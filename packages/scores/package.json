@@ -1,0 +1,37 @@
+{
+  "name": "@homie-rocks/scores",
+  "version": "0.1.0",
+  "description": "Leaderboards for games played together in one room: score direction and encoding, shared-tie ranking, a here/away split and one escaped board renderer. It stores nothing; the host does.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/scores"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/scores#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  },
+  "dependencies": {
+    "@homie-rocks/ui": "0.1.0"
+  }
+}

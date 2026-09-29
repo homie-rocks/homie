@@ -1,0 +1,50 @@
+{
+  // The compiler settings every BUILT package inherits.
+  //
+  // Deliberately separate from the noEmit tsconfigs of packages that run
+  // directly under Node's type stripping and must never emit. These emit, and
+  // mixing the two sets of flags in one file is how a package ends up with
+  // `composite` and `noEmit` fighting each other.
+  //
+  // Measured under tsc 5.9.3.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    // "Bundler", not "NodeNext": these files are loaded by a browser through an
+    // import map and by Vite, and NodeNext would demand extensions on every
+    // package specifier for a resolver that is not doing the resolving.
+    "moduleResolution": "Bundler",
+    "useDefineForClassFields": true,
+
+    // THE TWO FLAGS THAT MAKE ONE SOURCE SERVE THREE CONSUMERS.
+    // Source writes './Sky.ts', so a reader of a package sees the file it can
+    // open. On EMIT that becomes './Sky.js', which is what a bundler-less
+    // browser needs. Requires tsc >= 5.7.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+
+    "composite": true,
+    "declaration": true,
+    // Not decoration: without it "go to definition" from a game lands in
+    // dist/Sky.d.ts — a file with no bodies — and a reader who lands in a .d.ts
+    // concludes the code is missing and rewrites it.
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+
+    // STRICTER THAN THE GAMES, ON PURPOSE, AND THIS IS A REAL COST. The games
+    // these packages came out of ran strict:false, and code harvested out of
+    // them does not compile here on the first try. That is the point: a shared
+    // package is read by every consumer and edited by many hands in parallel.
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false
+  }
+}

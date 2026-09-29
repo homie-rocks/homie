@@ -1,0 +1,43 @@
+{
+  "name": "@homie-rocks/geom",
+  "version": "0.1.0",
+  "description": "Procedural geometry for three.js games: chamfered primitives, walls with cut openings, lofts, sweeps, merge and instancing accumulators, route and racing-line maths. It builds triangles; it owns no game content.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/geom"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/geom#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  },
+  "dependencies": {
+    "@homie-rocks/heightfield": "0.1.0"
+  },
+  "peerDependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "three": "0.185.1"
+  }
+}

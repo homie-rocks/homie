@@ -1,0 +1,46 @@
+{
+  "name": "@homie-rocks/props",
+  "version": "0.1.0",
+  "description": "Procedural scenery geometry for three.js: houses, boats, trackside furniture, landforms, rocks, vegetation, trusses and industrial fittings. Each generator takes numbers and an RNG and returns a BufferGeometry.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/props"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/props#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  },
+  "dependencies": {
+    "@homie-rocks/geom": "0.1.0",
+    "@homie-rocks/noise": "0.1.0",
+    "@homie-rocks/render": "0.1.0"
+  },
+  "peerDependencies": {
+    "three": "0.185.1",
+    "simplex-noise": "^4.0.3"
+  },
+  "devDependencies": {
+    "three": "0.185.1"
+  }
+}

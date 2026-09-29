@@ -1,0 +1,34 @@
+{
+  "name": "@homie-rocks/scatter",
+  "version": "0.1.0",
+  "description": "Placement policy for procedural worlds: keep-out registers, polyline corridors, footprint ground snaps, arc-length stepping, weighted quotas and crowd formations. Numbers in, numbers out; imports nothing.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/scatter"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/scatter#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  }
+}

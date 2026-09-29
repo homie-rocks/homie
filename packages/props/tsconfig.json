@@ -1,0 +1,44 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ is served over HTTP on every package origin and the
+    // build info names absolute paths on this machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+
+    // ----------------------------------------------------------------------
+    // THE ONE FLAG THIS PACKAGE TURNS OFF, AND WHY.
+    // ----------------------------------------------------------------------
+    // `strict: true` from the base config is ON and every module here compiles
+    // under it with ZERO errors. Measured 2026-08-20, on the modules as moved:
+    //
+    //   tsc --strict (no noUncheckedIndexedAccess)   → 0 errors
+    //   tsc --strict + noUncheckedIndexedAccess      → 9 errors
+    //
+    // All nine are one shape — a read out of an array at a computed index
+    // inside a bounded loop, which the flag correctly types as `T | undefined`
+    // because JS really does return `undefined` past the end: `corners[i]` in
+    // `Landmark`'s island ring, `a[0]`/`b[1]` in `gableWedge`'s triangle
+    // helper, `ROOF_MULT[k]` in `buildHouse`, and `arr[...]` in `Kit.pick`.
+    //
+    // @homie-rocks/noise made this call first at 93 errors and @homie-rocks/geom at 139;
+    // both tsconfigs carry the long form of the argument. The part that
+    // matters for THIS package:
+    //
+    //  THE PROOF OF THE MOVE IS THE BYTES. Every generator here was moved out
+    //  of a game unchanged, and its geometry is pinned to fingerprints captured
+    //  from those games' own pre-move source at a pinned revision. Nine `!`
+    //  assertions added inside those functions would turn "nothing moved" from
+    //  something anybody can diff into something they have to take on trust.
+    //
+    // As with @homie-rocks/noise and @homie-rocks/geom, the flag goes back on
+    // when this package's own src/ is next read line by line. Until then read
+    // this row as a DEBT WITH A NUMBER ON IT — nine — not as a setting somebody
+    // preferred.
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../geom" }, { "path": "../noise" }, { "path": "../render" }]
+}

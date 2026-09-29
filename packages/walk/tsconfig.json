@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // Beside tsconfig.json, NOT in dist/: dist/ may be served over HTTP as-is,
+    // and the build info names absolute paths on the build machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  // `damp1` only. It is an analytic critically-damped filter that happens to
+  // live in the camera package — `spring.ts` imports NOTHING, by design, so
+  // this dependency costs a walk no renderer and no DOM. Recorded as a seam
+  // rather than fixed here: the filter is not a camera thing and neither
+  // package is the right one to move it from.
+  "references": [{ "path": "../camera" }]
+}

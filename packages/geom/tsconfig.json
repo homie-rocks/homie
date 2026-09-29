@@ -1,0 +1,57 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ may be served over HTTP as-is, and the build info
+    // names absolute paths on the machine that built it.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+
+    // ----------------------------------------------------------------------
+    // THE ONE FLAG THIS PACKAGE TURNS OFF, AND EXACTLY WHAT IT COST TO KEEP.
+    // ----------------------------------------------------------------------
+    // `strict: true` from the base config is ON and every module here compiles
+    // under it with ZERO errors. Measured 2026-08-20, on the first nine modules
+    // as extracted:
+    //
+    //   tsc --strict (no noUncheckedIndexedAccess)   → 0 errors
+    //   tsc --strict + noUncheckedIndexedAccess      → 139 errors
+    //
+    // All 139 are one shape: a read out of a `number[]`, `Float32Array` or
+    // `Float64Array` at a computed index inside a bounded loop — `P[i0 * 3]`,
+    // `st[a + 7]`, `s.cols[inst * 3 + 1]`, `m.elements[12]` — which the flag
+    // correctly types as `number | undefined` because JS really does return
+    // `undefined` past the end of an array.
+    //
+    // @homie-rocks/noise made this call first, at 93 errors, and its tsconfig carries
+    // the long form of the argument. Both halves of it apply here and the
+    // second is the one that matters:
+    //
+    //  1. A `!` in a geometry kernel is a claim about an index that a reader
+    //     cannot check locally. A hundred and thirty-nine of them, added in one
+    //     mechanical pass, make a genuinely-unsafe read indistinguishable from
+    //     a safe one — the flag stops protecting anything while still looking
+    //     like it does.
+    //
+    //  2. THE EXTRACTION'S RECEIPT IS THE BYTES. Ten of the eleven symbols
+    //     first extracted here were byte-identical in the two racing games they
+    //     came from, and a parity test pins the geometry they produce to
+    //     fingerprints captured from the games' own source before extraction.
+    //     A hundred and thirty-nine edits inside those functions turn "nothing
+    //     moved" from something anybody can check into something they have to
+    //     take on trust.
+    //
+    // The flag goes back on when this package's own src/ is next read line by
+    // line — the same deal @homie-rocks/noise struck. Until then a reviewer
+    // should read this row as a DEBT with a number on it, not as a setting
+    // somebody preferred.
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*.ts"],
+  // `route.ts` re-exports the `HeightField` INTERFACE from the package that now
+  // implements it. Type-only: `export type` is erased on emit, so dist/route.js
+  // gains no import and no browser import map changes — but tsc still needs the
+  // declaration, so the reference is real.
+  "references": [{ "path": "../heightfield" }]
+}

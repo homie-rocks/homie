@@ -1,0 +1,40 @@
+{
+  "name": "@homie-rocks/brush",
+  "version": "0.1.0",
+  "description": "A box-and-ramp world for three.js games with interiors: a collision broadphase with a swept capsule, ground and ray queries, a geometry builder, a nav graph and parametric fittings.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/brush"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/brush#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  },
+  "peerDependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "three": "0.185.1"
+  }
+}

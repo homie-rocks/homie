@@ -1,0 +1,34 @@
+{
+  "name": "@homie-rocks/audio",
+  "version": "0.1.0",
+  "description": "Web Audio building blocks for games: an output chain that cannot clip, seeded noise and reverb, envelopes, voice management, a beat clock and an offline sampler planner. It ships no notes, tempos or patches.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/audio"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/audio#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "@homie-rocks/ui-world",
+  "version": "0.1.0",
+  "description": "The arithmetic between a 3D world and a 2D panel: principal-axis fit, oblique ribbon projection, screen projection, marker relaxation, paint order, canvas marks and a bake/blit plate. No minimap, no colours.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/ui-world"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/ui-world#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  },
+  "peerDependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "three": "0.185.1"
+  }
+}

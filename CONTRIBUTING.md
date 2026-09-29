@@ -1,7 +1,7 @@
 # Contributing
 
-Issues and pull requests are welcome: bugs, docs, the netplay contract, the Gem Rush
-starter, and the plugin's skills.
+Issues and pull requests are welcome: bugs, docs, the game engine packages, the netplay
+contract, the Gem Rush starter, and the plugin's skills.
 
 ## How a change gets in
 
@@ -15,6 +15,9 @@ Before you open one:
 - run `npm install && npm test`, and `npm run validate` if you changed the plugin or a
   marketplace file;
 - keep the change small, and say what you saw: the command you ran and what it printed;
+- an engine package's public modules are its API: a change that breaks a caller needs a
+  new minor version while the packages are 0.x, and the packages that depend on it are
+  bumped with it (they pin each other exactly);
 - the netplay wire protocol is versioned: a change that a v1 client cannot ignore needs
   `v: 2` (see `packages/studio/netplay/NETPLAY.md`);
 - never put a key, token or password in an issue, a pull request or a test.

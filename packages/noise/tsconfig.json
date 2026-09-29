@@ -1,0 +1,51 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ may be served over HTTP as-is, and the build info
+    // names absolute paths on the build machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+
+    // ----------------------------------------------------------------------
+    // THE ONE FLAG THIS PACKAGE TURNS OFF, AND EXACTLY WHAT IT COSTS TO KEEP.
+    // ----------------------------------------------------------------------
+    // `strict: true` from the base config is ON and `src/Noise.ts` compiles
+    // under it with ZERO errors. Measured 2026-08-19:
+    //
+    //   tsc --strict (no noUncheckedIndexedAccess)   → 0 errors
+    //   tsc --strict + noUncheckedIndexedAccess      → 93 errors
+    //
+    // All 93 are the same shape: a read out of a `Float32Array`/`Uint8Array`
+    // at a computed index inside a bounded loop — `buf[i]`, `perm[h & 255]`,
+    // `row[x0]` — which the flag correctly types as `number | undefined`
+    // because JS really does return `undefined` past the end of a typed array.
+    //
+    // Two reasons this package opts out rather than silencing 93 sites with
+    // `!`, and the second is the important one:
+    //
+    //  1. `!` in a numeric kernel is a claim about an index that a reader
+    //     cannot check locally. Ninety-three of them, added in one pass, are
+    //     ninety-three places where a genuinely-unsafe read is now
+    //     indistinguishable from a safe one. The flag would stop protecting
+    //     anything here while still looking like it does.
+    //
+    //  2. The extraction was proved by hash. The file in `src/` was
+    //     byte-identical to the copies it replaced in two games (1,150 lines),
+    //     which made "nothing moved but the import" provable without reading
+    //     a line. Ninety-three edits would have destroyed that, and a parity
+    //     change that has to be argued instead of hashed is worth much less
+    //     than a compiler flag.
+    //
+    // This is a debt with a named payer: the flag goes back on in the change
+    // that reworks `src/` line by line anyway, where a wrong `!` would land in
+    // a diff somebody is already reviewing for behaviour. Until then the
+    // package's tests measure the field values, so a bad index change is
+    // caught by numbers rather than by types — which is the weaker of the two
+    // guards, and saying so is the point of this comment.
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*.ts"],
+  "references": []
+}

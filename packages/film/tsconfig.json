@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ may be served over HTTP as-is, and the build info
+    // names absolute paths on the build machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../camera" }]
+}

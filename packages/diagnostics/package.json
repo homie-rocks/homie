@@ -1,0 +1,34 @@
+{
+  "name": "@homie-rocks/diagnostics",
+  "version": "0.1.0",
+  "description": "Checks whether a WebGL frame actually has a picture in it: pure blank/flat/tear tests, a pipeline log for bug reports, a watchdog that steps the renderer down a fallback ladder, and probe fault hooks.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/diagnostics"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/diagnostics#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "@homie-rocks/input",
+  "version": "0.1.0",
+  "description": "Input for browser games: gamepad, keyboard, touch sticks and pads, key rebinding, and a controls screen. It knows what a stick reads, never what a button means.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/input"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/input#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  },
+  "dependencies": {
+    "@homie-rocks/ui": "0.1.0"
+  }
+}

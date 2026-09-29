@@ -65,6 +65,39 @@ never uses a Worker, database or bucket that it did not create, and it records w
 created in `studio.json`. You pay Cloudflare directly, and homie.rocks never hosts your
 games. `packages/studio/netplay/NETPLAY.md` (section 11) estimates what a busy room costs.
 
+## The game engine
+
+The packages Homie's own games are built on are here too, as `@homie-rocks/*` on npm
+under the same license. Each is ESM with TypeScript types, built for a plain Vite game
+(or any bundler), and there is no barrel file: a game imports the module it needs,
+`@homie-rocks/<package>/<Module>.js`.
+
+| Package | What it is |
+| --- | --- |
+| `@homie-rocks/arcade` | Seats and phone controllers, game-facing. |
+| `@homie-rocks/input` | Controllers, keyboard, touch and the controls screen: what a stick reads. |
+| `@homie-rocks/camera` | Analytic springs, the lens and the frame solver. |
+| `@homie-rocks/render` | GPU-ready before the first frame: texture budget, materials, pipeline, shader pre-warm. |
+| `@homie-rocks/postfx` | The frame clock, capture protocol and the grade (tone curve, aberration, vignette, grain). |
+| `@homie-rocks/fx` | Pooled screen-space effects: trails, rings, plumes, shimmer, effect lights. |
+| `@homie-rocks/audio` | The DSP substrate: an output chain that cannot clip, noise, reverb, envelopes, voices. |
+| `@homie-rocks/ui` | Screen-space primitives with no renderer dependency. |
+| `@homie-rocks/loop` | The frame loop: freeze gate, render-failure and resolution ladders, context restore. |
+| `@homie-rocks/diagnostics` | Whether a frame has a picture in it, and the watchdog that acts when it does not. |
+| `@homie-rocks/device` | What the hardware is (touch, handheld, panel size) and validated stored preferences. |
+| `@homie-rocks/bus` | A typed, synchronous event bus. |
+| `@homie-rocks/scores` | Scores and leaderboards. |
+| `@homie-rocks/noise`, `geom`, `heightfield`, `scatter`, `props`, `brush`, `ui-world` | Procedural fields, geometry, terrain, placement, scenery, box worlds, world-to-panel maths. |
+| `@homie-rocks/walk`, `film` | A body on two legs (contact, coyote time, jump buffer, slopes); shot timelines and deterministic capture. |
+
+Every package's own README says what it does, what it needs, and how to import it.
+
+**Pin exact versions.** `npm install --save-exact`, so a game rebuilt months later is the
+same game; the packages pin each other exactly for the same reason. They share one copy
+of `three` as a peer dependency (0.185.1); TypeScript games also add `@types/three` at
+the same version. Two copies of three.js in one page are two `instanceof` worlds, and the
+symptom is an object that renders as nothing with no error.
+
 ## What stays at homie.rocks
 
 These parts are shared between studios. They run at homie.rocks and are not in this
@@ -79,8 +112,8 @@ repository:
 - **Release tarballs.** Until `@homie-rocks/studio` is on the npm registry, a studio pins
   one release at `https://homie.rocks/npm/homie-studio-<version>.tgz`.
 
-homie.rocks itself, the Homie app for TVs, phones and places, and Homie's own games and
-brands are not open source.
+homie.rocks itself, the Homie app for TVs, phones and places, and Homie's own games (their
+code, art, music and names) are not open source; the engine they are built on is.
 
 ## This repository
 
@@ -90,11 +123,14 @@ brands are not open source.
 | `.agents/plugins/marketplace.json` | The plugin marketplace for Codex. |
 | `plugins/homie/` | The Homie plugin: its skills and its MCP server configuration. |
 | `packages/studio/` | `@homie-rocks/studio`: the `homie-studio` CLI, the studio's site Worker, the netplay contract (`netplay/NETPLAY.md`), its game helper (`@homie-rocks/studio/netplay`), the relay (`worker/room.mjs`) and the Gem Rush starter. |
+| `packages/<engine package>/` | The game engine packages above, one folder each. |
+| `scripts/publish.mjs`, `.github/workflows/publish.yml` | How the packages reach npm: trusted publishing on a `release-*` tag, with provenance. |
 
 To work on it:
 
 ```sh
 npm install
+npm run build         # every package, in dependency order (tsc --build)
 npm test
 npm run validate      # claude plugin validate, for the marketplace and the plugin
 ```

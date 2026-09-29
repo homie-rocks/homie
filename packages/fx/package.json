@@ -1,0 +1,43 @@
+{
+  "name": "@homie-rocks/fx",
+  "version": "0.1.0",
+  "description": "Pooled particles and effects for three.js games: particle pools and shaders, trails and ribbons, shockwave rings, flame plumes, heat shimmer, decals, haze, light shafts and a pool of claimable point lights.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/fx"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/fx#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  },
+  "dependencies": {
+    "@homie-rocks/noise": "0.1.0"
+  },
+  "peerDependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "three": "0.185.1"
+  }
+}

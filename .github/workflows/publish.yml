@@ -1,0 +1,49 @@
+# Publish the @homie-rocks packages to npm with trusted publishing (OIDC): no npm
+# token is stored anywhere, and every version carries a provenance attestation that
+# links it to this repository, this workflow and the commit.
+#
+# A release is a tag named release-*, pushed directly or made with a GitHub release:
+#   git tag release-2026-10-01 && git push origin release-2026-10-01
+# The job builds and tests everything, then publishes each package whose package.json
+# version is not on npm yet, in dependency order (scripts/publish.mjs). Versions
+# already on npm are skipped, so re-running a release is safe.
+#
+# Each package lists this workflow as its trusted publisher on npmjs.com (package
+# Settings > Trusted Publisher > GitHub Actions: organization homie-rocks, repository
+# homie, workflow publish.yml, environment npm). The job runs in the `npm` environment,
+# which only release-* tags may deploy to (repository Settings > Environments).
+name: Publish to npm
+
+on:
+  push:
+    tags: ['release-*']
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # trusted publishing and provenance
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: startsWith(github.ref, 'refs/tags/release-')
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: npm 11 (trusted publishing needs 11.5.1 or later)
+        run: npm install -g npm@11
+      - run: npm ci
+      - run: npm test
+      - name: What goes out
+        run: node scripts/publish.mjs --check
+      - name: Publish
+        run: node scripts/publish.mjs

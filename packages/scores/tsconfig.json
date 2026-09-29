@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ is served over HTTP on every package origin and the
+    // build info names absolute paths on this machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  // `Dimension.ts` takes `formatClock` and `ordinalSuffix` from `@homie-rocks/ui`
+  // rather than growing this repository's second spelling of "11th". Both are
+  // pure functions with no module-level DOM, so a Node harness plays the real
+  // module.
+  "references": [{ "path": "../ui" }]
+}

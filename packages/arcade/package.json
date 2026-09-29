@@ -1,0 +1,35 @@
+{
+  "name": "@homie-rocks/arcade",
+  "version": "0.1.0",
+  "description": "Seats and phone controllers for games on a shared screen: jobs per seat, a controller page per phone, late arrivals dealt in, and a keyboard fallback. It never decides what a seat is or what a button means.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/arcade"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/arcade#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build",
+    "harness": "npm run build && node harness/asymmetric.mjs && node harness/live-knock.mjs"
+  }
+}

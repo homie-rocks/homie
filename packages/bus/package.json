@@ -1,0 +1,34 @@
+{
+  "name": "@homie-rocks/bus",
+  "version": "0.1.0",
+  "description": "A small synchronous event bus for games: one handler set (Bus) or one set per event type (KeyedBus). The game supplies the event types; a handler that throws never stops the others.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/bus"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/bus#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "prepack": "tsc --build"
+  }
+}

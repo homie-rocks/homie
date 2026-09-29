@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ is served over HTTP on every package origin and the
+    // build info names absolute paths on this machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  // Chain.ts imports `Quality` from @homie-rocks/render/caps.ts, which is where the
+  // ONE Quality lives — the games' types.ts re-exports it from there today, so
+  // this is not a new dependency for any consumer. A project reference rather
+  // than a path mapping because `tsc --build` has to know to emit render first;
+  // without it the first clean build reads a dist/ that does not exist yet and
+  // reports a missing module for a file that is right there in the tree.
+  "references": [{ "path": "../render" }]
+}

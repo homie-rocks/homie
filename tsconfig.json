@@ -1,0 +1,29 @@
+{
+  // The solution: `tsc --build` (npm run build) builds every engine package,
+  // each after the packages it references (their own tsconfig.json says which).
+  "files": [],
+  "references": [
+    { "path": "packages/arcade" },
+    { "path": "packages/audio" },
+    { "path": "packages/brush" },
+    { "path": "packages/bus" },
+    { "path": "packages/camera" },
+    { "path": "packages/device" },
+    { "path": "packages/diagnostics" },
+    { "path": "packages/film" },
+    { "path": "packages/fx" },
+    { "path": "packages/geom" },
+    { "path": "packages/heightfield" },
+    { "path": "packages/input" },
+    { "path": "packages/loop" },
+    { "path": "packages/noise" },
+    { "path": "packages/postfx" },
+    { "path": "packages/props" },
+    { "path": "packages/render" },
+    { "path": "packages/scatter" },
+    { "path": "packages/scores" },
+    { "path": "packages/ui" },
+    { "path": "packages/ui-world" },
+    { "path": "packages/walk" }
+  ]
+}

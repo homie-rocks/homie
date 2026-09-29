@@ -1,16 +1,49 @@
 {
   "name": "homie-rocks",
   "private": true,
-  "description": "Homie's open core: the Homie plugin for Claude Code and Codex, and @homie-rocks/studio.",
+  "description": "Homie's open core: the Homie plugin for Claude Code and Codex, @homie-rocks/studio, and the @homie-rocks game engine packages.",
   "license": "Apache-2.0",
   "workspaces": [
-    "packages/studio"
+    "packages/studio",
+    "packages/arcade",
+    "packages/audio",
+    "packages/brush",
+    "packages/bus",
+    "packages/camera",
+    "packages/device",
+    "packages/diagnostics",
+    "packages/film",
+    "packages/fx",
+    "packages/geom",
+    "packages/heightfield",
+    "packages/input",
+    "packages/loop",
+    "packages/noise",
+    "packages/postfx",
+    "packages/props",
+    "packages/render",
+    "packages/scatter",
+    "packages/scores",
+    "packages/ui",
+    "packages/ui-world",
+    "packages/walk"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test": "npm test --workspaces",
-    "validate": "claude plugin validate . && claude plugin validate plugins/homie"
+    "build": "tsc --build",
+    "test": "npm run build && npm test --workspaces --if-present",
+    "validate": "claude plugin validate . && claude plugin validate plugins/homie",
+    "release:check": "node scripts/publish.mjs --check"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/three": "0.185.1",
+    "n8ao": "2.0.1",
+    "postprocessing": "6.39.3",
+    "simplex-noise": "4.0.3",
+    "three": "0.185.1",
+    "typescript": "5.9.3"
   }
 }

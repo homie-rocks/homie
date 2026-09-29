@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ is served over HTTP on every package origin and the
+    // build info names absolute paths on this machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  // @homie-rocks/ui is a composite project too: ControlsSheet.ts takes `el` and
+  // `clamp` from it rather than keeping a second copy of either. Without the
+  // reference tsc compiles that package's source into this one's output
+  // instead of consuming its .d.ts.
+  "references": [{ "path": "../ui" }]
+}

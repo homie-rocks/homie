@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ may be served over HTTP as-is, and the build info
+    // names absolute paths on the build machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  // @homie-rocks/noise is a composite project too: ParticleTiles.ts takes its
+  // seeded simplex field from it rather than keeping a second copy of
+  // mulberry32. Without the reference tsc compiles that package's source
+  // into this one's output instead of consuming its .d.ts.
+  "references": [{ "path": "../noise" }]
+}
