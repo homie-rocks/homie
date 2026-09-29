@@ -1,0 +1,23 @@
+{
+  "$schema": "https://code.claude.com/schemas/plugin.json",
+  "name": "homie",
+  "displayName": "Homie",
+  "version": "0.2.0",
+  "description": "Set up a game studio, make or remix multiplayer web games, run the studio's site and public rooms on its own Cloudflare, and list them in the homie.rocks directory.",
+  "author": {
+    "name": "Homie",
+    "url": "https://homie.rocks"
+  },
+  "homepage": "https://homie.rocks/studios/",
+  "repository": "https://github.com/homie-rocks/homie",
+  "license": "Apache-2.0",
+  "keywords": [
+    "games",
+    "multiplayer",
+    "netplay",
+    "cloudflare",
+    "studio",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json"
+}

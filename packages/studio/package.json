@@ -1,0 +1,44 @@
+{
+  "name": "@homie-rocks/studio",
+  "version": "0.2.0",
+  "description": "A game studio on its own Cloudflare: scaffold, multiplayer starters on the netplay contract, the site Worker with public rooms (Table/Lobby Durable Objects, D1, R2), deploy, and the homie.rocks directory.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "homepage": "https://homie.rocks/studio/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/studio"
+  },
+  "bin": {
+    "homie-studio": "bin/homie-studio.mjs"
+  },
+  "exports": {
+    "./netplay": {
+      "types": "./netplay/netplay.ts",
+      "default": "./netplay/netplay.ts"
+    },
+    "./worker": "./worker/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "netplay/",
+    "worker/",
+    "starters/",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "esbuild": "0.28.1",
+    "puppeteer-core": "25.8.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

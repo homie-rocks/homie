@@ -1,0 +1,12 @@
+{
+  "name": "homie",
+  "interface": { "displayName": "Homie" },
+  "plugins": [
+    {
+      "name": "homie",
+      "source": { "source": "local", "path": "./plugins/homie" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_USE" },
+      "category": "Developer Tools"
+    }
+  ]
+}

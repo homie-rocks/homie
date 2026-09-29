@@ -1,0 +1,45 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "homie",
+  "version": "0.2.0",
+  "description": "Set up a game studio, make or remix multiplayer web games, run the studio's site and public rooms on its own Cloudflare, and list them in the homie.rocks directory.",
+  "author": {
+    "name": "Homie",
+    "url": "https://homie.rocks"
+  },
+  "homepage": "https://homie.rocks/studios/",
+  "repository": "https://github.com/homie-rocks/homie",
+  "license": "Apache-2.0",
+  "keywords": [
+    "games",
+    "multiplayer",
+    "netplay",
+    "cloudflare",
+    "studio",
+    "mcp"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Homie",
+        "shortDescription": "Game studios on your own Cloudflare",
+        "longDescription": "Set up a game studio as one repository, make or remix multiplayer web games where strangers meet in public rooms (every browser renders, bots fill seats, rounds restart), preview locally, deploy the studio's site to its own Cloudflare account, and list the games in the homie.rocks directory.",
+        "developerName": "Homie",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Interactive",
+          "Write"
+        ],
+        "websiteURL": "https://homie.rocks/",
+        "privacyPolicyURL": "https://homie.rocks/privacy/",
+        "termsOfServiceURL": "https://homie.rocks/terms/",
+        "defaultPrompt": [
+          "Set up a game studio called Night Owls and make a multiplayer game",
+          "Make a multiplayer game in this studio where everyone races to steal one crown",
+          "Put this studio online and list its games in the Homie directory"
+        ],
+        "brandColor": "#FFCF5A"
+      }
+    }
+  }
+}

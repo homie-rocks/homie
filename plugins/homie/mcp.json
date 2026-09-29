@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "homie": {
+      "type": "streamable-http",
+      "url": "https://homie.rocks/mcp"
+    }
+  }
+}

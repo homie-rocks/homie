@@ -1,0 +1,16 @@
+{
+  "name": "homie-rocks",
+  "private": true,
+  "description": "Homie's open core: the Homie plugin for Claude Code and Codex, and @homie-rocks/studio.",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/studio"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "npm test --workspaces",
+    "validate": "claude plugin validate . && claude plugin validate plugins/homie"
+  }
+}
