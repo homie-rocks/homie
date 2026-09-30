@@ -51,6 +51,8 @@ npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 --shots ./.
 `check` passes only when two fresh browsers (a computer and a phone) press Play, land
 in the same room, and both see a round finish with both of them in the results. Look
 at the screenshots it saves. Never say a game works without a passing `check`.
+Start `npm run dev` as a background task your app keeps alive (Claude Code: the Bash
+tool's `run_in_background`), and when you are done with it: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
 
 Then `npm run deploy` and `studio_publish` (see `publish`), and check again
 on the live site.

@@ -1,0 +1,47 @@
+name: Port request
+description: A single-player web game you want multiplayer on Homie, that the port skill graded "not a fit" or could not finish.
+title: "[port] "
+labels: ["port request", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The port skill ("make this game multiplayer on my studio") grades a game easy, medium, hard or not a fit, and says why. Every hard port teaches the skill something, so tell us about the ones it could not do yet.
+
+        Only games whose licence allows changing and publishing them (MIT, Apache-2.0, BSD, ISC and similar), or games you made. No keys, tokens or private addresses.
+  - type: input
+    id: game
+    attributes:
+      label: The game
+      description: A public address for its source or its page.
+      placeholder: https://github.com/someone/their-game
+    validations:
+      required: true
+  - type: input
+    id: licence
+    attributes:
+      label: Its licence
+      placeholder: MIT
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What it is, and what multiplayer should mean in it
+      description: A race, a free-for-all, co-op, turns? How many players?
+    validations:
+      required: true
+  - type: textarea
+    id: grade
+    attributes:
+      label: What the port skill said
+      description: Its grade and the reasons it gave, and which check failed if it got that far. Paste the lines.
+      render: text
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app ran the port?
+      options:
+        - Claude Code
+        - Codex
+        - I have not tried yet

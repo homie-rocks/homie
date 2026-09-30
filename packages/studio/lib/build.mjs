@@ -5,7 +5,9 @@
  *   site/dist/games/<id>/index.html        the game's page (the Worker adds HOMIE_NET)
  *   site/dist/games/<id>/assets/main.js    its bundle (esbuild; @homie-rocks/studio/netplay inlined)
  *   site/dist/games/<id>/...               everything in games/<id>/public/
- *   site/dist/games.json                   { studio, games[] } from studio.json and game.json files
+ *   site/dist/games.json                   { studio, games[], songs[], videos[] } from studio.json, game.json
+ *                                          files and the music/ and videos/ manifests (media/MEDIA.md)
+ *   site/dist/music/..., site/dist/videos/...   media files the site serves itself (R2 keys are served from R2)
  *
  * game.json "build" picks how a game becomes files (a ported game keeps its own shape):
  *   (absent) / { "mode": "bundle" }   src/main.ts (or "entry") bundled by esbuild — new games and ES-module ports
@@ -19,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
+import { buildMedia } from './media.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
@@ -135,6 +138,13 @@ export async function build(root, { only = null, log = () => {} } = {}) {
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB)`);
   }
   const all = listGames(root);
+  // Songs and videos (music/ and videos/ manifests): rebuilt with every full build; a one-game build keeps them.
+  const r2 = Boolean(studio.cloudflare?.r2 && (studio.cloudflare?.created ?? []).includes(`r2:${studio.cloudflare.r2}`));
+  let media = null;
+  if (!only) media = buildMedia(root, dist, { r2, log });
+  else {
+    try { const prev = JSON.parse(readFileSync(join(dist, 'games.json'), 'utf8')); media = { songs: prev.songs ?? [], videos: prev.videos ?? [], skipped: [] }; } catch { media = { songs: [], videos: [], skipped: [] }; }
+  }
   const catalogue = {
     studio: { name: studio.name, slug: studio.slug, version: STUDIO_VERSION },
     games: all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))).map((g) => ({
@@ -142,7 +152,12 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       roundSeconds: g.roundSeconds ?? null, movement: g.netplay?.movement ?? null, cover: g.cover ?? null,
       ...(g.screen ? { screen: g.screen } : {}),
     })),
+    songs: media.songs,
+    videos: media.videos,
   };
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
-  return { ok: true, command: 'build', dist, games: built, catalogue: catalogue.games.map((g) => g.id) };
+  return {
+    ok: true, command: 'build', dist, games: built, catalogue: catalogue.games.map((g) => g.id),
+    songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped,
+  };
 }

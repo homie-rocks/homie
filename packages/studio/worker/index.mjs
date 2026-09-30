@@ -15,19 +15,22 @@
  *   /<game>/api/lobby          which public room to join (Lobby Durable Object)
  *   /api/games                 the catalogue plus live counts (D1 + Lobby)
  *   /.well-known/homie-studio.json   what the homie.rocks directory reads
- *   /media/<key>               the studio's large media, from R2 (when bound)
+ *   /music/, /music/<slug>/    the studio's songs, scores and loops (music/manifest.json)
+ *   /videos/, /videos/<slug>/  its trailers, music videos and cutscenes (videos/manifest.json)
+ *   /media/<key>               the studio's large media, from R2 (once `storage add` bound it), with byte ranges
  *
  * Bindings (site/wrangler.jsonc, written by `homie-studio new`): ASSETS (the
  * built site), TABLE and LOBBY (SQLite-backed Durable Objects, free plan
- * friendly), DB (D1: plays, finished rounds, the directory claim) and, when
- * the account has R2, MEDIA.
+ * friendly), DB (D1: plays, finished rounds, the directory claim) and, only
+ * after `homie-studio storage add` (R2 needs a payment method on the account),
+ * MEDIA. Everything else runs on Cloudflare's free Workers plan.
  *
  * The relay is the netplay contract's own room.mjs (NETPLAY.md v1 rev 2), run
  * unchanged inside the Table, so a game that plays in `homie-studio dev`
  * plays the same way here.
  */
 import { NetRoom } from './room.mjs';
-import { gamePage, homePage, notFoundPage, playPage } from './pages.mjs';
+import { gamePage, homePage, mediaIndexPage, notFoundPage, playPage, songPage, videoPage } from './pages.mjs';
 import { qrSvg } from './qr.mjs';
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -60,6 +63,71 @@ async function liveCounts(env, games) {
     } catch { out[g.id] = 0; }
   }));
   return out;
+}
+
+const MEDIA_SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** `bytes=a-b`, `bytes=a-`, `bytes=-n` against a length, or null (a malformed or multi-range header is served whole). */
+function parseRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(header ?? '').trim());
+  if (!m || (m[1] === '' && m[2] === '')) return null;
+  let start; let end;
+  if (m[1] === '') { const n = Number(m[2]); start = Math.max(0, size - n); end = size - 1; }
+  else { start = Number(m[1]); end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1); }
+  if (!(start <= end) || start >= size) return { unsatisfiable: true };
+  return { start, end };
+}
+
+/** A media file from the site's own assets, answering a byte range (phones seek audio and video with them). */
+async function assetWithRange(request, env, url) {
+  const res = await env.ASSETS.fetch(new Request(url.toString(), { method: 'GET' }));
+  const range = request.headers.get('range');
+  if (!res.ok || !range || res.status === 206) return res;
+  const body = new Uint8Array(await res.arrayBuffer());
+  const r = parseRange(range, body.byteLength);
+  const headers = new Headers(res.headers);
+  headers.set('accept-ranges', 'bytes');
+  if (!r) return new Response(body, { status: 200, headers });
+  if (r.unsatisfiable) { headers.set('content-range', `bytes */${body.byteLength}`); return new Response(null, { status: 416, headers }); }
+  headers.set('content-range', `bytes ${r.start}-${r.end}/${body.byteLength}`);
+  headers.set('content-length', String(r.end - r.start + 1));
+  return new Response(body.subarray(r.start, r.end + 1), { status: 206, headers });
+}
+
+/** A file from the studio's R2 bucket, with byte ranges. */
+async function mediaObject(request, env, key) {
+  const range = request.headers.get('range');
+  let head = null;
+  if (range) head = await env.MEDIA.head(key);
+  if (range && !head) return new Response('not found', { status: 404 });
+  const r = head ? parseRange(range, head.size) : null;
+  if (r?.unsatisfiable) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}` } });
+  const obj = await env.MEDIA.get(key, r ? { range: { offset: r.start, length: r.end - r.start + 1 } } : undefined);
+  if (!obj) return new Response('not found', { status: 404 });
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set('etag', obj.httpEtag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('accept-ranges', 'bytes');
+  if (r) {
+    headers.set('content-range', `bytes ${r.start}-${r.end}/${head.size}`);
+    headers.set('content-length', String(r.end - r.start + 1));
+    return new Response(obj.body, { status: 206, headers });
+  }
+  headers.set('content-length', String(obj.size));
+  return new Response(obj.body, { headers });
+}
+
+/** A catalogue media row as the directory reads it (absolute addresses). */
+function mediaRow(e, origin, kind) {
+  const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u ?? null);
+  const main = (e.files ?? []).find((f) => f.role === (kind === 'music' ? 'audio' : 'video'));
+  const art = (e.files ?? []).find((f) => f.role === (kind === 'music' ? 'cover' : 'poster'));
+  return {
+    slug: e.slug, kind: e.kind, title: e.title, blurb: e.blurb ?? '', duration: e.duration ?? null,
+    page: `${origin}/${kind}/${e.slug}/`, [kind === 'music' ? 'audio' : 'video']: abs(main?.url), [kind === 'music' ? 'cover' : 'poster']: abs(art?.url),
+    credits: e.credits ?? null, rights: e.rights ?? null, for: e.for ?? null,
+  };
 }
 
 /** The game's index.html with HOMIE_NET ahead of its modules, in the site's sandbox (an opaque origin). */
@@ -124,6 +192,8 @@ export default {
           id: g.id, name: g.name, blurb: g.blurb ?? '', players: g.players ?? null, roundSeconds: g.roundSeconds ?? null,
           page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play`, cover: g.cover ? `${url.origin}/games/${g.id}/${g.cover}` : null,
         })),
+        songs: (cat.songs ?? []).map((e) => mediaRow(e, url.origin, 'music')),
+        videos: (cat.videos ?? []).map((e) => mediaRow(e, url.origin, 'videos')),
       }, 200, { 'access-control-allow-origin': '*' });
     }
     if (path === '/api/games') {
@@ -133,13 +203,26 @@ export default {
     if (path.startsWith('/media/')) {
       if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });
       const key = decodeURIComponent(path.slice('/media/'.length));
-      const obj = await env.MEDIA.get(key);
-      if (!obj) return new Response('not found', { status: 404 });
-      const headers = new Headers();
-      obj.writeHttpMetadata(headers);
-      headers.set('etag', obj.httpEtag);
-      headers.set('cache-control', 'public, max-age=3600');
-      return new Response(obj.body, { headers });
+      if (!key || key.includes('..')) return new Response('not found', { status: 404 });
+      return mediaObject(request, env, key);
+    }
+    if (parts[0] === 'music' || parts[0] === 'videos') {
+      const kind = parts[0];
+      if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${kind}/`, 301);
+      const cat = await catalogue(env, url.origin);
+      if (parts.length === 1) return mediaIndexPage(cat, kind);
+      const slug = parts[1];
+      const list = (kind === 'music' ? cat.songs : cat.videos) ?? [];
+      const entry = MEDIA_SLUG.test(slug) ? list.find((e) => e.slug === slug) : null;
+      if (parts.length === 2) {
+        if (!entry) return notFoundPage(`No ${kind === 'music' ? 'song' : 'video'} called "${slug}" here.`);
+        if (!path.endsWith('/')) return Response.redirect(`${url.origin}/${kind}/${slug}/`, 301);
+        return kind === 'music' ? songPage(cat, entry, url.origin) : videoPage(cat, entry, url.origin);
+      }
+      if (parts.some((p) => p === '..')) return notFoundPage('Nothing here.');
+      const file = await assetWithRange(request, env, url);
+      if (file.status === 404) return notFoundPage('Nothing here.');
+      return file;
     }
     if (path === '/' || path === '/index.html') {
       const cat = await catalogue(env, url.origin);

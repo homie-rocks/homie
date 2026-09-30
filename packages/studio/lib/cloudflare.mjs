@@ -5,12 +5,18 @@
  * The person's only step is Wrangler's sign-in (`npx wrangler login`, one
  * approval in their browser); Wrangler keeps that login, this never sees a key.
  *
- * It creates what the studio needs, by the names in studio.json:
- *   the Worker (pages + rooms), a D1 database, an R2 bucket (when the account
- *   has R2), the Table/Lobby Durable Objects (declared by the Worker)
- * and it REFUSES to touch a Worker, database or bucket of that name that this
+ * NO CREDIT CARD. It creates only what Cloudflare's free Workers plan gives a
+ * brand-new account with no payment method, by the names in studio.json:
+ *   the Worker (pages + rooms), a D1 database, and the Table/Lobby Durable
+ *   Objects (SQLite-backed, declared by the Worker).
+ * It never creates or binds R2: Cloudflare asks for a payment method before R2
+ * works, even inside its free tier, so storage for large media is its own later
+ * step (`homie-studio storage add`) that the person agrees to.
+ *
+ * It REFUSES to touch a Worker, database or bucket of that name that this
  * studio did not create (studio.json `cloudflare.created` is the record), so it
- * can never overwrite someone's existing site.
+ * can never overwrite someone's existing site. `deploy --plan` says all of this
+ * before anything happens and calls nothing.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
@@ -53,19 +59,76 @@ function parseJson(text) {
   try { return JSON.parse(text.slice(start)); } catch { return null; }
 }
 
+/*
+ * WHAT A NEW ACCOUNT TRIPS ON, said as the next step instead of a Wrangler stack.
+ * Measured names: 10034 is Cloudflare's "verify your email address" (a new
+ * account cannot deploy a Worker until it does); a missing workers.dev
+ * subdomain is registered by Wrangler itself when an agent runs it (Claude Code
+ * and Codex are detected), and otherwise needs one visit to the onboarding page.
+ */
+export function explainCloudflare(out, accountId = null) {
+  const text = String(out ?? '');
+  const dash = accountId ? `https://dash.cloudflare.com/${accountId}` : 'https://dash.cloudflare.com';
+  if (/\b10034\b|verify your email/i.test(text)) {
+    return { needs: 'cloudflare-verify-email', why: `Cloudflare needs this account's email address verified before it runs a Worker. Ask the person to open the verification email from Cloudflare (or ${dash}/profile and "Send verification email"), click it, then run \`npm run deploy\` again. No payment method is needed.` };
+  }
+  if (/register a workers\.dev subdomain|workers\/onboarding/i.test(text)) {
+    return { needs: 'workers-dev-subdomain', why: `This Cloudflare account has no workers.dev address yet. Ask the person to open ${dash}/workers/onboarding once and pick one (it is free), then run \`npm run deploy\` again.` };
+  }
+  if (/maximum number of (D1 )?databases|database limit|too many databases/i.test(text)) {
+    return { needs: 'd1-limit', why: 'This Cloudflare account has used all the D1 databases its plan allows (10 on the free plan). Nothing was deployed. Ask the person which unused database of theirs to remove, or use another account; never delete one yourself.' };
+  }
+  if (/\b1027\b|exceeded .*daily request limit/i.test(text)) {
+    return { needs: 'free-plan-daily-limit', why: 'This account used its free plan\'s 100,000 Worker requests for today (it resets at 00:00 UTC). Nothing is broken; try again after the reset.' };
+  }
+  return null;
+}
+
+/** What `deploy` will create and what it costs, from studio.json alone. It calls nothing. */
+export function deployPlan(root) {
+  const studio = readStudio(root);
+  const cf = { created: [], ...studio.cloudflare };
+  const created = new Set(cf.created ?? []);
+  const storage = cf.r2 && created.has(`r2:${cf.r2}`) ? cf.r2 : null;
+  const mark = (key) => (created.has(key) ? 'exists (this studio made it)' : 'will be created');
+  return {
+    ok: true, command: 'deploy plan', studio: studio.name, account: cf.accountId ?? null,
+    cloudflare: [
+      { kind: 'Worker', name: cf.worker, what: 'the studio\'s pages, each game\'s page and play shell, and /.well-known/homie-studio.json for the directory', state: mark(`worker:${cf.worker}`), plan: 'Workers Free' },
+      { kind: 'D1 database', name: cf.d1, what: 'the directory claim and every finished round', state: mark(`d1:${cf.d1}`), plan: 'Workers Free (500 MB per database, 5 GB per account)' },
+      { kind: 'Durable Object', name: 'Table', what: 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
+      { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
+      storage
+        ? { kind: 'R2 bucket', name: storage, what: 'large media for /media/<key> (added with storage add)', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
+        : { kind: 'R2 bucket', name: null, what: 'none: a new studio needs no storage. `homie-studio storage add` adds it later, for large media only', state: 'not created', plan: null },
+    ],
+    cost: storage
+      ? 'Free on Cloudflare\'s Workers Free plan. R2 storage is free up to 10 GB-month; beyond that Cloudflare bills the account directly.'
+      : 'Free: everything above is on Cloudflare\'s Workers Free plan, which needs no payment method. Its daily limits (100,000 Worker requests; D1 5 million rows read and 100,000 written) reset at 00:00 UTC; past them requests fail until the reset, nothing is charged.',
+    login: 'One approval: `npx wrangler login` opens Cloudflare in the person\'s browser (a free account works; a new one verifies its email address first).',
+    address: `https://${cf.worker}.<the account's workers.dev subdomain>.workers.dev`,
+    directory: {
+      site: studio.homie?.directory || 'https://homie.rocks',
+      stores: 'the site\'s address and a claim token, the studio\'s name and slug, the @homie-rocks/studio version, and each game\'s id, name, blurb and Play/page links. Never code, media, keys or accounts.',
+    },
+    never: 'It never touches a Worker, database or bucket this studio did not create, and it never adds a payment method or buys anything.',
+  };
+}
+
 export async function deploy(root, { log = () => {}, homie } = {}) {
   const studio = readStudio(root);
-  const cf = { r2: `${studio.slug}-media`, created: [], ...studio.cloudflare };
+  const cf = { r2: null, created: [], ...studio.cloudflare };
   const created = new Set(cf.created ?? []);
   const who = whoami(root);
   if (!who) {
-    return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` in the studio folder: it opens Cloudflare in the browser and the person approves once. Then run `npm run deploy` again.' };
+    return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` in the studio folder: it opens Cloudflare in the browser and the person approves once (a free account works, no payment method). Then run `npm run deploy` again.' };
   }
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
   if (!accountId) {
     return { ok: false, command: 'deploy', needs: 'cloudflare-account', why: `This Cloudflare login can reach ${who.accounts.length} accounts; ask the person which one this studio uses and put its id in studio.json (cloudflare.accountId).`, accounts: who.accounts };
   }
   const w = runner(root, { CLOUDFLARE_ACCOUNT_ID: accountId });
+  const refuse = (why, out) => ({ ok: false, command: 'deploy', ...(explainCloudflare(out, accountId) ?? { why }) });
   // Record every resource the moment it exists, so a deploy cut short (an expired login, a network drop) resumes
   // instead of refusing its own database as "someone else's" next time.
   const remember = (key) => {
@@ -75,9 +138,22 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const steps = [];
   const step = (what, extra = {}) => { steps.push({ what, ...extra }); log(what); };
 
+  // The first deploy says what it is about to create, and what it costs, before it creates anything: the person
+  // reads it in the transcript whether or not the AI repeated it.
+  const announced = [];
+  if (!created.has(`worker:${cf.worker}`)) {
+    const account = who.accounts.find((a) => a.id === accountId)?.name ?? 'the signed-in account';
+    announced.push(
+      `First deploy of ${studio.name} to the Cloudflare account "${account}". It creates: the Worker ${cf.worker} (the site and its rooms), the D1 database ${cf.d1}, and the Durable Objects Table and Lobby (SQLite-backed).`,
+      'Cost: free, on the Workers Free plan; no payment method, no R2 (storage for large media is `homie-studio storage add`, later, only if wanted).',
+      `The directory (${homie || studio.homie?.directory || 'https://homie.rocks'}) will store the site's address and claim, the studio's name, and each game's name, blurb and Play link.`,
+    );
+    for (const line of announced) log(line);
+  }
+
   const b = await build(root, { log });
-  if (!b.catalogue.length) return { ok: false, command: 'deploy', why: 'no games built yet: make one with `npx --no-install homie-studio game new <id> --from gem-rush`' };
-  step(`built ${b.catalogue.length} game(s)`);
+  if (!b.catalogue.length && !b.songs.length && !b.videos.length) return { ok: false, command: 'deploy', why: 'nothing to put online yet: make a game (`npx --no-install homie-studio game new <id> --from gem-rush`) or publish a song or video in music/ or videos/ (media/MEDIA.md)' };
+  step(`built ${b.catalogue.length} game(s), ${b.songs.length} song(s), ${b.videos.length} video(s)`);
 
   // The Worker: never one this studio did not make.
   if (!created.has(`worker:${cf.worker}`)) {
@@ -85,7 +161,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     if (exists.code === 0) {
       return { ok: false, command: 'deploy', why: `A Worker named "${cf.worker}" already exists on this Cloudflare account and this studio did not create it, so nothing was deployed. Pick another name in studio.json (cloudflare.worker) and site/wrangler.jsonc (name).` };
     }
-    if (!/10007|does not exist/i.test(exists.out)) return { ok: false, command: 'deploy', why: `could not check the Worker name: ${exists.out.trim().split('\n').slice(-3).join(' ')}` };
+    if (!/10007|does not exist/i.test(exists.out)) return refuse(`could not check the Worker name: ${exists.out.trim().split('\n').slice(-3).join(' ')}`, exists.out);
   }
 
   // D1.
@@ -98,34 +174,25 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   if (!db) {
     const made = w(['d1', 'create', cf.d1]);
     const id = /"?database_id"?\s*[:=]\s*"([0-9a-f-]{36})"/.exec(made.out)?.[1];
-    if (made.code !== 0 || !id) return { ok: false, command: 'deploy', why: `could not create the D1 database "${cf.d1}": ${made.out.trim().split('\n').slice(-4).join(' ')}` };
+    if (made.code !== 0 || !id) return refuse(`could not create the D1 database "${cf.d1}": ${made.out.trim().split('\n').slice(-4).join(' ')}`, made.out);
     db = { name: cf.d1, uuid: id };
     remember(`d1:${cf.d1}`);
     step(`created D1 ${cf.d1}`);
   }
 
-  // R2, when the account has it (R2 needs a payment method on the account; without it the site runs without MEDIA).
-  let r2 = cf.r2 || null;
-  if (r2 && !created.has(`r2:${r2}`)) {
-    const buckets = w(['r2', 'bucket', 'list']);
-    const names = [...buckets.out.matchAll(/^name:\s+(\S+)/gm)].map((m) => m[1]);
-    if (names.includes(r2)) {
-      return { ok: false, command: 'deploy', why: `An R2 bucket named "${r2}" already exists on this account and this studio did not create it; nothing was deployed. Pick another name in studio.json (cloudflare.r2).` };
-    }
-    const made = w(['r2', 'bucket', 'create', r2]);
-    if (made.code === 0) { remember(`r2:${r2}`); step(`created R2 ${r2}`); }
-    else if (/enable R2|R2 is not enabled|10042|purchase|subscription/i.test(made.out)) { step('R2 is not enabled on this account: the site deploys without media storage for now'); r2 = null; }
-    else return { ok: false, command: 'deploy', why: `could not create the R2 bucket "${r2}": ${made.out.trim().split('\n').slice(-4).join(' ')}` };
-  }
+  // Storage (R2) is bound only when `storage add` made the bucket. Deploy itself never creates or lists R2, so a
+  // free account with no payment method deploys the whole studio.
+  const r2 = cf.r2 && created.has(`r2:${cf.r2}`) ? cf.r2 : null;
+  if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
   writeFileSync(join(root, 'site', 'wrangler.jsonc'), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2 }));
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
-  if (migrate.code !== 0) return { ok: false, command: 'deploy', why: `D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}` };
+  if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   step('D1 migrations applied');
 
   const started = Date.now();
   const dep = w(['deploy']);
-  if (dep.code !== 0) return { ok: false, command: 'deploy', why: `wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}` };
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   remember(`worker:${cf.worker}`);
   const url = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? cf.url ?? null;
   step(`deployed ${cf.worker} in ${Math.round((Date.now() - started) / 1000)} s`, { url });
@@ -145,11 +212,62 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     }
   }
 
-  const next = { ...cf, accountId, url, d1Id: db.uuid, r2, created: [...created].sort(), deployedAt: new Date().toISOString() };
+  const next = { ...cf, accountId, url, d1Id: db.uuid, r2: cf.r2 ?? null, created: [...created].sort(), deployedAt: new Date().toISOString() };
   writeStudio(root, { ...studio, cloudflare: next });
   return {
-    ok: true, command: 'deploy', url, worker: cf.worker, d1: cf.d1, r2, account: accountId, steps,
+    ok: true, command: 'deploy', url, worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
     games: b.catalogue.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null })),
+    songs: b.songs.map((slug) => ({ slug, page: url ? `${url}/music/${slug}/` : null })),
+    videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),
     claim: Boolean(claim), directory,
   };
+}
+
+/*
+ * `homie-studio storage add` — the studio's own storage for large media (songs,
+ * videos, big art), as an R2 bucket on its account, bound as MEDIA and served at
+ * /media/<key>. It is separate from deploy on purpose: Cloudflare asks for a
+ * payment method on the account before R2 works, even inside R2's free tier
+ * (10 GB-month), so this is a step the person agrees to, and a studio that only
+ * makes games never needs it. It changes nothing on Cloudflare but the one bucket.
+ */
+export async function storageAdd(root, { log = () => {} } = {}) {
+  const studio = readStudio(root);
+  const cf = { created: [], ...studio.cloudflare };
+  const created = new Set(cf.created ?? []);
+  const bucket = cf.r2 || `${studio.slug}-media`;
+  if (created.has(`r2:${bucket}`)) {
+    return { ok: true, command: 'storage add', bucket, already: true, next: ['npm run deploy   (binds it as MEDIA if the live site does not have it yet)'] };
+  }
+  const who = whoami(root);
+  if (!who) return { ok: false, command: 'storage add', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` first (one approval in the browser).' };
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
+  if (!accountId) return { ok: false, command: 'storage add', needs: 'cloudflare-account', why: 'This login reaches several Cloudflare accounts; put the studio\'s in studio.json (cloudflare.accountId) first.', accounts: who.accounts };
+  const w = runner(root, { CLOUDFLARE_ACCOUNT_ID: accountId });
+  const enable = {
+    ok: false, command: 'storage add', needs: 'r2-payment-method', bucket,
+    why: `R2 is not turned on for this Cloudflare account. Cloudflare asks for a payment method before R2 works, even inside its free tier (10 GB-month of storage, 1 million writes and 10 million reads a month free). Only the person can decide that: if they want storage, they open https://dash.cloudflare.com/${accountId}/r2/overview, add R2 there, and you run \`npx --no-install homie-studio storage add\` again. Nothing was created; the studio keeps working without storage.`,
+  };
+  const buckets = w(['r2', 'bucket', 'list']);
+  if (buckets.code !== 0) {
+    if (/enable R2|R2 is not enabled|10042|purchase|subscription|payment/i.test(buckets.out)) return enable;
+    return { ok: false, command: 'storage add', ...(explainCloudflare(buckets.out, accountId) ?? { why: `could not list R2 buckets: ${buckets.out.trim().split('\n').slice(-3).join(' ')}` }) };
+  }
+  const names = [...buckets.out.matchAll(/^name:\s+(\S+)/gm)].map((m) => m[1]);
+  if (names.includes(bucket)) {
+    return { ok: false, command: 'storage add', why: `An R2 bucket named "${bucket}" already exists on this account and this studio did not create it; nothing was created. Put another name in studio.json (cloudflare.r2) and run storage add again.` };
+  }
+  const made = w(['r2', 'bucket', 'create', bucket]);
+  if (made.code !== 0) {
+    if (/enable R2|R2 is not enabled|10042|purchase|subscription|payment/i.test(made.out)) return enable;
+    return { ok: false, command: 'storage add', why: `could not create the R2 bucket "${bucket}": ${made.out.trim().split('\n').slice(-4).join(' ')}` };
+  }
+  created.add(`r2:${bucket}`);
+  const next = { ...readStudio(root), cloudflare: { ...readStudio(root).cloudflare, accountId, r2: bucket, created: [...created].sort() } };
+  writeStudio(root, next);
+  if (next.cloudflare.d1Id) {
+    writeFileSync(join(root, 'site', 'wrangler.jsonc'), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket }));
+  }
+  log(`created R2 ${bucket}`);
+  return { ok: true, command: 'storage add', bucket, account: accountId, next: ['npm run deploy   (binds the bucket as MEDIA; the site serves it at /media/<key>)', 'npx --no-install homie-studio media put <file>'] };
 }

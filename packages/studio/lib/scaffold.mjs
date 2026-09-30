@@ -7,9 +7,12 @@
  *   studio.json          the studio's name, slug, and its Cloudflare resources
  *   package.json         @homie-rocks/studio and wrangler, pinned
  *   games/<id>/          one folder per game (game.json, index.html, src/)
- *   music/ videos/       manifests in the repo; the big files live in the studio's R2
+ *   music/ videos/       manifests in the repo; the big files go to the studio's own storage
+ *                        (R2) once it is added with `homie-studio storage add`
  *   posts/               words the studio publishes
- *   site/                the studio's Worker (pages, rooms), its D1 migrations
+ *   site/                the studio's Worker (pages, rooms), its D1 migrations (no R2
+ *                        binding until the studio adds storage: a free Cloudflare account
+ *                        without a payment method cannot use R2, and a new studio needs none)
  *   .claude/skills/      skills only this studio uses
  *
  * It writes only into a folder that is new or empty, never guesses one, and
@@ -47,7 +50,8 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null }) {
     observability: { enabled: true },
   };
   return `// This studio's site on its own Cloudflare account (written by homie-studio; \`homie-studio deploy\`
-// fills in the D1 id, and drops the R2 binding when the account has no R2).
+// fills in the D1 id). Everything here runs on Cloudflare's Workers Free plan. There is no R2 binding
+// until \`homie-studio storage add\` gives the studio storage for large media.
 ${JSON.stringify(config, null, 2)}
 `;
 }
@@ -55,19 +59,19 @@ ${JSON.stringify(config, null, 2)}
 function agentsMd({ name, slug }) {
   return `# ${name}
 
-This folder is a game studio: **${name}** (\`${slug}\`). It is one repository.
+This folder is a studio: **${name}** (\`${slug}\`). It is one repository.
 Its games, music, videos and posts live here; its website and public game rooms
-run on the studio's **own Cloudflare account** (a Worker, D1, R2, and the
-Table/Lobby Durable Objects), built from \`@homie-rocks/studio\`, pinned in
-\`package.json\`. The homie.rocks directory lists its games; homie.rocks does
-not host them.
+run on the studio's **own Cloudflare account** (one Worker, one D1 database and
+the Table/Lobby Durable Objects, all on Cloudflare's free Workers plan), built
+from \`@homie-rocks/studio\`, pinned in \`package.json\`. The homie.rocks
+directory lists its games; homie.rocks does not host them.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
 | \`games/<id>/\` | One game: \`game.json\` (id, name, blurb, players, round length), \`index.html\`, \`src/main.ts\`. |
-| \`music/\`, \`videos/\` | \`manifest.json\` lists each file and its R2 key. Large files go to R2 (\`npx --no-install homie-studio media put <file>\`), never into git. |
+| \`music/\`, \`videos/\` | Songs, scores, loops; trailers, music videos, cutscenes. \`manifest.json\` lists each one (\`node_modules/@homie-rocks/studio/media/MEDIA.md\`); a published entry gets a page at \`/music/<slug>/\` or \`/videos/<slug>/\`, served from the site itself (files up to 25 MiB) or, for larger media, from the studio's storage once it has storage (see below; \`npx --no-install homie-studio media put <file>\`). Large files never go into git. The Homie plugin's \`music\` and \`video\` skills make them. |
 | \`posts/\` | Markdown the studio publishes. |
 | \`site/\` | The studio's Worker (\`src/worker.mjs\`), D1 migrations, \`wrangler.jsonc\`. |
 | \`studio.json\` | The studio's name, slug and Cloudflare resource names. |
@@ -87,11 +91,20 @@ studio's pinned copy, never a registry lookup of the bare name.
 - \`npm run build\` — bundle every game into \`site/dist\`.
 - \`npm run dev\` — the whole site locally (pages, the netplay relay in a local
   Durable Object, D1): open the printed address in two browsers and they share a room.
+  Stop it with \`npx --no-install homie-studio dev --stop\` (this studio's dev server only;
+  never \`pkill\` by name, which stops other projects' dev servers too).
 - \`npx --no-install homie-studio check <id> --url <site>\` — two headless browsers press Play and must
   land in the same room and finish a round. Run it before you say a game works.
-- \`npm run deploy\` — the site on this studio's Cloudflare (Workers, D1, R2).
+- \`npx --no-install homie-studio deploy --plan\` — says what deploy will create on Cloudflare and what it
+  costs, and changes nothing. Tell the person before the first deploy.
+- \`npm run deploy\` — the site on this studio's Cloudflare: one Worker, one D1 database, two
+  SQLite-backed Durable Objects, all on the free Workers plan (no payment method needed).
   If Wrangler is not signed in, run \`npx wrangler login\`: the person approves once in
   their browser. It never overwrites a Worker or database this studio did not create.
+- \`npx --no-install homie-studio storage add\` — only when the studio needs large media (songs,
+  videos): an R2 bucket for \`media put\`, served at \`/media/<key>\`. Cloudflare asks for a
+  payment method on the account before R2 works (its first 10 GB a month are free), so this
+  is a separate step the person agrees to; nothing else needs it.
 - \`npx --no-install homie-studio publish\` — list this studio's games in the homie.rocks directory
   (or call the Homie MCP tool \`studio_publish\`).
 
@@ -113,6 +126,12 @@ studio's pinned copy, never a registry lookup of the bare name.
   keychain. Never write a key, token or password into this repository.
 - Never touch a Cloudflare resource this studio did not create (\`studio.json\` says which).
 - Nothing in this studio needs \`~/.homie\` or a Homie box.
+
+## Beta
+
+Homie for studios is in beta. When something breaks, or a game you want to port does
+not fit, open an issue at https://github.com/homie-rocks/homie/issues/new/choose (a bug,
+a port request or a question). Leave keys, tokens and private addresses out of it.
 `;
 }
 
@@ -159,7 +178,10 @@ site/.wrangler/
 *.log
 # Port checks: receipts and screenshots of each run (games/<id>/.port/check-*/).
 games/*/.port/
-# Large media lives in this studio's R2; the manifests beside it are committed.
+# Large media lives in this studio's storage (R2, after storage add) or is served by the site; the manifests beside it are committed.
+# Working files of the music and video skills (frames, captures, provider answers) stay on this computer.
+music/**/work/
+videos/**/work/
 music/**/*.wav
 music/**/*.mp3
 music/**/*.flac
@@ -174,7 +196,8 @@ export function studioFiles({ name, slug, homie }) {
   const studio = {
     name, slug,
     homie: { studio: STUDIO_VERSION, directory: homie },
-    cloudflare: { worker, d1: `${slug}-db`, r2: `${slug}-media`, accountId: null, url: null, created: [] },
+    // r2 stays null until `homie-studio storage add`: a new studio deploys with no R2 at all.
+    cloudflare: { worker, d1: `${slug}-db`, r2: null, accountId: null, url: null, created: [] },
   };
   const pkg = {
     name: `${slug}-studio`,
@@ -191,12 +214,12 @@ export function studioFiles({ name, slug, homie }) {
     'package.json': `${JSON.stringify(pkg, null, 2)}\n`,
     '.gitignore': GITIGNORE,
     'games/README.md': 'One folder per game. Start one with `npx --no-install homie-studio game new <id> --from gem-rush`.\n',
-    'music/README.md': 'Songs and stems. `manifest.json` lists them; the files themselves go to R2 with `npx --no-install homie-studio media put`.\n',
-    'music/manifest.json': '{ "items": [] }\n',
-    'videos/README.md': 'Trailers and clips. `manifest.json` lists them; the files themselves go to R2 with `npx --no-install homie-studio media put`.\n',
-    'videos/manifest.json': '{ "items": [] }\n',
+    'music/README.md': 'Songs, game scores, loops and stems, one folder each (`music/<slug>/`). `manifest.json` lists them (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/music/<slug>/`. The site serves files up to 25 MiB itself; larger ones go to the studio\'s storage with `npx --no-install homie-studio media put` (after `npx --no-install homie-studio storage add`). Never into git.\n',
+    'music/manifest.json': '{ "v": 1, "items": [] }\n',
+    'videos/README.md': 'Trailers, music videos and cutscenes, one folder each (`videos/<slug>/`). `manifest.json` lists them (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/videos/<slug>/`. The site serves files up to 25 MiB itself; larger ones go to the studio\'s storage with `npx --no-install homie-studio media put` (after `npx --no-install homie-studio storage add`). Never into git.\n',
+    'videos/manifest.json': '{ "v": 1, "items": [] }\n',
     'posts/README.md': 'Markdown posts this studio publishes, one file each.\n',
-    'site/src/worker.mjs': `// This studio's site: pages, public rooms (Table + Lobby Durable Objects), D1 and R2.
+    'site/src/worker.mjs': `// This studio's site: pages, public rooms (Table + Lobby Durable Objects), D1, and R2 once storage is added.
 // The code is @homie-rocks/studio's, pinned in package.json, so an update never changes a published game by surprise.
 export { default, Table, Lobby } from '@homie-rocks/studio/worker';
 `,
@@ -254,7 +277,7 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
     'npx --no-install homie-studio game new <id> --from gem-rush --name "<Game Name>"',
     'npm run dev   (then: npx --no-install homie-studio check <id> --url http://127.0.0.1:8787)',
     'npm run deploy   (then the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish)',
-  ] };
+  ], online: 'Going online creates one Worker, one D1 database and two Durable Objects on your own Cloudflare account: free plan, no payment method, no R2. `npx --no-install homie-studio deploy --plan` says exactly what, and changes nothing.' };
 }
 
 export const _test = { relative };

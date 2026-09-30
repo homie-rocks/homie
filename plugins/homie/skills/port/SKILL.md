@@ -59,7 +59,10 @@ score), how the camera moves, what "game over" is. Then write `PORT.md` in the g
 
 Tell the person the grade and why in two or three lines, then go on. If it is
 **not a fit** (it needs its own server, WebAssembly threads, or its licence forbids
-it), stop there and explain what would make it portable.
+it), stop there and explain what would make it portable. The port toolkit is in beta:
+a game that is not a fit today, or a port the checks cannot judge, is worth a port
+request at https://github.com/homie-rocks/homie/issues/new/choose (the game's public
+address and licence, the grade and why; no keys or private addresses).
 
 Licence: a game you did not make must carry a licence that allows changing and
 publishing it (MIT, Apache-2.0, BSD, ISC…). Keep the licence file with the game.
@@ -159,8 +162,8 @@ body easy to find, does the world fill an upright phone, is the text readable,
 does the big screen show the game? A passing check with an ugly, tiny or
 confusing picture is not done. When you debug in a browser of your own, open one
 at a time (the check already runs two). Fix, rebuild
-(`npm run build`; the dev server serves the new files), check again. Stop the dev
-server when you are done (`kill %1` or `lsof -ti tcp:8787 | xargs kill`).
+(`npm run build`; the dev server serves the new files), check again. When you are
+done, stop the dev server: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
 
 If something still fails after real effort, say exactly which row, what you saw,
 and why — never hide it.
@@ -182,7 +185,8 @@ Then list it with the Homie MCP tool `studio_publish` { site }. Commit the studi
 Five to eight lines: the grade and why; what multiplayer means in their game now
 (rounds, bots, what the host decides); the check table (each row pass/fail, with
 the numbers that matter); the Play link, the big-screen link and the directory
-listing; and anything still weak, plainly.
+listing; and anything still weak, plainly. If something in Homie itself got in the
+way, say it can be reported at https://github.com/homie-rocks/homie/issues/new/choose.
 
 ## Never
 

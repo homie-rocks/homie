@@ -1,7 +1,7 @@
 {
   "$schema": "https://code.claude.com/schemas/marketplace.json",
   "name": "homie",
-  "description": "Homie for game studios: make multiplayer web games in Claude Code or Codex, run your studio's site and public rooms on your own Cloudflare, and list the games in the homie.rocks directory.",
+  "description": "Homie for studios: make games, music and video with Claude Code or Codex, run your studio's site and public multiplayer rooms on your own Cloudflare (free plan), and list your games, songs and videos in the homie.rocks directory. Beta.",
   "owner": {
     "name": "Homie",
     "url": "https://homie.rocks"
@@ -10,8 +10,8 @@
     {
       "name": "homie",
       "source": "./plugins/homie",
-      "description": "Set up a game studio, make or remix multiplayer games or make an existing single-player game multiplayer (netplay public rooms, bots, rounds), preview them locally, deploy the studio's site to its own Cloudflare, and publish to the homie.rocks directory.",
-      "version": "0.3.0",
+      "description": "Set up a studio, make or remix multiplayer games or make an existing single-player game multiplayer (netplay public rooms, bots, rounds), make songs and game scores (ElevenLabs, on your own account) and trailers and music videos (gameplay capture, or fal on your own account, under a budget), preview locally, deploy the studio's site to its own Cloudflare on the free plan (no payment method), and list it in the homie.rocks directory. Beta.",
+      "version": "0.5.0",
       "author": {
         "name": "Homie",
         "url": "https://homie.rocks"
@@ -24,6 +24,9 @@
         "multiplayer",
         "netplay",
         "cloudflare",
+        "music",
+        "video",
+        "trailers",
         "studio",
         "mcp"
       ]

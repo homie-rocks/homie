@@ -1,0 +1,29 @@
+name: Question
+description: How do I…? Is this meant to…? Anything about making a studio, a game or a port.
+title: "[question] "
+labels: ["question", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask anything about Homie for studios. The README's Known issues section may already have the answer. No keys, tokens or private addresses, please.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What you have tried
+      description: The prompt you gave your AI, or the command you ran, and what it printed.
+      render: text
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app?
+      options:
+        - Claude Code
+        - Codex
+        - Neither

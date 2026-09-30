@@ -1,0 +1,78 @@
+name: Bug
+description: Something in the plugin, a studio, its rooms, the directory or an engine package did not work.
+title: "[bug] "
+labels: ["bug", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for trying Homie for studios. It is in beta, and a bug report with the exact words your AI or a command printed is the fastest way to a fix.
+
+        Leave keys, tokens, passwords and private addresses out of the issue. A security problem goes privately to the address in [SECURITY.md](https://github.com/homie-rocks/homie/blob/main/SECURITY.md), never here. To report a listing in the studio directory, use the Report link on the listing at https://homie.rocks/studios/.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it go wrong?
+      options:
+        - Installing the plugin
+        - Setting up a studio
+        - Making or remixing a game
+        - Porting an existing game (the port skill)
+        - Previewing or checking a game locally
+        - Deploying to Cloudflare
+        - Listing in the homie.rocks directory
+        - Playing in a public room (netplay)
+        - An engine package (@homie-rocks/*)
+        - Something else
+    validations:
+      required: true
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app runs the plugin?
+      options:
+        - Claude Code
+        - Codex
+        - Neither (the homie-studio CLI by hand)
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: The plugin version (shown by `/plugin` in Claude Code or `codex plugin list`) and, inside a studio, `npx --no-install homie-studio version`.
+      placeholder: "plugin 0.4.0, @homie-rocks/studio 0.4.0"
+  - type: textarea
+    id: asked
+    attributes:
+      label: What you asked your AI
+      description: The prompt, word for word if you can.
+      placeholder: set up a game studio called Night Owls and make a multiplayer game
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What the AI said and what the command printed. Paste the lines; they are formatted as text.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: input
+    id: link
+    attributes:
+      label: A public link, if there is one
+      description: The studio's site or the game's Play link, when it is public.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other

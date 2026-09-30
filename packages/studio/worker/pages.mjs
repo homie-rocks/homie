@@ -27,7 +27,23 @@ header.top { display: flex; align-items: baseline; justify-content: space-betwee
 .hero p { color: var(--dim); max-width: 60ch; font-size: 18px; margin: 0 0 28px; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 footer { margin-top: 48px; color: var(--dim); font-size: 13px; }
-@media (max-width: 540px) { .wrap { padding: 20px 16px 48px; } .btn { width: 100%; } }
+h2.section { margin: 44px 0 0; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+h2.section a { text-decoration: none; }
+.card .kind { color: var(--accent); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.thumb { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; background: #000; display: block; }
+.thumb.square { aspect-ratio: 1; }
+.player { margin: 8px 0 20px; }
+.player audio { width: 100%; }
+.player video { width: 100%; max-height: 78vh; border-radius: 14px; background: #000; display: block; }
+.player video.vertical { max-width: 420px; margin: 0 auto; }
+.facts { color: var(--dim); font-size: 14px; display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 18px; }
+.rights { color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 24px; max-width: 70ch; }
+.lyrics { white-space: pre-wrap; font-size: 17px; line-height: 1.6; max-width: 60ch; }
+.files { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; max-width: 560px; }
+.files a { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; }
+.files span { color: var(--dim); font-size: 13px; }
+.cover { width: min(320px, 100%); aspect-ratio: 1; object-fit: cover; border-radius: 16px; float: right; margin: 0 0 16px 24px; }
+@media (max-width: 540px) { .wrap { padding: 20px 16px 48px; } .btn { width: 100%; } .cover { float: none; margin: 0 0 16px; width: 100%; } }
 `;
 
 function page(title, body, { extraHead = '', viewport = 'width=device-width, initial-scale=1, viewport-fit=cover' } = {}) {
@@ -37,9 +53,39 @@ function page(title, body, { extraHead = '', viewport = 'width=device-width, ini
 <body>${body}</body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
 }
 
+const fmtTime = (s) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '');
+const fileOf = (e, role) => (e.files ?? []).find((f) => f.role === role) ?? null;
+const KIND_WORD = { song: 'Song', score: 'Score', loop: 'Loop', stem: 'Stem', sfx: 'Sound', trailer: 'Trailer', 'music-video': 'Music video', cutscene: 'Cutscene', clip: 'Clip' };
+
+function songCard(e) {
+  const cover = fileOf(e, 'cover');
+  return `
+    <article class="card">
+      ${cover ? `<img class="thumb square" src="${esc(cover.url)}" alt="" loading="lazy">` : ''}
+      <span class="kind">${esc(KIND_WORD[e.kind] ?? 'Music')}${e.duration ? ` · ${esc(fmtTime(e.duration))}` : ''}</span>
+      <h2>${esc(e.title)}</h2>
+      <p>${esc(e.blurb)}</p>
+      <div class="row"><a class="btn" href="/music/${esc(e.slug)}/">Listen</a></div>
+    </article>`;
+}
+
+function videoCard(e) {
+  const poster = fileOf(e, 'poster');
+  return `
+    <article class="card">
+      ${poster ? `<img class="thumb" src="${esc(poster.url)}" alt="" loading="lazy">` : ''}
+      <span class="kind">${esc(KIND_WORD[e.kind] ?? 'Video')}${e.duration ? ` · ${esc(fmtTime(e.duration))}` : ''}</span>
+      <h2>${esc(e.title)}</h2>
+      <p>${esc(e.blurb)}</p>
+      <div class="row"><a class="btn" href="/videos/${esc(e.slug)}/">Watch</a></div>
+    </article>`;
+}
+
 export function homePage(cat, live = {}) {
   const name = cat.studio?.name ?? 'Studio';
   const games = cat.games ?? [];
+  const songs = cat.songs ?? [];
+  const videos = cat.videos ?? [];
   const cards = games.map((g) => `
     <article class="card">
       <h2>${esc(g.name)}</h2>
@@ -48,10 +94,86 @@ export function homePage(cat, live = {}) {
       <div class="row"><a class="btn" href="/${esc(g.id)}/play">Play</a><a class="btn ghost" href="/${esc(g.id)}/">About</a></div>
     </article>`).join('');
   return page(name, `<div class="wrap">
-    <header class="top"><a class="brand" href="/">${esc(name)}</a><span class="tag">Press Play and you are in a live room.</span></header>
-    ${games.length ? `<section class="grid">${cards}</section>` : '<p class="tag" style="margin-top:28px">No games published yet.</p>'}
+    <header class="top"><a class="brand" href="/">${esc(name)}</a><span class="tag">${games.length ? 'Press Play and you are in a live room.' : 'Games, music and videos.'}</span></header>
+    ${games.length ? `${songs.length || videos.length ? '<h2 class="section">Games</h2>' : ''}<section class="grid">${cards}</section>` : (songs.length || videos.length ? '' : '<p class="tag" style="margin-top:28px">Nothing published yet.</p>')}
+    ${videos.length ? `<h2 class="section"><a href="/videos/">Videos</a></h2><section class="grid">${videos.map(videoCard).join('')}</section>` : ''}
+    ${songs.length ? `<h2 class="section"><a href="/music/">Music</a></h2><section class="grid">${songs.map(songCard).join('')}</section>` : ''}
     <footer>${esc(name)} runs on its own Cloudflare. Made with Homie.</footer>
   </div>`);
+}
+
+/** /music/ and /videos/: every published entry of one kind. */
+export function mediaIndexPage(cat, kind) {
+  const name = cat.studio?.name ?? 'Studio';
+  const list = (kind === 'music' ? cat.songs : cat.videos) ?? [];
+  const title = kind === 'music' ? 'Music' : 'Videos';
+  return page(`${title} · ${name}`, `<div class="wrap">
+    <header class="top"><a class="brand" href="/" style="font-size:22px">${esc(name)}</a><span class="tag">${esc(title)}</span></header>
+    ${list.length ? `<section class="grid">${list.map(kind === 'music' ? songCard : videoCard).join('')}</section>` : `<p class="tag" style="margin-top:28px">No ${kind === 'music' ? 'music' : 'videos'} published yet.</p>`}
+  </div>`);
+}
+
+function rightsLine(e) {
+  const bits = [];
+  if (e.credits) bits.push(esc(e.credits));
+  const r = e.rights;
+  if (r && typeof r === 'object') {
+    if (r.commercial === true) bits.push(`Licensed for commercial use${r.plan ? ` (made on the provider's ${esc(r.plan)} plan)` : ''}.`);
+    else if (r.commercial === false) bits.push(`Not licensed for commercial use${r.plan ? ` (made on the provider's ${esc(r.plan)} plan)` : ''}.`);
+    if (r.attribution) bits.push(esc(r.attribution));
+  }
+  if (e.honesty) bits.push(esc(e.honesty));
+  return bits.length ? `<p class="rights">${bits.join(' ')}</p>` : '';
+}
+
+const ogTags = (props) => Object.entries(props).filter(([, v]) => v).map(([k, v]) => `<meta property="${esc(k)}" content="${esc(v)}">`).join('');
+
+/** /music/<slug>/: the player, the facts, the words, the loops and stems another game may use. */
+export function songPage(cat, e, origin = '') {
+  const name = cat.studio?.name ?? 'Studio';
+  const audio = fileOf(e, 'audio');
+  const cover = fileOf(e, 'cover');
+  const extras = (e.files ?? []).filter((f) => f.role === 'loop' || f.role === 'stem');
+  const game = e.for?.game && (cat.games ?? []).find((g) => g.id === e.for.game);
+  const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u);
+  return page(`${e.title} · ${name}`, `<div class="wrap">
+    <header class="top"><a class="brand" href="/" style="font-size:22px">${esc(name)}</a><a class="tag" href="/music/">Music</a></header>
+    <section class="hero">
+      ${cover ? `<img class="cover" src="${esc(cover.url)}" alt="">` : ''}
+      <h1>${esc(e.title)}</h1>
+      ${e.blurb ? `<p>${esc(e.blurb)}</p>` : ''}
+      <div class="player"><audio controls preload="metadata" src="${esc(audio.url)}"></audio></div>
+      <div class="facts">${[KIND_WORD[e.kind], e.duration ? fmtTime(e.duration) : null, e.bpm ? `${e.bpm} BPM` : null, e.key].filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('')}${game ? `<a href="/${esc(game.id)}/">${esc(game.name)}</a>` : ''}</div>
+    </section>
+    ${e.lyrics ? `<h2 class="section">Words</h2><div class="lyrics">${esc(e.lyrics)}</div>` : ''}
+    ${extras.length ? `<h2 class="section">Loops and stems</h2><ul class="files">${extras.map((f) => `<li><a href="${esc(f.url)}" download><b>${esc(f.name ?? (f.role === 'loop' ? 'Loop' : 'Stem'))}</b><span>${esc([f.role, f.bars ? `${f.bars} bars` : null, f.bytes ? `${Math.max(1, Math.round(f.bytes / 1024))} KB` : null].filter(Boolean).join(' · '))}</span></a></li>`).join('')}</ul>` : ''}
+    ${rightsLine(e)}
+  </div>`, { extraHead: ogTags({ 'og:type': 'music.song', 'og:title': e.title, 'og:description': e.blurb, 'og:audio': abs(audio.url), 'og:image': abs(cover?.url) }) });
+}
+
+/** /videos/<slug>/: the player (16:9, or the 9:16 cut on a portrait phone), captions, credits. */
+export function videoPage(cat, e, origin = '') {
+  const name = cat.studio?.name ?? 'Studio';
+  const video = fileOf(e, 'video');
+  const vertical = fileOf(e, 'vertical');
+  const poster = fileOf(e, 'poster');
+  const captions = fileOf(e, 'captions');
+  const game = e.for?.game && (cat.games ?? []).find((g) => g.id === e.for.game);
+  const song = e.for?.song && (cat.songs ?? []).find((m) => m.slug === e.for.song);
+  const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u);
+  // A portrait phone gets the 9:16 cut when there is one; everything else the 16:9 cut.
+  const pick = vertical ? `<script>(function(){var v=document.querySelector('video[data-main]');if(!v)return;if(matchMedia('(orientation: portrait) and (max-width: 700px)').matches){v.src=${JSON.stringify(vertical.url).replace(/</g, '\u003c')};v.classList.add('vertical');}}());</script>` : '';
+  return page(`${e.title} · ${name}`, `<div class="wrap">
+    <header class="top"><a class="brand" href="/" style="font-size:22px">${esc(name)}</a><a class="tag" href="/videos/">Videos</a></header>
+    <section style="padding-top:28px">
+      <div class="player"><video data-main controls playsinline preload="metadata" src="${esc(video.url)}"${poster ? ` poster="${esc(poster.url)}"` : ''}>${captions ? `<track kind="captions" src="${esc(captions.url)}" srclang="en" label="English">` : ''}</video></div>
+      <h1 style="font-size:clamp(30px,6vw,56px);margin:0 0 10px;letter-spacing:-.02em">${esc(e.title)}</h1>
+      ${e.blurb ? `<p class="tag" style="font-size:17px;max-width:62ch">${esc(e.blurb)}</p>` : ''}
+      <div class="facts">${[KIND_WORD[e.kind], e.duration ? fmtTime(e.duration) : null].filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('')}${song ? `<a href="/music/${esc(song.slug)}/">${esc(song.title)}</a>` : ''}</div>
+      ${game ? `<div class="row"><a class="btn" href="/${esc(game.id)}/play">Play ${esc(game.name)}</a>${vertical ? `<a class="btn ghost" href="${esc(vertical.url)}">Vertical cut</a>` : ''}</div>` : (vertical ? `<div class="row"><a class="btn ghost" href="${esc(vertical.url)}">Vertical cut</a></div>` : '')}
+    </section>
+    ${rightsLine(e)}
+  </div>${pick}`, { extraHead: ogTags({ 'og:type': 'video.other', 'og:title': e.title, 'og:description': e.blurb, 'og:video': abs(video.url), 'og:image': abs(poster?.url) }) });
 }
 
 export function gamePage(cat, g, playing = 0) {

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a listing in the studio directory
+    url: https://homie.rocks/studios/
+    about: Every listing has a Report link that goes straight to the directory's owner, not to a public issue.
+  - name: A security problem
+    url: https://github.com/homie-rocks/homie/blob/main/SECURITY.md
+    about: Report it privately, never in an issue.
+  - name: Make a studio
+    url: https://homie.rocks/studio/
+    about: What Homie is for creators, how to install the plugin, and what it creates on your Cloudflare.

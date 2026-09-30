@@ -6,7 +6,7 @@
  * Run: node --test packages/studio/test/studio.test.mjs
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -46,7 +46,11 @@ test('new: a studio monorepo in a new folder, every file listed; a non-empty fol
   assert.match(pkg.devDependencies['@homie-rocks/studio'], /^https:\/\/homie\.test\/npm\/homie-studio-\d+\.\d+\.\d+\.tgz$/, 'pinned to one tarball');
   assert.match(pkg.devDependencies.wrangler, /^\d+\.\d+\.\d+$/, 'wrangler pinned exactly');
   const s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
-  assert.deepEqual([s.slug, s.cloudflare.worker, s.cloudflare.d1, s.cloudflare.r2], ['night-owls', 'night-owls', 'night-owls-db', 'night-owls-media']);
+  assert.deepEqual([s.slug, s.cloudflare.worker, s.cloudflare.d1, s.cloudflare.r2], ['night-owls', 'night-owls', 'night-owls-db', null], 'no storage until storage add');
+  const wrangler = readFileSync(join(dir, 'site/wrangler.jsonc'), 'utf8');
+  assert.doesNotMatch(wrangler, /r2_buckets/, 'a new studio binds no R2');
+  assert.match(wrangler, /new_sqlite_classes/, 'SQLite-backed Durable Objects (the free plan has no other kind)');
+  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /storage add/, 'AGENTS.md says how storage is added later');
   const busy = join(scratch, 'busy');
   mkdirSync(busy);
   writeFileSync(join(busy, 'notes.txt'), 'mine');
@@ -145,7 +149,7 @@ case "$1" in
         migrations) if [ -f $S/expired ]; then echo 'Not logged in. Your auth token has expired' >&2; exit 1; fi; echo ok;;
         execute) echo ok;;
       esac;;
-  r2) case "$3" in list) echo '';; create) exit 0;; esac;;
+  r2) echo "r2 $*" >> $S/r2-calls; exit 9;;
   deploy) echo 'Deployed test-studio triggers https://test-studio.acct.workers.dev';;
   *) echo "unexpected: $*" >&2; exit 9;;
 esac
@@ -160,6 +164,151 @@ esac
   const resumed = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
   assert.equal(resumed.ok, true, JSON.stringify(resumed));
   assert.equal(resumed.url, 'https://test-studio.acct.workers.dev');
+  assert.ok(!existsSync(join(state, 'r2-calls')), 'deploy never calls R2');
+});
+
+/** A stand-in account with NO R2 (no payment method): every r2 command answers what Cloudflare answers, and is logged. */
+function noCardAccount(dir, { r2Enabled = false, buckets = [] } = {}) {
+  const bin = join(dir, 'node_modules', '.bin');
+  const state = join(dir, '.fake-cf');
+  mkdirSync(bin, { recursive: true });
+  mkdirSync(state, { recursive: true });
+  writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
+S=${state}
+echo "$*" >> $S/calls
+case "$1" in
+  whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
+  versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
+  d1) case "$2" in
+        list) if [ -f $S/db ]; then echo '[{"uuid":"22222222-2222-2222-2222-222222222222","name":"test-studio-db"}]'; else echo '[]'; fi;;
+        create) touch $S/db; echo '"database_id": "22222222-2222-2222-2222-222222222222"';;
+        *) echo ok;;
+      esac;;
+  r2) ${r2Enabled
+    ? `case "$3" in list) ${buckets.map((b) => `echo "name:           ${b}"`).join('; ') || 'echo ""'};; create) echo "Created bucket $4"; touch $S/bucket;; esac;;`
+    : `echo 'Please enable R2 through the Cloudflare Dashboard. [code: 10042]' >&2; exit 1;;`}
+  deploy) echo 'Deployed test-studio triggers https://test-studio.acct.workers.dev';;
+  *) echo "unexpected: $*" >&2; exit 9;;
+esac
+`);
+  chmodSync(join(bin, 'wrangler'), 0o755);
+  return { calls: () => (existsSync(join(state, 'calls')) ? readFileSync(join(state, 'calls'), 'utf8').trim().split('\n') : []) };
+}
+
+test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and deploy never asks R2 anything', () => {
+  const dir = studio('nocard');
+  out(run(['game', 'new', 'crown-thief'], dir));
+  const account = noCardAccount(dir);
+  const plan = out(run(['deploy', '--plan'], dir));
+  assert.equal(plan.ok, true, JSON.stringify(plan));
+  assert.deepEqual(account.calls(), [], 'the plan calls nothing');
+  assert.deepEqual(plan.cloudflare.map((r) => r.kind), ['Worker', 'D1 database', 'Durable Object', 'Durable Object', 'R2 bucket']);
+  assert.equal(plan.cloudflare.at(-1).name, null, 'no R2 bucket in the plan');
+  assert.match(plan.cost, /Free/);
+  assert.match(plan.cost, /no payment method/);
+  assert.match(plan.directory.stores, /Never code, media, keys or accounts/);
+  const done = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
+  assert.equal(done.ok, true, JSON.stringify(done));
+  assert.equal(done.r2, null);
+  assert.match(done.announced.join(' '), /It creates: the Worker test-studio .* the D1 database test-studio-db, and the Durable Objects Table and Lobby/);
+  assert.match(done.announced.join(' '), /Cost: free, on the Workers Free plan; no payment method, no R2/);
+  assert.match(done.announced.join(' '), /will store the site's address/);
+  assert.deepEqual(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).announced, [], 'a redeploy creates nothing new and says nothing');
+  assert.ok(!account.calls().some((c) => c.startsWith('r2')), `no r2 call: ${account.calls().join(' | ')}`);
+  const wrangler = readFileSync(join(dir, 'site/wrangler.jsonc'), 'utf8');
+  assert.doesNotMatch(wrangler, /r2_buckets/);
+  assert.match(wrangler, /22222222-2222-2222-2222-222222222222/, 'the D1 id is filled in');
+  const s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+  assert.deepEqual(s.cloudflare.created, ['d1:test-studio-db', 'worker:test-studio']);
+  const media = out(run(['media', 'put', join(dir, 'README.md')], dir));
+  assert.equal(media.needs, 'storage');
+  assert.match(media.why, /storage add/);
+});
+
+test('storage add: refused with the dashboard link on an account without R2 (nothing created); on one with R2 it makes the bucket and deploy binds it', () => {
+  const dir = studio('storage');
+  out(run(['game', 'new', 'crown-thief'], dir));
+  noCardAccount(dir);
+  assert.equal(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).ok, true);
+  const refused = out(run(['storage', 'add'], dir));
+  assert.equal(refused.ok, false);
+  assert.equal(refused.needs, 'r2-payment-method');
+  assert.match(refused.why, /payment method/);
+  assert.match(refused.why, /https:\/\/dash\.cloudflare\.com\/acc1\/r2\/overview/);
+  let s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+  assert.equal(s.cloudflare.r2, null, 'nothing recorded');
+  assert.equal(out(run(['storage'], dir)).storage, null);
+  // Somebody else's bucket of that name: refused, untouched.
+  noCardAccount(dir, { r2Enabled: true, buckets: ['test-studio-media'] });
+  assert.match(out(run(['storage', 'add'], dir)).why, /already exists on this account and this studio did not create it/);
+  // The person turned R2 on: the bucket is made, recorded, and the next deploy binds it.
+  const account = noCardAccount(dir, { r2Enabled: true });
+  const added = out(run(['storage', 'add'], dir));
+  assert.equal(added.ok, true, JSON.stringify(added));
+  assert.equal(added.bucket, 'test-studio-media');
+  s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+  assert.equal(s.cloudflare.r2, 'test-studio-media');
+  assert.ok(s.cloudflare.created.includes('r2:test-studio-media'));
+  assert.match(readFileSync(join(dir, 'site/wrangler.jsonc'), 'utf8'), /"bucket_name": "test-studio-media"/);
+  const again = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
+  assert.equal(again.r2, 'test-studio-media');
+  assert.ok(account.calls().includes('r2 bucket create test-studio-media'));
+});
+
+test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and nothing else', async () => {
+  const dir = studio('devstop');
+  out(run(['game', 'new', 'crown-thief'], dir));
+  const bin = join(dir, 'node_modules', '.bin');
+  mkdirSync(bin, { recursive: true });
+  // A stand-in Wrangler: `dev` runs until it is stopped, like the real one.
+  writeFileSync(join(bin, 'wrangler'), `#!${process.execPath}\nif (process.argv[2] === 'dev') setInterval(() => {}, 1000);\n`);
+  chmodSync(join(bin, 'wrangler'), 0o755);
+  // Another project's dev server, running the very same command line a pattern would match.
+  const other = spawn(join(bin, 'wrangler'), ['dev', '--local'], { stdio: 'ignore' });
+  const devProc = spawn(process.execPath, [CLI, 'dev', '--port', '18989'], { cwd: dir, stdio: 'ignore' });
+  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  try {
+    const file = join(dir, 'site', '.wrangler', 'homie-dev.json');
+    for (let i = 0; i < 150 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 100));
+    const rec = JSON.parse(readFileSync(file, 'utf8'));
+    assert.equal(rec.pid, devProc.pid);
+    const stopped = out(run(['dev', '--stop'], dir));
+    assert.deepEqual([...stopped.stopped].sort(), [rec.child, rec.pid].sort());
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(alive(rec.child), false, 'Wrangler stopped');
+    assert.equal(alive(devProc.pid), false, 'the dev command stopped');
+    assert.equal(alive(other.pid), true, 'the other project\'s identical dev server is untouched');
+    assert.equal(out(run(['dev', '--stop'], dir)).stopped.length, 0, 'nothing left to stop');
+  } finally {
+    for (const p of [other, devProc]) try { p.kill('SIGKILL'); } catch { /* gone */ }
+  }
+});
+
+test('a new account\'s first deploy says the next step: verify the email (10034), pick a workers.dev address', async () => {
+  const { explainCloudflare } = await import('../lib/cloudflare.mjs');
+  const mail = explainCloudflare('X [ERROR] A request to the Cloudflare API failed. You need to verify your email address to use Workers. [code: 10034]', 'acc1');
+  assert.equal(mail.needs, 'cloudflare-verify-email');
+  assert.match(mail.why, /No payment method is needed/);
+  const sub = explainCloudflare('You can either deploy your worker to one or more routes by specifying them in your wrangler.jsonc file, or register a workers.dev subdomain here:\nhttps://dash.cloudflare.com/acc1/workers/onboarding', 'acc1');
+  assert.equal(sub.needs, 'workers-dev-subdomain');
+  assert.match(sub.why, /dash\.cloudflare\.com\/acc1\/workers\/onboarding/);
+  assert.equal(explainCloudflare('some other failure'), null);
+  const dir = studio('verify');
+  out(run(['game', 'new', 'crown-thief'], dir));
+  const bin = join(dir, 'node_modules', '.bin');
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
+case "$1" in
+  whoami) echo '{"loggedIn":true,"authType":"OAuth Token","accounts":[{"id":"acc1","name":"Test"}]}';;
+  versions) echo 'This Worker does not exist on your account. [code: 10007]' >&2; exit 1;;
+  d1) case "$2" in list) echo '[]';; create) echo '"database_id": "22222222-2222-2222-2222-222222222222"';; *) echo ok;; esac;;
+  deploy) echo 'You need to verify your email address to use Workers. [code: 10034]' >&2; exit 1;;
+esac
+`);
+  chmodSync(join(bin, 'wrangler'), 0o755);
+  const r = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
+  assert.equal(r.ok, false);
+  assert.equal(r.needs, 'cloudflare-verify-email');
 });
 
 test('port: plan grades a single-player game and reads its risks; import brings it in as a static game with the toolkit first; build ships homie-port.js', () => {
@@ -225,4 +374,107 @@ test('port check, maze view: a turn queued behind a wall is not a wrong turn; mo
   assert.equal(ignored.rows[0].queued, false, 'a reversal that never happens is a failure');
   // The same queued turn in a top view is a wrong-way press.
   assert.equal(judgePresses(queued, [{ dir: 'up', a: 0, b: 420 }], 10, 'top').rows[0].ok, false);
+});
+
+/** The studio Worker against a built site folder: ASSETS reads site/dist, MEDIA is an in-memory R2 with ranges. */
+async function siteOf(dir, objects = {}) {
+  const { default: worker } = await import('../worker/index.mjs');
+  const dist = join(dir, 'site', 'dist');
+  const ASSETS = {
+    async fetch(req) {
+      const p = decodeURIComponent(new URL(req.url).pathname);
+      const f = join(dist, p);
+      if (!f.startsWith(dist) || !existsSync(f)) return new Response('not found', { status: 404 });
+      return new Response(readFileSync(f), { headers: { 'content-type': p.endsWith('.json') ? 'application/json' : 'application/octet-stream' } });
+    },
+  };
+  const MEDIA = {
+    async head(key) { return objects[key] ? { size: objects[key].length } : null; },
+    async get(key, opts) {
+      const all = objects[key];
+      if (!all) return null;
+      const body = opts?.range ? all.subarray(opts.range.offset, opts.range.offset + opts.range.length) : all;
+      return { body, size: all.length, httpEtag: '"e"', writeHttpMetadata(h) { h.set('content-type', 'audio/mpeg'); } };
+    },
+  };
+  const LOBBY = { idFromName: () => 'x', get: () => ({ fetch: async () => new Response('{"rooms":[]}') }) };
+  return (path, init) => worker.fetch(new Request(`https://studio.test${path}`, init), { ASSETS, MEDIA, LOBBY, STUDIO_NAME: 'Test Studio' });
+}
+
+test('media: published songs and videos from the manifests get pages, players, byte ranges and directory rows; the rest is listed as left out', async () => {
+  const dir = studio('media');
+  assert.equal(out(run(['game', 'new', 'music'], dir)).ok, false, 'music is a page address, not a game id');
+  mkdirSync(join(dir, 'music/theme'), { recursive: true });
+  mkdirSync(join(dir, 'videos/trailer'), { recursive: true });
+  writeFileSync(join(dir, 'music/theme/theme.mp3'), Buffer.from('ID3-fake-audio-bytes'));
+  writeFileSync(join(dir, 'music/theme/theme-master.wav'), Buffer.from('RIFF-master'));
+  writeFileSync(join(dir, 'music/theme/theme-loop.ogg'), Buffer.from('OggS-loop'));
+  writeFileSync(join(dir, 'videos/trailer/trailer.mp4'), Buffer.from('ftyp-16x9'));
+  writeFileSync(join(dir, 'videos/trailer/trailer-9x16.mp4'), Buffer.from('ftyp-9x16'));
+  writeFileSync(join(dir, 'videos/trailer/poster.jpg'), Buffer.from('jpeg'));
+  writeFileSync(join(dir, 'music/manifest.json'), JSON.stringify({ v: 1, items: [
+    { slug: 'theme', kind: 'song', title: 'Owl <Theme>', blurb: 'A hook.', published: true, duration: 16, bpm: 120, lyrics: 'Stay up <late>',
+      files: [{ role: 'audio', path: 'music/theme/theme.mp3' }, { role: 'master', path: 'music/theme/theme-master.wav', public: false }, { role: 'loop', path: 'music/theme/theme-loop.ogg', bars: 8, name: 'Theme loop' }],
+      credits: 'Made with Eleven Music.', rights: { provider: 'elevenlabs', plan: 'creator', commercial: true } },
+    { slug: 'draft', title: 'Not yet', published: false, files: [{ role: 'audio', path: 'music/theme/theme.mp3' }] },
+    { slug: 'cloud', title: 'In R2', published: true, files: [{ role: 'audio', path: 'music/cloud.mp3', key: 'music/cloud.mp3' }] },
+    { key: 'music/old.mp3', file: 'music/old.mp3', bytes: 3 },
+  ] }));
+  writeFileSync(join(dir, 'videos/manifest.json'), JSON.stringify({ v: 1, items: [
+    { slug: 'trailer', kind: 'trailer', title: 'Trailer', published: true, duration: 15, honesty: 'Real gameplay; bots fill empty seats.',
+      files: [{ role: 'video', path: 'videos/trailer/trailer.mp4' }, { role: 'vertical', path: 'videos/trailer/trailer-9x16.mp4' }, { role: 'poster', path: 'videos/trailer/poster.jpg' }] },
+  ] }));
+  const b = out(run(['build'], dir));
+  assert.equal(b.ok, true, JSON.stringify(b));
+  assert.deepEqual([b.catalogue, b.songs, b.videos], [[], ['theme'], ['trailer']]);
+  assert.ok(b.mediaSkipped.some((m) => m.item === 'draft' && /not published/.test(m.why)));
+  assert.ok(b.mediaSkipped.some((m) => m.item === 'cloud' && /not on this computer/.test(m.why)), 'an R2 key without a bucket is not reachable yet');
+  const dist = join(dir, 'site/dist');
+  assert.ok(existsSync(join(dist, 'music/theme/theme.mp3')) && existsSync(join(dist, 'music/theme/theme-loop.ogg')));
+  assert.equal(existsSync(join(dist, 'music/theme/theme-master.wav')), false, 'a file marked public: false never reaches the site');
+  const list = out(run(['media', 'list'], dir));
+  assert.deepEqual(list.music.pages.map((p) => p.slug), ['theme']);
+
+  const site = await siteOf(dir);
+  const home = await (await site('/')).text();
+  assert.match(home, /href="\/music\/theme\/"/);
+  assert.match(home, /href="\/videos\/trailer\/"/);
+  assert.match(home, /Owl &lt;Theme&gt;/, 'titles are escaped');
+  const song = await site('/music/theme/');
+  assert.equal(song.status, 200);
+  const songHtml = await song.text();
+  assert.match(songHtml, /<audio controls preload="metadata" src="\/music\/theme\/theme\.mp3">/);
+  assert.match(songHtml, /Stay up &lt;late&gt;/);
+  assert.match(songHtml, /Licensed for commercial use \(made on the provider's creator plan\)/);
+  assert.match(songHtml, /download><b>Theme loop<\/b>/);
+  assert.equal((await site('/music/draft/')).status, 404, 'an unpublished song has no page');
+  assert.equal((await site('/music/theme')).status, 301);
+  const video = await (await site('/videos/trailer/')).text();
+  assert.match(video, /<video data-main controls playsinline preload="metadata" src="\/videos\/trailer\/trailer\.mp4" poster="\/videos\/trailer\/poster\.jpg">/);
+  assert.match(video, /trailer-9x16\.mp4/);
+  assert.match(video, /Real gameplay; bots fill empty seats\./);
+  const part = await site('/music/theme/theme.mp3', { headers: { range: 'bytes=0-3' } });
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get('content-range'), 'bytes 0-3/20');
+  assert.equal(Buffer.from(await part.arrayBuffer()).toString(), 'ID3-');
+  assert.equal((await site('/music/theme/theme-master.wav')).status, 404);
+  const wk = await (await site('/.well-known/homie-studio.json')).json();
+  assert.deepEqual(wk.songs.map((x) => [x.slug, x.page, x.audio]), [['theme', 'https://studio.test/music/theme/', 'https://studio.test/music/theme/theme.mp3']]);
+  assert.deepEqual(wk.videos.map((x) => [x.slug, x.video, x.poster]), [['trailer', 'https://studio.test/videos/trailer/trailer.mp4', 'https://studio.test/videos/trailer/poster.jpg']]);
+
+  // No storage is the default: everything above was served by the site itself. After `storage add` (a bucket
+  // this studio made), a key is served from R2 at /media/<key>, ranges included.
+  const s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+  assert.equal(s.cloudflare.r2, null, 'a new studio has no storage');
+  s.cloudflare.r2 = 'night-owls-media';
+  s.cloudflare.created = [`r2:${s.cloudflare.r2}`];
+  writeFileSync(join(dir, 'studio.json'), JSON.stringify(s));
+  assert.deepEqual(out(run(['build'], dir)).songs, ['theme', 'cloud'], 'the manifest order is the site order');
+  const r2site = await siteOf(dir, { 'music/cloud.mp3': Buffer.from('0123456789') });
+  assert.match(await (await r2site('/music/cloud/')).text(), /src="\/media\/music\/cloud\.mp3"/);
+  const r2part = await r2site('/media/music/cloud.mp3', { headers: { range: 'bytes=-4' } });
+  assert.equal(r2part.status, 206);
+  assert.equal(r2part.headers.get('content-range'), 'bytes 6-9/10');
+  assert.equal(Buffer.from(await r2part.arrayBuffer()).toString(), '6789');
+  assert.equal((await r2site('/media/music/cloud.mp3', { headers: { range: 'bytes=50-60' } })).status, 416);
 });
