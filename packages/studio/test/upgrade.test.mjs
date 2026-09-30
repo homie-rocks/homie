@@ -68,6 +68,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'pin package.json',
     'scripts package.json',
     'update-section AGENTS.md ## Commands (all through the pinned CLI in node_modules)',
+    'update-section AGENTS.md ## Layout',
     'update-section AGENTS.md ## Making games',
     'update-section AGENTS.md ## The site',
     'version studio.json',

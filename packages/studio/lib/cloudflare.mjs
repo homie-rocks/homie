@@ -211,7 +211,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const url = siteUrl(root);
   step(`deployed ${cf.worker} in ${Math.round((Date.now() - started) / 1000)} s`, { url, ...(workersDev && workersDev !== url ? { workersDev } : {}) });
 
-  // The homie.rocks directory claim: the live site claims itself the first time its manifest is read (0.9.0), so
+  // The homie.rocks directory claim: the live site claims itself the first time its manifest is read (0.10.0), so
   // reading it once now is all it takes; nothing is stored by hand.
   const directory = homie || studio.homie?.directory || 'https://homie.rocks';
   let claim = null;
@@ -235,7 +235,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
 }
 
 /**
- * Read the live site's manifest once, which makes a 0.9.0 site claim itself in its directory. Returns the claim it
+ * Read the live site's manifest once, which makes a 0.10.0 site claim itself in its directory. Returns the claim it
  * serves, or null (the directory did not answer, the site is not reachable yet, or it is a Preview). A fresh deploy
  * can take a few seconds to answer everywhere, so it asks three times.
  */

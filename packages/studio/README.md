@@ -72,8 +72,8 @@ site. A game made with Homie's arcade controls that knocks for a Homie box (`/__
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y --package=https://homie.rocks/npm/homie-studio-0.9.0.tgz homie-studio upgrade          # the plan; changes nothing
-npx -y --package=https://homie.rocks/npm/homie-studio-0.9.0.tgz homie-studio upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.10.0 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.10.0 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 

@@ -39,7 +39,7 @@ export function slugify(name) {
 /*
  * The Worker config, generated so a later deploy can rewrite exactly what it owns.
  *
- * `layout: 'root'` (every studio from 0.9.0) keeps it at the studio's root, where Cloudflare's Workers Builds and
+ * `layout: 'root'` (every studio from 0.10.0) keeps it at the studio's root, where Cloudflare's Workers Builds and
  * the "Deploy to Cloudflare" button look for it; `'site'` is the older site/wrangler.jsonc.
  *
  * PREVIEWS (Cloudflare Worker Previews, Wrangler 4.135.0+): a branch deploys with `npx wrangler preview` (Workers
@@ -102,7 +102,7 @@ directory lists its games; homie.rocks does not host them.
 | \`music/\`, \`videos/\` | Songs, scores, loops; trailers, music videos, cutscenes. \`manifest.json\` lists each one (\`node_modules/@homie-rocks/studio/media/MEDIA.md\`); a published entry gets a page at \`/music/<slug>/\` or \`/videos/<slug>/\`, served from the site itself (files up to 25 MiB) or, for larger media, from the studio's storage once it has storage (see below; \`npx --no-install homie-studio media put <file>\`). Large files never go into git. The Homie plugin's \`music\` and \`video\` skills make them. |
 | \`posts/\` | The studio's news and drops: one markdown file each (\`posts/2026-09-30-we-are-live.md\`: \`title:\`, \`date:\`, \`summary:\`, and \`game:\` / \`song:\` / \`video:\` to link one). They are the site's Posts, with Atom and JSON feeds. |
 | \`site/\` | The studio's site: its look (\`theme.json\`), and anything of its own that wins over the generated pages (\`site/README.md\`); the Worker (\`src/worker.mjs\`) and its D1 migrations. |
-| \`wrangler.jsonc\` | The Worker's Cloudflare config (the Worker, D1, the Table and Lobby Durable Objects, and \`previews\` for branch Previews). It sits at the root, where Cloudflare's Workers Builds reads it. |
+| \`wrangler.jsonc\` | The Worker's Cloudflare config (the Worker, D1, the Table and Lobby Durable Objects, and \`previews\` for branch Previews), at the root, where Cloudflare's Workers Builds reads it. A studio made before 0.10.0 keeps it in \`site/\` and deploys from a computer; every command finds either. |
 | \`changes/\` | One small file per change that went out through a pull request (\`homie-studio progress pr\` writes it): the site lists the newest, so the Claude app can tell when a merged change is live. |
 | \`studio.json\` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. \`.studio/\` (git-ignored) is this computer's own state. |
 | \`.claude/skills/\` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |

@@ -27,14 +27,14 @@ export function requireStudio(from) {
 }
 
 /*
- * WHERE THE WORKER'S CONFIG LIVES. From 0.9.0 a new studio keeps `wrangler.jsonc` at its root, which is what
+ * WHERE THE WORKER'S CONFIG LIVES. From 0.10.0 a new studio keeps `wrangler.jsonc` at its root, which is what
  * Cloudflare's Workers Builds and its "Deploy to Cloudflare" button read (they run the studio's own `npm run build`
- * and `npm run deploy` at the repository's root). A studio made before 0.9.0 keeps `site/wrangler.jsonc`; every
+ * and `npm run deploy` at the repository's root). A studio made before 0.10.0 keeps `site/wrangler.jsonc`; every
  * command runs Wrangler next to whichever the studio has, so both keep working.
  */
 export function workerDir(root) { return existsSync(join(root, 'wrangler.jsonc')) || !existsSync(join(root, 'site', 'wrangler.jsonc')) ? root : join(root, 'site'); }
 export function configPath(root) { return join(workerDir(root), 'wrangler.jsonc'); }
-/** 'root' (0.9.0 and later: Workers Builds ready) or 'site' (older studios). */
+/** 'root' (0.10.0 and later: Workers Builds ready) or 'site' (older studios). */
 export function layoutOf(root) { return workerDir(root) === root ? 'root' : 'site'; }
 
 export function readStudio(root) { return JSON.parse(readFileSync(join(root, 'studio.json'), 'utf8')); }

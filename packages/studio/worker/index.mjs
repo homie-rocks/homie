@@ -91,9 +91,9 @@ async function postsOf(env, origin) {
 }
 
 /*
- * THE SITE CLAIMS ITSELF IN THE DIRECTORY (0.9.0). The homie.rocks directory lists a studio only when its site
+ * THE SITE CLAIMS ITSELF IN THE DIRECTORY (0.10.0). The homie.rocks directory lists a studio only when its site
  * serves the claim the directory handed out for that exact address, which proves the studio controls the site.
- * Before 0.9.0 `homie-studio deploy` fetched the claim and stored it in D1 from the person's computer; a site built
+ * Before 0.10.0 `homie-studio deploy` fetched the claim and stored it in D1 from the person's computer; a site built
  * by Cloudflare's Workers Builds has no such step. So the site asks for its own claim the first time its manifest
  * is read (by the directory publishing it, or `deploy` reading it once), for the address it is being read at, and
  * keeps it in its D1 (`meta`, `homie_claim:<origin>`).

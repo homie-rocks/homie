@@ -236,6 +236,8 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       },
       // studio.json `stats.share`: the site tells the directory two numbers for the hub (played this week).
       ...(studio.stats?.share === true ? { stats: { share: true } } : {}),
+      // studio.json `"rooms": { "share": false }`: the manifest names no rooms, so the hub shows none of this studio's.
+      ...(studio.rooms?.share === false ? { rooms: { share: false } } : {}),
       // The directory the live site claims itself in (0.10.0); studio.json `homie.directory: false` keeps it out.
       // HOMIE_DIRECTORY (a build variable) points one build at another directory, such as a staging one.
       directory: /^https:\/\/[a-z0-9.-]+$/i.test(process.env.HOMIE_DIRECTORY ?? '') ? process.env.HOMIE_DIRECTORY

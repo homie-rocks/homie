@@ -129,7 +129,7 @@ studio and changes nothing):
 | Durable Object `Lobby` | one per game | Puts strangers who press Play into the same public room, and opens the next room when one is full. |
 | D1 database | `<studio>-db` | The directory claim and every finished round. |
 
-From 0.9.0 the Worker's config (`wrangler.jsonc`) sits at the studio's root, so Cloudflare's
+From 0.10.0 the Worker's config (`wrangler.jsonc`) sits at the studio's root, so Cloudflare's
 **Workers Builds** can deploy it from GitHub: `npm run build` and `npm run deploy` on the
 production branch, and `npx wrangler preview` on every other branch, which gets a Preview
 URL and its own rooms (a Durable Object namespace of its own). The live site claims itself
@@ -202,7 +202,7 @@ repository:
   asks with `studio_request_grant`, and only the name's owner can approve it.
 - **Release tarballs.** homie.rocks serves every published `@homie-rocks/studio` version
   at `https://homie.rocks/npm/homie-studio-<version>.tgz`, the same bytes as the npm
-  registry's. Studios made before 0.9.0 pin those; a new studio pins the registry's
+  registry's. Studios made before 0.10.0 pin those; a new studio pins the registry's
   exact version, which Workers Builds and Claude Code cloud sessions reach by default.
 
 homie.rocks itself, the Homie app for TVs, phones and places, and Homie's own games (their

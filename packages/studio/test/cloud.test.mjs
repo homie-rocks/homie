@@ -1,5 +1,5 @@
 /**
- * @homie-rocks/studio 0.9.0: a studio works from the Claude app, with Cloudflare's own CI doing the deploys.
+ * @homie-rocks/studio 0.10.0: a studio works from the Claude app, with Cloudflare's own CI doing the deploys.
  *   - the template: `new --template` (and the repository's template/ folder) is what Cloudflare's "Deploy to
  *     Cloudflare" button and Workers Builds need: wrangler.jsonc at the root, Previews with their own rooms,
  *     build and deploy scripts, the toolkit pinned from registry.npmjs.org, a first game and a Connect band;
