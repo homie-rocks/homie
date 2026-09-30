@@ -10,7 +10,7 @@ Most people never run this by hand: the Homie plugin for Claude Code and Codex d
 and the person approves Cloudflare once in their browser.
 
 ```sh
-npx -y --package=https://homie.rocks/npm/homie-studio-0.7.0.tgz homie-studio new ./night-owls --name "Night Owls"
+npx -y --package=https://homie.rocks/npm/homie-studio-0.8.0.tgz homie-studio new ./night-owls --name "Night Owls"
 cd night-owls && npm install
 npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
 npx homie-studio dev                                   # the whole site locally
