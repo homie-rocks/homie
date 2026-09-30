@@ -42,9 +42,10 @@ codex plugin add homie@homie
 Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
 session afterwards so the skills and tools load.
 
-Then ask for a studio. The plugin adds three skills (`studio-setup`, `game`, `publish`)
-and connects the Homie MCP server at `https://homie.rocks/mcp`, which has creator tools
-only: set up a studio, make or remix a game, preview it, deploy it, and list it.
+Then ask for a studio. The plugin adds four skills (`studio-setup`, `game`, `port`,
+`publish`) and connects the Homie MCP server at `https://homie.rocks/mcp`, which has
+creator tools only: set up a studio, make or remix a game, make an existing
+single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.
 
 ## What the studio deploys to your Cloudflare

@@ -11,6 +11,9 @@
  *   homie-studio build [<id>]
  *   homie-studio dev [--port 8787]
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
+ *   homie-studio port plan <game folder>
+ *   homie-studio port import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
+ *   homie-studio port check <id> [--url <site>] [--only owner-desk,owner-phone,owner-iphone,round,life,tv] [--shots <dir>]
  *   homie-studio deploy
  *   homie-studio publish
  *   homie-studio media put <file> [--as <key>]
@@ -25,19 +28,22 @@ import { build } from '../lib/build.mjs';
 import { check } from '../lib/check.mjs';
 import { deploy, whoami, wranglerBin } from '../lib/cloudflare.mjs';
 import { publish } from '../lib/directory.mjs';
+import { importPort, planPort } from '../lib/port.mjs';
+import { portCheck } from '../lib/port-check.mjs';
 import { newStudio } from '../lib/scaffold.mjs';
 import { listGames, newGame, readStudio, remixGame, requireStudio, starters, writeStudio } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
+const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a.startsWith('--')) {
     const [k, v] = a.slice(2).split(/=(.*)/s, 2);
     if (v !== undefined) flags.set(k, v);
-    else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') && !['json', 'yes', 'detach', 'no-install'].includes(k)) flags.set(k, argv[++i]);
+    else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') && !BOOL_FLAGS.includes(k)) flags.set(k, argv[++i]);
     else flags.set(k, true);
   } else positional.push(a);
 }
@@ -46,7 +52,8 @@ const log = asJson ? () => {} : (line) => process.stderr.write(`${line}\n`);
 
 function print(result) {
   if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
-  if (result.ok === false) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
+  if (result.ok === false && result.command !== 'port check') { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
+  if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
   const lines = [];
   switch (result.command) {
     case 'new':
@@ -67,6 +74,22 @@ function print(result) {
       break;
     case 'publish':
       lines.push(`Listed in the directory: ${result.studioPage ?? result.directory}`, ...(result.games ?? []).map((g) => `  ${g.name}: ${g.play}`));
+      break;
+    case 'port plan': {
+      const f = result.facts;
+      lines.push(`Port plan for ${result.folder}`, '', `Difficulty: ${result.grade.toUpperCase()}`, ...result.reasons.map((r) => `  - ${r}`), '',
+        `What it is: ${f.engine.join(', ')}; ${f.loc} lines of game code in ${f.files} files (${Math.round(f.bytes / 1024)} KB); ${f.turnBased ? 'turn-based / moves on input' : 'real time'}${f.physics.length ? `; physics: ${f.physics.join(', ')}` : ''}.`,
+        `Input: keys ${f.input.keys}, mouse ${f.input.mouse}, touch ${f.input.touch}, pointer ${f.input.pointer}${f.input.pointerLock ? ', pointer lock' : ''}.`,
+        `Recommended: movement "${result.recommend.movement}", check view "${result.recommend.view}", build "${result.recommend.build}".`,
+        `Licence: ${result.licence.kind}${result.licence.file ? ` (${result.licence.file})` : ''}.`, '', 'Risks:', ...(result.risks.length ? result.risks.map((r) => `  - ${r}`) : ['  - none found by reading; the checks will say']));
+      break;
+    }
+    case 'port import':
+      lines.push(`games/${result.id} is a port of ${result.from} (${result.files} files, build "${result.mode}", draft grade ${result.plan.grade}).`, ...result.edits.map((e) => `  ${e}`), '', 'Next:', ...result.next.map((n) => `  - ${n}`));
+      break;
+    case 'port check':
+      lines.push(`${result.ok ? 'PASS' : 'NOT YET'}: ${result.game} at ${result.url} (${Math.round(result.totalMs / 1000)} s)`,
+        ...result.passed.map((p) => `  ok    ${p}`), ...result.failed.map((f) => `  FAIL  ${f}`), ...result.skipped.map((f) => `  skip  ${f}`), '', `Receipt and screenshots: ${result.out}`);
       break;
     case 'check':
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
@@ -89,7 +112,15 @@ async function main() {
   if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install') });
   if (cmd === 'starters') return { ok: true, command: 'starters', starters: starters() };
 
+  if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
   const root = requireStudio();
+  if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
+  if (cmd === 'port' && sub === 'check') {
+    const game = positional[2] ?? listGames(root)[0]?.id;
+    const url = flags.get('url') ?? readStudio(root).cloudflare?.url;
+    if (!url) return { ok: false, command: 'port check', why: 'give --url (the local dev address or the live site)' };
+    return portCheck({ url, game, root, only: flags.get('only') ?? null, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log });
+  }
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });
   if (cmd === 'game' && sub === 'remix') return remixGame(root, positional[2], flags.get('id'), { name: flags.get('name') });
   if (cmd === 'games') return { ok: true, command: 'games', games: listGames(root).map(({ dir, ...g }) => ({ ...g, dir: relative(root, dir) })) };
@@ -159,7 +190,7 @@ try {
   if (result && result.command !== 'help') print(result);
   if (result?.ok === false) process.exitCode = 1;
   // Chrome's pipes can outlive browser.close(); a finished check must not hang its caller.
-  if (result?.command === 'check') process.exit(process.exitCode ?? 0);
+  if (result?.command === 'check' || result?.command === 'port check') process.exit(process.exitCode ?? 0);
 } catch (error) {
   print({ ok: false, why: error instanceof Error ? error.message : String(error) });
   process.exitCode = 1;

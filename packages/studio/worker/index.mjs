@@ -7,6 +7,8 @@
  *   /<game>/                   the game's page
  *   /<game>/play               the play shell: asks the Lobby for a public room and
  *                              boots the game in a sandboxed frame, seated at once
+ *   /<game>/tv                 the big screen: the same room as a spectator, with a
+ *                              QR code phones scan to join (also /<game>/play?screen=1)
  *   /<game>/__game/...         the game's own files (index.html gets HOMIE_NET)
  *   /<game>/__net?room=        the room's netplay socket (Table Durable Object)
  *   /<game>/__watch?room=      the room's facts, for the shell
@@ -26,6 +28,7 @@
  */
 import { NetRoom } from './room.mjs';
 import { gamePage, homePage, notFoundPage, playPage } from './pages.mjs';
+import { qrSvg } from './qr.mjs';
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const ROOM_ID = /^[A-Za-z0-9_-]{1,32}$/;
@@ -151,6 +154,20 @@ export default {
       if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
       const sub = parts.slice(1).join('/');
       if (sub === '') return gamePage(cat, meta, (await liveCounts(env, [meta]))[game] ?? 0);
+      if (sub === 'tv' || (sub === 'play' && url.searchParams.get('screen') === '1')) {
+        // The big screen picks its room now, so the QR it shows puts every phone in that same room.
+        let room = ROOM_ID.test(url.searchParams.get('room') || '') ? url.searchParams.get('room') : null;
+        if (!room) {
+          try {
+            const max = Math.max(1, Math.min(16, Number(meta.players?.max) || 8));
+            room = (await (await env.LOBBY.get(env.LOBBY.idFromName(game)).fetch(`https://lobby/join?max=${max}`, { method: 'POST' })).json()).room ?? null;
+          } catch { room = null; }
+        }
+        const joinUrl = `${url.origin}/${game}/play${room ? `?room=${encodeURIComponent(room)}` : ''}`;
+        let qr = null;
+        try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
+        return playPage(cat, meta, { screen: true, joinUrl, qr, room });
+      }
       if (sub === 'play') return playPage(cat, meta);
       if (sub === 'api/lobby') {
         const max = Math.max(1, Math.min(16, Number(meta.players?.max) || 8));
@@ -334,6 +351,8 @@ export class Lobby {
     if (url.pathname === '/report' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
       if (typeof body.room !== 'string' || !ROOM_ID.test(body.room)) return json({ ok: false }, 400);
+      // Only public rooms the Lobby made are matched with strangers; a named room (?room=) stays private.
+      if (!this.rooms.has(body.room) && !/^pub-\d+$/.test(body.room)) return json({ ok: true, private: true });
       const r = this.rooms.get(body.room) ?? { name: body.room, players: 0, at: now, pending: [] };
       const grew = Math.max(0, (Number(body.players) || 0) - r.players);
       r.pending.splice(0, grew);

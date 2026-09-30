@@ -254,6 +254,17 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   readonly spectator: boolean;
   readonly offline: boolean;
   readonly connected: boolean;
+  /** Why the client stopped for good (a refusal reconnecting would repeat: 'replaced', 'room-full', ...), else null. */
+  readonly closedWhy: string | null;
+  /** How long the socket has been down while it reconnects (ms; 0 while connected). */
+  readonly downMs: number;
+  /**
+   * Host: hand the room to another browser — a checkpoint, then the protocol's `yield` (the same road a hidden
+   * tab takes). The relay elects the best other candidate, or keeps me host when nobody else can host.
+   * Use it when a big screen or a struggling phone should give the room to a seated computer (never in a
+   * host's first 30 s, at most once a minute); false when not sent.
+   */
+  handOff(): boolean;
   /** Seated replica: true while my browser moves my body; false while the host does (host movement, or taken). */
   readonly owned: boolean;
   readonly id: string | null;
@@ -476,8 +487,26 @@ export class Roster {
 /* --------------------------------------------------------------- the client */
 
 const LADDER = [250, 500, 1000, 2000, 4000];
-/** Relay errors after which reconnecting would only repeat the refusal. */
-const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'flood']);
+/**
+ * Relay errors after which reconnecting would only repeat the refusal. A 'flood' kick is NOT one: a replica's
+ * inputs bunch up behind a stall it did not cause (a host migration, a relay or network hiccup that delivers a
+ * second of frames at once), and a kick that ended the page's play for good left a phone frozen with no word.
+ * After one it comes back (its seat token keeps its body), sending at the slow rate below.
+ */
+const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many']);
+/**
+ * Input pacing (NETPLAY.md §5): at most this many `in` frames in any rolling second from this browser, whatever
+ * the frame rate or the press rate: two thirds of the relay's cap of 60, so frames that reach it bunched (a
+ * stall anywhere between) still fit under the cap.
+ */
+const IN_CAP_PER_S = 32;
+/** Longest a page with a live socket listens for the relay's welcome before it plays alone (ms of time it could listen). */
+const CONNECT_OPEN_MAX_MS = 10_000;
+/** After the relay reports dropped inputs (or kicked this browser for them): the cap for the next while. */
+const IN_SLOW_CAP_PER_S = 15;
+const IN_SLOW_MS = 8000;
+/** A socket with this much still unsent does not queue another input frame (the newest one waits instead). */
+const IN_BACKLOG_BYTES = 2048;
 
 function heldList(held: Iterable<string> | Record<string, boolean> | undefined): string[] {
   if (!held) return [];
@@ -606,6 +635,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let prevHeld = new Set<string>();
   let pendingPresses: Record<string, number> = {};
   let inputTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Wall times of the input frames sent in the last second, and until when the slow cap holds. */
+  const inSent: number[] = [];
+  let inSlowUntil = 0;
+  /** Why this client stopped for good (a FINAL_ERRORS refusal), or null while it plays or reconnects. */
+  let closedWhy: string | null = null;
+  /** Wall time the socket went down (0 while connected): how long a reconnect has taken. */
+  let downSince = 0;
   const sentHist: { q: number; a: A; h: string[]; at: number; r: number }[] = [];
   const inputs = new Map<number, InputFrame<A>>();
   const presses = new Map<number, Record<string, number>>();
@@ -798,12 +834,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       }
       case 'error': {
         const code = String(m['code'] ?? '');
+        // Inputs over the relay's cap were dropped: send fewer for a while (the newest frame still goes out).
+        if ((code === 'rate' && m['of'] === 'in') || code === 'flood') inSlowUntil = wall() + IN_SLOW_MS;
         if (code === 'rate' || code === 'state-full') { warnOnce(`${code}:${String(m['of'] ?? '')}`, m['message']); return; }
         console.warn('[netplay] relay refused:', code, m['message']);
         // The same seat opened in another tab, a full room, a version the relay does not speak: reconnecting
         // would repeat the refusal (or, for 'replaced', make the two tabs evict each other for ever).
         if (FINAL_ERRORS.has(code)) {
           closed = true;
+          closedWhy = code;
           post?.({ what: 'closed', why: code });
         }
         return;
@@ -846,6 +885,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (next === 'host' && !snap && !continuing) snap = localSnap();
     offline = false;
     connected = true;
+    downSince = 0;
     attempt = 0;
     emit('status', true);
     post?.({ what: 'token', token, seat, room: cfg?.room ?? null });
@@ -897,10 +937,14 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (ages.length > 40) ages.shift();
         const sorted = [...ages].sort((x, y) => x - y);
         ageP90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))] as number;
+        // The 95th percentile and 1.4 intervals, not the 90th and 1.2. A phone host's frame
+        // quantisation (snapshots at 50/67 ms) plus 30-50 ms relay jitter held the picture on 5-8 % of a desktop
+        // replica's frames in the contract e2e (interpolation-not-starved); this buys ~20 ms of delay for it.
+        const ageP95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] as number;
         // Render far enough back that the next snapshot is normally here before we need it: its age, plus one
         // interval. Rise up to 6 ms a snapshot (a hold is visible); fall 6% of the excess a snapshot, at least 3 ms
         // (boot-time jank clears in about a second, as a brief time-warp nobody sees).
-        const target = Math.max(50, Math.min(400, ageP90 + iv * 1.2 + 4));
+        const target = Math.max(50, Math.min(400, ageP95 + iv * 1.4 + 6));
         if (!delaySmooth || ages.length <= 3) delaySmooth = target;
         else if (target > delaySmooth) delaySmooth += Math.min(6, target - delaySmooth);
         else delaySmooth -= Math.min(delaySmooth - target, Math.max(3, (delaySmooth - target) * 0.06));
@@ -1010,9 +1054,24 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     raw({ t: 'ckpt', k: c.k, st: c.st, d: c.d, c: c.c });
   }
 
+  /** How long until one more input frame fits the rolling-second cap (0: now). */
+  function inputBudgetWait(): number {
+    const t = wall();
+    while (inSent.length && (inSent[0] as number) <= t - 1000) inSent.shift();
+    const cap = t < inSlowUntil ? IN_SLOW_CAP_PER_S : IN_CAP_PER_S;
+    if (inSent.length < cap) return 0;
+    return Math.max(1, (inSent[inSent.length - cap] as number) + 1000 - t);
+  }
+
   function flushInput(): void {
     inputTimer = null;
     if (role === 'host' || seat === null || offline || !connected || pendingA === undefined) return;
+    // Never a burst: over the cap, or with the last frames still unsent on the socket, the newest frame waits
+    // (it replaces whatever was pending, so nothing stale is ever flushed after a stall).
+    const budget = inputBudgetWait();
+    const backlog = (ws?.bufferedAmount ?? 0) > IN_BACKLOG_BYTES;
+    if (budget > 0 || backlog) { inputTimer = setTimeout(flushInput, backlog ? Math.max(budget, 30) : budget); return; }
+    inSent.push(wall());
     inSeq += 1;
     const msg: Record<string, unknown> = { t: 'in', q: inSeq, a: pendingA, h: pendingHeld, r: mine.rs };
     if (Object.keys(pendingPresses).length) msg['p'] = pendingPresses;
@@ -1026,7 +1085,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   function scheduleInput(urgent: boolean): void {
     const since = wall() - lastInputSentAt;
-    const wait = urgent ? Math.max(0, 16 - since) : Math.max(0, inputMs - since);
+    const wait = Math.max(inputBudgetWait(), urgent ? Math.max(0, 16 - since) : Math.max(0, inputMs - since));
     if (wait <= 0) { if (inputTimer) { clearTimeout(inputTimer); inputTimer = null; } flushInput(); return; }
     if (inputTimer) return;
     inputTimer = setTimeout(flushInput, wait);
@@ -1071,6 +1130,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (why !== 'closed') { try { sock.close(4000, why); } catch { /* gone */ } }
     const was = connected;
     connected = false;
+    if (was) downSince = wall();
     if (was) emit('status', false);
     notifyStats(true);
     retry();
@@ -1106,8 +1166,24 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   } else {
     post?.({ what: 'attached', v: NETPLAY_VERSION });
     open();
-    // A relay that never answers must not leave a game on a black screen.
-    connectTimer = setTimeout(() => { if (!roleKnown) goOfflineHost('relay-timeout'); }, connectTimeoutMs);
+    // A relay that never answers must not leave a game on a black screen. But the wait is counted only while
+    // this page is able to listen: a phone compiling shaders under load is blocked for seconds at a time, and
+    // neither its socket's open nor the relay's welcome can be handled meanwhile. Giving up on the wall clock
+    // started a private fight 1 at every loaded boot and swapped it for the room's a moment later. A socket
+    // that is connecting or open gets CONNECT_OPEN_MAX_MS of that listening time; one that failed outright
+    // (ws is null between retries) gets connectTimeoutMs.
+    let listenedMs = 0;
+    let lastCheckAt = wall();
+    const connectCheck = (): void => {
+      if (roleKnown) return;
+      const t = wall();
+      listenedMs += Math.min(t - lastCheckAt, 600);
+      lastCheckAt = t;
+      const live = Boolean(ws && (ws.readyState === 0 || ws.readyState === 1));
+      if (listenedMs < (live ? CONNECT_OPEN_MAX_MS : connectTimeoutMs)) { connectTimer = setTimeout(connectCheck, 250); return; }
+      goOfflineHost('relay-timeout');
+    };
+    connectTimer = setTimeout(connectCheck, 250);
     pingTimer = setInterval(ping, 2000);
     ckptTimer = setInterval(sendCheckpoint, checkpointMs);
     statsTimer = setInterval(() => notifyStats(true), 500);
@@ -1133,6 +1209,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get spectator() { return seat === null && !offline; },
     get offline() { return offline; },
     get connected() { return connected; },
+    get closedWhy() { return closedWhy; },
+    get downMs() { return connected || !downSince ? 0 : wall() - downSince; },
     get owned() { return role === 'host' || offline || seat === null ? true : mine.own; },
     get id() { return id; },
     get name() { return name; },
@@ -1161,8 +1239,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       const c = ctlWire();
       const text = JSON.stringify(c.length ? { t: 'snap', k: tick, st, d, c } : { t: 'snap', k: tick, st, d });
       if (!ws || ws.readyState !== 1) return false;
-      // A congested socket drops a snapshot rather than queueing a stale one.
-      if ((ws.bufferedAmount ?? 0) > 256 * 1024) return false;
+      // A congested socket drops a snapshot rather than queueing a stale one. At 3 KB (about six
+      // snapshots), not 256 KB. A starved network thread on a loaded phone held a second of snapshots and then
+      // flushed them at once; the relay counted 30+ in a second, dropped them, and called the host stalled.
+      if ((ws.bufferedAmount ?? 0) > 3 * 1024) return false;
       try { ws.send(text); } catch { return false; }
       countBytes(bytesOut, text.length);
       lastSnapSentAt = wall();
@@ -1173,6 +1253,11 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       return true;
     },
     checkpointNow: sendCheckpoint,
+    handOff() {
+      if (role !== 'host' || offline || !connected || peers.size < 2) return false;
+      sendCheckpoint();
+      return raw({ t: 'yield' });
+    },
     round(r) {
       roundInfo = r;
       post?.({ what: 'round', round: r });

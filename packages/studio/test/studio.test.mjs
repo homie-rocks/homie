@@ -161,3 +161,68 @@ esac
   assert.equal(resumed.ok, true, JSON.stringify(resumed));
   assert.equal(resumed.url, 'https://test-studio.acct.workers.dev');
 });
+
+test('port: plan grades a single-player game and reads its risks; import brings it in as a static game with the toolkit first; build ships homie-port.js', () => {
+  const fixture = join(PKG, 'test', 'fixtures', 'coin-dash');
+  const plan = out(run(['port', 'plan', fixture], scratch));
+  assert.equal(plan.ok, true, JSON.stringify(plan));
+  assert.equal(plan.grade, 'easy');
+  assert.deepEqual(plan.recommend, { movement: 'owner', view: 'top', build: 'static' });
+  assert.equal(plan.licence.kind, 'Apache-2.0');
+  assert.ok(plan.risks.some((r) => /localStorage/.test(r)), 'storage in a sandboxed frame is named');
+  assert.ok(plan.risks.some((r) => /keyboard only/.test(r)), 'keyboard-only is named');
+  const dir = studio('ports');
+  const imp = out(run(['port', 'import', fixture, '--id', 'coin-dash'], dir));
+  assert.equal(imp.ok, true, JSON.stringify(imp));
+  const meta = JSON.parse(readFileSync(join(dir, 'games/coin-dash/game.json'), 'utf8'));
+  assert.deepEqual([meta.build.mode, meta.netplay.movement, meta.port.licence], ['static', 'owner', 'Apache-2.0']);
+  const html = readFileSync(join(dir, 'games/coin-dash/index.html'), 'utf8');
+  assert.ok(html.indexOf('homie-port.js') > 0 && html.indexOf('homie-port.js') < html.indexOf('game.js'), 'the toolkit loads before the game');
+  assert.match(html, /user-scalable=no/, 'a phone-safe viewport');
+  assert.ok(existsSync(join(dir, 'games/coin-dash/LICENSE')), 'the licence travels with the game');
+  assert.equal(out(run(['port', 'import', fixture, '--id', 'coin-dash'], dir)).ok, false, 'an existing id is refused');
+  const b = out(run(['build'], dir));
+  assert.equal(b.ok, true, JSON.stringify(b));
+  const port = readFileSync(join(dir, 'site/dist/games/coin-dash/homie-port.js'), 'utf8');
+  assert.match(port, /HomiePort/, 'the toolkit as one classic script');
+  assert.ok(existsSync(join(dir, 'site/dist/games/coin-dash/game.js')), 'the game\'s own files are served as they are');
+  assert.ok(!existsSync(join(dir, 'site/dist/games/coin-dash/game.json')), 'game.json is not served');
+});
+
+test('port check judges motion on screen axes: a straight hold passes, a camera that turns or a curve fails, a wall is contact', async () => {
+  const { judgeHold, judgePresses } = await import('../lib/port-check.mjs');
+  const flat = (t, x, y) => [t, x, y, 1, 0, 0, -1, 0];
+  const straight = Array.from({ length: 300 }, (_, i) => flat(i * 16.7, 100, 100 + Math.min(i * 4, 600)));
+  const ok = judgeHold(straight, 'down', 0, 5000, 10, 'top');
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  assert.ok(ok.contactMs !== null, 'reaching the wall ends the free run');
+  const turning = Array.from({ length: 300 }, (_, i) => { const a = i * 0.002; return [i * 16.7, 100, 100 + i * 4, Math.cos(a), Math.sin(a), Math.sin(a), -Math.cos(a), 0]; });
+  assert.equal(judgeHold(turning, 'down', 0, 5000, 10, 'top').why, 'the camera turned by itself');
+  const curve = Array.from({ length: 300 }, (_, i) => flat(i * 16.7, 100 + (i * i) / 40, 100 + i * 4));
+  assert.equal(judgeHold(curve, 'down', 0, 5000, 10, 'top').ok, false);
+  const presses = [];
+  const rows = [];
+  let x = 0; let t = 0;
+  for (const [k, dir] of ['left', 'right', 'left', 'right'].entries()) {
+    presses.push({ dir, a: t, b: t + 420 });
+    for (let f = 0; f < 35; f++) { x += (dir === 'right' ? 4 : -4) * (f > 2 ? 1 : 0); rows.push([t, x, 0, 1, 0, 0, -1, k]); t += 16.7; }
+  }
+  const alt = judgePresses(rows, presses, 10, 'side');
+  assert.equal(alt.ok, true, JSON.stringify(alt));
+});
+
+test('port check, maze view: a turn queued behind a wall is not a wrong turn; moving against the press is', async () => {
+  const { judgePresses } = await import('../lib/port-check.mjs');
+  const flat = (t, x, y) => [t, x, y, 1, 0, 0, -1, 0];
+  // Running right along a corridor; "up" is pressed but the wall holds the turn: the body keeps going right.
+  const queued = Array.from({ length: 40 }, (_, i) => flat(i * 16.7, i * 4, 0));
+  const q = judgePresses(queued, [{ dir: 'up', a: 0, b: 420 }], 10, 'maze');
+  assert.equal(q.rows[0].queued, true);
+  assert.equal(q.blocked, 1, 'a queued turn counts as blocked, not wrong');
+  // Pressing "left" while running right is a reversal: it must answer.
+  const ignored = judgePresses(queued, [{ dir: 'left', a: 0, b: 420 }], 10, 'maze');
+  assert.equal(ignored.rows[0].ok, false);
+  assert.equal(ignored.rows[0].queued, false, 'a reversal that never happens is a failure');
+  // The same queued turn in a top view is a wrong-way press.
+  assert.equal(judgePresses(queued, [{ dir: 'up', a: 0, b: 420 }], 10, 'top').rows[0].ok, false);
+});

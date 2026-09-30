@@ -80,6 +80,10 @@ studio's pinned copy, never a registry lookup of the bare name.
 
 - \`npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"\` — a new game from a
   multiplayer starter (one live public room from its first build, bots fill seats).
+- \`npx --no-install homie-studio port plan <folder>\` — read an existing single-player web game and grade
+  how hard making it multiplayer will be; \`port import\` brings it into \`games/\`, \`port check\` runs the
+  owner tests (real touch, a late joiner, a killed host, two browsers finishing a round). The Homie
+  plugin's \`port\` skill does the whole job.
 - \`npm run build\` — bundle every game into \`site/dist\`.
 - \`npm run dev\` — the whole site locally (pages, the netplay relay in a local
   Durable Object, D1): open the printed address in two browsers and they share a room.
@@ -153,6 +157,8 @@ site/.wrangler/
 .dev.vars
 .env
 *.log
+# Port checks: receipts and screenshots of each run (games/<id>/.port/check-*/).
+games/*/.port/
 # Large media lives in this studio's R2; the manifests beside it are committed.
 music/**/*.wav
 music/**/*.mp3

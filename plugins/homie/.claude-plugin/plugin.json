@@ -2,8 +2,8 @@
   "$schema": "https://code.claude.com/schemas/plugin.json",
   "name": "homie",
   "displayName": "Homie",
-  "version": "0.2.0",
-  "description": "Set up a game studio, make or remix multiplayer web games, run the studio's site and public rooms on its own Cloudflare, and list them in the homie.rocks directory.",
+  "version": "0.3.0",
+  "description": "Set up a game studio, make or remix multiplayer web games, make an existing single-player web game multiplayer, run the studio's site and public rooms on its own Cloudflare, and list them in the homie.rocks directory.",
   "author": {
     "name": "Homie",
     "url": "https://homie.rocks"

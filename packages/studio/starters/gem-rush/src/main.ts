@@ -19,6 +19,8 @@
  * Canvas 2D on purpose: the point is the contract, in ~700 readable lines.
  */
 import { createNetplay, Roster, q, lerp, capMove, type RoleChange, type RoundInfo, type RoundResult, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
+// The port toolkit's probe: what `homie-studio port check` reads for the owner tests (and sandbox + audio shims).
+import { exposePort } from '@homie-rocks/studio/port';
 
 /* ------------------------------------------------------------------ rules */
 const W = 1600;
@@ -707,6 +709,13 @@ net.expose({
     knock(b, b.x < W / 2 ? b.x - 1 : b.x + 1, b.y); // push toward the middle, away from the nearer wall
     return true;
   },
+});
+
+exposePort(net, {
+  view: 'top',
+  self: () => (me.has && mySeat() !== null ? { x: me.x, y: me.y } : null),
+  size: R_AV,
+  score: () => { const seat = mySeat(); const b = hosting ? [...bodies.values()].find((x) => x.seat === seat) : [...drawn.values()].find((x) => x.seat === seat); return b ? b.score : null; },
 });
 
 void net.ready.then(() => {

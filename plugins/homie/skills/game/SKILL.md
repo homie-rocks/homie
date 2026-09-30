@@ -13,6 +13,8 @@ is none, use the `studio-setup` skill first.
 - **New game:** call the Homie MCP tool `game_make` (id, name) for the exact command
   and rules, then run `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`.
   The id becomes the game's address (`/<id>/`); lowercase, digits, hyphens.
+- **Make an existing single-player web game multiplayer:** use the `port` skill (it
+  grades the port, brings the game in, and proves it with the owner tests).
 - **Remix a directory game:** `directory_search`, then `game_remix` returns
   `npx --no-install homie-studio game remix <source.json> --id <new id>`.
 - Some names are protected (the homie.rocks house games): `game_make` and

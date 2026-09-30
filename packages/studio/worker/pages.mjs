@@ -30,9 +30,9 @@ footer { margin-top: 48px; color: var(--dim); font-size: 13px; }
 @media (max-width: 540px) { .wrap { padding: 20px 16px 48px; } .btn { width: 100%; } }
 `;
 
-function page(title, body, { extraHead = '' } = {}) {
+function page(title, body, { extraHead = '', viewport = 'width=device-width, initial-scale=1, viewport-fit=cover' } = {}) {
   return new Response(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="${viewport}">
 <title>${esc(title)}</title><link rel="icon" href="data:,"><style>${BASE_CSS}</style>${extraHead}</head>
 <body>${body}</body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
 }
@@ -61,7 +61,7 @@ export function gamePage(cat, g, playing = 0) {
     <section class="hero">
       <h1>${esc(g.name)}</h1>
       <p>${esc(g.blurb)}</p>
-      <div class="row"><a class="btn" href="/${esc(g.id)}/play">Play now</a><a class="btn ghost" href="/${esc(g.id)}/play?screen=1">Big screen</a></div>
+      <div class="row"><a class="btn" href="/${esc(g.id)}/play">Play now</a><a class="btn ghost" href="/${esc(g.id)}/tv">Big screen</a></div>
       <div class="meta" style="margin-top:18px"><span>${esc(g.players?.max ? `1–${g.players.max} players` : 'multiplayer')}</span>${g.roundSeconds ? `<span>${esc(g.roundSeconds)} s rounds</span>` : ''}<span>phone or computer</span></div>
     </section>
   </div>`);
@@ -77,8 +77,10 @@ export function notFoundPage(why) {
  * once (seated, no waiting), keeps the seat token for a reload, and keeps the
  * room's facts in `window.__shell` (what a test or a big screen reads).
  */
-export function playPage(cat, g) {
-  const css = `html, body { height: 100%; overflow: hidden; overscroll-behavior: none; background: #04060c; }
+export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, room = null } = {}) {
+  // The phone's glass belongs to the game: no page pan, pinch-zoom, text selection or callout under a thumb
+  // (a pinch between a stick thumb and a button thumb made the browser cancel both touches).
+  const css = `html, body { height: 100%; overflow: hidden; overscroll-behavior: none; background: #04060c; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; touch-action: none; }
 .chip { position: fixed; left: 10px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 5; transition: opacity .6s; }
 .chip.quiet { opacity: 0; }
@@ -87,15 +89,27 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .card { position: fixed; right: 12px; bottom: 12px; z-index: 4; max-width: 300px; padding: 10px 12px; border-radius: 12px; background: rgba(8,12,22,.82); border: 1px solid rgba(255,255,255,.14); color: #e8ecf5; font: 13px/1.35 ui-sans-serif, system-ui, sans-serif; }
 .card h2 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #ffcf5a; }
 .card ol { margin: 0; padding-left: 18px; }
+.join { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 6; display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 16px; background: rgba(8,12,22,.78); border: 1px solid rgba(255,255,255,.14); color: #eef1f8; font: 600 clamp(14px, 1.6vmin, 22px)/1.3 ui-sans-serif, system-ui, sans-serif; pointer-events: none; }
+.join.join-top-left { top: max(16px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: auto; bottom: auto; }
+.join.join-top-right { top: max(16px, env(safe-area-inset-top)); bottom: auto; }
+.join.join-bottom-left { left: max(16px, env(safe-area-inset-left)); right: auto; }
+.join .qr { width: clamp(96px, 15vmin, 220px); height: clamp(96px, 15vmin, 220px); border-radius: 8px; overflow: hidden; }
+.join .qr svg { width: 100%; height: 100%; display: block; }
+.join b { display: block; color: #ffcf5a; font-size: 1.15em; margin-bottom: 4px; }
+.join span { opacity: .85; word-break: break-all; }
 [hidden] { display: none !important; }`;
-  const boot = { game: g.id, name: g.name };
+  const boot = { game: g.id, name: g.name, screen: Boolean(screen), ...(room ? { room } : {}) };
+  // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
+  const corner = ['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.join) ? g.screen.join : 'bottom-right';
+  const joinCard = screen && joinUrl ? `<div class="join join-${corner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
   return page(`${g.name} · play`, `
 <iframe class="game" title="${esc(g.name)}" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen; autoplay; gamepad"></iframe>
 <div class="chip" data-chip><a href="/${esc(g.id)}/">← ${esc(g.name)}</a> · <span data-status>finding a room…</span></div>
 <div class="card" data-results hidden></div>
 <div class="card" data-screen hidden></div>
+${joinCard}
 <script>window.__HOMIE_PLAY=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
-<script>${SHELL_JS}</script>`, { extraHead: `<style>${css}</style>` });
+<script>${SHELL_JS}</script>`, { extraHead: `<style>${css}</style>`, viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' });
 }
 
 /* The shell script (runs on the site's own origin; the game runs in the sandboxed frame). */
@@ -103,7 +117,7 @@ const SHELL_JS = String.raw`(function () {
   'use strict';
   var boot = window.__HOMIE_PLAY;
   var params = new URLSearchParams(location.search);
-  var screenMode = params.get('screen') === '1';
+  var screenMode = params.get('screen') === '1' || boot.screen === true;
   var asked = params.get('hand');
   var device = asked === 'phone' || asked === 'desk' || asked === 'tv' ? asked : Math.min(innerWidth, innerHeight) <= 540 ? 'phone' : 'desk';
   var want = screenMode ? 'screen' : 'play';
@@ -134,6 +148,8 @@ const SHELL_JS = String.raw`(function () {
     if (token) q.set('k', token);
     if (params.get('name')) q.set('name', params.get('name'));
     if (params.get('debug') === '1') q.set('debug', '1');
+    // The frame cannot read this page's address (it is an opaque origin): hand it the game's own switches.
+    ['touchdebug', 'cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
     frame.src = '/' + boot.game + '/__game/?' + q.toString();
     frame.addEventListener('load', function () { try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
     window.addEventListener('pointerdown', function () { try { frame.focus(); } catch (e) {} }, { passive: true });
@@ -150,7 +166,7 @@ const SHELL_JS = String.raw`(function () {
       paint();
     });
     watch(room);
-    if (screenMode) {
+    if (screenMode && !document.querySelector('[data-join]')) {
       var h2 = document.createElement('h2'); h2.textContent = 'Join on your phone';
       var div = document.createElement('div'); div.textContent = location.origin + '/' + boot.game + '/play';
       screenCard.append(h2, div); screenCard.hidden = false;
@@ -198,7 +214,11 @@ const SHELL_JS = String.raw`(function () {
     say(bits.join(' · ') || 'joining…');
   }
 
-  fetch('/' + boot.game + '/api/lobby', { method: 'POST' })
+  // A named room (?room=, a friend's link, a test, the big screen's QR) skips the lobby; everyone else meets strangers.
+  var askedRoom = params.get('room');
+  if (boot.room) start(boot.room);
+  else if (askedRoom && /^[A-Za-z0-9_-]{1,32}$/.test(askedRoom)) start(askedRoom);
+  else fetch('/' + boot.game + '/api/lobby', { method: 'POST' })
     .then(function (r) { return r.json(); })
     .then(function (j) { start(j.room || 'main'); })
     .catch(function () { start('main'); });

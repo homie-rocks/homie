@@ -6,14 +6,51 @@
  *   site/dist/games/<id>/assets/main.js    its bundle (esbuild; @homie-rocks/studio/netplay inlined)
  *   site/dist/games/<id>/...               everything in games/<id>/public/
  *   site/dist/games.json                   { studio, games[] } from studio.json and game.json files
+ *
+ * game.json "build" picks how a game becomes files (a ported game keeps its own shape):
+ *   (absent) / { "mode": "bundle" }   src/main.ts (or "entry") bundled by esbuild — new games and ES-module ports
+ *   { "mode": "static" }              the folder copied as it is (plain <script> games), plus homie-port.js,
+ *                                     the port toolkit as one classic script (window.HomiePort); an "entry"
+ *                                     is bundled to assets/main.js as well
+ *   { "mode": "command", "command": "npm run build", "out": "dist" }
+ *                                     the game's own build (Vite, webpack…), then its output copied; base must be './'
  */
+import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
-import { listGames, readStudio } from './studio.mjs';
+import { join, relative } from 'node:path';
+import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
-const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler']);
+const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
+/** Never copied into a static game's served folder. */
+const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md']);
+const LOADERS = { '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file', '.webp': 'file', '.mp3': 'file', '.ogg': 'file', '.wav': 'file', '.m4a': 'file', '.glb': 'file', '.gltf': 'file', '.bin': 'file', '.hdr': 'file', '.svg': 'file', '.json': 'json', '.woff2': 'file', '.ttf': 'file' };
+
+/** The port toolkit as one classic script (window.HomiePort), for static games. Built once per build. */
+async function portScript(esbuild, root, cache) {
+  if (cache.text) return cache.text;
+  const entry = join(PACKAGE_ROOT, 'port', 'global.ts');
+  const res = await esbuild.build({ entryPoints: [entry], bundle: true, format: 'iife', target: 'es2020', minify: true, write: false, absWorkingDir: root, logLevel: 'silent' });
+  cache.text = `/* homie-port.js — @homie-rocks/studio port toolkit (window.HomiePort). Load it first in <head>. */\n${res.outputFiles[0].text}`;
+  return cache.text;
+}
+
+function copyStatic(from, to) {
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    if (STATIC_SKIP.has(entry.name)) continue;
+    const src = join(from, entry.name);
+    const dest = join(to, entry.name);
+    if (entry.isDirectory()) { mkdirSync(dest, { recursive: true }); copyStatic(src, dest); }
+    else if (entry.isFile()) cpSync(src, dest);
+  }
+}
+
+function dirBytes(dir) {
+  let n = 0;
+  for (const e of readdirSync(dir, { withFileTypes: true })) n += e.isDirectory() ? dirBytes(join(dir, e.name)) : statSync(join(dir, e.name)).size;
+  return n;
+}
 const TEXT = /\.(ts|tsx|js|mjs|jsx|json|html|css|md|txt|svg|glsl|wgsl|frag|vert)$/i;
 /** Text files of a game folder, capped (2 MB total, 512 KB each): what `homie-studio game remix` takes. */
 export function sourceOf(dir, id) {
@@ -47,31 +84,55 @@ export async function build(root, { only = null, log = () => {} } = {}) {
   if (!only) rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
   const built = [];
+  const cache = {};
   for (const g of games) {
     const out = join(dist, 'games', g.id);
     rmSync(out, { recursive: true, force: true });
     mkdirSync(join(out, 'assets'), { recursive: true });
-    const entry = join(g.dir, g.entry ?? 'src/main.ts');
-    if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${g.entry ?? 'src/main.ts'} not found`);
+    const mode = g.build?.mode ?? 'bundle';
     const started = Date.now();
-    const result = await esbuild.build({
-      entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: false,
-      outfile: join(out, 'assets', 'main.js'), absWorkingDir: root, logLevel: 'silent', metafile: true,
-      loader: { '.png': 'file', '.jpg': 'file', '.webp': 'file', '.mp3': 'file', '.ogg': 'file', '.wav': 'file', '.glb': 'file', '.svg': 'file' },
-      assetNames: '[name]-[hash]',
-    }).catch((error) => {
-      const first = error.errors?.[0];
-      throw new Error(`games/${g.id} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
-    });
-    const html = join(g.dir, 'index.html');
-    if (!existsSync(html)) throw new Error(`games/${g.id}/index.html is missing`);
-    writeFileSync(join(out, 'index.html'), readFileSync(html, 'utf8'));
-    if (existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
+    let warnings = 0;
+    const bundle = async (entryRel) => {
+      const entry = join(g.dir, entryRel);
+      if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
+      const result = await esbuild.build({
+        entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: false,
+        outfile: join(out, 'assets', 'main.js'), absWorkingDir: root, logLevel: 'silent', metafile: true,
+        loader: LOADERS, assetNames: '[name]-[hash]',
+      }).catch((error) => {
+        const first = error.errors?.[0];
+        throw new Error(`games/${g.id} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
+      });
+      warnings += result.warnings.length;
+    };
+    if (mode === 'static') {
+      copyStatic(g.dir, out);
+      writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
+      if (g.entry) await bundle(g.entry);
+      const html = readFileSync(join(out, 'index.html'), 'utf8');
+      if (!/homie-port\.js/.test(html)) log(`warning: games/${g.id}/index.html does not load ./homie-port.js (the port toolkit); add <script src="./homie-port.js"></script> first in <head>`);
+    } else if (mode === 'command') {
+      const command = String(g.build.command ?? 'npm run build');
+      const res = spawnSync(command, { cwd: g.dir, shell: true, encoding: 'utf8', timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
+      if (res.status !== 0) throw new Error(`games/${g.id}: \`${command}\` failed: ${`${res.stdout ?? ''}${res.stderr ?? ''}`.trim().split('\n').slice(-6).join(' ')}`);
+      const built = join(g.dir, String(g.build.out ?? 'dist'));
+      if (!existsSync(join(built, 'index.html'))) throw new Error(`games/${g.id}: \`${command}\` left no index.html in ${relative(g.dir, built) || '.'}`);
+      cpSync(built, out, { recursive: true });
+      writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
+    } else {
+      await bundle(g.entry ?? 'src/main.ts');
+      const html = join(g.dir, 'index.html');
+      if (!existsSync(html)) throw new Error(`games/${g.id}/index.html is missing`);
+      writeFileSync(join(out, 'index.html'), readFileSync(html, 'utf8'));
+    }
+    if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
+    if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
     // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).
     if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id))}\n`);
-    const bytes = statSync(join(out, 'assets', 'main.js')).size;
-    built.push({ id: g.id, name: g.name, bytes, ms: Date.now() - started, warnings: result.warnings.length });
-    log(`built ${g.id} (${Math.round(bytes / 1024)} KB)`);
+    const main = join(out, 'assets', 'main.js');
+    const bytes = existsSync(main) ? statSync(main).size : dirBytes(out);
+    built.push({ id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings });
+    log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB)`);
   }
   const all = listGames(root);
   const catalogue = {
@@ -79,6 +140,7 @@ export async function build(root, { only = null, log = () => {} } = {}) {
     games: all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))).map((g) => ({
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: g.players ?? { min: 1, max: 8 },
       roundSeconds: g.roundSeconds ?? null, movement: g.netplay?.movement ?? null, cover: g.cover ?? null,
+      ...(g.screen ? { screen: g.screen } : {}),
     })),
   };
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
