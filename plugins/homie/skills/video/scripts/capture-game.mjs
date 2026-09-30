@@ -79,7 +79,7 @@ try {
   const target = VIEW === 'play' ? `${URL_}/${GAME}/play?hand=desk&name=Camera` : `${URL_}/${GAME}/tv`;
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   // The shell's own furniture (status chip, join card, results card) is not the game.
-  await page.addStyleTag({ content: '[data-chip],[data-join],[data-screen],[data-results]{display:none!important} *{cursor:none!important}' });
+  await page.addStyleTag({ content: '[data-chip],[data-join],[data-screen],[data-results],[data-room-ui],[data-toast]{display:none!important} *{cursor:none!important}' });
   let game = null;
   for (let i = 0; i < 200 && !game; i++) {
     for (const f of page.frames()) if (/\/__game\//.test(f.url()) && !f.isDetached()) game = f;

@@ -106,7 +106,7 @@ async function frame(root) {
     await page.setUserAgent(`${await browser.userAgent()} homie-art`);
     await page.goto(`${url}/${game}/${view}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     // The platform's own furniture never goes into art: the join card, the QR, the status chip, result cards.
-    await page.addStyleTag({ content: '.join,.chip,.card,[data-join],[data-chip],[data-results],[data-screen]{display:none!important}' }).catch(() => {});
+    await page.addStyleTag({ content: '.join,.chip,.card,[data-join],[data-chip],[data-results],[data-screen],[data-room-ui],[data-toast]{display:none!important}' }).catch(() => {});
     await sleep(4000);
     for (let t = 0; t < seconds; t += 2) {
       const png = await page.screenshot({ type: 'png', captureBeyondViewport: false });

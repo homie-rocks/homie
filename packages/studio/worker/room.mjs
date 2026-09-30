@@ -41,6 +41,33 @@ export const EV_RATES = Object.freeze({ host: 30, replica: 10, screen: 2 });
 /** The keyed state channel: at most this many keys and bytes per room. */
 export const STATE_CAPS = Object.freeze({ keys: 64, bytes: 65536 });
 
+/**
+ * A seat's handle when its player typed no name: two words, varied per seat and per room ("Velvet Comet"), never
+ * "Player 1" (a game that falls back to a list by seat number made every room's first player the same name).
+ * At most 16 characters, so a game that trims names at 18 keeps all of it.
+ */
+export const HANDLE_WORDS = Object.freeze({
+  first: ['Neon', 'Velvet', 'Static', 'Amber', 'Cobalt', 'Lucky', 'Rapid', 'Silent', 'Solar', 'Lunar', 'Crimson', 'Golden',
+    'Frosty', 'Wild', 'Quiet', 'Swift', 'Brave', 'Clever', 'Cosmic', 'Mellow', 'Rusty', 'Shiny', 'Sunny', 'Stormy', 'Turbo',
+    'Pixel', 'Retro', 'Jolly', 'Nimble', 'Bold', 'Misty', 'Copper'],
+  second: ['Comet', 'Otter', 'Falcon', 'Fox', 'Panda', 'Rocket', 'Tiger', 'Raven', 'Pilot', 'Ranger', 'Rider', 'Moth', 'Koi',
+    'Lynx', 'Heron', 'Badger', 'Yeti', 'Wolf', 'Bison', 'Gecko', 'Orca', 'Puma', 'Sparrow', 'Beacon', 'Meteor', 'Nova',
+    'Ember', 'Drift', 'Spark', 'Echo', 'Kite', 'Mantis'],
+});
+/** The handle for a seat token (random per seat), skipping any handle another seat in the room already has. */
+export function handleFor(token, taken = new Set()) {
+  let h = 2166136261;
+  for (const ch of String(token ?? '')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const { first, second } = HANDLE_WORDS;
+  const all = first.length * second.length;
+  for (let i = 0; i < all; i += 1) {
+    const n = (h + i * 7919) % all;
+    const name = `${first[n % first.length]} ${second[Math.floor(n / first.length) % second.length]}`;
+    if (!taken.has(name)) return name;
+  }
+  return `${first[h % first.length]} ${second[h % second.length]}`;
+}
+
 /** Random bytes as base64url, with no Node Buffer (runs in workerd too). */
 function randomId(n) {
   const raw = new Uint8Array(n);
@@ -427,7 +454,7 @@ export class NetRoom {
     c.token = s.token;
     c.waiting = false;
     s.present = true;
-    const name = c.typed || s.name || `Player ${seat + 1}`;
+    const name = c.typed || s.name || handleFor(s.token, new Set([...this.seats.values()].map((x) => x.name).filter(Boolean)));
     if (name !== s.name) { s.name = name; this.seatsDirty = true; }
     c.name = name;
     c.colour = seat % PALETTE_SIZE;

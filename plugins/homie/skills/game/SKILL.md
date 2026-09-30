@@ -1,6 +1,6 @@
 ---
 name: game
-description: Make or remix a multiplayer web game inside a Homie studio — every browser renders the game, strangers meet in public rooms, bots fill empty seats, rounds end and restart — and prove it with two browsers finishing a round. Use when someone in a Homie studio (a folder with studio.json) asks for a new game, a change to a game, or a remix of a game from the Homie directory.
+description: Make or remix a multiplayer web game inside a Homie studio — every browser renders the game, strangers meet in public rooms, bots fill empty seats, rounds end and restart — prove it with two browsers finishing a round, and give it an epic landing page (a full-bleed hero from its own footage or art, the pitch, Play, phone / computer / TV, live rooms, how to play, credits). Use when someone in a Homie studio (a folder with studio.json) asks for a new game, a change to a game, a remix of a game from the Homie directory, or a better page for a game ("make my game's landing page epic").
 ---
 
 # Make or remix a game
@@ -64,5 +64,51 @@ Then make it good, not just working:
   first ten seconds, the look, the UI, the real sound and a round, runs the owner tests, and hands a
   blind review to a fresh reviewer. Fix what it ranks first; run it again.
 
-Then `npm run deploy` and `studio_publish` (see `publish`), and check again
-on the live site.
+Then give it its landing (below), `npm run deploy` and `studio_publish` (see `publish`), and
+check again on the live site.
+
+## Its landing page: `/<id>/`
+
+Every game gets a landing page from the studio template, made from the game's own files
+(`node_modules/@homie-rocks/studio/site/SITE.md` has every field): a full-bleed hero, the pitch, a big
+Play button that drops a visitor into a public room, how to play on a phone, a computer and a TV (with
+the join code), the live rooms, how to play, credits and "Make a game like this" (the viral road: it
+tells a stranger how to make their own with Homie). It is as good as what you give it. "Make the landing
+page epic" means all of this, in this order:
+
+1. **Footage in the hero.** The biggest single difference. Capture the game running with the `video`
+   skill (`capture <slug> --game <id> --url http://127.0.0.1:8787 --seconds 30`), pick 8 to 12 s where a
+   lot happens, and cut two silent loops into `games/<id>/hero/`: `wide.mp4` (16:9) and `tall.mp4`
+   (9:16, the phone's). Under 3 MB each, so a phone starts it at once:
+
+   ```sh
+   C=videos/<slug>/work/capture/capture.mp4
+   ffmpeg -y -ss <start> -t 10 -i $C -an -vf "scale=1600:-2,fps=30" -c:v libx264 -crf 27 -preset slow -pix_fmt yuv420p -movflags +faststart games/<id>/hero/wide.mp4
+   ffmpeg -y -ss <start> -t 10 -i $C -an -vf "crop=ih*9/16:ih,scale=720:-2,fps=30" -c:v libx264 -crf 27 -preset slow -pix_fmt yuv420p -movflags +faststart games/<id>/hero/tall.mp4
+   ffmpeg -y -ss <start+2> -i $C -frames:v 1 -q:v 3 games/<id>/hero/wide.jpg
+   ```
+
+   Look at them (`ffprobe`, and a frame or two): the game, not a menu, a QR code or a black frame. A
+   finished trailer in `videos/` with `"for": { "game": "<id>" }` is used when there is no `hero/`.
+   No footage at all: the cover (the `art` skill's `cover`, from a real frame) moves slowly instead.
+2. **The words**, in game.json's `landing` block: `pitch` (one line a stranger gets at once), `about`
+   (a short paragraph), `howToPlay` (three to five short lines), `controls` for `phone`, `computer`
+   (and `tv` if it differs), `players` (what a player is called: `{ "one": "pilot", "many": "pilots" }`),
+   `hero.alt` (what the footage shows, for a screen reader), `hero.focus` (`"50% 35%"` keeps the action
+   in frame on a phone), `hero.tint` (0 to 80: more when the art is bright and the title hard to read).
+3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "…" }]`). A port
+   keeps its `credits.json` (the original, its author and licence, every part inside); never drop one.
+4. **The look**: the studio's `site/theme.json` colours; `landing.theme` gives this game its own
+   `accent` and `glow` on its page, when two games of one studio should not look alike.
+5. **A band of its own**, when the game has something to say that the template does not (a soundtrack, a
+   mode, a season): `site/partials/game-<id>.html`, a short section in the page's own classes
+   (`<p class="kicker">`, `<h2>`, `<p class="lead">`, `<a class="ghost">`).
+
+Then `npm run build`, `npm run dev`, and look at `http://127.0.0.1:8787/<id>/` as a stranger would:
+a computer (1440 wide) and a phone (390 wide, and turned sideways), from the top, scrolling to the end.
+The `playtest` skill takes the screenshots. The hero reads at a glance, Play is above the fold on a phone,
+nothing is cut off or runs off the side. Fix what you see; build again.
+
+A whole landing of the studio's own (`site/pages/<id>/index.html`) replaces the generated one: only when
+the person asks for a hand-made page, and start from the generated one's HTML so Play, the TV road and
+"Made with Homie" stay.

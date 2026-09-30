@@ -20,7 +20,11 @@ Night Owls and make a multiplayer game"* and it:
    passes only when they share a room and finish a round;
 4. **deploys** the studio's site to **your own Cloudflare account**, after you approve
    Cloudflare once in your browser (a free account, no payment method: it says what it
-   will create and what it costs before it does);
+   will create and what it costs before it does). The site has the same sections as
+   homie.rocks in your studio's own look (Home, Games, Music, Videos, Rooms, Posts), and
+   every game gets a landing page of its own: a full-bleed hero from its footage or art,
+   a big Play button into a public room, phone / computer / TV, live rooms, credits, and
+   "Make a game like this";
 5. **lists** the games in the [homie.rocks](https://homie.rocks/studios/) directory, so
    people can find them.
 
@@ -94,7 +98,7 @@ studio and changes nothing):
 
 | Resource | Name | What it does |
 | --- | --- | --- |
-| Worker | `<studio>` | The studio's pages, each game's page and play shell, the game files, `/api/games`, and `/.well-known/homie-studio.json` for the directory. |
+| Worker | `<studio>` | The studio's pages (Home, Games, Music, Videos, Rooms, Posts and their feeds), each game's landing and play shell, the game files, `/api/games`, `/api/rooms`, and `/.well-known/homie-studio.json` for the directory (`packages/studio/site/SITE.md`). |
 | Durable Object `Table` | one per room | The netplay relay (`worker/room.mjs`): seats, host election, snapshots, keyed state, checkpoints. It runs no game code. |
 | Durable Object `Lobby` | one per game | Puts strangers who press Play into the same public room, and opens the next room when one is full. |
 | D1 database | `<studio>-db` | The directory claim and every finished round. |

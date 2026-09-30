@@ -9,8 +9,8 @@
  *   games/<id>/          one folder per game (game.json, index.html, src/)
  *   music/ videos/       manifests in the repo; the big files go to the studio's own storage
  *                        (R2) once it is added with `homie-studio storage add`
- *   posts/               words the studio publishes
- *   site/                the studio's Worker (pages, rooms), its D1 migrations (no R2
+ *   posts/               the studio's news and drops (markdown; the site's Posts, with feeds)
+ *   site/                the studio's Worker (pages, rooms), its look (theme.json), its D1 migrations (no R2
  *                        binding until the studio adds storage: a free Cloudflare account
  *                        without a payment method cannot use R2, and a new studio needs none)
  *   .claude/skills/      skills only this studio uses
@@ -24,6 +24,7 @@ import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { STUDIO_VERSION, packageSpec } from './version.mjs';
 import { STATS_MIGRATION, STATS_MIGRATION_FILE } from '../worker/stats.mjs';
+import { themeFile } from './site.mjs';
 
 export const COMPAT_DATE = '2026-06-01';
 export const WRANGLER_VERSION = '4.126.0';
@@ -73,8 +74,8 @@ directory lists its games; homie.rocks does not host them.
 | --- | --- |
 | \`games/<id>/\` | One game: \`game.json\` (id, name, blurb, players, round length), \`index.html\`, \`src/main.ts\`. |
 | \`music/\`, \`videos/\` | Songs, scores, loops; trailers, music videos, cutscenes. \`manifest.json\` lists each one (\`node_modules/@homie-rocks/studio/media/MEDIA.md\`); a published entry gets a page at \`/music/<slug>/\` or \`/videos/<slug>/\`, served from the site itself (files up to 25 MiB) or, for larger media, from the studio's storage once it has storage (see below; \`npx --no-install homie-studio media put <file>\`). Large files never go into git. The Homie plugin's \`music\` and \`video\` skills make them. |
-| \`posts/\` | Markdown the studio publishes. |
-| \`site/\` | The studio's Worker (\`src/worker.mjs\`), D1 migrations, \`wrangler.jsonc\`. |
+| \`posts/\` | The studio's news and drops: one markdown file each (\`posts/2026-09-30-we-are-live.md\`: \`title:\`, \`date:\`, \`summary:\`, and \`game:\` / \`song:\` / \`video:\` to link one). They are the site's Posts, with Atom and JSON feeds. |
+| \`site/\` | The studio's site: its look (\`theme.json\`), and anything of its own that wins over the generated pages (\`site/README.md\`); the Worker (\`src/worker.mjs\`), D1 migrations, \`wrangler.jsonc\`. |
 | \`studio.json\` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. \`.studio/\` (git-ignored) is this computer's own state. |
 | \`.claude/skills/\` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |
 
@@ -115,6 +116,24 @@ studio's pinned copy, never a registry lookup of the bare name.
   \`studio_stats\` (never paste a key anywhere else). \`stats share on\` tells the directory two numbers
   (played this week). The site counts and never tracks: no cookie on a visitor, no person identified,
   nothing sent anywhere; house QA and \`check\` runs are not counted.
+
+## The site
+
+\`npm run build\` makes the studio's site from what is in this folder
+(\`node_modules/@homie-rocks/studio/site/SITE.md\` says all of it):
+
+- **Sections, like homie.rocks:** Home (the featured game, live rooms, latest posts), Games, Music, Videos,
+  Rooms (every public room playing now, joinable) and Posts. A section with nothing in it has no tab, and its
+  page is not found.
+- **Every game gets a landing** at \`/<id>/\`: a full-bleed hero from the game's own footage
+  (\`games/<id>/hero/wide.mp4\` and \`tall.mp4\`, or a trailer in \`videos/\` with \`for.game\`), else its cover
+  with slow motion; the pitch, a big Play button into a public room, phone / computer / TV with the join code,
+  live rooms, how to play, credits, and "Make a game like this". Give it words in game.json's \`landing\` block
+  (\`pitch\`, \`about\`, \`controls\`, \`howToPlay\`, \`credits\`) and art with the plugin's \`art\` and \`video\` skills.
+- **The look** is \`site/theme.json\` (colours, fonts, corner radius, a logo). Anything in \`site/\` wins: a whole
+  page in \`site/pages/\`, a piece of every page in \`site/partials/\`, files in \`site/public/\`, extra CSS in
+  \`site/theme.css\` (\`site/README.md\`).
+- Every page ends with "Made with Homie", linking to homie.rocks/studio/. Restyle it in \`site/theme.css\`; keep it.
 
 ## Making games
 
@@ -181,6 +200,46 @@ CREATE TABLE IF NOT EXISTS rounds (
 CREATE INDEX IF NOT EXISTS rounds_game_at ON rounds (game, at);
 `;
 
+const POSTS_README = `# Posts
+
+The studio's news and drops. One markdown file each; the site shows them at \`/posts/\` (newest first), on the home
+page, and in two feeds: \`/posts/feed.xml\` (Atom) and \`/posts/feed.json\` (JSON Feed).
+
+The file's name is its address: \`posts/2026-09-30-we-are-live.md\` is \`/posts/we-are-live/\`, dated by its prefix.
+
+\`\`\`markdown
+---
+title: We are live
+date: 2026-09-30
+summary: One line for the cards and the feeds.
+game: crown-thief
+image: /games/crown-thief/cover.jpg
+---
+
+The body, in markdown: **bold**, *italic*, [links](https://homie.rocks/), images, lists, quotes.
+\`\`\`
+
+\`game:\`, \`song:\` and \`video:\` link one of this studio's games, songs or videos (by id or slug); the post shows
+it with a Play, Listen or Watch button. \`draft: true\` keeps a post off the site. Raw HTML is shown as text.
+Files README.md, and names starting with \`_\` or \`.\`, are not posts.
+`;
+
+const SITE_README = `# site/
+
+The studio's site. \`npm run build\` makes every page from the studio (its games, music, videos and posts);
+anything here wins. The whole list is in \`node_modules/@homie-rocks/studio/site/SITE.md\`.
+
+| Put it in | What it does |
+| --- | --- |
+| \`theme.json\` | The look: \`bg\`, \`fg\`, \`accent\`, \`glow\` colours, \`display\` and \`text\` fonts (\`fonts\` loads a file from \`public/\`), \`radius\`, \`mark\` (a logo). Or \`palette\`: neon, dock, gold, acid, ember, orchid, tide, candy. |
+| \`theme.css\` | Extra CSS on every page (restyle anything, the "Made with Homie" footer included). |
+| \`partials/<name>.html\` | A piece of every page: \`head\`, \`header\`, \`footer\`, \`home\` (a band on Home), \`game\` (a band on every game's landing), \`game-<id>\` (on one game's), \`post\`. |
+| \`pages/<path>/index.html\` | A whole page at \`/<path>/\`, instead of the generated one (\`pages/<id>/index.html\` replaces a game's landing) or beside them (\`pages/about/index.html\`). It may borrow \`<!-- homie:style -->\`, \`<!-- homie:header -->\`, \`<!-- homie:footer -->\`, \`<!-- homie:script -->\`. |
+| \`public/\` | Files served as they are, at the same path (\`public/fonts/x.woff2\` is \`/fonts/x.woff2\`). |
+
+\`src/worker.mjs\`, \`migrations/\` and \`wrangler.jsonc\` are the Worker; \`dist/\` is the build (not committed).
+`;
+
 const GITIGNORE = `node_modules/
 # This computer's own state: the site's workers.dev address (it names the Cloudflare account, often after its owner).
 .studio/
@@ -237,7 +296,9 @@ export function studioFiles({ name, slug, homie }) {
     'music/manifest.json': '{ "v": 1, "items": [] }\n',
     'videos/README.md': 'Trailers, music videos and cutscenes, one folder each (`videos/<slug>/`). `manifest.json` lists them (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/videos/<slug>/`. The site serves files up to 25 MiB itself; larger ones go to the studio\'s storage with `npx --no-install homie-studio media put` (after `npx --no-install homie-studio storage add`). Never into git.\n',
     'videos/manifest.json': '{ "v": 1, "items": [] }\n',
-    'posts/README.md': 'Markdown posts this studio publishes, one file each.\n',
+    'posts/README.md': POSTS_README,
+    'site/theme.json': themeFile(slug),
+    'site/README.md': SITE_README,
     'site/src/worker.mjs': `// This studio's site: pages, public rooms (Table + Lobby Durable Objects), D1, and R2 once storage is added.
 // The code is @homie-rocks/studio's, pinned in package.json, so an update never changes a published game by surprise.
 export { default, Table, Lobby } from '@homie-rocks/studio/worker';

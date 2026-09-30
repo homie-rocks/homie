@@ -1,0 +1,160 @@
+/**
+ * @homie-rocks/studio 0.7.0: the play page shares its room, and names its players.
+ *
+ *   - the game frame delegates fullscreen, autoplay and gamepad to its opaque origin (`*`): the bare names
+ *     matched nothing in the sandboxed frame, and Safari refused the gamepad;
+ *   - the room goes into the address, and a small room button at the edge shares it: Invite (the share sheet,
+ *     or the link copied), Big screen (/<game>/tv of that room) and the room code;
+ *   - a room code the relay cannot use (over 32 characters, or other characters) is refused on the page,
+ *     never swapped for a public room;
+ *   - a player who typed no name gets a two-word handle, varied per seat and per room, never "Player 1".
+ * The shell script runs here against a small stand-in page (no browser needed).
+ * Run: node --test packages/studio/test/play.test.mjs
+ */
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import vm from 'node:vm';
+import { NetRoom, HANDLE_WORDS, handleFor } from '../worker/room.mjs';
+import { playPage } from '../worker/pages.mjs';
+
+const cat = { studio: { name: 'Night Owls', theme: { accent: '#ffcf5a' } }, games: [] };
+const game = { id: 'rock-race', name: 'Rock <Race>', players: { max: 6 } };
+
+test('the game frame delegates fullscreen, autoplay and gamepad to its opaque origin', async () => {
+  const html = await playPage(cat, game).text();
+  assert.match(html, /<iframe class="game"[^>]* sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen \*; autoplay \*; gamepad \*"><\/iframe>/);
+  assert.doesNotMatch(html, /allow="fullscreen; autoplay; gamepad"/);
+});
+
+/** The play page's shell script, run against a stand-in page at `search`. */
+async function shell(search, { lobby = 'pub-3', screen = false, room = null } = {}) {
+  const res = playPage(cat, game, { screen, room });
+  const html = await res.text();
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  const els = new Map();
+  const el = (sel) => {
+    if (sel === '[data-join]') return null;
+    if (!els.has(sel)) {
+      els.set(sel, {
+        sel, textContent: '', hidden: /sheet|toast|results|screen/.test(sel), attrs: {}, listeners: {}, href: '', src: '',
+        classList: { set: new Set(), add(c) { this.set.add(c); }, remove(c) { this.set.delete(c); }, contains(c) { return this.set.has(c); } },
+        setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] ?? null; },
+        addEventListener(t, fn) { (this.listeners[t] ??= []).push(fn); }, querySelector: (s) => el(s), contains: () => false,
+        append() {}, focus() {}, contentWindow: { focus() {} },
+      });
+    }
+    return els.get(sel);
+  };
+  const replaced = [];
+  const fetched = [];
+  const ctx = {
+    document: { querySelector: el, createElement: () => el(`new-${Math.random()}`), addEventListener() {} },
+    location: { search, origin: 'https://owls.example', pathname: `/${game.id}/${screen ? 'tv' : 'play'}`, hash: '', host: 'owls.example', protocol: 'https:' },
+    history: { state: null, replaceState: (s, t, u) => replaced.push(u) },
+    sessionStorage: { getItem: () => null, setItem() {} },
+    navigator: {},
+    WebSocket: class { constructor(u) { this.url = u; } },
+    fetch: async (u, o) => { fetched.push([u, o?.method]); return { json: async () => ({ room: lobby }) }; },
+    URLSearchParams, setTimeout, clearTimeout, innerWidth: 1280, innerHeight: 800,
+    addEventListener() {},
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  for (const s of scripts) vm.runInContext(s, ctx);
+  await new Promise((r) => setTimeout(r, 10));
+  return { html, ctx, el, replaced, fetched };
+}
+
+test('the room goes into the address, and the room button shares it: Invite, Big screen and the code', async () => {
+  const html = await playPage(cat, game).text();
+  assert.match(html, /<button class="pill" type="button" data-share-toggle aria-expanded="false"/);
+  assert.match(html, /<div class="sheet" id="share-sheet" role="dialog" aria-label="This room" data-share-sheet hidden>/);
+  assert.match(html, /data-invite>/);
+  assert.match(html, /data-bigscreen target="_blank" rel="noopener" href="\/rock-race\/tv"/);
+  assert.match(html, /<div class="room at-top-right" data-room-ui>/, 'at the edge, away from the thumbs and the middle');
+  assert.match(html, /← Rock &lt;Race&gt;/);
+  // A stranger pressing Play: the lobby's room is written into the address and into the share sheet.
+  const a = await shell('');
+  assert.deepEqual(a.fetched, [['/rock-race/api/lobby', 'POST']]);
+  assert.deepEqual(a.replaced, ['/rock-race/play?room=pub-3']);
+  assert.match(a.el('iframe.game').src, /^\/rock-race\/__game\/\?room=pub-3&device=desk&want=play$/);
+  assert.equal(a.el('[data-room-code]').textContent, 'Room 3');
+  assert.equal(a.el('[data-bigscreen]').href, '/rock-race/tv?room=pub-3');
+  assert.equal(a.el('[data-room-link]').textContent, 'owls.example/rock-race/play?room=pub-3');
+  assert.equal(a.ctx.__shell.link, 'https://owls.example/rock-race/play?room=pub-3');
+  // A friend's link: that room, no lobby, the address kept as it is (with its other switches).
+  const b = await shell('?room=owl-party&hand=phone');
+  assert.deepEqual(b.fetched, []);
+  assert.deepEqual(b.replaced, []);
+  assert.match(b.el('iframe.game').src, /room=owl-party&device=phone/);
+  assert.equal(b.el('[data-room-code]').textContent, 'owl-party');
+  // Invite: the share sheet when there is one, else the link copied.
+  const shared = [];
+  b.ctx.navigator.share = async (d) => { shared.push(d); };
+  b.el('[data-invite]').listeners.click[0]();
+  assert.deepEqual(JSON.parse(JSON.stringify(shared)), [{ title: 'Rock <Race>', text: 'Play Rock <Race> with me: join my room.', url: 'https://owls.example/rock-race/play?room=owl-party' }]);
+  const copied = [];
+  delete b.ctx.navigator.share;
+  b.ctx.navigator.clipboard = { writeText: async (t) => { copied.push(t); } };
+  b.el('[data-invite]').listeners.click[0]();
+  assert.deepEqual(copied, ['https://owls.example/rock-race/play?room=owl-party']);
+  // The big screen writes its room into its address too, so a reload keeps the same room and QR.
+  const tv = await shell('', { screen: true, room: 'pub-5' });
+  assert.deepEqual(tv.replaced, ['/rock-race/tv?room=pub-5']);
+  assert.deepEqual(tv.fetched, []);
+});
+
+test('a room code the relay cannot use is refused on the page, never swapped for a public room', async () => {
+  const long = 'a'.repeat(33);
+  const s = await shell(`?room=${long}`);
+  assert.deepEqual(s.fetched, [], 'no lobby: an asked room is never silently a public one');
+  assert.equal(s.el('iframe.game').src, '', 'no game is started');
+  assert.equal(s.el('[data-status]').textContent, 'that room link does not work');
+  const ok = await shell(`?room=${'a'.repeat(32)}`);
+  assert.match(ok.el('iframe.game').src, new RegExp(`room=${'a'.repeat(32)}&`));
+  // The site answers the same before any script runs: the page, the big screen and the game's own page.
+  const { default: worker } = await import('../worker/index.mjs');
+  const catalogue = { studio: { name: 'Night Owls' }, games: [{ id: 'rock-race', name: 'Rock Race', players: { max: 6 } }] };
+  const ASSETS = { fetch: async (req) => (new URL(req.url).pathname === '/games.json' ? new Response(JSON.stringify(catalogue)) : new Response('<html><head></head></html>', { headers: { 'content-type': 'text/html' } })) };
+  const LOBBY = { idFromName: (n) => n, get: () => ({ fetch: async () => new Response(JSON.stringify({ room: 'pub-1', rooms: [] })) }) };
+  const site = (p) => worker.fetch(new Request(`https://owls.example${p}`), { ASSETS, LOBBY }, { waitUntil() {} });
+  for (const p of [`/rock-race/play?room=${long}`, '/rock-race/play?room=a%20b', `/rock-race/tv?room=${long}`, `/rock-race/play?screen=1&room=${long}`]) {
+    const r = await site(p);
+    assert.equal(r.status, 400, p);
+    const html = await r.text();
+    assert.match(html, /That room link does not work/);
+    assert.doesNotMatch(html, /<iframe/, `${p}: no game in a room nobody asked for`);
+    assert.match(html, /href="\/rock-race\/(play|tv)" data-play>Join a public room<\/a>/, 'a public room is one tap away, and said so');
+  }
+  const doc = await site(`/rock-race/__game/?room=${long}`);
+  assert.equal(doc.status, 400);
+  assert.equal((await site(`/rock-race/play?room=${'b'.repeat(32)}`)).status, 200);
+});
+
+test('handles: a player with no name gets two words, varied per seat and per room, never "Player 1"', () => {
+  const names = (code, n, typed = {}) => {
+    const room = new NetRoom({ code, maxPlayers: 8 });
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const got = [];
+      room.attach({ ip: `198.51.100.${i}`, send: (t) => got.push(JSON.parse(t)), close: () => {} })
+        .onMessage(JSON.stringify({ t: 'hello', v: 1, device: 'phone', want: 'play', canHost: true, ...(typed[i] ? { name: typed[i] } : {}) }));
+      out.push(got.find((m) => m.t === 'welcome').name);
+    }
+    return out;
+  };
+  const eight = names('pub-1', 8, { 3: 'Zed' });
+  assert.equal(eight[3], 'Zed', 'a typed name is kept');
+  const handles = eight.filter((_, i) => i !== 3);
+  for (const h of handles) {
+    assert.match(h, /^[A-Z][a-z]+ [A-Z][a-z]+$/, h);
+    assert.ok(h.length <= 16, `${h} fits a game that trims names at 18`);
+    assert.doesNotMatch(h, /^Player \d+$/);
+  }
+  assert.equal(new Set(handles).size, handles.length, 'no two seats share a handle');
+  const firsts = new Set(Array.from({ length: 40 }, (_, i) => names(`pub-${i + 2}`, 1)[0]));
+  assert.ok(firsts.size >= 20, `every room's first player is not the same name (${firsts.size} different in 40 rooms)`);
+  assert.equal(handleFor('same-token'), handleFor('same-token'), 'a seat keeps its handle (its token names it)');
+  assert.notEqual(handleFor('same-token', new Set([handleFor('same-token')])), handleFor('same-token'), 'a taken handle is skipped');
+  assert.ok(HANDLE_WORDS.first.length * HANDLE_WORDS.second.length >= 1000);
+});

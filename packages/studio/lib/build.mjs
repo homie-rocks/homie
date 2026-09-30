@@ -5,8 +5,12 @@
  *   site/dist/games/<id>/index.html        the game's page (the Worker adds HOMIE_NET)
  *   site/dist/games/<id>/assets/main.js    its bundle (esbuild; @homie-rocks/studio/netplay inlined)
  *   site/dist/games/<id>/...               everything in games/<id>/public/
- *   site/dist/games.json                   { studio, games[], songs[], videos[] } from studio.json, game.json
- *                                          files and the music/ and videos/ manifests (media/MEDIA.md)
+ *   site/dist/games.json                   { studio, games[], songs[], videos[], posts[], site } from studio.json,
+ *                                          game.json files, the music/ and videos/ manifests (media/MEDIA.md),
+ *                                          posts/*.md and the studio's site/ folder (site/SITE.md)
+ *   site/dist/games/<id>/_landing/...      what the game's landing shows (hero footage, its cover, licence texts)
+ *   site/dist/_site/                       posts.json (the posts' HTML), the studio's own pages (site/pages)
+ *   site/dist/<file>                       site/public, as it is (fonts, a logo, hero footage)
  *   site/dist/music/..., site/dist/videos/...   media files the site serves itself (R2 keys are served from R2)
  *
  * game.json "build" picks how a game becomes files (a ported game keeps its own shape):
@@ -22,6 +26,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 import { buildMedia } from './media.mjs';
+import { buildSiteFiles, landingOf, readPosts, readTheme } from './site.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
 import { SEAT_MAX } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
@@ -173,28 +178,49 @@ export async function build(root, { only = null, log = () => {} } = {}) {
   else {
     try { const prev = JSON.parse(readFileSync(join(dist, 'games.json'), 'utf8')); media = { songs: prev.songs ?? [], videos: prev.videos ?? [], skipped: [] }; } catch { media = { songs: [], videos: [], skipped: [] }; }
   }
+  // The site around the games (site/SITE.md): the look, each game's landing, posts, and what site/ overrides.
+  const theme = readTheme(root, { log });
+  const shown = all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html')));
+  const rows = shown.map((g) => {
+    // The seats come from the game's netplay manifest (NETPLAY.md §3): what the Worker gives every room of it.
+    const net = netplayOf(g, join(dist, 'games', g.id));
+    const { min, max } = seatsFor(g, net);
+    return {
+      id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
+      roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
+      ...(g.screen ? { screen: g.screen } : {}),
+      landing: landingOf(g, join(dist, 'games', g.id), { videos: media.videos, songs: media.songs, log }),
+    };
+  });
+  const { posts, skipped: postsSkipped } = readPosts(root, { games: rows, songs: media.songs, videos: media.videos, log });
+  const site = buildSiteFiles(root, dist, { gameIds: rows.map((g) => g.id), log });
+  mkdirSync(join(dist, '_site'), { recursive: true });
+  writeFileSync(join(dist, '_site', 'posts.json'), `${JSON.stringify({ v: 1, posts })}\n`);
+  const s = studio.site && typeof studio.site === 'object' ? studio.site : {};
   const catalogue = {
     studio: {
       name: studio.name, slug: studio.slug, version: STUDIO_VERSION,
+      ...(typeof studio.tagline === 'string' && studio.tagline.trim() ? { tagline: studio.tagline.trim().slice(0, 140) } : {}),
+      theme,
+      site: {
+        ...(rows.some((g) => g.id === s.featured) ? { featured: s.featured } : {}),
+        ...(Array.isArray(s.frameAncestors) ? { frameAncestors: s.frameAncestors.filter((o) => /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(String(o))).slice(0, 8) } : {}),
+      },
       // studio.json `stats.share`: the site tells the directory two numbers for the hub (played this week).
       ...(studio.stats?.share === true ? { stats: { share: true }, directory: studio.homie?.directory ?? 'https://homie.rocks' } : {}),
     },
-    games: all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))).map((g) => {
-      // The seats come from the game's netplay manifest (NETPLAY.md §3): what the Worker gives every room of it.
-      const net = netplayOf(g, join(dist, 'games', g.id));
-      const { min, max } = seatsFor(g, net);
-      return {
-        id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
-        roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
-        ...(g.screen ? { screen: g.screen } : {}),
-      };
-    }),
+    games: rows,
     songs: media.songs,
     videos: media.videos,
+    // Summaries only; each post's HTML is in _site/posts.json.
+    posts: posts.map(({ html, record, ...p }) => p),
+    site: { pages: site.pages, partials: site.partials, ...(site.css ? { css: site.css } : {}) },
   };
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
   return {
     ok: true, command: 'build', dist, games: built, catalogue: catalogue.games.map((g) => g.id),
     songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped,
+    posts: posts.map((p) => p.slug), postsSkipped, pages: site.pages, partials: Object.keys(site.partials), public: site.public.length, siteSkipped: site.skipped,
+    landings: rows.map((g) => ({ id: g.id, hero: g.landing.hero.wide || g.landing.hero.tall ? 'footage' : g.landing.hero.wideImage ? 'art' : 'colours', credits: Boolean(g.landing.credits.original || g.landing.credits.people.length), source: g.landing.source })),
   };
 }

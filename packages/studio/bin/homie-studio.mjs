@@ -12,6 +12,8 @@
  *   homie-studio build [<id>]
  *   homie-studio dev [--port 8787]        (--stop: stop exactly this studio's dev server, nothing else)
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
+ *   homie-studio look [<path>...] [--url <site>] [--shots <dir>] [--only computer,phone,sideways]
+ *                                         (the site's pages on a computer and a phone, as pictures, with what is wrong)
  *   homie-studio port plan <game folder>
  *   homie-studio port import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
  *   homie-studio port check <id> [--url <site>] [--only owner-desk,owner-phone,owner-iphone,round,life,tv] [--shots <dir>]
@@ -36,6 +38,7 @@ import { build } from '../lib/build.mjs';
 import { check } from '../lib/check.mjs';
 import { deploy, deployPlan, storageAdd, whoami, wranglerBin } from '../lib/cloudflare.mjs';
 import { publish } from '../lib/directory.mjs';
+import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
 import { recordUpload, resolveMedia, typeOf } from '../lib/media.mjs';
@@ -62,7 +65,7 @@ const log = asJson ? () => {} : (line) => process.stderr.write(`${line}\n`);
 
 function print(result) {
   if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
-  if (result.ok === false && result.command !== 'port check') { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
+  if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
   if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
   const lines = [];
   switch (result.command) {
@@ -81,7 +84,12 @@ function print(result) {
     case 'build':
       lines.push(`Built ${result.games.map((g) => `${g.id} (${Math.round(g.bytes / 1024)} KB)`).join(', ') || 'no games'} into ${relative(process.cwd(), result.dist) || result.dist}`);
       if (result.songs?.length || result.videos?.length) lines.push(`Media pages: ${[...result.songs.map((x) => `/music/${x}/`), ...result.videos.map((x) => `/videos/${x}/`)].join(', ')}`);
+      for (const l of result.landings ?? []) lines.push(`Landing /${l.id}/: hero from ${l.hero === 'footage' ? 'its footage' : l.hero === 'art' ? 'its art (moving)' : 'the studio\'s colours (add a cover or hero/ footage)'}${l.credits ? ', credits' : ''}${l.source ? ', "Make a game like this" with its source' : ''}`);
+      if (result.posts?.length) lines.push(`Posts: ${result.posts.map((x) => `/posts/${x}/`).join(', ')} (feeds: /posts/feed.xml, /posts/feed.json)`);
+      if (result.pages?.length || result.partials?.length) lines.push(`The studio's own: ${[...(result.pages ?? []).map((x) => `page ${x}`), ...(result.partials ?? []).map((x) => `partial ${x}`)].join(', ')}`);
       for (const m of result.mediaSkipped ?? []) lines.push(`  left out: ${m.kind}/${m.item}${m.file ? ` ${m.file}` : ''}: ${m.why}`);
+      for (const m of result.postsSkipped ?? []) lines.push(`  left out: posts/${m.post}: ${m.why}`);
+      for (const m of result.siteSkipped ?? []) lines.push(`  left out: ${m.what}: ${m.why}`);
       break;
     case 'media list':
       for (const kind of ['music', 'videos']) {
@@ -147,6 +155,9 @@ function print(result) {
     case 'stats share':
       lines.push(result.message);
       break;
+    case 'look':
+      lines.push(`${result.ok ? 'Looks right' : 'Look again'}: ${result.rows.length} views of ${result.url}`, ...result.rows.map((r) => `  ${r.ok ? 'ok  ' : 'FIX '} ${r.path} on ${({ computer: 'a computer', phone: 'a phone', sideways: 'a phone turned sideways' })[r.device] ?? r.device}${r.problems.length ? `: ${r.problems.join('; ')}` : ''}`), '', `Pictures (open them and look): ${result.shots}`);
+      break;
     case 'check':
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
         ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`));
@@ -192,6 +203,19 @@ async function main() {
     const url = flags.get('url') ?? siteUrl(root);
     if (!url) return { ok: false, command: 'check', why: 'give --url (the local dev address or the live site)' };
     return check({ url, game, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log });
+  }
+  if (cmd === 'look') {
+    const url = flags.get('url') ?? siteUrl(root);
+    if (!url) return { ok: false, command: 'look', why: 'give --url (the local dev address or the live site)' };
+    let paths = positional.slice(1).map((p) => (p.startsWith('/') ? p : `/${p}`));
+    if (!paths.length) {
+      let cat = null;
+      try { cat = JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8')); } catch { /* not built */ }
+      const games = cat?.games?.map((g) => g.id) ?? listGames(root).map((g) => g.id);
+      paths = ['/', ...games.map((id) => `/${id}/`), ...(games.length ? ['/games/', '/rooms/'] : []), ...(cat?.posts?.length ? ['/posts/', `/posts/${cat.posts[0].slug}/`] : [])];
+    }
+    const only = flags.get('only') ? String(flags.get('only')).split(',').filter((d) => ['computer', 'phone', 'sideways'].includes(d)) : undefined;
+    return look({ url, paths, shots: flags.get('shots') ? resolve(flags.get('shots')) : join(root, '.studio', 'look'), devices: only, log });
   }
   if (cmd === 'deploy' && flags.has('plan')) return deployPlan(root);
   if (cmd === 'deploy') return deploy(root, { log, homie: flags.get('homie') });
@@ -304,7 +328,7 @@ try {
   if (result && result.command !== 'help') print(result);
   if (result?.ok === false) process.exitCode = 1;
   // Chrome's pipes can outlive browser.close(); a finished check must not hang its caller.
-  if (result?.command === 'check' || result?.command === 'port check') process.exit(process.exitCode ?? 0);
+  if (result?.command === 'check' || result?.command === 'port check' || result?.command === 'look') process.exit(process.exitCode ?? 0);
 } catch (error) {
   print({ ok: false, why: error instanceof Error ? error.message : String(error) });
   process.exitCode = 1;

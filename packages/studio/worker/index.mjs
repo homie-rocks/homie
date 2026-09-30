@@ -1,25 +1,34 @@
 /**
  * @homie-rocks/studio/worker — a studio's own site, on the studio's own Cloudflare.
  *
- * One Worker serves the studio's pages and its public rooms:
+ * One Worker serves the studio's pages and its public rooms (site/SITE.md: the sections, the landings, posts and
+ * what a studio's site/ folder overrides):
  *
- *   /                          the studio's home: every game, with a Play button
- *   /<game>/                   the game's page
- *   /<game>/play               the play shell: asks the Lobby for a public room and
- *                              boots the game in a sandboxed frame, seated at once
- *   /<game>/tv                 the big screen: the same room as a spectator, with a
- *                              QR code phones scan to join (also /<game>/play?screen=1)
+ *   /                          Home: the featured game, live rooms, games, latest posts, videos, music
+ *   /games/ /rooms/ /posts/    the sections, as on homie.rocks (a section with nothing in it answers 404)
+ *   /music/ /videos/           songs and videos (music/manifest.json, videos/manifest.json)
+ *   /posts/<slug>/             a post (posts/*.md); /posts/feed.xml (Atom) and /posts/feed.json (JSON Feed)
+ *   /<game>/                   the game's landing: hero, Play, phone / computer / TV, live rooms, how to play, credits
+ *   /<game>/credits            the licence texts the game ships with
+ *   /<game>/live               the landing's live line and rooms (JSON)
+ *   /<game>/play               the play shell: asks the Lobby for a public room and boots the game in a
+ *                              sandboxed frame, seated at once; the room goes into the address, and a small
+ *                              room button shares it (Invite, Big screen, the room code)
+ *   /<game>/tv                 the big screen: the same room as a spectator, with a QR code phones scan to join
+ *                              (also /<game>/play?screen=1)
  *   /<game>/__game/...         the game's own files (index.html gets HOMIE_NET)
  *   /<game>/__net?room=        the room's netplay socket (Table Durable Object)
  *   /<game>/__watch?room=      the room's facts, for the shell
  *   /<game>/api/lobby          which public room to join (Lobby Durable Object)
- *   /api/games                 the catalogue plus live counts (D1 + Lobby)
+ *   /api/games, /api/rooms     the catalogue plus live counts; every public room playing now
  *   /.well-known/homie-studio.json   what the homie.rocks directory reads
- *   /music/, /music/<slug>/    the studio's songs, scores and loops (music/manifest.json)
- *   /videos/, /videos/<slug>/  its trailers, music videos and cutscenes (videos/manifest.json)
  *   /media/<key>               the studio's large media, from R2 (once `storage add` bound it), with byte ranges
  *   /api/stats                 the studio's numbers, for its owner only (a read key, or the owner's page session)
  *   /_studio/stats             the owner's private stats page (one-time sign-in link from `homie-studio stats link`)
+ *   /_homie/site.js            the pages' one script
+ *
+ * A page in the studio's site/pages wins over the generated one at the same address. Every HTML answer is
+ * `no-transform` (an edge in front of a custom domain injects nothing) and is never framed by another site.
  *
  * It counts, and never tracks (worker/stats.mjs): a page opened, a Play press, a room opened, a round finished,
  * the peak of players, a song or video started, and which site sent the visitor (a host name), as daily counters
@@ -36,18 +45,26 @@
  * plays the same way here.
  */
 import { NetRoom } from './room.mjs';
-import { gamePage, homePage, mediaIndexPage, notFoundPage, playPage, songPage, videoPage } from './pages.mjs';
+import { ROOM_ID, badRoomPage, frameAncestors, playPage } from './pages.mjs';
 import { qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
+import {
+  SITE_JS, atomFeed, creditsPage, customPage, gameLanding, gamesPage, homePage, jsonFeed, mediaIndexPage, notFoundPage,
+  postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage,
+} from './site.mjs';
 import { count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
 import { ownerRoutes } from './stats-page.mjs';
+import { STUDIO_VERSION_TAG } from './version.mjs';
 
 export { SEAT_MAX } from './seats.mjs';
 /** For a studio's own wrapper Worker: count its own pages the way the template counts its pages. */
 export { countVisit } from './stats.mjs';
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const ROOM_ID = /^[A-Za-z0-9_-]{1,32}$/;
+const POST_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
+/** A game's own files, framed by its play page: never x-frame-options DENY. */
+const GAME_FILES = /^\/[a-z0-9][a-z0-9-]{0,39}\/__game(?:\/|$)/;
+const MEDIA_FILE = /\.(mp4|webm|m4v|mov|mp3|m4a|aac|ogg|opus|wav|flac)$/i;
 
 const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
@@ -62,22 +79,36 @@ async function catalogue(env, origin) {
   } catch { return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] }; }
 }
 
+/** The posts with their HTML (site/dist/_site/posts.json), for a post's page and the feeds. */
+async function postsOf(env, origin) {
+  try {
+    const res = await env.ASSETS.fetch(new Request(`${origin}/_site/posts.json`));
+    return res.ok ? ((await res.json()).posts ?? []) : [];
+  } catch { return []; }
+}
+
 async function claimOf(env) {
   if (!env.DB) return null;
   try { return (await env.DB.prepare('SELECT value FROM meta WHERE key = ?').bind('homie_claim').first())?.value ?? null; } catch { return null; }
 }
 
-async function liveCounts(env, games) {
-  const out = {};
+/** Every public room with people in it, per game (the Lobby's list), and the number playing per game. */
+async function roomsOf(env, games) {
+  const rooms = [];
+  const live = {};
   await Promise.all(games.map(async (g) => {
-    try {
-      const res = await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/rooms');
-      const rooms = (await res.json()).rooms ?? [];
-      out[g.id] = rooms.reduce((n, r) => n + (r.players || 0), 0);
-    } catch { out[g.id] = 0; }
+    let list = [];
+    try { list = (await (await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
+    const busy = list.filter((r) => (r.players || 0) > 0);
+    live[g.id] = busy.reduce((n, r) => n + (r.players || 0), 0);
+    for (const r of busy) rooms.push(roomView(g, r, seatsOf(g)));
   }));
-  return out;
+  rooms.sort((a, b) => b.players - a.players || a.game.localeCompare(b.game) || String(a.room).localeCompare(String(b.room)));
+  return { rooms, live };
 }
+
+/** Kept for a studio's own wrapper Worker that reads `/api/games`'s `live`. */
+async function liveCounts(env, games) { return (await roomsOf(env, games)).live; }
 
 const MEDIA_SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
@@ -92,7 +123,7 @@ function parseRange(header, size) {
   return { start, end };
 }
 
-/** A media file from the site's own assets, answering a byte range (phones seek audio and video with them). */
+/** A media file from the site's own assets, answering a byte range (phones seek audio and video with them; Safari needs them to play a video at all). */
 async function assetWithRange(request, env, url) {
   const res = await env.ASSETS.fetch(new Request(url.toString(), { method: 'GET' }));
   const range = request.headers.get('range');
@@ -145,10 +176,13 @@ function mediaRow(e, origin, kind) {
 }
 
 /** The game's index.html with HOMIE_NET ahead of its modules, in the site's sandbox (an opaque origin). */
-async function gameDocument(request, env, url, game, meta) {
+async function gameDocument(request, env, url, game, meta, cat) {
+  const asked = url.searchParams.get('room');
+  // A room code the relay cannot use is refused here too, never swapped for another room.
+  if (asked !== null && !ROOM_ID.test(asked)) return new Response('That room link does not work: a room code is 1 to 32 letters, digits, - or _.\n', { status: 400, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
   const res = await env.ASSETS.fetch(new Request(`${url.origin}/games/${game}/index.html`));
-  if (!res.ok) return notFoundPage(`No build of "${game}" on this site yet.`);
-  const room = ROOM_ID.test(url.searchParams.get('room') || '') ? url.searchParams.get('room') : 'main';
+  if (!res.ok) return notFoundPage(`No build of "${game}" on this site yet.`, cat);
+  const room = asked ?? 'main';
   const want = url.searchParams.get('want') === 'screen' ? 'screen' : 'play';
   const device = ['phone', 'desk', 'tv'].includes(url.searchParams.get('device')) ? url.searchParams.get('device') : undefined;
   const wsBase = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
@@ -169,17 +203,18 @@ async function gameDocument(request, env, url, game, meta) {
   return new Response(html, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-store',
+      'cache-control': 'no-store, no-transform',
       'access-control-allow-origin': '*',
       // The game runs in an opaque origin: it cannot read this site's storage or cookies.
-      'content-security-policy': "sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups; frame-ancestors 'self'",
+      'content-security-policy': `sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups; frame-ancestors ${frameAncestors(cat)}`,
     },
   });
 }
 
-async function gameAsset(env, url, game, rest) {
+async function gameAsset(request, env, url, game, rest) {
   if (rest.includes('..')) return new Response('not found', { status: 404 });
-  const res = await env.ASSETS.fetch(new Request(`${url.origin}/games/${game}/${rest}`));
+  const target = new URL(`${url.origin}/games/${game}/${rest}`);
+  const res = MEDIA_FILE.test(rest) && request.headers.get('range') ? await assetWithRange(request, env, target) : await env.ASSETS.fetch(new Request(target));
   const out = new Response(res.body, res);
   // Module scripts from the opaque-origin frame are CORS requests.
   out.headers.set('access-control-allow-origin', '*');
@@ -218,133 +253,252 @@ async function mediaBeat(request, env, ctx, url) {
   return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
 }
 
+/**
+ * EVERY HTML ANSWER IS no-transform, AND NEVER FRAMED BY ANOTHER SITE. A custom domain on a zone with Cloudflare Web
+ * Analytics' automatic setup gets a beacon injected into every HTML answer not marked no-transform, and the beacon
+ * posts to /cdn-cgi/rum, which a Worker custom domain does not serve. Pages that name no frame rule get
+ * x-frame-options DENY (the game's own files are framed by its play page, so they keep theirs).
+ */
+function finish(res, path) {
+  if (!res || res.status === 101 || res.webSocket) return res;
+  if (!/text\/html/i.test(res.headers.get('content-type') ?? '')) return res;
+  const cache = res.headers.get('cache-control') ?? '';
+  const addNt = !/no-transform/i.test(cache);
+  const addXfo = !res.headers.has('x-frame-options') && !GAME_FILES.test(path);
+  if (!addNt && !addXfo) return res;
+  const headers = new Headers(res.headers);
+  if (addNt) headers.set('cache-control', cache ? `${cache}, no-transform` : 'no-transform');
+  if (addXfo) headers.set('x-frame-options', 'DENY');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    const parts = path.split('/').filter(Boolean);
-
-    if (path.startsWith('/_studio/')) return ownerRoutes(request, env, url, { catalogueOf: () => catalogue(env, url.origin) });
-    if (path === '/api/stats/beat' && request.method === 'POST') return mediaBeat(request, env, ctx, url);
-    if (path === '/api/stats') {
-      if (request.method !== 'GET') return json({ ok: false, error: 'method' }, 405);
-      if ((await ownerAllowed(request, env, { kinds: ['read'] })) !== 'read') {
-        return json({ ok: false, error: 'owner-only', message: 'The studio\'s numbers are for its owner. In the studio folder: `npx --no-install homie-studio stats` prints them; `npx --no-install homie-studio stats key` gives a read key for the Homie MCP tool studio_stats.' }, 401, { 'www-authenticate': 'Bearer' });
-      }
-      const cat = await catalogue(env, url.origin);
-      const studios = new Set(String(url.searchParams.get('studios') ?? '').split(',').filter((h) => /^[a-z0-9.-]{3,80}$/.test(h)).slice(0, 500));
-      try {
-        return json({ ok: true, site: url.origin, ...(await readStats(env, cat, { range: rangeOf(url.searchParams), only: onlyOf(url.searchParams), studios })) });
-      } catch (error) {
-        return json({ ok: false, error: 'no-stats', message: `The counters are not in this studio's D1 yet: \`npm run deploy\` applies migration 0002_studio_stats.sql. (${String(error?.message ?? error).slice(0, 120)})` }, 503);
-      }
-    }
-    if (path === '/.well-known/homie-studio.json') {
-      const cat = await catalogue(env, url.origin);
-      const played = cat.studio?.stats?.share ? await playedThisWeek(env) : null;
-      return json({
-        v: 1,
-        kind: 'homie-studio',
-        name: cat.studio?.name ?? env.STUDIO_NAME ?? 'Studio',
-        slug: cat.studio?.slug ?? null,
-        site: url.origin,
-        studio: cat.studio?.version ?? null,
-        claim: await claimOf(env),
-        games: (cat.games ?? []).map((g) => ({
-          id: g.id, name: g.name, blurb: g.blurb ?? '', players: g.players ?? null, roundSeconds: g.roundSeconds ?? null,
-          page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play`, cover: g.cover ? `${url.origin}/games/${g.id}/${g.cover}` : null,
-        })),
-        songs: (cat.songs ?? []).map((e) => mediaRow(e, url.origin, 'music')),
-        videos: (cat.videos ?? []).map((e) => mediaRow(e, url.origin, 'videos')),
-        // Shared only when studio.json says `stats.share`: two numbers for the whole studio, for the hub.
-        ...(played ? { played } : {}),
-      }, 200, { 'access-control-allow-origin': '*' });
-    }
-    if (path === '/api/games') {
-      const cat = await catalogue(env, url.origin);
-      return json({ studio: cat.studio, games: cat.games, live: await liveCounts(env, cat.games ?? []) });
-    }
-    if (path.startsWith('/media/')) {
-      if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });
-      const key = decodeURIComponent(path.slice('/media/'.length));
-      if (!key || key.includes('..')) return new Response('not found', { status: 404 });
-      return mediaObject(request, env, key);
-    }
-    if (parts[0] === 'music' || parts[0] === 'videos') {
-      const kind = parts[0];
-      if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${kind}/`, 301);
-      const cat = await catalogue(env, url.origin);
-      if (parts.length === 1) { await countVisit(request, env, ctx, kind); return mediaIndexPage(cat, kind); }
-      const slug = parts[1];
-      const list = (kind === 'music' ? cat.songs : cat.videos) ?? [];
-      const entry = MEDIA_SLUG.test(slug) ? list.find((e) => e.slug === slug) : null;
-      if (parts.length === 2) {
-        if (!entry) return notFoundPage(`No ${kind === 'music' ? 'song' : 'video'} called "${slug}" here.`);
-        if (!path.endsWith('/')) return Response.redirect(`${url.origin}/${kind}/${slug}/`, 301);
-        await countVisit(request, env, ctx, `${kind}/${slug}`);
-        return kind === 'music' ? songPage(cat, entry, url.origin) : videoPage(cat, entry, url.origin);
-      }
-      if (parts.some((p) => p === '..')) return notFoundPage('Nothing here.');
-      const file = await assetWithRange(request, env, url);
-      if (file.status === 404) return notFoundPage('Nothing here.');
-      return file;
-    }
-    if (path === '/' || path === '/index.html') {
-      const cat = await catalogue(env, url.origin);
-      await countVisit(request, env, ctx, 'home');
-      shareDaily(cat, url, ctx);
-      return homePage(cat, await liveCounts(env, cat.games ?? []));
-    }
-
-    const game = parts[0];
-    if (game && GAME_ID.test(game)) {
-      const cat = await catalogue(env, url.origin);
-      const meta = (cat.games ?? []).find((g) => g.id === game);
-      if (!meta) return env.ASSETS.fetch(request);
-      if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
-      const sub = parts.slice(1).join('/');
-      if (sub === '') { await countVisit(request, env, ctx, game); shareDaily(cat, url, ctx); return gamePage(cat, meta, (await liveCounts(env, [meta]))[game] ?? 0); }
-      if (sub === 'tv' || (sub === 'play' && url.searchParams.get('screen') === '1')) {
-        await countVisit(request, env, ctx, game, 'screen');
-        // The big screen picks its room now, so the QR it shows puts every phone in that same room.
-        let room = ROOM_ID.test(url.searchParams.get('room') || '') ? url.searchParams.get('room') : null;
-        if (!room) {
-          try {
-            const max = seatsOf(meta);
-            room = (await (await env.LOBBY.get(env.LOBBY.idFromName(game)).fetch(`https://lobby/join?max=${max}`, { method: 'POST' })).json()).room ?? null;
-          } catch { room = null; }
-        }
-        const joinUrl = `${url.origin}/${game}/play${room ? `?room=${encodeURIComponent(room)}` : ''}`;
-        let qr = null;
-        try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
-        return playPage(cat, meta, { screen: true, joinUrl, qr, room });
-      }
-      if (sub === 'play') { await countVisit(request, env, ctx, game, 'play'); shareDaily(cat, url, ctx); return playPage(cat, meta); }
-      if (sub === 'api/lobby') {
-        const max = seatsOf(meta);
-        return env.LOBBY.get(env.LOBBY.idFromName(game)).fetch(`https://lobby/join?max=${max}`, { method: 'POST' });
-      }
-      if (sub === '__net' || sub === '__watch') {
-        if (request.headers.get('upgrade') !== 'websocket') return new Response('websocket only', { status: 426 });
-        const room = url.searchParams.get('room') || 'main';
-        if (!ROOM_ID.test(room)) return new Response('bad room', { status: 400 });
-        const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-        const max = seatsOf(meta);
-        const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}`;
-        return stub.fetch(new Request(target, request));
-      }
-      if (sub.startsWith('__homie/')) {
-        // A game made with Homie's arcade controls asks here for a Homie host; "not-a-homie" makes it stop asking (the same answer homie.rocks gives).
-        return json({ ok: false, error: 'not-a-homie' }, 200, { 'access-control-allow-origin': '*' });
-      }
-      if (sub === '__game' || sub === '__game/' || sub === '__game/index.html') return gameDocument(request, env, url, game, meta);
-      if (sub.startsWith('__game/')) return gameAsset(env, url, game, sub.slice('__game/'.length));
-    }
-    const asset = await env.ASSETS.fetch(request);
-    if (asset.status === 404) return notFoundPage('Nothing here.');
-    return asset;
+    return finish(await route(request, env, ctx), new URL(request.url).pathname);
   },
 };
+
+async function route(request, env, ctx) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const parts = path.split('/').filter(Boolean);
+  const read = request.method === 'GET' || request.method === 'HEAD';
+  let catP = null;
+  const getCat = () => (catP ??= catalogue(env, url.origin));
+
+  if (path.startsWith('/_studio/')) return ownerRoutes(request, env, url, { catalogueOf: getCat });
+  if (path === '/_homie/site.js') return new Response(SITE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
+  if (path === '/api/stats/beat' && request.method === 'POST') return mediaBeat(request, env, ctx, url);
+  if (path === '/api/stats') {
+    if (request.method !== 'GET') return json({ ok: false, error: 'method' }, 405);
+    if ((await ownerAllowed(request, env, { kinds: ['read'] })) !== 'read') {
+      return json({ ok: false, error: 'owner-only', message: 'The studio\'s numbers are for its owner. In the studio folder: `npx --no-install homie-studio stats` prints them; `npx --no-install homie-studio stats key` gives a read key for the Homie MCP tool studio_stats.' }, 401, { 'www-authenticate': 'Bearer' });
+    }
+    const cat = await getCat();
+    const studios = new Set(String(url.searchParams.get('studios') ?? '').split(',').filter((h) => /^[a-z0-9.-]{3,80}$/.test(h)).slice(0, 500));
+    try {
+      return json({ ok: true, site: url.origin, ...(await readStats(env, cat, { range: rangeOf(url.searchParams), only: onlyOf(url.searchParams), studios })) });
+    } catch (error) {
+      return json({ ok: false, error: 'no-stats', message: `The counters are not in this studio's D1 yet: \`npm run deploy\` applies migration 0002_studio_stats.sql. (${String(error?.message ?? error).slice(0, 120)})` }, 503);
+    }
+  }
+  if (path === '/.well-known/homie-studio.json') {
+    const cat = await getCat();
+    const played = cat.studio?.stats?.share ? await playedThisWeek(env) : null;
+    return json({
+      v: 1,
+      kind: 'homie-studio',
+      name: cat.studio?.name ?? env.STUDIO_NAME ?? 'Studio',
+      slug: cat.studio?.slug ?? null,
+      ...(cat.studio?.tagline ? { tagline: cat.studio.tagline } : {}),
+      site: url.origin,
+      studio: cat.studio?.version ?? null,
+      claim: await claimOf(env),
+      games: (cat.games ?? []).map((g) => ({
+        id: g.id, name: g.name, blurb: g.blurb ?? '', players: g.players ?? null, roundSeconds: g.roundSeconds ?? null,
+        page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play`, cover: g.cover ? `${url.origin}/games/${g.id}/${g.cover}` : null,
+      })),
+      songs: (cat.songs ?? []).map((e) => mediaRow(e, url.origin, 'music')),
+      videos: (cat.videos ?? []).map((e) => mediaRow(e, url.origin, 'videos')),
+      // The studio's posts, for the hub (the full text is in /posts/feed.json).
+      posts: (cat.posts ?? []).slice(0, 20).map((p) => ({ slug: p.slug, title: p.title, date: p.date, summary: p.summary, page: `${url.origin}/posts/${p.slug}/`, image: p.image ? (p.image.startsWith('/') ? `${url.origin}${p.image}` : p.image) : null, links: p.links ?? {} })),
+      rooms: `${url.origin}/api/rooms`,
+      // Shared only when studio.json says `stats.share`: two numbers for the whole studio, for the hub.
+      ...(played ? { played } : {}),
+    }, 200, { 'access-control-allow-origin': '*' });
+  }
+  if (path === '/api/games') {
+    const cat = await getCat();
+    return json({ studio: cat.studio, games: cat.games, live: await liveCounts(env, cat.games ?? []) });
+  }
+  if (path === '/api/rooms') {
+    const cat = await getCat();
+    const { rooms } = await roomsOf(env, cat.games ?? []);
+    return json({ ok: true, playing: rooms.reduce((n, r) => n + r.players, 0), rooms }, 200, { 'access-control-allow-origin': '*' });
+  }
+  if (path.startsWith('/media/')) {
+    if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });
+    const key = decodeURIComponent(path.slice('/media/'.length));
+    if (!key || key.includes('..')) return new Response('not found', { status: 404 });
+    return mediaObject(request, env, key);
+  }
+  if (path === '/posts/feed.xml' || path === '/posts/feed.json') {
+    const cat = await getCat();
+    if (!(cat.posts ?? []).length) return notFoundPage('This studio has no posts yet.', cat);
+    const posts = await postsOf(env, url.origin);
+    return path.endsWith('.xml') ? atomFeed(cat, posts, url.origin) : jsonFeed(cat, posts, url.origin);
+  }
+
+  // A page the studio made itself (site/pages) wins at its address.
+  if (read && (path.endsWith('/') || !path.includes('.'))) {
+    const cat = await getCat();
+    const pages = cat.site?.pages ?? [];
+    const want = path.endsWith('/') ? path : `${path}/`;
+    if (pages.includes(want)) {
+      if (want !== path) return Response.redirect(`${url.origin}${want}${url.search}`, 301);
+      const res = await env.ASSETS.fetch(new Request(`${url.origin}/_site/pages${want}index.html`));
+      if (res.ok) {
+        const top = parts[0] ?? '';
+        const game = (cat.games ?? []).find((g) => g.id === top);
+        await countVisit(request, env, ctx, parts.length === 0 ? 'home' : game && parts.length === 1 ? game.id : parts.join('/').slice(0, 80));
+        const active = game ? 'games' : sectionsOf(cat).some((s) => s.key === top) ? top : null;
+        return customPage(cat, await res.text(), { active });
+      }
+    }
+  }
+
+  if (parts[0] === 'music' || parts[0] === 'videos') {
+    const kind = parts[0];
+    const cat = await getCat();
+    const list = (kind === 'music' ? cat.songs : cat.videos) ?? [];
+    // A studio with no songs has no Music: the tab is gone and the page is not found (the same for videos).
+    if (!list.length) return notFoundPage(kind === 'music' ? 'This studio has no music yet.' : 'This studio has no videos yet.', cat);
+    if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${kind}/`, 301);
+    if (parts.length === 1) { await countVisit(request, env, ctx, kind); return mediaIndexPage(cat, kind, { origin: url.origin }); }
+    const slug = parts[1];
+    const entry = MEDIA_SLUG.test(slug) ? list.find((e) => e.slug === slug) : null;
+    if (parts.length === 2) {
+      if (!entry) return notFoundPage(`No ${kind === 'music' ? 'song' : 'video'} called "${slug}" here.`, cat);
+      if (!path.endsWith('/')) return Response.redirect(`${url.origin}/${kind}/${slug}/`, 301);
+      await countVisit(request, env, ctx, `${kind}/${slug}`);
+      return kind === 'music' ? songPage(cat, entry, url.origin) : videoPage(cat, entry, url.origin);
+    }
+    if (parts.some((p) => p === '..')) return notFoundPage('Nothing here.', cat);
+    const file = await assetWithRange(request, env, url);
+    if (file.status === 404) return notFoundPage('Nothing here.', cat);
+    return file;
+  }
+  if (path === '/' || path === '/index.html') {
+    const cat = await getCat();
+    await countVisit(request, env, ctx, 'home');
+    shareDaily(cat, url, ctx);
+    const { rooms, live } = await roomsOf(env, cat.games ?? []);
+    return homePage(cat, { origin: url.origin, rooms, live });
+  }
+  if (['games', 'rooms', 'posts'].includes(parts[0]) && parts.length === 1) {
+    const cat = await getCat();
+    const has = sectionsOf(cat).some((s) => s.key === parts[0]);
+    if (!has) return notFoundPage(parts[0] === 'posts' ? 'This studio has no posts yet.' : 'This studio has no games yet.', cat);
+    if (!path.endsWith('/')) return Response.redirect(`${url.origin}/${parts[0]}/`, 301);
+    await countVisit(request, env, ctx, parts[0]);
+    if (parts[0] === 'posts') return postsPage(cat, { origin: url.origin });
+    const { rooms, live } = await roomsOf(env, cat.games ?? []);
+    return parts[0] === 'games' ? gamesPage(cat, { origin: url.origin, live }) : roomsPage(cat, { origin: url.origin, rooms });
+  }
+  if (parts[0] === 'posts' && parts.length === 2 && POST_SLUG.test(parts[1])) {
+    const cat = await getCat();
+    const posts = (cat.posts ?? []).length ? await postsOf(env, url.origin) : [];
+    const post = posts.find((p) => p.slug === parts[1]);
+    if (!post) return notFoundPage(`No post called "${parts[1]}" here.`, cat);
+    if (!path.endsWith('/')) return Response.redirect(`${url.origin}/posts/${post.slug}/`, 301);
+    await countVisit(request, env, ctx, `posts/${post.slug}`);
+    return postPage(cat, post, { origin: url.origin });
+  }
+
+  const game = parts[0];
+  if (game && GAME_ID.test(game)) {
+    const cat = await getCat();
+    const meta = (cat.games ?? []).find((g) => g.id === game);
+    if (!meta) return fallback(request, env, url, getCat);
+    if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
+    const sub = parts.slice(1).join('/');
+    const max = seatsOf(meta);
+    const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
+    if (sub === '') {
+      await countVisit(request, env, ctx, game);
+      shareDaily(cat, url, ctx);
+      const { rooms, live } = await roomsOf(env, [meta]);
+      const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
+      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week });
+    }
+    if (sub === 'live') {
+      const { rooms, live } = await roomsOf(env, [meta]);
+      const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
+      // The same shape the house brands' landings read (counted, playing, waiting, road), plus the rooms.
+      return json({ ok: true, game, counted: true, playing: live[game] ?? 0, waiting: 0, max, rooms, road: { seats: 'any', start: 'now', room: 'public', big: true }, ...(week ? { week } : {}) }, 200, { 'cache-control': 'no-store' });
+    }
+    if (sub === 'credits') {
+      let texts = [];
+      try { const res = await env.ASSETS.fetch(new Request(`${url.origin}/games/${game}/_landing/credits.json`)); if (res.ok) texts = (await res.json()).texts ?? []; } catch { texts = []; }
+      if (!texts.length) return notFoundPage(`${meta.name} has no licence texts to show; its credits are on its page.`, cat);
+      return creditsPage(cat, meta, texts, { origin: url.origin });
+    }
+    if (sub === 'tv' || (sub === 'play' && url.searchParams.get('screen') === '1')) {
+      const asked = url.searchParams.get('room');
+      if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { screen: true });
+      await countVisit(request, env, ctx, game, 'screen');
+      // The big screen picks its room now, so the QR it shows puts every phone in that same room.
+      let room = asked;
+      if (!room) {
+        try { room = (await (await lobby().fetch(`https://lobby/join?max=${max}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
+      }
+      const joinUrl = `${url.origin}/${game}/play${room ? `?room=${encodeURIComponent(room)}` : ''}`;
+      let qr = null;
+      try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
+      return playPage(cat, meta, { screen: true, joinUrl, qr, room });
+    }
+    if (sub === 'play') {
+      const asked = url.searchParams.get('room');
+      if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked);
+      await countVisit(request, env, ctx, game, 'play');
+      shareDaily(cat, url, ctx);
+      return playPage(cat, meta);
+    }
+    if (sub === 'api/lobby') return lobby().fetch(`https://lobby/join?max=${max}`, { method: 'POST' });
+    if (sub === '__net' || sub === '__watch') {
+      if (request.headers.get('upgrade') !== 'websocket') return new Response('websocket only', { status: 426 });
+      const room = url.searchParams.get('room') || 'main';
+      if (!ROOM_ID.test(room)) return new Response('bad room', { status: 400 });
+      const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}`;
+      return stub.fetch(new Request(target, request));
+    }
+    if (sub.startsWith('__homie/')) {
+      // A game made with Homie's arcade controls asks here for a Homie host; "not-a-homie" makes it stop asking (the same answer homie.rocks gives).
+      return json({ ok: false, error: 'not-a-homie' }, 200, { 'access-control-allow-origin': '*' });
+    }
+    if (sub === '__game' || sub === '__game/' || sub === '__game/index.html') return gameDocument(request, env, url, game, meta, cat);
+    if (sub.startsWith('__game/')) return gameAsset(request, env, url, game, sub.slice('__game/'.length));
+  }
+  return fallback(request, env, url, getCat);
+}
+
+/** A game's "played this week" on its landing, when the studio shares its numbers: Play presses and rounds with people. */
+async function weekOf(env, game) {
+  const w = await playedThisWeek(env, game);
+  if (!w) return null;
+  let peak = 0;
+  try { peak = (await (await env.LOBBY.get(env.LOBBY.idFromName(game)).fetch('https://lobby/now')).json()).peak?.players ?? 0; } catch { peak = 0; }
+  return { plays: w.plays, rounds: w.rounds, ...(peak ? { peak } : {}) };
+}
+
+/** Everything else is a file of the built site (site/public, the games' files), with byte ranges for media. */
+async function fallback(request, env, url, getCat) {
+  const asset = MEDIA_FILE.test(url.pathname) && request.headers.get('range') ? await assetWithRange(request, env, url) : await env.ASSETS.fetch(request);
+  if (asset.status === 404) return notFoundPage('Nothing here.', await getCat());
+  return asset;
+}
+
 
 /**
  * TABLE — one public room: the netplay relay (room.mjs) for every browser in it.

@@ -123,6 +123,13 @@ the riskiest shot first (the pilot), look at it, then the rest.
    `scripts/qa.mjs <cut>` on each delivery (`references/DELIVERY.md`: continuity, faces, green screens).
 9. **Deliver** 16:9 and 9:16 (the film's two modes), then the page (below).
 
+## The game's landing
+
+A published trailer with `--for-game <id>` plays, muted, in the hero of that game's landing page when the
+game has no hero loop of its own, and the landing links to it ("Watch the trailer"). The best hero is a
+short silent loop of real play in `games/<id>/hero/` (the `game` skill, "Its landing page", cuts it from a
+`capture`).
+
 ## The page
 
 ```sh

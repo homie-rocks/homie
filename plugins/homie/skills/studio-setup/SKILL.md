@@ -1,6 +1,6 @@
 ---
 name: studio-setup
-description: Set up a Homie studio (one repository with games/, music/, videos/, posts/ and a site that runs on the studio's own Cloudflare, free plan, no payment method), make its first multiplayer game, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, or says "set up a game studio called X and make a multiplayer game".
+description: Set up a Homie studio (one repository with games/, music/, videos/, posts/ and a site that runs on the studio's own Cloudflare, free plan, no payment method, with the same sections as homie.rocks in the studio's own look and an epic landing page for every game), make its first multiplayer game, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, or says "set up a game studio called X and make a multiplayer game".
 ---
 
 # Set up a studio
@@ -78,6 +78,27 @@ both, and passes only when they share a room and see a round finish (about 70 s 
 a 60 s round). Fix what it reports. Start `npm run dev` as a background task your app
 keeps alive (Claude Code: the Bash tool's `run_in_background`), and afterwards: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
 
+## 2b. Give the studio its site
+
+The site is made from the studio (`node_modules/@homie-rocks/studio/site/SITE.md`): Home (the featured
+game, live rooms, the latest posts), Games, Music, Videos, Rooms and Posts, each only once the studio has
+something in it, in the studio's own look, with "Made with Homie" at the foot of every page (keep it: it is
+how other people find their way to making a studio). Before going online:
+
+1. **Its look.** `site/theme.json` starts with a palette picked for the studio; make it the studio's own:
+   colours that belong to its name and its first game (`bg`, `fg`, `accent`, `glow`; or `palette`: neon,
+   dock, gold, acid, ember, orchid, tide, candy). Put a one-line `"tagline"` in `studio.json`.
+2. **The game's landing** (`/<id>/`): follow "Its landing page" in the `game` skill. At least the words
+   (game.json `landing`: `pitch`, `about`, `howToPlay`, `controls`) and a cover from a real frame (the `art`
+   skill's free `frame` and `cover`); footage in the hero when there is time.
+3. **A first post**: `posts/<today>-<game id>-is-live.md` saying what the game is and how to play it, with
+   `title:`, `summary:` and `game: <id>` (the post shows the game with its Play button). `posts/README.md`
+   has the format.
+4. **Look at it**: `npm run build`, `npm run dev` (background), then
+   `npx --no-install homie-studio look --url http://127.0.0.1:8787` shoots Home, every landing, Games, Rooms
+   and Posts on a computer and a phone (upright and sideways) and says what is wrong (anything wider than
+   the screen, Play below the fold, a picture that did not load). Open the pictures and look; fix; again.
+
 ## 3. Put it online, on the studio's own Cloudflare
 
 Cloudflare is checked only now (a studio that never deploys never needs it):
@@ -117,8 +138,8 @@ unlist a listing that breaks its rules.
 
 ## 5. Tell the person
 
-Three to five lines: the studio folder, the live site, each game's Play link, the
-directory link, that two browsers finished a round on the live site, and what now runs
+Three to five lines: the studio folder, the live site, each game's landing (`/<id>/`) and Play link,
+the directory link, that two browsers finished a round on the live site, and what now runs
 on their Cloudflare and what it costs (free). Say in one line that the studio keeps its
 own stats for them (`npx --no-install homie-studio stats`, or ask for the private page:
 `stats link`). Add one line:

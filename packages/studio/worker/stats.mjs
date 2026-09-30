@@ -284,19 +284,22 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
     },
     crossings: { fromHub: byKind('hub'), fromStudios: byKind('studio'), fromSearch: byKind('search'), fromWeb: byKind('web'), fromLinks: byKind('link') },
     // The studio's own pages: its home, and the /music/ and /videos/ lists (a catalogue's road).
-    pages: { home: sum((r) => r.metric === 'visit' && r.subject === 'home'), music: sum((r) => r.metric === 'visit' && r.subject === 'music'), videos: sum((r) => r.metric === 'visit' && r.subject === 'videos') },
+    pages: Object.fromEntries(['home', 'games', 'rooms', 'posts', 'music', 'videos'].map((p) => [p, sum((r) => r.metric === 'visit' && r.subject === p)])),
     games: perGame, songs: media(songs, 'song', 'music'), videos: media(videos, 'video', 'videos'), referrers, days,
     note: 'Counts, never people: a visit is a page a browser opened, a play is a Play press, a round is a finished round. Prefetches, crawlers and house QA are not counted. Times are UTC days.',
   };
 }
 
-/** What a studio that shares may tell the directory: Play presses and rounds with people in the last 7 days. */
-export async function playedThisWeek(env) {
+/**
+ * What a studio that shares may tell the directory: Play presses and rounds with people in the last 7 days. With
+ * `game`, one game's (a landing shows them).
+ */
+export async function playedThisWeek(env, game = null) {
   if (!env?.DB) return null;
   const to = today();
   try {
-    const row = await env.DB.prepare("SELECT SUM(CASE WHEN metric = 'play' THEN n ELSE 0 END) AS plays, SUM(CASE WHEN metric = 'round' AND source = 'people' THEN n ELSE 0 END) AS rounds FROM stats_daily WHERE day >= ?1 AND day <= ?2 AND metric IN ('play', 'round')")
-      .bind(dayOffset(to, -6), to).first();
+    const row = await env.DB.prepare(`SELECT SUM(CASE WHEN metric = 'play' THEN n ELSE 0 END) AS plays, SUM(CASE WHEN metric = 'round' AND source = 'people' THEN n ELSE 0 END) AS rounds FROM stats_daily WHERE day >= ?1 AND day <= ?2 AND metric IN ('play', 'round')${game ? ' AND subject = ?3' : ''}`)
+      .bind(dayOffset(to, -6), to, ...(game ? [String(game)] : [])).first();
     return { days: 7, plays: Number(row?.plays) || 0, rounds: Number(row?.rounds) || 0, to };
   } catch { return null; }
 }

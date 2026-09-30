@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Put a Homie studio's site and games online on the studio's OWN Cloudflare account (Worker, D1 and public-room Durable Objects, all on the free plan with no payment method; R2 storage only when added), list them in the homie.rocks directory, and read the studio's own stats (visits, plays, rooms, rounds, players, songs, videos, where people came from); ask an owner for a grant when a game uses a protected name. Use when someone asks to deploy, publish, go live, share a studio's games, list them in the Homie directory, or how their studio or a game is doing.
+description: Put a Homie studio's site and games online on the studio's OWN Cloudflare account (Worker, D1 and public-room Durable Objects, all on the free plan with no payment method; R2 storage only when added), run its site (the hub's sections in the studio's own look, a landing for every game, news posts with feeds, and what the studio's site/ folder overrides), list them in the homie.rocks directory, and read the studio's own stats (visits, plays, rooms, rounds, players, songs, videos, where people came from); ask an owner for a grant when a game uses a protected name. Use when someone asks to deploy, publish, go live, share a studio's games, write a news post or announce a drop, change how the studio's site looks, list games in the Homie directory, or how their studio or a game is doing.
 ---
 
 # Publish a studio
@@ -50,6 +50,31 @@ them and redeploy). The site serves each file itself, up to 25 MiB a file, with 
 only bigger media needs `storage add` (and `media put`), after the person agrees to R2's payment
 method. `npx --no-install homie-studio media list` shows what the site will show and why anything
 is left out. A studio with songs or videos and no games can still deploy.
+
+## The site
+
+Every deploy builds the studio's site from the studio (`node_modules/@homie-rocks/studio/site/SITE.md` has
+all of it): Home, Games, Music, Videos, Rooms and Posts, each only when the studio has something in it (a
+section with nothing has no tab and answers 404), and a landing for every game (the `game` skill's "Its
+landing page" makes one epic). Every page ends with "Made with Homie"; restyle it, keep it.
+
+- **A news post** ("give my studio a news post", "announce the new game"): write
+  `posts/<YYYY-MM-DD>-<slug>.md` (`posts/README.md`): frontmatter `title:`, `summary:` (one line: the
+  cards and the feeds), `image:` (a `/path` on the site, like a game's cover), and `game:`, `song:` or
+  `video:` to link one of the studio's own; then the body in markdown. Say something real: what is new,
+  why it is fun, how to play, what is next. Posts are at `/posts/`, on Home, in `/posts/feed.xml` (Atom)
+  and `/posts/feed.json` (JSON Feed), and in the directory's copy of the studio.
+- **The look**: `site/theme.json` (colours, fonts, corner radius, a logo in `site/public/`) and
+  `site/theme.css` for anything more. `studio.json` `"tagline"` is the studio's line; `"site": { "featured":
+  "<game id>" }` picks Home's game.
+- **Anything of the studio's own wins**: a whole page in `site/pages/<path>/index.html` (an About page, or a
+  hand-made landing at `site/pages/<id>/index.html`), a piece of every page in `site/partials/` (`footer`,
+  `header`, `home`, `game`, `game-<id>`, `post`, `head`), files in `site/public/`. `site/README.md` in the
+  studio lists them.
+- **The play page** shares its room: the room is in the address, and a small button at the edge gives
+  Invite, Big screen and the room code. Nothing to set up.
+- Before and after a deploy, look: `npx --no-install homie-studio look --url <site>` (the local dev address,
+  then the live one) shoots every page on a computer and a phone and names what is wrong.
 
 ## List in the directory
 

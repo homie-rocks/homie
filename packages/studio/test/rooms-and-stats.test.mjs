@@ -264,7 +264,7 @@ test('stats: the site counts, only the owner reads, and a one-time link signs th
   assert.deepEqual([stats.totals.visits, stats.totals.plays, stats.totals.screens, stats.totals.rounds, stats.totals.peopleInRounds, stats.totals.peakPlayers, stats.totals.peakInOneRoom, stats.totals.songPlays, stats.totals.playingNow], [3, 3, 1, 1, 2, 13, 7, 1, 3]);
   assert.deepEqual(stats.crossings, { fromHub: 1, fromStudios: 1, fromSearch: 0, fromWeb: 0, fromLinks: 1 });
   assert.deepEqual(stats.songs, [{ slug: 'theme', title: 'Theme', visits: 1, plays: 1 }]);
-  assert.deepEqual(stats.pages, { home: 1, music: 0, videos: 0 });
+  assert.deepEqual(stats.pages, { home: 1, games: 0, rooms: 0, posts: 0, music: 0, videos: 0 });
   assert.equal(stats.days.length, 7);
   const one = await (await site('/api/stats?game=owl-run', { headers: { authorization: `Bearer ${key}` } })).json();
   assert.deepEqual([one.only, one.totals.visits, one.songs.length], [{ kind: 'game', id: 'owl-run' }, 1, 0]);
@@ -290,7 +290,7 @@ test('stats: the site counts, only the owner reads, and a one-time link signs th
   const session = cookie.split(';')[0];
   const pageRes = await site('/_studio/stats?range=30d', { headers: { cookie: session } });
   assert.equal(pageRes.status, 200);
-  assert.equal(pageRes.headers.get('cache-control'), 'no-store, private');
+  assert.equal(pageRes.headers.get('cache-control'), 'no-store, private, no-transform', 'every HTML answer is no-transform (0.7.0)');
   assert.match(pageRes.headers.get('x-robots-tag'), /noindex/);
   assert.match(pageRes.headers.get('content-security-policy'), /default-src 'none'/);
   const html = await pageRes.text();
