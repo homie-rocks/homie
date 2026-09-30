@@ -28,6 +28,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statfsSync, writeFileSync, writeSync } from 'node:fs';
+import { cpus, loadavg } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from './lib/browser.mjs';
@@ -210,10 +211,11 @@ const sourceFps = +(frames.length / spanS).toFixed(1);
 // Too few frames from the page: a smaller page paints more (the frame count grows about with the pixels saved).
 let advice = null;
 if (sourceFps < FPS * 0.75) {
-  const want = Math.max(0.25, Math.min(1, +(SCALE * Math.sqrt(Math.max(0.05, sourceFps / FPS))).toFixed(2)));
-  advice = want < SCALE
-    ? `the page painted ${sourceFps} frames a second for a ${FPS} fps film (${held} frames held): capture again with --scale ${want} (a ${Math.round(W * want)}x${Math.round(H * want)} page, scaled up), or a lower --fps`
-    : `the page painted ${sourceFps} frames a second for a ${FPS} fps film (${held} frames held) even at its smallest: capture with a lower --fps, or on a quieter computer`;
+  // Below half size a film is too soft to scale up, and a page that slow is a busy computer as much as a heavy game.
+  const want = Math.max(0.5, Math.min(1, +(SCALE * Math.sqrt(Math.max(0.05, sourceFps / FPS))).toFixed(2)));
+  const load = +(loadavg()[0] / Math.max(1, cpus().length)).toFixed(1);
+  advice = `the page painted ${sourceFps} frames a second for a ${FPS} fps film (${held} frames held)${load > 1.5 ? `, on a busy computer (load ${load} a core)` : ''}: `
+    + (want < SCALE ? `capture again with --scale ${want} (a ${Math.round(W * want)}x${Math.round(H * want)} page, scaled up)${load > 1.5 ? ' when it is quieter' : ''}, or a lower --fps` : `capture with a lower --fps${load > 1.5 ? ', or when the computer is quieter' : ''}`);
 }
 const result = {
   ...report, file: 'capture.mp4', seconds: +(total / FPS).toFixed(3), outputFrames: total, sourceFrames: frames.length,
