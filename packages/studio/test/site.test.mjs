@@ -157,11 +157,16 @@ test('build: the landing facts come from each game\'s own files; posts are dated
   assert.equal(cat.studio.tagline, 'Games for night owls');
   assert.deepEqual(cat.studio.site, { featured: 'rock-race', frameAncestors: ['https://hub.example'] }, 'only https origins may frame the play page');
   assert.equal(cat.posts[0].html, undefined, 'the catalogue carries summaries; the HTML is in _site/posts.json');
+  // A bundled game's cover in its public/ (where the art skill writes it) is the cover the site shows.
+  write(dir, 'games/crown-thief/public/cover.jpg', 'jpeg');
+  const g = JSON.parse(readFileSync(join(dir, 'games/crown-thief/game.json'), 'utf8'));
+  writeFileSync(join(dir, 'games/crown-thief/game.json'), JSON.stringify({ ...g, cover: 'cover.jpg' }));
   // A bundled game's build has no hero/ of its own: the landing's copy goes under _landing/.
   write(dir, 'games/crown-thief/hero/wide.jpg', 'still');
   assert.equal(out(run(['build'], dir)).ok, true);
   const again = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
   assert.equal(again.games.find((g) => g.id === 'crown-thief').landing.hero.wideImage, '/games/crown-thief/_landing/wide.jpg');
+  assert.equal(again.games.find((g) => g.id === 'crown-thief').landing.cover, '/games/crown-thief/cover.jpg', 'the cover from public/');
   assert.ok(existsSync(join(dir, 'site/dist/games/crown-thief/_landing/wide.jpg')));
   const posts = JSON.parse(readFileSync(join(dir, 'site/dist/_site/posts.json'), 'utf8')).posts;
   const live = posts.find((p) => p.slug === 'we-are-live');

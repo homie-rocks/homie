@@ -3,7 +3,7 @@
  * each page on a computer (1440 x 900), a phone held upright (390 x 844) and the phone turned sideways
  * (844 x 390), scrolled to the end so everything that rises into view has, then shot whole and above the fold.
  * Measured on every shot: the answer's status, anything wider than the screen, whether the Play button is on the
- * first screen, pictures that did not load, footage that did not play, and script errors. Pictures go to
+ * first screen (Home and a game's landing), pictures that did not load, footage that did not play, and script errors. Pictures go to
  * `--shots` (default .studio/look/), which git ignores. One Chrome, closed at the end; its visits are house QA
  * (the studio's stats leave them out).
  */
@@ -55,9 +55,11 @@ export async function look({ url, paths, shots, devices = Object.keys(LOOK_DEVIC
         const ms = Date.now() - t0;
         await sleep(900);
         const fold = await page.evaluate(() => {
-          const play = [...document.querySelectorAll('.play,[data-play]')].find((a) => { const r = a.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+          // Home and a game's landing lead with Play; other pages (a post, the rooms) are not judged on it.
+          if (!['home', 'landing'].includes(document.body?.dataset?.page ?? '')) return { play: null };
+          const play = [...document.querySelectorAll('.play')].find((a) => { const r = a.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
           const r = play?.getBoundingClientRect();
-          return { play: r ? r.bottom <= innerHeight && r.top >= 0 : null };
+          return { play: r ? r.bottom <= innerHeight && r.top >= 0 : false };
         });
         const foldFile = join(shots, `${nameOf(path)}-${device}-fold.png`);
         await page.screenshot({ path: foldFile });

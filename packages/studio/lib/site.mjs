@@ -72,7 +72,8 @@ export function readTheme(root, { log = () => {} } = {}) {
   if (existsSync(file)) {
     try { raw = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { log(`warning: site/theme.json is not JSON (${error.message}); the default look is used`); raw = {}; }
   }
-  const base = PALETTES[raw.palette] ?? (raw.palette ? (log(`warning: site/theme.json palette "${raw.palette}" is not one of ${Object.keys(PALETTES).join(', ')}`), DEFAULT_THEME) : DEFAULT_THEME);
+  if (raw.palette && !PALETTES[raw.palette]) log(`warning: site/theme.json palette "${raw.palette}" is not one of ${Object.keys(PALETTES).join(', ')}`);
+  const base = PALETTES[raw.palette] ?? DEFAULT_THEME;
   const theme = { palette: PALETTES[raw.palette] ? raw.palette : (existsSync(file) ? 'custom' : DEFAULT_THEME.palette) };
   for (const k of ['bg', 'fg', 'accent', 'glow', 'panel', 'accentInk']) {
     const v = raw[k] ?? (k === 'accent' ? raw.hot : undefined) ?? base[k];
@@ -353,14 +354,17 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
     tallImage: pick(H.tallImage, HERO_NAMES.tallImage, 'hero tall image'),
   };
   // The cover: the game's card everywhere, and the hero still when there is no footage.
+  // game.json `cover` is a path in the game's build: already there (a static game, or a bundled game's public/,
+  // where the art skill writes it), or beside game.json (copied into the build).
   let cover = null;
   if (g.cover) {
-    const abs = inside(g.dir, g.cover);
-    if (abs && existsSync(abs)) {
-      const beside = join(out, relative(g.dir, abs));
-      if (!existsSync(beside)) { mkdirSync(dirname(beside), { recursive: true }); cpSync(abs, beside); }
-      cover = `/games/${g.id}/${relative(g.dir, abs).split(sep).map(encodeURIComponent).join('/')}`;
-    } else log(`warning: games/${g.id}/game.json cover "${g.cover}" is not a file in the game's folder`);
+    const built = inside(out, g.cover);
+    const beside = inside(g.dir, g.cover);
+    const pub = inside(join(g.dir, 'public'), g.cover);
+    const from = [beside, pub].find((p) => p && existsSync(p) && statSync(p).isFile());
+    if (built && !existsSync(built) && from) { mkdirSync(dirname(built), { recursive: true }); cpSync(from, built); }
+    if (built && existsSync(built)) cover = `/games/${g.id}/${relative(out, built).split(sep).map(encodeURIComponent).join('/')}`;
+    else log(`warning: games/${g.id}/game.json cover "${g.cover}" is not a file in the game's folder or its public/`);
   }
   // A trailer of this game from videos/manifest.json: the hero's footage when the game has none of its own.
   const forGame = (list) => list.filter((e) => e.for?.game === g.id);

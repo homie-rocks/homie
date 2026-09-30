@@ -251,6 +251,8 @@ site/.wrangler/
 *.log
 # Port checks: receipts and screenshots of each run (games/<id>/.port/check-*/).
 games/*/.port/
+# Screenshots from check and look runs.
+.checks/
 # Large media lives in this studio's storage (R2, after storage add) or is served by the site; the manifests beside it are committed.
 # Working files of the music and video skills (frames, captures, provider answers) stay on this computer.
 music/**/work/
