@@ -8,9 +8,16 @@
  * `report` (optional; the open progress feed, lib/progress.mjs) hears each step as it goes green or red, gets a
  * small picture of the computer's view, and can ask the check to stop: then the browsers close and the result
  * says `stopped`. Without it the check is exactly what it was.
+ *
+ * UNDER LOAD (a busy computer, another project's browsers): Chrome gets 150 s to start, a page 90 s to open and a
+ * seat 90 s. A browser that stalls for 10 s is let go by the relay and comes back with its seat token; the round it
+ * was away for lists its body as a bot, so that round cannot prove anything and the check waits for the next one
+ * (up to `rounds` rounds). A person the game lists as a bot while it keeps their seat (an idle player driven by
+ * the game's autopilot) is still that person. When no round counts, the result says which seat was missing from
+ * each finished round and whether that browser lost its connection, instead of only "no round finished".
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpus, loadavg, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const CHROMES = [
@@ -23,6 +30,9 @@ const CHROMES = [
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** The steps a progress feed shows for this check, in order. */
+/** Chrome's own start, on a loaded computer (a cold start there took over a minute). */
+export const LAUNCH_TIMEOUT_MS = 150_000;
+
 export const CHECK_STEPS = [
   ['computer-seated', 'A computer gets a seat'],
   ['phone-seated', 'A phone gets a seat'],
@@ -32,7 +42,26 @@ export const CHECK_STEPS = [
 
 class Stopped extends Error {}
 
-export async function check({ url, game, roundTimeoutMs = 150_000, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
+/**
+ * WHICH FINISHED ROUND PROVES THE TWO BROWSERS PLAYED TOGETHER. `browsers`: each `{ kind, seats, seen }`, where
+ * `seats` is every seat it held (a Set) and `seen` the rounds it saw finish after both were seated (a Map from
+ * `n:endsAt` to `{ n, endsAt, results, ms }`). A round counts when both saw it and each has a row carrying one of
+ * its seats, whatever the row's `bot` says (a game may hand an idle person's body to its autopilot and still keep
+ * their seat on the row: that is still the person). A round seen by both without one of them is a miss, kept in
+ * `missed` with who was missing and the rows, so the check can say why. Returns the round that counts, or null.
+ */
+export function judgeRounds(browsers, missed = new Map()) {
+  const mine = new Set(browsers.flatMap((b) => [...b.seats]));
+  for (const [key, r] of browsers[0]?.seen ?? []) {
+    if (missed.has(key) || !browsers.every((b) => b.seen.has(key))) continue;
+    const absent = browsers.filter((b) => !(r.results ?? []).some((row) => b.seats.has(row?.seat))).map((b) => b.kind);
+    if (!absent.length) return { ...r, key, overMs: browsers.map((b) => b.seen.get(key).ms), people: r.results.filter((row) => !row?.bot || mine.has(row?.seat)).length };
+    missed.set(key, { n: r.n, missing: absent, rows: (r.results ?? []).slice(0, 12).map((row) => ({ seat: row?.seat ?? null, name: row?.name ?? null, bot: Boolean(row?.bot) })) });
+  }
+  return null;
+}
+
+export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
   if (!url || !game) throw new Error('usage: homie-studio check <game> --url <site url>');
   const chrome = CHROMES.find((p) => existsSync(p));
   if (!chrome) return { ok: false, command: 'check', why: 'no Chrome found (set CHROME_PATH)' };
@@ -49,6 +78,8 @@ export async function check({ url, game, roundTimeoutMs = 150_000, shots = null,
     { name: 'phone', viewport: { width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
   ];
   const players = [];
+  // The playing loop runs until this is false: the round is settled, or the check ends in any way (finally).
+  let playingOn = true;
   const step = (id, state, opts = {}) => { try { report?.check?.(id, state, { label: CHECK_STEPS.find(([k]) => k === id)?.[1], ...opts }); } catch { /* a feed never breaks a check */ } };
   const halt = () => { if (report?.stopped?.()) throw new Stopped('stopped by the person'); };
   // The computer's view, small (480 px wide), for the feed's preview.
@@ -69,7 +100,7 @@ export async function check({ url, game, roundTimeoutMs = 150_000, shots = null,
       const profile = mkdtempSync(join(tmpdir(), 'homie-studio-check-'));
       profiles.push(profile);
       const browser = await puppeteer.launch({
-        executablePath: chrome, headless: true, userDataDir: profile,
+        executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, protocolTimeout: 180_000,
         args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
       });
       browsers.push(browser);
@@ -78,13 +109,13 @@ export async function check({ url, game, roundTimeoutMs = 150_000, shots = null,
       const ua = await browser.userAgent();
       await page.setUserAgent(`${ua} ${userAgentTag}`);
       const t0 = Date.now();
-      await page.goto(play, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      await page.goto(play, { waitUntil: 'domcontentloaded', timeout: 90_000 });
       players.push({ kind: kind.name, page, t0 });
       log(`${kind.name} opened ${play}`);
     }
     // Seated: the shell knows its room and the game reported a seat.
     const seated = await Promise.all(players.map(async (p) => {
-      const deadline = Date.now() + 45_000;
+      const deadline = Date.now() + 90_000;
       while (Date.now() < deadline) {
         const s = await p.page.evaluate(() => { const s = window.__shell; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, players: s.facts?.counts?.players ?? null } : null; }).catch(() => null);
         if (s?.room && s.seat !== null && s.seat !== undefined && s.role) {
@@ -95,67 +126,94 @@ export async function check({ url, game, roundTimeoutMs = 150_000, shots = null,
         halt();
         await sleep(250);
       }
-      step(`${p.kind}-seated`, 'fail', { note: 'no seat within 45 s' });
+      step(`${p.kind}-seated`, 'fail', { note: 'no seat within 90 s' });
       return null;
     }));
-    if (seated.some((s) => !s)) return { ok: false, command: 'check', why: 'a browser never got a seat within 45 s', seated };
+    if (seated.some((s) => !s)) return { ok: false, command: 'check', why: 'a browser never got a seat within 90 s', seated };
     const sameRoom = seated[0].room === seated[1].room;
     log(`seated: ${seated.map((s, i) => `${kinds[i].name} room ${s.room} seat ${s.seat} ${s.role}`).join('; ')}`);
     step('same-room', sameRoom ? 'pass' : 'fail', { note: sameRoom ? `room ${seated[0].room}` : `rooms ${seated[0].room} and ${seated[1].room}` });
     if (!sameRoom) return { ok: false, command: 'check', why: `the two browsers landed in different rooms (${seated[0].room}, ${seated[1].room})`, seated };
     step('round', 'running');
-    // Play: the computer holds keys, the phone drags from the lower left.
+    // Play: the computer holds keys; the phone drags from the lower left (a stick) and swipes across the bottom
+    // middle (a wheel, a slider). A game that hands an untouched player to its autopilot, or lets an idle one go,
+    // sees a hand on both. It plays until the check is over, through as many rounds as that takes.
     const playing = (async () => {
       const keys = ['KeyD', 'KeyS', 'KeyA', 'KeyW'];
-      for (let i = 0; Date.now() - started < roundTimeoutMs && i < 400; i++) {
+      const vp = kinds[1].viewport;
+      for (let i = 0; playingOn && i < 5000; i++) {
         const k = keys[i % keys.length];
         await players[0].page.keyboard.down(k).catch(() => {});
         await sleep(600);
         await players[0].page.keyboard.up(k).catch(() => {});
-        const vp = kinds[1].viewport;
-        await players[1].page.touchscreen.touchStart(vp.width * 0.2, vp.height * 0.8).catch(() => {});
-        await players[1].page.touchscreen.touchMove(vp.width * 0.2 + (i % 2 ? 60 : -60), vp.height * 0.8 - 40).catch(() => {});
+        const [x, y, dx, dy] = i % 3 === 2 ? [vp.width * 0.5, vp.height * 0.86, i % 2 ? 70 : -70, 0] : [vp.width * 0.2, vp.height * 0.8, i % 2 ? 60 : -60, -40];
+        await players[1].page.touchscreen.touchStart(x, y).catch(() => {});
+        await players[1].page.touchscreen.touchMove(x + dx, y + dy).catch(() => {});
         await sleep(300);
         await players[1].page.touchscreen.touchEnd().catch(() => {});
-        if (players.every((p) => p.over) || report?.stopped?.()) break;
+        if (report?.stopped?.()) break;
       }
     })();
     if (shots) for (const [i, p] of players.entries()) await p.page.screenshot({ path: join(shots, `${kinds[i].name}-playing.png`) }).catch(() => {});
     await sleep(1500);
     await picture('Playing: computer and phone in one room');
-    // Only a round that finishes AFTER both browsers were seated, with BOTH of them in its results, counts: an
-    // idle room remembers its last round for a while, and that stale result proves nothing.
+    // Only a round that finishes AFTER both browsers were seated, seen by both, with BOTH of them in its results,
+    // counts: an idle room remembers its last round for a while, and that stale result proves nothing. A browser is
+    // in a round when a row carries a seat it held (a reconnect keeps its seat; a game may still mark an idle
+    // person's row as a bot, and that is still the person). A round finished without one of them is a miss: its
+    // cause is kept, and the check waits for the next round, up to `rounds` of them.
     const bothSeated = Math.max(...players.map((p) => p.seatedAt));
-    const seats = players.map((p) => p.seat);
-    const over = await Promise.all(players.map(async (p) => {
-      const deadline = Date.now() + roundTimeoutMs;
-      while (Date.now() < deadline) {
-        const r = await p.page.evaluate((after, want) => {
-          const s = window.__shell;
-          const hit = (s?.results ?? []).find((x) => x.at > after && want.every((seat) => x.results.some((row) => row.seat === seat)));
-          return hit ? { n: hit.n, endsAt: hit.endsAt, results: hit.results, room: s.room } : null;
-        }, bothSeated, seats).catch(() => null);
-        if (r) { p.over = true; return { ...r, ms: Date.now() - p.t0 }; }
-        halt();
-        await sleep(500);
+    for (const p of players) { p.seats = new Set([p.seat]); p.reconnects = null; p.reconnects0 = null; p.closed = null; p.seen = new Map(); }
+    const t1 = Date.now();
+    const budget = roundTimeoutMs * Math.max(1, rounds);
+    const missed = new Map();
+    let hit = null;
+    while (!hit && Date.now() - t1 < budget && missed.size < Math.max(1, rounds)) {
+      for (const p of players) {
+        const s = await p.page.evaluate(() => {
+          const sh = window.__shell;
+          return sh ? { seat: sh.seat, room: sh.room, closed: sh.closed, reconnects: sh.stats?.reconnects ?? null, results: (sh.results ?? []).map((x) => ({ n: x.n, endsAt: x.endsAt, at: x.at, results: x.results })) } : null;
+        }).catch(() => null);
+        if (!s) continue;
+        if (Number.isInteger(s.seat)) p.seats.add(s.seat);
+        if (Number.isFinite(s.reconnects)) { p.reconnects0 ??= s.reconnects; p.reconnects = s.reconnects; }
+        if (s.closed) p.closed = s.closed;
+        for (const r of s.results) if (r.at > bothSeated && Array.isArray(r.results) && !p.seen.has(`${r.n}:${r.endsAt}`)) p.seen.set(`${r.n}:${r.endsAt}`, { ...r, room: s.room, ms: Date.now() - p.t0 });
       }
-      return null;
-    }));
+      const before = missed.size;
+      hit = judgeRounds(players, missed);
+      for (const m of [...missed.values()].slice(before)) log(`round ${m.n} finished without the ${m.missing.join(' and the ')}: waiting for the next one`);
+      if (hit) break;
+      halt();
+      await sleep(700);
+    }
+    playingOn = false;
     await playing.catch(() => {});
     if (shots) for (const [i, p] of players.entries()) await p.page.screenshot({ path: join(shots, `${kinds[i].name}-round-over.png`) }).catch(() => {});
-    if (over.some((o) => !o)) { step('round', 'fail', { note: 'no round finished in time' }); return { ok: false, command: 'check', why: 'a browser did not see a round finish in time', seated, over }; }
-    const humans = over[0].results.filter((r) => !r.bot).length;
-    const sameRound = over[0].n === over[1].n && over[0].endsAt === over[1].endsAt && over[0].room === over[1].room;
-    step('round', sameRound && humans >= 2 ? 'pass' : 'fail', { ms: Math.max(...over.map((o) => o.ms)), note: `round ${over[0].n}: ${humans} people, ${over[0].results.length - humans} bots` });
-    await picture(`Round ${over[0].n} finished with both; the next one is on`);
+    const connection = players.map((p) => ({ browser: p.kind, seats: [...p.seats], reconnects: p.reconnects !== null && p.reconnects0 !== null ? p.reconnects - p.reconnects0 : null, closed: p.closed }));
+    const load = { perCore: +(loadavg()[0] / Math.max(1, cpus().length)).toFixed(2), average: +loadavg()[0].toFixed(1), cores: cpus().length };
+    if (!hit) {
+      const misses = [...missed.values()];
+      const dropped = connection.filter((c) => c.reconnects > 0).map((c) => `the ${c.browser} lost its connection ${c.reconnects} time${c.reconnects === 1 ? '' : 's'}`);
+      const why = misses.length
+        ? `${misses.length} round${misses.length === 1 ? '' : 's'} finished, and none had both browsers in it: ${misses.map((m) => `round ${m.n} left out the ${m.missing.join(' and the ')}`).join('; ')}.${dropped.length ? ` ${dropped.join(', ')} (a browser silent for 10 s is let go by the relay and its body plays as a bot until it is back).` : ' The game listed that seat\'s body as a bot with no seat: it may hand an idle player to a bot.'}${load.perCore > 1.5 ? ` This computer is busy (load ${load.average} on ${load.cores} cores): run the check again when it is quieter.` : ''}`
+        : `no round finished within ${Math.round(budget / 1000)} s of both browsers being seated${load.perCore > 1.5 ? ` (this computer is busy: load ${load.average} on ${load.cores} cores)` : ''}`;
+      step('round', 'fail', { note: misses.length ? `${misses.length} round(s) without both` : 'no round finished in time' });
+      return { ok: false, command: 'check', why, play, room: seated[0].room, seated, missed: misses, connection, load, totalMs: Date.now() - started };
+    }
+    const humans = hit.people;
+    step('round', humans >= 2 ? 'pass' : 'fail', { ms: Math.max(...hit.overMs), note: `round ${hit.n}: ${humans} people, ${hit.results.length - humans} bots${missed.size ? ` (after ${missed.size} round(s) without both)` : ''}` });
+    await picture(`Round ${hit.n} finished with both; the next one is on`);
     return {
-      ok: sameRoom && sameRound && humans >= 2,
+      ok: sameRoom && humans >= 2,
       command: 'check',
       play,
       room: seated[0].room,
       seats: seated.map((s, i) => ({ browser: kinds[i].name, seat: s.seat, role: s.role, seatedMs: s.ms })),
-      round: { n: over[0].n, humans, bots: over[0].results.length - humans, results: over[0].results, overMs: over.map((o) => o.ms) },
-      why: !sameRound ? 'the two browsers saw different rounds finish' : humans >= 2 ? undefined : `the round's results list ${humans} human(s); both browsers should be in it`,
+      round: { n: hit.n, humans, bots: hit.results.length - humans, results: hit.results, overMs: hit.overMs },
+      ...(missed.size ? { missed: [...missed.values()] } : {}),
+      connection,
+      why: humans >= 2 ? undefined : `the round's results list ${humans} person(s); both browsers should be in it`,
       totalMs: Date.now() - started,
     };
   } catch (error) {
@@ -163,6 +221,7 @@ export async function check({ url, game, roundTimeoutMs = 150_000, shots = null,
     for (const [id] of CHECK_STEPS) { try { if (['pending', 'running'].includes(report?.state?.(id))) step(id, 'skip', { note: 'stopped' }); } catch { /* fine */ } }
     return { ok: false, command: 'check', stopped: true, why: 'stopped by the person', play, totalMs: Date.now() - started };
   } finally {
+    playingOn = false;
     for (const b of browsers) await b.close().catch(() => {});
     for (const p of profiles) rmSync(p, { recursive: true, force: true });
   }

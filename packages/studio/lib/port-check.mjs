@@ -197,7 +197,8 @@ function descendants(pid) {
 async function chrome(puppeteer, kind, exe) {
   const dir = mkdtempSync(join(tmpdir(), 'homie-port-check-'));
   const vp = kind === 'phone' ? { width: 412, height: 915 } : kind === 'tv' ? { width: 1280, height: 720 } : { width: 1280, height: 800 };
-  const browser = await puppeteer.launch({ executablePath: exe, headless: true, userDataDir: dir, protocolTimeout: 120_000, args: [...GPU, `--window-size=${vp.width},${vp.height}`] });
+  // 150 s for Chrome to start: on a loaded computer a cold start has taken over a minute.
+  const browser = await puppeteer.launch({ executablePath: exe, headless: true, userDataDir: dir, timeout: 150_000, protocolTimeout: 120_000, args: [...GPU, `--window-size=${vp.width},${vp.height}`] });
   const page = (await browser.pages())[0] ?? await browser.newPage();
   if (kind === 'phone') await page.emulate({ viewport: { ...vp, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true }, userAgent: `${ANDROID_UA} ${TAG}` });
   else { await page.setViewport({ ...vp, deviceScaleFactor: 1 }); await page.setUserAgent(`${await browser.userAgent()} ${TAG}`); }
@@ -215,7 +216,7 @@ async function chrome(puppeteer, kind, exe) {
 }
 
 async function webkit(pw) {
-  const browser = await pw.webkit.launch({ headless: true });
+  const browser = await pw.webkit.launch({ headless: true, timeout: 150_000 });
   const dev = pw.devices['iPhone 15'];
   const ctx = await browser.newContext({ ...dev, userAgent: `${dev.userAgent} ${TAG}` });
   const page = await ctx.newPage();

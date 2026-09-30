@@ -7,7 +7,9 @@
  *     or the link copied), Big screen (/<game>/tv of that room) and the room code;
  *   - a room code the relay cannot use (over 32 characters, or other characters) is refused on the page,
  *     never swapped for a public room;
- *   - a player who typed no name gets a two-word handle, varied per seat and per room, never "Player 1".
+ *   - a player who typed no name gets a two-word handle, varied per seat and per room, never "Player 1";
+ *   - 0.9.0: the room button's place per device (game.json screen.share: a corner or top-center, an x / y offset, an
+ *     icon-only button), so it never sits on a game's scoreboard.
  * The shell script runs here against a small stand-in page (no browser needed).
  * Run: node --test packages/studio/test/play.test.mjs
  */
@@ -15,7 +17,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import vm from 'node:vm';
 import { NetRoom, HANDLE_WORDS, handleFor } from '../worker/room.mjs';
-import { playPage } from '../worker/pages.mjs';
+import { playPage, sharePlaces } from '../worker/pages.mjs';
 
 const cat = { studio: { name: 'Night Owls', theme: { accent: '#ffcf5a' } }, games: [] };
 const game = { id: 'rock-race', name: 'Rock <Race>', players: { max: 6 } };
@@ -27,8 +29,8 @@ test('the game frame delegates fullscreen, autoplay and gamepad to its opaque or
 });
 
 /** The play page's shell script, run against a stand-in page at `search`. */
-async function shell(search, { lobby = 'pub-3', screen = false, room = null } = {}) {
-  const res = playPage(cat, game, { screen, room });
+async function shell(search, { lobby = 'pub-3', screen = false, room = null, g = game, width = 1280, height = 800 } = {}) {
+  const res = playPage(cat, g, { screen, room });
   const html = await res.text();
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   const els = new Map();
@@ -36,7 +38,8 @@ async function shell(search, { lobby = 'pub-3', screen = false, room = null } = 
     if (sel === '[data-join]') return null;
     if (!els.has(sel)) {
       els.set(sel, {
-        sel, textContent: '', hidden: /sheet|toast|results|screen/.test(sel), attrs: {}, listeners: {}, href: '', src: '',
+        sel, textContent: '', hidden: /sheet|toast|results|screen/.test(sel), attrs: {}, listeners: {}, href: '', src: '', className: '',
+        style: { props: {}, setProperty(k, v) { this.props[k] = String(v); } },
         classList: { set: new Set(), add(c) { this.set.add(c); }, remove(c) { this.set.delete(c); }, contains(c) { return this.set.has(c); } },
         setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] ?? null; },
         addEventListener(t, fn) { (this.listeners[t] ??= []).push(fn); }, querySelector: (s) => el(s), contains: () => false,
@@ -55,7 +58,7 @@ async function shell(search, { lobby = 'pub-3', screen = false, room = null } = 
     navigator: {},
     WebSocket: class { constructor(u) { this.url = u; } },
     fetch: async (u, o) => { fetched.push([u, o?.method]); return { json: async () => ({ room: lobby }) }; },
-    URLSearchParams, setTimeout, clearTimeout, innerWidth: 1280, innerHeight: 800,
+    URLSearchParams, setTimeout, clearTimeout, innerWidth: width, innerHeight: height,
     addEventListener() {},
   };
   ctx.window = ctx;
@@ -71,7 +74,7 @@ test('the room goes into the address, and the room button shares it: Invite, Big
   assert.match(html, /<div class="sheet" id="share-sheet" role="dialog" aria-label="This room" data-share-sheet hidden>/);
   assert.match(html, /data-invite>/);
   assert.match(html, /data-bigscreen target="_blank" rel="noopener" href="\/rock-race\/tv"/);
-  assert.match(html, /<div class="room at-top-right" data-room-ui>/, 'at the edge, away from the thumbs and the middle');
+  assert.match(html, /<div class="room at-top-right" style="--dx:0px;--dy:0px" data-room-ui>/, 'at the edge, away from the thumbs and the middle');
   assert.match(html, /← Rock &lt;Race&gt;/);
   // A stranger pressing Play: the lobby's room is written into the address and into the share sheet.
   const a = await shell('');
@@ -157,4 +160,44 @@ test('handles: a player with no name gets two words, varied per seat and per roo
   assert.equal(handleFor('same-token'), handleFor('same-token'), 'a seat keeps its handle (its token names it)');
   assert.notEqual(handleFor('same-token', new Set([handleFor('same-token')])), handleFor('same-token'), 'a taken handle is skipped');
   assert.ok(HANDLE_WORDS.first.length * HANDLE_WORDS.second.length >= 1000);
+});
+
+test('the room button\'s place, per device: a corner or the top\'s middle, moved in by x / y, and an icon-only button', () => {
+  const d = { at: 'top-right', x: 0, y: 0, label: true };
+  assert.deepEqual(sharePlaces(undefined), { desk: d, phone: d, sideways: d }, 'the top right, as before');
+  assert.deepEqual(sharePlaces('bottom-left').phone, { at: 'bottom-left', x: 0, y: 0, label: true }, 'a string is every device');
+  assert.deepEqual(sharePlaces('middle'), { desk: d, phone: d, sideways: d }, 'a place that is not one is the default');
+  const p = sharePlaces({ desk: 'bottom-left', phone: { at: 'top-left', y: 56 }, sideways: 'top-center' });
+  assert.deepEqual(p.desk, { at: 'bottom-left', x: 0, y: 0, label: true });
+  assert.deepEqual(p.phone, { at: 'top-left', x: 0, y: 56, label: true });
+  assert.deepEqual(p.sideways, { at: 'top-center', x: 0, y: 0, label: true });
+  assert.deepEqual(sharePlaces({ phone: 'top-left' }).sideways.at, 'top-left', 'a phone turned sideways is a phone unless it says otherwise');
+  const all = sharePlaces({ at: 'top-right', y: 9999, x: -40, label: false, phone: 'top-center' });
+  assert.deepEqual(all.desk, { at: 'top-right', x: 0, y: 600, label: false }, 'offsets stay on the screen: 0 to 600 from a corner');
+  assert.equal(all.phone.at, 'top-center');
+  assert.equal(sharePlaces({ at: 'top-center', x: -80 }).desk.x, -80, 'the top\'s middle moves either way');
+});
+
+test('the shell puts the room button where this device wants it, and keeps it a small icon when asked', async () => {
+  const g = { ...game, screen: { share: { desk: 'bottom-left', phone: { at: 'top-left', y: 56, label: false }, sideways: { at: 'top-center', x: 40 } } } };
+  // The page arrives with the computer's place, so a computer never sees it move.
+  const html = await playPage(cat, g).text();
+  assert.match(html, /<div class="room at-bottom-left" style="--dx:0px;--dy:0px" data-room-ui>/);
+  assert.match(html, /<button class="pill" type="button" data-share-toggle/);
+  const desk = await shell('', { g });
+  assert.equal(desk.el('[data-room-ui]').className, 'room at-bottom-left');
+  assert.ok(desk.el('[data-chip]').classList.contains('chip-right'), 'the status chip moves out of the button\'s corner');
+  assert.deepEqual(JSON.parse(JSON.stringify(desk.ctx.__shell.share)), { device: 'desk', at: 'bottom-left', x: 0, y: 0, label: true });
+  const phone = await shell('?hand=phone', { g, width: 390, height: 844 });
+  assert.equal(phone.el('[data-room-ui]').className, 'room at-top-left');
+  assert.equal(phone.el('[data-room-ui]').style.props['--dy'], '56px', 'below the game\'s own top line');
+  assert.ok(phone.el('[data-share-toggle]').classList.contains('icon'), 'label: false keeps it the small round icon');
+  assert.ok(!phone.el('[data-chip]').classList.contains('chip-right'));
+  const sideways = await shell('', { g, width: 844, height: 390 });
+  assert.equal(sideways.el('[data-room-ui]').className, 'room at-top-center', 'a phone turned sideways has its own place');
+  assert.equal(sideways.el('[data-room-ui]').style.props['--dx'], '40px');
+  assert.ok(!sideways.el('[data-share-toggle]').classList.contains('icon'));
+  // The big screen has no room button (its join card has its own corner, screen.join).
+  const tv = await playPage(cat, g, { screen: true, joinUrl: 'https://owls.example/rock-race/play?room=pub-5', room: 'pub-5' }).text();
+  assert.doesNotMatch(tv, /<div class="room[^"]*"[^>]*data-room-ui>/);
 });

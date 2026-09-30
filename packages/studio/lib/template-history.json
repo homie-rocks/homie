@@ -1,0 +1,157 @@
+{
+ "v": 1,
+ "about": "Fingerprints of every studio template version (scripts/studio-template-history.mjs): homie-studio upgrade replaces a file or an AGENTS.md section only when it is exactly one of these.",
+ "versions": {
+  "0.2.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "games/README.md": "5e5e942baa7e0372",
+    "music/README.md": "fd3d904cfa5b39d9",
+    "videos/README.md": "0546814c9382b601",
+    "posts/README.md": "ef1a30b0d7aa77bd",
+    "site/src/worker.mjs": "70148970cf81d685"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "9ecc7809a3b9b4f7",
+     "## Layout": "1829a9bfb106455b",
+     "## Commands (all through the pinned CLI in node_modules)": "000952727c257f96",
+     "## Making games": "a4c11a533a03391f",
+     "## Rules": "d9da1f3e572199f6"
+    }
+   }
+  },
+  "0.3.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "games/README.md": "5e5e942baa7e0372",
+    "music/README.md": "fd3d904cfa5b39d9",
+    "videos/README.md": "0546814c9382b601",
+    "posts/README.md": "ef1a30b0d7aa77bd",
+    "site/src/worker.mjs": "70148970cf81d685"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "9ecc7809a3b9b4f7",
+     "## Layout": "1829a9bfb106455b",
+     "## Commands (all through the pinned CLI in node_modules)": "583e8fd0eece6f76",
+     "## Making games": "a4c11a533a03391f",
+     "## Rules": "d9da1f3e572199f6"
+    }
+   }
+  },
+  "0.5.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "games/README.md": "5e5e942baa7e0372",
+    "music/README.md": "b8a828de9311bd28",
+    "videos/README.md": "70614388cbb203c7",
+    "posts/README.md": "ef1a30b0d7aa77bd",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "f8e01e41892420d3",
+     "## Commands (all through the pinned CLI in node_modules)": "dff7046dac113123",
+     "## Making games": "a4c11a533a03391f",
+     "## Rules": "d9da1f3e572199f6",
+     "## Beta": "9d02638207a26e73"
+    }
+   }
+  },
+  "0.6.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "games/README.md": "5e5e942baa7e0372",
+    "music/README.md": "b8a828de9311bd28",
+    "videos/README.md": "70614388cbb203c7",
+    "posts/README.md": "ef1a30b0d7aa77bd",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "b2af4e6842972cbd",
+     "## Commands (all through the pinned CLI in node_modules)": "3849a47e757f544a",
+     "## Making games": "a4c11a533a03391f",
+     "## Rules": "969318425c99f5a5",
+     "## Beta": "9d02638207a26e73"
+    }
+   }
+  },
+  "0.7.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "games/README.md": "5e5e942baa7e0372",
+    "music/README.md": "b8a828de9311bd28",
+    "videos/README.md": "70614388cbb203c7",
+    "posts/README.md": "37841aae476bd540",
+    "site/README.md": "0fd152a20a3eb55f",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "b5f801e112d163a9",
+     "## Commands (all through the pinned CLI in node_modules)": "3849a47e757f544a",
+     "## The site": "e174cd30932df888",
+     "## Making games": "a4c11a533a03391f",
+     "## Rules": "969318425c99f5a5",
+     "## Beta": "9d02638207a26e73"
+    }
+   }
+  },
+  "0.8.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "games/README.md": "5e5e942baa7e0372",
+    "music/README.md": "b8a828de9311bd28",
+    "videos/README.md": "70614388cbb203c7",
+    "posts/README.md": "37841aae476bd540",
+    "site/README.md": "0fd152a20a3eb55f",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "b5f801e112d163a9",
+     "## Commands (all through the pinned CLI in node_modules)": "3849a47e757f544a",
+     "## The site": "e174cd30932df888",
+     "## Making games": "a4c11a533a03391f",
+     "## Rules": "969318425c99f5a5",
+     "## Beta": "9d02638207a26e73"
+    }
+   }
+  },
+  "0.9.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "games/README.md": "5e5e942baa7e0372",
+    "music/README.md": "b8a828de9311bd28",
+    "videos/README.md": "70614388cbb203c7",
+    "posts/README.md": "37841aae476bd540",
+    "site/README.md": "0fd152a20a3eb55f",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "b5f801e112d163a9",
+     "## Commands (all through the pinned CLI in node_modules)": "63833b7006efdef4",
+     "## The site": "7d3525ba39b7f262",
+     "## Making games": "c204473d9b468f49",
+     "## Rules": "969318425c99f5a5",
+     "## Beta": "9d02638207a26e73"
+    }
+   }
+  }
+ }
+}

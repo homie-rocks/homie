@@ -58,7 +58,7 @@ async function launch(device, url, { tap = false, autoplay = false } = {}) {
   const vp = DEVICES[device];
   const profile = mkdtempSync(join(tmpdir(), 'homie-playtest-'));
   const browser = await puppeteer.launch({
-    executablePath: EXE, headless: true, userDataDir: profile, protocolTimeout: 120_000,
+    executablePath: EXE, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 120_000, // 150 s to start on a loaded computer
     args: [...GPU_FLAGS, '--mute-audio', `--window-size=${vp.width},${vp.height}`, '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb', ...(autoplay ? ['--autoplay-policy=no-user-gesture-required'] : [])],
   });
   const page = await browser.newPage();

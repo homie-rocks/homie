@@ -116,6 +116,10 @@ studio's pinned copy, never a registry lookup of the bare name.
   \`studio_stats\` (never paste a key anywhere else). \`stats share on\` tells the directory two numbers
   (played this week). The site counts and never tracks: no cookie on a visitor, no person identified,
   nothing sent anywhere; house QA and \`check\` runs are not counted.
+- \`npx --no-install homie-studio upgrade\` — after pinning a newer \`@homie-rocks/studio\` (or through
+  \`npx -y --package=<its tarball> homie-studio upgrade\`): what the newer template adds to this studio (AGENTS.md
+  sections, READMEs, .gitignore lines) and what it keeps. It changes nothing until \`--apply\`, and never
+  touches a file or section this studio changed; \`--diff\` shows how those differ from the template's.
 
 ## The site
 
@@ -132,7 +136,11 @@ studio's pinned copy, never a registry lookup of the bare name.
   (\`pitch\`, \`about\`, \`controls\`, \`howToPlay\`, \`credits\`) and art with the plugin's \`art\` and \`video\` skills.
 - **The look** is \`site/theme.json\` (colours, fonts, corner radius, a logo). Anything in \`site/\` wins: a whole
   page in \`site/pages/\`, a piece of every page in \`site/partials/\`, files in \`site/public/\`, extra CSS in
-  \`site/theme.css\` (\`site/README.md\`).
+  \`site/theme.css\` (\`site/README.md\`). A game whose picture is white or cream gets a light landing with
+  game.json \`"landing": { "scheme": "light" }\` (a dark tint would turn it grey).
+- **Cards and the directory** show each game's landing still (\`hero/wide.jpg\`), else its cover. A song without
+  a cover of its own shows the music manifest's \`cover\`, else its game's still.
+- **Live rooms** are listed on homie.rocks too; studio.json \`"rooms": { "share": false }\` keeps them off it.
 - Every page ends with "Made with Homie", linking to homie.rocks/studio/. Restyle it in \`site/theme.css\`; keep it.
 
 ## Making games
@@ -144,6 +152,10 @@ studio's pinned copy, never a registry lookup of the bare name.
 - Import it as \`import { createNetplay } from '@homie-rocks/studio/netplay'\`.
 - Phones and computers: touch controls on phones only, keys on computers; keep the
   centre of the screen clear during play.
+- The play page's small room button (Invite, Big screen, the room code) sits top right. If the game's
+  scoreboard or a bar is there, move it in game.json \`"screen": { "share": … }\`: a corner or \`top-center\`, per
+  device (\`desk\`, \`phone\`, \`sideways\`), with an \`x\` / \`y\` offset in pixels, and \`"label": false\` to keep it
+  a small icon (\`node_modules/@homie-rocks/studio/site/SITE.md\`). Look at it on a phone and a computer.
 - Change a game in small steps, build, and look at it (\`dev\`, then \`check\`).
 - A game's id is its URL (\`/<id>/\`); keep it once published.
 

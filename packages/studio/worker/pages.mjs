@@ -31,16 +31,49 @@ export function badRoomPage(cat, g, raw, { screen = false } = {}) {
   });
 }
 
+/** Where the room button may sit: a corner, or the middle of the top edge. */
+export const SHARE_PLACES = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-right'];
+
+/**
+ * Where the room button sits on each device, from game.json `screen.share`, so it never covers the game's own
+ * HUD (a scoreboard in the top right, a fuel bar across a phone's top):
+ *
+ *   "share": "top-left"                                     every device (a place from SHARE_PLACES)
+ *   "share": { "at": "top-right", "y": 64 }                 moved 64 px in from its edge (x: from its side)
+ *   "share": { "desk": "bottom-left", "phone": { "at": "top-left", "y": 56 }, "sideways": "top-center" }
+ *   "share": { "at": "top-right", "label": false }          the button stays a small round icon (the room code is
+ *                                                           in its sheet), for a corner with little room
+ *
+ * `desk` is a computer, `phone` a phone held upright, `sideways` a phone turned sideways (else as `phone`). For a
+ * corner, `x` and `y` move the button in from its side and its edge (0 to 600 px); for top-center, `x` moves it
+ * right (or left, negative) and `y` down. Anything else is the default: the top right, as before.
+ */
+export function sharePlaces(value) {
+  const one = (v) => {
+    const o = typeof v === 'string' ? { at: v } : v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+    if (!o || !SHARE_PLACES.includes(o.at)) return null;
+    const num = (n, lo, hi) => (Number.isFinite(Number(n)) ? Math.max(lo, Math.min(hi, Math.round(Number(n)))) : 0);
+    return { at: o.at, x: num(o.x, o.at === 'top-center' ? -600 : 0, 600), y: num(o.y, 0, 600), label: o.label !== false };
+  };
+  // A place for every device (a string, or an object with `at`), then any device's own over it.
+  const all = one(value) ?? { at: 'top-right', x: 0, y: 0, label: true };
+  const per = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const desk = one(per.desk) ?? all;
+  const phone = one(per.phone) ?? all;
+  return { desk, phone, sideways: one(per.sideways) ?? phone };
+}
+
 /**
  * The play shell. It asks the Lobby for a public room, boots the game frame at once (seated, no waiting), keeps
  * the seat token for a reload, writes the room into the address (so a reload or a copied address comes back to
  * it), and keeps the room's facts in `window.__shell` (what a test or a big screen reads). A small room button at
- * the edge (game.json `screen.share` picks the corner) opens Invite, Big screen and the room code; nothing covers
- * the middle of the screen or a thumb.
+ * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
+ * covers the middle of the screen or a thumb.
  */
 export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, room = null } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
+  const places = sharePlaces(g.screen?.share);
   // The phone's glass belongs to the game: no page pan, pinch-zoom, text selection or callout under a thumb
   // (a pinch between a stick thumb and a button thumb made the browser cancel both touches).
   const css = `:root{--hot:${/^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a'}}
@@ -59,17 +92,22 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .join .qr svg { width: 100%; height: 100%; display: block; }
 .join b { display: block; color: var(--hot); font-size: 1.15em; margin-bottom: 4px; }
 .join span { opacity: .85; word-break: break-all; }
-.room { position: fixed; z-index: 7; display: flex; flex-direction: column; gap: 8px; font: 600 13px/1.2 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #eef1f8; }
-.room.at-top-right { top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); align-items: flex-end; }
-.room.at-top-left { top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); align-items: flex-start; }
-.room.at-bottom-right { bottom: max(8px, env(safe-area-inset-bottom)); right: max(8px, env(safe-area-inset-right)); align-items: flex-end; flex-direction: column-reverse; }
-.room.at-bottom-left { bottom: max(8px, env(safe-area-inset-bottom)); left: max(8px, env(safe-area-inset-left)); align-items: flex-start; flex-direction: column-reverse; }
+.room { --dx: 0px; --dy: 0px; position: fixed; z-index: 7; display: flex; flex-direction: column; gap: 8px; font: 600 13px/1.2 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #eef1f8; }
+.room.at-top-right { top: calc(max(8px, env(safe-area-inset-top)) + var(--dy)); right: calc(max(8px, env(safe-area-inset-right)) + var(--dx)); align-items: flex-end; }
+.room.at-top-left { top: calc(max(8px, env(safe-area-inset-top)) + var(--dy)); left: calc(max(8px, env(safe-area-inset-left)) + var(--dx)); align-items: flex-start; }
+.room.at-top-center { top: calc(max(8px, env(safe-area-inset-top)) + var(--dy)); left: calc(50% + var(--dx)); transform: translateX(-50%); align-items: center; }
+.room.at-bottom-right { bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--dy)); right: calc(max(8px, env(safe-area-inset-right)) + var(--dx)); align-items: flex-end; flex-direction: column-reverse; }
+.room.at-bottom-left { bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--dy)); left: calc(max(8px, env(safe-area-inset-left)) + var(--dx)); align-items: flex-start; flex-direction: column-reverse; }
+.chip.chip-right { left: auto; right: max(10px, env(safe-area-inset-right)); }
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(6,9,16,.62); color: inherit; font: inherit; cursor: pointer; touch-action: manipulation; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity .5s; }
 .pill svg { width: 15px; height: 15px; flex: none; }
 .pill.dim { opacity: .38; width: 34px; padding: 0; justify-content: center; }
 .pill.dim span { display: none; }
 .pill:hover, .pill:focus-visible, .pill[aria-expanded="true"] { opacity: 1; width: auto; padding: 0 11px 0 9px; }
 .pill:hover span, .pill:focus-visible span, .pill[aria-expanded="true"] span { display: inline; }
+/* game.json screen.share "label": false: always the small round icon, even while it is open (the code is in the sheet). */
+.pill.icon, .pill.icon:hover, .pill.icon:focus-visible, .pill.icon[aria-expanded="true"] { width: 34px; padding: 0; justify-content: center; }
+.pill.icon span, .pill.icon:hover span, .pill.icon:focus-visible span, .pill.icon[aria-expanded="true"] span { display: none; }
 .sheet { box-sizing: border-box; width: min(300px, calc(100vw - 16px)); padding: 12px; border-radius: 16px; background: rgba(8,12,22,.94); border: 1px solid rgba(255,255,255,.16); box-shadow: 0 18px 50px rgba(0,0,0,.5); -webkit-user-select: text; user-select: text; touch-action: manipulation; }
 .sheet .code { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 2px 2px 10px; }
 .sheet .code b { font: 800 20px/1.1 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.01em; }
@@ -84,13 +122,14 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .sheet .foot a:hover, .sheet .foot button:hover { color: #fff; }
 .toast { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); z-index: 8; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; background: rgba(8,12,22,.9); color: #fff; font: 600 13px/1.2 ui-sans-serif, system-ui, sans-serif; pointer-events: none; }
 [hidden] { display: none !important; }`;
-  const boot = { game: g.id, name: g.name, screen: Boolean(screen), ...(room ? { room } : {}) };
+  // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
+  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
-  const shareCorner = corner('share', 'top-right');
+  const first = places.desk;
   const joinCard = screen && joinUrl ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
-  const share = screen ? '' : `<div class="room at-${shareCorner}" data-room-ui>
-  <button class="pill" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room, invite and big screen"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
+  const share = screen ? '' : `<div class="room at-${first.at}" style="--dx:${first.x}px;--dy:${first.y}px" data-room-ui>
+  <button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room, invite and big screen"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
   <div class="sheet" id="share-sheet" role="dialog" aria-label="This room" data-share-sheet hidden>
     <div class="code"><b data-room-label>This room</b><span data-room-count></span></div>
     <div class="acts">
@@ -163,6 +202,23 @@ const SHELL_JS = String.raw`(function () {
   var sheet = ui && ui.querySelector('[data-share-sheet]');
   var toast = document.querySelector('[data-toast]');
   var dimTimer = null;
+  // Where the button sits on THIS device (game.json screen.share, per computer, phone and phone turned sideways: a
+  // corner or the top's middle, moved in by x / y), so it never sits on the game's own scoreboard or fuel bar.
+  function place() {
+    if (!ui || !boot.share) return;
+    var key = device === 'phone' ? (innerWidth > innerHeight ? 'sideways' : 'phone') : 'desk';
+    var p = boot.share[key] || boot.share.desk;
+    if (!p) return;
+    ui.className = 'room at-' + p.at;
+    ui.style.setProperty('--dx', (p.x || 0) + 'px');
+    ui.style.setProperty('--dy', (p.y || 0) + 'px');
+    if (toggle) { if (p.label === false) toggle.classList.add('icon'); else toggle.classList.remove('icon'); }
+    // The status chip lives at the bottom left: a button there sends it to the bottom right.
+    if (p.at === 'bottom-left') chip.classList.add('chip-right'); else chip.classList.remove('chip-right');
+    state.share = { device: key, at: p.at, x: p.x || 0, y: p.y || 0, label: p.label !== false };
+  }
+  place();
+  addEventListener('resize', place);
   function labelOf(room) { var m = /^pub-(\d+)$/.exec(room); return m ? 'Room ' + m[1] : room; }
   function flash(text) { if (!toast) return; toast.textContent = text; toast.hidden = false; clearTimeout(flash.t); flash.t = setTimeout(function () { toast.hidden = true; }, 1800); }
   function wake() { if (!toggle) return; toggle.classList.remove('dim'); clearTimeout(dimTimer); dimTimer = setTimeout(function () { if (sheet.hidden) toggle.classList.add('dim'); }, 6000); }

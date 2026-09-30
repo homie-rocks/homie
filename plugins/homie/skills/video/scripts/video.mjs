@@ -14,7 +14,8 @@
  *   grid <slug> --song <music slug|file> [--bpm] the song's beats, bars and (from the music skill) sung words
  *   slice <slug> --from <s> --to <s> --out <path.wav> [--song …]    a cut of the song, e.g. a shot's audio reference
  *   lag <slug> --base <clip.mp4> --ref <cut.wav> how far a generated clip's own sound sits from its reference
- *   capture <slug> --game <id> --url <site> [--seconds 60] [--view tv|play]   real gameplay (capture-game.mjs)
+ *   capture <slug> --game <id> --url <site> [--seconds 60] [--view tv|play] [--scale 0.67] [--fps 30]
+ *                                         real gameplay (capture-game.mjs); --scale renders a heavy game smaller
  *   edl <slug> --length <s> [--song <slug>] [--bed-from-bar <k>] [--title "…"] [--end "…"]   an edit, cut on bars
  *   card <slug> --name <title|end> --text "…" [--sub "…"]    a title or end card, 16:9 and 9:16
  *   cut <slug> [--edl work/edl.json]             the 16:9 and 9:16 deliveries, loudness to -14 LUFS, a poster
@@ -236,10 +237,12 @@ function capture(root) {
   if (!url) throw new Error('--url <site>: http://127.0.0.1:8787 while `npm run dev` runs, or the live site');
   const out = join(dir, 'work', 'capture');
   const args = [join(HERE, 'capture-game.mjs'), '--url', String(url), '--game', String(flags.get('game') ?? ''), '--seconds', String(flags.get('seconds') ?? 60), '--out', out, '--view', String(flags.get('view') ?? 'tv')];
+  // A heavy game paints more frames on a smaller page (--scale), scaled up to the film's size when it is encoded.
+  for (const k of ['scale', 'fps']) if (flags.has(k)) args.push(`--${k}`, String(flags.get(k)));
   const r = spawnSync(process.execPath, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], timeout: 20 * 60_000 });
   let j = null; try { j = JSON.parse(r.stdout.trim().split('\n').pop()); } catch { /* */ }
   if (r.status !== 0 || !j?.ok) throw new Error('the capture failed (its log is above)');
-  return { ok: true, command: 'capture', slug, file: rel(root, j.file), seconds: j.seconds, sourceFps: j.sourceFps, heldFrames: j.heldFrames, audio: j.audio };
+  return { ok: true, command: 'capture', slug, file: rel(root, j.file), seconds: j.seconds, sourceFps: j.sourceFps, heldFrames: j.heldFrames, audio: j.audio, ...(j.advice ? { advice: j.advice } : {}) };
 }
 
 /**
@@ -659,7 +662,7 @@ function print(r) {
     case 'gen': L.push(r.already ? `already made: ${r.already}` : r.dryRun ? `dry run: US$${r.price.usd.toFixed(4)} (${r.price.basis}); nothing sent` : `made ${r.files.join(', ')} for US$${r.usd.toFixed(2)}; this video has spent US$${Number(r.spent).toFixed(2)}`); break;
     case 'grid': L.push(`${r.bpm} BPM (confidence ${r.confidence}), bars of ${r.barSeconds} s from ${r.offset} s; ${r.bars} bars, ${r.words} sung words. ${r.file}`); break;
     case 'lag': L.push(`${r.base}: ${r.lagMs} ms (${r.lagFramesAt24} frames at 24 fps), peak ${r.peak}: ${r.verdict}`); break;
-    case 'capture': L.push(`captured ${r.seconds} s (${r.sourceFps} fps from the page, ${r.heldFrames} held) to ${r.file}; ${r.audio ? `game sound ${r.audio.seconds} s, peak ${r.audio.peakDb} dB` : 'the game made no sound'}`); break;
+    case 'capture': L.push(`captured ${r.seconds} s (${r.sourceFps} fps from the page, ${r.heldFrames} held) to ${r.file}; ${r.audio ? `game sound ${r.audio.seconds} s, peak ${r.audio.peakDb} dB` : 'the game made no sound'}`); if (r.advice) L.push(`  note: ${r.advice}`); break;
     case 'edl': L.push(`${r.shots} shots of ${r.shotSeconds} s${r.title ? `, title ${r.title} s` : ''}, end card ${r.end} s; cuts at ${r.cuts.join(', ')}. ${r.file}`); break;
     case 'cut': L.push(`${r.seconds} s: ${r.outputs['16x9'].file} (${r.outputs['16x9'].loudness?.lufs ?? '-'} LUFS), ${r.outputs['9x16'].file}; poster ${r.poster}`); break;
     case 'sync': L.push(`${r.ok ? 'in sync' : 'OUT OF SYNC'}: ${r.judged} of ${r.of} hits judged, ${r.outOfSync} off by more than a frame`, ...r.rows.map((x) => `  ${x.at}s sound ${x.soundAt ?? '-'} picture f${x.pictureFrame} offset ${x.offsetFrames ?? '-'}`)); break;

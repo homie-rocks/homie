@@ -59,6 +59,9 @@ node <video.mjs> sheet <slug> --in videos/<slug>/<slug>.mp4
   empty seats) off a headless GPU Chrome for real seconds, with the game's own WebAudio sound on
   the same clock (the browser is muted; nothing plays out loud). It presses nothing. The live
   site works too (`--url` the studio's address); a local run keeps strangers out of the shot.
+  A heavy game paints few frames at 1920x1080 (it prints "fps from the page" and a note when that
+  is well under the film's 30): capture again with `--scale 0.67` (a 1280x720 page, scaled up to
+  1920x1080 when it is encoded) or a lower `--fps`. One game measured 8 fps at 1080p and 39 at 720p.
 - The bed is the studio's own song (`--song`, from the `music` skill) or the game's sound alone.
   No song yet: the `sound` skill synthesizes a theme for free (its bar grid cuts the trailer the same
   way), or the `music` skill renders one with ElevenLabs (credits: ask).

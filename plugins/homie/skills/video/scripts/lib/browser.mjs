@@ -37,8 +37,9 @@ export async function launch(root, { width = 1920, height = 1080, extra = [] } =
   const puppeteer = loadPuppeteer(root);
   if (!puppeteer) throw new Error('puppeteer-core is not installed (it comes with @homie-rocks/studio: run npm install in the studio)');
   const profile = mkdtempSync(join(tmpdir(), 'homie-video-'));
+  // 150 s for Chrome to start: on a loaded computer a cold start has taken over a minute.
   const browser = await puppeteer.launch({
-    executablePath: exe, headless: true, userDataDir: profile, protocolTimeout: 180_000,
+    executablePath: exe, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 180_000,
     args: [...GPU_FLAGS, `--window-size=${width},${height}`, '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--force-color-profile=srgb', ...extra],
   });
   const close = async () => {

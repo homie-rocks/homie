@@ -98,7 +98,7 @@ async function frame(root) {
   const dir = artDir(root, String(flags.get('slug') ?? 'frames'));
   const puppeteer = loadPuppeteer(root); const exe = chromePath();
   if (!puppeteer || !exe) throw new Error(!exe ? 'no Chrome found (set CHROME_PATH)' : 'puppeteer-core is missing (npm install in the studio)');
-  const browser = await puppeteer.launch({ executablePath: exe, headless: true, args: [...GPU_FLAGS, '--mute-audio', '--window-size=1920,1080', '--hide-scrollbars', '--force-color-profile=srgb', '--no-first-run'] });
+  const browser = await puppeteer.launch({ executablePath: exe, headless: true, timeout: 150_000, args: [...GPU_FLAGS, '--mute-audio', '--window-size=1920,1080', '--hide-scrollbars', '--force-color-profile=srgb', '--no-first-run'] });
   const shots = [];
   try {
     const page = await browser.newPage();

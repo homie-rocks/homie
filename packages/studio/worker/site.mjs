@@ -69,7 +69,7 @@ img,video{display:block;max-width:100%}
 .ico{width:18px;height:18px;flex:none}
 .skip{position:absolute;left:-9999px;top:12px;z-index:40;padding:10px 14px;border-radius:10px;background:var(--fg);color:var(--bg)}
 .skip:focus{left:12px}
-.kicker{margin:0 0 12px;font:600 12px/1.5 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--glow)}
+.kicker{margin:0 0 12px;font:600 12px/1.5 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--glow-ink)}
 :focus-visible{outline:3px solid var(--fg);outline-offset:3px}
 @media (max-width:559px){.k-opt{display:none}}
 
@@ -255,7 +255,7 @@ img,video{display:block;max-width:100%}
 .credits{display:grid;gap:18px;margin-top:30px}
 @media (min-width:760px){.credits{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}
 .credit{overflow-wrap:anywhere;padding:20px 22px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);color:var(--soft);font-size:15px}
-.credit h3{margin:0 0 10px;font:600 12px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--glow)}
+.credit h3{margin:0 0 10px;font:600 12px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--glow-ink)}
 .credit p{margin:0 0 8px}
 .credit ul{margin:0;padding-left:18px}
 .credit li{margin:4px 0}
@@ -310,7 +310,7 @@ img,video{display:block;max-width:100%}
 .plist{list-style:none;margin:28px 0 0;padding:0;display:grid;gap:14px}
 .pitem>a{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;padding:20px 22px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);text-decoration:none;transition:border-color .2s ease,transform .2s ease}
 .pitem>a:hover{border-color:color-mix(in srgb,var(--hot) 45%,transparent);transform:translateY(-2px)}
-.pitem time,.post-meta{font:600 12px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--glow)}
+.pitem time,.post-meta{font:600 12px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--glow-ink)}
 .pitem h3{margin:6px 0 6px;font:800 clamp(22px,2.6vw,30px)/1.1 var(--display);letter-spacing:-.02em}
 .pitem p{margin:0;color:var(--soft)}
 .pitem img{width:168px;aspect-ratio:16/10;object-fit:cover;border-radius:12px}
@@ -444,19 +444,43 @@ if(src){
 /* ------------------------------------------------------------------ the shell */
 
 const TOKEN_DEFAULTS = { bg: '#0b0c12', fg: '#f1f3f9', accent: '#ffcf5a', glow: '#7dffb0' };
+/**
+ * A game landing's own scheme (game.json `landing.scheme`), for a game whose picture is the other way round from
+ * the studio's look: a white or cream arena (a light hero) under a dark studio's tint turns grey, so a light
+ * landing draws the whole page light, its hero tinted and shaded with the light background and its words dark.
+ * `landing.theme` colours still win over these.
+ */
+export const SCHEME_TOKENS = {
+  light: { bg: '#f7f6f1', fg: '#15161d', panel: 'color-mix(in srgb,var(--fg) 5%,var(--bg))' },
+  dark: { bg: '#0b0c12', fg: '#f1f3f9', panel: 'color-mix(in srgb,var(--fg) 5%,var(--bg))' },
+};
 
-/** The studio's tokens as CSS custom properties (site/theme.json, checked at build), plus its fonts. */
+/**
+ * The studio's tokens as CSS custom properties (site/theme.json, checked at build), plus its fonts. `over` is a
+ * page's own (a game landing's `landing.theme`, and its `scheme`). `--glow-ink` is the glow as small text: the
+ * glow itself on a dark page, and a darker mix of it on a light one (a pale glow on white cannot be read).
+ */
 function tokensCss(theme = {}, over = null) {
   const t = { ...TOKEN_DEFAULTS, ...theme, ...(over ?? {}) };
+  const scheme = (over?.scheme ?? theme.scheme) === 'light' ? 'light' : 'dark';
   const fonts = (theme.fonts ?? []).map((f) => `@font-face{font-family:"${f.family}";src:url("${f.src}");font-weight:${f.weight};font-style:${f.style};font-display:swap}`).join('');
   const display = theme.display ?? 'ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
   const text = theme.text ?? 'ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
   const mono = theme.mono ?? 'ui-monospace,"SF Mono",Menlo,Consolas,monospace';
   return `${fonts}:root{--bg:${t.bg};--fg:${t.fg};--hot:${t.accent};--glow:${t.glow};--hot-ink:${t.accentInk ?? t.bg};
+--glow-ink:${scheme === 'light' ? 'color-mix(in srgb,var(--glow) 45%,var(--fg))' : 'var(--glow)'};
 --soft:color-mix(in srgb,var(--fg) 80%,transparent);--dim:color-mix(in srgb,var(--fg) 62%,transparent);--line:color-mix(in srgb,var(--fg) 14%,transparent);
 --panel:${t.panel ?? 'color-mix(in srgb,var(--fg) 5%,var(--bg))'};--display:${display};--text:${text};--mono:${mono};--r:${Number.isFinite(t.radius) ? t.radius : 18}px;
---gutter:clamp(18px,5vw,72px);--top-h:72px;color-scheme:${theme.scheme === 'light' ? 'light' : 'dark'}${theme.uppercase === false ? ';--mark-case:none;--mark-track:.02em' : ''}}
+--gutter:clamp(18px,5vw,72px);--top-h:72px;color-scheme:${scheme}${theme.uppercase === false ? ';--mark-case:none;--mark-track:.02em' : ''}}
 @media (max-width:719px){:root{--top-h:112px}}`;
+}
+
+/** A landing's `over` tokens: its scheme's (light or dark, when it differs from the studio's), then its own colours. */
+function landingTokens(cat, L) {
+  const studio = cat.studio?.theme?.scheme === 'light' ? 'light' : 'dark';
+  const want = L.scheme === 'light' || L.scheme === 'dark' ? L.scheme : null;
+  if (!want || want === studio) return L.theme ?? null;
+  return { ...SCHEME_TOKENS[want], ...(L.theme ?? {}), scheme: want };
 }
 
 const studioName = (cat) => cat.studio?.name ?? 'Studio';
@@ -533,7 +557,7 @@ ${icon}${feeds}${head}
 <style>${tokensCss(theme, over)}${BASE_CSS}${cat.site?.css ?? ''}</style>
 ${partial(cat, 'head') ?? ''}
 </head>
-<body class="${hero ? 'has-hero' : ''}" data-page="${esc(page)}">
+<body class="${hero ? 'has-hero' : ''}" data-page="${esc(page)}" data-scheme="${(over?.scheme ?? theme.scheme) === 'light' ? 'light' : 'dark'}">
 <a class="skip" href="#main">Skip to content</a>
 ${header(cat, active)}
 <main id="main">
@@ -566,7 +590,13 @@ export function customPage(cat, html, { active = null } = {}) {
 const minutes = (s) => (Number.isFinite(s) && s > 0 ? (s % 60 ? `${s}\u00a0s rounds` : `${s / 60}\u2011minute rounds`) : null);
 const playersText = (g) => (g.players?.max ? (g.players.max === 1 ? 'one player' : `1–${g.players.max} players`) : 'multiplayer');
 const titleClass = (name) => { const n = String(name ?? '').length; return n > 22 ? 't-xlong' : n > 12 ? 't-long' : ''; };
-const coverOf = (g) => g.landing?.cover ?? (g.cover ? `/games/${g.id}/${g.cover}` : null);
+/**
+ * A game's picture on every card (Home, Games, Rooms, a post), a room's row and the directory's manifest: the
+ * landing's hero still (hero/wide.jpg or game.json landing.hero.image, the picture the landing leads with), else
+ * a trailer's poster, else the game's cover. An old game.json cover never outranks the landing's own still.
+ */
+export const gameCover = (g) => g.landing?.hero?.wideImage ?? g.landing?.hero?.tallImage ?? g.landing?.cover ?? (g.cover ? `/games/${g.id}/${g.cover}` : null);
+const coverOf = gameCover;
 
 /** Hero media: the game's footage (wide and tall, AV1 first), else its art with slow motion, else the studio's colours. */
 function heroMedia(h = {}, { alt = '', word = '' } = {}) {
@@ -626,9 +656,22 @@ const KIND_WORD = { song: 'Song', score: 'Score', loop: 'Loop', stem: 'Stem', sf
 const fmtTime = (s) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '');
 const fileOf = (e, role) => (e.files ?? []).find((f) => f.role === role) ?? null;
 
-function mediaCard(e, kind) {
-  const art = fileOf(e, kind === 'music' ? 'cover' : 'poster');
-  return `<a class="media-card reveal" href="/${kind}/${esc(e.slug)}/"><span class="art">${art ? `<img src="${esc(art.url)}" alt="" loading="lazy" decoding="async">` : ''}<span class="big">${PLAY_ICON}</span></span><span class="cap"><b>${esc(e.title)}</b><span>${esc(KIND_WORD[e.kind] ?? (kind === 'music' ? 'Music' : 'Video'))}${e.duration ? ` · ${esc(fmtTime(e.duration))}` : ''}</span></span></a>`;
+/**
+ * A song's cover (a video's poster), wherever it is drawn (its page, a card, the directory's manifest): its own
+ * file, else the manifest's default (music/manifest.json `cover`, videos/manifest.json `poster`, which the build
+ * gives every entry without one), else the landing still of the game it was made for (`for.game`), else the
+ * studio's share picture (site/theme.json `social`). Null when there is none of these.
+ */
+export function mediaArt(e, kind, cat = null) {
+  const own = fileOf(e, kind === 'music' ? 'cover' : 'poster');
+  if (own?.url) return own.url;
+  const game = e.for?.game ? (cat?.games ?? []).find((g) => g.id === e.for.game) : null;
+  return (game ? gameCover(game) : null) ?? cat?.studio?.theme?.social ?? null;
+}
+
+function mediaCard(e, kind, cat = null) {
+  const art = mediaArt(e, kind, cat);
+  return `<a class="media-card reveal" href="/${kind}/${esc(e.slug)}/"><span class="art">${art ? `<img src="${esc(art)}" alt="" loading="lazy" decoding="async">` : ''}<span class="big">${PLAY_ICON}</span></span><span class="cap"><b>${esc(e.title)}</b><span>${esc(KIND_WORD[e.kind] ?? (kind === 'music' ? 'Music' : 'Video'))}${e.duration ? ` · ${esc(fmtTime(e.duration))}` : ''}</span></span></a>`;
 }
 
 /* ------------------------------------------------------------------ Home */
@@ -663,7 +706,7 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
 </section>`;
   } else {
     const lead = videos[0] ?? songs[0] ?? null;
-    const art = lead ? fileOf(lead, videos[0] ? 'poster' : 'cover')?.url : null;
+    const art = lead ? mediaArt(lead, videos[0] ? 'videos' : 'music', cat) : null;
     hero = `<section class="hero home" aria-labelledby="hero-title">
   ${heroMedia(art ? { wideImage: art } : {}, { word: name })}
   <div class="hero-copy">
@@ -688,7 +731,7 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
 </div></section>` : '';
   const mediaBand = (list, kind, title) => (list.length ? `<section class="band" aria-labelledby="${kind}-title"><div class="band-in">
   <div class="head-row reveal"><div><p class="kicker">${kind === 'music' ? 'Music' : 'Videos'}</p><h2 id="${kind}-title">${esc(title)}</h2></div><a class="more" href="/${kind}/">All ${kind === 'music' ? 'music' : 'videos'} ${icon('arrow')}</a></div>
-  <div class="cards">${list.slice(0, 3).map((e) => mediaCard(e, kind)).join('')}</div>
+  <div class="cards">${list.slice(0, 3).map((e) => mediaCard(e, kind, cat)).join('')}</div>
 </div></section>` : '');
   const extra = partial(cat, 'home');
   return layout(cat, {
@@ -751,7 +794,7 @@ export function postPage(cat, p, { origin = '' } = {}) {
   const video = p.links?.video ? (cat.videos ?? []).find((x) => x.slug === p.links.video) : null;
   const others = (cat.posts ?? []).filter((x) => x.slug !== p.slug).slice(0, 2);
   const extra = partial(cat, 'post', { 'post.title': p.title, 'post.slug': p.slug });
-  const linked = [g ? gameCard(g) : '', video ? mediaCard(video, 'videos') : '', song ? mediaCard(song, 'music') : ''].filter(Boolean).join('');
+  const linked = [g ? gameCard(g) : '', video ? mediaCard(video, 'videos', cat) : '', song ? mediaCard(song, 'music', cat) : ''].filter(Boolean).join('');
   return layout(cat, {
     title: `${p.title} · ${name}`, description: p.summary, origin, path: `/posts/${p.slug}/`, image: p.image ?? (g ? coverOf(g) : null), type: 'article', page: 'post', active: 'posts',
     head: `<meta property="article:published_time" content="${esc(p.date)}">${p.updated ? `<meta property="article:modified_time" content="${esc(p.updated)}">` : ''}`,
@@ -898,7 +941,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
 </div></section>`;
 
   const facts = ['free, in the browser', 'bots fill empty seats', 'join any time: take a bot’s place', 'rounds restart on their own', ...(tvOn ? ['phones as controllers on a TV'] : [])];
-  const side = trailer ? mediaCard(trailer, 'videos') : song ? mediaCard(song, 'music') : (L.cover ? `<figure class="media-card reveal" style="margin:0"><span class="art"><img src="${esc(L.cover)}" alt="${esc(g.name)}, a moment of play" loading="lazy"></span><figcaption class="cap"><b>${esc(g.name)}</b><span>${esc(playersText(g))}${minutes(g.roundSeconds) ? ` · ${esc(minutes(g.roundSeconds))}` : ''}</span></figcaption></figure>` : '');
+  const side = trailer ? mediaCard(trailer, 'videos', cat) : song ? mediaCard(song, 'music', cat) : (L.cover ? `<figure class="media-card reveal" style="margin:0"><span class="art"><img src="${esc(L.cover)}" alt="${esc(g.name)}, a moment of play" loading="lazy"></span><figcaption class="cap"><b>${esc(g.name)}</b><span>${esc(playersText(g))}${minutes(g.roundSeconds) ? ` · ${esc(minutes(g.roundSeconds))}` : ''}</span></figcaption></figure>` : '');
   const howBand = `<section class="band hotband" aria-labelledby="how-title"><div class="band-in split">
   <div class="reveal">
     <p class="kicker">How to play</p>
@@ -907,7 +950,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     ${(L.how ?? []).length ? `<ul class="howto">${L.how.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
     <ul class="facts">${facts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
   </div>
-  ${side ? `<div>${side}${trailer && song ? `<div style="margin-top:14px">${mediaCard(song, 'music')}</div>` : ''}</div>` : ''}
+  ${side ? `<div>${side}${trailer && song ? `<div style="margin-top:14px">${mediaCard(song, 'music', cat)}</div>` : ''}</div>` : ''}
 </div></section>`;
 
   const C = L.credits ?? {};
@@ -944,7 +987,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   return layout(cat, {
     title: `${g.name} — play free in your browser`,
     description: `${g.name}: ${L.pitch ?? g.blurb ?? ''} Free in your browser, nothing to download; a TV or laptop browser can be the big screen, with phones as controllers.`.replace(/\s+/g, ' ').trim(),
-    origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: 'games', over: L.theme ?? null,
+    origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: 'games', over: landingTokens(cat, L),
     head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}<script type="application/ld+json">${jsonScript(ld)}</script>`,
     main: `${hero}${ways}${liveBand}${howBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}${makeBand}`,
   });
@@ -986,14 +1029,15 @@ export function mediaIndexPage(cat, kind, { origin = '' } = {}) {
   return layout(cat, {
     title: `${title} · ${name}`, description: `${title} from ${name}.`, origin, path: `/${kind}/`, page: kind, active: kind,
     main: `${pageHead(name, title, kind === 'music' ? 'Songs, scores and loops from the studio.' : 'Trailers, music videos and clips from the studio.')}
-<div class="wrap"><div class="cards">${list.map((e) => mediaCard(e, kind)).join('')}</div></div>`,
+<div class="wrap"><div class="cards">${list.map((e) => mediaCard(e, kind, cat)).join('')}</div></div>`,
   });
 }
 
 export function songPage(cat, e, origin = '') {
   const name = studioName(cat);
   const audio = fileOf(e, 'audio');
-  const cover = fileOf(e, 'cover');
+  const coverUrl = mediaArt(e, 'music', cat);
+  const cover = coverUrl ? { url: coverUrl } : null;
   const extras = (e.files ?? []).filter((f) => f.role === 'loop' || f.role === 'stem');
   const game = e.for?.game && (cat.games ?? []).find((g) => g.id === e.for.game);
   const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u);
@@ -1023,7 +1067,8 @@ export function videoPage(cat, e, origin = '') {
   const name = studioName(cat);
   const video = fileOf(e, 'video');
   const vertical = fileOf(e, 'vertical');
-  const poster = fileOf(e, 'poster');
+  const posterUrl = mediaArt(e, 'videos', cat);
+  const poster = posterUrl ? { url: posterUrl } : null;
   const captions = fileOf(e, 'captions');
   const game = e.for?.game && (cat.games ?? []).find((g) => g.id === e.for.game);
   const song = e.for?.song && (cat.songs ?? []).find((m) => m.slug === e.for.song);

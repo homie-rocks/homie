@@ -50,6 +50,11 @@ export function resolveMedia(root, kind, { r2 = false } = {}) {
   const entries = [];
   const skipped = [];
   const seen = new Set();
+  // The manifest's own picture (music: `cover`, videos: `poster`): an album cover for every song that has none of
+  // its own. A path in the studio (copied into the site) or an https:// address, like any file.
+  const artRole = kind === 'music' ? 'cover' : 'poster';
+  const shared = manifest[artRole];
+  const sharedFile = typeof shared === 'string' ? (/^https:\/\//.test(shared) ? { url: shared } : { path: shared }) : shared && typeof shared === 'object' ? shared : null;
   for (const item of manifest.items) {
     if (!item || typeof item !== 'object') continue;
     const label = item.slug ?? item.key ?? item.file ?? '(unnamed)';
@@ -58,7 +63,9 @@ export function resolveMedia(root, kind, { r2 = false } = {}) {
     seen.add(item.slug);
     if (item.published !== true) { skipped.push({ kind, item: label, why: 'not published yet ("published": true shows it)' }); continue; }
     const files = [];
-    for (const f of Array.isArray(item.files) ? item.files : []) {
+    const own = Array.isArray(item.files) ? item.files : [];
+    const list = sharedFile && !own.some((f) => f?.role === artRole) ? [...own, { ...sharedFile, role: artRole }] : own;
+    for (const f of list) {
       if (!f || f.public === false) continue;
       let src = null;
       if (typeof f.key === 'string' && f.key && r2) src = { from: 'r2', url: `/media/${f.key.split('/').map(encodeURIComponent).join('/')}` };

@@ -60,6 +60,19 @@ show and why anything is left out.
 - `rights` and `credits` are shown on the page, in plain words. Say what the provider's terms
   say for the plan the file was made on; nothing on the site claims more.
 
+## Covers and posters
+
+Every song's page, its card and the directory's manifest show a cover (a video: a poster), the first of:
+
+1. its own `cover` file (a video's `poster`);
+2. the manifest's own, for every entry without one: `"cover": "music/night-route/cover.jpg"` at the top of
+   `music/manifest.json` (an album's cover; `"poster"` in `videos/manifest.json`), a path in the studio or an
+   `https://` address, served like any file;
+3. the landing still of the game the entry was made for (`for.game`);
+4. the studio's share picture (`site/theme.json` `social`).
+
+homie.rocks shows a cover only from the studio's own site, as a `.jpg`, `.png`, `.webp`, `.avif` or `.gif`.
+
 ## Where the bytes come from
 
 A studio needs no storage for songs and videos: the site serves them itself. For every public

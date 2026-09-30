@@ -6,7 +6,13 @@
  * sound on one clock.
  *
  *   node capture-game.mjs --url <site> --game <id> --seconds 60 --out <dir>
- *        [--view tv|play] [--fps 30] [--width 1920] [--height 1080] [--settle 4] [--min-free-gb 10]
+ *        [--view tv|play] [--fps 30] [--width 1920] [--height 1080] [--scale 1] [--settle 4] [--min-free-gb 10]
+ *
+ * Size and speed: --width/--height is the film's size, --fps its frame rate. --scale renders the page smaller
+ * (0.25 to 1: 0.67 is a 1280x720 page for a 1920x1080 film) and scales the frames up to the film's size when it
+ * encodes. A heavy game paints far more frames at a smaller size (measured: 8 frames a second at 1080p, 39 at
+ * 720p), and a frame the page did not paint in time is a held frame. The result says the page's own frame rate;
+ * when it is well under --fps it names a --scale that would paint enough.
  *
  * Picture: the compositor's own frame stream (CDP Page.startScreencast), every
  *          frame kept with the time Chrome presented it, then laid onto a constant
@@ -37,12 +43,17 @@ const OUT = resolve(String(opt('out', '')));
 const VIEW = opt('view', 'tv');
 const FPS = Number(opt('fps', 30));
 const W = Number(opt('width', 1920)); const H = Number(opt('height', 1080));
+const SCALE = Number(opt('scale', 1));
+// The page's own size: even numbers (the encoder's rule), scaled up to W x H when the film is made.
+const RW = Math.max(2, Math.round((W * SCALE) / 2) * 2); const RH = Math.max(2, Math.round((H * SCALE) / 2) * 2);
 const SETTLE = Number(opt('settle', 4));
 const MIN_FREE_GB = Number(opt('min-free-gb', 10));
 const fail = (m) => { process.stderr.write(`capture-game: ${m}\n`); process.exit(2); };
 if (!/^https?:\/\//.test(URL_)) fail('--url <the studio site: http://127.0.0.1:8787 from npm run dev, or the live site>');
 if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(GAME ?? ''))) fail('--game <id>');
 if (!(SECONDS >= 3 && SECONDS <= 600)) fail('--seconds 3..600');
+if (!(SCALE >= 0.25 && SCALE <= 1)) fail('--scale 0.25..1 (the page renders at that part of --width x --height, and the film is scaled up to it)');
+if (!(FPS >= 1 && FPS <= 60)) fail('--fps 1..60');
 if (!opt('out')) fail('--out <folder> (the video job\'s work/capture folder)');
 const freeGB = () => { try { const f = statfsSync(OUT); return (f.bavail * f.bsize) / 1e9; } catch { return 99; } };
 mkdirSync(OUT, { recursive: true });
@@ -62,9 +73,9 @@ const clock = []; // tap clock samples
 let pcmFrames = 0; let ctxRate = null;
 const pcmFile = join(OUT, 'game-audio.s16le');
 const pcm = openSync(pcmFile, 'w');
-const report = { ran: new Date().toISOString(), url: `${URL_}/${GAME}/${VIEW}`, seconds: SECONDS, fps: FPS, size: [W, H], notes: [] };
+const report = { ran: new Date().toISOString(), url: `${URL_}/${GAME}/${VIEW}`, seconds: SECONDS, fps: FPS, size: [W, H], ...(SCALE !== 1 ? { scale: SCALE, rendered: [RW, RH] } : {}), notes: [] };
 
-const { browser, close, pid } = await launch(root, { width: W, height: H, extra: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] });
+const { browser, close, pid } = await launch(root, { width: RW, height: RH, extra: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] });
 log('browser', { pid });
 const stop = async (why) => { log('stop', { why }); try { closeSync(pcm); } catch { /* */ } await close(); process.exit(3); };
 process.on('SIGINT', () => stop('SIGINT'));
@@ -72,7 +83,7 @@ process.on('SIGTERM', () => stop('SIGTERM'));
 
 try {
   const page = await browser.newPage();
-  await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
+  await page.setViewport({ width: RW, height: RH, deviceScaleFactor: 1 });
   await page.evaluateOnNewDocument(TAP);
   const errors = [];
   page.on('pageerror', (e) => { if (errors.length < 30) errors.push(String(e.message).slice(0, 200)); });
@@ -100,7 +111,7 @@ try {
     frames.push({ file, t: e.metadata.timestamp });
     cdp.send('Page.screencastFrameAck', { sessionId: e.sessionId }).catch(() => {});
   });
-  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 88, maxWidth: W, maxHeight: H, everyNthFrame: 1 });
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 88, maxWidth: RW, maxHeight: RH, everyNthFrame: 1 });
   const until = Date.now() + SECONDS * 1000 + 600;
   let lastLog = 0;
   while (Date.now() < until) {
@@ -195,11 +206,20 @@ rmSync(concat, { force: true });
 rmSync(join(OUT, 'game-audio.raw'), { force: true });
 if (enc.status !== 0) fail(`encode failed: ${enc.stderr.trim().split('\n').pop()}`);
 const spanS = frames.at(-1).t - t0;
+const sourceFps = +(frames.length / spanS).toFixed(1);
+// Too few frames from the page: a smaller page paints more (the frame count grows about with the pixels saved).
+let advice = null;
+if (sourceFps < FPS * 0.75) {
+  const want = Math.max(0.25, Math.min(1, +(SCALE * Math.sqrt(Math.max(0.05, sourceFps / FPS))).toFixed(2)));
+  advice = want < SCALE
+    ? `the page painted ${sourceFps} frames a second for a ${FPS} fps film (${held} frames held): capture again with --scale ${want} (a ${Math.round(W * want)}x${Math.round(H * want)} page, scaled up), or a lower --fps`
+    : `the page painted ${sourceFps} frames a second for a ${FPS} fps film (${held} frames held) even at its smallest: capture with a lower --fps, or on a quieter computer`;
+}
 const result = {
   ...report, file: 'capture.mp4', seconds: +(total / FPS).toFixed(3), outputFrames: total, sourceFrames: frames.length,
-  sourceFps: +(frames.length / spanS).toFixed(1), distinctFramesUsed: distinct, heldFrames: held, audio,
+  sourceFps, distinctFramesUsed: distinct, heldFrames: held, audio, ...(advice ? { advice } : {}),
   honesty: 'Recorded from the game running in a live public room; nothing was pressed and nothing was drawn over. Seats without a person are the game\'s own bots.',
 };
 writeFileSync(join(OUT, 'capture.json'), `${JSON.stringify(result, null, 1)}\n`);
-process.stdout.write(`${JSON.stringify({ ok: true, file: mp4, seconds: result.seconds, sourceFps: result.sourceFps, heldFrames: held, audio: audio ? { seconds: audio.seconds, peakDb: audio.peakDb, covered: audio.covered } : null })}\n`);
+process.stdout.write(`${JSON.stringify({ ok: true, file: mp4, seconds: result.seconds, sourceFps: result.sourceFps, heldFrames: held, ...(advice ? { advice } : {}), audio: audio ? { seconds: audio.seconds, peakDb: audio.peakDb, covered: audio.covered } : null })}\n`);
 process.exit(0);

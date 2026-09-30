@@ -23,6 +23,10 @@
  *   homie-studio media put <file> [--as <key>]
  *   homie-studio media list
  *   homie-studio status
+ *   homie-studio upgrade [--apply] [--diff]
+ *                                         (what this version's template adds to an existing studio: AGENTS.md
+ *                                          sections, READMEs, .gitignore lines, the pin; changes nothing until
+ *                                          --apply, and never a file or section the studio changed)
  *   homie-studio stats [--range 1d|7d|30d|90d] [--game <id> | --song <slug> | --video <slug>] [--url <site>]
  *   homie-studio stats key [--hours 1]    (a read key for the Homie MCP tool studio_stats)
  *   homie-studio stats link               (a one-time link to the private stats page, for the owner's browser)
@@ -61,6 +65,7 @@ import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
 import { recordUpload, resolveMedia, typeOf } from '../lib/media.mjs';
 import { ensureStatsMigration, newStudio } from '../lib/scaffold.mjs';
+import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
@@ -68,7 +73,7 @@ import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, star
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share'];
+const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -198,6 +203,33 @@ function print(result) {
     case 'look':
       lines.push(`${result.ok ? 'Looks right' : 'Look again'}: ${result.rows.length} views of ${result.url}`, ...result.rows.map((r) => `  ${r.ok ? 'ok  ' : 'FIX '} ${r.path} on ${({ computer: 'a computer', phone: 'a phone', sideways: 'a phone turned sideways' })[r.device] ?? r.device}${r.problems.length ? `: ${r.problems.join('; ')}` : ''}`), '', `Pictures (open them and look): ${result.shots}`);
       break;
+    case 'upgrade': {
+      const show = (text, n = 14) => { const l = String(text ?? '').replace(/\n+$/, '').split('\n'); return [...l.slice(0, n).map((x) => `      ${x}`), ...(l.length > n ? [`      … (${l.length - n} more lines; --json has all of it)`] : [])]; };
+      const mark = { 'add-file': '+', 'add-section': '+', 'add-lines': '+', scripts: '+', 'update-file': '~', 'update-section': '~', pin: '~', version: '~' };
+      const list = result.applied ? result.done : result.changes;
+      lines.push(result.applied
+        ? `${result.studio} is on the @homie-rocks/studio ${result.to} template now (${list.length} change${list.length === 1 ? '' : 's'}).`
+        : list.length ? `${result.studio}: what the @homie-rocks/studio ${result.to} template adds (from ${result.from ?? 'an older version'}). Nothing is changed until --apply.` : `${result.studio} has everything the @homie-rocks/studio ${result.to} template writes.`);
+      if (list.length) lines.push('');
+      for (const c of list) {
+        lines.push(`  ${mark[c.kind] ?? '·'} ${c.file.padEnd(18)} ${c.what}${c.kind === 'add-section' && (c.after || c.before) ? ` (${c.after ? `after "${c.after}"` : `before "${c.before}"`})` : ''}`);
+        if (result.applied) continue;
+        if (c.kind === 'add-section' || (c.kind === 'add-file' && c.file.endsWith('.md'))) lines.push(...show(c.text));
+        if (c.kind === 'update-section' || c.kind === 'update-file') lines.push(...lineDiff(c.from, c.text).map((x) => `      ${x}`));
+      }
+      for (const c of result.skipped ?? []) lines.push(`  ! ${c.file.padEnd(18)} not applied: ${c.why}`);
+      if (result.kept?.length) {
+        lines.push('', 'Kept as this studio wrote them (never changed by upgrade; the template\'s text differs):');
+        for (const k of result.kept) {
+          lines.push(`  = ${k.file.padEnd(18)} ${k.what}`);
+          if (flags.has('diff') && k.mine !== undefined) lines.push(...lineDiff(k.mine, k.template).map((x) => `      ${x}`));
+        }
+        if (!flags.has('diff')) lines.push('  (--diff shows how each differs from the template: "-" this studio\'s lines, "+" the template\'s)');
+      }
+      if (result.uncommitted && !result.applied && result.changes.length) lines.push('', `Note: ${result.uncommitted} file(s) have uncommitted changes; commit them first so the upgrade is a change of its own.`);
+      if (result.next?.length) lines.push('', 'Next:', ...result.next.map((n) => `  ${n}`));
+      break;
+    }
     case 'check':
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
         ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`));
@@ -236,6 +268,10 @@ async function main() {
   if (cmd === 'status') {
     const studio = readStudio(root);
     return { ok: true, command: 'status', root, studio, site: siteUrl(root, studio), games: listGames(root).map((g) => g.id), cloudflareSignedIn: Boolean(wranglerBin(root) && whoami(root)) };
+  }
+  if (cmd === 'upgrade') {
+    const plan = upgradePlan(root);
+    return flags.has('apply') || flags.has('yes') ? upgradeApply(root, plan) : plan;
   }
   if (cmd === 'dev' && flags.has('stop')) return stopDev(root);
   if (cmd === 'dev') return dev(root);

@@ -11,19 +11,34 @@ and every game gets a landing page. Anything the studio puts in `site/` wins.
 | `/` | Home: the featured game as a full-bleed hero with Play, the live rooms, the games, the latest posts, videos and music | always |
 | `/games/` | Every game, with its cover, pitch, players playing now, Play and About | the studio has a game |
 | `/music/`, `/videos/` | Songs and videos (`media/MEDIA.md`) | the studio has one published |
-| `/rooms/` | Every public room playing now across the studio's games, each with Join (`/api/rooms` is the same as JSON) | the studio has a game |
+| `/rooms/` | Every public room playing now across the studio's games, each with Join (`/api/rooms` is the same as JSON, cacheable for 15 s) | the studio has a game |
 | `/posts/` | The studio's posts, newest first, with `/posts/feed.xml` (Atom) and `/posts/feed.json` (JSON Feed) | the studio has a post |
 
 A section with nothing in it has no tab, and its address answers 404. Every page ends with a
 "Made with Homie" link to https://homie.rocks/studio/. studio.json may add `"tagline"` (one line, on Home and in
 the feeds) and `"site": { "featured": "<game id>" }` (the game on Home; otherwise the first with its own footage).
 
+Every card (Home, Games, Rooms, a post's), every live room's row and the directory's manifest show a game's
+**landing still**: `hero/wide.jpg` (or `landing.hero.image`), else a trailer's poster, else game.json's `cover`.
+
+## What the homie.rocks hub reads
+
+`/.well-known/homie-studio.json` is the studio's manifest: its games (each with its landing still as `cover`),
+songs (each with a `cover`), videos (each with a `poster`), the latest posts, and `rooms`, the address of
+`/api/rooms`, so the hub's Rooms page lists this studio's public rooms. With studio.json `"stats": { "share": true }`
+(`homie-studio stats share on`) it also says "played this week": `played` for the whole studio and each game's own
+(`games[].played`, `{ "days": 7, "plays", "rounds" }`). To keep the studio's rooms off the hub, studio.json takes
+`"rooms": { "share": false }`: the manifest then names no `rooms` (the studio's own pages still list them).
+
 ## A game's landing: `/<id>/`
 
 Made from the game's own files, nothing invented:
 
 - **The hero**, full-bleed: the game's footage when it has some, else its cover (or key art) moving slowly, tinted
-  with the studio's colour so the words read. Footage is looked for in this order: `landing.hero` in game.json;
+  with the studio's colour so the words read. A game whose picture is white or cream (a light arena) takes
+  `"scheme": "light"` in its `landing` block: its landing is drawn light, the hero tinted and shaded with a light
+  background and the words dark, where a dark studio's tint would turn it grey (`"dark"` is the other way round,
+  for a dark game in a light studio). `landing.theme` colours still win, and the rest of the site keeps its look. Footage is looked for in this order: `landing.hero` in game.json;
   `games/<id>/hero/` by the house brands' names (`wide.mp4` and `tall.mp4`, their AV1 cuts `wide.av1.mp4` and
   `tall.av1.mp4`, stills `wide.jpg` and `tall.jpg`); a trailer in `videos/manifest.json` whose `for.game` is the
   game (its 16:9 `video`, 9:16 `vertical` and `poster`). A loop of 8 to 15 s under 3 MB each, muted, plays best.
@@ -55,6 +70,7 @@ game.json's `landing` block, every key optional:
             "alt": "What the footage shows", "focus": "50% 40%", "tint": 30 },
   "credits": [{ "role": "Music", "name": "Low Tide", "url": "https://example.com" }],
   "theme": { "accent": "#ff3bd4", "glow": "#00eaff" },
+  "scheme": "light",
   "tv": true
 }
 ```
@@ -108,15 +124,44 @@ A studio with its own landing in `site/` keeps it: the template never replaces w
 ## The play page
 
 `/<id>/play` puts the visitor in a public room at once and writes the room into the address, so a reload comes
-back to it and a copied address brings a friend into it. A small room button at the edge (game.json
-`"screen": { "share": "top-left" }` moves it off the game's own HUD; top right by default) opens:
-**Invite** (the phone's share sheet, or the link copied), **Big screen** (`/<id>/tv` of this room, on another
-screen) and the room's code. A room code the relay cannot use (1 to 32 letters, digits, `-` or `_`) is refused
+back to it and a copied address brings a friend into it. A small room button at the edge (top right by default)
+opens: **Invite** (the phone's share sheet, or the link copied), **Big screen** (`/<id>/tv` of this room, on
+another screen) and the room's code. It must never cover the game's own HUD, so game.json's `screen.share` puts it
+where the game has room, per device:
+
+```json
+"screen": {
+  "share": {
+    "desk": "bottom-left",
+    "phone": { "at": "top-left", "y": 56 },
+    "sideways": { "at": "top-center", "label": false }
+  }
+}
+```
+
+- A place is `top-left`, `top-center`, `top-right`, `bottom-left` or `bottom-right`; a plain string (`"share":
+  "top-center"`) or an object with `at` is every device, and `desk` (a computer), `phone` (held upright) and
+  `sideways` (a phone turned sideways; else as `phone`) each take their own.
+- `x` and `y` move it in from its side and its edge, in CSS pixels (0 to 600): `"y": 56` puts it under a game's
+  own top line. At `top-center`, `x` moves it right (or left, negative).
+- It shows the room's name ("Room 7") for a few seconds, then shrinks to a round icon until it is touched;
+  `"label": false` keeps it the icon always (the code is in its sheet), for a corner with little room.
+- A button at the bottom left sends the "finding a room" chip to the bottom right.
+
+Look at the play page on a computer and a phone (both ways up) once a round is on: the button must not sit on a
+score, a timer or a bar. A room code the relay cannot use (1 to 32 letters, digits, `-` or `_`) is refused
 on the page, never swapped for a public room. A player who typed no name gets a two-word handle.
 
 The game runs in a sandboxed frame with an opaque origin, which is why its allow list delegates with `*`
 (`fullscreen *; autoplay *; gamepad *`): Safari refuses a bare `gamepad` there (`getGamepads()` throws a
 SecurityError), so a controller would not work.
+
+## The arcade knock
+
+A game made with Homie's arcade controls asks its page's origin for a Homie box (`GET /__homie/call`), and a score
+goes there as a POST. The site answers at its root and under every game with `{ "ok": false, "error":
+"not-a-homie" }` (JSON, CORS-open, 200, a preflight answered), so the game stops asking and plays on its own; no
+studio needs a Worker of its own for it.
 
 ## Headers
 

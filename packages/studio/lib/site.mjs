@@ -416,6 +416,12 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
   if (texts.length) { mkdirSync(landDir, { recursive: true }); writeFileSync(join(landDir, 'credits.json'), `${JSON.stringify({ v: 1, texts })}\n`); }
 
   const words = L.players && typeof L.players === 'object' ? { one: str(L.players.one, 24), many: str(L.players.many, 24) } : null;
+  // The landing's own colours (landing.theme): only colours, and the ink on its own accent worked out like the studio's.
+  const theme = L.theme && typeof L.theme === 'object' ? Object.fromEntries(['accent', 'glow', 'bg', 'fg'].filter((k) => COLOR.test(String(L.theme[k] ?? ''))).map((k) => [k, L.theme[k]])) : null;
+  if (theme?.accent) { const l = luminance(theme.accent); if (l !== null) theme.accentInk = l > 0.4 ? '#0b0b10' : '#ffffff'; }
+  // landing.scheme: "light" for a white or cream game (its hero is tinted light and its words dark), "dark" for a
+  // dark game in a light studio. Anything else follows the studio's look.
+  if (L.scheme !== undefined && L.scheme !== 'light' && L.scheme !== 'dark') log(`warning: games/${g.id}/game.json landing.scheme is "light" or "dark"; left out`);
   return {
     pitch: str(L.pitch, 240) ?? str(credits.tagline, 240),
     kicker: str(L.kicker, 120),
@@ -431,7 +437,8 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
     music: forGame(songs).map((e) => e.slug),
     source: g.share?.source !== false,
     tv: g.screen?.tv !== false && L.tv !== false,
-    theme: L.theme && typeof L.theme === 'object' ? Object.fromEntries(['accent', 'glow', 'bg', 'fg'].filter((k) => COLOR.test(String(L.theme[k] ?? ''))).map((k) => [k, L.theme[k]])) : null,
+    theme: theme && Object.keys(theme).length ? theme : null,
+    ...(L.scheme === 'light' || L.scheme === 'dark' ? { scheme: L.scheme } : {}),
   };
 }
 

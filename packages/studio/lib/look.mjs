@@ -36,8 +36,9 @@ export async function look({ url, paths, shots, devices = Object.keys(LOOK_DEVIC
   const base = String(url).replace(/\/+$/, '');
   mkdirSync(shots, { recursive: true });
   const profile = mkdtempSync(join(tmpdir(), 'homie-studio-look-'));
+  // 150 s for Chrome to start: on a loaded computer a cold start has taken over a minute.
   const browser = await puppeteer.launch({
-    executablePath: chrome, headless: true, userDataDir: profile,
+    executablePath: chrome, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 180_000,
     args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
   });
   const rows = [];
@@ -51,7 +52,7 @@ export async function look({ url, paths, shots, devices = Object.keys(LOOK_DEVIC
         await page.setViewport(LOOK_DEVICES[device]);
         await page.setUserAgent(`${await browser.userAgent()} homie-studio-check look`);
         const t0 = Date.now();
-        const res = await page.goto(`${base}${path}`, { waitUntil: 'networkidle2', timeout: 45_000 }).catch((e) => { errors.push(`open: ${e.message}`); return null; });
+        const res = await page.goto(`${base}${path}`, { waitUntil: 'networkidle2', timeout: 90_000 }).catch((e) => { errors.push(`open: ${e.message}`); return null; });
         const ms = Date.now() - t0;
         await sleep(900);
         const fold = await page.evaluate(() => {

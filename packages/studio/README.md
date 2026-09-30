@@ -10,7 +10,7 @@ Most people never run this by hand: the Homie plugin for Claude Code and Codex d
 and the person approves Cloudflare once in their browser.
 
 ```sh
-npx -y --package=https://homie.rocks/npm/homie-studio-0.8.0.tgz homie-studio new ./night-owls --name "Night Owls"
+npx -y --package=https://homie.rocks/npm/homie-studio-0.9.0.tgz homie-studio new ./night-owls --name "Night Owls"
 cd night-owls && npm install
 npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
 npx homie-studio dev                                   # the whole site locally
@@ -19,6 +19,7 @@ npx homie-studio deploy --plan                         # what deploy will create
 npx homie-studio deploy                                # the studio's own Cloudflare
 npx homie-studio publish                               # the homie.rocks directory
 npx homie-studio stats                                 # the studio's own numbers, for its owner
+npx homie-studio upgrade                               # what a newer template adds to this studio (--apply to take it)
 ```
 
 ## The site: the hub's shape, and a landing for every game
@@ -33,8 +34,30 @@ live rooms, credits (the original and its licence for a port), and "Make a game 
 files. `site/SITE.md` says all of it.
 
 The play page writes its room into the address, and a small room button at the edge shares it: Invite, Big
-screen and the room code. Every HTML answer is `no-transform`, and the site's pages are never framed by another
-site.
+screen and the room code. game.json's `screen.share` puts it where each game has room, per device (a corner or
+the top's middle, moved in by `x` / `y`, or kept a small icon), so it never covers a scoreboard. A game whose
+picture is white or cream gets a light landing (`landing.scheme: "light"`). Every card and the directory show a
+game's landing still. Every HTML answer is `no-transform`, and the site's pages are never framed by another
+site. A game made with Homie's arcade controls that knocks for a Homie box (`/__homie/call`) is told
+`not-a-homie`, at the site's root as under the game.
+
+## Upgrading a studio
+
+A studio pins one version, so nothing changes until it asks. To take a newer one:
+
+```sh
+npx -y --package=https://homie.rocks/npm/homie-studio-0.9.0.tgz homie-studio upgrade          # the plan; changes nothing
+npx -y --package=https://homie.rocks/npm/homie-studio-0.9.0.tgz homie-studio upgrade --apply  # after the person agrees
+npm install && npm run build
+```
+
+`upgrade` compares the studio with what this version's `new` would write for it: an AGENTS.md section, a README,
+a `.gitignore` line, a D1 migration or a package.json script it lacks is added, and one it never changed since an
+older template wrote it (`lib/template-history.json` knows every earlier version's text by a fingerprint) takes
+the newer text. Anything the studio changed or wrote itself is kept as it is: the plan lists it, and `--diff`
+shows how it differs from the template. `--apply` also pins this version in package.json and sets studio.json's
+`homie.studio`. When the template's words change, `node scripts/studio-template-history.mjs` records them (a test
+fails until it has).
 
 ## Rooms of up to 32
 
@@ -135,7 +158,8 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `lib/scaffold.mjs` | `new`: the studio monorepo, only into a new or empty folder, every file listed. |
 | `lib/build.mjs` | `build`: games bundled with esbuild into `site/dist`, `games.json`, each game's shared `source.json`. |
 | `lib/cloudflare.mjs` | `deploy` (and `deploy --plan`): Wrangler, D1, migrations, the directory claim; refuses resources it did not create. `storage add`: the optional R2 bucket. |
-| `lib/check.mjs` | `check`: two fresh Chrome processes (computer + phone) must share a room and finish a round. |
+| `lib/check.mjs` | `check`: two fresh Chrome processes (computer + phone) must share a room and finish a round with both in it; on a busy computer it waits out a round a browser was dropped from, and says why when none counts. |
+| `lib/upgrade.mjs`, `lib/template-history.json` | `upgrade`: an existing studio takes what a newer template adds, never over its own edits. |
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
 | `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`. |

@@ -109,6 +109,9 @@ page epic" means all of this, in this order:
    (and `tv` if it differs), `players` (what a player is called: `{ "one": "pilot", "many": "pilots" }`),
    `hero.alt` (what the footage shows, for a screen reader), `hero.focus` (`"50% 35%"` keeps the action
    in frame on a phone), `hero.tint` (0 to 80: more when the art is bright and the title hard to read).
+   A game whose picture is white or cream (a light arena) takes `"scheme": "light"`: its landing is drawn
+   light, where the studio's dark tint would turn the picture grey. `hero/wide.jpg` is also the game's
+   picture on every card and in the directory, so pick a frame that reads small.
 3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "…" }]`). A port
    keeps its `credits.json` (the original, its author and licence, every part inside); never drop one.
 4. **The look**: the studio's `site/theme.json` colours; `landing.theme` gives this game its own
@@ -116,6 +119,12 @@ page epic" means all of this, in this order:
 5. **A band of its own**, when the game has something to say that the template does not (a soundtrack, a
    mode, a season): `site/partials/game-<id>.html`, a short section in the page's own classes
    (`<p class="kicker">`, `<h2>`, `<p class="lead">`, `<a class="ghost">`).
+
+**The play page's room button** (Invite, Big screen, the room code) sits top right. If the game draws a
+score, a timer or a bar there, move it in game.json: `"screen": { "share": { "desk": "bottom-left",
+"phone": { "at": "top-left", "y": 56 } } }` (a corner or `top-center`, per device: `desk`, `phone`,
+`sideways`; `x` / `y` move it in, in pixels; `"label": false` keeps it a small icon). Look at
+`/<id>/play` on a computer and a phone, both ways up, while a round is on.
 
 Then `npm run build`, `npm run dev`, and look at `http://127.0.0.1:8787/<id>/` as a stranger would:
 a computer (1440 wide) and a phone (390 wide, and turned sideways), from the top, scrolling to the end.

@@ -304,6 +304,23 @@ export async function playedThisWeek(env, game = null) {
   } catch { return null; }
 }
 
+/**
+ * "Played this week" for every game at once (one query, grouped by game), for the manifest's `games[].played`
+ * when the studio shares its numbers: `{ [game]: { days: 7, plays, rounds } }`, or null when the counters cannot be
+ * read (before migration 0002, or no D1). A game nobody played this week is absent: its numbers are 0.
+ */
+export async function playedByGame(env) {
+  if (!env?.DB) return null;
+  const to = today();
+  try {
+    const { results } = await env.DB.prepare(`SELECT subject, SUM(CASE WHEN metric = 'play' THEN n ELSE 0 END) AS plays, SUM(CASE WHEN metric = 'round' AND source = 'people' THEN n ELSE 0 END) AS rounds FROM stats_daily WHERE day >= ?1 AND day <= ?2 AND metric IN ('play', 'round') GROUP BY subject`)
+      .bind(dayOffset(to, -6), to).all();
+    const out = {};
+    for (const row of results ?? []) if (SLUG.test(String(row.subject ?? ''))) out[row.subject] = { days: 7, plays: Number(row.plays) || 0, rounds: Number(row.rounds) || 0 };
+    return out;
+  } catch { return null; }
+}
+
 /** Parse ?game= / ?song= / ?video= into one narrowing, or null. */
 export function onlyOf(params) {
   for (const kind of ['game', 'song', 'video']) {

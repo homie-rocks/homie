@@ -208,6 +208,8 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       },
       // studio.json `stats.share`: the site tells the directory two numbers for the hub (played this week).
       ...(studio.stats?.share === true ? { stats: { share: true }, directory: studio.homie?.directory ?? 'https://homie.rocks' } : {}),
+      // studio.json `"rooms": { "share": false }`: the manifest names no rooms, so the hub shows none of this studio's.
+      ...(studio.rooms?.share === false ? { rooms: { share: false } } : {}),
     },
     games: rows,
     songs: media.songs,

@@ -20,7 +20,10 @@
  *   /<game>/__net?room=        the room's netplay socket (Table Durable Object)
  *   /<game>/__watch?room=      the room's facts, for the shell
  *   /<game>/api/lobby          which public room to join (Lobby Durable Object)
- *   /api/games, /api/rooms     the catalogue plus live counts; every public room playing now
+ *   /api/games, /api/rooms     the catalogue plus live counts; every public room playing now (/api/rooms may be
+ *                              cached for 15 s)
+ *   /__homie/..., /<game>/__homie/...   `not-a-homie`: the answer a game with Homie's arcade controls gets when it
+ *                              knocks for a Homie box, so it stops knocking (a studio site is not a box)
  *   /.well-known/homie-studio.json   what the homie.rocks directory reads
  *   /media/<key>               the studio's large media, from R2 (once `storage add` bound it), with byte ranges
  *   /api/stats                 the studio's numbers, for its owner only (a read key, or the owner's page session)
@@ -49,10 +52,10 @@ import { ROOM_ID, badRoomPage, frameAncestors, playPage } from './pages.mjs';
 import { qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
 import {
-  SITE_JS, atomFeed, creditsPage, customPage, gameLanding, gamesPage, homePage, jsonFeed, mediaIndexPage, notFoundPage,
-  postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage,
+  SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homePage, jsonFeed, mediaArt, mediaIndexPage,
+  notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage,
 } from './site.mjs';
-import { count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
+import { count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
 import { ownerRoutes } from './stats-page.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 
@@ -163,16 +166,32 @@ async function mediaObject(request, env, key) {
   return new Response(obj.body, { headers });
 }
 
-/** A catalogue media row as the directory reads it (absolute addresses). */
-function mediaRow(e, origin, kind) {
+/**
+ * A catalogue media row as the directory reads it (absolute addresses). A song's cover (a video's poster) is its
+ * own, else the manifest's default, else the landing still of the game it was made for (site.mjs mediaArt).
+ */
+function mediaRow(e, origin, kind, cat) {
   const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u ?? null);
   const main = (e.files ?? []).find((f) => f.role === (kind === 'music' ? 'audio' : 'video'));
-  const art = (e.files ?? []).find((f) => f.role === (kind === 'music' ? 'cover' : 'poster'));
   return {
     slug: e.slug, kind: e.kind, title: e.title, blurb: e.blurb ?? '', duration: e.duration ?? null,
-    page: `${origin}/${kind}/${e.slug}/`, [kind === 'music' ? 'audio' : 'video']: abs(main?.url), [kind === 'music' ? 'cover' : 'poster']: abs(art?.url),
+    page: `${origin}/${kind}/${e.slug}/`, [kind === 'music' ? 'audio' : 'video']: abs(main?.url), [kind === 'music' ? 'cover' : 'poster']: abs(mediaArt(e, kind, cat)),
     credits: e.credits ?? null, rights: e.rights ?? null, for: e.for ?? null,
   };
+}
+
+/**
+ * THE ARCADE KNOCK, ANSWERED AT THE ROOT. A game made with Homie's arcade controls (@homie-rocks/arcade, and the
+ * older builds of it that Homie's own games carry) asks its page's own origin for a Homie box with a GET on
+ * /__homie/call, and a score goes there as a POST. The game's frame is /<game>/__game/, so that absolute path lands
+ * on the site's ROOT, not under the game. `not-a-homie` (JSON, CORS-open, because the frame is an opaque origin) makes the knock stop for
+ * good and refuses a call in words; it answers 200, so no browser logs a failed load for it, and a studio needs no
+ * wrapper Worker of its own for this. A preflight (a POST's content-type) is answered too.
+ */
+const KNOCK_CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' };
+function notAHomie(request) {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...KNOCK_CORS, 'cache-control': 'no-store' } });
+  return json({ ok: false, error: 'not-a-homie', message: 'this is a studio site, not a Homie box; a game here plays on its own' }, 200, KNOCK_CORS);
 }
 
 /** The game's index.html with HOMIE_NET ahead of its modules, in the site's sandbox (an opaque origin). */
@@ -287,6 +306,7 @@ async function route(request, env, ctx) {
   const getCat = () => (catP ??= catalogue(env, url.origin));
 
   if (path.startsWith('/_studio/')) return ownerRoutes(request, env, url, { catalogueOf: getCat });
+  if (path === '/__homie' || path.startsWith('/__homie/')) return notAHomie(request);
   if (path === '/_homie/site.js') return new Response(SITE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   if (path === '/api/stats/beat' && request.method === 'POST') return mediaBeat(request, env, ctx, url);
   if (path === '/api/stats') {
@@ -304,7 +324,10 @@ async function route(request, env, ctx) {
   }
   if (path === '/.well-known/homie-studio.json') {
     const cat = await getCat();
-    const played = cat.studio?.stats?.share ? await playedThisWeek(env) : null;
+    const sharing = Boolean(cat.studio?.stats?.share);
+    const [played, byGame] = sharing ? await Promise.all([playedThisWeek(env), playedByGame(env)]) : [null, null];
+    // studio.json `"rooms": { "share": false }` keeps the rooms off the hub: a manifest that names no `rooms` shares none.
+    const shareRooms = cat.studio?.rooms?.share !== false;
     return json({
       v: 1,
       kind: 'homie-studio',
@@ -314,15 +337,21 @@ async function route(request, env, ctx) {
       site: url.origin,
       studio: cat.studio?.version ?? null,
       claim: await claimOf(env),
-      games: (cat.games ?? []).map((g) => ({
-        id: g.id, name: g.name, blurb: g.blurb ?? '', players: g.players ?? null, roundSeconds: g.roundSeconds ?? null,
-        page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play`, cover: g.cover ? `${url.origin}/games/${g.id}/${g.cover}` : null,
-      })),
-      songs: (cat.songs ?? []).map((e) => mediaRow(e, url.origin, 'music')),
-      videos: (cat.videos ?? []).map((e) => mediaRow(e, url.origin, 'videos')),
+      games: (cat.games ?? []).map((g) => {
+        // The card picture is the landing's hero still (what the landing leads with), else the game's cover.
+        const cover = gameCover(g);
+        return {
+          id: g.id, name: g.name, blurb: g.blurb ?? '', players: g.players ?? null, roundSeconds: g.roundSeconds ?? null,
+          page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play`, cover: cover ? (cover.startsWith('/') ? `${url.origin}${cover}` : cover) : null,
+          // Shared only with `stats.share`: this game's own Play presses and rounds with people, this week.
+          ...(byGame ? { played: byGame[g.id] ?? { days: 7, plays: 0, rounds: 0 } } : {}),
+        };
+      }),
+      songs: (cat.songs ?? []).map((e) => mediaRow(e, url.origin, 'music', cat)),
+      videos: (cat.videos ?? []).map((e) => mediaRow(e, url.origin, 'videos', cat)),
       // The studio's posts, for the hub (the full text is in /posts/feed.json).
       posts: (cat.posts ?? []).slice(0, 20).map((p) => ({ slug: p.slug, title: p.title, date: p.date, summary: p.summary, page: `${url.origin}/posts/${p.slug}/`, image: p.image ? (p.image.startsWith('/') ? `${url.origin}${p.image}` : p.image) : null, links: p.links ?? {} })),
-      rooms: `${url.origin}/api/rooms`,
+      ...(shareRooms ? { rooms: `${url.origin}/api/rooms` } : {}),
       // Shared only when studio.json says `stats.share`: two numbers for the whole studio, for the hub.
       ...(played ? { played } : {}),
     }, 200, { 'access-control-allow-origin': '*' });
@@ -334,7 +363,9 @@ async function route(request, env, ctx) {
   if (path === '/api/rooms') {
     const cat = await getCat();
     const { rooms } = await roomsOf(env, cat.games ?? []);
-    return json({ ok: true, playing: rooms.reduce((n, r) => n + r.players, 0), rooms }, 200, { 'access-control-allow-origin': '*' });
+    // Short-lived and cacheable: the hub reads every studio's rooms at most every 45 s, and a room's count is a
+    // few seconds stale at worst. (The site's own pages ask with cache: 'no-store'.)
+    return json({ ok: true, playing: rooms.reduce((n, r) => n + r.players, 0), rooms }, 200, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=15' });
   }
   if (path.startsWith('/media/')) {
     if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });
@@ -473,10 +504,8 @@ async function route(request, env, ctx) {
       const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}`;
       return stub.fetch(new Request(target, request));
     }
-    if (sub.startsWith('__homie/')) {
-      // A game made with Homie's arcade controls asks here for a Homie host; "not-a-homie" makes it stop asking (the same answer homie.rocks gives).
-      return json({ ok: false, error: 'not-a-homie' }, 200, { 'access-control-allow-origin': '*' });
-    }
+    // The same knock, relative to the game's own page: the same answer (see notAHomie).
+    if (sub === '__homie' || sub.startsWith('__homie/')) return notAHomie(request);
     if (sub === '__game' || sub === '__game/' || sub === '__game/index.html') return gameDocument(request, env, url, game, meta, cat);
     if (sub.startsWith('__game/')) return gameAsset(request, env, url, game, sub.slice('__game/'.length));
   }
