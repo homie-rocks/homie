@@ -164,8 +164,9 @@ repository:
 - **The Homie MCP server** the plugin connects to.
 - **Protected names.** Homie's own games' names are protected: a studio that wants one
   asks with `studio_request_grant`, and only the name's owner can approve it.
-- **Release tarballs.** Until `@homie-rocks/studio` is on the npm registry, a studio pins
-  one release at `https://homie.rocks/npm/homie-studio-<version>.tgz`.
+- **Release tarballs.** homie.rocks serves every published `@homie-rocks/studio` version
+  at `https://homie.rocks/npm/homie-studio-<version>.tgz`, the same bytes as the npm
+  registry's, and that is what a new studio pins.
 
 homie.rocks itself, the Homie app for TVs, phones and places, and Homie's own games (their
 code, art, music and names) are not open source; the engine they are built on is.
@@ -204,25 +205,89 @@ a bug, a port request or a question.
 
 ## This repository
 
+This is where Homie's open parts are developed: the plugin, `@homie-rocks/studio` and
+the engine packages. Every change lands here as a pull request, and a `release-*` tag
+publishes the packages to npm. Homie's own apps, homie.rocks and Homie's games use them
+from npm, pinned exactly, like any studio.
+
 | Path | What it is |
 | --- | --- |
 | `.claude-plugin/marketplace.json` | The plugin marketplace for Claude Code. |
 | `.agents/plugins/marketplace.json` | The plugin marketplace for Codex. |
-| `plugins/homie/` | The Homie plugin: its skills and its MCP server configuration. |
+| `plugins/homie/` | The Homie plugin: its skills, its MCP server configuration and its tests. |
 | `packages/studio/` | `@homie-rocks/studio`: the `homie-studio` CLI, the studio's site Worker, the netplay contract (`netplay/NETPLAY.md`), its game helper (`@homie-rocks/studio/netplay`), the relay (`worker/room.mjs`) and the Gem Rush starter. |
 | `packages/<engine package>/` | The game engine packages above, one folder each. |
-| `scripts/publish.mjs`, `.github/workflows/publish.yml` | How the packages reach npm: trusted publishing on a `release-*` tag, with provenance. |
+| `scripts/audit.mjs` | The leak audit CI runs on every pull request. |
+| `scripts/publish.mjs`, `.github/workflows/publish.yml`, `scripts/first-publish.sh` | How the packages reach npm: trusted publishing on a `release-*` tag, with provenance. |
+| `.github/workflows/ci.yml` | CI: every package's tests on Node 22 and 24, the plugin's tests and `claude plugin validate`, and the leak audit. |
 
-To work on it:
+## Develop
+
+Node.js 22 or later. The media skills' tests need ffmpeg, and two of them Chrome.
 
 ```sh
-npm install
-npm run build         # every package, in dependency order (tsc --build)
-npm test
-npm run validate      # claude plugin validate, for the marketplace and the plugin
+npm ci                # every workspace: packages/studio and the engine packages
+npm run build         # tsc --build: each engine package after the packages it references
+npm test              # the build, then every package's tests and the repository's own
+npm run test:plugin   # the plugin's skills, against stand-ins for their providers (no account, no money)
+npm run validate      # claude plugin validate: the marketplace and the plugin
+npm run leaks         # the leak audit of what your next commit would hold
+npm run release:check # what a release would publish, and whether a package changed since its version shipped
 ```
 
-This repository is a one-way copy of the open parts of Homie's development repository.
+**Workspaces.** `packages/studio` and every engine package are npm workspaces, so a
+package imports another by its published name (`@homie-rocks/render/caps.js`) and gets
+this checkout's copy, and a game or a studio you link to this checkout does too. The
+packages pin each other exactly: when one changes, the packages that depend on it pin
+its new version.
+
+**Tests.** Each engine package's `test/` holds `package.test.mjs`, the contract every
+package keeps (`scripts/test/engine-package.mjs`): its name and licence, its exports map,
+every module built and loading in Node by the package's own name, and every import
+declared and pinned. Behaviour tests go beside it as `packages/<name>/test/*.test.mjs`
+(`node:test`). `packages/studio/test` runs the CLI, the site Worker, the relay and the
+Lobby against stand-ins for Wrangler and Cloudflare. `plugins/homie/test` runs the media
+skills against stand-ins for ElevenLabs and fal, and checks the plugin's manifests agree.
+
+**The dev relay.** Public rooms run in the studio's own Worker: the `Table` Durable
+Object is the netplay relay (`packages/studio/worker/room.mjs`) and the `Lobby` puts
+strangers in the same room. `homie-studio dev` runs all of it on your computer with
+Wrangler's local mode, with no Cloudflare account. To try a change to the studio, the
+relay or the starter, point a scratch studio at this checkout:
+
+```sh
+node packages/studio/bin/homie-studio.mjs new ../scratch-studio --name "Scratch" --no-install
+cd ../scratch-studio
+npm install && npm install -D ../homie/packages/studio   # this checkout's @homie-rocks/studio, linked
+npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
+npx homie-studio dev          # the site, the relay and the Lobby at http://127.0.0.1:8787
+npx homie-studio check crown-thief --url http://127.0.0.1:8787   # two browsers share a room and finish a round
+npx homie-studio dev --stop   # this studio's dev server only
+```
+
+(`../homie` is this checkout.) Open `http://127.0.0.1:8787/crown-thief/` in two browser
+windows, or a computer and a phone on the same network, to play against yourself.
+`packages/studio/netplay/NETPLAY.md` is the contract a game keeps.
+
+**Releasing.** A published version never changes. Give each package you changed a new
+`version` (and bump the exact pins of the packages that depend on it), merge, then tag:
+
+```sh
+git tag release-YYYY-MM-DD && git push origin release-YYYY-MM-DD
+```
+
+`.github/workflows/publish.yml` builds, tests and audits the tagged commit, then publishes
+every package whose version is not on npm yet, with provenance; it refuses a package that
+changed since its version was published. A package that is not on npm at all is published
+once by a maintainer with `scripts/first-publish.sh`, because trusted publishing can only
+add versions to a package that exists.
+
+**The leak audit.** Nothing private goes into this repository: `scripts/audit.mjs` fails a
+home path, an email address other than the security contact, a key or account id, the old
+`@homie/` scope, a placeholder, and the maintainers' private terms (names and private
+projects, which live in a repository secret and are never printed). CI runs it on every
+pull request, over the tree and every commit the pull request adds.
+
 Contributions come in under Apache-2.0 with a DCO sign-off (`git commit -s`), and no
 CLA: [CONTRIBUTING.md](CONTRIBUTING.md) says how a change gets in. To report a
 vulnerability, see [SECURITY.md](SECURITY.md).

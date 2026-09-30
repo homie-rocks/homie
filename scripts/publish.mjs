@@ -6,6 +6,8 @@
  * provenance.
  *
  *   node scripts/publish.mjs --check      verify, and print what a release would publish (reads npm)
+ *   node scripts/publish.mjs --check --strict   the same, and fail when a package differs from its
+ *                                         version on npm (a change that was never given a version)
  *   node scripts/publish.mjs --dry-run    npm publish --dry-run for each package that would go out
  *   node scripts/publish.mjs              publish (GitHub Actions only)
  *
@@ -14,13 +16,18 @@
  *   - no dependency names a Homie package under another scope;
  *   - every @homie-rocks dependency is an EXACT version (x.y.z), and it is the version of
  *     that package in this repository, so one commit always names one consistent set;
+ *   - a published version never changes: a package whose version is on npm must pack the
+ *     same files as npm's tarball of it (compared file by file, after a build). A change
+ *     ships as a new version; the release refuses one that would silently not ship;
  *   - in GitHub Actions, every package already exists on npm. Trusted publishing can only
  *     publish a new VERSION: npm lets a package name a trusted publisher only once the
  *     package exists. A brand-new package is published once by a maintainer, who then
  *     registers this workflow as its trusted publisher; from then on it releases here.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,6 +35,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const CHECK = args.includes('--check');
 const DRY = args.includes('--dry-run');
+const STRICT = args.includes('--strict') || (!CHECK && !DRY);
 const EXACT = /^\d+\.\d+\.\d+$/;
 const inCI = process.env.GITHUB_ACTIONS === 'true';
 
@@ -83,9 +91,38 @@ const plan = order.map((name) => {
   const exists = onNpm(name);
   return { name, dir, version: pj.version, exists, published: exists && onNpm(`${name}@${pj.version}`) };
 });
-for (const p of plan) process.stdout.write(`${p.published ? 'on npm     ' : p.exists ? 'NEW VERSION' : 'NEW PACKAGE'} ${p.name}@${p.version}\n`);
+// 3b. A version on npm must be what this checkout packs, file by file.
+const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
+const filesOf = (dir) => {
+  const out = new Map();
+  const walk = (rel) => { for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) { const r = rel ? `${rel}/${e.name}` : e.name; if (e.isDirectory()) walk(r); else out.set(r, sha(join(dir, r))); } };
+  walk('');
+  return out;
+};
+const unpack = (tgz, into) => { mkdirSync(into, { recursive: true }); const r = spawnSync('tar', ['-xzf', tgz, '-C', into]); if (r.status !== 0) fail(`could not unpack ${tgz}`); return filesOf(join(into, 'package')); };
+const scratch = mkdtempSync(join(tmpdir(), 'homie-publish-check-'));
+for (const d of ['mine', 'npm']) mkdirSync(join(scratch, d));
+try {
+  for (const p of plan.filter((x) => x.published)) {
+    const mine = npm(['pack', '--workspace', p.dir, '--pack-destination', join(scratch, 'mine'), '--json', '--ignore-scripts'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const theirs = npm(['pack', `${p.name}@${p.version}`, '--pack-destination', join(scratch, 'npm'), '--json'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    if (mine.status !== 0 || theirs.status !== 0) fail(`could not pack ${p.name}@${p.version} here or from npm: ${(mine.stderr || theirs.stderr).trim().split('\n')[0]}`);
+    const a = unpack(join(scratch, 'mine', JSON.parse(mine.stdout)[0].filename), join(scratch, 'a', p.dir));
+    const b = unpack(join(scratch, 'npm', JSON.parse(theirs.stdout)[0].filename), join(scratch, 'b', p.dir));
+    const differ = [...new Set([...a.keys(), ...b.keys()])].filter((f) => a.get(f) !== b.get(f)).sort();
+    p.changed = differ;
+  }
+} finally { rmSync(scratch, { recursive: true, force: true }); }
+
+for (const p of plan) {
+  const state = p.changed?.length ? 'CHANGED    ' : p.published ? 'on npm     ' : p.exists ? 'NEW VERSION' : 'NEW PACKAGE';
+  const why = p.changed?.length ? ` (differs from npm in ${p.changed.length} file(s): ${p.changed.slice(0, 4).join(', ')}${p.changed.length > 4 ? ', ...' : ''}; give it a new version to release it)` : '';
+  process.stdout.write(`${state} ${p.name}@${p.version}${why}\n`);
+}
 const todo = plan.filter((p) => !p.published);
-process.stdout.write(`${todo.length} to publish, ${plan.length - todo.length} already on npm\n`);
+const changed = plan.filter((p) => p.changed?.length);
+process.stdout.write(`${todo.length} to publish, ${plan.length - todo.length} already on npm${changed.length ? `, ${changed.length} changed since their version was published` : ''}\n`);
+if (STRICT && changed.length) fail(`nothing was published: ${changed.map((p) => `${p.name}@${p.version}`).join(', ')} changed since that version was published. A published version never changes: bump the version (and the exact pins of the packages that depend on it).`);
 if (CHECK) process.exit(0);
 
 // 4. Publish.

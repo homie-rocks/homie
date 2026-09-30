@@ -5,19 +5,22 @@ contract, the Gem Rush starter, and the plugin's skills.
 
 ## How a change gets in
 
-This repository is a one-way copy of the open parts of Homie's development repository.
-A pull request is reviewed here. Once it is accepted, it is applied to the development
-repository with your authorship and your `Signed-off-by` line kept, and it comes back
-here with the next sync. The pull request is then closed.
+This repository is where Homie's open parts are developed. A pull request is reviewed
+and merged here, and ships to npm with the next release (a `release-*` tag). Homie's own
+apps and games pick up a release by pinning its new version, like any studio.
 
 Before you open one:
 
-- run `npm install && npm test`, and `npm run validate` if you changed the plugin or a
-  marketplace file;
+- run `npm ci && npm test`; `npm run test:plugin` and `npm run validate` if you changed
+  the plugin or a marketplace file; and `npm run leaks`. CI runs all of them, on Node 22
+  and 24, and a pull request merges when they pass;
 - keep the change small, and say what you saw: the command you ran and what it printed;
 - an engine package's public modules are its API: a change that breaks a caller needs a
-  new minor version while the packages are 0.x, and the packages that depend on it are
-  bumped with it (they pin each other exactly);
+  new minor version while the packages are 0.x, and the packages that depend on it pin
+  the new version (they pin each other exactly);
+- a published version never changes: a change to a package ships as a new `version`.
+  You can leave the bump to the maintainers; `npm run release:check` shows which
+  packages changed since their version shipped;
 - the netplay wire protocol is versioned: a change that a v1 client cannot ignore needs
   `v: 2` (see `packages/studio/netplay/NETPLAY.md`);
 - never put a key, token or password in an issue, a pull request or a test.

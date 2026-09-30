@@ -1,0 +1,88 @@
+# Every pull request and every push to main: the packages build and pass their tests,
+# the plugin validates and passes its tests, and the leak audit passes on the tree and
+# on every commit the change adds. Releases are publish.yml (a release-* tag).
+#
+# The leak audit's private terms (names and private projects that must never appear
+# here) come from the repository secret HOMIE_AUDIT_TERMS; the maintainers set it, and
+# the audit prints a hit as "private term #n (kind)", never the term. A pull request
+# from a fork gets no secrets, so there the audit runs its public checks and says so;
+# the maintainers' own branches and main require the terms.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packages:
+    name: Packages (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Build every package and run every package's tests
+        run: npm test
+      - name: What a release would publish (and the rules it checks)
+        run: node scripts/publish.mjs --check
+
+  plugin:
+    name: Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: ffmpeg (the media skills' tests render and measure real files)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: npm ci
+      - name: The plugin's tests
+        run: npm run test:plugin
+      - name: claude plugin validate (the marketplace and the plugin)
+        run: |
+          npx -y @anthropic-ai/claude-code@2.1.285 plugin validate .
+          npx -y @anthropic-ai/claude-code@2.1.285 plugin validate plugins/homie
+
+  leaks:
+    name: Leak audit
+    runs-on: ubuntu-latest
+    env:
+      HOMIE_AUDIT_TERMS: ${{ secrets.HOMIE_AUDIT_TERMS }}
+      # Required wherever the secret is available: a push here, or a pull request from this repository.
+      REQUIRE_TERMS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '--require-terms' || '' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: The tree
+        run: node scripts/audit.mjs $REQUIRE_TERMS
+      - name: Every commit this change adds (its files, author and message)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="origin/${{ github.base_ref }}..HEAD^2"
+          elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            range="${{ github.event.before }}..${{ github.sha }}"
+          else
+            range="${{ github.sha }}"
+          fi
+          node scripts/audit.mjs --history "$range" $REQUIRE_TERMS
