@@ -16,16 +16,10 @@
  * the game's autopilot) is still that person. When no round counts, the result says which seat was missing from
  * each finished round and whether that browser lost its connection, instead of only "no round finished".
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { cpus, loadavg, tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-const CHROMES = [
-  process.env.CHROME_PATH,
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-].filter(Boolean);
+import { SOFTWARE_GL, chromeArgs, findChrome, measureFrames, noChrome } from './chrome.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -63,8 +57,8 @@ export function judgeRounds(browsers, missed = new Map()) {
 
 export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, shots = null, userAgentTag = 'homie-studio-check', log = () => {}, report = null }) {
   if (!url || !game) throw new Error('usage: homie-studio check <game> --url <site url>');
-  const chrome = CHROMES.find((p) => existsSync(p));
-  if (!chrome) return { ok: false, command: 'check', why: 'no Chrome found (set CHROME_PATH)' };
+  const chrome = findChrome();
+  if (!chrome) return { ok: false, command: 'check', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'check', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   const base = String(url).replace(/\/+$/, '');
@@ -101,7 +95,7 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
       profiles.push(profile);
       const browser = await puppeteer.launch({
         executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, protocolTimeout: 180_000,
-        args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
+        args: [...chromeArgs(), '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
       });
       browsers.push(browser);
       const page = await browser.newPage();
@@ -157,6 +151,12 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
     if (shots) for (const [i, p] of players.entries()) await p.page.screenshot({ path: join(shots, `${kinds[i].name}-playing.png`) }).catch(() => {});
     await sleep(1500);
     await picture('Playing: computer and phone in one room');
+    // How fast each browser draws the game while it plays (reported, never judged: a VM without a GPU draws
+    // with SwiftShader, which is not a person's frame rate).
+    const frames = await Promise.all(players.map((p) => measureFrames(p.page)));
+    const software = frames.some((f) => f.renderer && SOFTWARE_GL.test(f.renderer));
+    const drawn = frames.map((f, i) => `${kinds[i].name} ${f.fps ?? '?'} fps`).join(', ');
+    log(`drawing: ${drawn}${frames[0]?.renderer ? ` (${frames[0].renderer})` : ''}`);
     // Only a round that finishes AFTER both browsers were seated, seen by both, with BOTH of them in its results,
     // counts: an idle room remembers its last round for a while, and that stale result proves nothing. A browser is
     // in a round when a row carries a seat it held (a reconnect keeps its seat; a game may still mark an idle
@@ -202,7 +202,7 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
       return { ok: false, command: 'check', why, play, room: seated[0].room, seated, missed: misses, connection, load, totalMs: Date.now() - started };
     }
     const humans = hit.people;
-    step('round', humans >= 2 ? 'pass' : 'fail', { ms: Math.max(...hit.overMs), note: `round ${hit.n}: ${humans} people, ${hit.results.length - humans} bots${missed.size ? ` (after ${missed.size} round(s) without both)` : ''}` });
+    step('round', humans >= 2 ? 'pass' : 'fail', { ms: Math.max(...hit.overMs), note: `round ${hit.n}: ${humans} people, ${hit.results.length - humans} bot${hit.results.length - humans === 1 ? '' : 's'}${missed.size ? ` (after ${missed.size} round(s) without both)` : ''}; ${drawn}${software ? ' (software GL: not measurable here)' : ''}` });
     await picture(`Round ${hit.n} finished with both; the next one is on`);
     return {
       ok: sameRoom && humans >= 2,
@@ -213,6 +213,8 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
       round: { n: hit.n, humans, bots: hit.results.length - humans, results: hit.results, overMs: hit.overMs },
       ...(missed.size ? { missed: [...missed.values()] } : {}),
       connection,
+      frames: frames.map((f, i) => ({ browser: kinds[i].name, fps: f.fps, renderer: f.renderer })),
+      ...(software ? { software: 'This machine has no GPU (WebGL is SwiftShader): seats, rooms and rounds are measured; the frame rate is not a person\'s.' } : {}),
       why: humans >= 2 ? undefined : `the round's results list ${humans} person(s); both browsers should be in it`,
       totalMs: Date.now() - started,
     };

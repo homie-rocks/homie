@@ -90,9 +90,71 @@ async function postsOf(env, origin) {
   } catch { return []; }
 }
 
-async function claimOf(env) {
+/*
+ * THE SITE CLAIMS ITSELF IN THE DIRECTORY (0.9.0). The homie.rocks directory lists a studio only when its site
+ * serves the claim the directory handed out for that exact address, which proves the studio controls the site.
+ * Before 0.9.0 `homie-studio deploy` fetched the claim and stored it in D1 from the person's computer; a site built
+ * by Cloudflare's Workers Builds has no such step. So the site asks for its own claim the first time its manifest
+ * is read (by the directory publishing it, or `deploy` reading it once), for the address it is being read at, and
+ * keeps it in its D1 (`meta`, `homie_claim:<origin>`).
+ *
+ * It never asks from a Preview (HOMIE_PREVIEW: a Preview is a branch under review, not the studio), from a studio
+ * whose studio.json says `homie.directory: false`, or without its D1. A directory that does not answer is asked
+ * again at most once a minute per address; the page answers without a claim meanwhile.
+ */
+const CLAIM = /^[a-f0-9]{16,128}$/;
+const claimed = new Map();
+const claimMissed = new Map();
+
+async function storedClaim(env, origin) {
   if (!env.DB) return null;
-  try { return (await env.DB.prepare('SELECT value FROM meta WHERE key = ?').bind('homie_claim').first())?.value ?? null; } catch { return null; }
+  try {
+    const rows = (await env.DB.prepare('SELECT key, value FROM meta WHERE key IN (?1, ?2)').bind(`homie_claim:${origin}`, 'homie_claim').all()).results ?? [];
+    return { own: rows.find((r) => r.key === `homie_claim:${origin}`)?.value ?? null, older: rows.find((r) => r.key === 'homie_claim')?.value ?? null };
+  } catch { return null; }
+}
+
+export function directoryOf(cat) {
+  const d = cat?.studio?.directory;
+  if (d === null || d === false) return null;
+  const at = String(d ?? 'https://homie.rocks').replace(/\/+$/, '');
+  try {
+    const u = new URL(at);
+    return u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(u.hostname)) ? u.origin : null;
+  } catch { return null; }
+}
+
+/** This address's claim: kept, else asked of the directory now (and kept), else an older studio's single claim. */
+async function claimOf(env, cat, url) {
+  const origin = url.origin;
+  if (claimed.has(origin)) return claimed.get(origin);
+  const kept = await storedClaim(env, origin);
+  if (kept?.own) { claimed.set(origin, kept.own); return kept.own; }
+  const directory = directoryOf(cat);
+  const local = url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname);
+  const may = directory && env.DB && env.HOMIE_PREVIEW !== '1' && (url.protocol === 'https:' || (local && directory.startsWith('http://')))
+    && Date.now() - (claimMissed.get(origin) ?? 0) > 60_000;
+  if (may) {
+    try {
+      const res = await fetch(`${directory}/api/studio/claim?site=${encodeURIComponent(origin)}`, {
+        headers: { accept: 'application/json', 'user-agent': `homie-studio/${STUDIO_VERSION_TAG} (site claim)` }, signal: AbortSignal.timeout(5000),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && CLAIM.test(String(body?.claim ?? ''))) {
+        await env.DB.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)').bind(`homie_claim:${origin}`, body.claim).run();
+        claimed.set(origin, body.claim);
+        return body.claim;
+      }
+    } catch { /* the directory is optional for a live site */ }
+    claimMissed.set(origin, Date.now());
+  }
+  return kept?.older ?? null;
+}
+
+/** A copy of the public template nobody has named yet shows the name typed into Cloudflare's form (STUDIO_NAME). */
+function named(cat, env) {
+  if (!cat?.studio?.template || !env.STUDIO_NAME) return cat;
+  return { ...cat, studio: { ...cat.studio, name: String(env.STUDIO_NAME).slice(0, 60) } };
 }
 
 /** Every public room with people in it, per game (the Lobby's list), and the number playing per game. */
@@ -303,8 +365,14 @@ async function route(request, env, ctx) {
   const parts = path.split('/').filter(Boolean);
   const read = request.method === 'GET' || request.method === 'HEAD';
   let catP = null;
-  const getCat = () => (catP ??= catalogue(env, url.origin));
+  const getCat = () => (catP ??= catalogue(env, url.origin).then((cat) => named(cat, env)));
 
+  // "Connect to Claude" (the template's first-run band): the directory's setup page, for this site's address.
+  if (path === '/_studio/connect' && read) {
+    const directory = directoryOf(await getCat());
+    if (!directory || env.HOMIE_PREVIEW === '1') return json({ ok: false, error: 'no-directory', message: 'This studio is not connected to a directory.' }, 404);
+    return Response.redirect(`${directory}/studio/setup/connect?site=${encodeURIComponent(url.origin)}`, 302);
+  }
   if (path.startsWith('/_studio/')) return ownerRoutes(request, env, url, { catalogueOf: getCat });
   if (path === '/__homie' || path.startsWith('/__homie/')) return notAHomie(request);
   if (path === '/_homie/site.js') return new Response(SITE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
@@ -336,7 +404,10 @@ async function route(request, env, ctx) {
       ...(cat.studio?.tagline ? { tagline: cat.studio.tagline } : {}),
       site: url.origin,
       studio: cat.studio?.version ?? null,
-      claim: await claimOf(env),
+      claim: await claimOf(env, cat, url),
+      // What is deployed: the commit, when, and the marks of the newest changes (a merged pull request is live when
+      // its mark is here). A Preview says it is one.
+      ...(cat.studio?.build ? { build: { commit: cat.studio.build.commit ?? null, branch: cat.studio.build.branch ?? null, at: cat.studio.build.at ?? null, changes: (cat.studio.build.changes ?? []).slice(0, 50), ...(env.HOMIE_PREVIEW === '1' ? { preview: true } : {}) } } : {}),
       games: (cat.games ?? []).map((g) => {
         // The card picture is the landing's hero still (what the landing leads with), else the game's cover.
         const cover = gameCover(g);

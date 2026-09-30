@@ -29,20 +29,14 @@
  * Exit 0 only when every row passed.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { chromeArgs, findChrome, noChrome } from './chrome.mjs';
 
-const CHROMES = [
-  process.env.CHROME_PATH,
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-].filter(Boolean);
 const GPU = [
-  ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []),
-  '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+  ...chromeArgs(), '--autoplay-policy=no-user-gesture-required',
   '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
   '--no-first-run', '--no-default-browser-check',
 ];
@@ -396,8 +390,8 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
   if (!url || !game) throw new Error('usage: homie-studio port check <game> --url <site>');
   const base = String(url).replace(/\/+$/, '');
   const want = new Set((only ? String(only).split(',') : ALL).map((s) => s.trim()).filter(Boolean));
-  const exe = CHROMES.find((p) => existsSync(p));
-  if (!exe) return { ok: false, command: 'port check', why: 'no Chrome found (set CHROME_PATH)' };
+  const exe = findChrome();
+  if (!exe) return { ok: false, command: 'port check', why: noChrome() };
   const req = createRequire(join(root ?? process.cwd(), 'package.json'));
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { try { puppeteer = req('puppeteer-core'); } catch { return { ok: false, command: 'port check', why: 'puppeteer-core is missing (it comes with @homie-rocks/studio: npm install)' }; } }

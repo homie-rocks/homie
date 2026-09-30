@@ -82,6 +82,34 @@ export function sourceOf(dir, id) {
   return { v: 1, kind: 'homie-game-source', id, files };
 }
 
+/*
+ * WHAT THIS BUILD IS, for the site's manifest: the commit and branch (Cloudflare's Workers Builds names them in
+ * WORKERS_CI_COMMIT_SHA and WORKERS_CI_BRANCH; elsewhere git is asked), when it was built, and the marks of the
+ * newest changes in changes/ (lib/progress.mjs recordChange), so the Claude app's card can tell when a merged pull
+ * request is live. Nothing here names a person or an account.
+ */
+export function buildInfo(root) {
+  const git = (args) => { try { const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', timeout: 5000 }); return r.status === 0 ? r.stdout.trim() : null; } catch { return null; } };
+  const commit = /^[a-f0-9]{40}$/.test(process.env.WORKERS_CI_COMMIT_SHA ?? '') ? process.env.WORKERS_CI_COMMIT_SHA : git(['rev-parse', 'HEAD']);
+  const branch = String(process.env.WORKERS_CI_BRANCH || git(['rev-parse', '--abbrev-ref', 'HEAD']) || '').slice(0, 100) || null;
+  const marks = [];
+  const dir = join(root, 'changes');
+  if (existsSync(dir)) {
+    for (const name of readdirSync(dir).filter((n) => n.endsWith('.json'))) {
+      const c = readJson(join(dir, name));
+      if (c && /^[a-f0-9]{16}$/.test(String(c.change)) && !Number.isNaN(Date.parse(c.at))) marks.push({ mark: c.change, at: c.at });
+    }
+  }
+  marks.sort((a, b) => b.at.localeCompare(a.at));
+  return {
+    commit: /^[a-f0-9]{40}$/.test(String(commit)) ? commit : null,
+    branch: branch && /^[A-Za-z0-9._/-]+$/.test(branch) && branch !== 'HEAD' ? branch : null,
+    at: new Date().toISOString(),
+    ci: process.env.WORKERS_CI === '1' ? 'workers-builds' : null,
+    changes: [...new Set(marks.map((m) => m.mark))].slice(0, 50),
+  };
+}
+
 function readJson(path) {
   try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
 }
@@ -207,9 +235,14 @@ export async function build(root, { only = null, log = () => {} } = {}) {
         ...(Array.isArray(s.frameAncestors) ? { frameAncestors: s.frameAncestors.filter((o) => /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(String(o))).slice(0, 8) } : {}),
       },
       // studio.json `stats.share`: the site tells the directory two numbers for the hub (played this week).
-      ...(studio.stats?.share === true ? { stats: { share: true }, directory: studio.homie?.directory ?? 'https://homie.rocks' } : {}),
+      ...(studio.stats?.share === true ? { stats: { share: true } } : {}),
       // studio.json `"rooms": { "share": false }`: the manifest names no rooms, so the hub shows none of this studio's.
       ...(studio.rooms?.share === false ? { rooms: { share: false } } : {}),
+      // The directory the live site claims itself in (0.10.0); studio.json `homie.directory: false` keeps it out.
+      directory: studio.homie?.directory === false || studio.homie?.directory === null ? null : String(studio.homie?.directory ?? 'https://homie.rocks'),
+      // A copy of the public template that nobody has named yet shows the name typed in Cloudflare's form.
+      ...(studio.template === true ? { template: true } : {}),
+      build: buildInfo(root),
     },
     games: rows,
     songs: media.songs,

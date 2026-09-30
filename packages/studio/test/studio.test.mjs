@@ -19,7 +19,8 @@ const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-const run = (args, cwd, env = {}) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, ...env } });
+// HOMIE_STUDIO_WARM=0: a deploy here never reads its (made-up) live site back.
+const run = (args, cwd, env = {}) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0', ...env } });
 const out = (r) => JSON.parse(r.stdout);
 
 /** A studio whose node_modules point at this package and the repo's esbuild (what npm install gives it). */
@@ -37,17 +38,18 @@ test('new: a studio monorepo in a new folder, every file listed; a non-empty fol
   const dir = join(scratch, 'fresh');
   const made = out(run(['new', dir, '--name', 'Night Owls', '--homie', 'https://homie.test', '--no-install'], scratch));
   assert.equal(made.ok, true);
-  for (const f of ['AGENTS.md', 'CLAUDE.md', 'studio.json', 'package.json', 'site/wrangler.jsonc', 'site/src/worker.mjs', 'site/migrations/0001_studio.sql', 'games/README.md', 'music/manifest.json', 'videos/manifest.json', 'posts/README.md', '.claude/skills/.gitkeep']) {
+  for (const f of ['AGENTS.md', 'CLAUDE.md', 'studio.json', 'package.json', 'wrangler.jsonc', 'site/src/worker.mjs', 'site/migrations/0001_studio.sql', 'games/README.md', 'music/manifest.json', 'videos/manifest.json', 'posts/README.md', '.claude/skills/.gitkeep']) {
     assert.ok(made.wrote.includes(f), `lists ${f}`);
     assert.ok(existsSync(join(dir, f)), `wrote ${f}`);
   }
   assert.match(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), /^@AGENTS\.md$/m, 'CLAUDE.md imports AGENTS.md');
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  assert.match(pkg.devDependencies['@homie-rocks/studio'], /^https:\/\/homie\.test\/npm\/homie-studio-\d+\.\d+\.\d+\.tgz$/, 'pinned to one tarball');
+  assert.match(pkg.devDependencies['@homie-rocks/studio'], /^\d+\.\d+\.\d+$/, 'pinned to one version, from registry.npmjs.org');
   assert.match(pkg.devDependencies.wrangler, /^\d+\.\d+\.\d+$/, 'wrangler pinned exactly');
   const s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
   assert.deepEqual([s.slug, s.cloudflare.worker, s.cloudflare.d1, s.cloudflare.r2], ['night-owls', 'night-owls', 'night-owls-db', null], 'no storage until storage add');
-  const wrangler = readFileSync(join(dir, 'site/wrangler.jsonc'), 'utf8');
+  assert.ok(!existsSync(join(dir, 'site/wrangler.jsonc')), 'the Worker config is at the root, where Workers Builds reads it');
+  const wrangler = readFileSync(join(dir, 'wrangler.jsonc'), 'utf8');
   assert.doesNotMatch(wrangler, /r2_buckets/, 'a new studio binds no R2');
   assert.match(wrangler, /new_sqlite_classes/, 'SQLite-backed Durable Objects (the free plan has no other kind)');
   assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /storage add/, 'AGENTS.md says how storage is added later');
@@ -215,7 +217,7 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   assert.match(done.announced.join(' '), /will store the site's address/);
   assert.deepEqual(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).announced, [], 'a redeploy creates nothing new and says nothing');
   assert.ok(!account.calls().some((c) => c.startsWith('r2')), `no r2 call: ${account.calls().join(' | ')}`);
-  const wrangler = readFileSync(join(dir, 'site/wrangler.jsonc'), 'utf8');
+  const wrangler = readFileSync(join(dir, 'wrangler.jsonc'), 'utf8');
   assert.doesNotMatch(wrangler, /r2_buckets/);
   assert.match(wrangler, /22222222-2222-2222-2222-222222222222/, 'the D1 id is filled in');
   const s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
@@ -242,7 +244,7 @@ test('the workers.dev address never goes into studio.json (it names the account)
     out(run(['game', 'new', 'crown-thief'], dir));
     noCardAccount(dir);
     const runAsync = (args) => new Promise((resolve) => {
-      const p = spawn(process.execPath, [CLI, ...args, '--json'], { cwd: dir });
+      const p = spawn(process.execPath, [CLI, ...args, '--json'], { cwd: dir, env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
       let stdout = '';
       p.stdout.on('data', (d) => { stdout += d; });
       p.on('close', () => resolve(JSON.parse(stdout)));
@@ -254,7 +256,7 @@ test('the workers.dev address never goes into studio.json (it names the account)
     assert.doesNotMatch(committed, /workers\.dev/, 'studio.json never names the account');
     assert.equal(JSON.parse(readFileSync(join(dir, '.studio', 'local.json'), 'utf8')).url, 'https://test-studio.acct.workers.dev');
     assert.equal(spawnSync('git', ['check-ignore', '-q', '.studio/local.json'], { cwd: dir }).status, 0, 'git leaves .studio/ out');
-    assert.deepEqual(asked.claim, ['https://test-studio.acct.workers.dev'], 'the claim is for the only address there is');
+    assert.deepEqual(asked.claim, [], 'deploy stores no claim by hand: the live site claims itself when it is first read');
     assert.equal((await runAsync(['publish', '--homie', homie])).ok, true);
     assert.deepEqual(asked.publish, ['https://test-studio.acct.workers.dev']);
     // The studio gets its own domain: it stays in studio.json, deploy never replaces it, claim and publish use it.
@@ -267,7 +269,7 @@ test('the workers.dev address never goes into studio.json (it names the account)
     const kept = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
     assert.equal(kept.cloudflare.domain, 'owls.example');
     assert.doesNotMatch(JSON.stringify(kept), /workers\.dev/);
-    assert.equal(asked.claim.at(-1), 'https://owls.example');
+    assert.deepEqual(asked.claim, []);
     assert.equal((await runAsync(['publish', '--homie', homie])).ok, true);
     assert.equal(asked.publish.at(-1), 'https://owls.example');
     // A studio from 0.5.0 committed its workers.dev address as cloudflare.url: the next deploy moves it out.
@@ -318,7 +320,7 @@ test('storage add: refused with the dashboard link on an account without R2 (not
   s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
   assert.equal(s.cloudflare.r2, 'test-studio-media');
   assert.ok(s.cloudflare.created.includes('r2:test-studio-media'));
-  assert.match(readFileSync(join(dir, 'site/wrangler.jsonc'), 'utf8'), /"bucket_name": "test-studio-media"/);
+  assert.match(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8'), /"bucket_name": "test-studio-media"/);
   const again = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
   assert.equal(again.r2, 'test-studio-media');
   assert.ok(account.calls().includes('r2 bucket create test-studio-media'));
@@ -337,7 +339,7 @@ test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and
   const devProc = spawn(process.execPath, [CLI, 'dev', '--port', '18989'], { cwd: dir, stdio: 'ignore' });
   const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
   try {
-    const file = join(dir, 'site', '.wrangler', 'homie-dev.json');
+    const file = join(dir, '.wrangler', 'homie-dev.json');
     for (let i = 0; i < 150 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 100));
     const rec = JSON.parse(readFileSync(file, 'utf8'));
     assert.equal(rec.pid, devProc.pid);

@@ -55,6 +55,32 @@ follows the build by itself (stages, each check going green, a preview, spend, S
 commands below report into it. If a command answers `stopped`, the person pressed Stop:
 end there and ask before starting again.
 
+**Started from the Claude app** (a Claude Code session whose prompt came from a "Build it"
+card, naming a build `hb_…` and maybe a setup `hs_…`): the chat already opened the build, so
+take it instead of starting one, then work on a branch and publish as a pull request:
+
+```sh
+npm install                                            # the studio's pinned toolkit, from registry.npmjs.org
+npx --no-install homie-studio setup attach hs_…        # only when the prompt names a setup: once, first
+npx --no-install homie-studio progress attach hb_…     # this session takes the chat's build (once)
+npx --no-install homie-studio chrome install           # Linux without Chrome: Chrome for Testing, once
+# … make the game, build, dev, check (below) …
+npx --no-install homie-studio progress change "<what the change does, one line>"
+git switch -c <short-branch> && git add -A && git commit -m "<what it does>" && git push -u origin HEAD
+gh pr create --fill
+npx --no-install homie-studio progress pr --url <the pull request's address>
+```
+
+The card's Publish button opens the pull request for the person; their merge in GitHub is
+the approval. Workers Builds deploys the branch as a Preview (run `check --url <the Preview
+URL>` when the pull request shows it, and pass it as `progress pr --preview`) and `main`
+after the merge; the card says Live by itself. Never merge the pull request yourself. If
+the toolkit says the environment's network does not reach homie.rocks, tell the person
+that one setting (in claude.ai/code: the environment's Network access, Custom, add
+`homie.rocks`) and go on: the build works with its local feed. On Linux without a GPU,
+`check` measures seats, rooms and rounds; its frame rate is SwiftShader's, not a person's:
+say so rather than calling the game slow.
+
 ```sh
 npm run build                                          # fix every error it names
 npm run dev                                            # in the background: http://127.0.0.1:8787/<id>/play

@@ -25,40 +25,62 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { STUDIO_VERSION, packageSpec } from './version.mjs';
 import { STATS_MIGRATION, STATS_MIGRATION_FILE } from '../worker/stats.mjs';
 import { themeFile } from './site.mjs';
+import { PACKAGE_ROOT } from './studio.mjs';
 
 export const COMPAT_DATE = '2026-06-01';
-export const WRANGLER_VERSION = '4.126.0';
+/** 4.135.0 or later: Worker Previews (`wrangler preview`, a Durable Object namespace per Preview). */
+export const WRANGLER_VERSION = '4.145.0';
 
 export function slugify(name) {
   return String(name ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '') || 'studio';
 }
 
-/** The Worker config, generated so a later deploy can rewrite exactly what it owns. */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null }) {
+/*
+ * The Worker config, generated so a later deploy can rewrite exactly what it owns.
+ *
+ * `layout: 'root'` (every studio from 0.9.0) keeps it at the studio's root, where Cloudflare's Workers Builds and
+ * the "Deploy to Cloudflare" button look for it; `'site'` is the older site/wrangler.jsonc.
+ *
+ * PREVIEWS (Cloudflare Worker Previews, Wrangler 4.135.0+): a branch deploys with `npx wrangler preview` (Workers
+ * Builds does it on every push that is not to the production branch) to its own URL, and Cloudflare gives every
+ * Preview its OWN Durable Object namespace, so a Preview's public rooms never meet production's. The `previews`
+ * block binds the same Table and Lobby classes and names the Preview (HOMIE_PREVIEW). It binds no D1 on purpose:
+ * a Preview counts nothing into the studio's stats, records no rounds and never claims itself in the directory;
+ * its pages and rooms work without it.
+ *
+ * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
+ * the binding names and keep it linked.
+ */
+export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root' }) {
+  const at = layout === 'site' ? { schema: '../node_modules', main: 'src/worker.mjs', dist: './dist', migrations: 'migrations' }
+    : { schema: 'node_modules', main: 'site/src/worker.mjs', dist: './site/dist', migrations: 'site/migrations' };
+  const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
   const config = {
-    $schema: '../node_modules/wrangler/config-schema.json',
+    $schema: `${at.schema}/wrangler/config-schema.json`,
     name: worker,
-    main: 'src/worker.mjs',
+    main: at.main,
     compatibility_date: COMPAT_DATE,
     workers_dev: true,
-    preview_urls: false,
-    assets: { directory: './dist', binding: 'ASSETS', run_worker_first: true },
-    durable_objects: { bindings: [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }] },
+    preview_urls: true,
+    assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
+    durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }],
-    d1_databases: [{ binding: 'DB', database_name: d1, ...(d1Id ? { database_id: d1Id } : {}), migrations_dir: 'migrations' }],
+    d1_databases: [{ binding: 'DB', database_name: d1, ...(d1Id ? { database_id: d1Id } : {}), migrations_dir: at.migrations }],
     ...(r2 ? { r2_buckets: [{ binding: 'MEDIA', bucket_name: r2 }] } : {}),
     vars: { STUDIO_NAME: name },
     observability: { enabled: true },
+    previews: { vars: { STUDIO_NAME: name, HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
   };
-  return `// This studio's site on its own Cloudflare account (written by homie-studio; \`homie-studio deploy\`
-// fills in the D1 id). Everything here runs on Cloudflare's Workers Free plan. There is no R2 binding
+  return `// This studio's site on its own Cloudflare account (written by homie-studio). Everything here runs on
+// Cloudflare's Workers Free plan. \`npm run deploy\` (on this computer, or in Workers Builds) puts it live;
+// \`npx wrangler preview\` puts a branch on its own Preview URL with its own rooms. There is no R2 binding
 // until \`homie-studio storage add\` gives the studio storage for large media.
 ${JSON.stringify(config, null, 2)}
 `;
 }
 
-function agentsMd({ name, slug }) {
+export function agentsMd({ name, slug }) {
   return `# ${name}
 
 This folder is a studio: **${name}** (\`${slug}\`). It is one repository.
@@ -75,7 +97,9 @@ directory lists its games; homie.rocks does not host them.
 | \`games/<id>/\` | One game: \`game.json\` (id, name, blurb, players, round length), \`index.html\`, \`src/main.ts\`. |
 | \`music/\`, \`videos/\` | Songs, scores, loops; trailers, music videos, cutscenes. \`manifest.json\` lists each one (\`node_modules/@homie-rocks/studio/media/MEDIA.md\`); a published entry gets a page at \`/music/<slug>/\` or \`/videos/<slug>/\`, served from the site itself (files up to 25 MiB) or, for larger media, from the studio's storage once it has storage (see below; \`npx --no-install homie-studio media put <file>\`). Large files never go into git. The Homie plugin's \`music\` and \`video\` skills make them. |
 | \`posts/\` | The studio's news and drops: one markdown file each (\`posts/2026-09-30-we-are-live.md\`: \`title:\`, \`date:\`, \`summary:\`, and \`game:\` / \`song:\` / \`video:\` to link one). They are the site's Posts, with Atom and JSON feeds. |
-| \`site/\` | The studio's site: its look (\`theme.json\`), and anything of its own that wins over the generated pages (\`site/README.md\`); the Worker (\`src/worker.mjs\`), D1 migrations, \`wrangler.jsonc\`. |
+| \`site/\` | The studio's site: its look (\`theme.json\`), and anything of its own that wins over the generated pages (\`site/README.md\`); the Worker (\`src/worker.mjs\`) and its D1 migrations. |
+| \`wrangler.jsonc\` | The Worker's Cloudflare config (the Worker, D1, the Table and Lobby Durable Objects, and \`previews\` for branch Previews). It sits at the root, where Cloudflare's Workers Builds reads it. |
+| \`changes/\` | One small file per change that went out through a pull request (\`homie-studio progress pr\` writes it): the site lists the newest, so the Claude app can tell when a merged change is live. |
 | \`studio.json\` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. \`.studio/\` (git-ignored) is this computer's own state. |
 | \`.claude/skills/\` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |
 
@@ -103,6 +127,11 @@ studio's pinned copy, never a registry lookup of the bare name.
   SQLite-backed Durable Objects, all on the free Workers plan (no payment method needed).
   If Wrangler is not signed in, run \`npx wrangler login\`: the person approves once in
   their browser. It never overwrites a Worker or database this studio did not create.
+- **Workers Builds** (Cloudflare's own CI, set up by the "Deploy to Cloudflare" button or in the dashboard): on
+  every push to \`main\` it runs \`npm run build\` and \`npm run deploy\`, which in Workers Builds only applies
+  the D1 migrations and deploys (it never creates or refuses anything); on every other branch it runs
+  \`npm run build\` and \`npx wrangler preview\`, a Preview URL with its own rooms. The live site claims itself
+  in the homie.rocks directory the first time it is read, so nothing is stored by hand.
 - \`npx --no-install homie-studio storage add\` — only when the studio needs large media (songs,
   videos): an R2 bucket for \`media put\`, served at \`/media/<key>\`. Cloudflare asks for a
   payment method on the account before R2 works (its first 10 GB a month are free), so this
@@ -186,7 +215,7 @@ Claude-only notes go below this line. -->
 `;
 }
 
-function readme({ name }) {
+export function readme({ name }) {
   return `# ${name}
 
 A game studio made with [Homie](https://homie.rocks). Open this folder in Claude Code or Codex
@@ -249,7 +278,7 @@ anything here wins. The whole list is in \`node_modules/@homie-rocks/studio/site
 | \`pages/<path>/index.html\` | A whole page at \`/<path>/\`, instead of the generated one (\`pages/<id>/index.html\` replaces a game's landing) or beside them (\`pages/about/index.html\`). It may borrow \`<!-- homie:style -->\`, \`<!-- homie:header -->\`, \`<!-- homie:footer -->\`, \`<!-- homie:script -->\`. |
 | \`public/\` | Files served as they are, at the same path (\`public/fonts/x.woff2\` is \`/fonts/x.woff2\`). |
 
-\`src/worker.mjs\`, \`migrations/\` and \`wrangler.jsonc\` are the Worker; \`dist/\` is the build (not committed).
+\`src/worker.mjs\` and \`migrations/\` are the Worker (its config is \`wrangler.jsonc\`, at the studio's root); \`dist/\` is the build (not committed).
 `;
 
 const GITIGNORE = `node_modules/
@@ -278,10 +307,13 @@ videos/**/*.webm
 `;
 
 /** Every file a new studio gets, relative to its folder. */
-export function studioFiles({ name, slug, homie }) {
+export function studioFiles({ name, slug, homie, template = false }) {
   const worker = slug;
   const studio = {
     name, slug,
+    // A copy of the public template (Deploy to Cloudflare) until `homie-studio setup attach` names it for real:
+    // meanwhile its site shows the name the person typed in Cloudflare's form (STUDIO_NAME).
+    ...(template ? { template: true } : {}),
     homie: { studio: STUDIO_VERSION, directory: homie },
     // r2 stays null until `homie-studio storage add`: a new studio deploys with no R2 at all.
     // `domain`: the studio's own domain once it has one (e.g. "night-owls.example"). The workers.dev address never
@@ -297,11 +329,20 @@ export function studioFiles({ name, slug, homie }) {
     type: 'module',
     scripts: { dev: 'homie-studio dev', build: 'homie-studio build', deploy: 'homie-studio deploy', check: 'homie-studio check', studio: 'homie-studio' },
     devDependencies: { '@homie-rocks/studio': packageSpec(homie), wrangler: WRANGLER_VERSION },
+    // What Cloudflare's "Deploy to Cloudflare" form says about each setting (package.json `cloudflare.bindings`).
+    cloudflare: {
+      label: 'Homie studio',
+      products: ['Workers', 'D1', 'Durable Objects'],
+      bindings: {
+        STUDIO_NAME: { description: 'Your studio\'s name, as its site shows it (for example **Night Owls**). Claude can change it later.' },
+        DB: { description: 'The studio\'s own database: finished rounds, the studio\'s own stats (counts, never a visitor) and its claim in the [homie.rocks](https://homie.rocks/studios/) directory. Free plan.' },
+      },
+    },
   };
-  return {
+  const files = {
     'AGENTS.md': agentsMd({ name, slug }),
     'CLAUDE.md': claudeMd(),
-    'README.md': readme({ name }),
+    'README.md': template ? templateReadme() : readme({ name }),
     'studio.json': `${JSON.stringify(studio, null, 2)}\n`,
     'package.json': `${JSON.stringify(pkg, null, 2)}\n`,
     '.gitignore': GITIGNORE,
@@ -319,9 +360,61 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
 `,
     'site/migrations/0001_studio.sql': MIGRATION,
     [`site/migrations/${STATS_MIGRATION_FILE}`]: STATS_MIGRATION,
-    'site/wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2 }),
+    'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
   };
+  if (template) {
+    // A first game, so the site plays the moment Cloudflare deploys it; and a band on Home that connects the new
+    // studio to the Claude chat that set it up (`setup attach` removes both once Claude works in the studio).
+    for (const [rel, text] of starterFiles('gem-rush')) files[`games/gem-rush/${rel}`] = text;
+    files['site/partials/home.html'] = CONNECT_BAND;
+  }
+  return files;
+}
+
+/** A starter's files, as text, relative to its folder. */
+function starterFiles(id) {
+  const dir = join(PACKAGE_ROOT, 'starters', id);
+  const out = [];
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(dir, rel), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const path = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(path);
+      else out.push([path, readFileSync(join(dir, path), 'utf8')]);
+    }
+  };
+  walk('');
+  return out;
+}
+
+/** The template's first-run band on Home: one link that connects this studio to the Claude chat that set it up. */
+export const CONNECT_BAND = `<!-- A new studio from the Homie template. This band goes away once Claude works in the studio
+     (homie-studio setup attach removes it); delete it by hand any time. -->
+<div class="band-in" style="text-align:center">
+  <p class="kicker">New studio</p>
+  <h2>{{studio.name}} is live</h2>
+  <p>It runs on your own Cloudflare account. Connect it to the Claude chat that set it up, and Claude takes it from here.</p>
+  <p><a class="btn" href="/_studio/connect">Connect to Claude</a></p>
+</div>
+`;
+
+export function templateReadme() {
+  return `# A Homie studio
+
+This repository is a game studio made with [Homie](https://homie.rocks): its games, music, videos and posts,
+and a site with public multiplayer rooms that runs on **your own Cloudflare account**, on the free plan.
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/homie-rocks/homie/tree/main/template)
+
+The button copies this studio into your GitHub, creates its Worker, database and rooms on your Cloudflare, and
+deploys it with Workers Builds: every push to \`main\` goes live, and every other branch gets its own Preview.
+The site plays a first game the moment it is up.
+
+Then open the site and tap **Connect to Claude**, or ask Claude in the Claude app to set up your studio with the
+Homie connector: it makes games, songs and videos here, in a pull request you merge with one tap.
+
+\`AGENTS.md\` says how everything here works.
+`;
 }
 
 /**
@@ -352,7 +445,7 @@ function insideGit(dir) {
   try { return execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() === 'true'; } catch { return false; }
 }
 
-export function newStudio(folder, { name, homie, slug: askedSlug, install = true } = {}) {
+export function newStudio(folder, { name, homie, slug: askedSlug, install = true, template = false } = {}) {
   if (typeof folder !== 'string' || !folder.trim()) throw new Error('name the folder for the new studio, e.g. `homie-studio new ~/studios/night-owls --name "Night Owls"`. Nothing was written.');
   if (!name || !String(name).trim()) throw new Error('give the studio a name: --name "Night Owls". Nothing was written.');
   const dir = resolve(folder.replace(/^~(?=\/|$)/, homedir()));
@@ -367,7 +460,7 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
     if (entries.length) throw new Error(`${real} is not empty (${entries.slice(0, 5).join(', ')}${entries.length > 5 ? ', …' : ''}). A new studio goes in a new or empty folder. Nothing was written.`);
   }
   const slug = slugify(askedSlug || name);
-  const files = studioFiles({ name: String(name).trim(), slug, homie: homie || 'https://homie.rocks' });
+  const files = studioFiles({ name: String(name).trim(), slug, homie: homie || 'https://homie.rocks', template });
   mkdirSync(dir, { recursive: true });
   const wrote = [];
   for (const [rel, content] of Object.entries(files)) {

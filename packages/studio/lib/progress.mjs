@@ -34,12 +34,24 @@
  *     stop: { requested, at, by },
  *     song?: { peaks: [0..1], lyrics: [{ line, sung: true|false|null }] },
  *     video?: { shots: [{ id, label, state, image }] },
+ *     change?: { url, number, title, repo, branch, state: open|merged|closed, files, additions, deletions, preview, mark, at },
+ *     site?: the studio's live address (for the Claude app's card to tell when a merged change is live),
  *     log: [{ at, text }], error, shared?: { build, directory } }
+ *
+ * A BUILD OPENED IN THE CHAT (`build_open`, the Claude app's "Build it" card): the chat gets the build id first
+ * and shows its card; the Claude Code session that does the work attaches to it ONCE with
+ * `progress attach <hb_…>`, and the directory hands the write key to that first attach only. No key ever travels
+ * in a prompt; a second attach is refused.
+ *
+ * A CHANGE THAT GOES OUT AS A PULL REQUEST: `progress change "<what it does>"` writes changes/<date>-<mark>.json
+ * (committed with the change; the site lists the newest marks in its manifest), and `progress pr --url <pr>` puts
+ * the pull request on the card, whose Publish button opens it in GitHub for the person's one-tap merge. When the
+ * live site lists the change's mark, Workers Builds has deployed it: the card says Live by itself.
  */
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import { readStudio } from './studio.mjs';
+import { readStudio, siteUrl } from './studio.mjs';
 
 export const PROGRESS_KIND = 'homie-studio-progress';
 export const PROGRESS_DIR = join('.studio', 'progress');
@@ -71,6 +83,23 @@ const docPath = (root, id) => join(dir(root), `${id}.json`);
 const keyPath = (root, id) => join(dir(root), `${id}.key`);
 const currentPath = (root) => join(dir(root), 'current');
 const loopback = (url) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
+
+/*
+ * A CLAUDE CODE CLOUD SESSION ON THE DEFAULT NETWORK. Its "Trusted" network reaches package registries and GitHub,
+ * not homie.rocks: the session's proxy answers 403 with `x-deny-reason: host_not_allowed`. Say which setting lets
+ * the card follow the build, instead of "did not answer"; the build itself goes on with its local feed.
+ */
+export function networkWhy(res, at) {
+  if (res?.status === 403 && /host_not_allowed/i.test(res.headers?.get?.('x-deny-reason') ?? '')) {
+    let host = at;
+    try { host = new URL(at).host; } catch { /* as given */ }
+    return `this Claude Code cloud environment's network does not reach ${host}. In claude.ai/code, open the environment's settings, set Network access to Custom, add ${host} (keep "Also include default list of common package managers"), and start a new session; until then the build goes on with its local feed only`;
+  }
+  return null;
+}
+
+/** A change's mark: what the site lists once the change is live. It names the build without being able to read it. */
+export const changeMark = (build) => createHash('sha256').update(`homie-change\n${build}`).digest('hex').slice(0, 16);
 
 function writeAtomic(file, text) {
   const tmp = `${file}.${process.pid}.${randomBytes(3).toString('hex')}.tmp`;
@@ -120,6 +149,11 @@ async function pushDoc(root, id) {
     body: JSON.stringify({ ...body, build: shared.build }),
     signal: AbortSignal.timeout(8000),
   });
+  const blocked = networkWhy(res, shared.directory);
+  if (blocked) {
+    mutateDoc(root, id, (d) => { d.shared = { ...d.shared, ended: true }; pushLog(d, `The Claude app cannot follow this build: ${blocked}`); });
+    return null;
+  }
   if (res.status === 404 || res.status === 410) {
     // The shared copy ended (24 hours, or the directory dropped it): keep the local feed, stop sending.
     mutateDoc(root, id, (d) => { d.shared = { ...d.shared, ended: true }; });
@@ -309,6 +343,31 @@ export class Feed {
     });
   }
 
+  /** The pull request this build's change went out as: the card's Publish button opens it for the person's merge. */
+  pr({ url, number, title, repo, branch, state = 'open', files, additions, deletions, preview } = {}) {
+    let u;
+    try { u = new URL(String(url ?? '')); } catch { throw new Error('--url is the pull request\'s https://github.com/<owner>/<repo>/pull/<n> address'); }
+    const m = /^\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})\/pull\/(\d{1,7})\/?$/.exec(u.pathname);
+    if (u.protocol !== 'https:' || u.hostname !== 'github.com' || !m) throw new Error('--url is the pull request\'s https://github.com/<owner>/<repo>/pull/<n> address');
+    if (!['open', 'merged', 'closed'].includes(state)) throw new Error('a pull request is open, merged or closed');
+    const count = (n) => (n === undefined || n === null || n === true ? null : Number.isFinite(Number(n)) && Number(n) >= 0 ? Math.round(Number(n)) : null);
+    return this.change((doc) => {
+      const before = doc.change ?? {};
+      doc.change = {
+        url: `https://github.com/${m[1]}/${m[2]}/pull/${m[3]}`, number: Number(m[3]), repo: `${m[1]}/${m[2]}`,
+        title: plain(title ?? before.title ?? doc.title, LIMITS.title), branch: branch ? plain(branch, 100) : before.branch ?? null, state,
+        files: count(files) ?? before.files ?? null, additions: count(additions) ?? before.additions ?? null, deletions: count(deletions) ?? before.deletions ?? null,
+        preview: preview ? String(preview).slice(0, 300) : before.preview ?? null, mark: before.mark ?? null, at: now(),
+      };
+      const deploy = doc.stages.find((s) => s.id === 'deploy' || s.id === 'publish');
+      if (deploy && state === 'open' && deploy.state === 'pending') { deploy.state = 'running'; deploy.startedAt = now(); deploy.note = 'Waiting for the merge: Publish on the card opens the pull request'; doc.stage = deploy.id; }
+      pushLog(doc, `Pull request #${m[3]} ${state}`);
+    }, { soon: true });
+  }
+
+  /** The studio's live address, so the card can read the site's own manifest for the change once it is merged. */
+  site(url) { return this.change((doc) => { doc.site = url ? String(url).slice(0, 200) : null; }); }
+
   stopRequested() { return Boolean(this.doc?.stop?.requested); }
 
   /**
@@ -362,7 +421,9 @@ export function publicFeed(doc) {
  * Open a feed for one build. `share` asks the studio's directory (studio.json `homie.directory`, or `directory`)
  * to keep a copy for the Claude app's widget; if it cannot, the build goes on with the local feed only.
  */
-export async function startProgress(root, { what = 'game', id, title, budget, unit, share = false, directory } = {}) {
+export async function startProgress(root, { what = 'game', id, title, budget, unit, share = false, directory, attach = null } = {}) {
+  if (attach !== null && !REMOTE_ID.test(String(attach))) return { ok: false, command: 'progress attach', why: 'attach to the build id the Claude app showed: hb_ and 32 hex digits' };
+  if (attach) share = true;
   if (!STAGES[what]) return { ok: false, command: 'progress start', why: `what is being made: ${Object.keys(STAGES).join(', ')}` };
   if (id !== undefined && id !== null && !SLUG.test(String(id))) return { ok: false, command: 'progress start', why: 'the id is the game, song or video id (lowercase letters, digits and hyphens)' };
   const studio = readStudio(root);
@@ -384,6 +445,9 @@ export async function startProgress(root, { what = 'game', id, title, budget, un
     log: [{ at: now(), text: `Started: ${plain(title || id || what, 100)}` }],
     error: null,
   };
+  let live = null;
+  try { live = siteUrl(root, studio); } catch { live = null; }
+  if (live && /^https:\/\//.test(live)) doc.site = live.slice(0, 200);
   mkdirSync(dir(root), { recursive: true });
   writeAtomic(docPath(root, build), `${JSON.stringify(doc, null, 1)}\n`);
   writeAtomic(currentPath(root), `${build}\n`);
@@ -394,12 +458,16 @@ export async function startProgress(root, { what = 'game', id, title, budget, un
     if (!/^https:\/\//.test(at) && !(/^http:\/\//.test(at) && loopback(at))) why = `the directory ${at} is not https`;
     else {
       try {
-        const res = await fetch(`${at}/api/studio/progress`, {
+        // A build the chat opened is attached (once); otherwise a new one is opened here.
+        const res = await fetch(attach ? `${at}/api/studio/progress/${attach}/attach` : `${at}/api/studio/progress`, {
           method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'homie-studio' },
           body: JSON.stringify({ what, id: id ?? null, title: doc.title, studio: doc.studio }), signal: AbortSignal.timeout(10_000),
         });
         const body = await res.json().catch(() => null);
-        if (res.ok && body?.ok && REMOTE_ID.test(String(body.build)) && /^hbk_[a-f0-9]{48}$/.test(String(body.key))) {
+        if (!res.ok && networkWhy(res, at)) why = networkWhy(res, at);
+        else if (res.ok && body?.ok && REMOTE_ID.test(String(body.build)) && /^hbk_[a-f0-9]{48}$/.test(String(body.key))) {
+          // The chat named the build: its title is the one the person saw.
+          if (attach && body.title && !title) mutateDoc(root, build, (d) => { d.title = plain(body.title, LIMITS.title); });
           writeFileSync(keyPath(root, build), `${body.key}\n`, { mode: 0o600 });
           try { chmodSync(keyPath(root, build), 0o600); } catch { /* not on this filesystem */ }
           shared = { build: body.build, directory: at, expiresAt: body.expiresAt ?? null };
@@ -410,11 +478,45 @@ export async function startProgress(root, { what = 'game', id, title, budget, un
       } catch (error) { why = `${at} did not answer (${error?.message ?? error})`; }
     }
   }
+  if (attach && !shared) {
+    // Attaching is the point of `progress attach`: without it, say why and leave no open feed behind.
+    rmSync(docPath(root, build), { force: true });
+    rmSync(currentPath(root), { force: true });
+    return { ok: false, command: 'progress attach', build: attach, why: `could not attach to ${attach}: ${why}` };
+  }
   return {
-    ok: true, command: 'progress start', build, file: join(PROGRESS_DIR, `${build}.json`), what, id: id ?? null, title: doc.title,
+    ok: true, command: attach ? 'progress attach' : 'progress start', build, file: join(PROGRESS_DIR, `${build}.json`), what, id: id ?? null, title: readFeed(root, build)?.title ?? doc.title,
     stages: doc.stages.map((s) => s.id), budget: doc.spend.budget, unit: doc.spend.unit,
     shared: shared ? { build: shared.build, directory: shared.directory, expiresAt: shared.expiresAt } : null,
     ...(share && !shared ? { sharedWhy: `not shared: ${why}; the feed is local only` } : {}),
     widget: shared ? `In the Claude app: call the Homie MCP tool build_progress with { "build": "${shared.build}" }` : null,
   };
 }
+
+/**
+ * `progress change "<what it does>"`: the change's mark, as a small file the change commits (changes/<date>-<mark>.json).
+ * `homie-studio build` lists the newest marks in the site's manifest; when the live site lists this one, the change
+ * is deployed, and the Claude app's card says so. Returns the file, relative to the studio.
+ */
+export function recordChange(root, id, title) {
+  const doc = readFeed(root, id);
+  if (!doc) throw new Error('no build is open: start or attach one first');
+  const mark = changeMark(doc.shared?.build ?? doc.build);
+  const folder = join(root, 'changes');
+  mkdirSync(folder, { recursive: true });
+  if (!existsSync(join(folder, 'README.md'))) writeFileSync(join(folder, 'README.md'), CHANGES_README);
+  const rel = join('changes', `${now().slice(0, 10)}-${mark.slice(0, 8)}.json`);
+  const text = `${JSON.stringify({ v: 1, change: mark, title: plain(title || doc.title, LIMITS.title), at: now() }, null, 2)}\n`;
+  writeFileSync(join(root, rel), text);
+  mutateDoc(root, id, (d) => { d.change = { ...(d.change ?? {}), mark }; pushLog(d, `Change recorded: ${plain(title || doc.title, 100)}`); });
+  schedule(root, id, { soon: true });
+  return { file: rel, mark };
+}
+
+export const CHANGES_README = `# changes/
+
+One small file per change this studio made through a pull request, written by \`homie-studio progress change\`:
+what it does, when, and its mark. \`npm run build\` lists the newest marks in the site's
+\`/.well-known/homie-studio.json\`, so the Claude app's card can tell when a merged change is live. Nothing in
+here is secret; old files may be deleted.
+`;

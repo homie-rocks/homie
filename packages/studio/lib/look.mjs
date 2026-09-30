@@ -7,16 +7,11 @@
  * `--shots` (default .studio/look/), which git ignores. One Chrome, closed at the end; its visits are house QA
  * (the studio's stats leave them out).
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { chromeArgs, findChrome, noChrome } from './chrome.mjs';
 
-const CHROMES = [
-  process.env.CHROME_PATH,
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-].filter(Boolean);
 
 export const LOOK_DEVICES = {
   computer: { width: 1440, height: 900, deviceScaleFactor: 1 },
@@ -29,8 +24,8 @@ const nameOf = (path) => path.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, 
 
 export async function look({ url, paths, shots, devices = Object.keys(LOOK_DEVICES), log = () => {} }) {
   if (!url) return { ok: false, command: 'look', why: 'give --url (the local dev address or the live site)' };
-  const chrome = CHROMES.find((p) => existsSync(p));
-  if (!chrome) return { ok: false, command: 'look', why: 'no Chrome found (set CHROME_PATH)' };
+  const chrome = findChrome();
+  if (!chrome) return { ok: false, command: 'look', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'look', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
   const base = String(url).replace(/\/+$/, '');
@@ -39,7 +34,7 @@ export async function look({ url, paths, shots, devices = Object.keys(LOOK_DEVIC
   // 150 s for Chrome to start: on a loaded computer a cold start has taken over a minute.
   const browser = await puppeteer.launch({
     executablePath: chrome, headless: true, userDataDir: profile, timeout: 150_000, protocolTimeout: 180_000,
-    args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
+    args: [...chromeArgs(), '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check'],
   });
   const rows = [];
   try {

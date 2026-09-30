@@ -60,6 +60,25 @@ jobs:
           npx -y @anthropic-ai/claude-code@2.1.285 plugin validate .
           npx -y @anthropic-ai/claude-code@2.1.285 plugin validate plugins/homie
 
+  studio-linux:
+    # The check a Claude Code cloud session runs, on a Linux VM with no GPU (the closest free stand-in): a studio
+    # from the public template, @homie-rocks/studio from this checkout, Chrome for Testing, `homie-studio dev`, and
+    # the real two-browser check. It prints each browser's frame rate and renderer (SwiftShader here).
+    name: A studio on Linux, no GPU (two browsers finish a round)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: The template is what the toolkit writes
+        run: node scripts/template.mjs --check
+      - name: New studio, dev site, two-browser check
+        run: node scripts/studio-check.mjs
+
   leaks:
     name: Leak audit
     runs-on: ubuntu-latest

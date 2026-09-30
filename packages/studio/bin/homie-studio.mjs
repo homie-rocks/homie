@@ -4,7 +4,8 @@
  * put its site on the studio's own Cloudflare (free plan, no payment method), and
  * list its games in the homie.rocks directory.
  *
- *   homie-studio new <folder> --name "<Studio Name>" [--homie <directory url>] [--no-install]
+ *   homie-studio new <folder> --name "<Studio Name>" [--homie <directory url>] [--no-install] [--template]
+ *                                         (--template: the public "Deploy to Cloudflare" template: a first game and a Connect band)
  *   homie-studio starters
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio game remix <source.json url> --id <new id>
@@ -12,12 +13,15 @@
  *   homie-studio build [<id>]
  *   homie-studio dev [--port 8787]        (--stop: stop exactly this studio's dev server, nothing else)
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
+ *   homie-studio chrome [install]         (which Chrome the checks use; on Linux, `install` fetches Chrome for Testing)
  *   homie-studio look [<path>...] [--url <site>] [--shots <dir>] [--only computer,phone,sideways]
  *                                         (the site's pages on a computer and a phone, as pictures, with what is wrong)
  *   homie-studio port plan <game folder>
  *   homie-studio port import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
  *   homie-studio port check <id> [--url <site>] [--only owner-desk,owner-phone,owner-iphone,round,life,tv] [--shots <dir>]
  *   homie-studio deploy [--plan]          (--plan: what it will create on Cloudflare and what it costs; changes nothing)
+ *                                         In Cloudflare's Workers Builds (WORKERS_CI=1, or --ci) it only applies the D1
+ *                                         migrations and deploys: the Worker and database are the Deploy button's.
  *   homie-studio publish
  *   homie-studio storage add              (large media only: an R2 bucket; needs R2 turned on for the account)
  *   homie-studio media put <file> [--as <key>]
@@ -46,10 +50,17 @@
  *   homie-studio progress log "<one line>"
  *   homie-studio progress stop            (ask the running build to stop at its next safe point)
  *   homie-studio progress end passed|failed|stopped [--note "<one line>"]
+ *   homie-studio progress attach <hb_…>   (the build the Claude app opened with build_open: this session takes it, once)
+ *   homie-studio progress change "<what the change does>"   (its mark in changes/, committed with the change)
+ *   homie-studio progress pr --url <pull request> [--state open|merged|closed] [--files n --additions n --deletions n]
+ *                                         [--preview <Preview URL>]   (the card's Publish opens it for the person's merge)
  *   homie-studio progress show [<build>]
  *                                         While a feed is open, build, check, port check and deploy report
  *                                         into it (stage, each check going green, a preview picture) and stop
  *                                         when asked. Without one, nothing changes.
+ *
+ *   homie-studio setup attach <hs_…>      (this repository is the studio the Claude app's setup card is making: say so, once,
+ *                                          learn its live address, and give a template copy its real name)
  *
  * Every command prints a few lines for a person; --json prints the result.
  */
@@ -58,7 +69,9 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, wr
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { build } from '../lib/build.mjs';
 import { check } from '../lib/check.mjs';
-import { deploy, deployPlan, storageAdd, whoami, wranglerBin } from '../lib/cloudflare.mjs';
+import { ciDeploy, deploy, deployPlan, storageAdd, whoami, wranglerBin } from '../lib/cloudflare.mjs';
+import { setupAttach } from '../lib/setup.mjs';
+import { chromeArgs, findChrome, installChrome, noChrome } from '../lib/chrome.mjs';
 import { publish } from '../lib/directory.mjs';
 import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
@@ -66,14 +79,14 @@ import { portCheck } from '../lib/port-check.mjs';
 import { recordUpload, resolveMedia, typeOf } from '../lib/media.mjs';
 import { ensureStatsMigration, newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
-import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters } from '../lib/studio.mjs';
+import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
-import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, startProgress } from '../lib/progress.mjs';
+import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff'];
+const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -123,10 +136,14 @@ function print(result) {
       }
       break;
     case 'deploy':
+      if (result.ci) {
+        lines.push(`Live: ${result.url ?? '(Wrangler printed no address)'}${result.commit ? ` (commit ${result.commit.slice(0, 7)}${result.branch ? ` on ${result.branch}` : ''})` : ''}`, ...result.steps.map((x) => `  ${x.what}`), ...result.games.map((g) => `  ${g.id}: ${g.play}`));
+        break;
+      }
       lines.push(`Live: ${result.url}`, ...(result.workersDev && result.workersDev !== result.url ? [`  also at ${result.workersDev}`] : []),
         ...(result.local ? [`  (the workers.dev address names your Cloudflare account, so it is kept in ${result.local} on this computer, never in studio.json)`] : []),
         ...result.games.map((g) => `  ${g.id}: ${g.play}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}. All on the free Workers plan${result.r2 ? ' plus R2' : ''}.`,
-        result.claim ? 'Directory claim stored: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim yet (the directory did not answer); publish will try again.');
+        result.claim ? 'The site claimed itself in the directory: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim yet (the site claims itself when the directory first reads it; publish does).');
       break;
     case 'deploy plan':
       lines.push(`What \`npm run deploy\` does for ${result.studio}, on the Cloudflare account the person approves:`, '',
@@ -179,6 +196,10 @@ function print(result) {
     case 'stats share':
       lines.push(result.message);
       break;
+    case 'setup attach':
+      lines.push(result.message, ...(result.site ? [`  live site: ${result.site}`] : []), ...(result.renamed?.length ? ['  changed (commit these on a branch):', ...result.renamed.map((f) => `    ${f}`)] : []), ...(result.next ?? []).map((n) => `  next: ${n}`));
+      break;
+    case 'progress attach':
     case 'progress start':
       lines.push(`Build ${result.build}: ${result.title} (${result.stages.join(' → ')})${result.budget !== null ? `, budget ${result.unit === 'usd' ? `$${result.budget.toFixed(2)}` : `${result.budget} credits`}` : ''}`,
         `  feed: ${result.file}`,
@@ -230,9 +251,15 @@ function print(result) {
       if (result.next?.length) lines.push('', 'Next:', ...result.next.map((n) => `  ${n}`));
       break;
     }
+    case 'chrome':
+    case 'chrome install':
+      lines.push(result.already || result.command === 'chrome' ? `Chrome: ${result.chrome}` : `Installed Chrome for Testing ${result.buildId}: ${result.chrome}`);
+      break;
     case 'check':
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
-        ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`));
+        ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`),
+        ...(result.frames ?? []).map((f) => `  ${f.browser} drew ${f.fps ?? '?'} fps${f.renderer ? ` on ${f.renderer}` : ''}`),
+        ...(result.software ? [`  ${result.software}`] : []));
       break;
     default:
       lines.push(JSON.stringify(result, null, 2));
@@ -248,12 +275,15 @@ async function main() {
     return { ok: true, command: 'help' };
   }
   if (cmd === 'version' || flags.has('version')) return { ok: true, command: 'version', version: STUDIO_VERSION };
-  if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install') });
+  if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install'), template: flags.has('template') });
   if (cmd === 'starters') return { ok: true, command: 'starters', starters: starters() };
 
   if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
+  if (cmd === 'chrome' && sub === 'install') return installChrome({ log });
+  if (cmd === 'chrome') { const chrome = findChrome(); return chrome ? { ok: true, command: 'chrome', chrome, args: chromeArgs() } : { ok: false, command: 'chrome', why: noChrome() }; }
   const root = requireStudio();
   if (cmd === 'progress') return progressCommand(root, sub);
+  if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie') });
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
     const game = positional[2] ?? listGames(root)[0]?.id;
@@ -295,6 +325,8 @@ async function main() {
     return look({ url, paths, shots: flags.get('shots') ? resolve(flags.get('shots')) : join(root, '.studio', 'look'), devices: only, log });
   }
   if (cmd === 'deploy' && flags.has('plan')) return deployPlan(root);
+  // Cloudflare's Workers Builds runs `npm run deploy` with WORKERS_CI=1 (and its own token for this one account).
+  if (cmd === 'deploy' && (process.env.WORKERS_CI === '1' || flags.has('ci'))) return tracked(root, 'deploy', () => ciDeploy(root, { log }), 'deploy');
   if (cmd === 'deploy') return tracked(root, 'deploy', () => deploy(root, { log, homie: flags.get('homie') }), 'deploy');
   if (cmd === 'storage' && sub === 'add') return storageAdd(root, { log });
   if (cmd === 'storage') {
@@ -372,6 +404,12 @@ async function progressCommand(root, sub) {
       budget: flags.get('budget'), unit: flags.get('unit'), share: flags.has('share'), directory: flags.get('homie'),
     });
   }
+  if (sub === 'attach') {
+    return startProgress(root, {
+      attach: arg ?? null, what: flags.get('what') ?? 'game', id: flags.get('id') ?? null, title: flags.get('title'),
+      budget: flags.get('budget'), unit: flags.get('unit'), directory: flags.get('homie'),
+    });
+  }
   if (sub === 'show') {
     const id = arg ?? currentId(root) ?? flags.get('build');
     const doc = readFeed(root, id);
@@ -400,8 +438,10 @@ async function progressCommand(root, sub) {
       }
       case 'log': feed.log(positional.slice(2).join(' ')); return done('logged');
       case 'stop': feed.stop('local'); return done('stop asked: the running command stops at its next safe point');
+      case 'change': { const c = recordChange(root, id, positional.slice(2).join(' ') || flags.get('title')); return { ...done(`change recorded: commit ${c.file} with the change`), file: c.file, mark: c.mark }; }
+      case 'pr': feed.pr({ url: flags.get('url'), state: flags.get('state') ?? 'open', title: flags.get('title'), branch: flags.get('branch'), files: flags.get('files'), additions: flags.get('additions'), deletions: flags.get('deletions'), preview: flags.get('preview') }); return done(`pull request on the card: ${feed.doc.change.url}`);
       case 'end': feed.end(arg, note); return done(`ended: ${arg}`);
-      default: return { ok: false, command: 'progress', why: `unknown: progress ${sub ?? ''} (start, stage, check, preview, spend, shot, song, log, stop, end, show)` };
+      default: return { ok: false, command: 'progress', why: `unknown: progress ${sub ?? ''} (start, attach, stage, check, preview, spend, shot, song, log, change, pr, stop, end, show)` };
     }
   } catch (error) { return { ok: false, command: 'progress', why: error instanceof Error ? error.message : String(error) }; }
 }
@@ -411,7 +451,7 @@ async function progressCommand(root, sub) {
  * and `dev --stop` stops exactly those two (each checked to still be a process of this studio's folder), so an AI
  * never has to reach for `pkill -f "wrangler dev"`, which stops every project's dev server on the machine.
  */
-const devFile = (root) => join(root, 'site', '.wrangler', 'homie-dev.json');
+const devFile = (root) => join(workerDir(root), '.wrangler', 'homie-dev.json');
 function processOfStudio(pid, root, kind) {
   if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return false;
   try { process.kill(pid, 0); } catch { return false; }
@@ -450,11 +490,11 @@ async function dev(root) {
   const added = ensureStatsMigration(root);
   if (added) log(`added ${added} (the studio's own stats)`);
   await new Promise((done) => {
-    const m = spawn(bin, ['d1', 'migrations', 'apply', studio.cloudflare.d1, '--local'], { cwd: join(root, 'site'), env, stdio: ['ignore', 'ignore', 'inherit'] });
+    const m = spawn(bin, ['d1', 'migrations', 'apply', 'DB', '--local'], { cwd: workerDir(root), env, stdio: ['ignore', 'ignore', 'inherit'] });
     m.on('close', done);
   });
   log(`Local site: http://127.0.0.1:${port}/  (each game: http://127.0.0.1:${port}/<id>/play — open it in two browsers)`);
-  const child = spawn(bin, ['dev', '--local', '--ip', '127.0.0.1', '--port', port], { cwd: join(root, 'site'), env, stdio: 'inherit' });
+  const child = spawn(bin, ['dev', '--local', '--ip', '127.0.0.1', '--port', port], { cwd: workerDir(root), env, stdio: 'inherit' });
   mkdirSync(dirname(devFile(root)), { recursive: true });
   writeFileSync(devFile(root), `${JSON.stringify({ pid: process.pid, child: child.pid, port: Number(port), at: new Date().toISOString() })}\n`);
   log(`Stop it with: npx --no-install homie-studio dev --stop   (this studio's dev server only)`);
@@ -477,7 +517,7 @@ function mediaPut(root, file, as) {
   const key = as ?? (/^(music|videos)\//.test(rel) && !rel.includes('..') ? rel : `${folder}/${basename(file)}`);
   const bin = wranglerBin(root);
   return new Promise((done) => {
-    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: join(root, 'site'), env: { ...process.env, CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
+    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: workerDir(root), env: { ...process.env, CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
     p.on('close', (code) => {
       if (code !== 0) return done({ ok: false, command: 'media put', why: 'wrangler r2 object put failed' });
       // The manifest is committed: it names the file by its path on the site, never the workers.dev address.

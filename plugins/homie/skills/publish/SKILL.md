@@ -31,9 +31,11 @@ Before the first deploy, tell the person what it creates and what it costs:
 one D1 database, two SQLite-backed Durable Objects; free on the Workers Free plan; no R2).
 
 `deploy` builds every game, creates the Worker and D1 database named in `studio.json`,
-applies migrations, deploys, and stores the homie.rocks directory claim. It never
-creates R2. It refuses to use a Worker, database or bucket of the same name that this
-studio did not create; then rename it in `studio.json` and `site/wrangler.jsonc`. Never
+applies migrations, deploys, and reads the live site once (the site then claims itself
+in the homie.rocks directory; nothing is stored by hand). It never creates R2. It refuses
+to use a Worker, database or bucket of the same name that this studio did not create;
+then rename it in `studio.json` and `wrangler.jsonc` (an older studio's is
+`site/wrangler.jsonc`). Never
 delete, rename or redeploy anything the studio did not create. When it answers with a
 `needs` step (a new account verifies its email address; an account with no workers.dev
 address picks one), say that step to the person and wait.

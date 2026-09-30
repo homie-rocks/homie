@@ -89,6 +89,32 @@ first used:
 
 All of them need ffmpeg; `video`, `art` and `playtest` also use Chrome.
 
+## From the Claude app, with no terminal
+
+In the Claude app (claude.ai, the desktop app or the phone), add Homie as a connector
+(Settings → Connectors → Add custom connector → `https://homie.rocks/mcp`) and ask for a
+studio. Its cards do the rest, and every approval is one tap on the provider's own page:
+
+1. **The setup card** has three buttons: *Make the studio on Cloudflare* (the Deploy to
+   Cloudflare button below: your GitHub gets the studio's repository, your Cloudflare its
+   Worker, database and rooms, and Workers Builds deploys every push), *Let Claude work in
+   it* (Claude's GitHub app, for that one repository), and an optional media provider. It
+   follows the studio as it comes up.
+2. **"Build it" cards** on a new game, a port or a remix open a Claude Code session on the
+   studio's repository with the brief already written. The chat opens the build first, so
+   its progress card (stages, checks going green, a picture, spend and Stop) is on screen
+   before the session starts.
+3. **The pull request card**: the change goes out as a pull request with its own Preview.
+   *Publish* opens it in GitHub, where your merge is the approval; Workers Builds deploys
+   it, and the card says when it is live.
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/homie-rocks/homie/tree/main/template)
+
+Claude Code cloud sessions need a Pro, Max, Team or Enterprise plan; on the Free plan the
+cards work and your own computer does the building. A cloud session's default network does
+not reach homie.rocks: to see a build's progress, set the session environment's network to
+Custom and add `homie.rocks`.
+
 ## What the studio deploys to your Cloudflare
 
 `npm run deploy` in a studio runs Wrangler under **your** Cloudflare login and creates,
@@ -102,6 +128,12 @@ studio and changes nothing):
 | Durable Object `Table` | one per room | The netplay relay (`worker/room.mjs`): seats, host election, snapshots, keyed state, checkpoints. It runs no game code. |
 | Durable Object `Lobby` | one per game | Puts strangers who press Play into the same public room, and opens the next room when one is full. |
 | D1 database | `<studio>-db` | The directory claim and every finished round. |
+
+From 0.9.0 the Worker's config (`wrangler.jsonc`) sits at the studio's root, so Cloudflare's
+**Workers Builds** can deploy it from GitHub: `npm run build` and `npm run deploy` on the
+production branch, and `npx wrangler preview` on every other branch, which gets a Preview
+URL and its own rooms (a Durable Object namespace of its own). The live site claims itself
+in the homie.rocks directory the first time the directory reads it.
 
 Both Durable Objects are SQLite-backed, which the Workers Free plan supports. There is no
 R2 bucket: a studio needs none to run. Deploy never uses a Worker, database or bucket that
@@ -170,7 +202,8 @@ repository:
   asks with `studio_request_grant`, and only the name's owner can approve it.
 - **Release tarballs.** homie.rocks serves every published `@homie-rocks/studio` version
   at `https://homie.rocks/npm/homie-studio-<version>.tgz`, the same bytes as the npm
-  registry's, and that is what a new studio pins.
+  registry's. Studios made before 0.9.0 pin those; a new studio pins the registry's
+  exact version, which Workers Builds and Claude Code cloud sessions reach by default.
 
 homie.rocks itself, the Homie app for TVs, phones and places, and Homie's own games (their
 code, art, music and names) are not open source; the engine they are built on is.

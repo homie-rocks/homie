@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+/**
+ * The check a Claude Code cloud session runs, on this machine, from nothing: a studio from the public template,
+ * @homie-rocks/studio from this checkout (packed, as npm would install it), Wrangler from the registry, Chrome for
+ * Testing when the machine has none, the site under `homie-studio dev`, and the real two-browser `check` against
+ * it: a computer and a phone press Play, land in the same public room and finish a round.
+ *
+ *   node scripts/studio-check.mjs [--keep] [--port 8799]
+ *
+ * CI runs it on ubuntu-24.04 (no GPU), the closest free stand-in for a cloud session's VM: it prints how fast each
+ * browser drew the game and on which renderer (SwiftShader there), and fails only when the round does not finish.
+ * It writes nothing outside a temporary folder (and Chrome for Testing into .cache/homie-studio in the home folder when needed).
+ */
+import { spawn, spawnSync } from 'node:child_process';
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const keep = process.argv.includes('--keep');
+const port = String(process.argv[process.argv.indexOf('--port') + 1] > 0 ? process.argv[process.argv.indexOf('--port') + 1] : 8799);
+const work = mkdtempSync(join(tmpdir(), 'homie-studio-check-'));
+const studio = join(work, 'my-studio');
+const say = (line) => process.stdout.write(`${line}\n`);
+const sh = (cmd, args, cwd, extra = {}) => {
+  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', env: { ...process.env, npm_config_update_notifier: 'false', ...extra }, maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} failed:\n${(r.stdout ?? '').slice(-2000)}${(r.stderr ?? '').slice(-2000)}`);
+  return r.stdout;
+};
+const cli = join(studio, 'node_modules', '.bin', 'homie-studio');
+let dev = null;
+const started = Date.now();
+try {
+  const tgz = sh('npm', ['pack', '--silent', '--pack-destination', work], join(ROOT, 'packages', 'studio')).trim().split('\n').pop();
+  say(`packed ${tgz}`);
+  sh(process.execPath, [join(ROOT, 'packages', 'studio', 'bin', 'homie-studio.mjs'), 'new', studio, '--name', 'My Studio', '--template', '--no-install'], work);
+  const pkg = JSON.parse(readFileSync(join(studio, 'package.json'), 'utf8'));
+  pkg.devDependencies['@homie-rocks/studio'] = `file:${join(work, tgz)}`;
+  writeFileSync(join(studio, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
+  sh('npm', ['install', '--no-audit', '--no-fund'], studio);
+  say(`installed the studio (wrangler ${pkg.devDependencies.wrangler})`);
+  const chrome = JSON.parse(sh(cli, ['chrome', 'install', '--json'], studio));
+  say(`chrome: ${chrome.chrome}${chrome.already ? '' : ` (Chrome for Testing ${chrome.buildId}, installed)`}`);
+  const env = { CHROME_PATH: chrome.chrome };
+  const built = JSON.parse(sh(cli, ['build', '--json'], studio, env));
+  say(`built: ${built.games.map((g) => `${g.id} ${Math.round(g.bytes / 1024)} KB`).join(', ')}`);
+  dev = spawn(cli, ['dev', '--port', port], { cwd: studio, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: false });
+  dev.stdout.on('data', () => {}); dev.stderr.on('data', () => {});
+  const up = Date.now() + 120_000;
+  for (;;) {
+    try { if ((await fetch(`http://127.0.0.1:${port}/api/games`)).ok) break; } catch { /* not yet */ }
+    if (Date.now() > up) throw new Error('the dev site did not answer within 120 s');
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  say(`dev site up on :${port} after ${Math.round((Date.now() - started) / 1000)} s`);
+  const r = spawnSync(cli, ['check', 'gem-rush', '--url', `http://127.0.0.1:${port}`, '--json'], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
+  const result = JSON.parse(r.stdout || '{}');
+  const lines = [
+    `### A studio on ${process.platform} ${process.arch}, ${result.ok ? 'PASSED' : 'NOT YET'}`,
+    '',
+    result.ok ? `Two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} people, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.` : `Why: ${result.why ?? r.stderr?.slice(-500)}`,
+    ...(result.seats ?? []).map((s) => `- ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`),
+    ...(result.frames ?? []).map((f) => `- ${f.browser} drew **${f.fps ?? '?'} fps** on ${f.renderer ?? 'an unknown renderer'}`),
+    ...(result.software ? [`- ${result.software}`] : []),
+  ];
+  say(lines.join('\n'));
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
+  process.exitCode = result.ok ? 0 : 1;
+} catch (error) {
+  say(String(error?.message ?? error));
+  process.exitCode = 1;
+} finally {
+  if (dev) { try { spawnSync(cli, ['dev', '--stop'], { cwd: studio }); } catch { /* gone */ } try { dev.kill('SIGTERM'); } catch { /* gone */ } }
+  if (!keep) rmSync(work, { recursive: true, force: true });
+  else say(`kept ${work}`);
+}

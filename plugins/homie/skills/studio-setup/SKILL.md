@@ -48,7 +48,7 @@ this for the studio, from `studio.json`, and changes nothing.
    folder that already holds other files, never in the home folder, and never guess a
    folder outside the current directory.
 3. Run the command it returned (it looks like
-   `npx -y --package=https://homie.rocks/npm/homie-studio-<version>.tgz homie-studio new "<folder>" --name "<Name>" --homie https://homie.rocks`).
+   `npx -y @homie-rocks/studio@<version> new "<folder>" --name "<Name>" --homie https://homie.rocks`).
    It lists every file it writes and installs the pinned `@homie-rocks/studio` and `wrangler`
    (about 20 s). Then `cd` into the studio.
 4. From here on run the studio's own copy: `npm run <script>` or
@@ -115,9 +115,10 @@ Cloudflare is checked only now (a studio that never deploys never needs it):
    game's name, blurb and Play link). Then go on; do not wait.
 4. `npm run deploy`. It creates the Worker and the D1 database named in `studio.json`
    (the Durable Objects come with the Worker), applies migrations, deploys, and stores
-   the directory claim. It never creates or binds R2. It refuses to touch anything of
-   the same name it did not create — if it refuses, rename in `studio.json` and
-   `site/wrangler.jsonc` (never delete or overwrite the other resource).
+   reads the live site once, which makes the site claim itself in the directory. It never
+   creates or binds R2. It refuses to touch anything of the same name it did not create —
+   if it refuses, rename in `studio.json` and `wrangler.jsonc` (an older studio's is
+   `site/wrangler.jsonc`; never delete or overwrite the other resource).
    If it answers with a `needs` step, say that step to the person in one line and wait:
    `cloudflare-verify-email` (a new account verifies its email address first),
    `workers-dev-subdomain` (pick a free workers.dev address once, on the link it gives).

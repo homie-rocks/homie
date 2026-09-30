@@ -19,11 +19,11 @@
  * before anything happens and calls nothing.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from './build.mjs';
 import { ensureLocalIgnored, ensureStatsMigration, wranglerConfig } from './scaffold.mjs';
-import { LOCAL_STATE, isWorkersDev, readLocal, readStudio, siteUrl, writeLocal, writeStudio } from './studio.mjs';
+import { LOCAL_STATE, configPath, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 
@@ -36,7 +36,7 @@ export function wranglerBin(root) {
 export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
-  return (args, { cwd = join(root, 'site'), input } = {}) => {
+  return (args, { cwd = workerDir(root), input } = {}) => {
     const res = spawnSync(bin, args, {
       cwd, env: { ...process.env, ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
       input, maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000,
@@ -186,7 +186,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const r2 = cf.r2 && created.has(`r2:${cf.r2}`) ? cf.r2 : null;
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
-  writeFileSync(join(root, 'site', 'wrangler.jsonc'), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2 }));
+  writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root) }));
   const added = ensureStatsMigration(root);
   if (added) step(`added ${added} (the studio's own stats: counts, never tracks)`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
@@ -211,20 +211,14 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const url = siteUrl(root);
   step(`deployed ${cf.worker} in ${Math.round((Date.now() - started) / 1000)} s`, { url, ...(workersDev && workersDev !== url ? { workersDev } : {}) });
 
-  // The homie.rocks directory claim, for the site's public address (its own domain when it has one): the site
-  // serves it, which proves this studio controls the site.
+  // The homie.rocks directory claim: the live site claims itself the first time its manifest is read (0.9.0), so
+  // reading it once now is all it takes; nothing is stored by hand.
   const directory = homie || studio.homie?.directory || 'https://homie.rocks';
   let claim = null;
   if (url) {
-    try {
-      const res = await fetch(`${directory.replace(/\/+$/, '')}/api/studio/claim?site=${encodeURIComponent(url)}`);
-      const body = await res.json();
-      if (res.ok && /^[a-f0-9]{16,128}$/.test(body.claim ?? '')) claim = body.claim;
-    } catch { /* the directory is optional for a live site */ }
-    if (claim) {
-      const put = w(['d1', 'execute', cf.d1, '--remote', '--command', `INSERT OR REPLACE INTO meta (key, value) VALUES ('homie_claim', '${claim}')`]);
-      step(put.code === 0 ? 'directory claim stored' : 'could not store the directory claim (publish will say so)');
-    }
+    claim = await warmClaim(url);
+    if (claim) step('the site claimed itself in the directory');
+    else step('the directory claim is not there yet (the site claims itself when the directory first reads it)');
   }
 
   // studio.json keeps what is safe to commit: names, ids, the custom domain; never the workers.dev address.
@@ -237,6 +231,81 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     songs: b.songs.map((slug) => ({ slug, page: url ? `${url}/music/${slug}/` : null })),
     videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),
     claim: Boolean(claim), directory,
+  };
+}
+
+/**
+ * Read the live site's manifest once, which makes a 0.9.0 site claim itself in its directory. Returns the claim it
+ * serves, or null (the directory did not answer, the site is not reachable yet, or it is a Preview). A fresh deploy
+ * can take a few seconds to answer everywhere, so it asks three times.
+ */
+export async function warmClaim(site, { tries = 3, wait = 2500 } = {}) {
+  if (process.env.HOMIE_STUDIO_WARM === '0') return null; // the toolkit's own tests: their live site is made up
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(`${String(site).replace(/\/+$/, '')}/.well-known/homie-studio.json`, { headers: { accept: 'application/json', 'user-agent': 'homie-studio-deploy' }, signal: AbortSignal.timeout(15_000) });
+      if (res.ok) {
+        const body = await res.json();
+        if (/^[a-f0-9]{16,128}$/.test(body?.claim ?? '')) return body.claim;
+      }
+    } catch { /* not answering yet */ }
+    if (i < tries - 1) await new Promise((r) => setTimeout(r, wait));
+  }
+  return null;
+}
+
+/** The Worker's name and D1 database, as the studio's wrangler.jsonc says (Cloudflare's forms may have renamed them). */
+export function configNames(root) {
+  try {
+    const text = readFileSync(configPath(root), 'utf8');
+    const json = JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
+    return { worker: json.name ?? null, d1: json.d1_databases?.[0]?.database_name ?? null, binding: json.d1_databases?.[0]?.binding ?? 'DB' };
+  } catch { return { worker: null, d1: null, binding: 'DB' }; }
+}
+
+/*
+ * `npm run deploy` IN WORKERS BUILDS (WORKERS_CI=1, or `deploy --ci`). Cloudflare's own CI has already run
+ * `npm run build`, and holds its own API token for this one account; the Worker and its database were made by the
+ * "Deploy to Cloudflare" flow or by an earlier deploy. So this only applies the D1 migrations (by binding name: the
+ * form may have renamed the database) and deploys. It creates nothing by hand and refuses nothing, and writes
+ * nothing back (a CI checkout is thrown away). On the very first deploy the database may not exist yet: Wrangler
+ * creates the one the binding names while it deploys, and the migrations run right after.
+ */
+export async function ciDeploy(root, { log = () => {} } = {}) {
+  const w = runner(root, {});
+  const names = configNames(root);
+  const steps = [];
+  const step = (what) => { steps.push({ what }); log(what); };
+  const refuse = (why, out) => ({ ok: false, command: 'deploy', ci: true, ...(explainCloudflare(out) ?? { why }), steps });
+  if (!existsSync(join(root, 'site', 'dist', 'games.json'))) return { ok: false, command: 'deploy', ci: true, why: 'nothing is built: the build command is `npm run build` (homie-studio build), and it runs before this', steps };
+  if (ensureStatsMigration(root)) step('added the stats migration (the studio\'s own counters)');
+  const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
+  let migrate = apply();
+  const first = migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
+  if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
+  if (!first) step('D1 migrations applied');
+  const started = Date.now();
+  const dep = w(['deploy']);
+  if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
+  step(`deployed ${names.worker ?? 'the Worker'} in ${Math.round((Date.now() - started) / 1000)} s`);
+  if (first) {
+    migrate = apply();
+    if (migrate.code !== 0) return refuse(`D1 migrations failed after the first deploy: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
+    step('D1 migrations applied (the database was created with this first deploy)');
+  }
+  // The live address, from what Wrangler printed (a custom domain in studio.json wins).
+  const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? null;
+  let url = null;
+  try { url = siteUrl(root) ?? workersDev; } catch { url = workersDev; }
+  const claim = url ? await warmClaim(url) : null;
+  step(claim ? 'the site claimed itself in the directory' : 'no directory claim yet (the site claims itself when the directory first reads it)');
+  let games = [];
+  try { games = JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8')).games.map((g) => g.id); } catch { games = []; }
+  return {
+    ok: true, command: 'deploy', ci: true, url, worker: names.worker, d1: names.d1, r2: null, steps, announced: [],
+    commit: process.env.WORKERS_CI_COMMIT_SHA ?? null, branch: process.env.WORKERS_CI_BRANCH ?? null,
+    games: games.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null })), songs: [], videos: [],
+    claim: Boolean(claim),
   };
 }
 
@@ -283,7 +352,7 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   const next = { ...readStudio(root), cloudflare: { ...readStudio(root).cloudflare, accountId, r2: bucket, created: [...created].sort() } };
   writeStudio(root, next);
   if (next.cloudflare.d1Id) {
-    writeFileSync(join(root, 'site', 'wrangler.jsonc'), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket }));
+    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root) }));
   }
   log(`created R2 ${bucket}`);
   return { ok: true, command: 'storage add', bucket, account: accountId, next: ['npm run deploy   (binds the bucket as MEDIA; the site serves it at /media/<key>)', 'npx --no-install homie-studio media put <file>'] };

@@ -10,7 +10,7 @@ Most people never run this by hand: the Homie plugin for Claude Code and Codex d
 and the person approves Cloudflare once in their browser.
 
 ```sh
-npx -y --package=https://homie.rocks/npm/homie-studio-0.9.0.tgz homie-studio new ./night-owls --name "Night Owls"
+npx -y @homie-rocks/studio new ./night-owls --name "Night Owls"
 cd night-owls && npm install
 npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
 npx homie-studio dev                                   # the whole site locally
@@ -21,6 +21,32 @@ npx homie-studio publish                               # the homie.rocks directo
 npx homie-studio stats                                 # the studio's own numbers, for its owner
 npx homie-studio upgrade                               # what a newer template adds to this studio (--apply to take it)
 ```
+
+## From GitHub, with Cloudflare's own CI (Workers Builds, Previews, Deploy to Cloudflare)
+
+A studio keeps `wrangler.jsonc` at its root (a studio made before 0.10.0 keeps `site/wrangler.jsonc`, and every
+command still finds it), so Cloudflare's Workers Builds can build and deploy it from its GitHub repository with no
+computer involved:
+
+| Workers Builds runs | On | What happens |
+| --- | --- | --- |
+| `npm run build` | every push | `homie-studio build`: the site, with the commit it is built from |
+| `npm run deploy` | the production branch | In Workers Builds (`WORKERS_CI=1`), `homie-studio deploy` only applies the D1 migrations (by binding name) and deploys: the Worker and database are Cloudflare's to make, so it creates and refuses nothing. The first deploy creates the database as it goes. |
+| `npx wrangler preview` | every other branch | A **Preview**: its own URL, and its own Durable Object namespace, so a branch's public rooms never meet production's. A Preview has no D1: it counts nothing into the studio's stats and never claims itself in the directory. |
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/homie-rocks/homie/tree/main/template)
+
+The button copies the public template (`template/` in this repository, exactly what `homie-studio new --template`
+writes) into the person's GitHub, makes the Worker, the D1 database and the rooms on their Cloudflare account,
+and connects Workers Builds. The site plays its first game (Gem Rush) the moment it is up, and its Home has a
+**Connect to Claude** band: one tap links it to the Claude chat that set it up (the Homie MCP tool `studio_setup`).
+In the Claude Code session that works in the repository, `homie-studio setup attach <hs_…>` then gives the studio
+the name chosen in the chat and removes the band.
+
+**The site claims itself in the directory.** The homie.rocks directory lists a studio only when its site serves
+the claim the directory handed out for that address. From 0.10.0 the site asks for it the first time its
+`/.well-known/homie-studio.json` is read (by `studio_publish`, or by `deploy` reading it once) and keeps it in
+its D1; nothing is stored by hand. studio.json `homie.directory: false` keeps a studio out.
 
 ## The site: the hub's shape, and a landing for every game
 
@@ -108,6 +134,27 @@ check green ends the build. The AI marks what only it knows with `progress stage
 one runs, a shared feed asks whether Stop was pressed; a stopped command closes its
 browsers and says so, and nothing already built or deployed is undone.
 
+**From the Claude app.** The chat can open the build first (the Homie MCP tool `build_open`, or the "Build it"
+card on a make, port or remix) and hand the work to a Claude Code session with a prefilled prompt. The session
+takes the build once, with no key in the prompt, and the card follows it; the change goes out as a pull request
+the person merges with one tap:
+
+```sh
+npx homie-studio progress attach hb_…                  # this session takes the build the chat opened (once)
+npx homie-studio progress change "Crowns spawn twice as often"   # its mark, in changes/, committed with the change
+git switch -c faster-crowns && git add -A && git commit -m "Faster crowns" && git push -u origin HEAD
+gh pr create --fill                                     # then:
+npx homie-studio progress pr --url https://github.com/<owner>/<repo>/pull/<n>
+```
+
+Workers Builds deploys the branch as a Preview; the card's **Publish** opens the pull request in GitHub, where the
+person's merge is the approval; Workers Builds deploys `main`, and the card says **Live** when the live site's
+manifest lists the change's mark (`homie-studio build` lists the newest marks from `changes/`).
+
+A Claude Code cloud session's default network ("Trusted") does not reach homie.rocks; the toolkit says so, and
+names the setting (the environment's Network access: Custom, add homie.rocks), instead of "did not answer". The
+build goes on with its local feed.
+
 The feed is `.studio/progress/<build>.json` (git-ignored). With `--share` the studio's
 directory (studio.json `homie.directory`, homie.rocks by default) keeps a copy for 24
 hours so the Claude app can show it: the feed only (plain bounded text, pictures under
@@ -120,6 +167,14 @@ feed every command behaves exactly as before. `lib/progress.mjs` has the whole f
 `deploy` keeps the `workers.dev` address in `.studio/local.json`, which git ignores: it
 names the Cloudflare account, often after its owner. A custom domain goes in studio.json
 as `cloudflare.domain` and is what the directory claim, `publish`, `check` and `stats` use.
+
+## Checks on a computer without a GPU
+
+`check`, `port check` and `look` run Chrome headless. On a Mac they use its GPU. On Linux (a Claude Code cloud
+session, GitHub Actions, a container) `npx homie-studio chrome install` puts Chrome for Testing in
+the home folder's `.cache/homie-studio` (from storage.googleapis.com, which a cloud session's default network reaches), and WebGL
+renders with SwiftShader. `check` reports how fast each browser drew the game and on what renderer; on SwiftShader
+it says the frame rate is not a person's, and judges only seats, rooms and rounds.
 
 ## No payment method needed
 
@@ -157,9 +212,11 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `bin/homie-studio.mjs` | The CLI. |
 | `lib/scaffold.mjs` | `new`: the studio monorepo, only into a new or empty folder, every file listed. |
 | `lib/build.mjs` | `build`: games bundled with esbuild into `site/dist`, `games.json`, each game's shared `source.json`. |
-| `lib/cloudflare.mjs` | `deploy` (and `deploy --plan`): Wrangler, D1, migrations, the directory claim; refuses resources it did not create. `storage add`: the optional R2 bucket. |
-| `lib/check.mjs` | `check`: two fresh Chrome processes (computer + phone) must share a room and finish a round with both in it; on a busy computer it waits out a round a browser was dropped from, and says why when none counts. |
+| `lib/cloudflare.mjs` | `deploy` (and `deploy --plan`): Wrangler, D1, migrations; refuses resources it did not create. In Workers Builds, migrations and deploy only. `storage add`: the optional R2 bucket. |
+| `lib/check.mjs` | `check`: two fresh Chrome processes (computer + phone) must share a room and finish a round with both in it, with each one's frame rate; on a busy computer it waits out a round a browser was dropped from, and says why when none counts. `lib/chrome.mjs`: which Chrome, and how (the GPU on a Mac, SwiftShader on Linux). |
 | `lib/upgrade.mjs`, `lib/template-history.json` | `upgrade`: an existing studio takes what a newer template adds, never over its own edits. |
+| `lib/progress.mjs`, `lib/setup.mjs` | The progress feed (`progress …`), a build the chat opened (`progress attach`), a change as a pull request (`progress change`, `progress pr`), and `setup attach`. |
+| `template/` (repository root), `scripts/template.mjs` | The public "Deploy to Cloudflare" template, generated from `new --template`. |
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
 | `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`. |
@@ -171,9 +228,10 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `starters/gem-rush/` | The reference multiplayer starter. |
 
 Versions are immutable: a published version never changes, so a studio that pinned one
-never changes by surprise. A change ships as a new `version`, on the npm registry as
-`@homie-rocks/studio` and as a tarball at `https://homie.rocks/npm/homie-studio-<version>.tgz`
-(which is what `homie-studio new` pins).
+never changes by surprise. A change ships as a new `version` on the npm registry as
+`@homie-rocks/studio`, which is what `homie-studio new` pins (the exact version; package-lock.json keeps its
+integrity). The registry is what Workers Builds and a Claude Code cloud session reach by default. Older studios
+pinned a tarball at `https://homie.rocks/npm/homie-studio-<version>.tgz`, which stays.
 
 ## Beta
 
