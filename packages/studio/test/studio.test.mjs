@@ -351,6 +351,8 @@ test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and
     assert.equal(alive(other.pid), true, 'the other project\'s identical dev server is untouched');
     assert.equal(out(run(['dev', '--stop'], dir)).stopped.length, 0, 'nothing left to stop');
   } finally {
+    // A failed assertion must not leave the dev command's own Wrangler running (SIGKILL skips its handlers).
+    try { process.kill(JSON.parse(readFileSync(join(dir, '.wrangler', 'homie-dev.json'), 'utf8')).child, 'SIGKILL'); } catch { /* stopped, or never written */ }
     for (const p of [other, devProc]) try { p.kill('SIGKILL'); } catch { /* gone */ }
   }
 });

@@ -61,6 +61,10 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     name: worker,
     main: at.main,
     compatibility_date: COMPAT_DATE,
+    // The site's own fetches (its directory claim, "played this week") go out as any browser's would, so a studio
+    // whose directory is on the same zone (a house studio on *.homie.rocks, or two Workers on one workers.dev
+    // subdomain) reaches it instead of failing with 1042.
+    compatibility_flags: ['global_fetch_strictly_public'],
     workers_dev: true,
     preview_urls: true,
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
