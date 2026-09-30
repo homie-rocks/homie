@@ -937,7 +937,8 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   <div class="keys"><a class="btn" href="${esc(makeHref)}">${icon('spark')}<span>Make a game like this</span></a>${L.source ? `<a class="ghost" href="/games/${esc(g.id)}/source.json">See the source</a>` : ''}</div>
 </div></div></section>`;
 
-  const band = (html) => (html ? `<section class="band tight"><div class="band-in">${html}</div></section>` : '');
+  // A partial that is its own <section> stands as it is; anything else sits in one of the page's bands.
+  const band = (html) => (!html ? '' : /^\s*<section\b/i.test(html) ? html : `<section class="band tight"><div class="band-in">${html}</div></section>`);
   const vars = { 'game.name': g.name, 'game.id': g.id, 'game.play': `/${g.id}/play` };
   const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.name, description: L.pitch ?? g.blurb ?? '', url: `${origin}/${g.id}/`, playMode: 'MultiPlayer', gamePlatform: ['Web browser', 'Phone', 'TV'], applicationCategory: 'Game', ...(h.wideImage ? { image: `${origin}${h.wideImage}` } : {}), author: { '@type': 'Organization', name, url: `${origin}/` }, offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' } };
   return layout(cat, {

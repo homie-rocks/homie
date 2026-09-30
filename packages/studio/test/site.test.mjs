@@ -325,6 +325,7 @@ test('site/ wins: a whole page, a landing of the studio\'s own, partials, tokens
   write(dir, 'site/pages/rock-race/play/index.html', '<h1>not allowed</h1>');
   write(dir, 'site/partials/footer.html', '<footer class="foot">Owls since {{year}} · <a href="https://homie.rocks/studio/">Made with Homie</a> · {{studio.name}}</footer>');
   write(dir, 'site/partials/game-rock-race.html', '<p class="lead">The {{game.name}} radio: <a href="{{game.play}}">tune in</a></p>');
+  write(dir, 'site/partials/game.html', '<section class="band" id="own">Our own band</section>');
   write(dir, 'site/partials/sidebar.html', '<p>unknown</p>');
   write(dir, 'site/theme.css', '.made{border-radius:4px}</style><script>x</script>');
   write(dir, 'site/public/fonts/owl.woff2', 'font');
@@ -334,7 +335,7 @@ test('site/ wins: a whole page, a landing of the studio\'s own, partials, tokens
   const b = out(run(['build'], dir));
   assert.equal(b.ok, true, JSON.stringify(b));
   assert.deepEqual(b.pages, ['/about/', '/crown-thief/']);
-  assert.deepEqual(b.partials.sort(), ['footer', 'game-rock-race']);
+  assert.deepEqual(b.partials.sort(), ['footer', 'game', 'game-rock-race']);
   assert.ok(b.siteSkipped.some((s) => /site\/pages\/rock-race\/play/.test(s.what)), 'a page cannot take a play address');
   assert.ok(b.siteSkipped.some((s) => /sidebar/.test(s.what)), 'an unknown partial is named');
   assert.ok(b.siteSkipped.some((s) => /site\/public\/games\/evil\.js/.test(s.what)), 'site/public cannot write into the games');
@@ -354,7 +355,8 @@ test('site/ wins: a whole page, a landing of the studio\'s own, partials, tokens
   const own = await (await site('/crown-thief/')).text();
   assert.equal(own, '<!doctype html><title>Our own landing</title><h1>Hand-made</h1>', 'a landing of the studio\'s own is served as it is');
   const rock = await (await site('/rock-race/')).text();
-  assert.match(rock, /<p class="lead">The Rock &lt;Race&gt; radio: <a href="\/rock-race\/play">tune in<\/a><\/p>/);
+  assert.match(rock, /<section class="band tight"><div class="band-in"><p class="lead">The Rock &lt;Race&gt; radio: <a href="\/rock-race\/play">tune in<\/a><\/p><\/div><\/section>/, 'a piece of a band sits in one');
+  assert.match(rock, /<\/section><section class="band" id="own">Our own band<\/section>/, 'a partial that is its own section stands alone');
   assert.match(rock, /\.made\{border-radius:4px\}<\\\/style><script>x<\/script>/, 'theme.css cannot close the stylesheet');
   assert.doesNotMatch(rock, /<\/style><script>x/);
   assert.match(rock, /--hot:#ff3bd4/, 'the neon palette');
