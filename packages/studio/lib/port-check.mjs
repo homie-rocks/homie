@@ -379,7 +379,19 @@ async function ownerTests(h, how, log) {
 
 /* ------------------------------------------------------------------ the check */
 
-export async function portCheck({ url, game, root, only = null, shots = null, log = () => {}, roundTimeoutMs = 240_000 }) {
+/** What a progress feed calls each port check row. */
+export const PORT_CHECK_LABELS = {
+  'owner-desk': 'Moves on a computer', 'owner-phone': 'Moves on a phone', 'owner-iphone': 'Moves on an iPhone (WebKit)',
+  audio: 'Sound starts on the first touch', sandbox: 'Runs in the sandbox', 'ui-cover': 'UI stays out of the middle',
+  round: 'Two browsers finish a round', 'host-kill': 'The host leaves, the round goes on', 'late-join': 'A late joiner takes a bot\'s seat',
+  tv: 'The big screen watches', errors: 'No errors in the game',
+};
+
+/**
+ * `report` (optional; the open progress feed, lib/progress.mjs) hears each row as it runs, passes or fails, gets a
+ * small picture after each screenshot, and can ask the check to stop between rows. Without it nothing changes.
+ */
+export async function portCheck({ url, game, root, only = null, shots = null, log = () => {}, roundTimeoutMs = 240_000, report = null }) {
   if (!url || !game) throw new Error('usage: homie-studio port check <game> --url <site>');
   const base = String(url).replace(/\/+$/, '');
   const want = new Set((only ? String(only).split(',') : ALL).map((s) => s.trim()).filter(Boolean));
@@ -393,13 +405,21 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
   mkdirSync(out, { recursive: true });
   if (root) { try { writeFileSync(join(root, 'games', game, '.port', '.gitignore'), '*\n'); } catch { /* fine */ } }
   const rows = [];
-  const row = (name, ok, detail) => { rows.push({ name, ok, ...detail }); log(`${ok === null ? 'SKIP' : ok ? 'PASS' : 'FAIL'} ${name}${detail?.why ? `: ${detail.why}` : ''}`); };
+  const tell = (name, state, note) => { try { report?.check?.(name, state, { label: PORT_CHECK_LABELS[name] ?? name, ...(note ? { note } : {}) }); } catch { /* a feed never breaks a check */ } };
+  const row = (name, ok, detail) => { rows.push({ name, ok, ...detail }); log(`${ok === null ? 'SKIP' : ok ? 'PASS' : 'FAIL'} ${name}${detail?.why ? `: ${detail.why}` : ''}`); tell(name, ok === null ? 'skip' : ok ? 'pass' : 'fail', detail?.why); };
   const open_ = [];
   const launch = async (kind) => { const h = await chrome(puppeteer, kind, exe); open_.push(h); return h; };
   const close = async (h) => { const i = open_.indexOf(h); if (i >= 0) open_.splice(i, 1); await h.close(); };
-  const shot = async (h, name) => { await T(h.page.screenshot({ path: join(out, `${name}.png`) }), 15_000); };
+  const shot = async (h, name) => {
+    await T(h.page.screenshot({ path: join(out, `${name}.png`) }), 15_000);
+    if (report?.preview && h.vp) {
+      const b64 = await T(h.page.screenshot({ type: 'jpeg', quality: 60, clip: { x: 0, y: 0, width: h.vp.width, height: h.vp.height, scale: Math.min(1, 480 / h.vp.width) }, encoding: 'base64' }), 15_000, null);
+      if (b64) { try { report.preview({ url: `${base}/${game}/play`, image: `data:image/jpeg;base64,${b64}`, caption: PORT_CHECK_LABELS[name.replace(/-(?:before|after|playing|over|\d+)$/, '')] ?? name }); } catch { /* too big: no picture */ } }
+    }
+  };
   const privateRoom = (tag) => `chk-${stamp.slice(-6)}-${tag}`.slice(0, 32);
   const errorsSeen = [];
+  let stoppedAt = null;
   const collect = (h) => { for (const e of h.errors) errorsSeen.push(`${h.engine}-${h.kind}: ${e}`); for (const r of h.badResponses) errorsSeen.push(`${h.engine}-${h.kind}: HTTP ${r}`); };
   const started = Date.now();
   // The site must answer before each row: a dev server that died mid-check made every later row fail as "no game
@@ -408,6 +428,8 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
     try { const r = await fetch(`${base}/${game}/play`, { signal: AbortSignal.timeout(8000) }); return r.ok; } catch { return false; }
   };
   const gate = async (name) => {
+    if (report?.stopped?.()) { row(name, null, { why: 'stopped by the person' }); stoppedAt ??= name; return false; }
+    tell(name, 'running');
     if (await alive()) return true;
     row(name, false, { why: `${base} stopped answering: is the dev server still running? (restart it as a background task that outlives this command, then rerun the check)` });
     return false;
@@ -631,7 +653,7 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
   }
   const failed = rows.filter((r) => r.ok === false);
   const skipped = rows.filter((r) => r.ok === null);
-  const result = { ok: failed.length === 0 && rows.length > 0, command: 'port check', game, url: base, out, totalMs: Date.now() - started, passed: rows.filter((r) => r.ok === true).map((r) => r.name), failed: failed.map((r) => `${r.name}: ${r.why ?? 'failed'}`), skipped: skipped.map((r) => `${r.name}: ${r.why ?? ''}`), rows };
+  const result = { ok: failed.length === 0 && rows.length > 0 && !stoppedAt, command: 'port check', game, url: base, out, totalMs: Date.now() - started, ...(stoppedAt ? { stopped: true, why: `stopped by the person (before ${stoppedAt})` } : {}), passed: rows.filter((r) => r.ok === true).map((r) => r.name), failed: failed.map((r) => `${r.name}: ${r.why ?? 'failed'}`), skipped: skipped.map((r) => `${r.name}: ${r.why ?? ''}`), rows };
   writeFileSync(join(out, 'receipt.json'), `${JSON.stringify(result, null, 1)}\n`);
   return result;
 }

@@ -64,6 +64,34 @@ npx homie-studio stats share on                         # tell the directory "pl
 Each key is minted on the owner's computer; only its SHA-256 goes into D1, through the
 studio's own Cloudflare login. `worker/stats.mjs` says exactly what is counted.
 
+## A build the person can watch (the progress feed)
+
+A build of a game, song or video can keep a small progress feed, so the person follows it
+from wherever they are (the Claude app on a phone, through the Homie MCP's build progress
+card), sees each check go green, what it spent against its budget, and can press Stop:
+
+```sh
+npx homie-studio progress start crown-thief --share --title "Crown Thief: faster rounds" --budget 2
+npx homie-studio progress stage plan done --note "Rounds from 60 s to 45 s"
+npm run build && npx homie-studio check crown-thief --url http://127.0.0.1:8787 && npm run deploy
+```
+
+While a feed is open, `build`, `check`, `port check` and `deploy` report into it by
+themselves: their stage (a game: plan → build → checks → deploy), each check as it runs
+and passes, a small picture of the game and the address to play it; a deploy with every
+check green ends the build. The AI marks what only it knows with `progress stage`,
+`progress check`, `progress spend`, `progress shot` (a video's shots) and `progress song`
+(a song's waveform and lyric check). Before each stage starts, and every few seconds while
+one runs, a shared feed asks whether Stop was pressed; a stopped command closes its
+browsers and says so, and nothing already built or deployed is undone.
+
+The feed is `.studio/progress/<build>.json` (git-ignored). With `--share` the studio's
+directory (studio.json `homie.directory`, homie.rocks by default) keeps a copy for 24
+hours so the Claude app can show it: the feed only (plain bounded text, pictures under
+96 KB), never a key, a path or code. Its write key stays in `.studio/progress/` and is
+never printed; the shared id is printed for the MCP tool `build_progress`. Without an open
+feed every command behaves exactly as before. `lib/progress.mjs` has the whole format.
+
 ## The site's address
 
 `deploy` keeps the `workers.dev` address in `.studio/local.json`, which git ignores: it

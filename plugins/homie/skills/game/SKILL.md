@@ -42,6 +42,19 @@ Make it the game the person asked for, in small steps:
 
 ## Prove it
 
+When the person is following along in the Claude app (or anywhere they cannot see your
+terminal), open a progress feed first and show it to them:
+
+```sh
+npx --no-install homie-studio progress start <id> --share --title "<what this build does>" [--budget <dollars>]
+npx --no-install homie-studio progress stage plan done --note "<the plan in one line>"
+```
+
+It prints a build id: call the Homie MCP tool `build_progress` with it once, and the card
+follows the build by itself (stages, each check going green, a preview, spend, Stop). The
+commands below report into it. If a command answers `stopped`, the person pressed Stop:
+end there and ask before starting again.
+
 ```sh
 npm run build                                          # fix every error it names
 npm run dev                                            # in the background: http://127.0.0.1:8787/<id>/play

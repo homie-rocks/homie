@@ -29,6 +29,24 @@
  *   homie-studio stats revoke             (every stats key and page session ends)
  *   homie-studio stats share on|off       (tell the homie.rocks directory "played this week", or stop)
  *
+ *   homie-studio progress start [<id>] [--what game|song|video] [--title "<what this build does>"]
+ *                                        [--budget <dollars>] [--unit usd|credits] [--share]
+ *                                         (a progress feed for one build; --share shows it in the Claude app
+ *                                          through the Homie MCP's build_progress widget, which can press Stop)
+ *   homie-studio progress stage <stage> running|done|failed|skipped [--note "<one line>"]
+ *   homie-studio progress check <id> pending|running|pass|fail|skip [--label "<words>"] [--note "<one line>"]
+ *   homie-studio progress preview [--url <address>] [--image <small .jpg/.png>] [--caption "<words>"]
+ *   homie-studio progress spend <amount> --what "<what it bought>" [--receipt <file>]
+ *   homie-studio progress shot <id> pending|running|pass|fail [--label "<words>"] [--image <small .jpg>]
+ *   homie-studio progress song [--peaks <peaks.json>] [--lyric "<line>" --sung yes|no]
+ *   homie-studio progress log "<one line>"
+ *   homie-studio progress stop            (ask the running build to stop at its next safe point)
+ *   homie-studio progress end passed|failed|stopped [--note "<one line>"]
+ *   homie-studio progress show [<build>]
+ *                                         While a feed is open, build, check, port check and deploy report
+ *                                         into it (stage, each check going green, a preview picture) and stop
+ *                                         when asked. Without one, nothing changes.
+ *
  * Every command prints a few lines for a person; --json prints the result.
  */
 import { spawn, spawnSync } from 'node:child_process';
@@ -46,10 +64,11 @@ import { ensureStatsMigration, newStudio } from '../lib/scaffold.mjs';
 import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
+import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, startProgress } from '../lib/progress.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop'];
+const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -155,6 +174,27 @@ function print(result) {
     case 'stats share':
       lines.push(result.message);
       break;
+    case 'progress start':
+      lines.push(`Build ${result.build}: ${result.title} (${result.stages.join(' → ')})${result.budget !== null ? `, budget ${result.unit === 'usd' ? `$${result.budget.toFixed(2)}` : `${result.budget} credits`}` : ''}`,
+        `  feed: ${result.file}`,
+        ...(result.shared ? [`  shared for the Claude app until ${result.shared.expiresAt ?? 'tomorrow'}: ${result.widget}`] : []),
+        ...(result.sharedWhy ? [`  ${result.sharedWhy}`] : []),
+        '  build, check, port check and deploy now report into it; mark the plan done with: npx --no-install homie-studio progress stage plan done --note "<the plan in one line>"');
+      break;
+    case 'progress':
+      lines.push(result.message ?? `${result.feed?.title}: ${result.feed?.state}${result.feed?.stage ? ` (${result.feed.stage})` : ''}`);
+      break;
+    case 'progress show': {
+      const f = result.feed;
+      const mark = { done: 'ok  ', pass: 'ok  ', running: '... ', failed: 'FAIL', fail: 'FAIL', skipped: 'skip', skip: 'skip', stopped: 'stop', pending: '    ' };
+      lines.push(`${f.title} [${f.state}] build ${f.build}${f.shared ? ` (shared as ${f.shared.build})` : ''}`,
+        ...f.stages.map((s) => `  ${mark[s.state] ?? s.state} ${s.label}${s.note ? `: ${s.note}` : ''}`),
+        ...f.checks.map((c) => `      ${mark[c.state] ?? c.state} ${c.label}${c.note ? `: ${c.note}` : ''}`),
+        ...(f.preview?.url ? [`  preview: ${f.preview.url}`] : []),
+        `  spent ${f.spend.unit === 'usd' ? `$${f.spend.used.toFixed(2)}` : `${f.spend.used} credits`}${f.spend.budget !== null ? ` of ${f.spend.unit === 'usd' ? `$${f.spend.budget.toFixed(2)}` : `${f.spend.budget} credits`}` : ''}`,
+        ...(f.stop?.requested ? [`  stop asked (${f.stop.by}) at ${f.stop.at}`] : []));
+      break;
+    }
     case 'look':
       lines.push(`${result.ok ? 'Looks right' : 'Look again'}: ${result.rows.length} views of ${result.url}`, ...result.rows.map((r) => `  ${r.ok ? 'ok  ' : 'FIX '} ${r.path} on ${({ computer: 'a computer', phone: 'a phone', sideways: 'a phone turned sideways' })[r.device] ?? r.device}${r.problems.length ? `: ${r.problems.join('; ')}` : ''}`), '', `Pictures (open them and look): ${result.shots}`);
       break;
@@ -181,17 +221,18 @@ async function main() {
 
   if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
   const root = requireStudio();
+  if (cmd === 'progress') return progressCommand(root, sub);
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
     const game = positional[2] ?? listGames(root)[0]?.id;
     const url = flags.get('url') ?? siteUrl(root);
     if (!url) return { ok: false, command: 'port check', why: 'give --url (the local dev address or the live site)' };
-    return portCheck({ url, game, root, only: flags.get('only') ?? null, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log });
+    return tracked(root, 'checks', (report) => portCheck({ url, game, root, only: flags.get('only') ?? null, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'port check');
   }
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });
   if (cmd === 'game' && sub === 'remix') return remixGame(root, positional[2], flags.get('id'), { name: flags.get('name') });
   if (cmd === 'games') return { ok: true, command: 'games', games: listGames(root).map(({ dir, ...g }) => ({ ...g, dir: relative(root, dir) })) };
-  if (cmd === 'build') return build(root, { only: positional[1] ?? null, log });
+  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log }), 'build');
   if (cmd === 'status') {
     const studio = readStudio(root);
     return { ok: true, command: 'status', root, studio, site: siteUrl(root, studio), games: listGames(root).map((g) => g.id), cloudflareSignedIn: Boolean(wranglerBin(root) && whoami(root)) };
@@ -202,7 +243,7 @@ async function main() {
     const game = positional[1] ?? listGames(root)[0]?.id;
     const url = flags.get('url') ?? siteUrl(root);
     if (!url) return { ok: false, command: 'check', why: 'give --url (the local dev address or the live site)' };
-    return check({ url, game, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log });
+    return tracked(root, 'checks', (report) => check({ url, game, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'check');
   }
   if (cmd === 'look') {
     const url = flags.get('url') ?? siteUrl(root);
@@ -218,7 +259,7 @@ async function main() {
     return look({ url, paths, shots: flags.get('shots') ? resolve(flags.get('shots')) : join(root, '.studio', 'look'), devices: only, log });
   }
   if (cmd === 'deploy' && flags.has('plan')) return deployPlan(root);
-  if (cmd === 'deploy') return deploy(root, { log, homie: flags.get('homie') });
+  if (cmd === 'deploy') return tracked(root, 'deploy', () => deploy(root, { log, homie: flags.get('homie') }), 'deploy');
   if (cmd === 'storage' && sub === 'add') return storageAdd(root, { log });
   if (cmd === 'storage') {
     const cf = readStudio(root).cloudflare ?? {};
@@ -239,6 +280,94 @@ async function main() {
     return { ok: true, command: 'media list', r2, site: siteUrl(root, studio), music: view('music'), videos: view('videos') };
   }
   return { ok: false, command: cmd, why: `unknown command "${[cmd, sub].filter(Boolean).join(' ')}" (homie-studio help)` };
+}
+
+/*
+ * THE PROGRESS FEED (lib/progress.mjs). A command that is a stage of the open build (build, check, port check,
+ * deploy) says so: the stage runs, then is done or failed with one line; a check's steps go green as they pass; a
+ * stop asked in the Claude app (or by `progress stop`) ends it at the next safe point. With no open feed, or a
+ * feed whose build has no such stage (a song has no deploy), the command runs exactly as it did before.
+ */
+async function tracked(root, stage, run, command) {
+  const feed = currentFeed(root);
+  if (!feed || !feed.doc.stages.some((s) => s.id === stage)) return run(null);
+  await feed.sync();
+  if (feed.stopRequested()) {
+    feed.stage(stage, 'stopped', 'stopped by the person before it started');
+    feed.end('stopped', 'Stopped by the person.');
+    return { ok: false, command, stopped: true, why: 'stopped by the person (in the Claude app, or `progress stop`): the build is over; ask them before starting again' };
+  }
+  if (stage === 'checks') feed.resetChecks('checks');
+  feed.stage(stage, 'running');
+  const report = {
+    check: (id, state, opts) => feed.check(id, state, { ...opts, stage }),
+    preview: (p) => feed.preview(p),
+    stopped: () => feed.stopRequested(),
+    state: (id) => feed.doc?.checks.find((c) => c.id === id)?.state,
+  };
+  let result;
+  try { result = await run(report); } catch (error) { feed.stage(stage, 'failed', error instanceof Error ? error.message : String(error)); throw error; }
+  if (result?.stopped || feed.stopRequested()) {
+    feed.stage(stage, 'stopped', 'stopped by the person');
+    feed.end('stopped', 'Stopped by the person.');
+    return { ...result, ok: false, stopped: true, why: result?.why ?? 'stopped by the person' };
+  }
+  if (!result?.ok) { feed.stage(stage, 'failed', result?.why ?? 'failed'); return result; }
+  const note = stage === 'build' ? `Built ${(result.games ?? []).map((g) => `${g.id} (${Math.round(g.bytes / 1024)} KB)`).join(', ') || 'the site'}`
+    : stage === 'deploy' ? `Live: ${result.url ?? 'deployed'}`
+      : result.command === 'port check' ? `${result.passed.length} passed${result.skipped.length ? `, ${result.skipped.length} skipped` : ''} in ${Math.round(result.totalMs / 1000)} s`
+        : `Room ${result.room}: round ${result.round?.n} finished with ${result.round?.humans} people in ${Math.round(result.totalMs / 1000)} s`;
+  feed.stage(stage, 'done', note);
+  if (stage === 'deploy') {
+    const doc = feed.doc;
+    const game = (result.games ?? []).find((g) => g.id === doc.id) ?? (result.games ?? [])[0];
+    if (game?.play) feed.preview({ url: game.play });
+    // Deployed, and every check that ran passed: the build is done.
+    if (doc.checks.every((c) => ['pass', 'skip'].includes(c.state))) feed.end('passed', `Live: ${game?.play ?? result.url}`);
+  }
+  return result;
+}
+
+async function progressCommand(root, sub) {
+  const arg = positional[2];
+  if (sub === 'start') {
+    return startProgress(root, {
+      what: flags.get('what') ?? 'game', id: arg ?? flags.get('id') ?? null, title: flags.get('title'),
+      budget: flags.get('budget'), unit: flags.get('unit'), share: flags.has('share'), directory: flags.get('homie'),
+    });
+  }
+  if (sub === 'show') {
+    const id = arg ?? currentId(root) ?? flags.get('build');
+    const doc = readFeed(root, id);
+    return doc ? { ok: true, command: 'progress show', feed: publicFeed(doc) } : { ok: false, command: 'progress show', why: id ? `no feed ${id} in .studio/progress/` : 'no build is open (homie-studio progress start)' };
+  }
+  const id = flags.get('build') ?? currentId(root);
+  if (!id || !readFeed(root, id)) return { ok: false, command: 'progress', why: 'no build is open: start one with `homie-studio progress start <id> --share`' };
+  const feed = new Feed(root, id);
+  const done = (message) => ({ ok: true, command: 'progress', build: id, message, feed: publicFeed(feed.doc) });
+  const note = flags.has('note') ? String(flags.get('note')) : undefined;
+  try {
+    switch (sub) {
+      case 'stage': feed.stage(arg, positional[3], note); return done(`${arg}: ${positional[3]}`);
+      case 'check': feed.check(arg, positional[3], { label: flags.get('label'), note }); return done(`check ${arg}: ${positional[3]}`);
+      case 'preview': feed.preview({ url: flags.get('url'), image: flags.get('image') ? resolve(String(flags.get('image'))) : undefined, caption: flags.get('caption') }); return done('preview updated');
+      case 'spend': feed.spend(arg, flags.get('what'), { receipt: flags.get('receipt'), unit: flags.get('unit') }); {
+        const s = feed.doc.spend;
+        return done(`spent ${s.unit === 'usd' ? `$${s.used.toFixed(2)}` : `${s.used} credits`}${s.budget !== null ? ` of ${s.unit === 'usd' ? `$${s.budget.toFixed(2)}` : `${s.budget} credits`}` : ''}`);
+      }
+      case 'shot': feed.shot(arg, positional[3], { label: flags.get('label'), image: flags.get('image') ? resolve(String(flags.get('image'))) : undefined }); return done(`shot ${arg}: ${positional[3]}`);
+      case 'song': {
+        const peaks = flags.get('peaks') ? JSON.parse(readFileSync(resolve(String(flags.get('peaks'))), 'utf8')) : undefined;
+        const sung = flags.get('sung') === 'yes' ? true : flags.get('sung') === 'no' ? false : null;
+        feed.song({ peaks: Array.isArray(peaks) ? peaks : peaks?.peaks, lyric: flags.get('lyric'), sung });
+        return done('song updated');
+      }
+      case 'log': feed.log(positional.slice(2).join(' ')); return done('logged');
+      case 'stop': feed.stop('local'); return done('stop asked: the running command stops at its next safe point');
+      case 'end': feed.end(arg, note); return done(`ended: ${arg}`);
+      default: return { ok: false, command: 'progress', why: `unknown: progress ${sub ?? ''} (start, stage, check, preview, spend, shot, song, log, stop, end, show)` };
+    }
+  } catch (error) { return { ok: false, command: 'progress', why: error instanceof Error ? error.message : String(error) }; }
 }
 
 /*
@@ -325,11 +454,14 @@ function mediaPut(root, file, as) {
 
 try {
   const result = await main();
+  // A shared progress feed sends its last word before the command exits.
+  await flushProgress();
   if (result && result.command !== 'help') print(result);
   if (result?.ok === false) process.exitCode = 1;
   // Chrome's pipes can outlive browser.close(); a finished check must not hang its caller.
   if (result?.command === 'check' || result?.command === 'port check' || result?.command === 'look') process.exit(process.exitCode ?? 0);
 } catch (error) {
+  await flushProgress().catch(() => {});
   print({ ok: false, why: error instanceof Error ? error.message : String(error) });
   process.exitCode = 1;
 }
