@@ -54,5 +54,15 @@ at the screenshots it saves. Never say a game works without a passing `check`.
 Start `npm run dev` as a background task your app keeps alive (Claude Code: the Bash
 tool's `run_in_background`), and when you are done with it: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
 
+Then make it good, not just working:
+
+- **Sound**: the `sound` skill makes the game's effects and a synthesized theme for free and wires
+  them in (`sound.play('coin')` where it happens, in every browser). A silent game is not finished.
+- **Look**: the `art` skill makes the cover from a real frame and, with a budget, painted backdrops
+  and textures.
+- **Playtest**: the `playtest` skill plays it on a computer and a phone held both ways, measures the
+  first ten seconds, the look, the UI, the real sound and a round, runs the owner tests, and hands a
+  blind review to a fresh reviewer. Fix what it ranks first; run it again.
+
 Then `npm run deploy` and `studio_publish` (see `publish`), and check again
 on the live site.

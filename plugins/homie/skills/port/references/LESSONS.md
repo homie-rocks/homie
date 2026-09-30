@@ -75,6 +75,11 @@ measured. Read it before porting; come back when a check fails.
   slowed the whole room; hand the room to a seated computer (`net.handOff()`), never
   in a host's first 30 s, at most once a minute.
 
+- Every stick reports up as y = -1 (screen axes). In a 3D world, map it to the ground by which side of
+  the body the camera sits on, never by the body's facing, or up means a different way every turn.
+- A stick sample of exactly zero is "no news", not "stop": coast to a stop over about 400 ms, or a
+  dropped touch packet stutters the body.
+
 ## Joining, leaving, hosting
 
 - **The first visitor plays at once with bots.** A lone stranger waiting for a
@@ -124,6 +129,9 @@ measured. Read it before porting; come back when a check fails.
   touchend); the first tap does it.
 - Phone speakers lose everything under ~300 Hz; a low-pass sweep at 720 Hz vanished
   on a phone.
+- A port that came with no sound, or whose sound was cut, is not finished: the `sound` skill
+  synthesizes effects and a theme for free and wires them in; the `playtest` skill's sound row
+  captures what the game really plays.
 
 ## Harness traps (when a check looks wrong)
 

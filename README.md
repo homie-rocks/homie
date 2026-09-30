@@ -48,13 +48,25 @@ codex plugin add homie@homie
 Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
 session afterwards so the skills and tools load.
 
-Then ask for a studio. The plugin adds six skills (`studio-setup`, `game`, `port`,
-`publish`, `music`, `video`) and connects the Homie MCP server at `https://homie.rocks/mcp`,
+Then ask for a studio. The plugin adds nine skills (`studio-setup`, `game`, `port`,
+`publish`, `sound`, `music`, `art`, `video`, `playtest`) and connects the Homie MCP server at `https://homie.rocks/mcp`,
 which has creator tools only: set up a studio, make or remix a game, make an existing
 single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.
 
-Music and video use the providers' own accounts, asked for only when the skill is first used:
+Two skills need no account and cost nothing:
+
+- **`sound`** (*"make sound effects and a short theme for my game"*): effects from presets and
+  synthesized scores from chords and patterns, rendered on your computer, with stems and seamless
+  loops, measured (loudness, clipping, late starts, what a phone speaker loses), and wired into the
+  game with a small player that starts on the first touch and changes music on bar lines.
+- **`playtest`** (*"playtest my game and tell me what's weak"*): real browsers on a computer and a
+  phone held both ways: the first ten seconds, the look while playing, how much of the screen the UI
+  covers, the game's real sound, a round with one player trying and one idle, the owner control tests,
+  and a brief for a blind review by a fresh reviewer.
+
+Music, art and generated video use the providers' own accounts, asked for only when the skill is
+first used:
 
 - **`music`** (*"make a 30-second theme song for my studio"*): ElevenLabs Music through its
   official CLI (`elevenlabs auth login`, a browser sign-in) or your own API key. It says your
@@ -67,7 +79,11 @@ Music and video use the providers' own accounts, asked for only when the skill i
   check and a contact sheet, and a video page. It never passes generated footage off as
   gameplay, and puts no real people or brands in a video.
 
-Both need ffmpeg; the video skill also uses Chrome.
+- **`art`** (*"make a cover for my game"*): a cover from a real frame of the game (free), and
+  painted covers, backdrops and textures with fal on your own key, priced, capped and receipted;
+  checks that a texture tiles and that files are small enough for a phone.
+
+All of them need ffmpeg; `video`, `art` and `playtest` also use Chrome.
 
 ## What the studio deploys to your Cloudflare
 

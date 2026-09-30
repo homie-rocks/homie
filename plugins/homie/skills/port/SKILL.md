@@ -168,6 +168,11 @@ done, stop the dev server: stop it with `npx --no-install homie-studio dev --sto
 If something still fails after real effort, say exactly which row, what you saw,
 and why — never hide it.
 
+When the rows pass, the port works; whether it is good is the `playtest` skill's question: it adds a
+phone held sideways, the look while playing, the UI in landscape, the game's real sound, a round with
+one player trying and one idle, and a blind review by a fresh reviewer. A port that went silent or
+never had sound: the `sound` skill makes and wires effects and a theme for free.
+
 ## 5. Put it online and list it
 
 Follow the `publish` skill: `npm run deploy` (the person approves Cloudflare once

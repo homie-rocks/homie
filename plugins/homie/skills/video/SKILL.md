@@ -60,7 +60,8 @@ node <video.mjs> sheet <slug> --in videos/<slug>/<slug>.mp4
   the same clock (the browser is muted; nothing plays out loud). It presses nothing. The live
   site works too (`--url` the studio's address); a local run keeps strangers out of the shot.
 - The bed is the studio's own song (`--song`, from the `music` skill) or the game's sound alone.
-  No song yet and the person wants one: the `music` skill first (that part costs credits: ask).
+  No song yet: the `sound` skill synthesizes a theme for free (its bar grid cuts the trailer the same
+  way), or the `music` skill renders one with ElevenLabs (credits: ask).
 - `edl` finds the song's bar lines, picks the busiest moments of the capture (motion, not guesses),
   and writes `work/edl.json`: a title card of one bar, shots of one bar each, the end card on what
   is left. Every cut lands on a bar line. Read it and change it: order, which moments, where the
@@ -70,6 +71,10 @@ node <video.mjs> sheet <slug> --in videos/<slug>/<slug>.mp4
   -14 LUFS, BT.709 tags, faststart, and a poster frame.
 - `sync` checks every cut: the picture must change within one frame of the sound's onset.
   `sheet` makes a contact sheet: **open it and look** before anyone else sees the video.
+- `node <skill folder>/scripts/qa.mjs videos/<slug>/<slug>.mp4` checks the delivered file itself: every
+  frame decodes, phone-safe encoding, faststart, no black or frozen stretches, loudness and true peak,
+  under the site's 25 MiB. Fix every FAIL before `add`. Delivery, capture and honesty traps:
+  `references/DELIVERY.md`.
 
 ## B. Generated footage: a music video, a cutscene
 
@@ -114,7 +119,8 @@ the riskiest shot first (the pilot), look at it, then the rest.
    Every frame is a function of time, rendered frame-exactly in a headless browser.
 7. **The sync loop**: `words <slug> --in <cut>` (a frame at every sung word, labelled) and
    `sync <slug> --in <cut> --at <hit times>`. Fix and re-render until every word and hit lands.
-8. **Contact-sheet review**: `sheet <slug> --in <cut> --every 1`. Look at every cell.
+8. **Contact-sheet review**: `sheet <slug> --in <cut> --every 1`. Look at every cell. Then
+   `scripts/qa.mjs <cut>` on each delivery (`references/DELIVERY.md`: continuity, faces, green screens).
 9. **Deliver** 16:9 and 9:16 (the film's two modes), then the page (below).
 
 ## The page

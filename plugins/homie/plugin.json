@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "homie",
-  "version": "0.6.0",
-  "description": "A studio in a box on your own Cloudflare: set up a studio (one repository for games, music, videos and posts), make or remix multiplayer web games or make an existing single-player game multiplayer, make songs and game scores with ElevenLabs Music on your own account, make gameplay trailers and music videos (captured from your game, or generated with fal on your own account, under a budget with receipts), run the studio's site and public rooms (up to 32 players a room) on its own Cloudflare account (free plan, no payment method), list it in the homie.rocks directory, and read the studio's own stats (counts, never tracking). Beta.",
+  "version": "0.7.0",
+  "description": "A studio in a box on your own Cloudflare: set up a studio (one repository for games, music, videos and posts), make or remix multiplayer web games or make an existing single-player game multiplayer, give games sound effects and synthesized music made on your own computer for free, make songs and game scores with ElevenLabs Music on your own account, make covers and painted art with fal on your own account under a budget, playtest a game on a computer and a phone with measured checks and a blind review, make gameplay trailers and music videos (captured from your game, or generated with fal under a budget with receipts), run the studio's site and public rooms (up to 32 players a room) on its own Cloudflare account (free plan, no payment method), list it in the homie.rocks directory, and read the studio's own stats (counts, never tracking). Beta.",
   "author": {
     "name": "Homie",
     "url": "https://homie.rocks"
@@ -16,6 +16,10 @@
     "netplay",
     "cloudflare",
     "music",
+    "sound",
+    "sfx",
+    "art",
+    "playtest",
     "video",
     "trailers",
     "studio",
@@ -26,7 +30,7 @@
       "interface": {
         "displayName": "Homie",
         "shortDescription": "Studios for games, music and video on your own Cloudflare",
-        "longDescription": "Set up a studio as one repository (games, music, videos, posts), make or remix multiplayer web games, make an existing single-player web game multiplayer where strangers meet in public rooms (every browser renders, bots fill seats, rounds restart), make songs and game scores with ElevenLabs Music on your own account, make gameplay trailers and music videos (captured from your game, or generated with fal on your own account, under a budget with receipts), preview locally, deploy the studio's site to its own Cloudflare account on the free plan (no payment method), and list the games in the homie.rocks directory. Beta: report issues at github.com/homie-rocks/homie/issues.",
+        "longDescription": "Set up a studio as one repository (games, music, videos, posts), make or remix multiplayer web games, make an existing single-player web game multiplayer where strangers meet in public rooms (every browser renders, bots fill seats, rounds restart), give a game sound effects and a synthesized theme made on your own computer for free (measured, wired in, starting on the first touch), make songs and game scores with ElevenLabs Music on your own account, make a cover from a real frame of the game and painted art with fal on your own account under a budget, playtest a game on a computer and a phone held both ways (first ten seconds, look, UI, real sound, a round, the owner control tests) with a blind review, make gameplay trailers and music videos (captured from your game, or generated with fal on your own account, under a budget with receipts), preview locally, deploy the studio's site to its own Cloudflare account on the free plan (no payment method; rooms of up to 32 players), list the games in the homie.rocks directory, and read the studio's own stats. Beta: report issues at github.com/homie-rocks/homie/issues.",
         "developerName": "Homie",
         "category": "Developer Tools",
         "capabilities": [
@@ -42,7 +46,9 @@
           "Put this studio online and list its games in the Homie directory",
           "Make this game multiplayer on my studio",
           "Make a 30-second theme song for my studio",
-          "Make a 15-second trailer of my game"
+          "Make a 15-second trailer of my game",
+          "Make sound effects and a short theme for my game",
+          "Playtest my game and tell me what is weak"
         ],
         "brandColor": "#FFCF5A"
       }

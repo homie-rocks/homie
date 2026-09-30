@@ -18,7 +18,11 @@ ask the person something (the go-ahead on the cost, a budget, an install).
 
 ## 1. The provider, only now
 
-A studio that never makes music is never asked about ElevenLabs. Check when this skill starts:
+A studio that never makes music is never asked about ElevenLabs. **Free first:** sound effects, a
+chiptune or synth theme, a game score from chords and patterns, loops and stems that cost nothing and
+need no account are the `sound` skill (synthesized on this computer). Use this skill for sung songs and
+produced music from a model, when the person wants that and has (or will make) an ElevenLabs account.
+Check when this skill starts:
 
 ```sh
 node <music.mjs> check
