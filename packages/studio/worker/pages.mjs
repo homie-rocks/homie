@@ -66,8 +66,10 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .room.at-bottom-left { bottom: max(8px, env(safe-area-inset-bottom)); left: max(8px, env(safe-area-inset-left)); align-items: flex-start; flex-direction: column-reverse; }
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(6,9,16,.62); color: inherit; font: inherit; cursor: pointer; touch-action: manipulation; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity .5s; }
 .pill svg { width: 15px; height: 15px; flex: none; }
-.pill.dim { opacity: .38; }
-.pill:hover, .pill:focus-visible, .pill[aria-expanded="true"] { opacity: 1; }
+.pill.dim { opacity: .38; width: 34px; padding: 0; justify-content: center; }
+.pill.dim span { display: none; }
+.pill:hover, .pill:focus-visible, .pill[aria-expanded="true"] { opacity: 1; width: auto; padding: 0 11px 0 9px; }
+.pill:hover span, .pill:focus-visible span, .pill[aria-expanded="true"] span { display: inline; }
 .sheet { box-sizing: border-box; width: min(300px, calc(100vw - 16px)); padding: 12px; border-radius: 16px; background: rgba(8,12,22,.94); border: 1px solid rgba(255,255,255,.16); box-shadow: 0 18px 50px rgba(0,0,0,.5); -webkit-user-select: text; user-select: text; touch-action: manipulation; }
 .sheet .code { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 2px 2px 10px; }
 .sheet .code b { font: 800 20px/1.1 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.01em; }

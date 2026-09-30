@@ -75,7 +75,7 @@ img,video{display:block;max-width:100%}
 
 /* ---- the top line: the studio, and its sections ---- */
 .top{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 18px;
-  padding:calc(env(safe-area-inset-top,0px) + 12px) max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px)) 12px max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px));
+  padding:calc(env(safe-area-inset-top,0px) + 12px) max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px),calc((100vw - 1180px) / 2)) 12px max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px),calc((100vw - 1180px) / 2));
   background:color-mix(in srgb,var(--bg) 80%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-bottom:1px solid var(--line)}
 .has-hero .top{position:absolute;inset:0 0 auto;background:linear-gradient(to bottom,color-mix(in srgb,var(--bg) 55%,transparent),transparent);border-bottom-color:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
 .mark{display:inline-flex;align-items:center;gap:10px;min-height:40px;font:800 14px/1 var(--display);letter-spacing:var(--mark-track,.3em);text-transform:var(--mark-case,uppercase);text-decoration:none;color:var(--fg)}
@@ -117,7 +117,7 @@ img,video{display:block;max-width:100%}
 .hero-shade{position:absolute;inset:0;z-index:-1;pointer-events:none;background:
   linear-gradient(to top,var(--bg) 0%,color-mix(in srgb,var(--bg) 88%,transparent) 20%,color-mix(in srgb,var(--bg) 40%,transparent) 46%,transparent 68%),
   linear-gradient(to bottom,color-mix(in srgb,var(--bg) 70%,transparent) 0%,transparent 22%)}
-.hero-copy{width:100%;max-width:780px;padding:0 max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px)) calc(env(safe-area-inset-bottom,0px) + clamp(26px,5.5vh,72px)) max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px))}
+.hero-copy{width:100%;max-width:780px;padding:0 max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px)) calc(env(safe-area-inset-bottom,0px) + clamp(26px,5.5vh,72px)) max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px),calc((100vw - 1180px) / 2))}
 .title{margin:0;font:800 clamp(54px,15vw,72px)/.9 var(--display);letter-spacing:-.035em;overflow-wrap:anywhere;text-wrap:balance;
   text-shadow:0 0 38px color-mix(in srgb,var(--hot) 50%,transparent),0 2px 0 color-mix(in srgb,var(--bg) 60%,transparent)}
 .title.t-long{font-size:clamp(44px,12vw,64px)}
@@ -143,7 +143,8 @@ img,video{display:block;max-width:100%}
     linear-gradient(to top,var(--bg) 0%,color-mix(in srgb,var(--bg) 70%,transparent) 18%,transparent 52%),
     linear-gradient(to right,color-mix(in srgb,var(--bg) 82%,transparent) 0%,color-mix(in srgb,var(--bg) 35%,transparent) 42%,transparent 66%),
     linear-gradient(to bottom,color-mix(in srgb,var(--bg) 70%,transparent) 0%,transparent 18%)}
-  .hero-copy{max-width:min(64rem,94vw)}
+  .hero-copy{max-width:none}
+  .hero-copy>*{max-width:min(64rem,94vw)}
   .title{font-size:clamp(76px,8.6vw,140px)}
   .title.t-long{font-size:clamp(64px,6.6vw,108px)}
   .title.t-xlong{font-size:clamp(54px,5.2vw,86px)}
@@ -243,10 +244,6 @@ img,video{display:block;max-width:100%}
 .facts li{padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);font:600 14px/1.2 var(--text);color:var(--soft)}
 .howto{margin:22px 0 0;padding-left:22px;color:var(--soft)}
 .howto li{margin:6px 0}
-.controls{display:grid;gap:10px;margin:22px 0 0}
-.controls div{display:grid;grid-template-columns:100px 1fr;gap:12px;padding:12px 16px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}
-.controls dt{margin:0;color:var(--dim);font:600 13px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.1em}
-.controls dd{margin:0;color:var(--fg)}
 .media-card{display:block;border-radius:var(--r);overflow:hidden;background:var(--panel);border:1px solid var(--line);text-decoration:none}
 .media-card .art{position:relative;aspect-ratio:16/9;background:color-mix(in srgb,var(--hot) 16%,var(--panel))}
 .media-card .art img{width:100%;height:100%;object-fit:cover}
@@ -279,7 +276,7 @@ img,video{display:block;max-width:100%}
 .copy svg{width:15px;height:15px}
 
 /* pages without a hero */
-.head{position:relative;overflow:hidden;padding:clamp(44px,8vw,110px) max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px)) clamp(22px,3vw,36px) max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px))}
+.head{position:relative;overflow:hidden;padding:clamp(44px,8vw,110px) max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px),calc((100vw - 1180px) / 2)) clamp(22px,3vw,36px) max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px),calc((100vw - 1180px) / 2))}
 .head::before{content:"";position:absolute;inset:-40% -10% auto;height:140%;z-index:-1;pointer-events:none;
   background:radial-gradient(40% 50% at 80% 30%,color-mix(in srgb,var(--glow) 16%,transparent),transparent 70%),radial-gradient(35% 45% at 15% 60%,color-mix(in srgb,var(--hot) 14%,transparent),transparent 70%)}
 .head{isolation:isolate}
@@ -287,7 +284,7 @@ img,video{display:block;max-width:100%}
 .head .lead{margin-top:16px}
 .head .feeds{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 .head .feeds a{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);text-decoration:none;color:var(--soft);font:600 13px/1 var(--text)}
-.wrap{max-width:1180px;margin:0 auto;padding:0 max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px)) clamp(56px,8vw,110px) max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px))}
+.wrap{max-width:calc(1180px + 2 * var(--gutter));margin:0 auto;padding:0 max(var(--gutter),calc(env(safe-area-inset-right,0px) + 12px)) clamp(56px,8vw,110px) max(var(--gutter),calc(env(safe-area-inset-left,0px) + 12px))}
 
 /* game cards */
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:20px;margin-top:28px}
@@ -901,7 +898,6 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
 </div></section>`;
 
   const facts = ['free, in the browser', 'bots fill empty seats', 'join any time: take a bot’s place', 'rounds restart on their own', ...(tvOn ? ['phones as controllers on a TV'] : [])];
-  const controls = ['phone', 'computer', 'tv'].filter((k) => L.controls?.[k]);
   const side = trailer ? mediaCard(trailer, 'videos') : song ? mediaCard(song, 'music') : (L.cover ? `<figure class="media-card reveal" style="margin:0"><span class="art"><img src="${esc(L.cover)}" alt="${esc(g.name)}, a moment of play" loading="lazy"></span><figcaption class="cap"><b>${esc(g.name)}</b><span>${esc(playersText(g))}${minutes(g.roundSeconds) ? ` · ${esc(minutes(g.roundSeconds))}` : ''}</span></figcaption></figure>` : '');
   const howBand = `<section class="band hotband" aria-labelledby="how-title"><div class="band-in split">
   <div class="reveal">
@@ -909,7 +905,6 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     <h2 class="small-h" id="how-title">${esc(L.headline ?? `${g.players?.max > 1 ? `Up to ${g.players.max} players` : 'One player'}${minutes(g.roundSeconds) ? `, ${minutes(g.roundSeconds)}` : ''}.`)}</h2>
     ${L.about ? `<p class="lead">${esc(L.about)}</p>` : ''}
     ${(L.how ?? []).length ? `<ul class="howto">${L.how.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
-    ${controls.length ? `<dl class="controls">${controls.map((k) => `<div><dt>${k === 'tv' ? 'TV' : k === 'phone' ? 'Phone' : 'Computer'}</dt><dd>${esc(L.controls[k])}</dd></div>`).join('')}</dl>` : ''}
     <ul class="facts">${facts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
   </div>
   ${side ? `<div>${side}${trailer && song ? `<div style="margin-top:14px">${mediaCard(song, 'music')}</div>` : ''}</div>` : ''}

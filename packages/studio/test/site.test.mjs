@@ -146,9 +146,10 @@ test('build: the landing facts come from each game\'s own files; posts are dated
   assert.equal(b.landings.find((l) => l.id === 'crown-thief').hero, 'colours', 'a starter with no art gets the studio\'s colours');
   const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
   const rock = cat.games.find((g) => g.id === 'rock-race');
-  assert.equal(rock.landing.hero.wide, '/games/rock-race/_landing/wide.mp4');
-  assert.equal(rock.landing.hero.tall, '/games/rock-race/_landing/tall.mp4');
-  assert.equal(rock.landing.hero.wideImage, '/games/rock-race/_landing/wide.jpg');
+  assert.equal(rock.landing.hero.wide, '/games/rock-race/hero/wide.mp4', 'a static game\'s own copy is served, not a second one');
+  assert.equal(rock.landing.hero.tall, '/games/rock-race/hero/tall.mp4');
+  assert.equal(rock.landing.hero.wideImage, '/games/rock-race/hero/wide.jpg');
+  assert.equal(existsSync(join(dir, 'site/dist/games/rock-race/_landing/wide.mp4')), false);
   assert.equal(rock.landing.cover, '/games/rock-race/cover.jpg');
   assert.deepEqual(rock.landing.controls, { phone: 'Stick left, FIRE right', computer: 'Arrows and Space' });
   assert.equal(rock.landing.credits.original.author, 'An Author');
@@ -156,6 +157,12 @@ test('build: the landing facts come from each game\'s own files; posts are dated
   assert.equal(cat.studio.tagline, 'Games for night owls');
   assert.deepEqual(cat.studio.site, { featured: 'rock-race', frameAncestors: ['https://hub.example'] }, 'only https origins may frame the play page');
   assert.equal(cat.posts[0].html, undefined, 'the catalogue carries summaries; the HTML is in _site/posts.json');
+  // A bundled game's build has no hero/ of its own: the landing's copy goes under _landing/.
+  write(dir, 'games/crown-thief/hero/wide.jpg', 'still');
+  assert.equal(out(run(['build'], dir)).ok, true);
+  const again = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
+  assert.equal(again.games.find((g) => g.id === 'crown-thief').landing.hero.wideImage, '/games/crown-thief/_landing/wide.jpg');
+  assert.ok(existsSync(join(dir, 'site/dist/games/crown-thief/_landing/wide.jpg')));
   const posts = JSON.parse(readFileSync(join(dir, 'site/dist/_site/posts.json'), 'utf8')).posts;
   const live = posts.find((p) => p.slug === 'we-are-live');
   assert.equal(live.date, '2026-09-29T00:00:00.000Z', 'dated by the file name');
@@ -222,7 +229,7 @@ test('a game\'s landing: its footage, the pitch, Play into a public room, phone 
   assert.equal(res.headers.get('cache-control'), 'no-store, no-transform');
   const html = await res.text();
   assert.match(html, /<video autoplay muted loop playsinline preload="metadata"[^>]*aria-label="Ships trade fire">/, 'the game\'s own footage is the hero');
-  assert.match(html, /<source media="\(min-aspect-ratio: 3\/4\)" src="\/games\/rock-race\/_landing\/wide\.mp4" type="video\/mp4"><source src="\/games\/rock-race\/_landing\/tall\.mp4" type="video\/mp4">/);
+  assert.match(html, /<source media="\(min-aspect-ratio: 3\/4\)" src="\/games\/rock-race\/hero\/wide\.mp4" type="video\/mp4"><source src="\/games\/rock-race\/hero\/tall\.mp4" type="video\/mp4">/);
   assert.match(html, /<h1 class="title[^"]*" id="game-title">Rock &lt;Race&gt;<\/h1>/);
   assert.match(html, /<p class="line">Blast rocks, not friends\.<\/p>/);
   assert.match(html, /<a class="play" href="\/rock-race\/play" data-play>/);
@@ -260,7 +267,7 @@ test('a game\'s landing: its footage, the pitch, Play into a public room, phone 
   assert.equal(credits.status, 200);
   assert.match(await credits.text(), /MIT License\n\nCopyright \(c\) the original authors/);
   assert.equal((await site('/crown-thief/credits')).status, 404);
-  const footage = await site('/games/rock-race/_landing/wide.mp4', { headers: { range: 'bytes=0-3' } });
+  const footage = await site('/games/rock-race/hero/wide.mp4', { headers: { range: 'bytes=0-3' } });
   assert.equal(footage.status, 206, 'hero footage answers byte ranges (Safari needs them to play a video)');
   assert.equal(await footage.text(), 'wide');
 });

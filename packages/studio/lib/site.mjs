@@ -317,6 +317,14 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
     if (copied.has(abs)) return copied.get(abs);
     const bytes = statSync(abs).size;
     if (bytes > MAX_FILE) { log(`warning: games/${g.id}: ${label} is ${Math.round(bytes / 1048576)} MiB, over the 25 MiB a site serves itself; the landing leaves it out`); return null; }
+    // Already in the game's build (a static game copies its whole folder): served from there, not twice.
+    const rel = relative(g.dir, abs);
+    const beside = join(out, rel);
+    if (!rel.startsWith('..') && existsSync(beside) && statSync(beside).size === bytes) {
+      const url = `/games/${g.id}/${rel.split(sep).map(encodeURIComponent).join('/')}`;
+      copied.set(abs, url);
+      return url;
+    }
     mkdirSync(landDir, { recursive: true });
     let name = basename(abs).replace(/[^A-Za-z0-9._-]/g, '-');
     if ([...copied.values()].some((u) => u.endsWith(`/${name}`))) name = `${copied.size}-${name}`;
