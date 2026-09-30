@@ -23,6 +23,7 @@ import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 import { buildMedia } from './media.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
+import { SEAT_MAX } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
@@ -74,6 +75,31 @@ export function sourceOf(dir, id) {
   };
   walk('');
   return { v: 1, kind: 'homie-game-source', id, files };
+}
+
+function readJson(path) {
+  try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
+}
+
+/**
+ * A game's netplay manifest: game.json's `netplay` block, over a `netplay.json` beside game.json or in the game's
+ * built output (a ported Vite game ships public/netplay.json), over nothing.
+ */
+export function netplayOf(g, out = null) {
+  const file = readJson(join(g.dir, 'netplay.json')) ?? (out ? readJson(join(out, 'netplay.json')) : null) ?? {};
+  return { ...(file && typeof file === 'object' ? file : {}), ...(g.netplay && typeof g.netplay === 'object' ? g.netplay : {}) };
+}
+
+/**
+ * How many seats a room of this game has: the netplay manifest's `maxPlayers` (or `players.max`), else game.json's
+ * `players.max`, else 8; at most SEAT_MAX (32). `asked` is what the game named, so a build can say it was capped.
+ */
+export function seatsFor(g, net = netplayOf(g)) {
+  const named = [net.maxPlayers, net.players?.max, g.players?.max].map((n) => Math.floor(Number(n))).find((n) => Number.isFinite(n) && n >= 1);
+  const asked = named ?? 8;
+  const max = Math.min(SEAT_MAX, asked);
+  const minNamed = [net.minPlayers, net.players?.min, g.players?.min].map((n) => Math.floor(Number(n))).find((n) => Number.isFinite(n) && n >= 1);
+  return { min: Math.min(max, minNamed ?? 1), max, asked };
 }
 
 export async function build(root, { only = null, log = () => {} } = {}) {
@@ -134,7 +160,9 @@ export async function build(root, { only = null, log = () => {} } = {}) {
     if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id))}\n`);
     const main = join(out, 'assets', 'main.js');
     const bytes = existsSync(main) ? statSync(main).size : dirBytes(out);
-    built.push({ id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings });
+    const seats = seatsFor(g, netplayOf(g, out));
+    if (seats.asked > SEAT_MAX) log(`warning: games/${g.id} asks for ${seats.asked} players; a room holds at most ${SEAT_MAX}, so its rooms have ${SEAT_MAX} seats`);
+    built.push({ id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max });
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB)`);
   }
   const all = listGames(root);
@@ -146,12 +174,21 @@ export async function build(root, { only = null, log = () => {} } = {}) {
     try { const prev = JSON.parse(readFileSync(join(dist, 'games.json'), 'utf8')); media = { songs: prev.songs ?? [], videos: prev.videos ?? [], skipped: [] }; } catch { media = { songs: [], videos: [], skipped: [] }; }
   }
   const catalogue = {
-    studio: { name: studio.name, slug: studio.slug, version: STUDIO_VERSION },
-    games: all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))).map((g) => ({
-      id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: g.players ?? { min: 1, max: 8 },
-      roundSeconds: g.roundSeconds ?? null, movement: g.netplay?.movement ?? null, cover: g.cover ?? null,
-      ...(g.screen ? { screen: g.screen } : {}),
-    })),
+    studio: {
+      name: studio.name, slug: studio.slug, version: STUDIO_VERSION,
+      // studio.json `stats.share`: the site tells the directory two numbers for the hub (played this week).
+      ...(studio.stats?.share === true ? { stats: { share: true }, directory: studio.homie?.directory ?? 'https://homie.rocks' } : {}),
+    },
+    games: all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))).map((g) => {
+      // The seats come from the game's netplay manifest (NETPLAY.md §3): what the Worker gives every room of it.
+      const net = netplayOf(g, join(dist, 'games', g.id));
+      const { min, max } = seatsFor(g, net);
+      return {
+        id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
+        roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
+        ...(g.screen ? { screen: g.screen } : {}),
+      };
+    }),
     songs: media.songs,
     videos: media.videos,
   };

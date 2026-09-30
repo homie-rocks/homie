@@ -23,10 +23,17 @@ export const NET_VERSION = 1;
 const PALETTE_SIZE = 12;
 const DEVICE_RANK = { desk: 0, tv: 1, phone: 2 };
 
-/** Size caps (bytes of the JSON text as received). */
+/** Size caps (bytes of the JSON text as received), for a room of up to 16 seats. */
 export const LIMITS = Object.freeze({
   hello: 2048, snap: 16384, in: 2048, ev: 4096, ckpt: 65536, state: 8192, round: 8192, roster: 4096, ping: 256, other: 512,
 });
+/**
+ * What grows with the seats (every body, every result, every slot): the checkpoint, round and roster caps double
+ * for a room of 17 to 32 (revision 3). Measured: a 32-seat courier game's checkpoint reached 56 KB of the 64 KB
+ * a 16-seat room allows. The snapshot cap does not grow: 32 bodies are about 1.5 KB.
+ */
+export const GROWS = Object.freeze(['ckpt', 'round', 'roster']);
+export const capOf = (t, seats) => (LIMITS[t] ?? LIMITS.other) * (GROWS.includes(t) && seats > 16 ? 2 : 1);
 /** Rate caps (messages per rolling second, per client). Over the cap a message is dropped, counted and reported. */
 export const RATES = Object.freeze({ snap: 30, in: 60, ev: 30, ckpt: 4, state: 64, round: 4, roster: 8, ping: 8, other: 8 });
 /** `ev` per second by the sender's role: a screen is a spectator, and the host is somebody's phone. */
@@ -169,7 +176,7 @@ export class NetRoom {
 
   allow(c, t, bytes) {
     // A spectator screen has little to say: its events are capped at 512 B (16 screens x 2/s x 512 B at most reach the host).
-    const cap = t === 'ev' && c.seat === null && c.id !== this.hostId ? 512 : (LIMITS[t] ?? LIMITS.other);
+    const cap = t === 'ev' && c.seat === null && c.id !== this.hostId ? 512 : capOf(t, this.seatCap);
     if (bytes > cap) { this.stats.oversize += 1; this.error(c, 'too-large', `${t} is ${bytes} B; the cap is ${cap} B`); return false; }
     const now = this.now();
     const limit = t === 'ev' ? EV_RATES[this.roleOf(c)] : (RATES[t] ?? RATES.other);

@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Put a Homie studio's site and games online on the studio's OWN Cloudflare account (Worker, D1 and public-room Durable Objects, all on the free plan with no payment method; R2 storage only when added) and list them in the homie.rocks directory; ask an owner for a grant when a game uses a protected name. Use when someone asks to deploy, publish, go live, share a studio's games, or list them in the Homie directory.
+description: Put a Homie studio's site and games online on the studio's OWN Cloudflare account (Worker, D1 and public-room Durable Objects, all on the free plan with no payment method; R2 storage only when added), list them in the homie.rocks directory, and read the studio's own stats (visits, plays, rooms, rounds, players, songs, videos, where people came from); ask an owner for a grant when a game uses a protected name. Use when someone asks to deploy, publish, go live, share a studio's games, list them in the Homie directory, or how their studio or a game is doing.
 ---
 
 # Publish a studio
@@ -59,6 +59,37 @@ refused for a protected name stays on the studio's site but is not listed. The d
 is in beta: at most 12 games per studio are listed, names and blurbs are checked (plain
 text, no links), and its owner can unlist a listing. Anyone can report a listing; only
 the directory's owner acts on reports, never an AI.
+
+## The site's address
+
+`deploy` prints the live address. A `workers.dev` address names the person's Cloudflare
+account (often after them), so `deploy` keeps it in `.studio/local.json`, which git ignores:
+never copy it into a committed file (README, posts, manifests). When the studio has its own
+domain, it goes in `studio.json` as `cloudflare.domain` (e.g. `"night-owls.example"`); deploy
+never replaces it, and the directory claim, `publish`, `check` and `stats` use it.
+
+## Stats (the owner's, and only the owner's)
+
+Every studio counts, in its own Cloudflare (D1, free plan): pages opened, Play presses,
+rooms opened, the most people playing at once and right now, rounds finished, songs played,
+videos watched, and which site sent each visitor (homie.rocks, another studio, search, the
+web, a `?via=` link). It counts and never tracks: no cookie on a visitor, no person
+identified, nothing sent anywhere; prefetches, crawlers and house QA are not counted.
+
+- "How is my studio doing?": run `npx --no-install homie-studio stats` (add `--range 30d`,
+  or `--game <id>`, `--song <slug>`, `--video <slug>`) and say the numbers plainly.
+- To read them through the Homie MCP (for example from an app without the studio folder
+  open): `npx --no-install homie-studio stats key` gives a read key that ends in an hour;
+  pass it to `studio_stats` { site, key, range }. The key only reads; never paste it
+  anywhere else, and `stats revoke` ends every key.
+- For the person's own browser: `npx --no-install homie-studio stats link` gives a one-time
+  link (30 minutes) to the private page `/_studio/stats`. Give it to the person to open
+  themselves; it keeps that browser signed in for 30 days. It is theirs: never post it.
+- `npx --no-install homie-studio stats share on` (then `npm run deploy`) lets the directory
+  show "played this week" (Play presses and rounds with people, over 7 days). Only when the
+  person wants it; it is off by default.
+- A studio made before 0.6.0 gets its counters on the next `npm run deploy` (D1 migration
+  `0002_studio_stats.sql`); nothing before then was counted.
 
 ## Grants (protected names)
 

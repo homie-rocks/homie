@@ -161,6 +161,8 @@ export interface NetStats {
   snapHzOut: number;
   inputHzIn: number;
   inputHzOut: number;
+  /** Idle input frames not sent (identical to the last one, inside the keepalive interval). */
+  idleInputsSkipped?: number;
   lastSnapBytes: number;
   maxSnapBytes: number;
   bytesInPerS: number;
@@ -507,6 +509,13 @@ const IN_SLOW_CAP_PER_S = 15;
 const IN_SLOW_MS = 8000;
 /** A socket with this much still unsent does not queue another input frame (the newest one waits instead). */
 const IN_BACKLOG_BYTES = 2048;
+/**
+ * An input frame identical to the last one sent (same avatar or intent, same held keys, no press, same reset epoch)
+ * goes out at most this often: a player standing still says so four times a second, not twenty. The host already
+ * holds that frame, so nothing it reads changes; every incoming socket message is a Durable Object request
+ * (billed 20:1), and in a 32-seat room the replicas' inputs are nearly all of them (NETPLAY.md §11).
+ */
+const IDLE_INPUT_MS = 250;
 
 function heldList(held: Iterable<string> | Record<string, boolean> | undefined): string[] {
   if (!held) return [];
@@ -635,9 +644,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let prevHeld = new Set<string>();
   let pendingPresses: Record<string, number> = {};
   let inputTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The last input frame sent, as text (idle frames repeat it at most every IDLE_INPUT_MS). */
+  let lastInputSig = '';
   /** Wall times of the input frames sent in the last second, and until when the slow cap holds. */
   const inSent: number[] = [];
   let inSlowUntil = 0;
+  let idleSkipped = 0;
   /** Why this client stopped for good (a FINAL_ERRORS refusal), or null while it plays or reconnects. */
   let closedWhy: string | null = null;
   /** Wall time the socket went down (0 while connected): how long a reconnect has taken. */
@@ -1071,12 +1083,17 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const budget = inputBudgetWait();
     const backlog = (ws?.bufferedAmount ?? 0) > IN_BACKLOG_BYTES;
     if (budget > 0 || backlog) { inputTimer = setTimeout(flushInput, backlog ? Math.max(budget, 30) : budget); return; }
+    // Standing still: the host has this exact frame already. Say it again only as a keepalive.
+    const pressed = Object.keys(pendingPresses).length > 0;
+    let sig = '';
+    try { sig = JSON.stringify([pendingA, pendingHeld, mine.rs]); } catch { sig = ''; }
+    if (!pressed && sig && sig === lastInputSig && wall() - lastInputSentAt < IDLE_INPUT_MS) { idleSkipped += 1; return; }
     inSent.push(wall());
     inSeq += 1;
     const msg: Record<string, unknown> = { t: 'in', q: inSeq, a: pendingA, h: pendingHeld, r: mine.rs };
     if (Object.keys(pendingPresses).length) msg['p'] = pendingPresses;
     if (raw(msg)) {
-      inputOut.hit(wall()); pendingPresses = {};
+      inputOut.hit(wall()); pendingPresses = {}; lastInputSig = sig;
       sentHist.push({ q: inSeq, a: pendingA, h: pendingHeld, at: wall(), r: mine.rs });
       if (sentHist.length > 64) sentHist.shift();
     }
@@ -1095,7 +1112,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const t = wall();
     return {
       role, seat, host, connected, offline, rtt, offset: Math.round(offset),
-      snapHzIn: snapIn.hz(t), snapHzOut: snapOut.hz(t), inputHzIn: inputIn.hz(t), inputHzOut: inputOut.hz(t),
+      snapHzIn: snapIn.hz(t), snapHzOut: snapOut.hz(t), inputHzIn: inputIn.hz(t), inputHzOut: inputOut.hz(t), idleInputsSkipped: idleSkipped,
       lastSnapBytes, maxSnapBytes, bytesInPerS: perSecond(bytesIn), bytesOutPerS: perSecond(bytesOut),
       interpDelay: Math.round(interpDelay()), snapAgeP90: Math.round(ageP90), starvedPct: +starvedPct.toFixed(3), rejectedSnaps,
       owned: api.owned, pending: sentHist.length, stateKeys: stateMap.size,

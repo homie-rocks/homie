@@ -33,6 +33,8 @@ is the consent that matters):
 - The homie.rocks directory then lists the games. It stores only the site's address and
   a claim token, the studio's name, and each game's name, blurb and Play link: never
   code, media, keys or accounts.
+- The studio's site counts its own visits, plays, rooms, rounds and songs in its own D1,
+  for them only (`homie-studio stats`): counts, never people, and nothing sent anywhere.
 
 `npx --no-install homie-studio deploy --plan` (once the studio exists) prints exactly
 this for the studio, from `studio.json`, and changes nothing.
@@ -101,6 +103,11 @@ Cloudflare is checked only now (a studio that never deploys never needs it):
 5. `npx --no-install homie-studio check <id> --url <the live site>` — the same two-browser proof,
    on the live site.
 
+The live address `deploy` prints is on `workers.dev`, which names the person's Cloudflare
+account; `deploy` keeps it in `.studio/local.json` (git-ignored). Never write it into a
+committed file. A custom domain, once the studio has one, goes in `studio.json` as
+`cloudflare.domain`.
+
 ## 4. List it in the directory
 
 Call the Homie MCP tool `studio_publish` with the live site address. It reads the
@@ -112,7 +119,9 @@ unlist a listing that breaks its rules.
 
 Three to five lines: the studio folder, the live site, each game's Play link, the
 directory link, that two browsers finished a round on the live site, and what now runs
-on their Cloudflare and what it costs (free). Add one line:
+on their Cloudflare and what it costs (free). Say in one line that the studio keeps its
+own stats for them (`npx --no-install homie-studio stats`, or ask for the private page:
+`stats link`). Add one line:
 Homie for studios is in beta; bugs, port requests and questions go to
 https://github.com/homie-rocks/homie/issues/new/choose. Commit the studio
 (`git add -A && git commit -m "…"` inside the studio folder — it is the studio's own

@@ -139,7 +139,8 @@ repository:
 - **The directory** of studios and games (<https://homie.rocks/studios/>), in beta. It
   lists a studio's games after the studio's site serves the claim the directory gave it,
   so nobody can list games under someone else's site. It stores the site's address, the
-  studio's name and each game's name, blurb and Play link; never code, media or keys.
+  studio's name, and each game's, song's and video's name, blurb, link and cover address;
+  never code, media files or keys.
   Names and blurbs are plain text without links, a studio lists at most 12 games, the
   directory and the MCP server are rate limited per address and per studio, every listing
   has a Report link, and only the directory's owner (never an AI) can unlist or take down

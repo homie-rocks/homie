@@ -29,6 +29,48 @@ export function requireStudio(from) {
 export function readStudio(root) { return JSON.parse(readFileSync(join(root, 'studio.json'), 'utf8')); }
 export function writeStudio(root, studio) { writeFileSync(join(root, 'studio.json'), `${JSON.stringify(studio, null, 2)}\n`); }
 
+/*
+ * WHERE THE SITE'S ADDRESS LIVES. studio.json is committed, and a workers.dev address carries the Cloudflare
+ * account's subdomain, which is often the person's own name. So studio.json keeps only a CUSTOM domain
+ * (`cloudflare.domain`, e.g. "night-owls.example"); the workers.dev address `deploy` gets back stays on this
+ * computer in .studio/local.json, which the studio's .gitignore leaves out.
+ */
+export const LOCAL_STATE = '.studio/local.json';
+export const isWorkersDev = (url) => { try { return /\.workers\.dev$/i.test(new URL(url).hostname); } catch { return false; } };
+
+/** `cloudflare.domain` as an origin: "example.com" or "https://example.com/" become "https://example.com"; else null. */
+export function domainOrigin(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (u.protocol !== 'https:' || !u.hostname.includes('.') || isWorkersDev(u.origin)) return null;
+    return u.origin;
+  } catch { return null; }
+}
+
+export function readLocal(root) {
+  try { return JSON.parse(readFileSync(join(root, LOCAL_STATE), 'utf8')); } catch { return {}; }
+}
+export function writeLocal(root, patch) {
+  const path = join(root, LOCAL_STATE);
+  mkdirSync(dirname(path), { recursive: true });
+  const next = { ...readLocal(root), ...patch };
+  writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
+  return next;
+}
+
+/**
+ * The studio site's public address: its custom domain (studio.json `cloudflare.domain`, or a non-workers.dev
+ * `cloudflare.url` an older studio wrote by hand), else the workers.dev address this computer's deploy got back,
+ * else an older studio.json's workers.dev `url` (until the next deploy moves it out).
+ */
+export function siteUrl(root, studio = readStudio(root)) {
+  const cf = studio.cloudflare ?? {};
+  const custom = domainOrigin(cf.domain) ?? (cf.url && !isWorkersDev(cf.url) ? domainOrigin(cf.url) : null);
+  return custom ?? readLocal(root).url ?? cf.url ?? null;
+}
+
 export function listGames(root) {
   const dir = join(root, 'games');
   if (!existsSync(dir)) return [];

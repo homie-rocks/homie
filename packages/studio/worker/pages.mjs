@@ -126,6 +126,12 @@ function rightsLine(e) {
   return bits.length ? `<p class="rights">${bits.join(' ')}</p>` : '';
 }
 
+/**
+ * The page's one stats beacon: when its player first starts, one POST to /api/stats/beat (a counter, nothing about
+ * the listener). worker/stats.mjs says what is counted.
+ */
+const playedBeacon = (kind, slug) => `<script>(function(){var m=document.querySelector(${JSON.stringify(kind === 'song' ? 'audio' : 'video[data-main]')});if(!m||!navigator.sendBeacon)return;m.addEventListener('play',function(){try{navigator.sendBeacon('/api/stats/beat',${JSON.stringify(JSON.stringify({ k: kind, s: slug })).replace(/</g, '\\u003c')});}catch(e){}},{once:true});}());</script>`;
+
 const ogTags = (props) => Object.entries(props).filter(([, v]) => v).map(([k, v]) => `<meta property="${esc(k)}" content="${esc(v)}">`).join('');
 
 /** /music/<slug>/: the player, the facts, the words, the loops and stems another game may use. */
@@ -148,7 +154,7 @@ export function songPage(cat, e, origin = '') {
     ${e.lyrics ? `<h2 class="section">Words</h2><div class="lyrics">${esc(e.lyrics)}</div>` : ''}
     ${extras.length ? `<h2 class="section">Loops and stems</h2><ul class="files">${extras.map((f) => `<li><a href="${esc(f.url)}" download><b>${esc(f.name ?? (f.role === 'loop' ? 'Loop' : 'Stem'))}</b><span>${esc([f.role, f.bars ? `${f.bars} bars` : null, f.bytes ? `${Math.max(1, Math.round(f.bytes / 1024))} KB` : null].filter(Boolean).join(' · '))}</span></a></li>`).join('')}</ul>` : ''}
     ${rightsLine(e)}
-  </div>`, { extraHead: ogTags({ 'og:type': 'music.song', 'og:title': e.title, 'og:description': e.blurb, 'og:audio': abs(audio.url), 'og:image': abs(cover?.url) }) });
+  </div>${playedBeacon('song', e.slug)}`, { extraHead: ogTags({ 'og:type': 'music.song', 'og:title': e.title, 'og:description': e.blurb, 'og:audio': abs(audio.url), 'og:image': abs(cover?.url) }) });
 }
 
 /** /videos/<slug>/: the player (16:9, or the 9:16 cut on a portrait phone), captions, credits. */
@@ -173,7 +179,7 @@ export function videoPage(cat, e, origin = '') {
       ${game ? `<div class="row"><a class="btn" href="/${esc(game.id)}/play">Play ${esc(game.name)}</a>${vertical ? `<a class="btn ghost" href="${esc(vertical.url)}">Vertical cut</a>` : ''}</div>` : (vertical ? `<div class="row"><a class="btn ghost" href="${esc(vertical.url)}">Vertical cut</a></div>` : '')}
     </section>
     ${rightsLine(e)}
-  </div>${pick}`, { extraHead: ogTags({ 'og:type': 'video.other', 'og:title': e.title, 'og:description': e.blurb, 'og:video': abs(video.url), 'og:image': abs(poster?.url) }) });
+  </div>${pick}${playedBeacon('video', e.slug)}`, { extraHead: ogTags({ 'og:type': 'video.other', 'og:title': e.title, 'og:description': e.blurb, 'og:video': abs(video.url), 'og:image': abs(poster?.url) }) });
 }
 
 export function gamePage(cat, g, playing = 0) {

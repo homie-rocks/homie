@@ -19,10 +19,11 @@
  * lists every file it writes, so the person sees exactly what changed.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { STUDIO_VERSION, packageSpec } from './version.mjs';
+import { STATS_MIGRATION, STATS_MIGRATION_FILE } from '../worker/stats.mjs';
 
 export const COMPAT_DATE = '2026-06-01';
 export const WRANGLER_VERSION = '4.126.0';
@@ -74,7 +75,7 @@ directory lists its games; homie.rocks does not host them.
 | \`music/\`, \`videos/\` | Songs, scores, loops; trailers, music videos, cutscenes. \`manifest.json\` lists each one (\`node_modules/@homie-rocks/studio/media/MEDIA.md\`); a published entry gets a page at \`/music/<slug>/\` or \`/videos/<slug>/\`, served from the site itself (files up to 25 MiB) or, for larger media, from the studio's storage once it has storage (see below; \`npx --no-install homie-studio media put <file>\`). Large files never go into git. The Homie plugin's \`music\` and \`video\` skills make them. |
 | \`posts/\` | Markdown the studio publishes. |
 | \`site/\` | The studio's Worker (\`src/worker.mjs\`), D1 migrations, \`wrangler.jsonc\`. |
-| \`studio.json\` | The studio's name, slug and Cloudflare resource names. |
+| \`studio.json\` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. \`.studio/\` (git-ignored) is this computer's own state. |
 | \`.claude/skills/\` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |
 
 ## Commands (all through the pinned CLI in node_modules)
@@ -107,6 +108,13 @@ studio's pinned copy, never a registry lookup of the bare name.
   is a separate step the person agrees to; nothing else needs it.
 - \`npx --no-install homie-studio publish\` — list this studio's games in the homie.rocks directory
   (or call the Homie MCP tool \`studio_publish\`).
+- \`npx --no-install homie-studio stats\` — the studio's own numbers, for its owner: visits, Play presses,
+  rooms, the most people playing at once, rounds, songs played, videos watched, and where visitors came
+  from (homie.rocks, other studios, search, the web). \`stats link\` gives the owner a one-time link to the
+  private page \`/_studio/stats\` in their own browser; \`stats key\` a short read key for the Homie MCP tool
+  \`studio_stats\` (never paste a key anywhere else). \`stats share on\` tells the directory two numbers
+  (played this week). The site counts and never tracks: no cookie on a visitor, no person identified,
+  nothing sent anywhere; house QA and \`check\` runs are not counted.
 
 ## Making games
 
@@ -125,6 +133,10 @@ studio's pinned copy, never a registry lookup of the bare name.
 - Keys stay in the providers' own logins (Wrangler, ElevenLabs, fal) or the OS
   keychain. Never write a key, token or password into this repository.
 - Never touch a Cloudflare resource this studio did not create (\`studio.json\` says which).
+- The site's workers.dev address names the Cloudflare account (often after its owner): \`deploy\` keeps it in
+  \`.studio/local.json\`, which git ignores. Never copy it into a committed file. A custom domain goes in
+  studio.json as \`cloudflare.domain\`.
+- A game's room size is its netplay manifest's \`maxPlayers\` (game.json \`netplay\`, or netplay.json), up to 32.
 - Nothing in this studio needs \`~/.homie\` or a Homie box.
 
 ## Beta
@@ -170,6 +182,8 @@ CREATE INDEX IF NOT EXISTS rounds_game_at ON rounds (game, at);
 `;
 
 const GITIGNORE = `node_modules/
+# This computer's own state: the site's workers.dev address (it names the Cloudflare account, often after its owner).
+.studio/
 site/dist/
 site/.wrangler/
 .wrangler/
@@ -197,7 +211,12 @@ export function studioFiles({ name, slug, homie }) {
     name, slug,
     homie: { studio: STUDIO_VERSION, directory: homie },
     // r2 stays null until `homie-studio storage add`: a new studio deploys with no R2 at all.
-    cloudflare: { worker, d1: `${slug}-db`, r2: null, accountId: null, url: null, created: [] },
+    // `domain`: the studio's own domain once it has one (e.g. "night-owls.example"). The workers.dev address never
+    // goes here: it names the Cloudflare account, so deploy keeps it in .studio/local.json (git-ignored).
+    cloudflare: { worker, d1: `${slug}-db`, r2: null, accountId: null, domain: null, created: [] },
+    // The site counts visits, plays, rooms, rounds and songs for the owner only (`homie-studio stats`); `share`
+    // also tells the homie.rocks directory "played this week" (two numbers) for the hub.
+    stats: { share: false },
   };
   const pkg = {
     name: `${slug}-studio`,
@@ -224,9 +243,34 @@ export function studioFiles({ name, slug, homie }) {
 export { default, Table, Lobby } from '@homie-rocks/studio/worker';
 `,
     'site/migrations/0001_studio.sql': MIGRATION,
+    [`site/migrations/${STATS_MIGRATION_FILE}`]: STATS_MIGRATION,
     'site/wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2 }),
     '.claude/skills/.gitkeep': '',
   };
+}
+
+/**
+ * A studio made before 0.6.0 has no stats migration: add it (the template owns site/migrations/), so the next
+ * `d1 migrations apply` makes the counters. Returns the file it wrote, or null when it was there.
+ */
+export function ensureStatsMigration(root) {
+  const file = join(root, 'site', 'migrations', STATS_MIGRATION_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, STATS_MIGRATION);
+  return `site/migrations/${STATS_MIGRATION_FILE}`;
+}
+
+/**
+ * A studio made before 0.6.0 committed nothing under .studio/ yet: make sure git leaves it out before the first
+ * deploy writes the workers.dev address there. Returns true when it added the line.
+ */
+export function ensureLocalIgnored(root) {
+  const file = join(root, '.gitignore');
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  if (/^\/?\.studio\/?$/m.test(text)) return false;
+  writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# This computer's own state: the site's workers.dev address (it names the Cloudflare account).\n.studio/\n`);
+  return true;
 }
 
 function insideGit(dir) {

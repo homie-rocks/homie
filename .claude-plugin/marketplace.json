@@ -10,8 +10,8 @@
     {
       "name": "homie",
       "source": "./plugins/homie",
-      "description": "Set up a studio, make or remix multiplayer games or make an existing single-player game multiplayer (netplay public rooms, bots, rounds), make songs and game scores (ElevenLabs, on your own account) and trailers and music videos (gameplay capture, or fal on your own account, under a budget), preview locally, deploy the studio's site to its own Cloudflare on the free plan (no payment method), and list it in the homie.rocks directory. Beta.",
-      "version": "0.5.0",
+      "description": "Set up a studio, make or remix multiplayer games or make an existing single-player game multiplayer (netplay public rooms, bots, rounds), make songs and game scores (ElevenLabs, on your own account) and trailers and music videos (gameplay capture, or fal on your own account, under a budget), preview locally, deploy the studio's site to its own Cloudflare on the free plan (no payment method; rooms of up to 32), list it in the homie.rocks directory, and read the studio's own stats (visits, plays, rounds, where people came from). Beta.",
+      "version": "0.6.0",
       "author": {
         "name": "Homie",
         "url": "https://homie.rocks"

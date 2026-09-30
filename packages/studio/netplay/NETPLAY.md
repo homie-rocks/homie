@@ -1,8 +1,19 @@
-# Homie netplay contract, v1 (revision 2)
+# Homie netplay contract, v1 (revision 3)
 
-Status: **v1, revision 2** (2026-09-26). The wire version is `v: 1`. Everything revision
-2 added is either an optional field or a new message type, and both sides ignore types
-they do not know. A change to the contract bumps `v` and keeps v1 working.
+Status: **v1, revision 3** (2026-09-30, `@homie-rocks/studio` 0.6.0). The wire version is
+`v: 1`. Everything revision 2 and 3 added is either an optional field, a new message type,
+or a change of pace inside the old caps, and both sides ignore types they do not know. A
+change to the contract bumps `v` and keeps v1 working.
+
+**What revision 3 added** (nothing on the wire changed; every v1 game plays on it):
+- **Rooms of up to 32 seats**, sized by the game's netplay manifest (section 3).
+- **One address may hold every seat plus four sockets** (section 6), so a party on one
+  Wi-Fi fills a 32-seat room with a TV beside it.
+- **The checkpoint, round and roster caps double for 17–32 seats** (section 6): a
+  32-seat courier game's checkpoint measured 56 KB against the 64 KB cap.
+- **Idle input keepalive** in the helper: an unchanged input frame goes out at most four
+  times a second (section 11).
+- Measured cost and free-plan headroom of a 32-seat room (section 11).
 
 **What revision 2 added:**
 - Interpolation measures transit time.
@@ -95,8 +106,12 @@ code.
 | `colour` | `seat % 12` | An index into a 12-colour palette. |
 
 - **Every visitor gets a seat at once**, phone or desktop. There is no gathering.
-- **Room size.** `maxPlayers` comes from the manifest. On the site the Table reads it.
-  Locally, the first visitor of an empty room sends it in `hello.max`.
+- **Room size.** `maxPlayers` comes from the game's netplay manifest: game.json's
+  `netplay.maxPlayers`, or a `netplay.json` beside game.json or in the game's build
+  (`maxPlayers` or `players.max`), else game.json's `players.max`, else 8. **A room holds
+  at most 32** (`SEAT_MAX`). `homie-studio build` writes the number into the catalogue and
+  the site's Table takes it from there; the first visitor of an empty room may lower it
+  (`hello.max`), never raise it.
 - **A dropped seat is held 60 s** for its token, which covers a reload or a network blip.
   **A visitor who is present beats one who left:** when no seat is free, the relay
   reclaims the seat that has been absent longest. Visitors who leave can never lock a
@@ -259,13 +274,15 @@ so `ev.origin` is `"null"`.
 | `in` | < 256 B | 2 KB | 20 Hz, plus an immediate flush (≤ 60 Hz) on a press edge | 60 |
 | `ev` | < 1 KB | 4 KB (512 B from a screen) | as needed | host 30, replica 10, screen 2 |
 | `state` | < 2 KB per key | 8 KB per key; **64 keys and 64 KB per room** → `state-full` | only on change | 64 |
-| `ckpt` | < 32 KB | 64 KB | 1 Hz | 4 |
-| `round` / `roster` | < 2 KB / < 1 KB | 8 KB / 4 KB | on change | 4 / 8 |
+| `ckpt` | < 32 KB | 64 KB (128 KB for 17–32 seats) | 1 Hz | 4 |
+| `round` / `roster` | < 2 KB / < 1 KB | 8 KB / 4 KB (16 / 8 KB for 17–32 seats) | on change | 4 / 8 |
 | `ping` | — | 256 B | every 2 s | 8 |
 
 **Sockets.**
-- At most `maxPlayers + 16` per room, and **12 per client address per room**. The Worker
-  passes `CF-Connecting-IP` as `conn.ip`.
+- At most `maxPlayers + 16` per room, and per client address per room **12, or every seat
+  plus four when that is more** (`perAddress`: 12 for 8 seats, 20 for 16, 36 for 32). The
+  Worker passes `CF-Connecting-IP` as `conn.ip`. Measured before revision 3: 32 visitors on
+  one address got 12 seats and 20 `too-many` refusals.
 - A client dropping more than 100 messages over the caps within 5 s is closed (`flood`).
 
 **Keep it small.**
@@ -494,6 +511,31 @@ Measured, with Gem Rush's bump (owner movement, 30–50 ms one way):
   writes/h ≈ $0.07/h, 9× everything else), or rewriting a whole log per event.
 - Re-check Cloudflare's published prices before quoting.
 
+**A 32-seat room (measured 2026-09-30, `@homie-rocks/studio` 0.6.0).** Every incoming
+socket message is a Durable Object request (billed 20:1; outgoing messages are free), and
+in a full room the replicas' inputs are nearly all of them:
+
+| 32 seats, one host | Incoming msgs/s at the relay | Requests/hour (20:1) | Free plan (100,000 a day) |
+|---|---|---|---|
+| every replica moving, input 20 Hz | ≈ 630 | ≈ 114 k | ≈ 53 room-minutes a day |
+| a game's own vendored helper, input 30 Hz | ≈ 860 | ≈ 155 k | ≈ 39 room-minutes a day |
+| half the replicas standing still, 0.6.0 helper | ≈ 415 | ≈ 75 k | ≈ 80 room-minutes a day |
+
+  - Put another way, the free plan carries roughly **28 player-hours a day** at 20 Hz input
+    (each seated player costs about one request a second). A studio that plays more than
+    that a day needs Workers Paid ($5 a month), where a full 32-seat room-hour costs about
+    $0.02 in requests plus $0.006 in duration.
+  - **Idle keepalive (helper, 0.6.0):** an input frame identical to the last one sent (same
+    avatar or intent, same held keys, no press, same reset epoch) is re-sent at most every
+    250 ms. The host already holds that frame, so nothing it reads changes. A player standing
+    still costs 4 messages a second instead of 20. A game that vendors its own copy of the
+    helper gets this by updating that copy.
+  - Keep `inputHz` at 20 unless the game needs more: 30 Hz costs 1.5× the requests.
+  - Snapshots of a real 32-seat courier game (32 bodies plus the control table) were 1.1–1.7 KB at
+    20 Hz: about 32 KB/s down per replica, 2 KB/s up. No snapshot delta or compression was
+    needed; the 2 KB target and 16 KB cap hold at 32 seats. Duration (13,000 GB-s a day free)
+    covers one busy room all day.
+
 ## 12. Trust and safety
 
 - **The host is a visitor's browser.** A modified host could fake scores. That is
@@ -569,7 +611,8 @@ npx --no-install homie-studio check my-game --url http://127.0.0.1:8787
     candidate for v2, not in v1.
 - **No lag compensation for hits.** A game can rewind a victim by the attacker's
   `rtt/2 + delay` itself.
-- **No snapshot deltas.** They are not needed at the measured sizes (Gem Rush: 364–427 B).
+- **No snapshot deltas.** They are not needed at the measured sizes (Gem Rush: 364–427 B;
+  a 32-body courier game's snapshot: 1.1–1.7 KB).
 - **A reload shows a bot in the player's body for about 1–2 s**, and then the player
   takes the same body back.
 - **The host is a visitor's browser** (section 12).

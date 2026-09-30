@@ -22,8 +22,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from './build.mjs';
-import { wranglerConfig } from './scaffold.mjs';
-import { readStudio, writeStudio } from './studio.mjs';
+import { ensureLocalIgnored, ensureStatsMigration, wranglerConfig } from './scaffold.mjs';
+import { LOCAL_STATE, isWorkersDev, readLocal, readStudio, siteUrl, writeLocal, writeStudio } from './studio.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 
@@ -32,7 +32,8 @@ export function wranglerBin(root) {
   return existsSync(local) ? local : null;
 }
 
-function runner(root, env) {
+/** Wrangler from the studio's own node_modules, run in site/ with the given environment. */
+export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
   return (args, { cwd = join(root, 'site'), input } = {}) => {
@@ -95,7 +96,7 @@ export function deployPlan(root) {
     ok: true, command: 'deploy plan', studio: studio.name, account: cf.accountId ?? null,
     cloudflare: [
       { kind: 'Worker', name: cf.worker, what: 'the studio\'s pages, each game\'s page and play shell, and /.well-known/homie-studio.json for the directory', state: mark(`worker:${cf.worker}`), plan: 'Workers Free' },
-      { kind: 'D1 database', name: cf.d1, what: 'the directory claim and every finished round', state: mark(`d1:${cf.d1}`), plan: 'Workers Free (500 MB per database, 5 GB per account)' },
+      { kind: 'D1 database', name: cf.d1, what: 'the directory claim, every finished round, and the studio\'s own stats (daily counters of visits, plays, rooms, rounds and songs, for the owner only; nothing about a visitor)', state: mark(`d1:${cf.d1}`), plan: 'Workers Free (500 MB per database, 5 GB per account)' },
       { kind: 'Durable Object', name: 'Table', what: 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
       { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
       storage
@@ -144,7 +145,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   if (!created.has(`worker:${cf.worker}`)) {
     const account = who.accounts.find((a) => a.id === accountId)?.name ?? 'the signed-in account';
     announced.push(
-      `First deploy of ${studio.name} to the Cloudflare account "${account}". It creates: the Worker ${cf.worker} (the site and its rooms), the D1 database ${cf.d1}, and the Durable Objects Table and Lobby (SQLite-backed).`,
+      `First deploy of ${studio.name} to the Cloudflare account "${account}". It creates: the Worker ${cf.worker} (the site and its rooms), the D1 database ${cf.d1} (rounds, and the studio's own stats: counts for the owner, never a visitor's identity), and the Durable Objects Table and Lobby (SQLite-backed).`,
       'Cost: free, on the Workers Free plan; no payment method, no R2 (storage for large media is `homie-studio storage add`, later, only if wanted).',
       `The directory (${homie || studio.homie?.directory || 'https://homie.rocks'}) will store the site's address and claim, the studio's name, and each game's name, blurb and Play link.`,
     );
@@ -186,6 +187,8 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
   writeFileSync(join(root, 'site', 'wrangler.jsonc'), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2 }));
+  const added = ensureStatsMigration(root);
+  if (added) step(`added ${added} (the studio's own stats: counts, never tracks)`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   step('D1 migrations applied');
@@ -194,10 +197,22 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const dep = w(['deploy']);
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   remember(`worker:${cf.worker}`);
-  const url = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? cf.url ?? null;
-  step(`deployed ${cf.worker} in ${Math.round((Date.now() - started) / 1000)} s`, { url });
+  // The workers.dev address names the Cloudflare account (often after its owner): it stays on this computer, in
+  // .studio/local.json (git-ignored), and never in the committed studio.json. A custom domain stays in studio.json.
+  if (ensureLocalIgnored(root)) step(`added .studio/ to .gitignore (${LOCAL_STATE} keeps this computer's own state)`);
+  const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? readLocal(root).url ?? (isWorkersDev(cf.url) ? cf.url : null);
+  if (workersDev) writeLocal(root, { url: workersDev, deployedAt: new Date().toISOString() });
+  const movedOut = isWorkersDev(cf.url);
+  if (movedOut) {
+    cf.url = null;
+    writeStudio(root, { ...readStudio(root), cloudflare: { ...readStudio(root).cloudflare, url: null } });
+    step(`studio.json no longer keeps the workers.dev address (it names the Cloudflare account); it is in ${LOCAL_STATE} on this computer. An earlier commit of studio.json still has it in the repository's history.`);
+  }
+  const url = siteUrl(root);
+  step(`deployed ${cf.worker} in ${Math.round((Date.now() - started) / 1000)} s`, { url, ...(workersDev && workersDev !== url ? { workersDev } : {}) });
 
-  // The homie.rocks directory claim: the site serves it, which proves this studio controls the site.
+  // The homie.rocks directory claim, for the site's public address (its own domain when it has one): the site
+  // serves it, which proves this studio controls the site.
   const directory = homie || studio.homie?.directory || 'https://homie.rocks';
   let claim = null;
   if (url) {
@@ -212,10 +227,12 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     }
   }
 
-  const next = { ...cf, accountId, url, d1Id: db.uuid, r2: cf.r2 ?? null, created: [...created].sort(), deployedAt: new Date().toISOString() };
-  writeStudio(root, { ...studio, cloudflare: next });
+  // studio.json keeps what is safe to commit: names, ids, the custom domain; never the workers.dev address.
+  const { url: _url, deployedAt: _at, ...kept } = cf;
+  const next = { ...kept, ...(cf.url && !isWorkersDev(cf.url) ? { url: cf.url } : {}), accountId, d1Id: db.uuid, r2: cf.r2 ?? null, created: [...created].sort() };
+  writeStudio(root, { ...readStudio(root), cloudflare: next });
   return {
-    ok: true, command: 'deploy', url, worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
+    ok: true, command: 'deploy', url, ...(workersDev ? { workersDev, local: LOCAL_STATE } : {}), worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
     games: b.catalogue.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null })),
     songs: b.songs.map((slug) => ({ slug, page: url ? `${url}/music/${slug}/` : null })),
     videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),

@@ -210,7 +210,7 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   const done = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
   assert.equal(done.ok, true, JSON.stringify(done));
   assert.equal(done.r2, null);
-  assert.match(done.announced.join(' '), /It creates: the Worker test-studio .* the D1 database test-studio-db, and the Durable Objects Table and Lobby/);
+  assert.match(done.announced.join(' '), /It creates: the Worker test-studio .* the D1 database test-studio-db \(rounds, and the studio's own stats: counts for the owner, never a visitor's identity\), and the Durable Objects Table and Lobby/);
   assert.match(done.announced.join(' '), /Cost: free, on the Workers Free plan; no payment method, no R2/);
   assert.match(done.announced.join(' '), /will store the site's address/);
   assert.deepEqual(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).announced, [], 'a redeploy creates nothing new and says nothing');
@@ -223,6 +223,75 @@ test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and de
   const media = out(run(['media', 'put', join(dir, 'README.md')], dir));
   assert.equal(media.needs, 'storage');
   assert.match(media.why, /storage add/);
+});
+
+test('the workers.dev address never goes into studio.json (it names the account); a custom domain stays, and claim and publish use it', async () => {
+  const { createServer } = await import('node:http');
+  const asked = { claim: [], publish: [] };
+  const directory = createServer((req, res) => {
+    const u = new URL(req.url, 'http://x');
+    if (u.pathname === '/api/studio/claim') { asked.claim.push(u.searchParams.get('site')); res.end(JSON.stringify({ ok: true, claim: 'c'.repeat(40) })); return; }
+    let body = '';
+    req.on('data', (d) => { body += d; });
+    req.on('end', () => { asked.publish.push(JSON.parse(body).site); res.end(JSON.stringify({ ok: true, games: [] })); });
+  });
+  await new Promise((r) => directory.listen(0, '127.0.0.1', r));
+  const homie = `http://127.0.0.1:${directory.address().port}`;
+  try {
+    const dir = studio('address');
+    out(run(['game', 'new', 'crown-thief'], dir));
+    noCardAccount(dir);
+    const runAsync = (args) => new Promise((resolve) => {
+      const p = spawn(process.execPath, [CLI, ...args, '--json'], { cwd: dir });
+      let stdout = '';
+      p.stdout.on('data', (d) => { stdout += d; });
+      p.on('close', () => resolve(JSON.parse(stdout)));
+    });
+    const first = await runAsync(['deploy', '--homie', homie]);
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.deepEqual([first.url, first.workersDev, first.local], ['https://test-studio.acct.workers.dev', 'https://test-studio.acct.workers.dev', '.studio/local.json']);
+    const committed = readFileSync(join(dir, 'studio.json'), 'utf8');
+    assert.doesNotMatch(committed, /workers\.dev/, 'studio.json never names the account');
+    assert.equal(JSON.parse(readFileSync(join(dir, '.studio', 'local.json'), 'utf8')).url, 'https://test-studio.acct.workers.dev');
+    assert.equal(spawnSync('git', ['check-ignore', '-q', '.studio/local.json'], { cwd: dir }).status, 0, 'git leaves .studio/ out');
+    assert.deepEqual(asked.claim, ['https://test-studio.acct.workers.dev'], 'the claim is for the only address there is');
+    assert.equal((await runAsync(['publish', '--homie', homie])).ok, true);
+    assert.deepEqual(asked.publish, ['https://test-studio.acct.workers.dev']);
+    // The studio gets its own domain: it stays in studio.json, deploy never replaces it, claim and publish use it.
+    const s = JSON.parse(committed);
+    s.cloudflare.domain = 'owls.example';
+    writeFileSync(join(dir, 'studio.json'), JSON.stringify(s, null, 2));
+    const second = await runAsync(['deploy', '--homie', homie]);
+    assert.equal(second.ok, true, JSON.stringify(second));
+    assert.deepEqual([second.url, second.workersDev], ['https://owls.example', 'https://test-studio.acct.workers.dev']);
+    const kept = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+    assert.equal(kept.cloudflare.domain, 'owls.example');
+    assert.doesNotMatch(JSON.stringify(kept), /workers\.dev/);
+    assert.equal(asked.claim.at(-1), 'https://owls.example');
+    assert.equal((await runAsync(['publish', '--homie', homie])).ok, true);
+    assert.equal(asked.publish.at(-1), 'https://owls.example');
+    // A studio from 0.5.0 committed its workers.dev address as cloudflare.url: the next deploy moves it out.
+    const old = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+    delete old.cloudflare.domain;
+    old.cloudflare.url = 'https://test-studio.acct.workers.dev';
+    writeFileSync(join(dir, 'studio.json'), JSON.stringify(old, null, 2));
+    rmSync(join(dir, '.studio'), { recursive: true });
+    writeFileSync(join(dir, '.gitignore'), readFileSync(join(dir, '.gitignore'), 'utf8').replace(/^.*\n\.studio\/\n/m, ''));
+    assert.notEqual(spawnSync('git', ['check-ignore', '-q', '.studio/local.json'], { cwd: dir }).status, 0);
+    const third = await runAsync(['deploy', '--homie', homie]);
+    assert.equal(third.ok, true, JSON.stringify(third));
+    assert.ok(third.steps.some((x) => /no longer keeps the workers\.dev address/.test(x.what)), 'it says so');
+    assert.ok(third.steps.some((x) => /added \.studio\/ to \.gitignore/.test(x.what)));
+    assert.doesNotMatch(readFileSync(join(dir, 'studio.json'), 'utf8'), /workers\.dev/);
+    assert.equal(spawnSync('git', ['check-ignore', '-q', '.studio/local.json'], { cwd: dir }).status, 0);
+    // A custom address written by hand in an older studio.json's `url` is a domain too: never replaced.
+    const custom = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+    custom.cloudflare.url = 'https://owls.example';
+    writeFileSync(join(dir, 'studio.json'), JSON.stringify(custom, null, 2));
+    const fourth = await runAsync(['deploy', '--homie', homie]);
+    assert.equal(fourth.url, 'https://owls.example');
+    assert.equal(JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8')).cloudflare.url, 'https://owls.example');
+  } finally { directory.close(); }
 });
 
 test('storage add: refused with the dashboard link on an account without R2 (nothing created); on one with R2 it makes the bucket and deploy binds it', () => {

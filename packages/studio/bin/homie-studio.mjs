@@ -21,6 +21,11 @@
  *   homie-studio media put <file> [--as <key>]
  *   homie-studio media list
  *   homie-studio status
+ *   homie-studio stats [--range 1d|7d|30d|90d] [--game <id> | --song <slug> | --video <slug>] [--url <site>]
+ *   homie-studio stats key [--hours 1]    (a read key for the Homie MCP tool studio_stats)
+ *   homie-studio stats link               (a one-time link to the private stats page, for the owner's browser)
+ *   homie-studio stats revoke             (every stats key and page session ends)
+ *   homie-studio stats share on|off       (tell the homie.rocks directory "played this week", or stop)
  *
  * Every command prints a few lines for a person; --json prints the result.
  */
@@ -34,9 +39,10 @@ import { publish } from '../lib/directory.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
 import { recordUpload, resolveMedia, typeOf } from '../lib/media.mjs';
-import { newStudio } from '../lib/scaffold.mjs';
-import { listGames, newGame, readStudio, remixGame, requireStudio, starters } from '../lib/studio.mjs';
+import { ensureStatsMigration, newStudio } from '../lib/scaffold.mjs';
+import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
+import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
@@ -85,7 +91,9 @@ function print(result) {
       }
       break;
     case 'deploy':
-      lines.push(`Live: ${result.url}`, ...result.games.map((g) => `  ${g.id}: ${g.play}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}. All on the free Workers plan${result.r2 ? ' plus R2' : ''}.`,
+      lines.push(`Live: ${result.url}`, ...(result.workersDev && result.workersDev !== result.url ? [`  also at ${result.workersDev}`] : []),
+        ...(result.local ? [`  (the workers.dev address names your Cloudflare account, so it is kept in ${result.local} on this computer, never in studio.json)`] : []),
+        ...result.games.map((g) => `  ${g.id}: ${g.play}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}. All on the free Workers plan${result.r2 ? ' plus R2' : ''}.`,
         result.claim ? 'Directory claim stored: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim yet (the directory did not answer); publish will try again.');
       break;
     case 'deploy plan':
@@ -116,6 +124,29 @@ function print(result) {
       lines.push(`${result.ok ? 'PASS' : 'NOT YET'}: ${result.game} at ${result.url} (${Math.round(result.totalMs / 1000)} s)`,
         ...result.passed.map((p) => `  ok    ${p}`), ...result.failed.map((f) => `  FAIL  ${f}`), ...result.skipped.map((f) => `  skip  ${f}`), '', `Receipt and screenshots: ${result.out}`);
       break;
+    case 'stats': {
+      const t = result.totals;
+      const n = (x) => Number(x || 0).toLocaleString('en-US');
+      lines.push(`${result.studio ?? 'Studio'}: ${result.range.from} to ${result.range.to} (UTC)${result.only ? `, ${result.only.kind} ${result.only.id}` : ''}`,
+        `  ${n(t.visits)} visits · ${n(t.plays)} Play presses · ${n(t.rooms)} rooms opened · ${n(t.rounds)} rounds finished (${n(t.roundsWithPeople)} with people, ${n(t.peopleInRounds)} people in them)`,
+        `  most playing at once: ${n(t.peakPlayers)} (${n(t.peakInOneRoom)} in one room) · playing now: ${n(t.playingNow)} · songs played: ${n(t.songPlays)} · videos watched: ${n(t.videoViews)}`,
+        `  came from homie.rocks: ${n(result.crossings.fromHub)} · other studios: ${n(result.crossings.fromStudios)} · search: ${n(result.crossings.fromSearch)} · the web: ${n(result.crossings.fromWeb)} · ?via= links: ${n(result.crossings.fromLinks)}`);
+      for (const g of result.games) lines.push(`  game ${g.id}: ${n(g.visits)} visits, ${n(g.plays)} plays, ${n(g.rooms)} rooms, ${n(g.rounds)} rounds, peak ${n(g.peakPlayers)}, now ${n(g.playingNow)}`);
+      for (const e of result.songs) lines.push(`  song ${e.slug}: ${n(e.visits)} page visits, played ${n(e.plays)}`);
+      for (const e of result.videos) lines.push(`  video ${e.slug}: ${n(e.visits)} page visits, watched ${n(e.views)}`);
+      for (const r of result.referrers.slice(0, 10)) lines.push(`  from ${r.from} (${r.kind}): ${n(r.visits)} visits, ${n(r.plays)} plays`);
+      break;
+    }
+    case 'stats key':
+      lines.push(`Read key (until ${result.expiresAt}): ${result.key}`, result.use);
+      break;
+    case 'stats link':
+      lines.push(`One-time link (until ${result.expiresAt}): ${result.link}`, result.use);
+      break;
+    case 'stats revoke':
+    case 'stats share':
+      lines.push(result.message);
+      break;
     case 'check':
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
         ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`));
@@ -142,7 +173,7 @@ async function main() {
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
     const game = positional[2] ?? listGames(root)[0]?.id;
-    const url = flags.get('url') ?? readStudio(root).cloudflare?.url;
+    const url = flags.get('url') ?? siteUrl(root);
     if (!url) return { ok: false, command: 'port check', why: 'give --url (the local dev address or the live site)' };
     return portCheck({ url, game, root, only: flags.get('only') ?? null, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log });
   }
@@ -152,13 +183,13 @@ async function main() {
   if (cmd === 'build') return build(root, { only: positional[1] ?? null, log });
   if (cmd === 'status') {
     const studio = readStudio(root);
-    return { ok: true, command: 'status', root, studio, games: listGames(root).map((g) => g.id), cloudflareSignedIn: Boolean(wranglerBin(root) && whoami(root)) };
+    return { ok: true, command: 'status', root, studio, site: siteUrl(root, studio), games: listGames(root).map((g) => g.id), cloudflareSignedIn: Boolean(wranglerBin(root) && whoami(root)) };
   }
   if (cmd === 'dev' && flags.has('stop')) return stopDev(root);
   if (cmd === 'dev') return dev(root);
   if (cmd === 'check') {
     const game = positional[1] ?? listGames(root)[0]?.id;
-    const url = flags.get('url') ?? readStudio(root).cloudflare?.url;
+    const url = flags.get('url') ?? siteUrl(root);
     if (!url) return { ok: false, command: 'check', why: 'give --url (the local dev address or the live site)' };
     return check({ url, game, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log });
   }
@@ -171,12 +202,17 @@ async function main() {
     return { ok: true, command: 'storage', storage: has ? { kind: 'r2', bucket: cf.r2 } : null, why: has ? undefined : 'no storage yet: the studio runs without it; `homie-studio storage add` adds an R2 bucket for large media (Cloudflare asks for a payment method before R2 works)' };
   }
   if (cmd === 'publish') return publish(root, { homie: flags.get('homie'), site: flags.get('site') });
+  if (cmd === 'stats' && sub === 'key') return statsKey(root, { url: flags.get('url'), hours: flags.get('hours') });
+  if (cmd === 'stats' && sub === 'link') return statsLink(root, { url: flags.get('url') });
+  if (cmd === 'stats' && sub === 'revoke') return statsRevoke(root, { url: flags.get('url') });
+  if (cmd === 'stats' && sub === 'share') return statsShare(root, positional[2]);
+  if (cmd === 'stats' && !sub) return statsShow(root, { url: flags.get('url'), range: flags.get('range'), game: flags.get('game'), song: flags.get('song'), video: flags.get('video') });
   if (cmd === 'media' && sub === 'put') return mediaPut(root, positional[2], flags.get('as'));
   if (cmd === 'media' && sub === 'list') {
     const studio = readStudio(root);
     const r2 = Boolean(studio.cloudflare?.r2 && (studio.cloudflare?.created ?? []).includes(`r2:${studio.cloudflare.r2}`));
     const view = (kind) => { const r = resolveMedia(root, kind, { r2 }); return { pages: r.entries.map((e) => ({ slug: e.slug, title: e.title, kind: e.kind, files: e.files.map(({ abs, rel, ...f }) => f) })), skipped: r.skipped }; };
-    return { ok: true, command: 'media list', r2, site: studio.cloudflare?.url ?? null, music: view('music'), videos: view('videos') };
+    return { ok: true, command: 'media list', r2, site: siteUrl(root, studio), music: view('music'), videos: view('videos') };
   }
   return { ok: false, command: cmd, why: `unknown command "${[cmd, sub].filter(Boolean).join(' ')}" (homie-studio help)` };
 }
@@ -222,6 +258,8 @@ async function dev(root) {
   if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
   const studio = readStudio(root);
   const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' };
+  const added = ensureStatsMigration(root);
+  if (added) log(`added ${added} (the studio's own stats)`);
   await new Promise((done) => {
     const m = spawn(bin, ['d1', 'migrations', 'apply', studio.cloudflare.d1, '--local'], { cwd: join(root, 'site'), env, stdio: ['ignore', 'ignore', 'inherit'] });
     m.on('close', done);
@@ -253,8 +291,10 @@ function mediaPut(root, file, as) {
     const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: join(root, 'site'), env: { ...process.env, CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
     p.on('close', (code) => {
       if (code !== 0) return done({ ok: false, command: 'media put', why: 'wrangler r2 object put failed' });
-      const rec = recordUpload(root, rel, key, statSync(file).size, studio.cloudflare?.url ?? null);
-      done({ ok: true, command: 'media put', key, manifest: rec.manifest, entry: rec.entry, url: studio.cloudflare?.url ? `${studio.cloudflare.url}/media/${key}` : null });
+      // The manifest is committed: it names the file by its path on the site, never the workers.dev address.
+      const rec = recordUpload(root, rel, key, statSync(file).size);
+      const site = siteUrl(root, studio);
+      done({ ok: true, command: 'media put', key, manifest: rec.manifest, entry: rec.entry, url: site ? `${site}/media/${key}` : null });
     });
   });
 }

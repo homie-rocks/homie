@@ -10,7 +10,7 @@ Most people never run this by hand: the Homie plugin for Claude Code and Codex d
 and the person approves Cloudflare once in their browser.
 
 ```sh
-npx -y --package=https://homie.rocks/npm/homie-studio-0.5.0.tgz homie-studio new ./night-owls --name "Night Owls"
+npx -y --package=https://homie.rocks/npm/homie-studio-0.6.0.tgz homie-studio new ./night-owls --name "Night Owls"
 cd night-owls && npm install
 npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
 npx homie-studio dev                                   # the whole site locally
@@ -18,7 +18,42 @@ npx homie-studio check crown-thief --url http://127.0.0.1:8787
 npx homie-studio deploy --plan                         # what deploy will create, and what it costs; changes nothing
 npx homie-studio deploy                                # the studio's own Cloudflare
 npx homie-studio publish                               # the homie.rocks directory
+npx homie-studio stats                                 # the studio's own numbers, for its owner
 ```
+
+## Rooms of up to 32
+
+Every room of a game has the seats its netplay manifest names: game.json's `netplay`
+block (`maxPlayers`), or a `netplay.json` beside game.json or in the game's build
+(`maxPlayers` or `players.max`), else game.json's `players.max`, else 8; at most 32.
+Bots, a late joiner taking a bot's body and a new host after the old one leaves work
+the same at 32 as at 4. One address may hold every seat plus four sockets, so a party
+on one Wi-Fi (or strangers behind one carrier's address) fills a room with a TV beside it.
+
+## The studio's own stats
+
+The site counts, and never tracks: pages opened, Play presses, rooms opened, the most
+people playing at once, rounds finished, songs played, videos watched, and which site
+sent each visitor (a host name: homie.rocks, another studio, search, the web, or a
+`?via=` tag). They are daily counters in the studio's own D1, on the free plan (a write
+per visit and per round, never per frame), with no cookie on a visitor and nothing sent
+to anyone. Prefetches, crawlers and house QA are not counted. Only the owner reads them:
+
+```sh
+npx homie-studio stats [--range 7d] [--game crown-thief]   # prints them
+npx homie-studio stats link                             # a one-time link: /_studio/stats in the owner's browser
+npx homie-studio stats key                              # a 1-hour read key for the Homie MCP tool studio_stats
+npx homie-studio stats share on                         # tell the directory "played this week" (two numbers)
+```
+
+Each key is minted on the owner's computer; only its SHA-256 goes into D1, through the
+studio's own Cloudflare login. `worker/stats.mjs` says exactly what is counted.
+
+## The site's address
+
+`deploy` keeps the `workers.dev` address in `.studio/local.json`, which git ignores: it
+names the Cloudflare account, often after its owner. A custom domain goes in studio.json
+as `cloudflare.domain` and is what the directory claim, `publish`, `check` and `stats` use.
 
 ## No payment method needed
 
@@ -61,7 +96,8 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
 | `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`. |
-| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site or from storage at `/media/<key>`). |
+| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site or from storage at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
+| `worker/stats.mjs`, `worker/stats-page.mjs`, `lib/stats.mjs` | The studio's own stats: what is counted and how, the owner-only `/api/stats` and `/_studio/stats`, and `homie-studio stats`. |
 | `lib/media.mjs`, `media/MEDIA.md` | The `music/` and `videos/` manifests: which entries get a page, and where each file's bytes come from (the site itself up to 25 MiB a file, the studio's storage, or a link). `media list` shows it; `media put` uploads a file to storage and records its key. |
 | `netplay/` | The netplay contract (`NETPLAY.md`) and its game helper (`@homie-rocks/studio/netplay`). |
 | `starters/gem-rush/` | The reference multiplayer starter. |

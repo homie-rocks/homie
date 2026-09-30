@@ -111,7 +111,7 @@ export function buildMedia(root, dist, { r2 = false, log = () => {} } = {}) {
 }
 
 /** `homie-studio media put`: record an uploaded file's R2 key on the entry that names it (or a bare entry). */
-export function recordUpload(root, rel, key, bytes, siteUrl) {
+export function recordUpload(root, rel, key, bytes) {
   const kind = rel.startsWith('videos/') ? 'videos' : 'music';
   const m = readManifest(root, kind);
   let hit = false;
@@ -120,7 +120,7 @@ export function recordUpload(root, rel, key, bytes, siteUrl) {
       if (f.path === rel) { f.key = key; f.bytes = bytes; hit = true; }
     }
   }
-  if (!hit) m.items = [...m.items.filter((i) => i.key !== key), { key, file: rel, bytes, url: siteUrl ? `${siteUrl}/media/${key}` : null, at: new Date().toISOString() }];
+  if (!hit) m.items = [...m.items.filter((i) => i.key !== key), { key, file: rel, bytes, url: `/media/${key.split('/').map(encodeURIComponent).join('/')}`, at: new Date().toISOString() }];
   writeManifest(root, kind, m);
   return { kind, manifest: relative(root, manifestPath(root, kind)), entry: hit };
 }
