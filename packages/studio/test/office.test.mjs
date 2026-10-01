@@ -564,6 +564,26 @@ test('invite-only: an invite code lets a browser in with a pass for that game; a
   assert.equal((await fetchSite('/games/owl-run/source.json')).status, 200);
 });
 
+test('a room that opens just as its game narrows reads the launch state on its first heartbeat and re-gates', async () => {
+  const { DB, seat, env } = await site();
+  const early = await seat('night-vault', 'pub-3', { browser: KEY_B, name: 'Early' });
+  const table = early.table;
+  // Public (no row): nothing to do. Then the owner's change lands in D1 without reaching this room (the race).
+  assert.equal(await table.rereadLaunch(), null);
+  DB.sql.prepare('INSERT OR REPLACE INTO office_games (game, launch, remix, max_players, updated_at) VALUES (?, ?, NULL, NULL, ?)').run('night-vault', 'invite', Date.now());
+  const r = await table.rereadLaunch();
+  assert.equal(r.ok, true);
+  assert.equal(r.leaving, 1, 'the guest without an invite will leave');
+  assert.deepEqual(table.room.regate.allow, ['o', 'i']);
+  assert.match(early.conn.sent.findLast((m) => m.t === 'announce').text, /invite-only beta after this round/);
+  assert.equal(early.conn.closed, null, 'after the round, never before');
+  assert.equal(await table.rereadLaunch(), null, 'a room already re-gating is left as it is');
+  // A Preview enforces no launch state.
+  const preview = Object.create(table);
+  preview.env = { ...env, HOMIE_PREVIEW: '1' };
+  assert.equal(await table.rereadLaunch.call(preview), null);
+});
+
 test('a sign-in lands on the office, an ask or a game; the office carries an older session to /', async () => {
   const { fetchSite, DB } = await site();
   const key = `hsk_${'ab'.repeat(24)}`;

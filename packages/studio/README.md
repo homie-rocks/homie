@@ -204,7 +204,9 @@ npx homie-studio office key                             # a key for the Homie MC
 
 Going private or invite-only never cuts a round short: each live room finishes its current round with a notice to
 the players, then everyone the new state leaves out is sent out with a thank-you (the owner, and in a beta the
-invited, play on). Mute drops a player's `say…`, `chat…` and `emote…` events, so a game that sends its chat and
+invited, play on). A known edge: a room that opens in the same moment as the change can be missed by it, because the
+office reaches the rooms its Lobby already knows. Each room therefore reads its game's launch state once, on its
+first heartbeat after it opens, and re-gates the same way; nobody new can join a game that is not public meanwhile. Mute drops a player's `say…`, `chat…` and `emote…` events, so a game that sends its chat and
 emotes under those kinds needs nothing more (`netplay/NETPLAY.md` section 15). Kicking a whole network address is in
 the studio's API (`address: true`) and deliberately not in the office. A Preview (a branch's own unlisted address, with
 no D1) enforces no launch state and has no office.

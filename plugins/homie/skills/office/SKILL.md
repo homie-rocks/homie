@@ -32,7 +32,7 @@ or anyone else were.
 | "Make invite codes for the beta" | `office invite <id> --label "<who>" --uses 1` (`game_launch_state` with `invites`) | At once: invite links and codes (XXXX-XXXX); each lets one browser in, or `--uses <n>` / `any`. |
 | "Kick / boot that player" | `office kick <id> <room> <seat number or name>` (`room_kick`) | ASKED: the owner taps once to confirm. They are removed with a polite notice and cannot come back to that room for 10 minutes (`--minutes`). |
 | "Close that room" | `office close <id> <room>` (`room_close`) | ASKED, then everyone is sent out with a thank-you; nobody gets in for 10 minutes. |
-| "Make it private / an invite-only beta / public", "players per room", "stop/allow remixes" | `office launch <id> private\|invite\|public [--max <n>] [--remixable on\|off]` (`game_launch_state`) | ASKED. Private: only the owner. Invite: invited browsers only. Public: anyone, listed. Going private or invite-only closes the game's live rooms for 15 s so everyone comes back through the door, and the game leaves the homie.rocks directory the next time it reads the studio (`studio_publish` reads it at once). |
+| "Make it private / an invite-only beta / public", "players per room", "stop/allow remixes" | `office launch <id> private\|invite\|public [--max <n>] [--remixable on\|off]` (`game_launch_state`) | ASKED. Private: only the owner. Invite: invited browsers only. Public: anyone, listed. Going private or invite-only lets each live room finish its current round with a notice to the players; then everyone the new state leaves out is sent out with a thank-you (the owner, and in a beta the invited, play on). The game leaves the homie.rocks directory the next time it reads the studio (`studio_publish` reads it at once). |
 
 **An ask is not done until the owner tapped.** `kick`, `close` and `launch` print a
 one-time link (the MCP tools show a card with the same button) that opens the ask in the
@@ -42,11 +42,14 @@ you asked for, give them the link, and check afterwards (`office`, or the ask's 
 
 - To keep a NEW game private from its very first deploy, put `"launch": "private"` in its
   `game.json` before deploying; the owner opens it with `office link --to /<id>/play`.
-- Mute stops a player's chat and emotes (`say`, `chat`, `emote` events). If the game has
-  other ways to talk, make it hide them with `net.isMuted(seat)`; a game can also show
+- Mute stops a player's chat and emotes: the relay drops their `ev` whose kind starts with
+  `say`, `chat` or `emote`, so a game that sends its chat, quick lines and emotes under those
+  kinds is muted for free. If the game has other ways to talk, make it hide them with
+  `net.isMuted(seat)`; a game can also show
   announcements its own way (`net.on('announce', ...)`) and open a player's owner card when
   their body is clicked (`net.pickPlayer(seat)`): `NETPLAY.md` section 15.
-- Kicks hold a player's browser (and account, once players sign in), not their network,
-  unless the owner asks for `--address` (a household or a phone carrier can share one).
+- Kicks hold a player's browser and, when they are signed in, their account (an invited
+  player's ticket names both), never their network from the office; the studio's API takes
+  `address: true` for a persistent troll (a household or a phone carrier can share one).
 - In a Preview (a branch's own address) launch states are not enforced and there is no
   office: it has no database.

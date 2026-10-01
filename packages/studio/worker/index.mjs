@@ -66,7 +66,7 @@ import { count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedByGame, p
 import { ownerRoutes } from './stats-page.mjs';
 import { playerRoutes, players as playerAccounts } from './players.mjs';
 import {
-  accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, officeRoutes, publicCatalogue, redeemInvite, remixOf, seatsFor, settingsOf, ticketAllows, ticketFor,
+  accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, remixOf, seatsFor, settingsOf, ticketAllows, ticketFor,
   ticketSub, usePlayers, verifyControl,
 } from './office.mjs';
 
@@ -815,6 +815,9 @@ export class Table {
       const room = this.room;
       if (!room) return;
       room.tick();
+      // A room that just opened reads its game's launch state once: a change made in the moment it opened (before the
+      // Lobby knew of it) still reaches it, after the current round as always.
+      if (room.openedAt && this.launchReadFor !== room.openedAt) { this.launchReadFor = room.openedAt; this.ctx.waitUntil(this.rereadLaunch().catch(() => {})); }
       // A launch change the room applied by itself (after its round): its stored state says so too.
       if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(() => {}); }
       n += 1;
@@ -822,6 +825,22 @@ export class Table {
       if (room.seats.size === 0 && room.clients.size === 0) this.openCounted = false;
       if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); }
     }, 250);
+  }
+
+  /**
+   * The game's launch state, read once when the room opens (one D1 read): a private or invite-only game whose room
+   * holds anyone the state leaves out re-gates after the current round. Never in a Preview (no launch states there).
+   */
+  async rereadLaunch() {
+    const room = this.room;
+    if (!room || !this.game || !this.env.DB || this.env.HOMIE_PREVIEW === '1' || room.regate) return null;
+    let launch = null;
+    try { launch = (await this.env.DB.prepare('SELECT launch FROM office_games WHERE game = ?1').bind(this.game).first())?.launch ?? null; } catch { return null; }
+    const args = regateArgs(launch);
+    if (!args.allow) return null;
+    const res = room.control('regate', args);
+    if (res.ok && res.leaving) await this.ctx.storage.put('office', room.officeSaved()).catch(() => {});
+    return res;
   }
 
   /** Tell the Lobby this room closed (until when; 0 when it opened again), so it sends nobody here meanwhile. */

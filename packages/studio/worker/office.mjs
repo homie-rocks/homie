@@ -57,6 +57,21 @@ const TICKET_TTL_MS = 12 * 3600_000;
 /** Who may stay in a live room after a launch change, by the kinds of holder a ticket names (o, i-…, p-…). */
 const ALLOW = Object.freeze({ private: ['o'], invite: ['o', 'i'], public: null });
 
+/**
+ * The room control for a launch state (NETPLAY.md section 15 `regate`): who may stay, the notice everyone sees while
+ * the round finishes, and the words for whoever then leaves. Public calls a waiting change off.
+ */
+export function regateArgs(launch, name = 'This game') {
+  if (!ALLOW[launch]) return {};
+  return {
+    allow: ALLOW[launch],
+    ...{
+      private: { notice: `${name} goes private after this round. Thanks for playing!`, message: `${name} is private now. Thanks for playing!` },
+      invite: { notice: `${name} becomes an invite-only beta after this round. Invited players keep playing.`, message: `${name} is an invite-only beta now. Have an invite? Enter it on the game's page. Thanks for playing!` },
+    }[launch],
+  };
+}
+
 const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(body)}\n`, {
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, private', 'x-robots-tag': 'noindex', ...extra },
 });
@@ -578,12 +593,7 @@ export async function perform(env, cat, a) {
       // state leaves out is sent out of it (the owner, and in an invite-only beta the invited, play on). Back to a
       // wider state, a change still waiting is called off.
       if (launch !== prev) {
-        const words = {
-          private: { notice: `${meta.name} goes private after this round. Thanks for playing!`, message: `${meta.name} is private now. Thanks for playing!` },
-          invite: { notice: `${meta.name} becomes an invite-only beta after this round. Invited players keep playing.`, message: `${meta.name} is an invite-only beta now. Have an invite? Enter it on the game's page. Thanks for playing!` },
-          public: {},
-        }[launch];
-        const res = await Promise.all(rooms.map((r) => roomControl(env, meta, fresh, r.room, 'regate', ALLOW[launch] ? { allow: ALLOW[launch], ...words } : {})));
+        const res = await Promise.all(rooms.map((r) => roomControl(env, meta, fresh, r.room, 'regate', regateArgs(launch, meta.name))));
         done.regating = res.filter((r) => r.ok && r.leaving > 0).length;
       }
       if (a.maxPlayers !== undefined) {
