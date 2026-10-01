@@ -205,9 +205,10 @@ Workers Builds deploys the branch as a Preview; the card's **Publish** opens the
 person's merge is the approval; Workers Builds deploys `main`, and the card says **Live** when the live site's
 manifest lists the change's mark (`homie-studio build` lists the newest marks from `changes/`).
 
-A Claude Code cloud session's default network ("Trusted") does not reach homie.rocks; the toolkit says so, and
-names the setting (the environment's Network access: Custom, add homie.rocks), instead of "did not answer". The
-build goes on with its local feed.
+A Claude Code cloud session's default network ("Trusted") reaches homie.rocks. If a session's network blocks it
+(its proxy answers 403 `host_not_allowed`, and the progress card stops updating), the toolkit says so and names the
+setting (the environment's Network access: Custom, add homie.rocks), instead of "did not answer". The build goes on
+with its local feed.
 
 The feed is `.studio/progress/<build>.json` (git-ignored). With `--share` the studio's
 directory (studio.json `homie.directory`, homie.rocks by default) keeps a copy for 24

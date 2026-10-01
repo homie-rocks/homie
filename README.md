@@ -133,9 +133,9 @@ studio. Its cards do the rest, and every approval is one tap on the provider's o
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/homie-rocks/homie/tree/main/template)
 
 Claude Code cloud sessions need a Pro, Max, Team or Enterprise plan; on the Free plan the
-cards work and your own computer does the building. A cloud session's default network does
-not reach homie.rocks: to see a build's progress, set the session environment's network to
-Custom and add `homie.rocks`.
+cards work and your own computer does the building. A cloud session's default network reaches
+homie.rocks. If the progress card ever stops updating in a cloud session, the session's network
+may be blocking homie.rocks: the toolkit says so, and names the setting.
 
 ## What the studio deploys to your Cloudflare
 

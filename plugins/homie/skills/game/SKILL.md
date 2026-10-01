@@ -80,10 +80,10 @@ npx --no-install homie-studio progress pr --url <the pull request's address>
 The card's Publish button opens the pull request for the person; their merge in GitHub is
 the approval. Workers Builds deploys the branch as a Preview (run `check --url <the Preview
 URL>` when the pull request shows it, and pass it as `progress pr --preview`) and `main`
-after the merge; the card says Live by itself. Never merge the pull request yourself. If
-the toolkit says the environment's network does not reach homie.rocks, tell the person
-that one setting (in claude.ai/code: the environment's Network access, Custom, add
-`homie.rocks`) and go on: the build works with its local feed. On Linux without a GPU,
+after the merge; the card says Live by itself. Never merge the pull request yourself. A
+cloud session's default network reaches homie.rocks; only if the toolkit says this session's
+network is blocking it (the card then stops updating), pass on the setting it names and go
+on: the build works with its local feed. On Linux without a GPU,
 `check` measures seats, rooms and rounds; its frame rate is SwiftShader's, not a person's:
 say so rather than calling the game slow.
 

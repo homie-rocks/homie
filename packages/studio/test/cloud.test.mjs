@@ -6,7 +6,7 @@
  *   - `npm run deploy` in Workers Builds only migrates and deploys (the first one makes the database as it goes);
  *   - the live site claims itself in the directory the first time it is read; a Preview never does;
  *   - a build the chat opened is attached once; a change goes out as a pull request the card can follow;
- *   - a cloud session on the default network is told which setting lets the card follow the build;
+ *   - a cloud session whose network blocks the directory is told which setting lets the card follow the build;
  *   - `setup attach` names a template copy for the chat that set it up.
  * Run: node --test packages/studio/test/cloud.test.mjs
  */
@@ -278,7 +278,7 @@ test('a build the chat opened is attached once; its change and pull request go o
   } finally { dirx.close(); }
 });
 
-test('a Claude Code cloud session on the default network: the toolkit names the setting that lets the card follow', async () => {
+test('a Claude Code cloud session whose network blocks the directory: the toolkit names the setting that lets the card follow', async () => {
   const dir = studio('network');
   const blocked = await directory({ '/api/studio/*': () => [403, { error: 'blocked' }, { 'x-deny-reason': 'host_not_allowed' }] });
   try {

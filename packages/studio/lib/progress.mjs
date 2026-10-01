@@ -90,9 +90,10 @@ const currentPath = (root) => join(dir(root), 'current');
 const loopback = (url) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
 
 /*
- * A CLAUDE CODE CLOUD SESSION ON THE DEFAULT NETWORK. Its "Trusted" network reaches package registries and GitHub,
- * not homie.rocks: the session's proxy answers 403 with `x-deny-reason: host_not_allowed`. Say which setting lets
- * the card follow the build, instead of "did not answer"; the build itself goes on with its local feed.
+ * A CLAUDE CODE CLOUD SESSION WHOSE NETWORK BLOCKS THE DIRECTORY. The default "Trusted" network reached homie.rocks
+ * in a real cloud session (2026-10-01); a stricter one makes the session's proxy answer 403 with
+ * `x-deny-reason: host_not_allowed`. Then, and only then, say which setting lets the card follow the build,
+ * instead of "did not answer"; the build itself goes on with its local feed.
  */
 export function networkWhy(res, at) {
   if (res?.status === 403 && /host_not_allowed/i.test(res.headers?.get?.('x-deny-reason') ?? '')) {
