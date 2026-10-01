@@ -19,6 +19,7 @@ npx homie-studio deploy --plan                         # what deploy will create
 npx homie-studio deploy                                # the studio's own Cloudflare
 npx homie-studio publish                               # the homie.rocks directory
 npx homie-studio stats                                 # the studio's own numbers, for its owner
+npx homie-studio office                                 # who is playing now, in every live room (the back office)
 npx homie-studio upgrade                               # what a newer template adds to this studio (--apply to take it)
 ```
 
@@ -72,8 +73,8 @@ site. A game made with Homie's arcade controls that knocks for a Homie box (`/__
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.12.1 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.12.1 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.13.0 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.13.0 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -139,10 +140,70 @@ npx homie-studio stats share on                         # tell the directory "pl
 Each key is minted on the owner's computer; only its SHA-256 goes into D1, through the
 studio's own Cloudflare login. `worker/stats.mjs` says exactly what is counted.
 
+## The back office: run your live games
+
+The owner sees and runs the studio's live games from `/_studio/office`, a private page
+that refreshes itself: every live room of every game (players, bots, the round, how long
+it has been up) and who is in it (each seat's handle, its device, whether it hosts, the
+browser it came from; signed-in players once a studio has player accounts). From there,
+and from a small Owner button in the owner's own play page (nobody else's page carries
+it):
+
+- **Kick** a player: they get a polite notice and cannot come back to that room for the
+  minutes the owner chose (their seat, their browser, their account; their network only
+  when asked, since a household shares one).
+- **Mute** a player: their chat and emotes reach nobody (the `say`, `chat` and `emote`
+  events; a game hides the rest with `net.isMuted(seat)`).
+- **Announce** one line to a room, a game or the whole studio: every player sees it as a
+  banner, and a game can show it its own way (`net.on('announce')`).
+- **Close** a room: everyone is sent out with a thank-you; nobody gets in until it opens.
+- Per game: **players per room**, the **launch state** (`private`: only the owner;
+  `invite`: an invite-only beta, where each invite link or code lets a browser in;
+  `public`: anyone, listed), and **remixable** (publish or withdraw the game's source).
+  A game that is not public is in no list and not in the directory manifest, so the
+  directory drops it the next time it reads the studio. A new game is private from its
+  first deploy with `"launch": "private"` in its game.json.
+
+```sh
+npx homie-studio office link                            # a one-time link that signs the owner's browser in
+npx homie-studio office link --to /crown-thief/play     # ... onto a private game, on the owner's phone
+npx homie-studio office                                 # every live room and who is in it, now
+npx homie-studio office announce "Double gems this round!" --game crown-thief
+npx homie-studio office invite crown-thief --label "Sam" --uses 1
+npx homie-studio office launch crown-thief invite       # asks: the owner confirms with one tap
+npx homie-studio office kick crown-thief pub-3 2        # asks: seat 2 of Room 3
+npx homie-studio office key                             # a key for the Homie MCP's owner tools
+```
+
+Going private or invite-only never cuts a round short: each live room finishes its current round with a notice to
+the players, then everyone the new state leaves out is sent out with a thank-you (the owner, and in a beta the
+invited, play on). Mute drops a player's `say…`, `chat…` and `emote…` events, so a game that sends its chat and
+emotes under those kinds needs nothing more (`netplay/NETPLAY.md` section 15). Kicking a whole network address is in
+the studio's API (`address: true`) and deliberately not in the office. A Preview (a branch's own unlisted address, with
+no D1) enforces no launch state and has no office.
+
+**Privacy.** The site still sets no cookie on a visitor to count or follow them. Two things are kept for the back
+office, both functional: a random room key in the play page's own storage (what a kick holds; it says nothing about
+who the player is), and, for an invited player of an invite-only beta only, their pass to that game: an HttpOnly
+cookie for that game's pages alone, for 90 days. D1 keeps only a hash of each pass.
+
+**Only the owner.** The owner's browser is signed in with the same one-time link as the
+stats (an HttpOnly session no page or game can read; games run in a sandboxed, opaque
+frame). An office key (minted with the studio's own Cloudflare login) lets the owner's AI
+look, announce and invite at once; a kick, a mute, a closed room or a launch change is only
+**asked** for, and the owner confirms it with one tap in their own browser. No key can
+confirm. The Worker signs each control with the studio's own secret and the room verifies
+it before it acts (`netplay/NETPLAY.md` section 15). Everything is in the studio's own
+Worker and D1 (migration `0003_studio_office.sql`); homie.rocks stores none of it.
+
+With player accounts (0.12.0), a signed-in player's play page names their account in its room ticket (an invited
+player's names the invite and the account), so the office shows them by name and a kick holds the account on every
+device; the owner's own passkey account (`homie-studio players owner`) counts as the owner.
+
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.12.1 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.13.0 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 

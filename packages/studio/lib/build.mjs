@@ -223,6 +223,8 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       // game.json "saves": true — player accounts and cloud saves (saves/SAVES.md): the play shell answers the game's
       // saves calls, and the site's nav and the game's landing offer a player account.
       ...(g.saves === true || (g.saves && typeof g.saves === 'object') ? { saves: true } : {}),
+      // game.json `"launch": "private" | "invite"`: the game's launch state until its owner sets one live (the office).
+      ...(g.launch === 'private' || g.launch === 'invite' ? { launch: g.launch } : {}),
       landing: landingOf(g, join(dist, 'games', g.id), { videos: media.videos, songs: media.songs, log }),
     };
   });

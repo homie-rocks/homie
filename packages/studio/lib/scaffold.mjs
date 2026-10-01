@@ -25,6 +25,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { STUDIO_VERSION, packageSpec } from './version.mjs';
 import { STATS_MIGRATION, STATS_MIGRATION_FILE } from '../worker/stats.mjs';
 import { PLAYERS_MIGRATION, PLAYERS_MIGRATION_FILE } from '../worker/players.mjs';
+import { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from '../worker/office-schema.mjs';
 import { themeFile } from './site.mjs';
 import { PACKAGE_ROOT } from './studio.mjs';
 
@@ -222,6 +223,28 @@ studio's pinned copy, never a registry lookup of the bare name.
   Cloudflare, Chrome, ffmpeg, GitHub, ElevenLabs, fal), what each unlocks, and the exact fix. Optional ones never
   block anything.
 
+## Running live games (the back office)
+
+- The owner runs the studio's live games from \`/_studio/office\` (\`npx --no-install homie-studio office link\` gives
+  the owner a one-time sign-in link): every live room of every game, who is in it (handles; accounts once players
+  sign in), bots, the round and uptime, refreshing by itself; Kick (that player cannot come back to that room for
+  the minutes chosen), Mute (their chat and emotes reach nobody), Announce (one line every player sees), Close a
+  room; and per game: launch state, Remixable, players per room and invites.
+- **Launch states:** \`private\` (only the owner, signed in; \`office link --to /<id>/play\` signs the owner's phone
+  in), \`invite\` (an invite-only beta: \`office invite <id>\` makes invite links and codes, each for one browser or
+  as many as \`--uses\` says), \`public\` (the default; listed). A game that is not public is in no list and not in
+  the directory manifest, so the directory drops it the next time it reads the studio. A new game stays private
+  from its first deploy with \`"launch": "private"\` in its game.json. **Remixable** publishes or withdraws its source.
+- The owner is recognised in their own games: signed in, their play page has a small Owner button (tap a player:
+  Mute, Kick; Announce). Nobody else's page has it.
+- **From the AI:** \`npx --no-install homie-studio office\` lists who is playing now; \`office announce "<text>"\` and
+  \`office invite <id>\` happen at once; \`office kick\`, \`office close\` and \`office launch\` only ASK, and print a
+  one-time link that opens the ask in the owner's own browser, where one tap does it. An ask is not done until the
+  owner tapped. \`office key\` gives a key for the Homie MCP's owner tools (\`studio_office\`, \`room_announce\`,
+  \`room_kick\`, \`room_close\`, \`game_launch_state\`), which ask the same way; never paste a key anywhere else.
+- A game can listen (\`NETPLAY.md\` section 15): \`net.on('announce', …)\`, \`net.isMuted(seat)\` to hide a muted
+  player's chat, and \`net.pickPlayer(seat)\` when a player is clicked (the owner's page opens their card).
+
 ## Rules
 
 - Keys stay in the providers' own logins (Wrangler, ElevenLabs, fal) or the OS
@@ -397,6 +420,7 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
     'site/migrations/0001_studio.sql': MIGRATION,
     [`site/migrations/${STATS_MIGRATION_FILE}`]: STATS_MIGRATION,
     [`site/migrations/${PLAYERS_MIGRATION_FILE}`]: PLAYERS_MIGRATION,
+    [`site/migrations/${OFFICE_MIGRATION_FILE}`]: OFFICE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
   };
@@ -467,6 +491,18 @@ export function ensureStatsMigration(root) {
 }
 
 /**
+ * A studio made before 0.13.0 has no back-office migration (worker/office.mjs): add it, so the next
+ * `d1 migrations apply` makes its tables. Returns the file it wrote, or null when it was there.
+ */
+export function ensureOfficeMigration(root) {
+  const file = join(root, 'site', 'migrations', OFFICE_MIGRATION_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, OFFICE_MIGRATION);
+  return `site/migrations/${OFFICE_MIGRATION_FILE}`;
+}
+
+/**
  * A studio made before 0.12.0 has no players migration (player accounts and cloud saves, saves/SAVES.md): add it,
  * so the next `d1 migrations apply` makes the tables. Returns the file it wrote, or null when it was there.
  */
@@ -480,7 +516,12 @@ export function ensurePlayersMigration(root) {
 
 /** Every migration the template owns that this studio lacks, added: the files written (deploy and dev say so). */
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root)].filter(Boolean);
+}
+
+/** What a migration file the template added is for, in a few words (deploy and dev say it). */
+export function migrationWord(file) {
+  return /players/.test(file) ? 'player accounts and cloud saves' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
 }
 
 /**

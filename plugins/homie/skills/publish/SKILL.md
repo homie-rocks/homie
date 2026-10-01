@@ -117,6 +117,9 @@ identified, nothing sent anywhere; prefetches, crawlers and house QA are not cou
   person wants it; it is off by default.
 - A studio made before 0.6.0 gets its counters on the next `npm run deploy` (D1 migration
   `0002_studio_stats.sql`); nothing before then was counted.
+- Who is playing right now, talking to players, kicking or muting one, an invite-only beta
+  or a private game: the `office` skill (`npx --no-install homie-studio office`). An office
+  key (`office key`) also reads these stats.
 
 ## Grants (protected names)
 

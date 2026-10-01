@@ -65,6 +65,8 @@ export interface Peer {
   device: Device;
   want: Want;
   role: Role;
+  /** Muted by the studio's owner (section 15): hide this player's chat and emotes. */
+  muted?: boolean;
 }
 
 /** One seat's entry in the body-control table: [seat, rs, own (1|0), ack]. */
@@ -92,6 +94,14 @@ export interface NetEvent<D = unknown> {
   /** The sender's peer id (events to the host only), so the host can answer a screen with `send(k, d, id)`. */
   id?: string;
 }
+
+/**
+ * The studio's announcement (NETPLAY.md section 15): one line from the studio's owner to everyone in the room, until
+ * `until` (server ms). The shell shows it as a banner; a game may show it its own way. `text: null` takes it down.
+ */
+export interface Announcement { id: string; text: string | null; at?: number; until?: number; from?: string }
+/** A player muted (or unmuted, `until: 0`) by the studio's owner: their chat and emotes (`ev` kinds say, chat, emote) reach nobody. */
+export interface Mute { id: string; seat: number | null; until: number }
 
 /** A seat's body control as the host keeps it. */
 export interface Control {
@@ -246,6 +256,10 @@ export interface NetHandlers<S, A, C> {
   round: (r: RoundInfo) => void;
   roster: (slots: Slot[]) => void;
   status: (connected: boolean) => void;
+  /** The studio's owner announced something to this room (or took it down: `text: null`). */
+  announce: (a: Announcement) => void;
+  /** The studio's owner muted or unmuted a player in this room. */
+  mute: (m: Mute) => void;
 }
 
 export interface Netplay<S = unknown, A = unknown, C = unknown> {
@@ -277,6 +291,15 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   readonly peers: ReadonlyMap<string, Peer>;
   readonly roundInfo: RoundInfo | null;
   readonly slots: Slot[] | null;
+  /** The studio's announcement now showing in this room, or null. */
+  readonly announcement: Announcement | null;
+  /** Whether the studio's owner has muted this seat (its chat and emotes reach nobody; a game hides them too). */
+  isMuted(seat: number | null): boolean;
+  /**
+   * A player was clicked (their body, their name): tell the shell. Only the studio's owner's page does anything with
+   * it (opens that player's card with Mute and Kick); for everyone else it is nothing.
+   */
+  pickPlayer(seat: number | null): void;
   /** Resolves with the first role (welcome, or offline fallback). */
   readonly ready: Promise<RoleChange<S, C>>;
   on<K extends keyof NetHandlers<S, A, C>>(kind: K, fn: NetHandlers<S, A, C>[K]): () => void;
@@ -495,7 +518,7 @@ const LADDER = [250, 500, 1000, 2000, 4000];
  * second of frames at once), and a kick that ended the page's play for good left a phone frozen with no word.
  * After one it comes back (its seat token keeps its body), sending at the slow rate below.
  */
-const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many']);
+const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed']);
 /**
  * Input pacing (NETPLAY.md §5): at most this many `in` frames in any rolling second from this browser, whatever
  * the frame rate or the press rate: two thirds of the relay's cap of 60, so frames that reach it bunched (a
@@ -565,7 +588,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   const handlers: { [K in keyof NetHandlers<S, A, C>]: Set<NetHandlers<S, A, C>[K]> } = {
     role: new Set(), join: new Set(), leave: new Set(), input: new Set(), event: new Set(),
-    snapshot: new Set(), control: new Set(), state: new Set(), round: new Set(), roster: new Set(), status: new Set(),
+    snapshot: new Set(), control: new Set(), state: new Set(), round: new Set(), roster: new Set(), status: new Set(), announce: new Set(), mute: new Set(),
   };
   const emit = <K extends keyof NetHandlers<S, A, C>>(kind: K, arg: Parameters<NetHandlers<S, A, C>[K]>[0]): void => {
     for (const fn of [...handlers[kind]]) {
@@ -652,6 +675,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let idleSkipped = 0;
   /** Why this client stopped for good (a FINAL_ERRORS refusal), or null while it plays or reconnects. */
   let closedWhy: string | null = null;
+  /** The studio's announcement now showing, and the seats the studio muted (until when, server ms). */
+  let announcement: Announcement | null = null;
+  const muted = new Map<number, number>();
   /** Wall time the socket went down (0 while connected): how long a reconnect has taken. */
   let downSince = 0;
   const sentHist: { q: number; a: A; h: string[]; at: number; r: number }[] = [];
@@ -784,6 +810,21 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       case 'ev': emit('event', { k: String(m['k'] ?? ''), d: m['d'], from: typeof m['from'] === 'number' ? m['from'] : null, ...(typeof m['id'] === 'string' ? { id: m['id'] } : {}) }); return;
       case 'state': if (typeof m['k'] === 'string') applyState(m['k'], m['d']); return;
       case 'pong': return onPong(m);
+      case 'announce': {
+        if (typeof m['id'] !== 'string') return;
+        const a: Announcement = { id: m['id'], text: typeof m['text'] === 'string' ? m['text'] : null, ...(typeof m['at'] === 'number' ? { at: m['at'] } : {}), ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}), from: 'studio' };
+        announcement = a.text ? a : null;
+        emit('announce', a);
+        return;
+      }
+      case 'mute': {
+        const mute: Mute = { id: String(m['id'] ?? ''), seat: typeof m['seat'] === 'number' ? m['seat'] : null, until: Number(m['until']) || 0 };
+        if (mute.seat !== null) { if (mute.until > now()) muted.set(mute.seat, mute.until); else muted.delete(mute.seat); }
+        const p = peers.get(mute.id);
+        if (p) peers.set(mute.id, { ...p, ...(mute.until > now() ? { muted: true } : { muted: undefined }) });
+        emit('mute', mute);
+        return;
+      }
       case 'join': {
         const p = m['peer'] as Peer | undefined;
         if (p && typeof p.id === 'string') { peers.set(p.id, p); if (role === 'host' && p.seat !== null) ctlOf(p.seat); emit('join', p); }
@@ -855,7 +896,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (FINAL_ERRORS.has(code)) {
           closed = true;
           closedWhy = code;
-          post?.({ what: 'closed', why: code });
+          post?.({ what: 'closed', why: code, ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}), ...(typeof m['message'] === 'string' ? { message: String(m['message']).slice(0, 200) } : {}) });
         }
         return;
       }
@@ -887,6 +928,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (typeof m['st'] === 'number' && rtt === null) offset = (m['st'] as number) - Date.now();
     const ckpt = (m['ckpt'] as Checkpoint<C> | null) ?? null;
     let snap = (m['snap'] as Snapshot<S> | null) ?? null;
+    const a = m['announce'] as Announcement | undefined;
+    if (a && typeof a === 'object' && typeof a.id === 'string' && typeof a.text === 'string' && (!announcement || announcement.id !== a.id)) { announcement = { ...a, from: 'studio' }; queueMicrotask(() => emit('announce', announcement as Announcement)); }
     if (!continuing) {
       roundInfo = (m['round'] as RoundInfo | null) ?? roundInfo;
       slots = (m['roster'] as Slot[] | null) ?? slots;
@@ -1237,6 +1280,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get peers() { return peers; },
     get roundInfo() { return roundInfo; },
     get slots() { return slots; },
+    get announcement() { return announcement && (announcement.until === undefined || announcement.until > now()) ? announcement : null; },
+    isMuted(s: number | null): boolean { return s !== null && (muted.get(s) ?? 0) > now(); },
+    pickPlayer(s: number | null): void { post?.({ what: 'pick', seat: typeof s === 'number' ? s : null }); },
     ready,
     on(kind, fn) {
       (handlers[kind] as Set<unknown>).add(fn);

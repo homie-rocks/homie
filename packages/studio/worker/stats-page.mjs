@@ -10,9 +10,13 @@
 import { OWNER_COOKIE, endSession, ownerAllowed, rangeOf, readStats, spendSignin, onlyOf } from './stats.mjs';
 import { CODEX_SCRIPT } from './codex-script.mjs';
 
-/** Where a sign-in may send the owner next: the stats, or one game's codex. */
-const NEXT = /^\/_studio\/(?:stats|codex\/[a-z0-9][a-z0-9-]{0,39}\/)$/;
+/**
+ * Where a sign-in may send the owner next: the stats, one game's codex, the back office, an ask waiting for the
+ * owner's tap, or one of the studio's games (a private game's own secret road for the owner's phone).
+ */
+const NEXT = /^\/(?:_studio\/(?:stats|office|codex\/[a-z0-9][a-z0-9-]{0,39}\/|confirm\/ask_[a-f0-9]{16})|[a-z0-9][a-z0-9-]{0,39}\/(?:play)?)$/;
 const nextOf = (url) => { const to = url.searchParams.get('to') ?? ''; return NEXT.test(to) ? to : '/_studio/stats'; };
+const signinWord = (to) => (to.startsWith('/_studio/codex/') ? 'Open the codex' : to === '/_studio/office' ? 'Open the office' : to.startsWith('/_studio/confirm/') ? 'Sign in and see what your AI asks' : to.startsWith('/_studio/stats') ? 'Open the stats' : 'Sign in and play');
 let scriptHash = null;
 async function codexScriptHash() {
   if (!scriptHash) {
@@ -99,7 +103,7 @@ function statsBody(cat, s, url) {
   const videoRows = s.videos.map((e) => `<tr><td><a href="${esc(q({ video: e.slug, game: null, song: null }))}">${esc(e.title)}</a></td><td>${fmt(e.visits)}</td><td>${fmt(e.views)}</td></tr>`).join('');
   const refRows = s.referrers.map((r) => `<tr><td>${esc(r.from)} <span class="kind">${esc(KIND_WORD[r.kind] ?? r.kind)}</span></td><td>${fmt(r.visits)}</td><td>${fmt(r.plays)}</td></tr>`).join('');
   return `<header><h1>${esc(cat.studio?.name ?? 'Studio')} stats${s.only ? ` <span class="dim">· ${esc(s.only.kind)} ${esc(s.only.id)}</span>` : ''}</h1>
-<form method="post" action="/_studio/signout"><button class="ghost" type="submit">Sign out</button></form></header>
+<span><a href="/_studio/office">Office</a> &nbsp; <form method="post" action="/_studio/signout"><button class="ghost" type="submit">Sign out</button></form></span></header>
 <p class="dim">${esc(s.range.from)} to ${esc(s.range.to)} (UTC)${s.only ? ` · <a href="${esc(q({ game: null, song: null, video: null }))}">whole studio</a>` : ''}</p>
 <nav class="ranges">${ranges}</nav>
 <section class="tiles">
@@ -132,18 +136,23 @@ export async function ownerRoutes(request, env, url, { catalogueOf }) {
     if (request.method === 'GET') {
       // A GET spends nothing: a chat app's link preview must not use up the owner's one-time link.
       return page('Sign in · stats', `<h1>${esc(cat.studio?.name ?? 'Studio')} stats</h1>
-<p class="dim">Open this studio's private stats in this browser. The link works once.</p>
-<form method="post" action="/_studio/signin?k=${esc(encodeURIComponent(key))}${nextOf(url) !== '/_studio/stats' ? `&amp;to=${esc(encodeURIComponent(nextOf(url)))}` : ''}"><button type="submit">${nextOf(url).startsWith('/_studio/codex/') ? 'Open the codex' : 'Open the stats'}</button></form>`);
+<p class="dim">Sign this browser in as the studio's owner: the private stats and office, and the owner's tools in your own games. The link works once.</p>
+<form method="post" action="/_studio/signin?k=${esc(encodeURIComponent(key))}${nextOf(url) !== '/_studio/stats' ? `&amp;to=${esc(encodeURIComponent(nextOf(url)))}` : ''}"><button type="submit">${signinWord(nextOf(url))}</button></form>`);
     }
     if (request.method !== 'POST' || !sameOrigin(request, url)) return page('Not allowed', '<h1>Not allowed</h1>', 403);
     const session = await spendSignin(env, key);
     if (!session) return page('Link used or expired', `<h1>That link has been used or has expired</h1><p class="note">A sign-in link works once, for 30 minutes. Ask your AI for a new one: <code>npx --no-install homie-studio stats link</code>.</p>`, 403);
-    return new Response(null, { status: 303, headers: { location: nextOf(url), 'cache-control': 'no-store', 'set-cookie': `${OWNER_COOKIE}=${session}; Path=/_studio/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secure}` } });
+    // The session lives at / (0.13.0): the owner is recognised in their own games, never readable by a page or a game.
+    return new Response(null, { status: 303, headers: { location: nextOf(url), 'cache-control': 'no-store', 'set-cookie': `${OWNER_COOKIE}=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secure}` } });
   }
   if (path === '/_studio/signout') {
     if (request.method !== 'POST' || !sameOrigin(request, url)) return page('Not allowed', '<h1>Not allowed</h1>', 403);
     await endSession(env, request);
-    return new Response(null, { status: 303, headers: { location: '/_studio/stats', 'cache-control': 'no-store', 'set-cookie': `${OWNER_COOKIE}=; Path=/_studio/; HttpOnly; SameSite=Lax; Max-Age=0${secure}` } });
+    const headers = new Headers({ location: '/_studio/stats', 'cache-control': 'no-store' });
+    // Both places a session cookie has lived (/ from 0.13.0, /_studio/ before).
+    headers.append('set-cookie', `${OWNER_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    headers.append('set-cookie', `${OWNER_COOKIE}=; Path=/_studio/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    return new Response(null, { status: 303, headers });
   }
   if (path === '/_studio/stats' || path === '/_studio/stats/') {
     if (request.method !== 'GET') return page('Not allowed', '<h1>Not allowed</h1>', 405);

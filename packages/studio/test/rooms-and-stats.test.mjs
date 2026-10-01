@@ -285,7 +285,8 @@ test('stats: the site counts, only the owner reads, and a one-time link signs th
   const signed = await site(`/_studio/signin?k=${link}`, { method: 'POST', headers: { origin: 'null', 'sec-fetch-site': 'same-origin' } });
   assert.equal(signed.status, 303);
   const cookie = signed.headers.get('set-cookie');
-  assert.match(cookie, /^studio_owner=[a-f0-9]{64}; Path=\/_studio\/; HttpOnly; SameSite=Lax; Max-Age=2592000; Secure$/);
+  // From 0.13.0 the owner's session lives at / (the owner is recognised in their own games); HttpOnly, never readable.
+  assert.match(cookie, /^studio_owner=[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=2592000; Secure$/);
   assert.equal((await site(`/_studio/signin?k=${link}`, { method: 'POST', headers: { origin: 'https://owls.example' } })).status, 403, 'the link works once');
   const session = cookie.split(';')[0];
   const pageRes = await site('/_studio/stats?range=30d', { headers: { cookie: session } });

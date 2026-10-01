@@ -40,6 +40,19 @@
  *   homie-studio players                  (player accounts and guests with saves: counts, never a passkey or an email)
  *   homie-studio players owner [--revoke] (a one-time link that marks the owner's own player account as the owner's)
  *
+ *   homie-studio office [--url <site>]    the back office: every live room of every game and who is in it, now
+ *   homie-studio office link [--to <path>]   a one-time link that signs the owner's browser in (the office; or
+ *                                          --to /<game>/play: a private game on the owner's own phone)
+ *   homie-studio office key [--hours 1]   a key for the Homie MCP's owner tools (studio_office, room_kick, ...)
+ *   homie-studio office announce "<text>" [--game <id>] [--room <code>] [--seconds 30]
+ *   homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--days <n>]
+ *   homie-studio office launch <game> private|invite|public [--remixable on|off] [--max <n>|game]
+ *   homie-studio office kick <game> <room> <seat number | name> [--minutes 10]
+ *   homie-studio office close <game> <room> [--minutes 10] [--reopen]
+ *                                         (kick, close and launch are ASKED for: the owner confirms each with one
+ *                                          tap in their own browser, from the link this prints)
+ *   homie-studio office revoke            (every office key, play ticket and pending ask ends)
+ *
  *   homie-studio progress start [<id>] [--what game|song|video] [--title "<what this build does>"]
  *                                        [--budget <dollars>] [--unit usd|credits] [--share]
  *                                         (a progress feed for one build; --share shows it in the Claude app
@@ -98,12 +111,13 @@ import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
 import { recordUpload, resolveMedia, typeOf } from '../lib/media.mjs';
-import { ensureMigrations, newStudio } from '../lib/scaffold.mjs';
+import { ensureMigrations, migrationWord, newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
+import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeRevoke, officeShow } from '../lib/office.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -112,7 +126,7 @@ import { restartWithProxy } from '../lib/net.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open'];
+const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -231,6 +245,28 @@ function print(result) {
     case 'stats revoke':
     case 'stats share':
       lines.push(result.message);
+      break;
+    case 'office':
+      lines.push(...officeLines(result));
+      break;
+    case 'office link':
+      lines.push(`One-time link (until ${result.expiresAt}): ${result.link}`, result.use);
+      break;
+    case 'office key':
+      lines.push(`Office key (until ${result.expiresAt}): ${result.key}`, result.use);
+      break;
+    case 'office announce':
+    case 'office revoke':
+      lines.push(result.message);
+      break;
+    case 'office invite':
+      for (const i of result.invites) lines.push(`Invite ${i.code}${i.label ? ` (${i.label})` : ''}, ${i.maxUses ? `${i.maxUses} use${i.maxUses === 1 ? '' : 's'}` : 'any number of uses'}: ${i.link}`);
+      if (result.note) lines.push(result.note);
+      break;
+    case 'office launch':
+    case 'office kick':
+    case 'office close':
+      lines.push(result.asked ? `Asked: ${result.what}` : result.message, ...(result.asked ? [`Owner's one-tap link (until the ask ends, 15 min): ${result.link}`, result.use] : []));
       break;
     case 'setup status':
       lines.push(formatStatus(result));
@@ -408,6 +444,18 @@ async function main() {
   if (cmd === 'stats' && sub === 'revoke') return statsRevoke(root, { url: flags.get('url') });
   if (cmd === 'stats' && sub === 'share') return statsShare(root, positional[2]);
   if (cmd === 'stats' && !sub) return statsShow(root, { url: flags.get('url'), range: flags.get('range'), game: flags.get('game'), song: flags.get('song'), video: flags.get('video') });
+  if (cmd === 'office') {
+    const url = flags.get('url');
+    if (!sub) return officeShow(root, { url });
+    if (sub === 'link') return officeLink(root, { url, to: flags.get('to') });
+    if (sub === 'key') return officeKey(root, { url, hours: flags.get('hours') });
+    if (sub === 'announce') return officeAnnounce(root, positional.slice(2).join(' '), { url, game: flags.get('game'), room: flags.get('room'), seconds: flags.get('seconds') });
+    if (sub === 'invite') return officeInvite(root, positional[2], { url, label: flags.get('label'), uses: flags.get('uses'), count: flags.get('count'), days: flags.get('days') });
+    if (sub === 'launch') return officeLaunch(root, positional[2], positional[3], { url, remixable: flags.get('remixable'), max: flags.get('max') });
+    if (sub === 'kick') return officeKick(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes') });
+    if (sub === 'close') return officeClose(root, positional[2], positional[3], { url, minutes: flags.get('minutes'), reopen: flags.has('reopen') });
+    if (sub === 'revoke') return officeRevoke(root, { url });
+  }
   if (cmd === 'media' && sub === 'put') return mediaPut(root, positional[2], flags.get('as'));
   if (cmd === 'media' && sub === 'list') {
     const studio = readStudio(root);
@@ -577,7 +625,7 @@ async function dev(root) {
   if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
   const studio = readStudio(root);
   const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' };
-  for (const added of ensureMigrations(root)) log(`added ${added} (${/players/.test(added) ? 'player accounts and cloud saves' : 'the studio\'s own stats'})`);
+  for (const added of ensureMigrations(root)) log(`added ${added} (${migrationWord(added)})`);
   await new Promise((done) => {
     const m = spawn(bin, ['d1', 'migrations', 'apply', 'DB', '--local'], { cwd: workerDir(root), env, stdio: ['ignore', 'ignore', 'inherit'] });
     m.on('close', done);

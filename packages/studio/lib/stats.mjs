@@ -48,7 +48,7 @@ export function mint(root, studio, kind, ttlMs, { local }) {
   return { ok: true, key, hash, expiresAt: new Date(now + ttlMs).toISOString() };
 }
 
-function drop(root, studio, hash, { local }) {
+export function drop(root, studio, hash, { local }) {
   const w = runner(root, studio.cloudflare?.accountId && !local ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
   w(['d1', 'execute', studio.cloudflare.d1, local ? '--local' : '--remote', '--command', `DELETE FROM stats_keys WHERE hash = '${hash}';`]);
 }

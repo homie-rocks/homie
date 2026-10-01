@@ -134,6 +134,28 @@ studio's pinned copy, never a registry lookup of the bare name.
   Cloudflare, Chrome, ffmpeg, GitHub, ElevenLabs, fal), what each unlocks, and the exact fix. Optional ones never
   block anything.
 
+## Running live games (the back office)
+
+- The owner runs the studio's live games from `/_studio/office` (`npx --no-install homie-studio office link` gives
+  the owner a one-time sign-in link): every live room of every game, who is in it (handles; accounts once players
+  sign in), bots, the round and uptime, refreshing by itself; Kick (that player cannot come back to that room for
+  the minutes chosen), Mute (their chat and emotes reach nobody), Announce (one line every player sees), Close a
+  room; and per game: launch state, Remixable, players per room and invites.
+- **Launch states:** `private` (only the owner, signed in; `office link --to /<id>/play` signs the owner's phone
+  in), `invite` (an invite-only beta: `office invite <id>` makes invite links and codes, each for one browser or
+  as many as `--uses` says), `public` (the default; listed). A game that is not public is in no list and not in
+  the directory manifest, so the directory drops it the next time it reads the studio. A new game stays private
+  from its first deploy with `"launch": "private"` in its game.json. **Remixable** publishes or withdraws its source.
+- The owner is recognised in their own games: signed in, their play page has a small Owner button (tap a player:
+  Mute, Kick; Announce). Nobody else's page has it.
+- **From the AI:** `npx --no-install homie-studio office` lists who is playing now; `office announce "<text>"` and
+  `office invite <id>` happen at once; `office kick`, `office close` and `office launch` only ASK, and print a
+  one-time link that opens the ask in the owner's own browser, where one tap does it. An ask is not done until the
+  owner tapped. `office key` gives a key for the Homie MCP's owner tools (`studio_office`, `room_announce`,
+  `room_kick`, `room_close`, `game_launch_state`), which ask the same way; never paste a key anywhere else.
+- A game can listen (`NETPLAY.md` section 15): `net.on('announce', …)`, `net.isMuted(seat)` to hide a muted
+  player's chat, and `net.pickPlayer(seat)` when a player is clicked (the owner's page opens their card).
+
 ## Rules
 
 - Keys stay in the providers' own logins (Wrangler, ElevenLabs, fal) or the OS

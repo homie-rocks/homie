@@ -42,6 +42,25 @@ export const EV_RATES = Object.freeze({ host: 30, replica: 10, screen: 2 });
 export const STATE_CAPS = Object.freeze({ keys: 64, bytes: 65536 });
 
 /**
+ * THE OWNER'S CONTROLS (revision 4, NETPLAY.md section 15). The studio's Worker, acting for the signed-in owner,
+ * hands the room a control: kick a player out (and hold the door for some minutes), mute one, announce a line to
+ * everyone, close the room, or change its seats. The Table verifies the owner's signature before it calls
+ * `control()`; this file only applies one. What a player sees of them is new optional frames and two new refusals,
+ * so a v1 game that knows none of it keeps playing (its shell shows the notice and the banner).
+ */
+export const CONTROL_LIMITS = Object.freeze({ minutes: 24 * 60, announce: 280, announceSeconds: 3600, bans: 200, mutes: 200, message: 200 });
+/** What a muted player cannot say: an `ev` whose kind starts with one of these (a game's chat, quick lines, emotes). */
+export const SPEECH = /^(?:say|chat|emote)/i;
+const oneLine = (v, max) => String(v ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+/** A short tag for a browser's room key: enough for the owner to see "the same browser", never the key itself. */
+export function browserTag(key) {
+  if (!key) return null;
+  let h = 2166136261;
+  for (const ch of String(key)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return h.toString(36).padStart(6, '0').slice(-6);
+}
+
+/**
  * A seat's handle when its player typed no name: two words, varied per seat and per room ("Velvet Comet"), never
  * "Player 1" (a game that falls back to a list by seat number made every room's first player the same name).
  * At most 16 characters, so a game that trims names at 18 keeps all of it.
@@ -152,6 +171,17 @@ export class NetRoom {
       kicked: 0, refused: 0, persists: 0, restoredFrom: null, bytesIn: 0, bytesOut: 0, elections: [], promotions: 0,
     };
     this.snapTimes = [];
+    /** The owner's controls (section 15): who is held out of this room until when, who is muted, the banner, a closed door. */
+    this.bans = [];
+    this.mutes = [];
+    this.announcement = null;
+    this.closedUntil = 0;
+    this.closedWhy = '';
+    /** When the room's first seat was taken (its uptime), and what the first hello asked for (`hello.max`). */
+    this.openedAt = 0;
+    this.askedMax = null;
+    /** A launch change waiting for the round to finish: who may stay (ticket kinds), and when it applies at the latest. */
+    this.regate = null;
   }
 
   /* ------------------------------------------------------------ sockets */
@@ -160,7 +190,7 @@ export class NetRoom {
   attach(conn) {
     const now = this.now();
     const c = {
-      id: randomId(6), conn, ip: conn.ip ?? null, helloed: false, seat: null, token: null, name: '', typed: '', colour: 0,
+      id: randomId(6), conn, ip: conn.ip ?? null, browser: conn.browser ?? null, player: conn.player ?? null, via: conn.via ?? null, helloed: false, seat: null, token: null, name: '', typed: '', colour: 0,
       device: 'desk', want: 'play', canHost: true, hidden: false, waiting: false, joinedAt: now, lastSeen: now, lastSnapAt: 0,
       rates: new Map(), drops: [], errAt: 0,
     };
@@ -175,6 +205,9 @@ export class NetRoom {
   watch(conn) {
     this.watchers.add(conn);
     this.sendText(conn, JSON.stringify(this.facts()));
+    // A shell that comes back to a room it was kicked from (or that is closed) hears so at once.
+    const held = this.heldNotice(conn);
+    if (held) this.sendText(conn, JSON.stringify(held));
     return { onClose: () => this.watchers.delete(conn) };
   }
 
@@ -184,13 +217,13 @@ export class NetRoom {
     try { conn.send(text); this.stats.bytesOut += text.length; } catch { /* closing */ }
   }
   send(c, msg) { this.sendText(c.conn, JSON.stringify(msg)); }
-  error(c, code, message) { this.send(c, { t: 'error', code, message }); }
+  error(c, code, message, extra = {}) { this.send(c, { t: 'error', code, message, ...extra }); }
   live() { return [...this.clients.values()].filter((c) => c.helloed); }
   others(c) { return this.live().filter((o) => o !== c); }
   host() { return this.hostId ? this.clients.get(this.hostId) ?? null : null; }
   hostRef() { const h = this.host(); return h ? { id: h.id, seat: h.seat } : null; }
   roleOf(c) { return c.id === this.hostId ? 'host' : c.seat === null ? 'screen' : 'replica'; }
-  peer(c) { return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c) }; }
+  peer(c) { return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(this.muteOf(c) ? { muted: true } : {}) }; }
   peers() { return this.live().map((c) => this.peer(c)); }
   stateObject() { const o = {}; for (const [k, v] of this.state) o[k] = v.d; return o; }
 
@@ -268,6 +301,8 @@ export class NetRoom {
       }
       case 'ev': {
         const kind = String(m.k ?? '').slice(0, 64);
+        // A muted player's speech goes nowhere (a host relays everyone's, so only a non-host's own is dropped).
+        if (!isHost && SPEECH.test(kind) && this.muteOf(c)) { this.stats.mutedDrops = (this.stats.mutedDrops ?? 0) + 1; return; }
         this.stats.evs += 1;
         const out = { t: 'ev', from: c.seat, k: kind, d: m.d ?? null };
         if (isHost) {
@@ -314,6 +349,8 @@ export class NetRoom {
       case 'round': {
         if (!isHost || !m.round || typeof m.round !== 'object') return;
         this.lastRound = m.round;
+        // The round a launch change waits for is over: everyone sees its results for a moment, then the room re-gates.
+        if (this.regate && m.round.phase === 'over' && (this.regate.roundN === null || Number(m.round.n) >= this.regate.roundN)) this.regate.until = Math.min(this.regate.until, this.now() + 5000);
         this.stats.rounds += 1;
         this.persistDirty = true;
         for (const o of this.others(c)) this.send(o, { t: 'round', round: m.round });
@@ -370,12 +407,16 @@ export class NetRoom {
       return;
     }
     const live = this.live();
-    const refuse = (code, message) => {
+    const refuse = (code, message, extra = {}) => {
       this.stats.refused += 1;
-      this.error(c, code, message);
+      this.error(c, code, message, extra);
       this.clients.delete(c.id);
       try { c.conn.close(1008, code); } catch { /* gone */ }
     };
+    // The owner closed this room, or held this player out of it (section 15): refused, with when it ends.
+    if (this.closedUntil > this.now()) return refuse('room-closed', this.closedWhy || 'The studio closed this room.', { until: this.closedUntil });
+    const ban = this.banOf(c, typeof m.token === 'string' ? m.token : '');
+    if (ban) return refuse('kicked', ban.message, { until: ban.until });
     if (this.perIp && c.ip && live.filter((o) => o.ip === c.ip).length >= this.perIp) return refuse('too-many', `at most ${this.perIp} sockets per address in one room`);
     if (live.length >= this.maxPlayers + this.maxScreens) return refuse('room-full', 'this room is full; try another');
     const now = this.now();
@@ -385,13 +426,14 @@ export class NetRoom {
     c.game = typeof m.game === 'string' ? m.game.slice(0, 64) : '';
     c.typed = typeof m.name === 'string' ? m.name.replace(/\s+/g, ' ').trim().slice(0, 24) : '';
     // The manifest's player count, from the first visitor of an empty room (the site's Table reads the manifest).
-    if (Number.isInteger(m.max) && !this.seats.size && !live.length) this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max));
+    if (Number.isInteger(m.max) && !this.seats.size && !live.length) { this.askedMax = m.max; this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max)); }
     this.reapSeats(now);
     let full = false;
     if (c.want === 'play' && !this.seatClient(c, typeof m.token === 'string' ? m.token : '')) { full = true; c.waiting = true; }
     if (c.seat === null) c.name = c.typed || (c.want === 'screen' ? 'Screen' : 'Watcher');
     c.helloed = true;
     c.joinedAt = now;
+    if (!this.openedAt) this.openedAt = now;
     this.emptySince = 0;
     this.lastJoinAt = now;
 
@@ -426,6 +468,7 @@ export class NetRoom {
       round: this.lastRound, roster: this.lastRoster, snap: this.lastSnap, state: this.stateObject(),
       ...(role === 'host' ? { ckpt: this.lastCkpt } : {}),
       ...(full ? { full: true } : {}),
+      ...(this.liveAnnouncement() ? { announce: this.liveAnnouncement() } : {}),
     });
     for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
     if (deposed) {
@@ -593,12 +636,13 @@ export class NetRoom {
       this.preferHost = null;
       if (this.live().some((c) => c.canHost)) this.elect(null, 'host-left');
     }
+    if (this.regate && now >= this.regate.until) this.applyRegate(now);
     this.reapSeats(now);
     this.seatWaiting();
     if (!this.live().length && this.emptySince && now - this.emptySince > this.forgetMs) {
       this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
       this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null;
-      this.emptySince = 0;
+      this.emptySince = 0; this.openedAt = 0; this.askedMax = null;
       this.seatsDirty = false; this.persistDirty = false;
       try { this.store?.clear?.(); } catch { /* best effort */ }
     }
@@ -621,7 +665,7 @@ export class NetRoom {
 
   saved(now = this.now()) {
     return {
-      v: NET_VERSION, room: this.code, savedAt: now, maxPlayers: this.maxPlayers, hostSeat: this.host()?.seat ?? null,
+      v: NET_VERSION, room: this.code, savedAt: now, maxPlayers: this.maxPlayers, hostSeat: this.host()?.seat ?? null, openedAt: this.openedAt || null,
       seats: [...this.seats].map(([seat, s]) => [seat, s.token, s.name]),
       ckpt: this.lastCkpt, round: this.lastRound, roster: this.lastRoster, state: this.stateObject(),
     };
@@ -636,6 +680,7 @@ export class NetRoom {
     const now = this.now();
     if (!saved || saved.v !== NET_VERSION || !(now - Number(saved.savedAt) < 120_000)) return false;
     if (Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
+    if (Number.isFinite(saved.openedAt) && saved.openedAt > 0) this.openedAt = saved.openedAt;
     for (const [seat, token, name] of saved.seats ?? []) this.seats.set(seat, { token, name, since: now, present: false });
     this.lastCkpt = saved.ckpt ?? null;
     this.lastRound = saved.round ?? null;
@@ -652,6 +697,251 @@ export class NetRoom {
     return true;
   }
 
+  /* ------------------------------------------------------------ the owner's controls (section 15) */
+
+  /** A live client by socket id, else the present client in a seat. */
+  findClient({ id = null, seat = null } = {}) {
+    if (typeof id === 'string' && id) { const c = this.clients.get(id); if (c && c.helloed) return c; }
+    if (Number.isInteger(seat)) return this.live().find((c) => c.seat === seat) ?? null;
+    return null;
+  }
+
+  /** The hold that keeps this client out, if any: by its seat token, its browser's room key, its account, or (only when the owner asked) its address. */
+  banOf(c, token = c.token) {
+    const now = this.now();
+    return this.bans.find((b) => b.until > now && ((b.token && b.token === token) || (b.browser && b.browser === c.browser) || (b.player && b.player === c.player) || (b.ip && b.ip === c.ip))) ?? null;
+  }
+
+  muteOf(c) {
+    const now = this.now();
+    return this.mutes.find((m) => m.until > now && ((m.token && m.token === c.token) || (m.browser && m.browser === c.browser) || (m.player && m.player === c.player))) ?? null;
+  }
+
+  liveAnnouncement() {
+    const a = this.announcement;
+    return a && a.until > this.now() ? a : null;
+  }
+
+  /** What a watching shell is told on arrival: the room is closed, or its browser is held out or muted. */
+  heldNotice(conn) {
+    const now = this.now();
+    if (this.closedUntil > now) return { t: 'closed', room: this.code, until: this.closedUntil, message: this.closedWhy || 'The studio closed this room.' };
+    const probe = { token: null, browser: conn.browser ?? null, player: conn.player ?? null, ip: null };
+    if (!probe.browser && !probe.player) return null;
+    const ban = this.banOf(probe, null);
+    if (ban) return { t: 'kicked', room: this.code, until: ban.until, message: ban.message };
+    const mute = this.muteOf(probe);
+    return mute ? { t: 'muted', room: this.code, until: mute.until } : null;
+  }
+
+  /** Tell the watching shells of one browser (or account) something meant for that player alone. */
+  tellBrowser(who, msg) {
+    const text = JSON.stringify(msg);
+    for (const w of this.watchers) if ((who.browser && w.browser === who.browser) || (who.player && w.player === who.player)) this.sendText(w, text);
+  }
+
+  /**
+   * One control, already verified by the caller (the Table checks the owner's signature). Returns what happened:
+   * `{ ok: true, ... }`, or `{ ok: false, error }` when there is nobody to act on.
+   */
+  control(op, a = {}) {
+    const now = this.now();
+    const minutes = Math.max(1, Math.min(CONTROL_LIMITS.minutes, Math.floor(Number(a.minutes) || 10)));
+    this.bans = this.bans.filter((b) => b.until > now);
+    this.mutes = this.mutes.filter((m) => m.until > now);
+    switch (op) {
+      case 'kick': {
+        const target = this.findClient(a);
+        if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
+        const until = now + minutes * 60_000;
+        // The message is the studio's words; `until` says when (the shell says it in the player's own time).
+        const message = oneLine(a.message, CONTROL_LIMITS.message) || 'The studio removed you from this room.';
+        const ban = { token: target.token, browser: target.browser, player: target.player, ip: a.address ? target.ip : null, name: target.name, seat: target.seat, until, at: now, message };
+        this.bans = [...this.bans, ban].slice(-CONTROL_LIMITS.bans);
+        // Every socket of that player in this room: the seat itself, and its browser's or account's other tabs.
+        const out = this.live().filter((o) => o === target || (ban.browser && o.browser === ban.browser) || (ban.player && o.player === ban.player));
+        for (const o of out) {
+          const seat = o.seat;
+          const token = o.token;
+          this.error(o, 'kicked', message, { until });
+          this.onClose(o, 'kicked');
+          // The seat is free for somebody else at once, and its token resumes nothing.
+          const s = seat === null ? null : this.seats.get(seat);
+          if (s && s.token === token) { this.seats.delete(seat); this.seatsDirty = true; }
+          try { o.conn.close(1008, 'kicked'); } catch { /* gone */ }
+        }
+        this.stats.ownerKicks = (this.stats.ownerKicks ?? 0) + 1;
+        this.tellBrowser(ban, { t: 'kicked', room: this.code, until, message });
+        this.persist(now);
+        this.tellWatchers();
+        return { ok: true, op, name: ban.name, seat: ban.seat, sockets: out.length, until };
+      }
+      case 'mute': {
+        const target = this.findClient(a);
+        if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
+        const off = a.off === true;
+        const same = (m) => (m.token && m.token === target.token) || (m.browser && m.browser === target.browser) || (m.player && m.player === target.player);
+        this.mutes = this.mutes.filter((m) => !same(m));
+        const until = off ? 0 : now + minutes * 60_000;
+        if (!off) this.mutes = [...this.mutes, { token: target.token, browser: target.browser, player: target.player, name: target.name, seat: target.seat, until, at: now }].slice(-CONTROL_LIMITS.mutes);
+        const note = { t: 'mute', id: target.id, seat: target.seat, until };
+        for (const o of this.live()) this.send(o, note);
+        this.tellBrowser(target, { t: 'muted', room: this.code, until });
+        this.tellWatchers();
+        return { ok: true, op, name: target.name, seat: target.seat, until };
+      }
+      case 'announce': {
+        const text = oneLine(a.text, CONTROL_LIMITS.announce);
+        const prev = this.announcement;
+        if (!text) {
+          this.announcement = null;
+          if (prev) { const clear = JSON.stringify({ t: 'announce', id: prev.id, text: null }); for (const o of this.live()) this.sendText(o.conn, clear); for (const w of this.watchers) this.sendText(w, clear); }
+          this.tellWatchers();
+          return { ok: true, op, cleared: Boolean(prev) };
+        }
+        const seconds = Math.max(5, Math.min(CONTROL_LIMITS.announceSeconds, Math.floor(Number(a.seconds) || 30)));
+        this.announcement = { id: typeof a.id === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(a.id) ? a.id : randomId(6), text, at: now, until: now + seconds * 1000, from: 'studio' };
+        const msg = JSON.stringify({ t: 'announce', ...this.announcement });
+        for (const o of this.live()) this.sendText(o.conn, msg);
+        for (const w of this.watchers) this.sendText(w, msg);
+        this.tellWatchers();
+        return { ok: true, op, id: this.announcement.id, people: this.live().length, until: this.announcement.until };
+      }
+      case 'close': {
+        if (a.reopen === true) { this.closedUntil = 0; this.closedWhy = ''; this.tellWatchers(); return { ok: true, op, reopened: true }; }
+        // `seconds` (10 s to a day) is a short close: everyone comes back through the game's door (a launch state change).
+        const seconds = Math.floor(Number(a.seconds));
+        const until = now + (seconds >= 10 ? Math.min(seconds, CONTROL_LIMITS.minutes * 60) * 1000 : minutes * 60_000);
+        const message = oneLine(a.message, CONTROL_LIMITS.message) || 'The studio closed this room. Thanks for playing!';
+        this.closedUntil = until;
+        this.closedWhy = message;
+        const people = this.live().length;
+        for (const c of [...this.clients.values()]) {
+          if (c.helloed) this.error(c, 'room-closed', message, { until });
+          this.clients.delete(c.id);
+          try { c.conn.close(1000, 'room-closed'); } catch { /* gone */ }
+        }
+        // Everything the room held goes, as when an empty room forgets (section 4).
+        this.hostId = null;
+        this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
+        this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null; this.openedAt = 0; this.askedMax = null;
+        this.emptySince = now; this.seatsDirty = false; this.persistDirty = false;
+        try { this.store?.clear?.(); } catch { /* best effort */ }
+        const msg = JSON.stringify({ t: 'closed', room: this.code, until, message });
+        for (const w of this.watchers) this.sendText(w, msg);
+        this.tellWatchers();
+        return { ok: true, op, people, until };
+      }
+      case 'regate': {
+        // A game's launch state changed (NETPLAY.md section 15): who may play is now narrower (`allow`: ticket kinds o,
+        // i, p), or anyone again (`allow` absent: a pending change is cancelled). The current round finishes first.
+        if (!Array.isArray(a.allow)) { const had = Boolean(this.regate); this.regate = null; this.tellWatchers(); return { ok: true, op, cancelled: had }; }
+        const allow = a.allow.filter((k) => ['o', 'i', 'p'].includes(k));
+        const leaving = this.live().filter((c) => !this.allowedAfter(c, allow)).length;
+        if (!leaving) { this.regate = null; this.tellWatchers(); return { ok: true, op, leaving: 0 }; }
+        const r = this.lastRound;
+        const playing = Boolean(r && r.phase === 'live' && Number(r.endsAt) > now);
+        const until = Math.min(now + 15 * 60_000, playing ? Number(r.endsAt) + 20_000 : now + 30_000);
+        this.regate = { allow, roundN: playing ? Number(r.n) : null, until, at: now, message: oneLine(a.message, CONTROL_LIMITS.message) || 'Thanks for playing!' };
+        const notice = oneLine(a.notice, CONTROL_LIMITS.announce);
+        if (notice) this.control('announce', { text: notice, seconds: Math.ceil((until - now) / 1000) + 5 });
+        this.tellWatchers();
+        return { ok: true, op, leaving, until, afterRound: playing ? Number(r.n) : null };
+      }
+      case 'seats': {
+        const n = Math.floor(Number(a.max));
+        if (!(n >= 1)) return { ok: false, error: 'max', message: 'seats is a number of at least 1' };
+        this.setSeats(n);
+        this.tellWatchers();
+        return { ok: true, op, max: this.maxPlayers };
+      }
+      default:
+        return { ok: false, error: 'op', message: `no control called ${String(op).slice(0, 24)}` };
+    }
+  }
+
+  /** Whether a client may stay once the room re-gates: one of its ticket's holders (o, i-…, p-…) is of an allowed kind. */
+  allowedAfter(c, allow) {
+    return String(c.via ?? '').split('~').some((part) => (part === 'o' && allow.includes('o')) || (part.startsWith('i-') && allow.includes('i')) || (part.startsWith('p-') && allow.includes('p')));
+  }
+
+  /** The launch change, now: everyone it leaves out is sent out of the room with the studio's words; the rest play on. */
+  applyRegate(now = this.now()) {
+    const g = this.regate;
+    if (!g) return 0;
+    this.regate = null;
+    // The holder of the room's storage keeps the owner's state (the Table writes it on its next tick).
+    this.officeDirty = true;
+    const out = this.live().filter((c) => !this.allowedAfter(c, g.allow));
+    for (const c of out) {
+      const seat = c.seat;
+      const token = c.token;
+      this.error(c, 'room-closed', g.message);
+      this.onClose(c, 'regated');
+      const s = seat === null ? null : this.seats.get(seat);
+      if (s && s.token === token) { this.seats.delete(seat); this.seatsDirty = true; }
+      try { c.conn.close(1000, 'room-closed'); } catch { /* gone */ }
+      this.tellBrowser(c, { t: 'closed', room: this.code, message: g.message });
+    }
+    this.persist(now);
+    this.tellWatchers();
+    return out.length;
+  }
+
+  /**
+   * The room's seats, changed while it runs (the owner's "max players per room"). Players already seated above the
+   * new number keep their seat until they leave; nobody new is seated there. Never above the room's own cap.
+   */
+  setSeats(n, perIp = null) {
+    this.seatCap = Math.max(1, Math.floor(n));
+    this.maxPlayers = Math.max(1, Math.min(this.seatCap, this.askedMax ?? this.seatCap));
+    if (Number.isFinite(perIp) && perIp > 0) this.perIp = perIp;
+  }
+
+  /** The owner's holds, the banner and a closed door: kept apart from the room's play (they outlive an empty room). */
+  officeSaved() {
+    const now = this.now();
+    return {
+      bans: this.bans.filter((b) => b.until > now), mutes: this.mutes.filter((m) => m.until > now),
+      announcement: this.liveAnnouncement(), closedUntil: this.closedUntil > now ? this.closedUntil : 0, closedWhy: this.closedWhy,
+      regate: this.regate,
+    };
+  }
+
+  restoreOffice(o) {
+    if (!o || typeof o !== 'object') return;
+    const now = this.now();
+    this.bans = (Array.isArray(o.bans) ? o.bans : []).filter((b) => b && b.until > now).slice(-CONTROL_LIMITS.bans);
+    this.mutes = (Array.isArray(o.mutes) ? o.mutes : []).filter((m) => m && m.until > now).slice(-CONTROL_LIMITS.mutes);
+    this.announcement = o.announcement && o.announcement.until > now ? o.announcement : null;
+    this.closedUntil = Number(o.closedUntil) > now ? Number(o.closedUntil) : 0;
+    this.closedWhy = this.closedUntil ? String(o.closedWhy ?? '') : '';
+    // A launch change still waiting comes back; one long past is over (whoever it was for has gone).
+    this.regate = o.regate && Array.isArray(o.regate.allow) && Number(o.regate.until) > now - 120_000 ? o.regate : null;
+  }
+
+  /** The room as its owner sees it: the facts, plus who each player is to the studio (never an address). */
+  officeFacts() {
+    const f = this.facts();
+    const now = this.now();
+    const byId = new Map(this.live().map((c) => [c.id, c]));
+    return {
+      ...f,
+      office: {
+        openedAt: this.openedAt || null,
+        closedUntil: this.closedUntil > now ? this.closedUntil : null,
+        regate: this.regate ? { allow: this.regate.allow, until: this.regate.until, afterRound: this.regate.roundN } : null,
+        clients: f.clients.map((p) => {
+          const c = byId.get(p.id);
+          const mute = c ? this.muteOf(c) : null;
+          return { ...p, joinedAt: c?.joinedAt ?? null, lastSeen: c?.lastSeen ?? null, browser: browserTag(c?.browser), player: c?.player ?? null, via: c?.via ?? null, mutedUntil: mute ? mute.until : null };
+        }),
+        bans: this.bans.filter((b) => b.until > now).map((b) => ({ name: b.name, seat: b.seat, until: b.until, at: b.at, address: Boolean(b.ip), browser: browserTag(b.browser) })),
+        mutes: this.mutes.filter((m) => m.until > now).map((m) => ({ name: m.name, seat: m.seat, until: m.until })),
+      },
+    };
+  }
+
   /* ------------------------------------------------------------ the shell's view */
 
   facts() {
@@ -662,6 +952,9 @@ export class NetRoom {
     return {
       t: 'net', v: NET_VERSION, room: this.code, st: now,
       host: this.hostRef(),
+      openedAt: this.openedAt || null,
+      announce: this.liveAnnouncement(),
+      ...(this.closedUntil > now ? { closedUntil: this.closedUntil } : {}),
       clients: live.map((c) => ({ ...this.peer(c), hidden: c.hidden, waiting: c.waiting })),
       round: this.lastRound,
       roster: this.lastRoster,

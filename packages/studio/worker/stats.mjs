@@ -25,8 +25,10 @@
  *   `homie-studio stats`        prints them (a ten-minute read key, minted and dropped by the CLI)
  *   `homie-studio stats key`    a read key for the Homie MCP tool `studio_stats` (1 hour by default)
  *   `homie-studio stats link`   a one-time sign-in link: /_studio/stats in the owner's own browser
+ *   `homie-studio office key`   a back-office key (it reads these too): worker/office.mjs
  * A key is 24 random bytes; D1 keeps only its SHA-256. The page's session cookie is the owner's alone
- * (HttpOnly, SameSite=Lax, only under /_studio/). There is no other way in.
+ * (HttpOnly, SameSite=Lax; from 0.13.0 at / so the owner is recognised in their own games, never readable by a
+ * page or a game). There is no other way in.
  *
  * FREE PLAN: D1 allows 100,000 row writes and 5 million row reads a day. A visit, a play, a room and a
  * song or video start are one write each; a finished round is three (its row in `rounds`, the round and the
@@ -134,30 +136,54 @@ export async function countVisit(request, env, ctx, subject, metric = 'visit') {
 
 /* ------------------------------------------------------------------ the owner's keys */
 
-/** Whether a presented key (Bearer header) or the owner's page session is valid. */
+/**
+ * Whether a presented key (Bearer header) or the owner's page session is valid, and which: `read` (a stats read
+ * key), `office` (a back-office key: the stats, the live rooms, and asking for the owner's controls; worker/office.mjs)
+ * or `session` (the owner's signed-in browser). A key's kind is fixed when it is minted; an office key also reads
+ * the stats.
+ */
 export async function ownerAllowed(request, env, { kinds = ['read', 'session'] } = {}) {
   if (!env?.DB) return false;
   const auth = request.headers.get('authorization') ?? '';
   const bearer = /^Bearer\s+(\S+)$/i.exec(auth)?.[1] ?? null;
-  const cookie = cookieValue(request, OWNER_COOKIE);
   const tries = [];
-  if (bearer && KEY.test(bearer) && kinds.includes('read')) tries.push(['read', bearer]);
-  if (cookie && SESSION.test(cookie) && kinds.includes('session')) tries.push(['session', cookie]);
-  for (const [kind, value] of tries) {
+  if (bearer && KEY.test(bearer) && (kinds.includes('read') || kinds.includes('office'))) tries.push([['read', 'office'].filter((k) => kinds.includes(k)), bearer]);
+  // The session cookie lives at / from 0.13.0 (the owner is recognised in their own game) and at /_studio/ before
+  // it: a browser may send both, so each is tried.
+  if (kinds.includes('session')) for (const cookie of cookieValues(request, OWNER_COOKIE).filter((v) => SESSION.test(v)).slice(0, 3)) tries.push([['session'], cookie]);
+  for (const [allowed, value] of tries) {
     try {
       const row = await env.DB.prepare('SELECT kind, expires_at FROM stats_keys WHERE hash = ?1').bind(await sha256(value)).first();
-      if (row && row.kind === kind && Number(row.expires_at) > Date.now()) return kind;
+      if (row && allowed.includes(row.kind) && Number(row.expires_at) > Date.now()) return row.kind;
     } catch { return false; }
   }
   return false;
 }
 
-export function cookieValue(request, name) {
-  for (const part of (request.headers.get('cookie') ?? '').split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === name) return v.join('=');
+/** The owner's valid page session value this request carries, or null (to carry an older /_studio/ cookie to /). */
+export async function ownerSession(request, env) {
+  if (!env?.DB) return null;
+  for (const cookie of cookieValues(request, OWNER_COOKIE).filter((v) => SESSION.test(v)).slice(0, 3)) {
+    try {
+      const row = await env.DB.prepare('SELECT kind, expires_at FROM stats_keys WHERE hash = ?1').bind(await sha256(cookie)).first();
+      if (row && row.kind === 'session' && Number(row.expires_at) > Date.now()) return cookie;
+    } catch { return null; }
   }
   return null;
+}
+
+export function cookieValue(request, name) {
+  return cookieValues(request, name)[0] ?? null;
+}
+
+/** Every value a request carries for one cookie name (the same name can arrive from two paths). */
+export function cookieValues(request, name) {
+  const out = [];
+  for (const part of (request.headers.get('cookie') ?? '').split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === name) out.push(v.join('='));
+  }
+  return out;
 }
 
 /** A one-time sign-in key turns into a 30-day page session (the key is spent). Returns the session value or null. */
@@ -178,9 +204,10 @@ export async function spendSignin(env, key) {
 }
 
 export async function endSession(env, request) {
-  const cookie = cookieValue(request, OWNER_COOKIE);
-  if (!env?.DB || !cookie || !SESSION.test(cookie)) return;
-  try { await env.DB.prepare("DELETE FROM stats_keys WHERE hash = ?1 AND kind = 'session'").bind(await sha256(cookie)).run(); } catch { /* gone */ }
+  if (!env?.DB) return;
+  for (const cookie of cookieValues(request, OWNER_COOKIE).filter((v) => SESSION.test(v)).slice(0, 3)) {
+    try { await env.DB.prepare("DELETE FROM stats_keys WHERE hash = ?1 AND kind = 'session'").bind(await sha256(cookie)).run(); } catch { /* gone */ }
+  }
 }
 
 /* ------------------------------------------------------------------ reading */

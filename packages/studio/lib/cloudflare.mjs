@@ -23,7 +23,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from './build.mjs';
 import { repoOf } from './repo.mjs';
-import { ensureLocalIgnored, ensureMigrations, wranglerConfig } from './scaffold.mjs';
+import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -193,7 +193,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
   writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root) }));
-  for (const added of ensureMigrations(root)) step(`added ${added} (${/players/.test(added) ? 'player accounts and cloud saves' : 'the studio\'s own stats: counts, never tracks'})`);
+  for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   step('D1 migrations applied');
@@ -293,7 +293,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
   const step = (what) => { steps.push({ what }); log(what); };
   const refuse = (why, out) => ({ ok: false, command: 'deploy', ci: true, ...(explainCloudflare(out) ?? { why }), steps });
   if (!existsSync(join(root, 'site', 'dist', 'games.json'))) return { ok: false, command: 'deploy', ci: true, why: 'nothing is built: the build command is `npm run build` (homie-studio build), and it runs before this', steps };
-  for (const added of ensureMigrations(root)) step(`added ${added} (${/players/.test(added) ? 'player accounts and cloud saves' : 'the studio\'s own counters'})`);
+  for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const apply = () => w(['d1', 'migrations', 'apply', names.binding, '--remote']);
   let migrate = apply();
   const first = migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);

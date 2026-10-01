@@ -80,7 +80,8 @@ test('the room goes into the address, and the room button shares it: Invite, Big
   const a = await shell('');
   assert.deepEqual(a.fetched, [['/rock-race/api/lobby', 'POST']]);
   assert.deepEqual(a.replaced, ['/rock-race/play?room=pub-3']);
-  assert.match(a.el('iframe.game').src, /^\/rock-race\/__game\/\?room=pub-3&device=desk&want=play$/);
+  // 0.13.0: the browser's room key (what an owner's kick holds out) rides along.
+  assert.match(a.el('iframe.game').src, /^\/rock-race\/__game\/\?room=pub-3&device=desk&want=play&b=[A-Za-z0-9_-]{16,43}$/);
   assert.equal(a.el('[data-room-code]').textContent, 'Room 3');
   assert.equal(a.el('[data-bigscreen]').href, '/rock-race/tv?room=pub-3');
   assert.equal(a.el('[data-room-link]').textContent, 'owls.example/rock-race/play?room=pub-3');

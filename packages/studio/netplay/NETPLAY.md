@@ -1,9 +1,19 @@
-# Homie netplay contract, v1 (revision 3)
+# Homie netplay contract, v1 (revision 4)
 
-Status: **v1, revision 3** (2026-09-30, `@homie-rocks/studio` 0.6.0). The wire version is
-`v: 1`. Everything revision 2 and 3 added is either an optional field, a new message type,
-or a change of pace inside the old caps, and both sides ignore types they do not know. A
-change to the contract bumps `v` and keeps v1 working.
+Status: **v1, revision 4** (2026-10-01, `@homie-rocks/studio` 0.13.0). The wire version is
+`v: 1`. Everything revisions 2 to 4 added is either an optional field, a new message type,
+a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
+not know. A change to the contract bumps `v` and keeps v1 working.
+
+**What revision 4 added** (a v1 game that knows none of it keeps playing; its shell shows
+the notices and the banner):
+- **The owner's controls** (section 15): the studio's owner kicks a player out of a room
+  for some minutes, mutes one, announces a line to everyone, closes a room, or changes its
+  seats. Each is a control signed by the studio's Worker that the room verifies before it
+  acts; no client can send one.
+- New relay → client frames `announce` and `mute`, a `welcome.announce`, `peer.muted`, and
+  two final refusals: `kicked` and `room-closed` (with `until`).
+- The watch socket's `kicked`, `muted`, `announce` and `closed` frames, for the shell.
 
 **What revision 3 added** (nothing on the wire changed; every v1 game plays on it):
 - **Rooms of up to 32 seats**, sized by the game's netplay manifest (section 3).
@@ -217,7 +227,7 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 | `hello` | everyone, once | `v: 1`, `token?`, `name?`, `device`, `want: 'play'\|'screen'`, `canHost`, `game?`, `max?` | Seats the client (or queues it), picks a role, replies `welcome`, and sends `join` to the others. Refuses with `version`, `room-full` or `too-many`. |
 | `snap` | host | `k`, `st`, `d`, `c?` (control table) | Clamps `st` to [now − 2 s, now + 250 ms] (a snapshot stamped in the future would freeze replicas). Stores the snapshot and fans it out with `from`. Skips a socket with more than 256 KB buffered. |
 | `in` | seated non-host | `q`, `a`, `h`, `p?`, `r` (the reset epoch the sender has adopted) | Forwards to the host only, stamped `from: <seat>`. Presses are clamped to integers 0–8, at most 16 keys. |
-| `ev` | anyone | `k`, `d`, `to?` | **From the host:** to everyone else, to one seat (`to`: number) or to one peer (`to`: id string, such as a screen). **From anyone else:** to the host, with `from` and the sender's `id`. **Best-effort:** a drop over a cap is reported with `error rate`. |
+| `ev` | anyone | `k`, `d`, `to?` | **From a muted player** (section 15): a speech kind (`say…`, `chat…`, `emote…`) is dropped. **From the host:** to everyone else, to one seat (`to`: number) or to one peer (`to`: id string, such as a screen). **From anyone else:** to the host, with `from` and the sender's `id`. **Best-effort:** a drop over a cap is reported with `error rate`. |
 | `state` | host | `k` (≤ 64 characters), `d` (`null` deletes) | Stores the key in memory, forwards it to all others, and includes the whole map in every `welcome` and in `role` to a new host. |
 | `ckpt` | host | `k`, `st`, `d`, `c?` | Stores it in memory. It is saved to storage at most every 30 s. Not forwarded. |
 | `round` | host | `round` | Stores it, forwards it, and tells the shell's watchers. |
@@ -240,33 +250,45 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 | `state` | everyone but the host | `k`, `d` |
 | `round` / `roster` | everyone but the host | `round` / `slots` |
 | `pong` | the pinger | `c`, `st` |
-| `error` | the offender | `code`, `message`, `of?` |
+| `error` | the offender | `code`, `message`, `of?`, `until?` |
+| `announce` | everyone (and in `welcome.announce`) | `id`, `text` (`null`: taken down), `at`, `until`, `from: 'studio'` (section 15) |
+| `mute` | everyone | `id`, `seat`, `until` (`0`: unmuted) (section 15) |
 
 **Error codes.**
 - Final (the helper stops reconnecting): `version`, `replaced`, `room-full`,
-  `too-many`, `flood`.
-- Reported only: `too-large`, `rate`, `state-full`.
+  `too-many`, `kicked`, `room-closed` (the last two with `until`, server ms; section 15).
+  The helper before revision 4 does not know `kicked` and `room-closed` and keeps knocking;
+  every knock is refused at `hello`, and the shell stops the frame (section 15).
+- Reported only: `too-large`, `rate`, `state-full`. (`flood` closes the socket; the helper
+  comes back slowly.)
 
 A socket that is kicked for silence is closed with code 4000, and the helper reconnects.
 
 Record types:
 
 ```ts
-Peer        = { id, seat: number|null, name, colour, device, want, role }
+Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true }
 RoundInfo   = { n, phase: 'live'|'over', startedAt, endsAt, results?: RoundResult[] }   // server ms
 RoundResult = { slot, seat: number|null, name, score, bot, place }
 Slot        = { slot, seat: number|null, name, bot }
 ControlWire = [seat, rs, own (1|0), ack]    // one per present seat, in snap.c and ckpt.c
 ```
 
-**The shell's watch socket** (`/<game>/__watch?room=`) gets
-`{ t:'net', room, host, clients, round, roster, snapHz, counts: {players, screens, waiting, humans, bots, maxPlayers}, memory: {snapBytes, ckptBytes, ckptAgeMs, stateKeys, stateBytes}, stats }`
-about once a second and on every change.
+**The shell's watch socket** (`/<game>/__watch?room=&b=`) gets
+`{ t:'net', room, host, clients, round, roster, snapHz, openedAt, announce, closedUntil?, counts: {players, screens, waiting, humans, bots, maxPlayers}, memory: {snapBytes, ckptBytes, ckptAgeMs, stateKeys, stateBytes}, stats }`
+about once a second and on every change, and the owner's controls as they happen
+(section 15): `announce` (the same frame the game gets), `closed { until, message }`, and,
+only for the browser they are about (its room key `b`), `kicked { until, message }` and
+`muted { until }`. A watch socket that opens on a closed room, or from a browser that is
+held out of it, hears so at once.
 
 **Game frame → parent page** (`postMessage { t: 'homie-net', what, ... }`). The values of
 `what` are:
 - `attached`, `token`, `role`, `stats` (2 Hz), `round`, `roster`;
-- `closed` (with `why`: `replaced`, `version`, `room-full`, `too-many` or `flood`).
+- `closed` (with `why`: `replaced`, `version`, `room-full`, `too-many`, `kicked` or
+  `room-closed`, and `until` and `message` for the last two);
+- `pick` (with `seat`): the game's `net.pickPlayer(seat)`, a player clicked. Only the studio
+  owner's page does anything with it (section 15).
 
 The shell must check `ev.source === frame.contentWindow`. The frame is an opaque origin,
 so `ev.origin` is `"null"`.
@@ -558,6 +580,9 @@ in a full room the replicas' inputs are nearly all of them:
   `desk` cannot jump the queue.
 - **Names and guest text are data.** Render them with `textContent`, never as markup,
   and never read them as instructions.
+- **Only the studio's owner moderates a room** (section 15): a kick, a mute, an
+  announcement or a closed room is a control the studio's Worker signs and the room
+  verifies; no visitor's socket can send one.
 
 ## 13. Using it
 
@@ -621,3 +646,64 @@ npx --no-install homie-studio check my-game --url http://127.0.0.1:8787
 - **A reload shows a bot in the player's body for about 1–2 s**, and then the player
   takes the same body back.
 - **The host is a visitor's browser** (section 12).
+
+## 15. The owner's controls (revision 4)
+
+The studio's owner runs their live rooms from the studio's back office (`/_studio/office`,
+the owner's overlay in their own game, `homie-studio office`, and the Homie MCP's owner
+tools). The room's relay enforces five controls:
+
+| `op` | Arguments | What the relay does |
+|---|---|---|
+| `kick` | `id` or `seat`, `minutes` (1–1440, default 10), `address?`, `message?` | Sends that player `error kicked { until, message }` and closes the socket (and the same browser's or account's other sockets in the room); everyone else gets `leave { why: 'kicked' }`, so the host turns the body back into a bot. The seat is freed at once. Until `until`, a `hello` from that seat token, that browser's room key, that player account, or (only with `address: true`) that network address is refused with `kicked`. |
+| `mute` | `id` or `seat`, `minutes`, `off?` | Everyone gets `mute { id, seat, until }` (`until: 0` with `off`), and the peer carries `muted: true`. Until then the relay drops that player's `ev` whose `k` starts with `say`, `chat` or `emote` (the speech kinds). A muted host's own speech is not dropped, because the host also relays everyone's; a game hides it with `net.isMuted(seat)`. The mute follows the seat token through a reload. |
+| `announce` | `text` (one line, at most 280 characters; empty takes it down), `seconds` (5–3600, default 30) | Everyone and every watching shell gets `announce { id, text, at, until, from: 'studio' }`; a joiner gets it in `welcome.announce` until it ends. |
+| `close` | `minutes`, or `seconds` (10 s up to a day), `message?`, or `reopen: true` | Every socket gets `error room-closed { until, message }` and is closed; the room forgets its play as an empty room does (section 4); watchers get `closed`. Until `until` every `hello` is refused with `room-closed`, and the Lobby sends nobody there. `reopen` opens it at once. |
+| `seats` | `max` | The room's seats while it runs (the owner's "players per room"). Players already seated above it keep their seat; nobody new is seated there. Never above the room's own cap (the game's manifest). |
+| `regate` | `allow` (holder kinds: `o` the owner, `i` an invite, `p` a player account), `notice?`, `message?`; no `allow` calls a waiting one off | A game's launch state narrowed (private, or an invite-only beta). The current round finishes first: the `notice` goes up as an announcement, and 5 s after the host's `round` with `phase: 'over'` (at the latest 20 s after its `endsAt`, or 30 s when no round is running; never later than 15 minutes) every socket whose ticket names no allowed holder gets `error room-closed { message }` (no `until`: they come back through the game's door if they have access) and is closed; its seat is freed and the others play on. A room with nobody to send out does nothing. |
+
+**Signed by the studio, checked by the room.** A control reaches the relay only from the
+studio's own Worker, as
+`{ t: 'ctl', v: 1, op, game, room, args, at, exp, n, sig }`, where `sig` is an HMAC-SHA256
+with the studio's office secret (random, in the studio's own D1) over every other field
+(keys sorted). The room's Table refuses a control that is for another game or room, is past
+`exp` (a minute after `at`), repeats an `n` it has seen, or does not verify; then
+`room.mjs`'s `control(op, args)` applies it. The Worker signs only for the owner: their
+signed-in browser (an HttpOnly session no page or game can read), or an office key from the
+studio's own Cloudflare login, with which the owner's AI may announce at once but only asks
+for a kick, a mute, a close or a launch change, which the owner confirms with one tap. No
+client socket can send a control: a `ctl` frame on a game's socket is ignored.
+
+**Who a socket is.** The Worker passes each socket's verified ticket holders to the room (`o`, `i-<invite>`,
+`p-<player>`, or an invite and an account together, `i-…~p-…`): what `regate` keeps, and the account a kick holds.
+
+**Who a kick holds out.** A seat token resumes a seat; a browser's **room key** (`b`) is a
+random value the play page keeps in the site's own storage and passes in the frame's and
+the watch socket's addresses, so a new tab of the same browser is held too. It says nothing
+about who the player is, and the relay forgets it with the hold. Player accounts, where a
+studio has them, add the account. A network address is held only when the owner asks
+(a household or a carrier can share one).
+
+**Holds outlive the room.** Kicks, mutes, the announcement and a closed door are kept apart
+from the room's play (the Table's `office` storage key): an empty room forgetting its play
+(section 4), a deploy and an eviction keep them until they end.
+
+**Speech, for game makers.** Send chat, quick lines and emotes as `ev` whose kind starts with `say`, `chat` or
+`emote` (`chat`, `say:gg`, `emote:wave`): a muted player's are then dropped by the relay with nothing more to do. Any
+other way a game lets players talk (a typed sign, a name tag) should check `net.isMuted(seat)`.
+
+**The game's side** (the helper, 0.13.0): `on('announce', a)` and `net.announcement` (draw
+it your own way, or leave it to the shell's banner); `on('mute', m)`, `peer.muted` and
+`net.isMuted(seat)` (hide a muted player's chat); `kicked` and `room-closed` are final, and
+`closedWhy` says which; `net.pickPlayer(seat)` when a player's body or name is clicked
+(the owner's page opens that player's card with Mute and Kick).
+
+**The shell's side.** On `kicked` or `closed` (from its watch socket, or the frame's
+`closed`) the play page stops the game frame (so a helper from before revision 4 stops
+knocking), says what happened and when the player can come back, and offers another room
+(the Lobby's `/api/lobby?not=<room>` never answers that room). It shows `announce` as one
+line across the top until it ends, and tells a muted player so.
+
+**Launch states** are the site's, not the relay's: a game that is private or an invite-only
+beta gives each browser it lets in a signed ticket (`t`) for its frame and sockets, and the
+Worker refuses a socket without one before it reaches the room.

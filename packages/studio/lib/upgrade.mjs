@@ -170,11 +170,14 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
     }
     const have = sections(mine);
     const tsecs = sections(want);
+    const adding = new Set();
     for (const [k, t] of tsecs.entries()) {
       const at = have.find((s) => s.heading === t.heading);
       if (!at) {
-        // After the nearest template section before it that the studio has; else before the first one after it.
-        const before = tsecs.slice(0, k).reverse().find((p) => have.some((s) => s.heading === p.heading));
+        // After the nearest template section before it that the studio has (or that this plan adds just before it, so
+        // two new sections in a row keep the template's order); else before the first one after it.
+        const before = tsecs.slice(0, k).reverse().find((p) => have.some((s) => s.heading === p.heading) || adding.has(p.heading));
+        adding.add(t.heading);
         const after = before ? null : tsecs.slice(k + 1).find((p) => have.some((s) => s.heading === p.heading));
         changes.push({ file: rel, kind: 'add-section', section: t.heading, what: `new section ${t.heading === INTRO ? 'intro' : `"${t.heading}"`}`, after: before?.heading ?? null, before: after?.heading ?? null, text: t.text });
         continue;

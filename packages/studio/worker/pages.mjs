@@ -71,7 +71,7 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, room = null } = {}) {
+export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, room = null, ticket = null, owner = false, launch = 'public' } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
   const places = sharePlaces(g.screen?.share);
@@ -122,9 +122,25 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .sheet .foot a, .sheet .foot button { color: #aab3c7; background: none; border: 0; padding: 6px 2px; font: inherit; text-decoration: none; cursor: pointer; }
 .sheet .foot a:hover, .sheet .foot button:hover { color: #fff; }
 .toast { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); z-index: 8; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; background: rgba(8,12,22,.9); color: #fff; font: 600 13px/1.2 ui-sans-serif, system-ui, sans-serif; pointer-events: none; }
+/* The studio's announcement (section 15): a line across the top, small, never over the middle; it goes by itself. */
+.banner { box-sizing: border-box; position: fixed; left: 50%; top: calc(max(8px, env(safe-area-inset-top)) + 44px); z-index: 9; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(560px, calc(100vw - 24px)); padding: 9px 8px 9px 14px; border-radius: 14px; background: rgba(8,12,22,.9); border: 1px solid var(--hot); color: #fff; font: 600 14px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); touch-action: manipulation; animation: drop .35s ease-out; }
+.banner b { color: var(--hot); font-weight: 800; white-space: nowrap; }
+.banner span { overflow-wrap: anywhere; }
+.banner button { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: #fff; font: 600 16px/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+@keyframes drop { from { opacity: 0; transform: translate(-50%, -8px); } }
+/* A kick or a closed room: the game stops, and the page says so plainly. */
+.notice { box-sizing: border-box; position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(4,6,12,.86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #eef1f8; font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+.notice .box { box-sizing: border-box; width: min(420px, 100%); padding: 22px; border-radius: 20px; background: #0d111c; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 24px 70px rgba(0,0,0,.55); }
+.notice h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: -.01em; }
+.notice p { margin: 0 0 10px; color: #c3cad9; }
+.notice .when { color: var(--hot); font-weight: 700; }
+.notice .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.notice .acts a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; text-decoration: none; font-weight: 700; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
+.notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
 [hidden] { display: none !important; }${g.saves && !screen ? SAVES_SHELL_CSS : ''}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
-  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}) };
+  // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
+  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
@@ -151,7 +167,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 ${joinCard}${share}
 <script>window.__HOMIE_PLAY=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
 <script>${SHELL_JS}</script>${g.saves && !screen ? `
-<script>${SAVES_SHELL_JS}</script>` : ''}`, css, frameAncestors(cat));
+<script>${SAVES_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
 }
 
 /** The play page's own document (no site chrome: the game owns the whole screen). */
@@ -185,8 +201,16 @@ const SHELL_JS = String.raw`(function () {
   var statusEl = document.querySelector('[data-status]');
   var results = document.querySelector('[data-results]');
   var screenCard = document.querySelector('[data-screen]');
-  var state = { game: boot.game, room: null, device: device, want: want, attached: false, stats: null, round: null, roster: null, facts: null, seat: null, results: [], closed: null, link: null };
+  var state = { game: boot.game, room: null, device: device, want: want, attached: false, stats: null, round: null, roster: null, facts: null, seat: null, results: [], closed: null, link: null, notice: null, banner: null, muted: null };
   window.__shell = state;
+  // This browser's room key: random, kept in this site's own storage, and sent only to this site's rooms. It is what
+  // an owner's kick holds out of a room for a while (section 15); it says nothing about who the player is.
+  function rnd() {
+    try { var a = new Uint8Array(16); crypto.getRandomValues(a); var s = ''; for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+    catch (e) { var r = ''; while (r.length < 22) r += Math.random().toString(36).slice(2); return r.slice(0, 22); }
+  }
+  var roomKey = null;
+  try { roomKey = localStorage.getItem('homie-b'); if (!/^[A-Za-z0-9_-]{16,43}$/.test(roomKey || '')) { roomKey = rnd(); localStorage.setItem('homie-b', roomKey); } } catch (e) { roomKey = rnd(); }
 
   // The chip says who is here, then gets out of the game's way (games draw their own HUD at the top). It never takes a touch.
   var chip = document.querySelector('[data-chip]');
@@ -257,6 +281,7 @@ const SHELL_JS = String.raw`(function () {
     try {
       if (params.get('room') !== room) {
         params.set('room', room);
+        params.delete('not');
         history.replaceState(history.state, '', location.pathname + '?' + params.toString() + location.hash);
       }
     } catch (e) {}
@@ -265,6 +290,8 @@ const SHELL_JS = String.raw`(function () {
     try { token = sessionStorage.getItem(KEY); } catch (e) {}
     var q = new URLSearchParams({ room: room, device: device, want: want });
     if (token) q.set('k', token);
+    q.set('b', roomKey);
+    if (boot.t) q.set('t', boot.t);
     if (params.get('name')) q.set('name', params.get('name'));
     else {
       // A player with an account (or a named guest) on this studio plays under their own name in every room.
@@ -275,7 +302,7 @@ const SHELL_JS = String.raw`(function () {
     ['touchdebug', 'cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
     frame.src = '/' + boot.game + '/__game/?' + q.toString();
     frame.addEventListener('load', function () { try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
-    window.addEventListener('pointerdown', function (e) { if (ui && ui.contains(e.target)) return; try { frame.focus(); } catch (e2) {} }, { passive: true });
+    window.addEventListener('pointerdown', function (e) { if ((ui && ui.contains(e.target)) || (e.target.closest && e.target.closest('[data-keep-focus]'))) return; try { frame.focus(); } catch (e2) {} }, { passive: true });
     window.addEventListener('message', function (ev) {
       if (ev.source !== frame.contentWindow) return;
       var m = ev.data;
@@ -285,7 +312,9 @@ const SHELL_JS = String.raw`(function () {
       if (m.what === 'stats') state.stats = m.stats;
       if (m.what === 'round') onRound(m.round);
       if (m.what === 'roster') state.roster = m.slots;
-      if (m.what === 'closed') state.closed = m.why;
+      if (m.what === 'closed') { state.closed = m.why; if (m.why === 'kicked' || m.why === 'room-closed') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); }
+      // A game's net.pickPlayer(seat): only an owner's page listens (its overlay opens that player's card).
+      if (m.what === 'pick' && (m.seat === null || typeof m.seat === 'number')) { try { window.dispatchEvent(new CustomEvent('homie-pick', { detail: { seat: m.seat } })); } catch (e) {} }
       paint();
     });
     watch(room);
@@ -317,15 +346,81 @@ const SHELL_JS = String.raw`(function () {
   }
 
   function watch(room) {
+    if (state.notice) return;
     var ws;
-    try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room)); }
+    var extra = '&b=' + encodeURIComponent(roomKey) + (boot.t ? '&t=' + encodeURIComponent(boot.t) : '');
+    try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
     catch (e) { setTimeout(function () { watch(room); }, 2000); return; }
+    state.watchSocket = ws;
     ws.onmessage = function (ev) {
-      try { state.facts = JSON.parse(ev.data); } catch (e) { return; }
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (!m || typeof m !== 'object') return;
+      if (m.t === 'kicked') { notice('kicked', m); return; }
+      if (m.t === 'closed') { notice('closed', m); return; }
+      if (m.t === 'announce') { banner(m); return; }
+      if (m.t === 'muted') { mutedNote(m); return; }
+      if (m.t !== 'net') return;
+      state.facts = m;
+      if (m.announce && m.announce.text) banner(m.announce, true);
       if (state.facts && state.facts.round) onRound(state.facts.round);
       paint();
     };
-    ws.onclose = function () { setTimeout(function () { watch(room); }, 1500); };
+    ws.onclose = function () { if (!state.notice) setTimeout(function () { watch(room); }, 1500); };
+  }
+
+  // The studio's announcement: one line across the top until it ends (its own clock) or the player closes it.
+  var shownBanners = {};
+  function banner(a, quiet) {
+    if (!a || typeof a !== 'object') return;
+    var old = document.querySelector('[data-banner]');
+    if (!a.text) { if (old && (!a.id || old.getAttribute('data-banner') === a.id)) { old.remove(); state.banner = null; } return; }
+    if (quiet && shownBanners[a.id]) return;
+    shownBanners[a.id] = true;
+    var left = Math.max(3000, Math.min(3600000, (Number(a.until) || 0) - (Number(a.at) || 0) || 30000));
+    if (state.facts && state.facts.st && a.until) left = Math.max(1000, Math.min(left, a.until - state.facts.st));
+    if (old) old.remove();
+    var el = document.createElement('div'); el.className = 'banner'; el.setAttribute('role', 'status'); el.setAttribute('data-banner', String(a.id || '')); el.setAttribute('data-keep-focus', '');
+    var b = document.createElement('b'); b.textContent = 'Studio';
+    var span = document.createElement('span'); span.textContent = String(a.text).slice(0, 280);
+    var x = document.createElement('button'); x.type = 'button'; x.setAttribute('aria-label', 'Close'); x.textContent = '×';
+    x.onclick = function () { el.remove(); state.banner = null; };
+    el.append(b, span, x);
+    document.body.appendChild(el);
+    state.banner = { id: a.id, text: String(a.text) };
+    setTimeout(function () { if (el.parentNode) { el.remove(); if (state.banner && state.banner.id === a.id) state.banner = null; } }, left);
+  }
+
+  function mutedNote(m) {
+    var mins = m.until ? Math.max(1, Math.round((m.until - (state.facts && state.facts.st ? state.facts.st : Date.now())) / 60000)) : 0;
+    state.muted = m.until ? { until: m.until } : null;
+    flash(m.until ? 'The studio muted you for ' + mins + ' min: your chat and emotes reach nobody.' : 'The studio unmuted you.');
+  }
+
+  // A kick or a closed room ends play here: the game frame stops (an older game would otherwise knock again and
+  // again), and the page says what happened, when they can come back, and where to play now.
+  function notice(kind, m) {
+    if (state.notice) return;
+    state.notice = { kind: kind, until: m && m.until ? m.until : null, message: m && m.message ? String(m.message) : '' };
+    try { frame.src = 'about:blank'; } catch (e) {}
+    if (state.watchSocket) { try { state.watchSocket.close(); } catch (e) {} }
+    if (ui) ui.hidden = true;
+    var old = document.querySelector('[data-banner]'); if (old) old.remove();
+    var nowAt = state.facts && state.facts.st ? state.facts.st : Date.now();
+    var mins = state.notice.until ? Math.max(1, Math.ceil((state.notice.until - nowAt) / 60000)) : 0;
+    var label = labelOf(state.room || '');
+    var box = document.createElement('div'); box.className = 'notice'; box.setAttribute('data-notice', kind); box.setAttribute('role', 'alertdialog'); box.setAttribute('data-keep-focus', '');
+    var inner = document.createElement('div'); inner.className = 'box';
+    var h = document.createElement('h1'); h.textContent = kind === 'kicked' ? 'You were removed from this room' : 'This room is closed';
+    var p = document.createElement('p'); p.textContent = state.notice.message || (kind === 'kicked' ? 'The studio removed you from this room.' : 'The studio closed this room. Thanks for playing!');
+    var w = document.createElement('p'); w.className = 'when';
+    w.textContent = mins ? (kind === 'kicked' ? 'You can come back to ' + label + ' in ' + mins + ' min.' : label + ' opens again in ' + mins + ' min.') : '';
+    var acts = document.createElement('div'); acts.className = 'acts';
+    var other = document.createElement('a'); other.className = 'primary'; other.href = '/' + boot.game + '/play?not=' + encodeURIComponent(state.room || ''); other.textContent = 'Play in another room';
+    var back = document.createElement('a'); back.href = '/' + boot.game + '/'; back.textContent = 'Back to ' + boot.name;
+    acts.append(other, back);
+    inner.append(h, p, w, acts); box.appendChild(inner);
+    document.body.appendChild(box);
+    say(kind === 'kicked' ? 'removed from this room' : 'room closed');
   }
 
   function paint() {
@@ -346,8 +441,160 @@ const SHELL_JS = String.raw`(function () {
   if (boot.room) start(boot.room);
   else if (askedRoom !== null && /^[A-Za-z0-9_-]{1,32}$/.test(askedRoom)) start(askedRoom);
   else if (askedRoom !== null) { say('that room link does not work'); }
-  else fetch('/' + boot.game + '/api/lobby', { method: 'POST' })
+  else fetch('/' + boot.game + '/api/lobby' + (/^[A-Za-z0-9_,-]{1,140}$/.test(params.get('not') || '') ? '?not=' + encodeURIComponent(params.get('not')) : ''), { method: 'POST' })
     .then(function (r) { return r.json(); })
     .then(function (j) { start(j.room || 'main'); })
     .catch(function () { start('main'); });
+}());`;
+
+/*
+ * THE OWNER IN THEIR OWN GAME (0.13.0). Only a page served to the studio's signed-in owner carries this (the
+ * Worker checks the owner's session before it adds it; nobody else's page has a byte of it): a small Owner button
+ * in a corner the room button does not use, and a sheet with everyone in this room. A tap on a player shows who they
+ * are, with Mute and Kick; Announce reaches this room or every room of the game. The controls go to the studio's
+ * own /_studio/api with the owner's session (an HttpOnly cookie; the game's sandboxed frame can neither read it nor
+ * send it). A game can open a player's card itself: `net.pickPlayer(seat)` (a click on that player's body).
+ */
+const OWNER_CSS = `.owner { position: fixed; z-index: 10; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); font: 600 13px/1.25 ui-sans-serif, system-ui, -apple-system, sans-serif; color: #eef1f8; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.owner.at-right { align-items: flex-end; }
+.owner.up { flex-direction: column-reverse; }
+.owner .opill { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 9px; border-radius: 999px; border: 1px solid #c9b8ff; background: rgba(12,8,24,.7); color: #e6dcff; font: inherit; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); touch-action: manipulation; }
+.owner .opill i { width: 8px; height: 8px; border-radius: 50%; background: #c9b8ff; }
+.osheet { box-sizing: border-box; width: min(340px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 70px)); overflow: auto; padding: 12px; border-radius: 16px; background: rgba(10,8,20,.96); border: 1px solid rgba(201,184,255,.35); box-shadow: 0 18px 50px rgba(0,0,0,.55); -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+.osheet h2 { margin: 2px 2px 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #c9b8ff; display: flex; justify-content: space-between; gap: 8px; }
+.osheet h2 a { color: #aab3c7; text-transform: none; letter-spacing: 0; font-weight: 600; text-decoration: none; }
+.osheet .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 10px; margin: 0 0 6px; border-radius: 11px; border: 1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.03); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.osheet .row:hover { border-color: rgba(201,184,255,.5); }
+.osheet .row small { color: #9aa3b7; font-weight: 500; }
+.osheet .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.2); color: #aab3c7; margin-left: 6px; }
+.osheet .tag.you { color: #c9b8ff; border-color: #c9b8ff; }
+.osheet .tag.muted { color: #ff8a9a; border-color: rgba(255,107,125,.6); }
+.osheet .bot { color: #6c7489; font-weight: 500; padding: 2px 10px 8px; }
+.osheet .det { padding: 4px 2px; }
+.osheet .det b { font-size: 18px; display: block; margin-bottom: 4px; overflow-wrap: anywhere; }
+.osheet .det p { margin: 0 0 4px; color: #aab3c7; font-weight: 500; }
+.osheet .acts { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap; }
+.osheet .acts button, .osheet form button { min-height: 40px; padding: 0 14px; border-radius: 11px; font: inherit; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,.18); background: transparent; color: inherit; }
+.osheet .acts .kick { color: #ff8a9a; border-color: rgba(255,107,125,.55); }
+.osheet .acts .kick.armed { background: #ff6b7d; color: #16080a; }
+.osheet .acts .mute { color: #ffc27a; border-color: rgba(255,179,92,.55); }
+.osheet .back { background: none; border: 0; color: #aab3c7; font: inherit; padding: 4px 0; cursor: pointer; }
+.osheet form { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.10); display: grid; gap: 8px; }
+.osheet textarea, .osheet select { box-sizing: border-box; width: 100%; font: 500 14px/1.35 ui-sans-serif, system-ui, sans-serif; color: inherit; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.16); border-radius: 10px; padding: 8px 10px; }
+.osheet textarea { min-height: 58px; resize: vertical; }
+.osheet form button { background: #c9b8ff; color: #120a24; border-color: transparent; }
+.osheet .msg { color: #aab3c7; font-weight: 500; min-height: 1.2em; margin: 6px 2px 0; }`;
+
+const OWNER_JS = String.raw`(function () {
+  'use strict';
+  var boot = window.__HOMIE_PLAY; var state = window.__shell;
+  if (!boot || !boot.owner || !state || boot.screen) return;
+  var HOLD = 10;
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.textContent = String(text); return e; }
+  // Beside the room button, on its inner side: the game already keeps that edge clear of its own HUD
+  // (game.json screen.share), so the owner's button never sits on a scoreboard or a stick.
+  var root = el('div', 'owner'); root.setAttribute('data-owner', ''); root.setAttribute('data-keep-focus', '');
+  var pill = el('button', 'opill'); pill.type = 'button'; pill.setAttribute('aria-expanded', 'false'); pill.appendChild(el('i')); pill.appendChild(el('span', '', 'Owner'));
+  var sheet = el('div', 'osheet'); sheet.hidden = true; sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-label', 'Owner');
+  root.append(pill, sheet); document.body.appendChild(root);
+  var toggleEl = document.querySelector('[data-share-toggle]');
+  function placeOwner() {
+    var r = toggleEl ? toggleEl.getBoundingClientRect() : null;
+    if (!r || !r.width) return;
+    var right = r.left + r.width / 2 > innerWidth / 2;
+    var low = r.top > innerHeight / 2;
+    root.classList.toggle('at-right', right); root.classList.toggle('up', low);
+    root.style.top = low ? '' : Math.round(r.top) + 'px';
+    root.style.bottom = low ? Math.round(innerHeight - r.bottom) + 'px' : '';
+    root.style.left = right ? '' : Math.round(r.right + 8) + 'px';
+    root.style.right = right ? Math.round(innerWidth - r.left + 8) + 'px' : '';
+  }
+  placeOwner();
+  addEventListener('resize', placeOwner);
+  try { new ResizeObserver(placeOwner).observe(toggleEl); } catch (e) { setInterval(placeOwner, 500); }
+  var view = { pick: null, msg: '', armed: null, armedAt: 0 };
+  function post(path, body) {
+    return fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, message: 'HTTP ' + r.status }; }); })
+      .catch(function () { return { ok: false, message: 'The studio did not answer.' }; });
+  }
+  function clients() { var f = state.facts; return (f && Array.isArray(f.clients) ? f.clients : []).filter(function (c) { return c.seat !== null || c.waiting; }); }
+  function bots() { var f = state.facts; return (f && Array.isArray(f.roster) ? f.roster : []).filter(function (s) { return s && s.bot; }); }
+  function mins(ms) { var m = Math.max(0, Math.round(ms / 60000)); return m < 1 ? 'under a minute' : m + ' min'; }
+  var drawn = '';
+  function render(force) {
+    if (sheet.hidden) return;
+    var active = document.activeElement; if (active && sheet.contains(active) && /TEXTAREA|SELECT/.test(active.tagName)) return;
+    // Redraw only when something it shows changed (a button under a finger is never swapped mid-tap).
+    var armedOn = view.armed !== null && Date.now() - view.armedAt < 4000 ? view.armed : null;
+    var sig = JSON.stringify([state.room, state.seat, view.pick, view.msg, armedOn, clients().map(function (c) { return [c.id, c.name, c.seat, c.muted, c.role, c.device]; }), bots().map(function (b) { return b.name; })]);
+    if (!force && sig === drawn) return;
+    drawn = sig;
+    sheet.textContent = '';
+    var h = el('h2'); h.appendChild(el('span', '', 'Owner · ' + (state.room ? (/^pub-(\d+)$/.test(state.room) ? 'Room ' + state.room.slice(4) : state.room) : 'this room')));
+    var office = el('a', '', 'Office ↗'); office.href = '/_studio/office'; office.target = '_blank'; office.rel = 'noopener'; h.appendChild(office);
+    sheet.appendChild(h);
+    var list = clients();
+    var picked = view.pick === null ? null : list.filter(function (c) { return c.id === view.pick || (typeof view.pick === 'number' && c.seat === view.pick); })[0];
+    if (picked) {
+      var me = picked.seat !== null && picked.seat === state.seat;
+      var back = el('button', 'back', '← Everyone here'); back.type = 'button'; back.onclick = function () { view.pick = null; view.msg = ''; render(); };
+      var det = el('div', 'det');
+      det.appendChild(el('b', '', picked.name || 'Someone'));
+      det.appendChild(el('p', '', (picked.seat !== null ? 'Seat ' + (picked.seat + 1) : 'Watching') + ' · ' + (picked.device === 'phone' ? 'on a phone' : picked.device === 'tv' ? 'a big screen' : 'on a computer') + (picked.role === 'host' ? ' · hosting the room' : '')));
+      if (me) det.appendChild(el('p', '', 'This is you.'));
+      if (picked.muted) det.appendChild(el('p', '', 'Muted: their chat and emotes reach nobody.'));
+      sheet.append(back, det);
+      if (!me) {
+        var acts = el('div', 'acts');
+        var mute = el('button', 'mute', picked.muted ? 'Unmute' : 'Mute ' + HOLD + ' min'); mute.type = 'button';
+        mute.onclick = function () { mute.disabled = true; post('/_studio/api/mute', { game: boot.game, room: state.room, id: picked.id, minutes: HOLD, off: Boolean(picked.muted) }).then(function (r) { view.msg = r.ok ? (picked.muted ? 'Unmuted.' : 'Muted for ' + HOLD + ' min.') : (r.message || 'That did not work.'); render(); }); };
+        // A kick takes a second tap within 4 s (the sheet redraws meanwhile, so the arming is remembered here).
+        var armedNow = view.armed === picked.id && Date.now() - view.armedAt < 4000;
+        var kick = el('button', 'kick' + (armedNow ? ' armed' : ''), armedNow ? 'Sure? Kick' : 'Kick ' + HOLD + ' min'); kick.type = 'button';
+        kick.onclick = function () {
+          if (!(view.armed === picked.id && Date.now() - view.armedAt < 4000)) { view.armed = picked.id; view.armedAt = Date.now(); render(); setTimeout(render, 4050); return; }
+          view.armed = null;
+          kick.disabled = true;
+          post('/_studio/api/kick', { game: boot.game, room: state.room, id: picked.id, minutes: HOLD }).then(function (r) { view.msg = r.ok ? (picked.name || 'They') + ' was removed for ' + HOLD + ' min.' : (r.message || 'That did not work.'); if (r.ok) view.pick = null; render(); });
+        };
+        acts.append(mute, kick); sheet.appendChild(acts);
+      }
+    } else {
+      if (!list.length) sheet.appendChild(el('p', 'msg', 'Nobody else is here yet.'));
+      list.forEach(function (c) {
+        var row = el('button', 'row'); row.type = 'button';
+        var left = el('span'); left.appendChild(el('span', '', c.name || 'Someone'));
+        if (c.seat !== null && c.seat === state.seat) left.appendChild(el('span', 'tag you', 'you'));
+        if (c.muted) left.appendChild(el('span', 'tag muted', 'muted'));
+        if (c.role === 'host') left.appendChild(el('span', 'tag', 'host'));
+        row.append(left, el('small', '', c.seat !== null ? 'seat ' + (c.seat + 1) + ' · ' + (c.device === 'phone' ? 'phone' : c.device === 'tv' ? 'screen' : 'computer') : 'waiting'));
+        row.onclick = function () { view.pick = c.id; view.msg = ''; render(); };
+        sheet.appendChild(row);
+      });
+      var b = bots(); if (b.length) sheet.appendChild(el('div', 'bot', 'Bots: ' + b.map(function (s) { return s.name; }).join(', ')));
+    }
+    var form = el('form'); form.setAttribute('data-announce', '');
+    var ta = el('textarea'); ta.maxLength = 280; ta.placeholder = 'Announce something to the players'; ta.setAttribute('aria-label', 'Announcement');
+    var scope = el('select'); var o1 = el('option', '', 'This room'); o1.value = 'room'; var o2 = el('option', '', 'Every room of ' + boot.name); o2.value = 'game'; scope.append(o1, o2);
+    var send = el('button', '', 'Announce'); send.type = 'submit';
+    form.append(ta, scope, send);
+    form.onsubmit = function (e) {
+      e.preventDefault(); if (!ta.value.trim()) return; send.disabled = true;
+      post('/_studio/api/announce', scope.value === 'room' ? { game: boot.game, room: state.room, text: ta.value } : { game: boot.game, text: ta.value }).then(function (r) {
+        view.msg = r.ok ? 'Announced to ' + (r.people || 0) + (r.people === 1 ? ' person' : ' people') + '.' : (r.message || 'That did not work.');
+        if (r.ok) ta.value = ''; send.disabled = false; ta.blur(); render();
+      });
+    };
+    sheet.appendChild(form);
+    sheet.appendChild(el('p', 'msg', view.msg));
+  }
+  function open(on) { sheet.hidden = !on; pill.setAttribute('aria-expanded', on ? 'true' : 'false'); if (on) render(true); }
+  pill.onclick = function (e) { e.stopPropagation(); open(sheet.hidden); };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheet.hidden) open(false); });
+  // A game that knows its players' bodies opens one's card (net.pickPlayer(seat), posted by its frame).
+  window.addEventListener('homie-pick', function (e) { var seat = e.detail && e.detail.seat; if (seat === null || typeof seat === 'number') { view.pick = seat; view.msg = ''; open(true); } });
+  window.__ownerPick = function (seat) { view.pick = seat; view.msg = ''; open(true); };
+  setInterval(render, 1500);
+  window.__owner = { open: open, render: render };
 }());`;
