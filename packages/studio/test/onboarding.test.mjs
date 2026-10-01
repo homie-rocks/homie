@@ -238,7 +238,7 @@ test('the codex page: cards, chips, stats, a table, a checklist, the decision lo
   const r = renderCodex(dir, 'ember-run', { mode: 'artifact', feed: null });
   const { html } = r;
   assert.match(html, /<h1>Ember Run<\/h1>/);
-  assert.match(html, /<nav class="tabs"[^>]*>.*<a href="#latest">Latest<\/a><a href="#concept">Concept<\/a>.*<a class="status" href="#build-status">Build status<\/a>/s);
+  assert.match(html, /<nav class="tabs"[^>]*>.*<a href="#latest">Latest<\/a><a class="status" href="#build-status">Build status<\/a><a href="#concept">Concept<\/a>/s, 'the build\'s tab right after Latest');
   // Cards: the picture embedded, the id chip, tags by tone, the subtitle and the stats.
   assert.match(html, /<h3>Kestrel<\/h3><span class="chip id">C-01<\/span>/);
   assert.match(html, /<span class="chip good">Player<\/span><span class="chip plain">Runner<\/span>/);
@@ -414,6 +414,14 @@ test('statusline --install: this studio\'s local settings, never over a status l
   assert.equal(JSON.parse(readFileSync(join(dir, '.claude', 'settings.local.json'), 'utf8')).statusLine, undefined, 'nothing changed');
   assert.equal(installStatusLine(dir, { env, replace: true }).ok, true);
   assert.equal(JSON.parse(readFileSync(join(home, 'settings.json'), 'utf8')).statusLine.command, 'my-line.sh', 'theirs stays everywhere else');
+  // Claude Code started in the folder above the studio (a new studio is made as a subfolder): the setting goes
+  // there, names the studio, and the line finds it from that folder.
+  const above = installStatusLine(dir, { env, replace: true, project: scratch });
+  assert.equal(above.ok, true, JSON.stringify(above));
+  const there = JSON.parse(readFileSync(join(scratch, '.claude', 'settings.local.json'), 'utf8')).statusLine.command;
+  assert.match(there, / --studio ".*line-install"$/);
+  const fromAbove = spawnSync(process.execPath, [LINE, '--studio', dir], { input: JSON.stringify({ workspace: { current_dir: scratch } }), encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  assert.equal(fromAbove.stdout.trim(), '◇ Lantern Works');
   // Other settings in the file are kept.
   writeFileSync(join(dir, '.claude', 'settings.local.json'), JSON.stringify({ permissions: { allow: ['Bash(npm run build)'] } }));
   installStatusLine(dir, { env, replace: true });

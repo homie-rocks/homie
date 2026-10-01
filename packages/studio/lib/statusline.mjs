@@ -16,7 +16,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { currentFeedDoc, latestFeedFor, summarize } from './feed-summary.mjs';
 import { PACKAGE_ROOT, findStudio } from './studio.mjs';
 
@@ -86,19 +86,23 @@ const readJson = (path) => { if (!existsSync(path)) return {}; return JSON.parse
 /** Our own status line: a command that runs this toolkit's statusline. */
 export const isOurs = (statusLine) => typeof statusLine?.command === 'string' && /homie-studio|@homie-rocks[\\/]studio/.test(statusLine.command) && /statusline/.test(statusLine.command);
 
-/** The command the setting runs: this studio's pinned toolkit, by an absolute path (forward slashes, for Windows too). */
-export function statusLineCommand(root) {
+/**
+ * The command the setting runs: this studio's pinned toolkit, by an absolute path (forward slashes, for Windows
+ * too). Set in another folder (the one Claude Code was started in, above the studio), it names the studio too.
+ */
+export function statusLineCommand(root, { named = false } = {}) {
   const pinned = join(root, 'node_modules', '@homie-rocks', 'studio', 'bin', 'statusline.mjs');
   const script = existsSync(pinned) ? pinned : join(PACKAGE_ROOT, 'bin', 'statusline.mjs');
-  return `node "${script.replace(/\\/g, '/')}"`;
+  const slash = (p) => p.replace(/\\/g, '/');
+  return `node "${slash(script)}"${named ? ` --studio "${slash(root)}"` : ''}`;
 }
 
 /** Every settings file that may already hold a status line for this studio, most specific first. */
-function settingsFiles(root, env) {
+function settingsFiles(project, env) {
   const user = env.CLAUDE_CONFIG_DIR ? join(env.CLAUDE_CONFIG_DIR, 'settings.json') : join(env.HOME || homedir(), '.claude', 'settings.json');
   return [
-    { where: 'this studio, this person (.claude/settings.local.json)', path: join(root, LOCAL) },
-    { where: 'this studio (.claude/settings.json)', path: join(root, '.claude', 'settings.json') },
+    { where: 'this project, this person (.claude/settings.local.json)', path: join(project, LOCAL) },
+    { where: 'this project (.claude/settings.json)', path: join(project, '.claude', 'settings.json') },
     { where: 'every project of this person (the user settings)', path: user },
   ];
 }
@@ -108,8 +112,12 @@ function settingsFiles(root, env) {
  * replaces a status line the person already has (anywhere Claude Code would read one) unless `replace`.
  * `remove`: take ours out again.
  */
-export function installStatusLine(root, { replace = false, remove = false, env = process.env } = {}) {
-  const files = settingsFiles(root, env);
+export function installStatusLine(root, { replace = false, remove = false, project = null, env = process.env } = {}) {
+  // Claude Code reads project settings from the folder it was started in. A studio made as a subfolder of that
+  // folder is named in the command, and the setting goes where Claude Code reads it (`--project <that folder>`).
+  const here = project ? resolve(project) : root;
+  if (!existsSync(here)) return { ok: false, command: 'statusline install', why: `no folder ${here}` };
+  const files = settingsFiles(here, env);
   const local = files[0].path;
   let mine;
   try { mine = readJson(local); } catch { return { ok: false, command: 'statusline install', why: `${LOCAL} is not valid JSON; fix it by hand first (nothing was changed)` }; }
@@ -119,7 +127,7 @@ export function installStatusLine(root, { replace = false, remove = false, env =
     writeFileSync(local, `${JSON.stringify(mine, null, 2)}\n`);
     return { ok: true, command: 'statusline remove', removed: true, file: LOCAL, message: `Removed the Homie status line from ${LOCAL}.` };
   }
-  const command = statusLineCommand(root);
+  const command = statusLineCommand(root, { named: here !== root });
   if (isOurs(mine.statusLine) && mine.statusLine.command === command) return { ok: true, command: 'statusline install', already: true, file: LOCAL, statusLine: mine.statusLine, message: 'The status line is already on in this studio.' };
   if (!replace) {
     for (const f of files) {
@@ -131,17 +139,17 @@ export function installStatusLine(root, { replace = false, remove = false, env =
     }
   }
   mine.statusLine = { type: 'command', command, padding: 0, refreshInterval: 5 };
-  mkdirSync(join(root, '.claude'), { recursive: true });
+  mkdirSync(join(here, '.claude'), { recursive: true });
   writeFileSync(local, `${JSON.stringify(mine, null, 2)}\n`);
   // Claude Code keeps settings.local.json out of git when it makes the file; this one we made, so say it here too.
-  const ignore = join(root, '.gitignore');
+  const ignore = join(here, '.gitignore');
   let ignored = false;
-  try {
+  if (existsSync(ignore) || here === root) try {
     const text = existsSync(ignore) ? readFileSync(ignore, 'utf8') : '';
     if (!/^\.claude\/settings\.local\.json\s*$/m.test(text)) { writeFileSync(ignore, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# This person's own Claude Code settings for this studio (the status line).\n.claude/settings.local.json\n`); ignored = true; }
   } catch { /* no .gitignore to keep */ }
   return {
-    ok: true, command: 'statusline install', file: LOCAL, statusLine: mine.statusLine, gitignore: ignored,
-    message: `The status line is on in this studio (${LOCAL}): one line under the prompt with the current build's stage, a progress bar, its checks and what it spent. Claude Code reloads settings by itself; it shows from the next message. Turn it off with: npx --no-install homie-studio statusline --remove`,
+    ok: true, command: 'statusline install', file: here === root ? LOCAL : join(here, LOCAL), statusLine: mine.statusLine, gitignore: ignored,
+    message: `The status line is on ${here === root ? `in this studio (${LOCAL})` : `for Claude Code started in ${here} (${LOCAL} there)`}: one line under the prompt with the current build's stage, a progress bar, its checks and what it spent. Claude Code reloads settings by itself; it shows from the next message. Turn it off with: npx --no-install homie-studio statusline --remove`,
   };
 }

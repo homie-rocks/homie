@@ -292,8 +292,10 @@ function card(title, lines, emb, { pixel }) {
   const tags = chips.replace(idChip, '');
   const inline = (t) => renderMarkdown(t).html.replace(/^<p>|<\/p>$/g, '');
   const pic = art ? emb.image(art[2]) : null;
+  // No picture yet: the card's initial, in the game's display font, holds its place (never a made-up picture).
+  const initial = [...String(title).trim()][0]?.toUpperCase() ?? '';
   return `<article class="card${art ? ' has-art' : ''}">
-<header>${art ? `<div class="art${pixel ? ' pixel' : ''}">${pic ? `<img src="${pic}" alt="${esc(art[1])}" loading="lazy" decoding="async">` : `<span>${esc(art[1] || '')}</span>`}</div>` : ''}<div class="who"><div class="name"><h3>${esc(title)}</h3>${idChip}</div>${subtitle ? `<p class="meta">${inline(subtitle)}</p>` : ''}${tags ? `<p class="tags">${tags}</p>` : ''}</div></header>
+<header>${art ? `<div class="art${pixel ? ' pixel' : ''}">${pic ? `<img src="${pic}" alt="${esc(art[1])}" loading="lazy" decoding="async">` : `<span>${esc(art[1] || '')}</span>`}</div>` : `<div class="art mono" aria-hidden="true"><span>${esc(initial)}</span></div>`}<div class="who"><div class="name"><h3>${esc(title)}</h3>${idChip}</div>${subtitle ? `<p class="meta">${inline(subtitle)}</p>` : ''}${tags ? `<p class="tags">${tags}</p>` : ''}</div></header>
 ${blocks(rest, emb)}
 ${stats.length ? `<dl class="stats">${stats.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${inline(v)}</dd>`).join('')}</dl>` : ''}
 </article>`;
@@ -379,8 +381,8 @@ a{color:var(--accent2)}img{max-width:100%}
 h1{margin:0;font:400 clamp(28px,6vw,52px)/1.15 var(--display);color:var(--accent);letter-spacing:.01em;overflow-wrap:anywhere}
 .tagline{margin:10px 0 0;font-size:18px;color:var(--ink)}.pitch{max-width:72ch;color:var(--dim)}
 nav.tabs{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto;padding:0 4px;scrollbar-width:none}nav.tabs .wrap::-webkit-scrollbar{display:none}
-nav.tabs a{flex:none;padding:12px 12px;color:var(--dim);text-decoration:none;font:600 14px/1 var(--body);border-bottom:2px solid transparent;white-space:nowrap}
+nav.tabs .wrap{display:flex;gap:2px;overflow-x:auto;padding:0 6px;scrollbar-width:none}nav.tabs .wrap::-webkit-scrollbar{display:none}
+nav.tabs a{flex:none;padding:12px 10px;color:var(--dim);text-decoration:none;font:600 14px/1 var(--body);border-bottom:2px solid transparent;white-space:nowrap}
 nav.tabs a.on,nav.tabs a:hover{color:var(--ink);border-bottom-color:var(--accent)}
 nav.tabs a.status{color:var(--accent2)}
 main{max-width:1080px;margin:0 auto;padding:28px 16px 64px}
@@ -392,7 +394,7 @@ h3{margin:0;font:400 18px/1.3 var(--display);color:var(--ink)}
 .card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
 .card header{display:flex;gap:14px;align-items:flex-start;margin-bottom:8px}
 .card .art{flex:none;width:96px;height:96px;border-radius:10px;background:color-mix(in srgb,var(--bg) 70%,var(--panel));border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
-.card .art img{width:100%;height:100%;object-fit:contain}.pixel img{image-rendering:pixelated}body.pixel figure img{background:color-mix(in srgb,var(--bg) 70%,var(--panel))}
+.card .art img{width:100%;height:100%;object-fit:contain}.card .art.mono{background:radial-gradient(circle at 30% 25%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 70%),color-mix(in srgb,var(--bg) 70%,var(--panel))}.card .art.mono span{font:400 40px/1 var(--display);color:var(--accent)}.pixel img{image-rendering:pixelated}body.pixel figure img{background:color-mix(in srgb,var(--bg) 70%,var(--panel))}
 .card .who{min-width:0}.card .name{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.card .meta{margin:4px 0 0;color:var(--dim);font-size:14px}.card .tags{margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px}
 .card p{margin:8px 0}
 .chip{display:inline-block;padding:2px 8px;border-radius:999px;font:600 12px/1.6 var(--mono);border:1px solid var(--line);color:var(--dim)}
@@ -423,7 +425,7 @@ code{font-family:var(--mono);font-size:.92em}pre{overflow-x:auto;background:var(
 .upd{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:14px;margin:10px 0}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--accent2)}.dot.running{animation:pulse 1.4s infinite}.dot.failed{background:var(--danger)}.dot.passed{background:var(--good)}.dot.stopped{background:var(--gold)}
 @keyframes pulse{50%{opacity:.35}}@media (prefers-reduced-motion:reduce){.dot.running{animation:none}}
-.segbar{display:flex;gap:6px;margin:14px 0}.seg{flex:1;height:12px;border-radius:4px;background:color-mix(in srgb,var(--ink) 10%,transparent);overflow:hidden}.seg i{display:block;height:100%;background:var(--good)}.seg.failed i{background:var(--danger);width:100%!important}
+.segbar{display:flex;gap:6px;margin:14px 0}.seg{flex:1;height:12px;border-radius:4px;background:color-mix(in srgb,var(--ink) 10%,transparent);overflow:hidden}.seg i{display:block;height:100%;background:var(--good)}.seg.failed i{background:var(--danger);width:100%!important}.seg.skipped i{background:color-mix(in srgb,var(--good) 35%,transparent)}li.skipped>span>b{color:var(--dim)}
 .summary{margin:6px 0 0}.spend{margin:6px 0 0;color:var(--dim);font:13px/1.5 var(--mono)}
 .try{margin:16px 0;padding:14px 16px;border:1px solid var(--gold);border-radius:14px;background:color-mix(in srgb,var(--gold) 8%,transparent)}.try .eyebrow{color:var(--gold)}.try p{margin:0}
 .panel h3{margin-bottom:6px}.status .panel{margin-top:14px}
@@ -491,7 +493,9 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   const s = summarize(feed === undefined ? latestFeedFor(root, id) : feed);
   const sections = parsed.sections.filter((x) => x.body.join('\n').trim() || x.key);
   const tabs = sections.map((x) => `<a href="#${esc(x.id)}">${esc(x.title)}</a>`);
-  tabs.push(`<a class="status" href="#build-status">${s?.state === 'running' ? `Build · ${s.percent}%` : 'Build status'}</a>`);
+  // The build's tab comes right after Latest (or first), so it is never the one a narrow screen hides.
+  const statusTab = `<a class="status" href="#build-status">${s?.state === 'running' ? `Build · ${s.percent}%` : 'Build status'}</a>`;
+  tabs.splice(sections[0]?.key === 'latest' ? 1 : 0, 0, statusTab);
   const cover = typeof meta.cover === 'string' ? emb.image(meta.cover) : null;
   const pitch = parsed.pitch ? renderMarkdown(parsed.pitch).html : (game.blurb ? `<p>${esc(game.blurb)}</p>` : '');
   const body = sections.map((x) => sectionHtml(x, emb, ctx)).join('\n');

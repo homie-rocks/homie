@@ -155,6 +155,7 @@ static game's served files.
 
 ```sh
 npx homie-studio statusline --install    # .claude/settings.local.json: this person, this studio
+npx homie-studio statusline --install --project ..   # Claude Code started in the folder above the studio
 npx homie-studio statusline --remove
 ```
 

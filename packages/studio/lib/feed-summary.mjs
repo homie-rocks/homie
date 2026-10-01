@@ -68,7 +68,8 @@ export function summarize(doc) {
     build: doc.build, what: doc.what, id: doc.id ?? null, title: doc.title ?? doc.id ?? 'Build', studio: doc.studio ?? '',
     state: doc.state, percent, stagesDone: done, stagesTotal: doc.stages.length,
     stage: at ? { id: at.id, label: at.label, state: at.state, note: at.note ?? '' } : null,
-    stages: doc.stages.map((s) => ({ id: s.id, label: s.label, state: s.state, note: s.note ?? '', checks: checks.filter((c) => c.stage === s.id) })),
+    // A build that passed without a stage (a check run that never deployed) skipped it.
+    stages: doc.stages.map((s) => ({ id: s.id, label: s.label, state: doc.state === 'passed' && s.state === 'pending' ? 'skipped' : s.state, note: s.note ?? '', checks: checks.filter((c) => c.stage === s.id) })),
     checks: {
       total: checks.length,
       pass: checks.filter((c) => PASSED.has(c.state)).length,

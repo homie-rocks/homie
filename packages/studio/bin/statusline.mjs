@@ -18,6 +18,9 @@ function print() {
     const session = JSON.parse(input || '{}');
     dirs = [session?.workspace?.current_dir, session?.workspace?.project_dir, session?.cwd, process.cwd()].filter((d) => typeof d === 'string' && d);
   } catch { /* no session: this folder */ }
+  // `--studio <folder>`: set up in the folder above the studio, the setting names the studio.
+  const named = process.argv.indexOf('--studio');
+  if (named > 0 && process.argv[named + 1]) dirs.push(process.argv[named + 1]);
   try {
     const columns = Number(process.env.COLUMNS) || 100;
     const color = !process.env.NO_COLOR;

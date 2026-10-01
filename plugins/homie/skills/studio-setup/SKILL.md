@@ -52,7 +52,9 @@ few seconds, and never prints a key:
    and a numbered list of next steps: this checklist decides the order, not that list.
 2. Run that same package with `setup status` instead of `new …`:
    `npx -y @homie-rocks/studio@<version> setup status --connector yes --json` (inside a studio:
-   `npx --no-install homie-studio setup status --connector yes --json`). `--connector yes` because
+   `npx --no-install homie-studio setup status --connector yes --json`). If it does not know
+   `setup status` (a toolkit older than 0.11.0 calls it unknown, or asks for a studio first), run `npx -y @homie-rocks/studio@latest setup status
+   --connector yes --json` for the status only (it only reads). `--connector yes` because
    the Homie tools are in your tool list; if `studio_scaffold` is not there, say `--connector no`,
    show the result, and stop: without the connector there is no pinned toolkit to use.
 3. Show it as one short checklist, a line per row: ✓ ready, → do this now, ○ optional, … later.
@@ -77,9 +79,12 @@ few seconds, and never prints a key:
    for something else: give them the link.
 5. Run it again whenever they say they did something, and tick the row.
 
-In Claude Code, once the studio exists, offer the status line in one line ("Want the build's progress
-under the prompt?"); on a yes: `npx --no-install homie-studio statusline --install` (`--remove` takes it
-away). It never replaces a status line they already have; if it says so, leave theirs.
+**The status line (Claude Code only).** The moment the studio exists (end of step 1), add one line to
+your reply offering it: "Want the build's progress as a line under the prompt? Say yes and I'll turn it
+on." On a yes: `npx --no-install homie-studio statusline --install` (`--remove` takes it away). Claude Code
+reads the setting from the folder it was started in: if that is the folder above the studio (you made the
+studio as a subfolder), add `--project <that folder>`. It never replaces a status line they already have;
+if it says so, leave theirs. Never turn it on unasked.
 
 ## 1. The studio
 
@@ -97,6 +102,7 @@ site's address, the studio's name, each game's name, blurb and Play link).
    the home folder, never outside the current directory.
 3. From here on run the studio's own copy: `npm run <script>` or `npx --no-install homie-studio <command>`
    (`--no-install` never fetches a package by that bare name).
+4. In Claude Code, offer the status line in one line (above), then ask about step 2.
 
 If the MCP tool is unavailable, tell the person the Homie connector is not connected and stop; never
 invent the package address.

@@ -76,8 +76,10 @@
  *   homie-studio codex link <id>          a one-time link to the codex on the live site (a private page for the owner)
  *
  *   homie-studio statusline               the current build in one line (what Claude Code's status line shows)
- *   homie-studio statusline --install     turn it on in Claude Code for this studio (.claude/settings.local.json);
- *                                         --remove turns it off; --replace when another status line is set
+ *   homie-studio statusline --install [--project <folder>]
+ *                                         turn it on in Claude Code for this studio (.claude/settings.local.json);
+ *                                         --project: the folder Claude Code was started in, when that is above the
+ *                                         studio; --remove turns it off; --replace when another status line is set
  *
  * Every command prints a few lines for a person; --json prints the result.
  */
@@ -331,7 +333,7 @@ async function main() {
     return { ok: true, command: 'help' };
   }
   const root = requireStudio();
-  if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace') });
+  if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);
   if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie') });
