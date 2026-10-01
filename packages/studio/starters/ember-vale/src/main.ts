@@ -345,7 +345,8 @@ function hud(t: number): void {
   }
   if (performance.now() < bannerUntil) { ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#ffcf6e'; ctx.fillText(bannerText, cw / 2, canvas.height / k - 90); }
   const st = saves.status();
-  if (st.pending && !st.online) { ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#c9c0a6'; ctx.textAlign = 'left'; ctx.fillText('Offline: saved on this device, syncs when back', x0 + 4, y0 + 112); }
+  // Under the clock: the pills below the hero panel are the page's own buttons and would cover it.
+  if (st.pending && !st.online) { ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#c9c0a6'; ctx.textAlign = 'center'; ctx.fillText('Offline: your hero is saved on this device and syncs when you are back', cw / 2, 52); }
   void t;
   ctx.restore();
 }
