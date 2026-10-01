@@ -91,6 +91,12 @@ const SECRET_SHAPES = [
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
 
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/*
+ * MCP's own method names (tools/list, tools/call, resources/templates/list, notifications/tools/list_changed and the
+ * rest) are protocol words, not paths. They come out of a line before the private terms read it, so a private folder
+ * that shares a word with them never fails a line that only names the protocol; a path into such a folder still does.
+ */
+export const MCP_METHOD = /(?<![\w./-])(?:notifications\/)?(?:tools|resources|resources\/templates|prompts|completion|logging|sampling|roots|elicitation)\/(?:list|call|read|get|subscribe|unsubscribe|list_changed|updated|complete|setLevel|createMessage)(?![\w.-])/g;
 /** A line as a report may show it: home folders, email addresses and every private term masked. */
 const sanitizer = (terms) => (line) => {
   let out = line.replace(/(\/Users\/|\/home\/|[A-Z]:\\Users\\)[^/\\\s'"`]+/g, '$1***').replace(EMAIL, '***@***');
@@ -174,7 +180,7 @@ export function auditText(path, text, ctx) {
   if (!isMessage) each(/\b(TV|tv|television|camera|speakers?|lights?|microphone)\b/, (i, line, m) => hit('context', 'info', i, `"${m}": ${excerpt(line)}`));
 
   // The maintainers' private terms: the number and kind only, never the term.
-  for (const t of ctx.terms) lines.forEach((line, i) => { if (t.re.test(line)) hit('private', 'fail', i, `private term #${t.n} (${t.kind})`); });
+  for (const t of ctx.terms) lines.forEach((line, i) => { if (t.re.test(line.replace(MCP_METHOD, ''))) hit('private', 'fail', i, `private term #${t.n} (${t.kind})`); });
   return out;
 }
 

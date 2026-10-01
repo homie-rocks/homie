@@ -80,6 +80,18 @@ test('private terms: a hit names the number and kind, and the report never print
   } finally { r.done(); }
 });
 
+test('private folder terms: MCP method names are protocol words, a path into the folder still fails', () => {
+  // A private-folder term of the maintainers' shape, for folders that share their names with MCP's words.
+  const terms = parseTerms(JSON.stringify({ v: 1, terms: [{ kind: 'private folder', re: '(^|[\\s`\'"(/])(tools|templates|kits)/[A-Za-z0-9_.-]', flags: '' }] }));
+  const protocol = repo({ 'packages/a/server.mjs': "case 'tools/list': case 'tools/call': case 'resources/templates/list':\nsend({ method: 'notifications/tools/list_changed' });\n" });
+  // (kits stands in for a private folder here, so this file never names a real one.)
+  const leak = repo({ 'packages/a/README.md': 'Built with kits/export/x.mjs and kits/list.mjs.\n' });
+  try {
+    assert.deepEqual(checks(auditRepo(protocol.dir, { terms, termsGiven: true })), [], 'MCP method names pass');
+    assert.deepEqual(checks(auditRepo(leak.dir, { terms, termsGiven: true })), ['private'], 'a path into the folder still fails');
+  } finally { protocol.done(); leak.done(); }
+});
+
 test('a finding that quotes its line masks home folders, addresses and private terms in it', () => {
   const secret = J('zq', 'xw', 'vy');
   const r = repo({ 'packages/a/src/x.ts': `// ${J('TO', 'DO')} ask ${secret} at ${J('/Us', 'ers/', secret, '/x')} or ${J('ada', '@', 'example.org')}\n` });
