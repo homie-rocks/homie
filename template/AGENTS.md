@@ -25,8 +25,11 @@ directory lists its games; homie.rocks does not host them.
 Use `npm run <script>` or `npx --no-install homie-studio <command>`: `--no-install` makes sure it is this
 studio's pinned copy, never a registry lookup of the bare name.
 
+- `npx --no-install homie-studio demo` — a live multiplayer game to try right now (on Homie Arcade, with
+  whoever is playing and bots in the empty seats). Nothing is copied into this studio.
 - `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"` — a new game from a
-  multiplayer starter (one live public room from its first build, bots fill seats).
+  multiplayer starter (one live public room from its first build, bots fill seats). A new studio starts with no
+  game: copy a starter only when the person asks for one, or once their game is planned.
 - `npx --no-install homie-studio port plan <folder>` — read an existing single-player web game and grade
   how hard making it multiplayer will be; `port import` brings it into `games/`, `port check` runs the
   owner tests (real touch, a late joiner, a killed host, two browsers finishing a round). The Homie
@@ -79,6 +82,8 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **Sections, like homie.rocks:** Home (the featured game, live rooms, latest posts), Games, Music, Videos,
   Rooms (every public room playing now, joinable) and Posts. A section with nothing in it has no tab, and its
   page is not found.
+- **A new studio goes live with its Home only:** its name and "First game coming soon", with what is on the way
+  (games, posts, music and videos), until its first game, song or video is published. A post shows there at once.
 - **Every game gets a landing** at `/<id>/`: a full-bleed hero from the game's own footage
   (`games/<id>/hero/wide.mp4` and `tall.mp4`, or a trailer in `videos/` with `for.game`), else its cover
   with slow motion; the pitch, a big Play button into a public room, phone / computer / TV with the join code,
@@ -155,6 +160,13 @@ studio's pinned copy, never a registry lookup of the bare name.
   `room_kick`, `room_close`, `game_launch_state`), which ask the same way; never paste a key anywhere else.
 - A game can listen (`NETPLAY.md` section 15): `net.on('announce', …)`, `net.isMuted(seat)` to hide a muted
   player's chat, and `net.pickPlayer(seat)` when a player is clicked (the owner's page opens their card).
+
+## Continuing a build from the Claude app
+
+A Claude Code session started from the Claude app's card gets one short line, like
+`Continue building Night Owls: build hb_…`. `HANDOFF.md` says what to do with it:
+`npx --no-install homie-studio handoff hb_…` fetches the brief the person gave in the chat, takes the build (the
+chat's card follows the work from then on) and, for a studio still being set up, checks in from this repository.
 
 ## Rules
 

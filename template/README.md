@@ -7,7 +7,7 @@ and a site with public multiplayer rooms that runs on **your own Cloudflare acco
 
 The button copies this studio into your GitHub, creates its Worker, database and rooms on your Cloudflare, and
 deploys it with Workers Builds: every push to `main` goes live, and every other branch gets its own Preview.
-The site plays a first game the moment it is up.
+The site goes live at once with its own home page ("first game coming soon"); the games come next.
 
 Then open the site and tap **Connect to Claude**, or ask Claude in the Claude app to set up your studio with the
 Homie connector: it makes games, songs and videos here, in a pull request you merge with one tap.

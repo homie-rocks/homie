@@ -272,6 +272,33 @@
      "## Beta": "9d02638207a26e73"
     }
    }
+  },
+  "0.14.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "HANDOFF.md": "ce7a8fd91c6bbee2",
+    "games/README.md": "5ad32fe80c61f117",
+    "music/README.md": "b8a828de9311bd28",
+    "videos/README.md": "70614388cbb203c7",
+    "posts/README.md": "37841aae476bd540",
+    "site/README.md": "ca131cd0472464fb",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "f14d641159480e6c",
+     "## Commands (all through the pinned CLI in node_modules)": "e579cd6ce3ce342a",
+     "## The site": "7c1618431bae6324",
+     "## Making games": "63069b31c87a2aa2",
+     "## The Game Codex and progress": "0738ef719cef3a4c",
+     "## Running live games (the back office)": "f0566f07cff04113",
+     "## Continuing a build from the Claude app": "0d68081e924ca419",
+     "## Rules": "969318425c99f5a5",
+     "## Beta": "9d02638207a26e73"
+    }
+   }
   }
  }
 }
