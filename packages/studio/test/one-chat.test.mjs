@@ -158,3 +158,22 @@ test('handoff: a setup line checks in; a build for another repository is refused
   assert.equal(r.ok, false);
   assert.match(r.why, /for octo\/paper-comets, but this session is in homie-rocks\/homie/);
 });
+
+test('a build log line is cut at a word\'s end with "…", inside its brackets, never mid-number', async () => {
+  const { Feed, clip, startProgress } = await import('../lib/progress.mjs');
+  assert.equal(clip('short and whole', 80), 'short and whole', 'a short line is never cut');
+  const { dir } = studio('log-lines');
+  const r = await startProgress(dir, { what: 'game', id: 'dogfight', title: 'Dogfight' });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const whole = 'Paper-plane dogfight: two crews, bots fill every empty seat, up to 6 players';
+  new Feed(dir, r.build).stage('plan', 'done', whole);
+  assert.equal(new Feed(dir, r.build).doc.log.at(-1).text, `Plan: done (${whole})`, 'a plan that fits is never cut');
+  const note = 'Paper-plane dogfight: two crews of folded planes loop over a cardboard city at dusk, bots fill every empty seat, rounds of 90 seconds, a scoreboard after each, up to 6 players';
+  new Feed(dir, r.build).stage('plan', 'done', note);
+  const line = new Feed(dir, r.build).doc.log.at(-1).text;
+  assert.ok(line.length <= 160, line);
+  assert.match(line, /^Plan: done \(Paper-plane dogfight: .*…\)$/, 'the cut ends with "…" and keeps its ")"');
+  assert.doesNotMatch(line, /up to\)/, 'never "up to)"');
+  const body = line.slice('Plan: done ('.length, -'…)'.length);
+  assert.ok(note.startsWith(body) && note[body.length] === ' ', 'cut where a word ends');
+});

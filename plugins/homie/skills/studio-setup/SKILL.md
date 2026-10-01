@@ -101,6 +101,10 @@ site's address, the studio's name, each game's name, blurb and Play link).
 2. Folder: the one the person named; otherwise a NEW folder named after the studio's slug inside the
    current directory (e.g. `./night-owls`). Never in a folder that already holds other files, never in
    the home folder, never outside the current directory.
+   **An earlier attempt:** if a folder of this name already exists and is not a studio (notes, a plan, a
+   charter from before), say so and ASK whether to fold its premise in: with a yes, copy its notes into the
+   studio's `notes/earlier/<folder>/` and use them in the plan; remove the old folder only with a second yes
+   (to the Trash, so it can come back). Never delete or overwrite it unasked.
 3. From here on run the studio's own copy: `npm run <script>` or `npx --no-install homie-studio <command>`
    (`--no-install` never fetches a package by that bare name).
 4. In Claude Code, offer the status line in one line (above), then ask about step 2.

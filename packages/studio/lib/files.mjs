@@ -7,9 +7,11 @@
  */
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { PICTURE_MAX, PICTURE_TYPES, pictureFor } from './pictures.mjs';
 
-export const FILE_LIMITS = Object.freeze({ write: 2 * 1024 * 1024, read: 400 * 1024, image: 1536 * 1024, lines: 2000, list: 600, matches: 200 });
-const IMAGES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
+// A picture is at most PICTURE_MAX raw in an answer (lib/pictures.mjs): a bigger one goes as a smaller JPEG copy.
+export const FILE_LIMITS = Object.freeze({ write: 2 * 1024 * 1024, read: 400 * 1024, image: PICTURE_MAX, lines: 2000, list: 600, matches: 200 });
+const IMAGES = PICTURE_TYPES;
 const SKIP_DIRS = new Set(['node_modules', '.git', '.wrangler', '.studio', 'dist']);
 
 const inside = (base, p) => p === base || p.startsWith(base.endsWith(sep) ? base : `${base}${sep}`);
@@ -79,8 +81,9 @@ export function readStudioFile(root, path, { offset = 1, limit = FILE_LIMITS.lin
   if (st.isDirectory()) throw new Error(`${rel} is a folder (file_list lists it)`);
   const mime = IMAGES[extname(abs).toLowerCase()];
   if (mime) {
-    if (st.size > FILE_LIMITS.image) throw new Error(`${rel} is ${Math.round(st.size / 1024)} KB, over the ${FILE_LIMITS.image / 1024} KB a picture may be here`);
-    return { rel, image: { mimeType: mime, data: readFileSync(abs).toString('base64') }, bytes: st.size };
+    // Small enough for one answer (the Claude desktop app refuses one over 1 MB): a big picture goes as a smaller copy.
+    const pic = pictureFor(abs, { label: rel });
+    return { rel, image: { mimeType: pic.mimeType, data: pic.data }, bytes: pic.bytes, shrunk: pic.shrunk, from: pic.from ?? st.size };
   }
   if (st.size > FILE_LIMITS.read * 8) throw new Error(`${rel} is ${Math.round(st.size / 1024)} KB: too big to read here`);
   const buf = readFileSync(abs);

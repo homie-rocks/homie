@@ -4,8 +4,9 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { deflateSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -20,8 +21,12 @@ const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-mcp-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
 /** A host's side of the stdio transport. */
+// A home folder of the tests' own: the server looks there for earlier folders of a studio's name.
+const HOME = join(scratch, 'home');
+mkdirSync(HOME, { recursive: true });
+
 function server(args, { cwd = scratch, env = {} } = {}) {
-  const child = spawn(process.execPath, [CLI, 'mcp', ...args], { cwd, env: { ...process.env, HOMIE_MCP_WAIT_MS: '20000', ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [CLI, 'mcp', ...args], { cwd, env: { ...process.env, HOME, HOMIE_MCP_WAIT_MS: '20000', ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
   let buf = ''; let seq = 0; const waiting = new Map(); const notes = []; let err = '';
   child.stderr.on('data', (d) => { err += d; });
   child.stdout.on('data', (d) => {
@@ -75,6 +80,7 @@ test('handshake, tools with the remote\'s names, prompts, and the cards as MCP A
       assert.match(read.text, /ui\/notifications\/size-changed/);
       assert.doesNotMatch(read.text, /__name|<\/script>[\s\S]*<\/script>[\s\S]*<\/script>/, 'one inline script, written as a file (never a function\'s source)');
       assert.deepEqual(read._meta.ui.csp.connectDomains, []);
+      assert.ok(JSON.stringify(read).length < 200_000, `${uri} is small enough for one answer`);
     }
     const prompts = (await s.request('prompts/list')).result.prompts;
     assert.ok(prompts.some((p) => p.name === 'new-studio'));
@@ -215,4 +221,80 @@ esac
     assert.equal(login.structuredContent.deviceCode, 'ABCD-1234');
     assert.match(login.content[0].text, /github\.com\/login\/device/);
   } finally { await out.close(); }
+});
+
+/** A PNG of random noise (it does not compress): about 3 MB at 1000 x 1000. */
+function noisePng(file, n = 1000) {
+  const raw = Buffer.alloc(n * (n * 3 + 1));
+  for (let y = 0; y < n; y++) { raw[y * (n * 3 + 1)] = 0; for (let i = 1; i <= n * 3; i++) raw[y * (n * 3 + 1) + i] = (Math.random() * 256) | 0; }
+  const table = Array.from({ length: 256 }, (_, k) => { let c = k; for (let j = 0; j < 8; j++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b) => { let c = 0xffffffff; for (const v of b) c = table[(c ^ v) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+  const h = Buffer.alloc(13); h.writeUInt32BE(n, 0); h.writeUInt32BE(n, 4); h[8] = 8; h[9] = 2;
+  writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', h), chunk('IDAT', deflateSync(raw, { level: 1 })), chunk('IEND', Buffer.alloc(0))]));
+}
+
+test('one answer stays under 1 MB: a 3 MB picture goes as a smaller copy (or is refused, naming it); the guard cuts the rest', async () => {
+  const { fitResult, RESULT_MAX } = await import('../lib/mcp.mjs');
+  const { shrinker, PICTURE_MAX } = await import('../lib/pictures.mjs');
+  const studios = join(scratch, 'big-pictures');
+  const s = server(['--studios', studios, '--no-install']);
+  try {
+    await s.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    assert.ok(!(await s.call('studio_scaffold', { name: 'Big Pictures' })).isError);
+    const root = join(studios, 'big-pictures');
+    noisePng(join(root, 'big.png'));
+    assert.ok(statSync(join(root, 'big.png')).size > 2.5 * 1024 * 1024, 'a picture of about 3 MB');
+    const r = await s.call('file_read', { path: 'big.png' });
+    assert.ok(JSON.stringify(r).length < RESULT_MAX, 'the answer is under the limit');
+    if (shrinker()) {
+      assert.ok(!r.isError, r.content?.[0]?.text);
+      const img = r.content.find((c) => c.type === 'image');
+      assert.equal(img.mimeType, 'image/jpeg');
+      assert.ok(Buffer.from(img.data, 'base64').length <= PICTURE_MAX, 'a smaller JPEG copy, at most 600 KB');
+      assert.match(r.content.find((c) => c.type === 'text').text, /smaller JPEG copy/);
+    } else {
+      assert.equal(r.isError, true);
+      assert.match(r.content[0].text, /big\.png/, 'the refusal names the file');
+    }
+  } finally { await s.close(); }
+  // The guard itself: a picture that cannot be shrunk, a card's big preview and 2 MB of text.
+  const huge = { content: [{ type: 'image', mimeType: 'image/png', data: 'A'.repeat(1_400_000) }, { type: 'text', text: 'line\n'.repeat(400_000) }], structuredContent: { kind: 'build', feed: { preview: { image: `data:image/jpeg;base64,${'B'.repeat(300_000)}` } } } };
+  const fit = fitResult(huge, { shrink: () => null });
+  assert.ok(JSON.stringify(fit).length <= RESULT_MAX);
+  assert.ok(!fit.content.some((c) => c.type === 'image'), 'the picture that could not be shrunk was left out');
+  assert.equal(fit.structuredContent.feed.preview.image, null, 'the card keeps its data, without its picture');
+  assert.match(fit.content.at(-1).text, /over 900 KB.*a picture was left out.*the card shows no pictures this time.*the text was cut/);
+  const small = { content: [{ type: 'text', text: 'ok' }] };
+  assert.equal(fitResult(small), small, 'an answer under the limit goes as it is');
+});
+
+test('an earlier folder of the studio\'s name is found, offered, folded in and (with a yes) moved to the Trash', async () => {
+  const earlier = join(HOME, 'dev', 'personal', 'quiet-moons');
+  mkdirSync(earlier, { recursive: true });
+  writeFileSync(join(earlier, 'charter.md'), '# Quiet Moons\n\nA co-op night game about lanterns.\n');
+  writeFileSync(join(earlier, 'decisions.md'), '- 2026-10-01: four players, one lantern each\n');
+  const studios = join(scratch, 'fold');
+  const s = server(['--studios', studios, '--no-install']);
+  try {
+    await s.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    const made = await s.call('studio_scaffold', { name: 'Quiet Moons' });
+    assert.ok(!made.isError, made.content[0].text);
+    assert.match(made.content[0].text, /An earlier folder for this name/);
+    assert.match(made.content[0].text, /ASK the person/);
+    assert.deepEqual(made.structuredContent.earlier.map((e) => e.path), [realpathSync(earlier)]);
+    assert.equal((await s.call('studio_fold', { from: join(HOME, 'Documents') })).isError, true, 'only the folder it found');
+    const fold = await s.call('studio_fold', { from: earlier });
+    assert.ok(!fold.isError, fold.content[0].text);
+    assert.match(fold.content[0].text, /A co-op night game about lanterns/, 'the notes are read back, for the plan');
+    assert.ok(existsSync(join(studios, 'quiet-moons', 'notes', 'earlier', 'quiet-moons', 'charter.md')));
+    assert.ok(existsSync(join(earlier, 'charter.md')), 'copying leaves the old folder as it was');
+    mkdirSync(join(HOME, '.Trash'), { recursive: true });
+    const gone = await s.call('studio_fold', { from: earlier, remove: true });
+    if (process.platform === 'darwin') {
+      assert.ok(!gone.isError, gone.content[0].text);
+      assert.ok(!existsSync(earlier), 'moved');
+      assert.ok(readdirSync(join(HOME, '.Trash')).some((f) => f.startsWith('quiet-moons ')), 'into the Trash, to put back from there');
+    } else assert.equal(gone.isError, true, 'elsewhere the person removes it themselves');
+  } finally { await s.close(); }
 });

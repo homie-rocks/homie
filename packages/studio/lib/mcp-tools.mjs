@@ -13,7 +13,7 @@
  * file tools never leave it (lib/files.mjs).
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { renderCodex, newCodex } from './codex.mjs';
@@ -399,6 +399,80 @@ async function startDev(ctx, root, port) {
   return { url: `http://127.0.0.1:${at}`, job, slow: true };
 }
 
+/* ------------------------------------------------------------------ an earlier attempt, folded in */
+
+/** Where a person keeps projects, looked at two levels deep for an earlier folder of a studio's name. */
+const PROJECT_ROOTS = ['dev', 'Developer', 'code', 'Code', 'src', 'projects', 'Projects', 'repos', 'git', 'work', 'Documents', 'Desktop'];
+const TEXT_NOTES = new Set(['.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.toml', '.csv', '.html', '.css', '.js', '.mjs', '.ts', '.tsx']);
+const SKIP = new Set(['node_modules', '.git', 'Library', 'dist', '.studio', '.wrangler']);
+
+/** Folders named like the studio that are not studios: [{ path, files }] (at most 3). */
+export function earlierFolders(ctx, names, own, home = homedir()) {
+  const want = new Set(names.filter(Boolean).map((n) => String(n).toLowerCase()));
+  const roots = [ctx.studiosDir, home, ...PROJECT_ROOTS.map((r) => join(home, r))].filter((r) => r && existsSync(r));
+  const found = new Map();
+  const look = (dir, depth) => {
+    let entries = [];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (found.size >= 3) return;
+      if (!e.isDirectory() || e.name.startsWith('.') || SKIP.has(e.name)) continue;
+      const p = join(dir, e.name);
+      if (want.has(e.name.toLowerCase()) && realOr(p) !== realOr(own) && !existsSync(join(p, 'studio.json'))) {
+        let files = [];
+        try { files = readdirSync(p).filter((f) => !f.startsWith('.')).slice(0, 12); } catch { files = []; }
+        found.set(realOr(p), { path: realOr(p), files });
+      } else if (depth > 1 && entries.length < 400) look(p, depth - 1);
+    }
+  };
+  for (const r of [...new Set(roots.map(realOr))]) look(r, r === realOr(home) ? 1 : 2);
+  return [...found.values()];
+}
+
+/** studio_fold: the earlier folder's notes into notes/earlier/, or (remove) the folder into the Trash. */
+async function foldEarlier(ctx, root, a) {
+  const from = realOr(expandHome(a.from) ?? '');
+  const known = ctx.note(root).earlier ?? earlierFolders(ctx, [readStudio(root).name, readStudio(root).slug, basename(root)], root).map((e) => e.path);
+  if (!known.includes(from)) return fail(`${a.from} is not an earlier folder found for this studio (${known.join(', ') || 'none was found'}); nothing was touched`);
+  if (!existsSync(from)) return fail(`${from} is not there any more`);
+  if (a.remove === true) {
+    const trash = join(homedir(), '.Trash');
+    if (process.platform !== 'darwin' || !existsSync(trash)) return fail(`Moving a folder to the Trash works on a Mac only: the person can remove ${from} themselves.`);
+    const to = join(trash, `${basename(from)} ${new Date().toISOString().slice(0, 19).replace(/:/g, '.')}`);
+    try { renameSync(from, to); } catch (error) { return fail(`${from} could not be moved to the Trash (${error.code ?? error.message}): the person can remove it themselves`); }
+    ctx.note(root).earlier = known.filter((p) => p !== from);
+    return ok(`Moved ${from} to the Trash (as "${basename(to)}"); the person can put it back from there.`);
+  }
+  const dest = join(root, 'notes', 'earlier', basename(from));
+  const copied = [];
+  let total = 0;
+  const walk = (dir, rel) => {
+    let entries = [];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (copied.length >= 60 || total > 2 * 1024 * 1024) return;
+      if (e.name.startsWith('.') || SKIP.has(e.name)) continue;
+      const p = join(dir, e.name);
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { walk(p, r); continue; }
+      if (!e.isFile() || !TEXT_NOTES.has(extname(e.name).toLowerCase())) continue;
+      const size = statSync(p).size;
+      if (size > 200 * 1024) continue;
+      mkdirSync(dirname(join(dest, r)), { recursive: true });
+      copyFileSync(p, join(dest, r));
+      copied.push(r); total += size;
+    }
+  };
+  walk(from, '');
+  let shown = '';
+  for (const r of copied.filter((f) => /\.(md|markdown|txt)$/i.test(f))) {
+    if (shown.length > 30_000) break;
+    shown += `\n--- ${r}\n${readFileSync(join(dest, r), 'utf8').split('\n').slice(0, 80).join('\n')}\n`;
+  }
+  ctx.note(root).changed = true;
+  return ok(`Copied ${copied.length} note file${copied.length === 1 ? '' : 's'} from ${from} into notes/earlier/${basename(from)}/ (the old folder is unchanged). Fold its premise into the plan with the person (the game's CODEX.md), then ask whether to remove the old folder (studio_fold with remove: true moves it to the Trash).${shown ? `\n${shown}` : ''}`, { kind: 'fold', from, to: `notes/earlier/${basename(from)}`, files: copied });
+}
+
 /* ------------------------------------------------------------------ a studio from GitHub */
 
 /** owner/name of a checkout's origin remote, lowercased, or null. */
@@ -517,18 +591,33 @@ export function toolDefs(ctx, avail = {}) {
         // Compared on real paths (a temporary or linked folder may have two names).
         const dir = join(realOr(dirname(asked)), basename(asked));
         if (!inside(base, dir) || dir === base) return fail(`a studio goes in its own folder inside ${ctx.studiosDir}`);
+        // An earlier attempt for this name (a folder that is not a studio: notes, a plan, a charter), here or in the
+        // usual project folders: the person is offered to fold its premise in (studio_fold), never surprised by it.
+        const earlier = earlierFolders(ctx, [name, slugify(name), basename(dir)], dir);
+        let at = dir;
+        if (existsSync(at) && readdirSync(at).some((f) => !['.DS_Store', '.git'].includes(f)) && !existsSync(join(at, 'studio.json'))) at = `${dir}-studio`;
         let made;
-        try { made = newStudio(dir, { name, install: false, ...(ctx.directory ? { homie: ctx.directory } : {}) }); } catch (error) { return fail(error.message); }
+        try { made = newStudio(at, { name, install: false, ...(ctx.directory ? { homie: ctx.directory } : {}) }); } catch (error) { return fail(error.message); }
         ctx.current = made.dir;
+        ctx.note(made.dir).earlier = earlier.map((e) => e.path);
         let install = null;
         if (ctx.install) {
           try { install = installJob(made.dir); } catch (error) { return fail(`${name} is made at ${made.dir}, but ${error.message}`); }
           await waitJob(install, Math.min(ctx.waitMs, 35_000));
         }
         const r = await setupCard(ctx, made.dir, { install, made: { dir: made.dir, wrote: made.wrote } });
-        r.content[0].text = `Made ${name} at ${made.dir} (no game yet: its home page says "First game coming soon").\nWrote: ${made.wrote.join(', ')}\n${!install ? '' : install.endedAt ? (install.code === 0 ? 'Its toolkit is installed.' : `npm install failed: ${whyOf(install)}`) : `Its toolkit is installing (job ${install.id}).`}\n\n${r.content[0].text}`;
+        const fold = earlier.length ? `\n\nAn earlier folder for this name is on this computer, and it is not a studio: ${earlier.map((e) => `${e.path} (${e.files.join(', ') || 'empty'})`).join('; ')}. ASK the person: fold its premise into ${name}? With their yes, studio_fold { "from": "<that folder>" } copies its notes into the studio (notes/earlier/) and shows them to you, so the plan can use them. Then, only with another yes, studio_fold { "from": "<that folder>", "remove": true } moves the old folder to the Trash.` : '';
+        r.content[0].text = `Made ${name} at ${made.dir} (no game yet: its home page says "First game coming soon").\nWrote: ${made.wrote.join(', ')}\n${!install ? '' : install.endedAt ? (install.code === 0 ? 'Its toolkit is installed.' : `npm install failed: ${whyOf(install)}`) : `Its toolkit is installing (job ${install.id}).`}${fold}\n\n${r.content[0].text}`;
+        if (r.structuredContent) r.structuredContent.earlier = earlier;
         return r;
       },
+    },
+    {
+      name: 'studio_fold', title: 'Fold an earlier folder into the studio',
+      description: 'An earlier folder for this studio\'s name that is not a studio (one studio_scaffold found and named): copy its notes into the studio (notes/earlier/<folder>/, text files only) and read them, so its premise goes into the plan; or, with remove: true, move the old folder to the Trash. Only with the person\'s yes for each; it never touches any other folder.',
+      inputSchema: { type: 'object', properties: { from: str('The earlier folder studio_scaffold named'), remove: { type: 'boolean', description: 'Move the earlier folder to the Trash (only with the person\'s yes)' }, ...STUDIO_ARG }, required: ['from'] },
+      annotations: { title: 'Fold an earlier folder in', readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      run: async (a) => foldEarlier(ctx, ctx.root(a.studio), a),
     },
     {
       name: 'studio_install', title: 'Install the studio\'s dependencies',
@@ -569,14 +658,14 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_demo', title: 'See a working game',
-      description: 'Step 2: a live multiplayer game on Homie Arcade to play right now, made with this same toolkit, with NOTHING copied into the studio. Give the person the Play link: two browser tabs (or a phone and a computer) are two players in the same room; bots fill the empty seats. Copy a starter into the studio (game_make) only if they ask.',
+      description: 'Step 2: a live multiplayer game on Homie Arcade to play right now, made with this same toolkit, with NOTHING copied into the studio. Give the person the Play link: THEY open it (the link in your reply, or Play on a card); never open a browser or run a command to open it yourself. Two browser tabs (or a phone and a computer) are two players in the same room; bots fill the empty seats. Copy a starter into the studio (game_make) only if they ask.',
       inputSchema: { type: 'object', properties: { ...STUDIO_ARG } },
       annotations: { title: 'See a working game', ...RO, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio, { need: false });
         const r = await demoGames();
         if (root) ctx.note(root).demo = true;
-        return ok(formatDemo(r), { kind: 'demo', ...r });
+        return ok(`${formatDemo(r)}\n\nFor you, the AI: give the person this Play link in your reply; they open it themselves. Do not open a browser or run any command to open it.`, { kind: 'demo', ...r });
       },
     },
     {
@@ -705,7 +794,7 @@ export function toolDefs(ctx, avail = {}) {
         return ok([
           `${slow ? 'Starting' : 'Running'} here: ${url}/${games.length ? '' : ' (the home page: "First game coming soon")'}`,
           ...games.map((x) => `  ${x.name ?? x.id}: ${url}/${x.id}/play`),
-          g ? `Open ${url}/${g.id}/play in two browser tabs: two players, one room.` : '',
+          g ? `The person opens ${url}/${g.id}/play in two browser tabs: two players, one room. Give them the address; do not open a browser for them.` : 'Give the person the address; do not open a browser for them.',
         ].filter(Boolean).join('\n'), { kind: 'preview', url, games: games.map((x) => ({ id: x.id, play: `${url}/${x.id}/play` })) });
       },
     },
@@ -901,7 +990,7 @@ export function toolDefs(ctx, avail = {}) {
       annotations: { title: 'Read a file', ...RO },
       run: async (a) => {
         const r = readStudioFile(ctx.root(a.studio), a.path, { offset: a.offset, limit: a.limit });
-        if (r.image) return { content: [{ type: 'image', data: r.image.data, mimeType: r.image.mimeType }, { type: 'text', text: `${r.rel} (${Math.round(r.bytes / 1024)} KB)` }] };
+        if (r.image) return { content: [{ type: 'image', data: r.image.data, mimeType: r.image.mimeType }, { type: 'text', text: `${r.rel} (${r.shrunk ? `a smaller JPEG copy, ${Math.round(r.bytes / 1024)} KB, of a ${Math.round(r.from / 1024)} KB picture; the file is unchanged` : `${Math.round(r.bytes / 1024)} KB`})` }] };
         return ok(`${r.rel} (lines ${r.from}-${r.to} of ${r.lines}${r.more ? '; more with offset' : ''})\n${r.text}`);
       },
     },

@@ -70,6 +70,9 @@ Night Owls: build hb_…"*; the session fetches the brief itself (`homie-studio 
 - **Not the Homie house app.** On a Mac with the Homie house app, Claude may also list that app's own MCP server
   (its room and TV tools). That is a different server: this one is **Homie Studio**, and every one of its tools says
   so in its description.
+- **The 1 MB rule.** Claude Desktop refuses a tool answer over 1 MB. A picture goes as a smaller JPEG copy (ffmpeg, or
+  macOS's own sips) of at most 600 KB, and every answer is kept under about 900 KB: what had to be left out or cut is
+  said in the answer.
 - **The 60-second rule.** Claude Desktop gives a local tool call 60 s. Long work (npm install, a check, a deploy) runs
   in the background: the tool answers at once with a card that follows it.
 - **Where it runs.** Claude Desktop may run the server on its own built-in Node.js; the server then runs every studio

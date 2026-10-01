@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import { PACKAGE_ROOT } from './studio.mjs';
 import { StudioContext, UI, availability, toolDefs } from './mcp-tools.mjs';
 import { stopAllJobs, toolPath } from './jobs.mjs';
+import { shrinkPictureData } from './pictures.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
 export const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -39,7 +40,11 @@ A new studio follows one checklist, in order and never ahead. Show it in your fi
 6. Playtest it (playtest), then put it online: studio_deploy with plan: true first (say what it creates and costs, free), cloudflare_login when not signed in (they approve once in their browser), studio_deploy, then studio_publish.
 If they ask for everything at once, show the list, make your own choices for steps 2 to 4 in one line each, and go on.
 
+If studio_scaffold finds an earlier folder of the studio's name that is not a studio, ask the person whether to fold its premise in (studio_fold), and remove it only with a second yes.
+
 A studio made elsewhere (on a phone, with Deploy to Cloudflare, so it lives on GitHub): studio_open with its repo clones it into the studios folder with this computer's own GitHub sign-in; github_login signs the computer in with GitHub's one-time code. Never ask for a token.
+
+Links are the person's to open: give them in your reply (the cards have their own buttons). Never open a browser or run a command such as open to open one yourself.
 
 Long work (npm install, check, playtest, deploy, renders) runs in the background: the tool answers at once with a card that follows it, and build_progress or studio_job reads where it is. studio_guide has Homie's full guide for each job (game, plan, port, playtest, publish, music, sound, art, video). Never put a key or password in a file or the chat. If Homie's homie.rocks connector is connected too, its tools of the same names say what to run; these run it.`;
 
@@ -62,6 +67,52 @@ export function cardHtml(uri) {
 export function cardCsp(uri) {
   if (uri === UI.codex) return { connectDomains: [], resourceDomains: ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'] };
   return { connectDomains: [], resourceDomains: [] };
+}
+
+/*
+ * ONE ANSWER, AT MOST RESULT_MAX. The Claude desktop app refuses a tool result over 1 MB. Every tools/call answer goes
+ * through fitResult on its way out: pictures first (a smaller copy, else left out), then the card's pictures, then the
+ * text (cut, and saying so), and last the card's data itself. What was left out is said in the answer's text.
+ */
+export const RESULT_MAX = 900_000;
+const sizeOf = (r) => JSON.stringify(r).length;
+
+/** Every data: URL in a card's data (a feed's preview, a codex's art, a studio's covers) taken out. */
+function withoutDataUrls(v) {
+  if (typeof v === 'string') return v.startsWith('data:') && v.length > 1024 ? null : v;
+  if (Array.isArray(v)) return v.map(withoutDataUrls);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withoutDataUrls(x)]));
+  return v;
+}
+
+export function fitResult(result, { max = RESULT_MAX, shrink = shrinkPictureData } = {}) {
+  if (!result || typeof result !== 'object' || sizeOf(result) <= max) return result;
+  const r = JSON.parse(JSON.stringify(result));
+  const said = [];
+  const content = Array.isArray(r.content) ? r.content : (r.content = []);
+  for (let i = 0; i < content.length && sizeOf(r) > max; i++) {
+    const c = content[i];
+    if (c?.type !== 'image') continue;
+    const small = shrink(c.data, c.mimeType);
+    if (small && small.data.length < c.data.length) { content[i] = { ...c, ...small }; said.push('a picture went as a smaller copy'); }
+    else { content[i] = { type: 'text', text: '(A picture was left out: too big for one answer.)' }; said.push('a picture was left out'); }
+  }
+  if (sizeOf(r) > max && r.structuredContent) { r.structuredContent = withoutDataUrls(r.structuredContent); said.push('the card shows no pictures this time'); }
+  if (sizeOf(r) > max) {
+    // The longest text goes down to what fits, cut at a line's end.
+    const texts = content.filter((c) => c?.type === 'text' && typeof c.text === 'string').sort((a, b) => b.text.length - a.text.length);
+    for (const t of texts) {
+      const over = sizeOf(r) - max;
+      if (over <= 0) break;
+      const keep = Math.max(0, t.text.length - over - 400);
+      const cut = t.text.slice(0, keep);
+      t.text = `${cut.slice(0, Math.max(cut.lastIndexOf('\n'), Math.floor(keep * 0.9)))}\n…`;
+      said.push('the text was cut');
+    }
+  }
+  if (sizeOf(r) > max && r.structuredContent) { delete r.structuredContent; said.push('the card had no room for its data'); }
+  if (said.length) content.push({ type: 'text', text: `(This answer was over ${Math.round(max / 1000)} KB, the most one answer may be here: ${[...new Set(said)].join('; ')}.)` });
+  return r;
 }
 
 export const PROMPTS = [
@@ -122,7 +173,7 @@ export async function serveMcp({ studios = null, skills = null, cwd = process.cw
           let result;
           try { result = await tool.run(params?.arguments ?? {}); } catch (e) { result = { content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true }; }
           log(`${name} ${result?.isError ? 'failed' : 'ok'} in ${Date.now() - t0} ms`);
-          reply(result);
+          reply(fitResult(result));
           // A media provider set up meanwhile adds its tool.
           const before = names;
           avail = availability();

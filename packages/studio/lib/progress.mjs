@@ -83,6 +83,17 @@ const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image
 
 const now = () => new Date().toISOString();
 /** Plain text of at most `max` characters: no control characters, trimmed. */
+/**
+ * Plain text of at most `max` characters, cut at the end of a word with "…" when it is longer: never mid-word, and
+ * never mid-number (a log line said "bots, up to)" once, its "6" cut off).
+ */
+export function clip(value, max) {
+  const t = plain(value, Number.MAX_SAFE_INTEGER);
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max * 0.5 ? cut.slice(0, space) : cut).replace(/[\s,;:(\u2013\u2014-]+$/u, '')}…`;
+}
 export const plain = (value, max) => String(value ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const dir = (root) => join(root, PROGRESS_DIR);
 const docPath = (root, id) => join(dir(root), `${id}.json`);
@@ -219,7 +230,7 @@ export async function flushProgress(ms = 6000) {
 /* ------------------------------------------------------------------ the document */
 
 function pushLog(d, text) {
-  d.log = [...(d.log ?? []), { at: now(), text: plain(text, LIMITS.logLine) }].slice(-LIMITS.logLines);
+  d.log = [...(d.log ?? []), { at: now(), text: clip(text, LIMITS.logLine) }].slice(-LIMITS.logLines);
 }
 
 function mutateDoc(root, id, fn) {
@@ -268,7 +279,8 @@ export class Feed {
       if (note !== undefined) s.note = plain(note, LIMITS.note);
       if (state === 'failed' && note) doc.error = plain(note, LIMITS.note);
       if (state === 'running' || state === 'done') doc.error = null;
-      pushLog(doc, `${s.label}: ${state}${note ? ` (${plain(note, 100)})` : ''}`);
+      // The note is cut at a word's end, inside its own brackets, so the line keeps its closing ")".
+      pushLog(doc, `${s.label}: ${state}${note ? ` (${clip(note, LIMITS.logLine - s.label.length - state.length - 5)})` : ''}`);
     }, { soon: true });
     heartbeat(this.root, this.id, d?.stages?.some((s) => s.state === 'running') && d.state === 'running');
     return d;
