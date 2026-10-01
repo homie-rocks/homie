@@ -113,6 +113,59 @@ npx homie-studio stats share on                         # tell the directory "pl
 Each key is minted on the owner's computer; only its SHA-256 goes into D1, through the
 studio's own Cloudflare login. `worker/stats.mjs` says exactly what is counted.
 
+## Setup status
+
+```sh
+npx -y @homie-rocks/studio@0.11.0 setup status --connector yes   # before a studio exists
+npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
+```
+
+One checklist of what this computer and the person's accounts have for a studio: Node.js, the Homie
+connector (the AI says whether its Homie tools are there; the directory is reached), Cloudflare (signed in
+with the studio's own Wrangler, and the account's email verified: a deploy that went through proves it, a
+deploy refused for it is remembered), Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and
+fal (and, in Claude Code, the status line). Each row is green, missing or "do this now", says what it
+unlocks, and gives the exact fix: a command the AI runs or a page the person taps. It only reads, answers in
+seconds, and never prints a key, a token or an account's name. A studio the Claude app's setup card made
+(`setup attach`) counts as connected to Cloudflare and GitHub there. `--json` gives the rows.
+
+## The Game Codex
+
+`games/<id>/CODEX.md` is a game's plan: Markdown with a small frontmatter for its look (palette, fonts, a
+cover, pixel art) and a few conventions that become cards (`### Name` with a picture, `` `M-01` `` id and tag
+chips, an italic subtitle and `**Key:** value` stats), tables, checklists, a dated decision log and open
+questions (`lib/codex.mjs` has the whole format).
+
+```sh
+npx homie-studio codex new crown-thief          # every section, in the studio's colours
+npx homie-studio codex crown-thief --open       # .studio/codex/crown-thief.html, in the browser
+npx homie-studio codex crown-thief --artifact   # one self-contained page to publish as a Claude artifact
+npx homie-studio codex link crown-thief         # a one-time link to the site's private copy
+```
+
+The page has a tab per section and a **Build status** tab from the game's progress feed; the local copy
+redraws itself whenever the feed changes and refreshes in the browser while a build runs. `npm run build`
+puts each game's codex on the site at `/_studio/codex/<id>/`, served only to the studio's owner (the same
+one-time sign-in as the stats page), never listed or indexed. Text is escaped and the page runs only its own
+script (the site allows it by its hash); pictures and fonts come only from inside the studio and are
+embedded, so it loads nothing but Google Fonts. CODEX.md is never in a game's remix source or among a
+static game's served files.
+
+## The Claude Code status line
+
+```sh
+npx homie-studio statusline --install    # .claude/settings.local.json: this person, this studio
+npx homie-studio statusline --remove
+```
+
+One line under the prompt, from the current build's feed: `▶ Crown Thief · Checks ▰▰▰▰▰▰▱▱▱▱ 62% · 3/5 checks
+· $0.40 of $2.00`; the studio's name, dimmed, when nothing runs; a finished build's result for ten minutes.
+Claude Code runs `bin/statusline.mjs` with the session as JSON on stdin (it reads only the studio's progress
+files, in about 40 ms) and, with the 5 s `refreshInterval` it sets, keeps it moving while a long check runs.
+It never replaces a status line the person already has (`--replace` puts this one in for this studio only).
+Plugins cannot set a status line, so it is always the person's yes. Codex CLI's status line takes only its
+own built-in items, so there the codex page is the progress view.
+
 ## A build the person can watch (the progress feed)
 
 A build of a game, song or video can keep a small progress feed, so the person follows it

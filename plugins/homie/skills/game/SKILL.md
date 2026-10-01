@@ -10,6 +10,11 @@ is none, use the `studio-setup` skill first.
 
 ## Start it
 
+- **A new studio's first game** follows the `studio-setup` checklist: a working copy of a starter first,
+  one small change, then the plan (the `plan` skill) before anything big. Never jump ahead of it.
+- **A game with a Game Codex** (`games/<id>/CODEX.md`): read it first; it is the plan. Every decision that
+  changes it goes into it in the same change, with a dated line under Latest, and the page is redrawn
+  (`npx --no-install homie-studio codex <id>`). A big change to a game without one: plan it first.
 - **New game:** call the Homie MCP tool `game_make` (id, name) for the exact command
   and rules, then run `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`.
   The id becomes the game's address (`/<id>/`); lowercase, digits, hyphens.
@@ -42,8 +47,9 @@ Make it the game the person asked for, in small steps:
 
 ## Prove it
 
-When the person is following along in the Claude app (or anywhere they cannot see your
-terminal), open a progress feed first and show it to them:
+Open a progress feed for every build, titled with what it does (the codex's milestone); the codex
+page's Build status tab and Claude Code's status line follow it by themselves. When the person is
+following along in the Claude app (or anywhere they cannot see your terminal), share it and show it:
 
 ```sh
 npx --no-install homie-studio progress start <id> --share --title "<what this build does>" [--budget <dollars>]

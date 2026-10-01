@@ -1,166 +1,222 @@
 ---
 name: studio-setup
-description: Set up a Homie studio (one repository with games/, music/, videos/, posts/ and a site that runs on the studio's own Cloudflare, free plan, no payment method, with the same sections as homie.rocks in the studio's own look and an epic landing page for every game), make its first multiplayer game, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, or says "set up a game studio called X and make a multiplayer game".
+description: Set up a Homie studio (one repository with games/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare, free plan, no payment method) by a built-in checklist that never jumps ahead — setup status first (accounts and tools, what each unlocks, the exact fix), name the studio, see a working game, make one small change, plan the game into its Game Codex, build it (alone or with parallel agents) with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says "set up a game studio called X" (with or without "and make a multiplayer game").
 ---
 
 # Set up a studio
 
 A Homie studio is ONE folder the person can see and open: `AGENTS.md` (+ `CLAUDE.md`
-importing it), `games/`, `music/`, `videos/`, `posts/`, and `site/`: a Cloudflare Worker
-with a D1 database and the Table/Lobby Durable Objects that serve the studio's pages and
-its public game rooms from the studio's **own** Cloudflare account, on Cloudflare's free
-Workers plan. The code comes from `@homie-rocks/studio`, pinned in the studio's
-`package.json`. The person never types a command: you run everything, and they approve
-what matters (Cloudflare, once, in their browser).
+importing it), `games/`, `music/`, `videos/`, `posts/`, and a site: a Cloudflare Worker with a
+D1 database and the Table/Lobby Durable Objects that serve the studio's pages and its public
+game rooms from the studio's **own** Cloudflare account, on Cloudflare's free Workers plan. The
+code comes from `@homie-rocks/studio`, pinned in the studio's `package.json`. The person never
+types a command: you run everything, and they approve what matters (Cloudflare, once, in their
+browser). Homie for studios is in **beta**.
 
-Homie for studios is in **beta**. Do the whole job in one go, then report the live
-links. Work in this order.
+## The new-studio checklist
 
-## 0. Say what will happen, before you do it
+Every new studio goes through this list, in this order. **Show it** in your first reply and
+again, ticked, whenever a step finishes, so the person always knows where they are:
 
-Your FIRST message, before any tool call, tells the person in a few lines what you are
-about to do (then go on without waiting for an answer; their Cloudflare approval later
-is the consent that matters):
-
-- You will make the studio folder and a first multiplayer game, and prove it locally
-  with two browsers.
-- Then Cloudflare opens in their browser **once** to approve. A free Cloudflare account
-  works and **no payment method is needed**. On their account you create: one Worker (the
-  studio's site and rooms), one D1 database, and two SQLite-backed Durable Objects
-  (Table, Lobby). Cost: **free** on the Workers Free plan (100,000 requests a day; past
-  its daily limits requests fail until 00:00 UTC, nothing is charged). No R2 bucket:
-  storage for large media is a later, optional step.
-- The homie.rocks directory then lists the games. It stores only the site's address and
-  a claim token, the studio's name, and each game's name, blurb and Play link: never
-  code, media, keys or accounts.
-- The studio's site counts its own visits, plays, rooms, rounds and songs in its own D1,
-  for them only (`homie-studio stats`): counts, never people, and nothing sent anywhere.
-
-`npx --no-install homie-studio deploy --plan` (once the studio exists) prints exactly
-this for the studio, from `studio.json`, and changes nothing.
-
-## 1. Make the studio
-
-1. Call the Homie MCP tool `studio_scaffold` with the studio's name (and a folder if
-   the person named one). It returns the exact pinned command.
-2. Folder: the one the person named; otherwise a NEW folder named after the studio's
-   slug inside the current directory (e.g. `./night-owls`). Never make a studio in a
-   folder that already holds other files, never in the home folder, and never guess a
-   folder outside the current directory.
-3. Run the command it returned (it looks like
-   `npx -y @homie-rocks/studio@<version> new "<folder>" --name "<Name>" --homie https://homie.rocks`).
-   It lists every file it writes and installs the pinned `@homie-rocks/studio` and `wrangler`
-   (about 20 s). Then `cd` into the studio.
-4. From here on run the studio's own copy: `npm run <script>` or
-   `npx --no-install homie-studio <command>` (`--no-install` never fetches a package by
-   that bare name from the registry).
-
-If the MCP tool is unavailable, tell the person the Homie connector is not connected
-and stop; do not invent the package address.
-
-## 2. Make the first game
-
-Follow the `game` skill: `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`,
-then turn the starter into the game the person asked for. If they gave no idea, make
-a small, fun, readable twist of your own — a new name, a new objective or hazard, its
-own colours — and keep it multiplayer. Keep every netplay rule (public rooms, bots,
-rounds that end and restart).
-
-Prove it before going online:
-
-```sh
-npm run dev                     # run in the background; the site at http://127.0.0.1:8787
-npx --no-install homie-studio check <id> --url http://127.0.0.1:8787
+```
+New studio: Night Owls
+  ✓ 0. Setup status: ready to make and check games; Cloudflare when we go online
+  ✓ 1. The studio: ./night-owls
+  → 2. See a working game
+    3. One small change, from one sentence of yours
+    4. Plan your game together: its Game Codex
+    5. Build it (one agent, or several in parallel), with progress you can watch
+    6. Playtest it, then put it online
 ```
 
-`check` opens two fresh headless browsers (a computer and a phone), presses Play in
-both, and passes only when they share a room and see a round finish (about 70 s for
-a 60 s round). Fix what it reports. Start `npm run dev` as a background task your app
-keeps alive (Claude Code: the Bash tool's `run_in_background`), and afterwards: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
+**Never jump ahead.** Each step ends with the person seeing something (a checklist, a game that
+plays, their change, the codex page), and the next starts when they say so. Keep it natural, not
+a form: a short message per step, one question at a time (the plan's interview asks two or three),
+always with a default they can take by saying "yes".
 
-## 2b. Give the studio its site
+**Asked for everything at once** ("set up a game studio called X and make a multiplayer game", "just
+make it", or a prompt with nobody to answer): show the list, then do not stop to ask. Make your
+own choices for steps 2 to 4 (say each in one line), write the codex from them with what you chose
+listed under Open questions, and go on through step 6. Offer the plan interview at the end, as the
+way to change the game.
 
-The site is made from the studio (`node_modules/@homie-rocks/studio/site/SITE.md`): Home (the featured
-game, live rooms, the latest posts), Games, Music, Videos, Rooms and Posts, each only once the studio has
-something in it, in the studio's own look, with "Made with Homie" at the foot of every page (keep it: it is
-how other people find their way to making a studio). Before going online:
+## 0. Setup status, first
 
-1. **Its look.** `site/theme.json` starts with a palette picked for the studio; make it the studio's own:
-   colours that belong to its name and its first game (`bg`, `fg`, `accent`, `glow`; or `palette`: neon,
-   dock, gold, acid, ember, orchid, tide, candy). Put a one-line `"tagline"` in `studio.json`.
-2. **The game's landing** (`/<id>/`): follow "Its landing page" in the `game` skill. At least the words
-   (game.json `landing`: `pitch`, `about`, `howToPlay`, `controls`) and a cover from a real frame (the `art`
-   skill's free `frame` and `cover`); footage in the hero when there is time.
-3. **A first post**: `posts/<today>-<game id>-is-live.md` saying what the game is and how to play it, with
-   `title:`, `summary:` and `game: <id>` (the post shows the game with its Play button). `posts/README.md`
-   has the format.
-4. **Look at it**: `npm run build`, `npm run dev` (background), then
-   `npx --no-install homie-studio look --url http://127.0.0.1:8787` shoots Home, every landing, Games, Rooms
-   and Posts on a computer and a phone (upright and sideways) and says what is wrong (anything wider than
-   the screen, Play below the fold, a picture that did not load). Open the pictures and look; fix; again.
+Before anything is made, and whenever the person asks what they need, whether they are set up, or
+is waiting (a usage limit resetting is a good time), run the setup status. It only reads, takes a
+few seconds, and never prints a key:
 
-## 3. Put it online, on the studio's own Cloudflare
+1. Call the Homie MCP tool `studio_scaffold` with the studio's name (if they have not named it yet,
+   use "My Studio" for now; it only reads). It returns the exact pinned command, like
+   `npx -y @homie-rocks/studio@<version> new "<folder>" --name "<Name>" --homie https://homie.rocks`,
+   and a numbered list of next steps: this checklist decides the order, not that list.
+2. Run that same package with `setup status` instead of `new …`:
+   `npx -y @homie-rocks/studio@<version> setup status --connector yes --json` (inside a studio:
+   `npx --no-install homie-studio setup status --connector yes --json`). `--connector yes` because
+   the Homie tools are in your tool list; if `studio_scaffold` is not there, say `--connector no`,
+   show the result, and stop: without the connector there is no pinned toolkit to use.
+3. Show it as one short checklist, a line per row: ✓ ready, → do this now, ○ optional, … later.
+   Each line says what the row **unlocks** (its `unlocks`) and, when it is not ready, the exact fix
+   (`fix.run`: a command you run; `fix.open`: a page the person taps; `fix.say`: the words):
 
-Cloudflare is checked only now (a studio that never deploys never needs it):
+   ```
+   Setup status
+     ✓ Node.js, Chrome, ffmpeg: you can make, check and sound games here
+     ✓ Homie connector: the directory and the cards
+     … Cloudflare: needed to go online (step 6). No account yet? Make a free one now:
+       https://dash.cloudflare.com/sign-up (no payment method), and click the email it sends.
+     ○ GitHub (optional): a private backup and publishing by pull request
+     ○ ElevenLabs (optional): songs and game scores, on your own plan
+     ○ fal (optional): painted art and generated video, on your own account, under a budget
+   ```
 
-1. `npx wrangler whoami` in the studio folder.
-2. If it says it is not signed in: run `npx wrangler login` and tell the person, in
-   one line, that Cloudflare opened in their browser and they should approve it
-   (a free Cloudflare account works, no payment method). That is their only step. Wait
-   for it to finish, then check `whoami` again. Never ask for or write an API key.
-3. Before the first deploy, run `npx --no-install homie-studio deploy --plan` and tell the
-   person its gist in two or three lines, in your own words: which Cloudflare resources
-   (one Worker, one D1 database, two Durable Objects; no R2), the cost (free, no payment
-   method), and what the directory will store (the site's address, the studio's name, each
-   game's name, blurb and Play link). Then go on; do not wait.
-4. `npm run deploy`. It creates the Worker and the D1 database named in `studio.json`
-   (the Durable Objects come with the Worker), applies migrations, deploys, and stores
-   reads the live site once, which makes the site claim itself in the directory. It never
-   creates or binds R2. It refuses to touch anything of the same name it did not create —
-   if it refuses, rename in `studio.json` and `wrangler.jsonc` (an older studio's is
-   `site/wrangler.jsonc`; never delete or overwrite the other resource).
-   If it answers with a `needs` step, say that step to the person in one line and wait:
-   `cloudflare-verify-email` (a new account verifies its email address first),
-   `workers-dev-subdomain` (pick a free workers.dev address once, on the link it gives).
-5. `npx --no-install homie-studio check <id> --url <the live site>` — the same two-browser proof,
-   on the live site.
+4. **Never block on an optional row.** Say what it unlocks and that it can wait until that feature is
+   wanted; the skill that needs it (`music`, `art`, `video`) offers it then. A "do this now" row you can
+   do (`fix.run`, like `npx wrangler login` or `brew install ffmpeg`): offer it, and run it when they
+   agree. A row the person does on their own (`fix.open`) can be done any time, even while they wait
+   for something else: give them the link.
+5. Run it again whenever they say they did something, and tick the row.
 
-The live address `deploy` prints is on `workers.dev`, which names the person's Cloudflare
-account; `deploy` keeps it in `.studio/local.json` (git-ignored). Never write it into a
-committed file. A custom domain, once the studio has one, goes in `studio.json` as
-`cloudflare.domain`.
+In Claude Code, once the studio exists, offer the status line in one line ("Want the build's progress
+under the prompt?"); on a yes: `npx --no-install homie-studio statusline --install` (`--remove` takes it
+away). It never replaces a status line they already have; if it says so, leave theirs.
 
-## 4. List it in the directory
+## 1. The studio
 
-Call the Homie MCP tool `studio_publish` with the live site address. It reads the
-site's `/.well-known/homie-studio.json` and lists the games with their Play links.
-The directory is in beta: it lists at most 12 games per studio, and its owner can
-unlist a listing that breaks its rules.
+Ask for a name if there is none ("What should the studio be called? It's the name on your site.").
+Then say in two or three lines what will happen, and go on: you make the studio folder and its first
+game here; later, when it goes online, Cloudflare opens in their browser **once** to approve (a free
+account, **no payment method**); on their account you will create one Worker, one D1 database and two
+Durable Objects, all free on the Workers Free plan; the homie.rocks directory lists the games (only the
+site's address, the studio's name, each game's name, blurb and Play link).
 
-## 5. Tell the person
+1. Call `studio_scaffold` with the name (and a folder if the person named one). Run the command it
+   returns. It lists every file it writes and installs the pinned toolkit and `wrangler` (about 20 s).
+2. Folder: the one the person named; otherwise a NEW folder named after the studio's slug inside the
+   current directory (e.g. `./night-owls`). Never in a folder that already holds other files, never in
+   the home folder, never outside the current directory.
+3. From here on run the studio's own copy: `npm run <script>` or `npx --no-install homie-studio <command>`
+   (`--no-install` never fetches a package by that bare name).
 
-Three to five lines: the studio folder, the live site, each game's landing (`/<id>/`) and Play link,
-the directory link, that two browsers finished a round on the live site, and what now runs
-on their Cloudflare and what it costs (free). Say in one line that the studio keeps its
-own stats for them (`npx --no-install homie-studio stats`, or ask for the private page:
-`stats link`). Add one line:
-Homie for studios is in beta; bugs, port requests and questions go to
-https://github.com/homie-rocks/homie/issues/new/choose. Commit the studio
-(`git add -A && git commit -m "…"` inside the studio folder — it is the studio's own
-repository).
+If the MCP tool is unavailable, tell the person the Homie connector is not connected and stop; never
+invent the package address.
+
+## 2. See a working game
+
+**Ask before copying a game**, unless the person already asked for a copy or for the whole thing: "Want
+to see a working game first? I'll copy the Gem Rush starter (grab gems, knock rivals away; bots fill the
+empty seats) so it plays in about a minute. Or tell me your idea and we go straight to planning it." To
+copy one of another studio's games instead, use the `game` skill's remix.
+
+```sh
+npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"
+npm run dev                                             # in the background: http://127.0.0.1:8787/<id>/play
+npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 --shots ./.checks
+```
+
+Give them the play address and say: open it in two browser tabs (or two windows side by side) and they
+are two players in the same room; keys on a computer, touch on a phone. `check` proves it first: two
+fresh browsers press Play, share a room and see a round finish (about 70 s). Show one of its pictures.
+Start `npm run dev` as a background task your app keeps alive (Claude Code: the Bash tool's
+`run_in_background`); stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this
+studio's dev server and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill`: other projects
+on this machine may run their own `wrangler dev`.
+
+## 3. One small change
+
+"Now tell me one thing to change, in your own words: a colour, the speed, what you collect, the name."
+Make exactly that, in `games/<id>/`, `npm run build`, and tell them to reload. If they say "you pick",
+make one visible change (the name and its colours) and say what it was. This is the whole loop in a
+minute: they say it, they see it. Keep the change small; the big ideas go into the plan.
+
+## 4. Plan your game: the Game Codex
+
+Follow the `plan` skill: a short interview (game type and genre, style, devices, players and rooms, art
+and film, music and sound, scope), then `games/<id>/CODEX.md` and its page in the game's own look (a
+Claude artifact where the app has artifacts; otherwise the page opens in their browser). The codex is
+the plan from here on: you keep it true as decisions change.
+
+## 5. Build it
+
+After the codex, offer the choice in the `parallel` skill (when your app runs subagents): one agent step
+by step, or several agents at once (art, sound, game logic, levels, landing page) with a merge and a
+playtest, faster but using more of their plan's usage. Then build with the `game` skill. Open a
+progress feed for every build so they can watch it:
+
+```sh
+npx --no-install homie-studio progress start <id> --title "<this milestone, from the codex>"
+npx --no-install homie-studio progress stage plan done --note "<the plan in one line>"
+```
+
+`build`, `check` and `deploy` report into it. The codex page's **Build status** tab shows it (a
+percentage, each step and check going green, how to try it, what was spent) and redraws itself; the
+status line shows one line of it in Claude Code. In the Claude app, add `--share` and call
+`build_progress` with the build id it prints: the card follows the build. Codex CLI has no command
+status line, so there the codex page is the progress view (`npx --no-install homie-studio codex <id> --open`).
+
+## 6. Playtest it, then put it online
+
+**Playtest** with the `playtest` skill; fix what it ranks first.
+
+**The site** is made from the studio (`node_modules/@homie-rocks/studio/site/SITE.md`): Home, Games,
+Music, Videos, Rooms and Posts, each once the studio has something in it, in the studio's own look, with
+"Made with Homie" at the foot of every page (keep it). Before going online:
+
+1. **Its look.** `site/theme.json`: colours that belong to the studio's name and its first game (`bg`,
+   `fg`, `accent`, `glow`, or a `palette`); the codex's palette is a good start. A one-line `"tagline"`
+   in `studio.json`.
+2. **The game's landing** (`/<id>/`): "Its landing page" in the `game` skill. At least the words
+   (game.json `landing`) and a cover from a real frame (the `art` skill's free `frame` and `cover`).
+3. **A first post**: `posts/<today>-<game id>-is-live.md` with `title:`, `summary:` and `game: <id>`
+   (`posts/README.md` has the format).
+4. **Look at it**: `npm run build`, `npm run dev`, then `npx --no-install homie-studio look --url
+   http://127.0.0.1:8787`, open the pictures, fix, again.
+
+**Cloudflare**, checked only now (a studio that never deploys never needs it):
+
+1. `npx wrangler whoami` in the studio folder. Not signed in: run `npx wrangler login` and tell the
+   person in one line that Cloudflare opened in their browser and they should approve it (a free
+   account, no payment method). That is their only step. Never ask for or write an API key.
+2. Before the first deploy, `npx --no-install homie-studio deploy --plan`, and tell them its gist in two
+   or three lines: the resources (one Worker, one D1 database, two Durable Objects; no R2), the cost
+   (free, no payment method), and what the directory stores. Then go on.
+3. `npm run deploy`. It creates the Worker and the D1 database named in `studio.json`, applies
+   migrations, deploys, and reads the live site once, which makes the site claim itself in the
+   directory. It refuses to touch anything of the same name it did not create (rename in `studio.json`
+   and `wrangler.jsonc`; never delete or overwrite the other resource). If it answers with a `needs`
+   step, say it in one line and wait: `cloudflare-verify-email` (the account verifies its email address
+   first: the email Cloudflare sent, one tap), `workers-dev-subdomain` (pick a free workers.dev address
+   once, on the link it gives). `setup status` remembers which.
+4. `npx --no-install homie-studio check <id> --url <the live site>`: the same two-browser proof, live.
+
+The live address `deploy` prints is on `workers.dev`, which names the person's Cloudflare account;
+`deploy` keeps it in `.studio/local.json` (git-ignored). Never write it into a committed file. A custom
+domain goes in `studio.json` as `cloudflare.domain`.
+
+**The directory:** call the Homie MCP tool `studio_publish` with the live site address. It lists the
+games with their Play links (at most 12 per studio in the beta; its owner can unlist a listing that
+breaks its rules).
+
+**Tell the person**, three to five lines: the studio folder, the live site, each game's landing
+(`/<id>/`) and Play link, the directory link, that two browsers finished a round on the live site, what
+runs on their Cloudflare and what it costs (free). The codex is on the site for them alone:
+`npx --no-install homie-studio codex link <id>` gives a one-time link for their own browser (a phone
+works). The studio keeps its own stats for them (`npx --no-install homie-studio stats`, or `stats link`).
+Add: Homie for studios is in beta; bugs, port requests and questions go to
+https://github.com/homie-rocks/homie/issues/new/choose. Commit the studio (`git add -A && git commit -m
+"…"` inside the studio folder: it is the studio's own repository).
 
 ## Storage, later and only when asked
 
-Songs, videos and other large media go to the studio's storage (an R2 bucket), not git.
-A studio that makes games never needs it. When the person wants it:
-`npx --no-install homie-studio storage add`. Cloudflare asks for a payment method on the
-account before R2 works (its first 10 GB a month are free), so say that first and let
-the person decide; if R2 is not turned on, the command gives the dashboard link and
-creates nothing. Then `npm run deploy` binds it and `homie-studio media put <file>`
-uploads.
+Songs, videos and other large media go to the studio's storage (an R2 bucket), not git. A studio that
+makes games never needs it. When the person wants it: `npx --no-install homie-studio storage add`.
+Cloudflare asks for a payment method on the account before R2 works (its first 10 GB a month are free),
+so say that first and let the person decide; if R2 is not turned on, the command gives the dashboard
+link and creates nothing. Then `npm run deploy` binds it and `homie-studio media put <file>` uploads.
 
 ## Never
 
+- Never jump ahead of the checklist, and never copy a game the person did not ask for without asking.
 - Never put a key, token or password in the studio or in chat.
 - Never touch Cloudflare resources the studio did not create.
 - Never add a payment method, buy anything or turn on a paid plan for the person.

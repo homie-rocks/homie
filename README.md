@@ -52,11 +52,33 @@ codex plugin add homie@homie
 Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
 session afterwards so the skills and tools load.
 
-Then ask for a studio. The plugin adds nine skills (`studio-setup`, `game`, `port`,
-`publish`, `sound`, `music`, `art`, `video`, `playtest`) and connects the Homie MCP server at `https://homie.rocks/mcp`,
-which has creator tools only: set up a studio, make or remix a game, make an existing
-single-player web game multiplayer, preview it, deploy it, and list it.
+Then ask for a studio. The plugin adds eleven skills (`studio-setup`, `plan`, `parallel`, `game`,
+`port`, `publish`, `sound`, `music`, `art`, `video`, `playtest`) and connects the Homie MCP server at
+`https://homie.rocks/mcp`, which has creator tools only: set up a studio, make or remix a game, make an
+existing single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.
+
+A new studio follows one checklist, and never jumps ahead:
+
+0. **Setup status** (*"what do I need for my studio?"*): Node, the Homie connector, Cloudflare (signed in,
+   email verified), Chrome, ffmpeg, and the optional GitHub, ElevenLabs and fal, each green, missing or
+   "do this now", with what it unlocks and the exact fix. Optional ones never block, and the person's own
+   steps (making a free Cloudflare account) can be done any time, even while waiting for something else.
+1. **The studio**, by name.
+2. **A working game**: a copy of a starter that plays in two browsers in a minute (asked first).
+3. **One small change**, from one sentence.
+4. **The plan** (`plan`, *"let's plan my game"*): a short interview (game type and genre, style, devices,
+   players and rooms, art and film, music and sound, scope) that becomes the game's **Game Codex**:
+   `games/<id>/CODEX.md`, drawn as a page in the game's own palette, fonts and art, with cards for its
+   characters, a controls table per device, milestones, open questions and the decisions as they are
+   made. It is a Claude artifact where the app has artifacts, a page in the browser otherwise, and a
+   private page on the studio's site. The AI keeps it true as decisions change.
+5. **Build it** (`parallel`): one agent step by step, or several at once (game logic, levels, art, sound,
+   the landing page), each in its own folders, then a merge, a check, a playtest and a blind review; the
+   person chooses, knowing parallel is faster and uses more of their plan. Every build has a progress
+   feed: the codex's **Build status** tab (a percentage, each step and check going green, how to try it,
+   what was spent) and, in Claude Code, an optional status line under the prompt.
+6. **Playtest, then online** on the studio's own Cloudflare, listed in the directory.
 
 Two skills need no account and cost nothing:
 
