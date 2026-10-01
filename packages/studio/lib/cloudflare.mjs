@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from './build.mjs';
+import { repoOf } from './repo.mjs';
 import { ensureLocalIgnored, ensureMigrations, wranglerConfig } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 
@@ -198,7 +199,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   step('D1 migrations applied');
 
   const started = Date.now();
-  const dep = w(['deploy']);
+  const dep = w(['deploy', ...repoVar(root)]);
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   remember(`worker:${cf.worker}`);
   // The workers.dev address names the Cloudflare account (often after its owner): it stays on this computer, in
@@ -236,6 +237,16 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),
     claim: Boolean(claim), directory,
   };
+}
+
+/*
+ * THE STUDIO'S REPOSITORY, FOR ITS WORKER (lib/repo.mjs). The Claude app's hand-off opens Claude Code on the studio's
+ * own GitHub repository, and only the studio knows which it is: the deploy hands it to the Worker as a variable
+ * (HOMIE_REPO), never into a public file, and the Worker tells its directory alongside its claim.
+ */
+export function repoVar(root) {
+  const repo = repoOf(root);
+  return repo ? ['--var', `HOMIE_REPO:${repo}`] : [];
 }
 
 /**
@@ -289,9 +300,11 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
   if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   if (!first) step('D1 migrations applied');
   const started = Date.now();
-  const dep = w(['deploy']);
+  const dep = w(['deploy', ...repoVar(root)]);
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   step(`deployed ${names.worker ?? 'the Worker'} in ${Math.round((Date.now() - started) / 1000)} s`);
+  const repo = repoOf(root);
+  step(repo ? `the live site knows its GitHub repository (${repo}), for the Claude app's hand-off` : 'no GitHub repository found here (no HOMIE_REPO, studio.json "github" or git remote): the Claude app\'s card asks the person which it is');
   if (first) {
     migrate = apply();
     if (migrate.code !== 0) return refuse(`D1 migrations failed after the first deploy: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);

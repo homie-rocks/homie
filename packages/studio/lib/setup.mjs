@@ -13,43 +13,32 @@
  * A setup id is single use per repository: a second attach from the same repository answers the same; another
  * repository is refused.
  */
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { configNames } from './cloudflare.mjs';
-import { networkWhy } from './progress.mjs';
+import { request } from './net.mjs';
+import { ENGINE_REPO, repoOf } from './repo.mjs';
 import { CONNECT_BAND, agentsMd, readme, slugify, templateReadme } from './scaffold.mjs';
 import { configPath, readStudio, writeLocal, writeStudio } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
 const SETUP_ID = /^hs_[a-f0-9]{32}$/;
 
-/** owner/repo of this checkout's GitHub remote (a Claude Code cloud session's remote goes through its own proxy). */
-export function repoOf(root) {
-  const r = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: root, encoding: 'utf8', timeout: 5000 });
-  if (r.status !== 0) return null;
-  const url = r.stdout.trim().replace(/\.git$/, '').replace(/\/+$/, '');
-  const m = /[/:]([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})$/.exec(url);
-  return m ? `${m[1]}/${m[2]}` : null;
-}
-
 export async function setupAttach(root, id, { homie } = {}) {
   if (!SETUP_ID.test(String(id ?? ''))) return { ok: false, command: 'setup attach', why: 'attach to the setup id the Claude app\'s setup card showed: hs_ and 32 hex digits' };
   const studio = readStudio(root);
   const directory = String(homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
   const repo = repoOf(root);
-  let res; let body = null;
-  try {
-    res = await fetch(`${directory}/api/studio/setup/${id}/attach`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': `homie-studio/${STUDIO_VERSION}` },
-      body: JSON.stringify({ repo, studio: { name: studio.name, slug: studio.slug, template: studio.template === true }, version: STUDIO_VERSION }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    body = await res.json().catch(() => null);
-  } catch (error) { return { ok: false, command: 'setup attach', why: `${directory} did not answer (${error?.message ?? error})` }; }
-  const blocked = networkWhy(res, directory);
-  if (blocked) return { ok: false, command: 'setup attach', needs: 'network', why: blocked };
-  if (!res.ok || !body?.ok) return { ok: false, command: 'setup attach', why: body?.message ?? `${directory} answered ${res.status}` };
+  if (!repo) {
+    return { ok: false, command: 'setup attach', needs: 'repository', why: `this checkout names no GitHub repository of its own (its git remote is missing, or is ${ENGINE_REPO}, Homie's engine and template, which a studio never is). Run this in the studio's own repository, the one Cloudflare's Deploy to Cloudflare made, or name it in studio.json as "github": "<owner>/<name>"` };
+  }
+  const sent = await request(`${directory}/api/studio/setup/${id}/attach`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': `homie-studio/${STUDIO_VERSION}` },
+    body: JSON.stringify({ repo, studio: { name: studio.name, slug: studio.slug, template: studio.template === true }, version: STUDIO_VERSION }),
+  });
+  // What went wrong, as it is: the directory's own answer, or the connection's error. Never a guess at the network.
+  if (!sent.ok) return { ok: false, command: 'setup attach', repo, ...(sent.status ? { status: sent.status } : {}), ...(sent.code ? { code: sent.code } : {}), ...(sent.needs ? { needs: sent.needs } : {}), why: sent.why };
+  const body = sent.body;
 
   const renamed = [];
   const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 60) : null;
@@ -78,6 +67,9 @@ export async function setupAttach(root, id, { homie } = {}) {
     const band = join(root, 'site', 'partials', 'home.html');
     if (existsSync(band) && readFileSync(band, 'utf8') === CONNECT_BAND) { rmSync(band); renamed.push('site/partials/home.html (removed)'); }
   }
+  // The repository goes into studio.json, so the next deploy (and Workers Builds) tells the live Worker which it is.
+  const now = readStudio(root);
+  if (now.github !== repo) { writeStudio(root, { ...now, github: repo }); if (!renamed.includes('studio.json')) renamed.push('studio.json'); }
   if (body.site) writeLocal(root, { url: body.site, connectedAt: new Date().toISOString() });
   return {
     ok: true, command: 'setup attach', setup: id, repo, site: body.site ?? null, name: name ?? studio.name, renamed,

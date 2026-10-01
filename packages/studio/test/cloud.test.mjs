@@ -280,6 +280,7 @@ test('a build the chat opened is attached once; its change and pull request go o
 
 test('a Claude Code cloud session whose network blocks the directory: the toolkit names the setting that lets the card follow', async () => {
   const dir = studio('network');
+  spawnSync('git', ['remote', 'add', 'origin', 'https://github.com/octo-studios/night-owls.git'], { cwd: dir });
   const blocked = await directory({ '/api/studio/*': () => [403, { error: 'blocked' }, { 'x-deny-reason': 'host_not_allowed' }] });
   try {
     const started = out(await runAsync(['progress', 'start', '--share', '--homie', blocked.url], dir));

@@ -84,7 +84,10 @@ end there and ask before starting again.
 
 **Started from the Claude app** (a Claude Code session whose prompt came from a "Build it"
 card, naming a build `hb_…` and maybe a setup `hs_…`): the chat already opened the build, so
-take it instead of starting one, then work on a branch and publish as a pull request:
+take it instead of starting one, then work on a branch and publish as a pull request. The
+prompt names the studio's repository: first check this session is in it
+(`git remote get-url origin`). If it is in another one (`homie-rocks/homie` is Homie's
+engine and template, never a studio), stop and say so; never attach from it.
 
 ```sh
 npm install                                            # the studio's pinned toolkit, from registry.npmjs.org
@@ -101,10 +104,11 @@ npx --no-install homie-studio progress pr --url <the pull request's address>
 The card's Publish button opens the pull request for the person; their merge in GitHub is
 the approval. Workers Builds deploys the branch as a Preview (run `check --url <the Preview
 URL>` when the pull request shows it, and pass it as `progress pr --preview`) and `main`
-after the merge; the card says Live by itself. Never merge the pull request yourself. A
-cloud session's default network reaches homie.rocks; only if the toolkit says this session's
-network is blocking it (the card then stops updating), pass on the setting it names and go
-on: the build works with its local feed. On Linux without a GPU,
+after the merge; the card says Live by itself. Never merge the pull request yourself. If an
+attach fails, quote the toolkit's message as it is: it names the directory's status and its
+own words, or the connection error and whether this machine's proxy was used. Never guess at
+the cause. Only when it says the network proxy refused homie.rocks, pass on the setting it
+names; then go on, since the build works with its local feed. On Linux without a GPU,
 `check` measures seats, rooms and rounds; its frame rate is SwiftShader's, not a person's:
 say so rather than calling the game slow.
 

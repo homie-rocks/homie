@@ -57,6 +57,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, sta
 import { extname, join } from 'node:path';
 import { refreshCodexFile } from './codex.mjs';
 import { readStudio, siteUrl } from './studio.mjs';
+import { request, whyRefused } from './net.mjs';
 
 export const PROGRESS_KIND = 'homie-studio-progress';
 export const PROGRESS_DIR = join('.studio', 'progress');
@@ -89,19 +90,10 @@ const keyPath = (root, id) => join(dir(root), `${id}.key`);
 const currentPath = (root) => join(dir(root), 'current');
 const loopback = (url) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
 
-/*
- * A CLAUDE CODE CLOUD SESSION WHOSE NETWORK BLOCKS THE DIRECTORY. The default "Trusted" network reached homie.rocks
- * in a real cloud session (2026-10-01); a stricter one makes the session's proxy answer 403 with
- * `x-deny-reason: host_not_allowed`. Then, and only then, say which setting lets the card follow the build,
- * instead of "did not answer"; the build itself goes on with its local feed.
- */
+/** Kept for callers of 0.11.0: whether an answer is the proxy refusing the host (lib/net.mjs says the rest). */
 export function networkWhy(res, at) {
-  if (res?.status === 403 && /host_not_allowed/i.test(res.headers?.get?.('x-deny-reason') ?? '')) {
-    let host = at;
-    try { host = new URL(at).host; } catch { /* as given */ }
-    return `this Claude Code cloud environment's network does not reach ${host}. In claude.ai/code, open the environment's settings, set Network access to Custom, add ${host} (keep "Also include default list of common package managers"), and start a new session; until then the build goes on with its local feed only`;
-  }
-  return null;
+  const r = whyRefused(res, null, '', at);
+  return r.needs === 'network' ? r.why : null;
 }
 
 /** The studio's live address for the card: an https origin (or this computer's own dev site), else null. */
@@ -154,23 +146,24 @@ async function pushDoc(root, id) {
   let key = null;
   try { key = readFileSync(keyPath(root, id), 'utf8').trim(); } catch { return null; }
   const { shared, ...body } = doc;
-  const res = await fetch(`${shared.directory}/api/studio/progress/${shared.build}`, {
+  const sent = await request(`${shared.directory}/api/studio/progress/${shared.build}`, {
     method: 'PUT',
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', 'user-agent': 'homie-studio' },
     body: JSON.stringify({ ...body, build: shared.build }),
-    signal: AbortSignal.timeout(8000),
-  });
-  const blocked = networkWhy(res, shared.directory);
-  if (blocked) {
-    mutateDoc(root, id, (d) => { d.shared = { ...d.shared, ended: true }; pushLog(d, `The Claude app cannot follow this build: ${blocked}`); });
+  }, { timeout: 8000 });
+  if (!sent.ok) {
+    if (sent.status === 404 || sent.status === 410 || sent.needs === 'network') {
+      // The shared copy ended (24 hours, or the directory dropped it), or the proxy refuses the directory: keep the
+      // local feed, stop sending, and say why in its log.
+      mutateDoc(root, id, (d) => { d.shared = { ...d.shared, ended: true }; pushLog(d, `The Claude app's card stopped following this build: ${sent.why}`); });
+      return null;
+    }
+    // Anything else (a slow answer, a refused write): the next write tries again; the log keeps what happened once.
+    mutateDoc(root, id, (d) => { if (d.shared && d.shared.lastError !== sent.why) { d.shared = { ...d.shared, lastError: sent.why }; pushLog(d, `Sending to the card failed: ${sent.why}`); } });
     return null;
   }
-  if (res.status === 404 || res.status === 410) {
-    // The shared copy ended (24 hours, or the directory dropped it): keep the local feed, stop sending.
-    mutateDoc(root, id, (d) => { d.shared = { ...d.shared, ended: true }; });
-    return null;
-  }
-  const reply = await res.json().catch(() => null);
+  const reply = sent.body;
+  if (readFeed(root, id)?.shared?.lastError) mutateDoc(root, id, (d) => { delete d.shared.lastError; });
   if (reply?.stop) {
     mutateDoc(root, id, (d) => {
       if (!d.stop?.requested) { d.stop = { requested: true, at: now(), by: 'person' }; pushLog(d, 'Stop pressed in the Claude app; stopping at the next safe point.'); }
@@ -468,36 +461,38 @@ export async function startProgress(root, { what = 'game', id, title, budget, un
   writeAtomic(currentPath(root), `${build}\n`);
   let shared = null;
   let why = null;
+  let failure = {};
   if (share) {
     const at = String(directory || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
     if (!/^https:\/\//.test(at) && !(/^http:\/\//.test(at) && loopback(at))) why = `the directory ${at} is not https`;
     else {
-      try {
-        // A build the chat opened is attached (once); otherwise a new one is opened here.
-        const res = await fetch(attach ? `${at}/api/studio/progress/${attach}/attach` : `${at}/api/studio/progress`, {
-          method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'homie-studio' },
-          body: JSON.stringify({ what, id: id ?? null, title: doc.title, studio: doc.studio }), signal: AbortSignal.timeout(10_000),
-        });
-        const body = await res.json().catch(() => null);
-        if (!res.ok && networkWhy(res, at)) why = networkWhy(res, at);
-        else if (res.ok && body?.ok && REMOTE_ID.test(String(body.build)) && /^hbk_[a-f0-9]{48}$/.test(String(body.key))) {
-          // The chat named the build: its title is the one the person saw.
-          if (attach && body.title && !title) mutateDoc(root, build, (d) => { d.title = plain(body.title, LIMITS.title); });
-          writeFileSync(keyPath(root, build), `${body.key}\n`, { mode: 0o600 });
-          try { chmodSync(keyPath(root, build), 0o600); } catch { /* not on this filesystem */ }
-          shared = { build: body.build, directory: at, expiresAt: body.expiresAt ?? null };
-          mutateDoc(root, build, (d) => { d.shared = { build: body.build, directory: at }; });
-          schedule(root, build, { soon: true });
-          heartbeat(root, build, true);
-        } else why = body?.message ?? `${at} answered ${res.status}`;
-      } catch (error) { why = `${at} did not answer (${error?.message ?? error})`; }
+      // A build the chat opened is attached (once); otherwise a new one is opened here.
+      const sent = await request(attach ? `${at}/api/studio/progress/${attach}/attach` : `${at}/api/studio/progress`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'homie-studio' },
+        body: JSON.stringify({ what, id: id ?? null, title: doc.title, studio: doc.studio }),
+      });
+      const body = sent.body;
+      if (sent.ok && REMOTE_ID.test(String(body?.build)) && /^hbk_[a-f0-9]{48}$/.test(String(body?.key))) {
+        // The chat named the build: its title is the one the person saw.
+        if (attach && body.title && !title) mutateDoc(root, build, (d) => { d.title = plain(body.title, LIMITS.title); });
+        writeFileSync(keyPath(root, build), `${body.key}\n`, { mode: 0o600 });
+        try { chmodSync(keyPath(root, build), 0o600); } catch { /* not on this filesystem */ }
+        shared = { build: body.build, directory: at, expiresAt: body.expiresAt ?? null };
+        mutateDoc(root, build, (d) => { d.shared = { build: body.build, directory: at }; });
+        schedule(root, build, { soon: true });
+        heartbeat(root, build, true);
+      } else {
+        // As it is: the directory's own answer (its status and message) or the connection's error, never a guess.
+        why = sent.ok ? `${at} answered without a build and key` : sent.why;
+        failure = { ...(sent.status ? { status: sent.status } : {}), ...(sent.code ? { code: sent.code } : {}), ...(sent.needs ? { needs: sent.needs } : {}) };
+      }
     }
   }
   if (attach && !shared) {
     // Attaching is the point of `progress attach`: without it, say why and leave no open feed behind.
     rmSync(docPath(root, build), { force: true });
     rmSync(currentPath(root), { force: true });
-    return { ok: false, command: 'progress attach', build: attach, why: `could not attach to ${attach}: ${why}` };
+    return { ok: false, command: 'progress attach', build: attach, ...failure, why: `could not attach to ${attach}: ${why}` };
   }
   return {
     ok: true, command: attach ? 'progress attach' : 'progress start', build, file: join(PROGRESS_DIR, `${build}.json`), what, id: id ?? null, title: readFeed(root, build)?.title ?? doc.title,

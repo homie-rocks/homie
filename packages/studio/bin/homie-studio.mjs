@@ -108,6 +108,7 @@ import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, reco
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
 import { installStatusLine, statusLine } from '../lib/statusline.mjs';
+import { restartWithProxy } from '../lib/net.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
@@ -615,6 +616,13 @@ function mediaPut(root, file, as) {
     });
   });
 }
+
+/*
+ * A machine whose web traffic goes through a proxy (a Claude Code cloud session: HTTPS_PROXY) runs this command once
+ * more with Node's own proxy support on, so the toolkit's requests go the way curl's and npm's do (lib/net.mjs).
+ */
+const proxied = await restartWithProxy();
+if (proxied !== null) process.exit(proxied);
 
 try {
   const result = await main();

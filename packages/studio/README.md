@@ -72,8 +72,8 @@ site. A game made with Homie's arcade controls that knocks for a Homie box (`/__
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.12.0 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.12.0 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.12.1 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.12.1 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -142,7 +142,7 @@ studio's own Cloudflare login. `worker/stats.mjs` says exactly what is counted.
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.12.0 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.12.1 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 
@@ -231,10 +231,27 @@ Workers Builds deploys the branch as a Preview; the card's **Publish** opens the
 person's merge is the approval; Workers Builds deploys `main`, and the card says **Live** when the live site's
 manifest lists the change's mark (`homie-studio build` lists the newest marks from `changes/`).
 
-A Claude Code cloud session's default network ("Trusted") reaches homie.rocks. If a session's network blocks it
-(its proxy answers 403 `host_not_allowed`, and the progress card stops updating), the toolkit says so and names the
-setting (the environment's Network access: Custom, add homie.rocks), instead of "did not answer". The build goes on
-with its local feed.
+A Claude Code cloud session sends all its traffic through a proxy (`HTTPS_PROXY`). curl, npm and git use it;
+Node's own `fetch` does not unless Node is started with `NODE_USE_ENV_PROXY=1` (Node.js 22.21 and later). So from
+0.12.1 the CLI restarts itself once with that set whenever a proxy is in the environment. Before that, `setup attach`
+and `progress attach` connected directly, failed the lookup, and said "did not answer", which read like a blocked
+network in a session with full network access. A failed request now says what happened (`lib/net.mjs`):
+
+- the directory's status and its own words (`homie.rocks answered 409: …`);
+- or the connection error's code (ENOTFOUND, ECONNREFUSED, a timeout, an untrusted certificate) and whether the
+  proxy was used.
+
+Only a refusal by the proxy itself (a 403 with `x-deny-reason: host_not_allowed`, or a refused CONNECT) names the
+network setting (the environment's Network access: Custom, add homie.rocks). The build goes on with its local feed.
+
+**The hand-off opens the studio's repository.** The chat's "Start building" and "Build it" open a Claude Code
+session in one repository, and homie.rocks never asks GitHub which one Deploy to Cloudflare made. So the studio's
+Worker tells it: `deploy` (and Workers Builds, which runs it) passes the repository as the Worker's private
+`HOMIE_REPO` variable, from `HOMIE_REPO`, studio.json `github`, or the git remote, in that order (`lib/repo.mjs`;
+Workers Builds sets no repository variable of its own). The Worker says it with its claim, a request Cloudflare
+stamps with the Worker's own zone. It is never in the public manifest. `setup attach` writes it into studio.json
+`github` too. When the directory does not know it, the card asks the person for it. It never opens Homie's engine
+repository (`homie-rocks/homie`), which is also never accepted as a studio's.
 
 The feed is `.studio/progress/<build>.json` (git-ignored). With `--share` the studio's
 directory (studio.json `homie.directory`, homie.rocks by default) keeps a copy for 24
@@ -297,6 +314,7 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `lib/check.mjs` | `check`: two fresh Chrome processes (computer + phone) must share a room and finish a round with both in it, with each one's frame rate; on a busy computer it waits out a round a browser was dropped from, and says why when none counts. `lib/chrome.mjs`: which Chrome, and how (the GPU on a Mac, SwiftShader on Linux). |
 | `lib/upgrade.mjs`, `lib/template-history.json` | `upgrade`: an existing studio takes what a newer template adds, never over its own edits. |
 | `lib/progress.mjs`, `lib/setup.mjs` | The progress feed (`progress …`), a build the chat opened (`progress attach`), a change as a pull request (`progress change`, `progress pr`), and `setup attach`. |
+| `lib/net.mjs`, `lib/repo.mjs` | The toolkit's own web requests: through the environment's proxy, and an honest reason when one fails. The studio's repository (`owner/name`), from its remote, never the engine's. |
 | `template/` (repository root), `scripts/template.mjs` | The public "Deploy to Cloudflare" template, generated from `new --template`. |
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |

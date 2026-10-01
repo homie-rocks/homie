@@ -115,10 +115,22 @@ const claimMissed = new Map();
 async function storedClaim(env, origin) {
   if (!env.DB) return null;
   try {
-    const rows = (await env.DB.prepare('SELECT key, value FROM meta WHERE key IN (?1, ?2)').bind(`homie_claim:${origin}`, 'homie_claim').all()).results ?? [];
-    return { own: rows.find((r) => r.key === `homie_claim:${origin}`)?.value ?? null, older: rows.find((r) => r.key === 'homie_claim')?.value ?? null };
+    const rows = (await env.DB.prepare('SELECT key, value FROM meta WHERE key IN (?1, ?2, ?3)').bind(`homie_claim:${origin}`, 'homie_claim', `homie_repo:${origin}`).all()).results ?? [];
+    const of = (k) => rows.find((r) => r.key === k)?.value ?? null;
+    return { own: of(`homie_claim:${origin}`), older: of('homie_claim'), repo: of(`homie_repo:${origin}`) };
   } catch { return null; }
 }
+
+/*
+ * THE STUDIO'S GITHUB REPOSITORY (HOMIE_REPO, set by `homie-studio deploy` from the studio's own git remote or
+ * studio.json "github"; lib/repo.mjs). The site tells its directory which repository it is built from, with its
+ * claim, so the Claude app's hand-off opens Claude Code on the studio's own repository. It is never put in a public
+ * page: only the directory hears it, from this Worker (Cloudflare's CF-Worker header names the zone it runs on),
+ * and it is said again only when it changes.
+ */
+const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
+const repoOf = (env) => { const r = String(env.HOMIE_REPO ?? '').trim(); return REPO.test(r) && r.toLowerCase() !== 'homie-rocks/homie' ? r : null; };
+const repoSaid = new Map();
 
 export function directoryOf(cat) {
   const d = cat?.studio?.directory;
@@ -133,28 +145,34 @@ export function directoryOf(cat) {
 /** This address's claim: kept, else asked of the directory now (and kept), else an older studio's single claim. */
 async function claimOf(env, cat, url) {
   const origin = url.origin;
-  if (claimed.has(origin)) return claimed.get(origin);
+  const repo = repoOf(env);
+  if (claimed.has(origin) && (!repo || repoSaid.get(origin) === repo)) return claimed.get(origin);
   const kept = await storedClaim(env, origin);
-  if (kept?.own) { claimed.set(origin, kept.own); return kept.own; }
+  if (kept?.own && (!repo || kept.repo === repo)) { claimed.set(origin, kept.own); if (repo) repoSaid.set(origin, repo); return kept.own; }
   const directory = directoryOf(cat);
   const local = url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname);
   const may = directory && env.DB && env.HOMIE_PREVIEW !== '1' && (url.protocol === 'https:' || (local && directory.startsWith('http://')))
     && Date.now() - (claimMissed.get(origin) ?? 0) > 60_000;
   if (may) {
     try {
-      const res = await fetch(`${directory}/api/studio/claim?site=${encodeURIComponent(origin)}`, {
+      // Asked when there is no claim yet, or to say a repository the directory has not heard from this site.
+      const res = await fetch(`${directory}/api/studio/claim?site=${encodeURIComponent(origin)}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`, {
         headers: { accept: 'application/json', 'user-agent': `homie-studio/${STUDIO_VERSION_TAG} (site claim)` }, signal: AbortSignal.timeout(5000),
       });
       const body = await res.json().catch(() => null);
       if (res.ok && CLAIM.test(String(body?.claim ?? ''))) {
-        await env.DB.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)').bind(`homie_claim:${origin}`, body.claim).run();
+        await env.DB.batch([
+          env.DB.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)').bind(`homie_claim:${origin}`, body.claim),
+          ...(repo ? [env.DB.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)').bind(`homie_repo:${origin}`, repo)] : []),
+        ]);
         claimed.set(origin, body.claim);
+        if (repo) repoSaid.set(origin, repo);
         return body.claim;
       }
     } catch { /* the directory is optional for a live site */ }
     claimMissed.set(origin, Date.now());
   }
-  return kept?.older ?? null;
+  return kept?.own ?? kept?.older ?? null;
 }
 
 /** A copy of the public template nobody has named yet shows the name typed into Cloudflare's form (STUDIO_NAME). */

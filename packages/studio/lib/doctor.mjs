@@ -24,6 +24,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findChrome } from './chrome.mjs';
+import { whyFailed } from './net.mjs';
 import { isOurs } from './statusline.mjs';
 import { findStudio, readLocal, readStudio } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
@@ -47,13 +48,17 @@ const MARK = { ok: '✓', act: '→', missing: '✗', optional: '○', later: '�
 const RANK = { missing: 0, act: 1, unknown: 2, later: 3, optional: 4, ok: 5 };
 const worst = (states) => states.reduce((a, b) => (RANK[b] < RANK[a] ? b : a), 'ok');
 
+/** Whether the directory answers at all (any status is an answer), and if not, the connection's own error. */
 async function reach(url, fetchFn, ms = 5000) {
   try {
     const res = await fetchFn(url, { method: 'GET', headers: { 'user-agent': `homie-studio/${STUDIO_VERSION}`, accept: 'application/json' }, signal: AbortSignal.timeout(ms) });
     const deny = res.headers?.get?.('x-deny-reason') ?? '';
     if (res.status === 403 && /host_not_allowed/i.test(deny)) return { ok: false, blocked: true };
     return { ok: true, status: res.status };
-  } catch (error) { return { ok: false, why: error?.name === 'TimeoutError' ? 'did not answer in time' : 'did not answer' }; }
+  } catch (error) {
+    const w = whyFailed(error, url);
+    return { ok: false, blocked: w.needs === 'network', why: w.why, code: w.code };
+  }
 }
 
 /**
@@ -133,16 +138,17 @@ export async function setupStatus({
       say: 'Turn the Homie connector on. Claude Code: run /plugin, install or enable "homie" (marketplace homie-rocks/homie), then /mcp shows homie connected. Codex: install the Homie plugin from the same marketplace. The Claude app: Settings, Connectors, Add custom connector, https://homie.rocks/mcp; then its setup card (studio_setup) makes the studio on your own Cloudflare and GitHub in three taps.',
     };
     let state; let detail;
-    if (net.blocked) { state = 'act'; detail = `this environment's network does not reach ${new URL(directory).host}`; }
-    else if (said === 'yes') { state = 'ok'; detail = net.ok ? 'the Homie tools are here, and the directory answers' : `the Homie tools are here; ${new URL(directory).host} ${net.why ?? 'did not answer'} just now`; }
+    if (net.blocked) { state = 'act'; detail = `the network proxy of this machine refused ${new URL(directory).host}`; }
+    else if (said === 'yes') { state = 'ok'; detail = net.ok ? 'the Homie tools are here, and the directory answers' : `the Homie tools are here; this computer's request to the directory failed just now: ${net.why}`; }
     else if (said === 'no') { state = 'act'; detail = 'the Homie tools are not in this session'; }
-    else { state = net.ok ? 'unknown' : 'act'; detail = net.ok ? `${new URL(directory).host} answers; your AI knows whether its Homie tools (studio_scaffold) are here` : `${new URL(directory).host} ${net.why ?? 'did not answer'}`; }
+    // The directory not answering this computer says nothing about the connector: say what failed, as it is.
+    else { state = 'unknown'; detail = net.ok ? `${new URL(directory).host} answers; your AI knows whether its Homie tools (studio_scaffold) are here` : `this computer's request to the directory failed: ${net.why}`; }
     rows.push({
       id: 'connector', label: 'Homie connector', need: 'required', state, detail,
       unlocks: 'making the studio with the right toolkit version, listing games in the homie.rocks directory, and the cards in the Claude app',
       fix: state === 'ok' ? null : net.blocked
         ? { who: 'person', say: `In claude.ai/code, open this environment's settings, set Network access to Custom, add ${new URL(directory).host} (keep the default package managers), and start a new session.` }
-        : fixConnector,
+        : said === 'no' || net.ok ? fixConnector : null,
     });
   }
 
