@@ -98,6 +98,11 @@ export function networkWhy(res, at) {
   return null;
 }
 
+/** The studio's live address for the card: an https origin (or this computer's own dev site), else null. */
+export function liveSite(url) {
+  try { const u = new URL(String(url ?? '')); return u.protocol === 'https:' || (u.protocol === 'http:' && loopback(u.href)) ? u.origin : null; } catch { return null; }
+}
+
 /** A change's mark: what the site lists once the change is live. It names the build without being able to read it. */
 export const changeMark = (build) => createHash('sha256').update(`homie-change\n${build}`).digest('hex').slice(0, 16);
 
@@ -344,7 +349,7 @@ export class Feed {
   }
 
   /** The pull request this build's change went out as: the card's Publish button opens it for the person's merge. */
-  pr({ url, number, title, repo, branch, state = 'open', files, additions, deletions, preview } = {}) {
+  pr({ url, number, title, repo, branch, state = 'open', files, additions, deletions, preview, site } = {}) {
     let u;
     try { u = new URL(String(url ?? '')); } catch { throw new Error('--url is the pull request\'s https://github.com/<owner>/<repo>/pull/<n> address'); }
     const m = /^\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})\/pull\/(\d{1,7})\/?$/.exec(u.pathname);
@@ -359,6 +364,8 @@ export class Feed {
         files: count(files) ?? before.files ?? null, additions: count(additions) ?? before.additions ?? null, deletions: count(deletions) ?? before.deletions ?? null,
         preview: preview ? String(preview).slice(0, 300) : before.preview ?? null, mark: before.mark ?? null, at: now(),
       };
+      // The live address may have been learned after the build was opened (`setup attach`): the card reads it.
+      if (liveSite(site)) doc.site = liveSite(site);
       const deploy = doc.stages.find((s) => s.id === 'deploy' || s.id === 'publish');
       if (deploy && state === 'open' && deploy.state === 'pending') { deploy.state = 'running'; deploy.startedAt = now(); deploy.note = 'Waiting for the merge: Publish on the card opens the pull request'; doc.stage = deploy.id; }
       pushLog(doc, `Pull request #${m[3]} ${state}`);
@@ -447,7 +454,7 @@ export async function startProgress(root, { what = 'game', id, title, budget, un
   };
   let live = null;
   try { live = siteUrl(root, studio); } catch { live = null; }
-  if (live && /^https:\/\//.test(live)) doc.site = live.slice(0, 200);
+  if (liveSite(live)) doc.site = liveSite(live);
   mkdirSync(dir(root), { recursive: true });
   writeAtomic(docPath(root, build), `${JSON.stringify(doc, null, 1)}\n`);
   writeAtomic(currentPath(root), `${build}\n`);

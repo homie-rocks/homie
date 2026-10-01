@@ -439,7 +439,7 @@ async function progressCommand(root, sub) {
       case 'log': feed.log(positional.slice(2).join(' ')); return done('logged');
       case 'stop': feed.stop('local'); return done('stop asked: the running command stops at its next safe point');
       case 'change': { const c = recordChange(root, id, positional.slice(2).join(' ') || flags.get('title')); return { ...done(`change recorded: commit ${c.file} with the change`), file: c.file, mark: c.mark }; }
-      case 'pr': feed.pr({ url: flags.get('url'), state: flags.get('state') ?? 'open', title: flags.get('title'), branch: flags.get('branch'), files: flags.get('files'), additions: flags.get('additions'), deletions: flags.get('deletions'), preview: flags.get('preview') }); return done(`pull request on the card: ${feed.doc.change.url}`);
+      case 'pr': feed.pr({ url: flags.get('url'), state: flags.get('state') ?? 'open', title: flags.get('title'), branch: flags.get('branch'), files: flags.get('files'), additions: flags.get('additions'), deletions: flags.get('deletions'), preview: flags.get('preview'), site: siteUrl(root) }); return done(`pull request on the card: ${feed.doc.change.url}`);
       case 'end': feed.end(arg, note); return done(`ended: ${arg}`);
       default: return { ok: false, command: 'progress', why: `unknown: progress ${sub ?? ''} (start, attach, stage, check, preview, spend, shot, song, log, change, pr, stop, end, show)` };
     }

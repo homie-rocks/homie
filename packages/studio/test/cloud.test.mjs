@@ -259,11 +259,15 @@ test('a build the chat opened is attached once; its change and pull request go o
     const marker = JSON.parse(readFileSync(join(dir, change.file), 'utf8'));
     assert.equal(marker.change, changeMark(hb));
     assert.ok(!JSON.stringify(marker).includes(hb), 'the mark names the build without being able to read it');
+    // The live address learned after the build opened (setup attach writes it): the pull request carries it to the card.
+    mkdirSync(join(dir, '.studio'), { recursive: true });
+    writeFileSync(join(dir, '.studio', 'local.json'), JSON.stringify({ url: 'https://test-studio.acct.workers.dev' }));
     const pr = out(await runAsync(['progress', 'pr', '--url', 'https://github.com/octo-studios/night-owls/pull/7', '--files', '3', '--additions', '41', '--deletions', '9', '--preview', 'https://example.org/preview'], dir));
     assert.equal(pr.ok, true, JSON.stringify(pr));
     assert.equal(pr.feed.change.number, 7);
     assert.equal(pr.feed.change.repo, 'octo-studios/night-owls');
     assert.equal(pr.feed.stages.find((x) => x.id === 'deploy').state, 'running', 'deploy waits for the merge');
+    assert.equal(pr.feed.site, 'https://test-studio.acct.workers.dev', 'the card reads the live site for the merge');
     assert.equal(out(await runAsync(['progress', 'pr', '--url', 'https://evil.example/octo/x/pull/1'], dir)).ok, false, 'only a github.com pull request');
     assert.equal(out(run(['build'], dir)).ok, true);
     assert.deepEqual(JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8')).studio.build.changes, [changeMark(hb)]);
