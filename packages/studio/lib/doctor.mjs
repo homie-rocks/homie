@@ -69,7 +69,8 @@ export async function setupStatus({
   let studio = null;
   try { studio = root ? readStudio(root) : null; } catch { studio = null; }
   const cli = root ? 'npx --no-install homie-studio' : `npx -y @homie-rocks/studio@${STUDIO_VERSION}`;
-  const directory = String(homie || (studio?.homie?.directory && typeof studio.homie.directory === 'string' ? studio.homie.directory : 'https://homie.rocks')).replace(/\/+$/, '');
+  let directory = String(homie || (studio?.homie?.directory && typeof studio.homie.directory === 'string' ? studio.homie.directory : 'https://homie.rocks')).replace(/\/+$/, '');
+  try { new URL(directory); } catch { directory = 'https://homie.rocks'; }
   const mac = platform === 'darwin';
   const win = platform === 'win32';
   const rows = [];

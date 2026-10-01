@@ -298,6 +298,11 @@ test('the Build status tab follows the progress feed, and the local page redraws
   assert.ok(s.percent > 25 && s.percent < 75, `part way: ${s.percent}%`);
   run(['progress', 'end', 'passed'], dir);
   assert.match(readFileSync(file, 'utf8'), /<div class="pct">100%<\/div>/);
+  assert.match(readFileSync(file, 'utf8'), /<span class="seg skipped"/, 'a passed build that never deployed skipped it');
+  // A preview that is not a web address is never a link.
+  run(['progress', 'start', 'ember-run'], dir);
+  run(['progress', 'preview', '--url', 'javascript:alert(1)'], dir);
+  assert.doesNotMatch(readFileSync(file, 'utf8'), /href="javascript:/);
 });
 
 test('the site: the codex is the owner\'s private page, and CODEX.md never ships in a public file', async () => {

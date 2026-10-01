@@ -348,6 +348,8 @@ function statusHtml(s, ctx) {
     return `<span class="seg ${esc(st.state)}" title="${esc(st.label)}: ${esc(st.state)}"><i style="width:${fill}%"></i></span>`;
   }).join('');
   const steps = s.stages.map((st) => `<li class="${esc(st.state)}"><span class="tick">${STATE_MARK[st.state] ?? ''}</span><span><b>${esc(st.label)}</b>${st.note ? ` <em>${esc(st.note)}</em>` : ''}${st.checks.length ? `<ul>${st.checks.map((c) => `<li class="${esc(c.state)}"><span class="tick">${STATE_MARK[c.state] ?? ''}</span><span>${esc(c.label)}${c.note ? ` <em>${esc(c.note)}</em>` : ''}</span></li>`).join('')}</ul>` : ''}</span></li>`).join('');
+  // Only a web address is a link (a feed is written by commands, but a page never links to anything else).
+  if (s.preview && !/^https?:\/\//i.test(s.preview)) s = { ...s, preview: null };
   const local = s.preview && /^http:\/\/(127\.0\.0\.1|localhost)/.test(s.preview);
   const tryBox = s.preview ? `<div class="try"><p class="eyebrow">Ready to try</p><p>Open <a href="${esc(s.preview)}">${esc(s.preview)}</a>${local ? ' on this computer (the studio\'s dev site must be running)' : ''}. ${esc(ctx.try || 'Open it in a second tab, or on a phone, to see two players in the same room.')}</p></div>` : '';
   return `<section class="tab status" id="build-status" data-key="status" data-running="${s.state === 'running' ? '1' : '0'}">
