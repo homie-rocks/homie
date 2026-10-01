@@ -72,8 +72,9 @@ export function noChrome() {
  * `homie-studio chrome install`: Chrome for Testing (stable) into CHROME_CACHE, through @puppeteer/browsers (it comes
  * with puppeteer-core). About 170 MB, once per user; a second run finds it and downloads nothing.
  */
-export async function installChrome({ log = () => {} } = {}) {
-  const existing = findChrome();
+export async function installChrome({ log = () => {}, fresh = false } = {}) {
+  // `fresh`: Chrome for Testing even when the machine has a Chrome (what a machine without one would get).
+  const existing = fresh ? null : findChrome();
   if (existing) return { ok: true, command: 'chrome install', chrome: existing, already: true };
   let browsers;
   try { browsers = await import('@puppeteer/browsers'); } catch { return { ok: false, command: 'chrome install', why: '@puppeteer/browsers is missing (it comes with @homie-rocks/studio: npm install)' }; }

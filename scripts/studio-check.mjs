@@ -5,7 +5,8 @@
  * Testing when the machine has none, the site under `homie-studio dev`, and the real two-browser `check` against
  * it: a computer and a phone press Play, land in the same public room and finish a round.
  *
- *   node scripts/studio-check.mjs [--keep] [--port 8799]
+ *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing]
+ *     --chrome-for-testing: Chrome for Testing even when the machine has a Chrome, as a machine without one gets
  *
  * CI runs it on ubuntu-24.04 (no GPU), the closest free stand-in for a cloud session's VM: it prints how fast each
  * browser drew the game and on which renderer (SwiftShader there), and fails only when the round does not finish.
@@ -40,7 +41,7 @@ try {
   writeFileSync(join(studio, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
   sh('npm', ['install', '--no-audit', '--no-fund'], studio);
   say(`installed the studio (wrangler ${pkg.devDependencies.wrangler})`);
-  const chrome = JSON.parse(sh(cli, ['chrome', 'install', '--json'], studio));
+  const chrome = JSON.parse(sh(cli, ['chrome', 'install', '--json', ...(process.argv.includes('--chrome-for-testing') ? ['--fresh'] : [])], studio));
   say(`chrome: ${chrome.chrome}${chrome.already ? '' : ` (Chrome for Testing ${chrome.buildId}, installed)`}`);
   const env = { CHROME_PATH: chrome.chrome };
   const built = JSON.parse(sh(cli, ['build', '--json'], studio, env));

@@ -13,7 +13,8 @@
  *   homie-studio build [<id>]
  *   homie-studio dev [--port 8787]        (--stop: stop exactly this studio's dev server, nothing else)
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
- *   homie-studio chrome [install]         (which Chrome the checks use; on Linux, `install` fetches Chrome for Testing)
+ *   homie-studio chrome [install] [--fresh]  (which Chrome the checks use; on Linux, `install` fetches Chrome for Testing;
+ *                                          --fresh fetches it even when the machine has a Chrome)
  *   homie-studio look [<path>...] [--url <site>] [--shots <dir>] [--only computer,phone,sideways]
  *                                         (the site's pages on a computer and a phone, as pictures, with what is wrong)
  *   homie-studio port plan <game folder>
@@ -86,7 +87,7 @@ import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, reco
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci'];
+const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -279,7 +280,7 @@ async function main() {
   if (cmd === 'starters') return { ok: true, command: 'starters', starters: starters() };
 
   if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
-  if (cmd === 'chrome' && sub === 'install') return installChrome({ log });
+  if (cmd === 'chrome' && sub === 'install') return installChrome({ log, fresh: flags.has('fresh') });
   if (cmd === 'chrome') { const chrome = findChrome(); return chrome ? { ok: true, command: 'chrome', chrome, args: chromeArgs() } : { ok: false, command: 'chrome', why: noChrome() }; }
   const root = requireStudio();
   if (cmd === 'progress') return progressCommand(root, sub);

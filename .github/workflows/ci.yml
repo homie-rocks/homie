@@ -76,8 +76,8 @@ jobs:
       - run: npm ci
       - name: The template is what the toolkit writes
         run: node scripts/template.mjs --check
-      - name: New studio, dev site, two-browser check
-        run: node scripts/studio-check.mjs
+      - name: New studio, dev site, two-browser check (Chrome for Testing, as a machine without Chrome gets)
+        run: node scripts/studio-check.mjs --chrome-for-testing
 
   leaks:
     name: Leak audit
