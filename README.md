@@ -13,7 +13,7 @@ Night Owls and make a multiplayer game"* and it:
 1. makes a **studio**: one folder you can see and open, a git repository with `games/`,
    `music/`, `videos/`, `posts/` and `site/`, and an `AGENTS.md` that tells your AI how
    everything in it works;
-2. makes a **game** from the Gem Rush starter on the netplay contract: every browser
+2. makes your **game**, built on the Gem Rush starter and the netplay contract: every browser
    renders the game itself, strangers who press Play meet in the same public room,
    bots fill empty seats, and rounds end and restart on their own;
 3. **proves it**: two fresh browsers (a computer and a phone) press Play, and the check
@@ -65,7 +65,9 @@ A new studio follows one checklist, and never jumps ahead:
    "do this now", with what it unlocks and the exact fix. Optional ones never block, and the person's own
    steps (making a free Cloudflare account) can be done any time, even while waiting for something else.
 1. **The studio**, by name.
-2. **A working game**: a copy of a starter that plays in two browsers in a minute (asked first).
+2. **A working game**: a live one to try at once on Homie Arcade (`homie-studio demo`), with nothing copied
+   into the studio. A new studio has no game (its home page says "First game coming soon"); a copy of a
+   starter goes in only when the person asks for one.
 3. **One small change**, from one sentence.
 4. **The plan** (`plan`, *"let's plan my game"*): a short interview (game type and genre, style, devices,
    players and rooms, art and film, music and sound, scope) that becomes the game's **Game Codex**:
@@ -111,7 +113,18 @@ first used:
 
 All of them need ffmpeg; `video`, `art` and `playtest` also use Chrome.
 
-## From the Claude app, with no terminal
+## In the Claude desktop app: one chat
+
+On a computer, **Homie for Claude Desktop** (a Desktop Extension, [`desktop/`](desktop/)) gives the plain Claude
+app Homie's tools and cards in the same chat: no terminal, no second session. Install it once (download the
+`.mcpb` from https://homie.rocks/studio/desktop/ and double-click it, or drag it into Claude's window), choose the
+folder your studios live in, and ask:
+*"set up a game studio called Night Owls"*. The chat makes the studio on your computer, plans your game with you,
+builds it, runs the two-browser check, and puts it online on your own Cloudflare, with the setup, build progress,
+studio and Game Codex cards in the conversation. Underneath it is `homie-studio mcp`, the toolkit as a local MCP
+server, which any MCP client can run.
+
+## From the Claude app on a phone, with no terminal
 
 In the Claude app (claude.ai, the desktop app or the phone), add Homie as a connector
 (Settings → Connectors → Add custom connector → `https://homie.rocks/mcp`) and ask for a
@@ -123,9 +136,10 @@ studio. Its cards do the rest, and every approval is one tap on the provider's o
    it* (Claude's GitHub app, for that one repository), and an optional media provider. It
    follows the studio as it comes up.
 2. **"Build it" cards** on a new game, a port or a remix open a Claude Code session on the
-   studio's repository with the brief already written. The chat opens the build first, so
-   its progress card (stages, checks going green, a picture, spend and Stop) is on screen
-   before the session starts.
+   studio's repository with ONE short line, *"Continue building Night Owls: build hb_…"*. The
+   session fetches the brief itself (`homie-studio handoff`, as the studio's `HANDOFF.md` says).
+   The chat opens the build first, so its progress card (stages, checks going green, a picture,
+   spend and Stop) is on screen before the session starts.
 3. **The pull request card**: the change goes out as a pull request with its own Preview.
    *Publish* opens it in GitHub, where your merge is the approval; Workers Builds deploys
    it, and the card says when it is live.
@@ -276,6 +290,7 @@ from npm, pinned exactly, like any studio.
 | `plugins/homie/` | The Homie plugin: its skills, its MCP server configuration and its tests. |
 | `packages/studio/` | `@homie-rocks/studio`: the `homie-studio` CLI, the studio's site Worker, the netplay contract (`netplay/NETPLAY.md`), its game helper (`@homie-rocks/studio/netplay`), the relay (`worker/room.mjs`) and the Gem Rush starter. |
 | `packages/<engine package>/` | The game engine packages above, one folder each. |
+| `desktop/`, `scripts/desktop.mjs` | Homie for Claude Desktop: the Desktop Extension (`.mcpb`) around `homie-studio mcp`, its manifest, and how it is packed and checked (`node scripts/desktop.mjs --check`). |
 | `scripts/audit.mjs` | The leak audit CI runs on every pull request. |
 | `scripts/publish.mjs`, `.github/workflows/publish.yml`, `scripts/first-publish.sh` | How the packages reach npm: trusted publishing on a `release-*` tag, with provenance. |
 | `.github/workflows/ci.yml` | CI: every package's tests on Node 22 and 24, the plugin's tests and `claude plugin validate`, and the leak audit. |

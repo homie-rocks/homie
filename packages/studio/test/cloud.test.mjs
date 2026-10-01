@@ -2,7 +2,8 @@
  * @homie-rocks/studio 0.10.0: a studio works from the Claude app, with Cloudflare's own CI doing the deploys.
  *   - the template: `new --template` (and the repository's template/ folder) is what Cloudflare's "Deploy to
  *     Cloudflare" button and Workers Builds need: wrangler.jsonc at the root, Previews with their own rooms,
- *     build and deploy scripts, the toolkit pinned from registry.npmjs.org, a first game and a Connect band;
+ *     build and deploy scripts, the toolkit pinned from registry.npmjs.org, no game (a home that says "First game
+ *     coming soon") and a Connect band;
  *   - `npm run deploy` in Workers Builds only migrates and deploys (the first one makes the database as it goes);
  *   - the live site claims itself in the directory the first time it is read; a Preview never does;
  *   - a build the chat opened is attached once; a change goes out as a pull request the card can follow;
@@ -108,7 +109,8 @@ test('the template: Deploy to Cloudflare and Workers Builds ready, and the repos
   assert.match(pkg.cloudflare.bindings.STUDIO_NAME.description, /studio's name/);
   const studioJson = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
   assert.equal(studioJson.template, true);
-  assert.ok(existsSync(join(dir, 'games/gem-rush/game.json')), 'a first game: the site plays the moment it is up');
+  assert.ok(!existsSync(join(dir, 'games/gem-rush')), 'no starter game: the site goes live with its own home page ("First game coming soon")');
+  assert.match(readFileSync(join(dir, 'HANDOFF.md'), 'utf8'), /homie-studio handoff hb_/, 'HANDOFF.md says what a one-line hand-off means');
   assert.match(readFileSync(join(dir, 'site/partials/home.html'), 'utf8'), /href="\/_studio\/connect"/);
   assert.match(readFileSync(join(dir, 'README.md'), 'utf8'), /deploy\.workers\.cloudflare\.com\/\?url=https:\/\/github\.com\/homie-rocks\/homie\/tree\/main\/template/);
   // The public template is generated, never hand-edited: `node scripts/template.mjs` writes it.

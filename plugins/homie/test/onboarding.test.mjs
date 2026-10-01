@@ -29,7 +29,11 @@ test('studio-setup: setup status first, then a checklist in order that never jum
   assert.deepEqual([...listed].sort((a, b) => a - b), listed, 'the checklist is in order');
   assert.ok(at(s, 'setup status --connector yes') < at(s, 'game new <id> --from gem-rush'), 'the status comes before any game is made');
   assert.match(s, /Never jump ahead/);
-  assert.match(s, /Ask before copying a game/);
+  // A new studio has no game: "see a working game" is a live one elsewhere, and a starter goes in only when asked.
+  assert.match(s, /Show a live one; copy nothing/);
+  assert.match(s, /homie-studio demo/);
+  assert.match(s, /Only when they ask for a copy/);
+  assert.ok(at(s, 'homie-studio demo') < at(s, 'game new <id> --from gem-rush'), 'the live demo comes before any copy');
   assert.match(s, /Never block on an optional row/);
   assert.match(s, /even while they wait/, 'the person can do their part while waiting');
   assert.match(s, /`plan` skill/);

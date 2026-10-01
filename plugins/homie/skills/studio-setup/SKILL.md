@@ -22,7 +22,7 @@ again, ticked, whenever a step finishes, so the person always knows where they a
 New studio: Night Owls
   ✓ 0. Setup status: ready to make and check games; Cloudflare when we go online
   ✓ 1. The studio: ./night-owls
-  → 2. See a working game
+  → 2. See a working game (a live one on Homie Arcade; a copy in your studio only if you ask)
     3. One small change, from one sentence of yours
     4. Plan your game together: its Game Codex
     5. Build it (one agent, or several in parallel), with progress you can watch
@@ -36,7 +36,8 @@ always with a default they can take by saying "yes".
 
 **Asked for everything at once** ("set up a game studio called X and make a multiplayer game", "just
 make it", or a prompt with nobody to answer): show the list, then do not stop to ask. Make your
-own choices for steps 2 to 4 (say each in one line), write the codex from them with what you chose
+own choices for steps 2 to 4 (say each in one line: step 2 is the demo's link, since their own game is
+what goes into the studio), write the codex from them with what you chose
 listed under Open questions, and go on through step 6. Offer the plan interview at the end, as the
 way to change the game.
 
@@ -89,8 +90,8 @@ if it says so, leave theirs. Never turn it on unasked.
 ## 1. The studio
 
 Ask for a name if there is none ("What should the studio be called? It's the name on your site.").
-Then say in two or three lines what will happen, and go on: you make the studio folder and its first
-game here; later, when it goes online, Cloudflare opens in their browser **once** to approve (a free
+Then say in two or three lines what will happen, and go on: you make the studio folder here (no game
+in it yet: its home page says "First game coming soon" until the first one is made); later, when it goes online, Cloudflare opens in their browser **once** to approve (a free
 account, **no payment method**); on their account you will create one Worker, one D1 database and two
 Durable Objects, all free on the Workers Free plan; the homie.rocks directory lists the games (only the
 site's address, the studio's name, each game's name, blurb and Play link).
@@ -109,10 +110,17 @@ invent the package address.
 
 ## 2. See a working game
 
-**Ask before copying a game**, unless the person already asked for a copy or for the whole thing: "Want
-to see a working game first? I'll copy the Gem Rush starter (grab gems, knock rivals away; bots fill the
-empty seats) so it plays in about a minute. Or tell me your idea and we go straight to planning it." To
-copy one of another studio's games instead, use the `game` skill's remix.
+**Show a live one; copy nothing.** A new studio has no game, and it gets none it did not ask for.
+`npx --no-install homie-studio demo` names a live multiplayer game on Homie Arcade (made with this same
+toolkit) with its Play link: give them the link and say to open it in two browser tabs, or on a phone and
+a computer, and they are two players in the same public room, with bots in the empty seats. Then ask:
+"Want a copy of a working starter in your own studio to change, or shall we go straight to planning your
+game?"
+
+**Only when they ask for a copy** (now, or in their first message): the Gem Rush starter (grab gems, knock
+rivals away; bots fill the empty seats), or Ember Vale (`--from ember-vale`: a hero who lasts for days, with
+cloud saves) when they want a persistent game. To copy one of another studio's games instead, use the `game`
+skill's remix.
 
 ```sh
 npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"
@@ -120,20 +128,21 @@ npm run dev                                             # in the background: htt
 npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 --shots ./.checks
 ```
 
-Give them the play address and say: open it in two browser tabs (or two windows side by side) and they
-are two players in the same room; keys on a computer, touch on a phone. `check` proves it first: two
-fresh browsers press Play, share a room and see a round finish (about 70 s). Show one of its pictures.
-Start `npm run dev` as a background task your app keeps alive (Claude Code: the Bash tool's
-`run_in_background`); stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this
-studio's dev server and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill`: other projects
-on this machine may run their own `wrangler dev`.
+`check` proves it first: two fresh browsers press Play, share a room and see a round finish (about 70 s).
+Show one of its pictures. Start `npm run dev` as a background task your app keeps alive (Claude Code: the
+Bash tool's `run_in_background`); stop it with `npx --no-install homie-studio dev --stop`, which stops
+exactly this studio's dev server and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill`: other
+projects on this machine may run their own `wrangler dev`. Without a game, `npm run dev` shows the studio's
+own home page ("First game coming soon") at http://127.0.0.1:8787/.
 
 ## 3. One small change
 
-"Now tell me one thing to change, in your own words: a colour, the speed, what you collect, the name."
-Make exactly that, in `games/<id>/`, `npm run build`, and tell them to reload. If they say "you pick",
-make one visible change (the name and its colours) and say what it was. This is the whole loop in a
-minute: they say it, they see it. Keep the change small; the big ideas go into the plan.
+"Now tell me one thing to change, in your own words." With a copied starter, it is the game: a colour, the
+speed, what you collect, the name (in `games/<id>/`). Without one, it is the studio's own home page: its
+colours (`site/theme.json`), a tagline (`studio.json` `"tagline"`), or a first post ("we're making our first
+game"; `posts/README.md`). Make exactly that, `npm run build`, and tell them to reload. If they say "you
+pick", make one visible change (the colours, or the name and its colours) and say what it was. This is the
+whole loop in a minute: they say it, they see it. Keep the change small; the big ideas go into the plan.
 
 ## 4. Plan your game: the Game Codex
 
@@ -222,7 +231,8 @@ link and creates nothing. Then `npm run deploy` binds it and `homie-studio media
 
 ## Never
 
-- Never jump ahead of the checklist, and never copy a game the person did not ask for without asking.
+- Never jump ahead of the checklist, and never copy a starter or another studio's game into the studio
+  unless the person asked for it.
 - Never put a key, token or password in the studio or in chat.
 - Never touch Cloudflare resources the studio did not create.
 - Never add a payment method, buy anything or turn on a paid plan for the person.

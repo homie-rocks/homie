@@ -159,8 +159,8 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   }
 
   const b = await build(root, { log });
-  if (!b.catalogue.length && !b.songs.length && !b.videos.length) return { ok: false, command: 'deploy', why: 'nothing to put online yet: make a game (`npx --no-install homie-studio game new <id> --from gem-rush`) or publish a song or video in music/ or videos/ (media/MEDIA.md)' };
-  step(`built ${b.catalogue.length} game(s), ${b.songs.length} song(s), ${b.videos.length} video(s)`);
+  // A new studio goes live with its own Home ("First game coming soon") before it has a game.
+  step(b.catalogue.length || b.songs.length || b.videos.length ? `built ${b.catalogue.length} game(s), ${b.songs.length} song(s), ${b.videos.length} video(s)` : 'built the home page (no game yet: "First game coming soon")');
 
   // The Worker: never one this studio did not make.
   if (!created.has(`worker:${cf.worker}`)) {

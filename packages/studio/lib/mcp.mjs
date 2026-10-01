@@ -1,0 +1,180 @@
+/**
+ * `homie-studio mcp` — the studio toolkit as a LOCAL MCP server (stdio), so the chat that shows Homie's cards also
+ * does the building: in the Claude desktop app through the Homie extension (.mcpb, desktop/ in this repository), in
+ * Claude Code, Codex or any MCP client. The remote Homie MCP (homie.rocks/mcp) coordinates (directory, grants, hub,
+ * progress relay for phones); this one does the work on this computer: studios, games, builds, checks with real
+ * browsers, deploys. Tools that overlap the remote ones keep their names and input shapes (lib/mcp-tools.mjs).
+ *
+ *   homie-studio mcp [--studios <folder>] [--skills <folder>]
+ *     --studios   the folder the person's studios live in (the extension's setting; `${HOME}/Studios` is expanded);
+ *                 without it, the studio the server was started in (the working directory, or one above it)
+ *     --skills    Homie's guides (the plugin's skills folder): studio_guide and the media tools read them
+ *     --no-install never run npm install in a studio (tests, and a studio whose node_modules are linked by hand)
+ *     --homie     the directory a new studio names (default https://homie.rocks)
+ *
+ * The transport is the MCP stdio transport: one JSON-RPC 2.0 message per line on stdin and stdout; logs go to
+ * stderr. No SDK. MCP Apps cards (spec 2026-01-26, `text/html;profile=mcp-app`) are served as ui:// resources from
+ * mcp/ui/ (real files, read as they are: a card's script is never built from a function's source), and every tool
+ * also answers in plain text for a host without cards.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PACKAGE_ROOT } from './studio.mjs';
+import { StudioContext, UI, availability, toolDefs } from './mcp-tools.mjs';
+import { stopAllJobs, toolPath } from './jobs.mjs';
+import { STUDIO_VERSION } from './version.mjs';
+
+export const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
+export const MCP_APP_MIME = 'text/html;profile=mcp-app';
+
+export const INSTRUCTIONS = `Homie Studio, on this computer: make game studios and their multiplayer web games, music and videos, run them here, and put them online on the studio's own Cloudflare. These tools do the work in this chat; the person never types a command and never needs a terminal. A studio is a folder in the studios folder; the file tools (file_list, file_read, file_edit, file_write, file_search) work inside it.
+
+A new studio follows one checklist, in order and never ahead. Show it in your first reply and again, ticked, as each step ends:
+0. Setup status (setup_status): what this computer and their accounts have; optional rows never block.
+1. The studio (studio_scaffold): it has NO game; its home page says "First game coming soon".
+2. See a working game (game_demo): a live game on Homie Arcade with its Play link, nothing copied in. Copy a starter in (game_make) only if they ask.
+3. One small change from one sentence of theirs: to the copied game, or to the studio's home (site/theme.json colours, a tagline in studio.json, a first post in posts/). Then build and preview_run, and they reload.
+4. Plan their game (game_plan): a short interview, two or three questions a message with options and your pick; then fill games/<id>/CODEX.md and show it (game_codex).
+5. Build it: build_open, then game_make under the planned id (the codex stays), file edits, build, preview_run, check. The card follows every build.
+6. Playtest it (playtest), then put it online: studio_deploy with plan: true first (say what it creates and costs, free), cloudflare_login when not signed in (they approve once in their browser), studio_deploy, then studio_publish.
+If they ask for everything at once, show the list, make your own choices for steps 2 to 4 in one line each, and go on.
+
+A studio made elsewhere (on a phone, with Deploy to Cloudflare, so it lives on GitHub): studio_open with its repo clones it into the studios folder with this computer's own GitHub sign-in; github_login signs the computer in with GitHub's one-time code. Never ask for a token.
+
+Long work (npm install, check, playtest, deploy, renders) runs in the background: the tool answers at once with a card that follows it, and build_progress or studio_job reads where it is. studio_guide has Homie's full guide for each job (game, plan, port, playtest, publish, music, sound, art, video). Never put a key or password in a file or the chat. If Homie's homie.rocks connector is connected too, its tools of the same names say what to run; these run it.`;
+
+const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js' };
+const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex' };
+const UI_DIR = join(PACKAGE_ROOT, 'mcp', 'ui');
+
+/** One card's whole document: the shared look and bridge, and the card's own script, as the files are. */
+export function cardHtml(uri) {
+  const own = CARD_FILES[uri];
+  if (!own) return null;
+  const css = readFileSync(join(UI_DIR, 'card.css'), 'utf8');
+  const bridge = readFileSync(join(UI_DIR, 'bridge.js'), 'utf8');
+  const script = readFileSync(join(UI_DIR, own), 'utf8');
+  const safe = (s) => s.replace(/<\/(script|style)/gi, '<\\/$1');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${CARD_TITLES[uri]} · Homie</title><style>${safe(css)}</style></head><body><main id="root" class="card" aria-live="polite"><div class="skel"></div><div class="skel"></div></main><script>${safe(bridge)}\n${safe(script)}</script></body></html>`;
+}
+
+/** What a card may load: nothing from the network, except the codex page's Google Fonts. */
+export function cardCsp(uri) {
+  if (uri === UI.codex) return { connectDomains: [], resourceDomains: ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'] };
+  return { connectDomains: [], resourceDomains: [] };
+}
+
+export const PROMPTS = [
+  { name: 'new-studio', title: 'Set up a game studio', description: 'Make a game studio on this computer and go through Homie\'s new-studio checklist.', arguments: [{ name: 'name', description: 'The studio\'s name', required: false }] },
+  { name: 'make-multiplayer', title: 'Make my game multiplayer', description: 'Port an existing single-player web game on this computer into a studio.', arguments: [{ name: 'folder', description: 'The game\'s folder', required: true }] },
+];
+
+function promptText(name, args = {}) {
+  if (name === 'new-studio') return `Set up a game studio${args.name ? ` called ${String(args.name).slice(0, 60)}` : ''} with Homie, step by step.`;
+  if (name === 'make-multiplayer') return `Make the game in ${String(args.folder ?? '').slice(0, 200)} multiplayer on my Homie studio.`;
+  return null;
+}
+
+/**
+ * The server. `input`/`output` are streams (stdin/stdout by default). Returns a promise that ends with the input.
+ */
+export async function serveMcp({ studios = null, skills = null, cwd = process.cwd(), input = process.stdin, output = process.stdout, waitMs, directory = null, install = true, log = (line) => process.stderr.write(`[homie-studio mcp] ${line}\n`) } = {}) {
+  // A GUI app starts this with a short PATH: everything it runs sees the usual places Node, npm and ffmpeg live.
+  process.env.PATH = toolPath();
+  const skillsDir = skills ?? [join(PACKAGE_ROOT, '..', '..', 'plugins', 'homie', 'skills'), join(PACKAGE_ROOT, '..', 'skills')].find((d) => existsSync(join(d, 'studio-setup', 'SKILL.md'))) ?? null;
+  const ctx = new StudioContext({ studiosDir: studios, cwd, skillsDir, waitMs: waitMs ?? Number(process.env.HOMIE_MCP_WAIT_MS || 40_000), directory, install });
+  let avail = availability();
+  let names = '';
+  const send = (message) => output.write(`${JSON.stringify(message)}\n`);
+  const tools = () => {
+    const list = toolDefs(ctx, avail);
+    const now = list.map((t) => t.name).join(',');
+    names = now;
+    return list;
+  };
+  tools();
+  log(`ready: toolkit ${STUDIO_VERSION}, studios ${ctx.studiosDir ?? '(none set)'}${ctx.cwdStudio ? `, started in ${ctx.cwdStudio}` : ''}${skillsDir ? ', guides on' : ''}`);
+
+  async function handle(message) {
+    const { id, method, params } = message ?? {};
+    const isRequest = message && Object.hasOwn(message, 'id') && id !== null && id !== undefined;
+    const reply = (result) => { if (isRequest) send({ jsonrpc: '2.0', id, result }); };
+    const error = (code, text) => { if (isRequest) send({ jsonrpc: '2.0', id, error: { code, message: text } }); };
+    try {
+      switch (method) {
+        case 'initialize': {
+          const asked = params?.protocolVersion;
+          return reply({
+            protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
+            capabilities: { tools: { listChanged: true }, resources: { listChanged: false }, prompts: { listChanged: false } },
+            serverInfo: { name: 'homie-studio', title: 'Homie Studio', version: STUDIO_VERSION },
+            instructions: INSTRUCTIONS,
+          });
+        }
+        case 'ping': return reply({});
+        case 'tools/list':
+          return reply({ tools: tools().map(({ run, ...t }) => t) });
+        case 'tools/call': {
+          const name = params?.name;
+          const tool = tools().find((t) => t.name === name);
+          if (!tool) return reply({ content: [{ type: 'text', text: `No tool ${name} here.` }], isError: true });
+          const t0 = Date.now();
+          let result;
+          try { result = await tool.run(params?.arguments ?? {}); } catch (e) { result = { content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true }; }
+          log(`${name} ${result?.isError ? 'failed' : 'ok'} in ${Date.now() - t0} ms`);
+          reply(result);
+          // A media provider set up meanwhile adds its tool.
+          const before = names;
+          avail = availability();
+          tools();
+          if (names !== before) send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
+          return undefined;
+        }
+        case 'resources/list':
+          return reply({ resources: Object.values(UI).map((uri) => ({ uri, name: uri.split('/').pop(), title: CARD_TITLES[uri], mimeType: MCP_APP_MIME })) });
+        case 'resources/templates/list': return reply({ resourceTemplates: [] });
+        case 'resources/read': {
+          const uri = String(params?.uri ?? '');
+          const html = cardHtml(uri);
+          if (!html) return error(-32002, `no resource ${uri}`);
+          return reply({ contents: [{ uri, mimeType: MCP_APP_MIME, text: html, _meta: { ui: { csp: cardCsp(uri), prefersBorder: false } } }] });
+        }
+        case 'prompts/list': return reply({ prompts: PROMPTS });
+        case 'prompts/get': {
+          const p = PROMPTS.find((x) => x.name === params?.name);
+          if (!p) return error(-32602, `no prompt ${params?.name}`);
+          return reply({ description: p.description, messages: [{ role: 'user', content: { type: 'text', text: promptText(p.name, params?.arguments) } }] });
+        }
+        case 'logging/setLevel': return reply({});
+        default:
+          if (!isRequest) return undefined; // notifications/initialized, notifications/cancelled, …
+          return error(-32601, `method not found: ${method}`);
+      }
+    } catch (e) {
+      return error(-32603, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  let buffer = '';
+  const pending = new Set();
+  await new Promise((done) => {
+    input.setEncoding?.('utf8');
+    input.on('data', (chunk) => {
+      buffer += chunk;
+      let nl;
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+        let msg;
+        try { msg = JSON.parse(line); } catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); continue; }
+        const p = handle(msg).finally(() => pending.delete(p));
+        pending.add(p);
+      }
+    });
+    input.on('end', done);
+    input.on('close', done);
+  });
+  await Promise.allSettled([...pending]);
+  stopAllJobs();
+}

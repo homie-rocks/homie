@@ -47,6 +47,7 @@ function oldStudio(name) {
   save(dir, 'studio.json', s);
   save(dir, '.gitignore', read(dir, '.gitignore').replace('# Screenshots from check and look runs.\n.checks/\n', ''));
   unlinkSync(join(dir, 'site/README.md'));
+  unlinkSync(join(dir, 'HANDOFF.md'));
   unlinkSync(join(dir, 'site/migrations/0002_studio_stats.sql'));
   unlinkSync(join(dir, 'site/migrations/0005_studio_office.sql'));
   save(dir, 'site/src/worker.mjs', "// Our own wrapper.\nexport { default, Table, Lobby } from '@homie-rocks/studio/worker';\n");
@@ -63,10 +64,12 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
   assert.equal(plan.to, STUDIO_VERSION);
   const what = plan.changes.map((c) => `${c.kind} ${c.file}${c.section ? ` ${c.section}` : ''}`);
   assert.deepEqual(what.sort(), [
+    'add-file HANDOFF.md',
     'add-file site/README.md',
     'add-file site/migrations/0002_studio_stats.sql',
     'add-file site/migrations/0005_studio_office.sql',
     'add-lines .gitignore',
+    'add-section AGENTS.md ## Continuing a build from the Claude app',
     'add-section AGENTS.md ## Running live games (the back office)',
     'add-section AGENTS.md ## The Game Codex and progress',
     'pin package.json',

@@ -59,6 +59,8 @@ jobs:
         run: |
           npx -y @anthropic-ai/claude-code@2.1.285 plugin validate .
           npx -y @anthropic-ai/claude-code@2.1.285 plugin validate plugins/homie
+      - name: Homie for Claude Desktop (the .mcpb validates with mcpb, packs, and its packed server answers as the app starts it)
+        run: node scripts/desktop.mjs --check
 
   studio-linux:
     # The check a Claude Code cloud session runs, on a Linux VM with no GPU (the closest free stand-in): a studio

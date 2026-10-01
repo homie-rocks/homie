@@ -692,6 +692,7 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   const f = featuredOf(cat);
   const tagline = cat.studio?.tagline ?? '';
   let hero;
+  let soon = '';
   if (f) {
     const playing = live[f.id] ?? 0;
     hero = `<section class="hero home" aria-labelledby="hero-title">
@@ -704,6 +705,27 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
     <a class="also" href="/${esc(f.id)}/">${icon('arrow')}<span>About ${esc(f.name)}</span></a>${games.length > 1 ? `<a class="also" href="/games/">${icon('games')}<span>All ${games.length} games</span></a>` : ''}
   </div>
 </section>`;
+  } else if (!videos.length && !songs.length) {
+    // A new studio with nothing published yet: its own Home, its name, "First game coming soon", and what is on the
+    // way (a studio is never given a starter game it did not ask for). Its posts show below as soon as it has any.
+    hero = `<section class="hero home soon" aria-labelledby="hero-title">
+  ${heroMedia({}, { word: name })}
+  <div class="hero-copy">
+    <p class="kicker">${esc(tagline || 'A Homie studio')}</p>
+    <h1 class="title ${titleClass(name)}" id="hero-title">${esc(name)}</h1>
+    <p class="line">First game coming soon.</p>
+    <p class="live"><span class="live-dot" aria-hidden="true"></span><span>${posts.length ? 'In the making · the latest news is below' : 'In the making'}</span></p>
+  </div>
+</section>`;
+    const next = [
+      ['Games', 'The first game', 'It opens here with a Play button: a live public room on a phone, a computer or a TV, with bots in the empty seats.'],
+      ['Posts', 'News and drops', 'The studio\'s posts land on this page, with feeds to follow.'],
+      ['Music and videos', 'Songs and trailers', 'Scores, songs and trailers get pages of their own.'],
+    ];
+    soon = `<section class="band glowband" aria-labelledby="soon-title"><div class="band-in">
+  <div class="head-row reveal"><div><p class="kicker">On the way</p><h2 class="small-h" id="soon-title">${esc(`Coming to ${name}`)}</h2></div></div>
+  <div class="cards">${next.map(([k, t, d]) => `<div class="pcard reveal" data-soon><p class="post-meta">${esc(k)}</p><h3>${esc(t)}</h3><p>${esc(d)}</p></div>`).join('')}</div>
+</div></section>`;
   } else {
     const lead = videos[0] ?? songs[0] ?? null;
     const art = lead ? mediaArt(lead, videos[0] ? 'videos' : 'music', cat) : null;
@@ -736,10 +758,10 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   const extra = partial(cat, 'home');
   return layout(cat, {
     title: tagline ? `${name} — ${tagline}` : name,
-    description: tagline || (f ? `${name}: ${games.map((g) => g.name).join(', ')}. Free in your browser, on a phone, a computer or a TV.` : name),
+    description: tagline || (f ? `${name}: ${games.map((g) => g.name).join(', ')}. Free in your browser, on a phone, a computer or a TV.` : soon ? `${name}: first game coming soon.` : name),
     origin, path: '/', image: f ? (f.landing?.hero?.wideImage ?? coverOf(f)) : null, page: 'home', hero: true,
     head: f?.landing?.hero?.wideImage ? `<link rel="preload" as="image" href="${esc(f.landing.hero.tallImage ?? f.landing.hero.wideImage)}">` : '',
-    main: `${hero}${extra ? `<section class="band">${extra}</section>` : ''}${roomsBand}${gamesBand}${postsBand}${mediaBand(videos, 'videos', 'Trailers and clips')}${mediaBand(songs, 'music', 'Songs and scores')}`,
+    main: `${hero}${extra ? `<section class="band">${extra}</section>` : ''}${roomsBand}${gamesBand}${postsBand}${soon}${mediaBand(videos, 'videos', 'Trailers and clips')}${mediaBand(songs, 'music', 'Songs and scores')}`,
   });
 }
 

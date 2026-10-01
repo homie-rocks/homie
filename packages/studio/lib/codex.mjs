@@ -472,14 +472,28 @@ function lookOf(root, game, meta, emb) {
 }
 
 /**
+ * The game a codex belongs to. A new studio has no game, and the plan comes before the game is made, so a codex may
+ * sit in games/<id>/ before its game.json does: then the "game" is that planned folder. `create`: a codex is being
+ * started for an id with no folder yet.
+ */
+function codexGame(root, id, { create = false } = {}) {
+  const game = listGames(root).find((g) => g.id === id);
+  if (game) return game;
+  if (!GAME_ID.test(String(id ?? ''))) return null;
+  const dir = join(root, 'games', id);
+  if (existsSync(join(dir, 'game.json'))) return null;
+  return existsSync(join(dir, CODEX_FILE)) || create ? { id, dir, name: null, planned: true } : null;
+}
+
+/**
  * The page for one game. `mode`: 'file' (this computer; reloads while a build runs), 'artifact' (one file to publish
  * as a Claude artifact), 'site' (the studio site's private page). `feed`: a progress feed document, else the game's
  * newest one.
  */
 export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } = {}) {
   if (!GAME_ID.test(String(id ?? ''))) throw new Error(`no game id ${JSON.stringify(id)}`);
-  const game = listGames(root).find((g) => g.id === id);
-  if (!game) throw new Error(`no game "${id}" in games/`);
+  const game = codexGame(root, id);
+  if (!game) throw new Error(`no game "${id}" in games/, and no codex planning it`);
   const file = join(game.dir, CODEX_FILE);
   if (!existsSync(file)) throw new Error(`games/${id}/${CODEX_FILE} does not exist yet: npx --no-install homie-studio codex new ${id}`);
   if (statSync(file).size > LIMITS.source) throw new Error(`games/${id}/${CODEX_FILE} is over ${LIMITS.source / 1024} KB`);
@@ -576,9 +590,12 @@ export function buildCodexPages(root, dist, ids, { log = () => {} } = {}) {
 /* ------------------------------------------------------------------ a new codex */
 
 /** `homie-studio codex new <id>`: CODEX.md with every section, its look taken from the game and the studio. */
-export function newCodex(root, id) {
-  const game = listGames(root).find((g) => g.id === id);
-  if (!game) return { ok: false, command: 'codex new', why: `no game "${id}" in games/ (make it first: npx --no-install homie-studio game new ${id} --from gem-rush)` };
+export function newCodex(root, id, { name = null } = {}) {
+  // A game is planned before it is made: with no game of this id, the codex starts its folder (games/<id>/CODEX.md),
+  // and `game new <id>` later makes the game around it.
+  const game = codexGame(root, id, { create: true });
+  if (!game) return { ok: false, command: 'codex new', why: `"${id}" is not a game id (lowercase letters, digits and hyphens, up to 40)` };
+  if (game.planned) { game.name = name ? String(name).slice(0, 60) : id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' '); mkdirSync(game.dir, { recursive: true }); }
   const file = join(game.dir, CODEX_FILE);
   if (existsSync(file)) return { ok: false, command: 'codex new', why: `games/${id}/${CODEX_FILE} exists already: change it, never replace it` };
   const theme = readTheme(root);
@@ -608,7 +625,7 @@ ${game.blurb ?? ''}
 
 ## Latest
 
-- ${today}: The codex starts. The game is a copy of the ${game.from?.starter ?? 'starter'} starter for now.
+- ${today}: The codex starts. ${game.planned ? 'The game is planned here first; it is made once the plan is agreed.' : `The game is a copy of the ${game.from?.starter ?? 'starter'} starter for now.`}
 
 ## Concept
 
@@ -645,18 +662,20 @@ ${game.blurb ?? ''}
 
 ## Milestones
 
-- [x] Step 1: a working copy of the starter plays in two browsers
+${game.planned ? `- [ ] The plan (this codex)
+- [ ] The first playable version of the plan, checked with two browsers
+- [ ] Art, sound and its landing page; online` : `- [x] Step 1: a working copy of the starter plays in two browsers
 - [ ] Step 2: one small change from one sentence
 - [ ] Step 3: the plan (this codex)
 - [ ] Step 4: the first playable version of the plan, checked with two browsers
-- [ ] Step 5: art, sound and its landing page; online
+- [ ] Step 5: art, sound and its landing page; online`}
 
 ## Open questions
 
 -
 `;
   writeFileSync(file, text);
-  return { ok: true, command: 'codex new', id, file: relative(root, file), next: [`fill it from the plan interview, then: npx --no-install homie-studio codex ${id}`] };
+  return { ok: true, command: 'codex new', id, file: relative(root, file), planned: Boolean(game.planned), next: [`fill it from the plan interview, then: npx --no-install homie-studio codex ${id}`, ...(game.planned ? [`once the plan is agreed: npx --no-install homie-studio game new ${id} --from gem-rush --name "<Name>" makes the game around it (the codex stays)`] : [])] };
 }
 
 /** A sign-in link that opens one game's codex on the live site (the stats page's one-time sign-in, then the codex). */

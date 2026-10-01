@@ -10,7 +10,8 @@ is none, use the `studio-setup` skill first.
 
 ## Start it
 
-- **A new studio's first game** follows the `studio-setup` checklist: a working copy of a starter first,
+- **A new studio's first game** follows the `studio-setup` checklist: a live game to try first
+  (`npx --no-install homie-studio demo`; a starter is copied into the studio only when the person asks),
   one small change, then the plan (the `plan` skill) before anything big. Never jump ahead of it.
 - **A game with a Game Codex** (`games/<id>/CODEX.md`): read it first; it is the plan. Every decision that
   changes it goes into it in the same change, with a dated line under Latest, and the page is redrawn

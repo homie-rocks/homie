@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * The check a Claude Code cloud session runs, on this machine, from nothing: a studio from the public template,
+ * The check a Claude Code cloud session runs, on this machine, from nothing: a studio from the public template (its
+ * home page live with no game: "First game coming soon"; then the Gem Rush starter, copied in as a creator asks),
  * @homie-rocks/studio from this checkout (packed, as npm would install it), Wrangler from the registry, Chrome for
  * Testing when the machine has none, the site under `homie-studio dev`, and the real two-browser `check` against
  * it: a computer and a phone press Play, land in the same public room and finish a round.
@@ -44,17 +45,35 @@ try {
   const chrome = JSON.parse(sh(cli, ['chrome', 'install', '--json', ...(process.argv.includes('--chrome-for-testing') ? ['--fresh'] : [])], studio));
   say(`chrome: ${chrome.chrome}${chrome.already ? '' : ` (Chrome for Testing ${chrome.buildId}, installed)`}`);
   const env = { CHROME_PATH: chrome.chrome };
+  const startDev = async () => {
+    dev = spawn(cli, ['dev', '--port', port], { cwd: studio, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: false });
+    dev.stdout.on('data', () => {}); dev.stderr.on('data', () => {});
+    const up = Date.now() + 120_000;
+    for (;;) {
+      try { if ((await fetch(`http://127.0.0.1:${port}/api/games`)).ok) break; } catch { /* not yet */ }
+      if (Date.now() > up) throw new Error('the dev site did not answer within 120 s');
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    say(`dev site up on :${port} after ${Math.round((Date.now() - started) / 1000)} s`);
+  };
+  const stopDev = async () => {
+    sh(cli, ['dev', '--stop'], studio);
+    await new Promise((r) => { if (dev.exitCode !== null) r(); else dev.on('close', r); });
+    dev = null;
+  };
+  // A new studio goes live with its own home page and no game.
+  const empty = JSON.parse(sh(cli, ['build', '--json'], studio, env));
+  if (empty.games.length) throw new Error(`a new studio has no game, but the build made ${empty.games.map((g) => g.id).join(', ')}`);
+  await startDev();
+  const home = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+  if (!/First game coming soon/.test(home)) throw new Error('the new studio\'s home page does not say "First game coming soon"');
+  say('home page: "First game coming soon" (no game yet)');
+  await stopDev();
+  // The creator asks for a copy of the starter.
+  sh(cli, ['game', 'new', 'gem-rush', '--from', 'gem-rush', '--json'], studio);
   const built = JSON.parse(sh(cli, ['build', '--json'], studio, env));
-  say(`built: ${built.games.map((g) => `${g.id} ${Math.round(g.bytes / 1024)} KB`).join(', ')}`);
-  dev = spawn(cli, ['dev', '--port', port], { cwd: studio, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: false });
-  dev.stdout.on('data', () => {}); dev.stderr.on('data', () => {});
-  const up = Date.now() + 120_000;
-  for (;;) {
-    try { if ((await fetch(`http://127.0.0.1:${port}/api/games`)).ok) break; } catch { /* not yet */ }
-    if (Date.now() > up) throw new Error('the dev site did not answer within 120 s');
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  say(`dev site up on :${port} after ${Math.round((Date.now() - started) / 1000)} s`);
+  say(`asked for the starter; built: ${built.games.map((g) => `${g.id} ${Math.round(g.bytes / 1024)} KB`).join(', ')}`);
+  await startDev();
   const r = spawnSync(cli, ['check', 'gem-rush', '--url', `http://127.0.0.1:${port}`, '--json'], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
   const result = JSON.parse(r.stdout || '{}');
   const lines = [

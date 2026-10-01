@@ -23,6 +23,32 @@ npx homie-studio office                                 # who is playing now, in
 npx homie-studio upgrade                               # what a newer template adds to this studio (--apply to take it)
 ```
 
+A new studio has no game: its home page says "First game coming soon" until the first one is made, and
+`homie-studio demo` names a live game on Homie Arcade to try meanwhile. A starter is copied in only when the person
+asks (`game new <id> --from gem-rush`, or `--from ember-vale` for a hero who lasts, with cloud saves).
+
+## In one chat: `homie-studio mcp`
+
+```sh
+npx -y @homie-rocks/studio mcp --studios "<the folder the studios live in>"   # the toolkit as a local MCP server (stdio)
+```
+
+The toolkit as MCP tools, so the chat that shows Homie's cards also does the work: the setup status, a new studio,
+the live demo, make / remix / port / plan a game and its Game Codex, build, run it here, the two-browser check, a
+playtest, deploy, publish, the progress feed, the studio's files, and the music, sound, art and video scripts where
+their provider is set up. Where a tool overlaps the remote Homie MCP (homie.rocks/mcp) it has the same name and
+input shape. Long work (npm install, a check, a deploy) runs in the background and reports through the progress
+feed; MCP Apps cards (setup, build progress, studio, codex) are served as `ui://homie-studio/*`, and every tool also
+answers in plain text. Homie for Claude Desktop (`desktop/` in this repository) is this server as a Desktop
+Extension: the plain Claude app gets it with one install, and no terminal.
+
+## From a phone: a one-line hand-off
+
+The Claude app on a phone hands a build to a Claude Code cloud session with one line, `Continue building <Studio>:
+build hb_…`. In the session, `homie-studio handoff hb_…` fetches the brief from the directory by the build id, checks
+in for a studio still being set up, takes the build so the chat's card follows it, and prints the steps (every
+studio's `HANDOFF.md` says so).
+
 ## From GitHub, with Cloudflare's own CI (Workers Builds, Previews, Deploy to Cloudflare)
 
 A studio keeps `wrangler.jsonc` at its root (a studio made before 0.10.0 keeps `site/wrangler.jsonc`, and every
@@ -39,7 +65,8 @@ computer involved:
 
 The button copies the public template (`template/` in this repository, exactly what `homie-studio new --template`
 writes) into the person's GitHub, makes the Worker, the D1 database and the rooms on their Cloudflare account,
-and connects Workers Builds. The site plays its first game (Gem Rush) the moment it is up, and its Home has a
+and connects Workers Builds. The site goes live with its own home page ("First game coming soon": no starter game
+is put in a studio unless the person asks for one), and its Home has a
 **Connect to Claude** band: one tap links it to the Claude chat that set it up (the Homie MCP tool `studio_setup`).
 In the Claude Code session that works in the repository, `homie-studio setup attach <hs_…>` then gives the studio
 the name chosen in the chat and removes the band.
@@ -73,8 +100,8 @@ site. A game made with Homie's arcade controls that knocks for a Homie box (`/__
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.13.0 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.13.0 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.14.0 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.14.0 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -203,7 +230,7 @@ device; the owner's own passkey account (`homie-studio players owner`) counts as
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.13.0 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.14.0 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 

@@ -4,6 +4,7 @@
  *
  *   AGENTS.md            what this studio is and how to work in it (both apps)
  *   CLAUDE.md            imports AGENTS.md (Claude Code's documented way to share it)
+ *   HANDOFF.md           what a Claude Code session started from the Claude app does with its one-line prompt
  *   studio.json          the studio's name, slug, and its Cloudflare resources
  *   package.json         @homie-rocks/studio and wrangler, pinned
  *   games/<id>/          one folder per game (game.json, index.html, src/)
@@ -27,7 +28,6 @@ import { STATS_MIGRATION, STATS_MIGRATION_FILE } from '../worker/stats.mjs';
 import { PLAYERS_MIGRATION, PLAYERS_MIGRATION_FILE } from '../worker/players.mjs';
 import { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from '../worker/office-schema.mjs';
 import { themeFile } from './site.mjs';
-import { PACKAGE_ROOT } from './studio.mjs';
 
 export const COMPAT_DATE = '2026-06-01';
 /** 4.135.0 or later: Worker Previews (`wrangler preview`, a Durable Object namespace per Preview). */
@@ -114,8 +114,11 @@ directory lists its games; homie.rocks does not host them.
 Use \`npm run <script>\` or \`npx --no-install homie-studio <command>\`: \`--no-install\` makes sure it is this
 studio's pinned copy, never a registry lookup of the bare name.
 
+- \`npx --no-install homie-studio demo\` — a live multiplayer game to try right now (on Homie Arcade, with
+  whoever is playing and bots in the empty seats). Nothing is copied into this studio.
 - \`npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"\` — a new game from a
-  multiplayer starter (one live public room from its first build, bots fill seats).
+  multiplayer starter (one live public room from its first build, bots fill seats). A new studio starts with no
+  game: copy a starter only when the person asks for one, or once their game is planned.
 - \`npx --no-install homie-studio port plan <folder>\` — read an existing single-player web game and grade
   how hard making it multiplayer will be; \`port import\` brings it into \`games/\`, \`port check\` runs the
   owner tests (real touch, a late joiner, a killed host, two browsers finishing a round). The Homie
@@ -168,6 +171,8 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **Sections, like homie.rocks:** Home (the featured game, live rooms, latest posts), Games, Music, Videos,
   Rooms (every public room playing now, joinable) and Posts. A section with nothing in it has no tab, and its
   page is not found.
+- **A new studio goes live with its Home only:** its name and "First game coming soon", with what is on the way
+  (games, posts, music and videos), until its first game, song or video is published. A post shows there at once.
 - **Every game gets a landing** at \`/<id>/\`: a full-bleed hero from the game's own footage
   (\`games/<id>/hero/wide.mp4\` and \`tall.mp4\`, or a trailer in \`videos/\` with \`for.game\`), else its cover
   with slow motion; the pitch, a big Play button into a public room, phone / computer / TV with the join code,
@@ -245,6 +250,13 @@ studio's pinned copy, never a registry lookup of the bare name.
 - A game can listen (\`NETPLAY.md\` section 15): \`net.on('announce', …)\`, \`net.isMuted(seat)\` to hide a muted
   player's chat, and \`net.pickPlayer(seat)\` when a player is clicked (the owner's page opens their card).
 
+## Continuing a build from the Claude app
+
+A Claude Code session started from the Claude app's card gets one short line, like
+\`Continue building Night Owls: build hb_…\`. \`HANDOFF.md\` says what to do with it:
+\`npx --no-install homie-studio handoff hb_…\` fetches the brief the person gave in the chat, takes the build (the
+chat's card follows the work from then on) and, for a studio still being set up, checks in from this repository.
+
 ## Rules
 
 - Keys stay in the providers' own logins (Wrangler, ElevenLabs, fal) or the OS
@@ -279,6 +291,39 @@ A game studio made with [Homie](https://homie.rocks). Open this folder in Claude
 and ask for a game; \`AGENTS.md\` says how everything here works.
 `;
 }
+
+/**
+ * HANDOFF.md: what a Claude Code session started from the Claude app does with the one line it is given
+ * ("Continue building <Studio>: build hb_…"). The brief stays with the build in the directory; the session fetches it
+ * (`homie-studio handoff`, lib/handoff.mjs), so no wall of text ever goes through a prompt.
+ */
+export const HANDOFF_MD = `# Continuing a build from the Claude app
+
+The Claude app (claude.ai on a phone or the web) hands a build to a Claude Code session in this repository with
+one short line:
+
+    Continue building <Studio>: build hb_<32 hex digits>
+
+That line is all the session is given. The brief (what the person asked for, in their words) stays with the build:
+
+1. \`npm install\` (once per session).
+2. \`npx --no-install homie-studio handoff hb_…\` prints the brief and the steps for this kind of build (a new
+   studio's first session, a new game, a port, a remix or a change). It takes the build once, so the chat's card
+   follows the work, and for a studio still being set up it checks in from this repository.
+3. If it says this session's network does not reach homie.rocks and the Homie connector's tools are in this session,
+   call \`build_progress\` with \`{ "build": "hb_…" }\`: its answer carries the same brief. Otherwise tell the person
+   in one line and ask what to build; the card in their chat shows the brief.
+4. Do the work the brief asks for, as AGENTS.md says: \`npm run build\`, \`npm run dev\` in the background, and
+   \`npx --no-install homie-studio check <id> --url http://127.0.0.1:8787\` (on Linux without Chrome, first
+   \`npx --no-install homie-studio chrome install\`).
+5. \`npx --no-install homie-studio progress change "<what it does, one line>"\`; commit on a new branch, push,
+   \`gh pr create\`; then \`npx --no-install homie-studio progress pr --url <the pull request>\`.
+
+Never merge the pull request: the person publishes it from the chat's card, in GitHub. A new studio has no game
+yet: copy a starter only when the brief or the person asks for one.
+
+On a computer, the Claude desktop app with the Homie extension builds in the same chat, with no hand-off at all.
+`;
 
 const MIGRATION = `-- A studio's own D1: the directory claim, and every finished round of every public room.
 CREATE TABLE IF NOT EXISTS meta (
@@ -402,10 +447,11 @@ export function studioFiles({ name, slug, homie, template = false }) {
     'AGENTS.md': agentsMd({ name, slug }),
     'CLAUDE.md': claudeMd(),
     'README.md': template ? templateReadme() : readme({ name }),
+    'HANDOFF.md': HANDOFF_MD,
     'studio.json': `${JSON.stringify(studio, null, 2)}\n`,
     'package.json': `${JSON.stringify(pkg, null, 2)}\n`,
     '.gitignore': GITIGNORE,
-    'games/README.md': 'One folder per game. Start one with `npx --no-install homie-studio game new <id> --from gem-rush`.\n',
+    'games/README.md': 'One folder per game. A new studio has none (its home page says "First game coming soon"). Start one with `npx --no-install homie-studio game new <id> --from gem-rush` when the person asks for a copy of the starter, or once their game is planned.\n',
     'music/README.md': 'Songs, game scores, loops and stems, one folder each (`music/<slug>/`). `manifest.json` lists them (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/music/<slug>/`. The site serves files up to 25 MiB itself; larger ones go to the studio\'s storage with `npx --no-install homie-studio media put` (after `npx --no-install homie-studio storage add`). Never into git.\n',
     'music/manifest.json': '{ "v": 1, "items": [] }\n',
     'videos/README.md': 'Trailers, music videos and cutscenes, one folder each (`videos/<slug>/`). `manifest.json` lists them (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/videos/<slug>/`. The site serves files up to 25 MiB itself; larger ones go to the studio\'s storage with `npx --no-install homie-studio media put` (after `npx --no-install homie-studio storage add`). Never into git.\n',
@@ -425,27 +471,12 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
     '.claude/skills/.gitkeep': '',
   };
   if (template) {
-    // A first game, so the site plays the moment Cloudflare deploys it; and a band on Home that connects the new
-    // studio to the Claude chat that set it up (`setup attach` removes both once Claude works in the studio).
-    for (const [rel, text] of starterFiles('gem-rush')) files[`games/gem-rush/${rel}`] = text;
+    // No game: a new studio goes live with its own Home ("first game coming soon"), and a band there that connects
+    // it to the Claude chat that set it up (`setup attach` removes the band once Claude works in the studio). A
+    // starter is copied in only when the person asks for one (`homie-studio game new`).
     files['site/partials/home.html'] = CONNECT_BAND;
   }
   return files;
-}
-
-/** A starter's files, as text, relative to its folder. */
-function starterFiles(id) {
-  const dir = join(PACKAGE_ROOT, 'starters', id);
-  const out = [];
-  const walk = (rel) => {
-    for (const entry of readdirSync(join(dir, rel), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const path = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) walk(path);
-      else out.push([path, readFileSync(join(dir, path), 'utf8')]);
-    }
-  };
-  walk('');
-  return out;
 }
 
 /** The template's first-run band on Home: one link that connects this studio to the Claude chat that set it up. */
@@ -469,7 +500,7 @@ and a site with public multiplayer rooms that runs on **your own Cloudflare acco
 
 The button copies this studio into your GitHub, creates its Worker, database and rooms on your Cloudflare, and
 deploys it with Workers Builds: every push to \`main\` goes live, and every other branch gets its own Preview.
-The site plays a first game the moment it is up.
+The site goes live at once with its own home page ("first game coming soon"); the games come next.
 
 Then open the site and tap **Connect to Claude**, or ask Claude in the Claude app to set up your studio with the
 Homie connector: it makes games, songs and videos here, in a pull request you merge with one tap.
@@ -581,8 +612,9 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
   const q = JSON.stringify(realpathSync(dir));
   return { ok: true, command: 'new', dir: realpathSync(dir), name, slug, wrote, git, installed, studio: STUDIO_VERSION, next: [
     `cd ${q}${install ? '' : ' && npm install'}`,
-    'npx --no-install homie-studio game new <id> --from gem-rush --name "<Game Name>"',
-    'npm run dev   (then: npx --no-install homie-studio check <id> --url http://127.0.0.1:8787)',
+    'see a working game first, with nothing copied here: npx --no-install homie-studio demo (a live game on Homie Arcade)',
+    'a copy of a starter only when the person asks for one: npx --no-install homie-studio game new <id> --from gem-rush --name "<Game Name>"',
+    'npm run dev   (the home page, "first game coming soon", at http://127.0.0.1:8787/; with a game: npx --no-install homie-studio check <id> --url http://127.0.0.1:8787)',
     'npm run deploy   (then the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish)',
   ], online: 'Going online creates one Worker, one D1 database and two Durable Objects on your own Cloudflare account: free plan, no payment method, no R2. `npx --no-install homie-studio deploy --plan` says exactly what, and changes nothing.' };
 }

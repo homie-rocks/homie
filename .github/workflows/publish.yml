@@ -53,3 +53,29 @@ jobs:
         run: node scripts/publish.mjs --check
       - name: Publish
         run: node scripts/publish.mjs
+
+  desktop:
+    # Homie for Claude Desktop: this release's .mcpb (desktop/, scripts/desktop.mjs), checked as the app starts it,
+    # and attached to the tag's GitHub release (made when the tag has none), as homie-studio-<version>.mcpb and as
+    # homie-studio.mcpb, which releases/latest/download/homie-studio.mcpb always names.
+    if: startsWith(github.ref, 'refs/tags/release-')
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Pack and check the extension
+        run: node scripts/desktop.mjs --check
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          v=$(node -p "require('./packages/studio/package.json').version")
+          cp "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes "Homie for Claude Desktop $v: desktop/README.md says how to install it."
+          gh release upload "$TAG" "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb --clobber

@@ -31,7 +31,7 @@ import { readStudio } from './studio.mjs';
 import { STUDIO_VERSION, packageSpec } from './version.mjs';
 
 /** Whole files the template writes and a studio may keep as they are: updated only while the studio never changed them. */
-export const TEMPLATE_FILES = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'games/README.md', 'music/README.md', 'videos/README.md', 'posts/README.md', 'site/README.md', 'site/src/worker.mjs'];
+export const TEMPLATE_FILES = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'HANDOFF.md', 'games/README.md', 'music/README.md', 'videos/README.md', 'posts/README.md', 'site/README.md', 'site/src/worker.mjs'];
 /** Files the template adds when missing and never changes once they exist (a migration is applied; a manifest is the studio's). */
 export const ADD_ONLY = ['music/manifest.json', 'videos/manifest.json', '.claude/skills/.gitkeep'];
 const MIGRATIONS = /^site\/migrations\/[^/]+\.sql$/;

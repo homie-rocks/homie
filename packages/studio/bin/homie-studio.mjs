@@ -5,8 +5,14 @@
  * list its games in the homie.rocks directory.
  *
  *   homie-studio new <folder> --name "<Studio Name>" [--homie <directory url>] [--no-install] [--template]
- *                                         (--template: the public "Deploy to Cloudflare" template: a first game and a Connect band)
+ *                                         (--template: the public "Deploy to Cloudflare" template, with a Connect band;
+ *                                          a new studio has no game: its home says "First game coming soon")
  *   homie-studio starters
+ *   homie-studio demo                     a live multiplayer game to try now (Homie Arcade), nothing copied into the studio
+ *   homie-studio mcp [--studios <folder>] [--skills <folder>]
+ *                                         this toolkit as a local MCP server (stdio): the Claude desktop app's Homie
+ *                                          extension, Claude Code or any MCP client builds in the same chat that shows
+ *                                          the cards (lib/mcp.mjs); --studios: the folder the studios live in
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio game remix <source.json url> --id <new id>
  *   homie-studio games
@@ -75,6 +81,9 @@
  *                                         into it (stage, each check going green, a preview picture) and stop
  *                                         when asked. Without one, nothing changes.
  *
+ *   homie-studio handoff <hb_…>           (a Claude Code session started from the Claude app with one line, "Continue building
+ *                                          <Studio>: build hb_…": fetch the person's brief, check in for a new studio, take
+ *                                          the build so the chat's card follows it, and print the steps; HANDOFF.md)
  *   homie-studio setup attach <hs_…>      (this repository is the studio the Claude app's setup card is making: say so, once,
  *                                          learn its live address, and give a template copy its real name)
  *   homie-studio setup status [--connector yes|no]   (also: homie-studio doctor)
@@ -83,7 +92,9 @@
  *                                         ElevenLabs, fal; green, missing or "do this now", what each unlocks and its
  *                                         exact fix. Read-only and safe any time, inside a studio or before one exists.
  *
- *   homie-studio codex new <id>           games/<id>/CODEX.md: the Game Codex, every section, in the game's colours
+ *   homie-studio codex new <id> [--name "<Name>"]
+ *                                         games/<id>/CODEX.md: the Game Codex, every section, in the game's colours (a game
+ *                                          is planned before it is made: with no game <id> yet, it starts its folder)
  *   homie-studio codex <id> [--artifact] [--open]
  *                                         the codex as a page in the game's own look (.studio/codex/<id>.html; it redraws
  *                                         itself as the build's progress changes); --artifact: a copy to publish as a
@@ -123,6 +134,9 @@ import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
 import { installStatusLine, statusLine } from '../lib/statusline.mjs';
 import { restartWithProxy } from '../lib/net.mjs';
+import { demoGames, formatDemo } from '../lib/demo.mjs';
+import { serveMcp } from '../lib/mcp.mjs';
+import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
@@ -142,7 +156,7 @@ const log = asJson ? () => {} : (line) => process.stderr.write(`${line}\n`);
 
 function print(result) {
   if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
-  if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
+  if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
   if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
   const lines = [];
   switch (result.command) {
@@ -271,6 +285,12 @@ function print(result) {
     case 'setup status':
       lines.push(formatStatus(result));
       break;
+    case 'demo':
+      lines.push(formatDemo(result));
+      break;
+    case 'handoff':
+      lines.push(formatHandoff(result));
+      break;
     case 'codex':
       lines.push(`The Game Codex for ${result.title}: ${result.file}${result.opened ? ' (opened in the browser)' : ''}`,
         `  tabs: ${result.sections.map((x) => x.title).join(' · ')} · Build status${result.build ? ` (${result.build.state}, ${result.build.percent}%)` : ''}`,
@@ -370,6 +390,12 @@ async function main() {
   if (cmd === 'version' || flags.has('version')) return { ok: true, command: 'version', version: STUDIO_VERSION };
   if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install'), template: flags.has('template') });
   if (cmd === 'starters') return { ok: true, command: 'starters', starters: starters() };
+  if (cmd === 'demo') return demoGames();
+  if (cmd === 'mcp') {
+    // stdout carries MCP messages only from here on (lib/mcp.mjs); every word for a person goes to stderr.
+    await serveMcp({ studios: flags.get('studios') ?? process.env.HOMIE_STUDIOS ?? null, skills: flags.get('skills') ?? process.env.HOMIE_SKILLS ?? null, install: !flags.has('no-install'), directory: flags.get('homie') ?? null });
+    return { ok: true, command: 'help' };
+  }
 
   if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
   if (cmd === 'chrome' && sub === 'install') return installChrome({ log, fresh: flags.has('fresh') });
@@ -386,6 +412,7 @@ async function main() {
   if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);
   if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie') });
+  if (cmd === 'handoff') return handoff(root, sub, { homie: flags.get('homie') });
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
     const game = positional[2] ?? listGames(root)[0]?.id;
@@ -469,7 +496,7 @@ async function main() {
 /** `homie-studio codex …` (lib/codex.mjs): the Game Codex of one game. */
 function codexCommand(root, sub) {
   const games = listGames(root);
-  if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined));
+  if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined), { name: flags.get('name') ?? null });
   if (sub === 'link') {
     const id = positional[2] ?? (games.length === 1 ? games[0].id : null);
     if (!id || !games.some((g) => g.id === id)) return { ok: false, command: 'codex link', why: 'name the game: homie-studio codex link <id>' };
@@ -620,7 +647,7 @@ async function stopDev(root) {
 async function dev(root) {
   const port = String(flags.get('port') ?? 8787);
   const b = await build(root, { log });
-  if (!b.catalogue.length && !b.songs.length && !b.videos.length) return { ok: false, command: 'dev', why: 'nothing to show yet: npx homie-studio game new <id> --from gem-rush, or publish a song or video (media/MEDIA.md)' };
+  if (!b.catalogue.length && !b.songs.length && !b.videos.length) log('No game yet: the home page says "First game coming soon" until the first one is made.');
   const bin = wranglerBin(root);
   if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
   const studio = readStudio(root);

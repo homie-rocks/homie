@@ -56,6 +56,10 @@ How to ask:
 npx --no-install homie-studio codex new <id>      # games/<id>/CODEX.md with every section, in the studio's colours
 ```
 
+A new studio has no game yet: its game is planned before it is made. With no game `<id>`, `codex new <id> --name
+"<Name>"` starts the game's folder with only the codex in it, and once the plan is agreed, `game new <id> --from
+gem-rush --name "<Name>"` makes the game around it (the codex stays).
+
 Never replace an existing codex: change it. Fill every section from the interview (the format, with an
 example: `references/CODEX.md`):
 

@@ -108,7 +108,10 @@ export function newGame(root, id, { from = 'gem-rush', name } = {}) {
   const src = join(PACKAGE_ROOT, 'starters', from);
   if (!existsSync(join(src, 'game.json'))) throw new Error(`no starter "${from}"; starters: ${starters().map((s) => s.id).join(', ')}`);
   const dest = join(root, 'games', id);
-  if (existsSync(dest)) throw new Error(`games/${id} already exists; pick another id or change that game`);
+  if (existsSync(join(dest, 'game.json'))) throw new Error(`games/${id} already exists; pick another id or change that game`);
+  // A planned game (its folder holds the Game Codex, maybe art, and no game.json yet): the starter goes in around
+  // what is there, and nothing of the plan is overwritten.
+  if (existsSync(dest) && readdirSync(dest).some((f) => existsSync(join(src, f)))) throw new Error(`games/${id} holds files of its own that a starter would overwrite; pick another id`);
   cpSync(src, dest, { recursive: true });
   const meta = JSON.parse(readFileSync(join(dest, 'game.json'), 'utf8'));
   meta.id = id;
