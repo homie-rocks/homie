@@ -15,9 +15,11 @@ skills), packed with Anthropic's own tool, [`@anthropic-ai/mcpb`](https://github
 2. Double-click it, or drag it into the Claude window (or Settings → Extensions → Advanced settings →
    Install Extension…). Claude shows what it is; choose **Install**. The install screen says the extension is not
    signed (see Signing below): that is the one warning, and it is expected for now.
-3. It asks for one setting, **Studios folder**: where your studios live (each studio is a folder in it; Homie only
-   reads and writes inside it). The default is `Studios` in your home folder.
-4. In a new chat, ask: *"Set up a game studio called Night Owls."*
+3. It has one setting, **Studios folder**: where your studios live (each studio is a folder in it; Homie only reads
+   and writes inside it). It is optional: left as it is, it is `Studios` in your home folder. Change it there, or
+   later in Settings → Extensions → Homie Studio.
+4. It turns itself on as it installs. If Settings → Extensions shows **Homie Studio** switched off, switch it on.
+5. In a new chat, ask: *"Set up a game studio called Night Owls."*
 
 The studio needs Node.js 22 or newer on the computer (it installs its own pinned toolkit and Cloudflare's Wrangler
 with npm). The setup card says so if it is missing, with the download page. Chrome is needed for the two-browser
@@ -26,8 +28,9 @@ method).
 
 ## The test: one minute, in your own Claude desktop app
 
-1. Install it as above, with the Studios folder set to a new, empty folder (for example a folder called Studios Test in your home folder), so the
-   test cannot touch a studio you already have.
+1. Install it as above, with the Studios folder set to a new, empty folder (for example a folder called Studios Test
+   in your home folder), so the test cannot touch a studio you already have. Check that Settings → Extensions shows
+   Homie Studio switched on (it turns itself on; if it is off, switch it on).
 2. New chat: **"Set up a game studio called Paper Comets."**
    - The **Studio setup** card appears in the chat: the new-studio checklist (step 1 ticked), this computer's rows
      (Node, Chrome, ffmpeg, Cloudflare, GitHub, ElevenLabs, fal), and "Installing the studio's toolkit…" until npm
@@ -64,6 +67,9 @@ Night Owls: build hb_…"*; the session fetches the brief itself (`homie-studio 
   that Claude Desktop refuses (modelcontextprotocol/mcpb#278), and a self-signed certificate reads as unsigned anyway.
   An organisation that requires signed extensions (`isDesktopExtensionSignatureRequired`) cannot install it until
   then.
+- **Not the Homie house app.** On a Mac with the Homie house app, Claude may also list that app's own MCP server
+  (its room and TV tools). That is a different server: this one is **Homie Studio**, and every one of its tools says
+  so in its description.
 - **The 60-second rule.** Claude Desktop gives a local tool call 60 s. Long work (npm install, a check, a deploy) runs
   in the background: the tool answers at once with a card that follows it.
 - **Where it runs.** Claude Desktop may run the server on its own built-in Node.js; the server then runs every studio

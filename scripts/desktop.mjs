@@ -120,7 +120,7 @@ manifest.version = version;
   const { tools } = (await s.request('tools/list')).result;
   await s.close();
   // The media tools appear only where their provider is set up; the install screen lists the ones every computer has.
-  manifest.tools = tools.filter((t) => !['music', 'sound', 'art', 'video'].includes(t.name)).map((t) => ({ name: t.name, description: t.description.split(/(?<=[.:])\s/)[0].slice(0, 200) }));
+  manifest.tools = tools.filter((t) => !['music', 'sound', 'art', 'video'].includes(t.name)).map((t) => ({ name: t.name, description: t.description.replace(/^Homie Studio: /, '').split(/(?<=[.])\s/)[0].slice(0, 200) }));
 }
 writeFileSync(join(STAGE, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 say(mcpb(['validate', join(STAGE, 'manifest.json')]).trim());
@@ -159,6 +159,18 @@ if (check) {
     const made = (await s2.request('tools/call', { name: 'studio_scaffold', arguments: { name: 'Check Studio' } })).result;
     await s2.close();
     if (made.isError || !existsSync(join(studios, 'check-studio', 'studio.json')) || existsSync(join(studios, 'check-studio', 'games', 'gem-rush'))) throw new Error(`studio_scaffold from the bundle: ${made.content?.[0]?.text}`);
-    say(`the packed server answers: ${tools.length} tools, 4 cards, setup status, the guides, and a new studio with no game (${init.result.protocolVersion})`);
+    // The folder setting is optional, so the app turns the extension on as it installs it (a required setting left it
+    // off even with a default). When the app passes no folder (its placeholder as written, or an empty value), the
+    // server uses the default: the Studios folder in the home folder.
+    const setting = m.user_config?.studios_folder;
+    if (setting?.required !== false || setting?.default !== '${HOME}/Studios') throw new Error(`the studios folder setting must be optional with the default \${HOME}/Studios: ${JSON.stringify(setting)}`);
+    for (const [what, value] of [['its placeholder as written', '${user_config.studios_folder}'], ['an empty value', '']]) {
+      const s3 = talk('node', [join(dir, 'server', 'index.mjs'), '--studios', value, '--no-install'], { cwd: work, env: { ...m.server.mcp_config.env, HOME: work } });
+      await s3.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'check', version: '1' } });
+      const st = (await s3.request('tools/call', { name: 'setup_status', arguments: {} })).result;
+      await s3.close();
+      if (st.structuredContent?.studiosDir !== join(work, 'Studios')) throw new Error(`with ${what} for the folder, the server used ${st.structuredContent?.studiosDir}, not the default`);
+    }
+    say(`the packed server answers: ${tools.length} tools, 4 cards, setup status, the guides, and a new studio with no game (${init.result.protocolVersion}); the folder setting is optional, and an unfilled one means the default`);
   } finally { rmSync(work, { recursive: true, force: true }); }
 }

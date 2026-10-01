@@ -27,7 +27,7 @@ import { STUDIO_VERSION } from './version.mjs';
 export const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 export const MCP_APP_MIME = 'text/html;profile=mcp-app';
 
-export const INSTRUCTIONS = `Homie Studio, on this computer: make game studios and their multiplayer web games, music and videos, run them here, and put them online on the studio's own Cloudflare. These tools do the work in this chat; the person never types a command and never needs a terminal. A studio is a folder in the studios folder; the file tools (file_list, file_read, file_edit, file_write, file_search) work inside it.
+export const INSTRUCTIONS = `Homie Studio, on this computer: make game studios and their multiplayer web games, music and videos, run them here, and put them online on the studio's own Cloudflare. (It is not the Homie house app: that app's own server, with its room and TV tools, is a different one.) These tools do the work in this chat; the person never types a command and never needs a terminal. A studio is a folder in the studios folder; the file tools (file_list, file_read, file_edit, file_write, file_search) work inside it.
 
 A new studio follows one checklist, in order and never ahead. Show it in your first reply and again, ticked, as each step ends:
 0. Setup status (setup_status): what this computer and their accounts have; optional rows never block.

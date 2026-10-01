@@ -27,7 +27,7 @@
       "type": "directory",
       "title": "Studios folder",
       "description": "Where your studios live: each studio is a folder in it. Homie only reads and writes inside it.",
-      "required": true,
+      "required": false,
       "default": "${HOME}/Studios"
     }
   },

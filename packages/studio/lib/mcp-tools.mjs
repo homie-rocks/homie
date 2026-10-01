@@ -981,6 +981,9 @@ export function toolDefs(ctx, avail = {}) {
       },
     });
   }
+  // Every tool says whose it is: a Claude app may also have the Homie house app's own MCP server (its room and TV
+  // tools), a different server with different tools.
+  for (const t of tools) if (!t.description.startsWith('Homie Studio')) t.description = `Homie Studio: ${t.description}`;
   return tools;
 }
 

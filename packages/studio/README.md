@@ -100,8 +100,8 @@ site. A game made with Homie's arcade controls that knocks for a Homie box (`/__
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.14.1 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.14.1 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.14.2 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.14.2 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -232,7 +232,7 @@ device; the owner's own passkey account (`homie-studio players owner`) counts as
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.14.1 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.14.2 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 
