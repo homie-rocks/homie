@@ -65,6 +65,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'add-file site/README.md',
     'add-file site/migrations/0002_studio_stats.sql',
     'add-lines .gitignore',
+    'add-section AGENTS.md ## The Game Codex and progress',
     'pin package.json',
     'scripts package.json',
     'update-section AGENTS.md ## Commands (all through the pinned CLI in node_modules)',

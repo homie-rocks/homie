@@ -129,7 +129,12 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     return { ok: false, command: 'deploy', needs: 'cloudflare-account', why: `This Cloudflare login can reach ${who.accounts.length} accounts; ask the person which one this studio uses and put its id in studio.json (cloudflare.accountId).`, accounts: who.accounts };
   }
   const w = runner(root, { CLOUDFLARE_ACCOUNT_ID: accountId });
-  const refuse = (why, out) => ({ ok: false, command: 'deploy', ...(explainCloudflare(out, accountId) ?? { why }) });
+  const refuse = (why, out) => {
+    const r = { ok: false, command: 'deploy', ...(explainCloudflare(out, accountId) ?? { why }) };
+    // What the account asked for (an email to verify…) stays on this computer, for `setup status`.
+    if (r.needs) { try { writeLocal(root, { needs: r.needs, needsAt: new Date().toISOString() }); } catch { /* not recorded */ } }
+    return r;
+  };
   // Record every resource the moment it exists, so a deploy cut short (an expired login, a network drop) resumes
   // instead of refusing its own database as "someone else's" next time.
   const remember = (key) => {
@@ -201,7 +206,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   // .studio/local.json (git-ignored), and never in the committed studio.json. A custom domain stays in studio.json.
   if (ensureLocalIgnored(root)) step(`added .studio/ to .gitignore (${LOCAL_STATE} keeps this computer's own state)`);
   const workersDev = /https:\/\/[a-z0-9.-]+\.workers\.dev/i.exec(dep.out)?.[0] ?? readLocal(root).url ?? (isWorkersDev(cf.url) ? cf.url : null);
-  if (workersDev) writeLocal(root, { url: workersDev, deployedAt: new Date().toISOString() });
+  if (workersDev) writeLocal(root, { url: workersDev, deployedAt: new Date().toISOString(), needs: null, needsAt: null });
   const movedOut = isWorkersDev(cf.url);
   if (movedOut) {
     cf.url = null;

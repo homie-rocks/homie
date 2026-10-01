@@ -10,6 +10,8 @@
  *                                          posts/*.md and the studio's site/ folder (site/SITE.md)
  *   site/dist/games/<id>/_landing/...      what the game's landing shows (hero footage, its cover, licence texts)
  *   site/dist/_site/                       posts.json (the posts' HTML), the studio's own pages (site/pages)
+ *   site/dist/_studio/codex/<id>/          each game's Game Codex (games/<id>/CODEX.md, lib/codex.mjs): served only to
+ *                                          the studio's owner (worker/stats-page.mjs), never listed or indexed
  *   site/dist/<file>                       site/public, as it is (fonts, a logo, hero footage)
  *   site/dist/music/..., site/dist/videos/...   media files the site serves itself (R2 keys are served from R2)
  *
@@ -25,6 +27,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
+import { buildCodexPages } from './codex.mjs';
 import { buildMedia } from './media.mjs';
 import { buildSiteFiles, landingOf, readPosts, readTheme } from './site.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
@@ -33,7 +36,7 @@ import { STUDIO_VERSION } from './version.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
-const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md']);
+const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md']);
 const LOADERS = { '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file', '.webp': 'file', '.mp3': 'file', '.ogg': 'file', '.wav': 'file', '.m4a': 'file', '.glb': 'file', '.gltf': 'file', '.bin': 'file', '.hdr': 'file', '.svg': 'file', '.json': 'json', '.woff2': 'file', '.ttf': 'file' };
 
 /** The port toolkit as one classic script (window.HomiePort), for static games. Built once per build. */
@@ -67,7 +70,7 @@ export function sourceOf(dir, id) {
   let total = 0;
   const walk = (rel) => {
     for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
-      if (entry.name.startsWith('.') || SOURCE_SKIP.has(entry.name)) continue;
+      if (entry.name.startsWith('.') || SOURCE_SKIP.has(entry.name) || (!rel && entry.name === 'CODEX.md')) continue;
       const path = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(path);
       else if (TEXT.test(entry.name)) {
@@ -222,6 +225,8 @@ export async function build(root, { only = null, log = () => {} } = {}) {
   });
   const { posts, skipped: postsSkipped } = readPosts(root, { games: rows, songs: media.songs, videos: media.videos, log });
   const site = buildSiteFiles(root, dist, { gameIds: rows.map((g) => g.id), log });
+  // Each game's Game Codex (games/<id>/CODEX.md), as the owner's private page at /_studio/codex/<id>/ (never listed).
+  const codexes = buildCodexPages(root, dist, games.map((g) => g.id), { log });
   mkdirSync(join(dist, '_site'), { recursive: true });
   writeFileSync(join(dist, '_site', 'posts.json'), `${JSON.stringify({ v: 1, posts })}\n`);
   const s = studio.site && typeof studio.site === 'object' ? studio.site : {};
@@ -257,7 +262,7 @@ export async function build(root, { only = null, log = () => {} } = {}) {
   return {
     ok: true, command: 'build', dist, games: built, catalogue: catalogue.games.map((g) => g.id),
     songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped,
-    posts: posts.map((p) => p.slug), postsSkipped, pages: site.pages, partials: Object.keys(site.partials), public: site.public.length, siteSkipped: site.skipped,
+    posts: posts.map((p) => p.slug), postsSkipped, codexes, pages: site.pages, partials: Object.keys(site.partials), public: site.public.length, siteSkipped: site.skipped,
     landings: rows.map((g) => ({ id: g.id, hero: g.landing.hero.wide || g.landing.hero.tall ? 'footage' : g.landing.hero.wideImage ? 'art' : 'colours', credits: Boolean(g.landing.credits.original || g.landing.credits.people.length), source: g.landing.source })),
   };
 }

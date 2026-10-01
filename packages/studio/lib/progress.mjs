@@ -19,6 +19,10 @@
  * knows (the plan, money spent, a song's lyric check, a video's shots) with the other `progress` commands.
  * WITHOUT AN OPEN FEED NOTHING CHANGES: every command behaves exactly as before.
  *
+ * WHERE A PERSON SEES IT: the Claude app's build card (shared feeds), the Build status tab of the game's codex page
+ * (lib/codex.mjs: it redraws itself at every change), and Claude Code's status line (lib/statusline.mjs), all read
+ * through lib/feed-summary.mjs so they agree.
+ *
  * SHARED (`progress start --share`): the directory named in studio.json (homie.rocks by default) keeps a copy for
  * 24 hours, so the Homie MCP tool `build_progress { build }` can show it in the Claude app, and answers every
  * write with whether the person pressed Stop there. It receives the feed and nothing else: never a key, a file
@@ -51,6 +55,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
+import { refreshCodexFile } from './codex.mjs';
 import { readStudio, siteUrl } from './studio.mjs';
 
 export const PROGRESS_KIND = 'homie-studio-progress';
@@ -245,6 +250,8 @@ export class Feed {
   change(fn, { soon = false } = {}) {
     const d = mutateDoc(this.root, this.id, fn);
     if (d) schedule(this.root, this.id, { soon });
+    // The game's codex page on this computer (.studio/codex/<id>.html), when there is one, shows the change too.
+    if (d?.what === 'game' && d.id) refreshCodexFile(this.root, d.id);
     return d;
   }
 

@@ -8,6 +8,19 @@
  * never cached, never indexed.
  */
 import { OWNER_COOKIE, endSession, ownerAllowed, rangeOf, readStats, spendSignin, onlyOf } from './stats.mjs';
+import { CODEX_SCRIPT } from './codex-script.mjs';
+
+/** Where a sign-in may send the owner next: the stats, or one game's codex. */
+const NEXT = /^\/_studio\/(?:stats|codex\/[a-z0-9][a-z0-9-]{0,39}\/)$/;
+const nextOf = (url) => { const to = url.searchParams.get('to') ?? ''; return NEXT.test(to) ? to : '/_studio/stats'; };
+let scriptHash = null;
+async function codexScriptHash() {
+  if (!scriptHash) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(CODEX_SCRIPT));
+    scriptHash = `sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}`;
+  }
+  return scriptHash;
+}
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n) => Number(n || 0).toLocaleString('en-US');
@@ -119,12 +132,12 @@ export async function ownerRoutes(request, env, url, { catalogueOf }) {
       // A GET spends nothing: a chat app's link preview must not use up the owner's one-time link.
       return page('Sign in · stats', `<h1>${esc(cat.studio?.name ?? 'Studio')} stats</h1>
 <p class="dim">Open this studio's private stats in this browser. The link works once.</p>
-<form method="post" action="/_studio/signin?k=${esc(encodeURIComponent(key))}"><button type="submit">Open the stats</button></form>`);
+<form method="post" action="/_studio/signin?k=${esc(encodeURIComponent(key))}${nextOf(url) !== '/_studio/stats' ? `&amp;to=${esc(encodeURIComponent(nextOf(url)))}` : ''}"><button type="submit">${nextOf(url).startsWith('/_studio/codex/') ? 'Open the codex' : 'Open the stats'}</button></form>`);
     }
     if (request.method !== 'POST' || !sameOrigin(request, url)) return page('Not allowed', '<h1>Not allowed</h1>', 403);
     const session = await spendSignin(env, key);
     if (!session) return page('Link used or expired', `<h1>That link has been used or has expired</h1><p class="note">A sign-in link works once, for 30 minutes. Ask your AI for a new one: <code>npx --no-install homie-studio stats link</code>.</p>`, 403);
-    return new Response(null, { status: 303, headers: { location: '/_studio/stats', 'cache-control': 'no-store', 'set-cookie': `${OWNER_COOKIE}=${session}; Path=/_studio/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secure}` } });
+    return new Response(null, { status: 303, headers: { location: nextOf(url), 'cache-control': 'no-store', 'set-cookie': `${OWNER_COOKIE}=${session}; Path=/_studio/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secure}` } });
   }
   if (path === '/_studio/signout') {
     if (request.method !== 'POST' || !sameOrigin(request, url)) return page('Not allowed', '<h1>Not allowed</h1>', 403);
@@ -139,6 +152,25 @@ export async function ownerRoutes(request, env, url, { catalogueOf }) {
       return page('Stats', `<h1>No stats yet</h1><p class="note">The counters are not in this studio's database yet: run <code>npm run deploy</code> (it applies D1 migration 0002_studio_stats.sql). (${esc(String(error?.message ?? error).slice(0, 120))})</p>`, 503);
     }
     return page(`Stats · ${cat.studio?.name ?? 'Studio'}`, statsBody(cat, stats, url));
+  }
+  // A game's Game Codex (lib/codex.mjs, built into site/dist/_studio/codex/<id>/): the owner's only, never listed.
+  const codex = /^\/_studio\/codex\/([a-z0-9][a-z0-9-]{0,39})(\/|\/index\.html)?$/.exec(path);
+  if (codex) {
+    if (request.method !== 'GET' && request.method !== 'HEAD') return page('Not allowed', '<h1>Not allowed</h1>', 405);
+    if (!codex[2]) return new Response(null, { status: 301, headers: { location: `/_studio/codex/${codex[1]}/`, 'cache-control': 'no-store' } });
+    if ((await ownerAllowed(request, env, { kinds: ['session'] })) !== 'session') {
+      return page('Codex · private', `<h1>${esc(cat.studio?.name ?? 'Studio')}: Game Codex</h1>
+<p class="dim">A game's codex is for the studio's owner only.</p>
+<p class="note">To open it, the owner asks their AI in the studio's folder to run <code>npx --no-install homie-studio codex link ${esc(codex[1])}</code>. That uses the studio's own Cloudflare login, and gives a one-time link for this browser.</p>`, 401);
+    }
+    const res = env.ASSETS ? await env.ASSETS.fetch(new Request(`${url.origin}/_studio/codex/${codex[1]}/index.html`)) : null;
+    if (!res || !res.ok) return page('No codex yet', `<h1>No codex for this game yet</h1><p class="note">Its plan is <code>games/${esc(codex[1])}/CODEX.md</code> in the studio; the next <code>npm run deploy</code> puts it here.</p>`, 404);
+    return new Response(request.method === 'HEAD' ? null : await res.text(), {
+      headers: {
+        ...PRIVATE_HEADERS,
+        'content-security-policy': `default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data:; script-src '${await codexScriptHash()}'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'`,
+      },
+    });
   }
   return page('Not found', '<h1>Not found</h1>', 404);
 }

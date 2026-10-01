@@ -62,6 +62,22 @@
  *
  *   homie-studio setup attach <hs_…>      (this repository is the studio the Claude app's setup card is making: say so, once,
  *                                          learn its live address, and give a template copy its real name)
+ *   homie-studio setup status [--connector yes|no]   (also: homie-studio doctor)
+ *                                         what this computer and the person's accounts have for a studio: Node, the Homie
+ *                                         connector, Cloudflare (signed in, email verified), Chrome, ffmpeg, GitHub,
+ *                                         ElevenLabs, fal; green, missing or "do this now", what each unlocks and its
+ *                                         exact fix. Read-only and safe any time, inside a studio or before one exists.
+ *
+ *   homie-studio codex new <id>           games/<id>/CODEX.md: the Game Codex, every section, in the game's colours
+ *   homie-studio codex <id> [--artifact] [--open]
+ *                                         the codex as a page in the game's own look (.studio/codex/<id>.html; it redraws
+ *                                         itself as the build's progress changes); --artifact: a copy to publish as a
+ *                                         Claude artifact; --open: open it in this computer's browser
+ *   homie-studio codex link <id>          a one-time link to the codex on the live site (a private page for the owner)
+ *
+ *   homie-studio statusline               the current build in one line (what Claude Code's status line shows)
+ *   homie-studio statusline --install     turn it on in Claude Code for this studio (.claude/settings.local.json);
+ *                                         --remove turns it off; --replace when another status line is set
  *
  * Every command prints a few lines for a person; --json prints the result.
  */
@@ -84,10 +100,13 @@ import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, star
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
+import { formatStatus, setupStatus } from '../lib/doctor.mjs';
+import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
+import { installStatusLine, statusLine } from '../lib/statusline.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh'];
+const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -128,6 +147,7 @@ function print(result) {
       for (const m of result.mediaSkipped ?? []) lines.push(`  left out: ${m.kind}/${m.item}${m.file ? ` ${m.file}` : ''}: ${m.why}`);
       for (const m of result.postsSkipped ?? []) lines.push(`  left out: posts/${m.post}: ${m.why}`);
       for (const m of result.siteSkipped ?? []) lines.push(`  left out: ${m.what}: ${m.why}`);
+      if (result.codexes?.length) lines.push(`Game Codex (the owner's private pages; codex link <id> opens one): ${result.codexes.map((x) => `/_studio/codex/${x}/`).join(', ')}`);
       break;
     case 'media list':
       for (const kind of ['music', 'videos']) {
@@ -195,6 +215,27 @@ function print(result) {
       break;
     case 'stats revoke':
     case 'stats share':
+      lines.push(result.message);
+      break;
+    case 'setup status':
+      lines.push(formatStatus(result));
+      break;
+    case 'codex':
+      lines.push(`The Game Codex for ${result.title}: ${result.file}${result.opened ? ' (opened in the browser)' : ''}`,
+        `  tabs: ${result.sections.map((x) => x.title).join(' · ')} · Build status${result.build ? ` (${result.build.state}, ${result.build.percent}%)` : ''}`,
+        ...(result.missing.length ? [`  not decided yet: ${result.missing.join(', ')}`] : ['  every section has something in it']),
+        `  open questions: ${result.openQuestions}`,
+        ...result.warnings.map((w) => `  warning: ${w}`),
+        result.mode === 'artifact' ? '  publish this file as an artifact where your app can (Claude: the Artifact tool); it is one self-contained page' : '  on the site, for the owner only, after the next deploy: npx --no-install homie-studio codex link ' + result.id);
+      break;
+    case 'codex new':
+      lines.push(`Wrote ${result.file}.`, ...result.next.map((n) => `  next: ${n}`));
+      break;
+    case 'codex link':
+      lines.push(`One-time link (until ${result.expiresAt}): ${result.link}`, result.use);
+      break;
+    case 'statusline install':
+    case 'statusline remove':
       lines.push(result.message);
       break;
     case 'setup attach':
@@ -282,7 +323,16 @@ async function main() {
   if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
   if (cmd === 'chrome' && sub === 'install') return installChrome({ log, fresh: flags.has('fresh') });
   if (cmd === 'chrome') { const chrome = findChrome(); return chrome ? { ok: true, command: 'chrome', chrome, args: chromeArgs() } : { ok: false, command: 'chrome', why: noChrome() }; }
+  if ((cmd === 'setup' && sub === 'status') || cmd === 'doctor') return setupStatus({ connector: flags.get('connector') ?? null, homie: flags.get('homie') ?? null });
+  if (cmd === 'statusline' && !flags.has('install') && !flags.has('remove')) {
+    const line = statusLine({ columns: Number(process.env.COLUMNS) || 100, color: !process.env.NO_COLOR && !asJson && process.stdout.isTTY });
+    if (asJson) return { ok: true, command: 'statusline', line };
+    if (line) process.stdout.write(`${line}\n`);
+    return { ok: true, command: 'help' };
+  }
   const root = requireStudio();
+  if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace') });
+  if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);
   if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie') });
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
@@ -349,6 +399,28 @@ async function main() {
     return { ok: true, command: 'media list', r2, site: siteUrl(root, studio), music: view('music'), videos: view('videos') };
   }
   return { ok: false, command: cmd, why: `unknown command "${[cmd, sub].filter(Boolean).join(' ')}" (homie-studio help)` };
+}
+
+/** `homie-studio codex …` (lib/codex.mjs): the Game Codex of one game. */
+function codexCommand(root, sub) {
+  const games = listGames(root);
+  if (sub === 'new') return newCodex(root, positional[2] ?? (games.length === 1 ? games[0].id : undefined));
+  if (sub === 'link') {
+    const id = positional[2] ?? (games.length === 1 ? games[0].id : null);
+    if (!id || !games.some((g) => g.id === id)) return { ok: false, command: 'codex link', why: 'name the game: homie-studio codex link <id>' };
+    const r = statsLink(root, { url: flags.get('url') });
+    if (!r.ok) return { ...r, command: 'codex link' };
+    return { ...r, command: 'codex link', link: `${r.link}&to=${encodeURIComponent(codexTarget(id))}`, use: 'Give this link to the studio\'s owner to open in their own browser: it works once, within 30 minutes, opens the codex, and keeps that browser signed in to the studio\'s private pages (the codex and the stats) for 30 days. Do not post it anywhere.' };
+  }
+  const id = sub ?? (games.length === 1 ? games[0].id : null);
+  if (!id) return { ok: false, command: 'codex', why: `name the game: homie-studio codex <id> (${games.map((g) => g.id).join(', ') || 'no games yet'})` };
+  let r;
+  try { r = writeCodexPage(root, id, { mode: flags.has('artifact') ? 'artifact' : 'file' }); } catch (error) { return { ok: false, command: 'codex', why: error.message }; }
+  if (flags.has('open')) {
+    const opener = process.platform === 'darwin' ? ['open', [r.path]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', r.path]] : ['xdg-open', [r.path]];
+    r.opened = spawnSync(opener[0], opener[1], { stdio: 'ignore', timeout: 10_000 }).status === 0;
+  }
+  return r;
 }
 
 /*

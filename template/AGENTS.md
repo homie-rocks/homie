@@ -105,6 +105,24 @@ studio's pinned copy, never a registry lookup of the bare name.
 - Change a game in small steps, build, and look at it (`dev`, then `check`).
 - A game's id is its URL (`/<id>/`); keep it once published.
 
+## The Game Codex and progress
+
+- **Every game has a Game Codex:** `games/<id>/CODEX.md`, its plan in plain words for everyone who makes it, coder
+  or not: concept, world, characters, art direction, controls per device, rooms and players, music and sound,
+  milestones, open questions, and under Latest the decisions as they are made, newest first, each with its date.
+  It is the source of truth: when a decision changes, change the codex in the same change.
+  `npx --no-install homie-studio codex new <id>` starts one with every section.
+- `npx --no-install homie-studio codex <id>` draws it as a page in the game's own look
+  (`.studio/codex/<id>.html`, `--open` opens it; `--artifact` makes a copy to publish as a Claude artifact).
+  The site has it too, for the owner only and never listed: `codex link <id>` gives the one-time sign-in link.
+- **Progress:** `npx --no-install homie-studio progress start <id> --title "<what this build does>"` opens a
+  build's progress feed; build, check and deploy report into it. The codex page's Build status tab redraws itself
+  as it moves (stages, checks going green, how to try it, spend), and `homie-studio statusline --install` puts
+  one line of it under the prompt in Claude Code.
+- `npx --no-install homie-studio setup status` says what this computer and the person's accounts have (Node,
+  Cloudflare, Chrome, ffmpeg, GitHub, ElevenLabs, fal), what each unlocks, and the exact fix. Optional ones never
+  block anything.
+
 ## Rules
 
 - Keys stay in the providers' own logins (Wrangler, ElevenLabs, fal) or the OS
