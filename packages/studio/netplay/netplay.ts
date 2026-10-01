@@ -779,6 +779,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let autoSeat: number | null = null;
   let autoAt = 0;
   let spot = { seat: -1, at: 0 };
+  /** A spotlight waiting for the player shown to have had their moment: Auto looks again exactly then. */
+  let spotTimer: ReturnType<typeof setTimeout> | null = null;
   let wish: number | null = null;
   let wishAt = 0;
   let lastViewPost = '';
@@ -904,6 +906,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (next === cur) autoAt = t; // looked again, and stayed: the next look is a hold from now
     }
     if (next !== autoSeat) { autoSeat = next; autoAt = t; }
+    // Action is waiting on the player shown: cut the moment their AUTO_MIN_MS is up, not on the next look.
+    if (spot.seat >= 0 && spot.at > autoAt && spot.seat !== next && has(spot.seat) && !spotTimer && !closed) {
+      spotTimer = setTimeout(() => { spotTimer = null; if (following === 'auto') resolveView('auto'); }, Math.max(0, AUTO_MIN_MS - (t - autoAt)) + 5);
+    }
     return next;
   }
   /** Work out whose view to draw now, and tell the game (a `view` event) and the watch page when it changed. */
@@ -1702,6 +1708,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (ckptTimer) clearInterval(ckptTimer);
       if (statsTimer) clearInterval(statsTimer);
       if (watchTimer) clearInterval(watchTimer);
+      if (spotTimer) clearTimeout(spotTimer);
       clearTimeout(connectTimer);
       try { raw({ t: 'bye' }); ws?.close(1000, 'bye'); } catch { /* gone */ }
     },

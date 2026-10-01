@@ -254,11 +254,16 @@ test('netplay helper: Auto cuts to the newest spotlight after a moment, else fol
   w.expose({ scores: () => scores });
   await wait(80);
   assert.equal(w.viewSeat, 1, 'the leader');
-  // Action on Cy: Auto has shown Bo for less than 3.5 s, so it waits, then cuts.
+  // Action on Cy: Auto has shown Bo for less than 3.5 s, so it waits, then cuts the moment Bo's time is up.
+  const shownAt = Date.now() - 80;
   w.spotlight(2);
   assert.equal(w.viewSeat, 1);
-  await wait(3700);
+  await wait(2500);
+  assert.equal(w.viewSeat, 1, 'the player shown keeps the view for a moment');
+  const deadline = Date.now() + 4000;
+  while (w.viewSeat !== 2 && Date.now() < deadline) await wait(50);
   assert.equal(w.viewSeat, 2, 'the newest action, once the player shown has had a moment');
+  assert.ok(Date.now() - shownAt < 5000, `and not long after (${Date.now() - shownAt} ms)`);
   // A tie with the player shown keeps them; a new leader is looked at on the next hold.
   scores = [{ seat: 0, score: 1 }, { seat: 1, score: 1 }, { seat: 2, score: 1 }];
   w.spotlight(null);
