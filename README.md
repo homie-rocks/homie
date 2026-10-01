@@ -52,7 +52,7 @@ codex plugin add homie@homie
 Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
 session afterwards so the skills and tools load.
 
-Then ask for a studio. The plugin adds eleven skills (`studio-setup`, `plan`, `parallel`, `game`,
+Then ask for a studio. The plugin adds twelve skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
 `port`, `publish`, `sound`, `music`, `art`, `video`, `playtest`) and connects the Homie MCP server at
 `https://homie.rocks/mcp`, which has creator tools only: set up a studio, make or remix a game, make an
 existing single-player web game multiplayer, preview it, deploy it, and list it.

@@ -467,7 +467,7 @@ export { _lineLit as lineLightClaim };
 // literal before handing the source to three. One token, replaced in both the
 // declaration and the loop, so the two can never disagree — a uniform loop
 // bound larger than the declared array is a link error on some drivers and
-// reads garbage on others. `LINE_N_TOKEN` is that token; do not type it out at
+// reads garbage on others. `LINE_N_PLACEHOLDER` is that token; do not type it out at
 // a call site.
 //
 // ## The `#ifndef` guard names are MB_ and they stay MB_
@@ -478,8 +478,11 @@ export { _lineLit as lineLightClaim };
 // baseline for this move is byte-for-byte. Renaming them is somebody's own
 // commit with its own before-and-after, not a tidy-up smuggled in beside a move.
 
-/** The token every array size and loop bound below is written in terms of. */
-export const LINE_N_TOKEN = 'MB_LINE_N';
+/** The placeholder every array size and loop bound below is written in terms of. */
+export const LINE_N_PLACEHOLDER = 'MB_LINE_N';
+
+/** @deprecated The same placeholder under its first name; use `LINE_N_PLACEHOLDER`. */
+export const LINE_N_TOKEN = LINE_N_PLACEHOLDER;
 
 /**
  * A fresh set of uniform objects for an N-segment line light.
@@ -1012,7 +1015,7 @@ export function installLineStrip(mat: THREE.Material, o: LineStripInstall): void
     // One token, replaced in both the declaration and the loop, so the two can
     // never disagree — a uniform loop bound larger than the declared array is a
     // link error on some drivers and reads garbage on others.
-    shader.fragmentShader = f.split(LINE_N_TOKEN).join(String(o.n));
+    shader.fragmentShader = f.split(LINE_N_PLACEHOLDER).join(String(o.n));
   };
   const key = o.keyPrefix + o.n + (o.specAA ? 'a' : '') + (variation ? 'v' : '') + (o.extraKey ?? '');
   mat.customProgramCacheKey =

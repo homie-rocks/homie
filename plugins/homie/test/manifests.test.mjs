@@ -45,6 +45,20 @@ test('the Claude Code and Codex plugin manifests agree', () => {
   assert.equal(claude.license, 'Apache-2.0');
 });
 
+test('the .codex-plugin manifest agrees with plugin.json, and its paths and icon exist', () => {
+  const standard = json(join(PLUGIN, 'plugin.json'));
+  const codex = json(join(PLUGIN, '.codex-plugin', 'plugin.json'));
+  for (const k of ['name', 'version', 'description', 'homepage', 'repository', 'license', 'keywords', 'author']) {
+    assert.deepEqual(codex[k], standard[k], `.codex-plugin/plugin.json and plugin.json agree on ${k}`);
+  }
+  const { composerIcon, logo, ...rest } = codex.interface;
+  assert.deepEqual(rest, standard.extensions['com.openai'].interface, 'the same interface as plugin.json\'s com.openai extension');
+  for (const p of [codex.skills, codex.mcpServers, composerIcon, logo]) {
+    assert.ok(existsSync(join(PLUGIN, p)), `.codex-plugin/plugin.json names ${p}, which exists`);
+  }
+  assert.equal(json(join(PLUGIN, codex.mcpServers)).mcpServers.homie.url, MCP_URL);
+});
+
 test('both MCP configurations point at the Homie MCP server', () => {
   const claude = json(join(PLUGIN, '.mcp.json'));
   const codex = json(join(PLUGIN, 'mcp.json'));
