@@ -12,7 +12,7 @@
  * rooms and rounds on the room's own clock; a frame rate on SwiftShader is not a person's, so the checks
  * report it with the renderer's name and never judge it.
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -52,12 +52,23 @@ export function findChrome() {
 /** Linux without a GPU renders with SwiftShader: say so with every number measured there. */
 export const SOFTWARE_GL = /swiftshader|llvmpipe|softpipe|software/i;
 
+/*
+ * Chrome's own sandbox needs unprivileged user namespaces. Running as root (a container), or on a Linux that
+ * restricts them with AppArmor (Ubuntu 23.10 and later: a system Chrome package brings its own AppArmor profile,
+ * Chrome for Testing does not), Chrome refuses to start without --no-sandbox. The checks only open the studio's
+ * own site, in throwaway profiles.
+ */
+function noSandboxNeeded() {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) return true;
+  try { return readFileSync('/proc/sys/kernel/apparmor_restrict_unprivileged_userns', 'utf8').trim() === '1'; } catch { return false; }
+}
+
 /** The launch flags for this machine (the GPU on a Mac; SwiftShader, headless and container-safe on Linux). */
 export function chromeArgs() {
   if (process.platform === 'darwin') return ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist'];
   return [
     '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-dev-shm-usage',
-    ...(typeof process.getuid === 'function' && process.getuid() === 0 ? ['--no-sandbox'] : []),
+    ...(noSandboxNeeded() ? ['--no-sandbox'] : []),
   ];
 }
 
