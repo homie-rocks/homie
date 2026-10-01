@@ -27,6 +27,12 @@
  *     that went quiet, reconnects with its seat token.
  *   - Reports role/seat/rtt/snapshot rate to the parent shell by postMessage
  *     (for the debug strip) and on `window.__homieNet` (for e2e probes).
+ *   - Watching (revision 5, NETPLAY.md section 16): a watcher is a screen that
+ *     never takes a seat. `net.viewSeat` is whose view to draw (a player's own
+ *     seat; for a watcher, the player it follows, or null for the overview),
+ *     `net.follow(seat | 'auto' | null)` changes it (the watch page's strip and
+ *     keys 1-9, A and O call it), and Auto follows the action: the newest
+ *     `net.spotlight(seat)`, else the leader of the game's `scores` probe.
  *
  * WHAT IT DOES NOT DO: rendering, physics, input devices, bots. `Roster` below
  * is the bot-yield bookkeeping a host needs; the bots themselves are the game's.
@@ -38,6 +44,22 @@ export const NETPLAY_VERSION = 1;
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
 export type Want = 'play' | 'screen';
+/** Whose view a watcher draws: a seat, `'auto'` (the action), or `null` (the overview camera). */
+export type Follow = number | 'auto' | null;
+/**
+ * Why the view changed: `start` (the first), `seat` (a player's own seat), `asked` (the watcher or its page chose),
+ * `auto` (Auto moved to the action), `left` (the followed player left; Auto took over), `back` (they came back),
+ * `policy` (the room or the game allows the overview only now, or again more).
+ */
+export type ViewWhy = 'start' | 'seat' | 'asked' | 'auto' | 'left' | 'back' | 'policy';
+export interface ViewChange {
+  /** The seat whose camera and HUD to draw; null: the overview camera. */
+  seat: number | null;
+  /** What was asked: a seat, 'auto', or null (the whole room). */
+  following: Follow;
+  prev: number | null;
+  why: ViewWhy;
+}
 /** Who moves a seated body by default. `owner`: the seat's own browser (instant). `host`: the host's rules. */
 export type Movement = 'owner' | 'host';
 
@@ -53,6 +75,12 @@ export interface NetConfig {
   device?: Device;
   want?: Want;
   debug?: boolean;
+  /** Revision 5: this browser watches (a screen that never takes a seat), from the game's watch door. */
+  watch?: boolean;
+  /** Whose view the watcher starts on: a seat number, 'auto' (the default) or 'overview'. */
+  follow?: number | 'auto' | 'overview';
+  /** What the game lets its watchers see (game.json "watch"): 'follow' (the default) or 'overview'. */
+  watchPolicy?: 'follow' | 'overview';
 }
 
 export interface HostRef { id: string; seat: number | null }
@@ -67,6 +95,8 @@ export interface Peer {
   role: Role;
   /** Muted by the studio's owner (section 15): hide this player's chat and emotes. */
   muted?: boolean;
+  /** A watcher (section 16): a screen that came to watch; it never takes a seat. */
+  watch?: boolean;
 }
 
 /** One seat's entry in the body-control table: [seat, rs, own (1|0), ack]. */
@@ -205,6 +235,10 @@ export interface NetplayOptions<C = unknown> {
   /** Defaults to `window.HOMIE_NET`. `null` forces offline. */
   config?: NetConfig | null;
   want?: Want;
+  /** Revision 5: watch (a screen that never takes a seat). Defaults to the shell's `HOMIE_NET.watch`. */
+  watch?: boolean;
+  /** A watcher's keys (1-9 a player, A Auto, O or 0 the whole room, arrows the next player). Default true. */
+  watchKeys?: boolean;
   /** May this browser be elected host? Default true. */
   canHost?: boolean;
   /** Game id, for the relay's logs. */
@@ -260,6 +294,8 @@ export interface NetHandlers<S, A, C> {
   announce: (a: Announcement) => void;
   /** The studio's owner muted or unmuted a player in this room. */
   mute: (m: Mute) => void;
+  /** Whose view to draw changed (a watcher's follow, or a player's own seat). Listening says the game draws it. */
+  view: (v: ViewChange) => void;
 }
 
 export interface Netplay<S = unknown, A = unknown, C = unknown> {
@@ -300,6 +336,32 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
    * it (opens that player's card with Mute and Kick); for everyone else it is nothing.
    */
   pickPlayer(seat: number | null): void;
+  /**
+   * WATCHING (revision 5, NETPLAY.md section 16). `watching`: this browser is a watcher, a screen that never takes a
+   * seat. `viewSeat`: whose camera and HUD to draw: a player's own seat, the seat a watcher follows, or null for the
+   * overview camera. Reading it (or listening for `view`) tells the watch page that this game draws the followed
+   * player; a game that never does is shown as its overview, and the page says so.
+   */
+  readonly watching: boolean;
+  readonly viewSeat: number | null;
+  /** What the watcher asked for: a seat, 'auto' or null (the whole room). */
+  readonly following: Follow;
+  /**
+   * `viewSeat` without saying the game draws it: for an overlay that only marks the followed player (the port's
+   * HUD), so a game whose camera does not follow is still shown to its watchers as its overview.
+   */
+  readonly watchedSeat: number | null;
+  /** Whether this watcher may follow one player (false: the game or the room shows it the overview only). */
+  readonly canFollow: boolean;
+  /** Watcher: follow a seat, 'auto' (the action) or null (the whole room). False when not a watcher or not allowed. */
+  follow(target: Follow | 'overview'): boolean;
+  /**
+   * Anyone: something happened to this player (a hit, a goal, a pickup). Auto cuts to the newest one once the player
+   * it shows has had a few seconds. A cheap no-op except on a watcher in Auto.
+   */
+  spotlight(seat: number | null): void;
+  /** The seated players, in seat order (the watch strip's order: key 1 is the first). */
+  players(): Peer[];
   /** Resolves with the first role (welcome, or offline fallback). */
   readonly ready: Promise<RoleChange<S, C>>;
   on<K extends keyof NetHandlers<S, A, C>>(kind: K, fn: NetHandlers<S, A, C>[K]): () => void;
@@ -351,6 +413,12 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
 }
 
 /* ------------------------------------------------------------------ helpers */
+
+/**
+ * The contract's 12 player colours (NETPLAY.md section 3): a peer's `colour` (its seat % 12) indexes this list. The
+ * watch page's player strip draws them, so a game that colours its players by seat matches it.
+ */
+export const PALETTE: readonly string[] = Object.freeze(['#8fe36a', '#ffd166', '#ef6f6c', '#6cb4ee', '#c792ea', '#f4a261', '#2ec4b6', '#ff8fab', '#a7c957', '#e9c46a', '#90e0ef', '#f28482']);
 
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 export function lerpAngle(a: number, b: number, t: number): number {
@@ -518,7 +586,7 @@ const LADDER = [250, 500, 1000, 2000, 4000];
  * second of frames at once), and a kick that ended the page's play for good left a phone frozen with no word.
  * After one it comes back (its seat token keeps its body), sending at the slow rate below.
  */
-const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed']);
+const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed', 'watch-off']);
 /**
  * Input pacing (NETPLAY.md §5): at most this many `in` frames in any rolling second from this browser, whatever
  * the frame rate or the press rate: two thirds of the relay's cap of 60, so frames that reach it bunched (a
@@ -539,6 +607,14 @@ const IN_BACKLOG_BYTES = 2048;
  * (billed 20:1), and in a 32-seat room the replicas' inputs are nearly all of them (NETPLAY.md §11).
  */
 const IDLE_INPUT_MS = 250;
+/** Auto (section 16): a player shown is shown at least this long before the action cuts to another. */
+const AUTO_MIN_MS = 3500;
+/** Auto, with no action: look again (the leader, or the next player) this often. */
+const AUTO_HOLD_MS = 12_000;
+/** A followed player who left and comes back within this long is followed again. */
+const WISH_MS = 30_000;
+/** The watch page's live scores, from the game's `scores` probe, at most this often. */
+const SCORES_MS = 1000;
 
 function heldList(held: Iterable<string> | Record<string, boolean> | undefined): string[] {
   if (!held) return [];
@@ -570,7 +646,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const connectTimeoutMs = opts.connectTimeoutMs ?? 4000;
   const staleMs = Math.max(2500, opts.staleMs ?? 6000);
   const device: Device = cfg?.device ?? guessDevice();
-  const want: Want = opts.want ?? cfg?.want ?? 'play';
+  // A watcher (section 16) is a screen that never takes a seat, whatever else it is told.
+  const watching = Boolean(opts.watch ?? cfg?.watch);
+  const want: Want = watching ? 'screen' : (opts.want ?? cfg?.want ?? 'play');
   const canHost = opts.canHost ?? true;
   const defaultOwn = (opts.movement ?? 'owner') === 'owner';
 
@@ -588,7 +666,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   const handlers: { [K in keyof NetHandlers<S, A, C>]: Set<NetHandlers<S, A, C>[K]> } = {
     role: new Set(), join: new Set(), leave: new Set(), input: new Set(), event: new Set(),
-    snapshot: new Set(), control: new Set(), state: new Set(), round: new Set(), roster: new Set(), status: new Set(), announce: new Set(), mute: new Set(),
+    snapshot: new Set(), control: new Set(), state: new Set(), round: new Set(), roster: new Set(), status: new Set(), announce: new Set(), mute: new Set(), view: new Set(),
   };
   const emit = <K extends keyof NetHandlers<S, A, C>>(kind: K, arg: Parameters<NetHandlers<S, A, C>[K]>[0]): void => {
     for (const fn of [...handlers[kind]]) {
@@ -686,6 +764,25 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   let probes: Probes = {};
 
+  // watching (section 16)
+  const firstFollow = cfg?.follow;
+  let following: Follow = typeof firstFollow === 'number' && Number.isInteger(firstFollow) && firstFollow >= 0 ? firstFollow : firstFollow === 'overview' ? null : 'auto';
+  /** The seat drawn now, and whether the game has shown it draws a followed player (it read viewSeat or listens). */
+  let viewNow: number | null = null;
+  let viewKnown = false;
+  let follows = false;
+  /** The page's word (game.json "watch": "overview") and the relay's (welcome.watch / watch frames). */
+  const policyFollow = cfg?.watchPolicy !== 'overview';
+  let relayFollow = true;
+  let relayWhy: string | null = null;
+  /** Auto's choice and when it was made; the newest spotlight; a followed player who left, and when. */
+  let autoSeat: number | null = null;
+  let autoAt = 0;
+  let spot = { seat: -1, at: 0 };
+  let wish: number | null = null;
+  let wishAt = 0;
+  let lastViewPost = '';
+
   const wall = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const now = (): number => (offline ? Date.now() : Date.now() + offset);
 
@@ -761,6 +858,97 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     for (const [k, d] of stateMap) stateSent.set(k, JSON.stringify(d));
   }
 
+  /* ------------------------------------------------------------ watching (section 16) */
+  const canFollowNow = (): boolean => watching && policyFollow && relayFollow;
+  /** The seated players, in seat order (never a watcher, never a waiting screen). */
+  function seated(): Peer[] {
+    return [...peers.values()].filter((p) => typeof p.seat === 'number' && !p.watch).sort((a, b) => (a.seat as number) - (b.seat as number));
+  }
+  const presentSeat = (s: number | null): boolean => s !== null && seated().some((p) => p.seat === s);
+  /** The leader of the game's `scores` probe ([{ seat, score }]), among the seated players; null without one. */
+  function leader(list: Peer[]): { seat: number; score: number } | null {
+    const fn = probes['scores'];
+    if (typeof fn !== 'function') return null;
+    let rows: unknown;
+    try { rows = (fn as () => unknown)(); } catch { return null; }
+    if (!Array.isArray(rows)) return null;
+    let best: { seat: number; score: number } | null = null;
+    for (const r of rows as { seat?: unknown; score?: unknown }[]) {
+      if (!r || typeof r.seat !== 'number' || !Number.isFinite(Number(r.score)) || !list.some((p) => p.seat === r.seat)) continue;
+      if (!best || Number(r.score) > best.score) best = { seat: r.seat, score: Number(r.score) };
+    }
+    return best;
+  }
+  const scoreOf = (s: number): number => {
+    const fn = probes['scores'];
+    try { const r = typeof fn === 'function' ? ((fn as () => { seat?: number; score?: number }[])() ?? []).find((x) => x && x.seat === s) : null; return r ? Number(r.score) || 0 : 0; } catch { return 0; }
+  };
+  /**
+   * AUTO: the newest spotlight on a present player (once the one shown has had AUTO_MIN_MS); with no action, every
+   * AUTO_HOLD_MS the leader of the game's scores (ties keep who is shown); with no scores, the next player in seat order.
+   */
+  function pickAuto(): number | null {
+    const list = seated();
+    if (!list.length) return null;
+    const has = (s: number): boolean => list.some((p) => p.seat === s);
+    const t = wall();
+    const cur = autoSeat !== null && has(autoSeat) ? autoSeat : null;
+    const dwell = t - autoAt;
+    let next: number | null = cur;
+    if (spot.seat >= 0 && spot.at > autoAt && has(spot.seat) && spot.seat !== cur && (cur === null || dwell >= AUTO_MIN_MS)) next = spot.seat;
+    else if (cur === null || dwell >= AUTO_HOLD_MS) {
+      const lead = leader(list);
+      if (lead) next = cur !== null && scoreOf(cur) >= lead.score ? cur : lead.seat;
+      else if (cur === null) next = (list[0] as Peer).seat;
+      else { const i = list.findIndex((p) => p.seat === cur); next = (list[(i + 1) % list.length] as Peer).seat; }
+      if (next === cur) autoAt = t; // looked again, and stayed: the next look is a hold from now
+    }
+    if (next !== autoSeat) { autoSeat = next; autoAt = t; }
+    return next;
+  }
+  /** Work out whose view to draw now, and tell the game (a `view` event) and the watch page when it changed. */
+  function resolveView(why: ViewWhy): void {
+    let next: number | null;
+    if (!watching) next = offline ? null : seat;
+    else if (!canFollowNow()) next = null;
+    else if (following === null) next = null;
+    else if (typeof following === 'number') {
+      if (presentSeat(following)) next = following;
+      else if (!roleKnown || !peers.size) next = null; // not in the room yet: the welcome says who is here
+      else {
+        // The followed player left: Auto takes over, and their view comes back if they do (a reload, a blip).
+        wish = following; wishAt = wall(); following = 'auto'; why = 'left';
+        autoSeat = null; next = pickAuto();
+      }
+    } else {
+      if (wish !== null && presentSeat(wish) && wall() - wishAt < WISH_MS) { following = wish; wish = null; why = 'back'; next = following; }
+      else { if (wish !== null && wall() - wishAt >= WISH_MS) wish = null; next = pickAuto(); }
+    }
+    if (!viewKnown || next !== viewNow) {
+      const prev = viewNow;
+      viewNow = next;
+      const first = !viewKnown;
+      viewKnown = true;
+      emit('view', { seat: next, following: watching ? following : next, prev, why: first ? 'start' : why });
+    }
+    postView(why);
+  }
+  function postView(why: ViewWhy | string = 'start'): void {
+    if (!post || !watching) return;
+    const whyNot = !policyFollow ? 'overview' : !relayFollow ? (relayWhy ?? 'overview') : null;
+    const msg = { what: 'view', seat: viewNow, following, follows, canFollow: canFollowNow(), whyNot, why };
+    const sig = JSON.stringify([msg.seat, msg.following, msg.follows, msg.canFollow, msg.whyNot]);
+    if (sig === lastViewPost) return;
+    lastViewPost = sig;
+    post(msg);
+  }
+  /** The game shows it draws a followed player: tell the watch page, so its strip lets the watcher choose. */
+  function markFollows(): void {
+    if (follows || !watching) return;
+    follows = true;
+    postView('start');
+  }
+
   function setRole(next: Role, why: string, extra: Partial<RoleChange<S, C>> = {}): void {
     const prev = roleKnown ? role : null;
     const was = role;
@@ -786,6 +974,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     post?.({ what: 'role', role: next, prev, why, seat });
     resolveReady(e);
     emit('role', e);
+    resolveView('seat');
     notifyStats(true);
   }
 
@@ -827,7 +1016,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       }
       case 'join': {
         const p = m['peer'] as Peer | undefined;
-        if (p && typeof p.id === 'string') { peers.set(p.id, p); if (role === 'host' && p.seat !== null) ctlOf(p.seat); emit('join', p); }
+        if (p && typeof p.id === 'string') { peers.set(p.id, p); if (role === 'host' && p.seat !== null) ctlOf(p.seat); emit('join', p); if (watching) resolveView('auto'); }
         return;
       }
       case 'leave': {
@@ -837,6 +1026,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         const s = typeof m['seat'] === 'number' ? m['seat'] : (p?.seat ?? null);
         if (s !== null) { inputs.delete(s); presses.delete(s); }
         emit('leave', { id: pid, seat: s, why: String(m['why'] ?? 'closed') });
+        if (watching) resolveView('auto');
         return;
       }
       case 'round': {
@@ -885,6 +1075,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (next === 'host') { lastSnapSentAt = -Infinity; if (snap) tick = Math.max(tick, snap.k); }
         return;
       }
+      case 'watch': {
+        // The relay's word on following (section 16): a seat this browser took in another tab, or taken back.
+        relayFollow = m['follow'] !== false;
+        relayWhy = typeof m['why'] === 'string' ? m['why'] : null;
+        resolveView('policy');
+        return;
+      }
       case 'error': {
         const code = String(m['code'] ?? '');
         // Inputs over the relay's cap were dropped: send fewer for a while (the newest frame still goes out).
@@ -926,6 +1123,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     peers.clear();
     if (Array.isArray(m['peers'])) for (const p of m['peers'] as Peer[]) peers.set(p.id, p);
     if (typeof m['st'] === 'number' && rtt === null) offset = (m['st'] as number) - Date.now();
+    if (watching) {
+      // A relay from before revision 5 says nothing: following is the page's to allow.
+      const w = m['watch'] as { follow?: boolean; why?: string } | undefined;
+      relayFollow = !w || w.follow !== false;
+      relayWhy = w && typeof w.why === 'string' ? w.why : null;
+    }
     const ckpt = (m['ckpt'] as Checkpoint<C> | null) ?? null;
     let snap = (m['snap'] as Snapshot<S> | null) ?? null;
     const a = m['announce'] as Announcement | undefined;
@@ -951,6 +1154,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (next === 'host' && snap) tick = Math.max(tick, snap.k);
     }
     if (continuing) reannounce();
+    resolveView('seat');
     ping(); setTimeout(ping, 120); setTimeout(ping, 260);
   }
 
@@ -1203,7 +1407,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     ws = sock;
     sock.onopen = () => {
       lastMsgAt = wall();
-      raw({ t: 'hello', v: NETPLAY_VERSION, token, name: name || undefined, device, want, canHost, game: opts.game, max: opts.maxPlayers });
+      raw({ t: 'hello', v: NETPLAY_VERSION, token, name: name || undefined, device, want, canHost, game: opts.game, max: opts.maxPlayers, ...(watching ? { watch: true } : {}) });
     };
     sock.onmessage = (ev) => onMessage(ev.data);
     sock.onclose = () => lost(sock, 'closed');
@@ -1261,6 +1465,52 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     } catch { /* not a browser */ }
   }
 
+  // ---------------------------------------------------------------- watching
+  let watchTimer: ReturnType<typeof setInterval> | null = null;
+  if (watching && !offline) {
+    // Auto looks again twice a second; the watch page gets live scores from the game's `scores` probe.
+    let lastScores = 0;
+    watchTimer = setInterval(() => {
+      if (closed) return;
+      if (following === 'auto' || wish !== null) resolveView('auto');
+      const fn = probes['scores'];
+      const t = wall();
+      if (post && typeof fn === 'function' && t - lastScores >= SCORES_MS) {
+        lastScores = t;
+        try {
+          const rows = ((fn as () => { seat?: unknown; score?: unknown }[])() ?? []).filter((r) => r && typeof r.seat === 'number' && Number.isFinite(Number(r.score)));
+          post({ what: 'scores', scores: rows.map((r) => ({ seat: r.seat, score: Number(r.score) })) });
+        } catch { /* a probe that throws reports nothing */ }
+      }
+    }, 500);
+    try {
+      // The watch page's strip and keys: { t: 'homie-watch', follow: seat | 'auto' | null }, from the page around the frame only.
+      g.addEventListener?.('message', (ev: MessageEvent) => {
+        if (ev.source !== g.parent || !ev.data || typeof ev.data !== 'object') return;
+        const d = ev.data as { t?: unknown; follow?: unknown };
+        if (d.t !== 'homie-watch') return;
+        const f = d.follow;
+        if (f === 'auto' || f === null || f === 'overview' || (typeof f === 'number' && Number.isInteger(f))) api.follow(f as Follow | 'overview');
+      });
+      // The same keys inside the frame, for a watcher who clicked into the game.
+      if (opts.watchKeys !== false) {
+        g.addEventListener?.('keydown', (ev: KeyboardEvent) => {
+          if (ev.metaKey || ev.ctrlKey || ev.altKey || !follows) return;
+          const list = seated();
+          const k = ev.key;
+          if (/^[1-9]$/.test(k)) { const p = list[Number(k) - 1]; if (p) api.follow(p.seat); return; }
+          if (k === 'a' || k === 'A') { api.follow('auto'); return; }
+          if (k === 'o' || k === 'O' || k === '0') { api.follow(null); return; }
+          if ((k === 'ArrowRight' || k === 'ArrowLeft') && list.length) {
+            const i = list.findIndex((p) => p.seat === viewNow);
+            const n = k === 'ArrowRight' ? (i + 1) % list.length : (i <= 0 ? list.length - 1 : i - 1);
+            api.follow((list[n] as Peer).seat);
+          }
+        });
+      }
+    } catch { /* not a browser */ }
+  }
+
   // ---------------------------------------------------------------- API
   const api: Netplay<S, A, C> = {
     get role() { return role; },
@@ -1283,9 +1533,34 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get announcement() { return announcement && (announcement.until === undefined || announcement.until > now()) ? announcement : null; },
     isMuted(s: number | null): boolean { return s !== null && (muted.get(s) ?? 0) > now(); },
     pickPlayer(s: number | null): void { post?.({ what: 'pick', seat: typeof s === 'number' ? s : null }); },
+    get watching() { return watching; },
+    get viewSeat() { markFollows(); return watching ? viewNow : (offline ? null : seat); },
+    get following() { return watching ? following : seat; },
+    get watchedSeat() { return watching ? viewNow : (offline ? null : seat); },
+    get canFollow() { return canFollowNow(); },
+    follow(target) {
+      if (!watching) return false;
+      const next: Follow | undefined = target === 'auto' ? 'auto' : target === null || target === 'overview' ? null
+        : typeof target === 'number' && Number.isInteger(target) && target >= 0 && target < 64 ? target : undefined;
+      if (next === undefined || !canFollowNow()) return false;
+      following = next;
+      wish = null;
+      // Auto starts from the player on screen (no cut for its own sake); a pick is shown at once.
+      if (next === 'auto') { autoSeat = viewNow; autoAt = wall(); }
+      resolveView('asked');
+      postView('asked');
+      return true;
+    },
+    spotlight(s) {
+      if (!watching || typeof s !== 'number') return;
+      spot = { seat: s, at: wall() };
+      if (following === 'auto') resolveView('auto');
+    },
+    players: seated,
     ready,
     on(kind, fn) {
       (handlers[kind] as Set<unknown>).add(fn);
+      if (kind === 'view') markFollows();
       return () => { (handlers[kind] as Set<unknown>).delete(fn); };
     },
     now,
@@ -1426,6 +1701,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (pingTimer) clearInterval(pingTimer);
       if (ckptTimer) clearInterval(ckptTimer);
       if (statsTimer) clearInterval(statsTimer);
+      if (watchTimer) clearInterval(watchTimer);
       clearTimeout(connectTimer);
       try { raw({ t: 'bye' }); ws?.close(1000, 'bye'); } catch { /* gone */ }
     },
@@ -1443,6 +1719,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       get peers() { return [...peers.values()]; },
       get round() { return roundInfo; },
       get roster() { return slots; },
+      get watching() { return watching; },
+      get viewSeat() { return viewNow; },
+      get following() { return following; },
       get state() { return Object.fromEntries(stateMap); },
       get lastCheckpoint() { return lastCkpt ? { k: lastCkpt.k, st: lastCkpt.st } : null; },
       /** The newest snapshot this browser received: tick, server time, sender seat, local Date.now() of arrival. */

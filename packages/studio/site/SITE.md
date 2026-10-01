@@ -29,6 +29,8 @@ songs (each with a `cover`), videos (each with a `poster`), the latest posts, an
 (`homie-studio stats share on`) it also says "played this week": `played` for the whole studio and each game's own
 (`games[].played`, `{ "days": 7, "plays", "rounds" }`). To keep the studio's rooms off the hub, studio.json takes
 `"rooms": { "share": false }`: the manifest then names no `rooms` (the studio's own pages still list them).
+Each room in `/api/rooms` carries `play` and, unless its game says `"watch": false`, `watch` (its watch door), so
+the hub offers Watch beside Join.
 
 ## A game's landing: `/<id>/`
 
@@ -163,6 +165,32 @@ on the page, never swapped for a public room. A player who typed no name gets a 
 The game runs in a sandboxed frame with an opaque origin, which is why its allow list delegates with `*`
 (`fullscreen *; autoplay *; gamepad *`): Safari refuses a bare `gamepad` there (`getGamepads()` throws a
 SecurityError), so a controller would not work.
+
+## The watch door: `/<id>/watch?room=<room>`
+
+Anyone can watch a live room from any player's view (NETPLAY.md section 16). Every room row (Home, Rooms, a
+game's landing) has a **Watch** button beside Join, and a landing offers "Watch a live room" while somebody plays.
+The page is the game itself, drawn by the watcher's own browser as a watcher: a screen that never takes a seat.
+
+- **The top bar:** LIVE, the game and the room, the round's clock, how many are watching, and **Play** (into
+  this room). **The caption** says whose view this is ("Watching Velvet Comet", "Auto · following the action").
+- **The strip** at the bottom: **Auto**, each player (their colour, name and live score when the game exposes
+  `scores`; the leader's score lit), and **Whole room**. A tap switches; on a computer keys 1-9 pick the n-th
+  player, A is Auto, O (or 0) the whole room, the arrows the next or previous player, F full screen. The address
+  keeps the view (`&follow=<seat>|auto|overview`), so a copied link watches the same player.
+- It fits a phone (the strip scrolls sideways), a computer, and a TV-sized screen (bigger type; `?hand=tv`). The
+  bars fade after five seconds without a touch, a move or a key, and come back with one.
+- With no `room`, it watches the busiest public room (`/<id>/api/watch`, which reserves nothing); with nobody
+  playing it says so, offers Play, and finds a room the moment one starts. A room everyone left, a kick, a closed
+  room and a full one are each said plainly, with the way on.
+- **What a game decides.** A game that draws `net.viewSeat` lets the watcher switch; one that does not is watched
+  as its overview, and the strip only names the players. game.json `"watch": "overview"` keeps watchers on the
+  whole room (hidden hands or roles); `"watch": false` removes the door (the page says the game is played, not
+  watched, and the socket is refused).
+- **The same door as Play:** a private or invite-only game is watched only by those it lets in, with their
+  ticket; a kick holds the browser out of watching that room too. A browser that holds a seat in a room watches
+  that room as the whole room only, so a second tab is not a peek.
+- Each opening counts as a `watch` in the studio's stats.
 
 ## Player accounts: `/account/`
 

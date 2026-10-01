@@ -51,6 +51,7 @@ const I = {
   arrow: '<path d="M5 12h13M13 6l6 6-6 6"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   home: '<path d="M4 11.5 12 5l8 6.5V20H4z"/><path d="M10 20v-5h4v5"/>',
+  eye: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
 };
 const icon = (name, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[name] ?? ''}</svg>`;
 const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8Z" fill="currentColor"/></svg>';
@@ -236,6 +237,11 @@ img,video{display:block;max-width:100%}
 .pips i{width:8px;height:8px;border-radius:50%;background:color-mix(in srgb,var(--fg) 18%,transparent)}
 .pips i.on{background:#43ff9e;box-shadow:0 0 8px rgba(67,255,158,.55)}
 .join{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:12px;background:var(--hot);color:var(--hot-ink);font:800 15px/1 var(--display);text-decoration:none}
+.room-acts{display:flex;gap:8px;align-items:center}
+.watchb{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:0 14px;border-radius:12px;border:1px solid color-mix(in srgb,var(--fg) 24%,transparent);color:var(--fg);font:700 15px/1 var(--display);text-decoration:none}
+.watchb:hover{border-color:var(--fg);background:color-mix(in srgb,var(--fg) 6%,transparent)}
+.watchb svg{width:18px;height:18px;flex:none}
+@media (max-width:379px){.watchb span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.watchb{padding:0 12px}}
 .quiet{margin:22px 0 0;padding:18px 20px;border-radius:var(--r);border:1px dashed color-mix(in srgb,var(--fg) 22%,transparent);color:var(--soft)}
 .stat{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 .stat span{padding:8px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font:600 14px/1.2 var(--text);color:var(--soft)}
@@ -423,10 +429,13 @@ d.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.t
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,function(){})});
 // Live: the line under Play and the rooms list follow the site's own room counts.
 var el=function(tag,cls,text){var e=d.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+var EYE='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 var roomRow=function(r){var li=el('li','room');var th=el('span','thumb');if(r.cover){var im=el('img');im.src=r.cover;im.alt='';im.loading='lazy';th.appendChild(im)}li.appendChild(th);
   var mid=el('div');mid.appendChild(el('b',null,(r.name?r.name+' · ':'')+r.label));mid.appendChild(el('span',null,r.players+' of '+r.max+' seats taken · bots hold the rest'));
   var pips=el('div','pips');for(var i=0;i<Math.min(r.max,32);i++)pips.appendChild(el('i',i<r.players?'on':''));mid.appendChild(pips);li.appendChild(mid);
-  var a=el('a','join','Join');a.href=r.play;a.setAttribute('data-play','');li.appendChild(a);return li};
+  var acts=el('div','room-acts');
+  if(r.watch){var w=el('a','watchb');w.href=r.watch;w.setAttribute('aria-label','Watch '+(r.name?r.name+' · ':'')+r.label);w.innerHTML=EYE;w.appendChild(el('span',null,'Watch'));acts.appendChild(w)}
+  var a=el('a','join','Join');a.href=r.play;a.setAttribute('data-play','');acts.appendChild(a);li.appendChild(acts);return li};
 var paintRooms=function(list,rooms){if(!list)return;var quiet=d.querySelector('[data-rooms-quiet]');list.textContent='';
   rooms.forEach(function(r){list.appendChild(roomRow(r))});list.hidden=!rooms.length;if(quiet)quiet.hidden=!!rooms.length;hand()};
 var live=d.querySelector('[data-live]'),list=d.querySelector('[data-rooms]');
@@ -639,14 +648,30 @@ function gameCard(g, playing = 0) {
 </article>`;
 }
 
+/**
+ * What a game lets its watchers see (game.json "watch", NETPLAY.md section 16): `follow` (any player's view; the
+ * default), `overview` (the whole room only: a game with hidden hands or roles), or `off` (no watch door at all).
+ */
+export function watchOf(g) {
+  const w = g?.watch;
+  if (w === false || w === 'off') return 'off';
+  if (w === 'overview') return 'overview';
+  return 'follow';
+}
+
 /** A room as the live list draws it (the same fields /api/rooms and /<game>/live give the script). */
 export function roomView(g, r, max) {
   const n = Number(String(r.name ?? r.room ?? '').replace(/^pub-/, '')) || null;
-  return { game: g.id, name: g.name, label: n ? `Room ${n}` : 'A room', room: r.name ?? r.room, players: r.players, max, cover: coverOf(g), play: `/${g.id}/play?room=${encodeURIComponent(r.name ?? r.room)}` };
+  const room = r.name ?? r.room;
+  return {
+    game: g.id, name: g.name, label: n ? `Room ${n}` : 'A room', room, players: r.players, max, cover: coverOf(g), play: `/${g.id}/play?room=${encodeURIComponent(room)}`,
+    // Watch this room from any player's view (section 16); a game that cannot be watched has no link.
+    watch: watchOf(g) === 'off' ? null : `/${g.id}/watch?room=${encodeURIComponent(room)}`,
+  };
 }
 
 function roomRows(rows, { names = true } = {}) {
-  return rows.map((r) => `<li class="room"><span class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : ''}</span><div><b>${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}</b><span>${esc(r.players)} of ${esc(r.max)} seats taken · bots hold the rest</span><div class="pips">${Array.from({ length: Math.min(r.max, 32) }, (_, i) => `<i${i < r.players ? ' class="on"' : ''}></i>`).join('')}</div></div><a class="join" href="${esc(r.play)}" data-play>Join</a></li>`).join('');
+  return rows.map((r) => `<li class="room"><span class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : ''}</span><div><b>${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}</b><span>${esc(r.players)} of ${esc(r.max)} seats taken · bots hold the rest</span><div class="pips">${Array.from({ length: Math.min(r.max, 32) }, (_, i) => `<i${i < r.players ? ' class="on"' : ''}></i>`).join('')}</div></div><div class="room-acts">${r.watch ? `<a class="watchb" href="${esc(r.watch)}" aria-label="Watch ${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}">${icon('eye', 'ico')}<span>Watch</span></a>` : ''}<a class="join" href="${esc(r.play)}" data-play>Join</a></div></li>`).join('');
 }
 
 const fmtDay = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : ''; };
@@ -944,7 +969,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
       <a class="play" href="/${esc(g.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>
       ${liveLine(g, playing, { idle: `Bots hold every empty seat · one tap and you are in` })}
     </div>
-    ${tvOn ? `<a class="also" href="#anywhere">${icon('tv')}<span>Or put it on the big screen</span></a>` : ''}${trailer ? `<a class="also" href="/videos/${esc(trailer.slug)}/">${icon('videos')}<span>Watch the trailer</span></a>` : ''}${g.saves ? `<a class="also" href="/account/?next=${encodeURIComponent(`/${g.id}/play`)}" data-account>${icon('spark')}<span>Your progress follows you: sign in</span></a>` : ''}
+    ${tvOn ? `<a class="also" href="#anywhere">${icon('tv')}<span>Or put it on the big screen</span></a>` : ''}${playing > 0 && rooms.length && watchOf(g) !== 'off' ? `<a class="also" href="/${esc(g.id)}/watch">${icon('eye')}<span>Watch a live room</span></a>` : ''}${trailer ? `<a class="also" href="/videos/${esc(trailer.slug)}/">${icon('videos')}<span>Watch the trailer</span></a>` : ''}${g.saves ? `<a class="also" href="/account/?next=${encodeURIComponent(`/${g.id}/play`)}" data-account>${icon('spark')}<span>Your progress follows you: sign in</span></a>` : ''}
   </div>
 </section>`;
 

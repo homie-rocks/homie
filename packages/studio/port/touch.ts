@@ -113,7 +113,10 @@ function isTouchDevice(): boolean {
 }
 
 export function createTouchControls(opts: TouchOptions = {}): TouchControls {
-  const enabled = Boolean(opts.force) || isTouchDevice();
+  // A spectator (a big screen, or a watcher: NETPLAY.md section 16) plays nothing: no stick, no buttons on its glass.
+  const shell = (globalThis as { HOMIE_NET?: { want?: string; watch?: boolean } }).HOMIE_NET;
+  const spectator = shell?.watch === true || shell?.want === 'screen';
+  const enabled = Boolean(opts.force) || (isTouchDevice() && !spectator);
   type StickCfg = { zone: [number, number, number, number]; radius: number; dead: number; keys: Partial<Record<Dir, string>> | false; fourWay: boolean };
   const stickOpt: StickCfg | null = opts.stick === false ? null : { zone: [0, 0.3, 0.55, 1], radius: 56, dead: 7, keys: false, fourWay: false, ...(opts.stick ?? {}) } as StickCfg;
   const lookOpt = opts.look ? { zone: [0.45, 0, 1, 1] as [number, number, number, number], ...opts.look } : null;

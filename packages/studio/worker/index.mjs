@@ -16,10 +16,15 @@
  *                              room button shares it (Invite, Big screen, the room code)
  *   /<game>/tv                 the big screen: the same room as a spectator, with a QR code phones scan to join
  *                              (also /<game>/play?screen=1)
+ *   /<game>/watch?room=        watch a live room from any player's view: the game itself, rendered by this browser
+ *                              as a watcher that never takes a seat, with a strip of the players to switch between
+ *                              (keys 1-9, A for Auto, O for the overview); no room: the busiest public room
+ *                              (NETPLAY.md section 16; game.json "watch": "overview" or false narrows it)
  *   /<game>/__game/...         the game's own files (index.html gets HOMIE_NET)
  *   /<game>/__net?room=        the room's netplay socket (Table Durable Object)
  *   /<game>/__watch?room=      the room's facts, for the shell
  *   /<game>/api/lobby          which public room to join (Lobby Durable Object)
+ *   /<game>/api/watch          which public room to watch: the busiest one now (nothing is reserved)
  *   /api/games, /api/rooms     the catalogue plus live counts; every public room playing now (/api/rooms may be
  *                              cached for 15 s)
  *   /__homie/..., /<game>/__homie/...   `not-a-homie`: the answer a game with Homie's arcade controls gets when it
@@ -51,17 +56,17 @@
  * after `homie-studio storage add` (R2 needs a payment method on the account),
  * MEDIA. Everything else runs on Cloudflare's free Workers plan.
  *
- * The relay is the netplay contract's own room.mjs (NETPLAY.md v1 rev 3), run
+ * The relay is the netplay contract's own room.mjs (NETPLAY.md v1 rev 5), run
  * unchanged inside the Table, so a game that plays in `homie-studio dev`
  * plays the same way here.
  */
-import { NetRoom } from './room.mjs';
-import { ROOM_ID, badRoomPage, frameAncestors, playPage } from './pages.mjs';
+import { NetRoom, WATCH_POLICIES } from './room.mjs';
+import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
 import { qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
 import {
   SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homePage, jsonFeed, mediaArt, mediaIndexPage,
-  notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage,
+  notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage, watchOf,
 } from './site.mjs';
 import { count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
 import { ownerRoutes } from './stats-page.mjs';
@@ -307,7 +312,12 @@ async function gameDocument(request, env, url, game, meta, cat) {
   const res = await env.ASSETS.fetch(new Request(`${url.origin}/games/${game}/index.html`));
   if (!res.ok) return notFoundPage(`No build of "${game}" on this site yet.`, cat);
   const room = asked ?? 'main';
-  const want = url.searchParams.get('want') === 'screen' ? 'screen' : 'play';
+  // A watcher (section 16): a screen that never takes a seat, following the player the watch page asks for.
+  const policy = watchOf(meta);
+  const watching = url.searchParams.get('watch') === '1';
+  if (watching && policy === 'off') return new Response(`${meta?.name ?? game} cannot be watched; play it instead.\n`, { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+  const follow = /^(?:auto|overview|\d{1,2})$/.test(url.searchParams.get('follow') ?? '') ? url.searchParams.get('follow') : 'auto';
+  const want = watching || url.searchParams.get('want') === 'screen' ? 'screen' : 'play';
   const device = ['phone', 'desk', 'tv'].includes(url.searchParams.get('device')) ? url.searchParams.get('device') : undefined;
   const wsBase = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
   // The browser's room key (b: what a kick holds out) and the play page's ticket (t: a game that is not public) ride
@@ -316,12 +326,13 @@ async function gameDocument(request, env, url, game, meta, cat) {
   const t = TICKET_TEXT.test(url.searchParams.get('t') ?? '') ? url.searchParams.get('t') : null;
   const cfg = {
     v: 1,
-    url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}`,
+    url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}`,
     room,
     ...(url.searchParams.get('k') ? { token: url.searchParams.get('k').slice(0, 128) } : {}),
     ...(url.searchParams.get('name') ? { name: url.searchParams.get('name').slice(0, 24) } : {}),
     ...(device ? { device } : {}),
     want,
+    ...(watching ? { watch: true, follow: /^\d+$/.test(follow) ? Number(follow) : follow, watchPolicy: policy } : {}),
     debug: url.searchParams.get('debug') === '1',
     ...(meta?.movement ? { movement: meta.movement } : {}),
     // game.json "saves": the play shell around this frame answers @homie-rocks/studio/saves (saves/SAVES.md).
@@ -619,7 +630,7 @@ async function route(request, env, ctx) {
     const max = seatsFor(meta, settings);
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
     if (sub === 'invite') return redeemInvite(request, env, url, cat, meta, settings);
-    const door = launch !== 'public' && ['', 'live', 'credits', 'tv', 'play', 'api/lobby'].includes(sub) ? await accessOf(request, env, game, launch) : { ok: true, sub: null, owner: false };
+    const door = launch !== 'public' && ['', 'live', 'credits', 'tv', 'play', 'watch', 'api/lobby', 'api/watch'].includes(sub) ? await accessOf(request, env, game, launch) : { ok: true, sub: null, owner: false };
     const shut = () => gatePage(cat, meta, launch, { code: url.searchParams.get('invite') ?? '' });
     if (sub === '') {
       if (!door.ok) return shut();
@@ -672,6 +683,28 @@ async function route(request, env, ctx) {
       shareDaily(cat, url, ctx);
       return playPage(cat, meta, { ticket, owner, launch });
     }
+    if (sub === 'watch') {
+      // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
+      const asked = url.searchParams.get('room');
+      if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { watch: true });
+      if (!door.ok) return shut();
+      const policy = watchOf(meta);
+      if (policy === 'off') return noWatchPage(cat, meta);
+      const owner = door.owner || (launch === 'public' && await isOwner(request, env));
+      const holder = joinHolders(door.sub ?? (owner ? 'o' : null), await accountSub(request, env));
+      const ticket = holder ? await ticketFor(env, game, holder) : null;
+      await countVisit(request, env, ctx, game, 'watch');
+      shareDaily(cat, url, ctx);
+      return watchPage(cat, meta, { room: asked, ticket, policy });
+    }
+    if (sub === 'api/watch') {
+      if (!door.ok || watchOf(meta) === 'off') return json({ ok: false, error: 'not-found' }, 404);
+      // The busiest public room now, to watch; nothing is reserved (a watcher takes no seat).
+      const not = String(url.searchParams.get('not') ?? '').split(',').filter((r) => ROOM_ID.test(r)).slice(0, 4).join(',');
+      let best = null;
+      try { best = await (await lobby().fetch(`https://lobby/busiest${not ? `?not=${encodeURIComponent(not)}` : ''}`)).json(); } catch { best = null; }
+      return json({ ok: true, game, room: best?.room ?? null, players: best?.players ?? 0, max }, 200, { 'cache-control': 'no-store' });
+    }
     if (sub === 'api/lobby') {
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
       // A browser held out of a room asks for any other (`not`), so the Lobby never sends it back there.
@@ -686,8 +719,13 @@ async function route(request, env, ctx) {
       const who = url.searchParams.get('t') ? await ticketSub(env, game, url.searchParams.get('t')) : null;
       if (launch !== 'public' && !(await ticketAllows(env, who, launch))) return new Response('this game is not open to you', { status: 403 });
       const b = BROWSER_KEY.test(url.searchParams.get('b') ?? '') ? url.searchParams.get('b') : '';
+      // A watcher's socket (section 16): what the game lets watchers see goes with every socket, so a helper that only
+      // says `watch` in its hello is held to it too; a game that cannot be watched refuses a watch door's socket here.
+      const policy = watchOf(meta);
+      const w = sub === '__net' && url.searchParams.get('w') === '1';
+      if (w && policy === 'off') return new Response('this game cannot be watched', { status: 403 });
       const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}`;
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}`;
       return stub.fetch(new Request(target, request));
     }
     // The same knock, relative to the game's own page: the same answer (see notAHomie).
@@ -795,6 +833,9 @@ export class Table {
       browser: url.searchParams.get('b') || null,
       via: via || null,
       player: holders(via).find((p) => p.startsWith('p-'))?.slice(2) ?? null,
+      // A socket opened through the game's watch door, and what the game lets watchers see (section 16).
+      watch: url.searchParams.get('w') === '1',
+      watchPolicy: WATCH_POLICIES.includes(url.searchParams.get('wp')) ? url.searchParams.get('wp') : 'follow',
       // House QA and `homie-studio check` mark their browsers; their rooms, rounds and peaks are not the studio's numbers.
       qa: isQa(request),
       send: (text) => { try { server.send(text); } catch { /* closed */ } },
@@ -1018,6 +1059,17 @@ export class Lobby {
       return json({ ok: true });
     }
     if (url.pathname === '/rooms') return json({ rooms: [...this.rooms.values()].map(({ name, players, at }) => ({ name, players, at })) });
+    if (url.pathname === '/busiest') {
+      // The public room with the most players now, for a watcher (section 16): it reserves nothing, as a watcher takes
+      // no seat. A closed room, or one named in `not`, is never the answer.
+      const not = new Set(String(url.searchParams.get('not') ?? '').split(',').filter(Boolean));
+      let best = null;
+      for (const r of this.rooms.values()) {
+        if (r.players <= 0 || not.has(r.name) || (this.closed.get(r.name) ?? 0) > now) continue;
+        if (!best || r.players > best.players || (r.players === best.players && r.name < best.name)) best = r;
+      }
+      return json({ room: best?.name ?? null, players: best?.players ?? 0 });
+    }
     if (url.pathname === '/office') {
       // The owner's office: every room with somebody seated in the last 3 minutes, public or named, and closed ones.
       for (const [name, r] of this.seen) if (now - r.at > 180_000) this.seen.delete(name);

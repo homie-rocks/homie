@@ -3,6 +3,7 @@
  * worker/site.mjs. Every name a player typed is escaped.
  */
 import { esc, layout } from './site.mjs';
+import { NET_PALETTE } from './room.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
 
 export { homePage, mediaIndexPage, notFoundPage, songPage, videoPage } from './site.mjs';
@@ -21,14 +22,24 @@ export function frameAncestors(cat) {
   return ["'self'", ...extra].join(' ');
 }
 
-/** What a play or big-screen page answers to a room code it cannot use: said on the page, never a silent public room. */
-export function badRoomPage(cat, g, raw, { screen = false } = {}) {
+/** What a play, big-screen or watch page answers to a room code it cannot use: said on the page, never a silent public room. */
+export function badRoomPage(cat, g, raw, { screen = false, watch = false } = {}) {
   const shown = String(raw ?? '').slice(0, 64);
   return layout(cat, {
     title: `That room link does not work · ${g.name}`, page: 'bad-room', status: 400,
     main: `<header class="head"><p class="kicker">${esc(g.name)}</p><h1>That room link does not work</h1>
-<p class="lead">The room code in this link${shown ? ` (<span class="addr">${esc(shown)}${String(raw).length > 64 ? '…' : ''}</span>)` : ''} is not one a room can have: a code is 1 to 32 letters, digits, hyphens or underscores. Ask whoever sent it for the link again, or play in a public room.</p>
-<div class="keys"><a class="btn" href="/${esc(g.id)}/${screen ? 'tv' : 'play'}" data-play>Join a public room</a><a class="ghost" href="/${esc(g.id)}/">Back to ${esc(g.name)}</a></div></header>`,
+<p class="lead">The room code in this link${shown ? ` (<span class="addr">${esc(shown)}${String(raw).length > 64 ? '…' : ''}</span>)` : ''} is not one a room can have: a code is 1 to 32 letters, digits, hyphens or underscores. Ask whoever sent it for the link again, or ${watch ? 'watch' : 'play in'} a public room.</p>
+<div class="keys"><a class="btn" href="/${esc(g.id)}/${watch ? 'watch' : screen ? 'tv' : 'play'}"${watch ? '' : ' data-play'}>${watch ? 'Watch a public room' : 'Join a public room'}</a><a class="ghost" href="/${esc(g.id)}/">Back to ${esc(g.name)}</a></div></header>`,
+  });
+}
+
+/** A game whose game.json says `"watch": false` has no watch door: the page says so and offers Play. */
+export function noWatchPage(cat, g) {
+  return layout(cat, {
+    title: `${g.name} is not shown to watchers`, page: 'no-watch', status: 404,
+    main: `<header class="head"><p class="kicker">${esc(g.name)}</p><h1>${esc(g.name)} is played, not watched</h1>
+<p class="lead">Its rooms are not shown to watchers: what each player sees stays theirs. Press Play and you are in a room, with bots in the empty seats.</p>
+<div class="keys"><a class="btn" href="/${esc(g.id)}/play" data-play>Play ${esc(g.name)}</a><a class="ghost" href="/${esc(g.id)}/">Back to ${esc(g.name)}</a></div></header>`,
   });
 }
 
@@ -429,6 +440,7 @@ const SHELL_JS = String.raw`(function () {
     var bits = [];
     if (n !== null) bits.push(n + (n === 1 ? ' player' : ' players') + ' here');
     if (f && f.counts && f.counts.bots) bits.push(f.counts.bots + ' bots');
+    if (f && f.counts && f.counts.watchers) bits.push(f.counts.watchers + ' watching');
     if (state.closed) bits.push(state.closed === 'replaced' ? 'opened in another tab' : 'reconnecting');
     say(bits.join(' · ') || 'joining…');
     var count = ui && ui.querySelector('[data-room-count]');
@@ -597,4 +609,405 @@ const OWNER_JS = String.raw`(function () {
   window.__ownerPick = function (seat) { view.pick = seat; view.msg = ''; open(true); };
   setInterval(render, 1500);
   window.__owner = { open: open, render: render };
+}());`;
+
+/*
+ * WATCH ANY PLAYER (0.15.0, NETPLAY.md section 16). /<game>/watch?room=<room>[&follow=<seat>|auto|overview] is the
+ * game itself, rendered by this browser as a watcher: a screen that never takes a seat. A strip of the room's players
+ * switches whose view it renders (a tap, keys 1-9, A for Auto, O for the whole room); Auto follows the action. The
+ * game draws the followed player's camera and HUD (its netplay helper's `viewSeat`); a game that does not shows its
+ * overview, and the strip says so. A game with hidden hands or roles says `"watch": "overview"` in game.json: its
+ * watchers see the whole room only. A private or invite-only game is watched only by whoever may play it (the door
+ * is the play door's). Every name a player typed is set with textContent.
+ */
+export function watchPage(cat, g, { room = null, ticket = null, policy = 'follow' } = {}) {
+  const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
+  const hot = /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a';
+  const boot = { game: g.id, name: g.name, policy, palette: NET_PALETTE, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}) };
+  const css = `:root{--hot:${hot}}${WATCH_CSS}`;
+  return layoutless(`Watch ${g.name}`, `
+<header class="wtop" data-top>
+  <span class="live" data-live><i aria-hidden="true"></i><b>Live</b></span>
+  <span class="what"><b>${esc(g.name)}</b><span data-room-label>finding a room…</span></span>
+  <span class="clock" data-clock hidden></span>
+  <span class="grow"></span>
+  <span class="eyes" data-eyes hidden title="Watching this room"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span data-eyes-n></span><span class="eyes-w"> watching</span></span>
+  <a class="playb" data-playb href="/${esc(g.id)}/play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8Z" fill="currentColor"/></svg><span>Play</span></a>
+</header>
+<main class="stage"><iframe class="game" title="${esc(g.name)}, live" tabindex="-1" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen *; autoplay *; gamepad *"></iframe></main>
+<footer class="dock">
+  <div class="caption" data-caption role="status" aria-live="polite"><b data-cap-head>Joining the room…</b><span data-cap-sub></span></div>
+  <nav class="strip" data-strip role="toolbar" aria-label="Whose view to watch"></nav>
+</footer>
+<div class="wnote" data-note hidden></div>
+<script>window.__HOMIE_WATCH=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
+<script>${WATCH_JS}</script>`, css, frameAncestors(cat));
+}
+
+/*
+ * The watch page is a broadcast: a band above the game (live, the game and room, the clock, who is watching, Play),
+ * the game in between, and a dock below (whose view this is, and the players to switch between). Nothing covers the
+ * game's own picture or HUD: every game draws its clock and board where it likes.
+ */
+const WATCH_CSS = `
+html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #05070d; color: #eef1f8; -webkit-tap-highlight-color: transparent; }
+body { --u: clamp(12px, calc(0.8vmin + 7px), 22px); --band: #080b14; --line: rgba(255,255,255,.08); display: flex; flex-direction: column; font: 600 var(--u)/1.25 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+body.big { --u: clamp(16px, calc(1vmin + 6px), 32px); }
+.stage { position: relative; flex: 1; min-height: 0; background: #04060c; }
+iframe.game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; }
+.wtop { flex: none; display: flex; align-items: center; gap: calc(var(--u) * .7); padding: max(calc(var(--u) * .5), env(safe-area-inset-top)) max(calc(var(--u) * .9), env(safe-area-inset-right)) calc(var(--u) * .5) max(calc(var(--u) * .9), env(safe-area-inset-left)); background: linear-gradient(#0b0f1a, var(--band)); border-bottom: 1px solid var(--line); min-width: 0; }
+.grow { flex: 1; }
+.live { flex: none; display: inline-flex; align-items: center; gap: .45em; padding: .3em .7em .3em .6em; border-radius: 999px; background: rgba(255,59,92,.16); border: 1px solid rgba(255,90,120,.5); font-weight: 800; font-size: .74em; letter-spacing: .14em; text-transform: uppercase; color: #ffd9e0; }
+.live i { width: .62em; height: .62em; border-radius: 50%; background: #ff3b5c; box-shadow: 0 0 10px #ff3b5c; animation: pulse 1.6s ease-in-out infinite; }
+.live.off { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); color: #aab3c7; }
+.live.off i { background: #6c7489; box-shadow: none; animation: none; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .live i { animation: none; } }
+.what { display: flex; align-items: baseline; gap: .55em; min-width: 0; }
+.what b { font-weight: 800; font-size: 1.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.what span { color: #9aa3b7; font-size: .86em; font-weight: 600; white-space: nowrap; }
+.clock { flex: none; padding: .26em .7em; border-radius: 9px; background: rgba(255,255,255,.05); border: 1px solid var(--line); font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+.eyes { flex: none; display: inline-flex; align-items: center; gap: .35em; color: #b9c1d3; font-variant-numeric: tabular-nums; font-size: .9em; }
+.eyes svg { width: 1.2em; height: 1.2em; }
+.playb { flex: none; display: inline-flex; align-items: center; gap: .45em; min-height: 2.4em; padding: 0 1em 0 .8em; border-radius: 11px; background: var(--hot); color: #0b0b10; font-weight: 800; text-decoration: none; }
+.playb:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.playb svg { width: 1em; height: 1em; }
+.dock { flex: none; display: flex; align-items: center; gap: calc(var(--u) * .9); padding: calc(var(--u) * .55) max(calc(var(--u) * .9), env(safe-area-inset-right)) max(calc(var(--u) * .55), env(safe-area-inset-bottom)) max(calc(var(--u) * .9), env(safe-area-inset-left)); background: linear-gradient(var(--band), #0b0f1a); border-top: 1px solid var(--line); min-width: 0; }
+.caption { flex: 0 1 auto; min-width: 0; max-width: 34%; display: flex; flex-direction: column; gap: .1em; }
+.caption b { font-weight: 800; font-size: 1.08em; display: flex; align-items: center; gap: .5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.caption b .dot { width: .72em; height: .72em; border-radius: 50%; flex: none; }
+.caption span { color: #9aa3b7; font-size: .82em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip { flex: 1; min-width: 0; display: flex; gap: calc(var(--u) * .45); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; touch-action: pan-x; padding: 3px 2px; }
+.strip::-webkit-scrollbar { display: none; }
+.strip > :first-child { margin-left: auto; }
+.strip > :last-child { margin-right: auto; }
+.chip { flex: none; display: inline-flex; align-items: center; gap: .5em; min-height: 2.6em; max-width: 15em; padding: 0 .9em 0 .5em; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.035); color: #e8ecf5; font: inherit; font-weight: 700; cursor: pointer; touch-action: manipulation; transition: border-color .2s, background .2s; }
+.chip:hover { border-color: rgba(255,255,255,.4); }
+.chip:focus-visible { outline: 2px solid var(--hot); outline-offset: 2px; }
+.chip[aria-pressed="true"] { border-color: var(--hot); background: color-mix(in srgb, var(--hot) 16%, transparent); box-shadow: inset 0 0 0 1px var(--hot); }
+.chip.auto-on { border-color: color-mix(in srgb, var(--hot) 55%, rgba(255,255,255,.2)); }
+.chip[disabled] { cursor: default; padding-left: .8em; }
+.chip[disabled]:hover { border-color: rgba(255,255,255,.14); }
+.chip .k { display: inline-grid; place-items: center; min-width: 1.45em; height: 1.45em; padding: 0 .2em; border-radius: 6px; background: rgba(255,255,255,.08); color: #9aa3b7; font-size: .76em; font-weight: 800; box-sizing: border-box; }
+.chip .dot { width: .8em; height: .8em; border-radius: 50%; flex: none; }
+.chip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .sc { color: #9aa3b7; font-variant-numeric: tabular-nums; font-weight: 800; }
+.chip .sc.lead { color: var(--hot); }
+.chip svg { width: 1.1em; height: 1.1em; flex: none; }
+.chip .tag { font-size: .68em; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--hot); }
+.hint { flex: none; align-self: center; color: #7d8699; font-size: .76em; font-weight: 600; padding: 0 .2em; white-space: nowrap; }
+@media (hover: none) { .chip .k, .hint { display: none; } }
+/* A phone held upright: the caption over the strip, the strip scrolling sideways. */
+@media (max-width: 640px) {
+  .dock { flex-direction: column; align-items: stretch; gap: calc(var(--u) * .45); }
+  .caption { max-width: none; align-items: center; text-align: center; }
+  .chip { max-width: 10.5em; min-height: 2.75em; }
+  .what span, .eyes-w { display: none; }
+}
+/* Not much height (a phone on its side): thinner bands. */
+@media (max-height: 460px) {
+  .wtop, .dock { padding-top: 4px; padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+  .caption span { display: none; }
+  .chip { min-height: 2.3em; }
+}
+body.idle { cursor: none; }
+.wnote { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(4,6,12,.8); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.wnote .box { box-sizing: border-box; width: min(440px, 100%); padding: calc(var(--u) * 1.5); border-radius: 20px; background: #0d111c; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 24px 70px rgba(0,0,0,.55); }
+.wnote h1 { margin: 0 0 .4em; font-size: 1.5em; letter-spacing: -.01em; }
+.wnote p { margin: 0 0 .7em; color: #c3cad9; font-weight: 500; line-height: 1.45; }
+.wnote .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 1em; }
+.wnote .acts a { display: inline-flex; align-items: center; min-height: 2.9em; padding: 0 1.1em; border-radius: 12px; text-decoration: none; font-weight: 800; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
+.wnote .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
+[hidden] { display: none !important; }`;
+
+/* The watch page's script (the site's own origin; the game runs in the sandboxed frame as a watcher). */
+const WATCH_JS = String.raw`(function () {
+  'use strict';
+  var boot = window.__HOMIE_WATCH;
+  var params = new URLSearchParams(location.search);
+  var hand = params.get('hand');
+  var device = hand === 'phone' || hand === 'desk' || hand === 'tv' ? hand : Math.min(innerWidth, innerHeight) <= 540 ? 'phone' : 'desk';
+  var frame = document.querySelector('iframe.game');
+  var q1 = function (s) { return document.querySelector(s); };
+  var strip = q1('[data-strip]'), note = q1('[data-note]');
+  var capHead = q1('[data-cap-head]'), capSub = q1('[data-cap-sub]'), clockEl = q1('[data-clock]'), liveEl = q1('[data-live]');
+  var palette = Array.isArray(boot.palette) ? boot.palette : [];
+  var asked = params.get('follow');
+  var first = /^\d{1,2}$/.test(asked || '') ? Number(asked) : asked === 'overview' ? null : 'auto';
+  // What the page knows: the room's facts (its watch socket), and what the game in the frame says it renders.
+  var state = { game: boot.game, room: null, facts: null, offset: 0, round: null, view: null, follows: null, canFollow: boot.policy !== 'overview', why: boot.policy === 'overview' ? 'overview' : null, scores: null, asked: first, attached: false, notice: null, emptySince: 0 };
+  window.__watch = state;
+  function rnd() {
+    try { var a = new Uint8Array(16); crypto.getRandomValues(a); var s = ''; for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+    catch (e) { var r = ''; while (r.length < 22) r += Math.random().toString(36).slice(2); return r.slice(0, 22); }
+  }
+  // The browser's room key, as the play page keeps it: a kick holds a browser out of watching too, and a browser
+  // that holds a seat in this room watches it in the overview only (section 16).
+  var roomKey = null;
+  try { roomKey = localStorage.getItem('homie-b'); if (!/^[A-Za-z0-9_-]{16,43}$/.test(roomKey || '')) { roomKey = rnd(); localStorage.setItem('homie-b', roomKey); } } catch (e) { roomKey = rnd(); }
+
+  function sizeUp() {
+    var big = hand === 'tv' || (Math.min(innerWidth, innerHeight) >= 900 && !(window.matchMedia && matchMedia('(pointer: coarse)').matches));
+    document.body.classList.toggle('big', big);
+  }
+  sizeUp();
+  addEventListener('resize', sizeUp);
+  function labelOf(room) { var m = /^pub-(\d+)$/.exec(room || ''); return m ? 'Room ' + m[1] : (room || ''); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.textContent = String(text); return e; }
+  function svg(path) { var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = path; return s; }
+  var AUTO_ICON = '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>';
+  var ROOM_ICON = '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>';
+
+  // The players, in seat order: the strip's order, and what keys 1-9 pick (the n-th player).
+  function players() {
+    var f = state.facts;
+    var list = f && Array.isArray(f.clients) ? f.clients.filter(function (c) { return c && typeof c.seat === 'number' && !c.watch; }) : [];
+    return list.sort(function (a, b) { return a.seat - b.seat; });
+  }
+  function nameOf(seat) { var p = players().filter(function (c) { return c.seat === seat; })[0]; return p ? String(p.name || 'A player') : null; }
+  function colourOf(p) { return palette[(Number(p.colour) || 0) % (palette.length || 1)] || '#e8ecf5'; }
+  // Choosing whose view: the game decides it can (its helper said so), and the room lets this browser.
+  function canChoose() { return state.follows === true && state.canFollow; }
+
+  function follow(target) {
+    if (!canChoose() || !frame.contentWindow) return;
+    state.asked = target;
+    try { frame.contentWindow.postMessage({ t: 'homie-watch', follow: target }, '*'); } catch (e) {}
+    paint();
+  }
+
+  // The address follows the view, so a copied link watches the same player.
+  function syncUrl() {
+    try {
+      var v = state.view;
+      var f = !v ? null : v.following === 'auto' ? 'auto' : v.following === null ? 'overview' : String(v.following);
+      if (params.get('room') !== state.room || (f && params.get('follow') !== f)) {
+        params.set('room', state.room);
+        if (f) params.set('follow', f); else params.delete('follow');
+        params.delete('not');
+        history.replaceState(history.state, '', location.pathname + '?' + params.toString() + location.hash);
+      }
+    } catch (e) {}
+  }
+
+  function start(room) {
+    state.room = room;
+    syncUrl();
+    q1('[data-room-label]').textContent = labelOf(room);
+    q1('[data-playb]').href = '/' + boot.game + '/play?room=' + encodeURIComponent(room);
+    document.title = 'Watch ' + boot.name + ' · ' + labelOf(room);
+    var q = new URLSearchParams({ room: room, watch: '1', device: device, b: roomKey });
+    q.set('follow', first === 'auto' ? 'auto' : first === null ? 'overview' : String(first));
+    if (boot.t) q.set('t', boot.t);
+    if (params.get('debug') === '1') q.set('debug', '1');
+    ['cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
+    frame.src = '/' + boot.game + '/__game/?' + q.toString();
+    addEventListener('message', function (ev) {
+      if (ev.source !== frame.contentWindow) return;
+      var m = ev.data;
+      if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
+      if (m.what === 'attached') {
+        state.attached = true;
+        // A helper from before revision 5 never says what it renders: after a moment, the room's overview it is.
+        setTimeout(function () { if (state.follows === null) { state.follows = false; paint(); } }, 4000);
+      }
+      if (m.what === 'view') {
+        state.view = { seat: typeof m.seat === 'number' ? m.seat : null, following: m.following === 'auto' || typeof m.following === 'number' ? m.following : null, why: String(m.why || '') };
+        state.follows = m.follows === true;
+        state.canFollow = m.canFollow !== false;
+        state.why = typeof m.whyNot === 'string' ? m.whyNot : null;
+        syncUrl();
+      }
+      if (m.what === 'scores' && Array.isArray(m.scores)) {
+        var sc = {}; m.scores.forEach(function (r) { if (r && typeof r.seat === 'number' && isFinite(r.score)) sc[r.seat] = Number(r.score); });
+        state.scores = sc;
+      }
+      if (m.what === 'round' && m.round) state.round = m.round;
+      if (m.what === 'closed') {
+        if (m.why === 'kicked' || m.why === 'room-closed') shut(m.why === 'kicked' ? 'kicked' : 'closed', m);
+        else if (m.why === 'watch-off') shut('off', m);
+        else if (m.why === 'room-full') shut('full', m);
+      }
+      paint();
+    });
+    watch(room);
+  }
+
+  function watch(room) {
+    if (state.notice && state.notice.final) return;
+    var ws;
+    var extra = '&b=' + encodeURIComponent(roomKey) + (boot.t ? '&t=' + encodeURIComponent(boot.t) : '');
+    try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
+    catch (e) { setTimeout(function () { watch(room); }, 2000); return; }
+    state.socket = ws;
+    ws.onmessage = function (ev) {
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (!m || typeof m !== 'object') return;
+      if (m.t === 'kicked') { shut('kicked', m); return; }
+      if (m.t === 'closed') { shut('closed', m); return; }
+      if (m.t !== 'net') return;
+      state.facts = m;
+      if (typeof m.st === 'number') state.offset = m.st - Date.now();
+      if (m.round) state.round = m.round;
+      paint();
+    };
+    ws.onclose = function () { if (!(state.notice && state.notice.final)) setTimeout(function () { watch(room); }, 1500); };
+  }
+
+  // A room that ended, a game that is not watched, a kick: the page says so plainly and offers the way on.
+  function shut(kind, m) {
+    if (state.notice && state.notice.kind === kind) return;
+    var final = kind !== 'empty';
+    state.notice = { kind: kind, final: final };
+    if (final) { try { frame.src = 'about:blank'; } catch (e) {} if (state.socket) { try { state.socket.close(); } catch (e) {} } }
+    note.textContent = '';
+    var box = el('div', 'box');
+    var label = labelOf(state.room);
+    var heads = { empty: 'Everyone has left ' + label, kicked: 'You were removed from this room', closed: 'This room is closed', off: boot.name + ' is played, not watched', full: label + ' is full of watchers', none: 'Nobody is playing ' + boot.name + ' right now' };
+    var lines = {
+      empty: 'The players went on their way. Watch another room, or press Play: you start at once, with bots in the empty seats.',
+      kicked: (m && m.message) || 'The studio removed you from this room.',
+      closed: (m && m.message) || 'The studio closed this room.',
+      off: 'Its rooms are not shown to watchers. Press Play and you are in one.',
+      full: 'Every place to watch it from is taken. Try the busiest other room.',
+      none: 'This page finds a room the moment somebody starts one. Or press Play, and people who come to watch will see you.',
+    };
+    box.appendChild(el('h1', '', heads[kind] || heads.closed));
+    box.appendChild(el('p', '', lines[kind] || lines.closed));
+    var acts = el('div', 'acts');
+    var other = el('a', 'primary', kind === 'none' || kind === 'off' ? 'Play ' + boot.name : 'Watch another room');
+    other.href = kind === 'none' || kind === 'off' ? '/' + boot.game + '/play' : '/' + boot.game + '/watch?not=' + encodeURIComponent(state.room || '');
+    acts.appendChild(other);
+    if (kind !== 'none' && kind !== 'off') { var play = el('a', '', 'Play'); play.href = '/' + boot.game + '/play'; acts.appendChild(play); }
+    var back = el('a', '', 'Back to ' + boot.name); back.href = '/' + boot.game + '/'; acts.appendChild(back);
+    box.appendChild(acts);
+    note.appendChild(box);
+    note.hidden = false;
+    liveEl.classList.add('off');
+  }
+  function unshut() { if (state.notice && !state.notice.final) { state.notice = null; note.hidden = true; note.textContent = ''; liveEl.classList.remove('off'); } }
+
+  var drawn = '';
+  function paintStrip() {
+    var list = players();
+    var choose = canChoose();
+    var v = state.view || { seat: null, following: state.asked, why: '' };
+    var scores = state.scores || {};
+    var lead = null; var best = -Infinity;
+    list.forEach(function (p) { var s = scores[p.seat]; if (typeof s === 'number' && s > best) { best = s; lead = p.seat; } });
+    var sig = JSON.stringify([choose, v.seat, v.following, list.map(function (p) { return [p.seat, p.name, p.colour, scores[p.seat]]; }), lead, state.follows]);
+    if (sig === drawn) return;
+    drawn = sig;
+    strip.textContent = '';
+    function chip(target, key, build, pressed, extraCls) {
+      var b = el('button', 'chip' + (extraCls ? ' ' + extraCls : ''));
+      b.type = 'button';
+      b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      if (!choose) { b.disabled = true; b.setAttribute('aria-disabled', 'true'); }
+      if (key) b.appendChild(el('span', 'k', key));
+      build(b);
+      b.addEventListener('click', function () { follow(target); });
+      strip.appendChild(b);
+      return b;
+    }
+    if (choose) chip('auto', 'A', function (b) { b.appendChild(svg(AUTO_ICON)); b.appendChild(el('span', 'nm', 'Auto')); }, v.following === 'auto');
+    list.forEach(function (p, i) {
+      var on = choose && v.following === p.seat;
+      var auto = choose && v.following === 'auto' && v.seat === p.seat;
+      chip(p.seat, i < 9 ? String(i + 1) : '', function (b) {
+        var dot = el('i', 'dot'); dot.style.background = colourOf(p); b.appendChild(dot);
+        b.appendChild(el('span', 'nm', p.name || 'A player'));
+        if (auto) b.appendChild(el('span', 'tag', 'auto'));
+        if (typeof scores[p.seat] === 'number') b.appendChild(el('span', 'sc' + (p.seat === lead && list.length > 1 ? ' lead' : ''), scores[p.seat]));
+        b.setAttribute('aria-label', (on || auto ? 'Watching ' : 'Watch ') + (p.name || 'a player'));
+      }, on, auto ? 'auto-on' : '');
+    });
+    if (choose) chip(null, 'O', function (b) { b.appendChild(svg(ROOM_ICON)); b.appendChild(el('span', 'nm', 'Whole room')); }, v.following === null);
+    if (choose && device !== 'phone') strip.appendChild(el('span', 'hint', '1–9 · A · O'));
+  }
+
+  function paint() {
+    var f = state.facts;
+    var list = players();
+    // The caption: whose view this is, and why it is the whole room when it is.
+    var v = state.view;
+    var head = 'Watching the whole room';
+    var sub = '';
+    var dotColour = null;
+    if (!state.attached || state.follows === null) { head = 'Joining ' + labelOf(state.room) + '…'; }
+    else if (!state.follows) sub = boot.name + ' shows watchers the whole room';
+    else if (!state.canFollow && state.why === 'seated-here') sub = 'You are playing in this room in another tab, so this one shows the whole room';
+    else if (!state.canFollow) sub = boot.name + ' keeps each player’s view to themselves';
+    else if (v && v.seat !== null) {
+      var who = list.filter(function (p) { return p.seat === v.seat; })[0];
+      head = 'Watching ' + (who ? who.name || 'a player' : 'a player');
+      dotColour = who ? colourOf(who) : null;
+      sub = v.following === 'auto' ? 'Auto · following the action' : '';
+    } else if (v && v.following === 'auto') sub = list.length ? 'Auto · waiting for the action' : 'Auto · nobody is playing yet';
+    capHead.textContent = '';
+    if (dotColour) { var d = el('span', 'dot'); d.style.background = dotColour; capHead.appendChild(d); }
+    capHead.appendChild(document.createTextNode(head));
+    capSub.textContent = sub;
+    capSub.hidden = !sub;
+    // The round's clock, in the relay's time.
+    var r = state.round;
+    if (r && isFinite(r.endsAt)) {
+      var left = Math.max(0, Math.ceil((r.endsAt - (Date.now() + state.offset)) / 1000));
+      clockEl.textContent = r.phase === 'over' ? 'Next round in ' + left : 'Round ' + r.n + ' · ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+      clockEl.hidden = false;
+    } else clockEl.hidden = true;
+    var eyes = f && f.counts ? Number(f.counts.watchers) || 0 : 0;
+    q1('[data-eyes]').hidden = eyes < 1;
+    q1('[data-eyes-n]').textContent = String(eyes);
+    paintStrip();
+    // Everyone left: say so after a moment (a reload is not a departure), and take it back if they return.
+    var people = f && f.counts ? Number(f.counts.players) || 0 : null;
+    if (people === 0 && state.attached) {
+      if (!state.emptySince) state.emptySince = Date.now();
+      if (Date.now() - state.emptySince > 6000 && !state.notice) shut('empty');
+    } else { state.emptySince = 0; if (people) unshut(); }
+  }
+  setInterval(paint, 500);
+
+  // Keys: 1-9 the n-th player, A Auto, O (or 0) the whole room, arrows the next or previous player, F full screen.
+  addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    var list = players();
+    wake();
+    if (/^[1-9]$/.test(k)) { var p = list[Number(k) - 1]; if (p) follow(p.seat); e.preventDefault(); return; }
+    if (k === 'a' || k === 'A') { follow('auto'); return; }
+    if (k === 'o' || k === 'O' || k === '0') { follow(null); return; }
+    if (k === 'ArrowRight' || k === 'ArrowLeft') {
+      if (!list.length) return;
+      var cur = state.view && typeof state.view.seat === 'number' ? state.view.seat : null;
+      var i = list.map(function (p) { return p.seat; }).indexOf(cur);
+      var n = k === 'ArrowRight' ? (i + 1) % list.length : (i <= 0 ? list.length - 1 : i - 1);
+      follow(list[n].seat); e.preventDefault(); return;
+    }
+    if (k === 'f' || k === 'F') { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e2) {} }
+  });
+
+  // The bars get out of the way while nobody touches anything; any touch, move or key brings them back.
+  var idleTimer = null;
+  function wake() { document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(function () { document.body.classList.add('idle'); }, 5000); }
+  ['pointermove', 'pointerdown', 'touchstart', 'wheel'].forEach(function (t) { addEventListener(t, wake, { passive: true }); });
+  wake();
+  // The frame never keeps the keys: a click in the game hands them back to the page.
+  addEventListener('blur', function () { setTimeout(function () { if (document.activeElement === frame) { try { frame.blur(); window.focus(); } catch (e) {} } }, 0); });
+
+  // A named room watches that room; no room: the busiest public room now (nothing is reserved), or a wait for one.
+  var askedRoom = params.get('room');
+  if (boot.room) start(boot.room);
+  else if (askedRoom !== null && /^[A-Za-z0-9_-]{1,32}$/.test(askedRoom)) start(askedRoom);
+  else {
+    var not = /^[A-Za-z0-9_,-]{1,140}$/.test(params.get('not') || '') ? params.get('not') : '';
+    var look = function () {
+      fetch('/' + boot.game + '/api/watch' + (not ? '?not=' + encodeURIComponent(not) : ''), { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.room) { unshut(); state.notice = null; note.hidden = true; start(j.room); } else { if (!state.notice) shut('none'); state.notice.final = false; setTimeout(look, 10000); } })
+        .catch(function () { setTimeout(look, 10000); });
+    };
+    look();
+  }
 }());`;

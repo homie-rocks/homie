@@ -16,9 +16,15 @@
  * zone (gems inside it score double) is slow state on the keyed state channel,
  * so a joiner has it in its welcome and a promoted host inherits it.
  *
+ * WATCH ANY PLAYER (contract revision 5): a watcher (/<game>/watch) never
+ * takes a seat. `net.viewSeat` says whose view to draw; the camera follows that
+ * player's body as their own browser does, the board marks their row, and with
+ * nobody followed the whole arena shows. Waves call `net.spotlight(seat)`, so a
+ * watcher on Auto cuts to whoever just bumped.
+ *
  * Canvas 2D on purpose: the point is the contract, in ~700 readable lines.
  */
-import { createNetplay, Roster, q, lerp, capMove, type RoleChange, type RoundInfo, type RoundResult, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
+import { createNetplay, Roster, q, lerp, capMove, PALETTE, type RoleChange, type RoundInfo, type RoundResult, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit's probe: what `homie-studio port check` reads for the owner tests (and sandbox + audio shims).
 import { exposePort } from '@homie-rocks/studio/port';
 
@@ -38,7 +44,8 @@ const KNOCK_RANGE = 110;
 const KNOCK_SPEED = 950;
 const KNOCK_MS = 420;
 const ZONE_MS = 12_000;
-const PALETTE = ['#8fe36a', '#ffd166', '#ef6f6c', '#6cb4ee', '#c792ea', '#f4a261', '#2ec4b6', '#ff8fab', '#a7c957', '#e9c46a', '#90e0ef', '#f28482'];
+/** The contract's 12 colours (PALETTE, NETPLAY.md section 3): a person wears their seat's, so the watch page's strip matches. */
+const colourOf = (slot: number, seat: number | null): string => PALETTE[(seat ?? slot) % PALETTE.length] as string;
 const BOT_NAMES = ['Rook', 'Vex', 'Moth', 'Kilo', 'Juno', 'Pike', 'Nyx', 'Ash'];
 const botName = (slot: number): string => BOT_NAMES[slot % BOT_NAMES.length] as string;
 const label = (name: string, bot: boolean): string => (bot ? `${name} · bot` : name);
@@ -85,6 +92,8 @@ let predictionError = 0;
 const me = { x: W / 2, y: H / 2, vx: 0, vy: 0, kvx: 0, kvy: 0, knockUntil: 0, has: false };
 /** Offline (no shell) plays as a local seat 0, with keys or touch. */
 const mySeat = (): number | null => (net.offline ? 0 : net.seat);
+/** Whose view to draw: my own seat, or for a watcher the player it follows (null: the whole arena). */
+const viewSeat = (): number | null => (net.offline ? 0 : net.viewSeat);
 
 /* ------------------------------------------------------- replica view */
 const drawn = new Map<number, { x: number; y: number; seat: number; score: number; slot: number }>();
@@ -342,6 +351,9 @@ function knock(b: Body, fx: number, fy: number): void {
 }
 function addWave(d: { slot: number }, isKnock = false): void {
   const pos = hosting ? bodies.get(d.slot) : [...drawn.values()].find((x) => x.slot === d.slot);
+  // The action, for a watcher on Auto: whoever waved (a person, never a bot).
+  const waver = pos && 'bot' in pos ? (pos.bot ? null : pos.seat) : pos && pos.seat >= 0 ? pos.seat : null;
+  if (!isKnock) net.spotlight(waver);
   const mineSlot = hosting ? [...bodies.values()].find((x) => x.seat !== null && x.seat === mySeat())?.slot : [...drawn.values()].find((x) => x.seat === net.seat)?.slot;
   const at = mineSlot === d.slot && me.has ? me : pos;
   if (!at) return;
@@ -527,7 +539,14 @@ function resize(): void {
 addEventListener('resize', resize);
 resize();
 
-const cam = { x: W / 2, y: H / 2 };
+const cam = { x: W / 2, y: H / 2, scale: 0 };
+/** Where a seat's body is drawn now (host: the real body; replica: interpolated), or null. */
+function seatPos(seat: number): { x: number; y: number } | null {
+  if (seat === mySeat() && me.has && !net.watching) return me;
+  if (hosting) { const b = [...bodies.values()].find((x) => !x.bot && x.seat === seat); return b ? { x: b.x, y: b.y } : null; }
+  const d = [...drawn.values()].find((x) => x.seat === seat);
+  return d ? { x: d.x, y: d.y } : null;
+}
 const gemGlow = (() => {
   const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R_GEM * 2.8);
   g.addColorStop(0, 'rgba(255,209,102,0.55)'); g.addColorStop(0.4, 'rgba(255,170,60,0.18)'); g.addColorStop(1, 'rgba(255,150,40,0)');
@@ -536,9 +555,15 @@ const gemGlow = (() => {
 function draw(t: number): void {
   const cw = innerWidth; const ch = innerHeight;
   const phone = Math.min(cw, ch) <= 540;
-  const spectating = mySeat() === null;
-  const scale = spectating ? Math.min(cw / (W + 80), ch / (H + 80)) : Math.min(cw, ch) / (phone ? 560 : 820);
-  const target = spectating || !me.has ? { x: W / 2, y: H / 2 } : me;
+  // The view: my own body, or (a watcher) the followed player's, drawn exactly as their own browser frames it.
+  const view = viewSeat();
+  const followed = net.watching && view !== null ? seatPos(view) : null;
+  const overview = net.watching ? !followed : mySeat() === null;
+  const wantScale = overview ? Math.min(cw / (W + 80), ch / (H + 80)) : Math.min(cw, ch) / (phone ? 560 : 820);
+  // A watcher's switch glides: the zoom and the pan ease over a few frames, never a cut.
+  cam.scale = cam.scale ? cam.scale + (wantScale - cam.scale) * 0.12 : wantScale;
+  const scale = cam.scale;
+  const target = net.watching ? (followed ?? { x: W / 2, y: H / 2 }) : overview || !me.has ? { x: W / 2, y: H / 2 } : me;
   cam.x += (target.x - cam.x) * 0.2; cam.y += (target.y - cam.y) * 0.2;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const bg = ctx.createRadialGradient(cw / 2, ch / 2, 0, cw / 2, ch / 2, Math.max(cw, ch) * 0.8);
@@ -588,18 +613,20 @@ function draw(t: number): void {
 
   // avatars
   const names = new Map<number, Slot>((net.slots ?? roster.slots).map((s) => [s.slot, s]));
+  // `mine`: the body whose view this is: my own, or the player a watcher follows (named, never "You").
   const list: { slot: number; seat: number | null; x: number; y: number; bot: boolean; name: string; mine: boolean }[] = [];
+  const isView = (seat: number | null, bot: boolean): boolean => !bot && seat !== null && seat === view;
   if (hosting) {
-    for (const b of bodies.values()) list.push({ slot: b.slot, seat: b.seat, x: b.x, y: b.y, bot: b.bot, name: b.name, mine: b.seat !== null && b.seat === mySeat() });
+    for (const b of bodies.values()) list.push({ slot: b.slot, seat: b.seat, x: b.x, y: b.y, bot: b.bot, name: b.name, mine: isView(b.seat, b.bot) });
   } else {
     for (const d of drawn.values()) {
-      const mine = d.seat >= 0 && d.seat === net.seat;
+      const own = !net.watching && d.seat >= 0 && d.seat === net.seat;
       const s = names.get(d.slot);
-      list.push({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, x: mine && me.has ? me.x : d.x, y: mine && me.has ? me.y : d.y, bot: d.seat < 0, name: s?.name ?? (d.seat >= 0 ? `Player ${d.seat + 1}` : botName(d.slot)), mine });
+      list.push({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, x: own && me.has ? me.x : d.x, y: own && me.has ? me.y : d.y, bot: d.seat < 0, name: s?.name ?? (d.seat >= 0 ? `Player ${d.seat + 1}` : botName(d.slot)), mine: isView(d.seat >= 0 ? d.seat : null, d.seat < 0) });
     }
   }
   for (const a of list) {
-    const colour = PALETTE[a.slot % PALETTE.length] as string;
+    const colour = colourOf(a.slot, a.bot ? null : a.seat);
     ctx.globalAlpha = a.bot ? 0.62 : 1;
     ctx.fillStyle = colour; ctx.beginPath(); ctx.arc(a.x, a.y, R_AV, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(a.x, a.y, R_AV * 0.45, 0, Math.PI * 2); ctx.fill();
@@ -607,7 +634,7 @@ function draw(t: number): void {
     ctx.globalAlpha = 1;
     ctx.font = `600 ${Math.round(15 / Math.max(0.6, scale))}px ui-sans-serif, system-ui, sans-serif`;
     ctx.textAlign = 'center'; ctx.fillStyle = a.mine ? '#ffffff' : 'rgba(232,236,245,0.8)';
-    ctx.fillText(a.mine ? 'You' : label(a.name, a.bot), a.x, a.y - R_AV - 12);
+    ctx.fillText(a.mine && !net.watching ? 'You' : label(a.name, a.bot), a.x, a.y - R_AV - 12);
   }
   ctx.restore();
 
@@ -640,11 +667,11 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; name:
   ctx.textAlign = 'right';
   rows.forEach((a, i) => {
     ctx.fillStyle = a.mine ? '#ffffff' : a.bot ? 'rgba(232,236,245,0.55)' : 'rgba(232,236,245,0.85)';
-    ctx.fillText(`${a.mine ? 'You' : label(a.name, a.bot)}  ${scores.get(a.slot) ?? 0}`, cw - pad, top + 18 + i * (phone ? 20 : 22));
+    ctx.fillText(`${a.mine && !net.watching ? 'You' : label(a.name, a.bot)}  ${scores.get(a.slot) ?? 0}`, cw - pad, top + 18 + i * (phone ? 20 : 22));
   });
   // role badge
   ctx.textAlign = 'left'; ctx.font = '600 11px ui-monospace, Menlo, monospace'; ctx.fillStyle = 'rgba(125,240,255,0.7)';
-  ctx.fillText(net.offline ? 'OFFLINE HOST' : net.role.toUpperCase(), pad, ch - pad);
+  ctx.fillText(net.offline ? 'OFFLINE HOST' : net.watching ? 'WATCHING' : net.role.toUpperCase(), pad, ch - pad);
   if (r && r.phase === 'over' && r.results) {
     const w = Math.min(360, cw - 40); const h = 44 + Math.min(6, r.results.length) * 26;
     const x = (cw - w) / 2; const y = (ch - h) / 2;
@@ -653,10 +680,11 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; name:
     ctx.textAlign = 'center'; ctx.fillStyle = '#7df0ff'; ctx.font = '700 18px ui-sans-serif, system-ui, sans-serif';
     ctx.fillText(`Round ${r.n} results`, cw / 2, y + 28);
     ctx.font = '600 16px ui-sans-serif, system-ui, sans-serif';
+    const view = viewSeat();
     r.results.slice(0, 6).forEach((row, i) => {
-      const mine = row.seat !== null && row.seat === mySeat();
+      const mine = !row.bot && row.seat !== null && row.seat === view;
       ctx.fillStyle = mine ? '#ffffff' : row.bot ? 'rgba(232,236,245,0.6)' : '#e8ecf5';
-      ctx.fillText(`${row.place}. ${mine ? 'You' : label(row.name, row.bot)} — ${row.score}`, cw / 2, y + 56 + i * 26);
+      ctx.fillText(`${row.place}. ${mine && !net.watching ? 'You' : label(row.name, row.bot)}${mine && net.watching ? ' ◂' : ''} — ${row.score}`, cw / 2, y + 56 + i * 26);
     });
   }
   if (!net.offline && !net.connected && net.role !== 'host') {
@@ -699,6 +727,8 @@ net.expose({
   movement: () => MOVEMENT,
   controlResets: () => controlResets,
   predictionError: () => predictionError,
+  /** Where the camera looks and whose view it is (a watcher following a player: their body, under the camera). */
+  camera: () => ({ x: cam.x, y: cam.y, scale: cam.scale, view: viewSeat() }),
   /** performance.now() of the first keyed-state value and the first live snapshot this browser received. */
   arrivals: () => ({ firstStateAt, firstSnapAt }),
   /** Harness hook (host only): knock the body of `seat` back, toward the middle of the arena. */

@@ -114,7 +114,10 @@ Non-negotiable, every port:
    body about 14% of the screen's height) or lay the arena out for portrait.
    Your own body is unmistakable at a glance (a ring or highlight plus "You").
 7. **The big screen** (`/<id>/tv`) is a spectator: no body, no personal prompts,
-   an overview or director camera, readable from across a room.
+   an overview or director camera, readable from across a room. **A watcher**
+   (`/<id>/watch`) follows one player: point the camera at `room.viewBody()` (your
+   own local body when it is your seat) and the HUD at its numbers, and fall back to
+   the overview when it is null (the recipe's section 8).
 8. **The probe.** Call `exposePort` (see the recipe): the checks cannot judge a
    game that does not report where its player is.
 9. Randomness that changes the world happens on the host only. Names people type

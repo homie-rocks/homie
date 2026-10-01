@@ -14,6 +14,10 @@
  * The host decides who killed what and sends the killer a `loot` event; only the hero's own browser changes the
  * hero and saves it. A hardcore hero who falls becomes a memorial in the Hall of the Fallen, and its save is wiped
  * in the same step (saves.fall). Canvas 2D on purpose: the point is the pattern, in a few hundred lines.
+ *
+ * A watcher (/<game>/watch, contract revision 5) has no hero and makes none: `room.viewSeat()` is the hero it
+ * follows, drawn in gold as a hero's own browser draws itself, with that hero's panel; nobody followed, the vale.
+ * The host says who slew what (`slain`), so a watcher on Auto cuts to the kill.
  */
 import { createControls, createRoom, createSaves, exposePort, q, type BodyBase, type NetEvent } from '@homie-rocks/studio/port';
 
@@ -40,6 +44,9 @@ interface Slime { id: number; x: number; y: number; hp: number; maxHp: number; s
 type SlimeRow = [id: number, x: number, y: number, hp: number, size: number];
 
 /* ------------------------------------------------------------------ the save */
+/** A spectator (a watcher, or a big screen) has no hero of its own: it never loads, makes or saves one. */
+const shellCfg = (globalThis as { HOMIE_NET?: { want?: string; watch?: boolean } }).HOMIE_NET;
+const lookOnly = shellCfg?.watch === true || shellCfg?.want === 'screen';
 const saves = createSaves({ game: 'ember-vale' });
 let hero: Hero | null = null;
 let heroLoaded = false;
@@ -50,6 +57,7 @@ function saveSoon(): void {
   saveTimer = setTimeout(() => { if (hero) void saves.set('hero', hero); }, 1000);
 }
 async function loadHero(): Promise<void> {
+  if (lookOnly) { heroLoaded = true; ui.paint(); return; }
   const h = await saves.get<Hero>('hero');
   hero = h && h.v === 1 ? h : null;
   heroLoaded = true;
@@ -140,6 +148,7 @@ net.on('event', (e: NetEvent) => {
   const d = (e.d ?? {}) as { xp?: number; gold?: number; cause?: string; to?: number };
   if (e.k === 'loot' && d.to === room.mySeat()) gain(Math.max(0, Number(d.xp) || 0), Math.max(0, Number(d.gold) || 0));
   if (e.k === 'down' && d.to === room.mySeat()) void fell(String(d.cause ?? 'a slime').slice(0, 40));
+  if (e.k === 'slain' && typeof (e.d as { seat?: unknown })?.seat === 'number') net.spotlight((e.d as { seat: number }).seat);
 });
 function tell(b: Body, k: 'loot' | 'down', d: Record<string, unknown>): void {
   if (b.bot || b.seat === null) return;
@@ -158,6 +167,8 @@ function strike(b: Body, now: number): void {
       const gold = s.size === 3 ? 50 : 2 + Math.floor(Math.random() * 4) * s.size;
       b.score += xp;
       tell(b, 'loot', { xp, gold });
+      // Everyone hears who slew it (a watcher on Auto cuts to them); the loot itself is the slayer's alone.
+      if (!b.bot && b.seat !== null) room.send('slain', { seat: b.seat });
     }
   }
   slimes = slimes.filter((s) => s.hp > 0);
@@ -299,10 +310,12 @@ function draw(t: number): void {
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(x - r, y + r + 4, r * 2, 4);
     ctx.fillStyle = '#ff7a59'; ctx.fillRect(x - r, y + r + 4, (r * 2 * clamp(hp, 0, max)) / max, 4);
   }
-  const mySeat = room.mySeat();
+  // The hero whose view this is: my own, or the one a watcher follows (null: the vale, nobody in gold).
+  const viewS = room.viewSeat();
   for (const b of room.view()) {
-    const self = !b.bot && b.seat === mySeat;
-    const x = self && !room.hosting ? me.x : b.x; const y = self && !room.hosting ? me.y : b.y;
+    const self = !b.bot && b.seat === viewS;
+    const local = self && !room.hosting && !net.watching;
+    const x = local ? me.x : b.x; const y = local ? me.y : b.y;
     const isDown = Boolean(b.flags & DOWN);
     ctx.globalAlpha = isDown ? 0.35 : 1;
     if ((b.flags & STRIKING) || (self && performance.now() - me.flashAt < 160)) { ctx.strokeStyle = 'rgba(255,207,110,.7)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, STRIKE_RANGE * 0.8, 0, Math.PI * 2); ctx.stroke(); }
@@ -325,8 +338,23 @@ function hud(t: number): void {
   const x0 = 14; const y0 = 14;
   ctx.fillStyle = 'rgba(10,14,9,.62)'; ctx.fillRect(x0, y0, 240, 62);
   ctx.textAlign = 'left'; ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#ffcf6e';
-  ctx.fillText(hero ? `${hero.name}${hero.hardcore ? ' ☠' : ''} · Lv ${hero.level}` : heroLoaded ? 'No hero yet' : 'Loading your hero…', x0 + 10, y0 + 22);
-  if (hero) {
+  if (lookOnly) {
+    // A watcher's panel is the followed hero's, as the room has them (their save stays in their own browser).
+    const v = room.viewBody();
+    if (v) {
+      ctx.fillText(`${v.name} · Lv ${v.level}`, x0 + 10, y0 + 22);
+      ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x0 + 10, y0 + 32, 140, 6);
+      ctx.fillStyle = '#7ad35a'; ctx.fillRect(x0 + 10, y0 + 32, (140 * clamp(v.hp, 0, v.maxHp)) / Math.max(1, v.maxHp), 6);
+      ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
+      ctx.fillText(`${v.score} xp tonight${v.flags & DOWN ? ' · down' : ''}`, x0 + 10, y0 + 54);
+    } else {
+      const heroes = room.view().filter((b) => !b.bot).length;
+      ctx.fillText('Watching the vale', x0 + 10, y0 + 22);
+      ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
+      ctx.fillText(`${heroes} ${heroes === 1 ? 'hero' : 'heroes'} · ${(room.fast() ?? []).length} slimes`, x0 + 10, y0 + 46);
+    }
+  } else ctx.fillText(hero ? `${hero.name}${hero.hardcore ? ' ☠' : ''} · Lv ${hero.level}` : heroLoaded ? 'No hero yet' : 'Loading your hero…', x0 + 10, y0 + 22);
+  if (hero && !lookOnly) {
     ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x0 + 10, y0 + 32, 140, 6);
     ctx.fillStyle = '#ffcf6e'; ctx.fillRect(x0 + 10, y0 + 32, (140 * hero.xp) / xpFor(hero.level), 6);
     ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
@@ -359,6 +387,7 @@ const ui = {
   paint(): void {
     const p = saves.player;
     $('who').textContent = p.local ? 'Playing here only' : p.signedIn ? `${p.name}${p.owner ? ' · owner' : ''}` : 'Guest · keep my hero';
+    $('who').hidden = lookOnly;
   },
   make(): void {
     ($('hero-name') as HTMLInputElement).value = '';
@@ -415,6 +444,9 @@ function frame(t: number): void {
   frames += 1;
   requestAnimationFrame(frame);
 }
+
+// Tonight's experience per hero: the watch page's live scores, and who Auto follows when nobody is slaying.
+net.expose({ scores: () => room.view().map((b) => ({ slot: b.slot, seat: b.seat, bot: b.bot, score: b.score })) });
 
 exposePort(net, {
   view: 'top',

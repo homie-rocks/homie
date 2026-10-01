@@ -1,9 +1,19 @@
-# Homie netplay contract, v1 (revision 4)
+# Homie netplay contract, v1 (revision 5)
 
-Status: **v1, revision 4** (2026-10-01, `@homie-rocks/studio` 0.13.0). The wire version is
-`v: 1`. Everything revisions 2 to 4 added is either an optional field, a new message type,
+Status: **v1, revision 5** (2026-10-01, `@homie-rocks/studio` 0.15.0). The wire version is
+`v: 1`. Everything revisions 2 to 5 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
 not know. A change to the contract bumps `v` and keeps v1 working.
+
+**What revision 5 added** (a v1 game that knows none of it is watched as its overview):
+- **Watching** (section 16): a watcher is a screen that came to watch a live room from any
+  player's view. It never takes a seat, hosts only a room no player can, and the game draws
+  the followed player's camera and HUD from `net.viewSeat`. Auto follows the action
+  (`net.spotlight(seat)`, else the leader of the `scores` probe).
+- New optional fields `hello.watch`, `welcome.watch` and `peer.watch`, a relay → client
+  `watch` frame, the final refusal `watch-off`, and `counts.watchers` in the watch feed.
+- game.json `"watch"`: `"overview"` (hidden hands or roles: the whole room only) or `false`.
+- `PALETTE`: the contract's 12 player colours, which a peer's `colour` indexes.
 
 **What revision 4 added** (a v1 game that knows none of it keeps playing; its shell shows
 the notices and the banner):
@@ -91,12 +101,15 @@ code.
 |---|---|---|---|---|---|
 | `host` | One browser per room | yes | if seated (a seatless host is possible) | `snap`, `state`, `ckpt`, `round`, `roster`, `ev` | `in`, `ev`, `join`, `leave` |
 | `replica` | Every other seated browser | no | yes | `in`, `ev` | `snap`, `state`, `ev`, `round`, `roster`, `join`, `leave`, `seat` |
-| `screen` | A spectator (a TV or laptop with `?screen=1`, or a visitor waiting for a seat) | no | no | `ev` (2/s, 512 B) | the same as a replica |
+| `screen` | A spectator (a TV or laptop with `?screen=1`, a watcher from the game's watch door, or a visitor waiting for a seat) | no | no | `ev` (2/s, 512 B) | the same as a replica |
 
 - **Role and seat are separate facts.**
   - `net.isHost` answers: do I run the rules?
   - `net.seat !== null` answers: do I have a body?
   - A screen can be elected host when nobody else can host.
+- **A watcher** (section 16) is a screen that never takes a seat: not at its hello, and not when
+  one frees up. A visitor who wanted to play and found the room full is the other kind of screen:
+  it takes the next free seat.
 - **Offline is not a fourth role.** With no shell (a plain file, a Vite dev server),
   the helper reports `role: 'host'`, `seat: null` and `offline: true`, and every send
   is a no-op.
@@ -113,7 +126,7 @@ code.
 | `token` | The capability that resumes a seat | Returned in `welcome` and never shown to others. The shell keeps it in `sessionStorage`. |
 | `id` | One socket | Used for routing, event addressing and the host reference. It changes on every reconnect. |
 | `name` | Display name | Typed by the guest, so untrusted: render it with `textContent` only. |
-| `colour` | `seat % 12` | An index into a 12-colour palette. |
+| `colour` | `seat % 12` | An index into the contract's 12 colours, `PALETTE` (the watch page's strip draws them; a game that colours its players by seat matches it). |
 
 - **Every visitor gets a seat at once**, phone or desktop. There is no gathering.
 - **Room size.** `maxPlayers` comes from the game's netplay manifest: game.json's
@@ -224,7 +237,7 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 
 | `t` | Sent by | Fields | What the relay does |
 |---|---|---|---|
-| `hello` | everyone, once | `v: 1`, `token?`, `name?`, `device`, `want: 'play'\|'screen'`, `canHost`, `game?`, `max?` | Seats the client (or queues it), picks a role, replies `welcome`, and sends `join` to the others. Refuses with `version`, `room-full` or `too-many`. |
+| `hello` | everyone, once | `v: 1`, `token?`, `name?`, `device`, `want: 'play'\|'screen'`, `canHost`, `game?`, `max?`, `watch?` (revision 5) | Seats the client (or queues it), picks a role, replies `welcome`, and sends `join` to the others. Refuses with `version`, `room-full`, `too-many` or `watch-off`. A `watch: true` hello is a watcher (section 16). |
 | `snap` | host | `k`, `st`, `d`, `c?` (control table) | Clamps `st` to [now − 2 s, now + 250 ms] (a snapshot stamped in the future would freeze replicas). Stores the snapshot and fans it out with `from`. Skips a socket with more than 256 KB buffered. |
 | `in` | seated non-host | `q`, `a`, `h`, `p?`, `r` (the reset epoch the sender has adopted) | Forwards to the host only, stamped `from: <seat>`. Presses are clamped to integers 0–8, at most 16 keys. |
 | `ev` | anyone | `k`, `d`, `to?` | **From a muted player** (section 15): a speech kind (`say…`, `chat…`, `emote…`) is dropped. **From the host:** to everyone else, to one seat (`to`: number) or to one peer (`to`: id string, such as a screen). **From anyone else:** to the host, with `from` and the sender's `id`. **Best-effort:** a drop over a cap is reported with `error rate`. |
@@ -239,7 +252,7 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 
 | `t` | To | Fields |
 |---|---|---|
-| `welcome` | the new client | `v`, `id`, `room`, `seat`, `token`, `name`, `colour`, `role`, `why: 'first'\|'resumed'\|'joined'\|'host-stalled'\|'host-hidden'`, `host`, `peers`, `st`, `max`, `round`, `roster`, `snap`, **`state`**, `ckpt` (host only), `full?` |
+| `welcome` | the new client | `v`, `id`, `room`, `seat`, `token`, `name`, `colour`, `role`, `why: 'first'\|'resumed'\|'joined'\|'host-stalled'\|'host-hidden'`, `host`, `peers`, `st`, `max`, `round`, `roster`, `snap`, **`state`**, `ckpt` (host only), `full?`, `watch?: { follow, why? }` (a watcher only) |
 | `role` | a client whose role changed | `role`, `why`, `host`, `peers`. For a new host, also `ckpt`, `snap`, `round`, `roster`, `state`. |
 | `seat` | a waiting spectator that just got a seat | `seat`, `token`, `name`, `colour`, `role` |
 | `host` | everyone else, on a change | `host`, `why` |
@@ -253,10 +266,12 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 | `error` | the offender | `code`, `message`, `of?`, `until?` |
 | `announce` | everyone (and in `welcome.announce`) | `id`, `text` (`null`: taken down), `at`, `until`, `from: 'studio'` (section 15) |
 | `mute` | everyone | `id`, `seat`, `until` (`0`: unmuted) (section 15) |
+| `watch` | one watcher | `follow`, `why?` (`overview`, `seated-here`): whether it may follow one player now (section 16) |
 
 **Error codes.**
 - Final (the helper stops reconnecting): `version`, `replaced`, `room-full`,
-  `too-many`, `kicked`, `room-closed` (the last two with `until`, server ms; section 15).
+  `too-many`, `kicked`, `room-closed` (the last two with `until`, server ms; section 15),
+  `watch-off` (a watcher of a game that cannot be watched; section 16).
   The helper before revision 4 does not know `kicked` and `room-closed` and keeps knocking;
   every knock is refused at `hello`, and the shell stops the frame (section 15).
 - Reported only: `too-large`, `rate`, `state-full`. (`flood` closes the socket; the helper
@@ -267,7 +282,7 @@ A socket that is kicked for silence is closed with code 4000, and the helper rec
 Record types:
 
 ```ts
-Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true }
+Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true, watch?: true }
 RoundInfo   = { n, phase: 'live'|'over', startedAt, endsAt, results?: RoundResult[] }   // server ms
 RoundResult = { slot, seat: number|null, name, score, bot, place }
 Slot        = { slot, seat: number|null, name, bot }
@@ -275,7 +290,7 @@ ControlWire = [seat, rs, own (1|0), ack]    // one per present seat, in snap.c a
 ```
 
 **The shell's watch socket** (`/<game>/__watch?room=&b=`) gets
-`{ t:'net', room, host, clients, round, roster, snapHz, openedAt, announce, closedUntil?, counts: {players, screens, waiting, humans, bots, maxPlayers}, memory: {snapBytes, ckptBytes, ckptAgeMs, stateKeys, stateBytes}, stats }`
+`{ t:'net', room, host, clients, round, roster, snapHz, openedAt, announce, closedUntil?, counts: {players, screens, waiting, watchers, humans, bots, maxPlayers}, memory: {snapBytes, ckptBytes, ckptAgeMs, stateKeys, stateBytes}, stats }`
 about once a second and on every change, and the owner's controls as they happen
 (section 15): `announce` (the same frame the game gets), `closed { until, message }`, and,
 only for the browser they are about (its room key `b`), `kicked { until, message }` and
@@ -289,6 +304,12 @@ held out of it, hears so at once.
   `room-closed`, and `until` and `message` for the last two);
 - `pick` (with `seat`): the game's `net.pickPlayer(seat)`, a player clicked. Only the studio
   owner's page does anything with it (section 15).
+- `view` (a watcher; section 16): `seat`, `following`, `follows` (the game draws the followed
+  player), `canFollow`, `whyNot`; and `scores` (`[{ seat, score }]`, once a second, from the
+  game's `scores` probe).
+
+**Parent page → game frame** (revision 5): `postMessage { t: 'homie-watch', follow: seat | 'auto' | null }`.
+The helper takes it only from its own parent window, and only as a watcher.
 
 The shell must check `ev.source === frame.contentWindow`. The frame is an opaque origin,
 so `ev.origin` is `"null"`.
@@ -486,6 +507,7 @@ Measured, with Gem Rush's bump (owner movement, 30–50 ms one way):
    - use separate storage keys, or a SQLite-backed object, if a save can pass 128 KiB.
 7. **Choose the device** with the short-edge rule (≤ 540 px is a phone; `?hand=`
    overrides). `?screen=1` makes a spectator that shows a QR code to the game URL.
+   `/<game>/watch?room=` makes a watcher, with a strip of the players (section 16).
 8. **Show room facts** from the watch feed or the frame's messages: the lobby line,
    results, and with `?debug=1` the debug strip.
 9. **One matcher:** every Play door for a game lands in the same rooms (the `Lobby`).
@@ -508,7 +530,9 @@ Measured, with Gem Rush's bump (owner movement, 30–50 ms one way):
 4. **When seated:** call `net.input([...avatar, ...intent], held)` every frame. Adopt
    your body on `control` with `reset`. While `!net.owned`, predict (section 8).
 5. **Render others** from `net.sample()` and your own body locally. A spectator gets an
-   overview camera.
+   overview camera. **Draw from `net.viewSeat`** (section 16): your own seat when you play,
+   the followed player's body, camera and HUD when you watch, the overview when it is `null`;
+   call `net.spotlight(seat)` on a hit or a goal, and expose `scores` for Auto and the strip.
 6. **Draw your own HUD**: clock (`round.endsAt − net.now()`), scores, results.
 7. **Touch controls on phones:** a drag in the lower-left moves you. On desktop,
    WASD and the arrow keys.
@@ -616,9 +640,9 @@ function frame(dt) {
     if (net.snapshotDue()) net.snapshot(fastState(), tick);
     net.state('world', slowWorld());                                                   // sent only when it changed
   } else net.input([q(me.x), q(me.y), q(me.vx), q(me.vy), stick.x, stick.y], heldButtons());
-  render(hosting ? authoritative : net.sample());
+  render(hosting ? authoritative : net.sample(), net.viewSeat);                         // camera + HUD: whose view (section 16)
 }
-net.expose({ self: () => me, peer: (seat) => positionOf(seat), frames: () => frameCount });
+net.expose({ self: () => me, peer: (seat) => positionOf(seat), frames: () => frameCount, scores: () => scoresBySeat() });
 ```
 
 ```sh
@@ -707,3 +731,85 @@ line across the top until it ends, and tells a muted player so.
 **Launch states** are the site's, not the relay's: a game that is private or an invite-only
 beta gives each browser it lets in a signed ticket (`t`) for its frame and sockets, and the
 Worker refuses a socket without one before it reaches the room.
+
+## 16. Watching (revision 5)
+
+A **watcher** watches a live room from any player's view. Nothing is streamed: the watcher's
+own browser loads the game and receives what a replica receives (snapshots, keyed state, events
+sent to everyone), and draws it with the followed player's camera and HUD. Every existing game
+is watchable on day one as its spectator overview; a game that draws `net.viewSeat` lets the
+watcher switch between the players.
+
+**Who a watcher is (the relay).**
+- The shell's watch door (`/<game>/watch?room=<room>&follow=<seat>|auto|overview`) boots the
+  game with `HOMIE_NET = { …, want: 'screen', watch: true, follow, watchPolicy }`, and the
+  socket's address carries `w=1`. A revision-5 helper also says `watch: true` in its `hello`.
+  Either one makes the socket a watcher:
+  - it **never takes a seat**, at its hello or later, whatever its hello asks for;
+  - it **hosts only a room no player can host**: election ranks every visible, responsive
+    player above it, and a watcher never deposes a frozen host at its hello;
+  - its peer record carries `watch: true`, and the watch feed counts it (`counts.watchers`);
+  - for every cap it is a screen: `ev` at 2/s and 512 B, one of the room's `+16` sockets.
+- `welcome.watch = { follow, why? }` says whether it may follow one player's view, and a
+  `watch { follow, why }` frame says so when that changes. `why` is `overview` (the game shows
+  watchers the whole room only) or `seated-here` (this browser holds a seat in this room).
+- A game whose game.json says `"watch": false` has no watch door: the Worker answers it with a
+  page that says so and refuses a `w=1` socket (403), and the relay refuses a watching hello
+  with `error watch-off` (final). The Worker passes the game's rule to the room with every
+  socket (`wp=follow|overview|off`).
+
+**What the game does (the helper).**
+
+| Call | Meaning |
+|---|---|
+| `net.watching` | This browser watches. |
+| `net.viewSeat` | Whose camera and HUD to draw: a player's own seat; the seat a watcher follows; `null` for the overview camera. Reading it (or listening for `view`) tells the watch page that this game draws the followed player. A game that never does is shown as its overview, and the page says so. |
+| `net.on('view', ({ seat, following, prev, why }) => …)` | Whose view changed. `why`: `start`, `seat`, `asked`, `auto`, `left` (the followed player left; Auto takes over, and returns to them if they are back within 30 s), `back`, `policy`. |
+| `net.follow(seat \| 'auto' \| null)` | Follow a seat, the action, or the whole room. The watch page's strip and keys call it through the frame; a game's own spectator UI may too. False when not allowed. |
+| `net.spotlight(seat)` | Something happened to this player (a hit, a kill, a goal). A no-op except on a watcher in Auto. |
+| `net.players()` | The seated players in seat order (key 1 is the first). |
+| `net.following`, `net.canFollow` | What was asked; whether this watcher may choose. |
+| `net.watchedSeat` | `viewSeat` without claiming the camera follows: for an overlay that only marks the followed player (the port's HUD). |
+
+- **Auto** shows a player for at least 3.5 s, then cuts to the newest spotlight. With no action,
+  every 12 s it looks at the leader of the game's `scores` probe
+  (`net.expose({ scores: () => [{ seat, score }] })`; a tie keeps who is shown), else the next
+  player in seat order. Nobody seated: the overview.
+- **Keys** inside the frame, for a watcher who clicked into the game: 1–9 the n-th player in
+  seat order, A Auto, O or 0 the whole room, ← → the previous or next player
+  (`createNetplay({ watchKeys: false })` turns them off). The watch page answers the same keys.
+- The helper tells its page `view` and `scores` (section 5) and takes `homie-watch` from its
+  own parent window only.
+- **Draw the followed player as that player's own browser frames them**: their body under the
+  camera, their score or health in the HUD, their row marked as "you" is (with their name, never
+  "You"). Their own body is interpolated like every other one; nothing of yours moves.
+
+**Hidden information.** A watcher receives what any replica receives. What is private goes to
+one seat (`net.send(kind, data, seat)`), so a watcher following that seat never has it. A game
+whose shared state itself shows a hand or a role (cards, a traitor game) says game.json
+`"watch": "overview"`: its watchers draw the whole room only and the strip only names the
+players. `"watch": false` removes the watch door. Neither is a wall a modified browser cannot
+climb, and neither needs to be: anyone may take a seat in a public room and receive the same
+stream as a player. The rule decides what is offered and drawn.
+
+**A second tab is not a peek.** A browser that holds a seat in a room watches that room in the
+overview only (`seated-here`), for as long as its seat is there: the relay compares the
+browser's room key (`b`, section 15), so a second tab cannot look over an opponent's shoulder
+with a click. Another device is another watcher, as it would be another player.
+
+**Launch states and the owner's controls.** The watch door is the play door: a private game or
+an invite-only beta is watched only by whoever may play it, and their ticket rides in the
+frame's and the sockets' addresses as it does for Play. A kick holds that browser out of
+watching the room too (the same room key), and a closed room closes for watchers.
+
+**Old games and old relays.**
+- A game with a helper from before revision 5 is booted as a screen: it draws its overview, the
+  Worker's `w=1` makes the relay treat it as a watcher, and the page lists the players without
+  letting the watcher choose.
+- A revision-5 helper on an older relay is a plain screen (no relay ever seated a screen); with
+  no `welcome.watch`, following is the page's to allow.
+
+**Cost.** A watcher is one more socket on the fan-out (outgoing messages are not billed) and one
+ping every 2 s (a request, billed 20:1). Like a big screen, a watcher alone keeps a room's object
+awake; the room's host of last resort is the watcher's browser, running the bots.
+

@@ -230,6 +230,9 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       ...(g.saves === true || (g.saves && typeof g.saves === 'object') ? { saves: true } : {}),
       // game.json `"launch": "private" | "invite"`: the game's launch state until its owner sets one live (the office).
       ...(g.launch === 'private' || g.launch === 'invite' ? { launch: g.launch } : {}),
+      // game.json `"watch"` (NETPLAY.md section 16): watchers see any player's view (the default), only the whole room
+      // ("overview": hidden hands or roles), or nothing (false: no watch door).
+      ...(g.watch === 'overview' ? { watch: 'overview' } : g.watch === false || g.watch === 'off' ? { watch: 'off' } : {}),
       // Its source licence (worker/license.mjs), and, for a remix, what it is a remix of (shown on its landing).
       license: licenseOf(g.license),
       ...(remixRow(g.remixOf) ? { remixOf: remixRow(g.remixOf) } : {}),

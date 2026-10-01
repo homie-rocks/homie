@@ -4,7 +4,8 @@
  * results card between rounds. Everything is text on small translucent chips;
  * nothing opaque sits in the middle of the screen during play; names are set
  * with textContent (people type them). A big screen (a spectator) gets the
- * same board without any "you".
+ * same board without any "you"; a watcher following a player (NETPLAY.md
+ * section 16) sees that player's row and result marked the way "you" is.
  *
  * A game with its own HUD should draw the same facts itself (clock from
  * room.clock(), results from room.results()) instead.
@@ -59,19 +60,21 @@ export function createHud<B extends BodyBase>(room: Room<B, any, any>, opts: Hud
   const paint = (): void => {
     const c = room.clock();
     clock.textContent = c.phase === 'none' ? 'Joining…' : c.phase === 'live' ? `Round ${c.n} · ${Math.floor(c.secondsLeft / 60)}:${String(c.secondsLeft % 60).padStart(2, '0')}` : `Next round in ${c.secondsLeft}`;
-    const me = room.mySeat();
+    // A watcher's followed player is marked as "you" is (net.watchedSeat says it without claiming the camera follows).
+    const me = room.net.watching ? room.net.watchedSeat : room.mySeat();
+    const watchingSeat = room.net.watching && me !== null;
     const rows = room.view().slice().sort((a, b) => b.score - a.score || Number(a.bot) - Number(b.bot)).slice(0, phone ? 4 : 5);
     board.textContent = '';
     for (const b of rows) {
       const d = document.createElement('div');
-      const mine = !spectator() && me !== null && b.seat === me && !b.bot;
+      const mine = (watchingSeat || !spectator()) && me !== null && b.seat === me && !b.bot;
       d.className = mine ? 'me' : b.bot ? 'bot' : '';
-      d.textContent = `${mine ? 'You' : b.name}${b.bot ? ' · bot' : ''}  ${b.score}`;
+      d.textContent = `${mine && !watchingSeat ? 'You' : b.name}${b.bot ? ' · bot' : ''}  ${b.score}`;
       board.append(d);
     }
     const r = room.round;
     if (r && r.phase === 'over' && r.results) {
-      const key = `${r.n}:${r.endsAt}`;
+      const key = `${r.n}:${r.endsAt}:${me}`;
       if (key !== lastResults) {
         lastResults = key;
         results.textContent = '';
@@ -79,8 +82,8 @@ export function createHud<B extends BodyBase>(room: Room<B, any, any>, opts: Hud
         const ol = document.createElement('ol');
         for (const row of r.results.slice(0, 6)) {
           const li = document.createElement('li');
-          const mine = !spectator() && me !== null && row.seat === me && !row.bot;
-          li.textContent = `${mine ? 'You' : row.name}${row.bot ? ' (bot)' : ''} — ${row.score}${opts.unit ? ` ${opts.unit}` : ''}`;
+          const mine = (watchingSeat || !spectator()) && me !== null && row.seat === me && !row.bot;
+          li.textContent = `${mine && !watchingSeat ? 'You' : row.name}${row.bot ? ' (bot)' : ''} — ${row.score}${opts.unit ? ` ${opts.unit}` : ''}`;
           if (mine) li.style.color = 'var(--hp-accent,#ffd166)';
           ol.append(li);
         }

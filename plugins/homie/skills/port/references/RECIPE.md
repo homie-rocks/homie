@@ -57,6 +57,8 @@ const room = P.createRoom({
 room.hosting            // true while this browser runs the rules
 room.bodies             // host: Map slot → body (people and bots)
 room.mySeat()           // my seat, or null for the big screen
+room.viewSeat()         // whose view to draw: my seat; for a watcher, the player it follows; null: the overview
+room.viewBody()         // that player's body as everyone draws it (or null)
 room.avatar(b)          // host: the owner's last input frame for body b (owner movement)
 room.bound(b, claim, maxSpeed, dt)   // host: accept a plausible claimed position, reset a teleport
 room.presses(b)         // host: button presses from that seat since last call ({ fire: 1 })
@@ -292,6 +294,22 @@ phones scan to join that room. When there is no seat:
 - an overview camera that shows the whole arena, or a director that follows the most
   interesting person (a person before a bot) and cuts cleanly, never swinging;
 - type big enough for a room: the clock and the board at least 2.2vmin.
+
+**Watchers** (`/<id>/watch?room=`, NETPLAY.md section 16) are spectators who choose a
+player to follow (a strip of names, keys 1-9, Auto). Make the camera follow
+`room.viewBody()` exactly as that player's own browser frames them, mark their row in
+the board (createHud does), and keep the overview for `null`:
+
+```js
+const view = room.viewBody();                       // the followed player (a watcher), my own seat (a player), or null
+const target = view && view.seat === room.mySeat() && !room.net.watching ? me : view;
+if (target) camera.follow(target.x, target.y); else camera.overview();
+room.on('event', (e) => { if (e.k === 'hit') room.net.spotlight(e.d.by); });   // Auto cuts to the action
+room.net.expose({ scores: () => room.view().map((b) => ({ seat: b.seat, score: b.score })) });   // the strip's scores, Auto's leader
+```
+
+A port that never reads `viewSeat` is still watchable: its watchers see the overview. A
+game with hidden hands or roles says `game.json` `"watch": "overview"` or `false`.
 
 ## 9. The probe
 

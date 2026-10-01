@@ -80,7 +80,7 @@ studio's pinned copy, never a registry lookup of the bare name.
 (`node_modules/@homie-rocks/studio/site/SITE.md` says all of it):
 
 - **Sections, like homie.rocks:** Home (the featured game, live rooms, latest posts), Games, Music, Videos,
-  Rooms (every public room playing now, joinable) and Posts. A section with nothing in it has no tab, and its
+  Rooms (every public room playing now, joinable and watchable) and Posts. A section with nothing in it has no tab, and its
   page is not found.
 - **A new studio goes live with its Home only:** its name and "First game coming soon", with what is on the way
   (games, posts, music and videos), until its first game, song or video is published. A post shows there at once.
@@ -111,6 +111,14 @@ studio's pinned copy, never a registry lookup of the bare name.
   scoreboard or a bar is there, move it in game.json `"screen": { "share": … }`: a corner or `top-center`, per
   device (`desk`, `phone`, `sideways`), with an `x` / `y` offset in pixels, and `"label": false` to keep it
   a small icon (`node_modules/@homie-rocks/studio/site/SITE.md`). Look at it on a phone and a computer.
+- **Watch any player.** Every live room can be watched at `/<id>/watch?room=<room>` (each room on the Rooms page
+  and the landing has a Watch button): the game itself, drawn by the watcher's own browser, which never takes a
+  seat, with a strip of the players to switch between (a tap, keys 1-9, A for Auto, O for the whole room). Point the
+  camera and the HUD at `net.viewSeat` (your own seat when playing; the followed player when watching; null: the
+  overview camera; `room.viewBody()` in a port), and call `net.spotlight(seat)` on a hit, a kill or a goal so
+  Auto cuts to it (`NETPLAY.md` section 16). A game that never reads `viewSeat` is watched as its overview. A
+  game with hidden hands or roles says game.json `"watch": "overview"` (the whole room only) or `false` (no
+  watch door); a private or invite-only game is watched only by those it lets in.
 - Change a game in small steps, build, and look at it (`dev`, then `check`).
 - A game's id is its URL (`/<id>/`); keep it once published.
 - **Remixing.** A public game shares its source at `/games/<id>/source.json`, with who made it (the studio, the

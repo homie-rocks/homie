@@ -50,6 +50,21 @@ Make it the game the person asked for, in small steps:
   (`roundSeconds`) and the code in agreement.
 - Phones get touch (the drag from the lower left), computers get keys; keep the centre
   of the screen clear during play; names people type are drawn as text only.
+- **Watch any player.** Anyone can watch a live room at `/<id>/watch?room=<room>` and switch
+  between the players' views (a strip of names, keys 1-9, Auto). Draw the camera and HUD
+  from `net.viewSeat` (your own seat when playing; the followed player when watching; `null`:
+  the overview), call `net.spotlight(seat)` on a hit, a kill or a goal so Auto cuts to it,
+  and expose `scores` (`[{ seat, score }]`) for the strip and the leader. Gem Rush does all
+  three. A game that never reads `viewSeat` is watched as its overview. Hidden hands or
+  roles: `game.json` `"watch": "overview"` (the whole room only), or `false` (no watch
+  door). NETPLAY.md section 16.
+
+  ```ts
+  const view = net.offline ? 0 : net.viewSeat;           // whose camera and HUD this browser draws
+  const body = view === null ? null : bodyOfSeat(view);   // the followed body, sampled like every other
+  camera.follow(body ?? arenaCentre);                     // null: the overview camera
+  hud.mark(view);                                         // their row, their score; "You" only when it is you
+  ```
 - Update `game.json` `name` and `blurb`, and the `<title>`.
 
 ## Progress that lasts: cloud saves

@@ -16,6 +16,11 @@
  *            allocated or the host changes, plus the latest checkpoint/round/
  *            roster/state at most every 30 s. That is what lets a Worker deploy
  *            (which evicts every Durable Object) keep seats, bodies and round.
+ *
+ * WATCHERS (revision 5, NETPLAY.md section 16): a screen that came to watch
+ * (`hello.watch`, or a socket the Worker opened through a game's watch door,
+ * `conn.watch`) never takes a seat, hosts only when no player can, and is told
+ * whether it may follow one player's view (`welcome.watch`, then `watch` frames).
  * =============================================================================
  */
 
@@ -51,6 +56,16 @@ export const STATE_CAPS = Object.freeze({ keys: 64, bytes: 65536 });
 export const CONTROL_LIMITS = Object.freeze({ minutes: 24 * 60, announce: 280, announceSeconds: 3600, bans: 200, mutes: 200, message: 200 });
 /** What a muted player cannot say: an `ev` whose kind starts with one of these (a game's chat, quick lines, emotes). */
 export const SPEECH = /^(?:say|chat|emote)/i;
+/**
+ * The contract's 12 player colours: a peer's `colour` (its seat % 12) is an index into this list. The watch page's
+ * player strip draws them; a game that colours its players the same way matches it (Gem Rush does).
+ */
+export const NET_PALETTE = Object.freeze(['#8fe36a', '#ffd166', '#ef6f6c', '#6cb4ee', '#c792ea', '#f4a261', '#2ec4b6', '#ff8fab', '#a7c957', '#e9c46a', '#90e0ef', '#f28482']);
+/**
+ * What a game lets its watchers see (game.json "watch", passed by the Worker as `conn.watchPolicy`): `follow` (any
+ * player's view, the default), `overview` (the whole room only: a game with hidden hands or hidden roles), `off`.
+ */
+export const WATCH_POLICIES = Object.freeze(['follow', 'overview', 'off']);
 const oneLine = (v, max) => String(v ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 /** A short tag for a browser's room key: enough for the owner to see "the same browser", never the key itself. */
 export function browserTag(key) {
@@ -193,6 +208,8 @@ export class NetRoom {
       id: randomId(6), conn, ip: conn.ip ?? null, browser: conn.browser ?? null, player: conn.player ?? null, via: conn.via ?? null, helloed: false, seat: null, token: null, name: '', typed: '', colour: 0,
       device: 'desk', want: 'play', canHost: true, hidden: false, waiting: false, joinedAt: now, lastSeen: now, lastSnapAt: 0,
       rates: new Map(), drops: [], errAt: 0,
+      // A watcher (section 16): the Worker's word for a socket opened through a watch door, else the hello's own.
+      watch: conn.watch === true, policy: WATCH_POLICIES.includes(conn.watchPolicy) ? conn.watchPolicy : 'follow', follow: null, followWhy: null,
     };
     this.clients.set(c.id, c);
     return {
@@ -223,7 +240,7 @@ export class NetRoom {
   host() { return this.hostId ? this.clients.get(this.hostId) ?? null : null; }
   hostRef() { const h = this.host(); return h ? { id: h.id, seat: h.seat } : null; }
   roleOf(c) { return c.id === this.hostId ? 'host' : c.seat === null ? 'screen' : 'replica'; }
-  peer(c) { return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(this.muteOf(c) ? { muted: true } : {}) }; }
+  peer(c) { return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(c.watch ? { watch: true } : {}), ...(this.muteOf(c) ? { muted: true } : {}) }; }
   peers() { return this.live().map((c) => this.peer(c)); }
   stateObject() { const o = {}; for (const [k, v] of this.state) o[k] = v.d; return o; }
 
@@ -417,11 +434,16 @@ export class NetRoom {
     if (this.closedUntil > this.now()) return refuse('room-closed', this.closedWhy || 'The studio closed this room.', { until: this.closedUntil });
     const ban = this.banOf(c, typeof m.token === 'string' ? m.token : '');
     if (ban) return refuse('kicked', ban.message, { until: ban.until });
+    // A watcher of a game that cannot be watched (game.json "watch": false) is refused for good (section 16).
+    const watching = c.watch || m.watch === true;
+    if (watching && c.policy === 'off') return refuse('watch-off', 'this game cannot be watched; play it instead');
     if (this.perIp && c.ip && live.filter((o) => o.ip === c.ip).length >= this.perIp) return refuse('too-many', `at most ${this.perIp} sockets per address in one room`);
     if (live.length >= this.maxPlayers + this.maxScreens) return refuse('room-full', 'this room is full; try another');
     const now = this.now();
     c.device = m.device === 'phone' || m.device === 'tv' ? m.device : 'desk';
-    c.want = m.want === 'screen' ? 'screen' : 'play';
+    // A watcher is a screen that never takes a seat, whatever else its hello says.
+    c.watch = watching;
+    c.want = watching || m.want === 'screen' ? 'screen' : 'play';
     c.canHost = m.canHost !== false;
     c.game = typeof m.game === 'string' ? m.game.slice(0, 64) : '';
     c.typed = typeof m.name === 'string' ? m.name.replace(/\s+/g, ' ').trim().slice(0, 24) : '';
@@ -430,7 +452,7 @@ export class NetRoom {
     this.reapSeats(now);
     let full = false;
     if (c.want === 'play' && !this.seatClient(c, typeof m.token === 'string' ? m.token : '')) { full = true; c.waiting = true; }
-    if (c.seat === null) c.name = c.typed || (c.want === 'screen' ? 'Screen' : 'Watcher');
+    if (c.seat === null) c.name = c.typed || (c.want === 'screen' && !c.watch ? 'Screen' : 'Watcher');
     c.helloed = true;
     c.joinedAt = now;
     if (!this.openedAt) this.openedAt = now;
@@ -442,12 +464,14 @@ export class NetRoom {
     let deposed = null;
     const h = this.host();
     const preferred = this.preferHost && now < this.preferHost.until ? this.preferHost.seat : undefined;
-    if (c.canHost && (preferred === undefined || preferred === c.seat)) {
+    // A watcher hosts only a room nobody else can host (a player who can is elected first), and never deposes one.
+    const lastResort = c.watch && live.some((o) => o.canHost && !o.watch && !o.hidden);
+    if (c.canHost && !lastResort && (preferred === undefined || preferred === c.seat)) {
       if (!h) {
         role = 'host';
         why = this.lastSnap || this.lastCkpt ? 'resumed' : 'first';
         if (preferred !== undefined) this.preferHost = null;
-      } else if (h.hidden || now - h.lastSeen > this.silentMs) {
+      } else if (!c.watch && (h.hidden || now - h.lastSeen > this.silentMs)) {
         // The host is a frozen phone (socket open, nothing sent): the newcomer runs the round now, not after a stall.
         deposed = h;
         role = 'host';
@@ -469,13 +493,16 @@ export class NetRoom {
       ...(role === 'host' ? { ckpt: this.lastCkpt } : {}),
       ...(full ? { full: true } : {}),
       ...(this.liveAnnouncement() ? { announce: this.liveAnnouncement() } : {}),
+      ...(c.watch ? { watch: this.followFacts(c) } : {}),
     });
     for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
+    // A seat taken by a browser that also watches this room: its watching tab sees the overview from now on.
+    this.refreshWatchers(c);
     if (deposed) {
       this.send(deposed, { t: 'role', role: deposed.seat === null ? 'screen' : 'replica', why, host: this.hostRef(), peers: this.peers() });
       for (const o of this.others(c)) if (o !== deposed) this.send(o, { t: 'host', host: this.hostRef(), why });
     }
-    this.log({ ev: 'hello', room: this.code, id: c.id, seat: c.seat, device: c.device, want: c.want, role, why, full, resumed: typeof m.token === 'string' && m.token === c.token });
+    this.log({ ev: 'hello', room: this.code, id: c.id, seat: c.seat, device: c.device, want: c.want, role, why, full, resumed: typeof m.token === 'string' && m.token === c.token, ...(c.watch ? { watch: true } : {}) });
     this.persist(now); // a new seat (or a new host) is written now, not on the next tick: a deploy can come any moment
     this.tellWatchers();
   }
@@ -539,7 +566,35 @@ export class NetRoom {
       for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
       this.log({ ev: 'seated', room: this.code, id: c.id, seat: c.seat });
       this.persist();
+      this.refreshWatchers();
       this.tellWatchers();
+    }
+  }
+
+  /* ------------------------------------------------------------ watchers (section 16) */
+
+  /**
+   * Whether this watcher may follow one player's view, and if not, why: `overview` (the game shows watchers the
+   * whole room only) or `seated-here` (the same browser holds a seat in this room: a second tab is not a way to
+   * look over an opponent's shoulder). The stream is the same either way; this decides what the watcher's page
+   * offers and its helper renders.
+   */
+  followFacts(c) {
+    if (c.policy === 'overview') return { follow: false, why: 'overview' };
+    if (c.browser && this.live().some((o) => o !== c && o.seat !== null && o.browser === c.browser)) return { follow: false, why: 'seated-here' };
+    return { follow: true };
+  }
+
+  /** Tell every watcher whose right to follow changed (a seat taken or left by its own browser). */
+  refreshWatchers(except = null) {
+    for (const c of this.live()) {
+      if (!c.watch) continue;
+      const f = this.followFacts(c);
+      const why = f.why ?? null;
+      if (c === except || (c.follow === f.follow && c.followWhy === why)) { c.follow = f.follow; c.followWhy = why; continue; }
+      c.follow = f.follow;
+      c.followWhy = why;
+      this.send(c, { t: 'watch', ...f });
     }
   }
 
@@ -560,6 +615,7 @@ export class NetRoom {
     }
     if (!this.live().length) this.emptySince = now;
     this.seatWaiting();
+    if (c.seat !== null) this.refreshWatchers();
     this.tellWatchers();
   }
 
@@ -576,6 +632,8 @@ export class NetRoom {
       .filter((c) => c.canHost && c.id !== excludeId)
       .sort((a, b) => Number(a.hidden) - Number(b.hidden)
         || silent(a) - silent(b)
+        // A watcher is the host of last resort: any player who can host comes first (section 16).
+        || Number(a.watch) - Number(b.watch)
         || tenure(b) - tenure(a)
         || (DEVICE_RANK[a.device] ?? 3) - (DEVICE_RANK[b.device] ?? 3)
         || a.joinedAt - b.joinedAt);
@@ -963,6 +1021,7 @@ export class NetRoom {
         players: live.filter((c) => c.seat !== null).length,
         screens: live.filter((c) => c.seat === null).length,
         waiting: live.filter((c) => c.waiting).length,
+        watchers: live.filter((c) => c.watch).length,
         humans: slots.filter((s) => s && !s.bot).length,
         bots: slots.filter((s) => s && s.bot).length,
         maxPlayers: this.maxPlayers,

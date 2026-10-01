@@ -83,6 +83,14 @@ export interface Room<B extends BodyBase, F = unknown, S = unknown> {
   readonly round: RoundInfo | null;
   /** My seat (0 when offline: a solo game with bots, the way a plain file or a dev server plays). */
   mySeat(): number | null;
+  /**
+   * WATCHING (NETPLAY.md section 16): whose camera and HUD to draw. My own seat when I play (0 offline); for a
+   * watcher, the seat it follows, or null for the overview camera. Point your camera at `viewBody()` (for your own
+   * seat, keep drawing your local body) and your HUD at its numbers; null: your spectator overview.
+   */
+  viewSeat(): number | null;
+  /** The body of viewSeat() as everyone draws it (host: the real one; others: interpolated), or null. */
+  viewBody(): B | null;
   /** Host: my own body. Replica: null (draw yours from your local state). */
   mine(): B | null;
   /** Host, every frame: the round clock and the snapshot. Replica: no-op. Call AFTER your rules moved the bodies. */
@@ -320,6 +328,13 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     get bodies() { return bodies; },
     get round() { return hosting ? round : (net.roundInfo ?? round); },
     mySeat,
+    viewSeat: () => (net.offline ? 0 : net.viewSeat),
+    viewBody() {
+      const s = net.offline ? 0 : net.viewSeat;
+      if (s === null) return null;
+      for (const b of room.view()) if (!b.bot && b.seat === s) return b;
+      return null;
+    },
     mine: () => (hosting ? bodyOfSeat(mySeat()) : null),
     update() {
       if (!hosting) return;

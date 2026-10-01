@@ -80,7 +80,7 @@ its D1; nothing is stored by hand. studio.json `homie.directory: false` keeps a 
 
 Every studio site has the same sections as homie.rocks, in the studio's own look (`site/theme.json`): Home (the
 featured game, live rooms, the latest posts), Games, Music, Videos, Rooms (every public room playing now,
-joinable) and Posts (`posts/*.md`, with Atom and JSON feeds). A section with nothing in it has no tab, and its
+joinable and watchable) and Posts (`posts/*.md`, with Atom and JSON feeds). A section with nothing in it has no tab, and its
 page answers 404. Every game gets a landing at `/<game>/`: a full-bleed hero from its own footage or art, the
 pitch, a big Play button into a public room, how to play on a phone, a computer and a TV (with the join code),
 live rooms, credits (the original and its licence for a port; "Remix of <game> by <studio>", linked, for a
@@ -97,13 +97,20 @@ game's landing still. Every HTML answer is `no-transform`, and the site's pages 
 site. A game made with Homie's arcade controls that knocks for a Homie box (`/__homie/call`) is told
 `not-a-homie`, at the site's root as under the game.
 
+Anyone can **watch** a live room from any player's view at `/<game>/watch?room=<room>` (a Watch button sits beside
+Join on every room): the game itself, drawn by the watcher's own browser as a watcher that never takes a seat,
+with a strip of the players to switch between (a tap, keys 1-9, Auto, the whole room). A game draws the followed
+player's camera and HUD from `net.viewSeat` (Gem Rush and Ember Vale do; a game that does not is watched as its
+overview), and game.json `"watch": "overview"` or `false` keeps hidden hands hidden. Private and invite-only games
+are watched only by those they let in (NETPLAY.md section 16, site/SITE.md).
+
 ## Upgrading a studio
 
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.14.4 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.14.4 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.15.0 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.15.0 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -234,7 +241,7 @@ device; the owner's own passkey account (`homie-studio players owner`) counts as
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.14.4 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.15.0 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 
@@ -411,7 +418,7 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
 | `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`. |
-| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site or from storage at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
+| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/<game>/watch` watches a live room from any player's view (NETPLAY.md section 16); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site or from storage at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
 | `worker/site.mjs`, `lib/site.mjs`, `lib/markdown.mjs`, `site/SITE.md` | The site: its sections, each game's landing, posts and their feeds, the look (theme tokens) and what the studio's `site/` folder overrides; the safe markdown posts are written in. `worker/pages.mjs`: the play page. |
 | `worker/stats.mjs`, `worker/stats-page.mjs`, `lib/stats.mjs` | The studio's own stats: what is counted and how, the owner-only `/api/stats` and `/_studio/stats`, and `homie-studio stats`. |
 | `lib/media.mjs`, `media/MEDIA.md` | The `music/` and `videos/` manifests: which entries get a page, and where each file's bytes come from (the site itself up to 25 MiB a file, the studio's storage, or a link). `media list` shows it; `media put` uploads a file to storage and records its key. |

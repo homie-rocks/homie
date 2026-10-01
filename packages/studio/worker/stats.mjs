@@ -9,6 +9,7 @@
  *   visit   a page opened (home, a game's page, /music/, a song's page, /videos/, a video's page)
  *   play    a game's play page opened: somebody pressed Play (or followed a Play link or QR code)
  *   screen  a big screen opened (/<game>/tv)
+ *   watch   a watch page opened (/<game>/watch: a live room from any player's view; 0.15.0)
  *   room    a room opened: the first seat taken in an empty room (public, or a named one)
  *   round   a round finished (source: `people` when a person was in it, `bots` when only bots were)
  *   humans  the people in finished rounds, summed
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS stats_keys (
 ) WITHOUT ROWID;
 `;
 
-export const METRICS = Object.freeze(['visit', 'play', 'screen', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video']);
+export const METRICS = Object.freeze(['visit', 'play', 'screen', 'watch', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video']);
 const MAX_METRICS = new Set(['peak', 'peak-room']);
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -288,7 +289,7 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
     const of = (m, extra = () => true) => sum((r) => r.metric === m && r.subject === g.id && extra(r));
     return {
       id: g.id, name: g.name, seats: g.players?.max ?? null,
-      visits: of('visit'), plays: of('play'), screens: of('screen'), rooms: of('room'),
+      visits: of('visit'), plays: of('play'), screens: of('screen'), watches: of('watch'), rooms: of('room'),
       rounds: of('round'), roundsWithPeople: of('round', (r) => r.source === 'people'), peopleInRounds: of('humans'),
       peakPlayers: maxOf((r) => r.metric === 'peak' && r.subject === g.id), peakInOneRoom: maxOf((r) => r.metric === 'peak-room' && r.subject === g.id),
       playingNow: now[g.id]?.players ?? 0, roomsNow: now[g.id]?.rooms ?? 0,
@@ -316,7 +317,7 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
   return {
     v: 1, kind: 'homie-studio-stats', studio: cat.studio?.name ?? null, range, ...(only ? { only } : {}),
     totals: {
-      visits: sum((r) => r.metric === 'visit'), plays: sum((r) => r.metric === 'play'), screens: sum((r) => r.metric === 'screen'),
+      visits: sum((r) => r.metric === 'visit'), plays: sum((r) => r.metric === 'play'), screens: sum((r) => r.metric === 'screen'), watches: sum((r) => r.metric === 'watch'),
       rooms: sum((r) => r.metric === 'room'), rounds: sum((r) => r.metric === 'round'), roundsWithPeople: sum((r) => r.metric === 'round' && r.source === 'people'),
       peopleInRounds: sum((r) => r.metric === 'humans'), songPlays: sum((r) => r.metric === 'song'), videoViews: sum((r) => r.metric === 'video'),
       peakPlayers: Math.max(0, ...perGame.map((g) => g.peakPlayers)), peakInOneRoom: Math.max(0, ...perGame.map((g) => g.peakInOneRoom)),
