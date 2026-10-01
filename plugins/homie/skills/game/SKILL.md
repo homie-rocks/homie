@@ -57,7 +57,7 @@ forgets everything 60 s after its last player leaves.
   stats, a hardcore mode with a hall of the fallen, on the same rooms as any game).
 - In the game: `import { createSaves } from '@homie-rocks/studio/saves'`; `const saves = createSaves({ game: '<id>' })`.
   Load on arrival (`await saves.get('hero')`), save when it changes (`saves.set('hero', hero)`, at most about once a
-  second), and reload on `saves.on('player', …)` (the player signed in on this device). Keep one character in ONE
+  second), and reload on `saves.on('player', ...)` (the player signed in on this device). Keep one character in ONE
   key. Lifetime numbers: `saves.stats.add({ kills: 1 })`. Hardcore: `saves.fall({ character, summary, wipe: true })`.
 - The host decides what happened and tells the player's own browser (a netplay event to its seat); only that
   browser changes and saves the player's progress.
@@ -84,7 +84,7 @@ commands below report into it. If a command answers `stopped`, the person presse
 end there and ask before starting again.
 
 **Started from the Claude app** (a Claude Code session whose prompt came from a "Build it"
-card, naming a build `hb_…` and maybe a setup `hs_…`): the chat already opened the build, so
+card, naming a build `hb_...` and maybe a setup `hs_...`): the chat already opened the build, so
 take it instead of starting one, then work on a branch and publish as a pull request. The
 prompt names the studio's repository: first check this session is in it
 (`git remote get-url origin`). If it is in another one (`homie-rocks/homie` is Homie's
@@ -92,10 +92,10 @@ engine and template, never a studio), stop and say so; never attach from it.
 
 ```sh
 npm install                                            # the studio's pinned toolkit, from registry.npmjs.org
-npx --no-install homie-studio setup attach hs_…        # only when the prompt names a setup: once, first
-npx --no-install homie-studio progress attach hb_…     # this session takes the chat's build (once)
+npx --no-install homie-studio setup attach hs_...        # only when the prompt names a setup: once, first
+npx --no-install homie-studio progress attach hb_...     # this session takes the chat's build (once)
 npx --no-install homie-studio chrome install           # Linux without Chrome: Chrome for Testing, once
-# … make the game, build, dev, check (below) …
+# ... make the game, build, dev, check (below) ...
 npx --no-install homie-studio progress change "<what the change does, one line>"
 git switch -c <short-branch> && git add -A && git commit -m "<what it does>" && git push -u origin HEAD
 gh pr create --fill
@@ -123,7 +123,7 @@ npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 --shots ./.
 in the same room, and both see a round finish with both of them in the results. Look
 at the screenshots it saves. Never say a game works without a passing `check`.
 Start `npm run dev` as a background task your app keeps alive (Claude Code: the Bash
-tool's `run_in_background`), and when you are done with it: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
+tool's `run_in_background`), and when you are done with it: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof ... | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
 
 Then make it good, not just working:
 
@@ -170,7 +170,7 @@ page epic" means all of this, in this order:
    A game whose picture is white or cream (a light arena) takes `"scheme": "light"`: its landing is drawn
    light, where the studio's dark tint would turn the picture grey. `hero/wide.jpg` is also the game's
    picture on every card and in the directory, so pick a frame that reads small.
-3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "…" }]`). A port
+3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "..." }]`). A port
    keeps its `credits.json` (the original, its author and licence, every part inside); never drop one.
 4. **The look**: the studio's `site/theme.json` colours; `landing.theme` gives this game its own
    `accent` and `glow` on its page, when two games of one studio should not look alike.

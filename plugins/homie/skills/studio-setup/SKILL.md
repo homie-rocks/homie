@@ -1,6 +1,6 @@
 ---
 name: studio-setup
-description: Set up a Homie studio (one repository with games/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare, free plan, no payment method) by a built-in checklist that never jumps ahead — setup status first (accounts and tools, what each unlocks, the exact fix), name the studio, see a working game, make one small change, plan the game into its Game Codex, build it (alone or with parallel agents) with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says "set up a game studio called X" (with or without "and make a multiplayer game").
+description: Set up a Homie studio (one repository with games/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare, free plan, no payment method) by a built-in checklist that never jumps ahead: setup status first (accounts and tools, what each unlocks, the exact fix), name the studio, see a working game, make one small change, plan the game into its Game Codex, build it (alone or with parallel agents) with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says "set up a game studio called X" (with or without "and make a multiplayer game").
 ---
 
 # Set up a studio
@@ -51,14 +51,14 @@ few seconds, and never prints a key:
    use "My Studio" for now; it only reads). It returns the exact pinned command, like
    `npx -y @homie-rocks/studio@<version> new "<folder>" --name "<Name>" --homie https://homie.rocks`,
    and a numbered list of next steps: this checklist decides the order, not that list.
-2. Run that same package with `setup status` instead of `new …`:
+2. Run that same package with `setup status` instead of `new ...`:
    `npx -y @homie-rocks/studio@<version> setup status --connector yes --json` (inside a studio:
    `npx --no-install homie-studio setup status --connector yes --json`). If it does not know
    `setup status` (a toolkit older than 0.11.0 calls it unknown, or asks for a studio first), run `npx -y @homie-rocks/studio@latest setup status
    --connector yes --json` for the status only (it only reads). `--connector yes` because
    the Homie tools are in your tool list; if `studio_scaffold` is not there, say `--connector no`,
    show the result, and stop: without the connector there is no pinned toolkit to use.
-3. Show it as one short checklist, a line per row: ✓ ready, → do this now, ○ optional, … later.
+3. Show it as one short checklist, a line per row: ✓ ready, → do this now, ○ optional, ... later.
    Each line says what the row **unlocks** (its `unlocks`) and, when it is not ready, the exact fix
    (`fix.run`: a command you run; `fix.open`: a page the person taps; `fix.say`: the words):
 
@@ -66,7 +66,7 @@ few seconds, and never prints a key:
    Setup status
      ✓ Node.js, Chrome, ffmpeg: you can make, check and sound games here
      ✓ Homie connector: the directory and the cards
-     … Cloudflare: needed to go online (step 6). No account yet? Make a free one now:
+     ... Cloudflare: needed to go online (step 6). No account yet? Make a free one now:
        https://dash.cloudflare.com/sign-up (no payment method), and click the email it sends.
      ○ GitHub (optional): a private backup and publishing by pull request
      ○ ElevenLabs (optional): songs and game scores, on your own plan
@@ -131,7 +131,7 @@ npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 --shots ./.
 `check` proves it first: two fresh browsers press Play, share a room and see a round finish (about 70 s).
 Show one of its pictures. Start `npm run dev` as a background task your app keeps alive (Claude Code: the
 Bash tool's `run_in_background`); stop it with `npx --no-install homie-studio dev --stop`, which stops
-exactly this studio's dev server and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill`: other
+exactly this studio's dev server and nothing else. Never `pkill`, `killall` or `lsof ... | xargs kill`: other
 projects on this machine may run their own `wrangler dev`. Without a game, `npm run dev` shows the studio's
 own home page ("First game coming soon") at http://127.0.0.1:8787/.
 
@@ -219,7 +219,7 @@ runs on their Cloudflare and what it costs (free). The codex is on the site for 
 works). The studio keeps its own stats for them (`npx --no-install homie-studio stats`, or `stats link`).
 Add: Homie for studios is in beta; bugs, port requests and questions go to
 https://github.com/homie-rocks/homie/issues/new/choose. Commit the studio (`git add -A && git commit -m
-"…"` inside the studio folder: it is the studio's own repository).
+"..."` inside the studio folder: it is the studio's own repository).
 
 ## Storage, later and only when asked
 

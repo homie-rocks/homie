@@ -496,7 +496,7 @@ async function film(root) {
     await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
     const errs = []; page.on('pageerror', (e) => errs.push(e.message));
     await page.goto(`http://127.0.0.1:${port}/film/index.html?mode=${mode}`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction('window.READY === true || window.FAIL', { timeout: 120_000 });
+    await page.waitForFunction(() => window.READY === true || window.FAIL, { timeout: 120_000 });
     const failed = await page.evaluate(() => window.FAIL);
     if (failed) throw new Error(`the film page failed: ${failed}`);
     const n0 = Math.round(from * fps); const n1 = Math.round(to * fps);

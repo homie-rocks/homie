@@ -14,7 +14,7 @@ It needs Node 22, ffmpeg and Chrome; `--json` on every command.
 
 Check disk before any capture or render (`df -h .`): keep 10 GB free. Raw frames are deleted
 once encoded. Finish in this turn: start the local site with the app's background-task tool
-(not `nohup … &` inside a command, which dies with the command) and wait on it.
+(not `nohup ... &` inside a command, which dies with the command) and wait on it.
 
 ## The rules that come first
 

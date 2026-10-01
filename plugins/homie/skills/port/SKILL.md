@@ -65,7 +65,7 @@ request at https://github.com/homie-rocks/homie/issues/new/choose (the game's pu
 address and licence, the grade and why; no keys or private addresses).
 
 Licence: a game you did not make must carry a licence that allows changing and
-publishing it (MIT, Apache-2.0, BSD, ISC…). Keep the licence file with the game.
+publishing it (MIT, Apache-2.0, BSD, ISC...). Keep the licence file with the game.
 No licence, or a licence that forbids it: port it for private testing only and say so.
 
 ## 2. Bring it into the studio
@@ -127,7 +127,7 @@ Non-negotiable, every port:
 
 In the studio, start the site locally and run the checks. Both are long-running:
 start each as a **background task your app keeps alive** (Claude Code: the Bash
-tool's `run_in_background`; a `nohup … &` inside an ordinary command can be killed
+tool's `run_in_background`; a `nohup ... &` inside an ordinary command can be killed
 when that command returns, and a dev server that dies mid-check fails every later
 row). The full check takes 3–6 minutes; poll its log with short commands.
 
@@ -140,7 +140,7 @@ tail -5 .port-check.log                            # poll until it prints PASS o
 The check says so when the site stops answering; restart the dev server as a
 background task and rerun.
 
-`--only owner-desk,owner-phone,…` reruns single rows while you fix. Each row, what
+`--only owner-desk,owner-phone,...` reruns single rows while you fix. Each row, what
 it measures and how to fix a failure: [references/CHECKS.md](references/CHECKS.md).
 
 - **owner-desk / owner-phone / owner-iphone**: hold a direction 5 s → one straight
@@ -163,7 +163,7 @@ does the big screen show the game? A passing check with an ugly, tiny or
 confusing picture is not done. When you debug in a browser of your own, open one
 at a time (the check already runs two). Fix, rebuild
 (`npm run build`; the dev server serves the new files), check again. When you are
-done, stop the dev server: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof … | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
+done, stop the dev server: stop it with `npx --no-install homie-studio dev --stop`, which stops exactly this studio's dev server (and its Wrangler) and nothing else. Never `pkill`, `killall` or `lsof ... | xargs kill` by name or port: other projects on this machine may run their own `wrangler dev`, and a pattern stops theirs too.
 
 If something still fails after real effort, say exactly which row, what you saw,
 and why — never hide it.

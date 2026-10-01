@@ -71,7 +71,7 @@ example: `references/CODEX.md`):
   places, levels. Each `### Name` has its picture, a chip line (`` `C-01` `good: Ally` `danger: Boss` ``),
   an italic one-line subtitle, a sentence, and `**Key:** value` stats.
 - **Controls** as a table with a column per device; **Milestones** as a checklist (`- [x]` done) that
-  matches the scope; **Latest** as dated decisions (`- 2026-10-01: …`); **Open questions** as a list.
+  matches the scope; **Latest** as dated decisions (`- 2026-10-01: ...`); **Open questions** as a list.
 - **Pictures** only from the studio's folder (a real frame of the game, its sprites, its cover, art the
   `art` skill made). Until the game has art, a card without a picture is fine; never present a mock-up
   as the game.

@@ -28,7 +28,7 @@ or anyone else were.
 
 | The person says | Run (or the MCP tool) | What happens |
 |---|---|---|
-| "Tell everyone…" | `office announce "<one line>" [--game <id>] [--room <code>]` (`room_announce`) | At once: a banner every player sees in the game, 30 s by default (`--seconds`). |
+| "Tell everyone..." | `office announce "<one line>" [--game <id>] [--room <code>]` (`room_announce`) | At once: a banner every player sees in the game, 30 s by default (`--seconds`). |
 | "Make invite codes for the beta" | `office invite <id> --label "<who>" --uses 1` (`game_launch_state` with `invites`) | At once: invite links and codes (XXXX-XXXX); each lets one browser in, or `--uses <n>` / `any`. |
 | "Kick / boot that player" | `office kick <id> <room> <seat number or name>` (`room_kick`) | ASKED: the owner taps once to confirm. They are removed with a polite notice and cannot come back to that room for 10 minutes (`--minutes`). |
 | "Close that room" | `office close <id> <room>` (`room_close`) | ASKED, then everyone is sent out with a thank-you; nobody gets in for 10 minutes. |
@@ -44,7 +44,7 @@ you asked for, give them the link, and check afterwards (`office`, or the ask's 
   `game.json` before deploying; the owner opens it with `office link --to /<id>/play`.
 - Mute stops a player's chat and emotes (`say`, `chat`, `emote` events). If the game has
   other ways to talk, make it hide them with `net.isMuted(seat)`; a game can also show
-  announcements its own way (`net.on('announce', …)`) and open a player's owner card when
+  announcements its own way (`net.on('announce', ...)`) and open a player's owner card when
   their body is clicked (`net.pickPlayer(seat)`): `NETPLAY.md` section 15.
 - Kicks hold a player's browser (and account, once players sign in), not their network,
   unless the owner asks for `--address` (a household or a phone carrier can share one).
