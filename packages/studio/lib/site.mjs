@@ -214,9 +214,9 @@ export function readPosts(root, { games = [], songs = [], videos = [], log = () 
 
 export const PARTIALS = ['head', 'header', 'footer', 'home', 'game', 'post'];
 /** Paths a page of the studio's own can never take: the rooms, the game files, the API and the owner's pages. */
-const RESERVED_PAGE = /^\/(?:api|_studio|_homie|_site|media|\.well-known|games\/[^/]+)\/|^\/[a-z0-9][a-z0-9-]{0,39}\/(?:play|tv|live|api|__[a-z]+)(?:\/|$)/;
+const RESERVED_PAGE = /^\/(?:api|account|_studio|_homie|_site|media|\.well-known|games\/[^/]+)\/|^\/[a-z0-9][a-z0-9-]{0,39}\/(?:play|tv|live|api|__[a-z]+)(?:\/|$)/;
 /** Top-level names site/public must not take (the build's own output). */
-const RESERVED_PUBLIC = new Set(['games', 'music', 'videos', 'games.json', '_site', '_homie', '_studio', 'api', 'media']);
+const RESERVED_PUBLIC = new Set(['games', 'music', 'videos', 'games.json', '_site', '_homie', '_studio', 'api', 'media', 'account']);
 
 function walk(dir, fn, rel = '') {
   for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {

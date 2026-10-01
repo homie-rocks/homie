@@ -200,6 +200,19 @@ export function rangeOf(params, now = Date.now()) {
   return { from: dayOffset(end, -(days - 1)), to: end, days };
 }
 
+/**
+ * Player accounts (0.12.0, worker/players.mjs): how many, never who. Null before migration 0004 or with no D1.
+ * `accounts` have a passkey; `guests` saved something without one; `active7d` played in the last 7 days.
+ */
+export async function playersNow(env) {
+  if (!env?.DB) return null;
+  const now = Date.now();
+  try {
+    const r = await env.DB.prepare('SELECT SUM(guest = 0) AS accounts, SUM(guest = 1) AS guests, SUM(guest = 0 AND created_at >= ?1) AS new7d, SUM(seen_at >= ?1) AS active7d FROM players').bind(now - 7 * 86400_000).first();
+    return { accounts: Number(r?.accounts) || 0, guests: Number(r?.guests) || 0, newAccounts7d: Number(r?.new7d) || 0, active7d: Number(r?.active7d) || 0 };
+  } catch { return null; }
+}
+
 /** The Lobby's count of people in every room of each game, right now. */
 async function playingNow(env, games) {
   const out = {};
@@ -243,7 +256,7 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
   const scoped = rows.filter(inScope);
   const sum = (pred) => scoped.reduce((n, r) => n + (pred(r) ? Number(r.n) : 0), 0);
   const maxOf = (pred) => scoped.reduce((n, r) => Math.max(n, pred(r) ? Number(r.n) : 0), 0);
-  const now = await playingNow(env, games);
+  const [now, people] = await Promise.all([playingNow(env, games), only ? null : playersNow(env)]);
   const perGame = games.map((g) => {
     const of = (m, extra = () => true) => sum((r) => r.metric === m && r.subject === g.id && extra(r));
     return {
@@ -282,6 +295,8 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
       peakPlayers: Math.max(0, ...perGame.map((g) => g.peakPlayers)), peakInOneRoom: Math.max(0, ...perGame.map((g) => g.peakInOneRoom)),
       playingNow: perGame.reduce((n, g) => n + g.playingNow, 0),
     },
+    // Player accounts (saves/SAVES.md): counts only, never a name, a passkey or an email.
+    ...(people ? { players: people } : {}),
     crossings: { fromHub: byKind('hub'), fromStudios: byKind('studio'), fromSearch: byKind('search'), fromWeb: byKind('web'), fromLinks: byKind('link') },
     // The studio's own pages: its home, and the /music/ and /videos/ lists (a catalogue's road).
     pages: Object.fromEntries(['home', 'games', 'rooms', 'posts', 'music', 'videos'].map((p) => [p, sum((r) => r.metric === 'visit' && r.subject === p)])),

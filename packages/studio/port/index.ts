@@ -12,6 +12,7 @@
  *   createHud    a minimal clock / scores / results overlay
  *   BotBrain, seek, nearest, rubberBand
  *                bot scaffolds
+ *   createSaves  player accounts and cloud saves (a character that lasts days, on every device; saves/SAVES.md)
  * and everything from @homie-rocks/studio/netplay.
  */
 import './early';
@@ -27,3 +28,4 @@ export { exposePort, type PortProbeOptions, type View } from './probe';
 export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt } from './room';
 export { createHud, type HudOptions } from './hud';
 export { BotBrain, seek, flee, wanderer, nearest, rubberBand, protectedNewcomer, type V2 } from './bots';
+export { createSaves, SAVES_VERSION, type Saves, type SavesOptions, type Player, type SaveEntry, type SetResult, type Memorial, type SavesStatus, type Conflict } from '../saves/saves';

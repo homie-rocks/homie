@@ -75,6 +75,9 @@ export function createKeys(target: Window | HTMLElement = window): Keys {
   const edges = new Set<string>();
   const kd = (e: Event): void => {
     const k = e as KeyboardEvent;
+    // A key typed into the game's own text box (a hero's name, a chat line) is a word, never a move.
+    const el = k.target as HTMLElement | null;
+    if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName ?? ''))) return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(k.code)) k.preventDefault();
     if (!held.has(k.code)) edges.add(k.code);
     held.add(k.code);

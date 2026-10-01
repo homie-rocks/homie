@@ -29,6 +29,9 @@
  *   /api/stats                 the studio's numbers, for its owner only (a read key, or the owner's page session)
  *   /_studio/stats             the owner's private stats page (one-time sign-in link from `homie-studio stats link`)
  *   /_homie/site.js            the pages' one script
+ *   /account/                  a player's account: a passkey, a name, their data (worker/players.mjs, saves/SAVES.md)
+ *   /api/player/...            sign in and up, saves, lifetime stats and memorials (the game's saves bridge, via the
+ *                              play shell), export and delete
  *
  * A page in the studio's site/pages wins over the generated one at the same address. Every HTML answer is
  * `no-transform` (an edge in front of a custom domain injects nothing) and is never framed by another site.
@@ -57,11 +60,14 @@ import {
 } from './site.mjs';
 import { count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
 import { ownerRoutes } from './stats-page.mjs';
+import { playerRoutes } from './players.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 
 export { SEAT_MAX } from './seats.mjs';
 /** For a studio's own wrapper Worker: count its own pages the way the template counts its pages. */
 export { countVisit } from './stats.mjs';
+/** Players and cloud saves (saves/SAVES.md): `players.list`, `players.get`, `players.isOwner`… for the back office. */
+export { players, cleanName } from './players.mjs';
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const POST_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
@@ -277,6 +283,8 @@ async function gameDocument(request, env, url, game, meta, cat) {
     want,
     debug: url.searchParams.get('debug') === '1',
     ...(meta?.movement ? { movement: meta.movement } : {}),
+    // game.json "saves": the play shell around this frame answers @homie-rocks/studio/saves (saves/SAVES.md).
+    ...(meta?.saves && want === 'play' ? { saves: true } : {}),
   };
   let html = await res.text();
   const head = `<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
@@ -375,6 +383,7 @@ async function route(request, env, ctx) {
   }
   if (path.startsWith('/_studio/')) return ownerRoutes(request, env, url, { catalogueOf: getCat });
   if (path === '/__homie' || path.startsWith('/__homie/')) return notAHomie(request);
+  if (path.startsWith('/api/player/') || path === '/account' || path === '/account/' || path === '/_homie/account.js') return playerRoutes(request, env, ctx, url, { catalogueOf: getCat });
   if (path === '/_homie/site.js') return new Response(SITE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   if (path === '/api/stats/beat' && request.method === 'POST') return mediaBeat(request, env, ctx, url);
   if (path === '/api/stats') {
@@ -441,7 +450,8 @@ async function route(request, env, ctx) {
   if (path.startsWith('/media/')) {
     if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });
     const key = decodeURIComponent(path.slice('/media/'.length));
-    if (!key || key.includes('..')) return new Response('not found', { status: 404 });
+    // A player's large saves live under players/ in the same bucket: never served here (saves/SAVES.md).
+    if (!key || key.includes('..') || key.startsWith('players/')) return new Response('not found', { status: 404 });
     return mediaObject(request, env, key);
   }
   if (path === '/posts/feed.xml' || path === '/posts/feed.json') {

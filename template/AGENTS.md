@@ -62,6 +62,10 @@ studio's pinned copy, never a registry lookup of the bare name.
   `studio_stats` (never paste a key anywhere else). `stats share on` tells the directory two numbers
   (played this week). The site counts and never tracks: no cookie on a visitor, no person identified,
   nothing sent anywhere; house QA and `check` runs are not counted.
+- `npx --no-install homie-studio players` — how many players have accounts here (and guests, and who played
+  this week): counts and names for the owner, never a passkey or an email. `players owner` gives the owner a
+  one-time link that marks their own player account (a passkey on this site) as the owner's, so their games and
+  the studio's back office recognise them.
 - `npx --no-install homie-studio upgrade` — after pinning a newer `@homie-rocks/studio` (or through
   `npx -y --package=<its tarball> homie-studio upgrade`): what the newer template adds to this studio (AGENTS.md
   sections, READMEs, .gitignore lines) and what it keeps. It changes nothing until `--apply`, and never
@@ -104,6 +108,13 @@ studio's pinned copy, never a registry lookup of the bare name.
   a small icon (`node_modules/@homie-rocks/studio/site/SITE.md`). Look at it on a phone and a computer.
 - Change a game in small steps, build, and look at it (`dev`, then `check`).
 - A game's id is its URL (`/<id>/`); keep it once published.
+- **Progress that lasts** (a character, unlocks, a collection, days of play) goes in **saves**, never in the room:
+  a room forgets everything 60 s after its last player leaves. game.json `"saves": true` and
+  `createSaves` from `@homie-rocks/studio/saves` (`node_modules/@homie-rocks/studio/saves/SAVES.md`): per
+  player and game, versioned, offline-tolerant, in this studio's own D1. Pressing Play needs no account; a guest's
+  progress stays on that device until they make a passkey account (at `/account/`, or the game's own button), and
+  then it follows them to every device. Lifetime stats and a hardcore "hall of the fallen" are in it too. The
+  `ember-vale` starter shows the whole pattern.
 
 ## The Game Codex and progress
 

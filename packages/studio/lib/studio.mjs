@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 export const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const RESERVED_IDS = new Set(['api', 'media', 'games', 'assets', '_homie', '_site', '_studio', 'well-known', 'index', 'play', 'studio', 'studios', 'music', 'videos', 'posts', 'rooms', 'feed']);
+const RESERVED_IDS = new Set(['api', 'media', 'games', 'assets', '_homie', '_site', '_studio', 'well-known', 'index', 'play', 'studio', 'studios', 'music', 'videos', 'posts', 'rooms', 'feed', 'account']);
 
 export function findStudio(from = process.cwd()) {
   let at = resolve(from);

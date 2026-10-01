@@ -34,20 +34,32 @@ said; these are starting points, not a script.
 - "Bots fill empty seats. Should they be easy, or play to win?"
 - "Someone who joins mid-round takes a bot's place. Do they keep the bot's score or start at zero?"
 
-## 5. Art and film
+## 5. Progress and saves
+
+Always ask: **"Does progress need to persist across sessions or devices?"** Then, if it does:
+
+- "What does a player keep between visits: a character and its level, an inventory, unlocks, a collection,
+  their settings? I'd keep the hero in one save, so it always saves whole."
+- "Should it follow them to their phone and their laptop? Then they make an account with a passkey (Face ID or
+  a fingerprint, no password); until they do, they play as a guest and keep it on that device."
+- "Lifetime numbers that never reset: kills, gold earned, time played, best level?"
+- "Can a death be forever? A hardcore mode wipes the character and writes its name in a hall of the fallen."
+- No persistence (a match is all there is): say so in one line and move on; nothing to wire.
+
+## 6. Art and film
 
 - "Who are the characters, creatures or pieces? Name them and I'll give each a card."
 - "Places: one arena, or several levels or zones?"
 - "A cover and a trailer come from the game itself, free. Painted art or generated video is on your own
   fal account with a budget you set: want any of it, and how much at most?"
 
-## 6. Music and sound
+## 7. Music and sound
 
 - "A theme that loops while you play: fast and driving, calm, spooky, heroic? About what tempo?"
 - "Which moments need a sound you'd recognise with your eyes closed?" (pick-up, hit, win, countdown)
 - "Synthesized here for free, or a song from ElevenLabs on your own plan (quoted first)?"
 
-## 7. Scope
+## 8. Scope
 
 - "For the first playable version: the core loop, one place, two or three characters, bots. Then art,
   sound and the landing page. Then more places or modes. Sound right?"
@@ -63,4 +75,4 @@ said; these are starting points, not a script.
 | Co-op survival | waves, the enemies, reviving | 2–6 players, waves of 30 s, survive as many as you can |
 | Party / quick rounds | the minigames, scoring across rounds | 4–8 players, 30 s rounds, five rounds a match |
 | Puzzle versus | the board, sending trouble to others | 2–4 players, until one board fills |
-| Adventure / RPG | classes, monsters, loot, zones, death | 2–8 players in a shared world, rounds as days or quests |
+| Adventure / RPG | classes, monsters, loot, zones, death, what persists | 2–8 players in a shared world, rounds as days or quests; the hero in cloud saves (start from the `ember-vale` starter) |

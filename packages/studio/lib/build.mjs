@@ -220,6 +220,9 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
       roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
       ...(g.screen ? { screen: g.screen } : {}),
+      // game.json "saves": true — player accounts and cloud saves (saves/SAVES.md): the play shell answers the game's
+      // saves calls, and the site's nav and the game's landing offer a player account.
+      ...(g.saves === true || (g.saves && typeof g.saves === 'object') ? { saves: true } : {}),
       landing: landingOf(g, join(dist, 'games', g.id), { videos: media.videos, songs: media.songs, log }),
     };
   });

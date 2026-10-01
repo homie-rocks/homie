@@ -156,6 +156,15 @@ The game runs in a sandboxed frame with an opaque origin, which is why its allow
 (`fullscreen *; autoplay *; gamepad *`): Safari refuses a bare `gamepad` there (`getGamepads()` throws a
 SecurityError), so a controller would not work.
 
+## Player accounts: `/account/`
+
+A studio whose games keep saves (game.json `"saves": true`, [../saves/SAVES.md](../saves/SAVES.md)) has a player
+account page at `/account/`, in the studio's look: make an account with a passkey, sign in on another device,
+choose a name, add or remove passkeys, a recovery email (only with a mail sender), download everything, delete
+everything. The play page of such a game carries the saves bridge and a "who is playing" row in its room sheet,
+and shows a passkey sheet over the game when the game asks (`saves.signIn()`); its landing links the account page.
+`/account/` belongs to the site: `site/pages/account/` and `site/public/account/` are refused.
+
 ## The arcade knock
 
 A game made with Homie's arcade controls asks its page's origin for a Homie box (`GET /__homie/call`), and a score

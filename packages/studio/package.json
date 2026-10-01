@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/studio",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "A studio for games, music and video on its own Cloudflare: scaffold, multiplayer starters on the netplay contract, a port toolkit that makes existing single-player web games multiplayer, the site Worker with public rooms (Table/Lobby Durable Objects and D1, all on the free Workers plan, no payment method), a site with the hub's sections (Home, Games, Music, Videos, Rooms, Posts with feeds) in the studio's own look, an epic landing page for every game, optional R2 storage for large media, deploy, and the homie.rocks directory.",
   "type": "module",
   "license": "Apache-2.0",
@@ -26,6 +26,10 @@
       "types": "./port/early.ts",
       "default": "./port/early.ts"
     },
+    "./saves": {
+      "types": "./saves/saves.ts",
+      "default": "./saves/saves.ts"
+    },
     "./worker": "./worker/index.mjs",
     "./package.json": "./package.json"
   },
@@ -35,6 +39,7 @@
     "netplay/",
     "port/",
     "worker/",
+    "saves/",
     "starters/",
     "media/",
     "site/",

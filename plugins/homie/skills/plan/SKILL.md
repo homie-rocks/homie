@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Plan a game with the person before building it — a short, natural interview (game type and genre, style and art direction, devices, players and rooms, art and film, music and sound, scope) that ends in the game's Game Codex, games/<id>/CODEX.md, drawn as a page in the game's own palette, fonts and art that anyone can read and steer (a Claude artifact where the app has artifacts, else a page in their browser, and a private page on the studio's site), kept true as decisions change, with the build's progress on it. Use for step 4 of a new studio, or when someone says "let's plan my game", "what should my game be", "make a design doc, a game bible or a codex", "show me the plan", or before a big change to a game.
+description: Plan a game with the person before building it — a short, natural interview (game type and genre, style and art direction, devices, players and rooms, progress that lasts (cloud saves, player accounts), art and film, music and sound, scope) that ends in the game's Game Codex, games/<id>/CODEX.md, drawn as a page in the game's own palette, fonts and art that anyone can read and steer (a Claude artifact where the app has artifacts, else a page in their browser, and a private page on the studio's site), kept true as decisions change, with the build's progress on it. Use for step 4 of a new studio, or when someone says "let's plan my game", "what should my game be", "make a design doc, a game bible or a codex", "show me the plan", or before a big change to a game.
 ---
 
 # Plan a game: the interview and its Game Codex
@@ -12,7 +12,7 @@ tab. People who never read code see the game in it and steer it; you keep it tru
 
 ## 1. The interview: natural, not a form
 
-Collect all seven topics, in whatever order the conversation goes:
+Collect all eight topics, in whatever order the conversation goes:
 
 1. **Game type and genre**: what kind of game, what a player does in the first ten seconds, how a round
    is won. Why it is fun with strangers who just pressed Play.
@@ -22,12 +22,20 @@ Collect all seven topics, in whatever order the conversation goes:
    say what changes on each (touch on the lower left, keys, the big screen).
 4. **Players and rooms**: how many in a room (up to 32), teams or free-for-all, round length, what bots do
    in empty seats, what a player who arrives mid-round gets.
-5. **Art and film**: characters, creatures, places; the cover; a trailer or a cutscene; what is made
+5. **Progress and saves**: always ask it plainly: "Does progress need to persist across sessions or devices?"
+   A round that is all there is (a brawl, a race) needs nothing. A character that levels up for days, unlocks,
+   a collection, a hardcore mode with one life: yes. Then the game keeps it in **cloud saves** (player accounts
+   with passkeys, a guest's progress kept until they make one), never in the room, which forgets everything 60 s
+   after its last player leaves. Ask what is kept (the hero, the inventory, unlocks), what lifetime stats count
+   (kills, gold, time played), and whether a death can be forever (hardcore: a wipe and a memorial in the hall of
+   the fallen). Write it into the codex under **Rooms and players** as "Progress that lasts", with a dated line
+   under Latest; the `game` skill wires it in.
+6. **Art and film**: characters, creatures, places; the cover; a trailer or a cutscene; what is made
    from the game itself (free) and what is painted or generated (the `art` and `video` skills, on their
    own accounts, under a budget).
-6. **Music and sound**: the theme's mood and tempo; the sounds that matter (a pick-up, a hit, a win);
+7. **Music and sound**: the theme's mood and tempo; the sounds that matter (a pick-up, a hit, a win);
    synthesized here for free (the `sound` skill) or songs from ElevenLabs (the `music` skill).
-7. **Scope**: what the first playable version has, what comes later, and the milestones between.
+8. **Scope**: what the first playable version has, what comes later, and the milestones between.
 
 How to ask:
 

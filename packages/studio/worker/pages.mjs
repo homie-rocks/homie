@@ -3,6 +3,7 @@
  * worker/site.mjs. Every name a player typed is escaped.
  */
 import { esc, layout } from './site.mjs';
+import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
 
 export { homePage, mediaIndexPage, notFoundPage, songPage, videoPage } from './site.mjs';
 
@@ -121,7 +122,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .sheet .foot a, .sheet .foot button { color: #aab3c7; background: none; border: 0; padding: 6px 2px; font: inherit; text-decoration: none; cursor: pointer; }
 .sheet .foot a:hover, .sheet .foot button:hover { color: #fff; }
 .toast { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); z-index: 8; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; background: rgba(8,12,22,.9); color: #fff; font: 600 13px/1.2 ui-sans-serif, system-ui, sans-serif; pointer-events: none; }
-[hidden] { display: none !important; }`;
+[hidden] { display: none !important; }${g.saves && !screen ? SAVES_SHELL_CSS : ''}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
@@ -137,7 +138,8 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
       <a data-bigscreen target="_blank" rel="noopener" href="/${esc(g.id)}/tv"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg><span>Big screen</span></a>
     </div>
     <span class="link" data-room-link></span>
-    <div class="foot"><a href="/${esc(g.id)}/">← ${esc(g.name)}</a><button type="button" data-copy-link>Copy link</button></div>
+    <div class="foot"><a href="/${esc(g.id)}/">← ${esc(g.name)}</a><button type="button" data-copy-link>Copy link</button></div>${g.saves ? `
+    <div class="who-row" data-who hidden><span data-who-name></span><button type="button" data-who-act></button></div>` : ''}
   </div>
 </div>
 <div class="toast" data-toast role="status" hidden></div>`;
@@ -148,7 +150,8 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 <div class="card" data-screen hidden></div>
 ${joinCard}${share}
 <script>window.__HOMIE_PLAY=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
-<script>${SHELL_JS}</script>`, css, frameAncestors(cat));
+<script>${SHELL_JS}</script>${g.saves && !screen ? `
+<script>${SAVES_SHELL_JS}</script>` : ''}`, css, frameAncestors(cat));
 }
 
 /** The play page's own document (no site chrome: the game owns the whole screen). */
@@ -263,6 +266,10 @@ const SHELL_JS = String.raw`(function () {
     var q = new URLSearchParams({ room: room, device: device, want: want });
     if (token) q.set('k', token);
     if (params.get('name')) q.set('name', params.get('name'));
+    else {
+      // A player with an account (or a named guest) on this studio plays under their own name in every room.
+      try { var who = JSON.parse(localStorage.getItem('homie.player') || 'null'); if (who && typeof who.name === 'string' && who.name) q.set('name', who.name.slice(0, 24)); } catch (e) {}
+    }
     if (params.get('debug') === '1') q.set('debug', '1');
     // The frame cannot read this page's address (it is an opaque origin): hand it the game's own switches.
     ['touchdebug', 'cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });

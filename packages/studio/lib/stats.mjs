@@ -21,9 +21,9 @@ const HOUR = 3600_000;
 const RANGES = new Set(['1d', '7d', '30d', '90d']);
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
-const loopback = (url) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
+export const loopback = (url) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
 
-function siteOf(root, url) {
+export function siteOf(root, url) {
   const studio = readStudio(root);
   const site = String(url || siteUrl(root, studio) || '').replace(/\/+$/, '');
   if (!/^https?:\/\//.test(site)) return { studio, site: null };
@@ -31,7 +31,7 @@ function siteOf(root, url) {
 }
 
 /** Put a key's hash into the studio's D1 (remote, or local for a loopback site). The key never leaves this machine. */
-function mint(root, studio, kind, ttlMs, { local }) {
+export function mint(root, studio, kind, ttlMs, { local }) {
   const key = `hsk_${randomBytes(24).toString('hex')}`;
   const hash = createHash('sha256').update(key).digest('hex');
   const now = Date.now();

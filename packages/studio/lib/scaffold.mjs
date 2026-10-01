@@ -24,6 +24,7 @@ import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { STUDIO_VERSION, packageSpec } from './version.mjs';
 import { STATS_MIGRATION, STATS_MIGRATION_FILE } from '../worker/stats.mjs';
+import { PLAYERS_MIGRATION, PLAYERS_MIGRATION_FILE } from '../worker/players.mjs';
 import { themeFile } from './site.mjs';
 import { PACKAGE_ROOT } from './studio.mjs';
 
@@ -149,6 +150,10 @@ studio's pinned copy, never a registry lookup of the bare name.
   \`studio_stats\` (never paste a key anywhere else). \`stats share on\` tells the directory two numbers
   (played this week). The site counts and never tracks: no cookie on a visitor, no person identified,
   nothing sent anywhere; house QA and \`check\` runs are not counted.
+- \`npx --no-install homie-studio players\` — how many players have accounts here (and guests, and who played
+  this week): counts and names for the owner, never a passkey or an email. \`players owner\` gives the owner a
+  one-time link that marks their own player account (a passkey on this site) as the owner's, so their games and
+  the studio's back office recognise them.
 - \`npx --no-install homie-studio upgrade\` — after pinning a newer \`@homie-rocks/studio\` (or through
   \`npx -y --package=<its tarball> homie-studio upgrade\`): what the newer template adds to this studio (AGENTS.md
   sections, READMEs, .gitignore lines) and what it keeps. It changes nothing until \`--apply\`, and never
@@ -191,6 +196,13 @@ studio's pinned copy, never a registry lookup of the bare name.
   a small icon (\`node_modules/@homie-rocks/studio/site/SITE.md\`). Look at it on a phone and a computer.
 - Change a game in small steps, build, and look at it (\`dev\`, then \`check\`).
 - A game's id is its URL (\`/<id>/\`); keep it once published.
+- **Progress that lasts** (a character, unlocks, a collection, days of play) goes in **saves**, never in the room:
+  a room forgets everything 60 s after its last player leaves. game.json \`"saves": true\` and
+  \`createSaves\` from \`@homie-rocks/studio/saves\` (\`node_modules/@homie-rocks/studio/saves/SAVES.md\`): per
+  player and game, versioned, offline-tolerant, in this studio's own D1. Pressing Play needs no account; a guest's
+  progress stays on that device until they make a passkey account (at \`/account/\`, or the game's own button), and
+  then it follows them to every device. Lifetime stats and a hardcore "hall of the fallen" are in it too. The
+  \`ember-vale\` starter shows the whole pattern.
 
 ## The Game Codex and progress
 
@@ -359,7 +371,7 @@ export function studioFiles({ name, slug, homie, template = false }) {
       products: ['Workers', 'D1', 'Durable Objects'],
       bindings: {
         STUDIO_NAME: { description: 'Your studio\'s name, as its site shows it (for example **Night Owls**). Claude can change it later.' },
-        DB: { description: 'The studio\'s own database: finished rounds, the studio\'s own stats (counts, never a visitor) and its claim in the [homie.rocks](https://homie.rocks/studios/) directory. Free plan.' },
+        DB: { description: 'The studio\'s own database: finished rounds, the studio\'s own stats (counts, never a visitor), player accounts and cloud saves for games that keep them, and its claim in the [homie.rocks](https://homie.rocks/studios/) directory. Free plan.' },
       },
     },
   };
@@ -384,6 +396,7 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
 `,
     'site/migrations/0001_studio.sql': MIGRATION,
     [`site/migrations/${STATS_MIGRATION_FILE}`]: STATS_MIGRATION,
+    [`site/migrations/${PLAYERS_MIGRATION_FILE}`]: PLAYERS_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
   };
@@ -451,6 +464,23 @@ export function ensureStatsMigration(root) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, STATS_MIGRATION);
   return `site/migrations/${STATS_MIGRATION_FILE}`;
+}
+
+/**
+ * A studio made before 0.12.0 has no players migration (player accounts and cloud saves, saves/SAVES.md): add it,
+ * so the next `d1 migrations apply` makes the tables. Returns the file it wrote, or null when it was there.
+ */
+export function ensurePlayersMigration(root) {
+  const file = join(root, 'site', 'migrations', PLAYERS_MIGRATION_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, PLAYERS_MIGRATION);
+  return `site/migrations/${PLAYERS_MIGRATION_FILE}`;
+}
+
+/** Every migration the template owns that this studio lacks, added: the files written (deploy and dev say so). */
+export function ensureMigrations(root) {
+  return [ensureStatsMigration(root), ensurePlayersMigration(root)].filter(Boolean);
 }
 
 /**

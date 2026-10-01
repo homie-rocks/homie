@@ -10,7 +10,7 @@
     "studio": "homie-studio"
   },
   "devDependencies": {
-    "@homie-rocks/studio": "0.11.0",
+    "@homie-rocks/studio": "0.12.0",
     "wrangler": "4.145.0"
   },
   "cloudflare": {
@@ -25,7 +25,7 @@
         "description": "Your studio's name, as its site shows it (for example **Night Owls**). Claude can change it later."
       },
       "DB": {
-        "description": "The studio's own database: finished rounds, the studio's own stats (counts, never a visitor) and its claim in the [homie.rocks](https://homie.rocks/studios/) directory. Free plan."
+        "description": "The studio's own database: finished rounds, the studio's own stats (counts, never a visitor), player accounts and cloud saves for games that keep them, and its claim in the [homie.rocks](https://homie.rocks/studios/) directory. Free plan."
       }
     }
   }

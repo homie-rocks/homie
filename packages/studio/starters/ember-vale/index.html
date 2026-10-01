@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Ember Vale</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0f0a; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; font: 15px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #f3ead2; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .ui { position: fixed; z-index: 3; }
+  .pill { left: calc(12px + env(safe-area-inset-left)); top: calc(86px + env(safe-area-inset-top)); display: flex; gap: 6px; }
+  .pill button { min-height: 32px; padding: 0 11px; border-radius: 999px; border: 1px solid rgba(243,234,210,.25); background: rgba(10,14,9,.6); color: inherit; font: 600 12.5px/1 inherit; font-family: inherit; cursor: pointer; backdrop-filter: blur(4px); }
+  .panel { left: 50%; top: 50%; transform: translate(-50%, -50%); box-sizing: border-box; width: min(360px, calc(100vw - 24px)); padding: 18px; border-radius: 16px; background: rgba(14,19,12,.94); border: 1px solid rgba(243,234,210,.2); box-shadow: 0 20px 60px rgba(0,0,0,.55); -webkit-user-select: text; user-select: text; }
+  .panel h2 { margin: 0 0 6px; font-size: 20px; color: #ffcf6e; }
+  .panel p { margin: 0 0 12px; color: #c9c0a6; }
+  .panel input[type=text] { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(243,234,210,.25); background: #070a06; color: #fff; font: 16px inherit; font-family: inherit; }
+  .panel label.hc { display: flex; gap: 8px; align-items: center; margin: 12px 0; color: #e7d9b4; }
+  .panel .go { width: 100%; min-height: 46px; border: 0; border-radius: 12px; background: #ffcf6e; color: #1b1405; font: 800 16px inherit; font-family: inherit; cursor: pointer; }
+  .panel ol { margin: 0 0 12px; padding-left: 20px; max-height: 40vh; overflow: auto; }
+  .panel li { margin: 4px 0; color: #e7d9b4; }
+  .panel li small { color: #a39a80; }
+  .panel .close { float: right; background: none; border: 0; color: #c9c0a6; font-size: 20px; cursor: pointer; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="ui pill"><button type="button" id="who"></button><button type="button" id="hall-btn">Hall of the Fallen</button></div>
+<div class="ui panel" id="make" hidden>
+  <h2>A new hero</h2>
+  <p>Your hero keeps every level and coin, on every device you play on.</p>
+  <input type="text" id="hero-name" maxlength="20" placeholder="Name your hero" autocomplete="off">
+  <label class="hc"><input type="checkbox" id="hero-hc"> Hardcore: one life. A death is forever, and the Hall remembers.</label>
+  <button type="button" class="go" id="hero-go">Into the vale</button>
+</div>
+<div class="ui panel" id="hall" hidden>
+  <button type="button" class="close" id="hall-close" aria-label="Close">×</button>
+  <h2 id="hall-title">Hall of the Fallen</h2>
+  <p id="hall-text">Hardcore heroes who fell in Ember Vale.</p>
+  <ol id="hall-list"></ol>
+  <button type="button" class="go" id="hall-go" hidden>Make a new hero</button>
+</div>
+<script type="module" crossorigin src="./assets/main.js"></script>
+</body>
+</html>

@@ -37,6 +37,8 @@
  *   homie-studio stats link               (a one-time link to the private stats page, for the owner's browser)
  *   homie-studio stats revoke             (every stats key and page session ends)
  *   homie-studio stats share on|off       (tell the homie.rocks directory "played this week", or stop)
+ *   homie-studio players                  (player accounts and guests with saves: counts, never a passkey or an email)
+ *   homie-studio players owner [--revoke] (a one-time link that marks the owner's own player account as the owner's)
  *
  *   homie-studio progress start [<id>] [--what game|song|video] [--title "<what this build does>"]
  *                                        [--budget <dollars>] [--unit usd|credits] [--share]
@@ -96,11 +98,12 @@ import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
 import { recordUpload, resolveMedia, typeOf } from '../lib/media.mjs';
-import { ensureStatsMigration, newStudio } from '../lib/scaffold.mjs';
+import { ensureMigrations, newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
+import { playersOwner, playersShow } from '../lib/players.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -108,7 +111,7 @@ import { installStatusLine, statusLine } from '../lib/statusline.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open'];
+const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -207,8 +210,17 @@ function print(result) {
       for (const e of result.songs) lines.push(`  song ${e.slug}: ${n(e.visits)} page visits, played ${n(e.plays)}`);
       for (const e of result.videos) lines.push(`  video ${e.slug}: ${n(e.visits)} page visits, watched ${n(e.views)}`);
       for (const r of result.referrers.slice(0, 10)) lines.push(`  from ${r.from} (${r.kind}): ${n(r.visits)} visits, ${n(r.plays)} plays`);
+      if (result.players) lines.push(`  players: ${n(result.players.accounts)} accounts (${n(result.players.newAccounts7d)} new this week), ${n(result.players.guests)} guests with saves, ${n(result.players.active7d)} played this week`);
       break;
     }
+    case 'players': {
+      const p = result.players;
+      lines.push(`${p.accounts} player accounts (${p.newAccounts7d} new this week), ${p.guests} guests with saves, ${p.active7d} played this week.`, result.note);
+      break;
+    }
+    case 'players owner':
+      lines.push(result.revoked ? result.message : `One-time link (until ${result.expiresAt}): ${result.link}`, ...(result.revoked ? [] : [result.use]));
+      break;
     case 'stats key':
       lines.push(`Read key (until ${result.expiresAt}): ${result.key}`, result.use);
       break;
@@ -388,6 +400,8 @@ async function main() {
     return { ok: true, command: 'storage', storage: has ? { kind: 'r2', bucket: cf.r2 } : null, why: has ? undefined : 'no storage yet: the studio runs without it; `homie-studio storage add` adds an R2 bucket for large media (Cloudflare asks for a payment method before R2 works)' };
   }
   if (cmd === 'publish') return publish(root, { homie: flags.get('homie'), site: flags.get('site') });
+  if (cmd === 'players' && sub === 'owner') return playersOwner(root, { url: flags.get('url'), revoke: flags.has('revoke') });
+  if (cmd === 'players' && !sub) return playersShow(root, { url: flags.get('url') });
   if (cmd === 'stats' && sub === 'key') return statsKey(root, { url: flags.get('url'), hours: flags.get('hours') });
   if (cmd === 'stats' && sub === 'link') return statsLink(root, { url: flags.get('url') });
   if (cmd === 'stats' && sub === 'revoke') return statsRevoke(root, { url: flags.get('url') });
@@ -562,8 +576,7 @@ async function dev(root) {
   if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
   const studio = readStudio(root);
   const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' };
-  const added = ensureStatsMigration(root);
-  if (added) log(`added ${added} (the studio's own stats)`);
+  for (const added of ensureMigrations(root)) log(`added ${added} (${/players/.test(added) ? 'player accounts and cloud saves' : 'the studio\'s own stats'})`);
   await new Promise((done) => {
     const m = spawn(bin, ['d1', 'migrations', 'apply', 'DB', '--local'], { cwd: workerDir(root), env, stdio: ['ignore', 'ignore', 'inherit'] });
     m.on('close', done);

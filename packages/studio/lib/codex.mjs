@@ -637,6 +637,7 @@ ${game.blurb ?? ''}
 - **Players in a room:** ${players}
 - **Round:** ${game.roundSeconds ? `${game.roundSeconds} s` : 'how long, and how it ends'}
 - **Bots:** fill empty seats; a person who arrives takes a bot's place
+- **Progress that lasts:** ${game.saves ? 'the player\'s own saves (cloud saves: what is kept, lifetime stats, hardcore or not)' : 'none: a round is all there is (or cloud saves, if the plan says progress persists across sessions or devices)'}
 
 ## Music and sound
 

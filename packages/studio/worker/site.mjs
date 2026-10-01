@@ -912,7 +912,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
       <a class="play" href="/${esc(g.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>
       ${liveLine(g, playing, { idle: `Bots hold every empty seat · one tap and you are in` })}
     </div>
-    ${tvOn ? `<a class="also" href="#anywhere">${icon('tv')}<span>Or put it on the big screen</span></a>` : ''}${trailer ? `<a class="also" href="/videos/${esc(trailer.slug)}/">${icon('videos')}<span>Watch the trailer</span></a>` : ''}
+    ${tvOn ? `<a class="also" href="#anywhere">${icon('tv')}<span>Or put it on the big screen</span></a>` : ''}${trailer ? `<a class="also" href="/videos/${esc(trailer.slug)}/">${icon('videos')}<span>Watch the trailer</span></a>` : ''}${g.saves ? `<a class="also" href="/account/?next=${encodeURIComponent(`/${g.id}/play`)}" data-account>${icon('spark')}<span>Your progress follows you: sign in</span></a>` : ''}
   </div>
 </section>`;
 

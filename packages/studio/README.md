@@ -72,8 +72,8 @@ site. A game made with Homie's arcade controls that knocks for a Homie box (`/__
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.11.0 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.11.0 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.12.0 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.12.0 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -93,6 +93,32 @@ block (`maxPlayers`), or a `netplay.json` beside game.json or in the game's buil
 Bots, a late joiner taking a bot's body and a new host after the old one leaves work
 the same at 32 as at 4. One address may hold every seat plus four sockets, so a party
 on one Wi-Fi (or strangers behind one carrier's address) fills a room with a TV beside it.
+
+## Player accounts and cloud saves
+
+A game whose progress must last (a character that levels up for days, unlocks, a collection, a hardcore mode)
+keeps it in **saves**, not in its room: a room forgets everything 60 s after its last player leaves.
+
+```json
+{ "id": "my-rpg", "saves": true }
+```
+
+```ts
+import { createSaves } from '@homie-rocks/studio/saves';
+const saves = createSaves({ game: 'my-rpg' });
+const hero = (await saves.get('hero')) ?? newHero();
+await saves.set('hero', hero);                       // on this device at once, in the studio's D1 when online
+saves.stats.add({ kills: 1 });                       // lifetime numbers that outlive any hero
+await saves.fall({ character: hero.name, summary: { level: hero.level }, wipe: true });   // hardcore
+```
+
+Pressing Play needs no account. A player who saves something is a guest on that browser; with a **passkey**
+(Face ID, a fingerprint, a PIN, no password, no email) it becomes an account on this studio only, and the same
+saves follow them to every device they sign in on. Saves are per player and game, versioned (a stale offline
+copy is a conflict, never an overwrite), capped in size, and offline-tolerant. Players see, download and delete
+everything at `/account/`; the owner sees counts (`homie-studio players`) and, through the back office, names,
+never a passkey or an email. The `ember-vale` starter is a small persistent-character game on the same public
+rooms. Everything, including what is stored and the back office's API: [saves/SAVES.md](saves/SAVES.md).
 
 ## The studio's own stats
 
@@ -116,7 +142,7 @@ studio's own Cloudflare login. `worker/stats.mjs` says exactly what is counted.
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.11.0 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.12.0 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 

@@ -106,6 +106,7 @@ function statsBody(cat, s, url) {
 ${tile(t.visits, 'visits')}${tile(t.plays, 'Play presses')}${tile(t.rooms, 'rooms opened')}${tile(t.rounds, 'rounds finished')}
 ${tile(t.peopleInRounds, 'people in finished rounds')}${tile(t.peakPlayers, 'most playing at once')}${tile(t.playingNow, 'playing right now', t.playingNow ? 'live' : '')}
 ${tile(t.songPlays, 'songs played')}${tile(t.videoViews, 'videos watched')}
+${s.players && (s.players.accounts || s.players.guests) ? `${tile(s.players.accounts, 'player accounts')}${tile(s.players.guests, 'guests with saves')}${tile(s.players.active7d, 'players this week')}` : ''}
 </section>
 <h2>Every day</h2><div class="bars" role="img" aria-label="visits and plays per day">${bars}</div>
 <h2>Games</h2><div class="scroll"><table class="wide"><thead><tr><th>Game</th><th>Visits</th><th>Plays</th><th>Rooms</th><th>Rounds</th><th>People in rounds</th><th>Peak</th><th>Peak in a room</th><th>Now</th></tr></thead><tbody>${gameRows || '<tr><td colspan="9" class="dim">No games.</td></tr>'}</tbody></table></div>

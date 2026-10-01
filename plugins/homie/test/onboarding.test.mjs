@@ -41,6 +41,10 @@ test('studio-setup: setup status first, then a checklist in order that never jum
 test('plan: the interview covers every topic, naturally, and ends in the Game Codex', () => {
   const s = skill('plan');
   for (const topic of ['Game type and genre', 'Style and art direction', 'Devices', 'Players and rooms', 'Art and film', 'Music and sound', 'Scope']) assert.match(s, new RegExp(`\\*\\*${topic}\\*\\*`), topic);
+  // Persistent games: the interview always asks, and the game skill wires cloud saves in when the answer is yes.
+  assert.match(s, /Does progress need to persist across sessions or devices\?/);
+  const game = skill('game');
+  for (const needle of ['"saves": true', "createSaves", '--from ember-vale', 'saves.fall', 'SAVES.md']) at(game, needle);
   assert.match(s, /natural, not a form/);
   assert.match(s, /Two or three questions a message/);
   for (const needle of ['games/<id>/CODEX.md', 'codex new <id>', 'codex <id> --artifact', 'codex <id> --open', 'codex link <id>', 'Keep it true', 'Build status', 'progress start <id>']) at(s, needle);

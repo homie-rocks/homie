@@ -45,6 +45,27 @@ Make it the game the person asked for, in small steps:
   of the screen clear during play; names people type are drawn as text only.
 - Update `game.json` `name` and `blurb`, and the `<title>`.
 
+## Progress that lasts: cloud saves
+
+When the plan says progress persists across sessions or devices (the codex's "Progress that lasts", or the person
+asks for a character, levels, unlocks, a collection, hardcore), wire in saves. Never keep it in the room: a room
+forgets everything 60 s after its last player leaves.
+
+- `game.json`: `"saves": true`. A new game of that kind can start from the starter:
+  `npx --no-install homie-studio game new <id> --from ember-vale --name "<Name>"` (a hero that lasts, lifetime
+  stats, a hardcore mode with a hall of the fallen, on the same rooms as any game).
+- In the game: `import { createSaves } from '@homie-rocks/studio/saves'`; `const saves = createSaves({ game: '<id>' })`.
+  Load on arrival (`await saves.get('hero')`), save when it changes (`saves.set('hero', hero)`, at most about once a
+  second), and reload on `saves.on('player', …)` (the player signed in on this device). Keep one character in ONE
+  key. Lifetime numbers: `saves.stats.add({ kills: 1 })`. Hardcore: `saves.fall({ character, summary, wipe: true })`.
+- The host decides what happened and tells the player's own browser (a netplay event to its seat); only that
+  browser changes and saves the player's progress.
+- Show who is playing (`saves.player.name`, guest or signed in) and a small "Keep my progress" button that calls
+  `saves.signIn()`; the play page shows its passkey sheet. Pressing Play never needs an account.
+- Prove it: build, `npm run dev`, open `http://localhost:8787/<id>/play` (passkeys need `localhost`, not
+  `127.0.0.1`), play, reload: the progress is still there. The whole guide is
+  `node_modules/@homie-rocks/studio/saves/SAVES.md` (the limits, offline and conflicts, what is stored, privacy).
+
 ## Prove it
 
 Open a progress feed for every build, titled with what it does (the codex's milestone); the codex

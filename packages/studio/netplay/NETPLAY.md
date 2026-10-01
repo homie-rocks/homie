@@ -194,6 +194,11 @@ it.
 - If the old host does not return, the relay elects someone else. That browser restores
   from the stored checkpoint (at most 30 s old) and from its own newest snapshot.
 
+**What a room is not.** A room forgets everything 60 s after its last player leaves (`forgetMs`). Progress that
+must last (a character, unlocks, days of play) is the player's, not the room's: it goes in cloud saves
+(`@homie-rocks/studio/saves`, `../saves/SAVES.md`). The host decides what happened and tells that player's own
+browser (an `ev` to its seat); only that browser changes and saves the player's progress.
+
 ## 5. Wire protocol v1
 
 - **Transport:** one WebSocket per game document, carrying JSON text frames
