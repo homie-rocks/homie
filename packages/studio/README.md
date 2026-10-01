@@ -83,8 +83,10 @@ featured game, live rooms, the latest posts), Games, Music, Videos, Rooms (every
 joinable) and Posts (`posts/*.md`, with Atom and JSON feeds). A section with nothing in it has no tab, and its
 page answers 404. Every game gets a landing at `/<game>/`: a full-bleed hero from its own footage or art, the
 pitch, a big Play button into a public room, how to play on a phone, a computer and a TV (with the join code),
-live rooms, credits (the original and its licence for a port), and "Make a game like this". Every page ends with
-"Made with Homie". Anything the studio puts in `site/` wins: a whole page, a partial, its tokens, its CSS, its
+live rooms, credits (the original and its licence for a port; "Remix of <game> by <studio>", linked, for a
+remix), and "Make a game like this". A game's shared source (`/games/<id>/source.json`) says who made it and the
+licence its owner picked in game.json `"license"`: `"remix-with-credit"` (the default), `"remix-freely"` or
+`"no-remix"`, which `game remix` refuses. Every page ends with "Made with Homie". Anything the studio puts in `site/` wins: a whole page, a partial, its tokens, its CSS, its
 files. `site/SITE.md` says all of it.
 
 The play page writes its room into the address, and a small room button at the edge shares it: Invite, Big
@@ -100,8 +102,8 @@ site. A game made with Homie's arcade controls that knocks for a Homie box (`/__
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.14.3 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.14.3 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.14.4 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.14.4 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -232,7 +234,7 @@ device; the owner's own passkey account (`homie-studio players owner`) counts as
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.14.3 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.14.4 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 

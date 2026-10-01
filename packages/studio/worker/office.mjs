@@ -41,6 +41,7 @@ import { SEAT_MAX, seatsOf } from './seats.mjs';
 import { OWNER_COOKIE, cookieValues, ownerAllowed, ownerSession } from './stats.mjs';
 import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
+import { licenseOf } from './license.mjs';
 
 export { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from './office-schema.mjs';
 
@@ -455,7 +456,7 @@ export async function officeView(env, cat, origin) {
     rooms.sort((a, b) => b.players - a.players || a.room.localeCompare(b.room));
     return {
       id: g.id, name: g.name, launch, launchFrom: row?.launch ? 'office' : g.launch ? 'game.json' : 'default',
-      remix: remixOf(g, settings), remixBuilt: g.landing?.source !== false,
+      remix: remixOf(g, settings), remixBuilt: g.landing?.source !== false, license: licenseOf(g.license).kind,
       seats: seatsOf(g), maxPlayers: max, maxSet: Number(row?.max_players) >= 1 ? Number(row.max_players) : null,
       play: `${origin}/${g.id}/play`, page: `${origin}/${g.id}/`,
       invites: launch === 'invite' || (await hasInvites(env, g.id)) ? await invitesOf(env, g.id, origin) : [],

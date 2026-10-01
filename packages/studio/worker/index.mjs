@@ -25,6 +25,7 @@
  *   /__homie/..., /<game>/__homie/...   `not-a-homie`: the answer a game with Homie's arcade controls gets when it
  *                              knocks for a Homie box, so it stops knocking (a studio site is not a box)
  *   /.well-known/homie-studio.json   what the homie.rocks directory reads
+ *   /games/<id>/source.json    a public game's source for remixing, with its credit and licence (worker/license.mjs)
  *   /media/<key>               the studio's large media, from R2 (once `storage add` bound it), with byte ranges
  *   /api/stats                 the studio's numbers, for its owner only (a read key, or the owner's page session)
  *   /_studio/stats             the owner's private stats page (one-time sign-in link from `homie-studio stats link`)
@@ -74,6 +75,7 @@ import {
 // every device, and the owner's own account (`homie-studio players owner`) counts as the owner.
 usePlayers(playerAccounts);
 import { STUDIO_VERSION_TAG } from './version.mjs';
+import { licenseOf, remixAllowed, remixRow } from './license.mjs';
 
 export { SEAT_MAX } from './seats.mjs';
 /** For a studio whose Worker has player accounts: hand their server API to the back office once (worker/office.mjs). */
@@ -463,12 +465,17 @@ async function route(request, env, ctx) {
       games: await Promise.all((cat.games ?? []).map(async (g) => {
         // The card picture is the landing's hero still (what the landing leads with), else the game's cover.
         const cover = gameCover(g);
-        const remix = remixOf(g, await settingsOf(env));
+        // Open to remix: the owner's switch is on and the licence the owner picked allows it (worker/license.mjs).
+        const license = licenseOf(g.license);
+        const remix = remixOf(g, await settingsOf(env)) && remixAllowed(license);
+        const lineage = remixRow(g.remixOf);
         return {
           id: g.id, name: g.name, blurb: g.blurb ?? '', players: g.players ?? null, roundSeconds: g.roundSeconds ?? null,
           page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play`, cover: cover ? (cover.startsWith('/') ? `${url.origin}${cover}` : cover) : null,
           // The owner's remix switch (0.13.0): whether the source is open for other studios to remix, and where.
-          remix, ...(remix ? { source: `${url.origin}/games/${g.id}/source.json` } : {}),
+          remix, ...(remix ? { source: `${url.origin}/games/${g.id}/source.json` } : {}), license,
+          // A remix names what it is a remix of (its game.json `remixOf`): "Remix of <name> by <studio>", linked.
+          ...(lineage ? { remixOf: lineage } : {}),
           // Shared only with `stats.share`: this game's own Play presses and rounds with people, this week.
           ...(byGame ? { played: byGame[g.id] ?? { days: 7, plays: 0, rounds: 0 } } : {}),
         };
@@ -507,7 +514,9 @@ async function route(request, env, ctx) {
     return path.endsWith('.xml') ? atomFeed(cat, posts, url.origin) : jsonFeed(cat, posts, url.origin);
   }
 
-  // A game's remix source is served while the game is public and its owner has not withdrawn it (the remix switch).
+  // A game's remix source is served while the game is public and its owner has not withdrawn it (the remix switch),
+  // with who made it as this site says it (the studio's name, the game's name and page here) and the owner's licence
+  // (worker/license.mjs): the remix flow credits the first and refuses a game whose licence says no remix.
   const src = /^\/games\/([a-z0-9][a-z0-9-]{0,39})\/source\.json$/.exec(path);
   if (src) {
     const all = await getAll();
@@ -515,6 +524,16 @@ async function route(request, env, ctx) {
     if (meta) {
       const settings = await settingsOf(env, { fresh: true });
       if (launchOf(meta, settings, env) !== 'public' || !remixOf(meta, settings)) return json({ ok: false, error: 'not-shared', message: 'This game\'s source is not shared for remixing.' }, 404);
+      if (request.method === 'GET') {
+        const res = await env.ASSETS.fetch(new Request(`${url.origin}${path}`));
+        let body = null;
+        if (res.ok) { try { body = await res.json(); } catch { body = null; } }
+        if (body?.kind === 'homie-game-source' && body.files && typeof body.files === 'object') {
+          const credit = { studio: all.studio?.name ?? body.credit?.studio ?? null, game: meta.name ?? body.credit?.game ?? meta.id, page: `${url.origin}/${meta.id}/` };
+          const { files, ...head } = body;
+          return json({ ...head, credit, license: licenseOf(body.license ?? meta.license), files }, 200, { 'access-control-allow-origin': '*' });
+        }
+      }
     }
   }
 
@@ -608,7 +627,7 @@ async function route(request, env, ctx) {
       shareDaily(cat, url, ctx);
       const { rooms, live } = await roomsOf(env, [meta]);
       const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
-      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week });
+      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, remix: launch === 'public' && remixOf(meta, settings) });
     }
     if (sub === 'live') {
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);

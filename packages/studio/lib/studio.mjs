@@ -5,6 +5,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { httpsPage, licenseOf, pageOfSource, remixAllowed, remixCredit, remixRow } from '../worker/license.mjs';
 
 export const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -125,7 +126,11 @@ export function newGame(root, id, { from = 'gem-rush', name } = {}) {
   return { ok: true, command: 'game new', id, from, dir: dest, files: readdirSync(dest, { recursive: true }).map(String) };
 }
 
-/** `homie-studio game remix <source.json url> --id <new id>`: a shared game brought in as this studio's own. */
+/**
+ * `homie-studio game remix <source.json url> --id <new id>`: a shared game brought in as this studio's own. Its
+ * game.json `remixOf` credits the original ("Remix of <game> by <studio>", with a link back to its page), and its
+ * landing and credits show it. A game whose owner's licence says no remix is refused (worker/license.mjs).
+ */
 export async function remixGame(root, source, id, { name } = {}) {
   if (!GAME_ID.test(String(id ?? '')) || RESERVED_IDS.has(id)) throw new Error('give the new game an id: --id <lowercase-id>');
   const dest = join(root, 'games', id);
@@ -137,6 +142,14 @@ export async function remixGame(root, source, id, { name } = {}) {
   if (!res.ok) throw new Error(`${url} answered ${res.status}`);
   const body = await res.json();
   if (body?.kind !== 'homie-game-source' || !body.files || typeof body.files !== 'object') throw new Error('that address is not a shared Homie game source');
+  // Who made it and what they allow: the source's credit and licence (a studio before 0.14.4 sends neither, so the
+  // default licence, and the page from the address).
+  const credit = body.credit && typeof body.credit === 'object' ? body.credit : {};
+  const license = licenseOf(body.license);
+  if (!remixAllowed(license)) {
+    const who = remixRow({ name: credit.game ?? body.id, studio: credit.studio });
+    throw new Error(`${who?.name ?? 'That game'}${who?.studio ? ` by ${who.studio}` : ''} is not open to remixing: its owner's licence says no remix. Make a game of your own like it instead.`);
+  }
   const wrote = [];
   for (const [rel, text] of Object.entries(body.files)) {
     if (typeof text !== 'string' || rel.includes('..') || rel.startsWith('/') || !/^[A-Za-z0-9._/-]+$/.test(rel)) continue;
@@ -148,11 +161,18 @@ export async function remixGame(root, source, id, { name } = {}) {
   if (!existsSync(join(dest, 'game.json'))) throw new Error('the shared source has no game.json');
   const meta = JSON.parse(readFileSync(join(dest, 'game.json'), 'utf8'));
   const from = meta.id;
-  meta.remixOf = { source: String(url), id: from, name: meta.name };
+  // The credit, in the remix's own game.json: the original's name, studio, page and licence, the line its landing and
+  // credits show, and, when the original was itself a remix, what that was a remix of.
+  const row = remixRow({ name: credit.game ?? meta.name ?? from, studio: credit.studio, page: httpsPage(credit.page) ?? pageOfSource(url) });
+  const before = remixRow(meta.remixOf);
+  meta.remixOf = {
+    credit: remixCredit(row), name: row?.name ?? null, studio: row?.studio ?? null, page: row?.page ?? null,
+    source: String(url), id: from, license, ...(before ? { of: before } : {}),
+  };
   meta.id = id;
   if (name) meta.name = String(name).slice(0, 60);
   writeFileSync(join(dest, 'game.json'), `${JSON.stringify(meta, null, 2)}\n`);
   const main = join(dest, meta.entry ?? 'src/main.ts');
   if (existsSync(main) && from) writeFileSync(main, readFileSync(main, 'utf8').replace(new RegExp(`game: '${from}'`, 'g'), `game: '${id}'`));
-  return { ok: true, command: 'game remix', id, from: String(url), files: wrote };
+  return { ok: true, command: 'game remix', id, from: String(url), credit: meta.remixOf.credit, page: meta.remixOf.page, license, files: wrote };
 }

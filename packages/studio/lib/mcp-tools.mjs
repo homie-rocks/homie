@@ -684,7 +684,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_remix', title: 'Remix a shared game',
-      description: 'Bring a game another studio shared in the Homie directory into this studio as a new game of its own (the original stays credited in game.json).',
+      description: 'Bring a game another studio shared in the Homie directory into this studio as a new game of its own. The original stays credited: game.json remixOf says "Remix of <game> by <studio>" with a link back, shown on the new game\'s landing and in its credits. A game whose owner\'s licence says no remix is refused.',
       inputSchema: { type: 'object', properties: { game: str('The directory game: "<studio site>/<game id>" or its play URL'), id: str('The new game id in this studio'), name: str('Optional: its new name'), ...STUDIO_ARG }, required: ['game', 'id'] },
       annotations: { title: 'Remix a game', ...RW, openWorldHint: true },
       run: async (a) => {
@@ -696,7 +696,8 @@ export function toolDefs(ctx, avail = {}) {
         const r = await cli(ctx, root, `game remix ${a.id}`, ['game', 'remix', source, '--id', a.id, ...(a.name ? ['--name', String(a.name).slice(0, 60)] : [])]);
         if (!r.ended) return stillRunning(r.job, 'The remix');
         if (r.job.code !== 0) return fail(`Not remixed: ${whyOf(r.job)}`);
-        return ok(`games/${a.id} is a remix of ${site}/${gameId} (${(r.result?.files ?? []).length} files).`, { kind: 'game', ...r.result });
+        const credit = r.result?.credit ? ` Its game.json credits the original: "${r.result.credit}"${r.result.page ? ` (${r.result.page})` : ''}, on its landing and in its credits; keep it.` : '';
+        return ok(`games/${a.id} is a remix of ${site}/${gameId} (${(r.result?.files ?? []).length} files).${credit}`, { kind: 'game', ...r.result });
       },
     },
     {

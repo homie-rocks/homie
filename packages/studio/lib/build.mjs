@@ -33,6 +33,7 @@ import { buildSiteFiles, landingOf, readPosts, readTheme } from './site.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
 import { SEAT_MAX } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
+import { licenseOf, remixRow } from '../worker/license.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
@@ -64,8 +65,12 @@ function dirBytes(dir) {
   return n;
 }
 const TEXT = /\.(ts|tsx|js|mjs|jsx|json|html|css|md|txt|svg|glsl|wgsl|frag|vert)$/i;
-/** Text files of a game folder, capped (2 MB total, 512 KB each): what `homie-studio game remix` takes. */
-export function sourceOf(dir, id) {
+/**
+ * Text files of a game folder, capped (2 MB total, 512 KB each): what `homie-studio game remix` takes; with who made
+ * it (`credit`: the studio and the game; the live site adds the page, worker/index.mjs) and its licence (game.json
+ * "license", worker/license.mjs).
+ */
+export function sourceOf(dir, id, { studio = null, game = null, license } = {}) {
   const files = {};
   let total = 0;
   const walk = (rel) => {
@@ -82,7 +87,7 @@ export function sourceOf(dir, id) {
     }
   };
   walk('');
-  return { v: 1, kind: 'homie-game-source', id, files };
+  return { v: 1, kind: 'homie-game-source', id, credit: { studio, game: game ?? id }, license: licenseOf(license), files };
 }
 
 /*
@@ -193,7 +198,7 @@ export async function build(root, { only = null, log = () => {} } = {}) {
     if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
     if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
     // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).
-    if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id))}\n`);
+    if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id, { studio: studio.name ?? null, game: g.name ?? g.id, license: g.license }))}\n`);
     const main = join(out, 'assets', 'main.js');
     const bytes = existsSync(main) ? statSync(main).size : dirBytes(out);
     const seats = seatsFor(g, netplayOf(g, out));
@@ -225,6 +230,9 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       ...(g.saves === true || (g.saves && typeof g.saves === 'object') ? { saves: true } : {}),
       // game.json `"launch": "private" | "invite"`: the game's launch state until its owner sets one live (the office).
       ...(g.launch === 'private' || g.launch === 'invite' ? { launch: g.launch } : {}),
+      // Its source licence (worker/license.mjs), and, for a remix, what it is a remix of (shown on its landing).
+      license: licenseOf(g.license),
+      ...(remixRow(g.remixOf) ? { remixOf: remixRow(g.remixOf) } : {}),
       landing: landingOf(g, join(dist, 'games', g.id), { videos: media.videos, songs: media.songs, log }),
     };
   });

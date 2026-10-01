@@ -48,12 +48,20 @@ Made from the game's own files, nothing invented:
   phone scans to play, and how to put the game on a TV (`/<id>/tv` shows the room with its own join code).
 - **Live rooms**, each with Join. When studio.json shares its stats (`stats.share`), also "played this week".
 - **How to play**: `landing.about`, `landing.howToPlay` (a few lines), the controls, the room facts.
-- **Credits**: the studio and `landing.credits` (`[{ "role", "name", "url" }]`); for a port, the original, its
-  author and licence and every part inside it (`credits.json`, as the port skill writes it), with the full
-  licence texts on `/<id>/credits`; and Homie's open engine.
+- **Credits**: the studio and `landing.credits` (`[{ "role", "name", "url" }]`); for a remix, "Remix of
+  <game> by <studio>" linked to the original's page (game.json `remixOf`, which `game remix` writes; it is also
+  under the game's name in the hero); for a port, the original, its author and licence and every part inside it
+  (`credits.json`, as the port skill writes it), with the full licence texts on `/<id>/credits`; Homie's open
+  engine; and the source's licence.
 - **Make a game like this**: the two commands that install the Homie plugin and the words to say. When the game
-  shares its source (the default; `"share": { "source": false }` keeps it closed) the words remix it from
-  `/games/<id>/source.json`, and the button goes to `https://homie.rocks/studio/?remix=<that address>`.
+  shares its source (the default; `"share": { "source": false }` keeps it closed, and the owner's Remixable
+  switch withdraws it) and its licence allows remixing, the words remix it from `/games/<id>/source.json`, and
+  the button goes to `https://homie.rocks/studio/?remix=<that address>`.
+
+A game's licence is game.json `"license"`, the owner's pick: `"remix-with-credit"` (the default: a remix says
+"Remix of <game> by <studio>" with a link back), `"remix-freely"` (the credit is welcome, not asked for) or
+`"no-remix"` (the source can be read; `game remix` refuses it), and `{ "kind": "<one of those>", "spdx": "MIT" }`
+names a licence too. The source.json carries it, with `credit`: the studio's name, the game's name and its page.
 
 game.json's `landing` block, every key optional:
 

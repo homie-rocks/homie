@@ -22,7 +22,13 @@ is none, use the `studio-setup` skill first.
 - **Make an existing single-player web game multiplayer:** use the `port` skill (it
   grades the port, brings the game in, and proves it with the owner tests).
 - **Remix a directory game:** `directory_search`, then `game_remix` returns
-  `npx --no-install homie-studio game remix <source.json> --id <new id>`.
+  `npx --no-install homie-studio game remix <source.json> --id <new id>`. The new game's
+  game.json gets `remixOf`: "Remix of <game> by <studio>" with a link back to the original's
+  page, shown under its name on its landing and in its credits. Keep it, whatever else
+  changes. A source whose licence says `no-remix` is refused: say so, and offer to make a
+  game of their own like it instead. A game's own licence is game.json `"license"`:
+  `"remix-with-credit"` (the default), `"remix-freely"` or `"no-remix"` (or
+  `{ "kind": "…", "spdx": "MIT" }`), the owner's pick.
 - Some names are protected (the homie.rocks house games): `game_make` and
   `studio_publish` refuse them. Pick your own name, or ask the name's owner
   with `studio_request_grant` (only the owner can approve, in their browser).
@@ -171,7 +177,8 @@ page epic" means all of this, in this order:
    light, where the studio's dark tint would turn the picture grey. `hero/wide.jpg` is also the game's
    picture on every card and in the directory, so pick a frame that reads small.
 3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "..." }]`). A port
-   keeps its `credits.json` (the original, its author and licence, every part inside); never drop one.
+   keeps its `credits.json` (the original, its author and licence, every part inside); a remix keeps
+   game.json `remixOf`; never drop either.
 4. **The look**: the studio's `site/theme.json` colours; `landing.theme` gives this game its own
    `accent` and `glow` on its page, when two games of one studio should not look alike.
 5. **A band of its own**, when the game has something to say that the template does not (a soundtrack, a

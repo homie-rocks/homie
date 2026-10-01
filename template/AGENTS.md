@@ -113,6 +113,12 @@ studio's pinned copy, never a registry lookup of the bare name.
   a small icon (`node_modules/@homie-rocks/studio/site/SITE.md`). Look at it on a phone and a computer.
 - Change a game in small steps, build, and look at it (`dev`, then `check`).
 - A game's id is its URL (`/<id>/`); keep it once published.
+- **Remixing.** A public game shares its source at `/games/<id>/source.json`, with who made it (the studio, the
+  game, its page) and the licence its owner picks in game.json `"license"`: `"remix-with-credit"` (the
+  default), `"remix-freely"` or `"no-remix"`, and `{ "kind": "…", "spdx": "MIT" }` to name a licence too.
+  `npx --no-install homie-studio game remix <source.json> --id <new id>` brings another studio's game in as a new
+  game here: its game.json `remixOf` says "Remix of <game> by <studio>" with a link back, and its landing and
+  credits show it; keep that credit. A game whose licence says no remix is refused.
 - **Progress that lasts** (a character, unlocks, a collection, days of play) goes in **saves**, never in the room:
   a room forgets everything 60 s after its last player leaves. game.json `"saves": true` and
   `createSaves` from `@homie-rocks/studio/saves` (`node_modules/@homie-rocks/studio/saves/SAVES.md`): per

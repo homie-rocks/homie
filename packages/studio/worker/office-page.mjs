@@ -157,7 +157,7 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       act('/_studio/api/game', { game: g.id, maxPlayers: n >= g.seats ? null : n }, 'Rooms of ' + g.name + ' now hold ' + Math.min(n, g.seats) + '.');
     });
     add(box, st,
-      add(el('label'), remix, el('span', '', g.remixBuilt ? 'Remixable' : 'Remixable (not in the build)')),
+      add(el('label'), remix, el('span', '', !g.remixBuilt ? 'Remixable (not in the build)' : g.license === 'no-remix' ? 'Source shared (its licence: not for remixing)' : 'Remixable')),
       add(el('label'), el('span', 'dim', 'Players per room'), max, el('span', 'faint', 'of ' + g.seats), setMax),
       add(el('span', 'faint'), document.createTextNode(g.launchFrom === 'game.json' ? 'state from game.json' : '')));
     return box;

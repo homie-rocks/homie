@@ -11,6 +11,7 @@
  */
 import { qrSvg } from './qr.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
+import { licenseLabel, licenseOf, remixRow } from './license.mjs';
 
 export const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const jsonScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
@@ -122,6 +123,8 @@ img,video{display:block;max-width:100%}
   text-shadow:0 0 38px color-mix(in srgb,var(--hot) 50%,transparent),0 2px 0 color-mix(in srgb,var(--bg) 60%,transparent)}
 .title.t-long{font-size:clamp(44px,12vw,64px)}
 .title.t-xlong{font-size:clamp(38px,10vw,54px)}
+.remix-of{margin:12px 0 0;font:600 14px/1.4 var(--text);color:var(--soft)}
+.remix-of a{color:inherit;text-decoration:underline;text-underline-offset:3px}
 .line{margin:14px 0 22px;max-width:36ch;font:500 17px/1.45 var(--text);color:var(--soft);text-wrap:pretty}
 .play{display:flex;width:100%;align-items:center;justify-content:center;gap:12px;min-height:62px;padding:0 30px;border-radius:18px;
   background:var(--hot);color:var(--hot-ink);text-decoration:none;font:800 20px/1 var(--display);letter-spacing:-.01em;
@@ -908,9 +911,15 @@ export function jsonFeed(cat, posts, origin) {
  * public room, phone / computer / TV (with the join code), live rooms, how to play, credits, and "Make a game like
  * this". A studio's site/pages/<id>/index.html replaces it; site/partials/game.html and game-<id>.html add a band.
  */
-export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null } = {}) {
+export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, remix = true } = {}) {
   const name = studioName(cat);
   const L = g.landing ?? {};
+  // A remix says what it is a remix of, linked, under its name and in its credits (game.json `remixOf`).
+  const lineage = remixRow(g.remixOf);
+  const ofWhat = lineage ? `${lineage.page ? `<a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.name)}</a>` : `<strong>${esc(lineage.name)}</strong>`}${lineage.studio ? ` by ${esc(lineage.studio)}` : ''}` : '';
+  // Open to remix: the source is in the build, the owner's switch is on, and the licence they picked allows it.
+  const license = licenseOf(g.license);
+  const remixable = Boolean(L.source) && remix !== false && license.kind !== 'no-remix';
   const h = L.hero ?? {};
   const host = origin.replace(/^https?:\/\//, '');
   const playUrl = `${origin}/${g.id}/play`;
@@ -929,6 +938,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   <div class="hero-copy">
     <p class="kicker">${kickerHtml}</p>
     <h1 class="title ${titleClass(g.name)}" id="game-title">${esc(g.name)}</h1>
+    ${lineage ? `<p class="remix-of">Remix of ${ofWhat}</p>` : ''}
     <p class="line">${esc(L.pitch ?? g.blurb)}</p>
     <div class="row">
       <a class="play" href="/${esc(g.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>
@@ -979,27 +989,28 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   const o = C.original;
   const creditCards = [
     `<div class="credit"><h3>Made by</h3><p><strong><a href="/">${esc(name)}</a></strong>${cat.studio?.tagline ? ` · ${esc(cat.studio.tagline)}` : ''}</p>${(C.people ?? []).length ? `<ul>${C.people.map((c) => `<li>${c.role ? `${esc(c.role)}: ` : ''}${c.url ? `<a href="${esc(c.url)}" rel="noopener">${esc(c.name)}</a>` : `<strong>${esc(c.name)}</strong>`}</li>`).join('')}</ul>` : ''}</div>`,
+    lineage ? `<div class="credit"><h3>Remix of</h3><p>${ofWhat}.</p>${lineage.page ? `<p><a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.page.replace(/^https:\/\//, ''))}</a></p>` : ''}</div>` : '',
     o && !o.house ? `<div class="credit"><h3>Based on</h3><p><strong>${esc(o.title)}</strong>${o.author ? ` by <strong>${esc(o.author)}</strong>` : ''}${o.year ? ` (${esc(o.year)})` : ''}${o.licence ? `, ${esc(o.licence)} licence` : ''}.</p>${o.url ? `<p><a href="${esc(o.url)}" rel="noopener">${esc(o.url.replace(/^https:\/\//, ''))}</a></p>` : ''}<p>Made multiplayer with Homie: public rooms, bots, join-in-progress, a new host when one leaves, touch controls and the big screen.</p></div>` : '',
     (C.parts ?? []).length ? `<div class="credit"><h3>Also inside</h3><ul>${C.parts.map((p) => `<li>${esc(p.what)}${p.author ? `: ${esc(p.author)}` : ''}${p.url ? ` (<a href="${esc(p.url)}" rel="noopener">source</a>)` : ''}${p.licence ? `, ${p.licenceUrl ? `<a href="${esc(p.licenceUrl)}" rel="noopener">${esc(p.licence)}</a>` : esc(p.licence)}` : ''}</li>`).join('')}</ul></div>` : '',
-    `<div class="credit"><h3>Built with</h3><p>Homie’s open engine: <a href="https://github.com/homie-rocks/homie" rel="noopener">@homie-rocks/studio</a> (rooms, netplay, the big screen), Apache-2.0.</p>${C.texts ? `<p><a href="/${esc(g.id)}/credits">Licences and full credits</a></p>` : ''}</div>`,
+    `<div class="credit"><h3>Built with</h3><p>Homie’s open engine: <a href="https://github.com/homie-rocks/homie" rel="noopener">@homie-rocks/studio</a> (rooms, netplay, the big screen), Apache-2.0.</p>${L.source ? `<p>Its source: ${esc(licenseLabel(license))}.</p>` : ''}${C.texts ? `<p><a href="/${esc(g.id)}/credits">Licences and full credits</a></p>` : ''}</div>`,
   ].filter(Boolean).join('');
   const creditsBand = `<section class="band tight" aria-labelledby="credits-title"><div class="band-in"><p class="kicker reveal">Credits</p><h2 class="small-h reveal" id="credits-title">Who made ${esc(g.name)}</h2><div class="credits reveal">${creditCards}</div></div></section>`;
 
   const source = `${origin}/games/${g.id}/source.json`;
-  const say = L.source
+  const say = remixable
     ? `Remix ${g.name} from ${source} into a game of my own in my Homie studio`
     : `Make a multiplayer game like ${g.name} in my Homie studio`;
-  const makeHref = L.source ? `https://homie.rocks/studio/?remix=${encodeURIComponent(source)}` : 'https://homie.rocks/studio/';
+  const makeHref = remixable ? `https://homie.rocks/studio/?remix=${encodeURIComponent(source)}` : 'https://homie.rocks/studio/';
   const makeBand = `<section class="band" aria-labelledby="make-title"><div class="band-in"><div class="make reveal">
-  <p class="kicker">${L.source ? 'Open to remix' : 'Your turn'}</p>
+  <p class="kicker">${remixable ? 'Open to remix' : 'Your turn'}</p>
   <h2 id="make-title">Make a game like this</h2>
-  <p class="lead">${L.source ? `${esc(g.name)}’s source is shared. Homie is a plugin for Claude Code and Codex: your AI copies this game into a studio of your own, makes it yours, and puts it online with public rooms like these, on your own free Cloudflare account.` : `Homie is a plugin for Claude Code and Codex: your AI sets up a studio of your own and makes a multiplayer game like ${esc(g.name)}, with public rooms like these, on your own free Cloudflare account.`}</p>
+  <p class="lead">${remixable ? `${esc(g.name)}’s source is shared. Homie is a plugin for Claude Code and Codex: your AI copies this game into a studio of your own, makes it yours, and puts it online with public rooms like these, on your own free Cloudflare account.` : `Homie is a plugin for Claude Code and Codex: your AI sets up a studio of your own and makes a multiplayer game like ${esc(g.name)}, with public rooms like these, on your own free Cloudflare account.`}</p>
   <ol class="say">
     <li><div><span class="label">1 · In Claude Code</span><code>/plugin marketplace add homie-rocks/homie</code></div><button class="copy" type="button" data-copy="/plugin marketplace add homie-rocks/homie">${icon('copy')}<span data-copy-word>Copy</span></button></li>
     <li><div><span class="label">2</span><code>/plugin install homie@homie</code></div><button class="copy" type="button" data-copy="/plugin install homie@homie">${icon('copy')}<span data-copy-word>Copy</span></button></li>
     <li><div><span class="label">3 · Then say</span><code>${esc(say)}</code></div><button class="copy" type="button" data-copy="${esc(say)}">${icon('copy')}<span data-copy-word>Copy</span></button></li>
   </ol>
-  <div class="keys"><a class="btn" href="${esc(makeHref)}">${icon('spark')}<span>Make a game like this</span></a>${L.source ? `<a class="ghost" href="/games/${esc(g.id)}/source.json">See the source</a>` : ''}</div>
+  <div class="keys"><a class="btn" href="${esc(makeHref)}">${icon('spark')}<span>Make a game like this</span></a>${remixable ? `<a class="ghost" href="/games/${esc(g.id)}/source.json">See the source</a>` : ''}</div>
 </div></div></section>`;
 
   // A partial that is its own <section> stands as it is; anything else sits in one of the page's bands.
@@ -1018,10 +1029,12 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
 /** /<game>/credits: the licence texts the game ships with (CREDITS.md and every licence file credits.json names). */
 export function creditsPage(cat, g, texts, { origin = '' } = {}) {
   const name = studioName(cat);
+  const lineage = remixRow(g.remixOf);
+  const of = lineage ? `<p class="sec">Remix of</p><p>${lineage.page ? `<a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.name)}</a>` : esc(lineage.name)}${lineage.studio ? ` by ${esc(lineage.studio)}` : ''}</p>` : '';
   return layout(cat, {
     title: `Credits · ${g.name} · ${name}`, description: `Credits and licences for ${g.name}.`, origin, path: `/${g.id}/credits`, page: 'credits', active: 'games',
     main: `${pageHead(g.name, 'Credits and licences', null, `<div class="keys"><a class="ghost" href="/${esc(g.id)}/">${icon('arrow')}<span>Back to ${esc(g.name)}</span></a></div>`)}
-<div class="wrap">${texts.map(({ file, text }) => `<p class="sec">${esc(file)}</p><pre class="licence">${esc(text)}</pre>`).join('')}</div>`,
+<div class="wrap">${of}${texts.map(({ file, text }) => `<p class="sec">${esc(file)}</p><pre class="licence">${esc(text)}</pre>`).join('')}</div>`,
   });
 }
 

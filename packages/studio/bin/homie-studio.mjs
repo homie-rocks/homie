@@ -164,7 +164,7 @@ function print(result) {
       lines.push(`${result.name} is a studio now: ${result.dir}`, '', 'Wrote:', ...result.wrote.map((f) => `  ${f}`), '', `Dependencies: ${result.installed}`, '', 'Next:', ...result.next.map((n) => `  ${n}`), '', result.online);
       break;
     case 'game remix':
-      lines.push(`games/${result.id} is a remix of ${result.from} (${result.files.length} files). Make it yours in games/${result.id}/src/, then: npx homie-studio dev`);
+      lines.push(`games/${result.id} is a remix of ${result.from} (${result.files.length} files). Its game.json credits the original: "${result.credit}"${result.page ? ` (${result.page})` : ''}, on its landing and in its credits. Make it yours in games/${result.id}/src/, then: npx homie-studio dev`);
       break;
     case 'game new':
       lines.push(`games/${result.id} is a new game from the ${result.from} starter. Change it in games/${result.id}/src/, then: npx homie-studio dev`);
