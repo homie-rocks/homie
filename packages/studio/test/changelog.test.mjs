@@ -5,7 +5,8 @@
  *   - every version from 0.1.0 to this one has a section, newest first, each with a date, the plugin's version, a
  *     one-line summary and entries under Added, Changed, Fixed or Upgrade notes;
  *   - whatsNew is exactly the versions after the pin up to this one, and its terminal lines are short;
- *   - a GitHub release's notes are the section as written, with the Desktop extension's line under it;
+ *   - a GitHub release's notes are the section as written (each paragraph and entry on one line, since GitHub
+ *     breaks release notes at every line end), with the Desktop extension's line under it;
  *   - the studio card says what's new when a studio pins an older toolkit (behindOf), and nothing otherwise.
  * Run: node --test packages/studio/test/changelog.test.mjs
  */
@@ -15,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { CHANGELOG_FILE, compareVersions, parseChangelog, plain, readChangelog, releaseNotes, sectionOf, whatsNew, whatsNewLines } from '../lib/changelog.mjs';
+import { CHANGELOG_FILE, compareVersions, parseChangelog, plain, readChangelog, releaseNotes, sectionOf, unwrap, whatsNew, whatsNewLines } from '../lib/changelog.mjs';
 import { behindOf } from '../lib/mcp-tools.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 
@@ -108,7 +109,11 @@ test('a GitHub release\'s notes: the section as written, then the Desktop extens
   const log = readChangelog();
   const notes = releaseNotes(log, '0.19.1', { tag: 'release-2026-10-02-studio-0.19.1' });
   assert.ok(notes.startsWith('**Plugin 0.20.1**'), 'no heading: the release names the tag');
-  assert.ok(notes.includes(sectionOf(log, '0.19.1').body));
+  // The section's words, each paragraph and entry on one line: GitHub renders every line end in release notes.
+  assert.equal(notes.slice(0, notes.indexOf('\n---\n')).trim(), unwrap(sectionOf(log, '0.19.1').body).trim());
+  assert.doesNotMatch(notes, /\n {2}\S/, 'no wrapped continuation lines');
+  for (const entry of sectionOf(log, '0.19.1').groups.Fixed) assert.ok(notes.includes(`- ${entry}\n`), 'each entry is one line');
+  assert.equal(unwrap('Para one\nstill one.\n\n- A\n  b.\n- C\n\n### Fixed\n\n---\n'), 'Para one still one.\n\n- A b.\n- C\n\n### Fixed\n\n---\n');
   assert.match(notes, /Homie for Claude Desktop 0\.19\.1: \[desktop\/README\.md\]\(https:\/\/github\.com\/homie-rocks\/homie\/blob\/release-2026-10-02-studio-0\.19\.1\/desktop\/README\.md\) says how to install it/);
   assert.match(notes, /\[CHANGELOG\.md\]\(https:\/\/github\.com\/homie-rocks\/homie\/blob\/main\/CHANGELOG\.md\)/);
   assert.equal(releaseNotes(log, '9.9.9'), null);

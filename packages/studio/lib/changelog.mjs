@@ -170,14 +170,30 @@ export function whatsNewLines(news, { width = 110, maxVersions = 8, maxNotes = 8
 }
 
 /**
- * A GitHub release's notes: the version's section as it is in CHANGELOG.md, then the Desktop extension's line
- * (its .mcpb is attached to the release) and where every version is.
+ * Markdown with each paragraph and each "- " entry on one line. CHANGELOG.md wraps them at 120 columns, which a
+ * file ignores; GitHub's release notes render every line end as a break, so a wrapped entry would break mid-sentence.
+ */
+export function unwrap(markdown) {
+  const out = [];
+  for (const line of String(markdown ?? '').split('\n')) {
+    const prev = out.length ? out[out.length - 1] : '';
+    const starts = !line.trim() || /^(#{1,6} |- |\* |\d+\. |---\s*$|\|)/.test(line.trim()) && !/^\s+/.test(line);
+    const continues = prev.trim() && !/^(#{1,6} |---\s*$|\|)/.test(prev.trim());
+    if (!starts && continues) out[out.length - 1] = `${prev.replace(/\s+$/, '')} ${line.trim()}`;
+    else out.push(line);
+  }
+  return out.join('\n');
+}
+
+/**
+ * A GitHub release's notes: the version's section as it is in CHANGELOG.md (each paragraph and entry on one line),
+ * then the Desktop extension's line (its .mcpb is attached to the release) and where every version is.
  */
 export function releaseNotes(changelog, version, { tag = null, repo = REPO_URL } = {}) {
   const s = sectionOf(changelog, version);
   if (!s) return null;
   return [
-    s.body,
+    unwrap(s.body),
     '',
     '---',
     '',
