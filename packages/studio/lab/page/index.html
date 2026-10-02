@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Game Lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1l7 7-7 7-7-7z' fill='%23ffad3b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/_lab/lab.css">
+</head>
+<body>
+<header class="bar top">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><span class="word">GAME LAB</span></div>
+  <div class="title"><b id="game-name">…</b><span class="sep">/</span><span id="take-name">…</span></div>
+  <div class="status" id="status" aria-live="polite"></div>
+</header>
+
+<nav class="bar tools" aria-label="View">
+  <div class="group" role="group" aria-label="Which build" id="layout"></div>
+  <div class="group" role="group" aria-label="Views" id="views"></div>
+  <div class="group" role="group" aria-label="Device" id="device"></div>
+  <div class="group" role="group" aria-label="Overlays" id="overlays"></div>
+  <div class="group grow"></div>
+  <div class="group" role="group" aria-label="Take">
+    <label class="select"><span class="sr">Take</span><select id="take-pick"></select></label>
+    <button type="button" id="rec" class="rec" title="Record a take: play it in NEW">● REC</button>
+  </div>
+</nav>
+
+<main class="work">
+  <section class="stage" id="stage" aria-label="New and Today side by side">
+    <div class="slot" data-pane="new">
+      <div class="frame"><iframe title="New: the working tree" id="pane-new" tabindex="-1"></iframe></div>
+      <div class="tag new"><span>NEW</span><small id="new-sub"></small></div>
+      <div class="caption" id="cap-new"></div>
+      <div class="veil" id="veil-new" hidden></div>
+    </div>
+    <div class="slot" data-pane="today">
+      <div class="frame"><iframe title="Today: the last commit" id="pane-today" tabindex="-1"></iframe></div>
+      <div class="tag today"><span>TODAY</span><small id="today-sub"></small></div>
+      <div class="caption" id="cap-today"></div>
+      <div class="veil" id="veil-today" hidden></div>
+    </div>
+    <div class="recbar" id="recbar" hidden><span class="dot"></span><span id="rec-text">Recording: play in NEW</span><button type="button" id="rec-stop">Stop</button></div>
+  </section>
+
+  <aside class="tune" id="tune" aria-label="Tunables">
+    <div class="tune-head"><b>TUNABLES</b><small id="tune-file"></small></div>
+    <div class="tune-list" id="tune-list"></div>
+    <div class="tune-foot">
+      <button type="button" id="keep" class="primary" disabled>Keep in code</button>
+      <button type="button" id="undo" disabled>Undo</button>
+    </div>
+  </aside>
+
+  <section class="deck" aria-label="Timeline">
+    <div class="transport">
+      <div class="group" role="group" aria-label="Playback">
+        <button type="button" id="to-start" title="Start (Home)">|◀</button>
+        <button type="button" id="back" title="Back a frame (←)">◀</button>
+        <button type="button" id="play" class="wide" title="Play or pause (Space)">Pause</button>
+        <button type="button" id="fwd" title="Forward a frame (→)">▶</button>
+        <button type="button" id="to-end" title="End (End)">▶|</button>
+      </div>
+      <div class="group" role="group" aria-label="Speed" id="speeds"></div>
+      <div class="group" role="group" aria-label="Frames a second" id="fpses"></div>
+      <div class="group" role="group" aria-label="Loop"><button type="button" id="loop" class="on" title="Play the take again from the start">Loop</button></div>
+      <div class="counter" id="counter">F 0 / 0 · 0.00 s</div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="lines">
+      <canvas id="timeline" aria-label="Phases of the take, New above Today: click or drag to move the playhead"></canvas>
+    </div>
+    <div class="tracks" id="tracks" role="tablist" aria-label="Graphs"></div>
+    <div class="lines">
+      <canvas id="graph" aria-label="The chosen value over the take, New against Today"></canvas>
+    </div>
+    <p class="hint" id="hint"></p>
+  </section>
+</main>
+<script type="module" src="/_lab/page.js"></script>
+</body>
+</html>

@@ -187,6 +187,9 @@ Then make it good, not just working:
 - **Speed**: when it stutters, loads slowly or a phone struggles, the `perf` skill measures it (frame
   times, CPU per frame for the host and a replica, time to playable, downloads, memory, netplay) and
   keeps a change only when it is faster beyond the noise and two browsers still finish a round.
+- **Feel**: when a move feels floaty, stiff, weak or unclear ("the jump", "the hit", "the drift"), the `lab` skill
+  builds a Game Lab for it: one take in the new build beside the last commit, frame by frame, with named phases,
+  graphs and sliders that write kept values into the game's `tunables.json`.
 
 Then give it its landing (below), `npm run deploy` and `studio_publish` (see `publish`), and
 check again on the live site.

@@ -61,7 +61,7 @@ test('handshake, tools with the remote\'s names, prompts, and the cards as MCP A
     assert.match(init.result.instructions, /NO game/);
     const { tools } = (await s.request('tools/list')).result;
     const names = tools.map((t) => t.name);
-    for (const n of ['setup_status', 'studio_scaffold', 'studio_card', 'game_demo', 'game_make', 'game_remix', 'game_port', 'game_plan', 'game_codex', 'build', 'preview_run', 'check', 'playtest', 'studio_deploy', 'studio_publish', 'build_open', 'build_progress', 'build_stop', 'file_read', 'file_write', 'file_edit', 'studio_guide']) assert.ok(names.includes(n), `tool ${n}`);
+    for (const n of ['setup_status', 'studio_scaffold', 'studio_card', 'game_demo', 'game_make', 'game_remix', 'game_port', 'game_plan', 'game_codex', 'build', 'preview_run', 'check', 'playtest', 'studio_deploy', 'studio_publish', 'build_open', 'build_progress', 'build_stop', 'game_lab', 'file_read', 'file_write', 'file_edit', 'studio_guide']) assert.ok(names.includes(n), `tool ${n}`);
     // The same names and input shapes as the remote Homie MCP where they overlap.
     const by = Object.fromEntries(tools.map((t) => [t.name, t]));
     assert.deepEqual(by.game_make.inputSchema.required, ['id', 'name']);
@@ -73,7 +73,7 @@ test('handshake, tools with the remote\'s names, prompts, and the cards as MCP A
       assert.equal(typeof t.annotations?.readOnlyHint, 'boolean', `${t.name} says whether it only reads`);
       assert.ok(!('run' in t));
     }
-    for (const [tool, uri] of [['setup_status', 'ui://homie-studio/setup'], ['build_progress', 'ui://homie-studio/build'], ['studio_card', 'ui://homie-studio/studio'], ['game_codex', 'ui://homie-studio/codex']]) {
+    for (const [tool, uri] of [['setup_status', 'ui://homie-studio/setup'], ['build_progress', 'ui://homie-studio/build'], ['studio_card', 'ui://homie-studio/studio'], ['game_codex', 'ui://homie-studio/codex'], ['game_lab', 'ui://homie-studio/lab']]) {
       assert.equal(by[tool]._meta.ui.resourceUri, uri);
       const read = (await s.request('resources/read', { uri })).result.contents[0];
       assert.equal(read.mimeType, 'text/html;profile=mcp-app');

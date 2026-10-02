@@ -11,7 +11,7 @@ directory lists its games; homie.rocks does not host them.
 
 | Path | What it is |
 | --- | --- |
-| `games/<id>/` | One game: `game.json` (id, name, blurb, players, round length), `index.html`, `src/main.ts`. |
+| `games/<id>/` | One game: `game.json` (id, name, blurb, players, round length), `index.html`, `src/main.ts`; and, when it has them, `tunables.json` (the numbers that shape how it feels: the Game Lab's sliders, kept values written back) and `lab.json` (the Game Lab's takes). |
 | `music/`, `videos/` | Songs, scores, loops; trailers, music videos, cutscenes. `manifest.json` lists each one (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/music/<slug>/` or `/videos/<slug>/`. Without storage the site serves each file itself (up to 25 MiB). Once the studio has storage (see below), its big media (over 1 MiB, or left out of git) lives in its own R2: every deploy uploads it, checks it by SHA-256 and serves it from R2 at the same address. Large files never go into git. The Homie plugin's `music` and `video` skills make them. |
 | `posts/` | The studio's news and drops: one markdown file each (`posts/2026-09-30-we-are-live.md`: `title:`, `date:`, `summary:`, and `game:` / `song:` / `video:` to link one). They are the site's Posts, with Atom and JSON feeds. |
 | `site/` | The studio's site: its look (`theme.json`), and anything of its own that wins over the generated pages (`site/README.md`); the Worker (`src/worker.mjs`) and its D1 migrations. |
@@ -47,6 +47,12 @@ studio's pinned copy, never a registry lookup of the bare name.
   per frame, time to playable, what it downloads, the heap, netplay messages a second (files under `.perf/`). The
   Homie plugin's `perf` skill runs the whole loop: one change at a time, kept only when it is better beyond the noise
   and `check` still passes, and a report in `perf/<id>/`.
+- `npx --no-install homie-studio lab <id>` — the Game Lab, on this computer (run it in the background; stop it with
+  `lab --stop`): one take of a move (`games/<id>/lab.json`) played in the working tree beside the last commit, on
+  one clock, slowed down or a frame at a time, with the phases, graphs and tunables the game reports
+  (`@homie-rocks/studio/lab`). `lab check <id>` plays it headless and writes the numbers and a contact sheet. The
+  Homie plugin's `lab` skill runs the whole loop: instrument and commit first, change how it feels, keep what the
+  person likes.
 - `npx --no-install homie-studio deploy --plan` — says what deploy will create on Cloudflare and what it
   costs, and changes nothing. Tell the person before the first deploy.
 - `npm run deploy` — the site on this studio's Cloudflare: one Worker, one D1 database, two

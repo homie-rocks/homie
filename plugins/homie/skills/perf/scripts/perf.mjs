@@ -6,14 +6,16 @@
  *       build the game (keeping its source map), keep that build and the game's source as the one to beat, run the
  *       studio's own two-browser check, measure it `runs` times per device, profile it once per device, and write
  *       BASELINE.md: the numbers, how much they move run to run, where the time goes, and what a player downloads.
- *   try <game> --name "<the one change>" --looks same|"<how it looks now>" --plays same|"<how it plays now>" [--goal <metric>]
+ *   try <game> --name "<the one change>" --looks same|"<how it looks now>" --plays same|"<how it plays now>" [--goal <metric>] [--measure]
  *       after ONE change to games/<game>/: build it, run the two-browser check (it must pass), then measure the build to
  *       beat and this one in alternating order (before, after, after, before, ...), `runs` times each per device, and
  *       compare (homie-studio perf compare). KEEP when the goal is better beyond the noise and nothing guarded got
  *       worse; otherwise REVERT: games/<game>/ goes back to the kept source (only that folder) and the kept build is
  *       served again. A busy computer gives BLOCKED: nothing decided, the change left in place to try again. --goal judges
  *       this change on another metric than the loop's (a change aimed at load time is judged on load time); the guards
- *       still hold everything else.
+ *       still hold everything else. --measure: a change kept for another reason (how a move feels, the lab skill) is
+ *       measured the same way and gets the same verdict, as MEASURED, and is never reverted: it stays in games/<game>/
+ *       and is served, and the build to beat stays what it was.
  *   revert <game>       put games/<game>/ and the served build back to the kept one (a change you drop untried)
  *   report <game> [--final-runs <n>]
  *       write perf/<game>/ in the studio: README.md (the goal, before and after with intervals and p, every change tried
@@ -473,6 +475,8 @@ async function tryChange() {
   const game = pos[1];
   const name = String(flags.get('name') ?? '').trim();
   const looks = flags.get('looks'); const plays = flags.get('plays');
+  // --measure: what this change costs or saves, said in numbers, and nothing reverted (the person keeps it for its feel).
+  const measureOnly = flags.has('measure');
   if (!game || !name || looks === undefined || plays === undefined || looks === true || plays === true) throw new Error('usage: try <game> --name "<the one change>" --looks same|"<how it looks now>" --plays same|"<how it plays now>" (say both, every time: a faster game that looks or plays differently has to say so)');
   const root = studioOrThrow();
   diskOk(root);
@@ -498,9 +502,9 @@ async function tryChange() {
     return r;
   };
   if (!b.json?.ok) {
-    restoreSource(root, game, dir, s.kept); installBuild(root, game, dir, s.kept);
-    const r = finish('revert', `it did not build: ${b.json?.why ?? b.err}`);
-    return { ok: false, command: 'try', game, verdict: 'REVERT', why: r.why, result: join(exp, 'RESULT.md') };
+    if (!measureOnly) { restoreSource(root, game, dir, s.kept); installBuild(root, game, dir, s.kept); }
+    const r = finish(measureOnly ? 'measured' : 'revert', `it did not build: ${b.json?.why ?? b.err}`);
+    return { ok: false, command: 'try', game, verdict: measureOnly ? 'MEASURED' : 'REVERT', why: r.why, result: join(exp, 'RESULT.md') };
   }
   keepBuild(root, game, dir, v);
   keepSource(root, game, dir, v);
@@ -509,6 +513,10 @@ async function tryChange() {
   log('… the two-browser check on the changed build');
   const ck = await cli(root, ['check', game, '--url', s.url], { timeoutMs: 8 * 60_000 });
   const check = { ok: Boolean(ck.json?.ok), why: ck.json?.why ?? (ck.json ? null : ck.err), seconds: ck.json?.totalMs ? Math.round(ck.json.totalMs / 1000) : null };
+  if (!check.ok && measureOnly) {
+    const r = finish('measured', `the two-browser check failed with this change (${check.why}): fix that before anything else`, { check });
+    return { ok: false, command: 'try', game, verdict: 'MEASURED', why: r.why, result: join(exp, 'RESULT.md') };
+  }
   if (!check.ok) {
     const restored = restoreSource(root, game, dir, s.kept); installBuild(root, game, dir, s.kept); await servedIs(s.url, game, dir, s.kept);
     const r = finish('revert', `the two-browser check failed with this change (${check.why}): a faster game that does not work is not faster`, { check, restored });
@@ -525,6 +533,17 @@ async function tryChange() {
     // Nothing decided: the change stays in games/<game>/ so it can be measured again when the computer is calmer.
     writeJson(join(exp, 'result.json'), { ...rec, verdict: 'blocked', why: cmp.json.why, check, compare, look });
     return { ok: false, command: 'try', game, verdict: 'BLOCKED', why: cmp.json.why, next: 'the change is still in games/; run try again with the same --name when the computer is calmer, or revert', result: join(exp, 'result.json') };
+  }
+  if (measureOnly) {
+    installBuild(root, game, dir, v); await servedIs(s.url, game, dir, v);
+    const r = finish('measured', `${cmp.json.verdict}: ${cmp.json.why}`, { check, compare, look });
+    return {
+      ok: true, command: 'try', game, change: name, verdict: 'MEASURED', against: s.kept, why: r.why,
+      goal: `${compare.goal.metric}: ${compare.goal.why}`,
+      guardsWorse: compare.guards.filter((g) => g.verdict === 'worse').map((g) => `${g.metric}: ${g.why}`),
+      looks: look?.note ?? null, declared: { looks: r.looks, plays: r.plays }, result: join(exp, 'RESULT.md'),
+      next: 'the change stays in games/ and is served; say what it costs in these numbers, and commit it if the person keeps it',
+    };
   }
   const keep = cmp.json.verdict === 'better';
   let restored = [];

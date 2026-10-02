@@ -52,8 +52,8 @@ codex plugin add homie@homie
 Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
 session afterwards so the skills and tools load.
 
-Then ask for a studio. The plugin adds thirteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
-`port`, `publish`, `sound`, `music`, `art`, `video`, `playtest`, `perf`) and connects the Homie MCP server at
+Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
+`port`, `publish`, `sound`, `music`, `art`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
 `https://homie.rocks/mcp`, which has creator tools only: set up a studio, make or remix a game, make an
 existing single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.
@@ -100,6 +100,14 @@ Three skills need no account and cost nothing:
   measures it against the build to beat in alternating runs, and keeps it only when it is better beyond the
   noise, nothing guarded got worse and two browsers still finish a round; anything else is reverted. The
   report goes in the studio's `perf/` folder, with the numbers and the before and after.
+- **`lab`** (*"iterate on the jump"*, *"make the hit feel punchier"*, *"tune the drift"*): a Game Lab for one
+  mechanic, on your computer. One short take plays in New (your working tree) beside Today (the last commit) on one
+  clock, with the same seed and presses: slowed to a tenth or a frame at a time, with a timeline of the move's named
+  phases (hit-stop, launch, slide, settle), graphs of what it does New against Today, the game's own onion skin and
+  arcs, a phone view, and sliders that write the values you keep into the game's `tunables.json`. Claude instruments
+  the move and commits that first, so Today is the game as it is; proposes the change as phases and numbers; and
+  keeps only what you like, with the numbers (and the frame cost, measured with `perf` when it costs any) and a
+  side-by-side clip.
 
 Music, art and generated video use the providers' own accounts, asked for only when the skill is
 first used:
@@ -122,7 +130,7 @@ first used:
   painted covers, backdrops and textures with fal on your own key, priced, capped and receipted;
   checks that a texture tiles and that files are small enough for a phone.
 
-All of them need ffmpeg; `video`, `art`, `playtest` and `perf` also use Chrome.
+All of them but `lab` need ffmpeg; `video`, `art`, `playtest`, `perf` and `lab` use Chrome.
 
 ## In the Claude desktop app: one chat
 

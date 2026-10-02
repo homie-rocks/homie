@@ -46,10 +46,12 @@ A studio made elsewhere (on a phone, with Deploy to Cloudflare, so it lives on G
 
 Links are the person's to open: give them in your reply (the cards have their own buttons). Never open a browser or run a command such as open to open one yourself.
 
+To make one mechanic of a game feel better (a jump, a hit, a dash), game_lab opens the Game Lab: New beside Today, one take, its phases and sliders (studio_guide { "topic": "lab" }).
+
 Long work (npm install, check, playtest, deploy, renders) runs in the background: the tool answers at once with a card that follows it, and build_progress or studio_job reads where it is. studio_guide has Homie's full guide for each job (game, plan, port, playtest, publish, music, sound, art, video). Never put a key or password in a file or the chat. If Homie's homie.rocks connector is connected too, its tools of the same names say what to run; these run it.`;
 
-const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js' };
-const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex' };
+const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js', [UI.lab]: 'lab.js' };
+const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex', [UI.lab]: 'Game Lab' };
 const UI_DIR = join(PACKAGE_ROOT, 'mcp', 'ui');
 
 /** One card's whole document: the shared look and bridge, and the card's own script, as the files are. */

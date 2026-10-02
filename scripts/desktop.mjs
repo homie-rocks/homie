@@ -144,7 +144,7 @@ if (check) {
     if (init.result?.serverInfo?.version !== version) throw new Error(`the packed server says ${init.result?.serverInfo?.version}, not ${version}`);
     const tools = (await s.request('tools/list')).result.tools.map((t) => t.name);
     for (const t of m.tools) if (!tools.includes(t.name)) throw new Error(`the manifest lists ${t.name}, which the packed server does not have`);
-    for (const uri of ['ui://homie-studio/setup', 'ui://homie-studio/build', 'ui://homie-studio/studio', 'ui://homie-studio/codex']) {
+    for (const uri of ['ui://homie-studio/setup', 'ui://homie-studio/build', 'ui://homie-studio/studio', 'ui://homie-studio/codex', 'ui://homie-studio/lab']) {
       const c = (await s.request('resources/read', { uri })).result.contents[0];
       if (!/ui\/initialize/.test(c.text) || /__name/.test(c.text)) throw new Error(`the card ${uri} is not right in the bundle`);
     }
@@ -171,6 +171,6 @@ if (check) {
       await s3.close();
       if (st.structuredContent?.studiosDir !== join(work, 'Studios')) throw new Error(`with ${what} for the folder, the server used ${st.structuredContent?.studiosDir}, not the default`);
     }
-    say(`the packed server answers: ${tools.length} tools, 4 cards, setup status, the guides, and a new studio with no game (${init.result.protocolVersion}); the folder setting is optional, and an unfilled one means the default`);
+    say(`the packed server answers: ${tools.length} tools, 5 cards, setup status, the guides, and a new studio with no game (${init.result.protocolVersion}); the folder setting is optional, and an unfilled one means the default`);
   } finally { rmSync(work, { recursive: true, force: true }); }
 }

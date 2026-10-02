@@ -75,6 +75,8 @@ person wants, fix it and run the same instruments again; a change that does not 
 the version before it is a regression, not progress. When the weak thing is speed (a low frame rate in
 `first`, a slow first ten seconds, a phone that struggles), the `perf` skill measures it properly: frame
 times and CPU per frame for the host and a replica, alternating runs, and only changes that beat the noise.
+When the weak thing is how a move feels (a hit that does not land, a floaty jump), the `lab` skill compares the
+change with the last commit frame by frame, with the person.
 
 `references/METHOD.md` has the method behind the rows: playing like a person, the five numbers a
 round owes you, the scenarios, seats with different strategies, the do-nothing test, the ten-second

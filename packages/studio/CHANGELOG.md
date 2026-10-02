@@ -17,9 +17,60 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.20.0] - 2026-10-02
+
+**Plugin 0.21.0** · [#30](https://github.com/homie-rocks/homie/pull/30)
+
+A Game Lab: tune how one move of your game feels (a jump, a hit, a dash), your new version beside your last commit,
+frame by frame.
+
+### Added
+
+- Plugin: the `lab` skill. Say "iterate on the jump", "make the hit feel punchier" or "tune the drift". Claude first
+  teaches your game to tell the lab about that move (its phases, the numbers that shape it) without changing how it
+  plays, and commits that. Then it proposes the change as named phases and numbers, shows it to you New beside Today,
+  keeps only what you like, and can record a side-by-side clip to share.
+- `homie-studio lab <game>`: the Game Lab, a page on your own computer. One short take of your game plays in New (your
+  working copy, rebuilt every time a file is saved) beside Today (your last commit), on one clock, with the same
+  presses on the same frames. Slow it to a quarter or a tenth, step a frame at a time, try 30, 15 or 12 frames a
+  second, or switch to a phone-sized screen; the frames are the same frames at any speed.
+- In the lab: a timeline that names each phase of the move, graphs of New against Today, captions, the game's own
+  onion skin and arcs, and its views (close, the whole arena). Its numbers are sliders: move one and New plays it at
+  once, and "Keep in code" writes the ones you like into the game's `tunables.json`. Press REC and play a move to make
+  a new take; both versions get your presses.
+- `homie-studio lab check <game>`: the same take with no window. How long each phase lasts in each version, the peaks
+  of what the game tracks, whether a replay landed on exactly the same frames, a contact sheet and a still.
+  `homie-studio lab set <game> name=value` writes a number into `tunables.json`; `homie-studio lab --stop` stops the lab.
+- Homie for Claude Desktop (`homie-studio mcp`): `game_lab` opens the lab and answers with a card: a still of both
+  versions at the move's busiest moment, their phases side by side, and Open.
+- For your game's code, `@homie-rocks/studio/lab`: `lab.tunables`, `lab.phase`, `lab.track`, `lab.camera`,
+  `lab.overlay`, `lab.stage` (a training dummy for one move) and `lab.random` (dice for sparks and shake). Every call
+  does nothing outside the lab, so the calls stay in your game.
+- Plugin: the perf skill's `try --measure` measures a change you keep for how it feels and says what it costs, without
+  reverting it (`try` on its own reverts anything that is not faster).
+
+### Changed
+
+- Gem Rush's bump lands. The bumped body holds for 70 ms, white and squashed against the hit, then flies stretched
+  along it, eases to a stop 185 px away at any frame rate (it used to slide a different distance at 12 and at 60
+  frames a second, then creep), and wobbles as it settles. Sparks, and a small camera kick for whoever was in it.
+- Ember Vale's strike lands. The slime freezes white when it is hit and its damage pops up, a swipe carries through,
+  the slime is pushed back and wobbles like jelly, and a kill bursts. Your hero steps into each strike, so three
+  strikes in a row still reach.
+- Both starters come ready for the lab: their numbers in `tunables.json` and a take in `lab.json`, which
+  `homie-studio game new` copies with the game. A new studio's AGENTS.md names both files and the lab command.
+
+### Upgrade notes
+
+- A game you made from a starter before 0.20.0 keeps its old feel: the new bump and strike come with a new copy
+  (`homie-studio game new`). To tune a move of your own game, tell Claude "build a Game Lab for <the move>": it adds
+  the lab's calls and a take, and commits that first.
+- Today is your last commit, so commit (or stash) your work in progress before you open the lab. Its builds live in
+  `.studio/lab/`, which git already ignores.
+
 ## [0.19.2] - 2026-10-02
 
-**Plugin 0.20.2** · [#29](https://github.com/homie-rocks/homie/pull/29) · [npm](https://www.npmjs.com/package/@homie-rocks/studio/v/0.19.2)
+**Plugin 0.20.2** · [#29](https://github.com/homie-rocks/homie/pull/29) · [release-2026-10-02-studio-0.19.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.19.2)
 
 Release notes: this changelog, on every GitHub release, inside the npm package, and at the top of
 `homie-studio upgrade`.
@@ -846,7 +897,8 @@ The first studio toolkit: a studio in one folder, a multiplayer starter, and dep
   create, and `publish` to the homie.rocks directory.
 - Plugin: the `studio-setup`, `game` and `publish` skills, and the remote Homie MCP.
 
-[0.19.2]: https://www.npmjs.com/package/@homie-rocks/studio/v/0.19.2
+[0.20.0]: https://github.com/homie-rocks/homie/pull/30
+[0.19.2]: https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.19.2
 [0.19.1]: https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.19.1
 [0.19.0]: https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.19.0
 [0.18.2]: https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.18.2

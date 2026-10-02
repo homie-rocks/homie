@@ -8,6 +8,7 @@
  *   - a change that is faster beyond the noise is KEPT, and becomes the build to beat;
  *   - a change inside the noise is REVERTED: games/<game>/ is the kept source again (a file it added is removed);
  *   - a change the check fails on is REVERTED before anything is measured;
+ *   - a change kept for how it feels (--measure) is MEASURED, its cost said, and never reverted;
  *   - try without saying how it looks and plays is refused;
  *   - report writes perf/<game>/README.md, numbers.json and the kept change as a patch.
  * And (plugin 0.20.1) the check that the site serves the build being measured:
@@ -203,6 +204,19 @@ test('the perf loop: baseline, a kept change, a reverted one, a refused one, a f
     assert.ok(!existsSync(join(out, 'before-after', '01-cache-the-background-gradient.patch')));
     assert.ok(!existsSync(join(out, 'before-after', 'all-kept.patch')), 'one change kept: its own patch is the whole of it');
     assert.match(readme, /The change: `before-after\/01-cache-the-background-gradient\.files\.txt`/);
+
+    // 4. A change kept for how a move feels (the lab skill: --measure): measured and said in numbers, never reverted.
+    writeFileSync(join(game, 'speed.txt'), '0.9\n');
+    writeFileSync(join(game, 'src', 'juice.ts'), 'export const sparks = 9;\n');
+    const felt = await perf(['try', 'gem-rush', '--name', 'The bump lands', '--looks', 'a flash and sparks', '--plays', 'a 70 ms hit-stop', '--measure'], root);
+    assert.equal(felt.code, 0, felt.out + felt.err);
+    assert.equal(felt.json.verdict, 'MEASURED', felt.json.why);
+    assert.match(felt.json.why, /^worse: phone\.host\.busy/, 'the cost, said');
+    assert.ok(existsSync(join(game, 'src', 'juice.ts')), 'nothing reverted');
+    assert.equal(readFileSync(join(game, 'speed.txt'), 'utf8'), '0.9\n');
+    assert.equal(await fetch(`${url}/gem-rush/__game/speed.txt`).then((r) => r.text()), '0.9\n', 'the changed build is served');
+    assert.equal(JSON.parse(readFileSync(join(loop, 'session.json'), 'utf8')).kept, 'c1', 'the build to beat is what it was');
+    assert.match(readFileSync(join(loop, 'experiments', '04-the-bump-lands', 'RESULT.md'), 'utf8'), /\*\*MEASURED\*\*/);
   } finally {
     server.close();
   }

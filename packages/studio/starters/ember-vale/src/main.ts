@@ -36,18 +36,27 @@
  * done. The BRAIN is the server's (the Table's Workers AI, the owner's key, or the owner's own Claude in the seat); with
  * none, or between its decisions, `decide` below is the floor. A guide's line is drawn as a bubble from agents.json,
  * never from a model; "Quiet AI" hides them.
+ *
+ * THE GAME LAB (`homie-studio lab ember-vale`): the strike is tuned in the lab. Its numbers are tunables.json (read
+ * with lab.tunables: the lab's sliders move them and write kept values back), and the game tells the lab what a strike
+ * is doing: its phases, the struck slime's hit points, squash and push, poses for the onion skin and arcs, and views.
+ * The take "strike" (lab.json) stands a big training slime in front of the hero (lab.stage "dummy"). Outside the lab
+ * every lab call is a no-op.
  */
 import { AI_MARK, createControls, createLabels, createRoom, createSaves, easeView, exposePort, fitView, jitter, q, standoff, stripAi, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
 import { useAgents, type Goal, type Vocabulary } from '@homie-rocks/studio/agents';
 import vocabulary from '../agents.json';
+// The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
+import { lab } from '@homie-rocks/studio/lab';
+import tuning from '../tunables.json';
 
 /* ------------------------------------------------------------------ rules */
 const W = 1600;
 const H = 1000;
 const R = 22;
 const SPEED = 300;
-const STRIKE_RANGE = 96;
-const STRIKE_MS = 380;
+/** The strike's numbers (tunables.json): the file's values, or the Game Lab's sliders while it plays a take. */
+const T = lab.tunables(tuning);
 const DOWN_MS = 4000;
 const DOWN = 1;
 const STRIKING = 2;
@@ -62,7 +71,8 @@ const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(
 /** The hero: the one thing that lasts. Kept in the save key 'hero'. */
 interface Hero { v: 1; name: string; level: number; xp: number; gold: number; hardcore: boolean; kills: number; deaths: number; born: number }
 interface Body extends BodyBase { x: number; y: number; hp: number; maxHp: number; level: number; face: number; flags: number; downUntil: number; atkAt: number; strikeAt: number; tx: number; ty: number; seenAt?: number; ax?: number; ay?: number }
-interface Slime { id: number; x: number; y: number; hp: number; maxHp: number; size: number; hitAt: number; lastHit: number }
+/** A slime; while it is struck: where its push starts (kx, ky), along (kdx, kdy), from when (kat, after the hit-stop). */
+interface Slime { id: number; x: number; y: number; hp: number; maxHp: number; size: number; hitAt: number; lastHit: number; kx?: number; ky?: number; kdx?: number; kdy?: number; kat?: number }
 type SlimeRow = [id: number, x: number, y: number, hp: number, size: number];
 
 /* ------------------------------------------------------------------ the save */
@@ -290,10 +300,15 @@ function tell(b: Body, k: 'loot' | 'down', d: Record<string, unknown>): void {
 
 function strike(b: Body, now: number): void {
   b.atkAt = now; b.strikeAt = now;
+  const hits: Slime[] = [];
   for (const s of slimes) {
-    if (s.hp <= 0 || Math.hypot(s.x - b.x, s.y - b.y) > STRIKE_RANGE + s.size * 10) continue;
+    if (s.hp <= 0 || Math.hypot(s.x - b.x, s.y - b.y) > T.strikeRange + s.size * 10) continue;
     s.hp -= damageOf(b.level);
     s.lastHit = b.slot;
+    // The hit lands, then pushes: the slime holds for the hit-stop, then eases back along the strike.
+    const d = Math.hypot(s.x - b.x, s.y - b.y) || 1;
+    s.kx = s.x; s.ky = s.y; s.kdx = (s.x - b.x) / d; s.kdy = (s.y - b.y) / d; s.kat = now + T.hitStopMs;
+    hits.push(s);
     if (s.hp <= 0) {
       const xp = s.size === 3 ? 60 : 6 * s.size;
       const gold = s.size === 3 ? 50 : 2 + Math.floor(Math.random() * 4) * s.size;
@@ -304,6 +319,7 @@ function strike(b: Body, now: number): void {
       if (!b.bot && b.seat !== null) room.send('slain', { seat: b.seat });
     }
   }
+  if (lab.on && b.seat !== null && b.seat === room.mySeat()) labStrike(b, now, hits);
   slimes = slimes.filter((s) => s.hp > 0);
 }
 
@@ -324,6 +340,7 @@ function stepHost(dt: number): void {
     let wants = false;
     const guide = b.bot && b.agent?.role === 'guide' ? agents.goalOf(b.slot) : null;
     if (guide) wants = stepGuide(b, guide, room.skillOf(b), dt, now);
+    else if (b.bot && lab.stage === 'dummy') wants = false; // the lab's training stage: bots stand by
     else if (b.bot) {
       // Bots are company, not carries: they hunt only what is near them, and strike slower than a person. At the
       // room's dial (section 17): they notice a slime `reactionMs` late, hunt farther afield the more they lean to
@@ -341,7 +358,7 @@ function stepHost(dt: number): void {
       if (!t && Math.hypot(b.tx - b.x, b.ty - b.y) < 30) { b.tx = 200 + Math.random() * (W - 400); b.ty = 150 + Math.random() * (H - 300); }
       const dx = tx - b.x; const dy = ty - b.y; const dist = Math.hypot(dx, dy) || 1;
       if (dist > 60) { b.x += (dx / dist) * SPEED * 0.75 * dt; b.y += (dy / dist) * SPEED * 0.75 * dt; b.face = Math.atan2(dy, dx); }
-      wants = Boolean(t && dist < STRIKE_RANGE && now - b.atkAt > 1400 - 900 * s.aggression);
+      wants = Boolean(t && dist < T.strikeRange && now - b.atkAt > 1400 - 900 * s.aggression);
     } else if (b.seat === myS) {
       b.x = me.x; b.y = me.y; b.face = me.face; b.level = myLevel(); b.maxHp = maxHpOf(b.level);
       wants = me.strikes > 0; me.strikes = 0;
@@ -356,8 +373,8 @@ function stepHost(dt: number): void {
       wants = Boolean(room.presses(b)['strike']);
     }
     b.hp = Math.min(b.hp, b.maxHp);
-    b.flags = now - b.strikeAt < 200 ? STRIKING : 0;
-    if (wants && live && now - b.atkAt > STRIKE_MS) strike(b, now);
+    b.flags = now - b.strikeAt < T.flashMs ? STRIKING : 0;
+    if (wants && live && now - b.atkAt > T.strikeMs) strike(b, now);
   }
   if (live) stepSlimes(dt, now);
   // Every browser's ask buttons offer the quests open now (slow keyed state: sent only when it changes).
@@ -445,7 +462,7 @@ function stepGuide(b: Body, g: Goal, s: Skill, dt: number, now: number): boolean
   }
   const dx = tx - b.x; const dy = ty - b.y; const dist = Math.hypot(dx, dy) || 1;
   if (dist > (hunt ? 50 : 24)) { const v = Math.min(SPEED * 0.85, dist / Math.max(dt, 1e-3)); b.x = clamp(b.x + (dx / dist) * v * dt, R, W - R); b.y = clamp(b.y + (dy / dist) * v * dt, R, H - R); b.face = Math.atan2(dy, dx); }
-  return Boolean(hunt && Math.hypot(hunt.x - b.x, hunt.y - b.y) < STRIKE_RANGE + hunt.size * 10 && now - b.atkAt > 1400 - 900 * s.aggression);
+  return Boolean(hunt && Math.hypot(hunt.x - b.x, hunt.y - b.y) < T.strikeRange + hunt.size * 10 && now - b.atkAt > 1400 - 900 * s.aggression);
 }
 
 /** The quests open now: a slime hunt always, the King Slime when it is out or close to coming, a big slime when one is. */
@@ -465,7 +482,20 @@ function nearestSlime(x: number, y: number): Slime | null {
   return best;
 }
 
+/** A struck slime: held through the hit-stop, then eased back along the strike. True while it is (it does not chase). */
+function pushed(s: Slime, now: number): boolean {
+  if (s.kat === undefined || s.kx === undefined || s.ky === undefined) return false;
+  if (now < s.kat) return true;
+  const u = Math.min(1, (now - s.kat) / Math.max(1, T.pushMs));
+  const e = 1 - (1 - u) ** 3;
+  s.x = clamp(s.kx + (s.kdx ?? 0) * T.slimePush * e, 20, W - 20); s.y = clamp(s.ky + (s.kdy ?? 0) * T.slimePush * e, 20, H - 20);
+  // The push ends exactly where it should, at any frame rate; then the slime chases again.
+  if (u >= 1) { delete s.kat; return false; }
+  return true;
+}
 function stepSlimes(dt: number, now: number): void {
+  const struck = new Set(slimes.filter((s) => pushed(s, now)).map((s) => s.id));
+  if (lab.stage === 'dummy') return; // the lab's training slime stands still and never bites
   const bodies = [...room.bodies.values()].filter((b) => !(b.flags & DOWN));
   const people = bodies.filter((b) => !b.bot).length;
   if (now >= spawnAt && slimes.length < 6 + people * 2) {
@@ -484,6 +514,7 @@ function stepSlimes(dt: number, now: number): void {
   // Slimes hunt heroes: the nearest person, and a bot only when no person is up.
   const prey = bodies.some((b) => !b.bot) ? bodies.filter((b) => !b.bot) : bodies;
   for (const s of slimes) {
+    if (struck.has(s.id)) continue;
     let target: Body | null = null; let bd = Infinity;
     for (const b of prey) { const d = Math.hypot(b.x - s.x, b.y - s.y); if (d < bd) { bd = d; target = b; } }
     const speed = s.size === 3 ? 70 : 95 - s.size * 10;
@@ -504,13 +535,24 @@ function stepSlimes(dt: number, now: number): void {
 const input = createControls({ actions: { strike: ['Space', 'KeyJ', 'Enter'] }, touch: { buttons: [{ id: 'strike', label: 'STRIKE' }] } });
 // A touch screen has STRIKE at the bottom right: the ask panel stands right above it (index.html, .touch).
 document.body.classList.toggle('touch', input.touch.enabled);
+/** A strike's lunge: my hero steps T.lunge along its facing over 90 ms, easing out (owner movement, under top speed). */
+const lunge = { at: -1e9, face: 0, done: 1 };
+function stepLunge(): void {
+  if (lunge.done >= 1) return;
+  const u = Math.min(1, (performance.now() - lunge.at) / 90);
+  const e = 1 - (1 - u) ** 2;
+  const d = (e - lunge.done) * T.lunge;
+  lunge.done = e;
+  me.x = clamp(me.x + Math.cos(lunge.face) * d, R, W - R); me.y = clamp(me.y + Math.sin(lunge.face) * d, R, H - R);
+}
 function stepMe(dt: number): void {
   const b = room.hosting ? room.mine() : null;
   const isDown = b ? Boolean(b.flags & DOWN) : Boolean(myViewBody()?.flags && (myViewBody()!.flags & DOWN));
   const typing = !ui.idle();
   const m = typing || isDown ? { x: 0, y: 0 } : input.move();
   if (Math.hypot(m.x, m.y) > 0.05) { me.face = Math.atan2(m.y, m.x); me.x = clamp(me.x + m.x * SPEED * dt, R, W - R); me.y = clamp(me.y + m.y * SPEED * dt, R, H - R); me.has = true; }
-  if (!typing && input.pressed('strike')) { if (room.hosting) me.strikes += 1; else room.press('strike'); me.flashAt = performance.now(); }
+  if (!typing && input.pressed('strike')) { if (room.hosting) me.strikes += 1; else room.press('strike'); me.flashAt = performance.now(); if (!isDown) { lunge.at = performance.now(); lunge.face = me.face; lunge.done = 0; } }
+  if (!isDown) stepLunge();
   room.input([q(me.x, 0), q(me.y, 0), q(me.face, 2), myLevel()]);
 }
 function myViewBody(): Body | null { const s = room.mySeat(); return room.view().find((b) => b.seat === s && !b.bot) ?? null; }
@@ -535,6 +577,131 @@ function banner(t: string): void { bannerText = t; bannerUntil = performance.now
 const SLIME = ['#7ad35a', '#e0a83a', '#c74bd8'];
 
 /*
+ * HOW A STRIKE LOOKS, on every screen: the room's fast world says each slime's hit points, so any browser sees a hit as
+ * a drop in them (and a kill as a slime gone with a strike beside it). A hit: the slime freezes white for the hit-stop,
+ * squashed against the strike, then is pushed back (the host moves it) and wobbles like jelly until it settles
+ * (overlap), and its damage pops up. A kill bursts. A strike is a swipe that sweeps around the hero and trails off
+ * (follow-through); a strike of mine that lands kicks my camera. Droplets and the kick roll lab.random(): their own dice.
+ */
+const seen = new Map<number, { x: number; y: number; hp: number; size: number; hitAt: number; dx: number; dy: number }>();
+const pops: { x: number; y: number; size: number; at: number }[] = [];
+const drops: { x: number; y: number; vx: number; vy: number; at: number; life: number; colour: string }[] = [];
+const numbers: { x: number; y: number; text: string; at: number }[] = [];
+const swings = new Map<number, { at: number; face: number }>();
+let kickAt = -1e9;
+/** The striking body nearest a point (a hit's direction comes from it), or null. */
+function striker(x: number, y: number, bodies: Body[]): Body | null {
+  let best: Body | null = null; let bd = Infinity;
+  for (const b of bodies) {
+    const mineNow = !b.bot && b.seat === room.mySeat() && performance.now() - me.flashAt < T.flashMs;
+    if (!(b.flags & STRIKING) && !mineNow) continue;
+    const d = Math.hypot(b.x - x, b.y - y);
+    if (d < bd && d < T.strikeRange + 60) { bd = d; best = b; }
+  }
+  return best;
+}
+function watchSlimes(t: number, bodies: Body[]): void {
+  const rows = room.fast() ?? [];
+  const here = new Set<number>();
+  for (const [id, x, y, hp, size] of rows) {
+    here.add(id);
+    const s = seen.get(id);
+    if (!s) { seen.set(id, { x, y, hp, size, hitAt: -1e9, dx: 0, dy: 0 }); continue; }
+    if (hp < s.hp) {
+      const by = striker(x, y, bodies);
+      const d = by ? Math.hypot(x - by.x, y - by.y) || 1 : 1;
+      s.hitAt = t; s.dx = by ? (x - by.x) / d : 0; s.dy = by ? (y - by.y) / d : -1;
+      numbers.push({ x: x + ((numbers.length % 3) - 1) * 16, y: y - (12 + size * 10), text: `-${Math.round(s.hp - hp)}`, at: t });
+      if (by && !by.bot && by.seat === room.mySeat()) kickAt = t;
+    }
+    s.x = x; s.y = y; s.hp = hp; s.size = size;
+  }
+  for (const [id, s] of seen) {
+    if (here.has(id)) continue;
+    seen.delete(id);
+    const by = striker(s.x, s.y, bodies);
+    if (!by) continue; // gone without a strike: the night ended
+    pops.push({ x: s.x, y: s.y, size: s.size, at: t });
+    numbers.push({ x: s.x, y: s.y - (12 + s.size * 10), text: `-${Math.round(s.hp)}`, at: t });
+    if (!by.bot && by.seat === room.mySeat()) kickAt = t;
+    for (let i = 0; i < 10; i += 1) { const a = lab.random() * Math.PI * 2; const v = 120 + lab.random() * 260; drops.push({ x: s.x, y: s.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, at: t, life: 260 + lab.random() * 200, colour: SLIME[s.size - 1] ?? '#7ad35a' }); }
+  }
+  if (drops.length > 200) drops.splice(0, drops.length - 200);
+}
+/** A slime's look this frame: offset, squash (along x and y) and how white it flashes. */
+function slimeFx(id: number, t: number): { ox: number; oy: number; sx: number; sy: number; flash: number } {
+  const s = seen.get(id);
+  const out = { ox: 0, oy: 0, sx: 1, sy: 1, flash: 0 };
+  if (!s) return out;
+  const age = t - s.hitAt;
+  if (age < 0 || age > T.hitStopMs + T.wobbleMs) return out;
+  out.flash = Math.max(0, 1 - age / Math.max(1, T.hitStopMs + 40));
+  if (age < T.hitStopMs) {
+    // Squashed against the strike, shaking.
+    const k = T.wobble; const ax = Math.abs(s.dx); const ay = Math.abs(s.dy);
+    out.sx = 1 - k * 0.5 * ax + k * 0.3 * ay; out.sy = 1 - k * 0.5 * ay + k * 0.3 * ax;
+    out.ox = Math.sin(age * 1.1) * 2; out.oy = Math.cos(age * 1.7) * 2;
+    return out;
+  }
+  const w = (age - T.hitStopMs) / Math.max(1, T.wobbleMs);
+  const k = T.wobble * Math.exp(-4 * w) * Math.cos(w * Math.PI * 5);
+  out.sx = 1 + k * 0.7; out.sy = 1 - k * 0.7;
+  return out;
+}
+/** A strike's swipe: a crescent sweeping across the hero's front, its smear trailing off. */
+function drawSwing(x: number, y: number, face: number, age: number): void {
+  const total = T.swingMs + 120;
+  if (age < 0 || age > total) return;
+  const u = Math.min(1, age / Math.max(1, T.swingMs));
+  const lead = face - Math.PI * 0.7 + Math.PI * 1.25 * (1 - (1 - u) ** 3);
+  const tail = lead - Math.PI * (0.2 + 0.45 * (1 - u));
+  const fade = age > T.swingMs ? 1 - (age - T.swingMs) / 120 : 1;
+  const r = T.strikeRange * 0.82;
+  ctx.save();
+  ctx.globalAlpha = 0.85 * fade;
+  ctx.strokeStyle = '#ffcf6e'; ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i += 1) {
+    // The smear: thick and bright at the lead, thin and faint behind it.
+    const a0 = tail + ((lead - tail) * i) / 6; const a1 = tail + ((lead - tail) * (i + 1)) / 6;
+    ctx.globalAlpha = 0.85 * fade * ((i + 1) / 6) ** 1.5;
+    ctx.lineWidth = 3 + 9 * ((i + 1) / 6);
+    ctx.beginPath(); ctx.arc(x, y, r, a0, a1); ctx.stroke();
+  }
+  ctx.globalAlpha = fade; ctx.fillStyle = '#fff6dc';
+  ctx.beginPath(); ctx.arc(x + Math.cos(lead) * r, y + Math.sin(lead) * r, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function drawBursts(t: number): void {
+  for (let i = pops.length - 1; i >= 0; i -= 1) {
+    const p = pops[i]!; const age = t - p.at; const u = age / 240;
+    if (u >= 1) { pops.splice(i, 1); continue; }
+    const r = (12 + p.size * 10) * (1 + 0.5 * (1 - (1 - u) ** 2));
+    ctx.globalAlpha = 1 - u; ctx.strokeStyle = SLIME[p.size - 1] ?? '#7ad35a'; ctx.lineWidth = 6 * (1 - u) + 1;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  for (let i = drops.length - 1; i >= 0; i -= 1) {
+    const d = drops[i]!; const age = (t - d.at) / 1000;
+    if (age * 1000 > d.life) { drops.splice(i, 1); continue; }
+    const x = d.x + d.vx * age; const y = d.y + d.vy * age + 420 * age * age;
+    ctx.globalAlpha = 1 - (age * 1000) / d.life; ctx.fillStyle = d.colour;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+  for (let i = numbers.length - 1; i >= 0; i -= 1) {
+    const n = numbers[i]!; const age = t - n.at;
+    if (age > 700) { numbers.splice(i, 1); continue; }
+    const u = Math.min(1, age / 260); const rise = 34 * (1 - (1 - u) ** 3);
+    const pop = age < 120 ? 1.35 - 0.35 * (age / 120) : 1;
+    ctx.save(); ctx.translate(n.x, n.y - 8 - rise); ctx.scale(pop, pop);
+    ctx.globalAlpha = age > 450 ? 1 - (age - 450) / 250 : 1;
+    ctx.strokeStyle = 'rgba(11,15,10,.9)'; ctx.lineWidth = 5; ctx.strokeText(n.text, 0, 0);
+    ctx.fillStyle = '#fff3d6'; ctx.fillText(n.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/*
  * The camera (port/view.ts). Where the whole vale fits at a size that reads (a computer, a TV) it all shows, as it
  * always did. Where it would be small (a phone, above all held upright, where the vale was a strip a quarter of the
  * screen tall), the vale fills the screen and follows your hero (a watcher: the hero followed), never past the vale's
@@ -552,7 +719,9 @@ function aim(): Fit {
   const v = lookOnly ? room.viewBody() : null;
   const focus = !lookOnly && me.has ? { x: me.x, y: me.y } : v ? { x: v.x, y: v.y } : null;
   const phone = Math.min(vw, vh) <= 540;
-  return fitView({ world: { w: W, h: H }, screen: { w: vw, h: vh }, readable: READABLE, zoom: Math.max(READABLE, Math.min(vw, vh) / (phone ? 560 : 820)), focus, whole: lookOnly && !v, inset: INSET });
+  // The Game Lab's views (outside the lab: the game's own camera, always).
+  const lv = labView();
+  return fitView({ world: { w: W, h: H }, screen: { w: vw, h: vh }, readable: lv?.zoom ? 0 : READABLE, zoom: Math.max(READABLE, Math.min(vw, vh) / (phone ? 560 : 820)) * (lv?.zoom ?? 1), focus, whole: Boolean(lv?.whole) || (lookOnly && !v), inset: INSET });
 }
 
 function draw(t: number): void {
@@ -565,7 +734,10 @@ function draw(t: number): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0b0f0a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.save();
-  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (vw / 2 - cam.x * s), dpr * (vh / 2 - cam.y * s));
+  // The camera's kick when a strike of mine lands: a few px, gone in a fifth of a second.
+  const kick = t - kickAt < 200 ? T.shake * (1 - (t - kickAt) / 200) ** 2 : 0;
+  const kx = kick ? (lab.random() - 0.5) * 2 * kick : 0; const ky = kick ? (lab.random() - 0.5) * 2 * kick : 0;
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (vw / 2 - cam.x * s + kx), dpr * (vh / 2 - cam.y * s + ky));
   // The vale: moss, and embers that drift.
   ctx.fillStyle = '#16210f'; ctx.fillRect(0, 0, W, H);
   for (let i = 0; i < 70; i++) {
@@ -574,12 +746,19 @@ function draw(t: number): void {
     ctx.beginPath(); ctx.arc(x, H - y, i % 5 ? 26 : 2.5, 0, Math.PI * 2); ctx.fill();
   }
   const fast = room.fast() ?? [];
-  for (const [, x, y, hp, size] of fast) {
+  const everyone = room.view();
+  watchSlimes(t, everyone);
+  for (const [id, x, y, hp, size] of fast) {
     const r = 12 + size * 10;
+    const fx = slimeFx(id, t);
+    ctx.save();
+    ctx.translate(x + fx.ox, y + fx.oy); ctx.scale(fx.sx, fx.sy);
     ctx.fillStyle = SLIME[size - 1] ?? '#7ad35a';
-    ctx.beginPath(); ctx.ellipse(x, y, r, r * (0.78 + Math.sin(t / 180 + x) * 0.06), 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#0b0f0a'; ctx.fillRect(x - r * 0.4, y - r * 0.2, 4, 4); ctx.fillRect(x + r * 0.3, y - r * 0.2, 4, 4);
-    if (size === 3) { ctx.fillStyle = '#ffcf6e'; ctx.fillRect(x - 14, y - r - 12, 28, 8); }
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * (0.78 + Math.sin(t / 180 + x) * 0.06), 0, 0, Math.PI * 2); ctx.fill();
+    if (fx.flash > 0) { ctx.globalAlpha = fx.flash; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.8, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = '#0b0f0a'; ctx.fillRect(-r * 0.4, -r * 0.2, 4, 4); ctx.fillRect(r * 0.3, -r * 0.2, 4, 4);
+    if (size === 3) { ctx.fillStyle = '#ffcf6e'; ctx.fillRect(-14, -r - 12, 28, 8); }
+    ctx.restore();
     const max = size === 3 ? 160 : 18 * size;
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(x - r, y + r + 4, r * 2, 4);
     ctx.fillStyle = '#ff7a59'; ctx.fillRect(x - r, y + r + 4, (r * 2 * clamp(hp, 0, max)) / max, 4);
@@ -601,7 +780,12 @@ function draw(t: number): void {
     const x = local ? me.x : b.x; const y = local ? me.y : b.y;
     const isDown = Boolean(b.flags & DOWN);
     ctx.globalAlpha = isDown ? 0.35 : 1;
-    if ((b.flags & STRIKING) || (self && performance.now() - me.flashAt < 160)) { ctx.strokeStyle = 'rgba(255,207,110,.7)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, STRIKE_RANGE * 0.8, 0, Math.PI * 2); ctx.stroke(); }
+    // A strike: the swipe starts on the press (my own), or when the room says this body strikes (anyone's).
+    const striking = Boolean(b.flags & STRIKING) || (self && performance.now() - me.flashAt < T.flashMs);
+    const sw = swings.get(b.slot);
+    if (striking && (!sw || t - sw.at > T.strikeMs * 0.9)) swings.set(b.slot, { at: self && performance.now() - me.flashAt < T.flashMs ? t - (performance.now() - me.flashAt) : t, face: self ? me.face : b.face });
+    const swing = swings.get(b.slot);
+    if (swing) drawSwing(x, y, swing.face, t - swing.at);
     const isGuide = (net.slots ?? []).some((x) => x.slot === b.slot && x.agent?.role === 'guide');
     ctx.fillStyle = self ? '#ffcf6e' : isGuide ? '#7fd8c8' : b.bot ? '#8aa0b8' : '#f3ead2';
     ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
@@ -622,6 +806,8 @@ function draw(t: number): void {
     // The bubble's tail stops just above the guide's own name, so the name keeps its spot while it speaks.
     if (line && line.until > performance.now()) said.push({ x: sx(x), y: body.top - 3 - fs * 1.2 - 12, head: body.top, text: line.text });
   }
+  drawBursts(t);
+  lab.draw(ctx, s);
   ctx.restore();
   // Speech bubbles first (labels keep clear of them), then the names; your own last, on a dark chip.
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -848,16 +1034,82 @@ function paintAsks(): void {
 }
 setInterval(paintAsks, 250);
 
+/* ------------------------------------------------------------------ the Game Lab */
+/*
+ * What the lab shows of a strike (lab.json's take "strike"): my hero's last strike, and the slime nearest it then.
+ * Every frame: the strike's phase, the slime's hit points, how far it was pushed and how squashed it is (Today: it
+ * never reacts), and poses for the onion skin and the arc. Only in the lab: outside it these never run.
+ */
+type Pose = { x: number; y: number; r: number };
+const subject = { id: -1, at: 0, x0: 0, y0: 0, has: false, hit: false };
+function labStrike(b: Body, now: number, hits: Slime[]): void {
+  const s = hits[0] ?? nearestSlime(b.x, b.y);
+  subject.at = now; subject.has = true; subject.hit = hits.length > 0;
+  if (s) { subject.id = s.id; subject.x0 = s.kx ?? s.x; subject.y0 = s.ky ?? s.y; }
+}
+/** The subject slime as drawn (the fast world's row), or null once it is gone. */
+function subjectSlime(): { x: number; y: number; hp: number; size: number } | null {
+  const row = (room.fast() ?? []).find((r) => r[0] === subject.id);
+  return row ? { x: row[1], y: row[2], hp: row[3], size: row[4] } : null;
+}
+function labReport(): void {
+  if (!subject.has) { lab.phase(null); return; }
+  const age = room.net.now() - subject.at;
+  const sl = subjectSlime();
+  lab.track('slime hp', sl ? sl.hp : 0, 'hp');
+  lab.track('slime push', sl ? Math.hypot(sl.x - subject.x0, sl.y - subject.y0) : 0, 'px');
+  const fx = slimeFx(subject.id, performance.now());
+  lab.track('slime squash', (fx.sx - 1) * 100, '%');
+  const hit = subject.hit;
+  if (hit && age < T.hitStopMs) lab.phase('IMPACT', 'The hit lands: the slime freezes white');
+  else if (age < (hit ? T.hitStopMs : 0) + T.swingMs) lab.phase(hit ? 'FOLLOW' : 'SWING', hit ? 'The swipe carries through; the slime is pushed back' : 'A swipe at nothing');
+  else if (age < T.strikeMs) lab.phase('RECOVER', 'The slime wobbles; ready to strike again');
+  else if (sl && age < T.hitStopMs + T.wobbleMs) lab.phase('SETTLE', 'Overlap: the wobble dies away');
+  else lab.phase(null);
+  if (sl) lab.pose('slime', { x: sl.x, y: sl.y, r: 12 + sl.size * 10 });
+}
+/** The lab's training stage: the hero at camp facing right, a big slime a step away, the bots off to the side. */
+let staged = false;
+function stageDummy(): void {
+  staged = true;
+  me.x = W / 2 - 70; me.y = H / 2; me.face = 0; me.has = true;
+  let i = 0;
+  for (const b of room.bodies.values()) if (b.bot) { b.x = 200 + (i % 2) * 1200; b.y = 160 + Math.floor(i / 2) * 680; b.tx = b.x; b.ty = b.y; i += 1; room.moved(b); }
+  slimes = [{ id: ++slimeSeq, x: W / 2 + 30, y: H / 2, hp: 36, maxHp: 36, size: 2, hitAt: 0, lastHit: -1 }];
+}
+const labView = lab.camera<{ zoom?: number; whole?: boolean } | null>({ game: null, close: { zoom: 2.2 }, whole: { whole: true } });
+lab.overlay('onion', (c, k) => {
+  const g = c as CanvasRenderingContext2D; const s = Number(k) || 1;
+  const ghosts = lab.past<Pose>('slime', 8, 3);
+  ghosts.forEach((p, i) => { g.globalAlpha = 0.5 * (1 - i / ghosts.length); g.strokeStyle = '#ffad3b'; g.lineWidth = 2 / s; g.beginPath(); g.arc(p.x, p.y, p.r, 0, Math.PI * 2); g.stroke(); });
+  g.globalAlpha = 1;
+});
+lab.overlay('arcs', (c, k) => {
+  const g = c as CanvasRenderingContext2D; const s = Number(k) || 1;
+  const pts = lab.past<Pose>('slime', 90, 1);
+  if (pts.length < 2) return;
+  g.strokeStyle = 'rgba(124,196,255,.55)'; g.lineWidth = 1.5 / s;
+  g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+  g.fillStyle = '#7cc4ff';
+  for (const p of pts) { g.beginPath(); g.arc(p.x, p.y, 2.5 / s, 0, Math.PI * 2); g.fill(); }
+});
+lab.overlay('reach', (c, k) => {
+  if (!me.has) return;
+  const g = c as CanvasRenderingContext2D; const s = Number(k) || 1;
+  g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1.5 / s; g.setLineDash([8 / s, 6 / s]);
+  g.beginPath(); g.arc(me.x, me.y, T.strikeRange, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+});
+
 /* ------------------------------------------------------------------ loop */
-let last = performance.now();
 let frames = 0;
 function frame(t: number): void {
-  const dt = Math.min(0.05, (t - last) / 1000);
-  last = t;
+  const dt = lab.time.dt(t, 0.05);
+  if (lab.stage === 'dummy' && !staged && room.hosting && room.round?.phase === 'live') stageDummy();
   stepMe(dt);
   keepNames(t);
   if (room.hosting) stepHost(dt);
   draw(t);
+  if (lab.on) labReport();
   frames += 1;
   requestAnimationFrame(frame);
 }

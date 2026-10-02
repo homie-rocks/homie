@@ -65,6 +65,8 @@ export const ALLOWED_WORDS = {
   'packages/geom/src/laneride.ts': { words: ['lane'], why: "a road lane: the rider's offset from the centre line, and its public `lane` field" },
   'packages/geom/src/route.ts': { words: ['lane'], why: 'road lane markings, which ribbonGeo and dashedRibbon draw' },
   'packages/props/src/Landform.ts': { words: ['bench'], why: 'a bench in the geological sense: a terrace cut into a ridge flank (and the variable that shapes it)' },
+  'packages/studio/lib/lab.mjs': { words: ['worktree'], why: "git's own command: the Game Lab builds Today from `git worktree add --no-checkout` of a commit, and removes it" },
+  'packages/studio/test/lab.test.mjs': { words: ['worktree'], why: "git's own command: the test reads `git worktree list` to see the Game Lab's checkout come and go" },
 };
 
 /**

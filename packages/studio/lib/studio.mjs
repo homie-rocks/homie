@@ -103,6 +103,18 @@ export function starters() {
   });
 }
 
+/**
+ * A game's Game Lab takes (lab.json) seed its saves by the game's id (`homie-saves.local.<id>`, saves/saves.ts): a copy
+ * under a new id renames them, so a take's saved hero is still found.
+ */
+function renameTakeSaves(dir, from, id) {
+  const file = join(dir, 'lab.json');
+  if (!existsSync(file) || from === id) return;
+  const text = readFileSync(file, 'utf8');
+  const next = text.split(`"homie-saves.local.${from}"`).join(`"homie-saves.local.${id}"`);
+  if (next !== text) writeFileSync(file, next);
+}
+
 /** `homie-studio game new <id> --from <starter> --name "<Name>"`: a starter copied in as this studio's own game. */
 export function newGame(root, id, { from = 'gem-rush', name } = {}) {
   if (!GAME_ID.test(String(id ?? '')) || RESERVED_IDS.has(id)) throw new Error(`a game id is lowercase letters, digits and hyphens, up to 40, and not one of ${[...RESERVED_IDS].join(', ')} (got ${JSON.stringify(id)})`);
@@ -121,6 +133,7 @@ export function newGame(root, id, { from = 'gem-rush', name } = {}) {
   writeFileSync(join(dest, 'game.json'), `${JSON.stringify(meta, null, 2)}\n`);
   const main = join(dest, meta.entry ?? 'src/main.ts');
   if (existsSync(main)) writeFileSync(main, readFileSync(main, 'utf8').replace(new RegExp(`game: '${from}'`, 'g'), `game: '${id}'`));
+  renameTakeSaves(dest, from, id);
   const html = join(dest, 'index.html');
   if (name && existsSync(html)) writeFileSync(html, readFileSync(html, 'utf8').replace(/<title>[^<]*<\/title>/, `<title>${String(name).replace(/[<&]/g, '')}</title>`));
   return { ok: true, command: 'game new', id, from, dir: dest, files: readdirSync(dest, { recursive: true }).map(String) };
@@ -174,5 +187,6 @@ export async function remixGame(root, source, id, { name } = {}) {
   writeFileSync(join(dest, 'game.json'), `${JSON.stringify(meta, null, 2)}\n`);
   const main = join(dest, meta.entry ?? 'src/main.ts');
   if (existsSync(main) && from) writeFileSync(main, readFileSync(main, 'utf8').replace(new RegExp(`game: '${from}'`, 'g'), `game: '${id}'`));
+  if (from) renameTakeSaves(dest, from, id);
   return { ok: true, command: 'game remix', id, from: String(url), credit: meta.remixOf.credit, page: meta.remixOf.page, license, files: wrote };
 }

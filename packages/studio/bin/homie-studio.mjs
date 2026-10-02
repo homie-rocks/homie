@@ -37,6 +37,20 @@
  *                                         (better, worse or the same within the noise: medians, a 95% interval, a rank test,
  *                                          and the guards that must not get worse; runs taken side by side with the same
  *                                          --pair label on both sides are judged as pairs, so a computer's drift cancels)
+ *   homie-studio lab <id> [--port 8790] [--today HEAD|<ref>] [--take <name>]
+ *                                         (the Game Lab, on this computer, until --stop: one take of the game (games/<id>/lab.json)
+ *                                          played in New, the working tree, rebuilt on every save, beside Today, built from git's
+ *                                          checkout of the ref, on one clock with the same seed and presses: slowed to a tenth or
+ *                                          a frame at a time, at 60, 30, 15 or 12 fps, on a computer or a phone; a timeline of the
+ *                                          phases the game names, graphs New against Today, the game's own overlays and views,
+ *                                          sliders that write kept values into games/<id>/tunables.json, and REC for a new take.
+ *                                          The game calls @homie-rocks/studio/lab; the plugin's lab skill has the method)
+ *   homie-studio lab check <id> [--take <name>] [--today <ref>] [--device desk|phone] [--fps 60] [--frames 6] [--out <dir>]
+ *                                         (the same take headless, twice per build: every phase, each tracked value's peak, the
+ *                                          game's JavaScript per frame, whether a replay lands on the same frames, a contact sheet
+ *                                          and a still; .studio/lab/<id>/check-<time>/)
+ *   homie-studio lab set <id> <name>=<value> ...   (values into games/<id>/tunables.json, one tunable a line)
+ *   homie-studio lab --stop               (this studio's Game Lab only, and the checkouts Today was built from)
  *   homie-studio chrome [install] [--fresh]  (which Chrome the checks use; on Linux, `install` fetches Chrome for Testing;
  *                                          --fresh fetches it even when the machine has a Chrome)
  *   homie-studio look [<path>...] [--url <site>] [--shots <dir>] [--only computer,phone,sideways]
@@ -169,6 +183,7 @@ import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
 import { DEFAULT_GOAL, perfCompare, perfRun, perfSizes } from '../lib/perf.mjs';
+import { LAB_PORT, labServe, labSet, labStop } from '../lib/lab.mjs';
 import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeOf, typeOf } from '../lib/media.mjs';
 import { ensureMigrations, migrationWord, newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
@@ -234,6 +249,25 @@ function print(result) {
       for (const m of result.siteSkipped ?? []) lines.push(`  left out: ${m.what}: ${m.why}`);
       if (result.codexes?.length) lines.push(`Game Codex (the owner's private pages; codex link <id> opens one): ${result.codexes.map((x) => `/_studio/codex/${x}/`).join(', ')}`);
       break;
+    case 'lab':
+      lines.push(result.already ? `The Game Lab is running: ${result.url}` : `The Game Lab stopped (it was at ${result.url}).`);
+      break;
+    case 'lab stop':
+      lines.push(result.stopped.length ? 'Stopped this studio\'s Game Lab.' : 'No Game Lab of this studio was running.', ...(result.removed.length ? [`Removed the checkouts Today was built from: ${result.removed.join(', ')}`] : []));
+      break;
+    case 'lab set':
+      lines.push(result.changed.length ? `${result.file}: ${result.changed.map((c) => `${c.name} ${c.from} -> ${c.to}`).join(', ')}` : `${result.file}: nothing changed`);
+      break;
+    case 'lab check': {
+      const det = (x) => (x === null ? 'same frames' : `DIFFERED from frame ${x}`);
+      lines.push(`${result.game}: take "${result.take ?? '(none)'}", ${result.frames} frames at ${result.fps} fps`,
+        `  New:   ${result.phases.new.join(' · ') || 'no phases'}; JavaScript ${result.cost.new?.mean} ms a frame (p95 ${result.cost.new?.p95}); replay: ${det(result.deterministic.new)}`,
+        result.phases.today ? `  Today (${result.today}): ${result.phases.today.join(' · ') || 'no phases'}; JavaScript ${result.cost.today?.mean} ms a frame (p95 ${result.cost.today?.p95}); replay: ${det(result.deterministic.today)}` : `  Today: ${result.todayNote ?? 'none'}`,
+        ...(result.software ? [`  Note: a software renderer (${result.renderer}): pictures are right, the JavaScript numbers are slow`] : []),
+        ...result.errors.map((e) => `  error: ${e}`),
+        `Report: ${result.report}`, `Pictures: ${result.sheet}, ${result.still}`);
+      break;
+    }
     case 'media list':
       for (const kind of ['music', 'videos']) {
         lines.push(`${kind}/manifest.json: ${result[kind].pages.length} page(s)`);
@@ -555,6 +589,7 @@ async function main() {
   if (cmd === 'games') return { ok: true, command: 'games', games: listGames(root).map(({ dir, ...g }) => ({ ...g, dir: relative(root, dir) })) };
   if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps') }), 'build');
   if (cmd === 'perf' && sub === 'sizes') return perfSizes(root, positional[2] ?? listGames(root)[0]?.id);
+  if (cmd === 'lab') return labCommand(root, sub);
   if (cmd === 'perf') {
     const game = sub ?? listGames(root)[0]?.id;
     const url = flags.get('url') ?? siteUrl(root);
@@ -660,6 +695,21 @@ async function main() {
     };
   }
   return { ok: false, command: cmd, why: `unknown command "${[cmd, sub].filter(Boolean).join(' ')}" (homie-studio help)` };
+}
+
+/** `homie-studio lab …` (lib/lab.mjs, lib/lab-check.mjs): the Game Lab of one game. */
+async function labCommand(root, sub) {
+  if (flags.has('stop') || sub === 'stop') return labStop(root);
+  if (sub === 'set') return labSet(root, positional[2], positional.slice(3));
+  if (sub === 'check') {
+    const { labCheck } = await import('../lib/lab-check.mjs');
+    const num = (k, d) => (flags.has(k) ? Number(flags.get(k)) : d);
+    return labCheck(root, positional[2] ?? null, {
+      take: flags.get('take') ?? null, today: String(flags.get('today') ?? 'HEAD'), device: flags.get('device') ?? null, fps: num('fps', null),
+      out: flags.get('out') ? resolve(String(flags.get('out'))) : null, still: flags.get('still') ? resolve(String(flags.get('still'))) : null, frames: num('frames', 6), log,
+    });
+  }
+  return labServe(root, sub ?? null, { port: Number(flags.get('port') ?? LAB_PORT), today: String(flags.get('today') ?? 'HEAD'), take: flags.get('take') ?? null, log });
 }
 
 /** `homie-studio codex …` (lib/codex.mjs): the Game Codex of one game. */

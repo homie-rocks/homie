@@ -29,12 +29,20 @@
  * reserve, marked " · AI"), an AI with a pass takes one, and a humans-only
  * server's bots are off. The game says so: `caps: ['skill', 'agents']`.
  *
+ * THE GAME LAB (`homie-studio lab gem-rush`): the knock is tuned in the lab. Its numbers are tunables.json (read with
+ * lab.tunables, so the lab's sliders move them and write kept values back), and the game tells the lab what the knock
+ * is doing: its phases, the bumped body's speed and distance, poses for the onion skin and the spacing arc, and preset
+ * views. Outside the lab every lab call is a no-op. lab.json holds the take the lab plays.
+ *
  * Canvas 2D on purpose: the point is the contract, in ~700 readable lines.
  */
 import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` reads for the owner tests, and sandbox + audio shims),
 // and a flat world on every screen (port/view.ts: the camera, and name labels that never pile up).
 import { createLabels, exposePort, fitView, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
+// The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
+import { lab } from '@homie-rocks/studio/lab';
+import tuning from '../tunables.json';
 
 /* ------------------------------------------------------------------ rules */
 const W = 1600;
@@ -48,9 +56,8 @@ const BREAK_MS = 7_000;
 const GEM_COUNT = 14;
 const MIN_SLOTS = 3; // 1 human + 2 bots from the first frame
 const MAX_SLOTS = 8;
-const KNOCK_RANGE = 110;
-const KNOCK_SPEED = 950;
-const KNOCK_MS = 420;
+/** The knock's numbers (tunables.json): the file's values, or the Game Lab's sliders while it plays a take. */
+const T = lab.tunables(tuning);
 const ZONE_MS = 12_000;
 /** The contract's 12 colours (PALETTE, NETPLAY.md section 3): a person wears their seat's, so the watch page's strip matches. */
 const colourOf = (slot: number, seat: number | null): string => PALETTE[(seat ?? slot) % PALETTE.length] as string;
@@ -69,7 +76,9 @@ interface Snap { r: [n: number, phase: number, startedAt: number, endsAt: number
  * frame. The helper stamps the reset epoch the replica has adopted.
  */
 type Avatar = [x: number, y: number, vx: number, vy: number, mx: number, my: number];
-interface Body { slot: number; seat: number | null; name: string; bot: boolean; x: number; y: number; vx: number; vy: number; score: number; tx: number; ty: number; kvx: number; kvy: number; knockUntil: number }
+/** A body's bump, while it lasts: its direction (kvx, kvy), where its slide starts (kx, ky) and when (kat, after the hit-stop). */
+interface Knock { kvx: number; kvy: number; kx: number; ky: number; kat: number; knockUntil: number }
+interface Body extends Knock { slot: number; seat: number | null; name: string; bot: boolean; x: number; y: number; vx: number; vy: number; score: number; tx: number; ty: number }
 interface Gem { id: number; x: number; y: number }
 /** Slow state, on the keyed state channel (net.state('zone', ...)), not in the 20 Hz snapshot. */
 interface Zone { n: number; x: number; y: number; r: number; until: number }
@@ -103,7 +112,7 @@ let predictionError = 0;
 let pickups = new Map<number, number>();
 
 /* ------------------------------------------------ this browser's avatar */
-const me = { x: W / 2, y: H / 2, vx: 0, vy: 0, kvx: 0, kvy: 0, knockUntil: 0, has: false };
+const me = { x: W / 2, y: H / 2, vx: 0, vy: 0, kvx: 0, kvy: 0, kx: 0, ky: 0, kat: 0, knockUntil: 0, has: false };
 /** Offline (no shell) plays as a local seat 0, with keys or touch. */
 const mySeat = (): number | null => (net.offline ? 0 : net.seat);
 /** Whose view to draw: my own seat, or for a watcher the player it follows (null: the whole arena). */
@@ -127,7 +136,7 @@ const newGem = (): Gem => ({ id: ++gemSeq, x: rnd(60, W - 60), y: rnd(60, H - 60
 
 function bodyFor(slot: Slot): Body {
   const sp = spawnPoint(slot.slot);
-  return { slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, x: sp.x, y: sp.y, vx: 0, vy: 0, score: 0, tx: sp.x, ty: sp.y, kvx: 0, kvy: 0, knockUntil: 0 };
+  return { slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, x: sp.x, y: sp.y, vx: 0, vy: 0, score: 0, tx: sp.x, ty: sp.y, kvx: 0, kvy: 0, kx: sp.x, ky: sp.y, kat: 0, knockUntil: 0 };
 }
 
 function syncBodiesFromRoster(): void {
@@ -169,6 +178,7 @@ function startRound(n: number): void {
   pickups = new Map();
   sight.clear();
   round = { n, phase: 'live', startedAt: now, endsAt: now + ROUND_MS };
+  if (lab.stage === 'dummy') stageDummy();
   setZone(newZone((zone?.n ?? 0) + 1));
   net.round(round);
   publishRoster();
@@ -351,25 +361,46 @@ function wave(): void {
 function hostWave(from: Body): void {
   addWave({ slot: from.slot }); net.send('wave', { slot: from.slot });
   for (const b of bodies.values()) {
-    if (b === from || Math.hypot(b.x - from.x, b.y - from.y) > KNOCK_RANGE) continue;
-    knock(b, from.x, from.y);
+    if (b === from || Math.hypot(b.x - from.x, b.y - from.y) > T.knockRange) continue;
+    knock(b, from.x, from.y, from.slot);
   }
 }
 /**
- * Host: knock a body back. A replica's body is TAKEN for KNOCK_MS (its owner's avatar frames are ignored; the host
- * drives the knockback; the owner draws its body from snapshots), then the helper GIVES it back with a reset, so
- * the owner stands where the knockback ended. The owner cannot ignore it: the host holds the pen.
+ * Host: knock a body back. The hit LANDS first: for T.hitStopMs the body holds where it was hit (it flashes, squashes
+ * and shakes on every screen), then it SLIDES T.knockDistance along the hit, fast at first and easing into the stop
+ * (T.knockEase), so it arrives at rest, the same distance at any frame rate, and its owner steers again with no pop.
+ * A replica's body is TAKEN for the whole bump (its owner's avatar frames are ignored; the host drives it; the owner
+ * draws its body from snapshots), then the helper GIVES it back with a reset, so the owner stands where it ended.
  */
-function knock(b: Body, fx: number, fy: number): void {
+function knock(b: Body, fx: number, fy: number, by: number): void {
   let dx = b.x - fx; let dy = b.y - fy;
   const len = Math.hypot(dx, dy);
   if (len < 1) { const a = Math.random() * Math.PI * 2; dx = Math.cos(a); dy = Math.sin(a); } else { dx /= len; dy /= len; }
-  const until = net.now() + KNOCK_MS;
-  if (!b.bot && b.seat !== null && b.seat === mySeat()) { me.kvx = dx * KNOCK_SPEED; me.kvy = dy * KNOCK_SPEED; me.knockUntil = until; }
-  else { b.kvx = dx * KNOCK_SPEED; b.kvy = dy * KNOCK_SPEED; b.knockUntil = until; if (!b.bot && b.seat !== null) net.take(b.seat, KNOCK_MS); }
-  addWave({ slot: b.slot }, true); net.send('knock', { slot: b.slot });
+  const at = net.now() + T.hitStopMs;
+  const o: Knock & { x: number; y: number } = !b.bot && b.seat !== null && b.seat === mySeat() ? me : b;
+  o.kvx = dx; o.kvy = dy; o.kx = o.x; o.ky = o.y; o.kat = at; o.knockUntil = at + T.knockMs;
+  if (o === b && !b.bot && b.seat !== null) net.take(b.seat, T.hitStopMs + T.knockMs);
+  labKnock(b);
+  const d = { slot: b.slot, dx: q(dx, 2), dy: q(dy, 2), by };
+  addWave(d, true); net.send('knock', d);
 }
-function addWave(d: { slot: number }, isKnock = false): void {
+
+/** Where a bumped body is now: held through the hit-stop, then eased out along the hit. Sets its velocity too. */
+function slide(o: Knock & { x: number; y: number; vx: number; vy: number }, now: number, dt: number): void {
+  const u = Number.isFinite(o.kat) ? Math.max(0, Math.min(1, (now - o.kat) / Math.max(1, T.knockMs))) : 1;
+  const e = 1 - (1 - u) ** Math.max(1, T.knockEase);
+  const x = Math.max(R_AV, Math.min(W - R_AV, o.kx + o.kvx * T.knockDistance * e));
+  const y = Math.max(R_AV, Math.min(H - R_AV, o.ky + o.kvy * T.knockDistance * e));
+  if (u >= 1) { o.vx = 0; o.vy = 0; } else if (dt > 0) { o.vx = (x - o.x) / dt; o.vy = (y - o.y) / dt; }
+  o.x = x; o.y = y;
+}
+/** The frame a bump is over: the body lands exactly where its slide ends, at rest (at 12 fps the last step is long). */
+function landed(o: Knock & { x: number; y: number; vx: number; vy: number }): void {
+  if (!o.kat) return;
+  slide(o, o.kat + T.knockMs, 0);
+  o.kat = 0;
+}
+function addWave(d: { slot: number; dx?: number; dy?: number; by?: number }, isKnock = false): void {
   const pos = hosting ? bodies.get(d.slot) : [...drawn.values()].find((x) => x.slot === d.slot);
   // The action, for a watcher on Auto: whoever waved (a person, never a bot).
   const waver = pos && 'bot' in pos ? (pos.bot ? null : pos.seat) : pos && pos.seat >= 0 ? pos.seat : null;
@@ -379,6 +410,7 @@ function addWave(d: { slot: number }, isKnock = false): void {
   if (!at) return;
   waves.push({ x: at.x, y: at.y, at: performance.now(), colour: isKnock ? '#ffffff' : PALETTE[d.slot % PALETTE.length] as string, knock: isKnock });
   if (isKnock) knocksSeen += 1; else wavesSeen += 1;
+  if (isKnock) bumped(d, at); else pushes.set(d.slot, performance.now());
 }
 
 /* ---------------------------------------------------------------- simulate */
@@ -399,11 +431,8 @@ function stepMe(dt: number): void {
   if (seat === null) { me.has = false; return; }
   // Host-driven (host movement, or knocked back on a replica): stepReplica predicts me instead.
   if (!net.owned) return;
-  if (me.knockUntil > net.now()) {
-    me.x = Math.max(R_AV, Math.min(W - R_AV, me.x + me.kvx * dt)); me.y = Math.max(R_AV, Math.min(H - R_AV, me.y + me.kvy * dt));
-    me.kvx *= Math.max(0, 1 - dt * 5); me.kvy *= Math.max(0, 1 - dt * 5);
-    return;
-  }
+  if (me.knockUntil > net.now()) { slide(me, net.now(), dt); return; }
+  landed(me);
   const v = moveVector();
   integrate(me, v.x, v.y, dt);
 }
@@ -434,11 +463,7 @@ function predictMe(dt: number): void {
   me.has = true;
 }
 
-function stepKnocked(b: Body, dt: number): void {
-  b.x = Math.max(R_AV, Math.min(W - R_AV, b.x + b.kvx * dt)); b.y = Math.max(R_AV, Math.min(H - R_AV, b.y + b.kvy * dt));
-  b.kvx *= Math.max(0, 1 - dt * 5); b.kvy *= Math.max(0, 1 - dt * 5);
-  b.vx = b.kvx; b.vy = b.kvy;
-}
+function stepKnocked(b: Body, dt: number): void { slide(b, net.now(), dt); }
 
 /**
  * THE BOTS, AT THE ROOM'S DIAL (NETPLAY.md section 17). A bot re-reads the world only every `reactionMs` (what it
@@ -455,6 +480,8 @@ function stepBots(dt: number): void {
   for (const b of bodies.values()) {
     if (!b.bot) continue;
     if (b.knockUntil > now) { stepKnocked(b, dt); continue; }
+    landed(b);
+    if (lab.stage === 'dummy') { standStill(b, dt); continue; }
     const s: Skill = net.skillOf(b.slot); // Fair when nobody set a dial
     let eye = sight.get(b.slot);
     if (!eye || now - eye.at >= s.reactionMs) { // REACTION TIME
@@ -465,7 +492,7 @@ function stepBots(dt: number): void {
       if (g) taken.add(g.id);
     }
     b.tx = eye.tx; b.ty = eye.ty;
-    const rival = nearestBody(b, KNOCK_RANGE); // AGGRESSION: waves at a rival in reach
+    const rival = nearestBody(b, T.knockRange); // AGGRESSION: waves at a rival in reach
     if (rival && round?.phase === 'live' && Math.random() < s.aggression * 0.8 * dt) hostWave(b);
     const dx = b.tx - b.x; const dy = b.ty - b.y; const dist = Math.hypot(dx, dy);
     const len = dist || 1;
@@ -591,6 +618,144 @@ function stepReplica(dt: number): void {
   }
 }
 
+/* -------------------------------------------------------------- how a bump looks */
+/*
+ * Every screen draws a bump from the knock event (the host's own, or the one it sends): the hit lands (the body flashes
+ * white and holds, squashed against the hit, shaking), flies (stretched along the hit, less as it slows), stops
+ * (squashed, then a wobble that dies away: overlap), throws sparks, and kicks the camera of whoever was in it. The
+ * waver's own body pushes out a little when it waves. Sparks and the camera's kick roll lab.random(): their own dice, so
+ * the world's (Math.random) stay the same as a build without them, which the Game Lab needs to compare the two.
+ */
+const bumps = new Map<number, { at: number; dx: number; dy: number }>();
+const pushes = new Map<number, number>();
+const sparks: { x: number; y: number; vx: number; vy: number; at: number; life: number }[] = [];
+let kickAt = -1e9;
+function bumped(d: { slot: number; dx?: number; dy?: number; by?: number }, at: { x: number; y: number }): void {
+  const now = performance.now();
+  const dx = Number(d.dx) || 0; const dy = Number(d.dy) || 0;
+  bumps.set(d.slot, { at: now, dx, dy });
+  const base = Math.atan2(dy, dx);
+  for (let i = 0; i < T.sparks; i += 1) {
+    const a = base + (lab.random() - 0.5) * 1.6;
+    const v = 420 + lab.random() * 520;
+    sparks.push({ x: at.x - dx * R_AV * 0.6, y: at.y - dy * R_AV * 0.6, vx: Math.cos(a) * v, vy: Math.sin(a) * v, at: now, life: 170 + lab.random() * 170 });
+  }
+  if (sparks.length > 160) sparks.splice(0, sparks.length - 160);
+  // The camera kicks for whoever was in it: the body bumped, or the one who waved.
+  const mine = hosting ? [...bodies.values()].find((x) => x.seat !== null && x.seat === mySeat())?.slot : [...drawn.values()].find((x) => x.seat === net.seat)?.slot;
+  if (mine !== undefined && (d.slot === mine || d.by === mine)) kickAt = now;
+}
+/** A body's look this frame: offset, stretch along an angle, and how white it flashes. */
+function bodyFx(slot: number, t: number): { ox: number; oy: number; sx: number; sy: number; ang: number; flash: number } {
+  const out = { ox: 0, oy: 0, sx: 1, sy: 1, ang: 0, flash: 0 };
+  const p = pushes.get(slot);
+  if (p !== undefined) { const u = (t - p) / 170; if (u >= 0 && u < 1) { const k = 0.14 * Math.sin(Math.PI * u); out.sx = 1 + k; out.sy = 1 + k; } }
+  const b = bumps.get(slot);
+  if (!b) return out;
+  const age = t - b.at;
+  const hs = T.hitStopMs; const end = hs + T.knockMs;
+  if (age > end + T.settleMs + 200) { bumps.delete(slot); return out; }
+  out.ang = Math.atan2(b.dy, b.dx);
+  out.flash = T.flashMs > 0 ? Math.max(0, 1 - age / T.flashMs) : 0;
+  let k = 0;
+  if (age < hs) { k = -T.squash * 0.45; out.ox = Math.sin(age * 0.9) * 3; out.oy = Math.cos(age * 1.3) * 3; }
+  else if (age < end) k = T.squash * (1 - (age - hs) / T.knockMs) ** Math.max(0, T.knockEase - 1);
+  else if (T.settleMs > 0 && age < end + T.settleMs) { const w = (age - end) / T.settleMs; k = -T.squash * 0.8 * Math.exp(-3 * w) * Math.sin(2.5 * Math.PI * w); }
+  out.sx *= 1 + k; out.sy *= 1 / (1 + k);
+  return out;
+}
+function drawSparks(t: number, scale: number): void {
+  ctx.lineCap = 'round';
+  for (let i = sparks.length - 1; i >= 0; i -= 1) {
+    const sp = sparks[i] as (typeof sparks)[number];
+    const age = t - sp.at;
+    if (age > sp.life) { sparks.splice(i, 1); continue; }
+    if (age < T.hitStopMs * 0.5) continue;
+    const u = age / sp.life; const s = age / 1000 * (1 - u * 0.5);
+    const x = sp.x + sp.vx * s; const y = sp.y + sp.vy * s;
+    ctx.strokeStyle = u < 0.4 ? '#ffffff' : '#ffd166'; ctx.globalAlpha = 1 - u; ctx.lineWidth = (2.5 + 4 * (1 - u)) / Math.max(0.5, scale);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - sp.vx * 0.022 * (1 - u), y - sp.vy * 0.022 * (1 - u)); ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+}
+
+/* -------------------------------------------------------------- the Game Lab */
+/*
+ * What the lab shows of a knock (lab.json's take "knock"): the body bumped last is the subject. Every frame its phase,
+ * its speed and its distance from where it was hit go to the lab, and its pose feeds the onion skin and the spacing
+ * arc (dots far apart: fast; close together: slow). Only in the lab: outside it, labKnock and labReport never run.
+ */
+type Pose = { x: number; y: number; sx?: number; sy?: number; a?: number };
+/**
+ * The take's stage "dummy" (lab.stage, only ever set by the lab): you stand left of the middle with a bot a short step
+ * to your right, and every bot stands still unless it is bumped, like a training dummy. The knock alone, every time.
+ */
+function stageDummy(): void {
+  const seat = mySeat();
+  const list = [...bodies.values()].sort((a, c) => a.slot - c.slot);
+  const mine = list.find((b) => !b.bot && b.seat === seat);
+  const bots = list.filter((b) => b.bot);
+  if (mine) { mine.x = W / 2 - 160; mine.y = H / 2; hostMoved(mine); }
+  bots.forEach((b, i) => { b.x = i === 0 ? W / 2 - 160 + 92 : W - 180; b.y = i === 0 ? H / 2 : 150 + (i - 1) * 700; b.tx = b.x; b.ty = b.y; });
+}
+/** A dummy at rest: it eases to a stop wherever the last bump left it. */
+function standStill(b: Body, dt: number): void {
+  const k = Math.min(1, dt * 5);
+  b.vx -= b.vx * k; b.vy -= b.vy * k;
+  b.x = Math.max(R_AV, Math.min(W - R_AV, b.x + b.vx * dt)); b.y = Math.max(R_AV, Math.min(H - R_AV, b.y + b.vy * dt));
+}
+const subject = { slot: -1, at: 0, x0: 0, y0: 0, px: 0, py: 0, has: false };
+function labKnock(b: Body): void {
+  if (!lab.on) return;
+  subject.slot = b.slot; subject.at = net.now(); subject.x0 = b.x; subject.y0 = b.y; subject.px = b.x; subject.py = b.y; subject.has = true;
+}
+/** Where the subject is now (the host's own body is `me`), or null. */
+function subjectAt(): Pose | null {
+  if (!subject.has) return null;
+  const b = bodies.get(subject.slot);
+  if (!b) return null;
+  return !b.bot && b.seat !== null && b.seat === mySeat() ? me : b;
+}
+function labReport(dt: number): void {
+  const at = subjectAt();
+  if (!at || dt <= 0) { lab.phase(null); return; }
+  const age = net.now() - subject.at;
+  lab.track('speed', Math.hypot(at.x - subject.px, at.y - subject.py) / dt, 'px/s');
+  lab.track('distance', Math.hypot(at.x - subject.x0, at.y - subject.y0), 'px');
+  subject.px = at.x; subject.py = at.y;
+  const fx = bodyFx(subject.slot, performance.now());
+  lab.track('stretch', (fx.sx - 1) * 100, '%');
+  if (age < T.hitStopMs) lab.phase('HIT-STOP', 'The hit lands: hold, flash, squash');
+  else if (age < T.hitStopMs + T.knockMs * 0.3) lab.phase('LAUNCH', 'Leaves fast, stretched along the hit');
+  else if (age < T.hitStopMs + T.knockMs) lab.phase('SLIDE', 'Eases into the stop: no creep, no pop');
+  else if (age < T.hitStopMs + T.knockMs + T.settleMs) lab.phase('SETTLE', 'Squash on the stop, overlap on the way out');
+  else lab.phase(null);
+  lab.pose('subject', { x: at.x, y: at.y, sx: fx.sx, sy: fx.sy, a: fx.ang });
+}
+/** The lab's views: the game's own camera, close on the knock, the whole arena. */
+const labView = lab.camera<{ zoom?: number; whole?: boolean } | null>({ game: null, close: { zoom: 2.4 }, arena: { whole: true } });
+lab.overlay('onion', (c, k) => {
+  const g = c as CanvasRenderingContext2D; const s = Number(k) || 1;
+  const ghosts = lab.past<Pose>('subject', 8, 3);
+  ghosts.forEach((p, i) => { g.globalAlpha = 0.5 * (1 - i / ghosts.length); g.strokeStyle = '#ffad3b'; g.lineWidth = 2 / s; g.beginPath(); g.ellipse(p.x, p.y, R_AV * (p.sx ?? 1), R_AV * (p.sy ?? 1), p.a ?? 0, 0, Math.PI * 2); g.stroke(); });
+  g.globalAlpha = 1;
+});
+lab.overlay('arcs', (c, k) => {
+  const g = c as CanvasRenderingContext2D; const s = Number(k) || 1;
+  const pts = lab.past<Pose>('subject', 90, 1);
+  if (pts.length < 2) return;
+  g.strokeStyle = 'rgba(124,196,255,.55)'; g.lineWidth = 1.5 / s;
+  g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+  g.fillStyle = '#7cc4ff';
+  for (const p of pts) { g.beginPath(); g.arc(p.x, p.y, 2.5 / s, 0, Math.PI * 2); g.fill(); }
+});
+lab.overlay('reach', (c, k) => {
+  if (!me.has) return;
+  const g = c as CanvasRenderingContext2D; const s = Number(k) || 1;
+  g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1.5 / s; g.setLineDash([8 / s, 6 / s]);
+  g.beginPath(); g.arc(me.x, me.y, T.knockRange, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+});
+
 /* ------------------------------------------------------------------ draw */
 let dpr = 1;
 function resize(): void {
@@ -629,8 +794,10 @@ function draw(t: number): void {
   // phone showed the arena as a band with a third of the screen dark below or above it; now the arena fills the
   // screen). Following nobody: the whole arena.
   const focus = net.watching ? followed : overview || !me.has ? null : me;
-  const want = overview ? { scale: Math.min(cw / (W + 80), ch / (H + 80)), x: W / 2, y: H / 2 }
-    : fitView({ world: { w: W, h: H }, screen: { w: cw, h: ch }, readable: 0, zoom: Math.min(cw, ch) / (phone ? 560 : 820), focus, inset: { top: 52, bottom: 36 } });
+  // The Game Lab's views (outside the lab: the game's own camera, always).
+  const lv = labView();
+  const want = overview || lv?.whole ? { scale: Math.min(cw / (W + 80), ch / (H + 80)), x: W / 2, y: H / 2 }
+    : fitView({ world: { w: W, h: H }, screen: { w: cw, h: ch }, readable: 0, zoom: (Math.min(cw, ch) / (phone ? 560 : 820)) * (lv?.zoom ?? 1), focus: lv?.zoom ? subjectAt() ?? focus : focus, inset: { top: 52, bottom: 36 } });
   // A watcher's switch glides: the zoom and the pan ease over a few frames, never a cut.
   cam.scale = cam.scale ? cam.scale + (want.scale - cam.scale) * 0.12 : want.scale;
   const scale = cam.scale;
@@ -640,8 +807,10 @@ function draw(t: number): void {
   bg.addColorStop(0, '#0d1426'); bg.addColorStop(1, '#04060c');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch);
 
+  // The camera's kick (a bump you were in): a few px, gone in a fifth of a second.
+  const kick = t - kickAt < 200 ? T.shake * (1 - (t - kickAt) / 200) ** 2 : 0;
   ctx.save();
-  ctx.translate(cw / 2, ch / 2); ctx.scale(scale, scale); ctx.translate(-cam.x, -cam.y);
+  ctx.translate(cw / 2 + (kick ? (lab.random() - 0.5) * 2 * kick : 0), ch / 2 + (kick ? (lab.random() - 0.5) * 2 * kick : 0)); ctx.scale(scale, scale); ctx.translate(-cam.x, -cam.y);
   // arena
   ctx.strokeStyle = 'rgba(125,240,255,0.07)'; ctx.lineWidth = 1 / scale;
   ctx.beginPath();
@@ -675,10 +844,10 @@ function draw(t: number): void {
   // waves
   for (let i = waves.length - 1; i >= 0; i -= 1) {
     const w = waves[i] as (typeof waves)[number];
-    const age = (t - w.at) / 900;
+    const age = (t - w.at) / T.ringMs;
     if (age > 1) { waves.splice(i, 1); continue; }
     ctx.strokeStyle = w.colour; ctx.globalAlpha = 1 - age; ctx.lineWidth = w.knock ? 3 : 5;
-    ctx.beginPath(); ctx.arc(w.x, w.y, w.knock ? R_AV + 6 + age * 40 : R_AV + age * (KNOCK_RANGE + 10), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(w.x, w.y, w.knock ? R_AV + 6 + age * 40 : R_AV + age * (T.knockRange + 10), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
   }
 
   // avatars
@@ -702,9 +871,14 @@ function draw(t: number): void {
   const viewAt = list.find((a) => a.mine) ?? null;
   for (const a of list) {
     const colour = colourOf(a.slot, a.bot ? null : a.seat);
+    const fx = bodyFx(a.slot, t);
+    ctx.save();
+    ctx.translate(a.x + fx.ox, a.y + fx.oy); ctx.rotate(fx.ang); ctx.scale(fx.sx, fx.sy); ctx.rotate(-fx.ang);
     ctx.globalAlpha = a.bot ? 0.62 : 1;
-    ctx.fillStyle = colour; ctx.beginPath(); ctx.arc(a.x, a.y, R_AV, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(a.x, a.y, R_AV * 0.45, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = colour; ctx.beginPath(); ctx.arc(0, 0, R_AV, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(0, 0, R_AV * 0.45, 0, Math.PI * 2); ctx.fill();
+    if (fx.flash > 0) { ctx.globalAlpha = fx.flash; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, R_AV, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
     if (a.mine) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(a.x, a.y, R_AV + 7, 0, Math.PI * 2); ctx.stroke(); }
     ctx.globalAlpha = 1;
     const text = a.mine && !net.watching ? 'You' : label(a.name, a.bot);
@@ -713,6 +887,8 @@ function draw(t: number): void {
     // People before bots, nearer the view's body first; each keeps off the others' bodies when it can.
     tags.push({ key: a.slot, text, x: sx, y: sy - r - 5, w: ctx.measureText(text).width, h: fs * 1.2, below: sy + r + 4 + fs * 1.2, body: { left: sx - r, top: sy - r, right: sx + r, bottom: sy + r }, self: a.mine, rank: (a.bot ? 10_000 : 0) + (viewAt ? Math.hypot(a.x - viewAt.x, a.y - viewAt.y) : 0) });
   }
+  drawSparks(t, scale);
+  lab.draw(ctx, scale);
   ctx.restore();
   shownLabels = labels.place(tags, Math.min(0.1, (t - (lastDraw || t)) / 1000));
   lastDraw = t;
@@ -797,13 +973,12 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; name:
 }
 
 /* ------------------------------------------------------------------ loop */
-let last = performance.now();
 function frame(t: number): void {
-  const dt = Math.min(0.05, (t - last) / 1000);
-  last = t;
+  const dt = lab.time.dt(t, 0.05);
   stepMe(dt);
   if (hosting) stepHost(dt);
   else stepReplica(dt);
+  if (lab.on) labReport(dt);
   draw(t);
   frames += 1;
   requestAnimationFrame(frame);

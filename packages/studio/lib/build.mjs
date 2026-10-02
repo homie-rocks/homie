@@ -46,7 +46,7 @@ import { vocabularyOf } from '../worker/brain.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
-const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md']);
+const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json']);
 const LOADERS = { '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file', '.webp': 'file', '.mp3': 'file', '.ogg': 'file', '.wav': 'file', '.m4a': 'file', '.glb': 'file', '.gltf': 'file', '.bin': 'file', '.hdr': 'file', '.svg': 'file', '.json': 'json', '.woff2': 'file', '.ttf': 'file' };
 
 /** The port toolkit as one classic script (window.HomiePort), for static games. Built once per build. */
@@ -222,10 +222,66 @@ function keepMap(root, id, out, metafile) {
   writeFileSync(join(dir, 'main.js.sha256'), `${createHash('sha256').update(readFileSync(join(out, 'assets', 'main.js'))).digest('hex')}\n`);
 }
 
-export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false } = {}) {
+/** esbuild, as the studio has it installed (the version its package.json pins). */
+export async function studioEsbuild(root) {
   const require = createRequire(join(root, 'package.json'));
-  let esbuild;
-  try { esbuild = require('esbuild'); } catch { esbuild = await import('esbuild'); }
+  try { return require('esbuild'); } catch { return import('esbuild'); }
+}
+
+/**
+ * One game's own files into `out` (emptied first): its bundle, static copy or own build's output, its index.html and
+ * its public/ folder. What `build` serves at /games/<id>/, and what the Game Lab (lib/lab.mjs) builds New and Today
+ * with. `sourcemap` is esbuild's (the lab keeps a linked map beside its builds); `maps` keeps the site build's map in
+ * .studio/maps/<id>/. Returns { mode, warnings, metafile } (metafile: the bundle's inputs, null for other modes).
+ */
+export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {} } = {}) {
+  rmSync(out, { recursive: true, force: true });
+  mkdirSync(join(out, 'assets'), { recursive: true });
+  const mode = g.build?.mode ?? 'bundle';
+  let warnings = 0;
+  let metafile = null;
+  const bundle = async (entryRel) => {
+    const entry = join(g.dir, entryRel);
+    if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
+    const result = await esbuild.build({
+      entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: sourcemap ?? (maps ? 'external' : false),
+      outfile: join(out, 'assets', 'main.js'), absWorkingDir: root, logLevel: 'silent', metafile: true,
+      loader: LOADERS, assetNames: '[name]-[hash]',
+    }).catch((error) => {
+      const first = error.errors?.[0];
+      throw new Error(`games/${g.id} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
+    });
+    warnings += result.warnings.length;
+    metafile = result.metafile;
+    if (maps) keepMap(root, g.id, out, result.metafile);
+  };
+  if (mode === 'static') {
+    copyStatic(g.dir, out);
+    writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
+    if (g.entry) await bundle(g.entry);
+    const html = readFileSync(join(out, 'index.html'), 'utf8');
+    if (!/homie-port\.js/.test(html)) log(`warning: games/${g.id}/index.html does not load ./homie-port.js (the port toolkit); add <script src="./homie-port.js"></script> first in <head>`);
+  } else if (mode === 'command') {
+    const command = String(g.build.command ?? 'npm run build');
+    const res = spawnSync(command, { cwd: g.dir, shell: true, encoding: 'utf8', timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
+    if (res.status !== 0) throw new Error(`games/${g.id}: \`${command}\` failed: ${`${res.stdout ?? ''}${res.stderr ?? ''}`.trim().split('\n').slice(-6).join(' ')}`);
+    const built = join(g.dir, String(g.build.out ?? 'dist'));
+    if (!existsSync(join(built, 'index.html'))) throw new Error(`games/${g.id}: \`${command}\` left no index.html in ${relative(g.dir, built) || '.'}`);
+    cpSync(built, out, { recursive: true });
+    writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
+  } else {
+    await bundle(g.entry ?? 'src/main.ts');
+    const html = join(g.dir, 'index.html');
+    if (!existsSync(html)) throw new Error(`games/${g.id}/index.html is missing`);
+    writeFileSync(join(out, 'index.html'), readFileSync(html, 'utf8'));
+  }
+  if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
+  if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
+  return { mode, warnings, metafile };
+}
+
+export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false } = {}) {
+  const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
   const dist = join(root, 'site', 'dist');
   const games = listGames(root).filter((g) => !only || g.id === only);
@@ -236,47 +292,8 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   const cache = {};
   for (const g of games) {
     const out = join(dist, 'games', g.id);
-    rmSync(out, { recursive: true, force: true });
-    mkdirSync(join(out, 'assets'), { recursive: true });
-    const mode = g.build?.mode ?? 'bundle';
     const started = Date.now();
-    let warnings = 0;
-    const bundle = async (entryRel) => {
-      const entry = join(g.dir, entryRel);
-      if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
-      const result = await esbuild.build({
-        entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: maps ? 'external' : false,
-        outfile: join(out, 'assets', 'main.js'), absWorkingDir: root, logLevel: 'silent', metafile: true,
-        loader: LOADERS, assetNames: '[name]-[hash]',
-      }).catch((error) => {
-        const first = error.errors?.[0];
-        throw new Error(`games/${g.id} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
-      });
-      warnings += result.warnings.length;
-      if (maps) keepMap(root, g.id, out, result.metafile);
-    };
-    if (mode === 'static') {
-      copyStatic(g.dir, out);
-      writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
-      if (g.entry) await bundle(g.entry);
-      const html = readFileSync(join(out, 'index.html'), 'utf8');
-      if (!/homie-port\.js/.test(html)) log(`warning: games/${g.id}/index.html does not load ./homie-port.js (the port toolkit); add <script src="./homie-port.js"></script> first in <head>`);
-    } else if (mode === 'command') {
-      const command = String(g.build.command ?? 'npm run build');
-      const res = spawnSync(command, { cwd: g.dir, shell: true, encoding: 'utf8', timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
-      if (res.status !== 0) throw new Error(`games/${g.id}: \`${command}\` failed: ${`${res.stdout ?? ''}${res.stderr ?? ''}`.trim().split('\n').slice(-6).join(' ')}`);
-      const built = join(g.dir, String(g.build.out ?? 'dist'));
-      if (!existsSync(join(built, 'index.html'))) throw new Error(`games/${g.id}: \`${command}\` left no index.html in ${relative(g.dir, built) || '.'}`);
-      cpSync(built, out, { recursive: true });
-      writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
-    } else {
-      await bundle(g.entry ?? 'src/main.ts');
-      const html = join(g.dir, 'index.html');
-      if (!existsSync(html)) throw new Error(`games/${g.id}/index.html is missing`);
-      writeFileSync(join(out, 'index.html'), readFileSync(html, 'utf8'));
-    }
-    if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
-    if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
+    const { mode, warnings } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log });
     // The guides' vocabulary (NETPLAY.md section 18): checked here, so a room never meets a line it cannot say.
     vocabFor(g, out);
     // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).

@@ -16,6 +16,7 @@ npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
 npx homie-studio dev                                   # the whole site locally
 npx homie-studio check crown-thief --url http://127.0.0.1:8787
 npx homie-studio perf crown-thief --url http://127.0.0.1:8787   # how fast it runs: a computer and an emulated phone, host and replica
+npx homie-studio lab crown-thief                       # the Game Lab: how a move feels, New beside Today, frame by frame
 npx homie-studio deploy --plan                         # what deploy will create, and what it costs; changes nothing
 npx homie-studio deploy                                # the studio's own Cloudflare
 npx homie-studio publish                               # the homie.rocks directory
@@ -451,6 +452,44 @@ comments and names outside its strings (a minifier leaves about 1 to 2% whitespa
 Minified JavaScript gzips about as well as source text, and a bundle with three.js in it carries the shaders as GLSL
 source in strings, which no minifier touches; the line for such a file says `minified, 19% GLSL shader source in
 strings`, and the JSON's `code` has every measure.
+
+## How it feels: the Game Lab (`homie-studio lab`)
+
+```sh
+npx homie-studio lab crown-thief [--today HEAD|<ref>] [--port 8790]   # http://127.0.0.1:8790/crown-thief/ until --stop
+npx homie-studio lab check crown-thief [--take knock] [--fps 30] [--device phone]   # the same, headless: numbers and pictures
+npx homie-studio lab set crown-thief hitStopMs=80 knockDistance=200                 # values into games/crown-thief/tunables.json
+npx homie-studio lab --stop
+```
+
+A page on this computer for one mechanic at a time (a jump, a hit, a dash, a drift). It plays one short **take**
+(`games/<id>/lab.json`: a few seconds, a seed, the presses) in two builds side by side: **New**, the working tree,
+rebuilt on every save, and **Today**, the last commit (or any ref), built from git's own checkout of it with only the
+game's files (and what its bundle reads from the studio), cached per commit in `.studio/lab/`. Both play on the lab's
+clock: requestAnimationFrame, performance.now(), Date.now(), timers and Math.random() are the lab's in the game's page
+(its harness, `lab/harness.js`, is the page's first script), so frame f is exactly f/fps seconds in both builds, the
+dice are the same, the presses land on the same frames, and netplay's offline host, a round's clock and a knockback's
+timer all slow down, pause and step together. Every replay is compared with the last run, frame by frame: the page
+says "Replays match", or the frame where a build read something the lab does not drive.
+
+The page: New, Today, both side by side or Today ghosted over New; the game's own views (`lab.camera`) and overlays
+(`lab.overlay`: onion skin, arcs, reach); Desk (1280x800) or Phone (390x844); play, pause, a frame back or forward,
+start and end; 1x, ½, ¼ and ⅒ speed (each frame is the same frame at any speed); 60, 30, 15 or 12 frames a second (what
+a slower device draws); a frame counter; a timeline of the phases each build names (`lab.phase`), scrubbable, with each
+frame's motion marked HOLD, MOVE or FAST; graphs of every tracked value (`lab.track`), New against Today, beside the
+body's speed from the port probe and the game's JavaScript per frame; the phase each pane is in, as a caption; the
+game's tunables (`games/<id>/tunables.json`) as sliders, with Today's value marked, that restart New with the new value
+and write kept values back into the file ("Keep in code", one tunable a line); and REC, which records a new take while
+the person plays it in New (both builds get the same presses, on the same frames). A phone opens it too.
+
+A game opts in with `@homie-rocks/studio/lab` (`lab` from `/port` too, `HomiePort.lab` in a static game): every call is
+a no-op outside the lab. Both starters do: Gem Rush's bump (a dummy to bump: `lab.stage`) and Ember Vale's strike (a
+training slime). `lab check` plays the take headless twice per build and writes `.studio/lab/<id>/check-<time>/`:
+summary.json (each phase's frames, each tracked value's peak and where it ends, the JavaScript per frame, errors, the
+replay check), REPORT.md (New against Today), sheet.png (the lab at each phase's start) and still.jpg; and
+`.studio/lab/<id>/latest.json`, the last check in a few fields (`.studio/lab/server.json` says where a running lab is).
+The local MCP's `game_lab` starts the lab and answers with a card. The Homie plugin's `lab` skill has the method:
+instrument and commit first (Today is the game as it is), then change how it feels, and keep what the person likes.
 
 ## Checks on a computer without a GPU
 

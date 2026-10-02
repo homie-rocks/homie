@@ -142,7 +142,9 @@ node <video.mjs> sheet <slug> --in videos/<slug>/work/record/recording.mp4
   (`"js"`), in the page or in the game's own frame (`"frame": "game"`). Any step can carry a
   `"caption"`. `references/examples/studio-play.json` records a studio's own game from its landing:
   Play, then the arrow keys; `studio-play-phone.json` the same on a phone with the game's touch stick.
-  Both are tested against a real studio. Every step: `references/RECORD.md`.
+  Both are tested against a real studio. Every step: `references/RECORD.md`. A Game Lab's side by side
+  (New beside Today, slowed down, stepped through its phases) is a page too:
+  the `lab` skill's `references/record-lab.json` records it from the lab's own address.
 - It runs in real time on a headless GPU Chrome: nothing sped up, nothing cut. Every frame is one the
   page drew; a moment it did not repaint is held and counted, never interpolated. A visible cursor and
   press rings show where the script pointed (`--no-cursor` drops them); the take's honesty line says so.

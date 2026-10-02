@@ -98,8 +98,8 @@ jobs:
         run: node scripts/template.mjs --check
       - name: ffmpeg (the video skill's page recorder encodes its takes)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-      - name: New studio, dev site, two-browser check, the video skill's recorded examples and a perf run per device (Chrome for Testing, as a machine without Chrome gets)
-        run: node scripts/studio-check.mjs --chrome-for-testing --record --perf
+      - name: New studio, dev site, two-browser check, the video skill's recorded examples, a perf run per device and the Game Lab's take (Chrome for Testing, as a machine without Chrome gets)
+        run: node scripts/studio-check.mjs --chrome-for-testing --record --perf --lab
 
   leaks:
     name: Leak audit

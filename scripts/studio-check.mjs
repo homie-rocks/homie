@@ -6,7 +6,7 @@
  * Testing when the machine has none, the site under `homie-studio dev`, and the real two-browser `check` against
  * it: a computer and a phone press Play, land in the same public room and finish a round.
  *
- *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing] [--record] [--perf]
+ *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing] [--record] [--perf] [--lab]
  *     --chrome-for-testing: Chrome for Testing even when the machine has a Chrome, as a machine without one gets
  *     --record: then the video skill's page recorder runs its tested examples against the same dev site
  *               (plugins/homie/skills/video/references/examples/studio-play.json and studio-play-phone.json): the
@@ -15,6 +15,9 @@
  *     --perf: then `homie-studio perf` measures one run per device (two browsers in a room of their own, the host and
  *               a replica): it fails when a run is missing a number (load, frames, the main thread, the heap, netplay
  *               messages) or a role; on a software renderer every run must say it is blocked (nothing judged there)
+ *     --lab: then the starter is committed and `homie-studio lab check` plays its Game Lab take (the bump) headless in
+ *               New and Today: it fails unless both replay on the same frames, New names the bump's phases, and the
+ *               report, contact sheet and still are written
  *
  * CI runs it on ubuntu-24.04 (no GPU), the closest free stand-in for a cloud session's VM: it prints how fast each
  * browser drew the game and on which renderer (SwiftShader there), and fails only when the round does not finish.
@@ -129,9 +132,29 @@ try {
     const host = r0?.browsers?.find((b) => b.role === 'host');
     lines.push(`- perf: ${measured ? `${runs.length} runs, host and replica each; computer host playable at ${host?.load?.playableMs} ms, ${host?.frames?.fps} fps, ${host?.main?.busyPerFrame} ms of main thread a frame, ${host?.net?.msgsOut} netplay messages out a second; ${runs.every((x) => x.blocked) ? `every run blocked (${r0?.renderer}): measured, never judged` : `renderer ${r0?.renderer}`}` : `FAILED: ${problems.slice(0, 6).join('; ')}`}`);
   }
+  // The Game Lab: the starter's take, New (the working tree) against Today (its commit), replayed frame for frame.
+  let labbed = true;
+  if (process.argv.includes('--lab')) {
+    const who = { GIT_AUTHOR_NAME: 'Studio check', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: 'Studio check', GIT_COMMITTER_EMAIL: '' };
+    spawnSync('git', ['add', 'games'], { cwd: studio, env: { ...process.env, ...who } });
+    spawnSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'Gem Rush from the starter'], { cwd: studio, env: { ...process.env, ...who } });
+    const lr = spawnSync(cli, ['lab', 'check', 'gem-rush', '--json'], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 5 * 60_000, maxBuffer: 16 * 1024 * 1024 });
+    let lj = null; try { lj = JSON.parse(lr.stdout); } catch { /* none */ }
+    const problems = [];
+    if (!lj?.ok) problems.push(lj?.why ?? (lr.stderr ?? '').trim().split('\n').slice(-3).join(' '));
+    else {
+      if (lj.deterministic.new !== null || lj.deterministic.today !== null) problems.push(`a replay differed: ${JSON.stringify(lj.deterministic)}`);
+      if (!lj.today) problems.push(`no Today: ${lj.todayNote}`);
+      for (const p of ['HIT-STOP', 'LAUNCH', 'SLIDE', 'SETTLE']) if (!lj.phases.new.some((x) => x.startsWith(p))) problems.push(`New has no ${p} phase`);
+      for (const f of [lj.report, lj.sheet, lj.still]) { try { readFileSync(join(studio, f)); } catch { problems.push(`no ${f}`); } }
+      if (lj.errors?.length) problems.push(`errors: ${lj.errors.join('; ')}`);
+    }
+    labbed = problems.length === 0;
+    lines.push(`- Game Lab: ${labbed ? `take "${lj.take}", ${lj.frames} frames in New and Today (${lj.today}), both replayed on the same frames; New: ${lj.phases.new.join(' · ')}; JavaScript ${lj.cost.new?.mean} ms a frame${lj.software ? ` (${lj.renderer})` : ''}` : `FAILED: ${problems.slice(0, 6).join('; ')}`}`);
+  }
   say(lines.join('\n'));
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
-  process.exitCode = result.ok && recorded && measured ? 0 : 1;
+  process.exitCode = result.ok && recorded && measured && labbed ? 0 : 1;
 } catch (error) {
   say(String(error?.message ?? error));
   process.exitCode = 1;

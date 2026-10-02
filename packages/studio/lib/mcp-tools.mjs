@@ -33,12 +33,15 @@ import { STUDIO_VERSION } from './version.mjs';
 import { compareVersions, whatsNew, whatsNewLines } from './changelog.mjs';
 import { pinnedVersion } from './upgrade.mjs';
 import { AgentSeat } from './agent-seat.mjs';
+import { LAB_PORT, runningLab } from './lab.mjs';
+import { pictureFor } from './pictures.mjs';
 
 export const UI = Object.freeze({
   setup: 'ui://homie-studio/setup',
   build: 'ui://homie-studio/build',
   studio: 'ui://homie-studio/studio',
   codex: 'ui://homie-studio/codex',
+  lab: 'ui://homie-studio/lab',
 });
 
 const inside = (base, p) => p === base || p.startsWith(base.endsWith(sep) ? base : `${base}${sep}`);
@@ -874,6 +877,46 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'game_lab', title: 'Open the Game Lab',
+      description: 'The Game Lab for one mechanic of a game (a jump, a hit, a dash): one short take played in New (the working tree) beside Today (the last commit) on one clock, slowed down or a frame at a time, with its phases, graphs and live sliders that write kept values into the game\'s tunables.json. Starts the lab on this computer, plays the take headless once (New against Today: phases, peaks, whether replays match, JavaScript per frame) and answers with a card: a still of both builds at the take\'s busiest moment and Open. The game must call @homie-rocks/studio/lab (the starters do); studio_guide { "topic": "lab" } has the whole method. The person opens the lab from the card or the link; do not open a browser.',
+      inputSchema: { type: 'object', properties: { game: str('The game\'s id (default: the only game)'), take: str('Optional: a take in games/<id>/lab.json (default: its default)'), today: str('Optional: the git ref Today is built from (default HEAD)'), ...STUDIO_ARG } },
+      annotations: { title: 'Open the Game Lab', ...RW }, _meta: ui(UI.lab),
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const need = needsInstall(ctx, root); if (need) return need;
+        const games = listGames(root);
+        const game = a.game ?? (games.length === 1 ? games[0].id : null);
+        if (!game || !games.some((g) => g.id === game)) return fail(games.length ? `which game? ${games.map((g) => g.id).join(', ')}` : 'there is no game yet');
+        const ref = a.today ? String(a.today) : 'HEAD';
+        let lab = await runningLab(root);
+        if (!lab) {
+          const port = await freePort(LAB_PORT);
+          const job = cliJob(root, `the Game Lab, here (port ${port})`, ['lab', game, '--port', String(port), ...(ref !== 'HEAD' ? ['--today', ref] : [])]);
+          const until = Date.now() + 20_000;
+          while (!lab && Date.now() < until && !job.endedAt) { await new Promise((r) => setTimeout(r, 400)); lab = await runningLab(root); }
+          if (!lab) return fail(`the Game Lab did not start: ${whyOf(job)}`);
+        }
+        const q = new URLSearchParams({ ...(a.take ? { take: String(a.take) } : {}), ...(ref !== 'HEAD' ? { today: ref } : {}) }).toString();
+        const url = `${lab.url}/${game}/${q ? `?${q}` : ''}`;
+        const r = await cli(ctx, root, `Game Lab check of ${game}`, ['lab', 'check', game, ...(a.take ? ['--take', String(a.take)] : []), ...(ref !== 'HEAD' ? ['--today', ref] : [])]);
+        if (!r.ended) return ok(`The Game Lab is running: ${url}\nIts headless check is still going (job ${r.job.id}); the person can open the lab now.`, { kind: 'lab', game, url, running: true });
+        const c = r.result;
+        if (!c?.ok) return fail(`The Game Lab is running at ${url}, but its check failed: ${whyOf(r.job)}`, { kind: 'lab', game, url });
+        let still = null;
+        try { const p = pictureFor(resolve(root, c.still), { label: c.still, max: 420 * 1024 }); still = `data:${p.mimeType};base64,${p.data}`; } catch { still = null; }
+        const name = games.find((g) => g.id === game)?.name ?? game;
+        const det = (x) => (x === null ? 'replays match' : `replays DIFFER from frame ${x}`);
+        return ok([
+          `The Game Lab for ${name}: ${url} (on this computer; the person opens it from the card or this link).`,
+          `Take "${c.take ?? '(none)'}", ${c.frames} frames at ${c.fps} fps.`,
+          `New: ${c.phases.new.join(' · ') || 'no phases yet'} (${det(c.deterministic.new)}; JavaScript ${c.cost.new?.mean} ms a frame, p95 ${c.cost.new?.p95}).`,
+          c.phases.today ? `Today (${c.today}): ${c.phases.today.join(' · ') || 'no phases'} (${det(c.deterministic.today)}; JavaScript ${c.cost.today?.mean} ms, p95 ${c.cost.today?.p95}).` : `Today: ${c.todayNote ?? 'none'}.`,
+          `Report: ${c.report}; pictures: ${c.sheet} (file_read shows it).`,
+          ...(c.errors?.length ? [`Errors: ${c.errors.join('; ')}`] : []),
+        ].join('\n'), { kind: 'lab', game, name, url, take: c.take, frames: c.frames, fps: c.fps, phases: c.phases, timeline: c.timeline, deterministic: c.deterministic, cost: c.cost, today: c.today, todayNote: c.todayNote, report: c.report, sheet: c.sheet, still, errors: c.errors ?? [] });
+      },
+    },
+    {
       name: 'studio_deploy', title: 'Put the studio online',
       description: 'Put the studio\'s site online on the studio\'s OWN Cloudflare account: one Worker, one D1 database and two Durable Objects, free plan, no payment method. Call it with plan: true first and tell the person in two or three lines what it creates and costs. If Cloudflare is not signed in, cloudflare_login opens it in their browser to approve once. Runs in the background with the build card.',
       inputSchema: { type: 'object', properties: { plan: { type: 'boolean', description: 'Only say what it will create and what it costs; change nothing' }, ...STUDIO_ARG } },
@@ -975,7 +1018,8 @@ export function toolDefs(ctx, avail = {}) {
         const root = ctx.root(a.studio);
         const args = Array.isArray(a.args) ? a.args.map((x) => String(x)).filter((x) => x !== '--json') : [];
         if (!args.length) return fail('args: the command\'s words, e.g. ["look"]');
-        const refused = { mcp: 'this is it', new: 'studio_scaffold makes a studio', dev: 'preview_run runs the site here, preview_stop stops it', statusline: 'only for Claude Code' }[args[0]];
+        const refused = { mcp: 'this is it', new: 'studio_scaffold makes a studio', dev: 'preview_run runs the site here, preview_stop stops it', statusline: 'only for Claude Code' }[args[0]]
+          ?? (args[0] === 'lab' && !['check', 'set', 'stop'].includes(args[1] ?? '') && !args.includes('--stop') ? 'game_lab starts the Game Lab here (and answers with its card)' : null);
         if (refused) return fail(`not here: ${refused}`);
         if (!['help', 'version', 'setup', 'doctor', 'demo', 'starters', 'progress', 'codex', 'games', 'status'].includes(args[0])) { const need = needsInstall(ctx, root); if (need) return need; }
         if (args[0] === 'game' && args[1] === 'new') ctx.note(root).demo = true;

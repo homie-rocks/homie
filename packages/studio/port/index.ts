@@ -18,6 +18,7 @@
  *   jitter, engages, standoff
  *                the dial for the rest of a bot's decisions (port/skill.ts)
  *   createSaves  player accounts and cloud saves (a character that lasts days, on every device; saves/SAVES.md)
+ *   lab          the Game Lab's calls (@homie-rocks/studio/lab): tracks, phases, tunables, overlays, views
  * and everything from @homie-rocks/studio/netplay.
  */
 import './early';
@@ -35,4 +36,5 @@ export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, 
 export { createHud, type HudOptions } from './hud';
 export { BotBrain, brainOf, seek, flee, wanderer, nearest, rubberBand, protectedNewcomer, type V2 } from './bots';
 export { jitter, engages, standoff } from './skill';
+export { lab, type TunableSpec, type TunableFile, type Tuned } from '../lab/lab';
 export { createSaves, SAVES_VERSION, type Saves, type SavesOptions, type Player, type SaveEntry, type SetResult, type Memorial, type SavesStatus, type Conflict } from '../saves/saves';

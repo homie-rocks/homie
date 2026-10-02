@@ -82,9 +82,14 @@ after-run beside it are a pair, so a computer that got busier halfway hits both 
 
 `--looks` and `--plays` are required, every time. `same` is a promise the screenshots are checked against (brightness,
 contrast, detail, colour of each run's host screen, against their own run-to-run spread); anything else is said in
-words (`--looks "shadows are softer at the edge"`) and goes into the report. **Never trade how the game looks or plays
+words (`--looks "shadows are softer at the edge"`) and goes into the report. A change made for how a move feels (the
+`lab` skill: a hit-stop, sparks, a squash) is measured here when it costs frames: its `--looks` and `--plays` name it. **Never trade how the game looks or plays
 for frames without the person agreeing first**; then say it. Fewer bots, a lower resolution, fewer particles, shorter
 view distance and fewer physics steps are all trades, not optimisations.
+
+`--measure` (a change kept for another reason: how a move feels, from the `lab` skill): the same build, check, paired
+runs and comparison, reported as MEASURED with the verdict and every number, and **nothing is reverted**: the change
+stays in games/<game>/ and is served, and the build to beat stays what it was. Say what it costs in those numbers.
 
 Each `try` takes ten to twenty minutes. Its folder (`experiments/<n>-<name>/`) has `RESULT.md`, `change.patch`, the
 runs and `compare.json`. `status <game>` lists the loop so far; `revert <game>` drops a change you made but never
