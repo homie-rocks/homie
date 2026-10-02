@@ -17,9 +17,48 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.21.0] - 2026-10-02
+
+**Plugin 0.22.0** · [#31](https://github.com/homie-rocks/homie/pull/31)
+
+The Homie mod for Claude Code: your studio, its rooms and a real seat in a live game beside the chat, with a look
+before protected files, deploys and spending, and keys kept out of what Claude reads.
+
+### Added
+
+- Plugin: the Homie mod (Claude Code 2.1.287 or later). Inside a studio, a one-row band above the prompt shows the
+  studio, the game, the build step, ▶ Play and how many people are playing now. Outside a studio it adds nothing.
+- Plugin: the Studio pane (`/studio`) opens by itself when a build starts, on a wide enough terminal. **Build** has the
+  live Plan, Build, Checks, Deploy feed and the latest check frame, or a live Watch of a room of the game being built.
+  **Rooms** lists who is playing and the AI players, with Watch and Join links; Announce, Mute and Kick go through
+  the office, and Mute and Kick are only ever asked for, so you still confirm them with one tap. **Games** has
+  launch states and the remix switch; **Stats** and **Codex** link to the rest. **Lab** shows each game's last Game
+  Lab check (New's phases beside Today's, whether the replays match) and the lab's link while it runs.
+- Plugin: the Arcade pane (`/arcade`). Take a real seat in a public room of a Homie game (Homie Arcade's, or your
+  studio's own) and play it in the pane with w/a/s/d or the arrow keys while Claude works. It runs in one headless
+  Chrome on your computer at the lowest priority, about 8 frames a second in a terminal, pauses while the pane is
+  hidden and stops when you leave.
+- Plugin: a Parts pane for the `parallel` skill: each part, its last step, and the merge waiting for all of them.
+- Plugin: instant commands that answer without a Claude turn: `/play`, `/watch [room]`, `/rooms`, `/build`, `/codex`,
+  `/deploy-status`, `/perf-numbers`, `/parts`, `/arcade`. They print links or open a pane; nothing opens a browser.
+- Plugin: guards. An edit to a file matched by studio.json `"protect"` (globs, such as `"games/*/game.json"`) shows
+  the diff and waits for Proceed or Cancel. So does a deploy (where it goes, what it creates, the commits and files
+  since the last one, the checks) and a paid fal or ElevenLabs run that would pass studio.json `"budget"`.
+- Plugin: Cloudflare tokens, provider keys, agent passes, office keys and one-time owner links are taken out of
+  command output before Claude reads it.
+- Plugin: setup status, check, playtest and deploy results are drawn as checklists and rows, with the live link.
+- `homie-studio office mute <game> <room> <seat | name> [--minutes 10] [--off]`, asked for like `office kick`.
+- A build's latest check frame is also kept as a small picture beside its progress feed, for the mod to draw.
+
+### Upgrade notes
+
+- Every part of the mod has its own switch (`/config`, or `pluginConfigs` in settings.json). Codex installs the plugin
+  as before; it does not run plugin hooks, so there it is the skills and tools you had.
+- `homie-studio upgrade --apply` adds `office mute` and the `protect` and `budget` lines to AGENTS.md.
+
 ## [0.20.0] - 2026-10-02
 
-**Plugin 0.21.0** · [#30](https://github.com/homie-rocks/homie/pull/30)
+**Plugin 0.21.0** · [#30](https://github.com/homie-rocks/homie/pull/30) · [release-2026-10-02-studio-0.20.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.20.0)
 
 A Game Lab: tune how one move of your game feels (a jump, a hit, a dash), your new version beside your last commit,
 frame by frame.

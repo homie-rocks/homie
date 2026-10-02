@@ -82,7 +82,9 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
     try {
       const vp = kinds[0].viewport;
       const b64 = await players[0].page.screenshot({ type: 'jpeg', quality: 62, clip: { x: 0, y: 0, width: vp.width, height: vp.height, scale: 480 / vp.width }, encoding: 'base64' });
-      report.preview({ url: play, image: `data:image/jpeg;base64,${b64}`, caption });
+      // And a small PNG, kept as raw pixels beside the feed for Claude Code's Homie mod (lib/thumb.mjs).
+      const png = await players[0].page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: vp.width, height: vp.height, scale: 160 / vp.width } }).catch(() => null);
+      report.preview({ url: play, image: `data:image/jpeg;base64,${b64}`, caption, ...(png ? { png: Buffer.from(png) } : {}) });
     } catch { /* no picture this time */ }
   };
   for (const [id] of CHECK_STEPS) step(id, 'pending');

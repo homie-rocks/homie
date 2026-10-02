@@ -94,8 +94,9 @@
  *   homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--days <n>] [--server <id>]
  *   homie-studio office launch <game> private|invite|public [--remixable on|off] [--max <n>|game]
  *   homie-studio office kick <game> <room> <seat number | name> [--minutes 10]
+ *   homie-studio office mute <game> <room> <seat number | name> [--minutes 10] [--off]
  *   homie-studio office close <game> <room> [--minutes 10] [--reopen]
- *                                         (kick, close and launch are ASKED for: the owner confirms each with one
+ *                                         (kick, mute, close and launch are ASKED for: the owner confirms each with one
  *                                          tap in their own browser, from the link this prints)
  *   homie-studio office revoke            (every office key, play ticket and pending ask ends)
  *
@@ -192,7 +193,7 @@ import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, star
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
-import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeRevoke, officeShow } from '../lib/office.mjs';
+import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeMute, officeRevoke, officeShow } from '../lib/office.mjs';
 import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
@@ -206,7 +207,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -411,6 +412,7 @@ function print(result) {
     case 'agents brain':
     case 'office launch':
     case 'office kick':
+    case 'office mute':
     case 'office close':
       lines.push(result.asked ? `Asked: ${result.what}` : result.message, ...(result.asked ? [`Owner's one-tap link (until the ask ends, 15 min): ${result.link}`, result.use] : []));
       break;
@@ -654,6 +656,7 @@ async function main() {
     if (sub === 'invite') return officeInvite(root, positional[2], { url, label: flags.get('label'), uses: flags.get('uses'), count: flags.get('count'), days: flags.get('days'), server: flags.get('server') });
     if (sub === 'launch') return officeLaunch(root, positional[2], positional[3], { url, remixable: flags.get('remixable'), max: flags.get('max') });
     if (sub === 'kick') return officeKick(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes') });
+    if (sub === 'mute') return officeMute(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes'), off: flags.has('off') });
     if (sub === 'close') return officeClose(root, positional[2], positional[3], { url, minutes: flags.get('minutes'), reopen: flags.has('reopen') });
     if (sub === 'revoke') return officeRevoke(root, { url });
   }

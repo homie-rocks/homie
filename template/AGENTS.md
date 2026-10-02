@@ -186,7 +186,7 @@ studio's pinned copy, never a registry lookup of the bare name.
 - The owner is recognised in their own games: signed in, their play page has a small Owner button (tap a player:
   Mute, Kick; Announce). Nobody else's page has it.
 - **From the AI:** `npx --no-install homie-studio office` lists who is playing now; `office announce "<text>"` and
-  `office invite <id>` happen at once; `office kick`, `office close` and `office launch` only ASK, and print a
+  `office invite <id>` happen at once; `office kick`, `office mute`, `office close` and `office launch` only ASK, and print a
   one-time link that opens the ask in the owner's own browser, where one tap does it. An ask is not done until the
   owner tapped. `office key` gives a key for the Homie MCP's owner tools (`studio_office`, `room_announce`,
   `room_kick`, `room_close`, `game_launch_state`), which ask the same way; never paste a key anywhere else.
@@ -244,6 +244,11 @@ chat's card follows the work from then on) and, for a studio still being set up,
   studio.json as `cloudflare.domain`.
 - A game's room size is its netplay manifest's `maxPlayers` (game.json `netplay`, or netplay.json), up to 32.
 - Nothing in this studio needs `~/.homie` or a Homie box.
+- Optional in studio.json: `"protect"` (globs of files the owner wants to look at before any change, such as
+  `"games/*/game.json"`) and `"budget"` (`{ "usd": <n>, "credits": <n> }`: the most the studio's media jobs spend
+  in all). In Claude Code, the Homie plugin's mod holds an edit to a protected file, a deploy, and a paid call past
+  the budget until the person says Proceed, and takes keys out of command output. When it refuses a call, say what
+  you meant to do and why; do not retry it unless the person asks.
 
 ## Beta
 

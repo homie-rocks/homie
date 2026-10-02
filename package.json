@@ -35,6 +35,7 @@
     "build": "tsc --build",
     "test": "npm run build && node --test packages/*/test/*.test.mjs scripts/*.test.mjs",
     "test:plugin": "node --test plugins/homie/test/*.test.mjs",
+    "test:mod": "claude plugin test plugins/homie",
     "validate": "claude plugin validate . && claude plugin validate plugins/homie",
     "leaks": "node scripts/audit.mjs --working-tree",
     "release:check": "node scripts/publish.mjs --check"

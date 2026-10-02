@@ -409,7 +409,9 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
     await T(h.page.screenshot({ path: join(out, `${name}.png`) }), 15_000);
     if (report?.preview && h.vp) {
       const b64 = await T(h.page.screenshot({ type: 'jpeg', quality: 60, clip: { x: 0, y: 0, width: h.vp.width, height: h.vp.height, scale: Math.min(1, 480 / h.vp.width) }, encoding: 'base64' }), 15_000, null);
-      if (b64) { try { report.preview({ url: `${base}/${game}/play`, image: `data:image/jpeg;base64,${b64}`, caption: PORT_CHECK_LABELS[name.replace(/-(?:before|after|playing|over|\d+)$/, '')] ?? name }); } catch { /* too big: no picture */ } }
+      // And a small PNG, kept as raw pixels beside the feed for Claude Code's Homie mod (lib/thumb.mjs).
+      const png = b64 ? await T(h.page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: h.vp.width, height: h.vp.height, scale: Math.min(1, 160 / h.vp.width) } }), 15_000, null) : null;
+      if (b64) { try { report.preview({ url: `${base}/${game}/play`, image: `data:image/jpeg;base64,${b64}`, caption: PORT_CHECK_LABELS[name.replace(/-(?:before|after|playing|over|\d+)$/, '')] ?? name, ...(png ? { png: Buffer.from(png) } : {}) }); } catch { /* too big: no picture */ } }
     }
   };
   const privateRoom = (tag) => `chk-${stamp.slice(-6)}-${tag}`.slice(0, 32);

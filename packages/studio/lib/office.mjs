@@ -10,6 +10,7 @@
  *   homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--days <n>]
  *   homie-studio office launch <game> private|invite|public [--remixable on|off] [--max <n>|game]
  *   homie-studio office kick <game> <room> <seat number | name> [--minutes 10]
+ *   homie-studio office mute <game> <room> <seat number | name> [--minutes 10] [--off]
  *   homie-studio office close <game> <room> [--minutes 10] [--reopen]
  *   homie-studio office revoke                         every office key ends; every play ticket and pending ask too
  *
@@ -121,19 +122,40 @@ export async function officeLaunch(root, game, state, { url, remixable, max } = 
   return askedFor(root, url, r, 'office launch');
 }
 
+/** One player of one live room, by seat number (from 1) or name: { room, client } or { message }. */
+async function playerIn(call, game, room, who) {
+  const office = await call('/_studio/api/office');
+  const g = (office.games ?? []).find((x) => x.id === game);
+  const rm = (g?.rooms ?? []).find((x) => x.room === room || x.label.toLowerCase() === String(room).toLowerCase());
+  if (!rm) return { message: `nobody is in ${room} of ${game} now (homie-studio office lists the rooms)` };
+  const seat = /^\d+$/.test(String(who)) ? Number(who) - 1 : null;
+  const c = rm.clients.find((x) => (seat !== null && x.seat === seat) || String(x.name).toLowerCase() === String(who).toLowerCase());
+  if (!c) return { message: `no "${who}" in ${rm.label} (seats are numbered from 1)` };
+  return { room: rm, client: c };
+}
+
 export async function officeKick(root, game, room, who, { url, minutes } = {}) {
   if (!GAME.test(String(game ?? '')) || !room || who === undefined) return { ok: false, command: 'office kick', why: 'usage: homie-studio office kick <game> <room> <seat number | name> [--minutes 10]' };
   const r = await withKey(root, url, async (call) => {
-    const office = await call('/_studio/api/office');
-    const g = (office.games ?? []).find((x) => x.id === game);
-    const rm = (g?.rooms ?? []).find((x) => x.room === room || x.label.toLowerCase() === String(room).toLowerCase());
-    if (!rm) return { ok: false, message: `nobody is in ${room} of ${game} now (homie-studio office lists the rooms)` };
-    const seat = /^\d+$/.test(String(who)) ? Number(who) - 1 : null;
-    const c = rm.clients.find((x) => (seat !== null && x.seat === seat) || String(x.name).toLowerCase() === String(who).toLowerCase());
-    if (!c) return { ok: false, message: `no "${who}" in ${rm.label} (seats are numbered from 1)` };
-    return call('/_studio/api/kick', { game, room: rm.room, id: c.id, minutes: Number(minutes) || 10 });
+    const p = await playerIn(call, game, room, who);
+    if (!p.client) return { ok: false, message: p.message };
+    return call('/_studio/api/kick', { game, room: p.room.room, id: p.client.id, minutes: Number(minutes) || 10 });
   });
   return askedFor(root, url, r, 'office kick');
+}
+
+/**
+ * `office mute <game> <room> <seat | name> [--minutes 10] [--off]`: the player's chat and emotes reach nobody for a
+ * while (`--off` lifts it). Like a kick, it is only ASKED for: the owner confirms with one tap.
+ */
+export async function officeMute(root, game, room, who, { url, minutes, off = false } = {}) {
+  if (!GAME.test(String(game ?? '')) || !room || who === undefined) return { ok: false, command: 'office mute', why: 'usage: homie-studio office mute <game> <room> <seat number | name> [--minutes 10] [--off]' };
+  const r = await withKey(root, url, async (call) => {
+    const p = await playerIn(call, game, room, who);
+    if (!p.client) return { ok: false, message: p.message };
+    return call('/_studio/api/mute', { game, room: p.room.room, id: p.client.id, minutes: Number(minutes) || 10, ...(off ? { off: true } : {}) });
+  });
+  return askedFor(root, url, r, 'office mute');
 }
 
 export async function officeClose(root, game, room, { url, minutes, reopen } = {}) {

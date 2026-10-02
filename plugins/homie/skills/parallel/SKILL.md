@@ -60,6 +60,10 @@ Give every agent the same shape of brief:
   starts, `pass` or `fail` when it ends (you opened the feed with `progress start`).
 - **Its report**: what it made, the files, what the shared files need, and anything it could not decide.
 
+In Claude Code (2.1.287 or later), the Homie mod's parts pane (`/parts`; it opens by itself when two
+agents run) shows each agent's time, tool calls, files and last step, and the feed's check for each part,
+so the person can watch the parts without asking you.
+
 Commit first, so the tree is clean and each part's work is easy to see and to undo. Start them in one
 message so they run at the same time (Claude Code: several Agent calls in one reply),
 and wait for every report before merging. Money (painted art, generated video, songs) stays inside the

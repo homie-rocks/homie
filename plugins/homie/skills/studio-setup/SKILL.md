@@ -85,7 +85,9 @@ your reply offering it: "Want the build's progress as a line under the prompt? S
 on." On a yes: `npx --no-install homie-studio statusline --install` (`--remove` takes it away). Claude Code
 reads the setting from the folder it was started in: if that is the folder above the studio (you made the
 studio as a subfolder), add `--project <that folder>`. It never replaces a status line they already have;
-if it says so, leave theirs. Never turn it on unasked.
+if it says so, leave theirs. Never turn it on unasked. In Claude Code 2.1.287 or later the Homie mod (part
+of this plugin) already draws the studio's band above the prompt and the Studio pane (`/studio`), so offer
+the status line only to someone who wants the line under the prompt as well.
 
 ## 1. The studio
 
@@ -169,7 +171,8 @@ npx --no-install homie-studio progress stage plan done --note "<the plan in one 
 
 `build`, `check` and `deploy` report into it. The codex page's **Build status** tab shows it (a
 percentage, each step and check going green, how to try it, what was spent) and redraws itself; the
-status line shows one line of it in Claude Code. In the Claude app, add `--share` and call
+status line shows one line of it in Claude Code, and the Homie mod's Studio pane (Claude Code 2.1.287 or
+later) shows all of it with the latest check frame and opens by itself. In the Claude app, add `--share` and call
 `build_progress` with the build id it prints: the card follows the build. Codex CLI has no command
 status line, so there the codex page is the progress view (`npx --no-install homie-studio codex <id> --open`).
 

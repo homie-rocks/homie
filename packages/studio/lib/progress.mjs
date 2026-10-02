@@ -56,6 +56,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { refreshCodexFile } from './codex.mjs';
+import { dropThumbs, rgbThumb, thumbName } from './thumb.mjs';
 import { readStudio, siteUrl } from './studio.mjs';
 import { request, whyRefused } from './net.mjs';
 
@@ -307,8 +308,22 @@ export class Feed {
   /** Forget the checks of one stage (a stage run again starts its checks afresh). */
   resetChecks(stage) { return this.change((doc) => { doc.checks = doc.checks.filter((c) => c.stage !== stage); }); }
 
-  preview({ url, image, caption } = {}) {
+  /**
+   * The build's preview: the address to play it, a small picture (the feed's JPEG, for the Claude app's card) and its
+   * caption. `png`, a PNG screenshot's bytes (or a .png `image` file), is also kept small as raw RGB beside the feed
+   * (lib/thumb.mjs), for Claude Code's Homie mod, which has no image decoder; it never goes into the feed or the
+   * shared copy.
+   */
+  preview({ url, image, caption, png } = {}) {
     const picture = image ? imageData(image) : undefined;
+    const raw = png ?? (typeof image === 'string' && /\.png$/i.test(image) && existsSync(image) ? readFileSync(image) : null);
+    if (raw) {
+      try {
+        const t = rgbThumb(raw, 160);
+        dropThumbs(dir(this.root), this.id);
+        writeFileSync(join(dir(this.root), thumbName(this.id, t.w, t.h)), t.rgb);
+      } catch { /* no raw preview this time: the feed's picture stands */ }
+    }
     return this.change((doc) => {
       doc.preview = {
         url: url ? String(url).slice(0, 300) : doc.preview?.url ?? null,

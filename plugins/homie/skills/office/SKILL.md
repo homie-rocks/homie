@@ -28,6 +28,11 @@ or anyone else were.
   signs that browser in as the owner: their own games then show a small Owner button
   (tap a player: Mute, Kick; Announce). Give the link to the person to open themselves.
 
+In Claude Code (2.1.287 or later) the Homie mod's Studio pane shows the same office to the person
+directly: `/rooms` lists the live rooms, and its owner view (`o`) has Mute, Kick and Announce, which run
+these same commands and ask the same way. A one-time owner link in any command's output is taken out of
+what you read and shown to the person in that pane: tell them it is there.
+
 ## Do
 
 | The person says | Run (or the MCP tool) | What happens |
@@ -35,11 +40,12 @@ or anyone else were.
 | "Tell everyone..." | `office announce "<one line>" [--game <id>] [--room <code>]` (`room_announce`) | At once: a banner every player sees in the game, 30 s by default (`--seconds`). |
 | "Make invite codes for the beta" | `office invite <id> --label "<who>" --uses 1` (`game_launch_state` with `invites`) | At once: invite links and codes (XXXX-XXXX); each lets one browser in, or `--uses <n>` / `any`. |
 | "Kick / boot that player" | `office kick <id> <room> <seat number or name>` (`room_kick`) | ASKED: the owner taps once to confirm. They are removed with a polite notice and cannot come back to that room for 10 minutes (`--minutes`). |
+| "Mute that player" | `office mute <id> <room> <seat number or name>` (`--off` lifts it) | ASKED, like a kick: their chat and emotes reach nobody for 10 minutes (`--minutes`). |
 | "Close that room" | `office close <id> <room>` (`room_close`) | ASKED, then everyone is sent out with a thank-you; nobody gets in for 10 minutes. |
 | "Make servers", "humans only", "AI companions or guides", "guides that talk", "how strong are the bots", "let my AI play" | the `servers` skill: `servers new`, `servers set`, `servers level`, `agents pass`, `agents brain` (`server_create`, `server_set`, `room_level`, `agent_pass`, `agents_brain`; locally `agent_sit`) | Servers are named room pools with their own rules (humans-only, hybrid, beginner); see that skill. Narrowing one or closing it is ASKED, like a kick, and so is the first time AI guides may talk. |
 | "Make it private / an invite-only beta / public", "players per room", "stop/allow remixes" | `office launch <id> private\|invite\|public [--max <n>] [--remixable on\|off]` (`game_launch_state`) | ASKED. Private: only the owner. Invite: invited browsers only. Public: anyone, listed. Going private or invite-only lets each live room finish its current round with a notice to the players; then everyone the new state leaves out is sent out with a thank-you (the owner, and in a beta the invited, play on). The game leaves the homie.rocks directory the next time it reads the studio (`studio_publish` reads it at once). |
 
-**An ask is not done until the owner tapped.** `kick`, `close` and `launch` print a
+**An ask is not done until the owner tapped.** `kick`, `mute`, `close` and `launch` print a
 one-time link (the MCP tools show a card with the same button) that opens the ask in the
 owner's own browser; one tap does it, "No" cancels it, and it ends after 15 minutes. You
 cannot confirm it and must never try: no key, tool or command can. Tell the person what

@@ -1,0 +1,1446 @@
+/**
+ * THE HOMIE STUDIO MOD (Claude Code 2.1.287 and later; the CLI and the desktop app's Code tab).
+ *
+ * Inside a Homie studio (a folder with studio.json at or above the session's), it draws:
+ * - the band above the prompt: studio · game · build step and % · ▶ Play · N playing now;
+ * - the Studio pane (/studio): Build (the progress feed, stages going green, the latest check frame, a live Watch),
+ *   Rooms (live rooms with players and AI, Watch/Join links, Announce, Kick and Mute through the studio's own back
+ *   office, which only ASKS for a kick or a mute: the owner confirms each with one tap in their own browser),
+ *   Games (launch state and the remix switch, asked for the same way), Stats, Codex, and Parts (the parallel skill's
+ *   agents); it opens by itself when a build starts, where the terminal is wide enough for a pane nobody asked for;
+ * - the arcade (/arcade): a real seat in a public room of a live Homie game, played in the pane while Claude works;
+ * - Homie's tool results as checklists, check rows, verdicts and live links (and the commands' rows in words).
+ * Instant commands, no Claude turn: /studio /play /watch /rooms /build /codex /deploy-status /perf-numbers /parts /arcade.
+ * Guards on tool calls: an edit to a file studio.json "protect" lists, a production deploy, and a paid media call
+ * past the studio's budget are held with what would change and Proceed / Cancel; secrets are taken out of every
+ * tool result before Claude reads it.
+ *
+ * WHAT IT REACHES. Files: the studio's own (studio.json, .studio/, games/*, budgets, CODEX.md, .perf/) and the file
+ * a held edit names. Network ($.http.fetch): only the studio's own site (its live address or this computer's dev
+ * site), *.homie.rocks (the Homie Arcade game list), and its own game bridge over a private Unix socket. Processes:
+ * `git` (read-only), the studio's own pinned `homie-studio` (office, stats, codex link, progress stop; each with
+ * --json), a media skill's own `--dry-run` price, and the plugin's game bridge (mod/bridge.mjs: a headless Chrome
+ * seat, only while the arcade or a live Watch is open). It never reads a key file, the keychain or the environment,
+ * never approves a permission, never opens a browser, and never sends anything to a model.
+ *
+ * Mods have strict rules for the mods API (the README's "What the Homie mod does"): every call is spelled
+ * `$.namespace.method(...)` here, and a helper that takes `$` is a function declared at the top of this file.
+ */
+import { applyEdit, unifiedDiff } from './lib/diff.mjs';
+import { summarizeCodex } from './lib/codex.mjs';
+import { deployOf, inside, paidMcpOf, paidOf, protectedBy, studioCalls } from './lib/commands.mjs';
+import { ago, feedOf, summarize } from './lib/feed.mjs';
+import { redact } from './lib/redact.mjs';
+import { readResult } from './lib/results.mjs';
+import {
+  arcadeView, band, buildCard, buildTab, checksCard, codexTab, deployCard, gamesTab, guardPanel, holdPane, labTab, partsView, linkable,
+  paneFrame, roomsTab, setupCard, statsTab, studioCard, toolUseRow,
+} from './lib/views.mjs';
+
+const PANE = 'homie-studio';
+const PARTS = 'homie-parts';
+const ARCADE = 'homie-arcade';
+const HOLD = 'homie-hold';
+const ARCADE_HOME = 'https://arcade.homie.rocks';
+const TICK_MS = 2000;
+const RECENT_MS = 10 * 60_000;
+
+const DEFAULTS = Object.freeze({
+  paneAutoOpen: true, band: true, guardFiles: true, guardDeploys: true, guardSpend: true, redactSecrets: true,
+  renderResults: true, arcade: true, pictures: 'blocks',
+});
+let OPT = { ...DEFAULTS };
+
+const LABELS = {
+  'setup status': 'Setup status', doctor: 'Setup status', 'setup attach': 'Attach the setup card', check: 'Two-browser check',
+  'port check': 'Port check', 'port plan': 'Port plan', 'port import': 'Port import', deploy: 'Deploy', 'wrangler deploy': 'Deploy (Wrangler)',
+  build: 'Build the site', dev: 'Dev site', publish: 'List in the directory', 'progress start': 'Start a build', 'progress attach': 'Take the build',
+  'progress stage': 'Build stage', 'progress check': 'Build check', 'progress end': 'End the build', 'progress preview': 'Build preview',
+  'progress spend': 'Spend on the build', 'progress show': 'The build', 'progress stop': 'Stop the build', office: 'Back office',
+  'office announce': 'Announce', 'office kick': 'Kick (asks the owner)', 'office mute': 'Mute (asks the owner)', 'office close': 'Close a room (asks the owner)',
+  'office launch': 'Launch state (asks the owner)', 'office invite': 'Invites', 'office link': 'Owner link', stats: 'Stats', codex: 'Game Codex',
+  'codex new': 'New Game Codex', 'codex link': 'Codex link', perf: 'Performance run', 'perf compare': 'Performance compare', 'perf sizes': 'Download sizes',
+  'game new': 'New game', 'game remix': 'Remix a game', games: 'Games', status: 'Studio status', upgrade: 'Upgrade the studio', look: 'Look at the site',
+  servers: 'Servers', 'servers new': 'New server', 'agents pass': 'Agent pass', demo: 'A working game', new: 'New studio',
+};
+
+const idleBridge = () => ({ state: 'idle', sock: null, status: null, pic: null, why: null, fps: 0, frames: [], n: 0 });
+
+/** Everything the mod knows, rebuilt from the studio's files on a timer; module variables (a reload starts afresh). */
+const S = {
+  surfaces: [], interactive: false, cwd: null,
+  root: null, studio: null, name: null, local: {}, toolkit: false, games: [], live: null, dev: null,
+  feedId: null, feed: null, feedMtime: 0, last: null, autoOpened: new Set(),
+  preview: null, rooms: { live: null, dev: null, games: null, at: 0 }, office: null, stats: null,
+  busy: {}, why: {}, asks: [], forYou: [], codexes: [], codexLinks: {}, lab: { url: null, checks: [] },
+  tab: 'build', tickN: 0, ticking: false, drawn: '',
+  calls: new Map(), parts: new Map(), partsAutoOpened: false, agentsAt: 0,
+  guards: new Map(), guardN: 0, held: null,
+  arcade: { ...idleBridge(), pick: null, game: null }, watch: idleBridge(), arcadeGames: [], arcadeGamesAt: 0,
+};
+
+/* ================================================================== register */
+
+export function register(on, options) {
+  OPT = optionsOf(options);
+
+  on('session.start', async ($, e, next) => {
+    const started = await next(e);
+    S.interactive = Boolean(e.isInteractive);
+    S.cwd = e.cwd;
+    try { S.surfaces = [...(await $.session.surfaces())]; } catch { S.surfaces = []; }
+    await findStudio($);
+    if (S.root) { await readStudio($); await readFeed($); }
+    for (const [name, description, argumentHint] of COMMANDS) {
+      try { await $.command.register({ name, description, ...(argumentHint ? { argumentHint } : {}), immediate: true }); } catch (error) { $.ui.log(`/${name} is taken here (${String(error?.message ?? error).slice(0, 80)})`, { to: 'debug' }); }
+    }
+    $.clock.every(TICK_MS, () => tick($));
+    return started;
+  });
+
+  on('session.end', async ($, e, next) => {
+    stopBridge($, 'arcade');
+    stopBridge($, 'watch');
+    return next(e);
+  });
+
+  /* ------------------------------------------------------------ commands */
+
+  on('command.run', { command: 'studio' }, async ($, e) => {
+    const tab = String(e.args ?? '').trim().toLowerCase();
+    if (['build', 'rooms', 'games', 'stats', 'codex', 'lab', 'parts'].includes(tab)) S.tab = tab;
+    if (!S.root) return { text: 'Not inside a Homie studio (no studio.json here or above). /arcade plays a Homie game meanwhile; ask Claude to set up a studio to get the rest.' };
+    await tick($, { force: true });
+    if (S.tab === 'rooms') void loadRooms($);
+    if (S.tab === 'lab') void readLab($);
+    if (!(await openPane($, PANE, `◆ ${S.name}`))) return { text: studioText() };
+    return {};
+  });
+
+  on('command.run', { command: 'build' }, async ($) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    S.tab = 'build';
+    await tick($, { force: true });
+    await openPane($, PANE, `◆ ${S.name}`);
+    return { text: buildText() };
+  });
+
+  on('command.run', { command: 'rooms' }, async ($) => {
+    if (!S.root) return { text: 'Not inside a Homie studio. /arcade lists Homie Arcade\'s rooms.' };
+    S.tab = 'rooms';
+    await loadRooms($);
+    await openPane($, PANE, `◆ ${S.name}`);
+    return { text: roomsText() };
+  });
+
+  on('command.run', { command: 'play' }, async ($, e) => {
+    if (!S.root) {
+      await loadArcadeGames($);
+      return { text: ['Not inside a studio. Homie Arcade, live now (you open these):', ...S.arcadeGames.filter((g) => g.studio === 'Homie Arcade').map((g) => `  ▶ ${g.name}: ${g.base}/${g.id}/play`)].join('\n') };
+    }
+    const want = String(e.args ?? '').trim();
+    const games = want ? S.games.filter((g) => g.id === want || String(g.name ?? '').toLowerCase() === want.toLowerCase()) : S.games;
+    if (!games.length) return { text: want ? `No game "${want}" in ${S.name} (games: ${S.games.map((g) => g.id).join(', ') || 'none yet'}).` : `${S.name} has no game yet.` };
+    const lines = [`${S.name}: Play (open these yourself; nothing is opened for you)`];
+    for (const g of games) {
+      const at = [S.live ? `${S.live}/${g.id}/play` : null, S.dev ? `${linkable(S.dev)}/${g.id}/play (this computer)` : null].filter(Boolean);
+      lines.push(`  ▶ ${g.name ?? g.id}: ${at.join('  ·  ') || 'not running anywhere yet: deploy it, or start the dev site'}`);
+    }
+    return { text: lines.join('\n') };
+  });
+
+  on('command.run', { command: 'watch' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio. /arcade watches or plays a Homie Arcade room in a pane.' };
+    await loadRooms($);
+    const want = String(e.args ?? '').trim().toLowerCase();
+    const all = roomList().filter((r) => !want || r.room.toLowerCase() === want || r.room.toLowerCase() === `pub-${want}` || r.game === want || r.label.toLowerCase() === want);
+    if (!all.length) return { text: want ? `No live room "${want}" right now.${S.games.length ? ' A room exists while someone plays: open a game\'s Play page, and it can be watched from then on.' : ''}` : 'No live rooms right now. A room exists while someone plays; /play gives the Play links.' };
+    return { text: ['Watch (open these yourself):', ...all.filter((r) => r.watch).map((r) => `  ◉ ${r.name} · ${r.label}: ${linkable(new URL(r.watch, r.base).href)}  (${r.players}/${r.max} players${r.ai ? `, ${r.ai} AI` : ''})`), 'Or watch one in the Studio pane: /rooms, then "Watch in the pane".'].join('\n') };
+  });
+
+  on('command.run', { command: 'codex' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readCodexes($);
+    S.tab = 'codex';
+    const want = String(e.args ?? '').trim();
+    await openPane($, PANE, `◆ ${S.name}`);
+    const list = want ? S.codexes.filter((c) => c.id === want) : S.codexes;
+    if (!list.length) return { text: want ? `games/${want}/CODEX.md does not exist yet: ask Claude to plan ${want}.` : 'No Game Codex yet: ask Claude to plan a game; a short interview becomes games/<id>/CODEX.md.' };
+    return { text: list.map((c) => `${c.title ?? c.id} (games/${c.id}/CODEX.md): ${c.sections.filter((x) => x.filled && x.key).length} sections filled${c.missing.length ? `, not decided yet: ${c.missing.join(', ')}` : ''}; ${c.openQuestions} open question${c.openQuestions === 1 ? '' : 's'}. The page: .studio/codex/${c.id}.html (npx --no-install homie-studio codex ${c.id})${S.codexLinks[c.id] ? '; a private link is in the Studio pane' : ''}.`).join('\n') };
+  });
+
+  on('command.run', { command: 'deploy-status' }, async ($) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readStudio($);
+    await readFeed($);
+    await loadRooms($);
+    const d = await deployFacts($, S.root);
+    return { text: deployText(d) };
+  });
+
+  on('command.run', { command: 'perf-numbers' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    return { text: await perfText($, String(e.args ?? '').trim()) };
+  });
+
+  on('command.run', { command: 'parts' }, async ($) => {
+    await readParts($, { force: true });
+    if (!(await openPane($, PARTS, 'Parts'))) return { text: partsText() };
+    return {};
+  });
+
+  on('command.run', { command: 'arcade' }, async ($, e) => {
+    if (!OPT.arcade) return { text: 'The arcade is turned off in this plugin\'s settings (/config: Homie, arcade).' };
+    await loadArcadeGames($);
+    const want = String(e.args ?? '').trim().toLowerCase();
+    if (want) {
+      const g = S.arcadeGames.find((x) => x.id === want || x.key === want || x.name.toLowerCase() === want);
+      if (g) S.arcade.pick = g.key;
+    }
+    const opened = await openPane($, ARCADE, 'Arcade', { focus: true, rows: 30 });
+    if (want && S.arcade.pick && opened) await startArcade($);
+    if (!opened) return { text: ['The arcade draws in a pane, which this app does not show. Play in a browser instead (you open these):', ...S.arcadeGames.slice(0, 8).map((g) => `  ▶ ${g.name} · ${g.studio}: ${g.base}/${g.id}/play`)].join('\n') };
+    return {};
+  });
+
+  /* ------------------------------------------------------------ tool calls */
+
+  // Outermost: every tool call's result has its secrets taken out (after the guards below have decided), and the
+  // Studio pane learns what Homie command ran and which part ran it.
+  on('tool.call', async ($, e, next) => {
+    noteCall(e);
+    const result = await next(e);
+    afterCall($, e, result);
+    if (!OPT.redactSecrets) return result;
+    return redactResult(result);
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod could not check this result for secrets, so it was withheld. Run it again, or turn off the mod\'s secret redaction (/config).' } : next(e)));
+
+  on('tool.call', { tool: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] }, async ($, e, next) => {
+    if (!OPT.guardFiles) return next(e);
+    const held = await guardFile($, e);
+    return held ?? next(e);
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this edit ran.' } : { deny: 'The Homie mod could not check this edit against the studio\'s protected files (studio.json "protect"), so it was not made. Ask the person, or try again.' }));
+
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    const deploy = OPT.guardDeploys ? deployOf(e.command) : null;
+    if (deploy) {
+      const root = await studioFor($, deploy.dir);
+      if (root) {
+        const held = await guardDeploy($, e, root, deploy.what);
+        if (held) return held;
+        const result = await next(e);
+        await afterDeploy($, root, result);
+        return result;
+      }
+    }
+    const paid = OPT.guardSpend ? paidOf(e.command) : null;
+    if (paid) {
+      const held = await guardSpend($, e, paid);
+      if (held) return held;
+    }
+    return next(e);
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this command ran.' } : { deny: 'The Homie mod could not check this command (a deploy or a paid media call), so it was not run. Ask the person, or try again.' }));
+
+  on('tool.call', { tool: /^mcp__.+__studio_deploy$/ }, async ($, e, next) => {
+    if (!OPT.guardDeploys || !S.root) return next(e);
+    const held = await guardDeploy($, e, S.root, 'studio_deploy');
+    if (held) return held;
+    const result = await next(e);
+    await afterDeploy($, S.root, result);
+    return result;
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this deploy ran.' } : { deny: 'The Homie mod could not summarise this deploy, so it was not run. Ask the person, or try again.' }));
+
+  on('tool.call', { tool: /^mcp__.*(?:fal|eleven).*__/i }, async ($, e, next) => {
+    const paid = OPT.guardSpend ? paidMcpOf(e.tool) : null;
+    if (!paid) return next(e);
+    const held = await guardSpend($, e, paid);
+    return held ?? next(e);
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this call ran.' } : { deny: 'The Homie mod could not check this paid call against the studio\'s budget, so it was not made. Ask the person.' }));
+
+  on('turn.complete', async ($, e, next) => {
+    const result = await next(e);
+    if (e.agentId && S.parts.has(e.agentId)) { const l = S.parts.get(e.agentId); l.endedAt = Date.now(); l.status = e.isAborted ? 'killed' : 'completed'; redraw($); }
+    else if (!e.agentId) void tick($, { force: true });
+    return result;
+  });
+
+  /* ------------------------------------------------------------ drawing */
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (!OPT.band || !S.root || e.props.hasSurvey) return next(e);
+    const t = $.ui.resolve(e);
+    const ours = band(t, bandData(), e.props.bodyColumns);
+    if (!ours) return next(e);
+    const theirs = await next(e);
+    return t.Box({ flexDirection: 'column', children: [ours, theirs] });
+  });
+
+  on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId !== PANE && e.requestId !== PARTS && e.requestId !== ARCADE && e.requestId !== HOLD) return next(e);
+    const t = $.ui.resolve(e);
+    const columns = Math.max(30, e.props.bodyColumns ?? 80);
+    const now = Date.now();
+    if (e.requestId === HOLD) return holdPane(t, S.held);
+    if (e.requestId === PARTS) return partsView(t, { parts: partList(), checks: S.feed ? summarize(S.feed).checks : [], columns, now });
+    if (e.requestId === ARCADE) {
+      const size = arcadeSize(columns, e.props.scroll?.bodyRows ?? 30);
+      if (S.arcade.state !== 'idle' && S.arcade.sock && (size.cols !== S.arcade.cols || size.rows !== S.arcade.rows)) { S.arcade.cols = size.cols; S.arcade.rows = size.rows; void bridgePost($, S.arcade, '/size', size); }
+      return arcadeView(t, {
+        surface: e.surface, a: arcadeData(), games: S.arcadeGames, columns,
+        on: {
+          pick: (v) => { S.arcade.pick = v; $.ui.invalidate('ui.render'); },
+          play: () => startArcade($),
+          leave: () => { stopBridge($, 'arcade'); $.ui.invalidate('ui.render'); },
+          key: (k) => arcadeKey($, k),
+        },
+      });
+    }
+    if (!S.root) return t.Text({ dimColor: true, children: ['Not inside a Homie studio any more.'] });
+    const s = paneStudio();
+    const tabs = {
+      build: () => {
+        const b = S.feed ? summarize(S.feed) : null;
+        const watchSize = { cols: Math.min(columns - 2, 72), rows: Math.max(6, Math.round((Math.min(columns - 2, 72) * 9) / 32)) };
+        if (S.watch.state !== 'idle' && S.watch.sock && (watchSize.cols !== S.watch.cols || watchSize.rows !== S.watch.rows)) { S.watch.cols = watchSize.cols; S.watch.rows = watchSize.rows; void bridgePost($, S.watch, '/size', watchSize); }
+        return buildTab(t, {
+          surface: e.surface, s, b, last: S.last ? summarize(S.last) : null, columns, now, pic: previewPicture(e.surface, columns, b),
+          watch: watchData(b),
+          on: { watch: () => startWatch($, b?.id ?? null), unwatch: () => { stopBridge($, 'watch'); $.ui.invalidate('ui.render'); }, stop: () => stopBuild($) },
+        });
+      },
+      rooms: () => roomsTab(t, {
+        s, rooms: S.rooms, office: S.office, asks: S.asks, forYou: S.forYou, columns, now, busy: S.busy.rooms, why: S.why.rooms,
+        on: {
+          refresh: () => loadRooms($, { force: true }),
+          owner: () => loadOffice($),
+          watchHere: (r) => watchRoom($, r),
+          kick: (r, c) => officeAct($, 'kick', r, c),
+          mute: (r, c) => officeAct($, c.muted ? 'unmute' : 'mute', r, c),
+          announce: (r, text) => announce($, r, text),
+        },
+      }),
+      games: () => gamesTab(t, { s, rooms: S.rooms, office: S.office, columns, on: { launch: (g, v) => launchState($, g, v, null), remix: (g, v) => launchState($, g, null, v) } }),
+      stats: () => statsTab(t, { s, stats: S.stats, columns, now, busy: S.busy.stats, why: S.why.stats, on: { refresh: () => loadStats($) } }),
+      codex: () => codexTab(t, { s, codexes: S.codexes, links: S.codexLinks, columns, busy: S.busy.codex, on: { link: (c) => codexLink($, c) } }),
+      lab: () => labTab(t, { lab: S.lab, games: S.games, columns, now }),
+      parts: () => partsView(t, { parts: partList(), checks: S.feed ? summarize(S.feed).checks : [], columns, now }),
+    };
+    return paneFrame(t, {
+      s, tab: S.tab, columns,
+      onTab: (id) => { S.tab = id; if (id === 'rooms') void loadRooms($); if (id === 'codex') void readCodexes($); if (id === 'lab') void readLab($); $.ui.invalidate('ui.render'); },
+      body: (tabs[S.tab] ?? tabs.build)(),
+    });
+  });
+
+  // A held tool call's question: what would change, drawn above Claude Code's own dialog (the dialog stays whole).
+  on('ui.render', { component: 'AskUserQuestion' }, async ($, e, next) => {
+    const q = e.props.questions?.[0]?.question;
+    const g = typeof q === 'string' ? S.guards.get(q) : null;
+    if (!g) return next(e);
+    const t = $.ui.resolve(e);
+    const theirs = await next(e);
+    return t.Box({ flexDirection: 'column', children: [guardPanel(t, g), theirs] });
+  });
+
+  // A Homie command's row: what it is in words (the command itself beside it, dim) and, once it has answered, its
+  // result as a checklist, rows or live links, drawn right under it, whether the row stands alone or sits in a group
+  // Claude Code has unfolded (below). The standalone result block then draws nothing of its own.
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
+    if (!OPT.renderResults || e.props.tool !== 'Bash') return next(e);
+    const call = S.calls.get(e.requestId) ?? callOf(e.props.input?.command);
+    if (!call?.homie || !call.label) return next(e);
+    const t = $.ui.resolve(e);
+    const row = toolUseRow(t, { label: call.label, command: String(e.props.input?.command ?? '').replace(/\s+/g, ' ').slice(0, 300), state: e.props.isRunning ? 'running' : e.props.isErrored ? 'error' : 'done' });
+    const card = !e.props.isRunning && !e.props.isErrored && e.props.output !== undefined ? resultCard(t, e.props.tool, call, e.props.output, e.viewport) : null;
+    return card ? t.Box({ flexDirection: 'column', children: [row, t.Box({ paddingLeft: 2, children: [card] })] }) : row;
+  });
+
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
+    if (!OPT.renderResults || e.props.isErrored) return next(e);
+    const tool = e.props.tool;
+    if (tool !== 'Bash' && !/^mcp__.*homie.*__/i.test(tool)) return next(e);
+    const call = S.calls.get(e.requestId) ?? null;
+    // A command this session saw that was not Homie's stays Claude Code's; one from before a reload is read by its text.
+    if (tool === 'Bash' && call && !call.homie) return next(e);
+    const t = $.ui.resolve(e);
+    const card = resultCard(t, tool, call, e.props.output, e.viewport);
+    if (!card) return next(e);
+    // The command's own row (ToolUse, above) already drew this card.
+    if (tool === 'Bash' && call?.homie && call.label) return t.Text({ children: [''] });
+    return card;
+  });
+
+  // A group of calls Claude Code folds into one line ("Ran 3 shell commands") is unfolded when a Homie command is in
+  // it, so its result shows.
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => {
+    if (!OPT.renderResults || e.props.isExpanded) return next(e);
+    const homie = (e.props.calls ?? []).some((c) => c.tool === 'Bash' && callOf(c.input?.command)?.homie);
+    return homie ? next({ ...e, props: { ...e.props, isExpanded: true } }) : next(e);
+  });
+
+  // The arcade's pad (a Client region) posts the keys it took.
+  on('ui.message', async ($, e, next) => {
+    const d = e.data ?? {};
+    if (typeof d.key === 'string') await arcadeKey($, d.key);
+    return next(e);
+  });
+
+  on('ui.close', async ($, e, next) => {
+    if (e.id === ARCADE) stopBridge($, 'arcade');
+    if (e.id === PANE) stopBridge($, 'watch');
+    return next(e);
+  });
+}
+
+/* ================================================================== options and commands */
+
+const COMMANDS = [
+  ['studio', 'Homie: the Studio pane (build, rooms, games, stats, codex, parts)', '[build|rooms|games|stats|codex|parts]'],
+  ['play', 'Homie: Play links for this studio\'s games', '[game]'],
+  ['watch', 'Homie: Watch links for the rooms playing now', '[room|game]'],
+  ['rooms', 'Homie: live rooms with players and AI, and the back office', null],
+  ['build', 'Homie: the current build, step by step', null],
+  ['codex', 'Homie: the Game Codex, at a glance', '[game]'],
+  ['deploy-status', 'Homie: what is live, and what changed since the last deploy', null],
+  // /perf is the perf skill's own (plugin skills answer to their bare names), so the numbers are /perf-numbers.
+  ['perf-numbers', 'Homie: the latest performance run\'s numbers', '[game]'],
+  ['parts', 'Homie: the parallel agents building now', null],
+  ['arcade', 'Homie: play a live Homie game with strangers while Claude works', '[game]'],
+];
+
+/** The plugin's userConfig values, with defaults for anything unset. */
+function optionsOf(options) {
+  const o = { ...DEFAULTS };
+  for (const [k, v] of Object.entries(options ?? {})) {
+    if (!(k in DEFAULTS)) continue;
+    if (typeof DEFAULTS[k] === 'boolean') o[k] = v === true || v === 'true';
+    else if (k === 'pictures') o[k] = v === 'image' ? 'image' : 'blocks';
+  }
+  return o;
+}
+
+/* ================================================================== the studio, from its files */
+
+async function findStudio($) {
+  let cwd = S.cwd;
+  try { cwd = await $.session.cwd(); } catch { /* keep the last */ }
+  S.cwd = cwd;
+  let at = String(cwd ?? '').replace(/\/+$/, '');
+  const before = S.root;
+  S.root = null;
+  for (let i = 0; i < 24 && at; i++) {
+    if (await $.fs.exists(`${at}/studio.json`)) { S.root = at; break; }
+    const up = at.slice(0, at.lastIndexOf('/'));
+    if (up === at) break;
+    at = up;
+  }
+  if (S.root !== before) { S.studio = null; S.feed = null; S.feedId = null; S.last = null; S.rooms = { live: null, dev: null, games: null, at: 0 }; S.office = null; S.stats = null; S.codexes = []; S.lab = { url: null, checks: [] }; }
+}
+
+/** The studio whose folder a command line's `cd` names, or the session's. */
+async function studioFor($, dir) {
+  if (!dir) return S.root;
+  const base = dir.startsWith('/') ? dir : `${S.cwd}/${dir}`;
+  let at = base.replace(/\/+$/, '');
+  for (let i = 0; i < 24 && at; i++) {
+    if (await $.fs.exists(`${at}/studio.json`)) return at;
+    const up = at.slice(0, at.lastIndexOf('/'));
+    if (up === at) break;
+    at = up;
+  }
+  return null;
+}
+
+async function readJsonFile($, path) {
+  try { return JSON.parse(await $.fs.read(path)); } catch { return null; }
+}
+
+async function readStudio($) {
+  const root = S.root;
+  if (!root) return;
+  const studio = (await readJsonFile($, `${root}/studio.json`)) ?? {};
+  S.studio = studio;
+  S.name = String(studio.name ?? root.split('/').pop()).slice(0, 60);
+  S.local = (await readJsonFile($, `${root}/.studio/local.json`)) ?? {};
+  S.toolkit = await $.fs.exists(`${root}/node_modules/@homie-rocks/studio/bin/homie-studio.mjs`);
+  S.live = liveSite(studio, S.local);
+  // The dev site (`homie-studio dev`) records its port next to the Worker's config.
+  S.dev = null;
+  for (const dir of [root, `${root}/site`]) {
+    const rec = await readJsonFile($, `${dir}/.wrangler/homie-dev.json`);
+    if (rec && Number(rec.port) > 0) {
+      const url = `http://127.0.0.1:${Number(rec.port)}`;
+      const r = await fetchJson($, `${url}/api/games`, { timeoutMs: 1500 });
+      if (r) { S.dev = url; S.rooms.games = S.rooms.games ?? r.games ?? null; }
+      break;
+    }
+  }
+  const games = [];
+  try {
+    for (const d of await $.fs.list(`${root}/games`)) {
+      if (d.kind !== 'directory' && d.kind !== 'dir' && !(d.kind === 'other' && d.isLink)) continue;
+      const meta = await readJsonFile($, `${root}/games/${d.name}/game.json`);
+      if (meta) games.push({ id: meta.id ?? d.name, name: meta.name ?? d.name, blurb: meta.blurb ?? '', launch: meta.launch ?? null, remix: meta.share?.source !== false, hasCodex: await $.fs.exists(`${root}/games/${d.name}/CODEX.md`) });
+      else if (await $.fs.exists(`${root}/games/${d.name}/CODEX.md`)) games.push({ id: d.name, name: d.name, blurb: '(planned: its Game Codex, no game yet)', planned: true, hasCodex: true });
+    }
+  } catch { /* no games folder */ }
+  S.games = games.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** The live site: the studio's custom domain, else this computer's workers.dev address from its last deploy. */
+function liveSite(studio, local) {
+  const cf = studio?.cloudflare ?? {};
+  const raw = String(cf.domain ?? '').trim();
+  if (raw) { try { const u = new URL(/^https?:\/\//.test(raw) ? raw : `https://${raw}`); if (u.protocol === 'https:') return u.origin; } catch { /* not a domain */ } }
+  for (const u of [cf.url, local?.url]) { try { const x = new URL(String(u ?? '')); if (x.protocol === 'https:') return x.origin; } catch { /* none */ } }
+  return null;
+}
+
+/** Only these addresses: the studio's own live site, this computer's dev site, and Homie's own *.homie.rocks. */
+function allowedUrl(url) {
+  let u;
+  try { u = new URL(url); } catch { return false; }
+  if (u.protocol === 'http:') return u.hostname === '127.0.0.1' || u.hostname === 'localhost';
+  if (u.protocol !== 'https:') return false;
+  if (/(^|\.)homie\.rocks$/.test(u.hostname)) return true;
+  return Boolean(S.live && new URL(S.live).host === u.host);
+}
+
+async function fetchJson($, url, { timeoutMs = 6000 } = {}) {
+  if (!allowedUrl(url)) return null;
+  try {
+    const res = await $.http.fetch(url, { headers: { accept: 'application/json', 'user-agent': 'homie-claude-code-mod' } });
+    if (!res.ok) return null;
+    return JSON.parse(res.text);
+  } catch { return null; }
+}
+
+/* ------------------------------------------------------------------ the progress feed */
+
+async function readFeed($) {
+  const dir = `${S.root}/.studio/progress`;
+  let id = null;
+  try { id = String(await $.fs.read(`${dir}/current`)).trim(); } catch { id = null; }
+  if (id && !/^[a-z0-9][a-z0-9-]{5,63}$/.test(id)) id = null;
+  let changed = false;
+  if (id) {
+    let mtime = 0;
+    try { mtime = (await $.fs.stat(`${dir}/${id}.json`)).mtimeMs; } catch { mtime = 0; }
+    if (id !== S.feedId || mtime !== S.feedMtime) {
+      const doc = feedOf(await readText($, `${dir}/${id}.json`));
+      if (doc && doc.state === 'running') {
+        const fresh = id !== S.feedId;
+        S.feed = doc; S.feedId = id; S.feedMtime = mtime; changed = true;
+        if (fresh) await autoOpen($, id);
+        await readPreview($, dir, doc);
+      } else if (doc) { S.last = doc; S.feed = null; S.feedId = null; changed = true; }
+    }
+  } else if (S.feedId) {
+    // The open build ended: its feed is the last build now.
+    const doc = feedOf(await readText($, `${dir}/${S.feedId}.json`));
+    S.last = doc ?? S.feed; S.feed = null; S.feedId = null; changed = true;
+  } else if (!S.last && S.tickN % 15 === 3) {
+    S.last = await newestFeed($, dir);
+    if (S.last) changed = true;
+  }
+  return changed;
+}
+
+async function readText($, path) {
+  try { return await $.fs.read(path); } catch { return null; }
+}
+
+async function newestFeed($, dir) {
+  let best = null;
+  try {
+    const files = (await $.fs.list(dir)).filter((f) => f.name.endsWith('.json')).sort((a, b) => (b.mtimeMs ?? 0) - (a.mtimeMs ?? 0)).slice(0, 3);
+    for (const f of files) { const d = feedOf(await readText($, `${dir}/${f.name}`)); if (d && (!best || String(d.updatedAt) > String(best.updatedAt))) best = d; }
+  } catch { /* no feeds */ }
+  return best;
+}
+
+/**
+ * The latest check frame. @homie-rocks/studio 0.21.0 keeps a small raw RGB copy beside the feed
+ * (`<build>.preview.<w>x<h>.rgb`) for this pane; the feed itself carries the JPEG the Claude app's card shows.
+ */
+async function readPreview($, dir, doc) {
+  const at = doc.preview?.at ?? null;
+  if (!doc.preview || (S.preview && S.preview.build === doc.build && S.preview.at === at)) return;
+  let rgb = null;
+  try {
+    const f = (await $.fs.list(dir)).find((x) => x.name.startsWith(`${doc.build}.preview.`) && x.name.endsWith('.rgb'));
+    const m = f ? /\.preview\.(\d+)x(\d+)\.rgb$/.exec(f.name) : null;
+    if (m) {
+      const { base64 } = await $.fs.read(`${dir}/${f.name}`, { as: 'bytes' });
+      rgb = { w: Number(m[1]), h: Number(m[2]), data: bytesOf(base64), file: `${dir}/${f.name}` };
+      if (rgb.data.length < rgb.w * rgb.h * 3) rgb = null;
+    }
+  } catch { rgb = null; }
+  S.preview = { build: doc.build, at, rgb, jpeg: typeof doc.preview.image === 'string' ? doc.preview.image : null, memo: null };
+}
+
+function bytesOf(base64) {
+  if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(base64);
+  const bin = atob(base64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** The preview as the surface draws it: Raster cells (or an Image) in the terminal, an Svg on the desktop. */
+function previewPicture(surface, columns, b) {
+  const p = S.preview;
+  if (!p || !b || p.build !== b.build) return null;
+  if (surface === 'terminal') {
+    if (!p.rgb) return null;
+    // At most 14 rows: a glance at the frame, not the whole pane.
+    let cols = Math.max(16, Math.min(columns - 2, 64));
+    let rows = Math.max(4, Math.round((cols * p.rgb.h) / p.rgb.w / 2));
+    if (rows > 14) { rows = 14; cols = Math.max(16, Math.round((rows * 2 * p.rgb.w) / p.rgb.h)); }
+    if (OPT.pictures === 'image') return { key: 'preview', image: { file: p.rgb.file, format: 'rgb', width: p.rgb.w, height: p.rgb.h, generation: Date.parse(p.at ?? '') || 0 }, columns: cols, rows };
+    if (!p.memo || p.memo.cols !== cols) p.memo = { cols, rows, cells: cellsFromRgb(p.rgb, cols, rows) };
+    return { key: 'preview', cells: p.memo.cells, columns: cols, rows };
+  }
+  if (!p.jpeg || p.jpeg.length > 120_000) return null;
+  const w = p.rgb?.w ?? 480; const h = p.rgb?.h ?? 300;
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><image href="${p.jpeg}" width="${w}" height="${h}"/></svg>`, width: Math.min(480, columns * 7), height: Math.round((Math.min(480, columns * 7) * h) / w) };
+}
+
+/** RGB pixels as Raster cells: '▀' per cell, the averaged colour of the pixels above (fg) and below (bg). */
+function cellsFromRgb(img, cols, rows) {
+  const nums = new Uint32Array(cols * rows * 3);
+  const avg = (x0, y0, x1, y1) => {
+    let r = 0; let g = 0; let b = 0; let n = 0;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * img.w + x) * 3; r += img.data[i]; g += img.data[i + 1]; b += img.data[i + 2]; n++; }
+    return n ? ((Math.round(r / n) << 16) | (Math.round(g / n) << 8) | Math.round(b / n)) >>> 0 : 0;
+  };
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const x0 = Math.floor((cx * img.w) / cols); const x1 = Math.max(x0 + 1, Math.floor(((cx + 1) * img.w) / cols));
+      const ya = Math.floor((cy * 2 * img.h) / (rows * 2)); const yb = Math.max(ya + 1, Math.floor(((cy * 2 + 1) * img.h) / (rows * 2))); const yc = Math.max(yb + 1, Math.floor(((cy * 2 + 2) * img.h) / (rows * 2)));
+      const k = (cy * cols + cx) * 3;
+      nums[k] = 0x2580; nums[k + 1] = avg(x0, ya, x1, Math.min(img.h, yb)); nums[k + 2] = avg(x0, Math.min(img.h - 1, yb), x1, Math.min(img.h, yc));
+    }
+  }
+  return new Uint8Array(nums.buffer).toBase64();
+}
+
+/** A build that starts opens the Studio pane, where the terminal is wide enough for a pane nobody asked for. */
+async function autoOpen($, id) {
+  if (!OPT.paneAutoOpen || !S.interactive || S.autoOpened.has(id) || !S.surfaces.length) return;
+  S.autoOpened.add(id);
+  S.tab = 'build';
+  try {
+    const r = await $.ui.open({ id: PANE, title: `◆ ${S.name}` });
+    if (!r.isPlaced) $.ui.toast(`${S.name}: a build started. /studio shows it (the pane waits for a wider terminal).`);
+  } catch { /* the pane is up already */ }
+}
+
+/* ------------------------------------------------------------------ rooms, office, stats */
+
+function roomList() {
+  return [...(S.rooms.live?.rooms ?? []).map((r) => ({ ...r, where: 'live', base: S.live })), ...(S.rooms.dev?.rooms ?? []).map((r) => ({ ...r, where: 'here', base: S.dev }))];
+}
+
+async function loadRooms($, { force = false } = {}) {
+  if (!S.root) return;
+  if (!force && Date.now() - S.rooms.at < 10_000) return;
+  S.busy.rooms = force ? 'reading the rooms' : null;
+  const [live, dev, games] = await Promise.all([
+    S.live ? fetchJson($, `${S.live}/api/rooms`) : null,
+    S.dev ? fetchJson($, `${S.dev}/api/rooms`, { timeoutMs: 2000 }) : null,
+    S.live ? fetchJson($, `${S.live}/api/games`) : null,
+  ]);
+  S.rooms = { live, dev, games: games?.games ?? S.rooms.games ?? null, at: Date.now() };
+  S.busy.rooms = null;
+  redraw($);
+}
+
+/**
+ * The studio's own CLI, from its pinned toolkit, with --json. The owner's actions go through it so they keep the
+ * office's rules: its key is minted with the studio's own Cloudflare login and dropped after; kick, mute, close and
+ * launch only ASK, and the owner confirms in their own browser. Nothing here can confirm an ask.
+ */
+async function studioCli($, args, { timeoutMs = 120_000 } = {}) {
+  if (!S.root || !S.toolkit) return { ok: false, why: 'the studio\'s toolkit is not installed here: npm install in the studio folder first' };
+  try {
+    // A studio that is not online yet runs its office on this computer's dev site (its local database).
+    const site = !S.live && S.dev && /^(office|stats|codex link|players)/.test(args.join(' ')) ? ['--url', S.dev] : [];
+    const r = await $.process.run(['node', `${S.root}/node_modules/@homie-rocks/studio/bin/homie-studio.mjs`, ...args, ...site, '--json'], { cwd: S.root, timeoutMs });
+    const text = String(r.stdout ?? '').trim();
+    try { return JSON.parse(text.slice(text.indexOf('{'))); } catch { return { ok: false, why: (r.stderr || text || `exited ${r.exitCode}`).trim().split('\n').slice(-2).join(' ').slice(0, 300) }; }
+  } catch (error) {
+    return { ok: false, why: `could not run homie-studio: ${String(error?.message ?? error).slice(0, 200)}` };
+  }
+}
+
+async function loadOffice($) {
+  if (S.busy.rooms) return;
+  S.busy.rooms = 'reading the back office (a 10-minute key, minted with the studio\'s own Cloudflare login, dropped after)';
+  S.why.rooms = null;
+  redraw($);
+  const r = await studioCli($, ['office']);
+  S.busy.rooms = null;
+  if (r.ok) S.office = { at: Date.now(), data: r };
+  else S.why.rooms = `The back office did not answer: ${r.why ?? r.message ?? 'no reason given'}`;
+  redraw($);
+}
+
+/** Kick, mute and unmute through the office: ASKED, never done here; the person gets the owner's one-tap link. */
+async function officeAct($, op, room, client) {
+  if (S.busy.rooms) return;
+  const seat = String(client.seat + 1);
+  const args = op === 'kick' ? ['office', 'kick', room.game, room.room, seat] : ['office', 'mute', room.game, room.room, seat, ...(op === 'unmute' ? ['--off'] : [])];
+  S.busy.rooms = `${op === 'kick' ? 'asking to kick' : op === 'mute' ? 'asking to mute' : 'asking to unmute'} ${client.name}`;
+  redraw($);
+  const r = await studioCli($, args);
+  S.busy.rooms = null;
+  noteAsk($, r, `${op} ${client.name} in ${room.name} · ${room.label}`);
+  void loadOffice($);
+}
+
+function noteAsk($, r, fallback) {
+  if (!r.ok) { S.why.rooms = `Not asked: ${r.why ?? r.message ?? 'no reason given'}`; redraw($); return; }
+  if (r.asked) {
+    S.asks.push({ what: r.what ?? fallback, link: r.link ?? null, at: Date.now() });
+    S.asks = S.asks.slice(-8);
+    $.ui.toast(`Waiting for your tap: ${r.what ?? fallback}. The link is in the Studio pane (Rooms).`, { timeoutMs: 8000 });
+  } else $.ui.toast(r.message ?? 'Done.');
+  redraw($);
+}
+
+async function announce($, room, text) {
+  const line = String(text ?? '').trim();
+  if (!line) return;
+  S.busy.rooms = 'announcing';
+  redraw($);
+  const r = await studioCli($, ['office', 'announce', line, '--game', room.game, '--room', room.room]);
+  S.busy.rooms = null;
+  if (r.ok) $.ui.toast(`Announced in ${room.name} · ${room.label}${r.people !== undefined ? ` to ${r.people} ${r.people === 1 ? 'person' : 'people'}` : ''}.`);
+  else S.why.rooms = `Not announced: ${r.why ?? r.message}`;
+  redraw($);
+}
+
+async function launchState($, game, launch, remix) {
+  S.busy.rooms = 'asking the office';
+  redraw($);
+  const r = await studioCli($, ['office', 'launch', game.id, ...(launch ? [launch] : []), ...(remix === null ? [] : ['--remixable', remix ? 'on' : 'off'])]);
+  S.busy.rooms = null;
+  noteAsk($, r, `${game.name}: ${launch ? `launch ${launch}` : `remix ${remix ? 'on' : 'off'}`}`);
+}
+
+async function loadStats($) {
+  if (S.busy.stats) return;
+  S.busy.stats = 'reading the studio\'s numbers (a 10-minute key, dropped after)';
+  S.why.stats = null;
+  redraw($);
+  const r = await studioCli($, ['stats', '--range', '7d']);
+  S.busy.stats = null;
+  if (r.ok !== false && r.totals) S.stats = { at: Date.now(), data: r };
+  else S.why.stats = `No numbers: ${r.why ?? r.message ?? 'the site did not answer'}`;
+  redraw($);
+}
+
+async function readCodexes($) {
+  if (!S.root) return;
+  const out = [];
+  for (const g of S.games.filter((x) => x.hasCodex)) {
+    const text = await readText($, `${S.root}/games/${g.id}/CODEX.md`);
+    if (text) out.push({ id: g.id, ...summarizeCodex(text) });
+  }
+  S.codexes = out;
+  redraw($);
+}
+
+/**
+ * The Game Lab's files (studio 0.20.0 and later): .studio/lab/server.json says which port its page is on (it counts
+ * as running only when its /_lab/health answers), and .studio/lab/<game>/latest.json holds each game's last lab check.
+ */
+async function readLab($) {
+  if (!S.root) return;
+  const dir = `${S.root}/.studio/lab`;
+  const server = await readJsonFile($, `${dir}/server.json`);
+  let url = null;
+  if (Number.isInteger(server?.port) && server.port > 0 && server.port < 65536) {
+    const base = `http://127.0.0.1:${server.port}`;
+    if ((await fetchJson($, `${base}/_lab/health`, { timeoutMs: 1500 }))?.ok === true) url = base;
+  }
+  let names = [];
+  try { names = (await $.fs.list(dir)).filter((d) => d.kind !== 'file' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(d.name)).map((d) => d.name); } catch { names = []; }
+  const checks = [];
+  for (const id of names.slice(0, 16)) {
+    const c = labCheckOf(await readJsonFile($, `${dir}/${id}/latest.json`), id);
+    if (c) checks.push(c);
+  }
+  S.lab = { url, checks: checks.sort((a, b) => String(b.at).localeCompare(String(a.at))) };
+  redraw($);
+}
+
+/** One latest.json as the Lab tab shows it, its fields checked (a file the mod did not write). */
+function labCheckOf(l, id) {
+  if (!l || l.v !== 1 || typeof l.at !== 'string') return null;
+  const num = (v) => (Number.isFinite(v) ? v : null);
+  const str = (v, n = 120) => (typeof v === 'string' ? v.slice(0, n) : null);
+  const phases = (ps) => (Array.isArray(ps) ? ps.slice(0, 12).filter((p) => typeof p?.name === 'string' && Number.isFinite(p.from) && Number.isFinite(p.to)).map((p) => ({ name: p.name.slice(0, 24), from: p.from, to: p.to })) : null);
+  const mean = (c) => num(c?.mean);
+  const drift = (v) => (Number.isInteger(v) ? v : null);
+  return {
+    game: id, at: l.at, take: str(l.take, 40), frames: num(l.frames), fps: num(l.fps), device: str(l.device, 16),
+    today: str(l.today, 16), report: str(l.report, 200),
+    timeline: { new: phases(l.timeline?.new) ?? [], today: phases(l.timeline?.today) },
+    deterministic: { new: drift(l.deterministic?.new), today: drift(l.deterministic?.today) },
+    cost: { new: mean(l.cost?.new), today: mean(l.cost?.today) },
+  };
+}
+
+async function codexLink($, c) {
+  S.busy.codex = `a private link to ${c.title ?? c.id}`;
+  redraw($);
+  const r = await studioCli($, ['codex', 'link', c.id]);
+  S.busy.codex = null;
+  if (r.ok && r.link) S.codexLinks[c.id] = r.link;
+  else $.ui.toast(`No link: ${r.why ?? r.message ?? 'the site did not answer'}`);
+  redraw($);
+}
+
+async function stopBuild($) {
+  const r = await studioCli($, ['progress', 'stop']);
+  $.ui.toast(r.ok === false ? `Could not ask the build to stop: ${r.why}` : 'The build stops at its next safe point.');
+  void tick($, { force: true });
+}
+
+/* ------------------------------------------------------------------ the timer */
+
+async function tick($, { force = false } = {}) {
+  if (S.ticking) return;
+  S.ticking = true;
+  let changed = false;
+  try {
+    S.tickN++;
+    if (!S.root || S.tickN % 5 === 0) { const before = S.root; await findStudio($); if (S.root !== before) { changed = true; if (S.root) await readStudio($); } }
+    if (S.root) {
+      if (S.tickN % 15 === 1 || force) { await readStudio($); changed = true; }
+      if (await readFeed($)) changed = true;
+      if (S.tickN % 15 === 2 || (force && Date.now() - S.rooms.at > 5000)) { await loadRooms($); changed = true; }
+      if (S.tab === 'codex' && S.tickN % 15 === 4) await readCodexes($);
+      if (S.tab === 'lab' && S.tickN % 5 === 3) await readLab($);
+    }
+    if (await readParts($)) changed = true;
+    await keepBridges($);
+  } catch (error) {
+    $.ui.log(`homie tick: ${String(error?.message ?? error).slice(0, 200)}`, { to: 'debug' });
+  } finally { S.ticking = false; }
+  if (changed) redraw($);
+}
+
+/** Ask for a redraw only when what is drawn could have changed. */
+function redraw($) { $.ui.invalidate('ui.render'); }
+
+async function openPane($, id, title, extra = {}) {
+  if (!S.surfaces.length) { try { S.surfaces = [...(await $.session.surfaces())]; } catch { S.surfaces = []; } }
+  if (!S.surfaces.length) return false;
+  try {
+    const r = await $.ui.open({ id, title, focus: true, closeOnEscape: true, ...extra });
+    redraw($);
+    return r.isPlaced !== false;
+  } catch { return false; }
+}
+
+/* ------------------------------------------------------------------ what each tool call was */
+
+function callOf(command) {
+  const c = studioCalls(command)[0];
+  if (c) return { homie: true, sub: c.sub, label: LABELS[c.sub] ?? `homie-studio ${c.sub}` };
+  const m = /(?:^|\/)(playtest|art|music|video|sound|perf)\.mjs\s+(\w+)/.exec(String(command ?? ''));
+  if (m && /skills\//.test(String(command))) return { homie: true, sub: `${m[1]} ${m[2]}`, playtest: m[1] === 'playtest', label: `${m[1][0].toUpperCase()}${m[1].slice(1)} · ${m[2]}` };
+  return null;
+}
+
+function noteCall(e) {
+  try {
+    if (e.tool === 'Bash') {
+      const c = callOf(e.command);
+      if (c) { S.calls.set(e.tool_use_id, c); if (S.calls.size > 300) S.calls.delete(S.calls.keys().next().value); }
+    }
+    if (e.agentId) {
+      const l = S.parts.get(e.agentId) ?? { id: e.agentId, description: '', type: '', status: 'running', startedAt: Date.now(), endedAt: null, tools: 0, files: new Set(), last: '' };
+      l.tools++;
+      const target = e.file_path ?? e.notebook_path ?? e.path ?? e.pattern ?? e.command ?? e.url ?? '';
+      const rel = S.root && typeof target === 'string' ? target.replace(`${S.root}/`, '') : String(target);
+      l.last = `${e.tool}${rel ? ` ${String(rel).replace(/\s+/g, ' ').slice(0, 90)}` : ''}`;
+      if (['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(e.tool) && typeof target === 'string') l.files.add(rel);
+      l.lastAt = Date.now();
+      S.parts.set(e.agentId, l);
+    }
+  } catch { /* tracking never stops a call */ }
+}
+
+function afterCall($, e, result) {
+  try {
+    if (e.tool === 'Bash') {
+      const c = S.calls.get(e.tool_use_id);
+      if (c?.homie && /^(progress|check|port check|build|deploy|dev|game|codex|office|stats)/.test(c.sub)) void tick($, { force: true });
+    }
+    if (e.tool === 'Agent' || e.tool === 'Task') void readParts($, { force: true });
+  } catch { /* never */ }
+}
+
+function redactResult(result) {
+  if (!result || result.deny || result.result === undefined) {
+    if (result?.isError && typeof result.text === 'string') {
+      const r = redact(result.text);
+      if (r.hits.length) { keepLinks(r.links); return { deny: r.value }; }
+    }
+    return result;
+  }
+  const r = redact(result.result);
+  if (!r.hits.length) return result;
+  keepLinks(r.links);
+  const note = `The Homie mod took ${r.hits.length === 1 ? 'a secret' : 'secrets'} (${r.hits.join(', ')}) out of this output before you read it.${r.links.length ? ' A one-time owner link is in the person\'s Homie Studio pane (Rooms): tell them it is there; you never see it.' : ''} In this app, the studio's own commands (npx --no-install homie-studio office …, stats, agents sit) use their keys themselves.`;
+  return { result: r.value, context: [...(result.context ?? []), note] };
+}
+
+function keepLinks(links) {
+  for (const link of links) S.forYou.push({ link, at: Date.now() });
+  S.forYou = S.forYou.slice(-6);
+}
+
+/* ------------------------------------------------------------------ guards */
+
+async function ask($, g) {
+  S.guardN++;
+  const q = `${g.question} (Homie hold #${S.guardN})`;
+  S.guards.set(q, g);
+  // The dialog's panel is short (Claude Code allows 12 rows around it): the whole story is in the Hold pane while the
+  // question waits, or, where no pane can be placed (a narrow terminal), in dim lines above the dialog.
+  if (g.detail && S.surfaces.length) {
+    S.held = g;
+    let placed = false;
+    try { placed = (await $.ui.open({ id: HOLD, title: 'Homie · hold' })).isPlaced !== false; } catch { placed = false; }
+    if (!placed) $.ui.log(detailText(g).slice(0, 4000));
+  }
+  try {
+    return await $.ui.ask(q, { options: ['Proceed', 'Cancel'], header: 'Homie' });
+  } catch { return null; } finally {
+    S.guards.delete(q);
+    if (S.held === g) { S.held = null; try { await $.ui.close({ id: HOLD }); } catch { /* closed */ } }
+  }
+}
+
+/** A hold's whole story as plain lines, for a transcript line where no pane can show it. */
+function detailText(g) {
+  const d = g.detail ?? {};
+  return [`⚠ ${g.title}`, ...(d.lines ?? []).map((l) => (typeof l === 'string' ? `  ${l}` : `  ${l.k}: ${l.v}`)), ...(d.full?.source ? d.full.source.split('\n').slice(0, 40).map((l) => `  ${l}`) : [])].join('\n');
+}
+
+/** An edit to a file the studio protects: held, with its diff, until the person says Proceed. */
+async function guardFile($, e) {
+  if (!S.root || !Array.isArray(S.studio?.protect) || !S.studio.protect.length) return null;
+  const path = String(e.file_path ?? e.notebook_path ?? '');
+  if (!path.startsWith('/')) return null;
+  let real = path;
+  try { real = (await $.fs.stat(path, { resolve: true })).realPath ?? path; } catch { real = path; }
+  const root = S.root;
+  const hit = [path, real].find((p) => inside(root, p));
+  if (!hit) return null;
+  const rel = hit.slice(root.length + 1);
+  const glob = protectedBy(S.studio.protect, rel);
+  if (!glob) return null;
+  const before = (await readText($, path)) ?? '';
+  const [a, b] = e.tool === 'NotebookEdit' ? ['', String(e.new_source ?? '')] : (() => { const after = applyEdit(e.tool, before, e); return after === null ? [String(e.old_string ?? ''), String(e.new_string ?? '')] : [before, after]; })();
+  // The dialog's panel has room for about five diff rows ("@@" lines count): the first changes, cut short.
+  let diff = unifiedDiff(a, b, { context: 0, maxLines: 4, lineWidth: 28 });
+  for (let n = 3; n >= 1 && diff.rows > 5; n--) diff = unifiedDiff(a, b, { context: 0, maxLines: n, lineWidth: 28 });
+  const full = unifiedDiff(a, b, { maxLines: 400, maxChars: 9500 });
+  const by = e.agentId ? `a subagent (${partName(e.agentId)})` : 'Claude';
+  const answer = await ask($, {
+    question: `Change ${rel}, which the studio protects?`,
+    title: `Protected: ${rel.split('/').slice(-2).join('/')}`,
+    lines: [
+      { k: 'Rule', v: glob },
+      { k: e.tool, v: `+${diff.added} −${diff.removed} lines by ${e.agentId ? 'a subagent' : 'Claude'}`, style: { color: 'yellow' } },
+    ],
+    diff,
+    more: diff.shownChanges < full.added + full.removed ? `… ${full.added + full.removed - diff.shownChanges} more changed lines: Hold pane` : 'with its context in the Hold pane',
+    detail: {
+      lines: [
+        { k: 'File', v: rel },
+        { k: 'Rule', v: `studio.json "protect": "${glob}"` },
+        { k: 'Change', v: `${e.tool}${before ? '' : ' (a new file)'} · +${full.added} −${full.removed} lines`, style: { color: 'yellow' } },
+        { k: 'By', v: by },
+      ],
+      full,
+    },
+  });
+  if (answer === 'Proceed') return null;
+  return { deny: answer === null
+    ? `${rel} is protected by studio.json ("protect": "${glob}"), and nobody could be asked here, so the change was not made. Ask the person in chat first.`
+    : `The person said no to this change to ${rel} (studio.json "protect": "${glob}"). Do not retry it unless they ask; say what you wanted to change and why.` };
+}
+
+/** A production deploy: held, with what will change, until the person says Proceed. */
+async function guardDeploy($, e, root, what) {
+  const d = await deployFacts($, root);
+  const short = [
+    { k: 'Where', v: d.live ? d.where : 'a new workers.dev address', style: { bold: true } },
+    ...(d.first ? [{ k: 'Creates', v: 'Worker, D1, rooms (free)', style: { color: 'yellow' } }] : []),
+    { k: 'Last', v: d.lastDeployShort },
+    ...(d.commitCount ? [{ k: 'Commits', v: `${d.commitCount} since` }] : []),
+    ...(d.files ? [{ k: 'Files', v: d.files }] : []),
+    ...(d.uncommitted ? [{ k: 'Uncommitted', v: `${d.uncommitted} file${d.uncommitted === 1 ? '' : 's'}`, style: { color: 'yellow' } }] : []),
+    ...(d.newGames.length ? [{ k: 'New', v: d.newGames.join(', '), style: { color: 'green' } }] : []),
+    { k: 'Checks', v: d.checksShort, ...(d.checksOk ? {} : { style: { color: 'yellow' } }) },
+    ...(d.playing ? [{ k: 'Playing', v: `${d.playing} ${d.playing === 1 ? 'person' : 'people'} now` }] : []),
+  ];
+  const long = [
+    { k: 'Where', v: d.where, style: { bold: true } },
+    ...(d.first ? [{ k: 'Creates', v: d.first, style: { color: 'yellow' } }] : []),
+    { k: 'Last deploy', v: d.lastDeploy },
+    ...(d.commits.length ? [{ k: 'Commits', v: `${d.commitCount} since then: ${d.commits.slice(0, 6).join(' · ')}${d.commitCount > 6 ? ' …' : ''}` }] : []),
+    ...(d.diffstat ? [{ k: 'Files', v: d.diffstat }] : []),
+    ...(d.uncommitted ? [{ k: 'Uncommitted', v: `${d.uncommitted} file${d.uncommitted === 1 ? '' : 's'} changed and not committed (deployed as they are now)`, style: { color: 'yellow' } }] : []),
+    ...(d.newGames.length ? [{ k: 'New games', v: d.newGames.join(', '), style: { color: 'green' } }] : []),
+    { k: 'Checks', v: d.checks, ...(d.checksOk ? {} : { style: { color: 'yellow' } }) },
+    ...(d.playing ? [{ k: 'Playing now', v: `${d.playing} ${d.playing === 1 ? 'person' : 'people'} (rooms reconnect and keep their seats)` }] : []),
+    `Run as Claude wrote it: ${what}`,
+  ];
+  const answer = await ask($, { question: `Deploy ${S.name ?? 'the studio'} to production?`, title: `Deploy ${S.name ?? 'the studio'}`, lines: short, detail: { lines: long } });
+  if (answer === 'Proceed') return null;
+  return { deny: answer === null ? 'This deploy needs the person\'s go-ahead and nobody could be asked here, so it did not run. Ask them in chat first.' : 'The person cancelled this deploy, so nothing went live. Do not retry it unless they ask; say what is ready and what they would get.' };
+}
+
+async function afterDeploy($, root, result) {
+  try {
+    const out = typeof result?.result?.stdout === 'string' ? result.result.stdout : typeof result?.text === 'string' ? result.text : '';
+    if (result?.deny || result?.isError || !/Live: https?:\/\//.test(out)) return;
+    const head = await $.process.run(['git', '-C', root, 'rev-parse', 'HEAD'], { timeoutMs: 8000 });
+    if (head.exitCode === 0) await $.store.set(`deployed:${root}`, { commit: head.stdout.trim(), at: new Date().toISOString() });
+    void tick($, { force: true });
+  } catch { /* the next deploy summary reads the time instead */ }
+}
+
+/** What a deploy would change, from the studio's own files, git and its live site. */
+async function deployFacts($, root) {
+  const studio = root === S.root && S.studio ? S.studio : (await readJsonFile($, `${root}/studio.json`)) ?? {};
+  const local = root === S.root ? S.local : (await readJsonFile($, `${root}/.studio/local.json`)) ?? {};
+  const live = root === S.root ? S.live : liveSite(studio, local);
+  const created = Array.isArray(studio.cloudflare?.created) ? studio.cloudflare.created : [];
+  const first = created.length ? null : `on the Cloudflare account Wrangler is signed in to: Worker ${studio.cloudflare?.worker ?? '?'}, D1 ${studio.cloudflare?.d1 ?? '?'}, Durable Objects Table and Lobby (free plan, no payment method)`;
+  const where = live ? live.replace(/^https:\/\//, '') : 'a new workers.dev address (the first deploy makes it)';
+  const git = async (args) => { try { const r = await $.process.run(['git', '-C', root, ...args], { timeoutMs: 10_000 }); return r.exitCode === 0 ? r.stdout : null; } catch { return null; } };
+  const stored = await $.store.get(`deployed:${root}`);
+  const since = stored?.commit ?? null;
+  let commits = [];
+  let diffstat = null;
+  if (since) {
+    commits = String((await git(['log', '--oneline', '--no-decorate', `${since}..HEAD`])) ?? '').split('\n').filter(Boolean);
+    diffstat = String((await git(['diff', '--shortstat', since])) ?? '').trim() || null;
+  } else if (local?.deployedAt) {
+    commits = String((await git(['log', '--oneline', '--no-decorate', `--since=${local.deployedAt}`])) ?? '').split('\n').filter(Boolean);
+  }
+  const uncommitted = String((await git(['status', '--porcelain'])) ?? '').split('\n').filter((l) => l.trim() && !/\.studio\//.test(l)).length;
+  const liveIds = new Set((S.rooms.games ?? []).map((g) => g.id));
+  const newGames = live && liveIds.size ? S.games.filter((g) => !g.planned && !liveIds.has(g.id)).map((g) => g.id) : [];
+  const recent = [S.feed, S.last].filter(Boolean).map((d) => summarize(d)).find((b) => b.counts.total);
+  const checks = recent ? `${recent.title}: ${recent.counts.pass}/${recent.counts.total} passed${recent.counts.fail ? `, ${recent.counts.fail} failing` : ''} (${ago(recent.endedAt ?? recent.updatedAt, Date.now())})` : 'no two-browser check on record here';
+  const checksShort = recent ? `${recent.counts.pass}/${recent.counts.total} passed · ${ago(recent.endedAt ?? recent.updatedAt, Date.now())}` : 'none on record';
+  const stat = /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/.exec(diffstat ?? '');
+  const files = stat ? `${stat[1]} changed, +${stat[2] ?? 0} −${stat[3] ?? 0}` : null;
+  const playing = (S.rooms.live?.playing ?? 0);
+  return {
+    files, checksShort, lastDeployShort: local?.deployedAt ? ago(local.deployedAt, Date.now()) : stored?.at ? ago(stored.at, Date.now()) : created.length ? 'not from here' : 'never',
+    where, first, live, lastDeploy: local?.deployedAt ? `${ago(local.deployedAt, Date.now())} (${local.deployedAt.slice(0, 16).replace('T', ' ')} UTC)` : stored?.at ? ago(stored.at, Date.now()) : created.length ? 'not from this computer' : 'never',
+    commits: commits.map((c) => c.replace(/^[0-9a-f]+ /, '')), commitCount: commits.length, diffstat, uncommitted, newGames, checks,
+    checksOk: Boolean(recent && !recent.counts.fail && recent.counts.pass === recent.counts.total), playing,
+  };
+}
+
+/**
+ * A paid media call: held when it would take the studio, the open build or the job past its budget, or when its
+ * cost cannot be read first. The price comes from the skill's own --dry-run (free).
+ */
+async function guardSpend($, e, paid) {
+  const root = S.root;
+  const unit = paid.unit;
+  const money = (n) => (unit === 'usd' ? `$${Number(n).toFixed(2)}` : `${Math.round(Number(n))} credits`);
+  let est = null;
+  let basis = '';
+  if (!paid.raw && paid.dryRun && root) {
+    try {
+      const dir = paid.dir ? (paid.dir.startsWith('/') ? paid.dir : `${S.cwd}/${paid.dir}`) : S.cwd;
+      const r = await $.process.run(paid.dryRun, { cwd: dir, timeoutMs: 45_000 });
+      const j = JSON.parse(String(r.stdout).slice(String(r.stdout).indexOf('{')));
+      if (j?.price && Number.isFinite(Number(j.price.usd))) { est = Number(j.price.usd); basis = j.price.basis ?? ''; }
+      else if (j?.quote && Number.isFinite(Number(j.quote.music))) { est = Number(j.quote.music); basis = j.quote.basis ?? ''; }
+      else { const m = /guess of (\d+) credits/.exec(String(j?.why ?? '')); if (m) { est = Number(m[1]); basis = 'a guess from the length'; } }
+    } catch { est = null; }
+  }
+  const budgets = [];
+  if (root) {
+    const cap = Number(S.studio?.budget?.[unit]);
+    if (Number.isFinite(cap) && cap >= 0) budgets.push({ what: 'the studio\'s budget (studio.json "budget")', short: 'Studio', cap, spent: await spentAll($, root, unit) });
+    if (paid.slug) {
+      const job = await readJsonFile($, `${root}/${paid.kind}/${paid.slug}/budget.json`);
+      if (job && job.unit === unit && Number.isFinite(Number(job.cap))) budgets.push({ what: `this job's cap (${paid.kind}/${paid.slug})`, short: 'Job', cap: Number(job.cap), spent: Number(job.spent) || 0 });
+    }
+    if (S.feed) {
+      const b = summarize(S.feed);
+      if (b.spend.unit === unit && b.spend.budget !== null) budgets.push({ what: `this build's budget (${b.title})`, short: 'Build', cap: b.spend.budget, spent: b.spend.used });
+    }
+  }
+  const over = est === null ? budgets : budgets.filter((b) => b.spent + est > b.cap + 1e-9);
+  const unknown = est === null;
+  if (!unknown && !over.length) {
+    if (budgets.length) $.ui.toast(`${paid.provider}: about ${money(est)}${budgets[0] ? ` · ${budgets[0].what.split(' (')[0]}: ${money(budgets[0].spent)} of ${money(budgets[0].cap)} spent` : ''}`);
+    return null;
+  }
+  if (unknown && !budgets.length && !paid.raw) return null;
+  const answer = await ask($, {
+    question: unknown ? `Make a paid ${paid.provider} call whose cost could not be read first?` : `Spend about ${money(est)} at ${paid.provider}, past the budget?`,
+    title: `Paid: ${paid.provider}${paid.model ? ` ${paid.model.split('/').pop()}` : paid.tool ? ` ${paid.tool}` : ''}`,
+    lines: [
+      { k: 'Cost', v: unknown ? 'unknown (not priced)' : `about ${money(est)}`, style: { color: 'yellow', bold: true } },
+      ...budgets.map((b) => ({ k: b.short, v: `${money(b.spent)}${unknown ? '' : ` + ${money(est)}`} of ${money(b.cap)}`, ...(over.includes(b) ? { style: { color: 'red' } } : {}) })),
+      { k: 'Account', v: `your own ${paid.provider}` },
+    ],
+    detail: {
+      lines: [
+        { k: 'Cost', v: unknown ? (paid.raw ? 'unknown: a request straight at the provider, not priced first' : 'unknown: the skill could not price it') : `about ${money(est)}${basis ? ` (${basis})` : ''}`, style: { color: 'yellow', bold: true } },
+        ...budgets.map((b) => ({ k: 'Budget', v: `${b.what}: ${money(b.spent)} of ${money(b.cap)} spent${!unknown && b.spent + est > b.cap ? ` → ${money(b.spent + est)}, over by ${money(b.spent + est - b.cap)}` : ''}`, ...(over.includes(b) ? { style: { color: 'red' } } : {}) })),
+        { k: 'Account', v: `the person's own ${paid.provider} account` },
+        { k: 'Call', v: String(paid.text ?? paid.tool ?? '').slice(0, 300) },
+        'Proceed lets this one call through (a job\'s own cap still applies: the skill refuses past it). Cancel stops it here.',
+      ],
+    },
+  });
+  if (answer === 'Proceed') return null;
+  return { deny: answer === null ? `This ${paid.provider} call would pass the studio's budget, or its cost is unknown, and nobody could be asked here, so it was not made. Ask the person first.` : `The person said no to this ${paid.provider} call (${unknown ? 'its cost could not be read first' : `about ${money(est)}, past the budget`}). Do not retry it unless they raise the budget or ask for it.` };
+}
+
+/** Everything this studio's media jobs have spent in one unit (each job's budget.json `spent`). */
+async function spentAll($, root, unit) {
+  let total = 0;
+  for (const kind of ['art', 'videos', 'music']) {
+    let dirs = [];
+    try { dirs = await $.fs.list(`${root}/${kind}`); } catch { dirs = []; }
+    for (const d of dirs.slice(0, 200)) {
+      const b = await readJsonFile($, `${root}/${kind}/${d.name}/budget.json`);
+      if (b && b.unit === unit) total += Number(b.spent) || 0;
+    }
+  }
+  return Math.round(total * 10000) / 10000;
+}
+
+/* ------------------------------------------------------------------ parts */
+
+async function readParts($, { force = false } = {}) {
+  const running = [...S.parts.values()].some((l) => l.status === 'running');
+  if (!force && !running && Date.now() - S.agentsAt < 30_000) return false;
+  S.agentsAt = Date.now();
+  let list = [];
+  try { list = await $.agent.list(); } catch { return false; }
+  let changed = false;
+  for (const a of list) {
+    if (a.parentId && !S.parts.has(a.id)) continue;
+    const l = S.parts.get(a.id) ?? { id: a.id, startedAt: Date.now(), endedAt: null, tools: 0, files: new Set(), last: '' };
+    if (l.status !== a.status || l.description !== a.description) changed = true;
+    l.description = a.description; l.type = a.type; l.status = a.status;
+    if (a.status !== 'running' && !l.endedAt) l.endedAt = l.lastAt ?? Date.now();
+    S.parts.set(a.id, l);
+  }
+  const now = partList().filter((l) => l.status === 'running').length;
+  if (now >= 2 && !S.partsAutoOpened && S.root && OPT.paneAutoOpen && S.interactive && S.surfaces.length) {
+    S.partsAutoOpened = true;
+    try { const r = await $.ui.open({ id: PARTS, title: 'Parts' }); if (!r.isPlaced) $.ui.toast(`${now} agents are building in parallel: /parts shows each one.`); } catch { /* open already */ }
+  }
+  if (now === 0) S.partsAutoOpened = false;
+  return changed;
+}
+
+function partList() {
+  return [...S.parts.values()].filter((l) => l.description || l.tools).slice(-12).map((l) => ({ ...l, edits: l.files?.size ?? 0 }));
+}
+
+function partName(id) { return S.parts.get(id)?.description || 'a part'; }
+
+/* ------------------------------------------------------------------ the game bridge: the arcade and a live Watch */
+
+async function loadArcadeGames($) {
+  if (Date.now() - S.arcadeGamesAt < 10 * 60_000 && S.arcadeGames.length) return;
+  const list = [];
+  if (S.root) {
+    const base = S.live ?? S.dev;
+    if (base) for (const g of S.games.filter((x) => !x.planned)) list.push({ key: `studio:${g.id}`, id: g.id, name: g.name ?? g.id, studio: S.name, base });
+  }
+  const arcade = await fetchJson($, `${ARCADE_HOME}/api/games`);
+  for (const g of arcade?.games ?? []) list.push({ key: `arcade:${g.id}`, id: g.id, name: String(g.name ?? g.id).slice(0, 40), studio: 'Homie Arcade', base: ARCADE_HOME });
+  S.arcadeGames = list;
+  S.arcadeGamesAt = Date.now();
+  if (!S.arcade.pick && list.length) S.arcade.pick = (list.find((g) => g.id === 'bone-burglar') ?? list[0]).key;
+  redraw($);
+}
+
+/** The arcade's picture: as wide as the pane, and as tall as the pane leaves room for (the page is laid out to it). */
+function arcadeSize(columns, bodyRows) {
+  const cols = Math.max(24, Math.min(columns - 2, 120));
+  const rows = Math.max(8, Math.min(Math.max(8, bodyRows - 6), Math.round(cols * 0.6)));
+  return { cols, rows };
+}
+
+function pictureFormat() {
+  const terminal = S.surfaces.includes('terminal');
+  if (!terminal) return 'jpeg';
+  return OPT.pictures === 'image' ? 'png' : 'cells';
+}
+
+async function startArcade($) {
+  const g = S.arcadeGames.find((x) => x.key === S.arcade.pick);
+  if (!g) return;
+  const size = arcadeSize(80, 30);
+  S.arcade.game = { ...g, hint: g.id === '2048-race' ? 'arrows slide the tiles' : '' };
+  await startBridge($, 'arcade', { url: `${g.base}/${g.id}/play`, ...size, fps: pictureFormat() === 'jpeg' ? 4 : 8, mode: 'playing', pane: ARCADE });
+}
+
+/** Watch the room of the game being built (its dev site first): the Build tab's live picture. */
+async function startWatch($, gameId) {
+  await loadRooms($, { force: true });
+  const r = roomList().find((x) => x.watch && (!gameId || x.game === gameId));
+  if (!r) { $.ui.toast('No live room of this game right now: a room exists while someone plays.'); return; }
+  await startBridge($, 'watch', { url: new URL(r.watch, r.base).href, cols: 64, rows: 18, fps: pictureFormat() === 'jpeg' ? 3 : 6, mode: 'watching', pane: PANE, label: `${r.name} · ${r.label}` });
+}
+
+async function watchRoom($, r) {
+  if (!r.watch || !r.base) return;
+  S.arcade.game = { key: `${r.where}:${r.game}`, id: r.game, name: r.name, studio: S.name, base: r.base };
+  await openPane($, ARCADE, 'Arcade', { focus: true, rows: 30 });
+  await startBridge($, 'arcade', { url: new URL(r.watch, r.base).href, ...arcadeSize(80, 30), fps: pictureFormat() === 'jpeg' ? 4 : 8, mode: 'watching', pane: ARCADE });
+}
+
+async function startBridge($, which, { url, cols, rows, fps, mode, pane, label }) {
+  stopBridge($, which);
+  const format = pictureFormat();
+  const b = { ...idleBridge(), state: 'starting', url, cols, rows, format, mode, pane, label, startedAt: Date.now(), lastPing: Date.now(), paused: false };
+  if (which === 'arcade') { b.pick = S.arcade.pick; b.game = S.arcade.game; }
+  S[which] = b;
+  redraw($);
+  void (async () => {
+    try {
+      const stream = $.process.spawn({ argv: ['node', `${$.plugin.root}/mod/bridge.mjs`, '--url', url, '--cols', String(cols), '--rows', String(rows), '--fps', String(fps), '--format', format] });
+      b.stream = stream;
+      let buf = '';
+      for await (const piece of stream) {
+        if (S[which] !== b || b.stopping) break;
+        if (piece.stream !== 'stdout') continue;
+        buf += piece.text;
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) { const text = buf.slice(0, i); buf = buf.slice(i + 1); bridgeLine($, b, text); }
+        if (buf.length > 4_000_000) buf = '';
+      }
+    } catch (error) {
+      b.why = `The game bridge stopped: ${String(error?.message ?? error).slice(0, 160)}`;
+    }
+    if (S[which] === b) { b.state = b.stopping ? 'idle' : 'ended'; b.sock = null; }
+    redraw($);
+  })();
+}
+
+function bridgeLine($, b, text) {
+  let m;
+  try { m = JSON.parse(text); } catch { return; }
+  if (m.t === 'ready') { b.sock = m.sock; return; }
+  if (m.t === 'status') {
+    const before = JSON.stringify([b.status?.room, b.status?.seat, b.status?.players, b.status?.bots, b.state]);
+    b.status = m;
+    if (b.state === 'starting' && (m.room || m.seat !== null)) b.state = b.mode;
+    if (before !== JSON.stringify([m.room, m.seat, m.players, m.bots, b.state])) redraw($);
+    return;
+  }
+  if (m.t === 'frame') {
+    const now = Date.now();
+    b.frames = [...b.frames.filter((x) => now - x < 3000), now];
+    b.fps = Math.round(b.frames.length / 3);
+    if (b.state === 'starting') b.state = b.mode;
+    const key = b.pane === PANE ? 'watch' : 'screen';
+    if (m.cells) {
+      const fresh = !b.pic || b.pic.columns !== m.cols || b.pic.rows !== m.rows;
+      b.pic = { key, cells: m.cells, columns: m.cols, rows: m.rows };
+      if (fresh) redraw($);
+      else $.ui.blit({ requestId: b.pane, key, columns: m.cols, rows: m.rows, cells: m.cells }).then((r) => { if (r?.deny) redraw($); }).catch(() => {});
+    } else if (m.png) {
+      const rows = Math.max(6, Math.round((b.cols * m.height) / m.width / 2));
+      const fresh = !b.pic || b.pic.columns !== b.cols || b.pic.rows !== rows;
+      b.pic = { key, image: { png: m.png }, columns: b.cols, rows };
+      if (fresh) redraw($);
+      else $.ui.blit({ requestId: b.pane, key, source: { png: m.png }, columns: b.cols, rows }).then((r) => { if (r?.deny) redraw($); }).catch(() => {});
+    } else if (m.jpeg) {
+      b.pic = { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${m.width} ${m.height}"><image href="data:image/jpeg;base64,${m.jpeg}" width="${m.width}" height="${m.height}"/></svg>`, width: Math.min(640, m.width * 1.3), height: Math.round(Math.min(640, m.width * 1.3) * (m.height / m.width)) };
+      redraw($);
+    }
+    return;
+  }
+  if (m.t === 'error') { b.why = m.message; redraw($); return; }
+  if (m.t === 'bye') { b.state = b.stopping ? 'idle' : 'ended'; if (m.why === 'no-chrome') b.why = 'No Chrome on this computer: the arcade needs Google Chrome (or CHROME_PATH).'; redraw($); }
+}
+
+async function bridgePost($, b, path, body = {}) {
+  if (!b?.sock) return null;
+  try {
+    const res = await $.http.fetch(`http://bridge${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), socketPath: b.sock });
+    return res.ok ? JSON.parse(res.text) : null;
+  } catch { return null; }
+}
+
+function stopBridge($, which) {
+  const b = S[which];
+  if (!b || b.state === 'idle') return;
+  b.stopping = true;
+  if (b.sock) void bridgePost($, b, '/quit');
+  try { void b.stream?.return?.(); } catch { /* ended */ }
+  S[which] = which === 'arcade' ? { ...idleBridge(), pick: S.arcade.pick, game: null } : idleBridge();
+}
+
+async function arcadeKey($, key) {
+  const b = S.arcade;
+  if (!b.sock || b.mode !== 'playing') return;
+  await bridgePost($, b, '/key', { key, hold: b.game?.id === '2048-race' ? 90 : 300 });
+}
+
+/** Keep each bridge alive while its pane shows it, paused while hidden, and gone when its pane is closed. */
+async function keepBridges($) {
+  const live = ['arcade', 'watch'].filter((w) => S[w].state !== 'idle' && S[w].state !== 'ended' && S[w].sock);
+  if (!live.length) return;
+  let panes = [];
+  try { panes = await $.ui.panes(); } catch { panes = []; }
+  for (const which of live) {
+    const b = S[which];
+    const p = panes.find((x) => x.id === b.pane);
+    if (!p) { stopBridge($, which); redraw($); continue; }
+    const shown = p.isShown && p.isPlaced && (which === 'arcade' || S.tab === 'build');
+    if (!shown && !b.paused) { b.paused = true; await bridgePost($, b, '/pause'); }
+    else if (shown && b.paused) { b.paused = false; await bridgePost($, b, '/resume'); }
+    if (Date.now() - b.lastPing > 10_000) { b.lastPing = Date.now(); await bridgePost($, b, '/alive'); }
+  }
+}
+
+function arcadeData() {
+  const a = S.arcade;
+  return { state: a.state, game: a.game, pick: a.pick, status: a.status, pic: a.pic, fps: a.fps, why: a.why };
+}
+
+function watchData(b) {
+  const w = S.watch;
+  const rooms = roomList().filter((r) => r.watch && (!b?.id || r.game === b.id));
+  return { live: w.state === 'watching' || w.state === 'starting', label: w.label, fps: w.fps, pic: w.pic, room: rooms[0] ?? null, url: rooms[0] ? new URL(rooms[0].watch, rooms[0].base).href : null };
+}
+
+/* ------------------------------------------------------------------ data for the drawings */
+
+function paneStudio() {
+  return { name: S.name, live: S.live, dev: S.dev, games: S.games, toolkit: S.toolkit, root: S.root };
+}
+
+function bandData() {
+  const doc = S.feed ?? (S.last && Date.now() - Date.parse(S.last.endedAt ?? S.last.updatedAt ?? 0) < RECENT_MS ? S.last : null);
+  const b = doc ? summarize(doc) : null;
+  const gameId = b?.id ?? (S.games.filter((g) => !g.planned).length === 1 ? S.games.find((g) => !g.planned).id : null);
+  const game = gameId ? S.games.find((g) => g.id === gameId) : null;
+  const base = S.dev ?? S.live;
+  const playing = S.rooms.at ? (S.rooms.live?.playing ?? 0) + (S.rooms.dev?.playing ?? 0) : null;
+  return {
+    name: S.name,
+    game: game?.name ?? b?.title ?? null,
+    build: b ? { state: b.state, percent: b.percent, stage: b.stage?.label ?? null, stopping: b.stopping, checks: b.counts.total ? `${b.counts.pass}/${b.counts.total} checks` : '', failing: b.counts.fail > 0 } : null,
+    play: b?.preview ? linkable(b.preview) : gameId && base ? linkable(`${base}/${gameId}/play`) : null,
+    playing,
+  };
+}
+
+/** A Homie result as a card (a checklist, rows, live links, a build or studio card), or null when it is not one. */
+function resultCard(t, tool, call, output, viewport) {
+  const read = readResult({ tool, call, output });
+  if (!read) return null;
+  const columns = Math.max(30, Math.min(120, (viewport?.columns ?? 100) - 8));
+  if (read.kind === 'setup') return setupCard(t, read.data, columns);
+  if (read.kind === 'checks') return checksCard(t, read.data, columns);
+  if (read.kind === 'deploy') return deployCard(t, read.data, columns);
+  if (read.kind === 'card:setup') return setupFromCard(t, read.data, columns);
+  if (read.kind === 'card:build') return read.data.feed ? buildCard(t, summarize(read.data.feed), columns) : null;
+  if (read.kind === 'card:studio') return studioCard(t, read.data, columns);
+  return null;
+}
+
+function setupFromCard(t, d, columns) {
+  const rows = (d.status?.rows ?? []).map((r) => ({ state: r.state, label: r.label, need: r.need ?? 'required', detail: r.detail ?? '', fix: r.fix?.run ?? r.fix?.open ?? '' }));
+  const steps = (d.checklist ?? []).map((s) => ({ state: s.state === 'done' ? 'ok' : s.state === 'now' ? 'act' : 'optional', label: s.label, need: 'required', detail: '', fix: '' }));
+  return setupCard(t, { title: d.current ? `Setting up ${d.current.name}` : 'Setup status', rows: [...steps, ...rows], ready: (d.status?.features ?? []).map((f) => ({ feature: f.feature, state: f.state })), next: (d.status?.next ?? []).map((n) => n.run ?? n.open ?? n.say).filter(Boolean) }, columns);
+}
+
+/* ------------------------------------------------------------------ text, for commands (and where nothing draws) */
+
+function studioText() {
+  return [buildText(), roomsText()].join('\n');
+}
+
+function buildText() {
+  const doc = S.feed ?? S.last;
+  if (!doc) return `${S.name}: no build yet.`;
+  const b = summarize(doc);
+  return [
+    `${b.title}: ${b.state}${b.state === 'running' ? ` (${b.stage?.label ?? ''}, ${b.percent}%)` : ` ${ago(b.endedAt ?? b.updatedAt, Date.now())}`}`,
+    `  ${b.stages.map((s) => `${s.state === 'done' ? '✓' : s.state === 'running' ? '●' : s.state === 'failed' ? '✗' : '○'} ${s.label}`).join(' → ')}`,
+    ...b.checks.slice(-8).map((c) => `    ${c.state === 'pass' ? '✓' : c.state === 'fail' ? '✗' : c.state === 'running' ? '●' : '○'} ${c.label}${c.note ? `: ${c.note}` : ''}`),
+    ...(b.preview ? [`  ▶ Play: ${linkable(b.preview)}`] : []),
+    ...(b.spend.text ? [`  spent ${b.spend.text}`] : []),
+  ].join('\n');
+}
+
+function roomsText() {
+  const all = roomList();
+  if (!all.length) return `${S.name}: no live rooms right now${S.live || S.dev ? '' : ' (not online yet)'}.`;
+  return [`${S.name}: ${all.reduce((n, r) => n + r.players, 0)} playing in ${all.length} room${all.length === 1 ? '' : 's'}`,
+    ...all.map((r) => `  ${r.name} · ${r.label}: ${r.players}/${r.max}${r.ai ? `, ${r.ai} AI` : ''}${r.where === 'here' ? ' (this computer)' : ''}${r.watch ? `  ◉ ${linkable(new URL(r.watch, r.base).href)}` : ''}`)].join('\n');
+}
+
+function partsText() {
+  const parts = partList();
+  if (!parts.length) return 'No parts: nothing is building in parallel now.';
+  return parts.map((l) => `${l.status === 'running' ? '●' : l.status === 'completed' ? '✓' : '✗'} ${l.description || l.id}: ${l.tools} tools, ${l.edits} files${l.last ? ` · ${l.last}` : ''}`).join('\n');
+}
+
+function deployText(d) {
+  return [
+    `${S.name}: ${d.live ? `live at ${d.live}` : 'not online yet'}`,
+    `  last deploy: ${d.lastDeploy}`,
+    ...(d.commitCount ? [`  ${d.commitCount} commit${d.commitCount === 1 ? '' : 's'} since: ${d.commits.slice(0, 5).join(' · ')}`] : ['  no commits since the last deploy on record']),
+    ...(d.diffstat ? [`  ${d.diffstat}`] : []),
+    ...(d.uncommitted ? [`  ${d.uncommitted} uncommitted change${d.uncommitted === 1 ? '' : 's'} (a deploy ships them as they are)`] : []),
+    ...(d.newGames.length ? [`  not live yet: ${d.newGames.join(', ')}`] : []),
+    `  checks: ${d.checks}`,
+    ...(d.playing ? [`  ${d.playing} playing now`] : []),
+  ].join('\n');
+}
+
+async function perfText($, want) {
+  const base = `${S.root}/.perf`;
+  let games = [];
+  try { games = (await $.fs.list(base)).map((d) => d.name).filter((n) => !want || n === want); } catch { games = []; }
+  if (!games.length) return want ? `No performance runs of ${want} yet: ask Claude to measure it (the perf skill), or run npx --no-install homie-studio perf ${want} --url <site>.` : 'No performance runs yet: ask Claude to make a game faster (the perf skill), which measures first.';
+  const out = [];
+  for (const g of games.slice(0, 4)) {
+    let runs = [];
+    try { runs = (await $.fs.list(`${base}/${g}`)).map((d) => d.name).filter((n) => /^\d/.test(n)).sort(); } catch { runs = []; }
+    const last = runs[runs.length - 1];
+    const sum = last ? await readJsonFile($, `${base}/${g}/${last}/summary.json`) : null;
+    if (!sum?.metrics) { out.push(`${g}: no finished run`); continue; }
+    out.push(`${g}: ${sum.counted}/${sum.runs} runs counted (${last}, ${sum.renderers?.join(', ') || 'renderer unknown'})`);
+    for (const device of sum.devices ?? []) {
+      for (const role of ['host', 'replica']) {
+        const m = (k) => sum.metrics[`${device}.${role}.${k}`]?.median;
+        if (m('frame.p50') === undefined) continue;
+        out.push(`  ${device} ${role}: frames ${m('frame.p50')} ms median, ${m('frame.p95')} ms p95 · game JS ${m('work.p50')} ms · main thread ${m('busy')} ms · playable at ${m('load.playable') ?? '?'} ms`);
+      }
+    }
+    if (await $.fs.exists(`${S.root}/perf/${g}/README.md`)) out.push(`  the perf loop's report: perf/${g}/README.md`);
+  }
+  return out.join('\n');
+}

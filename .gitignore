@@ -4,3 +4,7 @@ node_modules/
 .DS_Store
 dist/
 *.tsbuildinfo
+# What Claude Code writes beside a mod it loads with --plugin-dir (its type declarations, and a tsconfig.json that
+# points at them): made for the version that loaded it, never committed.
+plugins/homie/.claude-plugin/types/
+plugins/homie/tsconfig.json
