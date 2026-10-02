@@ -31,7 +31,7 @@
  * none, or between its decisions, `decide` below is the floor. A guide's line is drawn as a bubble from agents.json,
  * never from a model; "Quiet AI" hides them.
  */
-import { AI_MARK, createControls, createRoom, createSaves, exposePort, jitter, q, standoff, type BodyBase, type NetEvent, type Skill } from '@homie-rocks/studio/port';
+import { AI_MARK, createControls, createLabels, createRoom, createSaves, easeView, exposePort, fitView, jitter, q, standoff, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
 import { useAgents, type Goal, type Vocabulary } from '@homie-rocks/studio/agents';
 import vocabulary from '../agents.json';
 
@@ -444,6 +444,8 @@ function stepSlimes(dt: number, now: number): void {
 
 /* ------------------------------------------------------------------ input */
 const input = createControls({ actions: { strike: ['Space', 'KeyJ', 'Enter'] }, touch: { buttons: [{ id: 'strike', label: 'STRIKE' }] } });
+// A touch screen has STRIKE at the bottom right: the ask panel stands right above it (index.html, .touch).
+document.body.classList.toggle('touch', input.touch.enabled);
 function stepMe(dt: number): void {
   const b = room.hosting ? room.mine() : null;
   const isDown = b ? Boolean(b.flags & DOWN) : Boolean(myViewBody()?.flags && (myViewBody()!.flags & DOWN));
@@ -458,22 +460,54 @@ function myViewBody(): Body | null { const s = room.mySeat(); return room.view()
 /* ------------------------------------------------------------------ drawing */
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D;
-let scale = 1; let ox = 0; let oy = 0;
+let dpr = 1; let vw = 1; let vh = 1;
 function resize(): void {
-  const dpr = Math.min(2, devicePixelRatio || 1);
-  canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
-  scale = Math.min(canvas.width / W, canvas.height / H); ox = (canvas.width - W * scale) / 2; oy = (canvas.height - H * scale) / 2;
+  dpr = Math.min(2, devicePixelRatio || 1); vw = innerWidth; vh = innerHeight;
+  canvas.width = Math.round(vw * dpr); canvas.height = Math.round(vh * dpr);
+  // The page's pills sit under the hero panel, which grows with the screen (a TV's would cover them).
+  const pills = document.querySelector<HTMLElement>('.pill');
+  if (pills) pills.style.top = `calc(${Math.max(86, Math.round(76 * hudScale() + 10))}px + env(safe-area-inset-top))`;
 }
+/** CSS px per HUD unit, from the screen's CSS size: 0.7 on a phone either way up, 0.8 on a computer, 1.2 on a TV. */
+function hudScale(): number { return Math.max(Math.min(vw, vh) <= 540 ? 0.7 : 0.8, Math.min(1.4, vh / 900, vw / 560)); }
 addEventListener('resize', resize);
 resize();
 let bannerText = ''; let bannerUntil = 0;
 function banner(t: string): void { bannerText = t; bannerUntil = performance.now() + 2600; }
 const SLIME = ['#7ad35a', '#e0a83a', '#c74bd8'];
 
+/*
+ * The camera (port/view.ts). Where the whole vale fits at a size that reads (a computer, a TV) it all shows, as it
+ * always did. Where it would be small (a phone, above all held upright, where the vale was a strip a quarter of the
+ * screen tall), the vale fills the screen and follows your hero (a watcher: the hero followed), never past the vale's
+ * edge, except as far as it takes to keep your hero clear of the panel at the top and STRIKE at the bottom.
+ */
+const READABLE = 0.62; // CSS px per vale unit: a body 27 px across, a name 12 px tall
+const INSET = { top: 124, bottom: 100 }; // the hero panel and its pills; STRIKE and the ask panel's foot
+let cam: Fit | null = null;
+let lastDraw = 0;
+// Names keep clear of the guides' bubbles and of the ask panel (a page element over the canvas).
+const labels = createLabels({ screen: () => ({ w: vw, h: vh }), avoid: () => { const p = document.getElementById('asks'); return p && !p.hidden ? [...bubbleBoxes, p.getBoundingClientRect()] : bubbleBoxes; } });
+let bubbleBoxes: { left: number; top: number; right: number; bottom: number }[] = [];
+let shownLabels: LabelOut[] = [];
+function aim(): Fit {
+  const v = lookOnly ? room.viewBody() : null;
+  const focus = !lookOnly && me.has ? { x: me.x, y: me.y } : v ? { x: v.x, y: v.y } : null;
+  const phone = Math.min(vw, vh) <= 540;
+  return fitView({ world: { w: W, h: H }, screen: { w: vw, h: vh }, readable: READABLE, zoom: Math.max(READABLE, Math.min(vw, vh) / (phone ? 560 : 820)), focus, whole: lookOnly && !v, inset: INSET });
+}
+
 function draw(t: number): void {
-  const s = scale;
+  const dt = lastDraw ? Math.min(0.1, (t - lastDraw) / 1000) : 0;
+  lastDraw = t;
+  const want = aim();
+  // A cut when the camera changes kind (a phone turned, a watcher's pick); else it glides.
+  cam = !cam || cam.follow !== want.follow ? want : easeView(cam, want, dt, 10);
+  const s = cam.scale;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0b0f0a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.save(); ctx.translate(ox, oy); ctx.scale(s, s);
+  ctx.save();
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (vw / 2 - cam.x * s), dpr * (vh / 2 - cam.y * s));
   // The vale: moss, and embers that drift.
   ctx.fillStyle = '#16210f'; ctx.fillRect(0, 0, W, H);
   for (let i = 0; i < 70; i++) {
@@ -494,6 +528,15 @@ function draw(t: number): void {
   }
   // The hero whose view this is: my own, or the one a watcher follows (null: the vale, nobody in gold).
   const viewS = room.viewSeat();
+  const sx = (x: number): number => vw / 2 + (x - (cam as Fit).x) * s;
+  const sy = (y: number): number => vh / 2 + (y - (cam as Fit).y) * s;
+  // Names are drawn after the vale, on the screen, at a size that reads on any screen; they never pile up.
+  const fs = clamp(18 * s, 12, 20);
+  ctx.font = `600 ${fs}px ui-sans-serif, system-ui, sans-serif`;
+  const names: LabelIn[] = [];
+  const said: { x: number; y: number; head: number; text: string }[] = [];
+  const mine: ScreenBox[] = []; // your own hero and its name: no bubble covers them
+  const meAt = (() => { const v = room.view().find((b) => !b.bot && b.seat === viewS); return v ? { x: v.x, y: v.y } : null; })();
   for (const b of room.view()) {
     const self = !b.bot && b.seat === viewS;
     const local = self && !room.hosting && !net.watching;
@@ -508,72 +551,121 @@ function draw(t: number): void {
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(x - 24, y - R - 12, 48, 5);
     ctx.fillStyle = '#7ad35a'; ctx.fillRect(x - 24, y - R - 12, (48 * clamp(b.hp, 0, b.maxHp)) / Math.max(1, b.maxHp), 5);
     ctx.globalAlpha = 1;
-    ctx.font = '600 18px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = self ? '#ffcf6e' : '#e7d9b4';
     // An AI's name already ends in " · AI" (a guide, a companion); a plain bot says bot.
-    ctx.fillText(`${b.name}${b.bot && !b.name.endsWith(AI_MARK) ? ' · bot' : ''}${isGuide ? ' · guide' : ''} · ${b.level}`, x, y - R - 18);
-    const said = bubbles.get(b.slot);
-    if (said && said.until > performance.now()) bubble(x, y - R - 44, said.text);
+    const text = `${b.name}${b.bot && !b.name.endsWith(AI_MARK) ? ' · bot' : ''}${isGuide ? ' · guide' : ''} · ${b.level}`;
+    const near = meAt ? Math.hypot(x - meAt.x, y - meAt.y) : 0;
+    // Its spot is above its health bar; its body (and bar) is what other names keep off. People first, then guides,
+    // then bots; nearer you first.
+    const body = { left: sx(x - 24), top: sy(y - R - 12), right: sx(x + 24), bottom: sy(y + R) };
+    if (body.right < 0 || body.left > vw || body.bottom < 0 || body.top > vh) continue; // off screen: no name at the edge
+    if (self) { const w = ctx.measureText(text).width; mine.push(body, { left: sx(x) - w / 2 - 6, top: body.top - 4 - fs * 1.2, right: sx(x) + w / 2 + 6, bottom: body.top }); }
+    names.push({ key: b.slot, text, x: sx(x), y: body.top - 3, w: ctx.measureText(text).width, h: fs * 1.2, below: body.bottom + 4 + fs * 1.2, body, self, rank: (b.bot ? (isGuide ? 1 : 2) : 0) * 10_000 + near });
+    const line = bubbles.get(b.slot);
+    // The bubble's tail stops just above the guide's own name, so the name keeps its spot while it speaks.
+    if (line && line.until > performance.now()) said.push({ x: sx(x), y: body.top - 3 - fs * 1.2 - 12, head: body.top, text: line.text });
   }
   ctx.restore();
+  // Speech bubbles first (labels keep clear of them), then the names; your own last, on a dark chip.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  bubbleBoxes = said.map((b) => bubble(b.x, b.y, b.text, fs, b.head, mine));
+  ctx.font = `600 ${fs}px ui-sans-serif, system-ui, sans-serif`;
+  shownLabels = labels.place(names, dt);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  for (const l of [...shownLabels].sort((a, b) => Number(Boolean(a.self)) - Number(Boolean(b.self)))) {
+    if (l.alpha <= 0) continue;
+    ctx.globalAlpha = l.alpha;
+    if (l.moved) {
+      // Moved off its own spot: a thin line to its body says whose it is.
+      const under = l.top > l.y;
+      ctx.strokeStyle = 'rgba(231,217,180,.45)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(l.cx, under ? l.top : l.bottom); ctx.lineTo(l.x, under ? (l.body?.bottom ?? l.top - 6) : l.y + 2); ctx.stroke();
+    }
+    if (l.self) { ctx.fillStyle = 'rgba(10,14,9,.72)'; ctx.beginPath(); ctx.roundRect(l.left - 5, l.top - 1, l.right - l.left + 10, l.bottom - l.top + 2, 6); ctx.fill(); }
+    else { ctx.strokeStyle = 'rgba(8,11,6,.8)'; ctx.lineWidth = 3; ctx.strokeText(l.text, l.cx, l.cy); }
+    ctx.fillStyle = l.self ? '#ffcf6e' : '#e7d9b4';
+    ctx.fillText(l.text, l.cx, l.cy);
+  }
+  ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   hud(t);
 }
 
-/** A speech bubble: up to three short lines, above a guide. */
-function bubble(x: number, y: number, text: string): void {
-  ctx.font = '600 16px ui-sans-serif, system-ui, sans-serif';
+type ScreenBox = { left: number; top: number; right: number; bottom: number };
+const touches = (a: ScreenBox, b: ScreenBox): boolean => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+/**
+ * A speech bubble: up to three short lines, above a guide (screen px). It never covers your own hero or its name
+ * (`clearOf`): it moves aside, or higher, and its tail runs down to the guide's head (`head`), so whose line it is
+ * stays plain. Returns the box it covers.
+ */
+function bubble(x: number, y: number, text: string, fs: number, head: number, clearOf: ScreenBox[]): ScreenBox {
+  const f = Math.max(12, fs - 1);
+  ctx.font = `600 ${f}px ui-sans-serif, system-ui, sans-serif`;
   const words = text.split(' ');
   const lines: string[] = [];
   let line = '';
   for (const w of words) { if ((line + ' ' + w).trim().length > 26 && line) { lines.push(line); line = w; } else line = (line + ' ' + w).trim(); }
   if (line) lines.push(line);
   const shown = lines.slice(0, 3);
-  const wid = Math.max(...shown.map((l) => ctx.measureText(l).width)) + 22;
-  const hgt = shown.length * 20 + 12;
+  const wid = Math.max(...shown.map((l) => ctx.measureText(l).width)) + 20;
+  const hgt = shown.length * f * 1.25 + 10;
+  // Where it goes: above the guide; else beside that, either way; else higher, over whatever it must keep clear of.
+  const above = Math.min(y, ...clearOf.map((c) => c.top - 12));
+  const spots = [y, above].flatMap((by) => [x, x + wid * 0.6 + 16, x - wid * 0.6 - 16].map((bx) => ({ bx: clamp(bx, wid / 2 + 4, vw - wid / 2 - 4), by })));
+  const at = spots.find((p) => p.by - hgt >= 0 && !clearOf.some((c) => touches({ left: p.bx - wid / 2, top: p.by - hgt, right: p.bx + wid / 2, bottom: p.by + 8 }, c))) ?? spots[0]!;
+  const cx = at.bx; const by = at.by;
+  const tail = clamp(x, cx - wid / 2 + 12, cx + wid / 2 - 12);
   ctx.fillStyle = 'rgba(14,30,27,.92)'; ctx.strokeStyle = 'rgba(127,216,200,.75)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.roundRect(x - wid / 2, y - hgt, wid, hgt, 10); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x - 7, y); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 9); ctx.closePath(); ctx.fillStyle = 'rgba(14,30,27,.92)'; ctx.fill();
-  ctx.fillStyle = '#e9fff9'; ctx.textAlign = 'center';
-  shown.forEach((l, i) => ctx.fillText(l, x, y - hgt + 22 + i * 20));
+  ctx.beginPath(); ctx.roundRect(cx - wid / 2, by - hgt, wid, hgt, 10); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tail - 6, by); ctx.lineTo(tail + 6, by); ctx.lineTo(tail, by + 8); ctx.closePath(); ctx.fillStyle = 'rgba(14,30,27,.92)'; ctx.fill();
+  if (head > by + 12 || tail !== x) { ctx.strokeStyle = 'rgba(127,216,200,.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tail, by + 8); ctx.lineTo(x, head - 2); ctx.stroke(); }
+  ctx.fillStyle = '#e9fff9'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  shown.forEach((l, i) => ctx.fillText(l, cx, by - hgt + 5 + f * 1.25 * (i + 0.5)));
+  ctx.textBaseline = 'alphabetic';
+  return { left: cx - wid / 2, top: by - hgt, right: cx + wid / 2, bottom: by + 8 };
 }
 
 function hud(t: number): void {
-  const k = Math.max(0.8, Math.min(1.4, canvas.height / 900));
+  // Device px per HUD unit: as before on an upright phone, a computer and a TV; readable on a phone on its side and on
+  // a high-density computer screen (it was sized by device pixels, so half as big there).
+  const k = dpr * hudScale();
   ctx.save(); ctx.scale(k, k);
   const x0 = 14; const y0 = 14;
-  ctx.fillStyle = 'rgba(10,14,9,.62)'; ctx.fillRect(x0, y0, 240, 62);
-  ctx.textAlign = 'left'; ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#ffcf6e';
-  if (lookOnly) {
-    // A watcher's panel is the followed hero's, as the room has them (their save stays in their own browser).
-    const v = room.viewBody();
-    if (v) {
-      ctx.fillText(`${v.name} · Lv ${v.level}`, x0 + 10, y0 + 22);
-      ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x0 + 10, y0 + 32, 140, 6);
-      ctx.fillStyle = '#7ad35a'; ctx.fillRect(x0 + 10, y0 + 32, (140 * clamp(v.hp, 0, v.maxHp)) / Math.max(1, v.maxHp), 6);
-      ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
-      ctx.fillText(`${v.score} xp tonight${v.flags & DOWN ? ' · down' : ''}`, x0 + 10, y0 + 54);
-    } else {
-      const heroes = room.view().filter((b) => !b.bot).length;
-      ctx.fillText('Watching the vale', x0 + 10, y0 + 22);
-      ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
-      ctx.fillText(`${heroes} ${heroes === 1 ? 'hero' : 'heroes'} · ${(room.fast() ?? []).length} slimes`, x0 + 10, y0 + 46);
-    }
-  } else ctx.fillText(hero ? `${hero.name}${hero.hardcore ? ' ☠' : ''} · Lv ${hero.level}` : heroLoaded ? 'No hero yet' : 'Loading your hero…', x0 + 10, y0 + 22);
-  if (hero && !lookOnly) {
+  const TITLE = '700 16px ui-sans-serif, system-ui, sans-serif';
+  const SMALL = '600 13px ui-sans-serif, system-ui, sans-serif';
+  // A watcher's panel is the followed hero's, as the room has them (their save stays in their own browser).
+  const v = lookOnly ? room.viewBody() : null;
+  const heroes = room.view().filter((b) => !b.bot).length;
+  const title = lookOnly ? (v ? `${v.name} · Lv ${v.level}` : 'Watching the vale') : hero ? `${hero.name}${hero.hardcore ? ' ☠' : ''} · Lv ${hero.level}` : heroLoaded ? 'No hero yet' : 'Loading your hero…';
+  const sub = lookOnly ? (v ? `${v.score} xp tonight${v.flags & DOWN ? ' · down' : ''}` : `${heroes} ${heroes === 1 ? 'hero' : 'heroes'} · ${(room.fast() ?? []).length} slimes`) : hero ? `${hero.gold} gold · ${hero.kills} slain` : '';
+  const bar = v ? { colour: '#7ad35a', of: clamp(v.hp, 0, v.maxHp) / Math.max(1, v.maxHp) } : hero && !lookOnly ? { colour: '#ffcf6e', of: hero.xp / xpFor(hero.level) } : null;
+  // The panel is as wide as what it says: on a phone the vale runs under it, and the clock sits beside it.
+  ctx.font = TITLE; const titleW = ctx.measureText(title).width;
+  ctx.font = SMALL; const subW = sub ? ctx.measureText(sub).width : 0;
+  const pw = Math.max(bar ? 140 : 0, titleW, subW) + 20;
+  ctx.fillStyle = 'rgba(10,14,9,.62)'; ctx.fillRect(x0, y0, pw, 62);
+  ctx.textAlign = 'left'; ctx.font = TITLE; ctx.fillStyle = '#ffcf6e';
+  ctx.fillText(title, x0 + 10, y0 + 22);
+  if (bar) {
     ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x0 + 10, y0 + 32, 140, 6);
-    ctx.fillStyle = '#ffcf6e'; ctx.fillRect(x0 + 10, y0 + 32, (140 * hero.xp) / xpFor(hero.level), 6);
-    ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
-    ctx.fillText(`${hero.gold} gold · ${hero.kills} slain`, x0 + 10, y0 + 54);
+    ctx.fillStyle = bar.colour; ctx.fillRect(x0 + 10, y0 + 32, 140 * clamp(bar.of, 0, 1), 6);
   }
+  if (sub) { ctx.font = SMALL; ctx.fillStyle = '#e7d9b4'; ctx.fillText(sub, x0 + 10, y0 + (bar ? 54 : 46)); }
   const c = room.clock();
-  ctx.textAlign = 'center'; ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#f3ead2';
+  ctx.font = TITLE; ctx.fillStyle = '#f3ead2';
   const cw = canvas.width / k;
-  ctx.fillText(c.phase === 'over' ? `Dawn · night ${c.n + 1} in ${c.secondsLeft}s` : `Night ${c.n} · ${Math.floor(c.secondsLeft / 60)}:${String(c.secondsLeft % 60).padStart(2, '0')}`, cw / 2, 30);
+  const clock = c.phase === 'over' ? `Dawn · night ${c.n + 1} in ${c.secondsLeft}s` : `Night ${c.n} · ${Math.floor(c.secondsLeft / 60)}:${String(c.secondsLeft % 60).padStart(2, '0')}`;
+  // Top centre; on a narrow screen where that would touch the panel, just under it.
+  if (x0 + pw + 10 > cw / 2 - ctx.measureText(clock).width / 2) { ctx.textAlign = 'left'; ctx.fillText(clock, x0 + 10, y0 + 62 + 20); }
+  else { ctx.textAlign = 'center'; ctx.fillText(clock, cw / 2, 30); }
+  ctx.textAlign = 'center';
   if (c.phase === 'over') {
     const rows = room.results().slice(0, 5);
-    ctx.fillStyle = 'rgba(10,14,9,.78)'; ctx.fillRect(cw / 2 - 150, 44, 300, 30 + rows.length * 22);
-    ctx.fillStyle = '#ffcf6e'; ctx.fillText('Tonight\'s hunters', cw / 2, 66);
+    // Under the page's own pills on a narrow screen (they are buttons, above the canvas), else under the clock.
+    const top = vw <= 540 ? 132 * (dpr / k) : 44;
+    ctx.fillStyle = 'rgba(10,14,9,.78)'; ctx.fillRect(cw / 2 - 150, top, 300, 30 + rows.length * 22);
+    ctx.font = TITLE; ctx.fillStyle = '#ffcf6e'; ctx.fillText('Tonight\'s hunters', cw / 2, top + 22);
     ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
-    rows.forEach((r, i) => ctx.fillText(`${r.place}. ${r.name}${r.bot && !r.name.endsWith(AI_MARK) ? ' (bot)' : ''} — ${r.score} xp`, cw / 2, 90 + i * 22));
+    rows.forEach((r, i) => ctx.fillText(`${r.place}. ${r.name}${r.bot && !r.name.endsWith(AI_MARK) ? ' (bot)' : ''} — ${r.score} xp`, cw / 2, top + 46 + i * 22));
   }
   if (performance.now() < bannerUntil) { ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#ffcf6e'; ctx.fillText(bannerText, cw / 2, canvas.height / k - 90); }
   const st = saves.status();
@@ -640,6 +732,7 @@ setInterval(() => { if (hero && document.visibilityState === 'visible') void sav
 /** The guide nearest my hero (within 340 px), and the asks I can make of it: drawn as buttons, four times a second. */
 let asksFor = -1;
 let asksSig = '';
+const askEls = new Map<string, HTMLButtonElement>();
 function paintAsks(): void {
   const panel = $('asks');
   const mySeat = room.mySeat();
@@ -649,18 +742,21 @@ function paintAsks(): void {
     for (const b of room.view()) {
       const sl = (net.slots ?? []).find((x) => x.slot === b.slot);
       if (!sl?.agent || sl.agent.role !== 'guide') continue;
+      // The guide the panel is for keeps it while it is in reach, unless another is much nearer: two guides at the
+      // party's side would otherwise swap it four times a second, and a thumb's tap would land on a button just redrawn.
       const d = Math.hypot(b.x - me.x, b.y - me.y);
-      if (d < 340 && (!best || d < best.d)) best = { slot: b.slot, name: b.name, d };
+      const rank = d - (b.slot === asksFor ? 120 : 0);
+      if (d < 340 && (!best || rank < best.d)) best = { slot: b.slot, name: b.name, d: rank };
     }
   }
   if (!best) { panel.hidden = true; asksFor = -1; asksSig = ''; return; }
   const quests = (net.stateOf<string[]>('quests') ?? (room.hosting ? openQuests() : ['slime-hunt'])).slice(0, 3);
-  // Help with each open quest, one place to be led to (not the one I am in), and "No thanks"; three on a phone.
+  // Help with each open quest, one place to be led to (not the one I am in), and "No thanks"; three on a phone (either way up).
   const zone = zoneOf(me.x, me.y);
   const all = agents.askButtons(best.slot, { quests });
   const lead = all.filter((b) => b.k === 'lead_me' && b.args['place'] !== zone).slice(0, 1);
   const order = [...all.filter((b) => b.k === 'ask_help'), ...lead, ...all.filter((b) => b.k === 'no_thanks')];
-  const buttons = order.slice(0, innerWidth < 540 ? 3 : 5);
+  const buttons = order.slice(0, Math.min(innerWidth, innerHeight) < 540 ? 3 : 5);
   const sig = `${best.slot}|${best.name}|${buttons.map((b) => b.text).join('|')}`;
   panel.hidden = false;
   if (sig === asksSig) return;
@@ -668,19 +764,29 @@ function paintAsks(): void {
   asksFor = best.slot;
   panel.dataset['slot'] = String(best.slot);
   $('asks-who').textContent = `${best.name} · guide`;
+  // A button that stays is the same element (a quest that opens or closes adds or takes one): a thumb's tap that lands
+  // while the list changes around it still counts.
   const list = $('asks-list');
-  list.textContent = '';
-  for (const b of buttons) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = b.text;
-    btn.dataset['ask'] = b.k;
-    btn.addEventListener('click', () => {
-      if (asksFor < 0) return;
-      if (agents.ask(asksFor, b.k, b.args)) { logGuide({ ev: 'asked', slot: asksFor, k: b.k, args: b.args }); btn.classList.add('sent'); setTimeout(() => btn.classList.remove('sent'), 900); }
-    });
-    list.append(btn);
-  }
+  const keep = new Set<string>();
+  buttons.forEach((b, i) => {
+    const key = `${b.k}|${JSON.stringify(b.args)}`;
+    keep.add(key);
+    let el = askEls.get(key);
+    if (!el) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset['ask'] = b.k;
+      btn.addEventListener('click', () => {
+        if (asksFor < 0) return;
+        if (agents.ask(asksFor, b.k, b.args)) { logGuide({ ev: 'asked', slot: asksFor, k: b.k, args: b.args }); btn.classList.add('sent'); setTimeout(() => btn.classList.remove('sent'), 900); }
+      });
+      askEls.set(key, btn);
+      el = btn;
+    }
+    if (el.textContent !== b.text) el.textContent = b.text;
+    if (list.children[i] !== el) list.insertBefore(el, list.children[i] ?? null);
+  });
+  for (const [key, el] of askEls) if (!keep.has(key)) { el.remove(); askEls.delete(key); }
 }
 setInterval(paintAsks, 250);
 
@@ -707,6 +813,9 @@ net.expose({
     me: me.has ? { x: Math.round(me.x), y: me.y | 0 } : null,
     log: guideLog.slice(),
   }),
+  // Where the camera looks, and the names as drawn (boxes only: the e2e probe counts overlaps and checks your own).
+  camera: () => (cam ? { x: cam.x, y: cam.y, scale: cam.scale, follow: cam.follow } : null),
+  labels: () => shownLabels.map((l) => ({ self: Boolean(l.self), alpha: l.alpha, moved: l.moved, left: Math.round(l.left), top: Math.round(l.top), right: Math.round(l.right), bottom: Math.round(l.bottom) })),
 });
 
 exposePort(net, {

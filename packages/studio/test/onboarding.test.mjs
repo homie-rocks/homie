@@ -139,6 +139,120 @@ test('setup status in a studio: Wrangler signed in, the email proven by a deploy
   assert.match(blocked.rows.find((x) => x.id === 'connector').fix.say, /Network access to Custom, add homie\.test/);
 });
 
+test('setup status: a server whose AI guides use Workers AI gets ONE tiny call to its model, and a plain answer when it is paid-only or gone', async () => {
+  const dir = studio('doctor-brain', { game: null });
+  mkdirSync(join(dir, 'node_modules', '.bin'), { recursive: true });
+  writeFileSync(join(dir, 'node_modules', '.bin', 'wrangler'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  mkdirSync(join(dir, '.studio'), { recursive: true });
+  writeFileSync(join(dir, '.studio', 'local.json'), JSON.stringify({ deployedAt: '2026-10-01T00:00:00Z' }));
+  const token = 'oauth-token-that-must-never-be-printed-5678';
+  const answers = (servers = 1, accounts = [{ id: 'acc1', name: 'Someone' }]) => fakeExec({
+    'wrangler whoami --json': { code: 0, stdout: JSON.stringify({ loggedIn: true, accounts }) },
+    'wrangler d1 execute DB --remote --json': { code: 0, stdout: JSON.stringify([{ results: [{ n: servers }], success: true }]) },
+    'wrangler auth token --json': { code: 0, stdout: JSON.stringify({ type: 'oauth', token }) },
+    'git --version': { code: 0 }, 'ffmpeg -version': { code: 0 },
+  });
+  /** Cloudflare's Workers AI REST API, stood in: every call is kept, and none reaches the network. */
+  const cloudflare = (status, body) => {
+    const calls = [];
+    const fetchFn = async (url, init) => {
+      if (String(url).includes('/ai/run/')) { calls.push({ url: String(url), auth: init?.headers?.authorization ?? null, body: JSON.parse(init.body) }); return new Response(JSON.stringify(body), { status }); }
+      return new Response('{}', { status: 405 });
+    };
+    return { fetchFn, calls };
+  };
+  const rowOf = (r) => r.rows.find((x) => x.id === 'workers-ai');
+  const status = (exec, fetchFn, env = {}) => setupStatus({ cwd: dir, env, platform: 'darwin', exec, fetchFn, chrome: () => '/x/chrome', connector: 'yes' });
+
+  // The default model answers: one call, a one-word prompt, max_tokens 1, the studio's own sign-in; nothing printed.
+  let cf = cloudflare(200, { success: true, result: { response: 'OK', usage: { prompt_tokens: 12, completion_tokens: 1 } }, errors: [] });
+  let ex = answers();
+  let r = await status(ex.exec, cf.fetchFn);
+  let row = rowOf(r);
+  assert.equal(row.state, 'ok', row.detail);
+  assert.match(row.detail, /@cf\/meta\/llama-3\.1-8b-instruct-fp8-fast answers on this studio's Cloudflare account/);
+  assert.equal(cf.calls.length, 1, 'exactly one call');
+  assert.match(cf.calls[0].url, /^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/acc1\/ai\/run\/@cf\/meta\/llama-3\.1-8b-instruct-fp8-fast$/);
+  assert.equal(cf.calls[0].auth, `Bearer ${token}`);
+  assert.equal(cf.calls[0].body.max_tokens, 1, 'one token out: about 0.1 of the 10,000 free neurons');
+  assert.ok(ex.calls.some((c) => c.startsWith('wrangler d1 execute DB --remote --json')), 'the live database says a server uses Workers AI');
+  assert.ok(r.features.some((f) => f.feature === 'AI guides that think (Workers AI)' && f.state === 'ready'));
+  let printed = JSON.stringify(r) + formatStatus(r);
+  assert.ok(!printed.includes(token) && !printed.includes('acc1') && !printed.includes('Someone'), 'never the token, the account\'s id or its name');
+  assert.match(formatStatus(r), /Workers AI/);
+
+  // A model Cloudflare moved to Workers Paid (403, 5035): what it means, what to do, and that the money is the person's.
+  writeFileSync(join(dir, 'wrangler.jsonc'), readFileSync(join(dir, 'wrangler.jsonc'), 'utf8').replace('"vars": {', '"vars": {\n    "HOMIE_BRAIN_MODEL": "@cf/moonshotai/kimi-k2.6",'));
+  cf = cloudflare(403, { success: false, result: null, errors: [{ code: 5035, message: 'This model requires the Workers Paid plan. Upgrade at https://dash.cloudflare.com/acc1/workers/plans' }] });
+  r = await status(answers().exec, cf.fetchFn);
+  row = rowOf(r);
+  assert.equal(row.state, 'act');
+  assert.match(row.detail, /@cf\/moonshotai\/kimi-k2\.6 needs the Workers Paid plan, and this account is on Workers Free: every guide on a workers-ai server answers from the game's script/);
+  assert.match(row.fix.say, /set HOMIE_BRAIN_MODEL in wrangler\.jsonc "vars"/);
+  assert.match(row.fix.say, /or remove it for the default, @cf\/meta\/llama-3\.1-8b-instruct-fp8-fast/);
+  assert.match(row.fix.say, /that is the person's money: ask them/);
+  assert.equal(row.fix.open, 'https://developers.cloudflare.com/workers-ai/models/');
+  assert.ok(r.next.some((n) => n.id === 'workers-ai'), 'a "do this now"');
+  assert.deepEqual(r.blocking, [], 'it never blocks making games');
+  printed = JSON.stringify(r) + formatStatus(r);
+  assert.ok(!printed.includes('acc1'), 'Cloudflare\'s own words, without the account\'s id');
+
+  // Retired or misspelt (400, 5007).
+  cf = cloudflare(400, { success: false, errors: [{ code: 5007, message: 'No such model @cf/moonshotai/kimi-k2.6 or task' }] });
+  row = rowOf(await status(answers().exec, cf.fetchFn));
+  assert.equal(row.state, 'act');
+  assert.match(row.detail, /Cloudflare has no model @cf\/moonshotai\/kimi-k2\.6 \(renamed or retired\)/);
+  // Today's free allowance spent (429, 3036): not the model's fault, nothing to do but wait.
+  cf = cloudflare(429, { success: false, errors: [{ code: 3036, message: 'You have used up your daily free allocation of 10,000 neurons.' }] });
+  row = rowOf(await status(answers().exec, cf.fetchFn));
+  assert.equal(row.state, 'later');
+  assert.match(row.detail, /allowance .* is used up/);
+  assert.equal(row.fix.who, 'person');
+  // A sign-in Cloudflare refuses (10000): sign in again.
+  cf = cloudflare(403, { success: false, errors: [{ code: 10000, message: 'Authentication error' }] });
+  row = rowOf(await status(answers().exec, cf.fetchFn));
+  assert.equal(row.state, 'unknown');
+  assert.equal(row.fix.run, 'npx wrangler login');
+
+  // Not a model id at all: said, and no call.
+  writeFileSync(join(dir, 'wrangler.jsonc'), readFileSync(join(dir, 'wrangler.jsonc'), 'utf8').replace('"@cf/moonshotai/kimi-k2.6"', '"llama please"'));
+  cf = cloudflare(200, { success: true });
+  row = rowOf(await status(answers().exec, cf.fetchFn));
+  assert.equal(row.state, 'act');
+  assert.match(row.detail, /not a Workers AI model id/);
+  assert.equal(cf.calls.length, 0);
+  writeFileSync(join(dir, 'wrangler.jsonc'), readFileSync(join(dir, 'wrangler.jsonc'), 'utf8').replace('\n    "HOMIE_BRAIN_MODEL": "llama please",', ''));
+  assert.doesNotMatch(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8'), /HOMIE_BRAIN_MODEL/);
+
+  // Several accounts and none named in studio.json: said, and no call.
+  cf = cloudflare(200, { success: true });
+  row = rowOf(await status(answers(1, [{ id: 'acc1' }, { id: 'acc2' }]).exec, cf.fetchFn));
+  assert.equal(row.state, 'unknown');
+  assert.match(row.detail, /several Cloudflare accounts/);
+  assert.equal(cf.calls.length, 0);
+
+  // No server thinks with Workers AI: no row, no call (the guides' brain is script, off or the owner's key).
+  cf = cloudflare(200, { success: true });
+  r = await status(answers(0).exec, cf.fetchFn);
+  assert.equal(rowOf(r), undefined);
+  assert.equal(cf.calls.length, 0);
+  assert.ok(!r.features.some((f) => /Workers AI/.test(f.feature)));
+  // A network that fails is said as it is.
+  row = rowOf(await status(answers().exec, async (url) => { if (String(url).includes('/ai/run/')) throw new Error('getaddrinfo ENOTFOUND api.cloudflare.com'); return new Response('{}', { status: 405 }); }));
+  assert.equal(row.state, 'unknown');
+  assert.match(row.detail, /request to Cloudflare failed \(getaddrinfo ENOTFOUND api\.cloudflare\.com\)/);
+  // A game.json seed in the built catalogue counts too, before the studio is live (and its database is not read).
+  writeFileSync(join(dir, '.studio', 'local.json'), '{}');
+  mkdirSync(join(dir, 'site', 'dist'), { recursive: true });
+  writeFileSync(join(dir, 'site', 'dist', 'games.json'), JSON.stringify({ games: [{ id: 'vale', servers: [{ id: 'first-light', brain: 'workers-ai' }] }] }));
+  cf = cloudflare(200, { success: true, result: { response: 'OK' } });
+  ex = answers(0);
+  row = rowOf(await status(ex.exec, cf.fetchFn));
+  assert.equal(row.state, 'ok');
+  assert.equal(cf.calls.length, 1);
+  assert.ok(!ex.calls.some((c) => c.startsWith('wrangler d1 execute')), 'no database read for a studio that is not live');
+});
+
 test('`homie-studio doctor` and `setup status` run anywhere and answer in seconds', () => {
   const away = join(scratch, 'cli-away');
   mkdirSync(away, { recursive: true });

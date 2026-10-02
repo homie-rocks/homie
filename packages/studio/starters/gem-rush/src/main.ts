@@ -32,8 +32,9 @@
  * Canvas 2D on purpose: the point is the contract, in ~700 readable lines.
  */
 import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
-// The port toolkit's probe: what `homie-studio port check` reads for the owner tests (and sandbox + audio shims).
-import { exposePort } from '@homie-rocks/studio/port';
+// The port toolkit: its probe (what `homie-studio port check` reads for the owner tests, and sandbox + audio shims),
+// and a flat world on every screen (port/view.ts: the camera, and name labels that never pile up).
+import { createLabels, exposePort, fitView, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
 
 /* ------------------------------------------------------------------ rules */
 const W = 1600;
@@ -601,6 +602,9 @@ addEventListener('resize', resize);
 resize();
 
 const cam = { x: W / 2, y: H / 2, scale: 0 };
+const labels = createLabels({ screen: () => ({ w: innerWidth, h: innerHeight }) });
+let shownLabels: LabelOut[] = [];
+let lastDraw = 0;
 /** Where a seat's body is drawn now (host: the real body; replica: interpolated), or null. */
 function seatPos(seat: number): { x: number; y: number } | null {
   if (seat === mySeat() && me.has && !net.watching) return me;
@@ -620,12 +624,17 @@ function draw(t: number): void {
   const view = viewSeat();
   const followed = net.watching && view !== null ? seatPos(view) : null;
   const overview = net.watching ? !followed : mySeat() === null;
-  const wantScale = overview ? Math.min(cw / (W + 80), ch / (H + 80)) : Math.min(cw, ch) / (phone ? 560 : 820);
+  // The camera: close on the body whose view this is, never past the arena's edge (except as far as it takes to keep
+  // that body clear of the HUD), and never so far out that an empty band shows beside the arena (held upright, a
+  // phone showed the arena as a band with a third of the screen dark below or above it; now the arena fills the
+  // screen). Following nobody: the whole arena.
+  const focus = net.watching ? followed : overview || !me.has ? null : me;
+  const want = overview ? { scale: Math.min(cw / (W + 80), ch / (H + 80)), x: W / 2, y: H / 2 }
+    : fitView({ world: { w: W, h: H }, screen: { w: cw, h: ch }, readable: 0, zoom: Math.min(cw, ch) / (phone ? 560 : 820), focus, inset: { top: 52, bottom: 36 } });
   // A watcher's switch glides: the zoom and the pan ease over a few frames, never a cut.
-  cam.scale = cam.scale ? cam.scale + (wantScale - cam.scale) * 0.12 : wantScale;
+  cam.scale = cam.scale ? cam.scale + (want.scale - cam.scale) * 0.12 : want.scale;
   const scale = cam.scale;
-  const target = net.watching ? (followed ?? { x: W / 2, y: H / 2 }) : overview || !me.has ? { x: W / 2, y: H / 2 } : me;
-  cam.x += (target.x - cam.x) * 0.2; cam.y += (target.y - cam.y) * 0.2;
+  cam.x += (want.x - cam.x) * 0.2; cam.y += (want.y - cam.y) * 0.2;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const bg = ctx.createRadialGradient(cw / 2, ch / 2, 0, cw / 2, ch / 2, Math.max(cw, ch) * 0.8);
   bg.addColorStop(0, '#0d1426'); bg.addColorStop(1, '#04060c');
@@ -686,6 +695,11 @@ function draw(t: number): void {
       list.push({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, x: own && me.has ? me.x : d.x, y: own && me.has ? me.y : d.y, bot: d.seat < 0, name: s?.name ?? (d.seat >= 0 ? `Player ${d.seat + 1}` : botName(d.slot)), mine: isView(d.seat >= 0 ? d.seat : null, d.seat < 0) });
     }
   }
+  // Names go on after the arena, on the screen, so they read at one size on any screen and never pile up.
+  const fs = Math.round(Math.max(15, Math.min(22, (15 * Math.min(cw, ch)) / 720)));
+  ctx.font = `600 ${fs}px ui-sans-serif, system-ui, sans-serif`;
+  const tags: LabelIn[] = [];
+  const viewAt = list.find((a) => a.mine) ?? null;
   for (const a of list) {
     const colour = colourOf(a.slot, a.bot ? null : a.seat);
     ctx.globalAlpha = a.bot ? 0.62 : 1;
@@ -693,11 +707,32 @@ function draw(t: number): void {
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(a.x, a.y, R_AV * 0.45, 0, Math.PI * 2); ctx.fill();
     if (a.mine) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(a.x, a.y, R_AV + 7, 0, Math.PI * 2); ctx.stroke(); }
     ctx.globalAlpha = 1;
-    ctx.font = `600 ${Math.round(15 / Math.max(0.6, scale))}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.textAlign = 'center'; ctx.fillStyle = a.mine ? '#ffffff' : 'rgba(232,236,245,0.8)';
-    ctx.fillText(a.mine && !net.watching ? 'You' : label(a.name, a.bot), a.x, a.y - R_AV - 12);
+    const text = a.mine && !net.watching ? 'You' : label(a.name, a.bot);
+    const sx = cw / 2 + (a.x - cam.x) * scale; const sy = ch / 2 + (a.y - cam.y) * scale; const r = (R_AV + (a.mine ? 7 : 0)) * scale;
+    if (sx + r < 0 || sx - r > cw || sy + r < 0 || sy - r > ch) continue; // off screen: no name at the edge
+    // People before bots, nearer the view's body first; each keeps off the others' bodies when it can.
+    tags.push({ key: a.slot, text, x: sx, y: sy - r - 5, w: ctx.measureText(text).width, h: fs * 1.2, below: sy + r + 4 + fs * 1.2, body: { left: sx - r, top: sy - r, right: sx + r, bottom: sy + r }, self: a.mine, rank: (a.bot ? 10_000 : 0) + (viewAt ? Math.hypot(a.x - viewAt.x, a.y - viewAt.y) : 0) });
   }
   ctx.restore();
+  shownLabels = labels.place(tags, Math.min(0.1, (t - (lastDraw || t)) / 1000));
+  lastDraw = t;
+  ctx.font = `600 ${fs}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  for (const l of [...shownLabels].sort((x, y) => Number(Boolean(x.self)) - Number(Boolean(y.self)))) {
+    if (l.alpha <= 0) continue;
+    ctx.globalAlpha = l.alpha;
+    if (l.moved) {
+      // Off its own spot: a thin line to its body says whose it is.
+      const under = l.top > l.y;
+      ctx.strokeStyle = 'rgba(232,236,245,0.4)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(l.cx, under ? l.top : l.bottom); ctx.lineTo(l.x, under ? (l.body?.bottom ?? l.top - 6) : l.y + 2); ctx.stroke();
+    }
+    if (l.self) { ctx.fillStyle = 'rgba(6,10,20,0.7)'; ctx.beginPath(); ctx.roundRect(l.left - 5, l.top - 1, l.right - l.left + 10, l.bottom - l.top + 2, 6); ctx.fill(); }
+    else { ctx.strokeStyle = 'rgba(4,6,12,0.85)'; ctx.lineWidth = 3; ctx.strokeText(l.text, l.cx, l.cy); }
+    ctx.fillStyle = l.self ? '#ffffff' : 'rgba(232,236,245,0.85)';
+    ctx.fillText(l.text, l.cx, l.cy);
+  }
+  ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
 
   hud(cw, ch, phone, list);
   if (stick.active) {
@@ -797,6 +832,8 @@ net.expose({
   predictionError: () => predictionError,
   /** Where the camera looks and whose view it is (a watcher following a player: their body, under the camera). */
   camera: () => ({ x: cam.x, y: cam.y, scale: cam.scale, view: viewSeat() }),
+  /** The names as drawn (boxes, never the text): the e2e probe counts overlaps and checks your own. */
+  labels: () => shownLabels.map((l) => ({ self: Boolean(l.self), alpha: l.alpha, moved: l.moved, left: Math.round(l.left), top: Math.round(l.top), right: Math.round(l.right), bottom: Math.round(l.bottom) })),
   /** performance.now() of the first keyed-state value and the first live snapshot this browser received. */
   arrivals: () => ({ firstStateAt, firstSnapAt }),
   /** Harness hook (host only): knock the body of `seat` back, toward the middle of the arena. */

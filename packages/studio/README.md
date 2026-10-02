@@ -110,8 +110,8 @@ are watched only by those they let in (NETPLAY.md section 16, site/SITE.md).
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.17.0 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.17.0 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.18.1 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.18.1 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -278,7 +278,7 @@ npx homie-studio agents pass night-rush --label Claude                          
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.17.0 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.18.1 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 
@@ -288,8 +288,15 @@ with the studio's own Wrangler, and the account's email verified: a deploy that 
 deploy refused for it is remembered), Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and
 fal (and, in Claude Code, the status line). Each row is green, missing or "do this now", says what it
 unlocks, and gives the exact fix: a command the AI runs or a page the person taps. It only reads, answers in
-seconds, and never prints a key, a token or an account's name. A studio the Claude app's setup card made
+seconds, and never prints a key, a token or an account's name or id. A studio the Claude app's setup card made
 (`setup attach`) counts as connected to Cloudflare and GitHub there. `--json` gives the rows.
+
+When a server's AI guides think with Workers AI (0.18.1), a **Workers AI** row checks that the model they use
+(`HOMIE_BRAIN_MODEL` in wrangler.jsonc `vars`, else `@cf/meta/llama-3.1-8b-instruct-fp8-fast`) answers on the
+studio's account: one tiny call through Cloudflare's API with the studio's own Wrangler login (a one-word prompt,
+one token out: about 0.1 of the 10,000 free neurons a day; `lib/brain-probe.mjs`). A model Cloudflare moved to
+Workers Paid (error 5035) or retired (5007) is named, with what to do: pick another model, or, the person's money,
+Workers Paid. A spent daily allowance (3036) is said as that, not as a broken model.
 
 ## The Game Codex
 
@@ -459,7 +466,7 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `template/` (repository root), `scripts/template.mjs` | The public "Deploy to Cloudflare" template, generated from `new --template`. |
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
-| `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`. |
+| `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`; `fitView` and `createLabels` (`port/view.ts`): a flat world on every screen (the whole of it where it reads, else filling a phone held upright and following the player) and names that never pile up when bodies crowd (yours placed first, the rest moved or faded). |
 | `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/<game>/watch` watches a live room from any player's view (NETPLAY.md section 16); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site's files or, once moved, from the studio's R2 at the same address; a loose file from `media put` at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
 | `worker/site.mjs`, `lib/site.mjs`, `lib/markdown.mjs`, `site/SITE.md` | The site: its sections, each game's landing, posts and their feeds, the look (theme tokens) and what the studio's `site/` folder overrides; the safe markdown posts are written in. `worker/pages.mjs`: the play page. |
 | `worker/stats.mjs`, `worker/stats-page.mjs`, `lib/stats.mjs` | The studio's own stats: what is counted and how, the owner-only `/api/stats` and `/_studio/stats`, and `homie-studio stats`. |

@@ -118,6 +118,11 @@ Non-negotiable, every port:
    The world fills a phone held upright: a fixed arena letterboxed into a strip
    of a portrait screen looks broken. Follow your own body with a camera (your
    body about 14% of the screen's height) or lay the arena out for portrait.
+   For a flat (top-down) world the kit's `fitView` does it: the whole world where
+   it reads, else the world fills the screen and follows your body, never past
+   its edge but for the HUD's margins. Names drawn over bodies pile up when they
+   crowd: place them with `createLabels` (yours first, never covered; the rest
+   move or fade). Both starters show the pattern.
    Your own body is unmistakable at a glance (a ring or highlight plus "You").
 7. **The big screen** (`/<id>/tv`) is a spectator: no body, no personal prompts,
    an overview or director camera, readable from across a room. **A watcher**

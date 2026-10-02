@@ -8,6 +8,9 @@
  *                keys on computers, a floating stick and small buttons on phones
  *   groundBasis / screenToGround / PlayerYaw
  *                the camera rules: input on screen axes, a yaw only the player turns
+ *   fitView / easeView / toScreen / createLabels
+ *                a flat world on every screen (the whole of it, or filling an upright phone and following the
+ *                player) and name labels that never pile up
  *   exposePort   what `homie-studio port check` reads (owner tests)
  *   createHud    a minimal clock / scores / results overlay
  *   BotBrain, seek, nearest, rubberBand
@@ -26,6 +29,7 @@ export { createKeys, synthKey, holdKey, tapKey, keyInfo, releaseAllSynthKeys, ty
 export { createTouchControls, type TouchControls, type TouchOptions, type TouchButton } from './touch';
 export { createControls, type Controls, type ControlsOptions } from './controls';
 export { groundBasis, screenToGround, PlayerYaw, type GroundBasis, type CameraLike } from './camera';
+export { fitView, easeView, toScreen, createLabels, type Fit, type FitOptions, type LabelIn, type LabelOut, type LabelOptions, type LabelBox } from './view';
 export { exposePort, type PortProbeOptions, type View } from './probe';
 export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt } from './room';
 export { createHud, type HudOptions } from './hud';

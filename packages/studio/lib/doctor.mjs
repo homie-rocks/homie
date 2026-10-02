@@ -8,6 +8,9 @@
  *                                  Homie tools are there: --connector yes|no)
  *   Cloudflare         to go online: signed in, and the account's email verified (Cloudflare checks that at the
  *                                  first deploy; a deploy that went through proves it)
+ *   Workers AI         for AI guides  only when a server's guides think with Workers AI: the model they use
+ *                                  (HOMIE_BRAIN_MODEL, else the default) answers on the studio's account, not paid-only
+ *                                  or retired (lib/brain-probe.mjs: one tiny call, about 0.1 of the free daily neurons)
  *   Chrome             for checks  the two-browser check, the look pictures and playtests
  *   ffmpeg             recommended sound effects and the theme, trailers and hero footage
  *   GitHub             optional    a private backup, publishing by pull request, building from the Claude app
@@ -17,12 +20,14 @@
  *
  * It is safe at any time, inside a studio or before one exists: it only reads (local files, `--version` of a few
  * tools, `wrangler whoami`, `gh auth status`, `elevenlabs auth status`, one GET to the directory and, when a fal key
- * is set, fal's free pricing API), never changes anything, and never prints a key, a token or an account's name.
+ * is set, fal's free pricing API; when a server's AI guides use Workers AI, one read of the live database and one
+ * one-word call to the model), never changes anything, and never prints a key, a token or an account's name or id.
  * Every check has a time limit, so it answers in seconds even with no network.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { workersAiRow } from './brain-probe.mjs';
 import { findChrome } from './chrome.mjs';
 import { whyFailed } from './net.mjs';
 import { isOurs } from './statusline.mjs';
@@ -98,7 +103,8 @@ export async function setupStatus({
       if (!bin || !existsSync(bin)) return { signedIn: null };
       const r = await exec(bin, ['whoami', '--json'], { cwd: root, timeout: 25_000, env: { ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' } });
       if (r.code === 124) return { signedIn: null, why: 'Wrangler did not answer in time' };
-      try { const d = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('{')))); return { signedIn: Boolean(d.loggedIn), accounts: Array.isArray(d.accounts) ? d.accounts.length : null }; } catch { return { signedIn: false }; }
+      // The accounts' ids stay in this process (the Workers AI row calls the studio's own account); never printed.
+      try { const d = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('{')))); return { signedIn: Boolean(d.loggedIn), accounts: Array.isArray(d.accounts) ? d.accounts.length : null, accountIds: Array.isArray(d.accounts) ? d.accounts.map((a) => a?.id).filter(Boolean) : [] }; } catch { return { signedIn: false }; }
     })(),
     (async () => {
       const git = await exec('git', ['--version']);
@@ -182,6 +188,15 @@ export async function setupStatus({
     });
   }
 
+  // Workers AI, only when a server's AI guides think with it: does the model they use answer on this account?
+  {
+    const local = root ? readLocal(root) : {};
+    const live = Boolean(local.deployedAt || local.connectedAt || (studio?.cloudflare?.created ?? []).some((c) => String(c).startsWith('worker:')));
+    const bin = root ? join(root, 'node_modules', '.bin', win ? 'wrangler.cmd' : 'wrangler') : null;
+    const row = root ? await workersAiRow({ root, studio, env, exec, fetchFn, who, bin, remote: live && Boolean(who.signedIn || env.CLOUDFLARE_API_TOKEN), cli }) : null;
+    if (row) rows.push(row);
+  }
+
   // Chrome, for the checks.
   {
     const found = chrome();
@@ -254,6 +269,7 @@ export async function setupStatus({
     { feature: 'Backup and pull requests', state: ready(by.github.state), needs: ['github'] },
     { feature: 'Songs and game scores', state: ready(by.elevenlabs.state), needs: ['elevenlabs'] },
     { feature: 'Painted art and generated video', state: ready(by.fal.state), needs: ['fal'] },
+    ...(by['workers-ai'] ? [{ feature: 'AI guides that think (Workers AI)', state: ready(by['workers-ai'].state), needs: ['workers-ai'] }] : []),
   ];
   const now = rows.filter((r) => ['missing', 'act'].includes(r.state) && r.fix);
   const meanwhile = rows.filter((r) => r.fix?.open && r.state !== 'ok' && (r.fix.who === 'person' || r.state === 'later'));
