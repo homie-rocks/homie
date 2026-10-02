@@ -175,7 +175,8 @@ status line, so there the codex page is the progress view (`npx --no-install hom
 
 ## 6. Playtest it, then put it online
 
-**Playtest** with the `playtest` skill; fix what it ranks first.
+**Playtest** with the `playtest` skill; fix what it ranks first. If it is slow on a phone, the `perf` skill
+measures why and keeps only the changes that make it faster beyond the noise.
 
 **The site** is made from the studio (`node_modules/@homie-rocks/studio/site/SITE.md`): Home, Games,
 Music, Videos, Rooms and Posts, each once the studio has something in it, in the studio's own look, with

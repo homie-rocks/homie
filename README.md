@@ -52,8 +52,8 @@ codex plugin add homie@homie
 Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
 session afterwards so the skills and tools load.
 
-Then ask for a studio. The plugin adds twelve skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
-`port`, `publish`, `sound`, `music`, `art`, `video`, `playtest`) and connects the Homie MCP server at
+Then ask for a studio. The plugin adds thirteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
+`port`, `publish`, `sound`, `music`, `art`, `video`, `playtest`, `perf`) and connects the Homie MCP server at
 `https://homie.rocks/mcp`, which has creator tools only: set up a studio, make or remix a game, make an
 existing single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.
@@ -82,7 +82,7 @@ A new studio follows one checklist, and never jumps ahead:
    what was spent) and, in Claude Code, an optional status line under the prompt.
 6. **Playtest, then online** on the studio's own Cloudflare, listed in the directory.
 
-Two skills need no account and cost nothing:
+Three skills need no account and cost nothing:
 
 - **`sound`** (*"make sound effects and a short theme for my game"*): effects from presets and
   synthesized scores from chords and patterns, rendered on your computer, with stems and seamless
@@ -92,6 +92,14 @@ Two skills need no account and cost nothing:
   phone held both ways: the first ten seconds, the look while playing, how much of the screen the UI
   covers, the game's real sound, a round with one player trying and one idle, the owner control tests,
   and a brief for a blind review by a fresh reviewer.
+- **`perf`** (*"make my game run faster on phones"*, *"find out why it stutters"*): a measured loop on real
+  Chrome on your computer's GPU, a computer and an emulated phone, two browsers in a room (the host and a
+  replica): frame times (median, p95, long frames), the game's JavaScript and the main thread per frame, time
+  to first frame and to playable, what it downloads, the heap and netplay messages a second, then a CPU
+  profile that names the hot functions through the game's source map. It tries one small change at a time,
+  measures it against the build to beat in alternating runs, and keeps it only when it is better beyond the
+  noise, nothing guarded got worse and two browsers still finish a round; anything else is reverted. The
+  report goes in the studio's `perf/` folder, with the numbers and the before and after.
 
 Music, art and generated video use the providers' own accounts, asked for only when the skill is
 first used:
@@ -114,7 +122,7 @@ first used:
   painted covers, backdrops and textures with fal on your own key, priced, capped and receipted;
   checks that a texture tiles and that files are small enough for a phone.
 
-All of them need ffmpeg; `video`, `art` and `playtest` also use Chrome.
+All of them need ffmpeg; `video`, `art`, `playtest` and `perf` also use Chrome.
 
 ## In the Claude desktop app: one chat
 

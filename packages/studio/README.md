@@ -15,6 +15,7 @@ cd night-owls && npm install
 npx homie-studio game new crown-thief --from gem-rush --name "Crown Thief"
 npx homie-studio dev                                   # the whole site locally
 npx homie-studio check crown-thief --url http://127.0.0.1:8787
+npx homie-studio perf crown-thief --url http://127.0.0.1:8787   # how fast it runs: a computer and an emulated phone, host and replica
 npx homie-studio deploy --plan                         # what deploy will create, and what it costs; changes nothing
 npx homie-studio deploy                                # the studio's own Cloudflare
 npx homie-studio publish                               # the homie.rocks directory
@@ -408,6 +409,36 @@ feed every command behaves exactly as before. `lib/progress.mjs` has the whole f
 `deploy` keeps the `workers.dev` address in `.studio/local.json`, which git ignores: it
 names the Cloudflare account, often after its owner. A custom domain goes in studio.json
 as `cloudflare.domain` and is what the directory claim, `publish`, `check` and `stats` use.
+
+## How fast it runs: `homie-studio perf`
+
+```sh
+npx homie-studio perf crown-thief --url http://127.0.0.1:8787 [--device computer,phone] [--runs 3] [--profile]
+npx homie-studio perf sizes crown-thief                     # every built file, raw and gzipped; with build --maps, the bundle's modules
+npx homie-studio perf compare .perf/crown-thief/<before> .perf/crown-thief/<after> --goal phone.host.frame.p95
+```
+
+One run is two headless Chromes on this computer's GPU in a fresh room of their own (`?room=perf-…`): the host (the
+rules, the bots, the snapshots) and a replica, both a computer (1280x800 at 2x) or both an emulated phone (390x844 at
+3x, touch, Chrome's CPU throttle at 4x with `--cpu`, 4G; each run records the slow-down the throttle really gave, which
+on a fast computer is less than its rate). They play the same seeded presses through a warm-up and a measured
+window, and each run's JSON says, per browser: the time between animation frames (median, p95, p99, the share over 33
+and 50 ms), the game's JavaScript per frame (every requestAnimationFrame callback timed), the main thread per frame
+(Chrome's TaskDuration), time to the first frame, to a seat and to playable, the game's files on the wire, the heap
+after a garbage collection, and netplay messages and kilobytes a second each way. `--profile` adds a CPU profile per
+browser in a window of its own (a `.cpuprofile` for Chrome DevTools) and its hottest functions, read through the
+game's source map when the build kept one (`homie-studio build --maps` keeps it in `.studio/maps/<id>/`, never in
+`site/dist`).
+
+The computer is shared, so every run waits for the 1-minute load to fall under 0.8 per core (`--max-load`) and
+records the load before and after; a run that started busy says `loaded` and `compare` leaves it out. A software
+renderer (SwiftShader) makes the run `blocked`: nothing on it is judged. `compare` calls a metric better only when a
+rank test says it is unlikely to be chance (p < 0.05), the 95% bootstrap interval of the change stays below zero, and
+it is at least 3% better; runs taken side by side with the same `--pair` label are judged as pairs (a signed-rank
+test on their ratios), so a computer that drifted busier cancels. Guards (frame time, main thread per frame, time to
+playable, heap, the host's upload) must not get worse. Results are files under `.perf/<id>/` (git-ignored); the
+command prints paths and medians. The Homie plugin's `perf` skill runs the whole loop: baseline, one change at a time,
+keep or revert, and a report in the studio's `perf/` folder.
 
 ## Checks on a computer without a GPU
 

@@ -30,6 +30,7 @@
  *                                     the game's own build (Vite, webpack…), then its output copied; base must be './'
  */
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
@@ -205,7 +206,23 @@ export function seatsFor(g, net = netplayOf(g)) {
   return { min: Math.min(max, minNamed ?? 1), max, asked };
 }
 
-export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1' } = {}) {
+/**
+ * `build --maps` (what `homie-studio perf` reads a CPU profile through): the bundle's source map and esbuild's metafile
+ * go to .studio/maps/<id>/ (git-ignored, this computer's own), never into site/dist, so a deploy never ships them. The
+ * bundle itself is byte for byte the one a plain build makes (an external map adds no comment to it); main.js.sha256
+ * says which bundle the map belongs to, so a map left over from an older build is never used.
+ */
+function keepMap(root, id, out, metafile) {
+  const dir = join(root, '.studio', 'maps', id);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  const map = join(out, 'assets', 'main.js.map');
+  if (existsSync(map)) { cpSync(map, join(dir, 'main.js.map')); rmSync(map, { force: true }); }
+  writeFileSync(join(dir, 'meta.json'), JSON.stringify(metafile ?? {}));
+  writeFileSync(join(dir, 'main.js.sha256'), `${createHash('sha256').update(readFileSync(join(out, 'assets', 'main.js'))).digest('hex')}\n`);
+}
+
+export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false } = {}) {
   const require = createRequire(join(root, 'package.json'));
   let esbuild;
   try { esbuild = require('esbuild'); } catch { esbuild = await import('esbuild'); }
@@ -228,7 +245,7 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
       const entry = join(g.dir, entryRel);
       if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
       const result = await esbuild.build({
-        entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: false,
+        entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: maps ? 'external' : false,
         outfile: join(out, 'assets', 'main.js'), absWorkingDir: root, logLevel: 'silent', metafile: true,
         loader: LOADERS, assetNames: '[name]-[hash]',
       }).catch((error) => {
@@ -236,6 +253,7 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
         throw new Error(`games/${g.id} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
       });
       warnings += result.warnings.length;
+      if (maps) keepMap(root, g.id, out, result.metafile);
     };
     if (mode === 'static') {
       copyStatic(g.dir, out);

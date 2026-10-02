@@ -16,10 +16,26 @@
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio game remix <source.json url> --id <new id>
  *   homie-studio games
- *   homie-studio build [<id>]
+ *   homie-studio build [<id>] [--maps]   (--maps: also keep each bundle's source map and module sizes in .studio/maps/<id>/,
+ *                                          never in site/dist: what `perf` reads a CPU profile through)
  *   homie-studio dev [--port 8787] [--remote-ai]   (--stop: stop exactly this studio's dev server, nothing else;
  *                                         AI guides think scripted here unless --remote-ai: real Workers AI, billed)
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
+ *   homie-studio perf <id> [--url <site>] [--device computer,phone] [--runs 1] [--seconds 15] [--warm 3] [--profile]
+ *                     [--cpu 4] [--out <dir>] [--max-load 0.8] [--pair <label>]
+ *                                         (how fast it runs: per device, two browsers in a fresh room, the host and a replica,
+ *                                          playing: frame times (median, p95, p99, long frames), the game's JavaScript per frame,
+ *                                          the main thread per frame, time to playable and what it downloaded, the heap, netplay
+ *                                          messages a second; the computer's load with every run. --profile: a CPU profile of
+ *                                          each browser and its hottest functions. Files under .perf/<id>/<time>/; the phone is
+ *                                          emulated (a --cpu times slower CPU, 4G) on this computer's GPU. The plugin's perf
+ *                                          skill runs the whole measure, change, compare, keep-or-revert loop)
+ *   homie-studio perf sizes <id>          (what a player downloads: every built file, raw and gzipped, the biggest first; with
+ *                                          build --maps, which modules make up the bundle)
+ *   homie-studio perf compare <before dir> <after dir> [--goal phone.host.frame.p95] [--min 3] [--guards a,b] [--also c,d]
+ *                                         (better, worse or the same within the noise: medians, a 95% interval, a rank test,
+ *                                          and the guards that must not get worse; runs taken side by side with the same
+ *                                          --pair label on both sides are judged as pairs, so a computer's drift cancels)
  *   homie-studio chrome [install] [--fresh]  (which Chrome the checks use; on Linux, `install` fetches Chrome for Testing;
  *                                          --fresh fetches it even when the machine has a Chrome)
  *   homie-studio look [<path>...] [--url <site>] [--shots <dir>] [--only computer,phone,sideways]
@@ -149,6 +165,7 @@ import { publish } from '../lib/directory.mjs';
 import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
+import { DEFAULT_GOAL, perfCompare, perfRun, perfSizes } from '../lib/perf.mjs';
 import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeOf, typeOf } from '../lib/media.mjs';
 import { ensureMigrations, migrationWord, newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
@@ -170,7 +187,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify'];
+const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -451,6 +468,26 @@ function print(result) {
     case 'chrome install':
       lines.push(result.already || result.command === 'chrome' ? `Chrome: ${result.chrome}` : `Installed Chrome for Testing ${result.buildId}: ${result.chrome}`);
       break;
+    case 'perf':
+      lines.push(`Measured ${result.game}: ${result.runs.length} run(s), in ${result.out}`, ...result.headline.map((l) => `  ${l}`),
+        ...(result.blocked ? [`  ${result.blocked}`] : []), ...(result.loaded ? [`  ${result.loaded}`] : []),
+        `Each run: ${result.out}/<device>-<n>.json (and its screenshots); medians: ${result.summary}${result.sizes ? `; sizes: ${result.sizes}` : ''}`,
+        ...(result.profiles?.length ? [`CPU profiles (Chrome DevTools opens them; the hottest functions are in each run's JSON): ${result.profiles.join(', ')}`] : []));
+      break;
+    case 'perf sizes': {
+      const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
+      lines.push(`${result.game}: ${result.total.files} files, ${kb(result.total.bytes)} (${kb(result.total.gzip)} gzipped); JavaScript ${kb(result.js.bytes)} (${kb(result.js.gzip)} gzipped)`,
+        'Biggest:', ...result.biggest.slice(0, 8).map((f) => `  ${kb(f.bytes).padStart(10)}  ${f.path}${f.gzip !== f.bytes ? `  (${kb(f.gzip)} gzipped)` : ''}`),
+        ...(result.modules ? ['Bundle modules:', ...result.modules.top.slice(0, 8).map((m) => `  ${kb(m.bytes).padStart(10)}  ${m.module}`)] : []),
+        ...(result.apart ? [`Not loaded by the game: ${result.apart.files} file(s), ${kb(result.apart.bytes)} (${result.apart.note})`] : []));
+      break;
+    }
+    case 'perf compare':
+      lines.push(`${result.verdict.toUpperCase()}: ${result.why}`,
+        ...result.guards.filter((g) => g.verdict !== 'same').map((g) => `  ${g.verdict} ${g.metric}: ${g.why}`),
+        ...(result.left.before + result.left.after ? [`  left out: ${result.left.before} run(s) before, ${result.left.after} after (blocked or started on a busy computer)`] : []),
+        `Written: ${result.file}`);
+      break;
     case 'check':
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
         ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`),
@@ -490,6 +527,10 @@ async function main() {
     if (line) process.stdout.write(`${line}\n`);
     return { ok: true, command: 'help' };
   }
+  if (cmd === 'perf' && sub === 'compare') {
+    if (!positional[2] || !positional[3]) return { ok: false, command: 'perf compare', why: 'usage: homie-studio perf compare <before dir> <after dir> [--goal <metric>] [--min 3]' };
+    return perfCompare(positional[2], positional[3], { goal: String(flags.get('goal') ?? DEFAULT_GOAL), min: flags.has('min') ? Number(flags.get('min')) / 100 : 0.03, guards: flags.get('guards') ? String(flags.get('guards')).split(',').map((x) => x.trim()).filter(Boolean) : null, also: flags.get('also') ? String(flags.get('also')).split(',').map((x) => x.trim()).filter(Boolean) : [] });
+  }
   const root = requireStudio();
   if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
@@ -506,7 +547,16 @@ async function main() {
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });
   if (cmd === 'game' && sub === 'remix') return remixGame(root, positional[2], flags.get('id'), { name: flags.get('name') });
   if (cmd === 'games') return { ok: true, command: 'games', games: listGames(root).map(({ dir, ...g }) => ({ ...g, dir: relative(root, dir) })) };
-  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log }), 'build');
+  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps') }), 'build');
+  if (cmd === 'perf' && sub === 'sizes') return perfSizes(root, positional[2] ?? listGames(root)[0]?.id);
+  if (cmd === 'perf') {
+    const game = sub ?? listGames(root)[0]?.id;
+    const url = flags.get('url') ?? siteUrl(root);
+    if (!url) return { ok: false, command: 'perf', why: 'give --url (the local dev address or the live site)' };
+    const devices = String(flags.get('device') ?? 'computer,phone').split(',').map((d) => d.trim()).filter(Boolean);
+    const num = (k, d, lo, hi) => Math.max(lo, Math.min(hi, Number(flags.get(k) ?? d) || d));
+    return perfRun({ root, url, game, devices, runs: num('runs', 1, 1, 50), seconds: num('seconds', 15, 3, 300), warm: num('warm', 3, 0, 60), profile: flags.has('profile'), out: flags.get('out') ? resolve(String(flags.get('out'))) : null, maxLoad: num('max-load', 0.8, 0.05, 50), cpu: num('cpu', 4, 1, 20), pair: flags.get('pair') ? String(flags.get('pair')) : null, log });
+  }
   if (cmd === 'status') {
     const studio = readStudio(root);
     return { ok: true, command: 'status', root, studio, site: siteUrl(root, studio), games: listGames(root).map((g) => g.id), cloudflareSignedIn: Boolean(wranglerBin(root) && whoami(root)) };
@@ -869,7 +919,7 @@ try {
   if (result && result.command !== 'help') print(result);
   if (result?.ok === false) process.exitCode = 1;
   // Chrome's pipes can outlive browser.close(); a finished check must not hang its caller.
-  if (result?.command === 'check' || result?.command === 'port check' || result?.command === 'look') process.exit(process.exitCode ?? 0);
+  if (['check', 'port check', 'look', 'perf'].includes(result?.command)) process.exit(process.exitCode ?? 0);
 } catch (error) {
   await flushProgress().catch(() => {});
   print({ ok: false, why: error instanceof Error ? error.message : String(error) });

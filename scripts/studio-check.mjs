@@ -6,12 +6,15 @@
  * Testing when the machine has none, the site under `homie-studio dev`, and the real two-browser `check` against
  * it: a computer and a phone press Play, land in the same public room and finish a round.
  *
- *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing] [--record]
+ *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing] [--record] [--perf]
  *     --chrome-for-testing: Chrome for Testing even when the machine has a Chrome, as a machine without one gets
  *     --record: then the video skill's page recorder runs its tested examples against the same dev site
  *               (plugins/homie/skills/video/references/examples/studio-play.json and studio-play-phone.json): the
  *               landing, Play, a few moves on a computer and on a phone, recorded in real time; it fails when a
  *               step fails or the game's frame received none of the input, never on a slow frame rate
+ *     --perf: then `homie-studio perf` measures one run per device (two browsers in a room of their own, the host and
+ *               a replica): it fails when a run is missing a number (load, frames, the main thread, the heap, netplay
+ *               messages) or a role; on a software renderer every run must say it is blocked (nothing judged there)
  *
  * CI runs it on ubuntu-24.04 (no GPU), the closest free stand-in for a cloud session's VM: it prints how fast each
  * browser drew the game and on which renderer (SwiftShader there), and fails only when the round does not finish.
@@ -104,9 +107,31 @@ try {
       lines.push(`- recorded ${name}: ${ok ? `${j.seconds} s, ${j.steps} steps, the game's frame received ${got.keys ?? 0} key presses, ${got.pointers ?? 0} pointer presses and ${got.touches ?? 0} touches; the page drew ${j.pageFps?.page ?? '?'} fps, the game ${j.pageFps?.game ?? '?'} fps, ${j.heldFrames} frames held${j.warnings?.length ? ` (${j.warnings.join(' ')})` : ''}` : `FAILED: ${j?.failed ? `step ${j.failed.step} (${j.failed.do}): ${j.failed.why}` : j ? `the game's frame received no input` : ((rec.stderr ?? '').split('\n').filter((l) => /record-page:|Error|error:/.test(l)).slice(0, 3).join(' ') || (rec.stderr ?? '').trim().split('\n').slice(-3).join(' ')).slice(0, 600)}`}`);
     }
   }
+  // homie-studio perf on the same site: every number of a run is there, and a software renderer judges nothing.
+  let measured = true;
+  if (process.argv.includes('--perf')) {
+    const pr = spawnSync(cli, ['perf', 'gem-rush', '--url', `http://127.0.0.1:${port}`, '--runs', '1', '--seconds', '5', '--warm', '1', '--max-load', '50', '--json'], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 8 * 60_000, maxBuffer: 16 * 1024 * 1024 });
+    let pj = null; try { pj = JSON.parse(pr.stdout); } catch { /* none */ }
+    const runs = (pj?.runs ?? []).map((f) => { try { return JSON.parse(readFileSync(join(studio, f), 'utf8')); } catch { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } } });
+    const problems = [];
+    if (runs.length !== 2 || runs.some((x) => !x)) problems.push(`expected a computer run and a phone run, got ${runs.filter(Boolean).length} (${pj?.why ?? (pr.stderr ?? '').trim().split('\n').slice(-2).join(' ')})`);
+    for (const run of runs.filter(Boolean)) {
+      const roles = (run.browsers ?? []).map((b) => b.role).sort().join(',');
+      if (roles !== 'host,replica') problems.push(`${run.device}: roles ${roles || 'none'}`);
+      for (const b of run.browsers ?? []) {
+        const need = { 'load.playableMs': b.load?.playableMs, 'frames.n': b.frames?.n, 'frames.p95': b.frames?.p95, 'main.busyPerFrame': b.main?.busyPerFrame, 'heap.afterGcMb': b.heap?.afterGcMb, 'net.msgsOut': b.net?.msgsOut };
+        for (const [k, v] of Object.entries(need)) if (!Number.isFinite(v)) problems.push(`${run.device} ${b.role}: no ${k}`);
+      }
+      if (/swiftshader|llvmpipe|software/i.test(run.renderer ?? '') && !run.blocked) problems.push(`${run.device}: a software renderer (${run.renderer}) but the run is not blocked`);
+    }
+    measured = problems.length === 0;
+    const r0 = runs.find((x) => x?.device === 'computer');
+    const host = r0?.browsers?.find((b) => b.role === 'host');
+    lines.push(`- perf: ${measured ? `${runs.length} runs, host and replica each; computer host playable at ${host?.load?.playableMs} ms, ${host?.frames?.fps} fps, ${host?.main?.busyPerFrame} ms of main thread a frame, ${host?.net?.msgsOut} netplay messages out a second; ${runs.every((x) => x.blocked) ? `every run blocked (${r0?.renderer}): measured, never judged` : `renderer ${r0?.renderer}`}` : `FAILED: ${problems.slice(0, 6).join('; ')}`}`);
+  }
   say(lines.join('\n'));
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
-  process.exitCode = result.ok && recorded ? 0 : 1;
+  process.exitCode = result.ok && recorded && measured ? 0 : 1;
 } catch (error) {
   say(String(error?.message ?? error));
   process.exitCode = 1;

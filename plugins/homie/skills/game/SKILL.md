@@ -184,6 +184,9 @@ Then make it good, not just working:
 - **Playtest**: the `playtest` skill plays it on a computer and a phone held both ways, measures the
   first ten seconds, the look, the UI, the real sound and a round, runs the owner tests, and hands a
   blind review to a fresh reviewer. Fix what it ranks first; run it again.
+- **Speed**: when it stutters, loads slowly or a phone struggles, the `perf` skill measures it (frame
+  times, CPU per frame for the host and a replica, time to playable, downloads, memory, netplay) and
+  keeps a change only when it is faster beyond the noise and two browsers still finish a round.
 
 Then give it its landing (below), `npm run deploy` and `studio_publish` (see `publish`), and
 check again on the live site.

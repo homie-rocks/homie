@@ -72,7 +72,9 @@ Lead with the numbers and the review, most important first: what fails, then wha
 fix first. Group findings by cause before proposing work (five complaints about flat shapes are one
 missing lighting model, not five jobs). Name the one change that would matter most. Then, if the
 person wants, fix it and run the same instruments again; a change that does not measure better than
-the version before it is a regression, not progress.
+the version before it is a regression, not progress. When the weak thing is speed (a low frame rate in
+`first`, a slow first ten seconds, a phone that struggles), the `perf` skill measures it properly: frame
+times and CPU per frame for the host and a replica, alternating runs, and only changes that beat the noise.
 
 `references/METHOD.md` has the method behind the rows: playing like a person, the five numbers a
 round owes you, the scenarios, seats with different strategies, the do-nothing test, the ten-second

@@ -17,6 +17,7 @@ directory lists its games; homie.rocks does not host them.
 | `site/` | The studio's site: its look (`theme.json`), and anything of its own that wins over the generated pages (`site/README.md`); the Worker (`src/worker.mjs`) and its D1 migrations. |
 | `wrangler.jsonc` | The Worker's Cloudflare config (the Worker, D1, the Table and Lobby Durable Objects, and `previews` for branch Previews), at the root, where Cloudflare's Workers Builds reads it. A studio made before 0.10.0 keeps it in `site/` and deploys from a computer; every command finds either. |
 | `changes/` | One small file per change that went out through a pull request (`homie-studio progress pr` writes it): the site lists the newest, so the Claude app can tell when a merged change is live. |
+| `perf/` | Performance reports, one folder per game (the Homie plugin's `perf` skill): `README.md` (the goal, before and after with the noise, every change tried and why it was kept or reverted), `numbers.json` and `before-after/`. The raw runs, screenshots and CPU profiles stay in `.perf/`, which git ignores. |
 | `studio.json` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. `.studio/` (git-ignored) is this computer's own state. |
 | `.claude/skills/` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |
 
@@ -41,6 +42,11 @@ studio's pinned copy, never a registry lookup of the bare name.
   never `pkill` by name, which stops other projects' dev servers too).
 - `npx --no-install homie-studio check <id> --url <site>` — two headless browsers press Play and must
   land in the same room and finish a round. Run it before you say a game works.
+- `npx --no-install homie-studio perf <id> --url <site>` — how fast a game runs, on a computer and an emulated
+  phone, with two browsers in a room (the host and a replica): frame times, the game's JavaScript and the main thread
+  per frame, time to playable, what it downloads, the heap, netplay messages a second (files under `.perf/`). The
+  Homie plugin's `perf` skill runs the whole loop: one change at a time, kept only when it is better beyond the noise
+  and `check` still passes, and a report in `perf/<id>/`.
 - `npx --no-install homie-studio deploy --plan` — says what deploy will create on Cloudflare and what it
   costs, and changes nothing. Tell the person before the first deploy.
 - `npm run deploy` — the site on this studio's Cloudflare: one Worker, one D1 database, two
