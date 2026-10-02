@@ -41,7 +41,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 // The one model loader every studio game uses: checks each file, decodes meshopt and WebP, copies for placing.
-import { createModels, instancedCopies, placeCopy, repaint, type Copies } from '@homie-rocks/studio/assets';
+import { createModels, instancedCopies, placeCopy, repaint, stylize, type Copies } from '@homie-rocks/studio/assets';
 import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` and `perf` read, and sandbox + audio shims), and name
 // labels that never pile up (port/view.ts).
@@ -749,10 +749,12 @@ const labView = lab.camera<{ zoom?: number; whole?: boolean } | null>({ game: nu
 interface StyleTokens {
   palette: { bg: string; ink: string; accent: string; accent2: string; danger: string; good: string; gold: string; ramp?: string[] };
   fonts?: { display?: string; body?: string } | null;
-  light?: { key?: number[]; intensity?: number; hardness?: number; sky?: string; ground?: string; fog?: number } | null;
+  light?: { time?: string; key?: number[]; intensity?: number; hardness?: number; sky?: string; ground?: string; fog?: number } | null;
   camera?: { pitch?: number; distance?: number; fov?: number } | null;
+  render?: string;
+  materials?: { model?: string; outline?: boolean } | null;
 }
-const STYLE = styleFile as unknown as StyleTokens;
+const STYLE = styleFile as unknown as StyleTokens & { materials?: { model?: string; outline?: boolean } };
 const PAL = STYLE.palette;
 const LIGHT = { key: [-0.5, -1, -0.35], intensity: 2.2, hardness: 0.35, sky: PAL.bg, ground: PAL.accent2, fog: 0.35, ...(STYLE.light ?? {}) };
 const CAM = { pitch: 52, distance: 22, fov: 38, ...(STYLE.camera ?? {}) };
@@ -766,10 +768,11 @@ function mixHex(a: string, b: string, k: number): string {
 /** The world's own colours, all from the palette: so a new style.json repaints everything the code draws. */
 const COL = {
   sky: LIGHT.sky ?? PAL.bg,
-  meadow: mixHex(mixHex(PAL.accent2, PAL.good, 0.5), PAL.ink, 0.1),
-  meadowSpot: mixHex(PAL.accent2, PAL.gold, 0.25),
-  floor: mixHex(PAL.good, PAL.gold, 0.36),
-  floorStripe: mixHex(mixHex(PAL.good, PAL.gold, 0.36), mixHex(PAL.good, PAL.ink, 0.25), 0.3),
+  // The ground of the style board when the light names one (a night grove is dark grass), else the palette's greens.
+  meadow: STYLE.light?.ground ? mixHex(STYLE.light.ground, PAL.accent2, 0.15) : mixHex(mixHex(PAL.accent2, PAL.good, 0.5), PAL.ink, 0.1),
+  meadowSpot: mixHex(STYLE.light?.ground ? mixHex(STYLE.light.ground, PAL.accent2, 0.3) : PAL.accent2, PAL.gold, 0.25),
+  floor: mixHex(mixHex(PAL.good, PAL.gold, 0.36), STYLE.light?.ground ?? PAL.good, STYLE.light?.ground ? 0.4 : 0),
+  floorStripe: mixHex(mixHex(mixHex(PAL.good, PAL.gold, 0.36), STYLE.light?.ground ?? PAL.good, STYLE.light?.ground ? 0.4 : 0), mixHex(PAL.good, PAL.ink, 0.25), 0.3),
   path: mixHex(PAL.gold, '#ffffff', 0.72),
   shadow: mixHex(PAL.ink, PAL.accent2, 0.25),
   zone: PAL.accent,
@@ -805,9 +808,10 @@ const camera = new PerspectiveCamera(CAM.fov, 1, 1, 320);
 // The light of the style board (assets/render-page.ts): a sun along style.json's key, a sky-to-ground fill, a little ambient.
 {
   const key = LIGHT.key;
-  const sun = new DirectionalLight(0xffffff, (LIGHT.intensity ?? 2.2) * 1.05);
+  const night = LIGHT.time === 'night';
+  const sun = new DirectionalLight(night ? mixHex(PAL.accent2, '#ffffff', 0.55) : LIGHT.time === 'golden' ? mixHex(PAL.gold, '#ffffff', 0.4) : '#ffffff', (LIGHT.intensity ?? 2.2) * 1.05);
   sun.position.set(-(key[0] ?? -0.5) * 30, -(key[1] ?? -1) * 30, -(key[2] ?? -0.35) * 30);
-  scene.add(sun, new HemisphereLight(new Color(LIGHT.sky), new Color(LIGHT.ground), 1.3), new AmbientLight(0xffffff, 0.25));
+  scene.add(sun, new HemisphereLight(new Color(night ? mixHex(LIGHT.sky ?? PAL.bg, '#9fb4ff', 0.5) : LIGHT.sky), new Color(LIGHT.ground), night ? 1.6 : 1.3), new AmbientLight(0xffffff, night ? 0.35 : 0.25));
 }
 const XZ = (x: number, y: number): [number, number] => [x - W / 2, y - H / 2]; // rules (x, y) to three.js (x, z)
 const EDGE = 0.55; // the path around the arena, metres
@@ -1006,6 +1010,8 @@ function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap'>): Promise<Ready | null> 
       if (spec.swap) repaint(m.scene, spec.swap);
       const size = new Box3().setFromObject(m.scene).getSize(new Vector3());
       const fit = size.y > 1e-3 ? spec.m / size.y : 1;
+      // The art direction's material model and ink line (style.json), as the style board drew them.
+      stylize(m.scene, STYLE);
       return { scene: m.scene, fit, size: size.multiplyScalar(fit) };
     }, () => { standIns.add(spec.url); return null; });
     ready.set(spec.url, p);
@@ -1240,7 +1246,7 @@ function dressAnimal(a: Animal, colour: string): void {
     const own = new Map<Material, MeshStandardMaterial>();
     obj.traverse((o) => {
       const mesh = o as Mesh;
-      if (!mesh.isMesh) return;
+      if (!mesh.isMesh || mesh.name === 'hull') return;
       const m = mesh.material as MeshStandardMaterial;
       let c = own.get(m);
       if (!c) { c = m.clone(); own.set(m, c); a.mats.push(c); }

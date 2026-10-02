@@ -13,13 +13,14 @@
  * Models arrive as base64 GLB bytes and are parsed here (meshopt decoded); nothing is fetched but Google Fonts.
  */
 import {
-  AmbientLight, BackSide, Box3, CanvasTexture, Color, DirectionalLight, DoubleSide, Fog, Group, HemisphereLight, Mesh, MeshBasicMaterial,
+  AmbientLight, BackSide, Box3, BufferGeometry, CanvasTexture, Float32BufferAttribute, Color, DirectionalLight, DoubleSide, Fog, Group, HemisphereLight, Mesh, MeshBasicMaterial,
   MeshLambertMaterial, MeshStandardMaterial, MeshToonMaterial, NearestFilter, Object3D, OrthographicCamera, PerspectiveCamera, PlaneGeometry,
   Scene, SRGBColorSpace, Vector3, WebGLRenderer, PointLight, CylinderGeometry, ConeGeometry, IcosahedronGeometry, SphereGeometry, CapsuleGeometry,
   OctahedronGeometry, DataTexture, RedFormat, GridHelper, ACESFilmicToneMapping, NoToneMapping, PCFSoftShadowMap, type Material, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 interface Palette { bg: string; ink: string; accent: string; accent2: string; danger: string; good: string; gold: string; ramp?: string[] }
 interface Tokens {
@@ -68,10 +69,10 @@ function styled(mat: Material, t: Tokens): Material {
   const color = src.color ? src.color.clone() : new Color('#cccccc');
   const map = (src.map ?? null) as Texture | null;
   const model = t.materials?.model ?? 'flat';
-  if (model === 'toon') return new MeshToonMaterial({ color, map, gradientMap: ramp(3) });
-  if (model === 'flat' || model === 'pixel') return new MeshLambertMaterial({ color, map, flatShading: true });
+  if (model === 'toon') return new MeshToonMaterial({ color, map, side: src.side, gradientMap: ramp(3) });
+  if (model === 'flat' || model === 'pixel') return new MeshLambertMaterial({ color, map, side: src.side, flatShading: true });
   if (model === 'hand-painted') {
-    const m = new MeshStandardMaterial({ color, map, roughness: 0.95, metalness: 0 });
+    const m = new MeshStandardMaterial({ color, map, side: src.side, roughness: 0.95, metalness: 0 });
     // A painted look: the top of every surface a little lighter, the bottom a little cooler (light baked gently in).
     m.onBeforeCompile = (s) => {
       s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nvarying float vH;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvH = (modelMatrix * vec4(transformed, 1.0)).y;');
@@ -79,18 +80,102 @@ function styled(mat: Material, t: Tokens): Material {
     };
     return m;
   }
-  return new MeshStandardMaterial({ color, map, roughness: src.roughness ?? 0.6, metalness: src.metalness ?? 0 });
+  return new MeshStandardMaterial({ color, map, side: src.side, roughness: src.roughness ?? 0.6, metalness: src.metalness ?? 0 });
+}
+
+/** The outline's shell: positions only, corners welded, smooth normals (an unbroken line on a flat-shaded model). */
+function hullGeometry(g: BufferGeometry): BufferGeometry | null {
+  const only = new BufferGeometry();
+  // Plain float positions (an optimised model's are quantized, often interleaved), read through the accessor.
+  const src = g.getAttribute('position');
+  const xyz = new Float32Array(src.count * 3);
+  for (let i = 0; i < src.count; i++) { xyz[i * 3] = src.getX(i); xyz[i * 3 + 1] = src.getY(i); xyz[i * 3 + 2] = src.getZ(i); }
+  only.setAttribute('position', new Float32BufferAttribute(xyz, 3));
+  if (g.index) only.setIndex(Array.from(g.index.array as ArrayLike<number>));
+  const h = mergeVertices(only);
+  if (openShell(h) || paperThin(h)) return null;
+  h.computeVertexNormals();
+  return h;
+}
+
+/**
+ * How thick a closed shell is, about (3 x volume / area: a slab of thickness t gives 1.5 t), in its own units.
+ */
+function thicknessOf(h: BufferGeometry): number {
+  const p = h.getAttribute('position'); const a = (h.index as NonNullable<BufferGeometry['index']>).array as ArrayLike<number>;
+  let vol = 0; let area = 0;
+  for (let i = 0; i + 2 < a.length; i += 3) {
+    const i0 = a[i] as number; const i1 = a[i + 1] as number; const i2 = a[i + 2] as number;
+    const ax = p.getX(i0); const ay = p.getY(i0); const az = p.getZ(i0);
+    const bx = p.getX(i1); const by = p.getY(i1); const bz = p.getZ(i1);
+    const cx = p.getX(i2); const cy = p.getY(i2); const cz = p.getZ(i2);
+    vol += (ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)) / 6;
+    const ux = bx - ax; const uy = by - ay; const uz = bz - az; const vx = cx - ax; const vy = cy - ay; const vz = cz - az;
+    area += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+  }
+  return area > 0 ? (3 * Math.abs(vol)) / area : 0;
+}
+
+/** Two cards back to back (leaves, grass): closed, but with no inside, so a shell would z-fight it black. */
+function paperThin(h: BufferGeometry): boolean {
+  h.computeBoundingBox();
+  const size = (h.boundingBox as NonNullable<BufferGeometry['boundingBox']>).getSize(new Vector3());
+  return thicknessOf(h) < 0.01 * Math.max(size.x, size.y, size.z);
+}
+
+/** An open surface (cards of leaves, grass, a sail): many edges belong to one triangle only. No outline shell for it. */
+function openShell(h: BufferGeometry): boolean {
+  const idx = h.index;
+  if (!idx) return true;
+  const edges = new Map<string, number>();
+  const a = idx.array as ArrayLike<number>;
+  for (let i = 0; i + 2 < a.length; i += 3) {
+    for (const [u, v] of [[a[i], a[i + 1]], [a[i + 1], a[i + 2]], [a[i + 2], a[i]]] as [number, number][]) {
+      const k = u < v ? `${u}_${v}` : `${v}_${u}`;
+      edges.set(k, (edges.get(k) ?? 0) + 1);
+    }
+  }
+  let open = 0;
+  for (const n of edges.values()) if (n === 1) open += 1;
+  return edges.size > 0 && open / edges.size > 0.15;
+}
+
+/**
+ * The ink shell's vertex step: pushed out along its normal by `width` WORLD units (metres in a game), after every
+ * transform (the model's scale, a quantized mesh's node, an instance's matrix), so a line is as thick on a flower as on
+ * a tree and nothing about the model's own units matters.
+ */
+function inkShader(width: number): (sh: { vertexShader: string }) => void {
+  const w = Math.max(0, width).toExponential(4);
+  return (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', [
+      'vec4 mvPosition = vec4( transformed, 1.0 );',
+      'vec3 inkN = normal;',
+      '#ifdef USE_INSTANCING',
+      'mvPosition = instanceMatrix * mvPosition; inkN = mat3( instanceMatrix ) * inkN;',
+      '#endif',
+      'vec4 inkW = modelMatrix * mvPosition;',
+      `inkW.xyz += normalize( mat3( modelMatrix ) * inkN ) * ${w};`,
+      'mvPosition = viewMatrix * inkW;',
+      'gl_Position = projectionMatrix * mvPosition;',
+    ].join('\n'));
+  };
 }
 
 /** Ink outlines (an inverted hull pushed out along the normals): the toon look's line. */
 function outline(root: Object3D, ink: string, width: number): void {
   const hulls: Mesh[] = [];
+  const mat = new MeshBasicMaterial({ color: col(ink), side: BackSide });
+  mat.onBeforeCompile = inkShader(width);
+  mat.customProgramCacheKey = () => `ink:${width}`;
   root.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh || m.name === 'hull') return;
-    const mat = new MeshBasicMaterial({ color: col(ink), side: BackSide });
-    mat.onBeforeCompile = (s) => { s.vertexShader = s.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\ntransformed += normalize(normal) * ${width.toFixed(4)};`); };
-    const h = new Mesh(m.geometry, mat);
+    // No line on a two-sided card (leaves, grass): a shell around nothing draws it black.
+    if ((Array.isArray(m.material) ? m.material : [m.material]).some((x) => x.side === DoubleSide)) return;
+    const shell = hullGeometry(m.geometry);
+    if (!shell) return;
+    const h = new Mesh(shell, mat);
     h.name = 'hull';
     hulls.push(h);
     (m as unknown as { __hull?: Mesh }).__hull = h;
@@ -170,14 +255,15 @@ export function retint(root: Object3D, hexes: string[]): void {
   });
 }
 
-function restyle(root: Object3D, t: Tokens, size: number): void {
+/** `line`: the outline's thickness in world units (the board: a share of its size; the lineup: 5 cm at true scale). */
+function restyle(root: Object3D, t: Tokens, size: number, line?: number): void {
   root.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh) return;
     m.castShadow = true; m.receiveShadow = true;
     m.material = Array.isArray(m.material) ? m.material.map((x) => styled(x, t)) : styled(m.material, t);
   });
-  if (t.materials?.outline) outline(root, mixHex(t.palette.bg, '#000000', 0.7), Math.max(0.012, size * 0.03));
+  if (t.materials?.outline) outline(root, mixHex(t.palette.bg, '#000000', 0.7), line ?? Math.max(0.012, size * 0.03));
 }
 
 function mixHex(a: string, b: string, k: number): string { return `#${col(a).lerp(col(b), k).getHexString()}`; }
@@ -347,7 +433,7 @@ async function lineup(models: ModelIn[], t: Tokens, opts: { w?: number; h?: numb
   const p = t.palette;
   const parsed: { m: ModelIn; g: Group; size: Vector3 }[] = [];
   for (const m of models) {
-    try { const g = await parse(m); if (m.retint) retint(g, [...(p.ramp ?? []), p.accent, p.accent2, p.gold, p.good]); if (m.scale && m.scale > 0) { g.scale.multiplyScalar(m.scale); g.updateMatrixWorld(true); } const b = boxOf(g); g.position.y -= b.min.y; g.position.x -= (b.min.x + b.max.x) / 2; g.position.z -= (b.min.z + b.max.z) / 2; parsed.push({ m, g, size: b.getSize(new Vector3()) }); } catch { /* skipped */ }
+    try { const g = await parse(m); if (m.retint) retint(g, [...(p.ramp ?? []), p.accent, p.accent2, p.gold, p.good]); restyle(g, t, Math.max(0.1, ...boxOf(g).getSize(new Vector3()).toArray()), 0.05); if (m.scale && m.scale > 0) { g.scale.multiplyScalar(m.scale); g.updateMatrixWorld(true); } const b = boxOf(g); g.position.y -= b.min.y; g.position.x -= (b.min.x + b.max.x) / 2; g.position.z -= (b.min.z + b.max.z) / 2; parsed.push({ m, g, size: b.getSize(new Vector3()) }); } catch { /* skipped */ }
   }
   const gap = 0.5;
   const room = 0.45; // under each shelf, for its labels

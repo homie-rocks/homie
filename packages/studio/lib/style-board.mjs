@@ -93,8 +93,11 @@ export async function styleBoard(root, id, { prompt = '', log = () => {}, librar
   }, { log });
   const prev = doc.board?.directions ?? [];
   doc = readDecisions(root, id);
+  // A pick survives a redraw only while its letter still names the same direction.
+  const was = prev.find((p) => p.id === doc.board?.chosen);
+  const still = was && out.some((d) => d.id === was.id && d.label === was.label);
   doc.board = {
-    at: new Date().toISOString(), renderer, chosen: doc.board?.chosen ?? null,
+    at: new Date().toISOString(), renderer, chosen: still ? was.id : null,
     directions: out.map((d) => ({ id: d.id, label: d.label, family: d.family, values: d.values, swatch: d.swatch.split('\\').join('/'), library: d.library, mood: prev.find((p) => p.id === d.id && p.label === d.label)?.mood ?? null })),
   };
   writeDecisions(root, id, doc);

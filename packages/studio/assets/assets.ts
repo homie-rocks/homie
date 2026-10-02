@@ -34,11 +34,16 @@
  *
  * A flat-coloured model (a library item with `paletteSwap`: its colours in one tiny palette picture) is repainted
  * into a game's own palette with `repaint(model, pick)`, once, on the loaded model, before it is copied.
+ *
+ * `stylize(model, style)` draws it the way the game's art direction says (style.json: `materials.model` toon, flat,
+ * hand-painted or pbr, and `materials.outline`), the same material model and ink line the style board was drawn with.
+ * Once, on the loaded model, after `repaint` and before it is copied: its outline hulls are instanced with it.
  */
-import { BoxGeometry, CanvasTexture, Color, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial, SRGBColorSpace, type AnimationClip, type Group, type Material, type Object3D, type Texture } from 'three';
+import { BackSide, DoubleSide, Box3, BoxGeometry, BufferGeometry, Float32BufferAttribute, CanvasTexture, Color, DataTexture, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial, MeshToonMaterial, NearestFilter, RedFormat, SRGBColorSpace, Vector3, type AnimationClip, type Group, type Material, type Object3D, type Texture } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { LIMITS, checkGlb, refusal } from './safety.mjs';
 
 export { LIMITS, checkGlb } from './safety.mjs';
@@ -213,6 +218,165 @@ export function repaint(model: Object3D, pick: (r: number, g: number, b: number)
 }
 
 /** Every geometry, material and picture under `obj`, freed. */
+/** What `stylize` reads from a game's style.json. */
+export interface StyleLike {
+  render?: string;
+  materials?: { model?: string; outline?: boolean };
+  palette?: { bg?: string; ink?: string };
+}
+
+let toonRamp: DataTexture | null = null;
+function rampOf(): DataTexture {
+  if (toonRamp) return toonRamp;
+  const data = new Uint8Array([Math.round(0.2 * 255), Math.round(0.53 * 255), Math.round(0.87 * 255)]);
+  toonRamp = new DataTexture(data, 3, 1, RedFormat);
+  toonRamp.minFilter = NearestFilter; toonRamp.magFilter = NearestFilter; toonRamp.needsUpdate = true;
+  return toonRamp;
+}
+
+/** One material in the style's material model (its colour, picture, vertex colours and transparency kept). */
+function styledMaterial(mat: Material, model: string): Material {
+  const src = mat as MeshStandardMaterial;
+  const base = { color: src.color ? src.color.clone() : new Color('#cccccc'), map: (src.map ?? null) as Texture | null, vertexColors: Boolean(src.vertexColors), transparent: src.transparent, opacity: src.opacity, side: src.side, alphaTest: src.alphaTest };
+  let out: Material;
+  if (model === 'toon') out = new MeshToonMaterial({ ...base, gradientMap: rampOf() });
+  else if (model === 'flat' || model === 'pixel') out = new MeshLambertMaterial({ ...base, flatShading: true });
+  else if (model === 'hand-painted') {
+    const m = new MeshStandardMaterial({ ...base, roughness: 0.95, metalness: 0 });
+    // A painted look: the top of every surface a little lighter, the bottom a little cooler.
+    m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vH;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvH = (modelMatrix * vec4(transformed, 1.0)).y;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vH;').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.82, 0.86, 0.98), vec3(1.12, 1.06, 0.96), clamp(vH * 0.6 + 0.4, 0.0, 1.0));');
+    };
+    out = m;
+  } else return mat;
+  out.name = mat.name;
+  return out;
+}
+
+/**
+ * The outline's shell: the mesh's positions only, its corners welded, with smooth normals, so a flat-shaded low-poly
+ * model's line stays one unbroken shell instead of a black flake on every face. One per geometry.
+ */
+const hullGeometries = new WeakMap<BufferGeometry, BufferGeometry | null>();
+function hullGeometry(g: BufferGeometry): BufferGeometry | null {
+  if (hullGeometries.has(g)) return hullGeometries.get(g) ?? null;
+  let h: BufferGeometry | null;
+  const only = new BufferGeometry();
+  // Plain float positions (an optimised model's are quantized, often interleaved), read through the accessor.
+  const src = g.getAttribute('position');
+  const xyz = new Float32Array(src.count * 3);
+  for (let i = 0; i < src.count; i++) { xyz[i * 3] = src.getX(i); xyz[i * 3 + 1] = src.getY(i); xyz[i * 3 + 2] = src.getZ(i); }
+  only.setAttribute('position', new Float32BufferAttribute(xyz, 3));
+  if (g.index) only.setIndex(Array.from(g.index.array as ArrayLike<number>));
+  h = mergeVertices(only);
+  if (openShell(h) || paperThin(h)) h = null; else h.computeVertexNormals();
+  hullGeometries.set(g, h);
+  return h;
+}
+
+/**
+ * How thick a closed shell is, about (3 x volume / area: a slab of thickness t gives 1.5 t), in its own units.
+ */
+function thicknessOf(h: BufferGeometry): number {
+  const p = h.getAttribute('position'); const a = (h.index as NonNullable<BufferGeometry['index']>).array as ArrayLike<number>;
+  let vol = 0; let area = 0;
+  for (let i = 0; i + 2 < a.length; i += 3) {
+    const i0 = a[i] as number; const i1 = a[i + 1] as number; const i2 = a[i + 2] as number;
+    const ax = p.getX(i0); const ay = p.getY(i0); const az = p.getZ(i0);
+    const bx = p.getX(i1); const by = p.getY(i1); const bz = p.getZ(i1);
+    const cx = p.getX(i2); const cy = p.getY(i2); const cz = p.getZ(i2);
+    vol += (ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)) / 6;
+    const ux = bx - ax; const uy = by - ay; const uz = bz - az; const vx = cx - ax; const vy = cy - ay; const vz = cz - az;
+    area += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+  }
+  return area > 0 ? (3 * Math.abs(vol)) / area : 0;
+}
+
+/** Two cards back to back (leaves, grass): closed, but with no inside, so a shell would z-fight it black. */
+function paperThin(h: BufferGeometry): boolean {
+  h.computeBoundingBox();
+  const size = (h.boundingBox as NonNullable<BufferGeometry['boundingBox']>).getSize(new Vector3());
+  return thicknessOf(h) < 0.01 * Math.max(size.x, size.y, size.z);
+}
+
+/** An open surface (cards of leaves, grass, a sail): many edges belong to one triangle only. No outline shell for it. */
+function openShell(h: BufferGeometry): boolean {
+  const idx = h.index;
+  if (!idx) return true;
+  const edges = new Map<string, number>();
+  const a = idx.array as ArrayLike<number>;
+  for (let i = 0; i + 2 < a.length; i += 3) {
+    for (const [u, v] of [[a[i], a[i + 1]], [a[i + 1], a[i + 2]], [a[i + 2], a[i]]] as [number, number][]) {
+      const k = u < v ? `${u}_${v}` : `${v}_${u}`;
+      edges.set(k, (edges.get(k) ?? 0) + 1);
+    }
+  }
+  let open = 0;
+  for (const n of edges.values()) if (n === 1) open += 1;
+  return edges.size > 0 && open / edges.size > 0.15;
+}
+
+/**
+ * The ink shell's vertex step: pushed out along its normal by `width` WORLD units (metres in a game), after every
+ * transform (the model's scale, a quantized mesh's node, an instance's matrix), so a line is as thick on a flower as on
+ * a tree and nothing about the model's own units matters.
+ */
+function inkShader(width: number): (sh: { vertexShader: string }) => void {
+  const w = Math.max(0, width).toExponential(4);
+  return (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', [
+      'vec4 mvPosition = vec4( transformed, 1.0 );',
+      'vec3 inkN = normal;',
+      '#ifdef USE_INSTANCING',
+      'mvPosition = instanceMatrix * mvPosition; inkN = mat3( instanceMatrix ) * inkN;',
+      '#endif',
+      'vec4 inkW = modelMatrix * mvPosition;',
+      `inkW.xyz += normalize( mat3( modelMatrix ) * inkN ) * ${w};`,
+      'mvPosition = viewMatrix * inkW;',
+      'gl_Position = projectionMatrix * mvPosition;',
+    ].join('\n'));
+  };
+}
+
+const MODEL_OF_RENDER: Record<string, string> = { toon: 'toon', 'lowpoly-flat': 'flat', voxel: 'flat', 'pixel-hd2d': 'pixel', 'hand-painted': 'hand-painted', pbr: 'pbr', realistic: 'pbr' };
+
+/**
+ * Draw a loaded model the way the game's art direction says: its material model (style.json `materials.model`, else
+ * the render style's) on every mesh, and with `materials.outline` an ink line (an inverted hull: a back-faced copy
+ * pushed out along the normals, `line` metres in the world: as thick on a flower as on a tree, at whatever scale the
+ * game draws it). Skinned meshes, two-sided cards and paper-thin shells get the material, not the line. Call it once on the loaded model, after `repaint`; `instancedCopies` copies the line with it. Returns how many
+ * meshes changed.
+ */
+export function stylize(model: Object3D, style: StyleLike, { line = 0.05, ink }: { line?: number; ink?: string } = {}): number {
+  const kind = style.materials?.model ?? MODEL_OF_RENDER[String(style.render ?? '')] ?? 'pbr';
+  const swapped = new Map<Material, Material>();
+  const meshes: Mesh[] = [];
+  model.traverse((o) => { const m = o as Mesh; if (m.isMesh && m.name !== 'hull') meshes.push(m); });
+  for (const m of meshes) {
+    const swap = (x: Material): Material => { let y = swapped.get(x); if (!y) { y = styledMaterial(x, kind); swapped.set(x, y); } return y; };
+    m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material);
+  }
+  if (style.materials?.outline) {
+    const colour = new Color(ink ?? (style.palette?.bg ? `#${new Color(style.palette.bg).lerp(new Color('#000000'), 0.7).getHexString()}` : '#1a1410'));
+    const inkMaterial = new MeshBasicMaterial({ color: colour, side: BackSide });
+    inkMaterial.onBeforeCompile = inkShader(line);
+    inkMaterial.customProgramCacheKey = () => `ink:${line}`;
+    for (const m of meshes) {
+      // No line on a skinned mesh, nor on a two-sided card (leaves, grass: a shell around nothing draws it black).
+      if ((m as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh) continue;
+      if ((Array.isArray(m.material) ? m.material : [m.material]).some((x) => x.side === DoubleSide)) continue;
+      const shell = hullGeometry(m.geometry);
+      if (!shell) continue;
+      const hull = new Mesh(shell, inkMaterial);
+      hull.name = 'hull';
+      hull.castShadow = false; hull.receiveShadow = false;
+      m.add(hull);
+    }
+  }
+  return meshes.length;
+}
+
 export function disposeObject(obj: Object3D): void {
   obj.traverse((o) => {
     const m = o as Mesh;

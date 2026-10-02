@@ -93,6 +93,22 @@ test('loader: @homie-rocks/studio/assets refuses an unsafe or oversized file bef
   assert.equal(models.stats().refused.length, 4);
   const box = models.placeholder({ x: 1, y: 2, z: 1 });
   assert.equal(box.name, 'placeholder');
+  // stylize: the style's material model on every mesh (colour kept), an ink line on a closed shell, none on a card.
+  const { stylize } = await import(pathToFileURL(out));
+  const THREE = await import('three');
+  const root = new THREE.Group();
+  const solid = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: '#ff8800' }));
+  const card = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: '#00ff00' }));
+  root.add(solid, card);
+  assert.equal(stylize(root, { materials: { model: 'toon', outline: true }, palette: { bg: '#102030' } }), 2);
+  assert.equal(solid.material.type, 'MeshToonMaterial');
+  assert.equal(solid.material.color.getHexString(), new THREE.Color('#ff8800').getHexString());
+  assert.equal(solid.children.filter((c) => c.name === 'hull').length, 1, 'a closed shell gets its ink line');
+  assert.equal(card.children.length, 0, 'an open card gets none');
+  const flat = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+  stylize(flat, { render: 'lowpoly-flat' });
+  assert.equal(flat.material.type, 'MeshLambertMaterial');
+  assert.equal(flat.children.length, 0, 'no outline unless the style asks for one');
 });
 
 test('decisions: automatic picks with a why, steer, lock by the person, pin by use, and the blast radius', async () => {

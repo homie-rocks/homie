@@ -105,7 +105,9 @@ const fox = await models.instance('./models/fox.glb').catch(() => models.placeho
 
 It refuses an unsafe or oversized file (an external URI, a buffer over the cap, an extension three.js cannot
 read) before parsing it, decodes meshopt geometry, clones skinned models properly, and warns in development
-when a model is over its budget. The `gem-rush-3d` starter shows the whole pattern.
+when a model is over its budget. Draw each loaded model the way the decisions say, once, before copying it:
+`stylize((await models.load(url)).scene, style)` with the game's `style.json` (its material model and ink outline,
+as the style board drew them). The `gem-rush-3d` starter shows the whole pattern.
 
 ## Licences, plainly
 
