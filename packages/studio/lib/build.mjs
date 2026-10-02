@@ -34,6 +34,7 @@ import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
 import { SEAT_MAX } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { licenseOf, remixRow } from '../worker/license.mjs';
+import { SERVER_LIMITS, serverOf } from '../worker/servers.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
@@ -126,6 +127,44 @@ function readJson(path) {
  * A game's netplay manifest: game.json's `netplay` block, over a `netplay.json` beside game.json or in the game's
  * built output (a ported Vite game ships public/netplay.json), over nothing.
  */
+/**
+ * Which netplay revision a game's build speaks (0.16.0): the helper writes `homie-netplay-rev:<n>` into every
+ * bundle (netplay/netplay.ts NETPLAY_MARK). A build without it is revision 5 or older: it plays on every server, but
+ * reserved AI seats stay empty and its bots do not read the dial, and the office says so. Null when nothing says.
+ */
+export function netplayRevOf(out) {
+  const files = [];
+  const walk = (dir, depth) => {
+    if (depth > 3 || !existsSync(dir)) return;
+    for (const name of readdirSync(dir)) {
+      const f = join(dir, name);
+      let st;
+      try { st = statSync(f); } catch { continue; }
+      if (st.isDirectory()) { if (!['node_modules', '_landing'].includes(name)) walk(f, depth + 1); } else if (/\.m?js$/.test(name) && st.size < 16 * 1024 * 1024) files.push(f);
+    }
+  };
+  walk(out, 0);
+  let rev = null;
+  for (const f of files.slice(0, 200)) {
+    const m = /homie-netplay-rev:(\d{1,3})/.exec(readFileSync(f, 'utf8'));
+    if (m) rev = Math.max(rev ?? 0, Number(m[1]));
+  }
+  return rev;
+}
+
+/** game.json "servers": the seeds a game ships with (worker/servers.mjs; a D1 row of the same id wins). */
+function serverSeeds(g, log) {
+  if (!Array.isArray(g.servers)) return [];
+  const out = [];
+  for (const raw of g.servers.slice(0, SERVER_LIMITS.perGame)) {
+    const s = serverOf({ ...raw, id: raw?.id ?? String(raw?.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) }, { from: 'game.json' });
+    if (!s || (s.id === 'public' && raw?.policy === undefined)) { log(`warning: games/${g.id}/game.json: a server needs an id (or a name) and a policy; skipped`); continue; }
+    const { from, createdAt, updatedAt, ...seed } = s;
+    out.push(seed);
+  }
+  return out;
+}
+
 export function netplayOf(g, out = null) {
   const file = readJson(join(g.dir, 'netplay.json')) ?? (out ? readJson(join(out, 'netplay.json')) : null) ?? {};
   return { ...(file && typeof file === 'object' ? file : {}), ...(g.netplay && typeof g.netplay === 'object' ? g.netplay : {}) };
@@ -221,6 +260,7 @@ export async function build(root, { only = null, log = () => {} } = {}) {
     // The seats come from the game's netplay manifest (NETPLAY.md §3): what the Worker gives every room of it.
     const net = netplayOf(g, join(dist, 'games', g.id));
     const { min, max } = seatsFor(g, net);
+    const seeds = serverSeeds(g, log);
     return {
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
       roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
@@ -233,6 +273,11 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       // game.json `"watch"` (NETPLAY.md section 16): watchers see any player's view (the default), only the whole room
       // ("overview": hidden hands or roles), or nothing (false: no watch door).
       ...(g.watch === 'overview' ? { watch: 'overview' } : g.watch === false || g.watch === 'off' ? { watch: 'off' } : {}),
+      // Servers (0.16.0): the seeds game.json ships, the netplay revision its build speaks (the office warns when it
+      // predates servers), and game.json "agents": { "vote": "game" | false } (the game draws its own vote card, or none).
+      ...(seeds.length ? { servers: seeds } : {}),
+      netplayRev: netplayRevOf(join(dist, 'games', g.id)),
+      ...(g.agents && typeof g.agents === 'object' && (g.agents.vote === 'game' || g.agents.vote === false) ? { agents: { vote: g.agents.vote } } : {}),
       // Its source licence (worker/license.mjs), and, for a remix, what it is a remix of (shown on its landing).
       license: licenseOf(g.license),
       ...(remixRow(g.remixOf) ? { remixOf: remixRow(g.remixOf) } : {}),

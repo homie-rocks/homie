@@ -11,7 +11,9 @@
  *   exposePort   what `homie-studio port check` reads (owner tests)
  *   createHud    a minimal clock / scores / results overlay
  *   BotBrain, seek, nearest, rubberBand
- *                bot scaffolds
+ *                bot scaffolds; `skill` makes a bot play at the room's dial (NETPLAY.md section 17)
+ *   jitter, engages, standoff
+ *                the dial for the rest of a bot's decisions (port/skill.ts)
  *   createSaves  player accounts and cloud saves (a character that lasts days, on every device; saves/SAVES.md)
  * and everything from @homie-rocks/studio/netplay.
  */
@@ -27,5 +29,6 @@ export { groundBasis, screenToGround, PlayerYaw, type GroundBasis, type CameraLi
 export { exposePort, type PortProbeOptions, type View } from './probe';
 export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt } from './room';
 export { createHud, type HudOptions } from './hud';
-export { BotBrain, seek, flee, wanderer, nearest, rubberBand, protectedNewcomer, type V2 } from './bots';
+export { BotBrain, brainOf, seek, flee, wanderer, nearest, rubberBand, protectedNewcomer, type V2 } from './bots';
+export { jitter, engages, standoff } from './skill';
 export { createSaves, SAVES_VERSION, type Saves, type SavesOptions, type Player, type SaveEntry, type SetResult, type Memorial, type SavesStatus, type Conflict } from '../saves/saves';

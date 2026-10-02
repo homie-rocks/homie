@@ -18,8 +18,12 @@
  * A watcher (/<game>/watch, contract revision 5) has no hero and makes none: `room.viewSeat()` is the hero it
  * follows, drawn in gold as a hero's own browser draws itself, with that hero's panel; nobody followed, the vale.
  * The host says who slew what (`slain`), so a watcher on Auto cuts to the kill.
+ *
+ * Servers and the skill dial (contract revision 6): the vale's bots hunt at the room's dial (`room.skillOf(body)`:
+ * how soon they notice a slime, how close they stand, how often they strike), and a beginner server's AI guide seats
+ * are kept as AI bodies, marked " · AI". createRoom does the seats; the bots below read the dial.
  */
-import { createControls, createRoom, createSaves, exposePort, q, type BodyBase, type NetEvent } from '@homie-rocks/studio/port';
+import { AI_MARK, createControls, createRoom, createSaves, exposePort, jitter, q, standoff, type BodyBase, type NetEvent } from '@homie-rocks/studio/port';
 
 /* ------------------------------------------------------------------ rules */
 const W = 1600;
@@ -39,7 +43,7 @@ const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(
 
 /** The hero: the one thing that lasts. Kept in the save key 'hero'. */
 interface Hero { v: 1; name: string; level: number; xp: number; gold: number; hardcore: boolean; kills: number; deaths: number; born: number }
-interface Body extends BodyBase { x: number; y: number; hp: number; maxHp: number; level: number; face: number; flags: number; downUntil: number; atkAt: number; strikeAt: number; tx: number; ty: number }
+interface Body extends BodyBase { x: number; y: number; hp: number; maxHp: number; level: number; face: number; flags: number; downUntil: number; atkAt: number; strikeAt: number; tx: number; ty: number; seenAt?: number; ax?: number; ay?: number }
 interface Slime { id: number; x: number; y: number; hp: number; maxHp: number; size: number; hitAt: number; lastHit: number }
 type SlimeRow = [id: number, x: number, y: number, hp: number, size: number];
 
@@ -190,14 +194,23 @@ function stepHost(dt: number): void {
     }
     let wants = false;
     if (b.bot) {
-      // Bots are company, not carries: they hunt only what is near them, and strike slower than a person.
+      // Bots are company, not carries: they hunt only what is near them, and strike slower than a person. At the
+      // room's dial (section 17): they notice a slime `reactionMs` late, hunt farther afield the more they lean to
+      // the front (positioning), aim a little off (aimNoise), and strike sooner the more aggressive they are.
+      const s = room.skillOf(b);
       const near = nearestSlime(b.x, b.y);
-      const t = near && Math.hypot(near.x - b.x, near.y - b.y) < 360 ? near : null;
+      const reach = standoff(s, 460, 220);
+      if (!b.seenAt || now - b.seenAt >= s.reactionMs) {
+        b.seenAt = now;
+        const t0 = near && Math.hypot(near.x - b.x, near.y - b.y) < reach ? near : null;
+        b.ax = t0 ? t0.x + jitter(s, 40) : undefined; b.ay = t0 ? t0.y + jitter(s, 40) : undefined;
+      }
+      const t = b.ax !== undefined && b.ay !== undefined ? { x: b.ax, y: b.ay } : null;
       const tx = t ? t.x : b.tx; const ty = t ? t.y : b.ty;
       if (!t && Math.hypot(b.tx - b.x, b.ty - b.y) < 30) { b.tx = 200 + Math.random() * (W - 400); b.ty = 150 + Math.random() * (H - 300); }
       const dx = tx - b.x; const dy = ty - b.y; const dist = Math.hypot(dx, dy) || 1;
       if (dist > 60) { b.x += (dx / dist) * SPEED * 0.75 * dt; b.y += (dy / dist) * SPEED * 0.75 * dt; b.face = Math.atan2(dy, dx); }
-      wants = Boolean(t && dist < STRIKE_RANGE && now - b.atkAt > 900);
+      wants = Boolean(t && dist < STRIKE_RANGE && now - b.atkAt > 1400 - 900 * s.aggression);
     } else if (b.seat === myS) {
       b.x = me.x; b.y = me.y; b.face = me.face; b.level = myLevel(); b.maxHp = maxHpOf(b.level);
       wants = me.strikes > 0; me.strikes = 0;
@@ -326,7 +339,8 @@ function draw(t: number): void {
     ctx.fillStyle = '#7ad35a'; ctx.fillRect(x - 24, y - R - 12, (48 * clamp(b.hp, 0, b.maxHp)) / Math.max(1, b.maxHp), 5);
     ctx.globalAlpha = 1;
     ctx.font = '600 18px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = self ? '#ffcf6e' : '#e7d9b4';
-    ctx.fillText(`${b.name}${b.bot ? ' · bot' : ''} · ${b.level}`, x, y - R - 18);
+    // An AI's name already ends in " · AI" (a guide, a companion); a plain bot says bot.
+    ctx.fillText(`${b.name}${b.bot && !b.name.endsWith(AI_MARK) ? ' · bot' : ''} · ${b.level}`, x, y - R - 18);
   }
   ctx.restore();
   hud(t);
@@ -369,7 +383,7 @@ function hud(t: number): void {
     ctx.fillStyle = 'rgba(10,14,9,.78)'; ctx.fillRect(cw / 2 - 150, 44, 300, 30 + rows.length * 22);
     ctx.fillStyle = '#ffcf6e'; ctx.fillText('Tonight\'s hunters', cw / 2, 66);
     ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
-    rows.forEach((r, i) => ctx.fillText(`${r.place}. ${r.name}${r.bot ? ' (bot)' : ''} — ${r.score} xp`, cw / 2, 90 + i * 22));
+    rows.forEach((r, i) => ctx.fillText(`${r.place}. ${r.name}${r.bot && !r.name.endsWith(AI_MARK) ? ' (bot)' : ''} — ${r.score} xp`, cw / 2, 90 + i * 22));
   }
   if (performance.now() < bannerUntil) { ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#ffcf6e'; ctx.fillText(bannerText, cw / 2, canvas.height / k - 90); }
   const st = saves.status();

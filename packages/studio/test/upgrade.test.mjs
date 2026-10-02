@@ -71,6 +71,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'add-lines .gitignore',
     'add-section AGENTS.md ## Continuing a build from the Claude app',
     'add-section AGENTS.md ## Running live games (the back office)',
+    'add-section AGENTS.md ## Servers and AI seats',
     'add-section AGENTS.md ## The Game Codex and progress',
     'pin package.json',
     'scripts package.json',

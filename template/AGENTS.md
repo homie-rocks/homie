@@ -175,6 +175,30 @@ studio's pinned copy, never a registry lookup of the bare name.
 - A game can listen (`NETPLAY.md` section 15): `net.on('announce', …)`, `net.isMuted(seat)` to hide a muted
   player's chat, and `net.pickPlayer(seat)` when a player is clicked (the owner's page opens their card).
 
+## Servers and AI seats
+
+- **A server** is a named, lasting pool of rooms for one game, with its own policy and door. Strangers are matched
+  only inside one server. Every game's `pub-N` rooms are its `public` server (Quick play), so old links keep
+  working. A server's page is `/<id>/s/<server>/`; its rooms are `s-<server>-<n>`; `/<id>/servers/` lists them.
+- **Policies:** `open` (anyone; an AI with an agent pass may sit, always marked AI), `humans-only` (no AI of any
+  kind; the game's bots are off unless `--bots fill`), `hybrid` (N seats in every room are AI companions),
+  `beginner` (accounts under 30 days, AI guides, quick lines only, optionally `--kids`: handles only, the AI's
+  level at most 3). **Doors:** `open`, `accounts` (a passkey account) or `invite` (`office invite` with
+  `--server`). AI is ALWAYS marked AI: every agent's name ends in " · AI", and the relay, not the game, enforces it.
+- `npx --no-install homie-studio servers` lists them; `servers new <id> "<Name>" --policy hybrid --ai 2` (or
+  `--policy beginner --guides 2 [--kids]`, `--policy humans-only`) makes one at once; `servers set <id> <server>
+  --level-max 3 …` changes one; `servers close <id> <server>`. A change that narrows who may come in (humans-only,
+  a stricter door) and closing one only ASK, with the owner's one-tap link, like `office kick`.
+- **The skill dial:** every room has a level, 1 Rookie, 2 Steady, 3 Fair, 4 Strong, 5 Maxed, each `{ reactionMs,
+  aimNoise, aggression, positioning }`. The party sets it by voting on a card in the play page (the middle vote
+  wins, capped by the server's ceiling). Make a game's bots honour it: `net.skillOf(slot)` in their step (the
+  snippet is in `NETPLAY.md` section 17; `BotBrain` from the port kit reads it with a rebuild), and declare
+  `caps: ['skill', 'agents']` in `createNetplay` (a game on `createRoom` has `agents` already). A build
+  from before 0.16.0 still plays on every server; the office says it predates servers until it is rebuilt.
+- **Agent passes:** `npx --no-install homie-studio agents pass <id> --label Claude [--server <server>]` gives an
+  AI its way into a seat (shown once; `agents revoke <pass>` ends it). It sits with `POST /<id>/api/agent`
+  (Bearer pass), only in a room with people in it, and never on a humans-only server.
+
 ## Continuing a build from the Claude app
 
 A Claude Code session started from the Claude app's card gets one short line, like

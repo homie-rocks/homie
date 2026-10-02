@@ -51,13 +51,29 @@
  *                                          --to /<game>/play: a private game on the owner's own phone)
  *   homie-studio office key [--hours 1]   a key for the Homie MCP's owner tools (studio_office, room_kick, ...)
  *   homie-studio office announce "<text>" [--game <id>] [--room <code>] [--seconds 30]
- *   homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--days <n>]
+ *   homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--days <n>] [--server <id>]
  *   homie-studio office launch <game> private|invite|public [--remixable on|off] [--max <n>|game]
  *   homie-studio office kick <game> <room> <seat number | name> [--minutes 10]
  *   homie-studio office close <game> <room> [--minutes 10] [--reopen]
  *                                         (kick, close and launch are ASKED for: the owner confirms each with one
  *                                          tap in their own browser, from the link this prints)
  *   homie-studio office revoke            (every office key, play ticket and pending ask ends)
+ *
+ *   homie-studio servers [--game <id>]    every server of every game (worker/servers.mjs): its policy, door, the AI's
+ *                                          level, live rooms and AI, members, and builds that predate servers
+ *   homie-studio servers new <game> "<Name>" --policy open|humans-only|hybrid|beginner [--ai <n>] [--guides <n>]
+ *                                        [--kids] [--door open|accounts|invite] [--level 1-5] [--level-max 1-5]
+ *                                        [--speech game|lines|off] [--bots fill|off] [--rooms <n>] [--listed on|off]
+ *   homie-studio servers set <game> <server> [the same flags]
+ *   homie-studio servers close <game> <server> [--reopen]
+ *   homie-studio servers level <game> <room> <1-5>   (the AI's level in one room: Rookie, Steady, Fair, Strong, Maxed)
+ *   homie-studio servers member <game> <server> <player> --role member|mentor|mod | --remove
+ *   homie-studio agents pass <game|any> --label "<Name>" [--server <id>] [--hands self|host] [--days 7]
+ *                                         (an AI's way into a seat, always marked AI; the pass is shown once)
+ *   homie-studio agents passes [<game>]   homie-studio agents revoke <pass id>
+ *   homie-studio agents brain <game> <server> off|script|workers-ai|owner-key
+ *                                         (a narrowing change, closing a server, removing a member and the first
+ *                                          time AI guides may talk are ASKED for, like office kick)
  *
  *   homie-studio progress start [<id>] [--what game|song|video] [--title "<what this build does>"]
  *                                        [--budget <dollars>] [--unit usd|credits] [--share]
@@ -129,6 +145,7 @@ import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
 import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeRevoke, officeShow } from '../lib/office.mjs';
+import { agentsBrain, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -140,7 +157,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen'];
+const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -277,6 +294,27 @@ function print(result) {
       for (const i of result.invites) lines.push(`Invite ${i.code}${i.label ? ` (${i.label})` : ''}, ${i.maxUses ? `${i.maxUses} use${i.maxUses === 1 ? '' : 's'}` : 'any number of uses'}: ${i.link}`);
       if (result.note) lines.push(result.note);
       break;
+    case 'servers':
+      lines.push(...serversLines(result));
+      break;
+    case 'servers new':
+      lines.push(result.message, ...(result.notes ?? []).map((n) => `  ${n}`));
+      break;
+    case 'servers level':
+    case 'agents revoke':
+      lines.push(result.message);
+      break;
+    case 'agents pass':
+      lines.push(`${result.pass.name} (pass ${result.pass.id}, ${result.pass.role}, hands ${result.pass.hands}${result.pass.server ? `, ${result.pass.server} only` : ''}):`, `  ${result.secret}`, result.use);
+      break;
+    case 'agents passes':
+      for (const p of result.passes) lines.push(`${p.id}  ${p.name}  ${p.role}, hands ${p.hands}${p.game ? `, ${p.game}` : ''}${p.server ? `/${p.server}` : ''}${p.live ? '' : p.revoked ? '  (revoked)' : '  (ended)'}`);
+      if (!result.passes.length) lines.push('No agent passes yet: homie-studio agents pass <game> --label "<Name>"');
+      break;
+    case 'servers set':
+    case 'servers close':
+    case 'servers member':
+    case 'agents brain':
     case 'office launch':
     case 'office kick':
     case 'office close':
@@ -477,11 +515,29 @@ async function main() {
     if (sub === 'link') return officeLink(root, { url, to: flags.get('to') });
     if (sub === 'key') return officeKey(root, { url, hours: flags.get('hours') });
     if (sub === 'announce') return officeAnnounce(root, positional.slice(2).join(' '), { url, game: flags.get('game'), room: flags.get('room'), seconds: flags.get('seconds') });
-    if (sub === 'invite') return officeInvite(root, positional[2], { url, label: flags.get('label'), uses: flags.get('uses'), count: flags.get('count'), days: flags.get('days') });
+    if (sub === 'invite') return officeInvite(root, positional[2], { url, label: flags.get('label'), uses: flags.get('uses'), count: flags.get('count'), days: flags.get('days'), server: flags.get('server') });
     if (sub === 'launch') return officeLaunch(root, positional[2], positional[3], { url, remixable: flags.get('remixable'), max: flags.get('max') });
     if (sub === 'kick') return officeKick(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes') });
     if (sub === 'close') return officeClose(root, positional[2], positional[3], { url, minutes: flags.get('minutes'), reopen: flags.has('reopen') });
     if (sub === 'revoke') return officeRevoke(root, { url });
+  }
+  if (cmd === 'servers') {
+    const url = flags.get('url');
+    if (!sub || sub === 'list') return serversList(root, { url, game: flags.get('game') });
+    if (sub === 'new') return serversNew(root, positional[2], positional.slice(3).join(' ') || flags.get('name'), flags, { url });
+    if (sub === 'set') return serversSet(root, positional[2], positional[3], flags, { url });
+    if (sub === 'close') return serversClose(root, positional[2], positional[3], { url, reopen: flags.has('reopen') });
+    if (sub === 'level') return serversLevel(root, positional[2], positional[3], positional[4], { url });
+    if (sub === 'member') return serversMember(root, positional[2], positional[3], positional[4], { url, role: flags.get('role'), remove: flags.has('remove') });
+    return { ok: false, command: 'servers', why: `unknown: servers ${sub} (list, new, set, close, level, member)` };
+  }
+  if (cmd === 'agents') {
+    const url = flags.get('url');
+    if (sub === 'pass') return agentsPass(root, positional[2], { url, label: flags.get('label'), server: flags.get('server'), hands: flags.get('hands'), role: flags.get('role'), days: flags.get('days') });
+    if (sub === 'passes') return agentsPasses(root, positional[2], { url });
+    if (sub === 'revoke') return agentsRevoke(root, positional[2], { url });
+    if (sub === 'brain') return agentsBrain(root, positional[2], positional[3], positional[4], { url });
+    return { ok: false, command: 'agents', why: `unknown: agents ${sub ?? ''} (pass, passes, revoke, brain)` };
   }
   if (cmd === 'media' && sub === 'put') return mediaPut(root, positional[2], flags.get('as'));
   if (cmd === 'media' && sub === 'list') {

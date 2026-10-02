@@ -192,6 +192,49 @@ The page is the game itself, drawn by the watcher's own browser as a watcher: a 
   that room as the whole room only, so a second tab is not a peek.
 - Each opening counts as a `watch` in the studio's stats.
 
+## Servers: `/<id>/servers/` and `/<id>/s/<server>/`
+
+A game's **servers** are named, lasting pools of rooms with their own rules (`worker/servers.mjs`; NETPLAY.md
+section 17 for the room's side). Strangers are matched only inside one server. The game's own public rooms are
+its **Quick play** server (`public`), so every old link keeps working.
+
+- **The landing's Servers band** shows when the game has a server besides Quick play: a card per server (its
+  name, its policy's badge and one line, who is on it now: "9 playing · 4 AI · 41 members", Play and About),
+  and "Quick play →" under it. `/<id>/servers/` lists them all (and every policy's line). A server that is
+  closed, not listed, or has a door (an account or an invite) is left out of the Rooms lists and `/api/rooms`.
+- **The badge and its line**, everywhere a server is shown: *Open* ("anyone can play. AI players are always
+  marked AI."), *Humans only* ("every player here is a person. AI can't join."), *Hybrid · N* ("N seats in every
+  room are AI companions, always marked AI. Your party sets their level."), *Beginner* ("for new players. AI guides
+  help you learn. Chat is quick lines only."); a kids server adds "Players have handles, not names."
+- **A server's page** (`/<id>/s/<server>/`): its name, blurb, badge and line; its live rooms (AI marked); how many
+  belong to it; "☆ Make this my home" for a signed-in player (and Leave); and a big **Play**
+  (`/<id>/s/<server>/play`). A player's home server is where a bare `/<id>/play` takes them; their account page
+  lists their servers.
+- **The door**, then the play page: *open* lets anyone in; *accounts* asks the visitor to sign in with a passkey
+  ("Sign in to play on Night Shift"); *invite* shows the invite-code box (`homie-studio office invite <id> --server
+  <server>` makes codes and links for one server); *beginner* lets in guests and accounts younger than its days
+  (a veteran is told "First Light is for new players… try another server or Quick play"; a mentor gets in, with a
+  Mentor badge). A server whose rooms are all full (its `rooms`) sends the visitor to its fullest room, where they
+  wait for a seat ("First Light is full. You're next for a seat."). The owner always comes in. The watch door is
+  the same door, except that watching a beginner room needs no new account.
+- **When the owner hides Quick play** (`homie-studio servers close <id> public`), Play shows the servers to pick
+  from, and a named `?room=` is off (except for the owner).
+- **The play shell** on a server: a pill beside the room button ("First Light · Beginner"; tap: the policy's line,
+  "AI level: Steady" with **Change** when the game's bots read the dial, and **Quiet AI**, which hides AI chat on
+  this screen only); the chip says "4 playing · 2 AI"; every AI row and result carries an AI pill.
+- **The vote card** ("How strong should the AI be?", five levels, "the middle vote wins") opens by itself at a
+  party's first round with AI seats, from the pill's Change, or from the game; a lone player's tap decides at once,
+  every seated person's vote closes it early, else 15 s. Keys 1-5 on a computer; a bottom sheet on a phone. The
+  result is a toast ("The party set the AI to Steady (3 votes)."). A game that draws its own card says game.json
+  `"agents": { "vote": "game" }` (`false`: none).
+- `/<id>/api/servers` is the servers with their live counts (cacheable 15 s). `/api/rooms` rows say their
+  `server`, `policy` and `ai`.
+
+**An AI's seat** (an agent pass from `homie-studio agents pass`): `POST /<id>/api/agent` with `Authorization:
+Bearer <pass>` and `{ "server": "<id>" }` answers a room with people in it (never an empty one), a ticket, its
+socket and (an AI that runs the game itself) the frame to load. A humans-only server answers 403 "This server is
+for humans only", and so does its socket.
+
 ## Player accounts: `/account/`
 
 A studio whose games keep saves (game.json `"saves": true`, [../saves/SAVES.md](../saves/SAVES.md)) has a player

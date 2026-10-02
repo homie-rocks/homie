@@ -17,15 +17,21 @@
  *   - Snapshots: one small row per body [slot, seat (-1 = bot), score, ...your
  *     fields], plus your fast world, at 20 Hz; replicas interpolate them.
  *
+ *   - Servers and agent seats (NETPLAY.md section 17): a hybrid server's AI
+ *     seats are kept as AI bodies (the game's bots move them, marked AI), an AI
+ *     that sits takes one, the server's `bots: 'off'` adds no filler bots, and
+ *     `room.skillOf(body)` is the dial a bot plays at (the party votes it).
+ *
  * What stays the game's: the rules (what a body does per frame), the bots'
  * brains, the drawing, and the camera. See the port skill's recipe.
  */
 import {
   capMove, createNetplay, lerp, lerpAngle, Roster,
-  type Movement, type Netplay, type NetplayOptions, type RoleChange, type RoundInfo, type RoundResult, type Slot, type Snapshot,
+  type Movement, type Netplay, type NetplayOptions, type Policy, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot,
 } from '../netplay/netplay';
 
-export interface BodyBase { slot: number; seat: number | null; name: string; bot: boolean; score: number }
+/** A body. `agent` (revision 6): this body is an AI's (a seat kept for AI, or an agent's), always marked AI. */
+export interface BodyBase { slot: number; seat: number | null; name: string; bot: boolean; score: number; agent?: Slot['agent'] }
 
 export interface RoomSnap<F = unknown> { r: [n: number, phase: number, startedAt: number, endsAt: number]; b: number[][]; w?: F }
 export interface RoomCkpt<B, S> { round: RoundInfo | null; roster: Slot[]; bodies: B[]; world: S | null; tick: number }
@@ -91,6 +97,8 @@ export interface Room<B extends BodyBase, F = unknown, S = unknown> {
   viewSeat(): number | null;
   /** The body of viewSeat() as everyone draws it (host: the real one; others: interpolated), or null. */
   viewBody(): B | null;
+  /** The skill dial a bot body plays at now (section 17): the party's vote, a guide's server level, else Fair. */
+  skillOf(body: { slot: number }): Skill;
   /** Host: my own body. Replica: null (draw yours from your local state). */
   mine(): B | null;
   /** Host, every frame: the round clock and the snapshot. Replica: no-op. Call AFTER your rules moved the bodies. */
@@ -131,7 +139,9 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   const angles = new Set(opts.angles ?? []);
   const discrete = new Set(opts.discrete ?? []);
 
-  let roster = new Roster({ min, max, botName });
+  // The roster keeps the server's AI seats (section 17); the policy is the room's, read when it fills.
+  const policy = (): Policy => net.policy;
+  let roster = new Roster({ min, max, botName, policy });
   let bodies = new Map<number, B>();
   let round: RoundInfo | null = null;
   let hosting = false;
@@ -142,6 +152,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     snapshotHz: 20, inputHz: 20, checkpointMs: 1000,
     checkpoint: () => ({ round, roster: roster.toJSON(), bodies: [...bodies.values()].map((b) => ({ ...b })), world: opts.saveWorld ? opts.saveWorld() : null, tick }),
     ...(opts.netplay ?? {}),
+    // createRoom claims an AI's slot for it (its join passes `p.agent`), so its host can move an AI's body.
+    caps: [...new Set([...(opts.netplay?.caps ?? []), 'agents' as const])],
   });
 
   const mySeat = (): number | null => (net.offline ? 0 : net.seat);
@@ -157,8 +169,9 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     for (const s of roster.slots) {
       seen.add(s.slot);
       const b = bodies.get(s.slot);
-      if (!b) { const nb = opts.spawn(s, i++); nb.slot = s.slot; nb.seat = s.seat; nb.name = s.name; nb.bot = s.bot; nb.score = nb.score ?? 0; bodies.set(s.slot, nb); continue; }
+      if (!b) { const nb = opts.spawn(s, i++); nb.slot = s.slot; nb.seat = s.seat; nb.name = s.name; nb.bot = s.bot; nb.score = nb.score ?? 0; if (s.agent) nb.agent = { ...s.agent }; bodies.set(s.slot, nb); continue; }
       b.seat = s.seat; b.name = s.name; b.bot = s.bot;
+      if (s.agent) b.agent = { ...s.agent }; else delete b.agent;
     }
     for (const k of [...bodies.keys()]) if (!seen.has(k)) bodies.delete(k);
   }
@@ -185,6 +198,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     for (const s of [...roster.slots].sort((a, c) => a.slot - c.slot)) {
       const fresh = opts.spawn(s, i++);
       fresh.slot = s.slot; fresh.seat = s.seat; fresh.name = s.name; fresh.bot = s.bot; fresh.score = 0;
+      if (s.agent) fresh.agent = { ...s.agent };
       bodies.set(s.slot, fresh);
     }
     round = { n, phase: 'live', startedAt: now, endsAt: now + roundMs };
@@ -197,7 +211,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
 
   function rank(): RoundResult[] {
     const ranked = [...bodies.values()].sort((a, b) => b.score - a.score || Number(a.bot) - Number(b.bot) || a.slot - b.slot);
-    return ranked.map((b, i) => ({ slot: b.slot, seat: b.seat, name: b.name, score: b.score, bot: b.bot, place: i + 1 }));
+    return ranked.map((b, i) => ({ slot: b.slot, seat: b.seat, name: b.name, score: b.score, bot: b.bot, place: i + 1, ...(b.agent ? { agent: true as const } : {}) }));
   }
 
   function endRound(): void {
@@ -212,12 +226,12 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   function restore(e: RoleChange<RoomSnap<F>, RoomCkpt<B, S>>): void {
     const ck = e.ckpt?.d ?? null;
     if (ck) {
-      roster = Roster.from(ck.roster, { min, max, botName });
+      roster = Roster.from(ck.roster, { min, max, botName, policy });
       bodies = new Map(ck.bodies.map((b) => [b.slot, { ...b }]));
       round = ck.round;
       tick = ck.tick;
     } else {
-      roster = Roster.from(e.roster ?? [], { min, max, botName });
+      roster = Roster.from(e.roster ?? [], { min, max, botName, policy });
       bodies = new Map();
       syncBodies();
     }
@@ -252,14 +266,14 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     hosting = true;
     if (e.promoted) restore(e);
     else {
-      roster = new Roster({ min, max, botName });
+      roster = new Roster({ min, max, botName, policy });
       bodies = new Map();
       const seat = mySeat();
       if (seat !== null) roster.claim(seat, net.offline ? 'You' : net.name);
       syncBodies();
       startRound((e.round?.n ?? 0) + 1);
     }
-    const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null);
+    const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null }));
     const { claimed } = roster.reconcile(peers);
     syncBodies();
     for (const s of claimed) { const b = bodies.get(s.slot); if (b && b.seat !== mySeat()) moved(b); }
@@ -274,7 +288,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   });
   net.on('join', (p) => {
     if (!hosting || p.seat === null) return;
-    const c = roster.claim(p.seat, p.name);
+    // An AI takes a seat kept for AI (its hands say who moves the body); a person never does (section 17).
+    const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null);
     if (!c) return; // full: they watch
     syncBodies();
     const b = bodies.get(c.slot.slot);
@@ -288,6 +303,13 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   net.on('leave', (p) => {
     if (!hosting || p.seat === null) return;
     roster.release(p.seat); // the body stays, a bot drives it now
+    syncBodies();
+    net.roster(roster.toJSON());
+  });
+  // The server's policy changed (a new server stamp, the owner): its AI seats come or go at once, filler at the round.
+  net.on('policy', () => {
+    if (!hosting) return;
+    roster.fill();
     syncBodies();
     net.roster(roster.toJSON());
   });
@@ -335,6 +357,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
       for (const b of room.view()) if (!b.bot && b.seat === s) return b;
       return null;
     },
+    skillOf: (body) => net.skillOf(body.slot),
     mine: () => (hosting ? bodyOfSeat(mySeat()) : null),
     update() {
       if (!hosting) return;

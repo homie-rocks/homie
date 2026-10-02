@@ -36,8 +36,16 @@
  * device; `get(id, env)` names them in the office; `isOwner(request, env)` lets the owner's own account (a passkey,
  * `homie-studio players owner`) count as the owner everywhere the owner's session does. A player with no account is
  * a guest with a handle.
+ *
+ * SERVERS AND AGENT SEATS (0.16.0, worker/servers.mjs and worker/agents.mjs): each game's servers (create at once;
+ * a change that narrows who may come in, closing one, or removing a member is an ASK from an office key), agent
+ * passes (issued and revoked at once; the secret is shown once), a room's dial (room_level), and whether AI guides
+ * may talk (the first time is an ASK: the owner's consent). A server change reaches its live rooms as a signed
+ * `policy` control; AI leave after the round when a server becomes humans-only.
  */
 import { SEAT_MAX, seatsOf } from './seats.mjs';
+import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
+import { aiName, fillSpot, passById, passCreate, passList, passRevoke } from './agents.mjs';
 import { OWNER_COOKIE, cookieValues, ownerAllowed, ownerSession } from './stats.mjs';
 import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
@@ -146,7 +154,7 @@ export async function isOwner(request, env) {
 
 const settingsCache = new WeakMap();
 
-/** Every game's live settings (D1 office_games), read at most every 5 s per Worker instance. Empty before migration 0003. */
+/** Every game's live settings (D1 office_games), read at most every 5 s per Worker instance. Empty before migration 0005. */
 export async function settingsOf(env, { fresh = false } = {}) {
   if (!env?.DB || env.HOMIE_PREVIEW === '1') return new Map();
   const hit = settingsCache.get(env.DB);
@@ -211,10 +219,11 @@ async function officeKey(env) {
 async function mac(key, text) { return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)))); }
 
 /**
- * Who a ticket names: `o` the owner, `i-<invite>` an invited browser, `p-<player>` a player account, or two of them
- * joined with `~` (an invited player who is signed in: `i-…~p-…`, so a kick holds the account too).
+ * Who a ticket names: `o` the owner, `i-<invite>` an invited browser, `p-<player>` a player account, `a-<pass>` an
+ * AI with an agent pass (0.16.0), or two of them joined with `~` (an invited player who is signed in: `i-…~p-…`, so
+ * a kick holds the account too).
  */
-const PART = '(?:o|i-[a-f0-9]{10}|p-[A-Za-z0-9_-]{1,64})';
+const PART = '(?:o|i-[a-f0-9]{10}|p-[A-Za-z0-9_-]{1,64}|a-[a-f0-9]{10})';
 const SUB = new RegExp(`^${PART}(?:~${PART})?$`);
 const TICKET = new RegExp(`^([a-z0-9]{6,12})\\.(${PART}(?:~${PART})?)\\.([A-Za-z0-9_-]{32})$`);
 /** A ticket's holders, as parts. */
@@ -310,11 +319,16 @@ export async function accessOf(request, env, game, launch) {
   return { ok: false, sub: null, owner: false };
 }
 
-/** Whether a ticket's holder may still play now (the state may have changed, or the invite been revoked, since it was minted). */
+/**
+ * Whether a ticket's holder may still play now (the state may have changed, or the invite been revoked, since it was
+ * minted). An agent's own pass opens a game that is not public only when it is the owner's (only the owner mints one).
+ */
 export async function ticketAllows(env, sub, launch) {
   if (launch === 'public') return true;
   const parts = holders(sub);
   if (parts.includes('o')) return true;
+  const agent = parts.find((p) => p.startsWith('a-'));
+  if (agent) { const pass = await passById(env, agent.slice(2)); return Boolean(pass?.live && pass.kind === 'owner'); }
   const invite = parts.find((p) => p.startsWith('i-'));
   if (launch === 'invite' && invite) return inviteOpen(env, invite.slice(2));
   return false;
@@ -343,16 +357,22 @@ ${error ? `<p class="lead" role="alert"><b>${esc(error)}</b></p>` : ''}
 export async function redeemInvite(request, env, url, cat, meta, settings) {
   const launch = launchOf(meta, settings, env);
   if (request.method !== 'POST' || !sameOrigin(request, url)) return new Response('Not allowed', { status: 403, headers: { 'cache-control': 'no-store' } });
-  if (launch === 'public') return Response.redirect(`${url.origin}/${meta.id}/play`, 303);
   let code = '';
   try { const form = await request.formData(); code = String(form.get('code') ?? ''); } catch { code = ''; }
   const norm = code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-  if (launch !== 'invite' || !env?.DB) return gatePage(cat, meta, launch);
   const now = Date.now();
   let row = null;
-  try { row = await env.DB.prepare('SELECT id, game, uses, max_uses, expires_at, revoked FROM office_invites WHERE code = ?1').bind(norm).first(); } catch { row = null; }
+  // An invite to one server (0.16.0, its door `invite`) works in a public game too; one to the game, only in a beta.
+  try { row = env?.DB ? await env.DB.prepare('SELECT id, game, server, uses, max_uses, expires_at, revoked FROM office_invites WHERE code = ?1').bind(norm).first() : null; } catch {
+    // A D1 from before migration 0006 has no `server` column: the game's own invites still work.
+    try { row = await env.DB.prepare('SELECT id, game, uses, max_uses, expires_at, revoked FROM office_invites WHERE code = ?1').bind(norm).first(); } catch { row = null; }
+  }
+  if (!row?.server) {
+    if (launch === 'public') return Response.redirect(`${url.origin}/${meta.id}/play`, 303);
+    if (launch !== 'invite' || !env?.DB) return gatePage(cat, meta, launch);
+  }
   const bad = !row || row.game !== meta.id || row.revoked || (row.expires_at && Number(row.expires_at) < now) || (row.max_uses && Number(row.uses) >= Number(row.max_uses));
-  if (bad) return gatePage(cat, meta, launch, { code: norm, error: 'That invite code does not work (used up, ended, or for another game). Ask whoever sent it for a new one.' });
+  if (bad) return gatePage(cat, meta, launch === 'public' ? 'invite' : launch, { code: norm, error: 'That invite code does not work (used up, ended, or for another game). Ask whoever sent it for a new one.' });
   const pass = randomHex(24);
   try {
     await env.DB.batch([
@@ -362,9 +382,10 @@ export async function redeemInvite(request, env, url, cat, meta, settings) {
     ]);
   } catch { return gatePage(cat, meta, launch, { code: norm, error: 'Something went wrong; try again.' }); }
   const secure = url.protocol === 'https:' ? '; Secure' : '';
+  const cookie = row.server ? serverPassCookie(meta.id, row.server) : passCookie(meta.id);
   return new Response(null, {
     status: 303,
-    headers: { location: `/${meta.id}/play`, 'cache-control': 'no-store', 'set-cookie': `${passCookie(meta.id)}=${pass}; Path=/${meta.id}/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(PASS_TTL_MS / 1000)}${secure}` },
+    headers: { location: row.server ? `/${meta.id}/s/${row.server}/play` : `/${meta.id}/play`, 'cache-control': 'no-store', 'set-cookie': `${cookie}=${pass}; Path=/${meta.id}/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(PASS_TTL_MS / 1000)}${secure}` },
   });
 }
 
@@ -388,7 +409,7 @@ async function roomFacts(env, game, room, max) {
 /** Hand one room one signed control; what the room says back. */
 async function roomControl(env, meta, settings, room, op, args) {
   const ctl = await signControl(env, { op, game: meta.id, room, args });
-  if (!ctl) return { ok: false, error: 'no-key', message: 'This studio has no database for its office yet: `npm run deploy` applies migration 0003_studio_office.sql.' };
+  if (!ctl) return { ok: false, error: 'no-key', message: 'This studio has no database for its office yet: `npm run deploy` applies migration 0005_studio_office.sql.' };
   try {
     const res = await tableOf(env, meta.id, room).fetch(new Request(`https://table/__office?game=${enc(meta.id)}&room=${enc(room)}&max=${seatsFor(meta, settings)}`, { method: 'POST', body: JSON.stringify(ctl) }));
     return await res.json();
@@ -407,40 +428,57 @@ async function roomRow(env, meta, room, max) {
     const pid = parts.find((p) => p.startsWith('p-'))?.slice(2) ?? c.player ?? null;
     const invite = parts.find((p) => p.startsWith('i-'))?.slice(2) ?? null;
     const account = pid ? await playerOf(env, pid) : null;
+    const agentPass = parts.find((p) => p.startsWith('a-'))?.slice(2) ?? null;
     return {
       id: c.id, seat: c.seat, name: c.name, device: c.device, role: c.role, want: c.want, hidden: Boolean(c.hidden), waiting: Boolean(c.waiting),
       joinedAt: c.joinedAt, browser: c.browser, muted: Boolean(c.muted), mutedUntil: c.mutedUntil ?? null,
-      as: parts.includes('o') ? 'owner' : invite ? 'invited' : account ? 'player' : 'guest',
+      // An AI (an agent pass, section 17) is always marked AI, here as everywhere.
+      ...(c.agent ? { agent: { role: c.agent.role, hands: c.agent.hands, pass: c.agent.pass ?? agentPass } } : {}),
+      as: c.agent ? 'ai' : parts.includes('o') ? 'owner' : invite ? 'invited' : account ? 'player' : 'guest',
       ...(invite ? { invite } : {}),
       ...(account ? { account } : {}),
     };
   }));
   const slots = Array.isArray(f.roster) ? f.roster : [];
   return {
-    room, label: roomLabel(room), public: /^pub-\d+$/.test(room),
+    room, label: roomLabel(room), public: /^pub-\d+$/.test(room), server: roomServer(room),
     players: f.counts?.players ?? 0, screens: f.counts?.screens ?? 0, waiting: f.counts?.waiting ?? 0,
     humans: f.counts?.humans ?? 0, bots: f.counts?.bots ?? 0, max: f.counts?.maxPlayers ?? max,
+    agents: f.counts?.agents ?? 0, ai: f.counts?.ai ?? 0, humanSeats: f.counts?.humanSeats ?? null,
+    // The room's dial now and who set it (the party's vote, the owner), its policy, and what its game reads.
+    policy: f.policy ? { kind: f.policy.kind, level: f.policy.skill?.level ?? f.policy.level, levelName: f.policy.skill?.name ?? levelName(f.policy.level), levelMax: f.policy.levelMax, by: f.policy.by ?? null, speech: f.policy.speech } : null,
+    caps: Array.isArray(f.caps) ? f.caps : [], rev: f.rev ?? null,
+    vote: f.vote ?? null,
     round: f.round && typeof f.round === 'object' ? { n: f.round.n ?? null, phase: f.round.phase ?? null, startedAt: f.round.startedAt ?? null, endsAt: f.round.endsAt ?? null } : null,
     openedAt: office.openedAt ?? f.openedAt ?? null, closedUntil: office.closedUntil ?? null, snapHz: f.snapHz ?? 0,
     regate: office.regate ?? null,
     host: f.host ?? null, announce: f.announce ?? null,
-    slots: slots.slice(0, 64).map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot) })),
+    slots: slots.slice(0, 64).map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot), ...(s.agent ? { agent: { role: s.agent.role ?? 'party', seat: s.agent.seat ?? null } } : {}) })),
     clients, bans: office.bans ?? [], mutes: office.mutes ?? [],
   };
 }
 
 async function invitesOf(env, game, origin) {
   try {
-    const { results } = await env.DB.prepare('SELECT id, code, label, uses, max_uses, expires_at, revoked, created_at FROM office_invites WHERE game = ?1 ORDER BY created_at DESC LIMIT 100').bind(game).all();
+    const { results } = await env.DB.prepare('SELECT id, code, label, uses, max_uses, expires_at, revoked, created_at, server FROM office_invites WHERE game = ?1 ORDER BY created_at DESC LIMIT 100').bind(game).all();
     return (results ?? []).map((r) => inviteView(r, game, origin));
-  } catch { return []; }
+  } catch {
+    // Before migration 0006 an invite is the game's (no `server`).
+    try {
+      const { results } = await env.DB.prepare('SELECT id, code, label, uses, max_uses, expires_at, revoked, created_at FROM office_invites WHERE game = ?1 ORDER BY created_at DESC LIMIT 100').bind(game).all();
+      return (results ?? []).map((r) => inviteView(r, game, origin));
+    } catch { return []; }
+  }
 }
 const prettyCode = (c) => `${String(c).slice(0, 4)}-${String(c).slice(4)}`;
 function inviteView(r, game, origin) {
   const ended = Boolean(r.revoked) || (r.expires_at && Number(r.expires_at) < Date.now()) || (r.max_uses && Number(r.uses) >= Number(r.max_uses));
   return {
     id: r.id, code: prettyCode(r.code), label: r.label ?? '', uses: Number(r.uses) || 0, maxUses: r.max_uses ?? null,
-    expiresAt: r.expires_at ?? null, revoked: Boolean(r.revoked), open: !ended, link: `${origin}/${game}/?invite=${prettyCode(r.code)}`,
+    expiresAt: r.expires_at ?? null, revoked: Boolean(r.revoked), open: !ended,
+    // An invite to one server (0.16.0) opens that server's door; any other, the game's invite-only beta.
+    ...(r.server ? { server: r.server } : {}),
+    link: r.server ? `${origin}/${game}/s/${r.server}/play?invite=${prettyCode(r.code)}` : `${origin}/${game}/?invite=${prettyCode(r.code)}`,
   };
 }
 
@@ -454,8 +492,16 @@ export async function officeView(env, cat, origin) {
     const rooms = (await Promise.all((await liveRooms(env, g.id)).map((r) => roomRow(env, g, r.room, max)))).filter(Boolean)
       .filter((r) => r.players + r.screens > 0 || r.closedUntil || r.bans.length);
     rooms.sort((a, b) => b.players - a.players || a.room.localeCompare(b.room));
+    const servers = await serversOf(env, g, { fresh: true });
+    const byServer = {};
+    for (const r of rooms) { const b = (byServer[r.server] ??= { rooms: 0, players: 0, ai: 0 }); b.rooms += 1; b.players += r.players; b.ai += r.ai; }
+    const members = await memberCountsOf(env, g.id);
     return {
       id: g.id, name: g.name, launch, launchFrom: row?.launch ? 'office' : g.launch ? 'game.json' : 'default',
+      // Servers (0.16.0): each with its policy and what is on it now; its build reads the dial only from netplay rev 6.
+      servers: servers.map((sv) => ({ ...serverView(sv, { origin, game: g.id }), live: byServer[sv.id] ?? { rooms: 0, players: 0, ai: 0 }, members: members[sv.id] ?? 0 })),
+      build: { netplayRev: Number.isInteger(g.netplayRev) ? g.netplayRev : null, predates: !(Number(g.netplayRev) >= 6), caps: g.caps ?? null },
+      passes: (await passList(env, { game: g.id })).filter((x) => x.live || Date.now() - x.createdAt < 7 * 86_400_000),
       remix: remixOf(g, settings), remixBuilt: g.landing?.source !== false, license: licenseOf(g.license).kind,
       seats: seatsOf(g), maxPlayers: max, maxSet: Number(row?.max_players) >= 1 ? Number(row.max_players) : null,
       play: `${origin}/${g.id}/play`, page: `${origin}/${g.id}/`,
@@ -466,7 +512,20 @@ export async function officeView(env, cat, origin) {
   return {
     ok: true, kind: 'homie-studio-office', v: 1, studio: cat.studio?.name ?? 'Studio', site: origin, now: Date.now(),
     accounts: Boolean(players?.get), games, playing: games.reduce((n, g) => n + g.playing, 0),
+    // The fill-a-spot service (an AI seated in an empty spot for a price) is a money decision: not offered yet.
+    fillSpot: { available: Boolean(fillSpot()), note: 'Let a fill-a-spot service seat AI (coming later)' },
+    agentsTalk: await talkConsented(env),
   };
+}
+async function memberCountsOf(env, game) {
+  try {
+    const { results } = await env.DB.prepare('SELECT server, COUNT(*) AS n FROM server_members WHERE game = ?1 GROUP BY server').bind(game).all();
+    return Object.fromEntries((results ?? []).map((r) => [r.server, Number(r.n) || 0]));
+  } catch { return {}; }
+}
+/** Whether the owner has said yes to AI guides talking (a `meta` row, the first `agents-brain` ask). */
+async function talkConsented(env) {
+  try { return Boolean((await env.DB.prepare("SELECT value FROM meta WHERE key = 'agents_talk_ok'").first())?.value); } catch { return false; }
 }
 async function hasInvites(env, game) {
   try { return Boolean(await env.DB.prepare('SELECT 1 AS x FROM office_invites WHERE game = ?1 LIMIT 1').bind(game).first()); } catch { return false; }
@@ -474,6 +533,7 @@ async function hasInvites(env, game) {
 
 /* ------------------------------------------------------------------ the controls */
 
+/** Always an ask from an office key; servers' asks are decided case by case (needsAsk: what narrows, or consent). */
 const DESTRUCTIVE = new Set(['kick', 'mute', 'close', 'game']);
 
 /** An action, checked against the catalogue: `{ ok, action }` or `{ ok: false, error, message }`. */
@@ -520,6 +580,52 @@ function checkAction(cat, op, body) {
       if (remix === true && meta.landing?.source === false) return bad(`${meta.name}'s source is not in its build (game.json "share": { "source": false }); set it to true and deploy first`);
       return { ok: true, action: { op, game: meta.id, ...(launch !== undefined ? { launch } : {}), ...(remix !== undefined ? { remix } : {}), ...(maxPlayers !== undefined ? { maxPlayers } : {}) } };
     }
+    case 'server-create': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      const c = checkServer(body, { create: true });
+      if (!c.ok) return c;
+      return { ok: true, action: { op, game: meta.id, fields: c.fields } };
+    }
+    case 'server-set': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      if (typeof body.server !== 'string' || !(body.server === 'public' || /^[a-z0-9][a-z0-9-]{1,19}$/.test(body.server))) return bad('server is the server\'s id');
+      const { game: _g, server: _s, ...rest } = body;
+      const c = checkServer(rest);
+      if (!c.ok) return c;
+      if (!Object.keys(c.fields).length) return bad('say what to change: name, blurb, policy, aiSeats, guides, bots, level, levelMax, speech, door, kids, beginnerDays, beginnerLevel, rooms, seats, listed');
+      return { ok: true, action: { op, game: meta.id, server: body.server, fields: c.fields } };
+    }
+    case 'server-close': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      if (typeof body.server !== 'string' || !/^[a-z0-9][a-z0-9-]{1,19}$/.test(body.server)) return bad('server is the server\'s id (the public server is Quick play: close it with "public")');
+      return { ok: true, action: { op, game: meta.id, server: body.server, reopen: body.reopen === true } };
+    }
+    case 'member': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      if (typeof body.server !== 'string' || !/^[a-z0-9][a-z0-9-]{1,19}$/.test(body.server)) return bad('server is the server\'s id');
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(body.player ?? ''))) return bad('player is the player\'s id (from the office)');
+      if (body.remove !== true && !['member', 'mentor', 'mod'].includes(body.role)) return bad('role is member, mentor or mod; or remove: true');
+      return { ok: true, action: { op, game: meta.id, server: body.server, player: body.player, ...(body.remove === true ? { remove: true } : { role: body.role }), name: oneLine(body.name, 40) || null } };
+    }
+    case 'pass': {
+      const action = ['create', 'list', 'revoke'].includes(body.action) ? body.action : 'create';
+      if (body.game !== undefined && body.game !== null && !meta) return bad('game is one of this studio\'s game ids, or leave it out for any');
+      if (action === 'revoke' && !/^[a-f0-9]{10}$/.test(String(body.id ?? ''))) return bad('id is the pass\'s id');
+      return { ok: true, action: { op, action, game: meta?.id ?? null, id: body.id ?? null, label: oneLine(body.label, 24), role: body.role ?? 'party', hands: body.hands ?? 'self', server: body.server ?? null, days: body.days ?? null, kind: body.kind ?? 'owner' } };
+    }
+    case 'room-level': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      if (!room) return bad('room is the room\'s code');
+      const level = Math.floor(Number(body.level));
+      if (!(level >= 1 && level <= 5)) return bad('level is 1 to 5 (Rookie, Steady, Fair, Strong, Maxed)');
+      return { ok: true, action: { op, game: meta.id, room, level } };
+    }
+    case 'agents-brain': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      if (typeof body.server !== 'string' || !(body.server === 'public' || /^[a-z0-9][a-z0-9-]{1,19}$/.test(body.server))) return bad('server is the server\'s id');
+      if (!['off', 'script', 'workers-ai', 'owner-key'].includes(body.mode)) return bad('mode is off, script, workers-ai or owner-key');
+      return { ok: true, action: { op, game: meta.id, server: body.server, mode: body.mode } };
+    }
     default:
       return bad('unknown control');
   }
@@ -545,8 +651,56 @@ export function describe(cat, a) {
       const s = bits.join('; ');
       return `${s.charAt(0).toUpperCase()}${s.slice(1)}.`;
     }
+    case 'server-create': return `Make a ${a.fields.policy} server "${a.fields.name}" for ${gname}.`;
+    case 'server-set': {
+      const f = a.fields;
+      const bits = [];
+      if (f.policy) bits.push(f.policy === 'humans-only' ? 'make it humans-only (its AI players leave after the current round, and no AI can join)' : `make it ${f.policy}`);
+      if (f.door) bits.push(f.door === 'open' ? 'open its door to anyone' : f.door === 'accounts' ? 'let in only players with an account (a passkey)' : 'let in only players with an invite');
+      if (f.rooms !== undefined) bits.push(`allow ${f.rooms} room${f.rooms === 1 ? '' : 's'} at most`);
+      if (f.seats !== undefined) bits.push(f.seats === null ? 'give its rooms the game\'s own seats' : `give its rooms ${f.seats} seats`);
+      if (f.beginnerDays !== undefined) bits.push(`count players as new for ${f.beginnerDays} days`);
+      if (f.name) bits.push(`rename it "${f.name}"`);
+      const rest = Object.keys(f).filter((k) => !['policy', 'door', 'rooms', 'seats', 'beginnerDays', 'name'].includes(k));
+      if (rest.length) bits.push(`change its ${rest.join(', ')}`);
+      return `On ${gname}'s server ${a.server}: ${bits.join('; ')}.`;
+    }
+    case 'server-close': return a.reopen ? `Open ${gname}'s server ${a.server} again.` : `Close ${gname}'s server ${a.server}: its rooms finish the current round, then everyone leaves with a thank-you, and nobody can join until it opens again.`;
+    case 'member': return a.remove ? `Remove ${a.name ?? 'that player'} from ${gname}'s server ${a.server} (they can join again unless its door keeps them out).` : `Make ${a.name ?? 'that player'} a ${a.role} of ${gname}'s server ${a.server}.`;
+    case 'pass': return a.action === 'revoke' ? `Revoke the agent pass ${a.id}: that AI leaves every room and cannot sit again.` : `Issue an agent pass for an AI called "${a.label} · AI".`;
+    case 'room-level': return `Set the AI in ${where} to ${levelName(a.level)} (level ${a.level}).`;
+    case 'agents-brain': return ['workers-ai', 'owner-key'].includes(a.mode)
+      ? `Let the AI guides on ${gname}'s server ${a.server} talk: they speak only the lines the game's own agents.json gives them (never free text), at most one line every 8 seconds, never about a person, and a player can quiet them. Their brain runs on ${a.mode === 'workers-ai' ? 'this studio\'s own Workers AI (free allowance)' : 'your own AI provider key (your money, capped daily)'}.`
+      : `Set the AI guides' brain on ${gname}'s server ${a.server} to ${a.mode}.`;
     default: return 'A control.';
   }
+}
+
+/** Whether an office key (the owner's AI) only ASKS for this (DESIGN D13): what takes something away, or consent. */
+export async function needsAsk(env, cat, a) {
+  if (DESTRUCTIVE.has(a.op)) return true;
+  if (a.op === 'server-close') return !a.reopen;
+  if (a.op === 'member') return a.remove === true;
+  if (a.op === 'server-set') {
+    const meta = (cat.games ?? []).find((g) => g.id === a.game);
+    const before = meta ? (await serversOf(env, meta, { fresh: true })).find((x) => x.id === a.server) : null;
+    return narrows(before, a.fields);
+  }
+  if (a.op === 'agents-brain') return ['workers-ai', 'owner-key'].includes(a.mode) && !(await talkConsented(env));
+  return false;
+}
+
+/** The live rooms of one server of a game. */
+async function serverRooms(env, game, server) {
+  return (await liveRooms(env, game)).filter((r) => roomServer(r.room) === server);
+}
+
+/** A server's policy reaches every live room of it now (a signed `policy` control; section 17). */
+async function pushPolicy(env, meta, settings, server) {
+  const pol = policyOf(server, { seats: seatsFor(meta, settings) });
+  const rooms = await serverRooms(env, meta.id, server.id);
+  const res = await Promise.all(rooms.map((r) => roomControl(env, meta, settings, r.room, 'policy', { pol })));
+  return { rooms: rooms.length, leaving: res.reduce((n, r) => n + (r.leaving ?? 0), 0) };
 }
 
 /** Do it: the owner's own session did, or the owner confirmed what the AI asked. */
@@ -601,6 +755,92 @@ export async function perform(env, cat, a) {
         await Promise.all(rooms.map((r) => roomControl(env, meta, fresh, r.room, 'seats', { max: done.maxPlayers })));
       }
       return done;
+    }
+    case 'server-create': {
+      if (!env?.DB) return { ok: false, error: 'no-db', message: 'This studio has no D1 for servers.' };
+      const list = await serversOf(env, meta, { fresh: true });
+      if (list.some((x) => x.id === a.fields.id)) return { ok: false, error: 'exists', message: `${meta.name} already has a server called ${a.fields.id}; change it with server_set.` };
+      if (list.length >= SERVER_LIMITS.perGame) return { ok: false, error: 'limit', message: `A game has at most ${SERVER_LIMITS.perGame} servers.` };
+      const sv = rowFor(meta.id, null, a.fields);
+      try { await writeServer(env, meta.id, sv); } catch (error) { return { ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+      const view = serverView(sv, { origin: a.origin ?? '', game: meta.id });
+      const notes = [];
+      if (sv.policy === 'beginner' && sv.guides) notes.push(`${sv.guides} AI guide seat${sv.guides === 1 ? '' : 's'} in every room, marked AI: the game's own bots play them now; guides talk once AI talk arrives (a later version, and only with the owner's yes).`);
+      if (sv.policy === 'hybrid') notes.push(`${sv.aiSeats} seat${sv.aiSeats === 1 ? '' : 's'} in every room are AI companions, marked AI; the party votes their level.`);
+      if (sv.policy === 'humans-only') notes.push('No AI can join; the game\'s practice bots are off unless the owner turns them on (bots: fill).');
+      if (!(Number(meta.netplayRev) >= 6)) notes.push(`${meta.name}'s build predates servers (netplay revision ${meta.netplayRev ?? '5 or older'}): reserved AI seats stay empty and its bots do not read the dial until it is rebuilt with @homie-rocks/studio 0.16.`);
+      return { ok: true, op: a.op, game: meta.id, server: view, notes };
+    }
+    case 'server-set': {
+      const before = (await serversOf(env, meta, { fresh: true })).find((x) => x.id === a.server);
+      if (!before) return { ok: false, error: 'no-server', message: `${meta.name} has no server called ${a.server}.` };
+      const sv = rowFor(meta.id, before, a.fields);
+      try { await writeServer(env, meta.id, sv); } catch (error) { return { ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+      const pushed = await pushPolicy(env, meta, settings, sv);
+      return { ok: true, op: a.op, game: meta.id, server: serverView(sv, { game: meta.id }), rooms: pushed.rooms, aiLeaving: pushed.leaving };
+    }
+    case 'server-close': {
+      const before = (await serversOf(env, meta, { fresh: true })).find((x) => x.id === a.server) ?? (a.server === 'public' ? PUBLIC_SERVER : null);
+      if (!before) return { ok: false, error: 'no-server', message: `${meta.name} has no server called ${a.server}.` };
+      const sv = rowFor(meta.id, before, { state: a.reopen ? 'open' : 'closed' });
+      try { await writeServer(env, meta.id, sv); } catch (error) { return { ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+      const rooms = await serverRooms(env, meta.id, sv.id);
+      // Its rooms finish the round they are in, then everyone but the owner leaves (the launch-change road).
+      const res = a.reopen
+        ? await Promise.all(rooms.map((r) => roomControl(env, meta, settings, r.room, 'regate', {})))
+        : await Promise.all(rooms.map((r) => roomControl(env, meta, settings, r.room, 'regate', { allow: ['o'], notice: `${sv.name} closes after this round. Thanks for playing!`, message: `${sv.name} is closed now. Thanks for playing!` })));
+      return { ok: true, op: a.op, game: meta.id, server: sv.id, state: sv.state, rooms: res.filter((r) => r.ok).length };
+    }
+    case 'member': {
+      try {
+        if (a.remove) await env.DB.prepare('DELETE FROM server_members WHERE game = ?1 AND server = ?2 AND player = ?3').bind(meta.id, a.server, a.player).run();
+        else {
+          const now = Date.now();
+          await env.DB.prepare(`INSERT INTO server_members (game, server, player, role, home, joined_at, seen_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?5)
+            ON CONFLICT(game, server, player) DO UPDATE SET role = excluded.role`).bind(meta.id, a.server, a.player, a.role, now).run();
+        }
+      } catch (error) { return { ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+      return { ok: true, op: a.op, game: meta.id, server: a.server, player: a.player, ...(a.remove ? { removed: true } : { role: a.role }) };
+    }
+    case 'pass': {
+      try {
+        if (a.action === 'list') return { ok: true, op: a.op, passes: await passList(env, { game: a.game }) };
+        if (a.action === 'revoke') {
+          const r = await passRevoke(env, a.id);
+          if (!r.ok) return r;
+          // The AI leaves every room it sits in now, and is held out of them.
+          let left = 0;
+          for (const g of a.game ? [meta] : (cat.games ?? [])) {
+            for (const room of await liveRooms(env, g.id)) {
+              const f = await roomFacts(env, g.id, room.room, seatsFor(g, settings));
+              for (const c of (f?.clients ?? []).filter((x) => x.agent?.pass === a.id)) {
+                const k = await roomControl(env, g, settings, room.room, 'kick', { id: c.id, minutes: 24 * 60, message: 'This AI\'s pass was revoked.' });
+                if (k.ok) left += 1;
+              }
+            }
+          }
+          return { ok: true, op: a.op, revoked: a.id, left };
+        }
+        const r = await passCreate(env, { label: a.label, kind: a.kind, role: a.role, hands: a.hands, game: a.game, server: a.server, days: a.days });
+        if (!r.ok) return r;
+        return {
+          ok: true, op: a.op, pass: r.pass, secret: r.secret,
+          use: `This is the only time the pass is shown. The AI sits with POST ${a.origin ?? ''}/${a.game ?? '<game>'}/api/agent and the header "Authorization: Bearer <pass>"; it plays as "${aiName(a.label)}", marked AI, never on a humans-only server. Revoke it any time.`,
+        };
+      } catch (error) { return { ok: false, error: 'not-migrated', message: `Agent passes need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+    }
+    case 'room-level': return roomControl(env, meta, settings, a.room, 'level', { level: a.level });
+    case 'agents-brain': {
+      const before = (await serversOf(env, meta, { fresh: true })).find((x) => x.id === a.server);
+      if (!before) return { ok: false, error: 'no-server', message: `${meta.name} has no server called ${a.server}.` };
+      if (before.policy === 'humans-only') return { ok: false, error: 'humans-only', message: 'A humans-only server has no AI to talk.' };
+      const sv = rowFor(meta.id, before, { brain: a.mode });
+      try {
+        await writeServer(env, meta.id, sv);
+        if (['workers-ai', 'owner-key'].includes(a.mode)) await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('agents_talk_ok', ?1)").bind(String(Date.now())).run();
+      } catch (error) { return { ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+      await pushPolicy(env, meta, settings, sv);
+      return { ok: true, op: a.op, game: meta.id, server: sv.id, brain: sv.brain, note: ['workers-ai', 'owner-key'].includes(a.mode) ? 'Saved. AI guides\' talk arrives with @homie-rocks/studio 0.17; until then they play as the game\'s bots, silent.' : 'Saved.' };
     }
     default: return { ok: false, error: 'op' };
   }
@@ -660,14 +900,22 @@ async function invitesApi(request, env, url, cat, body, who) {
   const uses = body.uses === null || body.uses === undefined || body.uses === 'any' ? null : Math.max(1, Math.min(10_000, Math.floor(Number(body.uses) || 1)));
   const days = body.days === null || body.days === undefined ? null : Math.max(1, Math.min(365, Math.floor(Number(body.days) || 30)));
   const label = oneLine(body.label, 60) || null;
+  // An invite to one server's door (0.16.0): the server must be this game's.
+  const server = typeof body.server === 'string' && body.server ? body.server : null;
+  if (server && !(await serversOf(env, meta, { fresh: true })).some((x) => x.id === server && x.id !== 'public')) return json({ ok: false, error: 'bad-request', message: `${meta.name} has no server called ${server}` }, 400);
   const made = [];
   for (let i = 0; i < count; i += 1) {
     const raw = new Uint8Array(8);
     crypto.getRandomValues(raw);
     const code = [...raw].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
-    const row = { id: randomHex(5), code, label, uses: 0, max_uses: uses, expires_at: days ? Date.now() + days * 86400_000 : null, revoked: 0, created_at: Date.now() };
-    await env.DB.prepare('INSERT INTO office_invites (id, game, code, label, uses, max_uses, expires_at, revoked, created_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, 0, ?7)')
-      .bind(row.id, meta.id, row.code, row.label, row.max_uses, row.expires_at, row.created_at).run();
+    const row = { id: randomHex(5), code, label, uses: 0, max_uses: uses, expires_at: days ? Date.now() + days * 86400_000 : null, revoked: 0, created_at: Date.now(), server };
+    if (server) {
+      await env.DB.prepare('INSERT INTO office_invites (id, game, code, label, uses, max_uses, expires_at, revoked, created_at, server) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, 0, ?7, ?8)')
+        .bind(row.id, meta.id, row.code, row.label, row.max_uses, row.expires_at, row.created_at, server).run();
+    } else {
+      await env.DB.prepare('INSERT INTO office_invites (id, game, code, label, uses, max_uses, expires_at, revoked, created_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, 0, ?7)')
+        .bind(row.id, meta.id, row.code, row.label, row.max_uses, row.expires_at, row.created_at).run();
+    }
     made.push(inviteView(row, meta.id, origin));
   }
   return json({ ok: true, game: meta.id, launch: launchOf(meta, await settingsOf(env), env), invites: made });
@@ -694,13 +942,13 @@ async function api(request, env, url, cat) {
 
   if (path === '/_studio/api/office' && request.method === 'GET') {
     try { return json({ ...(await officeView(env, cat, url.origin)), by: who }); } catch (error) {
-      return json({ ok: false, error: 'no-office', message: `The office is not in this studio's D1 yet: \`npm run deploy\` applies migration 0003_studio_office.sql. (${String(error?.message ?? error).slice(0, 120)})` }, 503);
+      return json({ ok: false, error: 'no-office', message: `The office is not in this studio's D1 yet: \`npm run deploy\` applies migration 0005_studio_office.sql. (${String(error?.message ?? error).slice(0, 120)})` }, 503);
     }
   }
   if (path === '/_studio/api/invites' || path === '/_studio/api/invites/revoke') {
     if (path.endsWith('/revoke') && request.method !== 'POST') return json({ ok: false, error: 'method' }, 405);
     try { return await invitesApi(request, env, url, cat, body, who); } catch (error) {
-      return json({ ok: false, error: 'no-office', message: `Invites need migration 0003_studio_office.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503);
+      return json({ ok: false, error: 'no-office', message: `Invites need migration 0005_studio_office.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503);
     }
   }
   const askPath = /^\/_studio\/api\/asks\/(ask_[a-f0-9]{16})$/.exec(path);
@@ -708,13 +956,34 @@ async function api(request, env, url, cat) {
     const row = await readAsk(env, askPath[1]);
     return row ? json({ ok: true, ask: askView(row, cat, url.origin) }) : json({ ok: false, error: 'no-ask', message: 'No such ask: they last 15 minutes.' }, 404);
   }
-  const op = /^\/_studio\/api\/(kick|mute|close|announce|game)$/.exec(path)?.[1];
+  // Servers and agent seats (0.16.0): the list, and each server's members.
+  if (path === '/_studio/api/servers' && request.method === 'GET') {
+    const metas = (cat.games ?? []).filter((g) => !url.searchParams.get('game') || g.id === url.searchParams.get('game'));
+    const view = await officeView(env, { ...cat, games: metas }, url.origin);
+    return json({ ok: true, games: view.games.map((g) => ({ id: g.id, name: g.name, build: g.build, servers: g.servers, passes: g.passes })), fillSpot: view.fillSpot, agentsTalk: view.agentsTalk });
+  }
+  if (path === '/_studio/api/servers/members' && request.method === 'GET') {
+    const game = url.searchParams.get('game');
+    const server = url.searchParams.get('server');
+    try {
+      const { results } = await env.DB.prepare('SELECT player, role, home, joined_at, seen_at FROM server_members WHERE game = ?1 AND server = ?2 ORDER BY seen_at DESC LIMIT 200').bind(game, server).all();
+      const members = await Promise.all((results ?? []).map(async (r) => ({ player: r.player, account: await playerOf(env, r.player), role: r.role, home: Number(r.home) === 1, joinedAt: Number(r.joined_at), seenAt: Number(r.seen_at) })));
+      return json({ ok: true, game, server, members });
+    } catch (error) { return json({ ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503); }
+  }
+  const OPS = {
+    '/_studio/api/kick': 'kick', '/_studio/api/mute': 'mute', '/_studio/api/close': 'close', '/_studio/api/announce': 'announce', '/_studio/api/game': 'game',
+    '/_studio/api/servers': 'server-create', '/_studio/api/servers/set': 'server-set', '/_studio/api/servers/close': 'server-close', '/_studio/api/servers/member': 'member',
+    '/_studio/api/agents/pass': 'pass', '/_studio/api/room-level': 'room-level', '/_studio/api/agents/brain': 'agents-brain',
+  };
+  const op = OPS[path];
   if (!op || request.method !== 'POST') return json({ ok: false, error: 'not-found' }, 404);
   const checked = checkAction(cat, op, body);
   if (!checked.ok) return json(checked, 400);
   const action = checked.action;
+  if (op === 'server-create' || op === 'pass') action.origin = url.origin;
   // An office key (the owner's AI) only ASKS for what takes something away; the owner confirms with one tap.
-  if (who === 'office' && DESTRUCTIVE.has(op)) {
+  if (who === 'office' && await needsAsk(env, cat, action)) {
     if (op === 'kick' || op === 'mute') {
       const found = await nameIn(env, cat, action);
       if (!found) return json({ ok: false, error: 'no-player', message: 'Nobody is in that seat of that room now (studio_office lists who is).' }, 404);
@@ -725,7 +994,7 @@ async function api(request, env, url, cat) {
       const ask = await makeAsk(env, cat, action, url.origin);
       return json({ ok: true, needs: 'owner', ask, message: `Waiting for the owner: ${ask.what} The owner confirms it with one tap at ${ask.confirm} (signed in to the studio; it lasts 15 minutes).` }, 202);
     } catch (error) {
-      return json({ ok: false, error: 'no-office', message: `Asks need migration 0003_studio_office.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503);
+      return json({ ok: false, error: 'no-office', message: `Asks need migration 0005_studio_office.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503);
     }
   }
   const result = await perform(env, cat, action);

@@ -245,6 +245,10 @@ export async function playerData(env, player) {
     try { summary = JSON.parse(m.summary); } catch { summary = {}; }
     of(m.game).memorials.push({ character: m.character, as: m.player_name, summary, at: new Date(Number(m.at)).toISOString() });
   }
+  // The servers this player belongs to (0.16.0; a studio before migration 0006 has none).
+  let servers = [];
+  try { servers = (await env.DB.prepare('SELECT game, server, role, home, joined_at, seen_at FROM server_members WHERE player = ?1 ORDER BY game, server').bind(player).all()).results ?? []; } catch { servers = []; }
+  for (const m of servers) (of(m.game).servers ??= []).push({ server: m.server, role: m.role, home: Number(m.home) === 1, joinedAt: new Date(Number(m.joined_at)).toISOString(), seenAt: new Date(Number(m.seen_at)).toISOString() });
   return games;
 }
 

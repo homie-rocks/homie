@@ -12,6 +12,7 @@
 import { qrSvg } from './qr.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 import { licenseLabel, licenseOf, remixRow } from './license.mjs';
+import { POLICY_WORDS, policyWords } from './servers.mjs';
 
 export const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const jsonScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
@@ -388,6 +389,27 @@ img,video{display:block;max-width:100%}
   .hero-media.drift img,.hero-media.drift::after,.hero-media.bare::after{animation:none}
   .js .reveal{opacity:1;transform:none;transition:none}
 }
+
+/* servers (0.16.0): a game's named room pools, their policy badges, AI marks, and their doors */
+.pol{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;border:1px solid color-mix(in srgb,var(--fg) 26%,transparent);font:700 11px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--soft);white-space:nowrap}
+.pol.hybrid{border-color:color-mix(in srgb,var(--hot) 60%,transparent);color:var(--fg)}
+.pol.beginner{border-color:color-mix(in srgb,#7dd3fc 70%,transparent);color:#bfe9ff}
+.pol.humans-only{border-color:color-mix(in srgb,#43ff9e 60%,transparent);color:#c6ffe0}
+.ai{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--hot) 22%,transparent);color:var(--fg);font:800 11px/1.4 var(--mono);letter-spacing:.06em;vertical-align:1px}
+.scards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:16px;margin-top:24px}
+.scard{display:flex;flex-direction:column;gap:10px;padding:18px 20px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line)}
+.scard .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.scard h3{margin:0;font:800 22px/1.1 var(--display);letter-spacing:-.02em}
+.scard h3 a{text-decoration:none}
+.scard p{margin:0;color:var(--soft);font-size:15px}
+.scard .nums{color:var(--dim);font-size:14px}
+.scard .acts{display:flex;gap:10px;align-items:center;margin-top:auto;flex-wrap:wrap}
+.scard .acts .btn{min-height:44px;font-size:16px;padding:0 20px;flex:none}
+.homeb{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 14px;border-radius:12px;border:1px solid color-mix(in srgb,var(--fg) 24%,transparent);background:transparent;color:var(--fg);font:700 14px/1 var(--display);cursor:pointer;text-decoration:none}
+.homeb[aria-pressed="true"]{border-color:var(--hot);color:var(--hot)}
+.quickplay{display:inline-flex;gap:8px;align-items:center;margin-top:18px;color:var(--soft);font-weight:700;text-decoration:none}
+.door-why{margin-top:14px;color:var(--soft);max-width:60ch}
+.room .srv{color:var(--soft);font-weight:700}
 `;
 
 /* ------------------------------------------------------------------ the script (served at /_homie/site.js) */
@@ -431,7 +453,7 @@ d.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.t
 var el=function(tag,cls,text){var e=d.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 var EYE='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 var roomRow=function(r){var li=el('li','room');var th=el('span','thumb');if(r.cover){var im=el('img');im.src=r.cover;im.alt='';im.loading='lazy';th.appendChild(im)}li.appendChild(th);
-  var mid=el('div');mid.appendChild(el('b',null,(r.name?r.name+' · ':'')+r.label));mid.appendChild(el('span',null,r.players+' of '+r.max+' seats taken · bots hold the rest'));
+  var mid=el('div');mid.appendChild(el('b',null,(r.name?r.name+' · ':'')+(r.server?r.server.name+' · ':'')+r.label));mid.appendChild(el('span',null,r.players+' of '+r.max+' seats taken'+(r.ai?' · '+r.ai+' AI':'')+(r.policy==='humans-only'?' · humans only':' · bots hold the rest')));
   var pips=el('div','pips');for(var i=0;i<Math.min(r.max,32);i++)pips.appendChild(el('i',i<r.players?'on':''));mid.appendChild(pips);li.appendChild(mid);
   var acts=el('div','room-acts');
   if(r.watch){var w=el('a','watchb');w.href=r.watch;w.setAttribute('aria-label','Watch '+(r.name?r.name+' · ':'')+r.label);w.innerHTML=EYE;w.appendChild(el('span',null,'Watch'));acts.appendChild(w)}
@@ -451,6 +473,11 @@ if(src){
   var go=function(){setInterval(ask,15000);d.addEventListener('visibilitychange',ask)};
   if(d.prerendering===true)d.addEventListener('prerenderingchange',function(){ask();go()},{once:true});else go();
 }
+// A server's "Make this my home" and "Leave" (a signed-in player): POST /<game>/s/<id>/home, then the page again.
+[].forEach.call(d.querySelectorAll('[data-server-home]'),function(b){b.addEventListener('click',function(){
+  var o={};try{o=JSON.parse(b.getAttribute('data-server-home')||'{}')}catch(e){}b.disabled=true;
+  fetch(o.at,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(o.body||{})}).then(function(r){return r.json()}).then(function(j){
+    if(j&&j.ok){location.reload();return}b.disabled=false;b.textContent=(j&&j.message)||'That did not work'}).catch(function(){b.disabled=false})})});
 })();`;
 
 /* ------------------------------------------------------------------ the shell */
@@ -659,19 +686,26 @@ export function watchOf(g) {
   return 'follow';
 }
 
-/** A room as the live list draws it (the same fields /api/rooms and /<game>/live give the script). */
-export function roomView(g, r, max) {
-  const n = Number(String(r.name ?? r.room ?? '').replace(/^pub-/, '')) || null;
+/**
+ * A room as the live list draws it (the same fields /api/rooms and /<game>/live give the script). A server's room
+ * (0.16.0) names its server and policy, and how many AI are in it (always marked AI).
+ */
+export function roomView(g, r, max, srv = null) {
   const room = r.name ?? r.room;
+  const m = /^(?:pub|s-[a-z0-9-]+)-(\d+)$/.exec(String(room ?? ''));
+  const n = m ? Number(m[1]) : null;
   return {
     game: g.id, name: g.name, label: n ? `Room ${n}` : 'A room', room, players: r.players, max, cover: coverOf(g), play: `/${g.id}/play?room=${encodeURIComponent(room)}`,
     // Watch this room from any player's view (section 16); a game that cannot be watched has no link.
     watch: watchOf(g) === 'off' ? null : `/${g.id}/watch?room=${encodeURIComponent(room)}`,
+    server: srv && srv.id !== 'public' ? { id: srv.id, name: srv.name, badge: policyWords(srv).badge } : null,
+    policy: srv?.policy ?? 'open',
+    ai: Number(r.ai ?? r.agents ?? 0) || 0,
   };
 }
 
 function roomRows(rows, { names = true } = {}) {
-  return rows.map((r) => `<li class="room"><span class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : ''}</span><div><b>${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}</b><span>${esc(r.players)} of ${esc(r.max)} seats taken · bots hold the rest</span><div class="pips">${Array.from({ length: Math.min(r.max, 32) }, (_, i) => `<i${i < r.players ? ' class="on"' : ''}></i>`).join('')}</div></div><div class="room-acts">${r.watch ? `<a class="watchb" href="${esc(r.watch)}" aria-label="Watch ${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}">${icon('eye', 'ico')}<span>Watch</span></a>` : ''}<a class="join" href="${esc(r.play)}" data-play>Join</a></div></li>`).join('');
+  return rows.map((r) => `<li class="room"><span class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : ''}</span><div><b>${names ? `${esc(r.name)} · ` : ''}${r.server ? `${esc(r.server.name)} · ` : ''}${esc(r.label)}</b><span>${esc(r.players)} of ${esc(r.max)} seats taken${r.ai ? ` · ${esc(r.ai)} AI` : ''}${r.policy === 'humans-only' ? ' · humans only' : ' · bots hold the rest'}</span><div class="pips">${Array.from({ length: Math.min(r.max, 32) }, (_, i) => `<i${i < r.players ? ' class="on"' : ''}></i>`).join('')}</div></div><div class="room-acts">${r.watch ? `<a class="watchb" href="${esc(r.watch)}" aria-label="Watch ${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}">${icon('eye', 'ico')}<span>Watch</span></a>` : ''}<a class="join" href="${esc(r.play)}" data-play>Join</a></div></li>`).join('');
 }
 
 const fmtDay = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : ''; };
@@ -825,6 +859,103 @@ export function roomsPage(cat, { origin = '', rooms = [] } = {}) {
   });
 }
 
+/* ------------------------------------------------------------------ servers (0.16.0) */
+
+const SERVERS_LEAD = 'Rooms on a server only ever match players from that server.';
+
+/** One server's card: its name, policy badge and line, who is on it now, and Play (and its page). */
+function serverCard(g, sv) {
+  const words = policyWords(sv);
+  const nums = [`${sv.playing} playing`, sv.ai ? `${sv.ai} AI` : '', sv.members ? `${sv.members} ${sv.members === 1 ? 'member' : 'members'}` : ''].filter(Boolean).join(' · ');
+  const page = sv.id === 'public' ? `/${g.id}/` : `/${g.id}/s/${sv.id}/`;
+  const play = sv.id === 'public' ? `/${g.id}/play` : `/${g.id}/s/${sv.id}/play`;
+  return `<article class="scard reveal" data-server="${esc(sv.id)}"><div class="top"><h3><a href="${esc(page)}">${esc(sv.name)}</a></h3><span class="pol ${esc(sv.policy)}">${esc(words.badge)}</span></div>
+<p>${esc(sv.blurb || words.line)}</p><p class="nums">${esc(nums)}</p>
+<div class="acts"><a class="btn" href="${esc(play)}" data-play>${PLAY_ICON}Play</a>${sv.id === 'public' ? '' : `<a class="ghost" href="${esc(page)}">About</a>`}</div></article>`;
+}
+
+/** Servers worth showing to everyone: open, listed, and not the public one (Quick play is its own link). */
+const shownServers = (list) => (list ?? []).filter((x) => x.id !== 'public' && x.listed && x.state === 'open');
+
+/** The landing's Servers band: there when the game has a server besides Quick play. */
+export function serversBand(g, list) {
+  const shown = shownServers(list);
+  if (!shown.length) return '';
+  const pub = (list ?? []).find((x) => x.id === 'public');
+  return `<section class="band tight" aria-labelledby="servers-title" data-servers-band><div class="band-in">
+  <div class="head-row reveal"><div><p class="kicker">Servers</p><h2 class="small-h" id="servers-title">${esc(SERVERS_LEAD)}</h2></div><a class="more" href="/${esc(g.id)}/servers/">Every server ${icon('arrow')}</a></div>
+  <div class="scards">${shown.map((sv) => serverCard(g, sv)).join('')}</div>
+  ${pub && pub.state === 'open' ? `<a class="quickplay" href="/${esc(g.id)}/play" data-play>Quick play ${icon('arrow')} <span class="dim">(the public server)</span></a>` : ''}
+</div></section>`;
+}
+
+/** /<game>/servers/: every server anyone can join (and, with `pick`, the page Play shows when Quick play is off). */
+export function serversPage(cat, g, { origin = '', servers = [], hidden = false, pick = false } = {}) {
+  const shown = shownServers(servers);
+  const pub = servers.find((x) => x.id === 'public');
+  const cards = [...(pub && !hidden ? [pub] : []), ...shown];
+  return layout(cat, {
+    title: `Servers · ${g.name}`, description: `${g.name}'s servers: ${SERVERS_LEAD}`, origin, path: `/${g.id}/servers/`, page: 'servers', active: 'games',
+    main: `${pageHead(g.name, pick ? 'Pick a server' : 'Servers', SERVERS_LEAD)}
+<div class="wrap">${cards.length ? `<div class="scards">${cards.map((sv) => serverCard(g, sv)).join('')}</div>` : `<p class="quiet">No server is open right now.</p>`}
+<p class="sec">Every policy</p><ul class="howto">${Object.values(POLICY_WORDS).map((w) => `<li>${esc(w.line.replace('{n}', 'N'))}</li>`).join('')}</ul></div>`,
+  });
+}
+
+/**
+ * /<game>/s/<id>/: a server's page. Its name, blurb and badge with its line; its live rooms (AI marked); how many
+ * belong to it and this player's membership ("Make this my home"); and a big Play (or what its door asks for).
+ */
+export function serverPage(cat, g, sv, { origin = '', rooms = [], door = { ok: true }, member = null, signedIn = false } = {}) {
+  const words = policyWords(sv);
+  const play = `/${g.id}/s/${sv.id}/play`;
+  const at = `/${g.id}/s/${sv.id}/home`;
+  const homeAct = (body, label, pressed = false) => `<button class="homeb" type="button" aria-pressed="${pressed ? 'true' : 'false'}" data-server-home="${esc(JSON.stringify({ at, body }))}">${esc(label)}</button>`;
+  const membership = !signedIn ? `<a class="homeb" href="/account/?next=${encodeURIComponent(`/${g.id}/s/${sv.id}/`)}">Sign in to make it your home</a>`
+    : member ? `${member.home ? homeAct({ join: true, home: false }, '★ Your home', true) : homeAct({ join: true, home: true }, '☆ Make this my home')}${member.role === 'mentor' ? ' <span class="pol beginner">Mentor</span>' : member.role === 'mod' ? ' <span class="pol">Mod</span>' : ''}${member.role === 'member' ? ` ${homeAct({ join: false }, 'Leave')}` : ''}`
+      : homeAct({ join: true, home: true }, '☆ Make this my home');
+  const blocked = !door.ok ? `<p class="door-why">${esc(doorWords(g, sv, door).line)}</p>` : '';
+  return layout(cat, {
+    title: `${sv.name} · ${g.name}`, description: `${sv.name}, a ${words.badge.toLowerCase()} server of ${g.name}. ${words.line}`, origin, path: `/${g.id}/s/${sv.id}/`, page: 'server', active: 'games',
+    main: `<header class="head"><p class="kicker">${esc(g.name)} · server</p><h1>${esc(sv.name)}</h1>
+<p class="lead"><span class="pol ${esc(sv.policy)}">${esc(words.badge)}</span> ${esc(words.line)}</p>${sv.blurb ? `<p class="lead">${esc(sv.blurb)}</p>` : ''}
+${blocked}<div class="keys">${door.ok ? `<a class="btn" href="${esc(play)}" data-play>${PLAY_ICON}<span>Play on ${esc(sv.name)}</span></a>` : ''}${membership}</div></header>
+<div class="wrap"><p class="sec">Live rooms · ${esc(sv.playing)} playing${sv.ai ? ` · ${esc(sv.ai)} AI` : ''} · ${esc(sv.members)} ${sv.members === 1 ? 'member' : 'members'}</p>
+${rooms.length ? `<ol class="rooms">${roomRows(rooms, { names: false })}</ol>` : `<p class="quiet">Nobody is on ${esc(sv.name)} this minute. Press Play and you open its first room.</p>`}
+<p class="sec"><a href="/${esc(g.id)}/servers/">Every server of ${esc(g.name)}</a></p></div>`,
+  });
+}
+
+/** What a server's door says to someone it does not let in (DESIGN section 7.1). */
+function doorWords(g, sv, { why, days = null } = {}) {
+  switch (why) {
+    case 'account': return { title: `Sign in to play on ${sv.name}`, line: `${sv.name} is for players with an account on this studio (a passkey: no password, nothing to remember).` };
+    case 'invite': return { title: `${sv.name} is invite-only`, line: `${sv.name} lets in players with an invite. Have a code? Enter it to play.` };
+    case 'veteran': return { title: `${sv.name} is for new players`, line: `${sv.name} is for new players.${days ? ` You've been playing ${g.name} for ${days} days:` : ''} try another server or Quick play.` };
+    default: return { title: `${sv.name} is closed`, line: `${sv.name} is not open right now.` };
+  }
+}
+
+/** A door that does not let this visitor in: said plainly, with the way on (sign in, an invite code, another server). */
+export function doorPage(cat, g, sv, { why = 'closed', days = null, next = '', watch = false, code = '' } = {}) {
+  const shown = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  const pretty = shown.length === 8 ? `${shown.slice(0, 4)}-${shown.slice(4)}` : shown;
+  const w = doorWords(g, sv, { why, days });
+  const quick = `<a class="ghost" href="/${esc(g.id)}/play" data-play>Quick play</a>`;
+  const others = `<a class="ghost" href="/${esc(g.id)}/servers/">Other servers</a>`;
+  const acts = why === 'account'
+    ? `<a class="btn" href="/account/?next=${encodeURIComponent(next || `/${g.id}/s/${sv.id}/play`)}">Sign in to play on ${esc(sv.name)}</a>${others}`
+    : why === 'invite'
+      ? `<form method="post" action="/${esc(g.id)}/invite" class="keys" style="flex-wrap:wrap;gap:10px;margin-top:0"><input name="code" value="${esc(pretty)}" placeholder="XXXX-XXXX" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="12" required aria-label="Invite code" style="font:600 18px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;padding:12px 14px;border-radius:12px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;min-width:12ch"><button class="btn" type="submit">Join ${esc(sv.name)}</button></form>${others}`
+      : `${quick}${others}`;
+  return layout(cat, {
+    title: `${w.title} · ${g.name}`, page: 'door', status: 403, active: 'games', extraHeaders: { 'cache-control': 'no-store, private', 'x-robots-tag': 'noindex' },
+    main: `<header class="head" data-door="${esc(why)}"><p class="kicker">${esc(g.name)} · ${esc(sv.name)}${watch ? ' · watch' : ''}</p><h1>${esc(w.title)}</h1>
+<p class="lead">${esc(w.line)}</p><p class="door-why"><span class="pol ${esc(sv.policy)}">${esc(policyWords(sv).badge)}</span> ${esc(policyWords(sv).line)}</p>
+<div class="keys">${acts}</div></header>`,
+  });
+}
+
 export function postsPage(cat, { origin = '' } = {}) {
   const posts = cat.posts ?? [];
   const name = studioName(cat);
@@ -936,7 +1067,7 @@ export function jsonFeed(cat, posts, origin) {
  * public room, phone / computer / TV (with the join code), live rooms, how to play, credits, and "Make a game like
  * this". A studio's site/pages/<id>/index.html replaces it; site/partials/game.html and game-<id>.html add a band.
  */
-export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, remix = true } = {}) {
+export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, remix = true, servers = null } = {}) {
   const name = studioName(cat);
   const L = g.landing ?? {};
   // A remix says what it is a remix of, linked, under its name and in its credits (game.json `remixOf`).
@@ -1047,7 +1178,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     description: `${g.name}: ${L.pitch ?? g.blurb ?? ''} Free in your browser, nothing to download; a TV or laptop browser can be the big screen, with phones as controllers.`.replace(/\s+/g, ' ').trim(),
     origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: 'games', over: landingTokens(cat, L),
     head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}<script type="application/ld+json">${jsonScript(ld)}</script>`,
-    main: `${hero}${ways}${liveBand}${howBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}${makeBand}`,
+    main: `${hero}${ways}${liveBand}${servers ? serversBand(g, servers) : ''}${howBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}${makeBand}`,
   });
 }
 

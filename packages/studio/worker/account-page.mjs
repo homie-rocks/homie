@@ -160,6 +160,11 @@ export function accountPage(cat, { origin = '', next = '/account/', owner = null
     <label for="acct-email">Email</label><input id="acct-email" data-email type="email" autocomplete="email">
     <div class="row"><button class="ghost" type="button" data-email-save>Send a confirmation</button><button class="ghost" type="button" data-email-remove hidden>Remove it</button></div>
   </div>` : ''}
+  <div class="card" data-servers-card hidden>
+    <h2>Your servers</h2>
+    <p>The servers you belong to in this studio's games. Your home server is where Play takes you.</p>
+    <ul class="keys-list" data-servers></ul>
+  </div>
   <div class="card">
     <h2>Your data</h2>
     <p>Download everything this studio keeps about you (your saves in every game, your stats, your memorials), or delete it all.</p>
@@ -230,6 +235,27 @@ export const ACCOUNT_JS = `${PASSKEY_JS}
       $('[data-email-remove]').hidden = !me.email;
     }
     keys();
+    servers();
+  }
+
+  // Your servers (0.16.0): each one, ★ for home, and Leave (a player's own choice; the door may let them back in).
+  function servers() {
+    var list = Array.isArray(me.servers) ? me.servers : [];
+    var card = $('[data-servers-card]'); var ul = $('[data-servers]');
+    if (!card || !ul) return;
+    card.hidden = !list.length; ul.textContent = '';
+    list.forEach(function (m) {
+      var li = document.createElement('li');
+      var a = document.createElement('a'); a.href = '/' + m.game + '/s/' + m.server + '/'; a.textContent = (m.home ? '★ ' : '') + m.server + ' · ' + m.game + (m.role !== 'member' ? ' · ' + m.role : '');
+      li.appendChild(a);
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'ghost'; b.textContent = 'Leave';
+      b.addEventListener('click', function () {
+        fetch('/' + m.game + '/s/' + m.server + '/home', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ join: false }) })
+          .then(function (r) { return r.json(); }).then(function (x) { if (!x.ok) throw new Error(x.message || 'That did not work.'); me.servers = list.filter(function (y) { return y !== m; }); servers(); say('You left ' + m.server + '.', 'good'); }).catch(fail);
+      });
+      if (m.role === 'member') li.appendChild(b);
+      ul.appendChild(li);
+    });
   }
 
   function keys() {

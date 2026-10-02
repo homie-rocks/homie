@@ -20,6 +20,7 @@ npx homie-studio deploy                                # the studio's own Cloudf
 npx homie-studio publish                               # the homie.rocks directory
 npx homie-studio stats                                 # the studio's own numbers, for its owner
 npx homie-studio office                                 # who is playing now, in every live room (the back office)
+npx homie-studio servers                                # each game's servers: humans-only, hybrid AI seats, beginner guides
 npx homie-studio upgrade                               # what a newer template adds to this studio (--apply to take it)
 ```
 
@@ -109,8 +110,8 @@ are watched only by those they let in (NETPLAY.md section 16, site/SITE.md).
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.15.0 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.15.0 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.16.0 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.16.0 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -232,16 +233,45 @@ look, announce and invite at once; a kick, a mute, a closed room or a launch cha
 **asked** for, and the owner confirms it with one tap in their own browser. No key can
 confirm. The Worker signs each control with the studio's own secret and the room verifies
 it before it acts (`netplay/NETPLAY.md` section 15). Everything is in the studio's own
-Worker and D1 (migration `0003_studio_office.sql`); homie.rocks stores none of it.
+Worker and D1 (migration `0005_studio_office.sql`); homie.rocks stores none of it.
 
 With player accounts (0.12.0), a signed-in player's play page names their account in its room ticket (an invited
 player's names the invite and the account), so the office shows them by name and a kick holds the account on every
 device; the owner's own passkey account (`homie-studio players owner`) counts as the owner.
 
+## Servers and AI seats
+
+A game's **servers** (0.16.0) are named, lasting pools of rooms with their own rules; strangers are matched only
+inside one server, and every game's public rooms are its Quick play server, so nothing old changes:
+
+```sh
+npx homie-studio servers new night-rush "Night Shift" --policy hybrid --ai 2      # 2 AI companions in every room
+npx homie-studio servers new night-rush "People Only" --policy humans-only        # no AI of any kind
+npx homie-studio servers new night-rush "First Light" --policy beginner --guides 2 --kids
+npx homie-studio servers                                                           # every server, live, and builds that predate them
+npx homie-studio agents pass night-rush --label Claude                             # an AI's way into a seat (shown once)
+```
+
+- **Policies:** open (an AI with a pass may sit, always marked AI), humans-only (the site and the room refuse
+  every AI; the game's bots are off), hybrid (the top N seats of every room are AI companions), beginner (new
+  accounts, AI guides, quick lines only; `--kids`: handles only, gentle AI). **Doors:** open, accounts (a passkey
+  account) or invite (`office invite <id> --server <server>`).
+- **AI is always marked AI**, by the room's relay, not the game: every agent is named "<label> · AI", and the
+  relay rewrites a host's roster and results so a game cannot hide one.
+- **The skill dial:** 1 Rookie to 5 Maxed (`{ reactionMs, aimNoise, aggression, positioning }`). The party votes it
+  on a card in the play page (the middle vote wins); `net.skillOf(slot)` is what a bot reads (`NETPLAY.md` section
+  17), and `BotBrain` reads it with a rebuild. In the starters, Gem Rush's Rookie bots collect far fewer gems than
+  its Maxed ones.
+- **Asks:** making a server, a widening change, a pass and a room's level happen at once; narrowing one
+  (humans-only, a stricter door), closing it, removing a member, and the first time AI guides may talk are asked
+  for, and the owner confirms with one tap.
+- Everything is in the studio's own Worker and D1 (migration `0006_studio_servers.sql`). The site's side is in
+  [site/SITE.md](site/SITE.md); the room's in [netplay/NETPLAY.md](netplay/NETPLAY.md) section 17.
+
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.15.0 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.16.0 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 

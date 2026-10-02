@@ -4,6 +4,8 @@
  */
 import { esc, layout } from './site.mjs';
 import { NET_PALETTE } from './room.mjs';
+import { SKILLS } from './agents.mjs';
+import { KIDS_LINE, POLICY_WORDS } from './servers.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
 
 export { homePage, mediaIndexPage, notFoundPage, songPage, videoPage } from './site.mjs';
@@ -82,7 +84,7 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, room = null, ticket = null, owner = false, launch = 'public' } = {}) {
+export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, room = null, ticket = null, owner = false, launch = 'public', server = null } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
   const places = sharePlaces(g.screen?.share);
@@ -148,16 +150,28 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .notice .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .notice .acts a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; text-decoration: none; font-weight: 700; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
 .notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
-[hidden] { display: none !important; }${g.saves && !screen ? SAVES_SHELL_CSS : ''}`;
+[hidden] { display: none !important; }
+${SERVER_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
-  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}) };
+  // The server this page plays on (0.16.0): its pool (the Lobby), its badge and line for the chip, its ceiling.
+  const srv = server ? { id: server.id, name: server.name, badge: server.badge, line: server.line, policy: server.policy, kids: Boolean(server.kids), mentor: Boolean(server.mentor), levelMax: server.levelMax } : null;
+  // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
+  const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
+  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
   const joinCard = screen && joinUrl ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
   const share = screen ? '' : `<div class="room at-${first.at}" style="--dx:${first.x}px;--dy:${first.y}px" data-room-ui>
   <button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room, invite and big screen"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
+  <button class="pill spill" type="button" data-server-toggle aria-expanded="false" aria-controls="server-sheet" hidden><span class="sdot" aria-hidden="true"></span><span data-server-label></span></button>
+  <div class="sheet ssheet" id="server-sheet" role="dialog" aria-label="This server" data-server-sheet hidden>
+    <div class="code"><b data-server-name></b><span data-server-badge></span></div>
+    <p class="sline" data-server-line></p>
+    <div class="srow" data-level-row hidden><span>AI level: <b data-level-name></b></span><button type="button" data-level-vote>Change ▾</button></div>
+    <label class="srow quiet-ai"><span>Quiet AI <small>hides AI chat on this screen</small></span><input type="checkbox" data-quiet-ai></label>
+  </div>
   <div class="sheet" id="share-sheet" role="dialog" aria-label="This room" data-share-sheet hidden>
     <div class="code"><b data-room-label>This room</b><span data-room-count></span></div>
     <div class="acts">
@@ -173,6 +187,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
   return layoutless(`${g.name} · play`, `
 <iframe class="game" title="${esc(g.name)}" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen *; autoplay *; gamepad *"></iframe>
 <div class="chip" data-chip><span data-status>finding a room…</span></div>
+<div class="vote" data-vote role="dialog" aria-label="How strong should the AI be?" data-keep-focus hidden></div>
 <div class="card" data-results hidden></div>
 <div class="card" data-screen hidden></div>
 ${joinCard}${share}
@@ -180,6 +195,42 @@ ${joinCard}${share}
 <script>${SHELL_JS}</script>${g.saves && !screen ? `
 <script>${SAVES_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
 }
+
+/*
+ * SERVERS AND THE AI DIAL (0.16.0, NETPLAY.md section 17): the server pill beside the room button (its name and
+ * badge; its sheet has the policy's line, the AI's level with "Change", and Quiet AI), and the party's vote card on
+ * how strong the AI should be (a bottom sheet on a phone; keys 1-5 on a computer). Nothing covers the middle of the
+ * screen except the card, for a few seconds, when a vote is open.
+ */
+const SERVER_CSS = `.spill .sdot { width: 8px; height: 8px; border-radius: 50%; background: var(--hot); flex: none; }
+.spill.dim .sdot { display: block; }
+.ssheet .sline { margin: 0 2px 10px; color: #c3cad9; font-weight: 500; line-height: 1.4; }
+.ssheet .srow { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 40px; margin: 0 2px; border-top: 1px solid rgba(255,255,255,.08); font-weight: 600; }
+.ssheet .srow small { display: block; color: #8b93a7; font-weight: 500; font-size: 11px; }
+.ssheet .srow button { min-height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.ssheet .srow input { width: 20px; height: 20px; accent-color: var(--hot); }
+.aipill { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: rgba(255,207,90,.2); color: #ffe7a8; font: 800 10px/1.6 ui-monospace, Menlo, monospace; letter-spacing: .06em; vertical-align: 1px; }
+.vote { box-sizing: border-box; position: fixed; left: 50%; top: 50%; z-index: 12; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 24px)); padding: 16px 16px 14px; border-radius: 18px; background: rgba(8,12,22,.95); border: 1px solid var(--hot); color: #eef1f8; font: 600 14px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; box-shadow: 0 24px 70px rgba(0,0,0,.55); touch-action: manipulation; -webkit-user-select: none; user-select: none; animation: rise .25s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, -46%); } }
+.vote .vh { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 0 2px 12px; }
+.vote .vh b { font-size: 18px; letter-spacing: -.01em; }
+.vote .vh span { color: #aab3c7; font-weight: 600; font-size: 12px; white-space: nowrap; }
+.vote .opts { display: grid; grid-template-columns: repeat(var(--n, 5), 1fr); gap: 8px; }
+.vote .opts button { min-height: 58px; padding: 6px 4px; border-radius: 13px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.04); color: inherit; font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.vote .opts button b { font-size: 16px; }
+.vote .opts button small { color: #9aa3b7; font-size: 11px; font-weight: 600; }
+.vote .opts button[aria-pressed="true"] { background: var(--hot); color: #0b0b10; border-color: transparent; }
+.vote .opts button[aria-pressed="true"] small { color: #3b3420; }
+.vote .legend { display: flex; justify-content: space-between; gap: 10px; margin: 10px 4px 0; color: #8b93a7; font-size: 11px; font-weight: 600; }
+.vote .legend i { flex: 1; border-bottom: 2px dotted rgba(255,255,255,.18); margin-bottom: 4px; }
+.vote .foot { margin: 10px 2px 0; text-align: center; color: #c3cad9; font-weight: 600; }
+@media (max-width: 540px) {
+  .vote { top: auto; bottom: 0; left: 0; right: 0; width: auto; transform: none; border-radius: 20px 20px 0 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); animation: up .25s ease-out; }
+  @keyframes up { from { opacity: 0; transform: translateY(20px); } }
+  .vote .opts { grid-template-columns: repeat(3, 1fr); }
+  .vote .opts button { min-height: 64px; }
+  .vote .legend { display: none; }
+}`;
 
 /** The play page's own document (no site chrome: the game owns the whole screen). */
 function layoutless(title, body, css, ancestors = "'self'") {
@@ -212,7 +263,7 @@ const SHELL_JS = String.raw`(function () {
   var statusEl = document.querySelector('[data-status]');
   var results = document.querySelector('[data-results]');
   var screenCard = document.querySelector('[data-screen]');
-  var state = { game: boot.game, room: null, device: device, want: want, attached: false, stats: null, round: null, roster: null, facts: null, seat: null, results: [], closed: null, link: null, notice: null, banner: null, muted: null };
+  var state = { game: boot.game, room: null, device: device, want: want, attached: false, stats: null, round: null, roster: null, facts: null, seat: null, results: [], closed: null, link: null, notice: null, banner: null, muted: null, server: boot.server || null, vote: null, myVote: {}, quietAi: false, full: false };
   window.__shell = state;
   // This browser's room key: random, kept in this site's own storage, and sent only to this site's rooms. It is what
   // an owner's kick holds out of a room for a while (section 15); it says nothing about who the player is.
@@ -259,7 +310,18 @@ const SHELL_JS = String.raw`(function () {
   addEventListener('resize', place);
   function labelOf(room) { var m = /^pub-(\d+)$/.exec(room); return m ? 'Room ' + m[1] : room; }
   function flash(text) { if (!toast) return; toast.textContent = text; toast.hidden = false; clearTimeout(flash.t); flash.t = setTimeout(function () { toast.hidden = true; }, 1800); }
-  function wake() { if (!toggle) return; toggle.classList.remove('dim'); clearTimeout(dimTimer); dimTimer = setTimeout(function () { if (sheet.hidden) toggle.classList.add('dim'); }, 6000); }
+  // The room pill and the server pill fade to dots after 6 s, so neither sits on the game's own HUD.
+  function wake() {
+    if (!toggle) return;
+    var sp = document.querySelector('[data-server-toggle]');
+    toggle.classList.remove('dim'); if (sp) sp.classList.remove('dim');
+    clearTimeout(dimTimer);
+    dimTimer = setTimeout(function () {
+      if (sheet.hidden) toggle.classList.add('dim');
+      var ss = document.querySelector('[data-server-sheet]');
+      if (sp && (!ss || ss.hidden)) sp.classList.add('dim');
+    }, 6000);
+  }
   function open(on) { if (!sheet) return; sheet.hidden = !on; toggle.setAttribute('aria-expanded', on ? 'true' : 'false'); if (on) wake(); else { wake(); try { frame.focus(); } catch (e) {} } }
   function copy(text, done) {
     var ok = function () { flash(done || 'Link copied'); };
@@ -309,6 +371,8 @@ const SHELL_JS = String.raw`(function () {
       try { var who = JSON.parse(localStorage.getItem('homie.player') || 'null'); if (who && typeof who.name === 'string' && who.name) q.set('name', who.name.slice(0, 24)); } catch (e) {}
     }
     if (params.get('debug') === '1') q.set('debug', '1');
+    // Quiet AI (this browser hides AI speech): the helper starts hushed, and hears a change by message.
+    if (state.quietAi) q.set('hush', '1');
     // The frame cannot read this page's address (it is an opaque origin): hand it the game's own switches.
     ['touchdebug', 'cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
     frame.src = '/' + boot.game + '/__game/?' + q.toString();
@@ -323,7 +387,7 @@ const SHELL_JS = String.raw`(function () {
       if (m.what === 'stats') state.stats = m.stats;
       if (m.what === 'round') onRound(m.round);
       if (m.what === 'roster') state.roster = m.slots;
-      if (m.what === 'closed') { state.closed = m.why; if (m.why === 'kicked' || m.why === 'room-closed') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); }
+      if (m.what === 'closed') { state.closed = m.why; if (m.why === 'kicked' || m.why === 'room-closed' || m.why === 'agents-off') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); }
       // A game's net.pickPlayer(seat): only an owner's page listens (its overlay opens that player's card).
       if (m.what === 'pick' && (m.seat === null || typeof m.seat === 'number')) { try { window.dispatchEvent(new CustomEvent('homie-pick', { detail: { seat: m.seat } })); } catch (e) {} }
       paint();
@@ -349,7 +413,9 @@ const SHELL_JS = String.raw`(function () {
       var ol = document.createElement('ol');
       r.results.slice(0, 6).forEach(function (row) {
         var li = document.createElement('li');
-        li.textContent = row.name + (row.bot ? ' (bot)' : '') + ' — ' + row.score;
+        li.textContent = String(row.name) + ' — ' + row.score;
+        // Every AI row (an agent, or a bot) carries the AI pill.
+        if (row.agent || row.bot) { var pill = document.createElement('span'); pill.className = 'aipill'; pill.textContent = 'AI'; li.append(pill); }
         ol.append(li);
       });
       results.append(h, ol); results.hidden = params.get('debug') !== '1'; // the game draws its own results; the card is for ?debug=1
@@ -370,10 +436,13 @@ const SHELL_JS = String.raw`(function () {
       if (m.t === 'closed') { notice('closed', m); return; }
       if (m.t === 'announce') { banner(m); return; }
       if (m.t === 'muted') { mutedNote(m); return; }
+      if (m.t === 'vote') { onVote(m); return; }
       if (m.t !== 'net') return;
       state.facts = m;
+      if (typeof m.st === 'number') state.offset = m.st - Date.now();
       if (m.announce && m.announce.text) banner(m.announce, true);
       if (state.facts && state.facts.round) onRound(state.facts.round);
+      if (m.vote) onVote(m.vote, true); else if (state.vote && state.vote.open) onVote({ open: false, id: state.vote.id }, true);
       paint();
     };
     ws.onclose = function () { if (!state.notice) setTimeout(function () { watch(room); }, 1500); };
@@ -438,24 +507,141 @@ const SHELL_JS = String.raw`(function () {
     var f = state.facts;
     var n = f && f.counts ? f.counts.players : null;
     var bits = [];
-    if (n !== null) bits.push(n + (n === 1 ? ' player' : ' players') + ' here');
-    if (f && f.counts && f.counts.bots) bits.push(f.counts.bots + ' bots');
+    if (state.server) bits.push(state.server.name);
+    if (n !== null) bits.push(n + ' playing');
+    // Every AI is counted as AI (agents, the seats kept for them, and the game's bots), never as a player.
+    var aiN = f && f.counts ? (Number(f.counts.ai) || 0) + (Number(f.counts.bots) || 0) : 0;
+    if (aiN) bits.push(aiN + ' AI');
     if (f && f.counts && f.counts.watchers) bits.push(f.counts.watchers + ' watching');
+    if (state.full) bits.push('waiting for a seat');
     if (state.closed) bits.push(state.closed === 'replaced' ? 'opened in another tab' : 'reconnecting');
     say(bits.join(' · ') || 'joining…');
     var count = ui && ui.querySelector('[data-room-count]');
-    if (count && n !== null) count.textContent = n + (n === 1 ? ' player here' : ' players here');
+    if (count && n !== null) count.textContent = n + (n === 1 ? ' player here' : ' players here') + (aiN ? ' · ' + aiN + ' AI' : '');
+    serverUi();
   }
+
+  /* ---------------------------------------------------------- the server pill, Quiet AI and the vote (section 17) */
+  var SKILL = boot.skills || [];
+  var sToggle = document.querySelector('[data-server-toggle]');
+  var sSheet = document.querySelector('[data-server-sheet]');
+  var voteCard = document.querySelector('[data-vote]');
+  try { state.quietAi = localStorage.getItem('homie-quiet-ai') === '1'; } catch (e) { state.quietAi = false; }
+  function skillName(n) { var s = SKILL[n - 1]; return s ? s.name : 'level ' + n; }
+  function hasAi() { var f = state.facts; return Boolean(f && f.counts && (f.counts.ai || f.counts.bots || f.counts.agents)); }
+  function readsDial() { var f = state.facts; return Boolean(f && Array.isArray(f.caps) && f.caps.indexOf('skill') >= 0); }
+  // The room's live policy says the badge and line (the owner's change reaches an open page at once); the
+  // server's words from the page load are the fallback.
+  function policyText(pol) {
+    var w = pol && boot.words ? boot.words[pol.kind] : null;
+    if (!w) return state.server ? { badge: state.server.badge, line: state.server.line } : { badge: 'Open', line: 'Open: anyone can play. AI players are always marked AI.' };
+    var n = pol.kind === 'hybrid' ? (Number(pol.aiSeats) || 0) : 0;
+    return { badge: pol.kind === 'hybrid' ? w.badge + ' · ' + n : w.badge, line: w.line.replace('{n}', String(n)) + (pol.kids && boot.kidsLine ? ' ' + boot.kidsLine : '') };
+  }
+  function serverUi() {
+    if (!sToggle || !sSheet) return;
+    var f = state.facts; var pol = f && f.policy ? f.policy : null;
+    var show = Boolean(state.server) || (hasAi() && readsDial());
+    sToggle.hidden = !show;
+    if (!show) return;
+    var name = state.server ? state.server.name : 'Quick play';
+    var words = policyText(pol);
+    var label = name + ' · ' + words.badge + (state.server && state.server.mentor ? ' · Mentor' : '');
+    var labelEl = sToggle.querySelector('[data-server-label]');
+    // A new policy (the owner's change) shows in full for a moment, then fades with the room pill.
+    if (labelEl.textContent !== label) { labelEl.textContent = label; wake(); }
+    sSheet.querySelector('[data-server-name]').textContent = name;
+    sSheet.querySelector('[data-server-badge]').textContent = words.badge;
+    sSheet.querySelector('[data-server-line]').textContent = words.line;
+    var row = sSheet.querySelector('[data-level-row]');
+    row.hidden = !(readsDial() && hasAi() && boot.vote !== false);
+    if (pol && pol.skill) sSheet.querySelector('[data-level-name]').textContent = pol.skill.name;
+    sSheet.querySelector('[data-quiet-ai]').checked = state.quietAi;
+  }
+  if (sToggle) {
+    sToggle.addEventListener('click', function (e) { e.stopPropagation(); var on = sSheet.hidden; sSheet.hidden = !on; sToggle.setAttribute('aria-expanded', on ? 'true' : 'false'); if (on && sheet) open(false); wake(); });
+    document.addEventListener('pointerdown', function (e) { if (!sSheet.hidden && !sSheet.contains(e.target) && e.target !== sToggle && !sToggle.contains(e.target)) { sSheet.hidden = true; sToggle.setAttribute('aria-expanded', 'false'); } }, true);
+    sSheet.querySelector('[data-quiet-ai]').addEventListener('change', function (e) {
+      state.quietAi = e.target.checked;
+      try { localStorage.setItem('homie-quiet-ai', state.quietAi ? '1' : '0'); } catch (e2) {}
+      try { frame.contentWindow.postMessage({ t: 'homie-hush', on: state.quietAi }, '*'); } catch (e3) {}
+      flash(state.quietAi ? 'AI chat is hidden on this screen.' : 'AI chat shows again.');
+    });
+    sSheet.querySelector('[data-level-vote]').addEventListener('click', function () { sendVote({ open: true }); sSheet.hidden = true; sToggle.setAttribute('aria-expanded', 'false'); });
+  }
+  function sendVote(m) {
+    var ws = state.watchSocket;
+    if (!ws || ws.readyState !== 1) { flash('Not connected yet; try again in a moment.'); return; }
+    try { ws.send(JSON.stringify(Object.assign({ t: 'vote', of: 'skill' }, m))); } catch (e) {}
+  }
+  function cast(n) { if (!state.vote || !state.vote.open) return; state.myVote[state.vote.id] = n; sendVote({ n: n }); renderVote(); }
+  var shownResults = {};
+  function onVote(v, quiet) {
+    if (!v || typeof v !== 'object') return;
+    if (v.t === 'error' || v.code) return;
+    var prev = state.vote;
+    state.vote = v.options ? v : (prev && prev.id === v.id ? Object.assign({}, prev, { open: false }) : prev);
+    if (v.result && !v.open && !shownResults[v.id] && !quiet) {
+      shownResults[v.id] = true;
+      flash('The party set the AI to ' + v.result.name + ' (' + v.result.votes + (v.result.votes === 1 ? ' vote' : ' votes') + ').');
+    } else if (v.result && !v.open) shownResults[v.id] = true;
+    renderVote();
+  }
+  var voteTimer = null;
+  function renderVote() {
+    var v = state.vote;
+    if (!voteCard) return;
+    // A game that draws its own card (game.json "agents": { "vote": "game" }), or no vote: the shell shows none.
+    if (!v || !v.open || boot.vote !== 'shell' || boot.screen || state.seat === null || state.seat === undefined) { voteCard.hidden = true; clearInterval(voteTimer); voteTimer = null; return; }
+    var left = Math.max(0, Math.ceil((v.until - (Date.now() + (state.offset || 0))) / 1000));
+    var mine = state.myVote[v.id];
+    voteCard.textContent = '';
+    var head = document.createElement('div'); head.className = 'vh';
+    var t = document.createElement('b'); t.textContent = 'How strong should the AI be?';
+    var sub = document.createElement('span'); sub.textContent = 'for this party · ' + left + ' s';
+    head.append(t, sub);
+    var opts = document.createElement('div'); opts.className = 'opts'; opts.style.setProperty('--n', String(v.options.length));
+    v.options.forEach(function (n) {
+      var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-vote-n', String(n));
+      b.setAttribute('aria-pressed', mine === n ? 'true' : 'false');
+      var big = document.createElement('b'); big.textContent = n + ' ' + skillName(n);
+      var small = document.createElement('small'); small.textContent = (v.counts && v.counts[n] ? v.counts[n] + (v.counts[n] === 1 ? ' vote' : ' votes') : '\u00a0');
+      b.append(big, small);
+      b.addEventListener('click', function () { cast(n); });
+      opts.appendChild(b);
+    });
+    var legend = document.createElement('div'); legend.className = 'legend';
+    var l1 = document.createElement('span'); l1.textContent = SKILL[0] ? SKILL[0].card.split(',')[0] : 'stays at the back';
+    var l2 = document.createElement('span'); var top = SKILL[v.options.length - 1]; l2.textContent = top ? top.card.split(',')[0] : '';
+    legend.append(l1, document.createElement('i'), l2);
+    var foot = document.createElement('div'); foot.className = 'foot';
+    foot.textContent = (v.voters || 0) + ' of ' + (v.of_total || 1) + ' voted · the middle vote wins';
+    voteCard.append(head, opts, legend, foot);
+    voteCard.hidden = false;
+    if (!voteTimer) voteTimer = setInterval(renderVote, 500);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!state.vote || !state.vote.open || voteCard.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    var n = Number(e.key);
+    if (state.vote.options.indexOf(n) >= 0) { e.preventDefault(); cast(n); }
+  });
 
   // A named room (?room=, a friend's link, a test, the big screen's QR) skips the lobby; everyone else meets strangers.
   // The page refuses a code it cannot use before it gets here, so an asked room is never swapped for a public one.
   var askedRoom = params.get('room');
+  var lobbyQ = [];
+  if (state.server) lobbyQ.push('server=' + encodeURIComponent(state.server.id));
+  if (/^[A-Za-z0-9_,-]{1,140}$/.test(params.get('not') || '')) lobbyQ.push('not=' + encodeURIComponent(params.get('not')));
   if (boot.room) start(boot.room);
   else if (askedRoom !== null && /^[A-Za-z0-9_-]{1,32}$/.test(askedRoom)) start(askedRoom);
   else if (askedRoom !== null) { say('that room link does not work'); }
-  else fetch('/' + boot.game + '/api/lobby' + (/^[A-Za-z0-9_,-]{1,140}$/.test(params.get('not') || '') ? '?not=' + encodeURIComponent(params.get('not')) : ''), { method: 'POST' })
+  else fetch('/' + boot.game + '/api/lobby' + (lobbyQ.length ? '?' + lobbyQ.join('&') : ''), { method: 'POST' })
     .then(function (r) { return r.json(); })
-    .then(function (j) { start(j.room || 'main'); })
+    .then(function (j) {
+      // Every room this server may have is full: the fullest one, watched until a seat frees (the relay seats it).
+      if (j.full) { state.full = true; flash((state.server ? state.server.name : 'This server') + ' is full. You\u2019re next for a seat.'); }
+      start(j.room || 'main');
+    })
     .catch(function () { start('main'); });
 }());`;
 
@@ -481,6 +667,7 @@ const OWNER_CSS = `.owner { position: fixed; z-index: 10; top: max(8px, env(safe
 .osheet .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.2); color: #aab3c7; margin-left: 6px; }
 .osheet .tag.you { color: #c9b8ff; border-color: #c9b8ff; }
 .osheet .tag.muted { color: #ff8a9a; border-color: rgba(255,107,125,.6); }
+.osheet .tag.ai { color: #ffe7a8; border-color: rgba(255,207,90,.6); }
 .osheet .bot { color: #6c7489; font-weight: 500; padding: 2px 10px 8px; }
 .osheet .det { padding: 4px 2px; }
 .osheet .det b { font-size: 18px; display: block; margin-bottom: 4px; overflow-wrap: anywhere; }
@@ -553,7 +740,7 @@ const OWNER_JS = String.raw`(function () {
       var back = el('button', 'back', '← Everyone here'); back.type = 'button'; back.onclick = function () { view.pick = null; view.msg = ''; render(); };
       var det = el('div', 'det');
       det.appendChild(el('b', '', picked.name || 'Someone'));
-      det.appendChild(el('p', '', (picked.seat !== null ? 'Seat ' + (picked.seat + 1) : 'Watching') + ' · ' + (picked.device === 'phone' ? 'on a phone' : picked.device === 'tv' ? 'a big screen' : 'on a computer') + (picked.role === 'host' ? ' · hosting the room' : '')));
+      det.appendChild(el('p', '', (picked.seat !== null ? 'Seat ' + (picked.seat + 1) : 'Watching') + ' · ' + (picked.agent ? 'an AI (' + (picked.agent.role === 'guide' ? 'a guide' : 'a companion') + '), always marked AI' : picked.device === 'phone' ? 'on a phone' : picked.device === 'tv' ? 'a big screen' : 'on a computer') + (picked.role === 'host' ? ' · hosting the room' : '')));
       if (me) det.appendChild(el('p', '', 'This is you.'));
       if (picked.muted) det.appendChild(el('p', '', 'Muted: their chat and emotes reach nobody.'));
       sheet.append(back, det);
@@ -579,12 +766,13 @@ const OWNER_JS = String.raw`(function () {
         var left = el('span'); left.appendChild(el('span', '', c.name || 'Someone'));
         if (c.seat !== null && c.seat === state.seat) left.appendChild(el('span', 'tag you', 'you'));
         if (c.muted) left.appendChild(el('span', 'tag muted', 'muted'));
+        if (c.agent) left.appendChild(el('span', 'tag ai', 'AI' + (c.agent.role === 'guide' ? ' guide' : c.agent.role === 'party' ? ' companion' : '')));
         if (c.role === 'host') left.appendChild(el('span', 'tag', 'host'));
         row.append(left, el('small', '', c.seat !== null ? 'seat ' + (c.seat + 1) + ' · ' + (c.device === 'phone' ? 'phone' : c.device === 'tv' ? 'screen' : 'computer') : 'waiting'));
         row.onclick = function () { view.pick = c.id; view.msg = ''; render(); };
         sheet.appendChild(row);
       });
-      var b = bots(); if (b.length) sheet.appendChild(el('div', 'bot', 'Bots: ' + b.map(function (s) { return s.name; }).join(', ')));
+      var b = bots(); if (b.length) sheet.appendChild(el('div', 'bot', 'AI bots: ' + b.map(function (s) { return s.name; }).join(', ')));
     }
     var form = el('form'); form.setAttribute('data-announce', '');
     var ta = el('textarea'); ta.maxLength = 280; ta.placeholder = 'Announce something to the players'; ta.setAttribute('aria-label', 'Announcement');
@@ -695,6 +883,7 @@ iframe.game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0
 .chip .sc.lead { color: var(--hot); }
 .chip svg { width: 1.1em; height: 1.1em; flex: none; }
 .chip .tag { font-size: .68em; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--hot); }
+.chip .tag.ai { padding: .1em .45em; border-radius: 999px; background: color-mix(in srgb, var(--hot) 20%, transparent); color: #fff; letter-spacing: .06em; }
 .hint { flex: none; align-self: center; color: #7d8699; font-size: .76em; font-weight: 600; padding: 0 .2em; white-space: nowrap; }
 @media (hover: none) { .chip .k, .hint { display: none; } }
 /* A phone held upright: the caption over the strip, the strip scrolling sideways. */
@@ -895,7 +1084,7 @@ const WATCH_JS = String.raw`(function () {
     var scores = state.scores || {};
     var lead = null; var best = -Infinity;
     list.forEach(function (p) { var s = scores[p.seat]; if (typeof s === 'number' && s > best) { best = s; lead = p.seat; } });
-    var sig = JSON.stringify([choose, v.seat, v.following, list.map(function (p) { return [p.seat, p.name, p.colour, scores[p.seat]]; }), lead, state.follows]);
+    var sig = JSON.stringify([choose, v.seat, v.following, list.map(function (p) { return [p.seat, p.name, p.colour, scores[p.seat], Boolean(p.agent)]; }), lead, state.follows]);
     if (sig === drawn) return;
     drawn = sig;
     strip.textContent = '';
@@ -917,6 +1106,8 @@ const WATCH_JS = String.raw`(function () {
       chip(p.seat, i < 9 ? String(i + 1) : '', function (b) {
         var dot = el('i', 'dot'); dot.style.background = colourOf(p); b.appendChild(dot);
         b.appendChild(el('span', 'nm', p.name || 'A player'));
+        // An AI in the room is marked AI here too (section 17).
+        if (p.agent) b.appendChild(el('span', 'tag ai', 'AI'));
         if (auto) b.appendChild(el('span', 'tag', 'auto'));
         if (typeof scores[p.seat] === 'number') b.appendChild(el('span', 'sc' + (p.seat === lead && list.length > 1 ? ' lead' : ''), scores[p.seat]));
         b.setAttribute('aria-label', (on || auto ? 'Watching ' : 'Watch ') + (p.name || 'a player'));

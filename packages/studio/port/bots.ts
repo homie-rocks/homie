@@ -13,7 +13,11 @@
  *   - They are kind to newcomers: no bot targets a person in their first
  *     ~15 s, and a person's first minute is never a pile-on.
  *   - A body a person left keeps playing as a bot, where it stands.
+ *   - They play at the room's skill dial (NETPLAY.md section 17): give BotBrain
+ *     `skill: () => room.skillOf(body)` and the party's vote changes how fast it
+ *     reacts, how well it aims and how long it commits, with no other change.
  */
+import type { Skill } from '../netplay/netplay';
 
 export interface V2 { x: number; y: number }
 
@@ -46,8 +50,19 @@ export function nearest<T extends V2>(from: V2, items: Iterable<T>, taken?: Set<
 }
 
 /**
+ * What a skill level means to a bot's brain (section 17): it reacts `reactionMs` late, its aim errs by
+ * `aimNoise x 0.8` radians, and it commits to a target for `2500 x (1.3 - 0.6 x aggression)` ms (an aggressive bot
+ * changes its mind sooner). Level 3, Fair, is 250 ms, 0.12 rad and 2.5 s: what every port's bots always were.
+ */
+export function brainOf(s: Skill): { reactionMs: number; aimError: number; commitMs: number } {
+  return { reactionMs: s.reactionMs, aimError: s.aimNoise * 0.8, commitMs: 2500 * (1.3 - 0.6 * s.aggression) };
+}
+
+/**
  * A bot's intent with a person's limits: it sees the world `reactionMs` late, commits to a target for `commitMs`,
  * and notices when it is stuck. Call `think(now, pos, choose)` every frame; it returns the stick to push.
+ * `skill` (a Skill, or a function that says the current one): the room's dial sets reaction, aim and commitment;
+ * explicit `reactionMs`, `commitMs` or `aimError` still win.
  */
 export class BotBrain<T extends V2 = V2> {
   target: T | null = null;
@@ -56,10 +71,18 @@ export class BotBrain<T extends V2 = V2> {
   private unstickUntil = 0;
   private unstick: V2 = { x: 0, y: 0 };
   private queue: { at: number; v: V2 }[] = [];
-  constructor(readonly opts: { reactionMs?: number; commitMs?: number; stuckMs?: number; stuckDist?: number; aimError?: number } = {}) {}
+  constructor(readonly opts: { reactionMs?: number; commitMs?: number; stuckMs?: number; stuckDist?: number; aimError?: number; skill?: Skill | (() => Skill) } = {}) {}
+
+  /** The dial this brain plays at now (Fair with none). */
+  skill(): Skill | null {
+    const k = this.opts.skill;
+    try { return typeof k === 'function' ? k() : k ?? null; } catch { return null; }
+  }
 
   think(now: number, pos: V2, choose: () => T | null, arrive = 0): V2 {
-    const { reactionMs = 250, commitMs = 2500, stuckMs = 3000, stuckDist = 24, aimError = 0.12 } = this.opts;
+    const sk = this.skill();
+    const dial = sk ? brainOf(sk) : { reactionMs: 250, commitMs: 2500, aimError: 0.12 };
+    const { reactionMs = dial.reactionMs, commitMs = dial.commitMs, stuckMs = 3000, stuckDist = 24, aimError = dial.aimError } = this.opts;
     if (!this.target || now - this.chosenAt > commitMs) { this.target = choose(); this.chosenAt = now; }
     if (!this.lastCheck || now - this.lastCheck.at > stuckMs) {
       if (this.lastCheck && Math.hypot(pos.x - this.lastCheck.x, pos.y - this.lastCheck.y) < stuckDist && this.target) {

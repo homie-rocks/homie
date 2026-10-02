@@ -1,9 +1,31 @@
-# Homie netplay contract, v1 (revision 5)
+# Homie netplay contract, v1 (revision 6)
 
-Status: **v1, revision 5** (2026-10-01, `@homie-rocks/studio` 0.15.0). The wire version is
-`v: 1`. Everything revisions 2 to 5 added is either an optional field, a new message type,
+Status: **v1, revision 6** (2026-10-01, `@homie-rocks/studio` 0.16.0). The wire version is
+`v: 1`. Everything revisions 2 to 6 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
 not know. A change to the contract bumps `v` and keeps v1 working.
+
+**What revision 6 added** (a v1 game that knows none of it plays on every server; its AI
+is labelled by name, its people are capped, and its play page shows no vote):
+- **Servers and agent seats** (section 17): a server is a named, lasting pool of rooms with
+  a policy (`open`, `humans-only`, `hybrid`, `beginner`). The Worker hands every room its
+  policy; a hybrid server keeps its top seats for AI. An **agent** is an AI that sits with
+  a pass the Worker verified: always named `<label> · AI`, marked `peer.agent`, never on a
+  humans-only server, never alone in a room, and the relay labels the host's roster and
+  results so they cannot hide one.
+- **The skill dial**: five levels (`SKILLS`: Rookie, Steady, Fair, Strong, Maxed), each
+  `{ reactionMs, aimNoise, aggression, positioning }`. The party votes the room's level; a
+  game's bots read it with `net.skillOf(slot)`.
+- New optional fields `hello.rev`, `hello.caps`, `hello.agent`, `welcome.policy`,
+  `welcome.vote`, `welcome.agent`, `peer.agent`, `slot.agent`, `result.agent`; new frames
+  `caps` and `vote` (client → relay) and `policy` and `vote` (relay → client); final
+  refusals `agent-pass`, `agents-off` and `agents-unsupported`, and the reported
+  `agents-alone`; speech modes (`lines`, `off`); the owner's `policy` and `level` controls.
+- The helper: `net.policy`, `net.skill`, `net.skillOf(slot)`, `net.vote(n)`,
+  `net.openVote()`, `on('policy')`, `on('vote')`, `net.agents()`, `net.isAgent(seat)`,
+  `net.hushed` (the play page's Quiet AI), `createNetplay({ caps })`, `SKILLS`,
+  `skillPreset`, `aiName`, `stripAi`; the `Roster`'s AI seats; `NETPLAY_REVISION` and the
+  build mark `homie-netplay-rev:6`.
 
 **What revision 5 added** (a v1 game that knows none of it is watched as its overview):
 - **Watching** (section 16): a watcher is a screen that came to watch a live room from any
@@ -237,14 +259,16 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 
 | `t` | Sent by | Fields | What the relay does |
 |---|---|---|---|
-| `hello` | everyone, once | `v: 1`, `token?`, `name?`, `device`, `want: 'play'\|'screen'`, `canHost`, `game?`, `max?`, `watch?` (revision 5) | Seats the client (or queues it), picks a role, replies `welcome`, and sends `join` to the others. Refuses with `version`, `room-full`, `too-many` or `watch-off`. A `watch: true` hello is a watcher (section 16). |
+| `hello` | everyone, once | `v: 1`, `token?`, `name?`, `device`, `want: 'play'\|'screen'`, `canHost`, `game?`, `max?`, `watch?` (revision 5), `rev?: 6`, `caps?: ('skill'\|'agents')[]`, `agent?: { hands, role }` (revision 6) | Seats the client (or queues it), picks a role, replies `welcome`, and sends `join` to the others. Refuses with `version`, `room-full`, `too-many` or `watch-off`. A `watch: true` hello is a watcher (section 16). An agent's (section 17) is seated in a seat kept for AI and named `<label> · AI`, or refused with `agent-pass`, `agents-off`, `agents-unsupported` or `agents-alone`. |
 | `snap` | host | `k`, `st`, `d`, `c?` (control table) | Clamps `st` to [now − 2 s, now + 250 ms] (a snapshot stamped in the future would freeze replicas). Stores the snapshot and fans it out with `from`. Skips a socket with more than 256 KB buffered. |
 | `in` | seated non-host | `q`, `a`, `h`, `p?`, `r` (the reset epoch the sender has adopted) | Forwards to the host only, stamped `from: <seat>`. Presses are clamped to integers 0–8, at most 16 keys. |
-| `ev` | anyone | `k`, `d`, `to?` | **From a muted player** (section 15): a speech kind (`say…`, `chat…`, `emote…`) is dropped. **From the host:** to everyone else, to one seat (`to`: number) or to one peer (`to`: id string, such as a screen). **From anyone else:** to the host, with `from` and the sender's `id`. **Best-effort:** a drop over a cap is reported with `error rate`. |
+| `ev` | anyone | `k`, `d`, `to?` | **Speech** (section 17): with the room's speech `lines`, every `chat…` is dropped (anyone's, a host relaying one too); with `off`, every speech kind; from an agent, one line every 4 s and 8 a minute. **From a muted player** (section 15): a speech kind (`say…`, `chat…`, `emote…`) is dropped. **From the host:** to everyone else, to one seat (`to`: number) or to one peer (`to`: id string, such as a screen). **From anyone else:** to the host, with `from` and the sender's `id`. **Best-effort:** a drop over a cap is reported with `error rate`. |
 | `state` | host | `k` (≤ 64 characters), `d` (`null` deletes) | Stores the key in memory, forwards it to all others, and includes the whole map in every `welcome` and in `role` to a new host. |
 | `ckpt` | host | `k`, `st`, `d`, `c?` | Stores it in memory. It is saved to storage at most every 30 s. Not forwarded. |
-| `round` | host | `round` | Stores it, forwards it, and tells the shell's watchers. |
-| `roster` | host | `slots` | Stores it, forwards it, and tells the shell's watchers. |
+| `round` | host | `round` | Labels its `results` (section 17), stores it, forwards it, and tells the shell's watchers. |
+| `roster` | host | `slots` | Labels it (section 17: a host cannot hide an AI), stores it, forwards it, and tells the shell's watchers. |
+| `caps` | host (revision 6) | `caps: ('skill'\|'agents')[]` | What the host's game does with servers: its bots read the dial, and it moves AI bodies. Stored as the room's (the play page offers the vote; a lite agent may sit) and in the watch feed. |
+| `vote` | a seated person, or the host (revision 6) | `of: 'skill'`, `n?: 1..levelMax`, `open?: true`, `reason?` | `open` starts the party's vote on the dial (a player may open one every 2 minutes); `n` casts or changes this seat's vote. Agents and watchers never vote. The shell's watch socket may send it too, counted as the seat of the client with the same browser key. |
 | `ping` | everyone | `c`, `hid` | Replies `pong`. A host whose `hid` turns true yields. |
 | `yield` / `bye` | host / anyone | — | `yield` elects another host if one is available. `bye` is a close. |
 
@@ -252,7 +276,7 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 
 | `t` | To | Fields |
 |---|---|---|
-| `welcome` | the new client | `v`, `id`, `room`, `seat`, `token`, `name`, `colour`, `role`, `why: 'first'\|'resumed'\|'joined'\|'host-stalled'\|'host-hidden'`, `host`, `peers`, `st`, `max`, `round`, `roster`, `snap`, **`state`**, `ckpt` (host only), `full?`, `watch?: { follow, why? }` (a watcher only) |
+| `welcome` | the new client | `v`, `rev`, `id`, `room`, `seat`, `token`, `name`, `colour`, `role`, `why: 'first'\|'resumed'\|'joined'\|'host-stalled'\|'host-hidden'\|'host-person'`, `host`, `peers`, `st`, `max`, `round`, `roster`, `snap`, **`state`**, `ckpt` (host only), `full?`, `watch?: { follow, why? }` (a watcher only), `policy` (with `skill`), `vote?`, `agent?` (an agent's own; a hands-`host` agent's carries no `snap` or `ckpt`, and an empty `state`) |
 | `role` | a client whose role changed | `role`, `why`, `host`, `peers`. For a new host, also `ckpt`, `snap`, `round`, `roster`, `state`. |
 | `seat` | a waiting spectator that just got a seat | `seat`, `token`, `name`, `colour`, `role` |
 | `host` | everyone else, on a change | `host`, `why` |
@@ -267,30 +291,34 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 | `announce` | everyone (and in `welcome.announce`) | `id`, `text` (`null`: taken down), `at`, `until`, `from: 'studio'` (section 15) |
 | `mute` | everyone | `id`, `seat`, `until` (`0`: unmuted) (section 15) |
 | `watch` | one watcher | `follow`, `why?` (`overview`, `seated-here`): whether it may follow one player now (section 16) |
+| `policy` | everyone (revision 6) | `policy` (with `skill`, and `by: 'vote'\|'owner'` once the dial was set): on any change, a vote's result, the owner's control, a newer server policy |
+| `vote` | everyone and the shell's watch sockets (revision 6) | `of`, `id`, `open`, `until`, `options` (1..levelMax), `counts`, `voters`, `of_total`, `result?: { level, name, votes, why }`, `reason?` |
 
 **Error codes.**
 - Final (the helper stops reconnecting): `version`, `replaced`, `room-full`,
   `too-many`, `kicked`, `room-closed` (the last two with `until`, server ms; section 15),
-  `watch-off` (a watcher of a game that cannot be watched; section 16).
+  `watch-off` (a watcher of a game that cannot be watched; section 16), `agent-pass`,
+  `agents-off` and `agents-unsupported` (section 17).
   The helper before revision 4 does not know `kicked` and `room-closed` and keeps knocking;
   every knock is refused at `hello`, and the shell stops the frame (section 15).
-- Reported only: `too-large`, `rate`, `state-full`. (`flood` closes the socket; the helper
-  comes back slowly.)
+- Reported only: `too-large`, `rate`, `state-full`, `vote`. (`flood` closes the socket; the helper
+  comes back slowly. `agents-alone` closes an agent's socket; it knocks again after 30 s.)
 
 A socket that is kicked for silence is closed with code 4000, and the helper reconnects.
 
 Record types:
 
 ```ts
-Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true, watch?: true }
+Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true, watch?: true, agent?: AgentFacts }
 RoundInfo   = { n, phase: 'live'|'over', startedAt, endsAt, results?: RoundResult[] }   // server ms
-RoundResult = { slot, seat: number|null, name, score, bot, place }
-Slot        = { slot, seat: number|null, name, bot }
+RoundResult = { slot, seat: number|null, name, score, bot, place, agent?: true }
+Slot        = { slot, seat: number|null, name, bot, agent?: { seat: number|null, role, hands } }
+AgentFacts  = { pass, role: 'party'|'guide'|'player', hands: 'self'|'host', by: 'studio'|'guest'|'service' }
 ControlWire = [seat, rs, own (1|0), ack]    // one per present seat, in snap.c and ckpt.c
 ```
 
 **The shell's watch socket** (`/<game>/__watch?room=&b=`) gets
-`{ t:'net', room, host, clients, round, roster, snapHz, openedAt, announce, closedUntil?, counts: {players, screens, waiting, watchers, humans, bots, maxPlayers}, memory: {snapBytes, ckptBytes, ckptAgeMs, stateKeys, stateBytes}, stats }`
+`{ t:'net', rev, room, host, clients, round, roster, snapHz, openedAt, announce, closedUntil?, counts: {players, agents, screens, waiting, watchers, humans, bots, ai, maxPlayers, humanSeats}, policy, vote?, caps, memory: {snapBytes, ckptBytes, ckptAgeMs, stateKeys, stateBytes}, stats }`
 about once a second and on every change, and the owner's controls as they happen
 (section 15): `announce` (the same frame the game gets), `closed { until, message }`, and,
 only for the browser they are about (its room key `b`), `kicked { until, message }` and
@@ -309,7 +337,8 @@ held out of it, hears so at once.
   game's `scores` probe).
 
 **Parent page → game frame** (revision 5): `postMessage { t: 'homie-watch', follow: seat | 'auto' | null }`.
-The helper takes it only from its own parent window, and only as a watcher.
+The helper takes it only from its own parent window, and only as a watcher. Revision 6 adds
+`{ t: 'homie-hush', on }` (the play page's Quiet AI) and the frame's `policy` and `vote`.
 
 The shell must check `ev.source === frame.contentWindow`. The frame is an opaque origin,
 so `ev.origin` is `"null"`.
@@ -675,7 +704,7 @@ npx --no-install homie-studio check my-game --url http://127.0.0.1:8787
 
 The studio's owner runs their live rooms from the studio's back office (`/_studio/office`,
 the owner's overlay in their own game, `homie-studio office`, and the Homie MCP's owner
-tools). The room's relay enforces five controls:
+tools). The room's relay enforces these controls:
 
 | `op` | Arguments | What the relay does |
 |---|---|---|
@@ -684,6 +713,8 @@ tools). The room's relay enforces five controls:
 | `announce` | `text` (one line, at most 280 characters; empty takes it down), `seconds` (5–3600, default 30) | Everyone and every watching shell gets `announce { id, text, at, until, from: 'studio' }`; a joiner gets it in `welcome.announce` until it ends. |
 | `close` | `minutes`, or `seconds` (10 s up to a day), `message?`, or `reopen: true` | Every socket gets `error room-closed { until, message }` and is closed; the room forgets its play as an empty room does (section 4); watchers get `closed`. Until `until` every `hello` is refused with `room-closed`, and the Lobby sends nobody there. `reopen` opens it at once. |
 | `seats` | `max` | The room's seats while it runs (the owner's "players per room"). Players already seated above it keep their seat; nobody new is seated there. Never above the room's own cap (the game's manifest). |
+| `policy` | `pol` (revision 6) | The server changed (section 17): the room takes its new policy at once. When agents are no longer allowed (humans-only), the current round finishes first, by the same rules as `regate`, and then every agent gets `error agents-off { message: 'This server is humans-only now.' }`. |
+| `level` | `level` (1–5; revision 6) | The owner sets this room's dial now (`room_level`), as a vote's result does. |
 | `regate` | `allow` (holder kinds: `o` the owner, `i` an invite, `p` a player account), `notice?`, `message?`; no `allow` calls a waiting one off | A game's launch state narrowed (private, or an invite-only beta). The current round finishes first: the `notice` goes up as an announcement, and 5 s after the host's `round` with `phase: 'over'` (at the latest 20 s after its `endsAt`, or 30 s when no round is running; never later than 15 minutes) every socket whose ticket names no allowed holder gets `error room-closed { message }` (no `until`: they come back through the game's door if they have access) and is closed; its seat is freed and the others play on. A room with nobody to send out does nothing. The studio's Worker sends it to every live room the game's Lobby knows; a room that opens in the same moment reads its game's launch state once on its first heartbeat and re-gates itself the same way. |
 
 **Signed by the studio, checked by the room.** A control reaches the relay only from the
@@ -813,3 +844,162 @@ watching the room too (the same room key), and a closed room closes for watchers
 ping every 2 s (a request, billed 20:1). Like a big screen, a watcher alone keeps a room's object
 awake; the room's host of last resort is the watcher's browser, running the bots.
 
+## 17. Servers, policies and agent seats (revision 6)
+
+A **server** is a named, lasting pool of rooms for one game, with its own policy, door and
+Lobby pool. Strangers are matched only inside one server, never across. Every game's
+`pub-N` rooms are its implicit server `public` (Quick play), so every old link and room keeps
+working; a server's rooms are `s-<id>-<n>`; a named `?room=` takes the public server's rules.
+Servers, their members and agent passes live in the studio's own D1 (migration
+`0006_studio_servers.sql`); a game.json `"servers": [{ id, name, policy, … }]` seeds them (a
+D1 row of the same id wins). The site's pages are `site/SITE.md`'s; this section is the room's.
+
+**Policies.**
+
+| `kind` | People | AI |
+|---|---|---|
+| `open` | anyone (the server's door decides) | an AI with a pass may sit, always marked AI |
+| `humans-only` | anyone | none: every agent is refused (the Worker's 403, and the relay's `agents-off`). The game's filler bots are off (`bots: 'off'`) unless the owner turns practice bots on. |
+| `hybrid` | the seats below the reserve | `aiSeats` seats in every room are AI companions: the top seats, `[max − N, max)` |
+| `beginner` | new accounts (the door) | `guides` (and any `aiSeats`) seats are AI guides; speech is quick lines only; `kids` adds handles only, the dial at most 3, aggression at most 0.3 |
+
+**The policy reaches the room from the Worker.** For every socket the Worker composes
+`pol = { v, at, server, kind, aiSeats, guides, bots, level, levelMax, speech, kids, brain }`
+from the server, the game and the office (AI seats and guides together are at most the seats
+less one), and passes it to the room's Table, which applies it when `at` is newer than the
+room's own. The owner's change reaches live rooms as a signed `policy` control (section 15).
+Every client hears `welcome.policy` and `policy` frames, with `skill`: the room's dial now.
+
+**Seats.** `seatFor(token, kind)`: a person takes a seat in `[0, max − reserve)`, an agent in
+`[max − reserve, max)` (with no reserve, any seat, from the top). A token's own seat is kept
+whatever the range (a person seated above a new cap keeps it). A seventh person in a hybrid
+room of 8 with 2 AI seats waits as a spectator and is seated when a person's seat frees.
+
+**Agents.** An AI sits like a phone: the same socket, with a ticket whose holder is
+`a-<pass>`. The Worker verifies the pass (not revoked, not ended, for this game and server, a
+server that lets AI in; a game that is not public opens only to the owner's own passes) and
+hands the room the agent's facts; only that makes a socket an agent (a hello that says
+`agent` with none is refused `agent-pass`). An agent:
+- is named `<label> · AI` (the exact mark ` · AI`), and its peer carries `agent: { pass, role,
+  hands, by }`. A person's typed name never ends in an AI or bot mark (the relay strips it;
+  account names refuse it);
+- **hands `self`**: runs the game itself (its frame is the game, booted with `HOMIE_NET.agent`)
+  and plays its seat like a person. It hosts only a room no person can host, and a person who
+  can host takes the rules back at their hello (`why: 'host-person'`);
+- **hands `host`**: has no game client. The host's own bot code moves its body (a `Roster`
+  slot that stays a bot, `agent.seat` naming it). It never hosts, and it gets the **lite
+  feed**: `join`/`leave`, `roster`, `round`, `policy`, `vote` and `ev` addressed to its seat,
+  never `snap`, `ckpt` or `state`. It sits only where the host's game declared
+  `caps: ['agents']`, else `agents-unsupported`;
+- **never keeps a room alive**: with no person seated for 60 s, every agent gets
+  `agents-alone` and is closed, and none may come in until a person is seated (the helper
+  waits 30 s before it knocks again). Agents are never players for the Lobby or for a room's
+  forgetting: `counts.players` is people, `counts.agents` and `counts.ai` are apart;
+- says at most one line every 4 s and 8 a minute (`stats.agentDrops` counts the rest).
+
+**Labels.** The relay rewrites the host's `roster` and every round's `results` before anyone
+sees them: a slot or row whose seat an agent holds gets `agent` and the agent's name; a slot
+with no seat is a bot; a slot naming a seat nobody holds is a bot; a person's slot never
+carries `agent` or an AI mark. A modified host cannot present an AI as a person.
+
+**Speech** (`policy.speech`): `game` (as the game does it), `lines` (every `chat…` is dropped,
+from people too: quick lines `say:…` and emotes pass), `off` (every speech kind). The play
+page's **Quiet AI** hides AI speech on that browser only: the helper drops `ev` speech from an
+agent's seat when `net.hushed`.
+
+**The skill dial.** One shape for every game: `{ level 1..5, name, reactionMs, aimNoise 0..1,
+aggression 0..1, positioning 0 back..1 front }`.
+
+| level | name | reactionMs | aimNoise | aggression | positioning | |
+|---|---|---|---|---|---|---|
+| 1 | Rookie | 650 | 0.55 | 0.10 | 0.10 | stays at the back, misses a lot |
+| 2 | Steady | 420 | 0.30 | 0.30 | 0.35 | helps, never steals the show |
+| 3 | Fair | 250 | 0.15 | 0.50 | 0.50 | plays like a regular |
+| 4 | Strong | 170 | 0.07 | 0.70 | 0.75 | keeps up with good players |
+| 5 | Maxed | 110 | 0.02 | 0.90 | 0.95 | front-line tank, rarely misses |
+
+Fair is what the port kit's bots always were (250 ms, an aim error of 0.12 rad = 0.15 × 0.8).
+Kids caps the level at 3 and aggression at 0.3. The room's dial is the party's vote (or the
+owner's `level`), else the server's `level`; a guide plays at the server's level.
+
+**The party's vote.** Opened by itself at a party's first live round when the room has AI seats
+and its game reads the dial (once per room per 30 minutes), by any seated person from the play
+page's chip (once per 2 minutes), or by the game (`net.openVote('skill', 'dungeon')`). It is
+open 15 s, or until every seated person voted (a lone player's tap decides at once). The result
+is the **median of the seated people's votes, rounded down** (a tie is settled kindly), capped
+at the server's `levelMax`, and it applies at once (`policy`, and the vote's `result`). The
+shell draws the card; a game that draws its own says game.json `"agents": { "vote": "game" }`
+(`false`: no vote).
+
+**What the game does (the helper).**
+
+```ts
+import { createNetplay, type Skill } from '@homie-rocks/studio/netplay';
+// 'skill': this game's bots read the dial; 'agents': its host moves an AI's body (its Roster passes p.agent).
+const net = createNetplay({ game: 'gem-rush', maxPlayers: 8, caps: ['skill', 'agents'], checkpoint });
+const roster = new Roster({ min: 3, max: 8, botName, policy: () => net.policy }); // keeps the AI seats
+net.on('join', (p) => { if (p.seat !== null) roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null); });
+
+/** What each bot last noticed: it re-reads the world only every skill.reactionMs. */
+const sight = new Map<number, { at: number; tx: number; ty: number }>();
+function stepBots(dt: number): void {
+  const taken = new Set<number>();
+  for (const b of bodies.values()) {
+    if (!b.bot) continue;
+    const s: Skill = net.skillOf(b.slot);                    // Fair when nobody set a dial
+    let eye = sight.get(b.slot);
+    if (!eye || net.now() - eye.at >= s.reactionMs) {        // REACTION TIME (a miss costs it again)
+      const g = pickGem(b, taken, s);                        // POSITIONING: 0 leaves the hot zone, 1 fights for it
+      const miss = 200 * s.aimNoise;                         // AIM NOISE: up to 200 px off at 1
+      eye = { at: net.now(), tx: g ? g.x + (Math.random() - 0.5) * miss : b.tx, ty: g ? g.y + (Math.random() - 0.5) * miss : b.ty };
+      sight.set(b.slot, eye);
+      if (g) taken.add(g.id);
+    }
+    const rival = nearestBody(b, KNOCK_RANGE);                // AGGRESSION: bumps a rival in reach
+    if (rival && Math.random() < s.aggression * 0.8 * dt) hostWave(b);
+    steer(b, eye.tx, eye.ty, BOT_SPEED, dt);
+  }
+}
+```
+
+| Call | Meaning |
+|---|---|
+| `net.policy` | The room's policy (`DEFAULT_POLICY` before the relay says one: open, Fair). |
+| `net.skill`, `net.skillOf(slot)` | The room's dial; the dial a bot in that slot plays at. Reading either declares `caps: ['skill']` (the host tells the room once), so the play page offers the vote. |
+| `net.on('policy', p)`, `net.on('vote', v)` | The policy or dial changed; the vote opened, moved or closed (`net.voteState`). |
+| `net.vote(n)`, `net.openVote('skill', reason?)` | A seated person's vote; open one. |
+| `net.agents()`, `net.isAgent(seat)` | The AI in the room. |
+| `net.hushed` | Quiet AI on this browser (the play page sets it). |
+| `aiName(label)`, `stripAi(name)`, `AI_MARK`, `SKILLS`, `skillPreset(n, kids?)` | Names and the dial. |
+| `Roster({ …, policy })` | Keeps `aiSeats + guides` slots marked `agent` (a person never takes one); `claim(seat, name, agent?)` (hands `host`: the slot stays a bot, `agent.seat` set; hands `self`: claimed like a person's); `release(seat)` gives an agent's slot back as a seat kept for AI; `bots: 'off'` adds no filler. |
+
+`createRoom` (the port kit) does all of it: its roster keeps the AI seats, its join passes
+`p.agent`, it declares `caps: ['agents']`, and `room.skillOf(body)` is the dial. `BotBrain`
+takes `skill: () => room.skillOf(body)` and maps it: `reactionMs`, an aim error of
+`aimNoise × 0.8` rad, and a commitment of `2500 × (1.3 − 0.6 × aggression)` ms; `port/skill.ts`
+adds `jitter(s, maxPx)`, `engages(s, dt)` and `standoff(s, near, far)`. A ported game built on
+`BotBrain` gets the dial with a rebuild.
+
+**Old games and old relays.**
+- A game built with a helper before revision 6 plays on every server: doors, the human seat
+  cap, speech modes and AI labels in names and in the shell work; it keeps no AI seats and its
+  bots do not read the dial, a hands-`host` agent is refused (`agents-unsupported`), a
+  hands-`self` agent is labelled by its name. Its play page shows no vote. `homie-studio
+  build` writes the revision a build speaks into the catalogue (the helper's mark
+  `homie-netplay-rev:<n>`), and the office says "This build predates servers" until it is
+  rebuilt.
+- A revision-6 helper on an older relay has `DEFAULT_POLICY` (open, Fair) and no AI seats.
+
+**Kids and safety.** The AI never types: in this revision an agent is a seat and a body, and
+its speech is rate-limited and filtered like anyone's (quick lines only on a beginner server).
+Every AI is marked AI by the relay, not trusted to the host. The owner's controls work on AI:
+mute (its speech is dropped), kick (held out by its pass; its seat goes back to a seat kept for
+AI), announce. Nothing about a person beyond a player id the studio already has is stored; no
+age is ever asked.
+
+**Cost.** An agent is one more socket, like a phone. Agents never keep a room alive (60 s
+alone at most). A lite agent gets no snapshots, so it costs a few frames a minute.
+
+**Revision 7 (a later version)** adds an AI's brain: hands in the host (`agent:view`,
+`agent:do`), lines only from the game's own `agents.json` vocabulary (`say:<lineId>`, checked
+by the relay), and guides that answer the party. Nothing in revision 6 needs to change for it.

@@ -15,6 +15,9 @@
  *   humans  the people in finished rounds, summed
  *   peak    the most people playing one game at once that day (all its rooms), and peak-room in one room
  *   song    a song's player started; video: a video's player started
+ *   agent-minutes   minutes an AI sat in a seat (an agent pass, NETPLAY.md section 17; 0.16.0), counted as it leaves
+ *   brain-calls, brain-neurons   reserved for AI guides' brains (a later version): calls made and Workers AI used
+ * A round's rows count agents as AI, never as people: `humans` is people only.
  * Each visit, play and screen row carries WHERE FROM: '' (typed, bookmarked, or this site's own link), the
  * referring site's host (homie.rocks, another studio, anywhere on the web), or `via:<tag>` from a ?via= link.
  * Concurrent players now come from the Lobby at read time; nothing stores them.
@@ -54,7 +57,7 @@ CREATE TABLE IF NOT EXISTS stats_keys (
 ) WITHOUT ROWID;
 `;
 
-export const METRICS = Object.freeze(['visit', 'play', 'screen', 'watch', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video']);
+export const METRICS = Object.freeze(['visit', 'play', 'screen', 'watch', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video', 'agent-minutes', 'brain-calls', 'brain-neurons']);
 const MAX_METRICS = new Set(['peak', 'peak-room']);
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -292,6 +295,7 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
       visits: of('visit'), plays: of('play'), screens: of('screen'), watches: of('watch'), rooms: of('room'),
       rounds: of('round'), roundsWithPeople: of('round', (r) => r.source === 'people'), peopleInRounds: of('humans'),
       peakPlayers: maxOf((r) => r.metric === 'peak' && r.subject === g.id), peakInOneRoom: maxOf((r) => r.metric === 'peak-room' && r.subject === g.id),
+      agentMinutes: of('agent-minutes'),
       playingNow: now[g.id]?.players ?? 0, roomsNow: now[g.id]?.rooms ?? 0,
     };
   });
@@ -320,6 +324,7 @@ export async function readStats(env, cat, { range, only = null, studios = new Se
       visits: sum((r) => r.metric === 'visit'), plays: sum((r) => r.metric === 'play'), screens: sum((r) => r.metric === 'screen'), watches: sum((r) => r.metric === 'watch'),
       rooms: sum((r) => r.metric === 'room'), rounds: sum((r) => r.metric === 'round'), roundsWithPeople: sum((r) => r.metric === 'round' && r.source === 'people'),
       peopleInRounds: sum((r) => r.metric === 'humans'), songPlays: sum((r) => r.metric === 'song'), videoViews: sum((r) => r.metric === 'video'),
+      agentMinutes: sum((r) => r.metric === 'agent-minutes'),
       peakPlayers: Math.max(0, ...perGame.map((g) => g.peakPlayers)), peakInOneRoom: Math.max(0, ...perGame.map((g) => g.peakInOneRoom)),
       playingNow: perGame.reduce((n, g) => n + g.playingNow, 0),
     },

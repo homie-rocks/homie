@@ -22,9 +22,16 @@
  * nobody followed the whole arena shows. Waves call `net.spotlight(seat)`, so a
  * watcher on Auto cuts to whoever just bumped.
  *
+ * SERVERS AND THE SKILL DIAL (contract revision 6): the bots play at the room's
+ * dial (`net.skillOf(slot)`: how late they see, how well they aim, whether they
+ * fight for the hot zone, how often they bump), which the party votes in the
+ * play page; a hybrid server's AI seats are kept as AI bodies (the Roster's
+ * reserve, marked " · AI"), an AI with a pass takes one, and a humans-only
+ * server's bots are off. The game says so: `caps: ['skill', 'agents']`.
+ *
  * Canvas 2D on purpose: the point is the contract, in ~700 readable lines.
  */
-import { createNetplay, Roster, q, lerp, capMove, PALETTE, type RoleChange, type RoundInfo, type RoundResult, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
+import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit's probe: what `homie-studio port check` reads for the owner tests (and sandbox + audio shims).
 import { exposePort } from '@homie-rocks/studio/port';
 
@@ -48,7 +55,8 @@ const ZONE_MS = 12_000;
 const colourOf = (slot: number, seat: number | null): string => PALETTE[(seat ?? slot) % PALETTE.length] as string;
 const BOT_NAMES = ['Rook', 'Vex', 'Moth', 'Kilo', 'Juno', 'Pike', 'Nyx', 'Ash'];
 const botName = (slot: number): string => BOT_NAMES[slot % BOT_NAMES.length] as string;
-const label = (name: string, bot: boolean): string => (bot ? `${name} · bot` : name);
+/** An AI's name already ends in " · AI" (the relay sees to it); a plain bot says bot. */
+const label = (name: string, bot: boolean): string => (name.endsWith(AI_MARK) ? name : bot ? `${name} · bot` : name);
 
 /* ------------------------------------------------------------ wire shapes */
 /** Snapshot: compact arrays, quantized. ~40 B per body, ~16 B per gem. (Reset epochs ride in the helper's `c` table.) */
@@ -73,10 +81,13 @@ interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; 
  * Default `owner`: each browser moves its own body and the host bounds it.
  */
 const MOVEMENT: 'owner' | 'host' = (() => { try { return new URLSearchParams(location.search).get('movement') === 'host' ? 'host' : 'owner'; } catch { return 'owner'; } })();
-const net = createNetplay<Snap, Avatar, Ckpt>({ game: 'gem-rush', maxPlayers: MAX_SLOTS, movement: MOVEMENT, snapshotHz: 20, inputHz: 20, checkpointMs: 1000, checkpoint: () => checkpoint() });
+// caps: its bots read the dial ('skill'), and its Roster takes an AI's slot for it ('agents': the join passes p.agent).
+const net = createNetplay<Snap, Avatar, Ckpt>({ game: 'gem-rush', maxPlayers: MAX_SLOTS, movement: MOVEMENT, snapshotHz: 20, inputHz: 20, checkpointMs: 1000, caps: ['skill', 'agents'], checkpoint: () => checkpoint() });
+/** The Roster keeps the server's AI seats (revision 6): the policy is read whenever it fills. */
+const policy = () => net.policy;
 
 /* ------------------------------------------------------------ host state */
-let roster = new Roster({ min: MIN_SLOTS, max: MAX_SLOTS, botName });
+let roster = new Roster({ min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
 let bodies = new Map<number, Body>();
 let gems: Gem[] = [];
 let gemSeq = 0;
@@ -87,6 +98,8 @@ let hosting = false;
 let cheatResets = 0;
 let controlResets = 0;
 let predictionError = 0;
+/** Gems each slot picked up this round (a gem, whatever it scored): the dial's numbers (`pickups` probe). */
+let pickups = new Map<number, number>();
 
 /* ------------------------------------------------ this browser's avatar */
 const me = { x: W / 2, y: H / 2, vx: 0, vy: 0, kvx: 0, kvy: 0, knockUntil: 0, has: false };
@@ -152,6 +165,8 @@ function startRound(n: number): void {
     hostMoved(b);
   }
   gems = Array.from({ length: GEM_COUNT }, newGem);
+  pickups = new Map();
+  sight.clear();
   round = { n, phase: 'live', startedAt: now, endsAt: now + ROUND_MS };
   setZone(newZone((zone?.n ?? 0) + 1));
   net.round(round);
@@ -163,7 +178,8 @@ function endRound(): void {
   if (!round) return;
   const now = net.now();
   const ranked = [...bodies.values()].sort((a, b) => b.score - a.score || Number(a.bot) - Number(b.bot) || a.slot - b.slot);
-  const results: RoundResult[] = ranked.map((b, i) => ({ slot: b.slot, seat: b.seat, name: b.name, score: b.score, bot: b.bot, place: i + 1 }));
+  const agentSlot = (slot: number): boolean => Boolean(roster.slots.find((x) => x.slot === slot)?.agent);
+  const results: RoundResult[] = ranked.map((b, i) => ({ slot: b.slot, seat: b.seat, name: b.name, score: b.score, bot: b.bot, place: i + 1, ...(agentSlot(b.slot) ? { agent: true as const } : {}) }));
   round = { n: round.n, phase: 'over', startedAt: now, endsAt: now + BREAK_MS, results };
   net.round(round);
 }
@@ -173,7 +189,7 @@ function becomeHost(e: RoleChange<Snap, Ckpt>): void {
   hosting = true;
   if (e.promoted) restore(e);
   else {
-    roster = new Roster({ min: MIN_SLOTS, max: MAX_SLOTS, botName });
+    roster = new Roster({ min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
     bodies = new Map();
     const seat = mySeat();
     if (seat !== null) roster.claim(seat, net.offline ? 'You' : net.name);
@@ -181,7 +197,7 @@ function becomeHost(e: RoleChange<Snap, Ckpt>): void {
     startRound((e.round?.n ?? 0) + 1);
   }
   // Whoever is connected now is who plays: seats that left during the gap become bots.
-  const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null);
+  const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null }));
   const { claimed } = roster.reconcile(peers);
   syncBodiesFromRoster();
   for (const s of claimed) { const b = bodies.get(s.slot); if (b && b.seat !== mySeat()) hostMoved(b); }
@@ -198,14 +214,14 @@ function becomeHost(e: RoleChange<Snap, Ckpt>): void {
 function restore(e: RoleChange<Snap, Ckpt>): void {
   const ck = e.ckpt?.d ?? null;
   if (ck) {
-    roster = Roster.from(ck.roster, { min: MIN_SLOTS, max: MAX_SLOTS, botName });
+    roster = Roster.from(ck.roster, { min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
     bodies = new Map(ck.bodies.map((b) => [b.slot, { ...b }]));
     gems = ck.gems.map((g) => ({ ...g }));
     gemSeq = ck.gemSeq;
     round = ck.round;
     tick = ck.tick;
   } else {
-    roster = Roster.from(e.roster ?? [], { min: MIN_SLOTS, max: MAX_SLOTS, botName });
+    roster = Roster.from(e.roster ?? [], { min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
     bodies = new Map();
     syncBodiesFromRoster();
   }
@@ -250,7 +266,8 @@ net.on('role', (e) => {
 });
 net.on('join', (p) => {
   if (!hosting || p.seat === null) return;
-  const c = roster.claim(p.seat, p.name);
+  // An AI takes a seat kept for AI, a person never does (revision 6: the Roster needs p.agent for that).
+  const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null);
   if (!c) return; // full: they watch
   syncBodiesFromRoster();
   const b = bodies.get(c.slot.slot);
@@ -265,6 +282,8 @@ net.on('leave', (p) => {
   syncBodiesFromRoster();
   publishRoster();
 });
+// The server's policy changed: its AI seats come (or go between rounds) at once.
+net.on('policy', () => { if (!hosting) return; roster.fill(); syncBodiesFromRoster(); publishRoster(); });
 net.on('event', (e) => {
   if (e.k === 'wave') addWave(e.d as { slot: number });
   if (e.k === 'knock') addWave(e.d as { slot: number }, true);
@@ -420,26 +439,67 @@ function stepKnocked(b: Body, dt: number): void {
   b.vx = b.kvx; b.vy = b.kvy;
 }
 
+/**
+ * THE BOTS, AT THE ROOM'S DIAL (NETPLAY.md section 17). A bot re-reads the world only every `reactionMs` (what it
+ * last noticed is where it heads, and a miss costs it that long again), aims up to 200 px off at aimNoise 1, leaves
+ * the hot zone to the people at positioning 0 and fights for it at 1, and waves at a rival in reach about
+ * `aggression x 0.8` times a second. Rookie is beatable by anyone, Maxed by few: measured with the
+ * `pickups` probe over 60 s rounds, a Maxed bot picks up a little over twice the gems of a Rookie.
+ */
+const sight = new Map<number, { at: number; tx: number; ty: number; arrived?: boolean }>();
+
 function stepBots(dt: number): void {
   const taken = new Set<number>();
   const now = net.now();
   for (const b of bodies.values()) {
     if (!b.bot) continue;
     if (b.knockUntil > now) { stepKnocked(b, dt); continue; }
-    let best: Gem | null = null; let bd = Infinity;
-    for (const g of gems) {
-      if (taken.has(g.id)) continue;
-      const d = Math.hypot(g.x - b.x, g.y - b.y);
-      if (d < bd) { bd = d; best = g; }
+    const s: Skill = net.skillOf(b.slot); // Fair when nobody set a dial
+    let eye = sight.get(b.slot);
+    if (!eye || now - eye.at >= s.reactionMs) { // REACTION TIME
+      const g = pickGem(b, taken, s); // POSITIONING
+      const miss = 200 * s.aimNoise; // AIM NOISE: up to 200 px off at 1
+      eye = { at: now, tx: g ? g.x + (Math.random() - 0.5) * miss : b.tx, ty: g ? g.y + (Math.random() - 0.5) * miss : b.ty };
+      sight.set(b.slot, eye);
+      if (g) taken.add(g.id);
     }
-    if (best) { taken.add(best.id); b.tx = best.x; b.ty = best.y; }
-    const dx = b.tx - b.x; const dy = b.ty - b.y; const len = Math.hypot(dx, dy) || 1;
+    b.tx = eye.tx; b.ty = eye.ty;
+    const rival = nearestBody(b, KNOCK_RANGE); // AGGRESSION: waves at a rival in reach
+    if (rival && round?.phase === 'live' && Math.random() < s.aggression * 0.8 * dt) hostWave(b);
+    const dx = b.tx - b.x; const dy = b.ty - b.y; const dist = Math.hypot(dx, dy);
+    const len = dist || 1;
+    // Arrived where it aimed: it stands there, and notices what it missed only a reaction later.
+    if (dist < 6 && !eye.arrived) { eye.arrived = true; eye.at = now; }
+    const speed = dist < 6 ? 0 : BOT_SPEED;
     const k = Math.min(1, dt * 5);
-    b.vx += ((dx / len) * BOT_SPEED - b.vx) * k;
-    b.vy += ((dy / len) * BOT_SPEED - b.vy) * k;
+    b.vx += ((dx / len) * speed - b.vx) * k;
+    b.vy += ((dy / len) * speed - b.vy) * k;
     b.x = Math.max(R_AV, Math.min(W - R_AV, b.x + b.vx * dt));
     b.y = Math.max(R_AV, Math.min(H - R_AV, b.y + b.vy * dt));
   }
+}
+
+/** Positioning: 0 leaves the hot zone to the people, 1 fights for it. */
+function pickGem(b: Body, taken: Set<number>, s: Skill): Gem | null {
+  let best: Gem | null = null; let bd = Infinity;
+  for (const g of gems) {
+    if (taken.has(g.id)) continue;
+    const hot = zone !== null && Math.hypot(g.x - zone.x, g.y - zone.y) < zone.r;
+    const d = Math.hypot(g.x - b.x, g.y - b.y) * (hot ? 1.5 - s.positioning : 1);
+    if (d < bd) { bd = d; best = g; }
+  }
+  return best;
+}
+
+/** The nearest other body within `range` (a bot's rival), or null. */
+function nearestBody(b: Body, range: number): Body | null {
+  let best: Body | null = null; let bd = range;
+  for (const o of bodies.values()) {
+    if (o === b) continue;
+    const d = Math.hypot(o.x - b.x, o.y - b.y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
 }
 
 function stepHost(dt: number): void {
@@ -483,6 +543,7 @@ function stepHost(dt: number): void {
         const g = gems[i] as Gem;
         if (Math.hypot(g.x - b.x, g.y - b.y) < R_AV + R_GEM) {
           b.score += zone && Math.hypot(g.x - zone.x, g.y - zone.y) < zone.r ? 2 : 1;
+          pickups.set(b.slot, (pickups.get(b.slot) ?? 0) + 1);
           gems[i] = newGem();
         }
       }
@@ -719,6 +780,10 @@ net.expose({
   },
   frames: () => frames,
   scores: () => (hosting ? [...bodies.values()].map((b) => ({ slot: b.slot, seat: b.seat, bot: b.bot, score: b.score })) : [...drawn.values()].map((d) => ({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, bot: d.seat < 0, score: d.score }))),
+  /** Host: gems each slot picked up this round, the round's age, and the dial each bot plays at (the dial's numbers). */
+  pickups: () => (hosting ? { round: round ? { n: round.n, phase: round.phase, ageMs: net.now() - round.startedAt } : null, slots: [...bodies.values()].map((b) => ({ slot: b.slot, bot: b.bot, gems: pickups.get(b.slot) ?? 0, level: b.bot ? net.skillOf(b.slot).level : null })) } : null),
+  /** Host: when each bot last looked (its reaction clock). */
+  sight: () => (hosting ? [...sight.entries()].map(([slot, e]) => ({ slot, at: e.at })) : null),
   waves: () => wavesSeen,
   knocks: () => knocksSeen,
   zone: () => zone,

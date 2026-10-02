@@ -33,6 +33,12 @@
  *     `net.follow(seat | 'auto' | null)` changes it (the watch page's strip and
  *     keys 1-9, A and O call it), and Auto follows the action: the newest
  *     `net.spotlight(seat)`, else the leader of the game's `scores` probe.
+ *   - Servers and agent seats (revision 6, NETPLAY.md section 17): `net.policy`
+ *     is the room's server policy and `net.skillOf(slot)` the skill dial a bot
+ *     should play at (the party votes it: `net.vote(n)`, `net.openVote()`);
+ *     an AI's seat is marked (`peer.agent`, `net.isAgent(seat)`, every name
+ *     ends in " · AI"); `Roster` keeps a hybrid server's AI seats; `net.hushed`
+ *     is the player's "Quiet AI".
  *
  * WHAT IT DOES NOT DO: rendering, physics, input devices, bots. `Roster` below
  * is the bot-yield bookkeeping a host needs; the bots themselves are the game's.
@@ -40,6 +46,10 @@
  */
 
 export const NETPLAY_VERSION = 1;
+/** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
+export const NETPLAY_REVISION = 6;
+/** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
+export const NETPLAY_MARK = 'homie-netplay-rev:6';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -81,7 +91,92 @@ export interface NetConfig {
   follow?: number | 'auto' | 'overview';
   /** What the game lets its watchers see (game.json "watch"): 'follow' (the default) or 'overview'. */
   watchPolicy?: 'follow' | 'overview';
+  /** Revision 6: this frame plays as an AI (an agent pass; the Worker's word). Its hello says so. */
+  agent?: { hands: 'self' | 'host'; role: AgentRole };
+  /** Revision 6: the play page's "Quiet AI" is on: AI speech is not shown on this browser. */
+  hush?: boolean;
 }
+
+/* ------------------------------------------------- servers and agent seats (revision 6, section 17) */
+
+export type PolicyKind = 'open' | 'humans-only' | 'hybrid' | 'beginner';
+export type AgentRole = 'party' | 'guide' | 'player';
+/** The skill dial: one shape everywhere. Level 3, Fair, is what bots always were. */
+export interface Skill { level: number; name: string; reactionMs: number; aimNoise: number; aggression: number; positioning: number; card?: string }
+/** The room's server policy (the Worker's, applied by the relay) with `skill`: the room's dial now. */
+export interface Policy {
+  v: 1;
+  at: number;
+  /** null: a named room (it takes the public server's rules). */
+  server: { id: string; name: string } | null;
+  kind: PolicyKind;
+  /** Seats kept for AI companions in every room (hybrid; a beginner server may add some). */
+  aiSeats: number;
+  /** AI guides in every room (beginner). */
+  guides: number;
+  /** The game's filler bots: 'off' on a humans-only server unless the owner turned practice bots on. */
+  bots: 'fill' | 'off';
+  /** The server's level (guides play at it); `skill` is the room's dial (the party's vote, or the owner's). */
+  level: number;
+  levelMax: number;
+  /** 'lines': free chat is dropped (quick lines and emotes pass); 'off': all speech is dropped. */
+  speech: 'game' | 'lines' | 'off';
+  kids: boolean;
+  brain: string;
+  skill: Skill;
+  by?: 'vote' | 'owner';
+}
+/** What a room says about an AI in a seat (`peer.agent`). */
+export interface AgentFacts { pass: string; role: AgentRole; hands: 'self' | 'host'; by: 'studio' | 'guest' | 'service' }
+/** The party's vote on the dial (a `vote` frame): options 1..levelMax, how many chose each, the result once closed. */
+export interface VoteState {
+  of: 'skill';
+  id: string;
+  open: boolean;
+  until: number;
+  options: number[];
+  counts: Record<string, number>;
+  voters: number;
+  of_total: number;
+  result?: { level: number; name: string; votes: number; why?: string };
+  reason?: string;
+}
+
+/** The dial's five levels (worker/agents.mjs has the same table; a test keeps them equal). */
+export const SKILLS: readonly Skill[] = Object.freeze([
+  Object.freeze({ level: 1, name: 'Rookie', reactionMs: 650, aimNoise: 0.55, aggression: 0.1, positioning: 0.1, card: 'stays at the back, misses a lot' }),
+  Object.freeze({ level: 2, name: 'Steady', reactionMs: 420, aimNoise: 0.3, aggression: 0.3, positioning: 0.35, card: 'helps, never steals the show' }),
+  Object.freeze({ level: 3, name: 'Fair', reactionMs: 250, aimNoise: 0.15, aggression: 0.5, positioning: 0.5, card: 'plays like a regular' }),
+  Object.freeze({ level: 4, name: 'Strong', reactionMs: 170, aimNoise: 0.07, aggression: 0.7, positioning: 0.75, card: 'keeps up with good players' }),
+  Object.freeze({ level: 5, name: 'Maxed', reactionMs: 110, aimNoise: 0.02, aggression: 0.9, positioning: 0.95, card: 'front-line tank, rarely misses' }),
+]);
+/** A level as its preset (a copy): 1..5, Fair for anything else; a kids room caps it at 3 and aggression at 0.3. */
+export function skillPreset(n: number, kids = false): Skill {
+  const level = Math.max(1, Math.min(kids ? 3 : 5, Math.round(Number(n)) || 3));
+  const s = { ...(SKILLS[level - 1] as Skill) };
+  if (kids) s.aggression = Math.min(s.aggression, 0.3);
+  return s;
+}
+/** The exact mark at the end of every agent's name. */
+export const AI_MARK = ' · AI';
+const AI_TAIL = /[\s·•∙⋅・|:_\-–—(\[{]+(?:a\.?\s?i\.?|bots?)[\s)\]}.!·•∙⋅・|:_\-–—]*$/iu;
+/** A name with every AI or bot mark taken off its end (a person cannot claim one). */
+export function stripAi(name: string): string {
+  let s = String(name ?? '').replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 6 && AI_TAIL.test(s); i += 1) s = s.replace(AI_TAIL, '').trim();
+  return s.replace(/[\s·•∙⋅・|:_\-–—(\[{]+$/u, '').trim();
+}
+/** An agent's name as every room shows it: its label (16 characters at most) and " · AI". */
+export function aiName(label: string): string {
+  const base = [...stripAi(label)].slice(0, 16).join('').trim();
+  return `${base || 'Agent'}${AI_MARK}`;
+}
+/** A room's policy before the relay says one (or an older relay that never will): open, bots fill, Fair. */
+export const DEFAULT_POLICY: Policy = Object.freeze({
+  v: 1, at: 0, server: null, kind: 'open', aiSeats: 0, guides: 0, bots: 'fill', level: 3, levelMax: 5, speech: 'game', kids: false, brain: 'script',
+  skill: SKILLS[2] as Skill,
+}) as Policy;
+const SPEECH_KIND = /^(?:say|chat|emote)/i;
 
 export interface HostRef { id: string; seat: number | null }
 
@@ -97,6 +192,8 @@ export interface Peer {
   muted?: boolean;
   /** A watcher (section 16): a screen that came to watch; it never takes a seat. */
   watch?: boolean;
+  /** Revision 6: an AI in a seat (always named "<label> · AI"). */
+  agent?: AgentFacts;
 }
 
 /** One seat's entry in the body-control table: [seat, rs, own (1|0), ack]. */
@@ -150,7 +247,7 @@ export interface ControlChange<S = unknown> extends Control {
 }
 export interface PendingInput<A = unknown> { q: number; a: A; h: string[]; at: number; dt: number }
 
-export interface RoundResult { slot: number; seat: number | null; name: string; score: number; bot: boolean; place: number }
+export interface RoundResult { slot: number; seat: number | null; name: string; score: number; bot: boolean; place: number; /** Revision 6: an AI's row (the relay marks it). */ agent?: true }
 export interface RoundInfo {
   n: number;
   phase: 'live' | 'over';
@@ -160,7 +257,11 @@ export interface RoundInfo {
   endsAt: number;
   results?: RoundResult[];
 }
-export interface Slot { slot: number; seat: number | null; name: string; bot: boolean }
+/**
+ * A body in the round. Revision 6: `agent` marks an AI's slot: a seat kept for AI (`agent.seat` null: nobody's brain
+ * yet, the host's bots move it), or an agent's (its seat; hands `host`: the host's bot code moves it, `bot` stays true).
+ */
+export interface Slot { slot: number; seat: number | null; name: string; bot: boolean; agent?: { seat: number | null; role: AgentRole; hands: 'self' | 'host' } }
 
 export interface RoleChange<S = unknown, C = unknown> {
   role: Role;
@@ -262,6 +363,11 @@ export interface NetplayOptions<C = unknown> {
   WebSocketImpl?: WebSocketCtor;
   /** Tests / custom shells: where parent notifications go. Default `parent.postMessage` when framed. */
   post?: ((msg: Record<string, unknown>) => void) | null;
+  /**
+   * Revision 6: what this game does with servers. 'skill': its bots read the dial (`net.skillOf`); 'agents': its host
+   * moves an AI's body with its own bot code (a Roster that passes `p.agent`). Reading the dial declares 'skill' too.
+   */
+  caps?: ('skill' | 'agents')[];
 }
 
 type WebSocketCtor = new (url: string) => WebSocketLike;
@@ -296,6 +402,10 @@ export interface NetHandlers<S, A, C> {
   mute: (m: Mute) => void;
   /** Whose view to draw changed (a watcher's follow, or a player's own seat). Listening says the game draws it. */
   view: (v: ViewChange) => void;
+  /** Revision 6: the room's policy or dial changed (a vote's result, the owner, the server). */
+  policy: (p: Policy) => void;
+  /** Revision 6: the party's vote on the dial opened, moved or closed. */
+  vote: (v: VoteState) => void;
 }
 
 export interface Netplay<S = unknown, A = unknown, C = unknown> {
@@ -362,6 +472,29 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   spotlight(seat: number | null): void;
   /** The seated players, in seat order (the watch strip's order: key 1 is the first). */
   players(): Peer[];
+  /**
+   * SERVERS AND AGENT SEATS (revision 6, NETPLAY.md section 17). `policy`: the room's server policy (DEFAULT_POLICY
+   * before the relay says one). `skill`: the room's dial now. `skillOf(slot)`: the dial a bot in that slot plays at
+   * (a guide plays at the server's level; everyone else at the party's). Reading either tells the room this game's
+   * bots read the dial (caps 'skill'), so its play page offers the vote.
+   */
+  readonly policy: Policy;
+  readonly skill: Skill;
+  skillOf(slot: number): Skill;
+  /** A seated player's vote on the dial (1..levelMax); opens a vote when none is open. False when not sent. */
+  vote(n: number): boolean;
+  /** Open the party's vote (a dungeon door, a new level): at most once every 2 minutes a room. */
+  openVote(of?: 'skill', reason?: string): boolean;
+  /** The vote open now (or the last result), or null. */
+  readonly voteState: VoteState | null;
+  /** The AI peers in the room. */
+  agents(): Peer[];
+  /** Whether an AI sits in this seat. */
+  isAgent(seat: number | null): boolean;
+  /** This browser's "Quiet AI": AI speech is dropped before the game hears it. Settable. */
+  hushed: boolean;
+  /** This browser plays as an AI (the frame of an agent pass). */
+  readonly asAgent: boolean;
   /** Resolves with the first role (welcome, or offline fallback). */
   readonly ready: Promise<RoleChange<S, C>>;
   on<K extends keyof NetHandlers<S, A, C>>(kind: K, fn: NetHandlers<S, A, C>[K]): () => void;
@@ -466,7 +599,14 @@ export interface RosterOptions {
   /** Hard cap on slots. */
   max: number;
   botName?: (slot: number) => string;
+  /**
+   * Revision 6: the room's policy (createRoom passes `() => net.policy`). A hybrid or beginner server keeps
+   * `aiSeats + guides` slots for AI (marked `agent`, never given to a person); `bots: 'off'` adds no other filler.
+   */
+  policy?: () => Policy | null;
 }
+
+const copySlot = (s: Slot): Slot => ({ slot: s.slot, seat: s.seat, name: s.name, bot: s.bot, ...(s.agent ? { agent: { seat: s.agent.seat, role: s.agent.role, hands: s.agent.hands } } : {}) });
 
 /**
  * Host-side bookkeeping for bots that yield their slot to an arriving human.
@@ -477,12 +617,18 @@ export interface RosterOptions {
  * bot is left is a new slot added (up to `max`). A human who leaves turns back
  * into a bot in the same slot, so the round never loses a body mid-play.
  * `trim()` drops surplus bots between rounds.
+ *
+ * Revision 6 (section 17): with a `policy`, the seats a server keeps for AI are slots marked `agent` (a bot body
+ * until an AI sits; a person never takes one). An agent claims one: hands `host` keeps the body a bot that the
+ * host's bot code moves (`agent.seat` says whose), hands `self` drives it like a person. An agent who leaves hands
+ * the slot back as a seat kept for AI. `bots: 'off'` (a humans-only server) adds no filler bots at all.
  */
 export class Roster {
   slots: Slot[] = [];
   readonly min: number;
   readonly max: number;
   readonly botName: (slot: number) => string;
+  private readonly policyFn: (() => Policy | null) | null;
   /** seat → the slot it held when it last left */
   private readonly lastSlot = new Map<number, number>();
 
@@ -490,20 +636,49 @@ export class Roster {
     this.min = Math.max(0, opts.min | 0);
     this.max = Math.max(this.min, opts.max | 0);
     this.botName = opts.botName ?? ((slot: number) => `Bot ${slot + 1}`);
+    this.policyFn = opts.policy ?? null;
     this.fill();
   }
 
   static from(slots: readonly Slot[], opts: RosterOptions): Roster {
     const r = new Roster(opts);
-    r.slots = slots.map((s) => ({ slot: s.slot, seat: s.seat, name: s.name, bot: s.bot }));
+    r.slots = slots.map(copySlot);
     r.fill();
     return r;
   }
 
+  private policy(): Policy | null {
+    try { return this.policyFn ? this.policyFn() : null; } catch { return null; }
+  }
+
+  /** How many slots this room keeps for AI (revision 6): aiSeats + guides, never every slot. */
+  reserved(): number {
+    const p = this.policy();
+    if (!p || (p.kind !== 'hybrid' && p.kind !== 'beginner')) return 0;
+    return Math.max(0, Math.min((p.aiSeats | 0) + (p.guides | 0), this.max - 1));
+  }
+
+  /** Each kept slot's role: the guides first, then the companions. */
+  private reserveRole(i: number): AgentRole {
+    const p = this.policy();
+    return p && i < (p.guides | 0) ? 'guide' : 'party';
+  }
+
   fill(): void {
-    while (this.slots.length < this.min) {
+    // The seats kept for AI: bot bodies marked `agent` until an AI sits in one.
+    const want = this.reserved();
+    let have = this.slots.filter((s) => s.agent).length;
+    while (have < want && this.slots.length < this.max) {
       const slot = this.nextSlotId();
-      this.slots.push({ slot, seat: null, name: this.botName(slot), bot: true });
+      this.slots.push({ slot, seat: null, name: aiName(this.botName(slot)), bot: true, agent: { seat: null, role: this.reserveRole(have), hands: 'host' } });
+      have += 1;
+    }
+    // Filler bots, unless the server turned them off.
+    if (this.policy()?.bots !== 'off') {
+      while (this.slots.length < this.min) {
+        const slot = this.nextSlotId();
+        this.slots.push({ slot, seat: null, name: this.botName(slot), bot: true });
+      }
     }
     this.slots.sort((a, b) => a.slot - b.slot);
   }
@@ -515,16 +690,42 @@ export class Roster {
     return id;
   }
 
-  bySeat(seat: number): Slot | undefined { return this.slots.find((s) => s.seat === seat && !s.bot); }
-  humans(): Slot[] { return this.slots.filter((s) => !s.bot); }
+  bySeat(seat: number): Slot | undefined { return this.slots.find((s) => (s.seat === seat && !s.bot) || (s.agent && s.agent.seat === seat)); }
+  humans(): Slot[] { return this.slots.filter((s) => !s.bot && !s.agent); }
   bots(): Slot[] { return this.slots.filter((s) => s.bot); }
+  /** Revision 6: the slots of AI (an agent's, or a seat kept for one). */
+  agents(): Slot[] { return this.slots.filter((s) => s.agent); }
 
-  /** A human takes a slot. Returns the slot, whether it yielded a bot, or null (full: spectate). */
-  claim(seat: number, name: string): { slot: Slot; yielded: boolean; added: boolean } | null {
+  /**
+   * A human (or, revision 6, an agent) takes a slot. Returns the slot, whether it yielded a bot, or null (full:
+   * spectate). A person never takes a slot kept for AI; an agent takes one first.
+   */
+  claim(seat: number, name: string, agent?: { role?: AgentRole; hands?: 'self' | 'host' } | null): { slot: Slot; yielded: boolean; added: boolean } | null {
     const mine = this.bySeat(seat);
     if (mine) { mine.name = name || mine.name; return { slot: mine, yielded: false, added: false }; }
     const last = this.lastSlot.get(seat);
-    const bot = (last !== undefined ? this.slots.find((s) => s.slot === last && s.bot) : undefined) ?? this.slots.find((s) => s.bot);
+    const kept = (s: Slot): boolean => Boolean(s.agent && s.agent.seat === null);
+    const plainBot = (s: Slot): boolean => s.bot && !s.agent;
+    if (agent) {
+      const role: AgentRole = agent.role === 'guide' || agent.role === 'player' ? agent.role : 'party';
+      const hands = agent.hands === 'host' ? 'host' : 'self';
+      const slot = (last !== undefined ? this.slots.find((s) => s.slot === last && (kept(s) || plainBot(s))) : undefined)
+        ?? this.slots.find(kept) ?? this.slots.find(plainBot);
+      const take = (s: Slot): Slot => {
+        s.agent = { seat, role: s.agent?.role ?? role, hands };
+        s.name = name || aiName(this.botName(s.slot));
+        // hands `host`: still a bot body, moved by the host's bot code; hands `self`: driven like a person's.
+        if (hands === 'host') { s.bot = true; s.seat = null; } else { s.bot = false; s.seat = seat; }
+        return s;
+      };
+      if (slot) return { slot: take(slot), yielded: true, added: false };
+      if (this.slots.length >= this.max) return null;
+      const s = take({ slot: this.nextSlotId(), seat: null, name: '', bot: true });
+      this.slots.push(s);
+      this.slots.sort((a, b) => a.slot - b.slot);
+      return { slot: s, yielded: false, added: true };
+    }
+    const bot = (last !== undefined ? this.slots.find((s) => s.slot === last && plainBot(s)) : undefined) ?? this.slots.find(plainBot);
     if (bot) {
       bot.bot = false; bot.seat = seat; bot.name = name || `Player ${seat + 1}`;
       return { slot: bot, yielded: true, added: false };
@@ -537,44 +738,59 @@ export class Roster {
     return { slot: s, yielded: false, added: true };
   }
 
-  /** A human leaves: their slot becomes a bot where it stands. */
+  /** A human leaves: their slot becomes a bot where it stands. An agent's goes back to a seat kept for AI. */
   release(seat: number): Slot | null {
     const s = this.bySeat(seat);
     if (!s) return null;
     this.lastSlot.set(seat, s.slot);
-    s.bot = true; s.seat = null; s.name = this.botName(s.slot);
+    s.bot = true; s.seat = null;
+    if (s.agent) {
+      const keep = this.slots.filter((x) => x.agent && x !== s).length < this.reserved();
+      if (keep) { s.agent = { seat: null, role: s.agent.role, hands: 'host' }; s.name = aiName(this.botName(s.slot)); } else { delete s.agent; s.name = this.botName(s.slot); }
+    } else s.name = this.botName(s.slot);
     return s;
   }
 
-  /** Between rounds: remove bots beyond `min` slots. Returns the removed slot ids. */
+  /** Between rounds: remove bots beyond `min` slots (the seats kept for AI stay). Returns the removed slot ids. */
   trim(): number[] {
     const removed: number[] = [];
-    for (let i = this.slots.length - 1; i >= 0 && this.slots.length > this.min; i -= 1) {
+    const floor = this.policy()?.bots === 'off' ? 0 : this.min;
+    let kept = this.slots.filter((s) => s.agent && s.agent.seat === null).length;
+    const surplusKept = (): boolean => kept > this.reserved();
+    for (let i = this.slots.length - 1; i >= 0; i -= 1) {
       const s = this.slots[i];
-      if (s && s.bot) { removed.push(s.slot); this.slots.splice(i, 1); }
+      if (!s || !s.bot) continue;
+      const isKept = Boolean(s.agent && s.agent.seat === null);
+      if (s.agent && !isKept) continue; // an agent's own body (hands host) stays while it is here
+      if (isKept ? surplusKept() : this.slots.length > Math.max(floor, this.reserved())) {
+        removed.push(s.slot); this.slots.splice(i, 1);
+        if (isKept) kept -= 1;
+      }
     }
+    this.fill();
     return removed;
   }
 
-  /** After a promotion: make the roster agree with who is actually connected. */
-  reconcile(peers: Iterable<{ seat: number | null; name: string }>): { claimed: Slot[]; released: Slot[] } {
-    const here = new Map<number, string>();
-    for (const p of peers) if (p.seat !== null && p.seat !== undefined) here.set(p.seat, p.name);
+  /** After a promotion: make the roster agree with who is actually connected (an agent with its facts). */
+  reconcile(peers: Iterable<{ seat: number | null; name: string; agent?: AgentFacts | null }>): { claimed: Slot[]; released: Slot[] } {
+    const here = new Map<number, { name: string; agent?: AgentFacts | null }>();
+    for (const p of peers) if (p.seat !== null && p.seat !== undefined) here.set(p.seat, { name: p.name, agent: p.agent ?? null });
     const released: Slot[] = [];
     const claimed: Slot[] = [];
-    for (const s of this.humans()) {
-      if (s.seat !== null && !here.has(s.seat)) { const r = this.release(s.seat); if (r) released.push(r); }
+    for (const s of this.slots.filter((x) => !x.bot || (x.agent && x.agent.seat !== null))) {
+      const seat = s.agent && s.agent.seat !== null ? s.agent.seat : s.seat;
+      if (seat !== null && !here.has(seat)) { const r = this.release(seat); if (r) released.push(r); }
     }
-    for (const [seat, name] of here) {
+    for (const [seat, p] of here) {
       if (this.bySeat(seat)) continue;
-      const c = this.claim(seat, name);
+      const c = this.claim(seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null);
       if (c) claimed.push(c.slot);
     }
     this.fill();
     return { claimed, released };
   }
 
-  toJSON(): Slot[] { return this.slots.map((s) => ({ ...s })); }
+  toJSON(): Slot[] { return this.slots.map(copySlot); }
 }
 
 /* --------------------------------------------------------------- the client */
@@ -586,7 +802,9 @@ const LADDER = [250, 500, 1000, 2000, 4000];
  * second of frames at once), and a kick that ended the page's play for good left a phone frozen with no word.
  * After one it comes back (its seat token keeps its body), sending at the slow rate below.
  */
-const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed', 'watch-off']);
+const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed', 'watch-off', 'agent-pass', 'agents-off', 'agents-unsupported']);
+/** An AI closed for being alone in a room (`agents-alone`, section 17) waits this long before it knocks again. */
+const AGENTS_ALONE_WAIT_MS = 30_000;
 /**
  * Input pacing (NETPLAY.md §5): at most this many `in` frames in any rolling second from this browser, whatever
  * the frame rate or the press rate: two thirds of the relay's cap of 60, so frames that reach it bunched (a
@@ -667,6 +885,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const handlers: { [K in keyof NetHandlers<S, A, C>]: Set<NetHandlers<S, A, C>[K]> } = {
     role: new Set(), join: new Set(), leave: new Set(), input: new Set(), event: new Set(),
     snapshot: new Set(), control: new Set(), state: new Set(), round: new Set(), roster: new Set(), status: new Set(), announce: new Set(), mute: new Set(), view: new Set(),
+    policy: new Set(), vote: new Set(),
   };
   const emit = <K extends keyof NetHandlers<S, A, C>>(kind: K, arg: Parameters<NetHandlers<S, A, C>[K]>[0]): void => {
     for (const fn of [...handlers[kind]]) {
@@ -784,6 +1003,16 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let wish: number | null = null;
   let wishAt = 0;
   let lastViewPost = '';
+
+  // servers and agent seats (section 17)
+  let policy: Policy = DEFAULT_POLICY;
+  let voteState: VoteState | null = null;
+  /** What this game does with servers: its own word, and 'skill' once it reads the dial. Sent to the relay when hosting. */
+  const caps = new Set<string>((opts.caps ?? []).filter((k) => k === 'skill' || k === 'agents'));
+  let capsSent = '';
+  const asAgent = cfg?.agent && typeof cfg.agent === 'object' ? { hands: cfg.agent.hands === 'host' ? 'host' : 'self', role: cfg.agent.role ?? 'party' } : null;
+  let hushed = cfg?.hush === true;
+  let aloneUntil = 0;
 
   const wall = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const now = (): number => (offline ? Date.now() : Date.now() + offset);
@@ -978,6 +1207,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       sentHist.length = 0;
     }
     post?.({ what: 'role', role: next, prev, why, seat });
+    if (next === 'host') { capsSent = ''; sendCaps(); }
     resolveReady(e);
     emit('role', e);
     resolveView('seat');
@@ -1002,7 +1232,23 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       case 'welcome': return onWelcome(m);
       case 'snap': return onSnap(m, text.length);
       case 'in': return onInput(m);
-      case 'ev': emit('event', { k: String(m['k'] ?? ''), d: m['d'], from: typeof m['from'] === 'number' ? m['from'] : null, ...(typeof m['id'] === 'string' ? { id: m['id'] } : {}) }); return;
+      case 'ev': {
+        const k = String(m['k'] ?? '');
+        const from = typeof m['from'] === 'number' ? m['from'] : null;
+        // Quiet AI (section 17): this browser does not hear an AI's speech.
+        if (hushed && SPEECH_KIND.test(k) && from !== null && api.isAgent(from)) return;
+        emit('event', { k, d: m['d'], from, ...(typeof m['id'] === 'string' ? { id: m['id'] } : {}) });
+        return;
+      }
+      case 'policy': {
+        if (m['policy'] && typeof m['policy'] === 'object') { policy = readPolicy(m['policy']); emit('policy', policy); post?.({ what: 'policy', policy }); }
+        return;
+      }
+      case 'vote': {
+        voteState = readVote(m);
+        if (voteState) { emit('vote', voteState); post?.({ what: 'vote', vote: voteState }); }
+        return;
+      }
       case 'state': if (typeof m['k'] === 'string') applyState(m['k'], m['d']); return;
       case 'pong': return onPong(m);
       case 'announce': {
@@ -1092,6 +1338,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         const code = String(m['code'] ?? '');
         // Inputs over the relay's cap were dropped: send fewer for a while (the newest frame still goes out).
         if ((code === 'rate' && m['of'] === 'in') || code === 'flood') inSlowUntil = wall() + IN_SLOW_MS;
+        // An AI alone in a room (nobody seated): it knocks again only after a while (section 17).
+        if (code === 'agents-alone') aloneUntil = wall() + AGENTS_ALONE_WAIT_MS;
+        if (code === 'vote') { warnOnce('vote', m['message']); return; }
         if (code === 'rate' || code === 'state-full') { warnOnce(`${code}:${String(m['of'] ?? '')}`, m['message']); return; }
         console.warn('[netplay] relay refused:', code, m['message']);
         // The same seat opened in another tab, a full room, a version the relay does not speak: reconnecting
@@ -1135,6 +1384,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       relayFollow = !w || w.follow !== false;
       relayWhy = w && typeof w.why === 'string' ? w.why : null;
     }
+    // Revision 6: the room's policy and an open vote (an older relay says neither: open, Fair).
+    if (m['policy'] && typeof m['policy'] === 'object') { policy = readPolicy(m['policy']); queueMicrotask(() => { emit('policy', policy); post?.({ what: 'policy', policy }); }); }
+    if (m['vote'] && typeof m['vote'] === 'object') voteState = readVote(m['vote'] as Record<string, unknown>);
     const ckpt = (m['ckpt'] as Checkpoint<C> | null) ?? null;
     let snap = (m['snap'] as Snapshot<S> | null) ?? null;
     const a = m['announce'] as Announcement | undefined;
@@ -1413,7 +1665,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     ws = sock;
     sock.onopen = () => {
       lastMsgAt = wall();
-      raw({ t: 'hello', v: NETPLAY_VERSION, token, name: name || undefined, device, want, canHost, game: opts.game, max: opts.maxPlayers, ...(watching ? { watch: true } : {}) });
+      raw({
+        t: 'hello', v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
+        ...(watching ? { watch: true } : {}), ...(caps.size ? { caps: [...caps] } : {}), ...(asAgent ? { agent: asAgent } : {}),
+      });
     };
     sock.onmessage = (ev) => onMessage(ev.data);
     sock.onclose = () => lost(sock, 'closed');
@@ -1424,7 +1679,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (closed) return;
     // A hidden tab does not play and its timers crawl: reconnect when it is looked at again.
     if (hidden()) { waitingVisible = true; return; }
-    const wait = LADDER[Math.min(attempt, LADDER.length - 1)] as number;
+    const wait = Math.max(LADDER[Math.min(attempt, LADDER.length - 1)] as number, aloneUntil - wall());
     attempt += 1;
     reconnects += 1;
     setTimeout(open, wait);
@@ -1434,7 +1689,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // No shell (a plain file, a dev server): the game is its own host, offline.
     queueMicrotask(() => goOfflineHost('offline'));
   } else {
-    post?.({ what: 'attached', v: NETPLAY_VERSION });
+    post?.({ what: 'attached', v: NETPLAY_VERSION, rev: NETPLAY_REVISION, mark: NETPLAY_MARK });
     open();
     // A relay that never answers must not leave a game on a black screen. But the wait is counted only while
     // this page is able to listen: a phone compiling shaders under load is blocked for seconds at a time, and
@@ -1517,6 +1772,50 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     } catch { /* not a browser */ }
   }
 
+  // The play page's "Quiet AI" (section 17): { t: 'homie-hush', on }, from the page around the frame only.
+  try {
+    g.addEventListener?.('message', (ev: MessageEvent) => {
+      if (ev.source !== g.parent || !ev.data || typeof ev.data !== 'object') return;
+      const d = ev.data as { t?: unknown; on?: unknown };
+      if (d.t === 'homie-hush') hushed = d.on === true;
+    });
+  } catch { /* not a browser */ }
+
+  /** Tell the relay what this game does with servers (only a host's word counts), once per change. */
+  function sendCaps(): void {
+    if (role !== 'host' || offline || !connected || !caps.size) return;
+    const list = [...caps].sort();
+    const sig = list.join(',');
+    if (sig === capsSent) return;
+    if (raw({ t: 'caps', caps: list })) capsSent = sig;
+  }
+  function declare(k: 'skill' | 'agents'): void {
+    if (caps.has(k)) { if (role === 'host' && capsSent === '') sendCaps(); return; }
+    caps.add(k);
+    sendCaps();
+  }
+  function readPolicy(raw0: unknown): Policy {
+    const p = (raw0 ?? {}) as Partial<Policy>;
+    const kids = p.kids === true;
+    const levelMax = Math.max(1, Math.min(kids ? 3 : 5, Number(p.levelMax) || 5));
+    const sk = p.skill && typeof p.skill === 'object' ? (p.skill as Skill) : skillPreset(Number(p.level) || 3, kids);
+    return {
+      ...DEFAULT_POLICY, ...p,
+      kind: p.kind === 'humans-only' || p.kind === 'hybrid' || p.kind === 'beginner' ? p.kind : 'open',
+      aiSeats: Math.max(0, Number(p.aiSeats) || 0), guides: Math.max(0, Number(p.guides) || 0), bots: p.bots === 'off' ? 'off' : 'fill',
+      level: Math.max(1, Math.min(levelMax, Number(p.level) || 3)), levelMax, kids,
+      skill: { ...skillPreset(Number(sk.level) || 3, kids), ...sk },
+    } as Policy;
+  }
+  function readVote(m: Record<string, unknown>): VoteState | null {
+    if (!Array.isArray(m['options']) || typeof m['id'] !== 'string') return null;
+    return {
+      of: 'skill', id: String(m['id']), open: m['open'] === true, until: Number(m['until']) || 0, options: (m['options'] as unknown[]).map(Number).filter(Number.isFinite),
+      counts: (m['counts'] && typeof m['counts'] === 'object' ? m['counts'] : {}) as Record<string, number>, voters: Number(m['voters']) || 0, of_total: Number(m['of_total']) || 0,
+      ...(m['result'] && typeof m['result'] === 'object' ? { result: m['result'] as VoteState['result'] } : {}), ...(typeof m['reason'] === 'string' ? { reason: m['reason'] } : {}),
+    };
+  }
+
   // ---------------------------------------------------------------- API
   const api: Netplay<S, A, C> = {
     get role() { return role; },
@@ -1563,6 +1862,33 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (following === 'auto') resolveView('auto');
     },
     players: seated,
+    get policy() { return policy; },
+    get skill() { declare('skill'); return policy.skill; },
+    skillOf(slot: number): Skill {
+      declare('skill');
+      const s = (slots ?? []).find((x) => x.slot === slot);
+      // A guide plays at the server's own level; everyone else at the party's dial.
+      if (s && s.agent && s.agent.role === 'guide') return skillPreset(policy.level, policy.kids);
+      return policy.skill;
+    },
+    vote(n: number): boolean {
+      if (offline || seat === null || watching || asAgent) return false;
+      return raw({ t: 'vote', of: 'skill', n: Math.floor(Number(n)) });
+    },
+    openVote(_of = 'skill', reason?: string): boolean {
+      if (offline || (seat === null && role !== 'host') || watching || asAgent) return false;
+      return raw({ t: 'vote', of: 'skill', open: true, ...(reason ? { reason: String(reason).slice(0, 40) } : {}) });
+    },
+    get voteState() { return voteState; },
+    agents(): Peer[] { return [...peers.values()].filter((p) => Boolean(p.agent)); },
+    isAgent(s: number | null): boolean {
+      if (s === null || s === undefined) return false;
+      for (const p of peers.values()) if (p.seat === s && p.agent) return true;
+      return false;
+    },
+    get hushed() { return hushed; },
+    set hushed(on: boolean) { hushed = Boolean(on); },
+    get asAgent() { return Boolean(asAgent); },
     ready,
     on(kind, fn) {
       (handlers[kind] as Set<unknown>).add(fn);
@@ -1609,7 +1935,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       emit('round', r);
     },
     roster(s) {
-      slots = s.map((x) => ({ slot: x.slot, seat: x.seat, name: x.name, bot: x.bot }));
+      slots = s.map((x) => ({ slot: x.slot, seat: x.seat, name: x.name, bot: x.bot, ...(x.agent ? { agent: { seat: x.agent.seat, role: x.agent.role, hands: x.agent.hands } } : {}) }));
       post?.({ what: 'roster', slots });
       if (role === 'host') raw({ t: 'roster', slots });
     },
@@ -1728,6 +2054,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       get roster() { return slots; },
       get watching() { return watching; },
       get viewSeat() { return viewNow; },
+      get policy() { return policy; },
+      get vote() { return voteState; },
+      get revision() { return NETPLAY_REVISION; },
+      get agent() { return asAgent; },
       get following() { return following; },
       get state() { return Object.fromEntries(stateMap); },
       get lastCheckpoint() { return lastCkpt ? { k: lastCkpt.k, st: lastCkpt.st } : null; },

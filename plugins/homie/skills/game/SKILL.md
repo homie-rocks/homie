@@ -65,6 +65,21 @@ Make it the game the person asked for, in small steps:
   camera.follow(body ?? arenaCentre);                     // null: the overview camera
   hud.mark(view);                                         // their row, their score; "You" only when it is you
   ```
+- **Make your bots honour the skill dial** (servers, NETPLAY.md section 17). A studio's servers
+  can keep AI seats in every room (hybrid), and the party votes how strong the AI plays: 1
+  Rookie to 5 Maxed, each `{ reactionMs, aimNoise, aggression, positioning }`. Read it per
+  bot with `net.skillOf(slot)` (Fair when nobody voted) and declare what the game does:
+  `createNetplay({ …, caps: ['skill', 'agents'] })`, with a `Roster({ …, policy: () =>
+  net.policy })` whose join passes `p.agent` (a game on `createRoom` has all of it). Gem
+  Rush's `stepBots` is the worked example:
+
+  ```ts
+  const s = net.skillOf(b.slot);                      // the room's dial for this bot
+  if (now - eye.at >= s.reactionMs) eye = aimAt(pick(b, s), 200 * s.aimNoise);   // reaction, aim (a miss costs it again)
+  if (rivalNear && Math.random() < s.aggression * 0.8 * dt) bump(b);              // aggression
+  // positioning: weight the hot spot's targets by (1.5 - s.positioning): 0 leaves it to people, 1 fights for it
+  ```
+  Never let a bot's name pass for a person's: an AI's name already ends in " · AI".
 - Update `game.json` `name` and `blurb`, and the `<title>`.
 
 ## Progress that lasts: cloud saves

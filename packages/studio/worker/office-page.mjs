@@ -93,6 +93,19 @@ button.small { min-height: 30px; padding: 4px 10px; font-size: 13px; border-radi
 .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #1f2433; border: 1px solid var(--line2); padding: 10px 16px; border-radius: 12px; font-weight: 600; max-width: calc(100vw - 32px); z-index: 9; }
 .note { color: var(--dim); font-size: 13px; max-width: 75ch; margin-top: 26px; }
 .err { color: var(--bad); }
+.servers { padding: 12px 16px 14px; border-bottom: 1px solid var(--line); }
+.srv { border-top: 1px dashed var(--line); padding: 8px 0; }
+.srv:first-of-type { border-top: 0; }
+.srvhead { display: grid; grid-template-columns: minmax(140px, 1.3fr) minmax(160px, 1.6fr) minmax(150px, 1.3fr) auto; gap: 6px 12px; align-items: center; cursor: pointer; font-size: 14px; }
+.srvhead b { font-size: 15px; }
+.srvbody { padding: 8px 0 4px 14px; display: grid; gap: 8px; font-size: 14px; }
+.srvbody .line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.warnbox { margin: 10px 16px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,179,92,.45); color: var(--warn); font-size: 14px; }
+.secret { font: 600 13px/1.4 ui-monospace, Menlo, monospace; word-break: break-all; padding: 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--warn); }
+.chip.ai { color: #ffe7a8; border-color: rgba(255,207,90,.6); }
+.newsrv { display: grid; gap: 8px; padding: 10px 0 0; }
+.newsrv .line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+@media (max-width: 720px) { .srvhead { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) {
   .rhead { grid-template-columns: 1fr 1fr 1fr; }
   .rhead .racts { grid-column: 1 / -1; justify-content: flex-start; }
@@ -190,6 +203,151 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     return box;
   }
 
+  /* ---------------------------------------------------------------- servers and agent seats (0.16.0) */
+  var POLICY = { open: 'Open', 'humans-only': 'Humans only', hybrid: 'Hybrid', beginner: 'Beginner' };
+  var LEVELS = ['Rookie', 'Steady', 'Fair', 'Strong', 'Maxed'];
+  function sel(options, value, label) { var x = el('select'); options.forEach(function (o) { var op = el('option', '', o[1]); op.value = o[0]; if (String(o[0]) === String(value)) op.selected = true; x.appendChild(op); }); if (label) x.setAttribute('aria-label', label); return x; }
+  function num(value, min, max, label) { var x = el('input'); x.type = 'number'; x.min = String(min); x.max = String(max); x.value = String(value); x.setAttribute('aria-label', label); return x; }
+  function srvSummary(sv) {
+    var bits = [POLICY[sv.policy] + (sv.policy === 'hybrid' ? ' · ' + sv.aiSeats : ''), sv.policy === 'beginner' ? sv.guides + ' guides' : null, sv.kids ? 'kids' : null,
+      sv.bots === 'off' ? 'bots off' : 'bots fill', LEVELS[sv.level - 1], sv.door !== 'open' ? 'door: ' + sv.door : null, sv.state !== 'open' ? sv.state.toUpperCase() : null];
+    return bits.filter(Boolean).join(' · ');
+  }
+  /** The owner may narrow a server: a second thought first (a stricter door, humans-only, fewer rooms, closing). */
+  function narrowing(sv, f) {
+    var rank = { open: 0, accounts: 1, invite: 2 };
+    return (f.door && rank[f.door] > rank[sv.door]) || (f.policy && f.policy !== sv.policy && (f.policy === 'humans-only' || f.policy === 'beginner')) || (f.rooms !== undefined && f.rooms < sv.rooms);
+  }
+  function setServer(g, sv, f, done) {
+    if (narrowing(sv, f) && !confirm('This takes something away on ' + sv.name + (f.policy === 'humans-only' ? ': its AI players leave after the current round' : '') + '. Go ahead?')) return;
+    act('/_studio/api/servers/set', Object.assign({ game: g.id, server: sv.id }, f), done || sv.name + ' changed.');
+  }
+  function serverRow(g, sv) {
+    var box = el('div', 'srv');
+    var key = 'srv:' + g.id + '/' + sv.id;
+    var head = el('div', 'srvhead');
+    head.onclick = function (e) { if (e.target.closest('button,select,input')) return; S.open[key] = !S.open[key]; render(); };
+    var live = sv.live || { rooms: 0, players: 0, ai: 0 };
+    add(head, add(el('div'), el('b', '', (S.open[key] ? '▾ ' : '▸ ') + sv.name + (sv.id === 'public' ? ' (public)' : '')), el('div', 'faint', sv.id === 'public' ? 'Quick play' : sv.id)),
+      el('div', 'dim', srvSummary(sv)),
+      el('div', 'stat', live.rooms ? live.rooms + (live.rooms === 1 ? ' room' : ' rooms') + ' · ' + live.players + ' playing · ' + live.ai + ' AI' : '—'),
+      el('div', 'faint', sv.members ? sv.members + ' members' : ''));
+    box.appendChild(head);
+    if (!S.open[key]) return box;
+    var body = el('div', 'srvbody');
+    var pol = sel([['open', 'Open'], ['hybrid', 'Hybrid'], ['beginner', 'Beginner'], ['humans-only', 'Humans only']], sv.policy, 'Policy');
+    var door = sel([['open', 'Door: anyone'], ['accounts', 'Door: accounts'], ['invite', 'Door: invite']], sv.door, 'Door');
+    var bots = sel([['fill', 'Bots fill empty seats'], ['off', 'Bots off']], sv.bots, 'Bots');
+    var level = sel(LEVELS.map(function (n, i) { return [i + 1, 'Default ' + n]; }), sv.level, 'Default level');
+    var levelMax = sel(LEVELS.map(function (n, i) { return [i + 1, 'Ceiling ' + n]; }), sv.levelMax, 'Ceiling');
+    var ai = num(sv.policy === 'beginner' ? sv.guides : sv.aiSeats, 0, 31, sv.policy === 'beginner' ? 'Guides' : 'AI seats');
+    add(body, add(el('div', 'line'), pol, door, bots, level, levelMax, el('span', 'faint', sv.policy === 'beginner' ? 'guides' : 'AI seats'), ai,
+      btn('Save', 'small', function () {
+        var f = {};
+        if (pol.value !== sv.policy) f.policy = pol.value;
+        if (door.value !== sv.door) f.door = door.value;
+        if (bots.value !== sv.bots) f.bots = bots.value;
+        if (Number(level.value) !== sv.level) f.level = Number(level.value);
+        if (Number(levelMax.value) !== sv.levelMax) f.levelMax = Number(levelMax.value);
+        var n = Math.floor(Number(ai.value));
+        if ((pol.value === 'beginner' ? 'guides' : 'aiSeats') && n !== (sv.policy === 'beginner' ? sv.guides : sv.aiSeats)) f[pol.value === 'beginner' ? 'guides' : 'aiSeats'] = n;
+        if (!Object.keys(f).length) { toast('Nothing changed.'); return; }
+        setServer(g, sv, f);
+      })));
+    add(body, el('div', 'faint', sv.line));
+    if (sv.id !== 'public' || sv.state !== 'open') {
+      add(body, add(el('div', 'line'), Object.assign(el('a', '', 'Its page'), { href: sv.page, target: '_blank', rel: 'noopener' }),
+        sv.state === 'open' ? armed('Close server', 'bad', function () { act('/_studio/api/servers/close', { game: g.id, server: sv.id }, sv.name + ' closes after the current round.'); })
+          : btn('Open it again', 'ghost small', function () { act('/_studio/api/servers/close', { game: g.id, server: sv.id, reopen: true }, sv.name + ' is open again.'); })));
+    } else add(body, add(el('div', 'line'), armed('Hide Quick play', 'bad', function () { act('/_studio/api/servers/close', { game: g.id, server: 'public' }, 'Quick play is hidden: Play shows the other servers.'); })));
+    if (sv.policy !== 'humans-only') {
+      var brain = sel([['script', 'Guides: scripted'], ['off', 'Guides: off'], ['workers-ai', 'Guides talk (Workers AI)'], ['owner-key', 'Guides talk (your key)']], sv.brain, 'AI guides');
+      add(body, add(el('div', 'line'), el('span', 'dim', 'AI guides\' brain'), brain, btn('Set', 'ghost small', function () {
+        if ((brain.value === 'workers-ai' || brain.value === 'owner-key') && !S.data.agentsTalk && !confirm('Let AI guides talk? They speak only the lines the game\'s agents.json gives them, at most one every 8 seconds, never about a person, and any player can quiet them.')) return;
+        act('/_studio/api/agents/brain', { game: g.id, server: sv.id, mode: brain.value });
+      })));
+    }
+    if (sv.id !== 'public') {
+      var mbox = el('div', 'line'); mbox.appendChild(el('span', 'dim', 'Members:'));
+      var showM = btn('Show', 'ghost small', function () {
+        fetch('/_studio/api/servers/members?game=' + encodeURIComponent(g.id) + '&server=' + encodeURIComponent(sv.id), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+          mbox.textContent = ''; mbox.appendChild(el('span', 'dim', 'Members:'));
+          (d.members || []).forEach(function (m) {
+            var who = m.account ? (m.account.handle || m.account.id) : m.player;
+            var span = add(el('span', 'chip' + (m.role !== 'member' ? ' owner' : '')), document.createTextNode(who + (m.home ? ' ★' : '') + (m.role !== 'member' ? ' · ' + m.role : '')));
+            mbox.appendChild(span);
+            if (m.role !== 'mentor') mbox.appendChild(btn('Mentor', 'ghost small', function () { act('/_studio/api/servers/member', { game: g.id, server: sv.id, player: m.player, role: 'mentor', name: who }, who + ' is a mentor of ' + sv.name + '.'); }));
+            mbox.appendChild(armed('Remove', 'bad', function () { act('/_studio/api/servers/member', { game: g.id, server: sv.id, player: m.player, remove: true, name: who }, who + ' was removed from ' + sv.name + '.'); }));
+          });
+          if (!(d.members || []).length) mbox.appendChild(el('span', 'faint', d.ok ? 'nobody yet' : (d.message || 'not available')));
+        });
+      });
+      mbox.appendChild(showM);
+      body.appendChild(mbox);
+    }
+    box.appendChild(body);
+    return box;
+  }
+  function newServer(g) {
+    var key = 'new:' + g.id;
+    var wrap = el('div');
+    if (!S.open[key]) { wrap.appendChild(btn('+ New server', 'small', function () { S.open[key] = true; render(); })); return wrap; }
+    var form = el('div', 'newsrv');
+    var name = el('input'); name.type = 'text'; name.placeholder = 'Name (Night Shift)'; name.maxLength = 40;
+    var pol = sel([['hybrid', 'Hybrid: AI seats in every room'], ['beginner', 'Beginner: new players, AI guides'], ['humans-only', 'Humans only'], ['open', 'Open']], 'hybrid', 'Policy');
+    var n = num(2, 0, Math.max(0, g.maxPlayers - 1), 'AI seats or guides');
+    var kids = el('input'); kids.type = 'checkbox'; kids.setAttribute('aria-label', 'Kids');
+    var door = sel([['open', 'Door: anyone'], ['accounts', 'Door: accounts'], ['invite', 'Door: invite']], 'open', 'Door');
+    var level = sel(LEVELS.map(function (x, i) { return [i + 1, 'Level ' + x]; }), 3, 'Default level');
+    var levelMax = sel(LEVELS.map(function (x, i) { return [i + 1, 'Ceiling ' + x]; }), 5, 'Ceiling');
+    var speech = sel([['game', 'Chat: the game\'s'], ['lines', 'Chat: quick lines only'], ['off', 'Chat: off']], 'game', 'Speech');
+    var rooms = num(4, 1, 16, 'Rooms');
+    var listed = el('input'); listed.type = 'checkbox'; listed.checked = true; listed.setAttribute('aria-label', 'Listed');
+    add(form, add(el('div', 'line'), name, pol),
+      add(el('div', 'line'), el('span', 'dim', 'AI seats / guides'), n, add(el('label'), kids, el('span', '', 'kids (beginner)')), door),
+      add(el('div', 'line'), level, levelMax, speech, el('span', 'dim', 'rooms'), rooms, add(el('label'), listed, el('span', '', 'listed'))),
+      add(el('div', 'line'), btn('Create', 'small', function () {
+        var body = { game: g.id, name: name.value, policy: pol.value, door: door.value, level: Number(level.value), levelMax: Number(levelMax.value), speech: speech.value, rooms: Number(rooms.value), listed: listed.checked };
+        if (pol.value === 'hybrid') body.aiSeats = Number(n.value);
+        if (pol.value === 'beginner') { body.guides = Number(n.value); body.kids = kids.checked; }
+        act('/_studio/api/servers', body, (name.value || 'The server') + ' is open.').then(function (r) { if (r && r.ok) { S.open[key] = false; render(); } });
+      }), btn('Cancel', 'ghost small', function () { S.open[key] = false; render(); })));
+    wrap.appendChild(form);
+    return wrap;
+  }
+  function passes(g) {
+    var box = el('div', 'servers');
+    add(box, el('h3', '', 'Agent passes (an AI\'s way into a seat, always marked AI)'));
+    (g.passes || []).forEach(function (p) {
+      var row = el('div', 'inv' + (p.live ? '' : ' closed'));
+      add(row, el('code', '', p.name), el('span', 'faint', p.role + ' · hands ' + p.hands + (p.server ? ' · ' + p.server : ' · any server') + (p.expiresAt ? ' · until ' + new Date(p.expiresAt).toLocaleDateString() : '') + (p.revoked ? ' · revoked' : !p.live ? ' · ended' : '')));
+      if (p.live) row.appendChild(armed('Revoke', 'bad', function () { act('/_studio/api/agents/pass', { action: 'revoke', game: g.id, id: p.id }, 'Pass revoked: that AI left.'); }));
+      box.appendChild(row);
+    });
+    var label = el('input'); label.type = 'text'; label.placeholder = 'Its name (Claude)'; label.maxLength = 16;
+    var server = sel([['', 'any server that lets AI in']].concat((g.servers || []).filter(function (x) { return x.policy !== 'humans-only'; }).map(function (x) { return [x.id, x.name]; })), '', 'Server');
+    var hands = sel([['self', 'runs the game itself'], ['host', 'moved by the host\'s bots']], 'self', 'Hands');
+    var out = el('div');
+    add(box, add(el('div', 'newinv'), label, server, hands, btn('Issue a pass', 'small', function () {
+      post('/_studio/api/agents/pass', { action: 'create', game: g.id, label: label.value, server: server.value || null, hands: hands.value, days: 7 }).then(function (r) {
+        out.textContent = '';
+        if (!r || !r.ok) { toast((r && r.message) || 'No pass made.', true); return; }
+        add(out, el('p', 'dim', 'Shown once. Give it to the AI only; it plays as ' + r.pass.name + ' for 7 days.'), el('div', 'secret', r.secret));
+        label.value = ''; S.keep = true;
+      });
+    })), out);
+    var fill = el('input', 'switch'); fill.type = 'checkbox'; fill.disabled = true; fill.setAttribute('aria-label', 'Fill-a-spot service');
+    add(box, add(el('label', 'faint'), fill, el('span', '', (S.data.fillSpot && S.data.fillSpot.note) || 'Let a fill-a-spot service seat AI (coming later)')));
+    return box;
+  }
+  function serversBox(g) {
+    var box = el('div', 'servers');
+    add(box, el('h3', '', 'Servers'));
+    (g.servers || []).forEach(function (sv) { box.appendChild(serverRow(g, sv)); });
+    box.appendChild(newServer(g));
+    return box;
+  }
+
   function person(g, r, c, now) {
     var row = el('div', 'person');
     var who = el('div', 'who');
@@ -197,7 +355,7 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       c.seat !== null && c.seat !== undefined ? el('span', 'faint', 'seat ' + (c.seat + 1)) : el('span', 'faint', c.waiting ? 'waiting for a seat' : 'watching'),
       el('span', 'chip', c.device === 'phone' ? 'phone' : c.device === 'tv' ? 'big screen' : 'computer'),
       c.role === 'host' ? el('span', 'chip host', 'host') : null,
-      c.as === 'owner' ? el('span', 'chip owner', 'you') : c.as === 'invited' ? el('span', 'chip invited', 'invited') : c.account ? el('span', 'chip owner', 'player ' + (c.account.handle || c.account.id)) : el('span', 'chip', 'guest'),
+      c.agent ? el('span', 'chip ai', 'AI ' + (c.agent.role === 'guide' ? 'guide' : c.agent.role === 'party' ? 'companion' : 'player')) : c.as === 'owner' ? el('span', 'chip owner', 'you') : c.as === 'invited' ? el('span', 'chip invited', 'invited') : c.account ? el('span', 'chip owner', 'player ' + (c.account.handle || c.account.id)) : el('span', 'chip', 'guest'),
       c.muted ? el('span', 'chip muted', 'muted') : null,
       el('span', 'faint', 'here ' + dur(now - c.joinedAt)),
       c.browser ? el('span', 'faint', 'browser ' + c.browser) : null);
@@ -215,7 +373,7 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     var box = el('div', 'room');
     var key = g.id + '/' + r.room;
     var head = el('div', 'rhead');
-    head.onclick = function (e) { if (e.target.closest('button')) return; S.open[key] = !S.open[key]; render(); };
+    head.onclick = function (e) { if (e.target.closest('button,select')) return; S.open[key] = !S.open[key]; render(); };
     var round = r.round ? 'Round ' + (r.round.n || '?') + (r.round.phase === 'live' && r.round.endsAt ? ' · ' + clock(r.round.endsAt - now) + ' left' : r.round.phase === 'over' ? ' · results' : '') : 'no round yet';
     var announce = btn('Announce', 'ghost small', function () {
       var text = prompt('Announce to everyone in ' + r.label + ' of ' + g.name + ':');
@@ -224,10 +382,14 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     var acts = add(el('div', 'racts'), announce, r.closedUntil
       ? btn('Reopen', 'ghost small', function () { act('/_studio/api/close', { game: g.id, room: r.room, reopen: true }, r.label + ' is open again.'); })
       : armed('Close', 'bad', function () { act('/_studio/api/close', { game: g.id, room: r.room, minutes: hold() }, r.label + ' closed for ' + hold() + ' min.'); }));
+    // The room's dial (room_level): the owner sets it at once, as the party's vote does.
+    var lvl = r.policy ? sel([1, 2, 3, 4, 5].filter(function (n) { return n <= (r.policy.levelMax || 5); }).map(function (n) { return [n, LEVELS[n - 1]]; }), r.policy.level, 'AI level') : null;
+    if (lvl) lvl.onchange = function () { act('/_studio/api/room-level', { game: g.id, room: r.room, level: Number(lvl.value) }, 'AI in ' + r.label + ' set to ' + LEVELS[Number(lvl.value) - 1] + '.'); };
+    var srvName = ((g.servers || []).filter(function (x) { return x.id === r.server; })[0] || {}).name;
     add(head,
-      add(el('div'), el('b', '', (S.open[key] ? '▾ ' : '▸ ') + r.label), el('div', 'faint', r.public ? 'public room' : 'named room')),
-      add(el('div', 'stat'), el('span', '', 'players'), document.createTextNode((r.players) + ' / ' + r.max)),
-      add(el('div', 'stat'), el('span', '', 'bots'), document.createTextNode(String(r.bots))),
+      add(el('div'), el('b', '', (S.open[key] ? '▾ ' : '▸ ') + r.label), el('div', 'faint', (r.server && r.server !== 'public' ? (srvName || r.server) + ' · ' : '') + (r.public ? 'public room' : r.server !== 'public' ? 'server room' : 'named room'))),
+      add(el('div', 'stat'), el('span', '', 'players'), document.createTextNode((r.players) + ' / ' + (r.humanSeats || r.max))),
+      add(el('div', 'stat'), el('span', '', 'AI · bots'), document.createTextNode((r.ai || 0) + ' · ' + String(r.bots)), lvl ? add(el('div'), lvl) : null),
       add(el('div', 'stat'), el('span', '', 'round'), document.createTextNode(round)),
       add(el('div', 'stat'), el('span', '', 'up'), document.createTextNode(r.closedUntil ? 'closed ' + dur(r.closedUntil - now) : dur(now - r.openedAt))),
       acts);
@@ -239,7 +401,8 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       var people = el('div', 'people');
       (r.clients || []).forEach(function (c) { people.appendChild(person(g, r, c, now)); });
       var bots = (r.slots || []).filter(function (s) { return s.bot; });
-      if (bots.length) people.appendChild(el('div', 'held', 'Bots: ' + bots.map(function (s) { return s.name; }).join(', ')));
+      if (bots.length) people.appendChild(el('div', 'held', 'AI and bots: ' + bots.map(function (s) { return s.name + (s.agent ? ' (AI ' + (s.agent.role === 'guide' ? 'guide' : 'seat') + ')' : ''); }).join(', ')));
+      if (r.vote && r.vote.open) people.appendChild(el('div', 'held', 'The party is voting on the AI\'s level: ' + r.vote.voters + ' of ' + r.vote.of_total + ' voted.'));
       (r.bans || []).forEach(function (b) { people.appendChild(el('div', 'held', 'Kicked: ' + (b.name || 'someone') + ', may come back in ' + dur(b.until - now) + (b.address ? ' (their network too)' : ''))); });
       box.appendChild(people);
     }
@@ -253,8 +416,8 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     liveEl.textContent = d.playing ? d.playing + (d.playing === 1 ? ' playing now' : ' playing now') : 'nobody playing right now';
     document.getElementById('livedot').className = 'dot' + (d.playing ? ' on' : '');
     var focus = document.activeElement && root.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName);
-    // Never redraw under a typing owner, or a control waiting for its second tap; the next poll will.
-    if (focus || root.querySelector('[data-armed="1"]')) return;
+    // Never redraw under a typing owner, or a control waiting for its second tap, or a pass secret shown once.
+    if (focus || root.querySelector('[data-armed="1"]') || root.querySelector('.secret')) return;
     root.textContent = '';
     if (!d.games.length) { root.appendChild(el('p', 'empty', 'This studio has no games yet.')); return; }
     d.games.forEach(function (g) {
@@ -263,6 +426,10 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       add(head, add(el('div', 'name'), el('h2', '', g.name), el('span', 'faint', g.playing ? g.playing + ' playing' : 'quiet')),
         add(el('div', 'links'), Object.assign(el('a', '', 'Play'), { href: g.play, target: '_blank', rel: 'noopener' }), Object.assign(el('a', '', 'Page'), { href: g.page, target: '_blank', rel: 'noopener' })));
       add(card, head, gameSettings(g));
+      // A build from before servers (netplay rev 5 or older): what it cannot do yet, and the fix.
+      if (g.build && g.build.predates && (g.servers || []).some(function (x) { return x.id !== 'public' && (x.aiSeats || x.guides); })) card.appendChild(el('div', 'warnbox', 'This build predates servers (netplay rev ' + (g.build.netplayRev || '5 or older') + '): reserved AI seats stay empty and its bots don\'t read the dial. Rebuild with @homie-rocks/studio 0.16.'));
+      card.appendChild(serversBox(g));
+      card.appendChild(passes(g));
       if (g.launch === 'invite' || (g.invites && g.invites.length)) card.appendChild(invites(g));
       var rooms = el('div', 'rooms');
       if (!g.rooms.length) rooms.appendChild(el('div', 'empty', g.launch === 'private' ? 'Private: only you can open it. Nobody is in a room.' : 'Nobody is in a room right now.'));
@@ -322,6 +489,7 @@ export async function officePage(cat, headers = {}) {
 <p class="dim" id="status" role="status"></p>
 <div id="games" aria-live="polite"><p class="empty">Reading the rooms…</p></div>
 <div class="toast" id="toast" role="status" hidden></div>
+<p class="note">Servers: each game's named room pools. Open: anyone, AI with a pass marked AI. Humans only: no AI at all. Hybrid: some seats in every room are AI companions; the party votes their level. Beginner: new players, AI guides, quick lines only. Changing a server reaches its live rooms at once; AI leave after the round when a server becomes humans-only.</p>
 <p class="note">Live from this studio's own rooms, every few seconds. A kick holds that player out of that room for the time you pick (their browser, and their account once players sign in); a mute stops their chat and emotes; Close sends everyone in a room out with a thank-you. Private: only you can open the game. Invite-only: invited players only (each invite link or code lets a browser in). Public: anyone, and listed. A game that is not public leaves the Homie directory the next time it reads this studio. This page is yours alone, never cached or indexed.</p>`;
   return new Response(shell(cat, `Office · ${name}`, body, { script: OFFICE_SCRIPT }), {
     headers: {
@@ -341,7 +509,7 @@ export function lockedPage(cat, { what = 'office', ask = null } = {}) {
   return new Response(shell(cat, `${what === 'confirm' ? 'Confirm' : 'Office'} · private`, body), { status: 401, headers: { ...PRIVATE, 'content-security-policy': NO_SCRIPT_CSP } });
 }
 
-const VERB = { kick: 'Kick', mute: 'Mute', close: 'Close the room', announce: 'Announce', game: 'Change it' };
+const VERB = { kick: 'Kick', mute: 'Mute', close: 'Close the room', announce: 'Announce', game: 'Change it', 'server-set': 'Change it', 'server-close': 'Close it', member: 'Remove', 'agents-brain': 'Let them talk' };
 
 /** The owner's one tap for what their AI asked, and what came of it. */
 export function confirmPage(cat, ask, { missing = false } = {}) {
@@ -353,7 +521,7 @@ export function confirmPage(cat, ask, { missing = false } = {}) {
     const verb = ask.action?.op === 'mute' && ask.action.off ? 'Unmute' : ask.action?.op === 'close' && ask.action.reopen ? 'Open it again' : VERB[ask.action?.op] ?? 'Yes';
     body = `<h1>${esc(name)} <small>Your AI asks</small></h1>
 <p style="font-size:19px;line-height:1.45;max-width:46ch">${esc(ask.what)}</p>
-<form method="post" class="bar" style="background:transparent;border:0;padding:0"><button type="submit" name="do" value="yes" class="${['kick', 'close'].includes(ask.action?.op) && !ask.action?.reopen ? 'armed' : ''}">${esc(verb)}</button><button type="submit" name="do" value="no" class="ghost">No</button></form>
+<form method="post" class="bar" style="background:transparent;border:0;padding:0"><button type="submit" name="do" value="yes" class="${['kick', 'close', 'server-close', 'member'].includes(ask.action?.op) && !ask.action?.reopen ? 'armed' : ''}">${esc(verb)}</button><button type="submit" name="do" value="no" class="ghost">No</button></form>
 <p class="note">Only you can confirm this: your AI asked through the studio's office key, which cannot say yes. It lasts until ${esc(new Date(ask.expiresAt).toISOString().slice(11, 16))} UTC.</p>`;
   } else {
     const said = { done: 'Done.', failed: 'That did not work.', cancelled: 'Not done: you said no.', expired: 'This ask ran out (15 minutes). Your AI can ask again.', working: 'Working on it…' }[ask.state] ?? ask.state;

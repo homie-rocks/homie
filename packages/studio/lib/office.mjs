@@ -26,7 +26,7 @@ const HOUR = 3600_000;
 const GAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 /** Call the studio's office API with a key that lives ten minutes and is dropped as soon as the answer is in. */
-async function withKey(root, url, fn) {
+export async function withKey(root, url, fn) {
   const { studio, site } = siteOf(root, url);
   if (!site) return { ok: false, why: 'this studio has no live site yet: `npm run deploy` first, or give --url http://127.0.0.1:8787 for `npm run dev`' };
   const local = loopback(site);
@@ -57,7 +57,7 @@ function signinTo(root, url, to) {
   return { ok: true, site, link: `${site}/_studio/signin?k=${k.key}${to && to !== '/_studio/stats' ? `&to=${encodeURIComponent(to)}` : ''}`, expiresAt: k.expiresAt };
 }
 
-const askedFor = (root, url, r, command) => {
+export const askedFor = (root, url, r, command) => {
   if (!r.ok) return { ok: false, command, why: r.message ?? r.why ?? `the studio said ${r.error ?? r.status}` };
   if (r.needs !== 'owner' || !r.ask) return { ok: true, command, done: true, result: r, message: r.what ? `Done: ${r.what}` : 'Done.' };
   const link = signinTo(root, url, `/_studio/confirm/${r.ask.id}`);
@@ -102,13 +102,14 @@ export async function officeAnnounce(root, text, { url, game, room, seconds } = 
   return r.ok ? { ok: true, command: 'office announce', ...r, message: `Announced to ${r.people ?? 0} people in ${r.rooms ?? 0} room(s).` } : { ok: false, command: 'office announce', why: r.message ?? r.why };
 }
 
-export async function officeInvite(root, game, { url, label, uses, count, days } = {}) {
-  if (!GAME.test(String(game ?? ''))) return { ok: false, command: 'office invite', why: 'usage: homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1]' };
+export async function officeInvite(root, game, { url, label, uses, count, days, server } = {}) {
+  if (!GAME.test(String(game ?? ''))) return { ok: false, command: 'office invite', why: 'usage: homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--server <id>]' };
   const r = await withKey(root, url, (call) => call('/_studio/api/invites', {
-    game, ...(label ? { label } : {}), uses: uses === 'any' ? 'any' : uses ? Number(uses) : 1, ...(count ? { count: Number(count) } : {}), ...(days ? { days: Number(days) } : {}),
+    game, ...(label ? { label } : {}), uses: uses === 'any' ? 'any' : uses ? Number(uses) : 1, ...(count ? { count: Number(count) } : {}), ...(days ? { days: Number(days) } : {}), ...(server ? { server } : {}),
   }));
   if (!r.ok) return { ok: false, command: 'office invite', why: r.message ?? r.why };
-  return { ok: true, command: 'office invite', game, launch: r.launch, invites: r.invites, note: r.launch === 'invite' ? null : `${game} is ${r.launch} now: invites let people in once it is an invite-only beta (homie-studio office launch ${game} invite).` };
+  // An invite to a server (its door "invite") works whatever the game's launch state; a game's own, in a beta only.
+  return { ok: true, command: 'office invite', game, launch: r.launch, invites: r.invites, note: server || r.launch === 'invite' ? null : `${game} is ${r.launch} now: invites let people in once it is an invite-only beta (homie-studio office launch ${game} invite).` };
 }
 
 export async function officeLaunch(root, game, state, { url, remixable, max } = {}) {

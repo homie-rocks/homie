@@ -23,8 +23,14 @@
  *   /<game>/__game/...         the game's own files (index.html gets HOMIE_NET)
  *   /<game>/__net?room=        the room's netplay socket (Table Durable Object)
  *   /<game>/__watch?room=      the room's facts, for the shell
- *   /<game>/api/lobby          which public room to join (Lobby Durable Object)
+ *   /<game>/api/lobby          which public room to join (Lobby Durable Object); ?server=<id>: a room of that server
  *   /<game>/api/watch          which public room to watch: the busiest one now (nothing is reserved)
+ *   /<game>/servers/           the game's servers (worker/servers.mjs): named, lasting room pools with their own
+ *                              policy (open, humans-only, hybrid, beginner) and door; /<game>/api/servers as JSON
+ *   /<game>/s/<id>/            a server's page; /<game>/s/<id>/play its door, then the play page in its pool;
+ *                              POST /<game>/s/<id>/home joins it, leaves it or makes it home (a signed-in player)
+ *   /<game>/api/agent          an AI's seat (POST, Bearer agent pass; worker/agents.mjs): a room with people in it,
+ *                              its ticket and socket, and the frame to load (NETPLAY.md section 17)
  *   /api/games, /api/rooms     the catalogue plus live counts; every public room playing now (/api/rooms may be
  *                              cached for 15 s)
  *   /__homie/..., /<game>/__homie/...   `not-a-homie`: the answer a game with Homie's arcade controls gets when it
@@ -56,24 +62,30 @@
  * after `homie-studio storage add` (R2 needs a payment method on the account),
  * MEDIA. Everything else runs on Cloudflare's free Workers plan.
  *
- * The relay is the netplay contract's own room.mjs (NETPLAY.md v1 rev 5), run
+ * The relay is the netplay contract's own room.mjs (NETPLAY.md v1 rev 6), run
  * unchanged inside the Table, so a game that plays in `homie-studio dev`
  * plays the same way here.
  */
 import { NetRoom, WATCH_POLICIES } from './room.mjs';
 import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
+import {
+  PUBLIC_SERVER, SERVER_ID, homeOf, memberCounts, memberOf, noteMember, policyOf, pooledRoom, roomCode, roomServer, serverAccess, serverPassOf, serverView, serversOf,
+  setMembership,
+} from './servers.mjs';
+import { agentFacts, aiName, decodeFacts, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
+import { doorPage, serverPage, serversPage } from './site.mjs';
 import { qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
 import {
   SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homePage, jsonFeed, mediaArt, mediaIndexPage,
   notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage, watchOf,
 } from './site.mjs';
-import { count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
+import { cookieValues, count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
 import { ownerRoutes } from './stats-page.mjs';
 import { playerRoutes, players as playerAccounts } from './players.mjs';
 import {
-  accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, remixOf, seatsFor, settingsOf, ticketAllows, ticketFor,
-  ticketSub, usePlayers, verifyControl,
+  accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, remixOf, sameOrigin, seatsFor, settingsOf, ticketAllows,
+  ticketFor, ticketSub, usePlayers, verifyControl,
 } from './office.mjs';
 
 // The back office knows the studio's player accounts: a signed-in player is named in the office and held by a kick on
@@ -205,8 +217,12 @@ function named(cat, env) {
   return { ...cat, studio: { ...cat.studio, name: String(env.STUDIO_NAME).slice(0, 60) } };
 }
 
-/** Every public room with people in it, per game (the Lobby's list), and the number playing per game. */
-async function roomsOf(env, games) {
+/**
+ * Every public room with people in it, per game (the Lobby's list), and the number playing per game. A room of a
+ * server (section 17) says which, its policy, and how many AI are in it; a server that is not listed, closed, or has
+ * a door is left out of the lists (its own page shows its rooms to whoever it lets in).
+ */
+async function roomsOf(env, games, { servers = null } = {}) {
   const rooms = [];
   const live = {};
   await Promise.all(games.map(async (g) => {
@@ -214,7 +230,13 @@ async function roomsOf(env, games) {
     try { list = (await (await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
     const busy = list.filter((r) => (r.players || 0) > 0);
     live[g.id] = busy.reduce((n, r) => n + (r.players || 0), 0);
-    for (const r of busy) rooms.push(roomView(g, r, seatsOf(g)));
+    const known = busy.some((r) => r.server && r.server !== 'public') ? (servers?.[g.id] ?? await serversOf(env, g).catch(() => [])) : [];
+    for (const r of busy) {
+      const sid = r.server ?? roomServer(r.name);
+      const srv = sid === 'public' ? (known.find((x) => x.id === 'public') ?? PUBLIC_SERVER) : known.find((x) => x.id === sid);
+      if (!srv || (sid !== 'public' && (!srv.listed || srv.state !== 'open' || srv.door !== 'open'))) continue;
+      rooms.push(roomView(g, r, seatsOf(g), srv));
+    }
   }));
   rooms.sort((a, b) => b.players - a.players || a.game.localeCompare(b.game) || String(a.room).localeCompare(String(b.room)));
   return { rooms, live };
@@ -304,8 +326,11 @@ function notAHomie(request) {
   return json({ ok: false, error: 'not-a-homie', message: 'this is a studio site, not a Homie box; a game here plays on its own' }, 200, KNOCK_CORS);
 }
 
-/** The game's index.html with HOMIE_NET ahead of its modules, in the site's sandbox (an opaque origin). */
-async function gameDocument(request, env, url, game, meta, cat) {
+/**
+ * The game's index.html with HOMIE_NET ahead of its modules, in the site's sandbox (an opaque origin). `agent`: the
+ * frame was opened with an agent's ticket (section 17): the game plays as that AI, named "<label> · AI".
+ */
+async function gameDocument(request, env, url, game, meta, cat, { agent = null } = {}) {
   const asked = url.searchParams.get('room');
   // A room code the relay cannot use is refused here too, never swapped for another room.
   if (asked !== null && !ROOM_ID.test(asked)) return new Response('That room link does not work: a room code is 1 to 32 letters, digits, - or _.\n', { status: 400, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
@@ -314,10 +339,10 @@ async function gameDocument(request, env, url, game, meta, cat) {
   const room = asked ?? 'main';
   // A watcher (section 16): a screen that never takes a seat, following the player the watch page asks for.
   const policy = watchOf(meta);
-  const watching = url.searchParams.get('watch') === '1';
+  const watching = !agent && url.searchParams.get('watch') === '1';
   if (watching && policy === 'off') return new Response(`${meta?.name ?? game} cannot be watched; play it instead.\n`, { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
   const follow = /^(?:auto|overview|\d{1,2})$/.test(url.searchParams.get('follow') ?? '') ? url.searchParams.get('follow') : 'auto';
-  const want = watching || url.searchParams.get('want') === 'screen' ? 'screen' : 'play';
+  const want = !agent && (watching || url.searchParams.get('want') === 'screen') ? 'screen' : 'play';
   const device = ['phone', 'desk', 'tv'].includes(url.searchParams.get('device')) ? url.searchParams.get('device') : undefined;
   const wsBase = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
   // The browser's room key (b: what a kick holds out) and the play page's ticket (t: a game that is not public) ride
@@ -329,7 +354,11 @@ async function gameDocument(request, env, url, game, meta, cat) {
     url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}`,
     room,
     ...(url.searchParams.get('k') ? { token: url.searchParams.get('k').slice(0, 128) } : {}),
-    ...(url.searchParams.get('name') ? { name: url.searchParams.get('name').slice(0, 24) } : {}),
+    ...(agent ? { name: agent.name } : url.searchParams.get('name') ? { name: url.searchParams.get('name').slice(0, 24) } : {}),
+    // An AI that runs the game itself (hands `self`): its hello says so; the relay knows it from its ticket anyway.
+    ...(agent ? { agent: { hands: agent.hands, role: agent.role } } : {}),
+    // The play page's "Quiet AI": this browser hides AI speech (the helper's `net.hushed`).
+    ...(url.searchParams.get('hush') === '1' ? { hush: true } : {}),
     ...(device ? { device } : {}),
     want,
     ...(watching ? { watch: true, follow: /^\d+$/.test(follow) ? Number(follow) : follow, watchPolicy: policy } : {}),
@@ -621,7 +650,7 @@ async function route(request, env, ctx) {
     if (!meta) return fallback(request, env, url, getCat);
     if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
     const cat = await getCat();
-    const sub = parts.slice(1).join('/');
+    let sub = parts.slice(1).join('/');
     // Read now, not from a Worker instance's 5 s cache: a game the owner just made private shuts at once everywhere.
     const settings = await settingsOf(env, { fresh: true });
     // The owner's launch state and room size (worker/office.mjs): a private or invite-only game lets in only those
@@ -630,19 +659,48 @@ async function route(request, env, ctx) {
     const max = seatsFor(meta, settings);
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
     if (sub === 'invite') return redeemInvite(request, env, url, cat, meta, settings);
-    const door = launch !== 'public' && ['', 'live', 'credits', 'tv', 'play', 'watch', 'api/lobby', 'api/watch'].includes(sub) ? await accessOf(request, env, game, launch) : { ok: true, sub: null, owner: false };
+
+    // SERVERS (worker/servers.mjs, NETPLAY.md section 17): which server a request is for — its path (/s/<id>/), its
+    // room (s-<id>-<n>; pub-N and any named room are the public server's), or for a bare Play the signed-in player's
+    // home server, else public. Every door follows the game's launch state first, as it always did.
+    const servers = await serversOf(env, meta);
+    const serverById = (id) => servers.find((x) => x.id === id) ?? null;
+    const pathServer = /^s\/([a-z0-9][a-z0-9-]{1,19})(?:\/(play|tv|home))?\/?$/.exec(sub);
+    if (/^s(?:\/|$)/.test(sub) && !pathServer) return notFoundPage(`Nothing here in ${meta.name}.`, cat);
+    if (pathServer && (!serverById(pathServer[1]) || pathServer[1] === 'public' || serverById(pathServer[1]).state === 'archived')) return notFoundPage(`${meta.name} has no server called "${pathServer[1]}".`, cat);
+    if (pathServer && !pathServer[2] && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/s/${pathServer[1]}/${url.search}`, 301);
+    const policyFor = (srv, named = false) => policyOf(srv, { seats: max, named });
+    const humanSeats = (pol) => Math.max(1, max - (pol.aiSeats + pol.guides));
+    const askedRoom = url.searchParams.get('room');
+    if (pathServer) sub = pathServer[2] === 'play' ? 'play' : pathServer[2] === 'tv' ? 'tv' : pathServer[2] === 'home' ? 's-home' : 's-page';
+
+    const doorSubs = ['', 'live', 'credits', 'tv', 'play', 'watch', 'api/lobby', 'api/watch', 'servers', 'api/servers', 's-page', 's-home'];
+    const door = launch !== 'public' && doorSubs.includes(sub) ? await accessOf(request, env, game, launch) : { ok: true, sub: null, owner: false };
     const shut = () => gatePage(cat, meta, launch, { code: url.searchParams.get('invite') ?? '' });
+    /** A page's own door to a server: who this browser is (owner, invited, signed in) and whether it may come in. */
+    const pageDoor = async (srv, { watching = false } = {}) => {
+      const owner = door.owner || (launch === 'public' && await isOwner(request, env));
+      const acct = await accountSub(request, env);
+      const sPass = srv && srv.door === 'invite' && !owner ? await serverPassOf(request, env, game, srv.id, cookieValues) : null;
+      const list = [owner ? 'o' : null, door.sub, sPass ? `i-${sPass.invite}` : null, acct].filter(Boolean).flatMap(holders);
+      const access = srv ? await serverAccess(env, { game, server: srv, holders: list, watching }) : { ok: true };
+      return { ...access, owner, acct, holder: joinHolders(door.sub ?? (owner ? 'o' : null), sPass ? `i-${sPass.invite}` : null, acct) };
+    };
+    /** The public server is hidden (closed by its owner): Play shows the other servers instead, and named rooms are off. */
+    const publicHidden = () => (serverById('public') ?? PUBLIC_SERVER).state !== 'open';
+
     if (sub === '') {
       if (!door.ok) return shut();
       await countVisit(request, env, ctx, game);
       shareDaily(cat, url, ctx);
-      const { rooms, live } = await roomsOf(env, [meta]);
+      const { rooms, live } = await roomsOf(env, [meta], { servers: { [game]: servers } });
       const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
-      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, remix: launch === 'public' && remixOf(meta, settings) });
+      const band = servers.some((x) => x.id !== 'public' && x.listed && x.state === 'open') ? await serverLive(env, meta, servers, url.origin, lobby) : null;
+      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, remix: launch === 'public' && remixOf(meta, settings), servers: band });
     }
     if (sub === 'live') {
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
-      const { rooms, live } = await roomsOf(env, [meta]);
+      const { rooms, live } = await roomsOf(env, [meta], { servers: { [game]: servers } });
       const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
       // The same shape the house brands' landings read (counted, playing, waiting, road), plus the rooms.
       return json({ ok: true, game, counted: true, playing: live[game] ?? 0, waiting: 0, max, rooms, road: { seats: 'any', start: 'now', room: launch === 'public' ? 'public' : launch, big: true }, ...(week ? { week } : {}) }, 200, { 'cache-control': 'no-store' });
@@ -654,62 +712,138 @@ async function route(request, env, ctx) {
       if (!texts.length) return notFoundPage(`${meta.name} has no licence texts to show; its credits are on its page.`, cat);
       return creditsPage(cat, meta, texts, { origin: url.origin });
     }
+    if (sub === 'servers') {
+      if (!door.ok) return shut();
+      if (!path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/servers/`, 301);
+      await countVisit(request, env, ctx, `${game}/servers`);
+      return serversPage(cat, meta, { origin: url.origin, servers: await serverLive(env, meta, servers, url.origin, lobby), hidden: publicHidden() });
+    }
+    if (sub === 'api/servers') {
+      if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
+      const list = (await serverLive(env, meta, servers, url.origin, lobby)).filter((x) => x.id === 'public' || (x.listed && x.state === 'open'));
+      return json({ ok: true, game, servers: list }, 200, { 'cache-control': 'public, max-age=15' });
+    }
+    if (sub === 's-page') {
+      if (!door.ok) return shut();
+      const srv = serverById(pathServer[1]);
+      const d = await pageDoor(srv);
+      const pid = d.acct?.startsWith('p-') ? d.acct.slice(2) : null;
+      const member = pid ? await memberOf(env, game, srv.id, pid) : null;
+      await countVisit(request, env, ctx, `${game}/s/${srv.id}`);
+      const [row] = await serverLive(env, meta, [srv], url.origin, lobby);
+      const { rooms } = await roomsOf(env, [meta], { servers: { [game]: servers } });
+      return serverPage(cat, meta, row, { origin: url.origin, rooms: rooms.filter((r) => r.server?.id === srv.id), door: d, member, signedIn: Boolean(pid) });
+    }
+    if (sub === 's-home') {
+      // Join this server, leave it, or make it home: the signed-in player's own choice (a same-origin JSON POST).
+      if (request.method !== 'POST' || !sameOrigin(request, url)) return json({ ok: false, error: 'origin' }, 403);
+      if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
+      const srv = serverById(pathServer[1]);
+      const acct = await accountSub(request, env);
+      if (!acct?.startsWith('p-')) return json({ ok: false, error: 'sign-in', message: 'Sign in to the studio first (your account page).' }, 401);
+      let body = {};
+      try { body = JSON.parse((await request.text()) || '{}'); } catch { return json({ ok: false, error: 'json' }, 400); }
+      const d = await pageDoor(srv);
+      if (body.join !== false && !d.ok) return json({ ok: false, error: d.why, message: 'This server\'s door does not let you in.' }, 403);
+      try { return json(await setMembership(env, game, srv.id, acct.slice(2), { join: body.join !== false, home: body.home === true })); } catch { return json({ ok: false, error: 'not-migrated', message: 'This studio\'s database has no servers yet (migration 0006).' }, 503); }
+    }
     if (sub === 'tv' || sub === 'play') {
       const screen = sub === 'tv' || url.searchParams.get('screen') === '1';
-      const asked = url.searchParams.get('room');
+      const asked = askedRoom;
       if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { screen });
       if (!door.ok) return shut();
-      // A browser let into a game that is not public carries a ticket into its frame and sockets; the owner (signed
-      // in, in any game) also gets the owner's overlay, which no one else's page carries.
-      // The owner's page (in any game), a browser let into a game that is not public, and a signed-in player carry a
-      // ticket naming them (an invited player: the invite and the account), so the room knows who stays when the game
-      // narrows and whom a kick holds on every device.
-      const owner = door.owner || (launch === 'public' && await isOwner(request, env));
-      const holder = joinHolders(door.sub ?? (owner ? 'o' : null), await accountSub(request, env));
-      const ticket = holder ? await ticketFor(env, game, holder) : null;
+      // Which server: the path's, the room's, else (Play) the player's home server, else public.
+      let srv = pathServer ? serverById(pathServer[1]) : asked !== null ? serverById(roomServer(asked)) : null;
+      if (asked !== null && !srv) return notFoundPage(`${meta.name} has no server for the room "${asked}".`, cat);
+      const named = asked !== null && !pooledRoom(asked);
+      if (!srv) {
+        const acct = await accountSub(request, env);
+        const home = acct?.startsWith('p-') ? await homeOf(env, game, acct.slice(2)) : null;
+        const h = home ? serverById(home) : null;
+        srv = h && h.state === 'open' ? h : serverById('public') ?? PUBLIC_SERVER;
+      }
+      const d = await pageDoor(srv);
+      // The owner hid the public server: Play shows the servers to pick from, and a named room is off (owner aside).
+      if (srv.id === 'public' && publicHidden() && !d.owner) {
+        if (named) return doorPage(cat, meta, srv, { why: 'closed' });
+        return serversPage(cat, meta, { origin: url.origin, servers: await serverLive(env, meta, servers, url.origin, lobby), hidden: true, pick: true });
+      }
+      if (!d.ok) return doorPage(cat, meta, srv, { why: d.why, days: d.days, origin: url.origin, next: `${url.pathname}${url.search}`, code: url.searchParams.get('invite') ?? '' });
+      if (d.acct?.startsWith('p-') && srv.id !== 'public') ctx?.waitUntil?.(noteMember(env, game, srv.id, d.acct.slice(2)));
+      const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
+      const pol = policyFor(srv, named);
+      const server = srv.id === 'public' && !pol.server ? null : { ...serverView(srv, { origin: url.origin, game }), mentor: Boolean(d.mentor) };
       if (screen) {
         await countVisit(request, env, ctx, game, 'screen');
         // The big screen picks its room now, so the QR it shows puts every phone in that same room.
         let room = asked;
         if (!room) {
-          try { room = (await (await lobby().fetch(`https://lobby/join?max=${max}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
+          try { room = (await (await lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
         }
         const joinUrl = `${url.origin}/${game}/play${room ? `?room=${encodeURIComponent(room)}` : ''}`;
         let qr = null;
         try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
-        return playPage(cat, meta, { screen: true, joinUrl, qr, room, ticket, owner, launch });
+        return playPage(cat, meta, { screen: true, joinUrl, qr, room, ticket, owner: d.owner, launch, server });
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      return playPage(cat, meta, { ticket, owner, launch });
+      return playPage(cat, meta, { ticket, owner: d.owner, launch, server });
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
-      const asked = url.searchParams.get('room');
+      const asked = askedRoom;
       if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { watch: true });
       if (!door.ok) return shut();
       const policy = watchOf(meta);
       if (policy === 'off') return noWatchPage(cat, meta);
-      const owner = door.owner || (launch === 'public' && await isOwner(request, env));
-      const holder = joinHolders(door.sub ?? (owner ? 'o' : null), await accountSub(request, env));
-      const ticket = holder ? await ticketFor(env, game, holder) : null;
+      // A server's door is its watch door too (an invite or an account); a beginner server is watched by anyone.
+      const srv = asked !== null ? serverById(roomServer(asked)) : serverById('public') ?? PUBLIC_SERVER;
+      if (!srv) return notFoundPage(`${meta.name} has no server for the room "${asked}".`, cat);
+      const d = await pageDoor(srv, { watching: true });
+      if (!d.ok) return doorPage(cat, meta, srv, { why: d.why, origin: url.origin, next: `${url.pathname}${url.search}`, watch: true });
+      const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
       await countVisit(request, env, ctx, game, 'watch');
       shareDaily(cat, url, ctx);
       return watchPage(cat, meta, { room: asked, ticket, policy });
     }
     if (sub === 'api/watch') {
       if (!door.ok || watchOf(meta) === 'off') return json({ ok: false, error: 'not-found' }, 404);
-      // The busiest public room now, to watch; nothing is reserved (a watcher takes no seat).
+      // The busiest room now, to watch, of a server anyone may watch; nothing is reserved (a watcher takes no seat).
       const not = String(url.searchParams.get('not') ?? '').split(',').filter((r) => ROOM_ID.test(r)).slice(0, 4).join(',');
+      const pools = servers.filter((x) => x.state === 'open' && x.door === 'open').map((x) => x.id).join(',');
       let best = null;
-      try { best = await (await lobby().fetch(`https://lobby/busiest${not ? `?not=${encodeURIComponent(not)}` : ''}`)).json(); } catch { best = null; }
+      try { best = await (await lobby().fetch(`https://lobby/busiest?pools=${encodeURIComponent(pools)}${not ? `&not=${encodeURIComponent(not)}` : ''}`)).json(); } catch { best = null; }
       return json({ ok: true, game, room: best?.room ?? null, players: best?.players ?? 0, max }, 200, { 'cache-control': 'no-store' });
     }
     if (sub === 'api/lobby') {
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
+      // ?server=<id>: a room of that server's pool (its door first); none: public. Strangers never meet across servers.
+      const sid = url.searchParams.get('server') ?? 'public';
+      const srv = SERVER_ID.test(sid) || sid === 'public' ? serverById(sid) : null;
+      if (!srv) return json({ ok: false, error: 'no-server', message: `${meta.name} has no server called ${String(sid).slice(0, 24)}.` }, 404);
+      if (srv.id === 'public' && publicHidden() && !(await pageDoor(srv)).owner) return json({ ok: false, error: 'closed', message: 'Pick a server to play on.' }, 403);
+      const d = await pageDoor(srv);
+      if (!d.ok) return json({ ok: false, error: d.why, message: 'This server\'s door does not let you in.' }, 403);
       // A browser held out of a room asks for any other (`not`), so the Lobby never sends it back there.
       const not = String(url.searchParams.get('not') ?? '').split(',').filter((r) => ROOM_ID.test(r)).slice(0, 4).join(',');
-      return lobby().fetch(`https://lobby/join?max=${max}${not ? `&not=${encodeURIComponent(not)}` : ''}`, { method: 'POST' });
+      const pol = policyFor(srv);
+      return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}`, { method: 'POST' });
+    }
+    if (sub === 'api/agent') {
+      // An AI's seat (worker/agents.mjs): its pass, the server's policy, a room with people in it, a ticket.
+      return sitRoute(request, env, url, {
+        meta, launch,
+        serverOf: (id) => serverById(id),
+        policyOf: (srv) => policyFor(srv),
+        ticketFor: (holder) => ticketFor(env, game, holder),
+        join: async (srv, pol) => {
+          try {
+            const reserve = pol.aiSeats + pol.guides;
+            const r = await (await lobby().fetch(`https://lobby/join?max=${max}&server=${srv.id}&agent=1&ai=${reserve}`, { method: 'POST' })).json();
+            return r.room ?? null;
+          } catch { return null; }
+        },
+      });
     }
     if (sub === '__net' || sub === '__watch') {
       if (request.headers.get('upgrade') !== 'websocket') return new Response('websocket only', { status: 426 });
@@ -724,19 +858,58 @@ async function route(request, env, ctx) {
       const policy = watchOf(meta);
       const w = sub === '__net' && url.searchParams.get('w') === '1';
       if (w && policy === 'off') return new Response('this game cannot be watched', { status: 403 });
+      // The room's server (section 17): its door for a person, and the policy the room applies. An AI's ticket
+      // (a-<pass>) is checked against its pass and the server: a humans-only server refuses it here and again at the relay.
+      const srv = serverById(roomServer(room));
+      if (!srv) return new Response('this server does not exist', { status: 404 });
+      const parts = holders(who);
+      const agentPart = parts.find((x) => x.startsWith('a-'));
+      const pol = policyFor(srv, !pooledRoom(room));
+      let ag = null;
+      if (agentPart && sub === '__net') {
+        const pass = await passById(env, agentPart.slice(2));
+        const why = passRefusal(pass, { game, server: srv.id, policy: pol, launch });
+        if (why) return new Response(why.error === 'agents-off' ? 'This server is for humans only\n' : `${why.message}\n`, { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+        ag = { ...agentFacts(pass), name: aiName(pass.label) };
+      } else if (srv.state !== 'open' || srv.door !== 'open' || (srv.policy === 'beginner' && !w && sub === '__net')) {
+        const access = await serverAccess(env, { game, server: srv, holders: parts, watching: w || sub === '__watch' });
+        if (!access.ok) return new Response('this server is not open to you', { status: 403 });
+      }
       const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}`;
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}${ag ? `&ag=${encodeFacts(ag)}` : ''}`;
       return stub.fetch(new Request(target, request));
     }
     // The same knock, relative to the game's own page: the same answer (see notAHomie).
     if (sub === '__homie' || sub.startsWith('__homie/')) return notAHomie(request);
     if (sub === '__game' || sub === '__game/' || sub === '__game/index.html') {
-      if (launch !== 'public' && !(await ticketAllows(env, await ticketSub(env, game, url.searchParams.get('t')), launch))) return new Response('This game is not open to you.\n', { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
-      return gameDocument(request, env, url, game, meta, cat);
+      const who = await ticketSub(env, game, url.searchParams.get('t'));
+      if (launch !== 'public' && !(await ticketAllows(env, who, launch))) return new Response('This game is not open to you.\n', { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+      // An agent's frame (hands `self`): the game plays as that AI.
+      const agentPart = holders(who).find((x) => x.startsWith('a-'));
+      const pass = agentPart ? await passById(env, agentPart.slice(2)) : null;
+      return gameDocument(request, env, url, game, meta, cat, { agent: pass?.live ? { name: aiName(pass.label), hands: pass.hands, role: pass.role } : null });
     }
     if (sub.startsWith('__game/')) return gameAsset(request, env, url, game, sub.slice('__game/'.length));
   }
   return fallback(request, env, url, getCat);
+}
+
+/**
+ * A game's servers with what is happening on them now (the Lobby's rooms by server, one request) and how many
+ * belong to each: the landing's Servers band, /<game>/servers/, a server's page and /<game>/api/servers.
+ */
+async function serverLive(env, meta, servers, origin, lobby) {
+  let list = [];
+  try { list = (await (await lobby().fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
+  const by = {};
+  for (const r of list) {
+    if (!(r.players > 0)) continue;
+    const sid = r.server ?? roomServer(r.name);
+    const b = (by[sid] ??= { playing: 0, ai: 0, rooms: 0 });
+    b.playing += r.players; b.ai += Number(r.ai ?? r.agents ?? 0) || 0; b.rooms += 1;
+  }
+  const members = env.DB ? await memberCounts(env, meta.id) : {};
+  return servers.map((s) => ({ ...serverView(s, { origin, game: meta.id }), playing: by[s.id]?.playing ?? 0, ai: by[s.id]?.ai ?? 0, live: by[s.id]?.rooms ?? 0, members: members[s.id] ?? 0 }));
 }
 
 /** A game's "played this week" on its landing, when the studio shares its numbers: Play presses and rounds with people. */
@@ -824,6 +997,10 @@ export class Table {
     }
     // The owner's room size: a room already open takes it from the next visitor on.
     if (room.seatCap !== max) room.setSeats(max, perAddress(max));
+    // The room's policy (section 17), composed by the Worker for every socket: a newer one than the room's applies.
+    const pol = decodeFacts(url.searchParams.get('pol'));
+    if (pol) room.setPolicy(pol);
+    const agent = decodeFacts(url.searchParams.get('ag'));
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
     const via = url.searchParams.get('via');
@@ -835,6 +1012,8 @@ export class Table {
       player: holders(via).find((p) => p.startsWith('p-'))?.slice(2) ?? null,
       // A socket opened through the game's watch door, and what the game lets watchers see (section 16).
       watch: url.searchParams.get('w') === '1',
+      // An AI with a pass the Worker verified (section 17): its pass, role, hands and name. Only the Worker sets it.
+      ...(agent && typeof agent === 'object' && url.pathname === '/__net' ? { agent } : {}),
       watchPolicy: WATCH_POLICIES.includes(url.searchParams.get('wp')) ? url.searchParams.get('wp') : 'follow',
       // House QA and `homie-studio check` mark their browsers; their rooms, rounds and peaks are not the studio's numbers.
       qa: isQa(request),
@@ -844,6 +1023,8 @@ export class Table {
     };
     if (url.pathname === '/__watch') {
       const w = room.watch(conn);
+      // The play page's vote card speaks on this socket (section 17); nothing else it says is read.
+      server.addEventListener('message', (e) => { if (typeof e.data === 'string') w.onMessage(e.data); });
       server.addEventListener('close', () => w.onClose());
       server.addEventListener('error', () => w.onClose());
     } else {
@@ -861,8 +1042,18 @@ export class Table {
           this.ctx.waitUntil(count(this.env, null, { metric: 'room', subject: this.game ?? '', source: /^pub-\d+$/.test(this.code ?? '') ? 'public' : 'named' }));
         }
       });
-      server.addEventListener('close', () => { h.onClose(); this.report(); });
-      server.addEventListener('error', () => { h.onClose(); this.report(); });
+      // An AI's time in a seat, counted once as it leaves (stats `agent-minutes`; never for house QA).
+      const left = () => {
+        const c = room.clients.get(h.id);
+        if (c?.agent && c.helloed && c.seat !== null && !conn.qa) {
+          const minutes = Math.round((Date.now() - c.joinedAt) / 60_000);
+          if (minutes > 0) this.ctx.waitUntil(count(this.env, null, { metric: 'agent-minutes', subject: this.game ?? '', source: c.agent.role, n: minutes }).catch(() => {}));
+        }
+        h.onClose();
+        this.report();
+      };
+      server.addEventListener('close', left);
+      server.addEventListener('error', left);
     }
     this.start();
     return new Response(null, { status: 101, webSocket: client });
@@ -915,17 +1106,23 @@ export class Table {
   report() {
     const room = this.room;
     if (!room || !this.game) return;
-    const players = room.facts().counts.players;
+    const counts = room.facts().counts;
+    // Players are people (an agent never counts as one, DESIGN D9); agents and AI bodies are reported apart.
+    const players = counts.players;
+    const agents = counts.agents ?? 0;
+    const ai = counts.ai ?? 0;
     // People for the stats: seated sockets that are not house QA (players is what the Lobby matches strangers by).
     let people = 0;
-    for (const c of room.clients.values()) if (c.helloed && c.seat !== null && !c.conn?.qa) people += 1;
+    for (const c of room.clients.values()) if (c.helloed && c.seat !== null && !c.agent && !c.conn?.qa) people += 1;
     // On a change, and once a minute while anybody is here (so the Lobby's "playing now" forgets a room that died).
-    if (players === this.lastReport && people === this.lastPeople && (!players || Date.now() - (this.lastReportAt ?? 0) < 60_000)) return;
+    if (players === this.lastReport && people === this.lastPeople && agents === this.lastAgents && ai === this.lastAi && (!players || Date.now() - (this.lastReportAt ?? 0) < 60_000)) return;
     this.lastReport = players;
     this.lastPeople = people;
+    this.lastAgents = agents;
+    this.lastAi = ai;
     this.lastReportAt = Date.now();
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
-    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people }) }).catch(() => {}));
+    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai }) }).catch(() => {}));
   }
 
   /** A round the host called over becomes one D1 row (once per round number). */
@@ -935,9 +1132,10 @@ export class Table {
     this.recorded = r.n;
     this.ctx.storage.put('recorded', r.n).catch(() => {});
     const results = Array.isArray(r.results) ? r.results.slice(0, SEAT_MAX * 2) : [];
-    const humans = results.filter((row) => row && !row.bot).length;
+    // An AI's row is never a person's (the relay labelled it `agent`): rounds count agents as AI.
+    const humans = results.filter((row) => row && !row.bot && !row.agent).length;
     // A round played only by house QA (every seated socket is marked) is kept in `rounds`, not in the stats.
-    const qaOnly = [...this.room.clients.values()].filter((c) => c.helloed && c.seat !== null).every((c) => c.conn?.qa);
+    const qaOnly = [...this.room.clients.values()].filter((c) => c.helloed && c.seat !== null && !c.agent).every((c) => c.conn?.qa);
     const db = this.env.DB;
     const insert = db.prepare('INSERT OR IGNORE INTO rounds (game, room, n, humans, bots, results, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(this.game, this.code, r.n, humans, results.length - humans, JSON.stringify(results), new Date().toISOString());
@@ -948,17 +1146,22 @@ export class Table {
 }
 
 /**
- * LOBBY — one per game: which public room a new visitor joins. Strangers meet:
- * the fullest room that still has a seat wins, counting visitors it just sent
- * there who have not connected yet, so two people pressing Play together land
+ * LOBBY — one per game: which room a new visitor joins. Strangers meet: the fullest room that still has a seat
+ * wins, counting visitors it just sent there who have not connected yet, so two people pressing Play together land
  * in the same room.
+ *
+ * SERVERS (section 17): one pool per server (`/join?server=`), never matched across: `public` is the game's pub-N
+ * rooms, a server's are s-<id>-<n>. A server whose `rooms_max` rooms are all full sends the visitor to its fullest
+ * room, where it waits as a spectator and is seated when a seat frees (`full: true`). An AI (`agent=1`) is only ever
+ * sent to a room with people in it; it never opens one. Players are people: agents are reported apart.
  */
 export class Lobby {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
     this.rooms = new Map();
-    this.next = 1;
+    /** Each pool's next room number: { public: n, <server>: n } (a store from before servers is public's). */
+    this.next = { public: 1 };
     /** Every room of this game that reported players (public and named), for "playing now" and the day's peak. */
     this.live = new Map();
     this.peak = { day: null, players: 0, room: 0 };
@@ -968,8 +1171,8 @@ export class Lobby {
     ctx.blockConcurrencyWhile(async () => {
       const saved = await ctx.storage.get('lobby');
       if (saved) {
-        this.next = saved.next ?? 1;
-        for (const r of saved.rooms ?? []) this.rooms.set(r.name, { ...r, pending: [] });
+        this.next = typeof saved.next === 'number' ? { public: saved.next } : saved.next && typeof saved.next === 'object' ? { public: 1, ...saved.next } : { public: 1 };
+        for (const r of saved.rooms ?? []) this.rooms.set(r.name, { ...r, server: r.server ?? roomServer(r.name), agents: r.agents ?? 0, ai: r.ai ?? 0, pending: [], agentPending: [] });
         for (const [name, until] of saved.closed ?? []) if (until > Date.now()) this.closed.set(name, until);
       }
     });
@@ -995,11 +1198,12 @@ export class Lobby {
     if (list.length) this.ctx.waitUntil(this.env.DB.batch(list).catch(() => {}));
   }
 
-  save() { this.ctx.storage.put('lobby', { next: this.next, rooms: [...this.rooms.values()].map(({ name, players, at }) => ({ name, players, at })), closed: [...this.closed] }).catch(() => {}); }
+  save() { this.ctx.storage.put('lobby', { next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at }) => ({ name, players, agents, ai, server, at })), closed: [...this.closed] }).catch(() => {}); }
 
   prune(now) {
     for (const [name, r] of this.rooms) {
       r.pending = r.pending.filter((t) => now - t < 20_000);
+      r.agentPending = (r.agentPending ?? []).filter((t) => now - t < 20_000);
       if (r.players === 0 && !r.pending.length && now - r.at > 120_000) this.rooms.delete(name);
     }
   }
@@ -1010,26 +1214,49 @@ export class Lobby {
     this.prune(now);
     if (url.pathname === '/join') {
       const max = Math.max(1, Math.min(SEAT_MAX, Math.floor(Number(url.searchParams.get('max'))) || 8));
+      const sid = url.searchParams.get('server') ?? 'public';
+      const server = sid === 'public' || SERVER_ID.test(sid) ? sid : 'public';
+      const roomsMax = Math.max(1, Math.min(16, Math.floor(Number(url.searchParams.get('rooms'))) || 16));
       // A room the owner closed, or one this visitor is held out of (`not`), is never the answer.
       const not = new Set(String(url.searchParams.get('not') ?? '').split(',').filter(Boolean));
       for (const [name, until] of this.closed) if (until <= now) this.closed.delete(name);
+      const pool = [...this.rooms.values()].filter((r) => (r.server ?? 'public') === server && !not.has(r.name) && !this.closed.has(r.name));
+      if (url.searchParams.get('agent') === '1') {
+        // An AI: a room of this pool with people in it and an AI seat free (the most people first). Never a new room.
+        const reserve = Math.max(0, Math.floor(Number(url.searchParams.get('ai'))) || 0);
+        let best = null;
+        for (const r of pool) {
+          const agents = (r.agents ?? 0) + (r.agentPending ?? []).length;
+          if (!(r.players > 0) || (reserve ? agents >= reserve : r.players + r.pending.length + agents >= max)) continue;
+          if (!best || r.players > best.players || (r.players === best.players && r.name < best.name)) best = r;
+        }
+        if (!best) return json({ room: null, players: 0, max });
+        (best.agentPending ??= []).push(now);
+        return json({ room: best.name, players: best.players, max });
+      }
       let best = null;
-      for (const r of this.rooms.values()) {
-        if (not.has(r.name) || this.closed.has(r.name)) continue;
+      for (const r of pool) {
         const fill = r.players + r.pending.length;
         if (fill >= max) continue;
         if (!best || fill > best.fill || (fill === best.fill && r.name < best.r.name)) best = { r, fill };
       }
       let room = best?.r;
+      let full = false;
+      if (!room && server !== 'public' && pool.length >= roomsMax) {
+        // Every room this server may have is full: the fullest one, where the visitor waits for a seat.
+        room = pool.reduce((a, b) => (b.players + b.pending.length > a.players + a.pending.length ? b : a), pool[0]);
+        full = true;
+      }
       if (!room) {
-        while (not.has(`pub-${this.next}`) || this.closed.has(`pub-${this.next}`)) this.next += 1;
-        room = { name: `pub-${this.next}`, players: 0, at: now, pending: [] };
-        this.next += 1;
+        let n = this.next[server] ?? 1;
+        while (not.has(roomCode(server, n)) || this.closed.has(roomCode(server, n)) || this.rooms.has(roomCode(server, n))) n += 1;
+        room = { name: roomCode(server, n), server, players: 0, agents: 0, ai: 0, at: now, pending: [], agentPending: [] };
+        this.next[server] = n + 1;
         this.rooms.set(room.name, room);
       }
       room.pending.push(now);
       this.save();
-      return json({ room: room.name, players: room.players, max });
+      return json({ room: room.name, players: room.players, max, server, ...(full ? { full: true } : {}) });
     }
     if (url.pathname === '/report' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
@@ -1042,30 +1269,36 @@ export class Lobby {
         return json({ ok: true, closed: body.closed > now });
       }
       const seated = Math.max(0, Math.floor(Number(body.players) || 0));
-      if (seated > 0) this.seen.set(body.room, { room: body.room, players: seated, people: Math.max(0, Math.floor(Number(body.people ?? seated) || 0)), at: now });
+      const agents = Math.max(0, Math.floor(Number(body.agents) || 0));
+      const ai = Math.max(agents, Math.floor(Number(body.ai) || 0));
+      if (seated > 0) this.seen.set(body.room, { room: body.room, players: seated, people: Math.max(0, Math.floor(Number(body.people ?? seated) || 0)), agents, ai, at: now });
       else this.seen.delete(body.room);
       if (this.closed.has(body.room)) return json({ ok: true, closed: true });
       this.notePeak(body.room, Math.max(0, Math.floor(Number(body.people ?? body.players) || 0)), url.searchParams.get('game'));
-      // Only public rooms the Lobby made are matched with strangers; a named room (?room=) stays private.
-      if (!this.rooms.has(body.room) && !/^pub-\d+$/.test(body.room)) return json({ ok: true, private: true });
-      const r = this.rooms.get(body.room) ?? { name: body.room, players: 0, at: now, pending: [] };
-      const grew = Math.max(0, (Number(body.players) || 0) - r.players);
-      const changed = !this.rooms.has(r.name) || r.players !== Math.max(0, Number(body.players) || 0);
+      // Only rooms of a pool are matched with strangers (pub-N, s-<id>-<n>); a named room (?room=) stays private.
+      if (!this.rooms.has(body.room) && !pooledRoom(body.room)) return json({ ok: true, private: true });
+      const r = this.rooms.get(body.room) ?? { name: body.room, server: roomServer(body.room), players: 0, agents: 0, ai: 0, at: now, pending: [], agentPending: [] };
+      const grew = Math.max(0, seated - r.players);
+      const changed = !this.rooms.has(r.name) || r.players !== seated || (r.agents ?? 0) !== agents || (r.ai ?? 0) !== ai;
       r.pending.splice(0, grew);
-      r.players = Math.max(0, Number(body.players) || 0);
+      if ((r.agents ?? 0) < agents) (r.agentPending ?? []).splice(0, agents - (r.agents ?? 0));
+      r.players = seated;
+      r.agents = agents;
+      r.ai = ai;
       r.at = now;
       this.rooms.set(r.name, r);
       if (changed) this.save(); // the minute's "still here" report writes nothing
       return json({ ok: true });
     }
-    if (url.pathname === '/rooms') return json({ rooms: [...this.rooms.values()].map(({ name, players, at }) => ({ name, players, at })) });
+    if (url.pathname === '/rooms') return json({ rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at }) => ({ name, players, agents: agents ?? 0, ai: ai ?? 0, server: server ?? roomServer(name), at })) });
     if (url.pathname === '/busiest') {
-      // The public room with the most players now, for a watcher (section 16): it reserves nothing, as a watcher takes
-      // no seat. A closed room, or one named in `not`, is never the answer.
+      // The pooled room with the most players now, for a watcher (section 16): it reserves nothing, as a watcher takes
+      // no seat. A closed room, one named in `not`, or one of a pool not in `pools` (a server with a door) is never it.
       const not = new Set(String(url.searchParams.get('not') ?? '').split(',').filter(Boolean));
+      const pools = url.searchParams.has('pools') ? new Set(String(url.searchParams.get('pools')).split(',').filter(Boolean)) : null;
       let best = null;
       for (const r of this.rooms.values()) {
-        if (r.players <= 0 || not.has(r.name) || (this.closed.get(r.name) ?? 0) > now) continue;
+        if (r.players <= 0 || not.has(r.name) || (this.closed.get(r.name) ?? 0) > now || (pools && !pools.has(r.server ?? 'public'))) continue;
         if (!best || r.players > best.players || (r.players === best.players && r.name < best.name)) best = r;
       }
       return json({ room: best?.name ?? null, players: best?.players ?? 0 });
@@ -1074,9 +1307,9 @@ export class Lobby {
       // The owner's office: every room with somebody seated in the last 3 minutes, public or named, and closed ones.
       for (const [name, r] of this.seen) if (now - r.at > 180_000) this.seen.delete(name);
       const rooms = new Map([...this.seen.values()].map((r) => [r.room, r]));
-      for (const r of this.rooms.values()) if (r.players > 0 && !rooms.has(r.name)) rooms.set(r.name, { room: r.name, players: r.players, people: r.players, at: r.at });
+      for (const r of this.rooms.values()) if (r.players > 0 && !rooms.has(r.name)) rooms.set(r.name, { room: r.name, players: r.players, people: r.players, agents: r.agents ?? 0, ai: r.ai ?? 0, at: r.at });
       for (const [name, until] of this.closed) if (until > now && !rooms.has(name)) rooms.set(name, { room: name, players: 0, people: 0, at: now, closedUntil: until });
-      return json({ rooms: [...rooms.values()].sort((a, b) => b.players - a.players).slice(0, 100) });
+      return json({ rooms: [...rooms.values()].map((r) => ({ ...r, server: roomServer(r.room) })).sort((a, b) => b.players - a.players).slice(0, 100) });
     }
     if (url.pathname === '/now') {
       let players = 0;

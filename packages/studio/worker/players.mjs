@@ -25,6 +25,7 @@
  * A player sees, downloads (/api/player/export) and deletes (/api/player/delete) everything of theirs.
  */
 import { handleFor } from './room.mjs';
+import { isAiName } from './agents.mjs';
 import { cookieValue } from './stats.mjs';
 import { adoptStatements, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';
 import { bytesToB64url, randomToken, sha256Hex, verifyAssertion, verifyRegistration } from './webauthn.mjs';
@@ -147,8 +148,9 @@ const ROLE_WORDS = /^(?:the\s+)?(?:admin|administrator|mod|moderator|owner|staff
 /**
  * A display name, by the same rules as a room's typed names and handles: one line of at most 24 characters,
  * whitespace collapsed, no control, format or invisible characters (no zero-width or bidi tricks), at least one
- * letter or digit; never a role (admin, moderator, owner…) or the studio's own name, except for the owner. It is
- * always shown as text (escaped), never as markup. `max` lets a character's name run to 32.
+ * letter or digit; never a role (admin, moderator, owner…) or the studio's own name, except for the owner; and never
+ * ending in an AI or bot mark ("· AI", "(bot)"…), for anyone: only an agent's name says AI (0.16.0). It is always
+ * shown as text (escaped), never as markup. `max` lets a character's name run to 32.
  */
 export function cleanName(raw, { studio = '', owner = false, max = 24 } = {}) {
   const text = String(raw ?? '').normalize('NFKC')
@@ -161,6 +163,7 @@ export function cleanName(raw, { studio = '', owner = false, max = 24 } = {}) {
   if (!owner && (ROLE_WORDS.test(name) || (studio && name.toLowerCase() === String(studio).trim().toLowerCase()))) {
     return { ok: false, error: 'name-taken', message: 'that name belongs to the studio; pick another' };
   }
+  if (isAiName(name)) return { ok: false, error: 'name-ai', message: 'a person\'s name cannot end in "AI" or "bot": only an AI player is marked AI' };
   return { ok: true, name, cut: chars.length > max };
 }
 
@@ -299,7 +302,10 @@ async function meOf(env, player) {
     const e = await env.DB.prepare('SELECT email, verified_at FROM player_emails WHERE player = ?1').bind(player.id).first();
     if (e) email = { address: e.email, verified: Boolean(e.verified_at) };
   }
-  return { id: player.id, name: player.name, named: Boolean(player.named), guest: Boolean(player.guest), owner: Boolean(player.owner), since: new Date(player.since).toISOString(), passkeys: Number(keys?.n) || 0, email };
+  // The servers this player belongs to (0.16.0; none before migration 0006).
+  let servers = [];
+  try { servers = ((await env.DB.prepare('SELECT game, server, role, home FROM server_members WHERE player = ?1 ORDER BY home DESC, seen_at DESC LIMIT 50').bind(player.id).all()).results ?? []).map((r) => ({ game: r.game, server: r.server, role: r.role, home: Number(r.home) === 1 })); } catch { servers = []; }
+  return { id: player.id, name: player.name, named: Boolean(player.named), guest: Boolean(player.guest), owner: Boolean(player.owner), since: new Date(player.since).toISOString(), passkeys: Number(keys?.n) || 0, email, servers };
 }
 
 const features = (env) => ({ accounts: Boolean(env.DB) && env.HOMIE_PREVIEW !== '1', email: Boolean(env.PLAYER_MAIL && env.PLAYER_MAIL_FROM) });
@@ -315,6 +321,8 @@ async function removePlayer(env, id) {
     env.DB.prepare('DELETE FROM player_emails WHERE player = ?1').bind(id),
     env.DB.prepare('DELETE FROM players WHERE id = ?1').bind(id),
   ]);
+  // Their servers' memberships too (0.16.0); a studio before migration 0006 has none to delete.
+  try { await env.DB.prepare('DELETE FROM server_members WHERE player = ?1').bind(id).run(); } catch { /* not migrated */ }
   await data.after();
 }
 
