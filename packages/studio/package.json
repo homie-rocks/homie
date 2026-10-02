@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/studio",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "description": "A studio for games, music and video on its own Cloudflare: scaffold, multiplayer starters on the netplay contract, a port toolkit that makes existing single-player web games multiplayer, the site Worker with public rooms (Table/Lobby Durable Objects and D1, all on the free Workers plan, no payment method), a site with the hub's sections (Home, Games, Music, Videos, Rooms, Posts with feeds) in the studio's own look, an epic landing page for every game, optional R2 storage for large media, deploy, and the homie.rocks directory.",
   "type": "module",
   "license": "Apache-2.0",
@@ -30,6 +30,10 @@
       "types": "./saves/saves.ts",
       "default": "./saves/saves.ts"
     },
+    "./agents": {
+      "types": "./agents/agents.ts",
+      "default": "./agents/agents.ts"
+    },
     "./worker": "./worker/index.mjs",
     "./package.json": "./package.json"
   },
@@ -41,6 +45,7 @@
     "worker/",
     "mcp/",
     "saves/",
+    "agents/",
     "starters/",
     "media/",
     "site/",
@@ -52,6 +57,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "esbuild": "0.28.1",
     "puppeteer-core": "25.8.0"
   },

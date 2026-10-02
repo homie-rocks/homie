@@ -62,9 +62,12 @@
  * after `homie-studio storage add` (R2 needs a payment method on the account),
  * MEDIA. Everything else runs on Cloudflare's free Workers plan.
  *
- * The relay is the netplay contract's own room.mjs (NETPLAY.md v1 rev 6), run
+ * The relay is the netplay contract's own room.mjs (NETPLAY.md v1 rev 7), run
  * unchanged inside the Table, so a game that plays in `homie-studio dev`
- * plays the same way here.
+ * plays the same way here. A beginner server whose AI may talk also gets the
+ * Table's own house guides (worker/agents.mjs HouseAgents), whose brains run
+ * on the Table's alarm: Workers AI through the optional AI binding (deploy adds
+ * it when a server uses it), or the owner's own key (secret HOMIE_BRAIN_KEY).
  */
 import { NetRoom, WATCH_POLICIES } from './room.mjs';
 import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
@@ -72,7 +75,8 @@ import {
   PUBLIC_SERVER, SERVER_ID, homeOf, memberCounts, memberOf, noteMember, policyOf, pooledRoom, roomCode, roomServer, serverAccess, serverPassOf, serverView, serversOf,
   setMembership,
 } from './servers.mjs';
-import { agentFacts, aiName, decodeFacts, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
+import { BRAIN_BUDGET, HouseAgents, agentFacts, aiName, decodeFacts, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
+import { talks } from './brain.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
@@ -950,6 +954,15 @@ export class Table {
     /** The owner's holds, banner and closed door (they outlive an empty room), and the controls already used. */
     this.officeSaved = null;
     this.seen = new Map();
+    /** Revision 7: the game's vocabulary (agents.json, read once from the build), and the room's house guides. */
+    this.vocabRead = null;
+    this.house = null;
+    /** The AI brains' day (worker/agents.mjs): what the studio allows a day and has used, and what is not counted yet. */
+    this.brainDay = null;
+    this.brainCap = { neurons: BRAIN_BUDGET.neurons, micros: BRAIN_BUDGET.usd * 1e6 };
+    this.brainUsed = { neurons: 0, micros: 0 };
+    this.brainPending = { calls: {}, neurons: 0, micros: 0 };
+    this.brainReadAt = 0;
     ctx.blockConcurrencyWhile(async () => {
       this.saved = (await ctx.storage.get('net')) ?? null;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
@@ -973,7 +986,97 @@ export class Table {
     });
     if (this.saved) this.room.restore(this.saved);
     if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
+    this.vocabRead = this.readVocab(game).catch(() => false);
     return this.room;
+  }
+
+  /** The game's agents.json from the build (the only words an AI in this room may say), once. */
+  async readVocab(game) {
+    if (!this.env.ASSETS || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(game ?? ''))) return false;
+    const res = await this.env.ASSETS.fetch(new Request(`https://assets.local/games/${game}/agents.json`));
+    if (!res.ok) return false;
+    const ok = this.room.setVocabulary(await res.json());
+    if (ok) this.syncHouse();
+    return ok;
+  }
+
+  /**
+   * The room's house guides (worker/agents.mjs): seated while the server's AI may talk, the game has a vocabulary and a
+   * person is playing; stood up otherwise. Called on the 1 s beat and whenever the policy changes. No brain runs here:
+   * decisions run on the alarm.
+   */
+  syncHouse() {
+    const room = this.room;
+    if (!room) return;
+    if (!this.house) {
+      if (!talks(room.policy) || !room.vocab || !(room.policy.guides > 0)) return;
+      this.house = new HouseAgents({
+        room, env: this.env,
+        setAlarm: (at) => { this.ctx.storage.setAlarm(at).catch(() => {}); },
+        budget: { left: (kind) => this.brainCap[kind] - this.brainUsed[kind], spend: (c) => this.brainSpend(c) },
+        log: (line) => { try { console.log(JSON.stringify(line)); } catch { /* no console */ } },
+      });
+      this.ctx.waitUntil(this.readBrainDay().catch(() => {}));
+    }
+    this.house.sync();
+  }
+
+  /** What the studio allows its AI brains a day (meta `brain_budget`) and has used today (stats_daily), all games. */
+  async readBrainDay() {
+    const db = this.env.DB;
+    if (!db) return;
+    const day = today();
+    try {
+      const b = JSON.parse((await db.prepare("SELECT value FROM meta WHERE key = 'brain_budget'").first())?.value ?? 'null');
+      if (b && Number.isFinite(Number(b.neurons))) this.brainCap.neurons = Math.max(0, Number(b.neurons));
+      if (b && Number.isFinite(Number(b.usd))) this.brainCap.micros = Math.max(0, Number(b.usd)) * 1e6;
+    } catch { /* the defaults */ }
+    try {
+      const { results } = await db.prepare("SELECT metric, SUM(n) AS n FROM stats_daily WHERE day = ?1 AND metric IN ('brain-neurons', 'brain-microdollars') GROUP BY metric").bind(day).all();
+      const used = { neurons: 0, micros: 0 };
+      for (const r of results ?? []) used[r.metric === 'brain-neurons' ? 'neurons' : 'micros'] = Number(r.n) || 0;
+      // What this room spent and has not written yet is added on top.
+      this.brainUsed = { neurons: used.neurons + this.brainPending.neurons, micros: used.micros + this.brainPending.micros };
+    } catch { /* before migration 0002: nothing used */ }
+    this.brainDay = day;
+    this.brainReadAt = Date.now();
+  }
+
+  brainSpend(c) {
+    if (this.brainDay && this.brainDay !== today()) { this.brainUsed = { neurons: 0, micros: 0 }; this.brainDay = today(); }
+    this.brainUsed.neurons += c.neurons ?? 0;
+    this.brainUsed.micros += c.micros ?? 0;
+    this.brainPending.neurons += c.neurons ?? 0;
+    this.brainPending.micros += c.micros ?? 0;
+    const k = c.provider ?? 'script';
+    this.brainPending.calls[k] = (this.brainPending.calls[k] ?? 0) + 1;
+  }
+
+  /**
+   * The day's brain counters into D1 (stats_daily: brain-calls by provider, brain-neurons, brain-microdollars), and the
+   * day's budget and usage read again (an owner's new budget, other rooms' use): at most once a minute, on the alarm.
+   */
+  async flushBrain(force = false) {
+    const p = this.brainPending;
+    if (!this.env.DB || (!force && Date.now() - this.brainReadAt < 60_000)) return;
+    if (!Object.keys(p.calls).length && p.neurons < 1 && p.micros < 1) { await this.readBrainDay(); return; }
+    const neurons = Math.floor(p.neurons);
+    const micros = Math.floor(p.micros);
+    const rows = [
+      ...Object.entries(p.calls).map(([source, n]) => counter(this.env, { metric: 'brain-calls', subject: this.game ?? '', source, n })),
+      neurons ? counter(this.env, { metric: 'brain-neurons', subject: this.game ?? '', n: neurons }) : null,
+      micros ? counter(this.env, { metric: 'brain-microdollars', subject: this.game ?? '', n: micros }) : null,
+    ].filter(Boolean);
+    this.brainPending = { calls: {}, neurons: p.neurons - neurons, micros: p.micros - micros };
+    if (rows.length) await this.env.DB.batch(rows).catch(() => {});
+    await this.readBrainDay();
+  }
+
+  /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
+  async alarm() {
+    // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
+    try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }
+    try { await this.flushBrain(); } catch { /* counted next time */ }
   }
 
   async fetch(request) {
@@ -984,12 +1087,14 @@ export class Table {
     const room = this.roomFor(game, code, max);
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
-    if (url.pathname === '/__facts') return json(room.officeFacts());
+    if (url.pathname === '/__facts') return json({ ...room.officeFacts(), ...(this.house ? { brains: this.house.facts() } : {}) });
     if (url.pathname === '/__office') {
       const ctl = await request.json().catch(() => null);
       const why = await verifyControl(this.env, ctl, { game: this.game, room: this.code }, this.seen);
       if (why) return json({ ok: false, error: 'refused', why }, 403);
       const res = room.control(ctl.op, ctl.args && typeof ctl.args === 'object' ? ctl.args : {});
+      // AI talk turned off (a policy) or a guide kicked: the house guides follow at once.
+      if (this.house) this.house.sync();
       await this.ctx.storage.put('office', room.officeSaved()).catch(() => {});
       if (ctl.op === 'close' && res.ok) this.tellLobby({ closed: ctl.args?.reopen ? 0 : res.until });
       this.report();
@@ -1000,6 +1105,7 @@ export class Table {
     // The room's policy (section 17), composed by the Worker for every socket: a newer one than the room's applies.
     const pol = decodeFacts(url.searchParams.get('pol'));
     if (pol) room.setPolicy(pol);
+    if (this.house) this.house.sync();
     const agent = decodeFacts(url.searchParams.get('ag'));
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
@@ -1072,9 +1178,9 @@ export class Table {
       // A launch change the room applied by itself (after its round): its stored state says so too.
       if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(() => {}); }
       n += 1;
-      if (n % 4 === 0) { room.tellWatchers(); this.report(); this.recordRound(); }
+      if (n % 4 === 0) { room.tellWatchers(); this.report(); this.recordRound(); this.syncHouse(); }
       if (room.seats.size === 0 && room.clients.size === 0) this.openCounted = false;
-      if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); }
+      if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
     }, 250);
   }
 
@@ -1109,7 +1215,9 @@ export class Table {
     const counts = room.facts().counts;
     // Players are people (an agent never counts as one, DESIGN D9); agents and AI bodies are reported apart.
     const players = counts.players;
-    const agents = counts.agents ?? 0;
+    // AIs with a pass (a house guide makes way for one, so the Lobby counts only these when it seats an AI).
+    let agents = 0;
+    for (const c of room.clients.values()) if (c.helloed && c.agent && c.seat !== null && !c.conn?.loopback) agents += 1;
     const ai = counts.ai ?? 0;
     // People for the stats: seated sockets that are not house QA (players is what the Lobby matches strangers by).
     let people = 0;

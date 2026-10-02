@@ -55,7 +55,7 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root' }) {
+export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/worker.mjs', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/worker.mjs', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
@@ -75,6 +75,9 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }],
     d1_databases: [{ binding: 'DB', database_name: d1, ...(d1Id ? { database_id: d1Id } : {}), migrations_dir: at.migrations }],
     ...(r2 ? { r2_buckets: [{ binding: 'MEDIA', bucket_name: r2 }] } : {}),
+    // Workers AI, only when a server's AI guides think with it (agents_brain workers-ai; deploy adds it, 0.17.0).
+    // Never in Previews: they do not inherit it, so a Preview's guides answer from the game's script.
+    ...(ai ? { ai: { binding: 'AI' } } : {}),
     vars: { STUDIO_NAME: name },
     observability: { enabled: true },
     previews: { vars: { STUDIO_NAME: name, HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
@@ -288,6 +291,16 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **Agent passes:** \`npx --no-install homie-studio agents pass <id> --label Claude [--server <server>]\` gives an
   AI its way into a seat (shown once; \`agents revoke <pass>\` ends it). It sits with \`POST /<id>/api/agent\`
   (Bearer pass), only in a room with people in it, and never on a humans-only server.
+- **AI guides that talk (0.17.0):** a beginner server's guides get a brain. A game's own words for them are
+  \`games/<id>/agents.json\` (its vocabulary: goals, lines, the asks a player taps; the build checks it), and
+  \`useAgents\` from \`@homie-rocks/studio/agents\` is the host's side: a view per guide, the scripted floor, goals
+  for the hands, lines drawn from the vocabulary (\`NETPLAY.md\` section 18; Ember Vale is the reference). The
+  brain is the server's: \`agents brain <id> <server> workers-ai\` (the studio's own Workers AI; \`npm run deploy\`
+  binds it; at most \`--budget\` neurons a day, 8,000 by default) or \`owner-key\` (the owner's own key, set with
+  \`agents brain key\` on this computer, never in a chat; a dollar cap a day). The first time AI talk is turned on
+  it only ASKS. The AI never types: it picks a goal and a line id; the relay drops anything else. With no AI, over
+  budget, or between decisions, the game's \`decide\` plays. \`agent_sit\` (the local MCP) puts the owner's own
+  Claude in a guide's seat.
 
 ## Continuing a build from the Claude app
 

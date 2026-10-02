@@ -320,6 +320,14 @@ export const OFFICE_SCRIPT = String.raw`(function () {
         if ((brain.value === 'workers-ai' || brain.value === 'owner-key') && !S.data.agentsTalk && !confirm('Let AI guides talk? They speak only the lines the game\'s agents.json gives them, at most one every 8 seconds, never about a person, and any player can quiet them.')) return;
         act('/_studio/api/agents/brain', { game: g.id, server: sv.id, mode: brain.value });
       })));
+      // What today's brains used of the day's budget (the whole studio), and what is missing for the one chosen.
+      var bd = S.data.brain;
+      if (bd && (sv.brain === 'workers-ai' || sv.brain === 'owner-key')) {
+        var used = sv.brain === 'workers-ai'
+          ? 'Workers AI: ' + Math.round(bd.used.neurons).toLocaleString('en-US') + ' / ' + Math.round(bd.budget.neurons).toLocaleString('en-US') + ' neurons today' + (bd.ai ? '' : ' · not bound yet: deploy once more')
+          : 'Your key: $' + bd.used.usd.toFixed(2) + ' / $' + bd.budget.usd.toFixed(2) + ' today' + (bd.key ? '' : ' · no key yet: homie-studio agents brain key');
+        add(body, add(el('div', 'line'), el('span', 'faint', used + (g.vocab ? '' : ' · this game has no agents.json: its guides have no words'))));
+      }
     }
     if (sv.id !== 'public') {
       var mbox = el('div', 'line'); mbox.appendChild(el('span', 'dim', 'Members:'));
@@ -635,6 +643,11 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       var bots = (r.slots || []).filter(function (s) { return s.bot; });
       if (bots.length) people.appendChild(el('div', 'held', 'AI and bots: ' + bots.map(function (s) { return s.name + (s.agent ? ' (AI ' + (s.agent.role === 'guide' ? 'guide' : 'seat') + ')' : ''); }).join(', ')));
       if (r.vote && r.vote.open) people.appendChild(el('div', 'held', 'The party is voting on the AI\'s level: ' + r.vote.voters + ' of ' + r.vote.of_total + ' voted.'));
+      // The house guides' brains: which one runs (and why not), and their last few decisions (ids only, never words).
+      if (r.brains) {
+        var last = (r.brains.decisions || []).filter(function (x) { return x.goal || x.say; }).slice(-4).reverse().map(function (x) { return 'seat ' + (x.seat + 1) + ': ' + (x.goal ? x.goal + (x.args && Object.keys(x.args).length ? ' ' + Object.keys(x.args).map(function (k) { return x.args[k]; }).join(' ') : '') : 'no change') + (x.say ? ', said ' + x.say : '') + ' (' + x.provider + (x.ms ? ', ' + (x.ms / 1000).toFixed(1) + ' s' : '') + ', ' + dur(now - x.at) + ' ago)'; });
+        people.appendChild(el('div', 'held', 'Guides\' brain: ' + (r.brains.brain || 'script') + (r.brains.why ? ' · ' + r.brains.why : '') + ' · ' + r.brains.calls + ' calls' + (last.length ? ' · ' + last.join('; ') : '')));
+      }
       (r.bans || []).forEach(function (b) { people.appendChild(el('div', 'held', 'Kicked: ' + (b.name || 'someone') + ', may come back in ' + dur(b.until - now) + (b.address ? ' (their network too)' : ''))); });
       box.appendChild(people);
     }

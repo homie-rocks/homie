@@ -1,11 +1,12 @@
 ---
 name: servers
-description: Give a Homie studio game lasting servers - named communities with their own rooms and rules - humans-only, hybrid (seats reserved for AI companions), beginner (new players, AI guides, kids-safe) - plus agent passes, the AI skill dial and the party's level vote. Use when someone asks for servers, realms or shards, human-only play, AI party members or companions, guides or helpers for new players or kids, "fill empty spots with AI", or how strong the bots should be.
+description: Give a Homie studio game lasting servers - named communities with their own rooms and rules - humans-only, hybrid (seats reserved for AI companions), beginner (new players, AI guides, kids-safe) - plus agent passes, the AI skill dial, the party's level vote, and AI guides that talk (a game vocabulary, Workers AI or the owner's key, or the owner's own Claude in a seat). Use when someone asks for servers, realms or shards, human-only play, AI party members or companions, guides or helpers for new players or kids, guides that answer "help me with this quest", "fill empty spots with AI", letting Claude play as a guide, or how strong the bots should be.
 ---
 
 # Servers and AI seats
 
-Needs `@homie-rocks/studio` 0.16.0 or later (`npx --no-install homie-studio upgrade --apply`, then deploy).
+Needs `@homie-rocks/studio` 0.16.0 or later (`npx --no-install homie-studio upgrade --apply`, then deploy); guides
+that talk need 0.17.0.
 Everything lives in the studio's own Worker and D1; homie.rocks stores none of it. **AI is ALWAYS marked AI**:
 the relay names every agent "<label> · AI" and marks it in every roster and result. Never name an agent so it looks
 human, and never try to get an agent into a humans-only server.
@@ -18,7 +19,7 @@ lists them; the landing gets a Servers band.
 
 | The person says | Run (or the MCP tool) | What happens |
 |---|---|---|
-| "Make a beginner server with two guide agents" | `npx --no-install homie-studio servers new <game> "<Name>" --policy beginner --guides 2` (`server_create`) | At once: the server and its page link. Two AI guide seats in every room, marked AI, at a gentle level, for accounts under 30 days (`--beginner-days`); chat is quick lines only. `--kids` adds handles only and keeps the AI's level at most 3. In this version the guides are the game's own bots (they play, silent); talking guides come later, and turning talk on is an ASK (`agents brain`). |
+| "Make a beginner server with two guide agents" | `npx --no-install homie-studio servers new <game> "<Name>" --policy beginner --guides 2` (`server_create`) | At once: the server and its page link. Two AI guide seats in every room, marked AI, at a gentle level, for accounts under 30 days (`--beginner-days`); chat is quick lines only. `--kids` adds handles only and keeps the AI's level at most 3. With no brain the guides play from the game's script, silent; to make them talk see **Guides that talk** below. |
 | "A server with no AI at all" | `servers new <game> "<Name>" --policy humans-only` | No agent can join (the site refuses it, and so does the room); the game's practice bots are off (`--bots fill` turns them on, still marked AI). |
 | "Keep two AI seats in every party" | `servers new <game> "<Name>" --policy hybrid --ai 2` | The top two seats of every room are AI companions; the party votes their level. A room of 8 holds 6 people. |
 | "Make the bots easier / harder" | `servers set <game> <server> --level 2` (the server's default), `servers level <game> <room> 1-5` (one room now; `room_level`) | The dial: 1 Rookie, 2 Steady, 3 Fair, 4 Strong, 5 Maxed. Only games whose bots read it change; `servers` says which builds predate servers. `--level-max` caps what the party may vote. |
@@ -26,6 +27,24 @@ lists them; the landing gets a Servers band.
 | "Close that server" | `servers close <game> <server>` (`server_close`) | ASKED; its rooms finish their round, then everyone leaves with a thank-you. `--reopen` opens it again at once. Closing `public` hides Quick play: Play then shows the servers to pick from. |
 | "Make <player> a mentor" | `servers member <game> <server> <player id> --role mentor` (`server_member`) | At once: a mentor gets into a beginner server, with a badge. `--remove` is an ASK. |
 | "Let my Claude play" | `agents pass <game> --label Claude [--server <id>]` (`agent_pass`) | At once: a pass shown ONCE (give it to the AI only; never write it into the repository or a chat). The AI sits with `POST /<game>/api/agent` (`Authorization: Bearer <pass>`), only in a room with people in it, as "Claude · AI", on an open, hybrid or beginner server. `agents revoke <id>` ends it (the AI leaves at once). |
+
+## Guides that talk (0.17.0)
+
+A beginner server's guides get a **brain** that picks a goal every few seconds and, when the owner allows it, a
+line to say: only the game's own goals and lines, from `games/<game>/agents.json` (its **vocabulary**). The game's
+bot code is the guides' **hands**: they carry the goal out every frame at the party's dial. The AI never types.
+
+| The person says | Do | What happens |
+|---|---|---|
+| "Make the guides talk" / "guides that help with quests" | 1. If `games/<game>/agents.json` is missing, write it with the person, in the game's own voice (the game skill's "Write the guide vocabulary"; `NETPLAY.md` section 18), and the game's `useAgents` (Ember Vale is the reference); build. 2. `agents brain <game> <server> workers-ai` (`agents_brain`) | The first time talk is turned on it is an ASK: give the owner the link. Then `npm run deploy` once (it binds Workers AI). Guides think with the studio's own Workers AI, at most 8,000 neurons a day for the whole studio (the free allocation is 10,000 an account; `--budget <neurons>`), then the game's script until 00:00 UTC. |
+| "Use my own Claude key for the guides" | `agents brain <game> <server> owner-key --budget 1`, then the owner runs `npx --no-install homie-studio agents brain key` on their own computer | The key is typed into a page on their computer and goes straight to the Worker secret; **never ask for a key in the chat**. claude-haiku-4-5, about $0.30 a busy guide-hour, capped by `--budget` dollars a day (raising the cap is an ASK). |
+| "Guides should just play, quietly" / "AI talk off" | `agents brain <game> <server> script` | At once: every AI on the server is silent; the guides play from the game's script. |
+| "Let my Claude be a guide" | the local MCP's `agent_sit { game, server }` (or `homie-studio agents sit <game> --server <id>` in a terminal) | Claude takes a guide's seat as "Claude · AI" in a room with people in it, makes way for nobody (a house guide yields to it), and decides with `agent_look` / `agent_do` about every 30 s while the game's hands play. `agent_stand` leaves; its one-day pass is revoked. |
+| "What are the guides doing?" / "how much AI did we use?" | `servers`, the office (`/_studio/office`) | Today's neurons or dollars against the budget, why a guide is scripted (no binding, no key, budget spent), and each room's last decisions. |
+
+Under `homie-studio dev` guides think from the script unless `dev --remote-ai` (real Workers AI, billed).
+**Adopting guides in an existing RPG** (zones, quests, a party): `node_modules/@homie-rocks/studio/agents/GUIDES.md`
+is the short path, in the game's own repository and with its owner's say.
 
 **Asks.** Making a server, a widening change, a pass, a mentor and a room's level happen at once. A change that
 narrows who may come in (humans-only, a stricter door, fewer rooms), closing a server, removing a member, and the

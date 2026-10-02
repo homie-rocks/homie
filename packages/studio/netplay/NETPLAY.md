@@ -1,9 +1,27 @@
-# Homie netplay contract, v1 (revision 6)
+# Homie netplay contract, v1 (revision 7)
 
-Status: **v1, revision 6** (2026-10-01, `@homie-rocks/studio` 0.16.0). The wire version is
-`v: 1`. Everything revisions 2 to 6 added is either an optional field, a new message type,
+Status: **v1, revision 7** (2026-10-02, `@homie-rocks/studio` 0.17.0). The wire version is
+`v: 1`. Everything revisions 2 to 7 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
 not know. A change to the contract bumps `v` and keeps v1 working.
+
+**What revision 7 added** (a game that knows none of it plays on every server; its AI guide
+seats are the game's own bots, silent):
+- **Agent hands and brains** (section 18): an AI with no game client of its own (hands
+  `host`) sees the game through `agent:view` events its host sends that seat (at most one
+  every 2 s, under 2 KB) and moves through `agent:do` goals (at most one every 3 s). It
+  speaks only `say:<lineId>` lines of the game's own vocabulary (`agents.json`), with typed
+  arguments, and only on a server whose AI may talk (the owner's `agents_brain`). The relay
+  checks every one of those again and drops anything else an AI says.
+- **The lite feed** carries the party's `say:`/`emote:` lines (free `chat` only on a
+  `speech: game` server) and an `ask:<id>` a person made of that AI.
+- **House guides**: on a beginner server whose AI may talk, the room's own Table seats the
+  server's guides as loopback peers, with brains that run on Durable Object alarms (Workers
+  AI or the owner's own key), and the scripted floor when there is no AI.
+- `@homie-rocks/studio/agents` (`useAgents`): the host's side (views, the floor, goals for
+  the hands, lines rendered from `agents.json`) and every browser's asks and lines.
+- `NETPLAY_REVISION` 7 and the build mark `homie-netplay-rev:7`; Quiet AI also hides a line a
+  host relays for an AI (`d.ai`).
 
 **What revision 6 added** (a v1 game that knows none of it plays on every server; its AI
 is labelled by name, its people are capped, and its play page shows no vote):
@@ -76,6 +94,9 @@ the notices and the banner):
 | `worker/room.mjs` | The relay's rules, with no transport. It needs no Node built-ins. |
 | `worker/index.mjs` | The studio's site Worker: `room.mjs` inside the `Table` Durable Object, and the `Lobby` that puts strangers in the same public room. `homie-studio dev` runs the same code under `wrangler dev`. |
 | `starters/gem-rush/` | Gem Rush, the reference game (canvas, about 700 lines). It has both movement modes. |
+| `agents/agents.ts` | `useAgents`, the AI guides' host side and every browser's asks and lines (section 18), imported as `@homie-rocks/studio/agents`. |
+| `worker/brain.mjs` | The vocabulary, prompts, `parseDecision`, the scripted floor and the providers (section 18). |
+| `starters/ember-vale/` | Ember Vale: saves (a hero that lasts), and the AI guides' reference (`agents.json`, section 18). |
 
 ---
 
@@ -1000,6 +1021,136 @@ age is ever asked.
 **Cost.** An agent is one more socket, like a phone. Agents never keep a room alive (60 s
 alone at most). A lite agent gets no snapshots, so it costs a few frames a minute.
 
-**Revision 7 (a later version)** adds an AI's brain: hands in the host (`agent:view`,
-`agent:do`), lines only from the game's own `agents.json` vocabulary (`say:<lineId>`, checked
-by the relay), and guides that answer the party. Nothing in revision 6 needs to change for it.
+**Revision 7** (section 18) adds an AI's brain: hands in the host (`agent:view`, `agent:do`),
+lines only from the game's own `agents.json` vocabulary (`say:<lineId>`, checked by the relay),
+and guides that answer the party. Nothing in revision 6 changed for it.
+
+---
+
+## 18. Agent hands and brains (revision 7)
+
+An AI guide has two layers. Its **hands** are the game's own bot code, in the host, every
+frame, at the dial the party agreed: they walk to the goal and do what it says. Its **brain**
+picks a goal every few seconds and, when the server lets its AI talk, one line to say. The
+brain never runs in the frame loop, and it can only choose: goals and lines are ids from the
+game's own vocabulary, never free text.
+
+**Where a brain runs.** In the room's own Table, on the studio owner's Worker (a *house
+guide*): Workers AI through the `AI` binding (model var `HOMIE_BRAIN_MODEL`, default
+`@cf/meta/llama-3.1-8b-instruct-fp8-fast`), or the owner's own key (Worker secret
+`HOMIE_BRAIN_KEY`, `claude-haiku-4-5` through the official `@anthropic-ai/sdk`). Or in the
+owner's own AI through the local MCP (`agent_sit`, about 30 s a decision). With none of them,
+over the day's budget, or between decisions: the game's scripted floor (`decide`). homie.rocks
+runs nothing and stores nothing.
+
+### The vocabulary: `games/<id>/agents.json`
+
+The only words an AI in the game's rooms has. `homie-studio build` checks it (an unknown
+argument type, a text over 120 characters, a `{placeholder}` that is not an argument, a goal
+aimed at a player, an ask naming a goal or line that is not there: the build stops) and serves
+it at `/games/<id>/agents.json`, where the Table reads it once.
+
+```json
+{ "v": 1,
+  "persona": "A patient guide for new heroes in Ember Vale. Short, kind, never sarcastic.",
+  "names": ["Wren", "Ash", "Moss"],
+  "labels": { "king-slime": "King Slime", "camp": "camp", "king": "the King's hill" },
+  "goals": {
+    "follow": { "about": "stay with a player", "args": { "seat": "player" } },
+    "quest":  { "about": "do a quest with the party", "args": { "quest": "view.quests" } },
+    "lead":   { "about": "lead the party to a place", "args": { "place": ["camp", "king", "east-woods"] } },
+    "guard":  { "about": "hold here and protect the party" },
+    "back":   { "about": "pull back to safety at camp" } },
+  "lines": {
+    "hello":      { "text": "Hi {player}! I'm {me}, an AI guide. Tap me if you want help.", "args": { "player": "player" } },
+    "quest_help": { "text": "Let's take on {quest} together.", "args": { "quest": "view.quests" } },
+    "bye":        { "text": "Okay! I'll give you some space." } },
+  "asks": {
+    "ask_help":  { "text": "Help me with {quest}", "args": { "quest": "view.quests" }, "goal": "quest", "say": "quest_help" },
+    "no_thanks": { "text": "No thanks", "goal": "back", "say": "bye", "leave": true } } }
+```
+
+| Field | Meaning |
+|---|---|
+| `persona` | Up to 400 characters: who the guide is, in the game's own voice. The system prompt starts with it. |
+| `names` | Up to 8 names (16 characters each); a guide plays as `<name> · AI`. |
+| `labels` | How a value reads aloud (`king-slime` → "King Slime"); else its dashes become spaces. |
+| `goals` | Up to 16: `about` (what it is, 80 characters) and `args`. A goal with a `player` argument means *with or near* that player; one that reads as acting against a player is refused. |
+| `lines` | Up to 32: `text` (120 characters; `{arg}` and `{me}` placeholders) and `args`. |
+| `asks` | Up to 8 buttons a game draws for a person: `text`, `args`, and how the scripted floor answers (`goal`, `say`: arguments carry over by name, a `player` argument is the asker). `leave: true` is "no thanks": the guide leaves that player alone for 10 minutes. |
+| argument types | `"player"` (a seat in the room, drawn with the room's name for it), a list of values, or `"view.<key>"` (a value present in the AI's latest `agent:view`). |
+
+### Frames (all `ev`, with the relay's checks)
+
+| `k` | From → to | `d` | The relay |
+|---|---|---|---|
+| `agent:view` | host → one AI's seat (`to: seat`) | the game's view of that guide (below) | Only the host, only to an AI's seat, under 2 KB, at most one every 2 s per AI; kept as that AI's latest view. |
+| `agent:do` | AI → host | `{ goal, args }` | A goal of the vocabulary whose arguments fit the AI's latest view and the seats people hold; at most one every 3 s. |
+| `say:<lineId>` | AI → host | `{ args }` | A line of the vocabulary with fitting arguments, on a server whose AI may talk (`policy.brain` is `workers-ai` or `owner-key`), at most one every 4 s and 8 a minute. The host renders it and relays it to everyone as `say:<lineId>` `{ slot, seat, args, ai: true }`, which the relay checks again (a line of the vocabulary; a view argument from the speaking AI's latest view, or only an id for a guide no AI holds): a host cannot put its own words in an AI's line. |
+| `ask:<askId>` | a person → host | `{ slot, seat, args }` | Copied to the AI in `seat` (an ask id of the vocabulary). |
+| anything else from an AI with no game client, `chat`, `emote`, `agent:view` | | | Dropped and counted (`stats.agentDrops`). An AI never types. |
+
+The lite feed (hands `host`) carries `join`/`leave`, `roster`, `round`, `policy`, `vote`, events
+addressed to its seat, the party's `say:`/`emote:` lines (`chat` only on a `speech: game`
+server), and the asks made of it; never `snap`, `ckpt` or `state`.
+
+### The host's side: `@homie-rocks/studio/agents`
+
+```ts
+import vocab from '../agents.json';
+import { useAgents, type Vocabulary } from '@homie-rocks/studio/agents';
+
+const agents = useAgents(room.net, vocab as unknown as Vocabulary, {
+  // Host: what a guide sees (<= 1 per 2 s, < 2 KB). Game state only: never an account, an address or typed text.
+  view: (slot) => ({ me: bodyView(slot), zone: zoneOf(slot), danger: dangerNear(slot), party: partyNear(slot), quests: openQuests() }),
+  // The scripted floor: runs with no AI, over budget, and between AI decisions. Synchronous; never waits.
+  decide: (v) => v.asks?.[0]?.k === 'ask_help' ? { goal: 'quest', args: { quest: v.asks[0].args.quest }, say: 'quest_help', sayArgs: { quest: v.asks[0].args.quest } }
+             : { goal: 'follow', args: { seat: v.party[0]?.seat } },
+});
+// Hands, every host frame: the goal in force at the party's dial. Never awaits a brain.
+for (const b of room.bodies.values()) { const g = b.agent?.role === 'guide' ? agents.goalOf(b.slot) : null; if (g) steerTo(b, g, room.skillOf(b), dt); }
+agents.done(slot, true);                                   // that goal finished: the brain thinks again
+agents.on('say', ({ slot, text }) => bubble(slot, text));  // a guide's line, from agents.json
+agents.ask(slot, 'ask_help', { quest: 'king-slime' });     // a person's button (agents.askButtons(slot, offer))
+```
+
+| Call | Meaning |
+|---|---|
+| `useAgents(net, vocab, { view, decide, roles?, holdMs?, askWaitMs? })` | Every browser. On the host: sends each AI-held guide its view every 2 s, runs the floor for the rest (once a second), takes `agent:do` and AI lines, answers asks. |
+| `goalOf(slot)` | `{ goal, args, from: 'brain' \| 'floor', at, state, asked? }` or null (the game's own bot code drives). An AI's decision holds for `holdMs` (45 s) or until it is done; a goal that answered a person's ask (`asked`) is carried through until done (or 60 s), whatever a brain says. A brain's decision that does not answer an open ask leaves it open, and the floor answers it after `askWaitMs`. |
+| `done(slot, ok?)` | The goal finished (or failed): the next view says so (a brain thinks again); a guide no AI holds decides at once. |
+| `ask(slot, k, args)`, `askButtons(slot, offer)`, `asksFor(slot)` | A person's ask (a button); the buttons to draw (one per value its argument may take); the asks made of a guide in the last 30 s. An ask of a held guide waits `askWaitMs` (4 s) for its brain, then the floor answers it. |
+| `on('say' \| 'goal' \| 'ask', fn)` | A guide's line (text from the vocabulary; never on a browser with Quiet AI on), a goal change (with `askAt`, the ask that led to it), an ask. |
+| `talking`, `render(id, args, slot)`, `stats()`, `stop()` | Whether the server's AI may talk; a line's text; counters. |
+
+A view adds `goal` (`{ goal, args, state }`) and `asks` itself. The brain also thinks again when
+the view's `zone` or `danger` changes.
+
+### House guides and their brains
+
+On a beginner server whose AI may talk, with a vocabulary, a person seated and a host whose game
+moves AI bodies (`caps: ['agents']`), the Table seats `guides` house guides: loopback peers with
+hands `host`, role `guide`, named from `names`. They are agents like any other: never players,
+never hosts, closed 60 s after the last person, held out by a kick, silent when muted. An AI
+with a pass (the owner's own Claude) takes a guide's seat from a house guide (`agent-yield`).
+
+| Rule | Value |
+|---|---|
+| A decision | 0.8 s after an ask of this guide; at once on a goal done or failed, a `zone` or `danger` change; else every 12 s while people are near (the view's `party`). |
+| Pace | At least 3 s between AI calls per guide, at most 10 a minute; one alarm per room at a time, at most one every 3 s. Never `setInterval`. |
+| Prompt | System: the persona, the goals, the lines, the asks (about 400 tokens, stable). User: the view (sanitized: no key that names a person, an account, a ticket, an address or an age; nothing that looks like a secret; seats, never names), the asks, and the last three party lines as ids and arguments (free text only on a `speech: game` server: quoted, 120 characters, labelled as data). |
+| Output | One JSON object `{ goal, args, say, sayArgs }` (a JSON schema where the provider takes one). Anything else (prose, a code fence, an unknown id, a wrong or extra argument, a player who said no thanks) is no decision: the scripted floor answers instead. |
+| Fixed rules | A person's ask is answered the way agents.json says (its `goal`): a model's other choice is overruled, and the asked-for goal is carried through until it is done (or 60 s) with no model call meanwhile but for a new ask. A line at most every 8 s. "No thanks" holds the guide off that player for 10 minutes. No goal aims at a player. |
+| Budget | A day, for the whole studio (meta `brain_budget`): 8,000 Workers AI neurons (the free allocation is 10,000 an account), $1 of the owner's key. Counted in `stats_daily` (`brain-calls`, `brain-neurons`, `brain-microdollars`), written at most once a minute. Over it: the scripted floor until 00:00 UTC. |
+| Log | The last 50 decisions per room (seat, goal, line, provider, time, why), in memory, in the office. |
+
+**Cost.** A house guide costs no request of its own beyond the alarm: one per room per due
+decision, at most one every 3 s. A decision is about 4.3 Workers AI neurons
+(`@cf/meta/llama-3.1-8b-instruct-fp8-fast`: 700 tokens in, 40 out), or $0.0009 of the owner's
+key.
+
+**Kids and safety.** The AI never types: it picks ids, the game renders the creator's text.
+A beginner server's chat is quick lines only; on a kids server names are handles and no free
+text ever reaches a brain. The owner's controls work on AI, and "AI talk off" (agents_brain
+`script`) silences every AI at once. Quiet AI hides every AI line on a player's own screen.
+

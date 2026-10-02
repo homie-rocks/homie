@@ -129,7 +129,9 @@ function workersBuilds(dir, { firstDeploy = true } = {}) {
 S=${state}
 echo "$*" >> $S/calls
 case "$1" in
-  d1) if [ "$2" = migrations ] && [ ! -f $S/deployed ] && [ "${firstDeploy ? 1 : 0}" = 1 ]; then echo "Couldn't find a D1 DB with the name or binding 'DB' in your wrangler.jsonc file." >&2; exit 1; fi; echo 'Migrations applied';;
+  d1) if [ "$2" = migrations ] && [ ! -f $S/deployed ] && [ "${firstDeploy ? 1 : 0}" = 1 ]; then echo "Couldn't find a D1 DB with the name or binding 'DB' in your wrangler.jsonc file." >&2; exit 1; fi
+      if [ "$2" = execute ]; then if [ -f $S/ai ]; then echo '[{"results":[{"n":1}],"success":true}]'; else echo '[{"results":[{"n":0}],"success":true}]'; fi; exit 0; fi
+      echo 'Migrations applied';;
   deploy) touch $S/deployed; echo 'Uploaded test-studio'; echo 'Deployed test-studio triggers'; echo '  https://test-studio.acct.workers.dev';;
   *) echo "Workers Builds never runs: $*" >&2; exit 9;;
 esac
@@ -159,7 +161,17 @@ test('Workers Builds: `npm run deploy` only migrates and deploys (by binding nam
   assert.equal(readFileSync(join(dir, 'studio.json'), 'utf8'), before, 'a CI checkout is thrown away: nothing is written back');
   const again = out(run(['deploy'], dir, env));
   assert.equal(again.ok, true);
-  assert.deepEqual(cf.calls().slice(3), ['d1 migrations apply DB --remote', 'deploy'], 'later deploys: migrations first, then the Worker');
+  const brains = "d1 execute DB --remote --json --command SELECT COUNT(*) AS n FROM servers WHERE brain = 'workers-ai' AND state = 'open'";
+  assert.deepEqual(cf.calls().slice(3), ['d1 migrations apply DB --remote', brains, 'deploy'], 'later deploys: migrations first, whether a server thinks with Workers AI, then the Worker');
+  assert.ok(!/"ai"/.test(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8')), 'no server thinks with Workers AI: no AI binding');
+  // A server whose AI guides think with Workers AI (agents_brain workers-ai): the deploy binds AI (0.17.0).
+  writeFileSync(join(dir, '.fake-cf', 'ai'), '1');
+  const ai = out(run(['deploy'], dir, env));
+  assert.equal(ai.ok, true);
+  assert.ok(ai.steps.some((x) => /Workers AI bound/.test(x.what)), JSON.stringify(ai.steps));
+  const cfg = JSON.parse(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
+  assert.deepEqual(cfg.ai, { binding: 'AI' });
+  assert.equal(cfg.previews.ai, undefined, 'never in Previews');
   assert.equal(out(run(['deploy', '--ci'], dir)).ci, true, '--ci does the same outside Workers Builds');
 });
 
@@ -331,4 +343,40 @@ test('Chrome on Linux: SwiftShader for WebGL, container-safe as root; on a Mac, 
     assert.ok(chromeArgs().includes('--use-angle=metal'));
     assert.ok(!chromeArgs().includes('--no-sandbox'));
   } finally { Object.defineProperty(process, 'platform', platform); process.getuid = uid; }
+});
+
+test('agents brain key: the owner\'s AI key goes from a page on this computer straight to the Worker secret, never printed', async () => {
+  const dir = studio('brain-key');
+  const bin = join(dir, 'node_modules', '.bin');
+  const state = join(dir, '.fake-cf');
+  mkdirSync(bin, { recursive: true });
+  mkdirSync(state, { recursive: true });
+  // A stand-in Wrangler: it records the command, and how long the secret on its standard input was (never the secret).
+  writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
+echo "$*" >> ${state}/calls
+if [ "$1" = secret ]; then wc -c | tr -d ' ' > ${state}/stdin-bytes; echo 'Success! Uploaded secret HOMIE_BRAIN_KEY'; fi
+`);
+  chmodSync(join(bin, 'wrangler'), 0o755);
+  const { agentsBrainKey } = await import('../lib/servers.mjs');
+  const said = [];
+  const key = `sk-ant-api03-${'k'.repeat(40)}`;
+  const done = agentsBrainKey(dir, { log: (line) => said.push(line), wait: 20_000 });
+  for (let i = 0; i < 50 && !said.length; i += 1) await new Promise((r) => setTimeout(r, 50));
+  const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}/.exec(said.join(' '))?.[0];
+  assert.ok(link, said.join(' '));
+  const page = await (await fetch(link)).text();
+  assert.match(page, /type="password"/);
+  assert.match(page, /not to the chat, not to a file/);
+  const n = /name="n" value="([a-f0-9]{32})"/.exec(page)[1];
+  const origin = new URL(link).origin;
+  assert.equal((await fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams({ n: 'f'.repeat(32), key }) })).status, 403, 'only this page\'s own form');
+  assert.equal((await fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams({ n, key: 'not a key' }) })).status, 400);
+  const ok = await fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams({ n, key }) });
+  assert.equal(ok.status, 200);
+  const r = await done;
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.match(readFileSync(join(state, 'calls'), 'utf8'), /^secret put HOMIE_BRAIN_KEY$/m);
+  assert.equal(Number(readFileSync(join(state, 'stdin-bytes'), 'utf8')), key.length + 1, 'the key went on Wrangler\'s standard input');
+  assert.doesNotMatch(JSON.stringify(r) + said.join(' '), /sk-ant-api03/, 'never printed or returned');
+  assert.equal((await fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams({ n, key }) }).catch(() => ({ status: 0 }))).status, 0, 'one use: the page is gone');
 });

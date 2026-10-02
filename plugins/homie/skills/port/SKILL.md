@@ -103,6 +103,8 @@ Non-negotiable, every port:
    `BotBrain` `skill: () => room.skillOf(body)` (reaction, aim and commitment follow
    the party's vote) and use `jitter`, `engages` and `standoff` for the rest of a
    bot's choices. `createRoom` keeps a hybrid server's AI seats and labels them AI.
+   For guides that talk (a beginner server), give the game a vocabulary and `useAgents`
+   (the game skill's "Write the guide vocabulary"; NETPLAY.md section 18).
 4. **Host handoff.** Everything the rules need is in the checkpoint; a promoted
    browser continues the SAME round (clock, scores, world).
 5. **Controls mean the same thing every second.** Input is read on the camera's

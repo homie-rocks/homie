@@ -16,7 +16,9 @@
  *   peak    the most people playing one game at once that day (all its rooms), and peak-room in one room
  *   song    a song's player started; video: a video's player started
  *   agent-minutes   minutes an AI sat in a seat (an agent pass, NETPLAY.md section 17; 0.16.0), counted as it leaves
- *   brain-calls, brain-neurons   reserved for AI guides' brains (a later version): calls made and Workers AI used
+ *   brain-calls     AI guides' brain calls (0.17.0), by provider (workers-ai, owner-key): the house guides' alarms
+ *   brain-neurons, brain-microdollars   what those calls used: Workers AI neurons, and the owner's own key in
+ *                   millionths of a dollar. The day's budget (meta `brain_budget`) is read against these, every game.
  * A round's rows count agents as AI, never as people: `humans` is people only.
  * Each visit, play and screen row carries WHERE FROM: '' (typed, bookmarked, or this site's own link), the
  * referring site's host (homie.rocks, another studio, anywhere on the web), or `via:<tag>` from a ?via= link.
@@ -57,7 +59,7 @@ CREATE TABLE IF NOT EXISTS stats_keys (
 ) WITHOUT ROWID;
 `;
 
-export const METRICS = Object.freeze(['visit', 'play', 'screen', 'watch', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video', 'agent-minutes', 'brain-calls', 'brain-neurons']);
+export const METRICS = Object.freeze(['visit', 'play', 'screen', 'watch', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video', 'agent-minutes', 'brain-calls', 'brain-neurons', 'brain-microdollars']);
 const MAX_METRICS = new Set(['peak', 'peak-room']);
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;

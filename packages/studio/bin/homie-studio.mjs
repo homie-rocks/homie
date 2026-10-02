@@ -17,7 +17,8 @@
  *   homie-studio game remix <source.json url> --id <new id>
  *   homie-studio games
  *   homie-studio build [<id>]
- *   homie-studio dev [--port 8787]        (--stop: stop exactly this studio's dev server, nothing else)
+ *   homie-studio dev [--port 8787] [--remote-ai]   (--stop: stop exactly this studio's dev server, nothing else;
+ *                                         AI guides think scripted here unless --remote-ai: real Workers AI, billed)
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
  *   homie-studio chrome [install] [--fresh]  (which Chrome the checks use; on Linux, `install` fetches Chrome for Testing;
  *                                          --fresh fetches it even when the machine has a Chrome)
@@ -71,9 +72,14 @@
  *   homie-studio agents pass <game|any> --label "<Name>" [--server <id>] [--hands self|host] [--days 7]
  *                                         (an AI's way into a seat, always marked AI; the pass is shown once)
  *   homie-studio agents passes [<game>]   homie-studio agents revoke <pass id>
- *   homie-studio agents brain <game> <server> off|script|workers-ai|owner-key
+ *   homie-studio agents brain <game> <server> off|script|workers-ai|owner-key [--budget <n>]
  *                                         (a narrowing change, closing a server, removing a member and the first
- *                                          time AI guides may talk are ASKED for, like office kick)
+ *                                          time AI guides may talk are ASKED for, like office kick; --budget is
+ *                                          Workers AI neurons a day, or dollars a day for the owner's key)
+ *   homie-studio agents brain key [--remove]   (the owner's AI key, typed into a page on this computer only)
+ *   homie-studio agents sit <game> [--server <id>] [--pass hap_…] [--label Claude]
+ *                                         (an AI guide's seat from this terminal: then lines of `do <goal> {args}`,
+ *                                          `say <line> {args}`, `look`, `stand`)
  *
  *   homie-studio progress start [<id>] [--what game|song|video] [--title "<what this build does>"]
  *                                        [--budget <dollars>] [--unit usd|credits] [--share]
@@ -145,7 +151,8 @@ import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
 import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeRevoke, officeShow } from '../lib/office.mjs';
-import { agentsBrain, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
+import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
+import { AgentSeat } from '../lib/agent-seat.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -157,7 +164,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids'];
+const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -302,7 +309,11 @@ function print(result) {
       break;
     case 'servers level':
     case 'agents revoke':
+    case 'agents brain key':
       lines.push(result.message);
+      break;
+    case 'agents sit':
+      lines.push(`Left ${result.room}.`);
       break;
     case 'agents pass':
       lines.push(`${result.pass.name} (pass ${result.pass.id}, ${result.pass.role}, hands ${result.pass.hands}${result.pass.server ? `, ${result.pass.server} only` : ''}):`, `  ${result.secret}`, result.use);
@@ -536,8 +547,10 @@ async function main() {
     if (sub === 'pass') return agentsPass(root, positional[2], { url, label: flags.get('label'), server: flags.get('server'), hands: flags.get('hands'), role: flags.get('role'), days: flags.get('days') });
     if (sub === 'passes') return agentsPasses(root, positional[2], { url });
     if (sub === 'revoke') return agentsRevoke(root, positional[2], { url });
-    if (sub === 'brain') return agentsBrain(root, positional[2], positional[3], positional[4], { url });
-    return { ok: false, command: 'agents', why: `unknown: agents ${sub ?? ''} (pass, passes, revoke, brain)` };
+    if (sub === 'brain' && positional[2] === 'key') return agentsBrainKey(root, { remove: flags.has('remove'), log });
+    if (sub === 'brain') return agentsBrain(root, positional[2], positional[3], positional[4], { url, budget: flags.get('budget') });
+    if (sub === 'sit') return agentsSit(root, positional[2], { url, server: flags.get('server'), pass: flags.get('pass'), label: flags.get('label') });
+    return { ok: false, command: 'agents', why: `unknown: agents ${sub ?? ''} (pass, passes, revoke, brain, brain key, sit)` };
   }
   if (cmd === 'media' && sub === 'put') return mediaPut(root, positional[2], flags.get('as'));
   if (cmd === 'media' && sub === 'list') {
@@ -714,7 +727,9 @@ async function dev(root) {
     m.on('close', done);
   });
   log(`Local site: http://127.0.0.1:${port}/  (each game: http://127.0.0.1:${port}/<id>/play — open it in two browsers)`);
-  const child = spawn(bin, ['dev', '--local', '--ip', '127.0.0.1', '--port', port], { cwd: workerDir(root), env, stdio: 'inherit' });
+  const ai = devConfig(root, flags.has('remote-ai'));
+  if (ai.note) log(ai.note);
+  const child = spawn(bin, ['dev', '--local', '--ip', '127.0.0.1', '--port', port, ...ai.args], { cwd: workerDir(root), env, stdio: 'inherit' });
   mkdirSync(dirname(devFile(root)), { recursive: true });
   writeFileSync(devFile(root), `${JSON.stringify({ pid: process.pid, child: child.pid, port: Number(port), at: new Date().toISOString() })}\n`);
   log(`Stop it with: npx --no-install homie-studio dev --stop   (this studio's dev server only)`);
@@ -723,6 +738,54 @@ async function dev(root) {
   await new Promise((done) => child.on('close', done));
   rmSync(devFile(root), { force: true });
   return { ok: true, command: 'dev', stopped: true };
+}
+
+/**
+ * AI guides under `dev` (0.17.0): they think scripted, for free, unless --remote-ai (real Workers AI on the signed-in
+ * account, billed like the live site). A config whose AI binding is not what was asked for runs from a copy in
+ * .wrangler/ (absolute paths, the same local state), so wrangler.jsonc itself is never changed by dev.
+ */
+function devConfig(root, remoteAi) {
+  const file = join(workerDir(root), 'wrangler.jsonc');
+  let json;
+  try { json = JSON.parse(readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '')); } catch { return { args: [] }; }
+  if (Boolean(json.ai) === remoteAi) return { args: [], note: remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : null };
+  const base = workerDir(root);
+  const abs = (p) => (p && !p.startsWith('/') ? join(base, p) : p);
+  delete json.$schema;
+  json.main = abs(json.main);
+  if (json.assets?.directory) json.assets.directory = abs(json.assets.directory);
+  json.d1_databases = (json.d1_databases ?? []).map((d) => ({ ...d, ...(d.migrations_dir ? { migrations_dir: abs(d.migrations_dir) } : {}) }));
+  if (remoteAi) json.ai = { binding: 'AI', remote: true }; else delete json.ai;
+  const copy = join(base, '.wrangler', 'homie-dev.wrangler.json');
+  mkdirSync(dirname(copy), { recursive: true });
+  writeFileSync(copy, `${JSON.stringify(json, null, 2)}\n`);
+  return { args: ['--config', copy, '--persist-to', join(base, '.wrangler', 'state')], note: remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : 'AI guides think scripted here (no Workers AI under dev; --remote-ai for the real one).' };
+}
+
+/** `agents sit`: an AI guide's seat from this terminal, for a demo or a test of a vocabulary. Lines on stdin act. */
+async function agentsSit(root, game, { url, server, pass, label }) {
+  const site = url ?? siteUrl(root);
+  const seat = new AgentSeat({ site, game, server: server ?? null, pass: pass ?? null, label: label ?? 'Claude', root });
+  const r = await seat.sit();
+  if (!r.ok) return { ok: false, command: 'agents sit', why: r.why };
+  log(`Seated as ${r.name} in ${r.room} (seat ${r.seat}). Type: look | do <goal> {"arg":…} | say <line> {"arg":…} with a goal | stand`);
+  log(JSON.stringify({ view: r.view, asks: r.asks, choices: r.choices }, null, 1));
+  const { createInterface } = await import('node:readline');
+  const rl = createInterface({ input: process.stdin });
+  let goal = null;
+  for await (const line of rl) {
+    const [word, id, ...rest] = line.trim().split(/\s+/);
+    let args = {};
+    try { args = rest.length ? JSON.parse(rest.join(' ')) : {}; } catch { log('arguments are JSON, e.g. {"place":"camp"}'); continue; }
+    if (word === 'look') log(JSON.stringify(seat.look(), null, 1));
+    else if (word === 'do') { goal = { goal: id, args }; const d = await seat.do(goal); log(d.ok ? `done: ${JSON.stringify(d.sent)}` : `refused: ${d.why}`); }
+    else if (word === 'say') { const d = await seat.do({ ...(goal ?? { goal: Object.keys(seat.vocab.goals)[0], args: {} }), say: id, sayArgs: args }); log(d.ok ? `said: ${d.text}` : `refused: ${d.why}`); }
+    else if (word === 'stand') break;
+  }
+  rl.close();
+  await seat.stand();
+  return { ok: true, command: 'agents sit', stood: true, room: r.room };
 }
 
 /** A big file into the studio's R2, and its key on the music/ or videos/ manifest entry that names it. */

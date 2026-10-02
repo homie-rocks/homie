@@ -14,14 +14,23 @@
  *   homie-studio agents pass <game|any> --label "<Name>" [--server <id>] [--hands self|host] [--role party|guide|player] [--days 7]
  *   homie-studio agents passes [<game>]                  every pass (never a secret)
  *   homie-studio agents revoke <pass id>
- *   homie-studio agents brain <game> <server> off|script|workers-ai|owner-key
+ *   homie-studio agents brain <game> <server> off|script|workers-ai|owner-key [--budget <neurons a day | dollars a day>]
+ *   homie-studio agents brain key [--remove]          the owner's own AI key (owner-key brains), from a page on this
+ *                                                     computer only: it goes straight to the Worker secret
+ *                                                     HOMIE_BRAIN_KEY, never through a chat, a file or a log
+ *   homie-studio agents sit <game> [--server <id>] [--pass hap_…] [--label Claude]
+ *                                                     sit in a guide's seat from this terminal (the local MCP's agent_sit)
  *
  * The proof of ownership is the studio's own Cloudflare login, as for the office: a ten-minute office key is minted
  * and dropped around each call. Making a server, a widening change, a pass and a room's level happen at once. A
  * change that narrows who may come in, closing a server, removing a member, and the first time AI guides may talk are
  * only ASKED for: the answer is a one-time link that opens the ask in the owner's own browser (one tap does it).
  */
+import { createServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
 import { askedFor, withKey } from './office.mjs';
+import { runner } from './cloudflare.mjs';
+import { readStudio } from './studio.mjs';
 
 const GAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SERVER = /^[a-z0-9][a-z0-9-]{1,19}$/;
@@ -111,10 +120,63 @@ export async function agentsRevoke(root, id, { url } = {}) {
   return r.ok ? { ok: true, command: 'agents revoke', revoked: id, left: r.left ?? 0, message: `Pass ${id} revoked${r.left ? `: its AI left ${r.left} room(s)` : ''}.` } : { ok: false, command: 'agents revoke', why: r.message ?? r.why };
 }
 
-export async function agentsBrain(root, game, server, mode, { url } = {}) {
-  if (!GAME.test(String(game ?? '')) || !server || !['off', 'script', 'workers-ai', 'owner-key'].includes(mode)) return { ok: false, command: 'agents brain', why: 'usage: homie-studio agents brain <game> <server> off|script|workers-ai|owner-key' };
-  const r = await withKey(root, url, (call) => call('/_studio/api/agents/brain', { game, server, mode }));
+export async function agentsBrain(root, game, server, mode, { url, budget } = {}) {
+  if (!GAME.test(String(game ?? '')) || !server || !['off', 'script', 'workers-ai', 'owner-key'].includes(mode)) return { ok: false, command: 'agents brain', why: 'usage: homie-studio agents brain <game> <server> off|script|workers-ai|owner-key [--budget <neurons a day for workers-ai | dollars a day for owner-key>]' };
+  const b = budget === undefined || budget === true ? undefined : Number(budget);
+  if (b !== undefined && !(b >= 0)) return { ok: false, command: 'agents brain', why: '--budget is a number: Workers AI neurons a day (workers-ai; the free allocation is 10,000 an account), or dollars a day (owner-key)' };
+  const r = await withKey(root, url, (call) => call('/_studio/api/agents/brain', { game, server, mode, ...(b !== undefined ? { budget: b } : {}) }));
   return askedFor(root, url, r, 'agents brain');
+}
+
+/**
+ * `homie-studio agents brain key`: the owner's own AI provider key (owner-key brains: claude-haiku-4-5), typed once
+ * into a page on this computer (127.0.0.1, one use, ten minutes) and handed straight to `wrangler secret put
+ * HOMIE_BRAIN_KEY` on its standard input. It never passes through a chat, a file, an argument or a log, and this
+ * command never prints it. `--remove` deletes the secret.
+ */
+export async function agentsBrainKey(root, { remove = false, log = () => {}, port = 0, wait = 10 * 60_000 } = {}) {
+  const studio = readStudio(root);
+  const env = studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {};
+  const w = runner(root, env);
+  if (remove) {
+    const r = w(['secret', 'delete', 'HOMIE_BRAIN_KEY'], { input: 'y\n' });
+    return r.code === 0 ? { ok: true, command: 'agents brain key', removed: true, message: 'The key is gone from the Worker: owner-key guides answer from the game\'s script.' } : { ok: false, command: 'agents brain key', why: r.out.trim().split('\n').slice(-2).join(' ') };
+  }
+  const nonce = randomBytes(16).toString('hex');
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your AI key</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:3rem auto;padding:0 1rem;color:#1b1b1b}input{width:100%;box-sizing:border-box;font:inherit;padding:.6rem;border:1px solid #999;border-radius:8px}button{margin-top:1rem;font:inherit;font-weight:700;padding:.6rem 1.2rem;border:0;border-radius:8px;background:#1b1b1b;color:#fff}small{color:#555}</style>
+<h1>Your AI key for the guides</h1><p>Paste your Anthropic API key. It goes from this page to your studio's Worker as the secret <code>HOMIE_BRAIN_KEY</code>, and nowhere else: not to the chat, not to a file. Your guides then think with claude-haiku-4-5, on your account, within the daily dollar cap in your office.</p>
+<form method="post" action="/key"><input type="hidden" name="n" value="${nonce}"><input name="key" type="password" autocomplete="off" placeholder="sk-ant-…" required><button>Save to my Worker</button></form><p><small>This page works once and closes in ten minutes.</small></p>`;
+  return await new Promise((done) => {
+    let finished = false;
+    const server = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === `/${nonce}`) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(page); return; }
+      if (req.method === 'POST' && req.url === '/key') {
+        let body = '';
+        req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
+        req.on('end', () => {
+          const form = new URLSearchParams(body);
+          const key = String(form.get('key') ?? '').trim();
+          if (form.get('n') !== nonce || finished) { res.writeHead(403); res.end('This page was used already.'); return; }
+          if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) { res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }); res.end('That does not look like an Anthropic API key (sk-ant-…). Go back and try again.'); return; }
+          finished = true;
+          const r = w(['secret', 'put', 'HOMIE_BRAIN_KEY'], { input: `${key}\n` });
+          const okay = r.code === 0;
+          res.writeHead(okay ? 200 : 500, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end(okay ? 'Saved to your Worker. You can close this page.' : 'Wrangler could not save it (is this computer signed in to Cloudflare? npx wrangler login). Nothing was kept.');
+          server.close();
+          done(okay ? { ok: true, command: 'agents brain key', saved: true, message: 'Saved as the Worker secret HOMIE_BRAIN_KEY (never shown). Owner-key guides use it from their next decision.' } : { ok: false, command: 'agents brain key', why: 'wrangler secret put failed (sign in with npx wrangler login, then run this again)' });
+        });
+        return;
+      }
+      res.writeHead(404); res.end();
+    });
+    server.listen(port, '127.0.0.1', () => {
+      const link = `http://127.0.0.1:${server.address().port}/${nonce}`;
+      log(`Open this page on this computer and paste the key there (not in a chat): ${link}`);
+    });
+    setTimeout(() => { if (!finished) { finished = true; server.close(); done({ ok: false, command: 'agents brain key', why: 'nothing was saved in ten minutes; run it again when ready' }); } }, wait).unref?.();
+  });
 }
 
 /** One line per server for a person (the CLI's print). */

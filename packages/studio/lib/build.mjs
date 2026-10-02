@@ -5,6 +5,8 @@
  *   site/dist/games/<id>/index.html        the game's page (the Worker adds HOMIE_NET)
  *   site/dist/games/<id>/assets/main.js    its bundle (esbuild; @homie-rocks/studio/netplay inlined)
  *   site/dist/games/<id>/...               everything in games/<id>/public/
+ *   site/dist/games/<id>/agents.json       the AI guides' vocabulary (games/<id>/agents.json, checked; NETPLAY.md
+ *                                          section 18): the only goals and lines an AI in its rooms has
  *   site/dist/games.json                   { studio, games[], songs[], videos[], posts[], site } from studio.json,
  *                                          game.json files, the music/ and videos/ manifests (media/MEDIA.md),
  *                                          posts/*.md and the studio's site/ folder (site/SITE.md)
@@ -35,6 +37,7 @@ import { SEAT_MAX } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { licenseOf, remixRow } from '../worker/license.mjs';
 import { SERVER_LIMITS, serverOf } from '../worker/servers.mjs';
+import { vocabularyOf } from '../worker/brain.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
@@ -152,6 +155,22 @@ export function netplayRevOf(out) {
   return rev;
 }
 
+/**
+ * games/<id>/agents.json, checked (worker/brain.mjs vocabularyOf: argument types, text over 120 characters, a goal
+ * against a player, an ask naming a goal or line that is not there) and served beside the game, where the room's Table
+ * reads it. A game with none has guides that play but never talk. Returns whether it has one.
+ */
+export function vocabFor(g, out) {
+  const file = join(g.dir, 'agents.json');
+  if (!existsSync(file)) { rmSync(join(out, 'agents.json'), { force: true }); return false; }
+  let raw;
+  try { raw = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { throw new Error(`games/${g.id}/agents.json is not JSON: ${error.message}`); }
+  const v = vocabularyOf(raw);
+  if (!v.ok) throw new Error(`games/${g.id}/agents.json: ${v.problems.slice(0, 6).join('; ')}`);
+  writeFileSync(join(out, 'agents.json'), `${JSON.stringify(raw)}\n`);
+  return true;
+}
+
 /** game.json "servers": the seeds a game ships with (worker/servers.mjs; a D1 row of the same id wins). */
 function serverSeeds(g, log) {
   if (!Array.isArray(g.servers)) return [];
@@ -236,6 +255,8 @@ export async function build(root, { only = null, log = () => {} } = {}) {
     }
     if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
     if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
+    // The guides' vocabulary (NETPLAY.md section 18): checked here, so a room never meets a line it cannot say.
+    vocabFor(g, out);
     // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).
     if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id, { studio: studio.name ?? null, game: g.name ?? g.id, license: g.license }))}\n`);
     const main = join(out, 'assets', 'main.js');
@@ -277,6 +298,8 @@ export async function build(root, { only = null, log = () => {} } = {}) {
       // predates servers), and game.json "agents": { "vote": "game" | false } (the game draws its own vote card, or none).
       ...(seeds.length ? { servers: seeds } : {}),
       netplayRev: netplayRevOf(join(dist, 'games', g.id)),
+      // 0.17.0: the game has a vocabulary for its AI guides (agents.json), so they can talk once the owner says so.
+      ...(existsSync(join(dist, 'games', g.id, 'agents.json')) ? { vocab: true } : {}),
       ...(g.agents && typeof g.agents === 'object' && (g.agents.vote === 'game' || g.agents.vote === false) ? { agents: { vote: g.agents.vote } } : {}),
       // Its source licence (worker/license.mjs), and, for a remix, what it is a remix of (shown on its landing).
       license: licenseOf(g.license),

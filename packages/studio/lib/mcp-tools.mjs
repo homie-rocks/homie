@@ -11,6 +11,10 @@
  *
  * Every tool works in ONE studio folder: one the person named, else the one in use, else the only one there is. The
  * file tools never leave it (lib/files.mjs).
+ *
+ * AN AI IN A SEAT (0.17.0, lib/agent-seat.mjs): agent_sit, agent_look, agent_do and agent_stand put the person's own
+ * AI in a game's guide seat, marked " · AI". This process holds the socket between turns; the game's own bot code
+ * moves the body while the AI thinks; the AI chooses only the game's own goals and lines (agents.json).
  */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs';
@@ -26,6 +30,7 @@ import { newStudio, slugify } from './scaffold.mjs';
 import { repoFromUrl, studioRepo } from './repo.mjs';
 import { GAME_ID, findStudio, listGames, readLocal, readStudio, siteUrl, workerDir } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
+import { AgentSeat } from './agent-seat.mjs';
 
 export const UI = Object.freeze({
   setup: 'ui://homie-studio/setup',
@@ -958,6 +963,57 @@ export function toolDefs(ctx, avail = {}) {
         if (!r.ended) return stillRunning(r.job, `homie-studio ${args.slice(0, 2).join(' ')}`);
         const text = r.result ? JSON.stringify(r.result, null, 1).slice(0, 12_000) : jobView(r.job, { lines: 40 }).tail.join('\n');
         return r.job.code === 0 ? ok(text, { kind: 'run', args, result: r.result }) : fail(`homie-studio ${args.join(' ')}: ${whyOf(r.job)}`, { kind: 'run', args, result: r.result });
+      },
+    },
+    {
+      name: 'agent_sit', title: 'Sit in a game as an AI guide',
+      description: 'Take a guide\'s seat in a live room of one of the studio\'s games as an AI ("Claude · AI": always marked AI, never on a humans-only server, only in a room with people in it). The game\'s own bot code moves the body every frame; you choose its goal and, when the server lets its AI talk, one of the game\'s own lines (agents.json; never free text). Returns your seat, what you see (view), the asks players made of you and your choices. Then agent_look and agent_do every 20 to 40 seconds, and agent_stand when done. Uses the site running here (preview_run) or the live site; with no pass, makes a one-day guide pass with the owner\'s office key and revokes it when you stand.',
+      inputSchema: { type: 'object', properties: { game: str('The game\'s id'), server: str('Optional: a server id (default: the pass\'s, else Quick play)'), pass: str('Optional: an agent pass (hap_…) the owner gave; never shown back'), label: str('Optional: the name you play under (default "Claude"; " · AI" is added)'), url: str('Optional: the site (default: this computer\'s preview, else the live site)'), ...STUDIO_ARG }, required: ['game'] },
+      annotations: { title: 'Sit in a game as an AI guide', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        if (ctx.seat && !ctx.seat.closed) await ctx.seat.stand();
+        const site = a.url ? String(a.url) : devOf(root)?.url ?? siteUrl(root);
+        if (!site) return fail('the studio is not running here and has no live site: preview_run first, or studio_deploy');
+        const seat = new AgentSeat({ site, game: String(a.game ?? ''), server: a.server ?? null, pass: a.pass ?? null, label: a.label ? String(a.label).slice(0, 16) : 'Claude', root });
+        const r = await seat.sit();
+        if (!r.ok) return fail(`No seat: ${r.why}`, { kind: 'agent', ok: false, error: r.error ?? null });
+        ctx.seat = seat;
+        return ok(`Seated as ${r.name} in ${r.room} (seat ${r.seat}). ${r.talking ? 'This server lets its AI talk: lines from look.choices.lines, at most one every 8 s.' : 'This server\'s AI does not talk: choose goals only (say null).'} Look again with agent_look; act with agent_do { goal, args, say?, sayArgs? }.\n${JSON.stringify({ view: r.view, asks: r.asks, choices: r.choices }, null, 1).slice(0, 6000)}`, { kind: 'agent', ...r });
+      },
+    },
+    {
+      name: 'agent_look', title: 'Look as the AI guide',
+      description: 'What your AI guide sees now: the view the game showed you (game state, seats, never names), the asks players made of you (answer these first), the party\'s lines, your last goal, and your choices.',
+      inputSchema: { type: 'object', properties: {} },
+      annotations: { title: 'Look as the AI guide', ...RO },
+      run: async () => {
+        if (!ctx.seat) return fail('not seated: agent_sit first');
+        const l = ctx.seat.look();
+        return ok(`${l.closed ? `The seat closed (${l.closed}); agent_sit again.\n` : ''}${JSON.stringify(l, null, 1).slice(0, 8000)}`, { kind: 'agent', ...l });
+      },
+    },
+    {
+      name: 'agent_do', title: 'Act as the AI guide',
+      description: 'Choose your guide\'s goal (one of look.choices.goals, with argument values the view offers; a player argument is a seat number) and, if the server lets its AI talk, at most one line (look.choices.lines; never free text). The game\'s bot code carries it out at frame rate until you choose again. At most one goal every 3 s and one line every 8 s.',
+      inputSchema: { type: 'object', properties: { goal: str('A goal id'), args: { type: 'object', description: 'The goal\'s arguments' }, say: str('Optional: a line id'), sayArgs: { type: 'object', description: 'The line\'s arguments' } }, required: ['goal'] },
+      annotations: { title: 'Act as the AI guide', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      run: async (a) => {
+        if (!ctx.seat) return fail('not seated: agent_sit first');
+        const r = await ctx.seat.do({ goal: a.goal, args: a.args ?? {}, say: a.say ?? null, sayArgs: a.sayArgs ?? {} });
+        return r.ok ? ok(`Done: ${r.sent.goal} ${JSON.stringify(r.sent.args)}${r.text ? `, saying "${r.text}"` : ''}.`, { kind: 'agent', ...r }) : fail(r.why, { kind: 'agent', ok: false });
+      },
+    },
+    {
+      name: 'agent_stand', title: 'Leave the seat',
+      description: 'Your AI guide leaves the room (its seat becomes a guide the game\'s own script plays); a pass made for this sitting is revoked.',
+      inputSchema: { type: 'object', properties: {} },
+      annotations: { title: 'Leave the seat', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      run: async () => {
+        if (!ctx.seat) return ok('Not seated.');
+        const r = await ctx.seat.stand();
+        ctx.seat = null;
+        return ok(`Left ${r.room}.`, { kind: 'agent', ...r });
       },
     },
     {

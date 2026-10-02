@@ -28,13 +28,20 @@
  * reserves for AI, names every agent "<label> · AI", rewrites the host's roster
  * and results so they cannot hide an AI, filters speech, runs the party's vote on
  * the skill dial, and closes agents that are left alone with no person seated.
+ *
+ * AGENT HANDS AND BRAINS (revision 7, NETPLAY.md section 18): an AI with no game client of its own (hands `host`)
+ * sees the game through `agent:view` (the host's, to its seat, at most one every 2 s, under 2 KB) and moves through
+ * `agent:do` (a goal of the game's agents.json, at most one every 3 s). It says only `say:<lineId>` lines of that
+ * vocabulary, with arguments that fit, and only on a server whose AI may talk: the relay drops everything else an AI
+ * says (`stats.agentDrops`). The Table's own house agents (worker/agents.mjs) are peers like any other, on a loopback.
  * =============================================================================
  */
 import { aiName, skillPreset, stripAi } from './agents.mjs';
+import { checkArgs, talks, vocabularyOf } from './brain.mjs';
 
 export const NET_VERSION = 1;
 /** The contract revision this relay speaks (NETPLAY.md): optional fields, frames and refusals; the wire stays `v: 1`. */
-export const NET_REVISION = 6;
+export const NET_REVISION = 7;
 const POLICY_KINDS = ['open', 'humans-only', 'hybrid', 'beginner'];
 /**
  * A room's policy before the Worker says anything (and the public server's with nothing set): today's behaviour.
@@ -48,6 +55,11 @@ export const VOTE = Object.freeze({ ms: 15_000, cooldownMs: 120_000, autoMs: 30 
 /** Agents left with no person seated for this long are closed (`agents-alone`): an AI never keeps a room alive. */
 export const AGENTS_ALONE_MS = 60_000;
 const CAPS = ['skill', 'agents'];
+/** Revision 7: what a game's host shows an AI (`agent:view`) and how often an AI may act (`agent:do`). */
+export const AGENT_FRAMES = Object.freeze({ viewMs: 2000, viewBytes: 2048, doMs: 3000 });
+const SAY = /^say:([a-z][a-z0-9_]{0,31})$/;
+const d0 = (m) => (m.d && typeof m.d === 'object' && !Array.isArray(m.d) ? m.d : {});
+const ASK = /^ask:([a-z][a-z0-9_]{0,31})$/;
 
 /** A policy as the relay keeps it: every field checked (the Worker composed it, but a bad one must not break a room). */
 export function normalizePolicy(p) {
@@ -209,6 +221,8 @@ export class NetRoom {
     this.lastHumanAt = 0;
     /** A policy that no longer lets AI in, waiting for the round to finish: when the agents leave. */
     this.agentsOut = null;
+    /** Revision 7: the game's agents.json (the Table reads it once), the only words an AI here may say. */
+    this.vocab = null;
     this.code = code;
     this.seatCap = maxPlayers;
     this.maxPlayers = maxPlayers;
@@ -277,6 +291,8 @@ export class NetRoom {
       watch: conn.watch === true, policy: WATCH_POLICIES.includes(conn.watchPolicy) ? conn.watchPolicy : 'follow', follow: null, followWhy: null,
       // An agent (section 17): only the Worker's word, from a verified pass, makes one; its hello cannot.
       agentWord: conn.agent && typeof conn.agent === 'object' ? conn.agent : null, agent: null, caps: new Set(), speechAt: [],
+      // Revision 7: the latest view the host showed this AI (what its arguments are checked against), and its pace.
+      lastView: null, viewAt: 0, doAt: 0,
     };
     this.clients.set(c.id, c);
     return {
@@ -432,22 +448,35 @@ export class NetRoom {
         // The server's speech (section 17): `lines` drops every free-text chat (quick lines and emotes pass), `off`
         // drops all speech, whoever sends it (a host relaying a player's chat too).
         if (SPEECH.test(kind) && (this.policy.speech === 'off' || (this.policy.speech === 'lines' && /^chat/i.test(kind)))) { this.stats.speechDrops += 1; return; }
+        // What an AI may send (section 18): its own goals and its game's lines, checked here whatever its host says.
+        if (c.agent && !this.agentEvOk(c, kind, m, text.length, now)) { this.stats.agentDrops += 1; return; }
         // An agent says at most one line every 4 s and 8 a minute.
         if (c.agent && SPEECH.test(kind)) {
           while (c.speechAt.length && c.speechAt[0] <= now - 60_000) c.speechAt.shift();
           if (c.speechAt.length >= AGENT_SPEECH.perMinute || (c.speechAt.length && now - c.speechAt[c.speechAt.length - 1] < AGENT_SPEECH.gapMs)) { this.stats.agentDrops += 1; return; }
           c.speechAt.push(now);
         }
+        // A line the host relays for an AI (`d.ai`): still only a line of the vocabulary, with fitting arguments.
+        if (isHost && d0(m).ai === true && !this.aiLineOk(kind, d0(m))) { this.stats.agentDrops += 1; return; }
+        // The host shows one AI the game (`agent:view`): to that AI's seat only, small, at most one every 2 s.
+        if (kind === 'agent:view') {
+          const o = isHost && Number.isInteger(m.to) ? this.live().find((x) => x.seat === m.to && x.agent) : null;
+          if (!o || text.length > AGENT_FRAMES.viewBytes || now - o.viewAt < AGENT_FRAMES.viewMs - 250) { this.stats.agentDrops += 1; return; }
+          o.viewAt = now;
+          o.lastView = m.d && typeof m.d === 'object' && !Array.isArray(m.d) ? m.d : null;
+        }
         this.stats.evs += 1;
         const out = { t: 'ev', from: c.seat, k: kind, d: m.d ?? null };
         if (isHost) {
           if (typeof m.to === 'string') { const o = this.clients.get(m.to); if (o && o.helloed && o !== c) this.send(o, out); }
           else if (Number.isInteger(m.to)) { for (const o of this.others(c)) if (o.seat === m.to) this.send(o, out); }
-          // An agent with no game client hears only what is addressed to its seat (the lite feed).
-          else for (const o of this.others(c)) { if (!this.lite(o)) this.send(o, out); }
+          // An agent with no game client hears only what is addressed to its seat (the lite feed), and the party's lines.
+          else for (const o of this.others(c)) { if (!this.lite(o) || this.liteHears(kind)) this.send(o, out); }
         } else {
           const h = this.host();
           if (h) this.send(h, { ...out, id: c.id });
+          // The lite feed (section 18): an AI with no game client hears the party's lines, and an ask made of it.
+          if (!c.agent) this.copyToLite(c, kind, out);
         }
         return;
       }
@@ -607,8 +636,18 @@ export class NetRoom {
     this.reapSeats(now);
     let full = false;
     if (c.want === 'play' && !this.seatClient(c, typeof m.token === 'string' ? m.token : '')) {
-      if (c.agent) return refuse('agents-off', 'no AI seat is free in this room');
-      full = true; c.waiting = true;
+      // The studio's own house guide (a loopback) makes way for an AI with a pass (the owner's Claude, say).
+      const house = c.agent && !c.conn.loopback ? this.live().find((o) => o.agent && o.conn.loopback && o.seat !== null) : null;
+      if (house) {
+        const seat = house.seat;
+        this.error(house, 'agent-yield', 'an AI with a pass took this seat');
+        this.kick(house, 'agent-yield', 4002);
+        if (this.seats.get(seat)?.token === house.token) { this.seats.delete(seat); this.seatsDirty = true; }
+      }
+      if (!house || !this.seatClient(c, '')) {
+        if (c.agent) return refuse('agents-off', 'no AI seat is free in this room');
+        full = true; c.waiting = true;
+      }
     }
     if (c.seat === null) c.name = c.typed || (c.want === 'screen' && !c.watch ? 'Screen' : 'Watcher');
     if (c.seat !== null && !c.agent) this.lastHumanAt = now;
@@ -760,6 +799,73 @@ export class NetRoom {
     }
   }
 
+  /* ------------------------------------------------------------ agent hands and brains (section 18) */
+
+  /** The game's agents.json (the Table reads it once from the build): the only goals and lines an AI here has. */
+  setVocabulary(raw) {
+    this.vocab = raw ? vocabularyOf(raw).vocab : null;
+    return Boolean(this.vocab);
+  }
+
+  /** The seats people hold now (a "player" argument names one of them). */
+  peopleSeats() { return this.seatedHumans().map((c) => c.seat); }
+
+  /**
+   * Whether this AI may send this event: `agent:do` (a goal of the vocabulary, arguments that fit the view the host
+   * last showed it, at most one every 3 s), `say:<lineId>` (a line of the vocabulary, on a server whose AI may talk),
+   * never `agent:view`, `chat:` or `emote:` (an AI never types), and nothing else from an AI with no game client.
+   */
+  agentEvOk(c, kind, m, bytes, now) {
+    if (kind === 'agent:view') return false;
+    const ctx = { view: c.lastView, players: this.peopleSeats() };
+    const d = m.d && typeof m.d === 'object' && !Array.isArray(m.d) ? m.d : {};
+    if (kind === 'agent:do') {
+      if (c.id === this.hostId || !this.vocab || bytes > 1024 || now - c.doAt < AGENT_FRAMES.doMs) return false;
+      const goal = this.vocab.goals[d.goal];
+      if (typeof d.goal !== 'string' || !goal || checkArgs(goal.args, d.args, ctx)) return false;
+      c.doAt = now;
+      return true;
+    }
+    if (SPEECH.test(kind)) {
+      const id = SAY.exec(kind)?.[1];
+      const line = id && this.vocab ? this.vocab.lines[id] : null;
+      return Boolean(line && talks(this.policy) && bytes <= 1024 && !checkArgs(line.args, d.args, ctx));
+    }
+    return !this.lite(c);
+  }
+
+  /**
+   * A line a host relays for an AI (`say:<lineId>`, `d.ai`): a line of the vocabulary on a server whose AI may talk,
+   * arguments that fit (a view argument: the speaking AI's latest view, or for a guide no AI holds, an id at most).
+   * A host cannot put words of its own in an AI's mouth on other screens.
+   */
+  aiLineOk(kind, d) {
+    const id = SAY.exec(kind)?.[1];
+    const line = id && this.vocab ? this.vocab.lines[id] : null;
+    if (!line || !talks(this.policy)) return false;
+    const speaker = Number.isInteger(d.seat) ? this.live().find((o) => o.seat === d.seat && o.agent) : null;
+    if (Number.isInteger(d.seat) && !speaker) return false;
+    const args = d.args && typeof d.args === 'object' ? d.args : {};
+    const view = speaker ? speaker.lastView : Object.fromEntries(Object.entries(line.args).filter(([, sp]) => sp.kind === 'view').map(([k, sp]) => [sp.key, /^[a-z0-9][a-z0-9_-]{0,39}$/.test(String(args[k] ?? '')) ? [args[k]] : []]));
+    return !checkArgs(line.args, args, { view, players: this.peopleSeats() });
+  }
+
+  /** What an AI with no game client hears of a host's broadcast: the party's lines (free chat only on a "game" server). */
+  liteHears(kind) { return /^(?:say|emote):/i.test(kind) || (/^chat/i.test(kind) && this.policy.speech === 'game'); }
+
+  /** A person's line, copied to every AI with no game client; a person's ask (`ask:<id>`, d.seat), to that AI alone. */
+  copyToLite(c, kind, out) {
+    const ask = ASK.exec(kind)?.[1];
+    if (ask) {
+      const seat = out.d && Number.isInteger(out.d.seat) ? out.d.seat : null;
+      if (seat === null || (this.vocab && !this.vocab.asks[ask])) return;
+      for (const o of this.live()) if (o !== c && this.lite(o) && o.seat === seat) this.send(o, out);
+      return;
+    }
+    if (!SPEECH.test(kind) || !this.liteHears(kind)) return;
+    for (const o of this.live()) if (o !== c && this.lite(o) && o.id !== this.hostId) this.send(o, out);
+  }
+
   /* ------------------------------------------------------------ watchers (section 16) */
 
   /**
@@ -871,7 +977,8 @@ export class NetRoom {
     // becomes a bot instead of a frozen body.
     for (const c of [...this.clients.values()]) {
       if (!c.helloed) { if (now - c.joinedAt > 5000) { this.clients.delete(c.id); try { c.conn.close(4000, 'no-hello'); } catch { /* gone */ } } continue; }
-      if (now - c.lastSeen > this.idleMs) this.kick(c, 'silent', 4000);
+      // A loopback (the Table's own house agent) cannot be half-open: it is never closed for silence.
+      if (now - c.lastSeen > this.idleMs && !c.conn.loopback) this.kick(c, 'silent', 4000);
     }
     // A host that stopped sending snapshots while others are present.
     const h = this.host();
@@ -1473,6 +1580,8 @@ export class NetRoom {
       policy: this.policyOut(),
       ...(this.vote ? { vote: this.voteView() } : {}),
       caps: [...this.caps],
+      // Revision 7: whether this room's game has a vocabulary its AI may speak (agents.json).
+      vocab: Boolean(this.vocab),
       memory: {
         snapBytes: this.lastSnapText ? this.lastSnapText.length : 0,
         ckptBytes: this.lastCkpt ? JSON.stringify(this.lastCkpt).length : 0,

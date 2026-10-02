@@ -39,6 +39,11 @@
  *     an AI's seat is marked (`peer.agent`, `net.isAgent(seat)`, every name
  *     ends in " · AI"); `Roster` keeps a hybrid server's AI seats; `net.hushed`
  *     is the player's "Quiet AI".
+ *   - Agent hands and brains (revision 7, NETPLAY.md section 18): an AI with no
+ *     game client of its own sees the game through `agent:view` events the host
+ *     sends its seat and moves through `agent:do` goals; it speaks only the
+ *     game's `agents.json` lines (`say:<lineId>`). `@homie-rocks/studio/agents`
+ *     (`useAgents`) is the host's side of it; this file only carries the frames.
  *
  * WHAT IT DOES NOT DO: rendering, physics, input devices, bots. `Roster` below
  * is the bot-yield bookkeeping a host needs; the bots themselves are the game's.
@@ -47,9 +52,9 @@
 
 export const NETPLAY_VERSION = 1;
 /** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
-export const NETPLAY_REVISION = 6;
+export const NETPLAY_REVISION = 7;
 /** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
-export const NETPLAY_MARK = 'homie-netplay-rev:6';
+export const NETPLAY_MARK = 'homie-netplay-rev:7';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -1235,8 +1240,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       case 'ev': {
         const k = String(m['k'] ?? '');
         const from = typeof m['from'] === 'number' ? m['from'] : null;
-        // Quiet AI (section 17): this browser does not hear an AI's speech.
-        if (hushed && SPEECH_KIND.test(k) && from !== null && api.isAgent(from)) return;
+        // Quiet AI (section 17): this browser does not hear an AI's speech, its own or relayed by the host (section 18:
+        // a host relays an AI's line with `d.ai`).
+        if (hushed && SPEECH_KIND.test(k) && ((from !== null && api.isAgent(from)) || (m['d'] && typeof m['d'] === 'object' && (m['d'] as { ai?: unknown }).ai === true))) return;
         emit('event', { k, d: m['d'], from, ...(typeof m['id'] === 'string' ? { id: m['id'] } : {}) });
         return;
       }

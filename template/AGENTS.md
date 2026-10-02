@@ -198,6 +198,16 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **Agent passes:** `npx --no-install homie-studio agents pass <id> --label Claude [--server <server>]` gives an
   AI its way into a seat (shown once; `agents revoke <pass>` ends it). It sits with `POST /<id>/api/agent`
   (Bearer pass), only in a room with people in it, and never on a humans-only server.
+- **AI guides that talk (0.17.0):** a beginner server's guides get a brain. A game's own words for them are
+  `games/<id>/agents.json` (its vocabulary: goals, lines, the asks a player taps; the build checks it), and
+  `useAgents` from `@homie-rocks/studio/agents` is the host's side: a view per guide, the scripted floor, goals
+  for the hands, lines drawn from the vocabulary (`NETPLAY.md` section 18; Ember Vale is the reference). The
+  brain is the server's: `agents brain <id> <server> workers-ai` (the studio's own Workers AI; `npm run deploy`
+  binds it; at most `--budget` neurons a day, 8,000 by default) or `owner-key` (the owner's own key, set with
+  `agents brain key` on this computer, never in a chat; a dollar cap a day). The first time AI talk is turned on
+  it only ASKS. The AI never types: it picks a goal and a line id; the relay drops anything else. With no AI, over
+  budget, or between decisions, the game's `decide` plays. `agent_sit` (the local MCP) puts the owner's own
+  Claude in a guide's seat.
 
 ## Continuing a build from the Claude app
 

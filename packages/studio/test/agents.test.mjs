@@ -147,7 +147,7 @@ test('refusals: an AI hello with no pass, any AI on a humans-only server, and a 
   r2.join({}, { caps: ['agents'] });
   const l2 = r2.agent({ hands: 'host' });
   assert.equal(l2.last('welcome').seat, 7);
-  assert.equal(room.facts().rev, 6);
+  assert.equal(room.facts().rev, 7);
 });
 
 test('names: a person cannot type an AI mark, a kids server uses handles, and an agent\'s name is its label', () => {
@@ -267,17 +267,20 @@ test('speech: quick lines only drops free chat (anyone\'s), off drops all of it,
   for (const k of ['chat', 'say:x', 'emote']) op.say({ t: 'ev', k, d: 1 });
   op.say({ t: 'ev', k: 'jump', d: 1 });
   assert.deepEqual(oh.all('ev').map((e) => e.k), ['jump']);
-  const r = relay({}, POL({ kind: 'hybrid', aiSeats: 1 }));
+  // An agent's lines (revision 7: only its game's vocabulary, on a server whose AI may talk): one every 4 s, 8 a minute.
+  const r = relay({}, POL({ kind: 'hybrid', aiSeats: 1, brain: 'workers-ai' }));
+  r.room.setVocabulary({ v: 1, goals: { wait: { about: 'wait here' } }, lines: Object.fromEntries(['hi', 'again', ...Array.from({ length: 12 }, (_, i) => `l${i}`)].map((k) => [k, { text: k }])) });
   const rh = r.join();
   const a = r.agent();
   a.say({ t: 'ev', k: 'say:hi', d: {} });
   a.say({ t: 'ev', k: 'say:again', d: {} });
   assert.deepEqual(rh.all('ev').map((e) => e.k), ['say:hi'], 'one line every 4 s');
-  for (let i = 0; i < 12; i += 1) { r.advance(4100); a.say({ t: 'ev', k: `say:${i}`, d: {} }); }
+  for (let i = 0; i < 12; i += 1) { r.advance(4100); a.say({ t: 'ev', k: `say:l${i}`, d: {} }); }
   assert.ok(rh.all('ev').length <= 9, `at most 8 a minute (got ${rh.all('ev').length} in ~53 s)`);
   assert.ok(r.room.stats.agentDrops >= 1);
-  a.say({ t: 'ev', k: 'agent:do', d: {} });
-  assert.equal(rh.last('ev').k, 'agent:do', 'what is not speech passes');
+  r.advance(3000);
+  a.say({ t: 'ev', k: 'agent:do', d: { goal: 'wait', args: {} } });
+  assert.equal(rh.last('ev').k, 'agent:do', 'what is not speech passes (a goal of the vocabulary)');
 });
 
 /* ------------------------------------------------------------------ the vote */

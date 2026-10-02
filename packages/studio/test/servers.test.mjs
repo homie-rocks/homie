@@ -13,7 +13,11 @@
  *     owner confirms with one tap, and its live rooms hear the new policy; no key can confirm; removing a member asks;
  *   - the site: the Servers band, /<game>/servers/, a server's page and every door page escape the owner's words;
  *     rooms in lists say their server and their AI;
- *   - the build: a game's netplay revision (the office's "predates servers") and game.json server seeds.
+ *   - the build: a game's netplay revision (the office's "predates servers") and game.json server seeds;
+ *   - 0.17.0, AI guides at the Table: the owner's consent, house guides seated, a decision on the alarm with Workers AI
+ *     (a stand-in binding), its neurons in stats_daily, the office's budget and decisions, a budget of 0 going
+ *     scripted, a raised dollar cap asked of the owner, AI talk off standing the guides; the build refuses a bad
+ *     agents.json.
  * The D1 is node:sqlite with the studio's own migrations; the Durable Objects are the real Table and Lobby.
  * Run: node --test packages/studio/test/servers.test.mjs
  */
@@ -130,7 +134,7 @@ function namespace(Klass, envRef, waits) {
     get(id) {
       if (!objs.has(id)) {
         const store = new Map();
-        const ctx = { storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); }, delete: async (k) => { store.delete(k); } }, blockConcurrencyWhile: async (fn) => fn(), waitUntil: (p) => waits.push(p) };
+        const ctx = { storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); }, delete: async (k) => { store.delete(k); }, setAlarm: async (at) => { store.set('__alarm', at); } }, blockConcurrencyWhile: async (fn) => fn(), waitUntil: (p) => waits.push(p) };
         objs.set(id, new Klass(ctx, envRef.env));
       }
       const o = objs.get(id);
@@ -227,7 +231,7 @@ test('the office makes servers at once; their pages, the Servers band and the li
   const list = await (await fetchSite('/_studio/api/servers', { headers: key })).json();
   const owl = list.games.find((g) => g.id === 'owl-run');
   assert.deepEqual(owl.servers.map((s) => s.id), ['public', 'night-shift', 'evil', 'people-only']);
-  assert.equal(owl.build.netplayRev, 6);
+  assert.equal(owl.build.netplayRev, 7);
   assert.equal(owl.build.predates, false);
   const vale = list.games.find((g) => g.id === 'vale');
   assert.equal(vale.servers.find((s) => s.id === 'hearth').from, 'game.json');
@@ -485,7 +489,7 @@ test('the office: narrowing a server from an office key is an ASK the owner conf
 test('the build knows a game\'s netplay revision: a build without the helper\'s mark predates servers', async () => {
   const { dir } = await site();
   const { netplayRevOf } = await import('../lib/build.mjs');
-  assert.equal(netplayRevOf(join(dir, 'site', 'dist', 'games', 'owl-run')), 6);
+  assert.equal(netplayRevOf(join(dir, 'site', 'dist', 'games', 'owl-run')), 7);
   const old = join(scratch, 'old-build');
   mkdirSync(join(old, 'assets'), { recursive: true });
   writeFileSync(join(old, 'assets', 'main.js'), 'console.log("netplay v1, revision 5")');
@@ -493,4 +497,100 @@ test('the build knows a game\'s netplay revision: a build without the helper\'s 
   const cat = JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games.json'), 'utf8'));
   assert.deepEqual(cat.games.find((g) => g.id === 'vale').servers.map((s) => s.id), ['hearth']);
   assert.ok(SERVERS_MIGRATION.includes('ALTER TABLE office_invites ADD COLUMN server TEXT;'));
+});
+
+/* ------------------------------------------------------------------ 0.17.0: AI guides at the Table */
+
+test('AI guides at the Table: consent, house guides, a Workers AI decision on the alarm, its neurons counted, the budget, talk off', async () => {
+  const { env, DB, fetchSite, seat, owner, post, waits } = await site();
+  const calls = [];
+  env.AI = { run: async (model, input) => { calls.push({ model, input }); return { response: { goal: 'quest', args: { quest: 'slime-hunt' }, say: 'quest_help', sayArgs: { quest: 'slime-hunt' } }, usage: { prompt_tokens: 700, completion_tokens: 40 } }; } };
+  let r = await post('/_studio/api/servers', { game: 'vale', name: 'First Steps', policy: 'beginner', guides: 2 });
+  assert.equal(r.status, 200);
+  assert.match((await r.json()).notes.join(' '), /agents brain vale first-steps workers-ai/, 'making the server says how its guides talk');
+  r = await post('/_studio/api/agents/brain', { game: 'vale', server: 'first-steps', mode: 'workers-ai', budget: 1000 });
+  let j = await r.json();
+  assert.equal(r.status, 202, 'the first time AI talk is turned on is the owner\'s consent');
+  assert.match(j.ask.what, /at most 1,000 neurons a day/);
+  r = await fetchSite(`/_studio/confirm/${j.ask.id}`, { method: 'POST', headers: { ...owner, 'content-type': 'application/x-www-form-urlencoded', origin: 'https://owls.example' }, body: 'do=yes' });
+  assert.equal(r.status, 200);
+  const room = (await (await fetchSite('/vale/api/lobby?server=first-steps', { method: 'POST' })).json()).room;
+  assert.match(room, /^s-first-steps-\d+$/);
+  const host = await seat('vale', room, { caps: ['agents', 'skill'] });
+  const table = host.table;
+  // The policy the Worker hands every socket of this server (seat() attaches straight to the room).
+  table.room.setPolicy({ ...policyOf(serverOf({ id: 'first-steps', name: 'First Steps', policy: 'beginner', guides: 2, brain: 'workers-ai', updatedAt: Date.now() }), { seats: 8 }) });
+  await table.vocabRead;
+  table.syncHouse();
+  await Promise.all(waits.splice(0));
+  const guides = table.room.live().filter((c) => c.agent);
+  assert.deepEqual(guides.map((c) => c.name), ['Wren · AI', 'Ash · AI'], 'two house guides sit, named from the game\'s agents.json');
+  assert.equal(table.room.facts().counts.players, 1);
+  // The host shows a guide the game, and its person asks for help: the brain decides on the alarm.
+  const g = guides[0].seat;
+  host.h.onMessage(JSON.stringify({ t: 'ev', k: 'agent:view', to: g, d: { quests: ['slime-hunt', 'king-slime'], party: [{ seat: 0, dist: 90 }], zone: 'camp' } }));
+  host.h.onMessage(JSON.stringify({ t: 'ev', k: 'ask:ask_help', to: g, d: { slot: 0, seat: g, args: { quest: 'slime-hunt' } } }));
+  assert.ok(Number.isFinite(table.ctx.storage ? 1 : 0));
+  await table.alarm();
+  assert.equal(calls.length >= 1, true, 'Workers AI was asked');
+  assert.equal(calls[0].model, '@cf/meta/llama-3.1-8b-instruct-fp8-fast');
+  assert.doesNotMatch(JSON.stringify(calls[0].input), /owls\.example|hsk_|pl_|studio_/, 'nothing about a person or the studio\'s keys in the prompt');
+  const said = host.conn.sent.filter((m) => m.t === 'ev' && m.from === g).map((m) => m.k);
+  assert.deepEqual(said, ['agent:do', 'say:quest_help'], 'the decision reached the host as a goal and a line');
+  await table.flushBrain(true);
+  const counted = Object.fromEntries(DB.sql.prepare("SELECT metric, SUM(n) AS n FROM stats_daily WHERE metric LIKE 'brain-%' GROUP BY metric").all().map((x) => [x.metric, x.n]));
+  assert.equal(counted['brain-calls'], calls.length);
+  assert.ok(counted['brain-neurons'] >= 4 * calls.length, JSON.stringify(counted));
+  // The office: the day's budget and what it used, the room's guides and their decisions.
+  const view = await (await fetchSite('/_studio/api/office', { headers: { authorization: `Bearer hsk_${'0e'.repeat(24)}` } })).json();
+  assert.equal(view.brain.budget.neurons, 1000);
+  assert.ok(view.brain.used.neurons >= 4);
+  assert.equal(view.brain.ai, true);
+  const rr = view.games.find((x) => x.id === 'vale').rooms.find((x) => x.room === room);
+  assert.equal(rr.brains.brain, 'workers-ai');
+  assert.equal(rr.brains.decisions.at(-1).provider, 'workers-ai');
+  assert.equal(view.games.find((x) => x.id === 'vale').vocab, true);
+  // A budget of 0: the guides answer from the script; Workers AI is not asked.
+  r = await post('/_studio/api/agents/brain', { game: 'vale', server: 'first-steps', mode: 'workers-ai', budget: 0 });
+  assert.equal(r.status, 200, 'lowering the budget happens at once');
+  await table.readBrainDay();
+  const before = calls.length;
+  await new Promise((done) => setTimeout(done, 3100));
+  host.h.onMessage(JSON.stringify({ t: 'ev', k: 'ask:lead_me', to: g, d: { slot: 0, seat: g, args: { place: 'camp' } } }));
+  await table.alarm();
+  assert.equal(calls.length, before, 'no Workers AI call over budget');
+  const last = table.house.decisions.at(-1);
+  assert.equal(last.provider, 'script');
+  assert.equal(last.goal, 'lead');
+  assert.match(last.why, /budget is spent/);
+  // The owner's own key: raising the day's dollar cap is the owner's to confirm; lowering it is not.
+  r = await post('/_studio/api/agents/brain', { game: 'vale', server: 'first-steps', mode: 'owner-key', budget: 5 });
+  assert.equal(r.status, 202, 'more of the owner\'s money: asked');
+  r = await post('/_studio/api/agents/brain', { game: 'vale', server: 'first-steps', mode: 'owner-key', budget: 0.5 });
+  j = await r.json();
+  assert.equal(r.status, 200, JSON.stringify(j));
+  assert.match(j.note, /homie-studio agents brain key/, 'no key yet: how to set it, on the owner\'s own computer');
+  // AI talk off: the room hears it at once and the guides stand.
+  r = await post('/_studio/api/agents/brain', { game: 'vale', server: 'first-steps', mode: 'script' });
+  assert.equal(r.status, 200);
+  await Promise.all(waits.splice(0));
+  assert.equal(table.room.policy.brain, 'script');
+  assert.equal(table.room.live().filter((c) => c.agent).length, 0, 'talk off: the house guides stand at once');
+});
+
+test('the build refuses an agents.json that is not a vocabulary, and serves a good one beside the game', async () => {
+  const dir = studio('vocab');
+  assert.equal(run(['game', 'new', 'vale', '--from', 'ember-vale', '--name', 'Vale'], dir).status, 0);
+  let b = JSON.parse(run(['build'], dir).stdout);
+  assert.equal(b.ok, true);
+  assert.equal(JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games', 'vale', 'agents.json'), 'utf8')).v, 1);
+  assert.equal(JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games.json'), 'utf8')).games[0].vocab, true);
+  const file = join(dir, 'games', 'vale', 'agents.json');
+  const v = JSON.parse(readFileSync(file, 'utf8'));
+  v.goals.attack = { about: 'attack a player', args: { seat: 'player' } };
+  v.lines.rude = { text: 'x'.repeat(130) };
+  writeFileSync(file, JSON.stringify(v));
+  b = JSON.parse(run(['build'], dir).stdout);
+  assert.equal(b.ok, false);
+  assert.match(b.why, /agents\.json: goals\.attack: a guide never acts against a player .*; lines\.rude: text is over 120 characters/);
 });

@@ -80,6 +80,17 @@ Make it the game the person asked for, in small steps:
   // positioning: weight the hot spot's targets by (1.5 - s.positioning): 0 leaves it to people, 1 fights for it
   ```
   Never let a bot's name pass for a person's: an AI's name already ends in " · AI".
+- **Write the guide vocabulary** (AI guides that talk, NETPLAY.md section 18), when the game has a beginner
+  server or the person wants guides: `games/<id>/agents.json` is the only words a guide has. Write it WITH the
+  person, in the game's own voice: a `persona` (two short sentences), 3 `names`, 4 to 6 `goals` the bot code can
+  actually carry out (`follow` a `"player"`, a `quest` from `"view.quests"`, `lead` to a list of places, `guard`,
+  `back`), 6 to 10 short `lines` (120 characters, kind, never sarcastic, never about a person), and 2 or 3 `asks`
+  a player taps (one with `"leave": true`: "No thanks"), each with the `goal` and `say` that answer it. A goal is
+  something done WITH players, never to one (the build refuses one that reads as acting against a player). Then
+  `useAgents(room.net, vocab, { view, decide })` from `@homie-rocks/studio/agents`: `view(slot)` is game state
+  only (seats, never names; under 2 KB), `decide(view)` is the scripted floor, the hands read
+  `agents.goalOf(slot)` and call `agents.done(slot)`, and lines are bubbles from `agents.on('say')`. Ember Vale
+  (`--from ember-vale`) is the worked example. The brain itself is the owner's switch (the `servers` skill).
 - Update `game.json` `name` and `blurb`, and the `<title>`.
 
 ## Progress that lasts: cloud saves

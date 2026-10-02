@@ -236,6 +236,12 @@ its **Quick play** server (`public`), so every old link keeps working.
 - `/<id>/api/servers` is the servers with their live counts (cacheable 15 s). `/api/rooms` rows say their
   `server`, `policy` and `ai`.
 
+**AI guides that talk** (0.17.0, `netplay/NETPLAY.md` section 18): a guide's line is the game's own text
+(its `agents.json`), drawn by the game (Ember Vale: a bubble over the guide); **Quiet AI** hides it on that
+screen. Asking a guide is buttons the game draws, never a text box. The page itself adds nothing for guides.
+The office shows each server's brain, today's Workers AI neurons or dollars against the day's budget, and each
+room's last guide decisions (seats and ids only).
+
 **An AI's seat** (an agent pass from `homie-studio agents pass`): `POST /<id>/api/agent` with `Authorization:
 Bearer <pass>` and `{ "server": "<id>" }` answers a room with people in it (never an empty one), a ticket, its
 socket and (an AI that runs the game itself) the frame to load. A humans-only server answers 403 "This server is

@@ -197,6 +197,11 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   step('D1 migrations applied');
+  // Workers AI (0.17.0): bound only when a server's AI guides think with it.
+  if (needsWorkersAi(root, w, cf.d1)) {
+    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true }));
+    step('Workers AI bound (AI): a server\'s AI guides think with it, within the day\'s budget (free allocation: 10,000 neurons a day)');
+  }
 
   const started = Date.now();
   const dep = w(['deploy', ...repoVar(root)]);
@@ -237,6 +242,21 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),
     claim: Boolean(claim), directory,
   };
+}
+
+/**
+ * Whether any server of this studio's games thinks with Workers AI (a D1 row with brain 'workers-ai', or a game.json
+ * seed): deploy binds AI only then (DESIGN section 6). A database without the servers table yet says no.
+ */
+export function needsWorkersAi(root, w, db) {
+  try {
+    const cat = JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8'));
+    if ((cat.games ?? []).some((g) => (g.servers ?? []).some((s) => s.brain === 'workers-ai'))) return true;
+  } catch { /* not built */ }
+  const r = w(['d1', 'execute', db, '--remote', '--json', '--command', "SELECT COUNT(*) AS n FROM servers WHERE brain = 'workers-ai' AND state = 'open'"]);
+  if (r.code !== 0) return false;
+  const parsed = parseJson(r.stdout ?? r.out);
+  return Number((Array.isArray(parsed) ? parsed[0] : parsed)?.results?.[0]?.n) > 0;
 }
 
 /*
@@ -299,6 +319,14 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
   const first = migrate.code !== 0 && /not found|could(?:n't| not) find|does not exist|no database|database_id/i.test(migrate.out);
   if (migrate.code !== 0 && !first) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   if (!first) step('D1 migrations applied');
+  // Workers AI (0.17.0): bound only when a server's AI guides think with it. The checkout is thrown away after.
+  if (!first && needsWorkersAi(root, w, names.binding)) {
+    try {
+      const json = JSON.parse(readFileSync(configPath(root), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
+      if (!json.ai) { json.ai = { binding: 'AI' }; writeFileSync(configPath(root), `${JSON.stringify(json, null, 2)}\n`); }
+      step('Workers AI bound (AI) for the AI guides');
+    } catch { step('could not add the Workers AI binding to wrangler.jsonc: the guides answer from the game\'s script'); }
+  }
   const started = Date.now();
   const dep = w(['deploy', ...repoVar(root)]);
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);

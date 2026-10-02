@@ -21,12 +21,20 @@
   .panel li { margin: 4px 0; color: #e7d9b4; }
   .panel li small { color: #a39a80; }
   .panel .close { float: right; background: none; border: 0; color: #c9c0a6; font-size: 20px; cursor: pointer; }
+  /* Asking a guide: buttons (agents.json "asks"), never a text box. Bottom centre, clear of the stick and STRIKE. */
+  .asks { left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); max-width: min(560px, calc(100vw - 200px)); box-sizing: border-box; padding: 8px 10px; border-radius: 14px; background: rgba(10,20,18,.84); border: 1px solid rgba(127,216,200,.45); text-align: center; }
+  .asks .who { font: 700 12.5px/1.2 inherit; font-family: inherit; color: #7fd8c8; margin: 0 0 6px; }
+  .asks .list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .asks button { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(127,216,200,.5); background: rgba(127,216,200,.12); color: #e9fff9; font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; }
+  .asks button.sent { background: #7fd8c8; color: #0b1512; }
+  @media (max-width: 540px) { .asks { max-width: calc(100vw - 168px); bottom: calc(10px + env(safe-area-inset-bottom)); } .asks button { min-height: 40px; padding: 0 10px; } }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div class="ui pill"><button type="button" id="who"></button><button type="button" id="hall-btn">Hall of the Fallen</button></div>
+<div class="ui asks" id="asks" hidden aria-live="polite"><p class="who" id="asks-who"></p><div class="list" id="asks-list"></div></div>
 <div class="ui panel" id="make" hidden>
   <h2>A new hero</h2>
   <p>Your hero keeps every level and coin, on every device you play on.</p>

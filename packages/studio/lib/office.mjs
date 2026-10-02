@@ -59,7 +59,7 @@ function signinTo(root, url, to) {
 
 export const askedFor = (root, url, r, command) => {
   if (!r.ok) return { ok: false, command, why: r.message ?? r.why ?? `the studio said ${r.error ?? r.status}` };
-  if (r.needs !== 'owner' || !r.ask) return { ok: true, command, done: true, result: r, message: r.what ? `Done: ${r.what}` : 'Done.' };
+  if (r.needs !== 'owner' || !r.ask) return { ok: true, command, done: true, result: r, message: `${r.what ? `Done: ${r.what}` : 'Done.'}${r.note ? ` ${r.note}` : ''}` };
   const link = signinTo(root, url, `/_studio/confirm/${r.ask.id}`);
   return {
     ok: true, command, asked: true, ask: r.ask, what: r.ask.what,

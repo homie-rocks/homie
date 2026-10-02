@@ -22,8 +22,18 @@
  * Servers and the skill dial (contract revision 6): the vale's bots hunt at the room's dial (`room.skillOf(body)`:
  * how soon they notice a slime, how close they stand, how often they strike), and a beginner server's AI guide seats
  * are kept as AI bodies, marked " · AI". createRoom does the seats; the bots below read the dial.
+ *
+ * AI GUIDES (contract revision 7, @homie-rocks/studio/agents): on a beginner server the guide seats get a brain. The
+ * vale's own words for it are ../agents.json: the goals a guide may take (follow, quest, lead, guard, back), the lines
+ * it may say, and the asks a new hero can tap ("Help me with King Slime", "Take me to camp", "No thanks"). The HANDS
+ * below play every frame at the dial: they walk to the goal, hunt what the goal says, and tell agents.done() when it is
+ * done. The BRAIN is the server's (the Table's Workers AI, the owner's key, or the owner's own Claude in the seat); with
+ * none, or between its decisions, `decide` below is the floor. A guide's line is drawn as a bubble from agents.json,
+ * never from a model; "Quiet AI" hides them.
  */
-import { AI_MARK, createControls, createRoom, createSaves, exposePort, jitter, q, standoff, type BodyBase, type NetEvent } from '@homie-rocks/studio/port';
+import { AI_MARK, createControls, createRoom, createSaves, exposePort, jitter, q, standoff, type BodyBase, type NetEvent, type Skill } from '@homie-rocks/studio/port';
+import { useAgents, type Goal, type Vocabulary } from '@homie-rocks/studio/agents';
+import vocabulary from '../agents.json';
 
 /* ------------------------------------------------------------------ rules */
 const W = 1600;
@@ -107,6 +117,10 @@ let slimeSeq = 0;
 let spawnAt = 0;
 let kingAt = 0;
 const me = { x: W / 2, y: H / 2, face: 0, has: false, strikes: 0, flashAt: 0 };
+/** Where a guide can lead the party (agents.json "lead"). */
+const PLACES: Record<string, { x: number; y: number }> = { camp: { x: W / 2, y: H / 2 }, king: { x: W / 2, y: 120 }, 'east-woods': { x: W - 200, y: H / 2 + 30 } };
+/** When the last King Slime fell (host): a guide on the King's quest is done. */
+let kingSlainAt = 0;
 
 const room = createRoom<Body, SlimeRow[], { slimes: Slime[]; seq: number }>({
   game: 'ember-vale',
@@ -142,6 +156,62 @@ const room = createRoom<Body, SlimeRow[], { slimes: Slime[]; seq: number }>({
 });
 const net = room.net;
 const myLevel = (): number => hero?.level ?? 1;
+
+/* ------------------------------------------------------------------ the guides' brain (agents.json) */
+type PartyRow = { seat: number; dist: number; hp: number; down: boolean };
+const greeted = new Map<number, Set<number>>();
+const warnedAt = new Map<number, number>();
+const agents = useAgents(net, vocabulary as unknown as Vocabulary, {
+  // What a guide sees (host, at most every 2 s, under 2 KB): the vale near it, never a name, an account or typed text.
+  view: (slot) => {
+    const b = room.bodies.get(slot);
+    if (!b) return {};
+    const party: PartyRow[] = [...room.bodies.values()].filter((o) => !o.bot && o.seat !== null)
+      .map((o) => ({ seat: o.seat as number, dist: Math.round(Math.hypot(o.x - b.x, o.y - b.y)), hp: Math.round((100 * o.hp) / Math.max(1, o.maxHp)), down: Boolean(o.flags & DOWN) }))
+      .filter((p) => p.dist < 900).sort((x, y) => x.dist - y.dist).slice(0, 6);
+    const king = slimes.find((o) => o.size === 3);
+    const near = slimes.filter((o) => Math.hypot(o.x - b.x, o.y - b.y) < 350).length;
+    const c = room.clock();
+    return {
+      me: { hp: Math.round((100 * b.hp) / Math.max(1, b.maxHp)), down: Boolean(b.flags & DOWN) },
+      zone: zoneOf(b.x, b.y),
+      // A brain thinks again when this changes, so it changes only for what matters: the King close, or a swarm.
+      danger: king && Math.hypot(king.x - b.x, king.y - b.y) < 450 ? 'the King Slime' : near >= 5 ? 'slimes' : null,
+      party, quests: openQuests(), slimes: { near, king: Boolean(king) }, round: { phase: c.phase, left: c.secondsLeft },
+    };
+  },
+  // The scripted floor: with no AI, over budget, and between an AI's decisions. Synchronous; it never waits.
+  decide: (v, { slot, goal }) => {
+    const a = (v['asks'] as { k: string; args: Record<string, unknown> }[] | undefined)?.[0];
+    if (a?.k === 'ask_help') return { goal: 'quest', args: { quest: a.args['quest'] }, say: 'quest_help', sayArgs: { quest: a.args['quest'] } };
+    if (a?.k === 'lead_me') return { goal: 'lead', args: { place: a.args['place'] }, say: 'follow_me', sayArgs: { place: a.args['place'] } };
+    if (a?.k === 'no_thanks') return { goal: 'back', say: 'bye' };
+    const party = (v['party'] as PartyRow[] | undefined) ?? [];
+    // What a hero asked for is carried through until it is done.
+    if (goal && goal.state === 'active' && ['quest', 'lead', 'back'].includes(goal.goal)) return null;
+    const seen = greeted.get(slot) ?? new Set<number>();
+    greeted.set(slot, seen);
+    const fresh = party.find((p) => !seen.has(p.seat) && p.dist < 420);
+    if (fresh) { seen.add(fresh.seat); return { goal: 'follow', args: { seat: fresh.seat }, say: 'hello', sayArgs: { player: fresh.seat } }; }
+    if (v['danger'] === 'the King Slime') {
+      const warn = room.net.now() - (warnedAt.get(slot) ?? 0) > 30_000;
+      if (warn) warnedAt.set(slot, room.net.now());
+      return { goal: 'guard', ...(warn ? { say: 'careful', sayArgs: { thing: 'the King Slime' } } : {}) };
+    }
+    const hurt = party.find((p) => !p.down && p.hp < 40);
+    if (hurt) return { goal: 'follow', args: { seat: hurt.seat } };
+    if (party[0]) return { goal: 'follow', args: { seat: party[0].seat } };
+    return { goal: 'lead', args: { place: 'camp' } };
+  },
+});
+/** A guide's line over its head for a few seconds: the game's own words (agents.json), never a model's. */
+const bubbles = new Map<number, { text: string; until: number }>();
+/** What the e2e probe reads: goal changes (with the ask that led to one), asks, lines. Never a name or an account. */
+const guideLog: Record<string, unknown>[] = [];
+const logGuide = (row: Record<string, unknown>): void => { guideLog.push({ at: Date.now(), ...row }); if (guideLog.length > 80) guideLog.shift(); };
+agents.on('say', (e) => { bubbles.set(e.slot, { text: e.text, until: performance.now() + 3600 }); logGuide({ ev: 'say', slot: e.slot, line: e.line }); });
+agents.on('goal', (e) => logGuide({ ev: 'goal', slot: e.slot, goal: e.goal.goal, args: e.goal.args, from: e.goal.from, askAt: e.askAt }));
+agents.on('ask', (e) => logGuide({ ev: 'ask', slot: e.slot, k: e.k, args: e.args, from: e.from }));
 function mine(): Body {
   const b = room.mine();
   return b ?? ({ slot: -1, seat: room.mySeat(), name: net.name, bot: false, score: 0, x: me.x, y: me.y, hp: maxHpOf(myLevel()), maxHp: maxHpOf(myLevel()), level: myLevel(), face: me.face, flags: 0, downUntil: 0, atkAt: 0, strikeAt: 0, tx: 0, ty: 0 } as Body);
@@ -170,6 +240,7 @@ function strike(b: Body, now: number): void {
       const xp = s.size === 3 ? 60 : 6 * s.size;
       const gold = s.size === 3 ? 50 : 2 + Math.floor(Math.random() * 4) * s.size;
       b.score += xp;
+      if (s.size === 3) kingSlainAt = now;
       tell(b, 'loot', { xp, gold });
       // Everyone hears who slew it (a watcher on Auto cuts to them); the loot itself is the slayer's alone.
       if (!b.bot && b.seat !== null) room.send('slain', { seat: b.seat });
@@ -193,7 +264,9 @@ function stepHost(dt: number): void {
       continue;
     }
     let wants = false;
-    if (b.bot) {
+    const guide = b.bot && b.agent?.role === 'guide' ? agents.goalOf(b.slot) : null;
+    if (guide) wants = stepGuide(b, guide, room.skillOf(b), dt, now);
+    else if (b.bot) {
       // Bots are company, not carries: they hunt only what is near them, and strike slower than a person. At the
       // room's dial (section 17): they notice a slime `reactionMs` late, hunt farther afield the more they lean to
       // the front (positioning), aim a little off (aimNoise), and strike sooner the more aggressive they are.
@@ -229,8 +302,104 @@ function stepHost(dt: number): void {
     if (wants && live && now - b.atkAt > STRIKE_MS) strike(b, now);
   }
   if (live) stepSlimes(dt, now);
+  // Every browser's ask buttons offer the quests open now (slow keyed state: sent only when it changes).
+  net.state('quests', openQuests());
   room.update();
 }
+
+/* ------------------------------------------------------------------ the guides' hands */
+const bodyOfSeat = (seat: unknown): Body | null => { for (const o of room.bodies.values()) if (!o.bot && o.seat === seat) return o; return null; };
+const people = (): Body[] => [...room.bodies.values()].filter((o) => !o.bot && o.seat !== null && !(o.flags & DOWN));
+const huntFrom = new Map<number, number>();
+const arrivedAt = new Map<number, number>();
+/**
+ * A guide's body, every host frame, doing its goal at the dial (`s`): where it stands (positioning), how soon it
+ * notices (reactionMs), how far off it strikes (aimNoise), how eagerly (aggression). Returns whether it strikes now.
+ */
+function stepGuide(b: Body, g: Goal, s: Skill, dt: number, now: number): boolean {
+  let tx = b.x; let ty = b.y; let hunt: Slime | null = null;
+  const nearTo = (x: number, y: number, r: number): Slime | null => { const n = nearestSlime(x, y); return n && Math.hypot(n.x - x, n.y - y) < r ? n : null; };
+  switch (g.goal) {
+    case 'follow': {
+      const p = bodyOfSeat(g.args['seat']);
+      if (!p) { agents.done(b.slot, false); break; }
+      // A step behind the hero (closer at a higher dial), each guide to its own side, and the slime that comes for them.
+      const back = standoff(s, 70, 150);
+      const side = (b.slot % 2 ? 1 : -1) * (0.5 + (b.slot % 3) * 0.25);
+      tx = p.x - Math.cos(p.face + side) * back; ty = p.y - Math.sin(p.face + side) * back;
+      hunt = nearTo(p.x, p.y, 200);
+      break;
+    }
+    case 'quest': {
+      const quest = g.args['quest'];
+      if (quest === 'king-slime') {
+        if (kingSlainAt > g.at) { agents.done(b.slot, true); break; }
+        hunt = slimes.find((o) => o.size === 3) ?? null;
+        if (!hunt) { tx = PLACES['king']!.x; ty = PLACES['king']!.y + 70; }
+      } else if (quest === 'big-slime') {
+        hunt = slimes.filter((o) => o.size === 2).sort((x, y) => Math.hypot(x.x - b.x, x.y - b.y) - Math.hypot(y.x - b.x, y.y - b.y))[0] ?? null;
+        if (!hunt) agents.done(b.slot, true);
+      } else {
+        // A slime hunt: the slimes near the party, three of them.
+        if (!huntFrom.has(b.slot) || huntFrom.get(b.slot)! > b.score) huntFrom.set(b.slot, b.score);
+        if (b.score - huntFrom.get(b.slot)! >= 18) { huntFrom.delete(b.slot); agents.done(b.slot, true); break; }
+        const ps = people();
+        const cx = ps.length ? ps.reduce((a, o) => a + o.x, 0) / ps.length : b.x;
+        const cy = ps.length ? ps.reduce((a, o) => a + o.y, 0) / ps.length : b.y;
+        hunt = nearTo(cx, cy, 520) ?? nearestSlime(b.x, b.y);
+      }
+      break;
+    }
+    case 'lead': {
+      const at = PLACES[String(g.args['place'])] ?? PLACES['camp']!;
+      tx = at.x; ty = at.y;
+      // Done when it is there and a hero came along; given up when nobody came within 20 s of it arriving.
+      if (Math.hypot(at.x - b.x, at.y - b.y) < 60) {
+        if (!arrivedAt.has(b.slot)) arrivedAt.set(b.slot, now);
+        if (people().some((o) => Math.hypot(o.x - at.x, o.y - at.y) < 280)) { arrivedAt.delete(b.slot); agents.done(b.slot, true); }
+        else if (now - arrivedAt.get(b.slot)! > 20_000) { arrivedAt.delete(b.slot); agents.done(b.slot, false); }
+      } else arrivedAt.delete(b.slot);
+      hunt = nearTo(b.x, b.y, 110);
+      break;
+    }
+    case 'guard': {
+      const ps = people().filter((o) => Math.hypot(o.x - b.x, o.y - b.y) < 700);
+      const cx = ps.length ? ps.reduce((a, o) => a + o.x, 0) / ps.length : b.x;
+      const cy = ps.length ? ps.reduce((a, o) => a + o.y, 0) / ps.length : b.y;
+      tx = cx + 50; ty = cy + 40;
+      hunt = nearTo(cx, cy, standoff(s, 260, 160));
+      break;
+    }
+    case 'back': {
+      const at = PLACES['camp']!;
+      tx = at.x; ty = at.y;
+      if (Math.hypot(at.x - b.x, at.y - b.y) < 50) agents.done(b.slot, true);
+      break;
+    }
+    default: break;
+  }
+  // Two guides with the same goal never stand in one spot: each keeps its own place around it.
+  if (!hunt && g.goal !== 'follow') { const k = b.slot * 2.4; tx += Math.cos(k) * 46; ty += Math.sin(k) * 46; }
+  // Reaction time: a guide re-aims only every reactionMs, a little off at a low dial.
+  if (hunt) {
+    if (!b.seenAt || now - b.seenAt >= s.reactionMs) { b.seenAt = now; b.ax = hunt.x + jitter(s, 40); b.ay = hunt.y + jitter(s, 40); }
+    tx = b.ax ?? hunt.x; ty = b.ay ?? hunt.y;
+  }
+  const dx = tx - b.x; const dy = ty - b.y; const dist = Math.hypot(dx, dy) || 1;
+  if (dist > (hunt ? 50 : 24)) { const v = Math.min(SPEED * 0.85, dist / Math.max(dt, 1e-3)); b.x = clamp(b.x + (dx / dist) * v * dt, R, W - R); b.y = clamp(b.y + (dy / dist) * v * dt, R, H - R); b.face = Math.atan2(dy, dx); }
+  return Boolean(hunt && Math.hypot(hunt.x - b.x, hunt.y - b.y) < STRIKE_RANGE + hunt.size * 10 && now - b.atkAt > 1400 - 900 * s.aggression);
+}
+
+/** The quests open now: a slime hunt always, the King Slime when it is out or close to coming, a big slime when one is. */
+function openQuests(): string[] {
+  const now = net.now();
+  return ['slime-hunt', ...(slimes.some((o) => o.size === 3) || kingAt - now < 30_000 ? ['king-slime'] : []), ...(slimes.some((o) => o.size === 2) ? ['big-slime'] : [])];
+}
+const zoneOf = (x: number, y: number): string => {
+  let best = 'vale'; let bd = 260;
+  for (const [id, p] of Object.entries(PLACES)) { const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = id; } }
+  return best;
+};
 
 function nearestSlime(x: number, y: number): Slime | null {
   let best: Slime | null = null; let bd = Infinity;
@@ -332,7 +501,8 @@ function draw(t: number): void {
     const isDown = Boolean(b.flags & DOWN);
     ctx.globalAlpha = isDown ? 0.35 : 1;
     if ((b.flags & STRIKING) || (self && performance.now() - me.flashAt < 160)) { ctx.strokeStyle = 'rgba(255,207,110,.7)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, STRIKE_RANGE * 0.8, 0, Math.PI * 2); ctx.stroke(); }
-    ctx.fillStyle = self ? '#ffcf6e' : b.bot ? '#8aa0b8' : '#f3ead2';
+    const isGuide = (net.slots ?? []).some((x) => x.slot === b.slot && x.agent?.role === 'guide');
+    ctx.fillStyle = self ? '#ffcf6e' : isGuide ? '#7fd8c8' : b.bot ? '#8aa0b8' : '#f3ead2';
     ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#0b0f0a'; ctx.beginPath(); ctx.arc(x + Math.cos(b.face) * 10, y + Math.sin(b.face) * 10, 5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(x - 24, y - R - 12, 48, 5);
@@ -340,10 +510,30 @@ function draw(t: number): void {
     ctx.globalAlpha = 1;
     ctx.font = '600 18px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = self ? '#ffcf6e' : '#e7d9b4';
     // An AI's name already ends in " · AI" (a guide, a companion); a plain bot says bot.
-    ctx.fillText(`${b.name}${b.bot && !b.name.endsWith(AI_MARK) ? ' · bot' : ''} · ${b.level}`, x, y - R - 18);
+    ctx.fillText(`${b.name}${b.bot && !b.name.endsWith(AI_MARK) ? ' · bot' : ''}${isGuide ? ' · guide' : ''} · ${b.level}`, x, y - R - 18);
+    const said = bubbles.get(b.slot);
+    if (said && said.until > performance.now()) bubble(x, y - R - 44, said.text);
   }
   ctx.restore();
   hud(t);
+}
+
+/** A speech bubble: up to three short lines, above a guide. */
+function bubble(x: number, y: number, text: string): void {
+  ctx.font = '600 16px ui-sans-serif, system-ui, sans-serif';
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let line = '';
+  for (const w of words) { if ((line + ' ' + w).trim().length > 26 && line) { lines.push(line); line = w; } else line = (line + ' ' + w).trim(); }
+  if (line) lines.push(line);
+  const shown = lines.slice(0, 3);
+  const wid = Math.max(...shown.map((l) => ctx.measureText(l).width)) + 22;
+  const hgt = shown.length * 20 + 12;
+  ctx.fillStyle = 'rgba(14,30,27,.92)'; ctx.strokeStyle = 'rgba(127,216,200,.75)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(x - wid / 2, y - hgt, wid, hgt, 10); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 7, y); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 9); ctx.closePath(); ctx.fillStyle = 'rgba(14,30,27,.92)'; ctx.fill();
+  ctx.fillStyle = '#e9fff9'; ctx.textAlign = 'center';
+  shown.forEach((l, i) => ctx.fillText(l, x, y - hgt + 22 + i * 20));
 }
 
 function hud(t: number): void {
@@ -446,6 +636,54 @@ saves.on('player', () => ui.paint());
 // Time in the vale, a lifetime stat: added every 30 s while the page is open and visible.
 setInterval(() => { if (hero && document.visibilityState === 'visible') void saves.stats.add({ seconds: 30 }); }, 30_000);
 
+/* ------------------------------------------------------------------ asking a guide (buttons, never typing) */
+/** The guide nearest my hero (within 340 px), and the asks I can make of it: drawn as buttons, four times a second. */
+let asksFor = -1;
+let asksSig = '';
+function paintAsks(): void {
+  const panel = $('asks');
+  const mySeat = room.mySeat();
+  const here = me.has && mySeat !== null && !lookOnly && ui.idle();
+  let best: { slot: number; name: string; d: number } | null = null;
+  if (here) {
+    for (const b of room.view()) {
+      const sl = (net.slots ?? []).find((x) => x.slot === b.slot);
+      if (!sl?.agent || sl.agent.role !== 'guide') continue;
+      const d = Math.hypot(b.x - me.x, b.y - me.y);
+      if (d < 340 && (!best || d < best.d)) best = { slot: b.slot, name: b.name, d };
+    }
+  }
+  if (!best) { panel.hidden = true; asksFor = -1; asksSig = ''; return; }
+  const quests = (net.stateOf<string[]>('quests') ?? (room.hosting ? openQuests() : ['slime-hunt'])).slice(0, 3);
+  // Help with each open quest, one place to be led to (not the one I am in), and "No thanks"; three on a phone.
+  const zone = zoneOf(me.x, me.y);
+  const all = agents.askButtons(best.slot, { quests });
+  const lead = all.filter((b) => b.k === 'lead_me' && b.args['place'] !== zone).slice(0, 1);
+  const order = [...all.filter((b) => b.k === 'ask_help'), ...lead, ...all.filter((b) => b.k === 'no_thanks')];
+  const buttons = order.slice(0, innerWidth < 540 ? 3 : 5);
+  const sig = `${best.slot}|${best.name}|${buttons.map((b) => b.text).join('|')}`;
+  panel.hidden = false;
+  if (sig === asksSig) return;
+  asksSig = sig;
+  asksFor = best.slot;
+  panel.dataset['slot'] = String(best.slot);
+  $('asks-who').textContent = `${best.name} · guide`;
+  const list = $('asks-list');
+  list.textContent = '';
+  for (const b of buttons) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = b.text;
+    btn.dataset['ask'] = b.k;
+    btn.addEventListener('click', () => {
+      if (asksFor < 0) return;
+      if (agents.ask(asksFor, b.k, b.args)) { logGuide({ ev: 'asked', slot: asksFor, k: b.k, args: b.args }); btn.classList.add('sent'); setTimeout(() => btn.classList.remove('sent'), 900); }
+    });
+    list.append(btn);
+  }
+}
+setInterval(paintAsks, 250);
+
 /* ------------------------------------------------------------------ loop */
 let last = performance.now();
 let frames = 0;
@@ -460,7 +698,16 @@ function frame(t: number): void {
 }
 
 // Tonight's experience per hero: the watch page's live scores, and who Auto follows when nobody is slaying.
-net.expose({ scores: () => room.view().map((b) => ({ slot: b.slot, seat: b.seat, bot: b.bot, score: b.score })) });
+net.expose({
+  scores: () => room.view().map((b) => ({ slot: b.slot, seat: b.seat, bot: b.bot, score: b.score })),
+  // The guides, for the e2e probe: each guide's goal now, and the log of goals, asks and lines (seats and ids only).
+  guides: () => ({
+    hosting: room.hosting, talking: agents.talking, stats: agents.stats(),
+    now: agents.guides().map((g) => { const v = room.view().find((b) => b.slot === g.slot); return { slot: g.slot, seat: g.agent?.seat ?? null, name: g.name, goal: agents.goalOf(g.slot), x: v ? Math.round(v.x) : null, y: v ? Math.round(v.y) : null }; }),
+    me: me.has ? { x: Math.round(me.x), y: me.y | 0 } : null,
+    log: guideLog.slice(),
+  }),
+});
 
 exposePort(net, {
   view: 'top',

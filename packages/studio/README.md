@@ -110,8 +110,8 @@ are watched only by those they let in (NETPLAY.md section 16, site/SITE.md).
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.16.1 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.16.1 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.17.0 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.17.0 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -265,13 +265,20 @@ npx homie-studio agents pass night-rush --label Claude                          
 - **Asks:** making a server, a widening change, a pass and a room's level happen at once; narrowing one
   (humans-only, a stricter door), closing it, removing a member, and the first time AI guides may talk are asked
   for, and the owner confirms with one tap.
+- **AI guides that talk** (0.17.0): a game's `agents.json` is its guides' vocabulary (goals, lines, the asks a
+  player taps), and `useAgents` from `@homie-rocks/studio/agents` its host side (Ember Vale is the reference). The
+  brain is the server's: `agents brain night-rush first-light workers-ai` (the studio's own Workers AI; deploy binds
+  it; 8,000 neurons a day by default) or `owner-key` (the owner's own key, `agents brain key`, capped in dollars a
+  day); with none, the game's scripted floor. The local MCP's `agent_sit` puts the owner's own Claude in a guide's
+  seat. The AI never types: it picks ids; the room drops anything else.
+  [agents/GUIDES.md](agents/GUIDES.md) is the short path for an existing RPG.
 - Everything is in the studio's own Worker and D1 (migration `0006_studio_servers.sql`). The site's side is in
-  [site/SITE.md](site/SITE.md); the room's in [netplay/NETPLAY.md](netplay/NETPLAY.md) section 17.
+  [site/SITE.md](site/SITE.md); the room's in [netplay/NETPLAY.md](netplay/NETPLAY.md) sections 17 and 18.
 
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.16.1 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.17.0 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 

@@ -45,8 +45,9 @@
  */
 import { SEAT_MAX, seatsOf } from './seats.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
-import { aiName, fillSpot, passById, passCreate, passList, passRevoke } from './agents.mjs';
-import { OWNER_COOKIE, cookieValues, ownerAllowed, ownerSession } from './stats.mjs';
+import { BRAIN_BUDGET, aiName, fillSpot, passById, passCreate, passList, passRevoke } from './agents.mjs';
+import { DEFAULT_MODEL, OWNER_MODEL } from './brain.mjs';
+import { OWNER_COOKIE, cookieValues, ownerAllowed, ownerSession, today } from './stats.mjs';
 import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
 import { licenseOf } from './license.mjs';
@@ -455,7 +456,33 @@ async function roomRow(env, meta, room, max) {
     host: f.host ?? null, announce: f.announce ?? null,
     slots: slots.slice(0, 64).map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot), ...(s.agent ? { agent: { role: s.agent.role ?? 'party', seat: s.agent.seat ?? null } } : {}) })),
     clients, bans: office.bans ?? [], mutes: office.mutes ?? [],
+    // The house guides' brains (0.17.0): which brain, why not when it is not, and the last decisions (seats and ids).
+    ...(f.brains && typeof f.brains === 'object' ? { brains: {
+      brain: String(f.brains.brain ?? ''), why: f.brains.why ? oneLine(f.brains.why, 120) : null, calls: Number(f.brains.calls) || 0,
+      guides: (Array.isArray(f.brains.guides) ? f.brains.guides : []).slice(0, 8).map((g) => ({ name: oneLine(g.name, 40), seat: g.seat ?? null, provider: g.provider ?? null })),
+      decisions: (Array.isArray(f.brains.decisions) ? f.brains.decisions : []).slice(-50),
+    } } : {}),
   };
+}
+
+/** The AI brains' day for the whole studio: the budget (meta brain_budget) and what today used (stats_daily). */
+export async function brainDay(env) {
+  const budget = { neurons: BRAIN_BUDGET.neurons, usd: BRAIN_BUDGET.usd };
+  const used = { neurons: 0, usd: 0, calls: 0 };
+  try {
+    const b = JSON.parse((await env.DB.prepare("SELECT value FROM meta WHERE key = 'brain_budget'").first())?.value ?? 'null');
+    if (b && Number.isFinite(Number(b.neurons))) budget.neurons = Number(b.neurons);
+    if (b && Number.isFinite(Number(b.usd))) budget.usd = Number(b.usd);
+  } catch { /* the defaults */ }
+  try {
+    const { results } = await env.DB.prepare("SELECT metric, SUM(n) AS n FROM stats_daily WHERE day = ?1 AND metric IN ('brain-calls', 'brain-neurons', 'brain-microdollars') GROUP BY metric").bind(today()).all();
+    for (const r of results ?? []) {
+      if (r.metric === 'brain-calls') used.calls = Number(r.n) || 0;
+      if (r.metric === 'brain-neurons') used.neurons = Number(r.n) || 0;
+      if (r.metric === 'brain-microdollars') used.usd = Math.round(Number(r.n) || 0) / 1e6;
+    }
+  } catch { /* nothing counted yet */ }
+  return { budget, used, ai: Boolean(env.AI), key: Boolean(env.HOMIE_BRAIN_KEY), model: env.HOMIE_BRAIN_MODEL || DEFAULT_MODEL, ownerModel: OWNER_MODEL };
 }
 
 async function invitesOf(env, game, origin) {
@@ -500,7 +527,9 @@ export async function officeView(env, cat, origin) {
       id: g.id, name: g.name, launch, launchFrom: row?.launch ? 'office' : g.launch ? 'game.json' : 'default',
       // Servers (0.16.0): each with its policy and what is on it now; its build reads the dial only from netplay rev 6.
       servers: servers.map((sv) => ({ ...serverView(sv, { origin, game: g.id }), live: byServer[sv.id] ?? { rooms: 0, players: 0, ai: 0 }, members: members[sv.id] ?? 0 })),
-      build: { netplayRev: Number.isInteger(g.netplayRev) ? g.netplayRev : null, predates: !(Number(g.netplayRev) >= 6), caps: g.caps ?? null },
+      build: { netplayRev: Number.isInteger(g.netplayRev) ? g.netplayRev : null, predates: !(Number(g.netplayRev) >= 6), caps: g.caps ?? null, guides: Number(g.netplayRev) >= 7 },
+      // 0.17.0: the game's AI guides have words of their own (agents.json): without it they play but never talk.
+      vocab: g.vocab === true,
       passes: (await passList(env, { game: g.id })).filter((x) => x.live || Date.now() - x.createdAt < 7 * 86_400_000),
       remix: remixOf(g, settings), remixBuilt: g.landing?.source !== false, license: licenseOf(g.license).kind,
       seats: seatsOf(g), maxPlayers: max, maxSet: Number(row?.max_players) >= 1 ? Number(row.max_players) : null,
@@ -515,6 +544,7 @@ export async function officeView(env, cat, origin) {
     // The fill-a-spot service (an AI seated in an empty spot for a price) is a money decision: not offered yet.
     fillSpot: { available: Boolean(fillSpot()), note: 'Let a fill-a-spot service seat AI (coming later)' },
     agentsTalk: await talkConsented(env),
+    brain: await brainDay(env),
   };
 }
 async function memberCountsOf(env, game) {
@@ -624,7 +654,10 @@ function checkAction(cat, op, body) {
       if (!meta) return bad('game is one of this studio\'s game ids');
       if (typeof body.server !== 'string' || !(body.server === 'public' || /^[a-z0-9][a-z0-9-]{1,19}$/.test(body.server))) return bad('server is the server\'s id');
       if (!['off', 'script', 'workers-ai', 'owner-key'].includes(body.mode)) return bad('mode is off, script, workers-ai or owner-key');
-      return { ok: true, action: { op, game: meta.id, server: body.server, mode: body.mode } };
+      // The day's budget for the studio's brains: Workers AI neurons (workers-ai) or dollars of the owner's key (owner-key).
+      const budget = body.budget === undefined || body.budget === null ? undefined : Number(body.budget);
+      if (budget !== undefined && (!['workers-ai', 'owner-key'].includes(body.mode) || !(budget >= 0) || budget > (body.mode === 'owner-key' ? 100 : 1e7))) return bad('budget goes with workers-ai (neurons a day; the free allocation is 10,000 an account) or owner-key (dollars a day, at most 100)');
+      return { ok: true, action: { op, game: meta.id, server: body.server, mode: body.mode, ...(budget !== undefined ? { budget } : {}) } };
     }
     default:
       return bad('unknown control');
@@ -670,7 +703,7 @@ export function describe(cat, a) {
     case 'pass': return a.action === 'revoke' ? `Revoke the agent pass ${a.id}: that AI leaves every room and cannot sit again.` : `Issue an agent pass for an AI called "${a.label} · AI".`;
     case 'room-level': return `Set the AI in ${where} to ${levelName(a.level)} (level ${a.level}).`;
     case 'agents-brain': return ['workers-ai', 'owner-key'].includes(a.mode)
-      ? `Let the AI guides on ${gname}'s server ${a.server} talk: they speak only the lines the game's own agents.json gives them (never free text), at most one line every 8 seconds, never about a person, and a player can quiet them. Their brain runs on ${a.mode === 'workers-ai' ? 'this studio\'s own Workers AI (free allowance)' : 'your own AI provider key (your money, capped daily)'}.`
+      ? `Let the AI guides on ${gname}'s server ${a.server} talk: they speak only the lines the game's own agents.json gives them (never free text), at most one line every 8 seconds, never about a person, and a player can quiet them. Their brain runs on ${a.mode === 'workers-ai' ? `this studio's own Workers AI (free allowance${a.budget !== undefined ? `; at most ${Math.round(a.budget).toLocaleString('en-US')} neurons a day` : ''})` : `your own AI provider key (claude-haiku-4-5, your money${a.budget !== undefined ? `, at most $${Number(a.budget).toFixed(2)} a day` : ', capped daily'})`}.`
       : `Set the AI guides' brain on ${gname}'s server ${a.server} to ${a.mode}.`;
     default: return 'A control.';
   }
@@ -686,7 +719,12 @@ export async function needsAsk(env, cat, a) {
     const before = meta ? (await serversOf(env, meta, { fresh: true })).find((x) => x.id === a.server) : null;
     return narrows(before, a.fields);
   }
-  if (a.op === 'agents-brain') return ['workers-ai', 'owner-key'].includes(a.mode) && !(await talkConsented(env));
+  if (a.op === 'agents-brain') {
+    if (['workers-ai', 'owner-key'].includes(a.mode) && !(await talkConsented(env))) return true;
+    // Raising the cap on the owner's own money is the owner's to confirm; Workers AI's free allocation is not money.
+    if (a.mode === 'owner-key' && a.budget !== undefined) return a.budget > (await brainDay(env)).budget.usd;
+    return false;
+  }
   return false;
 }
 
@@ -765,7 +803,7 @@ export async function perform(env, cat, a) {
       try { await writeServer(env, meta.id, sv); } catch (error) { return { ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
       const view = serverView(sv, { origin: a.origin ?? '', game: meta.id });
       const notes = [];
-      if (sv.policy === 'beginner' && sv.guides) notes.push(`${sv.guides} AI guide seat${sv.guides === 1 ? '' : 's'} in every room, marked AI: the game's own bots play them now; guides talk once AI talk arrives (a later version, and only with the owner's yes).`);
+      if (sv.policy === 'beginner' && sv.guides) notes.push(`${sv.guides} AI guide seat${sv.guides === 1 ? '' : 's'} in every room, marked AI: they play from the game's script, silent. To let them talk (only the game's own agents.json lines), turn on a brain: agents brain ${meta.id} ${sv.id} workers-ai (the first time asks the owner).${meta.vocab ? '' : ` ${meta.name} has no agents.json yet: write one first.`}`);
       if (sv.policy === 'hybrid') notes.push(`${sv.aiSeats} seat${sv.aiSeats === 1 ? '' : 's'} in every room are AI companions, marked AI; the party votes their level.`);
       if (sv.policy === 'humans-only') notes.push('No AI can join; the game\'s practice bots are off unless the owner turns them on (bots: fill).');
       if (!(Number(meta.netplayRev) >= 6)) notes.push(`${meta.name}'s build predates servers (netplay revision ${meta.netplayRev ?? '5 or older'}): reserved AI seats stay empty and its bots do not read the dial until it is rebuilt with @homie-rocks/studio 0.16.`);
@@ -839,8 +877,24 @@ export async function perform(env, cat, a) {
         await writeServer(env, meta.id, sv);
         if (['workers-ai', 'owner-key'].includes(a.mode)) await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('agents_talk_ok', ?1)").bind(String(Date.now())).run();
       } catch (error) { return { ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+      if (a.budget !== undefined) {
+        const day = await brainDay(env);
+        const next = { neurons: day.budget.neurons, usd: day.budget.usd, ...(a.mode === 'workers-ai' ? { neurons: Math.round(a.budget) } : { usd: Math.round(a.budget * 100) / 100 }) };
+        await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('brain_budget', ?1)").bind(JSON.stringify(next)).run().catch(() => {});
+      }
       await pushPolicy(env, meta, settings, sv);
-      return { ok: true, op: a.op, game: meta.id, server: sv.id, brain: sv.brain, note: ['workers-ai', 'owner-key'].includes(a.mode) ? 'Saved. AI guides\' talk arrives with @homie-rocks/studio 0.17; until then they play as the game\'s bots, silent.' : 'Saved.' };
+      const day = await brainDay(env);
+      const notes = [];
+      if (!meta.vocab && ['workers-ai', 'owner-key'].includes(a.mode)) notes.push(`${meta.name} has no agents.json yet: its guides play but have no words. Write one (the game skill's "Write the guide vocabulary"), build and deploy.`);
+      if (a.mode === 'workers-ai') notes.push(!env.AI ? 'This Worker has no Workers AI binding yet: run `npm run deploy` once more (it binds Workers AI when a server uses it). Until then the guides answer from the game\'s script.'
+        : !(day.budget.neurons > 0) ? 'The day\'s Workers AI budget is 0: the guides answer from the game\'s script (set --budget to let them think).'
+          : `The guides think with Workers AI (${day.model}) from their next decision: at most ${day.budget.neurons.toLocaleString('en-US')} neurons a day for the whole studio (${Math.round(day.used.neurons).toLocaleString('en-US')} used today), then the game's script until 00:00 UTC.`);
+      if (a.mode === 'owner-key') notes.push(!env.HOMIE_BRAIN_KEY ? 'Set your key on your own computer: `npx --no-install homie-studio agents brain key` opens a page there (the key goes straight to the Worker, never through a chat). Until then the guides answer from the game\'s script.'
+        : !(day.budget.usd > 0) ? 'The day\'s dollar cap is 0: the guides answer from the game\'s script.'
+          : `The guides think with your key (claude-haiku-4-5) from their next decision, at most $${day.budget.usd.toFixed(2)} a day ($${day.used.usd.toFixed(2)} used today), then the game's script until 00:00 UTC.`);
+      if (a.mode === 'script') notes.push('The guides play from the game\'s script, silent.');
+      if (a.mode === 'off') notes.push('The guides are the game\'s plain bots.');
+      return { ok: true, op: a.op, game: meta.id, server: sv.id, brain: sv.brain, budget: day.budget, note: `Saved. ${notes.join(' ')}`.trim() };
     }
     default: return { ok: false, error: 'op' };
   }
