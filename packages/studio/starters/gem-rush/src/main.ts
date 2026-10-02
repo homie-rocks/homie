@@ -726,9 +726,12 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; name:
   const rows = [...list].sort((a, b) => (scores.get(b.slot) ?? 0) - (scores.get(a.slot) ?? 0)).slice(0, phone ? 4 : 6);
   ctx.font = `600 ${phone ? 14 : 16}px ui-sans-serif, system-ui, sans-serif`;
   ctx.textAlign = 'right';
+  // The play page's room button (and a server's pill beside it) sit at the top right (game.json screen.share's
+  // default): the scores start under that band, so the buttons never cover a score.
+  const board = top + 18 + 44;
   rows.forEach((a, i) => {
     ctx.fillStyle = a.mine ? '#ffffff' : a.bot ? 'rgba(232,236,245,0.55)' : 'rgba(232,236,245,0.85)';
-    ctx.fillText(`${a.mine && !net.watching ? 'You' : label(a.name, a.bot)}  ${scores.get(a.slot) ?? 0}`, cw - pad, top + 18 + i * (phone ? 20 : 22));
+    ctx.fillText(`${a.mine && !net.watching ? 'You' : label(a.name, a.bot)}  ${scores.get(a.slot) ?? 0}`, cw - pad, board + i * (phone ? 20 : 22));
   });
   // role badge
   ctx.textAlign = 'left'; ctx.font = '600 11px ui-monospace, Menlo, monospace'; ctx.fillStyle = 'rgba(125,240,255,0.7)';

@@ -110,8 +110,8 @@ are watched only by those they let in (NETPLAY.md section 16, site/SITE.md).
 A studio pins one version, so nothing changes until it asks. To take a newer one:
 
 ```sh
-npx -y @homie-rocks/studio@0.16.0 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.16.0 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@0.16.1 upgrade          # the plan; changes nothing
+npx -y @homie-rocks/studio@0.16.1 upgrade --apply  # after the person agrees
 npm install && npm run build
 ```
 
@@ -271,7 +271,7 @@ npx homie-studio agents pass night-rush --label Claude                          
 ## Setup status
 
 ```sh
-npx -y @homie-rocks/studio@0.16.0 setup status --connector yes   # before a studio exists
+npx -y @homie-rocks/studio@0.16.1 setup status --connector yes   # before a studio exists
 npx homie-studio setup status                                    # in a studio (also: homie-studio doctor)
 ```
 

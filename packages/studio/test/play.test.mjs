@@ -9,7 +9,9 @@
  *     never swapped for a public room;
  *   - a player who typed no name gets a two-word handle, varied per seat and per room, never "Player 1";
  *   - 0.9.0: the room button's place per device (game.json screen.share: a corner or top-center, an x / y offset, an
- *     icon-only button), so it never sits on a game's scoreboard.
+ *     icon-only button), so it never sits on a game's scoreboard;
+ *   - 0.16.1: on a server, the server pill shares the room button's band (beside it, never under it; a dot on a phone
+ *     held upright), a server room's button says "Room 2", and the vote card is opaque.
  * The shell script runs here against a small stand-in page (no browser needed).
  * Run: node --test packages/studio/test/play.test.mjs
  */
@@ -29,8 +31,8 @@ test('the game frame delegates fullscreen, autoplay and gamepad to its opaque or
 });
 
 /** The play page's shell script, run against a stand-in page at `search`. */
-async function shell(search, { lobby = 'pub-3', screen = false, room = null, g = game, width = 1280, height = 800 } = {}) {
-  const res = playPage(cat, g, { screen, room });
+async function shell(search, { lobby = 'pub-3', screen = false, room = null, g = game, width = 1280, height = 800, server = null } = {}) {
+  const res = playPage(cat, g, { screen, room, server });
   const html = await res.text();
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   const els = new Map();
@@ -201,4 +203,27 @@ test('the shell puts the room button where this device wants it, and keeps it a 
   // The big screen has no room button (its join card has its own corner, screen.join).
   const tv = await playPage(cat, g, { screen: true, joinUrl: 'https://owls.example/rock-race/play?room=pub-5', room: 'pub-5' }).text();
   assert.doesNotMatch(tv, /<div class="room[^"]*"[^>]*data-room-ui>/);
+});
+
+test('on a server: the pill shares the room button\'s band, a server room says "Room 2", and the vote card is opaque', async () => {
+  const server = { id: 'night-shift', name: 'Night Shift', badge: 'Hybrid · 2', line: 'Hybrid: 2 seats in every room are AI companions.', policy: 'hybrid', levelMax: 5 };
+  const a = await shell('', { lobby: 's-night-shift-2', server });
+  assert.equal(a.el('[data-room-code]').textContent, 'Room 2', 'the pill beside it names the server');
+  assert.deepEqual(a.fetched[0], ['/rock-race/api/lobby?server=night-shift', 'POST']);
+  // One band: both buttons in one row at the room button's place, the room button at the edge on a right corner.
+  assert.match(a.html, /<div class="pills"><button class="pill" type="button" data-share-toggle[^]*?<button class="pill spill" type="button" data-server-toggle[^]*?<\/button><\/div>\s*<div class="sheet ssheet"/);
+  assert.match(a.html, /\.room \.pills \{ display: flex; align-items: center; gap: 8px; \}/);
+  assert.match(a.html, /\.room\.at-top-right \.pills, \.room\.at-bottom-right \.pills \{ flex-direction: row-reverse; \}/);
+  // A phone held upright: the server pill is its dot from the start.
+  assert.match(a.html, /@media \(max-width: 540px\) \{\s*\.spill, \.spill:hover[^{]*\{ width: 34px; padding: 0;/);
+  // The vote card: nothing of the game shows through it, on any screen.
+  const vote = /\n\.vote \{[^}]*\}/.exec(a.html)[0];
+  assert.deepEqual([...vote.matchAll(/(?:^|[ {;])(background(?:-color)?|opacity|backdrop-filter): ([^;]+);/g)].map((m) => [m[1], m[2]]), [['background', '#080c16']]);
+  // Another server's room, or a named one, is shown as it is.
+  const other = await shell('', { lobby: 's-people-only-1', server });
+  assert.equal(other.el('[data-room-code]').textContent, 's-people-only-1');
+  const longer = await shell('', { lobby: 's-night-shift-crew-1', server });
+  assert.equal(longer.el('[data-room-code]').textContent, 's-night-shift-crew-1', 'a server whose id starts the same is another server');
+  const named = await shell('?room=owl-party', { server });
+  assert.equal(named.el('[data-room-code]').textContent, 'owl-party');
 });

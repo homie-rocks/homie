@@ -6,6 +6,8 @@
  * else, connect only to this site). Everything a player typed is set as text, never as markup. Never cached,
  * never indexed, never framed.
  */
+import { SKILLS } from './agents.mjs';
+import { KIDS_LINE, POLICY_WORDS, SERVER_LIMITS } from './servers.mjs';
 import { esc } from './site.mjs';
 
 const PRIVATE = {
@@ -103,8 +105,54 @@ button.small { min-height: 30px; padding: 4px 10px; font-size: 13px; border-radi
 .warnbox { margin: 10px 16px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,179,92,.45); color: var(--warn); font-size: 14px; }
 .secret { font: 600 13px/1.4 ui-monospace, Menlo, monospace; word-break: break-all; padding: 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--warn); }
 .chip.ai { color: #ffe7a8; border-color: rgba(255,207,90,.6); }
-.newsrv { display: grid; gap: 8px; padding: 10px 0 0; }
-.newsrv .line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* The New server form: one panel, grouped, every control labelled, help under it in the office's quiet grey. */
+.newsrv { display: grid; gap: 16px; max-width: 820px; margin-top: 10px; padding: 16px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); }
+.newsrv [hidden] { display: none !important; }
+.newsrv h4 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+.newsrv fieldset { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 14px 0 0; min-width: 0; display: grid; gap: 10px; }
+.newsrv legend { float: left; width: 100%; padding: 0 0 4px; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
+.newsrv legend + * { clear: both; }
+.newsrv .frow { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 6px 14px; align-items: start; }
+.newsrv .frow > label, .newsrv .frow > .lbl { padding-top: 9px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.newsrv .ctl { display: grid; gap: 5px; min-width: 0; }
+.newsrv .help { margin: 0; color: var(--faint); font-size: 13px; line-height: 1.45; }
+.newsrv .help b { color: var(--dim); font-weight: 600; }
+.newsrv .note { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line2); color: var(--dim); font-size: 14px; max-width: none; }
+.newsrv input[type=text] { width: 100%; }
+.policies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.policy { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; align-items: start; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line2); background: var(--bg); cursor: pointer; }
+.policy:hover { border-color: rgba(255,255,255,.3); }
+.policy.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.policy input { margin: 2px 0 0; width: 16px; height: 16px; min-height: 0; padding: 0; border: 0; background: none; accent-color: var(--accent); }
+.policy b { font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }
+.policy span { grid-column: 2; color: var(--dim); font-size: 13px; line-height: 1.4; }
+.stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stepper button { width: 38px; padding: 0; font-size: 18px; line-height: 1; }
+.stepper input[type=number] { width: 64px; text-align: center; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper .of { color: var(--dim); font-size: 14px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line2); border-radius: 999px; padding: 3px; gap: 2px; justify-self: start; }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }
+.seg span { display: inline-block; padding: 6px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--dim); }
+.seg input:checked + span { background: var(--ink); color: var(--bg); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dial { display: grid; gap: 4px; max-width: 420px; }
+.dial input[type=range] { width: 100%; min-height: 0; padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
+.dial .ticks { display: grid; grid-template-columns: repeat(var(--n, 5), 1fr); font-size: 11px; color: var(--faint); }
+.dial .ticks span:not(:first-child):not(:last-child) { text-align: center; }
+.dial .ticks span:last-child { text-align: right; }
+.dial output { font-size: 14px; color: var(--ink); }
+.dial output b { color: var(--accent); }
+.check { display: inline-flex; gap: 10px; align-items: center; font-weight: 600; font-size: 14px; cursor: pointer; }
+.check input { width: 18px; height: 18px; min-height: 0; padding: 0; accent-color: var(--accent); }
+.newsrv .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 720px) {
+  .newsrv { padding: 14px 12px; }
+  .newsrv .frow { grid-template-columns: 1fr; gap: 6px; }
+  .newsrv .frow > label, .newsrv .frow > .lbl { padding-top: 0; }
+  .policies { grid-template-columns: 1fr; }
+}
 @media (max-width: 720px) { .srvhead { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) {
   .rhead { grid-template-columns: 1fr 1fr 1fr; }
@@ -116,7 +164,7 @@ button.small { min-height: 30px; padding: 4px 10px; font-size: 13px; border-radi
 /* The office's one script (allowed by its hash). It reads /_studio/api/office every 3 s while the page is visible. */
 export const OFFICE_SCRIPT = String.raw`(function () {
   'use strict';
-  var S = { data: null, open: {}, busy: false, err: 0, timer: null };
+  var S = { data: null, open: {}, drafts: {}, busy: false, err: 0, timer: null };
   var root = document.getElementById('games');
   var liveEl = document.getElementById('live');
   var holdEl = document.getElementById('hold');
@@ -205,6 +253,12 @@ export const OFFICE_SCRIPT = String.raw`(function () {
 
   /* ---------------------------------------------------------------- servers and agent seats (0.16.0) */
   var POLICY = { open: 'Open', 'humans-only': 'Humans only', hybrid: 'Hybrid', beginner: 'Beginner' };
+  // Each policy's badge and line, the kids line and the dial's card names: the same words the site and the play page say.
+  var WORDS = ${JSON.stringify(POLICY_WORDS)};
+  var KIDS_LINE = ${JSON.stringify(KIDS_LINE)};
+  var CARDS = ${JSON.stringify(SKILLS.map((k) => k.card))};
+  var ROOMS_MAX = ${SERVER_LIMITS.roomsMax};
+  var BEGINNER_DAYS = ${SERVER_LIMITS.beginnerDays};
   var LEVELS = ['Rookie', 'Steady', 'Fair', 'Strong', 'Maxed'];
   function sel(options, value, label) { var x = el('select'); options.forEach(function (o) { var op = el('option', '', o[1]); op.value = o[0]; if (String(o[0]) === String(value)) op.selected = true; x.appendChild(op); }); if (label) x.setAttribute('aria-label', label); return x; }
   function num(value, min, max, label) { var x = el('input'); x.type = 'number'; x.min = String(min); x.max = String(max); x.value = String(value); x.setAttribute('aria-label', label); return x; }
@@ -288,31 +342,209 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     box.appendChild(body);
     return box;
   }
+  /** A server's address from its name, as the Worker makes it (servers.mjs checkServer). */
+  function serverId(name) { return String(name || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20).replace(/-+$/, ''); }
+  /** A number with − and + beside it, labelled; onset gets every change. */
+  function stepper(id, value, min, max, label, onset) {
+    var box = el('div', 'stepper');
+    var input = el('input'); input.type = 'number'; input.id = id; input.inputMode = 'numeric'; input.min = String(min); input.max = String(max); input.value = String(value);
+    var show = function (v) { var n = Math.max(Number(input.min), Math.min(Number(input.max), Math.round(Number(v)) || 0)); input.value = String(n); less.disabled = n <= Number(input.min); more.disabled = n >= Number(input.max); return n; };
+    var set = function (v) { onset(show(v)); };
+    var less = btn('−', 'ghost small', function () { set(Number(input.value) - 1); }); less.setAttribute('aria-label', 'Fewer ' + label);
+    var more = btn('+', 'ghost small', function () { set(Number(input.value) + 1); }); more.setAttribute('aria-label', 'More ' + label);
+    input.onchange = function () { set(input.value); };
+    less.disabled = value <= min; more.disabled = value >= max;
+    add(box, less, input, more);
+    // sync: the value and its bounds as the form now has them (no onset: update() is what calls it).
+    return { box: box, input: input, sync: function (v, lo, hi) { input.min = String(lo); input.max = String(hi); return show(v); } };
+  }
+  /** One choice of a few, as the office's pill switch; each option is a real radio button. */
+  function segment(name, options, value, label, onset) {
+    var box = el('div', 'seg'); box.setAttribute('role', 'radiogroup'); box.setAttribute('aria-label', label);
+    var inputs = {};
+    options.forEach(function (o) {
+      var r = el('input'); r.type = 'radio'; r.name = name; r.value = o[0]; r.checked = o[0] === value;
+      r.onchange = function () { if (r.checked) onset(o[0]); };
+      inputs[o[0]] = r;
+      box.appendChild(add(el('label'), r, el('span', '', o[1])));
+    });
+    return { box: box, inputs: inputs };
+  }
+  /** A 1-5 dial in the vote card's names, with what the chosen level plays like. */
+  function dialOf(id, value, label, onset) {
+    var box = el('div', 'dial');
+    var range = el('input'); range.type = 'range'; range.id = id; range.min = '1'; range.max = '5'; range.step = '1'; range.value = String(value);
+    var out = el('output'); out.setAttribute('for', id);
+    var ticks = el('div', 'ticks'); ticks.setAttribute('aria-hidden', 'true');
+    var show = function () {
+      var n = Number(range.value); var top = Number(range.max);
+      out.textContent = ''; add(out, el('b', '', LEVELS[n - 1]), document.createTextNode(': ' + CARDS[n - 1]));
+      range.setAttribute('aria-valuetext', LEVELS[n - 1]);
+      ticks.textContent = ''; ticks.style.setProperty('--n', String(top));
+      for (var i = 0; i < top; i++) ticks.appendChild(el('span', '', LEVELS[i]));
+    };
+    range.oninput = function () { show(); onset(Number(range.value)); };
+    range.setAttribute('aria-label', label);
+    show();
+    add(box, range, ticks, out);
+    return { box: box, range: range, set: function (n, top) { range.max = String(top); range.value = String(Math.min(n, top)); show(); } };
+  }
+  function row(label, forId, control, help) {
+    var r = el('div', 'frow');
+    var l = forId ? el('label', '', label) : el('span', 'lbl', label); if (forId) l.htmlFor = forId;
+    add(r, l, add(el('div', 'ctl'), control, help));
+    return r;
+  }
+  /**
+   * The New server form (DESIGN 7.2): name; policy, with each badge's copy; AI seats or guides (capped at the room's
+   * seats less one) and kids, for the policies that have them; the level it starts at and its ceiling, in the vote
+   * card's names; who can come in; chat; rooms; listed. Only what applies to the chosen policy shows. What the owner
+   * set lives in S.drafts, so the office's redraw every few seconds never loses it. It creates at once.
+   */
   function newServer(g) {
     var key = 'new:' + g.id;
     var wrap = el('div');
-    if (!S.open[key]) { wrap.appendChild(btn('+ New server', 'small', function () { S.open[key] = true; render(); })); return wrap; }
-    var form = el('div', 'newsrv');
-    var name = el('input'); name.type = 'text'; name.placeholder = 'Name (Night Shift)'; name.maxLength = 40;
-    var pol = sel([['hybrid', 'Hybrid: AI seats in every room'], ['beginner', 'Beginner: new players, AI guides'], ['humans-only', 'Humans only'], ['open', 'Open']], 'hybrid', 'Policy');
-    var n = num(2, 0, Math.max(0, g.maxPlayers - 1), 'AI seats or guides');
-    var kids = el('input'); kids.type = 'checkbox'; kids.setAttribute('aria-label', 'Kids');
-    var door = sel([['open', 'Door: anyone'], ['accounts', 'Door: accounts'], ['invite', 'Door: invite']], 'open', 'Door');
-    var level = sel(LEVELS.map(function (x, i) { return [i + 1, 'Level ' + x]; }), 3, 'Default level');
-    var levelMax = sel(LEVELS.map(function (x, i) { return [i + 1, 'Ceiling ' + x]; }), 5, 'Ceiling');
-    var speech = sel([['game', 'Chat: the game\'s'], ['lines', 'Chat: quick lines only'], ['off', 'Chat: off']], 'game', 'Speech');
-    var rooms = num(4, 1, 16, 'Rooms');
-    var listed = el('input'); listed.type = 'checkbox'; listed.checked = true; listed.setAttribute('aria-label', 'Listed');
-    add(form, add(el('div', 'line'), name, pol),
-      add(el('div', 'line'), el('span', 'dim', 'AI seats / guides'), n, add(el('label'), kids, el('span', '', 'kids (beginner)')), door),
-      add(el('div', 'line'), level, levelMax, speech, el('span', 'dim', 'rooms'), rooms, add(el('label'), listed, el('span', '', 'listed'))),
-      add(el('div', 'line'), btn('Create', 'small', function () {
-        var body = { game: g.id, name: name.value, policy: pol.value, door: door.value, level: Number(level.value), levelMax: Number(levelMax.value), speech: speech.value, rooms: Number(rooms.value), listed: listed.checked };
-        if (pol.value === 'hybrid') body.aiSeats = Number(n.value);
-        if (pol.value === 'beginner') { body.guides = Number(n.value); body.kids = kids.checked; }
-        act('/_studio/api/servers', body, (name.value || 'The server') + ' is open.').then(function (r) { if (r && r.ok) { S.open[key] = false; render(); } });
-      }), btn('Cancel', 'ghost small', function () { S.open[key] = false; render(); })));
+    if (!S.open[key]) { wrap.appendChild(btn('+ New server', 'small', function () { S.open[key] = true; S.focusNew = key; render(); })); return wrap; }
+    var seats = Math.max(2, Number(g.maxPlayers) || Number(g.seats) || 2);
+    var cap = seats - 1;
+    var d = S.drafts[key] || (S.drafts[key] = { name: '', policy: 'hybrid', aiSeats: Math.min(2, cap), guides: Math.min(2, cap), kids: false, door: 'open', level: 3, levelMax: 5, levelSet: false, speech: 'game', rooms: 4, listed: true });
+    var id = 'ns-' + g.id + '-';
+    var form = el('form', 'newsrv'); form.noValidate = true; form.setAttribute('aria-label', 'New server for ' + g.name);
+    add(form, el('h4', '', 'New server for ' + g.name));
+
+    // Name, and the address it makes.
+    var name = el('input'); name.type = 'text'; name.id = id + 'name'; name.placeholder = 'Night Shift'; name.maxLength = 40; name.value = d.name; name.autocomplete = 'off';
+    var nameHelp = el('p', 'help');
+    add(form, row('Name', name.id, name, nameHelp));
+
+    // Policy: four cards, each with its badge and its line.
+    var pf = add(el('fieldset'), el('legend', '', 'Who plays'));
+    var cards = el('div', 'policies'); cards.setAttribute('role', 'radiogroup'); cards.setAttribute('aria-label', 'Policy');
+    var pol = {};
+    ['hybrid', 'beginner', 'humans-only', 'open'].forEach(function (p) {
+      var r = el('input'); r.type = 'radio'; r.name = id + 'policy'; r.value = p; r.checked = d.policy === p;
+      var badge = el('b'); var line = el('span');
+      var card = add(el('label', 'policy'), r, badge, line);
+      r.onchange = function () { if (!r.checked) return; d.policy = p; if (!d.levelSet) d.level = p === 'beginner' ? 2 : 3; update(); };
+      pol[p] = { input: r, card: card, badge: badge, line: line };
+      cards.appendChild(card);
+    });
+    add(form, add(pf, cards));
+
+    // AI in every room: seats (hybrid) or guides and kids (beginner); a plain note for the other two.
+    var af = add(el('fieldset'), el('legend', '', 'AI in every room'));
+    var aiHelp = el('p', 'help');
+    var ai = stepper(id + 'ai', d.policy === 'beginner' ? d.guides : d.aiSeats, d.policy === 'hybrid' ? 1 : 0, cap, 'AI seats', function (n) { if (d.policy === 'beginner') d.guides = n; else d.aiSeats = n; update(); });
+    var aiLabel = el('label', '', 'AI seats'); aiLabel.htmlFor = id + 'ai';
+    var aiRow = add(el('div', 'frow'), aiLabel, add(el('div', 'ctl'), ai.box, aiHelp));
+    var kids = el('input'); kids.type = 'checkbox'; kids.id = id + 'kids'; kids.checked = d.kids;
+    kids.onchange = function () { d.kids = kids.checked; update(); };
+    var kidsRow = row('Kids', null, add(el('label', 'check'), kids, el('span', '', 'A server for kids')), el('p', 'help', KIDS_LINE + ' The AI plays at Fair or gentler, and chat stays quick lines only.'));
+    var aiNote = el('p', 'note');
+    add(form, add(af, aiRow, kidsRow, aiNote));
+
+    // The AI's level: where it starts and how high the party may vote it.
+    var lf = add(el('fieldset'), el('legend', '', 'AI level'));
+    var lvl = dialOf(id + 'level', d.level, 'Starts at', function (n) { d.level = n; d.levelSet = true; if (levels().max < n) d.levelMax = n; update(); });
+    var top = dialOf(id + 'ceiling', d.levelMax, 'Ceiling', function (n) { d.levelMax = n; if (d.level > n) { d.level = n; d.levelSet = true; } update(); });
+    /** The level and ceiling as the server gets them: a kids server keeps both at Fair or gentler. */
+    function levels() { var cap = d.policy === 'beginner' && d.kids ? 3 : 5; var max = Math.min(d.levelMax, cap); return { cap: cap, max: max, level: Math.min(d.level, max) }; }
+    add(form, add(lf,
+      row('Starts at', id + 'level', lvl.box, null),
+      row('Ceiling', id + 'ceiling', top.box, el('p', 'help', 'Before play the party votes how strong the AI should be (the middle vote wins), never above the ceiling. Only games whose bots read the dial change how they play.'))));
+
+    // Who can come in: the door, how many rooms, and whether it is listed.
+    var df = add(el('fieldset'), el('legend', '', 'Who can come in'));
+    var DOOR_HELP = { open: 'Anyone with the link plays.', accounts: 'Players sign in with a passkey first.', invite: 'Only people with an invite to this server. Ask your AI for invite links.' };
+    var doorHelp = el('p', 'help');
+    var door = segment(id + 'door', [['open', 'Anyone'], ['accounts', 'Accounts'], ['invite', 'Invite only']], d.door, 'Door', function (v) { d.door = v; update(); });
+    var rooms = stepper(id + 'rooms', d.rooms, 1, ROOMS_MAX, 'rooms', function (n) { d.rooms = n; update(); });
+    var roomsHelp = el('p', 'help');
+    var listed = el('input'); listed.type = 'checkbox'; listed.id = id + 'listed'; listed.checked = d.listed;
+    listed.onchange = function () { d.listed = listed.checked; update(); };
+    var listedHelp = el('p', 'help');
+    add(form, add(df,
+      row('Door', null, door.box, doorHelp),
+      row('Rooms', id + 'rooms', rooms.box, roomsHelp),
+      row('Listed', null, add(el('label', 'check'), listed, el('span', '', 'Show it to everyone')), listedHelp)));
+
+    // Chat.
+    var cf = add(el('fieldset'), el('legend', '', 'Chat'));
+    var CHAT_HELP = { game: 'Players chat the way the game lets them.', lines: 'Only the game\'s quick lines: nobody types.', off: 'No chat at all.' };
+    var chatHelp = el('p', 'help');
+    var chat = segment(id + 'chat', [['game', 'The game\'s chat'], ['lines', 'Quick lines only'], ['off', 'Off']], d.speech, 'Chat', function (v) { d.speech = v; update(); });
+    add(form, add(cf, row('Chat', null, chat.box, chatHelp)));
+
+    var create = btn('Create', '', function () {});
+    create.type = 'submit';
+    var close = function () { S.open[key] = false; if (document.activeElement) document.activeElement.blur(); render(); };
+    add(form, add(el('div', 'acts'), create, btn('Cancel', 'ghost', close), el('span', 'faint', 'It opens at once; you can change any of it later.')));
+    name.oninput = function () { d.name = name.value; update(); };
+
+    function update() {
+      var p = d.policy;
+      var n = p === 'beginner' ? d.guides : d.aiSeats;
+      // Each card says its own badge and line; Hybrid's with the seats chosen.
+      Object.keys(pol).forEach(function (k) {
+        var w = WORDS[k];
+        pol[k].badge.textContent = w.badge + (k === 'hybrid' ? ' · ' + d.aiSeats : '');
+        var line = w.line.replace('{n}', String(d.aiSeats)).replace(/^[^:]+: /, '');
+        pol[k].line.textContent = line.charAt(0).toUpperCase() + line.slice(1) + (k === 'beginner' && d.kids ? ' ' + KIDS_LINE : '');
+        pol[k].card.classList.toggle('on', k === p);
+      });
+      // The name and the address it makes.
+      var sid = serverId(d.name);
+      var nameOk = /[A-Za-z0-9À-￿]/.test(d.name) && sid.length >= 2 && sid !== 'public';
+      nameHelp.textContent = '';
+      if (!d.name.trim()) nameHelp.textContent = 'Players see it on ' + g.name + '\'s page and on the play page.';
+      else if (!nameOk) nameHelp.textContent = 'Use at least two letters or digits (and not "public").';
+      else add(nameHelp, document.createTextNode('Its page: '), el('b', '', '/' + g.id + '/s/' + sid + '/'));
+      // AI in every room.
+      n = ai.sync(n, p === 'hybrid' ? 1 : 0, cap);
+      if (p === 'beginner') d.guides = n; else if (p === 'hybrid') d.aiSeats = n;
+      aiLabel.textContent = p === 'beginner' ? 'AI guides' : 'AI seats';
+      aiRow.hidden = !(p === 'hybrid' || p === 'beginner');
+      kidsRow.hidden = p !== 'beginner';
+      aiHelp.textContent = p === 'hybrid'
+        ? n + ' of the ' + seats + ' seats in every room ' + (n === 1 ? 'is an AI companion' : 'are AI companions') + ', always marked AI; people take the other ' + (seats - n) + '. At least one seat is always a person\'s.'
+        : n + ' guide seat' + (n === 1 ? '' : 's') + ' in every room, marked AI, beside new players. The game\'s own bots play them; guides talk only once you say yes.';
+      aiNote.hidden = !(p === 'humans-only' || p === 'open');
+      aiNote.textContent = p === 'humans-only'
+        ? 'No AI can join, not even one with a pass. The game\'s practice bots are off; you can switch them on later.'
+        : 'No seats are kept for AI. An AI with an agent pass may sit, always marked AI, and the game\'s bots fill empty seats.';
+      // The level: no AI on a humans-only server; kids keep it at Fair or gentler.
+      lf.hidden = p === 'humans-only';
+      var L = levels();
+      lvl.set(L.level, L.cap); top.set(L.max, L.cap);
+      // The door.
+      doorHelp.textContent = DOOR_HELP[d.door] + (p === 'beginner' ? ' New players only: an account older than ' + BEGINNER_DAYS + ' days is shown another server, unless you made that player a mentor.' : '');
+      d.rooms = rooms.sync(d.rooms, 1, ROOMS_MAX);
+      roomsHelp.textContent = 'Up to ' + d.rooms + (d.rooms === 1 ? ' room' : ' rooms') + ' at once. When ' + (d.rooms === 1 ? 'it is' : 'they are all') + ' full, newcomers wait for a seat.';
+      listedHelp.textContent = d.listed ? 'On ' + g.name + '\'s page, its servers list and the room lists.' : 'Left out of the lists: only people with its link find it.';
+      // Chat: a beginner server keeps chat to quick lines (or off).
+      var chatNow = p === 'beginner' && d.speech === 'game' ? 'lines' : d.speech;
+      chat.inputs.game.parentNode.hidden = p === 'beginner';
+      Object.keys(chat.inputs).forEach(function (k) { chat.inputs[k].checked = k === chatNow; });
+      chatHelp.textContent = CHAT_HELP[chatNow] + (p === 'beginner' ? ' A beginner server keeps chat to quick lines.' : '');
+      create.disabled = !nameOk;
+    }
+    form.onsubmit = function (e) {
+      e.preventDefault();
+      update();
+      if (create.disabled) { name.focus(); return; }
+      var p = d.policy;
+      var L = levels();
+      var body = { game: g.id, name: d.name, policy: p, door: d.door, level: L.level, levelMax: L.max, speech: p === 'beginner' && d.speech === 'game' ? 'lines' : d.speech, rooms: d.rooms, listed: d.listed };
+      if (p === 'hybrid') body.aiSeats = d.aiSeats;
+      if (p === 'beginner') { body.guides = d.guides; body.kids = d.kids; }
+      create.disabled = true;
+      act('/_studio/api/servers', body, d.name + ' is open.').then(function (r) {
+        if (r && r.ok) { delete S.drafts[key]; close(); } else create.disabled = false;
+      });
+    };
+    update();
     wrap.appendChild(form);
+    if (S.focusNew === key) { S.focusNew = null; setTimeout(function () { name.focus(); }, 0); }
     return wrap;
   }
   function passes(g) {
@@ -415,8 +647,10 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     var now = Date.now() - (S.skew || 0);
     liveEl.textContent = d.playing ? d.playing + (d.playing === 1 ? ' playing now' : ' playing now') : 'nobody playing right now';
     document.getElementById('livedot').className = 'dot' + (d.playing ? ' on' : '');
-    var focus = document.activeElement && root.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName);
-    // Never redraw under a typing owner, or a control waiting for its second tap, or a pass secret shown once.
+    var at = document.activeElement;
+    var focus = at && root.contains(at) && (/INPUT|SELECT/.test(at.tagName) || Boolean(at.closest && at.closest('.newsrv')));
+    // Never redraw under a typing owner (or one working in the New server form), a control waiting for its second
+    // tap, or a pass secret shown once.
     if (focus || root.querySelector('[data-armed="1"]') || root.querySelector('.secret')) return;
     root.textContent = '';
     if (!d.games.length) { root.appendChild(el('p', 'empty', 'This studio has no games yet.')); return; }

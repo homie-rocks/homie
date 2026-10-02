@@ -113,6 +113,10 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .room.at-bottom-right { bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--dy)); right: calc(max(8px, env(safe-area-inset-right)) + var(--dx)); align-items: flex-end; flex-direction: column-reverse; }
 .room.at-bottom-left { bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--dy)); left: calc(max(8px, env(safe-area-inset-left)) + var(--dx)); align-items: flex-start; flex-direction: column-reverse; }
 .chip.chip-right { left: auto; right: max(10px, env(safe-area-inset-right)); }
+/* The room button and the server pill share one band at the room button's place, side by side (the server pill on
+   the inner side), so the shell never covers more of the game than the place the game gave the room button. */
+.room .pills { display: flex; align-items: center; gap: 8px; }
+.room.at-top-right .pills, .room.at-bottom-right .pills { flex-direction: row-reverse; }
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(6,9,16,.62); color: inherit; font: inherit; cursor: pointer; touch-action: manipulation; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity .5s; }
 .pill svg { width: 15px; height: 15px; flex: none; }
 .pill.dim { opacity: .38; width: 34px; padding: 0; justify-content: center; }
@@ -164,8 +168,8 @@ ${SERVER_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}`;
   const first = places.desk;
   const joinCard = screen && joinUrl ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
   const share = screen ? '' : `<div class="room at-${first.at}" style="--dx:${first.x}px;--dy:${first.y}px" data-room-ui>
-  <button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room, invite and big screen"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
-  <button class="pill spill" type="button" data-server-toggle aria-expanded="false" aria-controls="server-sheet" hidden><span class="sdot" aria-hidden="true"></span><span data-server-label></span></button>
+  <div class="pills"><button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room, invite and big screen"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
+  <button class="pill spill" type="button" data-server-toggle aria-expanded="false" aria-controls="server-sheet" hidden><span class="sdot" aria-hidden="true"></span><span data-server-label></span></button></div>
   <div class="sheet ssheet" id="server-sheet" role="dialog" aria-label="This server" data-server-sheet hidden>
     <div class="code"><b data-server-name></b><span data-server-badge></span></div>
     <p class="sline" data-server-line></p>
@@ -197,20 +201,27 @@ ${joinCard}${share}
 }
 
 /*
- * SERVERS AND THE AI DIAL (0.16.0, NETPLAY.md section 17): the server pill beside the room button (its name and
- * badge; its sheet has the policy's line, the AI's level with "Change", and Quiet AI), and the party's vote card on
- * how strong the AI should be (a bottom sheet on a phone; keys 1-5 on a computer). Nothing covers the middle of the
- * screen except the card, for a few seconds, when a vote is open.
+ * SERVERS AND THE AI DIAL (0.16.0, NETPLAY.md section 17): the server pill beside the room button, in the same band
+ * (its name and badge, or on a phone held upright its dot; its sheet has the policy's line, the AI's level with
+ * "Change", and Quiet AI), and the party's vote card on how strong the AI should be (an opaque bottom sheet on a
+ * phone; keys 1-5 on a computer). Nothing covers the middle of the screen except the card, for a few seconds, when a
+ * vote is open.
  */
 const SERVER_CSS = `.spill .sdot { width: 8px; height: 8px; border-radius: 50%; background: var(--hot); flex: none; }
 .spill.dim .sdot { display: block; }
+/* A phone held upright has no width to spare at its top: the server pill is its dot from the start (its sheet says
+   the name, the badge and the line; the chip names the server), so the band is the room button's label and one dot. */
+@media (max-width: 540px) {
+  .spill, .spill:hover, .spill:focus-visible, .spill[aria-expanded="true"] { width: 34px; padding: 0; justify-content: center; }
+  .spill span[data-server-label], .spill:hover span[data-server-label], .spill:focus-visible span[data-server-label], .spill[aria-expanded="true"] span[data-server-label] { display: none; }
+}
 .ssheet .sline { margin: 0 2px 10px; color: #c3cad9; font-weight: 500; line-height: 1.4; }
 .ssheet .srow { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 40px; margin: 0 2px; border-top: 1px solid rgba(255,255,255,.08); font-weight: 600; }
 .ssheet .srow small { display: block; color: #8b93a7; font-weight: 500; font-size: 11px; }
 .ssheet .srow button { min-height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .ssheet .srow input { width: 20px; height: 20px; accent-color: var(--hot); }
 .aipill { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: rgba(255,207,90,.2); color: #ffe7a8; font: 800 10px/1.6 ui-monospace, Menlo, monospace; letter-spacing: .06em; vertical-align: 1px; }
-.vote { box-sizing: border-box; position: fixed; left: 50%; top: 50%; z-index: 12; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 24px)); padding: 16px 16px 14px; border-radius: 18px; background: rgba(8,12,22,.95); border: 1px solid var(--hot); color: #eef1f8; font: 600 14px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; box-shadow: 0 24px 70px rgba(0,0,0,.55); touch-action: manipulation; -webkit-user-select: none; user-select: none; animation: rise .25s ease-out; }
+.vote { box-sizing: border-box; position: fixed; left: 50%; top: 50%; z-index: 12; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 24px)); padding: 16px 16px 14px; border-radius: 18px; background: #080c16; border: 1px solid var(--hot); color: #eef1f8; font: 600 14px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; box-shadow: 0 24px 70px rgba(0,0,0,.55); touch-action: manipulation; -webkit-user-select: none; user-select: none; animation: rise .25s ease-out; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, -46%); } }
 .vote .vh { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 0 2px 12px; }
 .vote .vh b { font-size: 18px; letter-spacing: -.01em; }
@@ -308,9 +319,16 @@ const SHELL_JS = String.raw`(function () {
   }
   place();
   addEventListener('resize', place);
-  function labelOf(room) { var m = /^pub-(\d+)$/.exec(room); return m ? 'Room ' + m[1] : room; }
+  function labelOf(room) {
+    var m = /^pub-(\d+)$/.exec(room);
+    if (m) return 'Room ' + m[1];
+    // A room of this page's server (s-<server>-<n>) is "Room <n>" too: the server pill beside the button names it.
+    var at = state.server ? 's-' + state.server.id + '-' : null;
+    var n = at && room.indexOf(at) === 0 ? room.slice(at.length) : '';
+    return /^\d+$/.test(n) ? 'Room ' + n : room;
+  }
   function flash(text) { if (!toast) return; toast.textContent = text; toast.hidden = false; clearTimeout(flash.t); flash.t = setTimeout(function () { toast.hidden = true; }, 1800); }
-  // The room pill and the server pill fade to dots after 6 s, so neither sits on the game's own HUD.
+  // The room pill and the server pill (in one band, at the room button's place) fade to dots after 6 s.
   function wake() {
     if (!toggle) return;
     var sp = document.querySelector('[data-server-toggle]');
@@ -549,7 +567,7 @@ const SHELL_JS = String.raw`(function () {
     var label = name + ' · ' + words.badge + (state.server && state.server.mentor ? ' · Mentor' : '');
     var labelEl = sToggle.querySelector('[data-server-label]');
     // A new policy (the owner's change) shows in full for a moment, then fades with the room pill.
-    if (labelEl.textContent !== label) { labelEl.textContent = label; wake(); }
+    if (labelEl.textContent !== label) { labelEl.textContent = label; sToggle.setAttribute('aria-label', label + ': this server'); wake(); }
     sSheet.querySelector('[data-server-name]').textContent = name;
     sSheet.querySelector('[data-server-badge]').textContent = words.badge;
     sSheet.querySelector('[data-server-line]').textContent = words.line;

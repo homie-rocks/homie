@@ -157,6 +157,8 @@ where the game has room, per device:
 - It shows the room's name ("Room 7") for a few seconds, then shrinks to a round icon until it is touched;
   `"label": false` keeps it the icon always (the code is in its sheet), for a corner with little room.
 - A button at the bottom left sends the "finding a room" chip to the bottom right.
+- On a server, the server's pill sits beside the button, on its inner side in the same band, never under it: on a
+  phone held upright it is one more dot; elsewhere its name shows for a few seconds, then it is a dot too.
 
 Look at the play page on a computer and a phone (both ways up) once a round is on: the button must not sit on a
 score, a timer or a bar. A room code the relay cannot use (1 to 32 letters, digits, `-` or `_`) is refused
@@ -219,12 +221,16 @@ its **Quick play** server (`public`), so every old link keeps working.
   the same door, except that watching a beginner room needs no new account.
 - **When the owner hides Quick play** (`homie-studio servers close <id> public`), Play shows the servers to pick
   from, and a named `?room=` is off (except for the owner).
-- **The play shell** on a server: a pill beside the room button ("First Light · Beginner"; tap: the policy's line,
-  "AI level: Steady" with **Change** when the game's bots read the dial, and **Quiet AI**, which hides AI chat on
-  this screen only); the chip says "4 playing · 2 AI"; every AI row and result carries an AI pill.
+- **The play shell** on a server: a pill beside the room button, in the same band at the room button's place
+  (`screen.share`), never under it ("First Light · Beginner", then a dot after a few seconds; on a phone held
+  upright, the dot from the start; tap: the server's name, the policy's line, "AI level: Steady" with **Change**
+  when the game's bots read the dial, and **Quiet AI**, which hides AI chat on this screen only). A server room's
+  button says "Room 2", as Quick play's does. The chip says "First Light · 4 playing · 2 AI"; every AI row and result
+  carries an AI pill. A game's HUD keeps that band clear (Gem Rush starts its scores under it).
 - **The vote card** ("How strong should the AI be?", five levels, "the middle vote wins") opens by itself at a
   party's first round with AI seats, from the pill's Change, or from the game; a lone player's tap decides at once,
-  every seated person's vote closes it early, else 15 s. Keys 1-5 on a computer; a bottom sheet on a phone. The
+  every seated person's vote closes it early, else 15 s. Keys 1-5 on a computer; a bottom sheet on a phone. The card
+  is opaque: nothing of the game shows through it. The
   result is a toast ("The party set the AI to Steady (3 votes)."). A game that draws its own card says game.json
   `"agents": { "vote": "game" }` (`false`: none).
 - `/<id>/api/servers` is the servers with their live counts (cacheable 15 s). `/api/rooms` rows say their
