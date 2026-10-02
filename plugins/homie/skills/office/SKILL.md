@@ -5,8 +5,12 @@ description: Run a Homie studio's live games from its back office - who is playi
 
 # Run the studio's live games (the back office)
 
-Everything lives in the studio's own Worker and D1 (`@homie-rocks/studio` 0.13.0 or later;
-an older studio gets it from `npx --no-install homie-studio upgrade --apply` and a deploy).
+Everything lives in the studio's own Worker and D1 (`@homie-rocks/studio` 0.13.0 or later).
+A studio whose `package.json` pins an older version than the newest is behind: say so, and what's new since its
+version, before anything else. `npx -y @homie-rocks/studio@latest upgrade` in the studio prints "What's new since
+<its version>" and the plan, and changes nothing (in Claude Desktop, `studio_run` with `["upgrade"]`, and the
+studio card says it too). Pass on the upgrade notes in plain words; with the owner's yes, run the `--apply` command
+the plan names, then `npm install` and a deploy, so the office's newer controls reach the live site.
 homie.rocks stores none of it. The owner is the studio's owner: never act as if a player
 or anyone else were.
 

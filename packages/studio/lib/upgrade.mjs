@@ -25,11 +25,16 @@
  * Media (0.18.0): the plan also says which songs and videos are big media (over studio.json media.r2Over, 1 MiB
  * unless set, or left out of git), what is in the studio's R2 already, and the step that moves the rest
  * (`media move`, which every deploy of a studio with storage also runs). Upgrade itself never moves a file.
+ *
+ * What's new (0.19.2): the plan and the applied result carry `whatsNew`, every version after the one the studio
+ * was on up to this one, each with its one-line summary and its upgrade notes, read from THIS package's own
+ * CHANGELOG.md (lib/changelog.mjs): the version being moved to says what it brings, with no network.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { whatsNew } from './changelog.mjs';
 import { R2_COST, mediaPlan, r2OverOf, sizeOf } from './media.mjs';
 import { studioFiles } from './scaffold.mjs';
 import { readStudio } from './studio.mjs';
@@ -243,12 +248,15 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
   const git = spawnSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
   const dirty = git.status === 0 ? git.stdout.split('\n').filter(Boolean).length : null;
   const media = mediaNote(root, studio);
+  const news = whatsNew(from, STUDIO_VERSION);
   return {
     ok: true, command: 'upgrade', applied: false, root, studio: name, from, to: STUDIO_VERSION,
+    ...(news ? { whatsNew: news } : {}),
     changes, kept,
     ...(media ? { media } : {}),
     ...(dirty ? { uncommitted: dirty } : {}),
-    next: changes.length ? ['npx --no-install homie-studio upgrade --apply   (after the person agrees)'] : [],
+    // A plan that moves the pin is this (newer) toolkit's to apply: the studio's own older copy knows nothing newer.
+    next: changes.length ? [`${changes.some((c) => c.kind === 'pin') ? `npx -y @homie-rocks/studio@${STUDIO_VERSION} upgrade --apply` : 'npx --no-install homie-studio upgrade --apply'}   (after the person agrees)`] : [],
   };
 }
 

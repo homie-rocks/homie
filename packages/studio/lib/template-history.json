@@ -813,6 +813,43 @@
      }
     }
    }
+  },
+  "0.19.2": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "HANDOFF.md": "ce7a8fd91c6bbee2",
+    "games/README.md": "5ad32fe80c61f117",
+    "music/README.md": "a3dc042dadd39df8",
+    "videos/README.md": "16babc3437d5545b",
+    "posts/README.md": "37841aae476bd540",
+    "site/README.md": "ca131cd0472464fb",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "8dc97df0d77e655e",
+     "## Commands (all through the pinned CLI in node_modules)": "a06ab13fc385ab25",
+     "## The site": "ab922bb6bde23293",
+     "## Making games": "a8a893eeada33bf5",
+     "## The Game Codex and progress": "0738ef719cef3a4c",
+     "## Running live games (the back office)": "f0566f07cff04113",
+     "## Servers and AI seats": "0a332b07e22d3fce",
+     "## Continuing a build from the Claude app": "0d68081e924ca419",
+     "## Rules": "969318425c99f5a5",
+     "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "677ee39dc13485e0"
+      }
+     }
+    }
+   }
   }
  }
 }

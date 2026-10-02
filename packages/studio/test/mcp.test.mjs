@@ -3,7 +3,7 @@
  * and any MCP client. Spoken to here the way a host does: newline-delimited JSON-RPC on the process's stdin/stdout.
  */
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { deflateSync } from 'node:zlib';
@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { expandHome } from '../lib/mcp-tools.mjs';
 import { lastJson, toolPath } from '../lib/jobs.mjs';
 import { studioPath } from '../lib/files.mjs';
+import { STUDIO_VERSION } from '../lib/version.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
@@ -163,6 +164,53 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     assert.match(guide.content[0].text, /See a working game/);
     assert.match(guide.content[0].text, /call the tool of the same job/);
   } finally { await s.close(); }
+});
+
+test('a studio on an older toolkit: the card says what\'s new, and studio_run ["upgrade"] runs this newer one', async () => {
+  const studios = join(scratch, 'behind');
+  mkdirSync(studios, { recursive: true });
+  const root = join(studios, 'night-owls');
+  const made = spawnSync(process.execPath, [CLI, 'new', root, '--name', 'Night Owls', '--no-install', '--json'], { encoding: 'utf8' });
+  assert.equal(made.status, 0, made.stderr);
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  pkg.devDependencies['@homie-rocks/studio'] = '0.16.1';
+  writeFileSync(join(root, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
+  // The studio's own pinned copy, as npm install left it: a stand-in that says it is the pinned one.
+  const pinned = join(root, 'node_modules', '@homie-rocks', 'studio');
+  mkdirSync(join(pinned, 'bin'), { recursive: true });
+  writeFileSync(join(pinned, 'package.json'), JSON.stringify({ name: '@homie-rocks/studio', version: '0.16.1' }));
+  writeFileSync(join(pinned, 'bin', 'homie-studio.mjs'), 'console.log(JSON.stringify({ ok: true, pinnedCopy: true }));\n');
+  const s = server(['--studios', studios, '--no-install']);
+  try {
+    await s.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    const card = await s.call('studio_card', { studio: 'night-owls' });
+    assert.ok(!card.isError, card.content[0].text);
+    const behind = card.structuredContent.behind;
+    assert.equal(behind.pinned, '0.16.1');
+    assert.equal(behind.here, STUDIO_VERSION);
+    assert.equal(behind.whatsNew.versions[0].version, STUDIO_VERSION, 'newest first');
+    assert.ok(behind.whatsNew.versions.length <= 6, 'the card carries a few versions');
+    assert.match(card.content[0].text, /this studio pins @homie-rocks\/studio 0\.16\.1; this Homie is/);
+    assert.match(card.content[0].text, /What's new since 0\.16\.1:/);
+    // Every other command runs the studio's pinned copy; the upgrade runs this one, which knows what is newer.
+    assert.equal((await s.call('studio_run', { args: ['games'] })).structuredContent.result.pinnedCopy, true);
+    const plan = await s.call('studio_run', { args: ['upgrade'] });
+    assert.ok(!plan.isError, plan.content[0].text);
+    assert.equal(plan.structuredContent.result.to, STUDIO_VERSION);
+    assert.equal(plan.structuredContent.result.whatsNew.from, '0.16.1');
+    assert.ok(plan.structuredContent.result.changes.some((c) => c.kind === 'pin'), 'the plan moves the pin');
+    assert.equal(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).devDependencies['@homie-rocks/studio'], '0.16.1', 'the plan changes nothing');
+  } finally { await s.close(); }
+  // A studio on this version: no "behind".
+  pkg.devDependencies['@homie-rocks/studio'] = STUDIO_VERSION;
+  writeFileSync(join(root, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
+  const again = server(['--studios', studios, '--no-install']);
+  try {
+    await again.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    const card = await again.call('studio_card', { studio: 'night-owls' });
+    assert.equal(card.structuredContent.behind, undefined);
+    assert.doesNotMatch(card.content[0].text, /What's new/);
+  } finally { await again.close(); }
 });
 
 test('helpers: the extension\'s ${HOME} folder, a long PATH, the last JSON a command printed, paths', () => {

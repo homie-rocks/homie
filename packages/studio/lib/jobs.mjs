@@ -159,10 +159,11 @@ export function jobView(job, { lines = 12 } = {}) {
 }
 
 /** Run the studio's pinned CLI as a job: `homie-studio <args> --json`. */
-export function cliJob(root, label, args, opts = {}) {
+export function cliJob(root, label, args, { cli = null, ...opts } = {}) {
   const node = findNode();
   if (!node) throw new Error('no Node.js 22 or newer on this computer: install it from https://nodejs.org/en/download (the LTS), then ask again');
-  return startJob({ root, label, cmd: node.bin, args: [cliOf(root), ...args, '--json'], json: true, ...opts });
+  // `cli`: another homie-studio than the studio's pinned one (this package's, for an upgrade to it).
+  return startJob({ root, label, cmd: node.bin, args: [cli ?? cliOf(root), ...args, '--json'], json: true, ...opts });
 }
 
 /** `npm install` in a studio (its pinned toolkit and Wrangler). */

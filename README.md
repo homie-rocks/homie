@@ -302,6 +302,7 @@ from npm, pinned exactly, like any studio.
 | `packages/studio/` | `@homie-rocks/studio`: the `homie-studio` CLI, the studio's site Worker, the netplay contract (`netplay/NETPLAY.md`), its game helper (`@homie-rocks/studio/netplay`), the relay (`worker/room.mjs`) and the Gem Rush starter. |
 | `packages/<engine package>/` | The game engine packages above, one folder each. |
 | `desktop/`, `scripts/desktop.mjs` | Homie for Claude Desktop: the Desktop Extension (`.mcpb`) around `homie-studio mcp`, its manifest, and how it is packed and checked (`node scripts/desktop.mjs --check`). |
+| `CHANGELOG.md`, `scripts/changelog.mjs` | What changed in each `@homie-rocks/studio` version and the plugin beside it. npm ships a copy in the package, every GitHub release's notes are its version's section, and CI checks that a version bump comes with one. |
 | `scripts/audit.mjs` | The leak audit CI runs on every pull request. |
 | `scripts/publish.mjs`, `.github/workflows/publish.yml`, `scripts/first-publish.sh` | How the packages reach npm: trusted publishing on a `release-*` tag, with provenance. |
 | `.github/workflows/ci.yml` | CI: every package's tests on Node 22 and 24, the plugin's tests and `claude plugin validate`, and the leak audit. |
@@ -355,15 +356,21 @@ windows, or a computer and a phone on the same network, to play against yourself
 `packages/studio/netplay/NETPLAY.md` is the contract a game keeps.
 
 **Releasing.** A published version never changes. Give each package you changed a new
-`version` (and bump the exact pins of the packages that depend on it), merge, then tag:
+`version` (and bump the exact pins of the packages that depend on it). A new
+`@homie-rocks/studio` version gets its section at the top of [CHANGELOG.md](CHANGELOG.md),
+written for the people who make studios (Added, Changed, Fixed, Upgrade notes), then
+`node scripts/changelog.mjs --sync` copies it into the package; CI fails a pull request
+that moves the version without one, and says what to write. Merge, then tag:
 
 ```sh
 git tag release-YYYY-MM-DD && git push origin release-YYYY-MM-DD
 ```
 
-`.github/workflows/publish.yml` builds, tests and audits the tagged commit, then publishes
-every package whose version is not on npm yet, with provenance; it refuses a package that
-changed since its version was published. A package that is not on npm at all is published
+`.github/workflows/publish.yml` builds, tests and audits the tagged commit, checks the
+changelog, then publishes every package whose version is not on npm yet, with provenance;
+it refuses a package that changed since its version was published. The tag's GitHub
+release gets the version's CHANGELOG.md section as its notes, and Homie for Claude
+Desktop's `.mcpb` attached. A package that is not on npm at all is published
 once by a maintainer with `scripts/first-publish.sh`, because trusted publishing can only
 add versions to a package that exists.
 

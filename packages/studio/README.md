@@ -108,13 +108,19 @@ are watched only by those they let in (NETPLAY.md section 16, site/SITE.md).
 
 ## Upgrading a studio
 
-A studio pins one version, so nothing changes until it asks. To take a newer one:
+A studio pins one version, so nothing changes until it asks. To take a newer one (`latest`, or a version):
 
 ```sh
-npx -y @homie-rocks/studio@0.18.2 upgrade          # the plan; changes nothing
-npx -y @homie-rocks/studio@0.18.2 upgrade --apply  # after the person agrees
+npx -y @homie-rocks/studio@latest upgrade          # what's new, and the plan; changes nothing
+npx -y @homie-rocks/studio@0.19.2 upgrade --apply  # after the person agrees (the version the plan named)
 npm install && npm run build
 ```
+
+The plan starts with **what's new** since the version the studio pins: one line per version and every upgrade note
+(anything the person has to do), read from the new version's own `CHANGELOG.md`, which ships in the package (the
+repository's [CHANGELOG.md](https://github.com/homie-rocks/homie/blob/main/CHANGELOG.md) is the same file). `--json`
+carries it as `whatsNew`. In Claude Desktop, `studio_run ["upgrade"]` runs the extension's own newer toolkit for
+this, and the studio card says what's new when a studio is behind.
 
 `upgrade` compares the studio with what this version's `new` would write for it: an AGENTS.md section, a README,
 a `.gitignore` line, a D1 migration or a package.json script it lacks is added, and one it never changed since an
@@ -498,6 +504,7 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `lib/cloudflare.mjs` | `deploy` (and `deploy --plan`): Wrangler, D1, migrations; refuses resources it did not create. In Workers Builds, migrations and deploy only. `storage add`: the optional R2 bucket; `media move`: big media into it, checked by SHA-256 (every deploy runs it). |
 | `lib/check.mjs` | `check`: two fresh Chrome processes (computer + phone) must share a room and finish a round with both in it, with each one's frame rate; on a busy computer it waits out a round a browser was dropped from, and says why when none counts. `lib/chrome.mjs`: which Chrome, and how (the GPU on a Mac, SwiftShader on Linux). |
 | `lib/upgrade.mjs`, `lib/template-history.json` | `upgrade`: an existing studio takes what a newer template adds, never over its own edits. |
+| `lib/changelog.mjs`, `CHANGELOG.md` | The release history this package carries (a copy of the repository's): `upgrade`'s what's new, the studio card's, and the release notes. |
 | `lib/progress.mjs`, `lib/setup.mjs` | The progress feed (`progress …`), a build the chat opened (`progress attach`), a change as a pull request (`progress change`, `progress pr`), and `setup attach`. |
 | `lib/net.mjs`, `lib/repo.mjs` | The toolkit's own web requests: through the environment's proxy, and an honest reason when one fails. The studio's repository (`owner/name`), from its remote, never the engine's. |
 | `template/` (repository root), `scripts/template.mjs` | The public "Deploy to Cloudflare" template, generated from `new --template`. |

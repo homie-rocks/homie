@@ -1,5 +1,5 @@
 /* The studio card: its games with Play (on this computer and live), songs, videos and posts, where it runs, its
- * live rooms, and a live game to try while it has none. */
+ * live rooms, a live game to try while it has none, and what's new when its toolkit is older than this Homie. */
 (function () {
   var C = Card;
   function initials(name) { return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase(); }
@@ -28,6 +28,14 @@
       card.appendChild(soon);
     }
     if ((sc.rooms || []).length) card.appendChild(C.el('p', 'fine', 'Playing now: ' + sc.rooms.map(function (r) { return r.game + ' (' + r.players + ')'; }).join(', ')));
+    // A studio on an older toolkit than this Homie: what's new since (this package's CHANGELOG.md), and the words to ask.
+    if (sc.behind) {
+      var news = C.add(C.el('div', 'news'), C.el('b', '', 'New in Homie since ' + sc.behind.pinned));
+      ((sc.behind.whatsNew && sc.behind.whatsNew.versions) || []).slice(0, 3).forEach(function (v) { news.appendChild(C.add(C.el('span'), C.el('code', '', v.version), C.el('span', '', ' ' + v.summary))); });
+      news.appendChild(C.el('span', 'fine', 'This studio is on ' + sc.behind.pinned + ', and ' + sc.behind.here + ' is here. Say \u201cUpgrade my studio\u201d to see what changes; nothing does until you agree.'));
+      card.appendChild(news);
+      C.tell('behind', sc.name + ' pins @homie-rocks/studio ' + sc.behind.pinned + ' and this Homie is ' + sc.behind.here + ': offer the upgrade (studio_run ["upgrade"] shows what is new and the plan, and changes nothing).');
+    }
     var foot = C.el('div', 'foot');
     foot.appendChild(C.el('span', 'when', sc.site ? sc.site.replace(/^https?:\/\//, '') : sc.dev ? sc.dev.url.replace(/^https?:\/\//, '') : 'Not online yet'));
     var acts = C.el('div', 'actions');

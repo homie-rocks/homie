@@ -7,7 +7,9 @@
 # The job builds and tests everything, audits the tagged tree for leaks, then publishes
 # each package whose package.json version is not on npm yet, in dependency order
 # (scripts/publish.mjs). Versions already on npm are skipped, so re-running a release
-# is safe. A package that is not on npm at all is published once by a maintainer
+# is safe. A studio version with no section in CHANGELOG.md is refused before anything
+# is published, and the tag's GitHub release gets that section as its notes. A package
+# that is not on npm at all is published once by a maintainer
 # (scripts/first-publish.sh), because trusted publishing only adds versions.
 #
 # Each package lists this workflow as its trusted publisher on npmjs.com (package
@@ -49,6 +51,8 @@ jobs:
         run: node scripts/audit.mjs --require-terms
         env:
           HOMIE_AUDIT_TERMS: ${{ secrets.HOMIE_AUDIT_TERMS }}
+      - name: CHANGELOG.md has this studio version's section
+        run: node scripts/changelog.mjs --check
       - name: What goes out
         run: node scripts/publish.mjs --check
       - name: Publish
@@ -57,7 +61,8 @@ jobs:
   desktop:
     # Homie for Claude Desktop: this release's .mcpb (desktop/, scripts/desktop.mjs), checked as the app starts it,
     # and attached to the tag's GitHub release (made when the tag has none), as homie-studio-<version>.mcpb and as
-    # homie-studio.mcpb, which releases/latest/download/homie-studio.mcpb always names.
+    # homie-studio.mcpb, which releases/latest/download/homie-studio.mcpb always names. The release's notes are the
+    # version's CHANGELOG.md section with the extension's line under it (scripts/changelog.mjs --notes).
     if: startsWith(github.ref, 'refs/tags/release-')
     needs: publish
     runs-on: ubuntu-latest
@@ -70,12 +75,15 @@ jobs:
           node-version: 24
       - name: Pack and check the extension
         run: node scripts/desktop.mjs --check
-      - name: Attach it to the release
+      - name: Attach it to the release, with the version's CHANGELOG.md section as its notes
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           v=$(node -p "require('./packages/studio/package.json').version")
           cp "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes "Homie for Claude Desktop $v: desktop/README.md says how to install it."
+          notes="$RUNNER_TEMP/notes.md"
+          node scripts/changelog.mjs --notes "$v" --tag "$TAG" > "$notes" || printf 'Homie for Claude Desktop %s: desktop/README.md says how to install it.\n' "$v" > "$notes"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes-file "$notes"
+          gh release edit "$TAG" --notes-file "$notes"
           gh release upload "$TAG" "desktop/dist/homie-studio-$v.mcpb" desktop/dist/homie-studio.mcpb --clobber

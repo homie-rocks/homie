@@ -1,6 +1,7 @@
 # Every pull request and every push to main: the packages build and pass their tests,
-# the plugin validates and passes its tests, and the leak audit passes on the tree and
-# on every commit the change adds. Releases are publish.yml (a release-* tag).
+# the plugin validates and passes its tests, CHANGELOG.md has a section for the studio's
+# version, and the leak audit passes on the tree and on every commit the change adds.
+# Releases are publish.yml (a release-* tag).
 #
 # The leak audit's private terms (names and private projects that must never appear
 # here) come from the repository secret HOMIE_AUDIT_TERMS; the maintainers set it, and
@@ -61,6 +62,23 @@ jobs:
           npx -y @anthropic-ai/claude-code@2.1.285 plugin validate plugins/homie
       - name: Homie for Claude Desktop (the .mcpb validates with mcpb, packs, and its packed server answers as the app starts it)
         run: node scripts/desktop.mjs --check
+
+  changelog:
+    # A pull request that moves @homie-rocks/studio's version adds that version's section to CHANGELOG.md (and its
+    # copy in the package). The check prints exactly what to write when it is missing.
+    name: Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+      - name: A section for the studio's version, naming the plugin's, and the package's copy the same file
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: node scripts/changelog.mjs --check ${BASE:+--base "$BASE"}
 
   studio-linux:
     # The check a Claude Code cloud session runs, on a Linux VM with no GPU (the closest free stand-in): a studio

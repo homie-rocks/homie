@@ -226,6 +226,24 @@ Add: Homie for studios is in beta; bugs, port requests and questions go to
 https://github.com/homie-rocks/homie/issues/new/choose. Commit the studio (`git add -A && git commit -m
 "..."` inside the studio folder: it is the studio's own repository).
 
+## An existing studio that is behind: what's new
+
+A studio pins one `@homie-rocks/studio` version in its `package.json`. When you open a studio, or the person asks
+"what's new" or to update or upgrade it, compare that pin with the newest (`npm view @homie-rocks/studio version`; in
+Claude Desktop the studio card says so itself). When the studio is behind:
+
+1. Tell the person, in a few plain lines, what's new since their version: run
+   `npx -y @homie-rocks/studio@latest upgrade` in the studio (it changes nothing). It starts with "What's new since
+   <their version>", one line per version from the new version's own CHANGELOG.md, then the upgrade notes: anything
+   they have to do themselves. Pass those on in your own words, the upgrade notes first; never paste the whole list.
+   (In Claude Desktop: `studio_run` with `["upgrade"]`.)
+2. Say what the upgrade would change in the studio (the plan under "The changes"), and that nothing they wrote
+   themselves is touched.
+3. Only with their yes: the `--apply` command the plan names, then `npm install` (`studio_install`), `npm run build`,
+   a look at the site, and one commit for the upgrade on its own.
+
+Every version's notes are also at https://github.com/homie-rocks/homie/blob/main/CHANGELOG.md.
+
 ## Storage, later and only when asked
 
 Songs, videos and other large media go to the studio's storage (an R2 bucket), not git. A studio that

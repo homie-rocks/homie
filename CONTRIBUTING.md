@@ -21,6 +21,10 @@ Before you open one:
 - a published version never changes: a change to a package ships as a new `version`.
   You can leave the bump to the maintainers; `npm run release:check` shows which
   packages changed since their version shipped;
+- a pull request that moves `@homie-rocks/studio`'s version adds that version's section
+  to the top of [CHANGELOG.md](CHANGELOG.md), in plain words for the people who make
+  studios, then runs `node scripts/changelog.mjs --sync` (npm ships a copy in the
+  package). CI's changelog check says exactly what is missing;
 - the netplay wire protocol is versioned: a change that a v1 client cannot ignore needs
   `v: 2` (see `packages/studio/netplay/NETPLAY.md`);
 - never put a key, token or password in an issue, a pull request or a test.

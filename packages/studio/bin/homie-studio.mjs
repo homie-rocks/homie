@@ -61,7 +61,9 @@
  *   homie-studio upgrade [--apply] [--diff]
  *                                         (what this version's template adds to an existing studio: AGENTS.md
  *                                          sections, READMEs, .gitignore lines, the pin; changes nothing until
- *                                          --apply, and never a file or section the studio changed)
+ *                                          --apply, and never a file or section the studio changed. It starts
+ *                                          with what's new since the studio's version, from this package's
+ *                                          CHANGELOG.md)
  *   homie-studio stats [--range 1d|7d|30d|90d] [--game <id> | --song <slug> | --video <slug>] [--url <site>]
  *   homie-studio stats key [--hours 1]    (a read key for the Homie MCP tool studio_stats)
  *   homie-studio stats link               (a one-time link to the private stats page, for the owner's browser)
@@ -170,6 +172,7 @@ import { DEFAULT_GOAL, perfCompare, perfRun, perfSizes } from '../lib/perf.mjs';
 import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeOf, typeOf } from '../lib/media.mjs';
 import { ensureMigrations, migrationWord, newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
+import { whatsNewLines } from '../lib/changelog.mjs';
 import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
@@ -439,7 +442,9 @@ function print(result) {
       lines.push(result.applied
         ? `${result.studio} is on the @homie-rocks/studio ${result.to} template now (${list.length} change${list.length === 1 ? '' : 's'}).`
         : list.length ? `${result.studio}: what the @homie-rocks/studio ${result.to} template adds (from ${result.from ?? 'an older version'}). Nothing is changed until --apply.` : `${result.studio} has everything the @homie-rocks/studio ${result.to} template writes.`);
-      if (list.length) lines.push('');
+      // What the versions since the studio's own brought, from this package's CHANGELOG.md (also after --apply).
+      if (result.whatsNew) lines.push('', ...whatsNewLines(result.whatsNew, { source: `@homie-rocks/studio ${result.to}'s CHANGELOG.md` }));
+      if (list.length) lines.push('', result.applied ? 'Done:' : 'The changes:');
       for (const c of list) {
         lines.push(`  ${mark[c.kind] ?? '·'} ${c.file.padEnd(18)} ${c.what}${c.kind === 'add-section' && (c.after || c.before) ? ` (${c.after ? `after "${c.after}"` : `before "${c.before}"`})` : ''}`);
         if (result.applied) continue;

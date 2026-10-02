@@ -8,7 +8,9 @@
  *   - nothing is written without --apply, and a second run finds nothing to do;
  *   - the history of template fingerprints knows this version's template (a test fails until it is regenerated);
  *   - a studio the template's own words name (Homie Arcade, where `demo` plays) still reads its untouched sections
- *     as the template's (0.18.2).
+ *     as the template's (0.18.2);
+ *   - the plan, and the applied result, say what's new since the studio's version, from this package's own
+ *     CHANGELOG.md, and the next step names this (newer) toolkit (0.19.2).
  * The fixtures are the AGENTS.md @homie-rocks/studio 0.7.0 wrote for a studio called Night Owls, and the one 0.17.0
  * wrote for Homie Arcade.
  * Run: node --test packages/studio/test/upgrade.test.mjs
@@ -23,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { studioFiles } from '../lib/scaffold.mjs';
 import { NAMED_IN_TEMPLATE, STAND_IN, lineDiff, namedPrint, pinnedVersion, readHistory, sections, templatePrint, upgradePlan } from '../lib/upgrade.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
+import { compareVersions, readChangelog, sectionOf } from '../lib/changelog.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
@@ -99,7 +102,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
   assert.match(human, /\+ - The play page's small room button/);
   assert.match(human, /= AGENTS\.md +section "## Rules": changed by the studio/);
   assert.match(human, /- - Owls only: no other birds\./, '--diff shows the studio\'s own lines against the template\'s');
-  assert.match(human, /npx --no-install homie-studio upgrade --apply/);
+  assert.match(human, new RegExp(`npx -y @homie-rocks/studio@${STUDIO_VERSION.replace(/\./g, '\\.')} upgrade --apply`), 'the pin moves, so this newer toolkit applies it');
 });
 
 test('--apply takes the template\'s new text where the studio never changed it, and keeps every word of its own', () => {
@@ -219,4 +222,42 @@ test('Homie Arcade, which the template names (demo plays there), takes the templ
 test('a line diff keeps the lines both have and marks the rest', () => {
   assert.deepEqual(lineDiff('a\nb\nc', 'a\nB\nc'), ['  a', '- b', '+ B', '  c']);
   assert.deepEqual(lineDiff('1\n2\n3\n4\n5\n6\n7\n8', '1\n2\n3\n4\n5\n6\n7\nX', { context: 1 }), ['  …', '  7', '- 8', '+ X']);
+});
+
+test('what\'s new since the studio\'s version, from this package\'s CHANGELOG.md, in the plan and after --apply', () => {
+  const changelog = readChangelog();
+  assert.ok(changelog, 'packages/studio/CHANGELOG.md ships in the package (node scripts/changelog.mjs --sync)');
+  assert.ok(sectionOf(changelog, STUDIO_VERSION), `CHANGELOG.md has a section for ${STUDIO_VERSION}`);
+  const { dir } = oldStudio('news');
+  const plan = out(run(['upgrade'], dir));
+  const news = plan.whatsNew;
+  assert.equal(news.from, '0.7.0');
+  assert.equal(news.to, STUDIO_VERSION);
+  const listed = news.versions.map((v) => v.version);
+  assert.equal(listed[0], STUDIO_VERSION, 'newest first, starting with the version being moved to');
+  assert.ok(listed.includes('0.8.0') && listed.includes('0.9.0'), 'every version after the pin');
+  assert.ok(!listed.includes('0.7.0') && !listed.includes('0.6.0'), 'none at or before the pin');
+  assert.deepEqual(listed, changelog.versions.map((s) => s.version).filter((v) => compareVersions(v, '0.7.0') > 0 && compareVersions(v, STUDIO_VERSION) <= 0));
+  for (const v of news.versions) assert.ok(v.summary && !/[`*[]/.test(v.summary), `${v.version}: a plain one-line summary`);
+  assert.ok(news.versions.find((v) => v.version === '0.16.0').upgrade.some((u) => /0006_studio_servers\.sql/.test(u)), 'upgrade notes come along');
+  // The words a person reads, before and after --apply.
+  const human = spawnSync(process.execPath, [CLI, 'upgrade'], { cwd: dir, encoding: 'utf8' }).stdout;
+  assert.match(human, /What's new since 0\.7\.0 \(@homie-rocks\/studio [\d.]+'s CHANGELOG\.md\):/);
+  assert.match(human, new RegExp(`\\n  ${STUDIO_VERSION.replace(/\./g, '\\.')}\\s+\\S`), 'a line for the newest version');
+  assert.match(human, /Upgrade notes \(anything to do yourself\):/);
+  assert.match(human, /earlier versions? \(CHANGELOG\.md has every one\)/, 'a long way back is cut short in the terminal');
+  assert.ok(human.indexOf('What\'s new since') < human.indexOf('The changes:'), 'what\'s new comes first');
+  const applied = spawnSync(process.execPath, [CLI, 'upgrade', '--apply'], { cwd: dir, encoding: 'utf8' }).stdout;
+  assert.match(applied, /What's new since 0\.7\.0/);
+  assert.match(applied, /Done:/);
+  // On this version now: nothing new to say.
+  assert.equal(out(run(['upgrade'], dir)).whatsNew, undefined);
+  // A pin that is a link to a checkout says nothing about versions; a studio.json version alone still does.
+  const pkg = json(dir, 'package.json');
+  pkg.devDependencies['@homie-rocks/studio'] = 'file:../homie/packages/studio';
+  save(dir, 'package.json', pkg);
+  const s = json(dir, 'studio.json');
+  s.homie.studio = '0.18.2';
+  save(dir, 'studio.json', s);
+  assert.deepEqual(out(run(['upgrade'], dir)).whatsNew.versions.map((v) => v.version), listed.filter((v) => compareVersions(v, '0.18.2') > 0));
 });

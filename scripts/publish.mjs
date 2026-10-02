@@ -18,7 +18,9 @@
  *     that package in this repository, so one commit always names one consistent set;
  *   - a published version never changes: a package whose version is on npm must pack the
  *     same files as npm's tarball of it (compared file by file, after a build). A change
- *     ships as a new version; the release refuses one that would silently not ship;
+ *     ships as a new version; the release refuses one that would silently not ship.
+ *     CHANGELOG.md is set aside: it is the history of every version, so a later section,
+ *     or a fixed word in an older one, never needs a version of its own;
  *   - in GitHub Actions, every package already exists on npm. Trusted publishing can only
  *     publish a new VERSION: npm lets a package name a trusted publisher only once the
  *     package exists. A brand-new package is published once by a maintainer, who then
@@ -109,7 +111,7 @@ try {
     if (mine.status !== 0 || theirs.status !== 0) fail(`could not pack ${p.name}@${p.version} here or from npm: ${(mine.stderr || theirs.stderr).trim().split('\n')[0]}`);
     const a = unpack(join(scratch, 'mine', JSON.parse(mine.stdout)[0].filename), join(scratch, 'a', p.dir));
     const b = unpack(join(scratch, 'npm', JSON.parse(theirs.stdout)[0].filename), join(scratch, 'b', p.dir));
-    const differ = [...new Set([...a.keys(), ...b.keys()])].filter((f) => a.get(f) !== b.get(f)).sort();
+    const differ = [...new Set([...a.keys(), ...b.keys()])].filter((f) => f !== 'CHANGELOG.md' && a.get(f) !== b.get(f)).sort();
     p.changed = differ;
   }
 } finally { rmSync(scratch, { recursive: true, force: true }); }

@@ -28,8 +28,10 @@ import { cliJob, findNode, getJob, installJob, installed, jobView, runningJobs, 
 import { Feed, currentId, publicFeed, readFeed, startProgress } from './progress.mjs';
 import { newStudio, slugify } from './scaffold.mjs';
 import { repoFromUrl, studioRepo } from './repo.mjs';
-import { GAME_ID, findStudio, listGames, readLocal, readStudio, siteUrl, workerDir } from './studio.mjs';
+import { GAME_ID, PACKAGE_ROOT, findStudio, listGames, readLocal, readStudio, siteUrl, workerDir } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
+import { compareVersions, whatsNew, whatsNewLines } from './changelog.mjs';
+import { pinnedVersion } from './upgrade.mjs';
 import { AgentSeat } from './agent-seat.mjs';
 
 export const UI = Object.freeze({
@@ -120,8 +122,8 @@ const ok = (text, structured, extra = {}) => ({ content: [{ type: 'text', text }
 const fail = (text, structured) => ({ content: [{ type: 'text', text }], ...(structured ? { structuredContent: structured } : {}), isError: true });
 
 /** Run the pinned CLI and wait a while; { ended, job, result }. */
-async function cli(ctx, root, label, args, { wait = ctx.waitMs, onEnd = null } = {}) {
-  const job = cliJob(root, label, args, { onEnd });
+async function cli(ctx, root, label, args, { wait = ctx.waitMs, onEnd = null, cli: bin = null } = {}) {
+  const job = cliJob(root, label, args, { onEnd, ...(bin ? { cli: bin } : {}) });
   const ended = await waitJob(job, wait);
   return { ended, job, result: job.result };
 }
@@ -245,6 +247,18 @@ function published(root, kind) {
   } catch { return []; }
 }
 
+/**
+ * When the studio pins an older @homie-rocks/studio than this one: the pin, this version, and what's new between them
+ * (this package's own CHANGELOG.md). null when it is on this version, a newer one, or a link to a checkout.
+ */
+export function behindOf(root) {
+  let pkg = null;
+  try { pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')); } catch { return null; }
+  const pinned = pinnedVersion(pkg?.devDependencies?.['@homie-rocks/studio'] ?? pkg?.dependencies?.['@homie-rocks/studio']);
+  if (!pinned || compareVersions(pinned, STUDIO_VERSION) >= 0) return null;
+  return { pinned, here: STUDIO_VERSION, whatsNew: whatsNew(pinned, STUDIO_VERSION) };
+}
+
 async function studioCard(ctx, root) {
   const studio = readStudio(root);
   const dev = devOf(root);
@@ -282,6 +296,8 @@ async function studioCard(ctx, root) {
     games, songs: published(root, 'music'), videos: published(root, 'videos'), posts,
     dev: dev ? { url: dev.url } : null, site: live, rooms, demo, installed: installed(root),
   };
+  const behind = behindOf(root);
+  if (behind) data.behind = { ...behind, whatsNew: behind.whatsNew ? { ...behind.whatsNew, versions: behind.whatsNew.versions.slice(0, 6).map(({ version, summary, upgrade }) => ({ version, summary, upgrade: upgrade.slice(0, 2) })) } : null };
   const text = [
     `${studio.name} (${root})`,
     games.length ? `Games: ${games.map((g) => `${g.name} (${g.id}${live ? (g.live ? ', live' : ', not deployed yet') : ''})`).join(', ')}` : 'No game yet: its home page says "First game coming soon".',
@@ -289,6 +305,10 @@ async function studioCard(ctx, root) {
     live ? `Live: ${live}/` : 'Not online yet (studio_deploy).',
     ...(rooms.length ? [`Live rooms: ${rooms.map((r) => `${r.game} ${r.room} (${r.players})`).join(', ')}`] : []),
     ...(demo ? [`See a working game meanwhile: ${demo.name}, ${demo.play}`] : []),
+    ...(behind ? [
+      `Toolkit: this studio pins @homie-rocks/studio ${behind.pinned}; this Homie is ${behind.here}. Tell the person what is new (below) and offer the upgrade: studio_run { "args": ["upgrade"] } shows the plan and changes nothing; with their yes, ["upgrade","--apply"], then studio_install.`,
+      ...whatsNewLines(behind.whatsNew, { maxVersions: 6, maxNotes: 6 }),
+    ] : []),
   ].join('\n');
   return ok(text, data);
 }
@@ -948,7 +968,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_run', title: 'Run a studio command',
-      description: 'Any other homie-studio command in the studio, by its words (the guides name them): e.g. ["progress","stage","plan","done","--note","…"], ["progress","spend","0.40","--what","a cover"], ["look"], ["stats"], ["codex","link","<id>"], ["port","check","<id>","--url","…"], ["upgrade"], ["storage","add"]. Runs the studio\'s own pinned toolkit; long commands hand back a job.',
+      description: 'Any other homie-studio command in the studio, by its words (the guides name them): e.g. ["progress","stage","plan","done","--note","…"], ["progress","spend","0.40","--what","a cover"], ["look"], ["stats"], ["codex","link","<id>"], ["port","check","<id>","--url","…"], ["upgrade"], ["storage","add"]. Runs the studio\'s own pinned toolkit; long commands hand back a job. ["upgrade"] runs with THIS Homie\'s toolkit when the studio pins an older one (that is how a studio moves up to it): it says what is new since the studio\'s version and what would change, and changes nothing; ["upgrade","--apply"] only after the person agrees, then studio_install.',
       inputSchema: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' }, description: 'The command\'s words after `homie-studio`' }, ...STUDIO_ARG }, required: ['args'] },
       annotations: { title: 'Run a studio command', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
@@ -959,7 +979,9 @@ export function toolDefs(ctx, avail = {}) {
         if (refused) return fail(`not here: ${refused}`);
         if (!['help', 'version', 'setup', 'doctor', 'demo', 'starters', 'progress', 'codex', 'games', 'status'].includes(args[0])) { const need = needsInstall(ctx, root); if (need) return need; }
         if (args[0] === 'game' && args[1] === 'new') ctx.note(root).demo = true;
-        const r = await cli(ctx, root, `homie-studio ${args.slice(0, 3).join(' ')}`, args);
+        // The upgrade is the newer toolkit's to make: the studio's own pinned copy knows nothing newer than itself.
+        const own = args[0] === 'upgrade' && behindOf(root) ? { cli: join(PACKAGE_ROOT, 'bin', 'homie-studio.mjs') } : {};
+        const r = await cli(ctx, root, `homie-studio ${args.slice(0, 3).join(' ')}`, args, own);
         if (!r.ended) return stillRunning(r.job, `homie-studio ${args.slice(0, 2).join(' ')}`);
         const text = r.result ? JSON.stringify(r.result, null, 1).slice(0, 12_000) : jobView(r.job, { lines: 40 }).tail.join('\n');
         return r.job.code === 0 ? ok(text, { kind: 'run', args, result: r.result }) : fail(`homie-studio ${args.join(' ')}: ${whyOf(r.job)}`, { kind: 'run', args, result: r.result });
