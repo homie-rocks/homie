@@ -77,7 +77,7 @@ Sizes on disk never vary: any change of at least 1% counts.
 | batch: one path for many shapes, instanced meshes, fewer material or composite switches | draw order changes what overlaps: look at the screenshots |
 | stop allocating in the loop (reuse vectors and arrays) | shared scratch objects returned to callers get overwritten |
 | skip work for what is off screen or far away | a body that pops in, a sound that stops |
-| minified builds of the same library version | a different version is a different game; minify the files you ship, keep their names |
+| minified builds of the same library version | a different version is a different game; minify only a file `perf sizes` reads as not minified, keep its name and licence |
 | load big things after the first frame | a game that is "playable" but blank for a second has moved the wait, not removed it |
 | send less netplay: only what changed, coarser numbers | the replica's interpolation and the host's checks read those numbers |
 
@@ -91,7 +91,15 @@ particles or physics steps, shorter view distance, softer or smaller shadows, a 
   crawl on a real phone. It ranks changes; say "emulated" with every phone number.
 - **A capped frame rate hides cost.** At 60 Hz a frame that takes 2 ms and one that takes 12 ms both read 16.7 ms.
 - **The wrong build.** The loop swaps builds under a running dev server; it checks every served file's SHA-256 before
-  each run. Never build by hand while it runs.
+  each run, and the game page against the build's: every script of the build's page, byte for byte and in order, and
+  the markup between them. Scripts the site adds (HOMIE_NET, a shim a studio's own Worker injects) are set aside, listed
+  in BASELINE.md, and must be the same before every run: a stale page (another bundle's name), a changed inline script
+  or a Worker changed mid-loop stops the run. Never build by hand while it runs.
+- **Compression is not minification.** Minified JavaScript gzips to a quarter or a third of its bytes (three.js's own
+  minified builds: 24-26%), more than indented source does (20%), and a bundle with three.js in it carries its shaders as
+  GLSL source in strings, line by line, which no minifier touches (thousands of lines in a minified bundle). `perf sizes`
+  reads each big script's code instead: whitespace (about 1-2% minified, 15-30% indented), comments, and names outside its
+  strings, with the share that is GLSL shader source said apart.
 - **A busy computer.** Every run records the 1-minute load before and after and how busy all cores were in its window.
   A run that started over the bar (0.8 per core) is taken again and left out.
 - **A profile is not a measurement.** It names where time goes; only the alternating runs say whether a change helped.

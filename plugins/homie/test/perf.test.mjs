@@ -10,6 +10,12 @@
  *   - a change the check fails on is REVERTED before anything is measured;
  *   - try without saying how it looks and plays is refused;
  *   - report writes perf/<game>/README.md, numbers.json and the kept change as a patch.
+ * And (plugin 0.20.1) the check that the site serves the build being measured:
+ *   - a studio's own Worker that adds a script to the game page (beside HOMIE_NET) is measured, and BASELINE.md says
+ *     what it adds; a stale page (another bundle's name) is still refused, and so is a Worker that changes mid-loop;
+ *   - lib/page.mjs on its own: added scripts set aside, anything of the build's own page that differs refused;
+ *   - what BASELINE.md says about the download, from perf sizes' reading of each script: three.js minified is
+ *     minified (its shaders said apart), never "looks unminified"; three.js's plain build is not.
  * A real loop is `node perf.mjs baseline <game> --url <site>` in a studio (Chrome on a GPU, the perf skill).
  * Run: node --test plugins/homie/test/perf.test.mjs
  */
@@ -25,6 +31,10 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PERF = join(HERE, '..', 'skills', 'perf', 'scripts', 'perf.mjs');
 const STUDIO_LIB = join(HERE, '..', '..', '..', 'packages', 'studio', 'lib', 'perf.mjs');
+const THREE_BUILD = join(HERE, '..', '..', '..', 'node_modules', 'three', 'build');
+const { gamePageCheck, sameAdditions } = await import('../skills/perf/scripts/lib/page.mjs');
+const { sizeHints } = await import('../skills/perf/scripts/lib/sizes.mjs');
+const { perfSizes } = await import(STUDIO_LIB);
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-perf-test-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
@@ -70,8 +80,12 @@ else if (a[0] === 'perf') {
 } else out({ ok: false, why: 'stand-in: unknown ' + a.join(' ') });
 `;
 
-/** A site that serves site/dist/games/<g>/ the way a studio's Worker does. */
-function site(root) {
+/**
+ * A site that serves site/dist/games/<g>/ the way a studio's Worker does. `opts.inject`: what the studio's own Worker
+ * adds after the HOMIE_NET line (read on every request, so a test can change it mid-loop); `opts.page`: a function
+ * that rewrites the game page (a stale one).
+ */
+function site(root, opts = {}) {
   return new Promise((ok) => {
     const server = createServer((req, res) => {
       const u = new URL(req.url, 'http://x');
@@ -83,7 +97,7 @@ function site(root) {
       const file = join(dist, decodeURIComponent(rel));
       if (!existsSync(file)) { res.writeHead(404); res.end(); return; }
       let body = readFileSync(file);
-      if (rel === 'index.html') body = Buffer.from(String(body).replace(/<head>/, '<head><script>window.HOMIE_NET={"v":1}</script>'));
+      if (rel === 'index.html') body = Buffer.from((opts.page ?? ((x) => x))(String(body).replace(/<head>/, `<head><script>window.HOMIE_NET={"v":1}</script>${opts.inject ?? ''}`)));
       res.end(body);
     });
     server.listen(0, '127.0.0.1', () => ok(server));
@@ -204,4 +218,126 @@ test('perf.mjs outside a studio, and its help and goals', async () => {
   assert.match(help.json.usage, /baseline <game> --url <site>/);
   const goals = await perf(['goals'], away);
   assert.ok(goals.json.metrics.some((m) => /^busy:/.test(m)));
+});
+
+/** A studio with the stand-in CLI and one game whose page loads a bundle (assets/main.js) and has an inline script. */
+function studioWith(name) {
+  const root = join(scratch, name);
+  const game = join(root, 'games', 'gem-rush');
+  mkdirSync(join(game, 'src'), { recursive: true });
+  mkdirSync(join(game, 'assets'), { recursive: true });
+  mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+  writeFileSync(join(root, 'studio.json'), '{"name":"Perf Test","slug":"perf-test"}\n');
+  writeFileSync(join(game, 'game.json'), '{"id":"gem-rush","name":"Gem Rush"}\n');
+  writeFileSync(join(game, 'index.html'), '<!doctype html>\n<html>\n<head>\n<title>Gem Rush</title>\n<script>window.GAME_BUILD="b1"</script>\n<script type="module" src="./assets/main.js"></script>\n</head>\n<body></body>\n</html>\n');
+  writeFileSync(join(game, 'assets', 'main.js'), 'export const draw = () => 1;\n');
+  writeFileSync(join(game, 'speed.txt'), '1.00\n');
+  const bin = join(root, 'node_modules', '.bin', 'homie-studio');
+  writeFileSync(bin, FAKE);
+  chmodSync(bin, 0o755);
+  return { root, game };
+}
+
+/** What a studio's own Worker might add to a game page: a small inline shim, as some do for a knock or a beacon. */
+const SHIM = '<script>(function(){try{var real=window.fetch;window.fetch=function(u,i){return real.apply(this,arguments)};}catch(e){}})();</script>';
+
+test('a game page with scripts the studio\'s own Worker adds is measured; a stale page and a Worker that changes mid-loop are not', async () => {
+  const { root, game } = studioWith('injected');
+  const opts = { inject: SHIM };
+  const server = await site(root, opts);
+  const url = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const base = await perf(['baseline', 'gem-rush', '--url', url, '--devices', 'computer', '--runs', '3', '--seconds', '5'], root, { HOMIE_PERF_SERVE_WAIT_MS: '1500' });
+    assert.equal(base.code, 0, base.out + base.err);
+    assert.match(base.json.page, /the HOMIE_NET line, an inline script of \d+ B/);
+    const md = readFileSync(join(base.json.loop, 'BASELINE.md'), 'utf8');
+    assert.match(md, /The game page as the site serves it is the build's page plus the HOMIE_NET line, an inline script of \d+ B \(sha256 [0-9a-f]{16}, "\(function\(\)\{try\{var real=window\.fetch;[^"]*…"\): the site's, not the build's/);
+    const session = JSON.parse(readFileSync(join(base.json.loop, 'session.json'), 'utf8'));
+    assert.deepEqual(session.pageAdded.map((x) => x.kind), ['homie-net', 'inline']);
+
+    // The studio's Worker changes in the middle of the loop: the builds it compares would be served different pages.
+    opts.inject = `${SHIM}<script src="/__studio/beacon.js"></script>`;
+    writeFileSync(join(game, 'speed.txt'), '0.75\n');
+    const changed = await perf(['try', 'gem-rush', '--name', 'Faster', '--looks', 'same', '--plays', 'same'], root, { HOMIE_PERF_SERVE_WAIT_MS: '1500' });
+    assert.equal(changed.code, 1, changed.out + changed.err);
+    assert.match(changed.json.why, /did not start serving build c1 .*the site now adds the HOMIE_NET line, an inline script .*, a script from \/__studio\/beacon\.js to the game page, and added the HOMIE_NET line, an inline script .* when the loop began/);
+    assert.match(changed.json.why, /start a new loop/);
+  } finally { server.close(); }
+
+  // A stale page (the site still serves the page of a build with another bundle): refused, with what differs.
+  const stale = await site(root, { inject: SHIM, page: (html) => html.replace('./assets/main.js', './assets/main-0ld.js') });
+  try {
+    const r = await perf(['baseline', 'gem-rush', '--url', `http://127.0.0.1:${stale.address().port}`, '--devices', 'computer', '--runs', '3', '--seconds', '5'], root, { HOMIE_PERF_SERVE_WAIT_MS: '1500' });
+    assert.equal(r.code, 1, r.out + r.err);
+    assert.match(r.json.why, /did not start serving build base within \d+ s \(index\.html: the page lacks the build's script \.\/assets\/main\.js/);
+  } finally { stale.close(); }
+});
+
+test('lib/page.mjs: the scripts a site adds are set aside; anything else of the build\'s own page that differs is not', () => {
+  const built = '<!doctype html>\n<html>\n<head>\n<title>Gem Rush</title>\n<script>window.GAME_BUILD="b1"</script>\n<script type="module" src="./assets/main.js"></script>\n</head>\n<body></body>\n</html>\n';
+  const net = '<script>window.HOMIE_NET={"v":1,"url":"ws://127.0.0.1:8787/gem-rush/__net?room=main"}</script>';
+  const withNet = built.replace('<head>', `<head>${net}`);
+  // The build's page as served by any studio (HOMIE_NET only), and with a studio's own additions anywhere in it.
+  assert.deepEqual(gamePageCheck(built, built), { same: true, added: [], why: null });
+  const a = gamePageCheck(built, withNet);
+  assert.equal(a.same, true, a.why);
+  assert.deepEqual(a.added.map((x) => x.kind), ['homie-net']);
+  const b = gamePageCheck(built, withNet.replace(net, `${net}${SHIM}`));
+  assert.equal(b.same, true, b.why);
+  assert.deepEqual(b.added.map((x) => x.kind), ['homie-net', 'inline']);
+  assert.match(b.added[1].starts, /^\(function\(\)\{try\{var real=window\.fetch/);
+  const c = gamePageCheck(built, withNet.replace('</body>', '\n<script src="/__studio/beacon.js" defer></script>\n</body>'));
+  assert.equal(c.same, true, c.why);
+  assert.deepEqual(c.added.map((x) => [x.kind, x.src ?? null]), [['homie-net', null], ['src', '/__studio/beacon.js']]);
+  assert.ok(sameAdditions(a.added, gamePageCheck(built, withNet).added));
+  assert.ok(!sameAdditions(a.added, b.added));
+  // HOMIE_NET's words follow the game's game.json (a change may give it `movement`): the same site all the same.
+  const net2 = net.replace('"v":1,', '"v":1,"movement":"free",');
+  const moved = gamePageCheck(built, built.replace('<head>', `<head>${net2}${SHIM}`));
+  assert.equal(moved.same, true, moved.why);
+  assert.ok(sameAdditions(b.added, moved.added) && moved.added[0].sha256 !== b.added[0].sha256);
+  // A different build: another bundle, a changed inline script, a script gone, changed markup. Each is refused.
+  const stale = gamePageCheck(built, withNet.replace('./assets/main.js', './assets/main-0ld.js'));
+  assert.equal(stale.same, false);
+  assert.match(stale.why, /lacks the build's script \.\/assets\/main\.js \(1 of the build's 2 scripts there\)/);
+  const inline = gamePageCheck(built, withNet.replace('"b1"', '"b0"'));
+  assert.equal(inline.same, false);
+  assert.match(inline.why, /lacks the build's script "window\.GAME_BUILD="b1"…"/);
+  assert.equal(gamePageCheck(built, withNet.replace('<script>window.GAME_BUILD="b1"</script>\n', '')).same, false);
+  const markup = gamePageCheck(built, withNet.replace('<title>Gem Rush</title>', '<title>Gem Rush (old)</title>').replace(net, `${net}${SHIM}`));
+  assert.equal(markup.same, false);
+  assert.match(markup.why, /markup differs from the build's at character \d+: served ".*Gem Rush \(old\).*", built ".*Gem Rush<\/title>/);
+  // Scripts in another order are another page.
+  const swapped = built.replace('<script>window.GAME_BUILD="b1"</script>\n<script type="module" src="./assets/main.js"></script>', '<script type="module" src="./assets/main.js"></script>\n<script>window.GAME_BUILD="b1"</script>');
+  assert.equal(gamePageCheck(built, swapped).same, false);
+});
+
+test('what BASELINE.md says about the download: three.js minified is minified (its shaders said apart), three.js plain is not', { skip: !existsSync(join(THREE_BUILD, 'three.module.min.js')) && 'node_modules has no three' }, () => {
+  const root = join(scratch, 'downloads');
+  const dist = join(root, 'site', 'dist', 'games', 'sky-race');
+  mkdirSync(join(dist, 'assets'), { recursive: true });
+  mkdirSync(join(dist, 'build'), { recursive: true });
+  mkdirSync(join(root, 'games', 'sky-race'), { recursive: true });
+  writeFileSync(join(root, 'games', 'sky-race', 'game.json'), '{"id":"sky-race"}\n');
+  // A game's bundle (named as a bundler names it, so the name says nothing) that is minified three.js with its shaders.
+  writeFileSync(join(dist, 'assets', 'index-a1b2.js'), readFileSync(join(THREE_BUILD, 'three.module.min.js')));
+  writeFileSync(join(dist, 'build', 'three.core.js'), readFileSync(join(THREE_BUILD, 'three.core.js')));
+  const sizes = perfSizes(root, 'sky-race');
+  const min = sizes.biggest.find((f) => f.path === 'assets/index-a1b2.js');
+  // What 0.20.0 said of it: "looks unminified (it compresses like source text)" (over 200 KB, gzip over 17%).
+  assert.ok(min.bytes > 200 * 1024 && min.gzip / min.bytes > 0.17);
+  const h = sizeHints(sizes);
+  const said = h.join('\n');
+  assert.doesNotMatch(said, /assets\/index-a1b2\.js[^\n]*(looks unminified|is not minified)/);
+  assert.match(said, /assets\/index-a1b2\.js \(\d+ KB, \d+ KB gzipped\) is minified already \([\d.]+% whitespace in its code, names shortened\): minifying it again gains nothing\. \d+(\.\d)?% of its bytes are GLSL shader source in strings[^:]*: normal for three\.js/);
+  assert.match(said, /build\/three\.core\.js \(\d+ KB\) is not minified: [\d.]+% of its code is whitespace and [\d.]+% of the file comments/);
+  assert.match(said, /a player downloads \d+ KB of JavaScript \(gzipped\) before playing: .*Ship the unminified scripts below minified/);
+  // With the plain file gone, every script is minified: the download hint no longer says to minify.
+  rmSync(join(dist, 'build'), { recursive: true });
+  const only = sizeHints(perfSizes(root, 'sky-race')).join('\n');
+  assert.doesNotMatch(only, /[Ss]hip (the unminified scripts below )?minified|not minified/);
+  // A studio before 0.19.1 (no `code`) gets no claim about minifying at all.
+  const old = perfSizes(root, 'sky-race');
+  for (const f of old.biggest) delete f.code;
+  assert.doesNotMatch(sizeHints(old).join('\n'), /minif/i);
 });

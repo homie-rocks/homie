@@ -47,6 +47,7 @@ import { gzipSync } from 'node:zlib';
 import { SOFTWARE_GL, chromeArgs, findChrome, noChrome } from './chrome.mjs';
 import { LAUNCH_TIMEOUT_MS } from './check.mjs';
 import { judge, judgePaired, round, summarize } from './perf-stats.mjs';
+import { readCode } from './perf-code.mjs';
 import { sourceMapLookup, summarizeProfile } from './perf-profile.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -558,6 +559,11 @@ const COMPRESSIBLE = new Set(['js', 'css', 'html', 'data', 'model']);
  * map (`build --maps`) which source modules make up the bundle. `source.json` (for remixers), `_landing/`, `hero/` and
  * the cover (the landing page's) are listed apart: the game itself never loads them. What a browser really fetched is
  * in each run (`load`).
+ *
+ * Each of the biggest JavaScript files (20 KB or more) carries `code`: whether it is minified, read from its code
+ * (whitespace, comments and names outside its strings: lib/perf-code.mjs), and how much of it is strings and GLSL
+ * shader source. A bundle with three.js in it gzips like text even minified (its shaders are source in strings), so
+ * how well a file compresses never says it is unminified.
  */
 export function perfSizes(root, game) {
   const dir = join(root, 'site', 'dist', 'games', game);
@@ -595,10 +601,18 @@ export function perfSizes(root, game) {
     total: { files: game_.length, bytes: sum(game_, 'bytes'), gzip: sum(game_, 'gzip') },
     js: { bytes: byKind.js?.bytes ?? 0, gzip: byKind.js?.gzip ?? 0 },
     byKind,
-    biggest: [...game_].sort((a, b) => b.bytes - a.bytes).slice(0, 12).map(({ apart, ...f }) => f),
+    biggest: [...game_].sort((a, b) => b.bytes - a.bytes).slice(0, 12).map(({ apart, ...f }) => (f.kind === 'js' && f.bytes >= 20 * 1024 ? { ...f, code: codeOf(join(dir, f.path)) } : f)),
     apart: files.filter((f) => f.apart).length ? { files: files.filter((f) => f.apart).length, bytes: sum(files.filter((f) => f.apart), 'bytes'), note: 'the remix source and the landing page\'s art (hero/, the cover): never loaded by the game' } : null,
     modules,
   };
+}
+
+/** What `perf sizes` says about one JavaScript file's code (lib/perf-code.mjs), or null when it cannot be read. */
+function codeOf(file) {
+  try {
+    const { minified, mangled, whitespacePct, commentPct, codeCharsPerLine, nameLength, shortNamesPct, stringPct, shaderPct, why } = readCode(readFileSync(file, 'utf8'));
+    return { minified, mangled, whitespacePct, commentPct, codeCharsPerLine, nameLength, shortNamesPct, stringPct, shaderPct, why };
+  } catch { return null; }
 }
 
 /** Size metrics, flat like a run's: `bytes.total`, `bytes.gzip`, `bytes.js`, `bytes.jsGzip` (the same every run). */

@@ -440,6 +440,12 @@ playable, heap, the host's upload) must not get worse. Results are files under `
 command prints paths and medians. The Homie plugin's `perf` skill runs the whole loop: baseline, one change at a time,
 keep or revert, and a report in the studio's `perf/` folder.
 
+`perf sizes` reads each big script for whether it is minified from its code, not from how well it gzips: whitespace,
+comments and names outside its strings (a minifier leaves about 1 to 2% whitespace; indented source has 15 to 30%).
+Minified JavaScript gzips about as well as source text, and a bundle with three.js in it carries the shaders as GLSL
+source in strings, which no minifier touches; the line for such a file says `minified, 19% GLSL shader source in
+strings`, and the JSON's `code` has every measure.
+
 ## Checks on a computer without a GPU
 
 `check`, `port check` and `look` run Chrome headless. On a Mac they use its GPU. On Linux (a Claude Code cloud

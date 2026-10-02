@@ -31,7 +31,8 @@
  *                                          emulated (a --cpu times slower CPU, 4G) on this computer's GPU. The plugin's perf
  *                                          skill runs the whole measure, change, compare, keep-or-revert loop)
  *   homie-studio perf sizes <id>          (what a player downloads: every built file, raw and gzipped, the biggest first; with
- *                                          build --maps, which modules make up the bundle)
+ *                                          build --maps, which modules make up the bundle; each big script read for whether it
+ *                                          is minified, from its code, and how much of it is GLSL shader source in strings)
  *   homie-studio perf compare <before dir> <after dir> [--goal phone.host.frame.p95] [--min 3] [--guards a,b] [--also c,d]
  *                                         (better, worse or the same within the noise: medians, a 95% interval, a rank test,
  *                                          and the guards that must not get worse; runs taken side by side with the same
@@ -477,7 +478,7 @@ function print(result) {
     case 'perf sizes': {
       const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
       lines.push(`${result.game}: ${result.total.files} files, ${kb(result.total.bytes)} (${kb(result.total.gzip)} gzipped); JavaScript ${kb(result.js.bytes)} (${kb(result.js.gzip)} gzipped)`,
-        'Biggest:', ...result.biggest.slice(0, 8).map((f) => `  ${kb(f.bytes).padStart(10)}  ${f.path}${f.gzip !== f.bytes ? `  (${kb(f.gzip)} gzipped)` : ''}`),
+        'Biggest:', ...result.biggest.slice(0, 8).map((f) => `  ${kb(f.bytes).padStart(10)}  ${f.path}${f.gzip !== f.bytes ? `  (${kb(f.gzip)} gzipped)` : ''}${f.code ? `  ${f.code.minified ? `minified${f.code.shaderPct >= 5 ? `, ${f.code.shaderPct}% GLSL shader source in strings` : ''}` : 'NOT minified'}` : ''}`),
         ...(result.modules ? ['Bundle modules:', ...result.modules.top.slice(0, 8).map((m) => `  ${kb(m.bytes).padStart(10)}  ${m.module}`)] : []),
         ...(result.apart ? [`Not loaded by the game: ${result.apart.files} file(s), ${kb(result.apart.bytes)} (${result.apart.note})`] : []));
       break;

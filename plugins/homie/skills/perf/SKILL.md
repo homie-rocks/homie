@@ -12,7 +12,8 @@ snapshots), playing the same seeded presses every run.
 
 One script: `scripts/perf.mjs` in this skill's folder (Claude Code:
 `node "${CLAUDE_PLUGIN_ROOT}/skills/perf/scripts/perf.mjs" <command>`), run from inside the studio. It drives the
-studio's own `@homie-rocks/studio` (0.19.0 or later: `homie-studio perf`, `perf compare`, `check`, `build --maps`),
+studio's own `@homie-rocks/studio` (0.19.0 or later: `homie-studio perf`, `perf compare`, `check`, `build --maps`;
+0.19.1 also reads whether each big script is minified),
 opens at most two browsers at a time, all muted, and writes everything it measures under `.perf/<game>/`
 (git-ignored). It prints paths and a few numbers, never the data: read the files it names.
 
@@ -23,7 +24,10 @@ opens at most two browsers at a time, all muted, and writes everything it measur
   (a render, a build of something else, more browsers) while a loop runs.
 - Start the site as a background task that outlives the command (Claude Code: the Bash tool's `run_in_background`):
   `npm run dev` (another port: `npx --no-install homie-studio dev --port <n>`). Never `npm run build` by hand while a
-  loop runs: the script builds and swaps builds itself and checks the site serves exactly the build it means to measure.
+  loop runs: the script builds and swaps builds itself and checks the site serves exactly the build it means to measure
+  (every file by SHA-256, and the game page as built). Scripts the site's Worker adds to the game page are the site's,
+  not the build's: HOMIE_NET, and any a studio's own Worker injects (a small shim) are set aside, listed in BASELINE.md,
+  and must stay the same through the loop. Don't change the Worker in the middle of a loop; start a new one.
 - Commit or stash what the person is working on first: `try` only ever touches `games/<game>/`, and a revert puts that
   folder back to the kept build.
 
@@ -93,8 +97,10 @@ What usually helps, roughly in order (`references/METHOD.md` has the detail and 
 2. Work per thing that can be work per group: one path for many shapes, instancing in three.js, fewer state changes
    (composite modes, materials), fewer draw calls.
 3. Garbage: a high `gcPct` or hitches every few seconds mean allocation in the loop.
-4. Downloads: minified builds of the same library version, nothing that is never imported, big things after the first
-   frame.
+4. Downloads: nothing that is never imported, big things after the first frame, and a minified copy (the same library
+   version) of a script BASELINE.md says is **not minified**. That is read from the code (whitespace, comments, names),
+   never from how well it gzips: minified JavaScript gzips about as well as source text, and a bundle with three.js in
+   it carries the shaders as GLSL source in strings, which no minifier touches. Minifying it again gains nothing.
 5. Netplay: snapshots that send what did not change; the host's upload grows with every seat (`net.kbOut`).
 
 ## 3. The report

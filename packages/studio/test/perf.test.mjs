@@ -7,21 +7,26 @@
  *   - a CPU profile is summed per function, idle kept apart, and a minified bundle read back through its source map
  *     (`draw (src/main.ts:12)`, a real esbuild map);
  *   - `build --maps` keeps the map and the module sizes in .studio/maps/<id>/, never in site/dist, and the bundle is
- *     byte for byte what a plain build makes; `perf sizes` reads it, and ignores a map left from another build.
+ *     byte for byte what a plain build makes; `perf sizes` reads it, and ignores a map left from another build;
+ *   - 0.19.1: `perf sizes` tells a minified script from an unminified one by its code, never by how well it gzips: a
+ *     real minified three.js bundle (fixtures/three-bundles, small) is minified with its GLSL shader source counted
+ *     apart, the same bundle unminified is not, and so are three.js's own builds when node_modules has them.
  * The browsers themselves need Chrome on a GPU (`homie-studio perf` against `homie-studio dev`; the perf skill).
  * Run: node --test packages/studio/test/perf.test.mjs
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { bootstrapChange, judge, judgePaired, quantile, rankTest, signedRankTest, summarize } from '../lib/perf-stats.mjs';
 import { decodeMappings, sourceMapLookup, summarizeProfile } from '../lib/perf-profile.mjs';
 import { DEFAULT_GOAL, defaultGuards, deviceLabel, metricsOfRun, perfCompare, perfSizes, summaryOf } from '../lib/perf.mjs';
+import { readCode } from '../lib/perf-code.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
@@ -253,6 +258,7 @@ test('build --maps: the map and module sizes go to .studio/maps/<id>/, never int
   assert.equal(sizes.ok, true);
   assert.ok(sizes.js.bytes > 20_000 && sizes.js.gzip < sizes.js.bytes);
   assert.equal(sizes.biggest[0].path, 'assets/main.js');
+  assert.equal(sizes.biggest[0].code.minified, true, 'a studio build is minified, and perf sizes reads it so');
   assert.ok(sizes.modules.top.some((m) => /netplay\/netplay\.ts$/.test(m.module)), 'the netplay helper is in the bundle');
   assert.ok(sizes.modules.top.some((m) => /games\/gem-rush\/src\/main\.ts$/.test(m.module)));
   assert.match(sizes.apart.note, /never loaded by the game/, 'source.json is listed apart');
@@ -267,4 +273,111 @@ test('build --maps: the map and module sizes go to .studio/maps/<id>/, never int
   const none = JSON.parse(run(['perf', 'gem-rush', '--url', 'http://127.0.0.1:9'], dir).stdout);
   assert.equal(none.ok, false);
   assert.match(none.why, /does not answer: start the site|no Chrome|puppeteer/);
+});
+
+/* ------------------------------------------------------------------------------------------------- minified or not */
+
+const THREE_FIX = join(PKG, 'test', 'fixtures', 'three-bundles');
+const ratio = (buf) => gzipSync(buf, { level: 6 }).length / buf.length;
+
+test('a minified three.js bundle reads as minified, its shaders apart; the same bundle unminified does not; gzip could not tell', () => {
+  const min = readFileSync(join(THREE_FIX, 'three-shaders.min.js'));
+  const src = readFileSync(join(THREE_FIX, 'three-shaders.js'));
+  // What 0.19.0 read: "compresses like source text" (gzip over 17% of the bytes). Both files do, so it flagged both.
+  assert.ok(ratio(min) > 0.17 && ratio(src) > 0.17, `gzip ratios ${ratio(min).toFixed(3)} and ${ratio(src).toFixed(3)}`);
+  const m = readCode(min.toString('utf8'));
+  assert.equal(m.minified, true, m.why);
+  assert.equal(m.mangled, true, m.why);
+  assert.ok(m.whitespacePct < 3, `whitespace ${m.whitespacePct}%`);
+  assert.ok(m.shaderPct > 30 && m.shaderPct <= m.stringPct, `shader ${m.shaderPct}% of ${m.stringPct}% strings`);
+  assert.match(m.why, /^minified, names shortened .*GLSL shader source/);
+  const u = readCode(src.toString('utf8'));
+  assert.equal(u.minified, false, u.why);
+  assert.ok(u.whitespacePct > 15, `whitespace ${u.whitespacePct}%`);
+  assert.ok(u.commentPct > 10, `comments ${u.commentPct}%`);
+  assert.match(u.why, /^not minified/);
+  // The same shaders in both: a minifier never touches a string.
+  assert.ok(Math.abs((m.shaderPct / 100) * min.length - (u.shaderPct / 100) * src.length) < 0.02 * src.length, 'the same GLSL bytes in both');
+  // The licence comment a minifier keeps is not counted against it.
+  assert.ok(m.licencePct > 0 && m.commentPct === 0);
+});
+
+test('minified with its names kept (whitespace and syntax only) is minified; esbuild\'s own output reads the same', async () => {
+  const esbuild = await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'));
+  const src = readFileSync(join(THREE_FIX, 'three-shaders.js'), 'utf8');
+  const kept = (await esbuild.transform(src, { minifyWhitespace: true, minifySyntax: true, format: 'esm', legalComments: 'inline' })).code;
+  const r = readCode(kept);
+  assert.equal(r.minified, true, r.why);
+  assert.equal(r.mangled, false, `three.js's names are still there: ${r.why}`);
+  const full = readCode((await esbuild.transform(src, { minify: true, format: 'esm' })).code);
+  assert.equal(full.minified && full.mangled, true, full.why);
+  assert.ok(r.nameLength > full.nameLength + 1 && r.shortNamesPct < full.shortNamesPct - 20, `names ${r.nameLength} vs ${full.nameLength} characters`);
+});
+
+test('the reader keeps code, strings, templates, regular expressions and comments apart', () => {
+  const shader = '#ifdef USE_FOG\n\tuniform vec3 fogColor;\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );\n#endif\n';
+  const code = [
+    'const quote = /[\'"`]/g; // a backtick in a regular expression is not a template',
+    'if (ok) /`/.test(s) && go();',
+    'const half = width / 2 / scale, rate = (a + b) / c;',
+    `const fog = \`${shader}\`;`,
+    'const nested = `a${`b${c}d`}e`;',
+    'const obj = { alpha: 1, beta: { gamma: 2 } }; /* a note */',
+  ].join('\n');
+  const r = readCode(code);
+  // The shader template is read as a string (and as shader source); the regular expressions' backticks never opened one.
+  assert.ok(r.shaderPct > 0, 'the GLSL template is shader source');
+  const shaderShare = shader.length / code.length;
+  assert.ok(Math.abs(r.shaderPct / 100 - shaderShare) < 0.01, `shader ${r.shaderPct}% vs ${(shaderShare * 100).toFixed(1)}%`);
+  // Names that a minifier renames are counted (quote, ok, s, go, half, width, scale ...); keys and properties are not.
+  assert.ok(r.names >= 14 && r.names <= 20, `${r.names} names`);
+  assert.equal(r.minified, false, 'indented with comments');
+  // An empty file, and a string left open at the end of its line, are read without throwing.
+  assert.equal(readCode('').minified, false);
+  const open = readCode('"left open\nconst after = 1;\n');
+  assert.ok(open.stringPct > 0 && open.names === 1, 'the string stops at its line; the next line is code');
+});
+
+test('three.js\'s own builds: the plain files are not minified, the .min.js ones are, whatever gzip says', { skip: !existsSync(join(REPO_NM, 'three', 'build', 'three.module.min.js')) && 'node_modules has no three' }, () => {
+  const b = (f) => readFileSync(join(REPO_NM, 'three', 'build', f));
+  for (const f of ['three.core.js', 'three.module.js']) {
+    const r = readCode(b(f).toString('utf8'));
+    assert.equal(r.minified, false, `${f}: ${r.why}`);
+    assert.ok(ratio(b(f)) > 0.17, `${f} gzips like text`);
+  }
+  for (const f of ['three.core.min.js', 'three.module.min.js']) {
+    const r = readCode(b(f).toString('utf8'));
+    assert.equal(r.minified, true, `${f}: ${r.why}`);
+    assert.equal(r.mangled, true, `${f}: ${r.why}`);
+    assert.ok(ratio(b(f)) > 0.2, `${f} gzips at ${ratio(b(f)).toFixed(3)} minified, more than its source`);
+  }
+  // three.module.js carries the renderer and its shaders: about two fifths of the minified file is GLSL.
+  const mod = readCode(b('three.module.min.js').toString('utf8'));
+  assert.ok(mod.shaderPct > 30, `shader ${mod.shaderPct}%`);
+  assert.ok(readCode(b('three.core.min.js').toString('utf8')).shaderPct < 2, 'the core has no shaders');
+});
+
+test('perf sizes says which big scripts are minified (code), from the files themselves', () => {
+  const dir = join(scratch, 'sizes-code');
+  const dist = join(dir, 'site', 'dist', 'games', 'sky-race');
+  mkdirSync(join(dist, 'assets'), { recursive: true });
+  mkdirSync(join(dir, 'games', 'sky-race'), { recursive: true });
+  writeFileSync(join(dir, 'studio.json'), '{"name":"Sizes","slug":"sizes"}\n');
+  writeFileSync(join(dir, 'games', 'sky-race', 'game.json'), '{"id":"sky-race"}\n');
+  cpSync(join(THREE_FIX, 'three-shaders.min.js'), join(dist, 'assets', 'index-a1b2.js'));
+  cpSync(join(THREE_FIX, 'three-shaders.js'), join(dist, 'vendor.js'));
+  writeFileSync(join(dist, 'index.html'), '<!doctype html><script type="module" src="./assets/index-a1b2.js"></script>\n');
+  writeFileSync(join(dist, 'small.js'), 'export const x = 1;\n');
+  const s = perfSizes(dir, 'sky-race');
+  const by = Object.fromEntries(s.biggest.map((f) => [f.path, f]));
+  assert.equal(by['assets/index-a1b2.js'].code.minified, true);
+  assert.ok(by['assets/index-a1b2.js'].code.shaderPct > 30);
+  assert.equal(by['vendor.js'].code.minified, false);
+  assert.equal(by['small.js'].code, undefined, 'a small script is not read');
+  assert.equal(by['index.html'].code, undefined);
+  const cli = run(['perf', 'sizes', 'sky-race'], dir);
+  assert.equal(JSON.parse(cli.stdout).biggest.find((f) => f.path === 'vendor.js').code.minified, false);
+  const text = spawnSync(process.execPath, [CLI, 'perf', 'sizes', 'sky-race'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } }).stdout;
+  assert.match(text, /assets\/index-a1b2\.js .*minified, \d+(\.\d)?% GLSL shader source in strings/);
+  assert.match(text, /vendor\.js .*NOT minified/);
 });

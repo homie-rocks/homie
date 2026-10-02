@@ -24,9 +24,15 @@
  *   goals               the metrics a goal or a guard can name
  *
  * Run from inside the studio with its site running (npm run dev, a background task). It drives the studio's own
- * @homie-rocks/studio (0.19.0 or later): `homie-studio perf`, `perf compare`, `check` and `build --maps`. Two browsers at
- * a time, muted. Everything it measures stays in .perf/<game>/ (git-ignored); only `report` writes into the studio's
- * tracked files. Output is paths and a few numbers, never the data.
+ * @homie-rocks/studio (0.19.0 or later; 0.19.1 also reads whether each big script is minified): `homie-studio perf`,
+ * `perf compare`, `check` and `build --maps`. Two browsers at a time, muted. Everything it measures stays in
+ * .perf/<game>/ (git-ignored); only `report` writes into the studio's tracked files. Output is paths and a few numbers,
+ * never the data.
+ *
+ * Before every run it checks the site serves exactly the build it means to measure: every file by SHA-256, and the game
+ * page as the build made it with the scripts the site's Worker adds set aside (HOMIE_NET, and any a studio's own Worker
+ * injects; lib/page.mjs), which must stay the same through a loop. It waits up to 60 s for a dev server to pick up a
+ * build (HOMIE_PERF_SERVE_WAIT_MS sets another wait).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -34,6 +40,8 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statf
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findStudio, readJson, slugify, writeJson } from '../../music/scripts/lib/studio.mjs';
+import { gamePageCheck, sameAdditions } from './lib/page.mjs';
+import { sizeHints } from './lib/sizes.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
@@ -185,33 +193,47 @@ function installBuild(root, game, dir, v) {
   if (existsSync(join(from, 'maps'))) cpSync(join(from, 'maps'), maps, { recursive: true });
 }
 
+/** How long to wait for the site to serve a build it was just given (a dev server notices new files in a second or two). */
+const SERVE_WAIT_MS = Math.max(1000, Number(process.env.HOMIE_PERF_SERVE_WAIT_MS) || 60_000);
+
 /**
- * Wait until the site serves exactly build `v` (every file's SHA-256; the game page with the site's HOMIE_NET line
- * taken out): a run must never measure the build it did not mean to.
+ * Wait until the site serves exactly build `v`: every file's SHA-256, and the game page as the build made it plus the
+ * scripts the site's Worker adds (lib/page.mjs: HOMIE_NET, and any a studio's own Worker injects, such as a small
+ * inline shim). A run must never measure the build it did not mean to. Returns the scripts the site added; with
+ * `added` (the baseline's), the site must add the same ones: a Worker that changed in the middle of a loop serves a
+ * different page to the builds it compares.
  */
-async function servedIs(url, game, dir, v, timeoutMs = 60_000) {
+async function servedIs(url, game, dir, v, { added = null, timeoutMs = SERVE_WAIT_MS } = {}) {
   const man = readJson(join(dir, 'builds', v, 'manifest.json'));
   const files = Object.entries(man.files).filter(([f]) => !f.startsWith('_landing/') && !(/\.html?$/i.test(f) && f !== 'index.html')).slice(0, 300);
   const until = Date.now() + timeoutMs;
   let wrong = null;
+  let page = null;
   while (Date.now() < until) {
     wrong = null;
     for (const [f, want] of files) {
       try {
         if (f === 'index.html') {
           const body = await fetch(`${url}/${game}/__game/`, { signal: AbortSignal.timeout(15_000) }).then((r) => r.text());
-          const plain = body.replace(/<script>window\.HOMIE_NET=[^<]*<\/script>/, '');
-          if (sha256(Buffer.from(plain)) !== want) { wrong = f; break; }
+          page = gamePageCheck(readFileSync(join(dir, 'builds', v, 'files', 'index.html'), 'utf8'), body);
+          if (!page.same) { wrong = `${f}: ${page.why}`; break; }
+          if (added && !sameAdditions(added, page.added)) { wrong = `${f}: the site now adds ${addedSaid(page.added)} to the game page, and added ${addedSaid(added)} when the loop began`; break; }
         } else {
           const buf = Buffer.from(await fetch(`${url}/${game}/__game/${f.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(30_000) }).then((r) => r.arrayBuffer()));
-          if (sha256(buf) !== want) { wrong = f; break; }
+          if (sha256(buf) !== want) { wrong = `${f} differs`; break; }
         }
-      } catch { wrong = f; break; }
+      } catch (e) { wrong = `${f}: ${e instanceof Error ? e.message : e}`; break; }
     }
-    if (!wrong) return true;
+    if (!wrong) return page?.added ?? [];
     await sleep(1500);
   }
-  throw new Error(`the site at ${url} did not start serving build ${v} within ${Math.round(timeoutMs / 1000)} s (${wrong} differs): is the dev server still running? (npm run dev, as a background task)`);
+  throw new Error(`the site at ${url} did not start serving build ${v} within ${Math.round(timeoutMs / 1000)} s (${wrong}): is the dev server still running? (npm run dev, as a background task)${/the site now adds/.test(wrong) ? '. The site\'s Worker changed since the baseline: put it back, or start a new loop (baseline)' : ''}`);
+}
+
+/** The scripts a site adds to the game page, for a person. */
+function addedSaid(added) {
+  if (!added?.length) return 'no scripts';
+  return added.map((x) => (x.kind === 'homie-net' ? 'the HOMIE_NET line' : x.kind === 'src' ? `a script from ${x.src}` : `an inline script of ${x.bytes} B (sha256 ${x.sha256}, "${x.starts}…")`)).join(', ');
 }
 
 /* ------------------------------------------------------------------------------------------- measuring */
@@ -254,7 +276,7 @@ async function alternate(root, s, dir, a, b, out) {
       const order = k % 2 === 0 ? [a, b] : [b, a];
       for (const v of order) {
         installBuild(root, s.game, dir, v);
-        await servedIs(s.url, s.game, dir, v);
+        await servedIs(s.url, s.game, dir, v, { added: s.pageAdded ?? null });
         log(`  ${device} ${k + 1}/${s.runs}: ${v === a ? 'before' : 'after'} (${v})`);
         // Both runs of a turn carry the same pair label: compare judges each after-run against its neighbour.
         const pair = `${device}-${k + 1}`;
@@ -322,7 +344,10 @@ async function baseline() {
   if (!b.json?.ok) throw new Error(`the build failed: ${b.json?.why ?? b.err}`);
   keepBuild(root, game, dir, 'base');
   keepSource(root, game, dir, 'base');
-  await servedIs(url, game, dir, 'base');
+  // The scripts the site adds to the game page (HOMIE_NET, and any of the studio's own Worker): every later build must
+  // be served with the same ones.
+  s.pageAdded = await servedIs(url, game, dir, 'base');
+  saveSession(dir, s);
   log('… the two-browser check (homie-studio check): two fresh browsers must finish a round together');
   const ck = await cli(root, ['check', game, '--url', url], { timeoutMs: 8 * 60_000 });
   s.baseCheck = { ok: Boolean(ck.json?.ok), why: ck.json?.why ?? (ck.json ? null : ck.err), seconds: ck.json?.totalMs ? Math.round(ck.json.totalMs / 1000) : null };
@@ -337,7 +362,7 @@ async function baseline() {
   // Each run was its own `homie-studio perf` call, so the medians are taken here, over every run in the folder.
   const summary = summaryFromRuns(join(dir, 'runs', 'base'));
   writeFileSync(join(dir, 'BASELINE.md'), baselineMd(s, summary, profiles(join(dir, 'profile', 'base')), sizes.json, s.devices.map((d) => fetchedOf(join(dir, 'runs', 'base'), d))));
-  return { ok: true, command: 'baseline', game, loop: dir, goal: s.goal, check: `passed in ${s.baseCheck.seconds} s`, baseline: join(dir, 'BASELINE.md'), headline: headline(s, summary), next: 'read BASELINE.md (where the time goes, what to try), make ONE change, then: perf.mjs try <game> --name "<what it does>" --looks same --plays same' };
+  return { ok: true, command: 'baseline', game, loop: dir, goal: s.goal, check: `passed in ${s.baseCheck.seconds} s`, page: `the build's page plus ${addedSaid(s.pageAdded)} from the site`, baseline: join(dir, 'BASELINE.md'), headline: headline(s, summary), next: 'read BASELINE.md (where the time goes, what to try), make ONE change, then: perf.mjs try <game> --name "<what it does>" --looks same --plays same' };
 }
 
 /** A summary of the runs in a folder written by several single-run calls (each wrote its own summary.json). */
@@ -400,11 +425,7 @@ function hints(s, summary, profs, sizes) {
       ? `${d}: the heap grew ${g} MB a minute after garbage collection over ${s.seconds} s windows. Over a short window that is often a buffer filling (the port probe keeps its last 4,000 frames, about a minute): measure once with \`homie-studio perf ${s.game} --device ${d} --seconds 180\`; growth that keeps going after the first minute is a leak (a list that only grows, listeners added every round).`
       : `${d}: the heap grows ${g} MB a minute after garbage collection: something is kept that should not be (a list that only grows, listeners added every round).`);
   }
-  if (sizes?.ok) {
-    if (sizes.js.gzip > 300 * 1024) h.push(`a player downloads ${Math.round(sizes.js.gzip / 1024)} KB of JavaScript (gzipped) before playing: a phone on 4G feels that. Ship minified builds, drop what is never imported, load big things after the first frame.`);
-    const unmin = sizes.biggest.filter((f) => f.kind === 'js' && f.bytes > 200 * 1024 && !/\.min\.js$/.test(f.path) && f.gzip / f.bytes > 0.17);
-    if (unmin.length) h.push(`${unmin.map((f) => `${f.path} (${Math.round(f.bytes / 1024)} KB)`).join(', ')}: looks unminified (it compresses like source text). A minified copy of the same version is the same code in a third of the bytes.`);
-  }
+  if (sizes?.ok) h.push(...sizeHints(sizes));
   return h;
 }
 
@@ -421,6 +442,7 @@ function baselineMd(s, summary, profs, sizes, fetched = []) {
   L.push(`Measured on ${summary.machine?.cpu ?? '?'} (${summary.machine?.cores ?? '?'} cores), ${summary.chrome ?? 'Chrome'}, ${summary.renderers?.join(', ') || 'renderer unknown'}.`, '');
   for (const [d, label] of Object.entries(summary.deviceLabels ?? {})) L.push(`- **${d}**: ${label}`);
   if (summary.cpuMeasured) L.push(`- The phone's throttle measured **${summary.cpuMeasured}x** here (the median run): its work is that much slower than this computer's, not ${s.cpu}x.`);
+  if (s.pageAdded) L.push(`- The game page as the site serves it is the build's page plus ${addedSaid(s.pageAdded)}: the site's, not the build's, and the same for every build this loop measures. Before every run the page is checked against the build's (every script and the markup) and every other file by SHA-256.`);
   L.push('', '## The numbers (median of the runs; the spread is the middle half as a share of the median)', '', '| metric | median | spread |', '| --- | --- | --- |');
   const keep = /\.(frame\.(p50|p95|p99|over50)|work\.(mean|p95)|busy|heap|heap\.growth|load\.(firstFrame|playable|gameKb)|net\.(msgsOut|msgsIn|kbOut|kbIn))$/;
   for (const [k, v] of Object.entries(summary.metrics ?? {})) if (keep.test(k)) L.push(`| \`${k}\` | ${v.median} | ${v.spread === null ? '–' : `${Math.round(v.spread * 100)}%`} |`);
@@ -483,7 +505,7 @@ async function tryChange() {
   keepBuild(root, game, dir, v);
   keepSource(root, game, dir, v);
   writeFileSync(join(exp, 'change.patch'), patchOf(dir, game, s.kept, v));
-  await servedIs(s.url, game, dir, v);
+  await servedIs(s.url, game, dir, v, { added: s.pageAdded ?? null });
   log('… the two-browser check on the changed build');
   const ck = await cli(root, ['check', game, '--url', s.url], { timeoutMs: 8 * 60_000 });
   const check = { ok: Boolean(ck.json?.ok), why: ck.json?.why ?? (ck.json ? null : ck.err), seconds: ck.json?.totalMs ? Math.round(ck.json.totalMs / 1000) : null };
@@ -729,6 +751,7 @@ function reportMd(s, n, final, pictures, kept, patches = new Map()) {
   L.push(`- Each run: two browsers (the host and a replica) in a fresh room of their own, the same seeded presses, a 3 s warm-up and a ${s.seconds} s measured window; headless Chrome on this computer's GPU (never a software renderer).`);
   L.push(`- Each change: the build to beat and the changed build measured in turns (before, after, after, before, …), ${s.runs} runs each per device. Each before-run and the after-run beside it are a pair, so a computer that drifted busier hits both sides alike. Better means: a one-sided signed-rank test on the pairs (Wilcoxon, exact) p < 0.05, the 95% bootstrap interval of the change below zero, and at least ${s.min}% better. Guards (frame time, main thread per frame, time to playable, heap, the host's upload) must not be worse (worse in every pair or p < 0.01, and at least 5%).`);
   L.push(`- The computer is shared: every run waited for the 1-minute load to fall under ${s.maxLoad} per core and recorded it; a run that started busy was taken again and left out.`);
+  L.push(`- Before every run the site was checked to serve exactly the build being measured: every file by SHA-256, and the game page as the build made it${s.pageAdded ? `, with what the site adds to it (${addedSaid(s.pageAdded)}) the same throughout` : ''}.`);
   L.push(`- The phone is emulated: Chrome's CPU throttle at ${s.cpu}x${cpu ? ` (measured ${cpu.median}x slower here; it varies from run to run, ${cpu.min}x to ${cpu.max}x, which is part of the phone's noise)` : ''} and 4G, on this computer's GPU. It ranks changes; it is not a real phone's frame rate. Check a real phone (or the iOS Simulator) before promising one.`);
   L.push(`- Raw runs, screenshots and CPU profiles: \`.perf/${s.game}/\` (on this computer, not committed).`, '');
   return `${L.join('\n')}\n`;
