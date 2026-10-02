@@ -231,7 +231,8 @@ Songs, videos and other large media go to the studio's storage (an R2 bucket), n
 makes games never needs it. When the person wants it: `npx --no-install homie-studio storage add`.
 Cloudflare asks for a payment method on the account before R2 works (its first 10 GB a month are free),
 so say that first and let the person decide; if R2 is not turned on, the command gives the dashboard
-link and creates nothing. Then `npm run deploy` binds it and `homie-studio media put <file>` uploads.
+link and creates nothing. Then every `npm run deploy` binds it and moves the big songs and videos
+there (checked by SHA-256, at the same addresses); `homie-studio media move --dry-run` says which.
 
 ## Never
 

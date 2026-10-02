@@ -15,7 +15,11 @@
  *   site/dist/_studio/codex/<id>/          each game's Game Codex (games/<id>/CODEX.md, lib/codex.mjs): served only to
  *                                          the studio's owner (worker/stats-page.mjs), never listed or indexed
  *   site/dist/<file>                       site/public, as it is (fonts, a logo, hero footage)
- *   site/dist/music/..., site/dist/videos/...   media files the site serves itself (R2 keys are served from R2)
+ *   site/dist/music/..., site/dist/videos/...   media files the site serves itself. A file the studio's R2 has (media
+ *                                          move: the same bytes, by SHA-256) is left out of a deploy's build and
+ *                                          served from R2 at the same address; a local build still copies it when it
+ *                                          fits, for `dev` (whose R2 is empty). Workers Builds (WORKERS_CI=1) builds
+ *                                          as a deploy.
  *
  * game.json "build" picks how a game becomes files (a ported game keeps its own shape):
  *   (absent) / { "mode": "bundle" }   src/main.ts (or "entry") bundled by esbuild — new games and ES-module ports
@@ -201,7 +205,7 @@ export function seatsFor(g, net = netplayOf(g)) {
   return { min: Math.min(max, minNamed ?? 1), max, asked };
 }
 
-export async function build(root, { only = null, log = () => {} } = {}) {
+export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1' } = {}) {
   const require = createRequire(join(root, 'package.json'));
   let esbuild;
   try { esbuild = require('esbuild'); } catch { esbuild = await import('esbuild'); }
@@ -270,9 +274,9 @@ export async function build(root, { only = null, log = () => {} } = {}) {
   // Songs and videos (music/ and videos/ manifests): rebuilt with every full build; a one-game build keeps them.
   const r2 = Boolean(studio.cloudflare?.r2 && (studio.cloudflare?.created ?? []).includes(`r2:${studio.cloudflare.r2}`));
   let media = null;
-  if (!only) media = buildMedia(root, dist, { r2, log });
+  if (!only) media = buildMedia(root, dist, { r2, deploy, log });
   else {
-    try { const prev = JSON.parse(readFileSync(join(dist, 'games.json'), 'utf8')); media = { songs: prev.songs ?? [], videos: prev.videos ?? [], skipped: [] }; } catch { media = { songs: [], videos: [], skipped: [] }; }
+    try { const prev = JSON.parse(readFileSync(join(dist, 'games.json'), 'utf8')); media = { songs: prev.songs ?? [], videos: prev.videos ?? [], skipped: [], notes: [] }; } catch { media = { songs: [], videos: [], skipped: [], notes: [] }; }
   }
   // The site around the games (site/SITE.md): the look, each game's landing, posts, and what site/ overrides.
   const theme = readTheme(root, { log });
@@ -345,7 +349,7 @@ export async function build(root, { only = null, log = () => {} } = {}) {
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
   return {
     ok: true, command: 'build', dist, games: built, catalogue: catalogue.games.map((g) => g.id),
-    songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped,
+    songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped, mediaNotes: media.notes ?? [],
     posts: posts.map((p) => p.slug), postsSkipped, codexes, pages: site.pages, partials: Object.keys(site.partials), public: site.public.length, siteSkipped: site.skipped,
     landings: rows.map((g) => ({ id: g.id, hero: g.landing.hero.wide || g.landing.hero.tall ? 'footage' : g.landing.hero.wideImage ? 'art' : 'colours', credits: Boolean(g.landing.credits.original || g.landing.credits.people.length), source: g.landing.source })),
   };

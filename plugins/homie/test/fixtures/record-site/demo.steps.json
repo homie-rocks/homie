@@ -1,0 +1,16 @@
+{
+  "path": "/",
+  "tail": 1,
+  "steps": [
+    { "wait": 600, "caption": "The landing" },
+    { "type": "Owl", "into": "input[name=nick]", "caption": "A name" },
+    { "scroll": 200 },
+    { "scroll": -200 },
+    { "click": "a[data-play]", "caption": "Press Play" },
+    { "waitFor": { "frame": "game", "js": "window.__demo && window.__demo.frames > 10" } },
+    { "key": "ArrowRight", "hold": 700, "frame": "game", "caption": "Move" },
+    { "keys": ["ArrowUp", "ArrowLeft"], "hold": 350, "gap": 120, "frame": "game" },
+    { "click": { "frame": "game", "selector": "canvas" } },
+    { "waitFor": { "frame": "game", "js": "window.__demo.clicks >= 1 && window.__demo.keys >= 3" } }
+  ]
+}

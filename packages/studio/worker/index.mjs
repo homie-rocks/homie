@@ -37,7 +37,10 @@
  *                              knocks for a Homie box, so it stops knocking (a studio site is not a box)
  *   /.well-known/homie-studio.json   what the homie.rocks directory reads
  *   /games/<id>/source.json    a public game's source for remixing, with its credit and licence (worker/license.mjs)
- *   /media/<key>               the studio's large media, from R2 (once `storage add` bound it), with byte ranges
+ *   /media/<key>               a loose file in the studio's R2 (`media put`), with byte ranges
+ *   /music/<slug>/<file>, /videos/<slug>/<file>   a song's or video's files: from the site's own files, or, for a
+ *                              file `media move` put in the studio's R2 (the catalogue names its key), from R2 at the
+ *                              same address, with byte ranges, HEAD, ETag and the site's own cache headers
  *   /api/stats                 the studio's numbers, for its owner only (a read key, or the owner's page session)
  *   /_studio/stats             the owner's private stats page (one-time sign-in link from `homie-studio stats link`)
  *   /_studio/office            the owner's back office: live rooms and who is in them, kick, mute, announce, close,
@@ -278,21 +281,50 @@ async function assetWithRange(request, env, url) {
   return new Response(body.subarray(r.start, r.end + 1), { status: 206, headers });
 }
 
-/** A file from the studio's R2 bucket, with byte ranges. */
-async function mediaObject(request, env, key) {
+/** Does an If-None-Match header name this ETag (or `*`)? Weak and strong forms compare alike for a GET. */
+function etagMatches(header, etag) {
+  if (!header || !etag) return false;
+  const bare = (t) => String(t).trim().replace(/^W\//, '');
+  return header.split(',').some((t) => t.trim() === '*' || bare(t) === bare(etag));
+}
+
+/**
+ * A file from the studio's R2 bucket, with byte ranges (206), HEAD, and If-None-Match (304).
+ * `cache`: the Cache-Control it is served with. /media/<key> keeps its hour; a song or video served at its own
+ * address (media move) gets exactly what the site's static files get, `public, max-age=0, must-revalidate` with an
+ * ETag, so moving a file to R2 changes nothing a browser or a phone sees. `type`: the catalogue's type, for an
+ * object stored without one.
+ */
+async function mediaObject(request, env, key, { cache = 'public, max-age=3600', type = null } = {}) {
   const range = request.headers.get('range');
+  const inm = request.headers.get('if-none-match');
+  const headOnly = request.method === 'HEAD';
   let head = null;
-  if (range) head = await env.MEDIA.head(key);
-  if (range && !head) return new Response('not found', { status: 404 });
-  const r = head ? parseRange(range, head.size) : null;
-  if (r?.unsatisfiable) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}` } });
+  if (range || inm || headOnly) {
+    head = await env.MEDIA.head(key);
+    if (!head) return new Response('not found', { status: 404 });
+  }
+  const base = (obj) => {
+    const headers = new Headers();
+    obj.writeHttpMetadata?.(headers);
+    if (!headers.get('content-type') && type) headers.set('content-type', type);
+    if (obj.httpEtag) headers.set('etag', obj.httpEtag);
+    if (obj.uploaded) headers.set('last-modified', new Date(obj.uploaded).toUTCString());
+    headers.set('cache-control', cache);
+    headers.set('accept-ranges', 'bytes');
+    return headers;
+  };
+  if (head && inm && etagMatches(inm, head.httpEtag)) return new Response(null, { status: 304, headers: base(head) });
+  const r = head && range ? parseRange(range, head.size) : null;
+  if (r?.unsatisfiable) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}`, 'accept-ranges': 'bytes' } });
+  if (headOnly) {
+    const headers = base(head);
+    headers.set('content-length', String(head.size));
+    return new Response(null, { headers });
+  }
   const obj = await env.MEDIA.get(key, r ? { range: { offset: r.start, length: r.end - r.start + 1 } } : undefined);
   if (!obj) return new Response('not found', { status: 404 });
-  const headers = new Headers();
-  obj.writeHttpMetadata(headers);
-  headers.set('etag', obj.httpEtag);
-  headers.set('cache-control', 'public, max-age=3600');
-  headers.set('accept-ranges', 'bytes');
+  const headers = base(obj);
   if (r) {
     headers.set('content-range', `bytes ${r.start}-${r.end}/${head.size}`);
     headers.set('content-length', String(r.end - r.start + 1));
@@ -300,6 +332,30 @@ async function mediaObject(request, env, key) {
   }
   headers.set('content-length', String(obj.size));
   return new Response(obj.body, { headers });
+}
+
+/** The same Cache-Control the site's static files are served with (Workers static assets' default). */
+const ASSET_CACHE = 'public, max-age=0, must-revalidate';
+
+/**
+ * A song's or video's file that `media move` put in R2, by the address it always had (/music/<slug>/x.mp3,
+ * /videos/<slug>/x.mp4): the catalogue names its key (`r2`). Only files the catalogue lists as public are served this
+ * way, never any other key of the bucket.
+ */
+async function heldInR2(env, getCat, path) {
+  if (!env.MEDIA) return null;
+  const cat = await getCat();
+  let want;
+  try { want = decodeURIComponent(path); } catch { return null; }
+  for (const e of [...(cat.songs ?? []), ...(cat.videos ?? [])]) {
+    for (const f of e.files ?? []) {
+      if (typeof f.r2 !== 'string' || !f.r2 || f.r2.startsWith('players/') || typeof f.url !== 'string') continue;
+      let at;
+      try { at = decodeURIComponent(f.url); } catch { continue; }
+      if (at === want) return f;
+    }
+  }
+  return null;
 }
 
 /**
@@ -617,7 +673,12 @@ async function route(request, env, ctx) {
     }
     if (parts.some((p) => p === '..')) return notFoundPage('Nothing here.', cat);
     const file = await assetWithRange(request, env, url);
-    if (file.status === 404) return notFoundPage('Nothing here.', cat);
+    if (file.status === 404) {
+      // Not in the site's files: a song's or video's file that lives in the studio's R2 (media move), same address.
+      const held = await heldInR2(env, getCat, path);
+      if (held) return mediaObject(request, env, held.r2, { cache: ASSET_CACHE, type: held.type ?? null });
+      return notFoundPage('Nothing here.', cat);
+    }
     return file;
   }
   if (path === '/' || path === '/index.html') {
@@ -928,7 +989,12 @@ async function weekOf(env, game) {
 /** Everything else is a file of the built site (site/public, the games' files), with byte ranges for media. */
 async function fallback(request, env, url, getCat) {
   const asset = MEDIA_FILE.test(url.pathname) && request.headers.get('range') ? await assetWithRange(request, env, url) : await env.ASSETS.fetch(request);
-  if (asset.status === 404) return notFoundPage('Nothing here.', await getCat());
+  if (asset.status === 404) {
+    // A manifest file outside music/ and videos/ that media move put in R2 keeps its address too.
+    const held = (request.method === 'GET' || request.method === 'HEAD') ? await heldInR2(env, getCat, url.pathname) : null;
+    if (held) return mediaObject(request, env, held.r2, { cache: ASSET_CACHE, type: held.type ?? null });
+    return notFoundPage('Nothing here.', await getCat());
+  }
   return asset;
 }
 

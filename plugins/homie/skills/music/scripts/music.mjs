@@ -511,6 +511,18 @@ function studioCli(root, args) {
   return { code: r.status ?? 1, json: j, err: (r.stderr ?? '').trim() };
 }
 
+/** The studio's live address: its own domain, else the address its last deploy printed (kept on this computer). */
+function liveSite(root, studio) {
+  const cf = studio.cloudflare ?? {};
+  if (cf.domain) return `https://${String(cf.domain).replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
+  return cf.url ?? readJson(join(root, '.studio', 'local.json'), {})?.url ?? null;
+}
+
+/**
+ * Publish a song or video: its page goes live. Big media goes to the studio's R2 when it has storage: from
+ * @homie-rocks/studio 0.18.0 with `media move` (and every deploy), each file uploaded, read back and checked by SHA-256
+ * before the site stops carrying it, at the same address; an older studio uploads with `media put` (/media/<key>).
+ */
 export async function publishEntry(root, kind, slug, { deploy = true } = {}) {
   const pages = studioHasMediaPages(root);
   if (!pages.ok) return { ok: false, command: 'publish', why: pages.why };
@@ -520,7 +532,8 @@ export async function publishEntry(root, kind, slug, { deploy = true } = {}) {
   const studio = readJson(join(root, 'studio.json'), {});
   const hasR2 = Boolean(studio.cloudflare?.r2 && (studio.cloudflare?.created ?? []).includes(`r2:${studio.cloudflare.r2}`));
   const uploaded = [];
-  if (hasR2) {
+  let r2 = null;
+  if (hasR2 && !pages.move) {
     for (const f of entry.files ?? []) {
       if (f.public === false || f.key || !f.path || !existsSync(join(root, f.path))) continue;
       const put = studioCli(root, ['media', 'put', f.path]);
@@ -528,21 +541,28 @@ export async function publishEntry(root, kind, slug, { deploy = true } = {}) {
       uploaded.push(put.json.key);
     }
   }
-  const site = studio.cloudflare?.url ?? null;
+  const site = liveSite(root, studio);
   if (!deploy || !site) {
+    if (hasR2 && pages.move) {
+      const mv = studioCli(root, ['media', 'move']);
+      r2 = { moved: (mv.json?.moved ?? []).map((m) => m.path), failed: mv.json?.failed ?? [], ...(mv.json ? {} : { why: mv.err.split('\n').pop() }) };
+    }
     const b = studioCli(root, ['build']);
-    return { ok: b.code === 0, command: 'publish', slug, uploaded, built: b.json?.[kind === 'music' ? 'songs' : 'videos'] ?? null, live: null, next: site ? 'deploy with `npm run deploy`' : 'the studio is not online yet: the publish skill puts it on its own Cloudflare (npm run deploy), and the page is then at /' + kind + '/' + slug + '/' };
+    return { ok: b.code === 0, command: 'publish', slug, uploaded, ...(r2 ? { r2 } : {}), built: b.json?.[kind === 'music' ? 'songs' : 'videos'] ?? null, live: null, next: site ? 'deploy with `npm run deploy`' : 'the studio is not online yet: the publish skill puts it on its own Cloudflare (npm run deploy), and the page is then at /' + kind + '/' + slug + '/' };
   }
+  // A 0.18.0 deploy moves the big media to R2 itself (checked by SHA-256) before it builds.
   const d = studioCli(root, ['deploy']);
   if (d.code !== 0 || !d.json?.ok) return { ok: false, command: 'publish', why: `deploy failed: ${d.json?.why ?? d.err.split('\n').pop()}`, needs: d.json?.needs ?? null };
+  if (d.json.media) r2 = { moved: (d.json.media.moved ?? []).map((m) => m.path), failed: d.json.media.failed ?? [] };
   const page = `${d.json.url}/${kind}/${slug}/`;
   const check = await fetch(page).then((r) => r.status).catch(() => 0);
   const main = (entry.files ?? []).find((f) => f.role === (kind === 'music' ? 'audio' : 'video'));
   const fresh = getEntry(root, kind, slug);
   const mainNow = (fresh.files ?? []).find((f) => f.role === main?.role);
-  const mediaUrl = mainNow?.key ? `${d.json.url}/media/${mainNow.key}` : mainNow?.path ? `${d.json.url}/${mainNow.path}` : null;
+  // A file moved to R2 keeps its own address; only a `media put` key lives at /media/<key>.
+  const mediaUrl = mainNow?.key ? `${d.json.url}/media/${mainNow.key}` : mainNow?.path ? `${d.json.url}/${mainNow.path.split('/').map(encodeURIComponent).join('/')}` : null;
   const media = mediaUrl ? await fetch(mediaUrl, { headers: { range: 'bytes=0-1023' } }).then((r) => r.status).catch(() => 0) : null;
-  return { ok: check === 200 && (media === 206 || media === 200), command: 'publish', slug, uploaded, page, pageStatus: check, media: mediaUrl, mediaStatus: media };
+  return { ok: check === 200 && (media === 206 || media === 200), command: 'publish', slug, uploaded, ...(r2 ? { r2 } : {}), page, pageStatus: check, media: mediaUrl, mediaStatus: media, from: mainNow?.r2 ? 'r2' : mainNow?.key ? 'r2 (/media/)' : 'site' };
 }
 
 /* ---------------------------------------------------------------- main */

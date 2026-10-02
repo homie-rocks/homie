@@ -32,8 +32,14 @@
  *                                         migrations and deploys: the Worker and database are the Deploy button's.
  *   homie-studio publish
  *   homie-studio storage add              (large media only: an R2 bucket; needs R2 turned on for the account)
- *   homie-studio media put <file> [--as <key>]
- *   homie-studio media list
+ *   homie-studio media list               (every song and video page, where each file is served from, what moves to R2)
+ *   homie-studio media move [<file>...] [--dry-run] [--verify]
+ *                                         (with storage: the big files of published songs and videos into R2, each
+ *                                          read back and checked by SHA-256 before the site stops carrying it; the
+ *                                          address stays the same and the file stays in this folder. With no file:
+ *                                          everything over studio.json media.r2Over, 1 MiB unless set, or left out of
+ *                                          git. Every deploy does it too. --verify re-checks what R2 holds)
+ *   homie-studio media put <file> [--as <key>]   (a loose file at /media/<key>; for a song or video, media move)
  *   homie-studio status
  *   homie-studio upgrade [--apply] [--diff]
  *                                         (what this version's template adds to an existing studio: AGENTS.md
@@ -136,14 +142,14 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, wr
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { build } from '../lib/build.mjs';
 import { check } from '../lib/check.mjs';
-import { ciDeploy, deploy, deployPlan, storageAdd, whoami, wranglerBin } from '../lib/cloudflare.mjs';
+import { ciDeploy, deploy, deployPlan, mediaMove, storageAdd, whoami, wranglerBin } from '../lib/cloudflare.mjs';
 import { setupAttach } from '../lib/setup.mjs';
 import { chromeArgs, findChrome, installChrome, noChrome } from '../lib/chrome.mjs';
 import { publish } from '../lib/directory.mjs';
 import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
-import { recordUpload, resolveMedia, typeOf } from '../lib/media.mjs';
+import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeOf, typeOf } from '../lib/media.mjs';
 import { ensureMigrations, migrationWord, newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
@@ -164,7 +170,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai'];
+const BOOL_FLAGS = ['revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -210,10 +216,31 @@ function print(result) {
     case 'media list':
       for (const kind of ['music', 'videos']) {
         lines.push(`${kind}/manifest.json: ${result[kind].pages.length} page(s)`);
-        for (const e of result[kind].pages) lines.push(`  /${kind}/${e.slug}/  ${e.title}  (${e.files.map((f) => `${f.role} from ${f.from}`).join(', ')})`);
+        for (const e of result[kind].pages) lines.push(`  /${kind}/${e.slug}/  ${e.title}  (${e.files.map((f) => `${f.role} from ${f.from === 'r2' ? 'R2' : f.from}`).join(', ')})`);
         for (const m of result[kind].skipped) lines.push(`  left out: ${m.item}${m.file ? ` ${m.file}` : ''}: ${m.why}`);
+        for (const m of result[kind].notes ?? []) lines.push(`  note: ${m.item} ${m.file}: ${m.why}`);
       }
+      if (result.moves.length) {
+        lines.push('', `Big media${result.r2 ? ' for R2' : ''} (over ${result.over === null ? '(off)' : lineOf(result.over)}, or left out of git):`);
+        for (const m of result.moves) lines.push(`  ${m.path}  ${m.bytes ? sizeOf(m.bytes) : ''}  ${m.state === 'too-big' ? m.why : m.reason ?? ''}`);
+      }
+      if (result.storage) lines.push('', result.storage);
+      if (result.r2) lines.push(`R2 holds about ${sizeOf(result.inR2)} of this studio's media once these are in. ${result.cost}`);
       break;
+    case 'media move': {
+      const verb = result.dryRun ? 'Would move' : 'Moved';
+      if (result.ok === false && result.needs === 'storage') { lines.push(result.why); break; }
+      if (result.off) { lines.push(result.why); break; }
+      const todo = result.rows.filter((r) => r.state === 'move');
+      if (result.dryRun) lines.push(todo.length ? `${verb} ${todo.length} file(s) to R2 ${result.bucket}:` : 'Nothing to move: every big file is in R2 already, or none is published.', ...todo.map((r) => `  ${r.path}  ${sizeOf(r.bytes)}  (${r.reason})`));
+      else lines.push(result.moved.length ? `${verb} ${result.moved.length} file(s) to R2 ${result.bucket}, each read back and checked by SHA-256:` : 'Nothing moved.', ...result.moved.map((m) => `  ${m.path}  ${sizeOf(m.bytes)}  -> served at ${m.url} (the same address)`));
+      for (const f of result.failed ?? []) lines.push(`  NOT moved: ${f.path}: ${f.why}`);
+      for (const v of result.verified ?? []) lines.push(`  ${v.ok ? 'verified' : 'MISMATCH'}: ${v.path}${v.why ? `: ${v.why}` : ''}`);
+      for (const r of result.rows.filter((x) => x.state === 'too-big' || x.state === 'unlisted' || x.state === 'missing')) lines.push(`  ${r.state}: ${r.path}: ${r.why}`);
+      if (result.next) lines.push('', result.next);
+      lines.push(`R2 holds about ${sizeOf(result.inR2)} of this studio's media. ${result.cost}`, ...(result.warning ? [`Warning: ${result.warning}`] : []));
+      break;
+    }
     case 'deploy':
       if (result.ci) {
         lines.push(`Live: ${result.url ?? '(Wrangler printed no address)'}${result.commit ? ` (commit ${result.commit.slice(0, 7)}${result.branch ? ` on ${result.branch}` : ''})` : ''}`, ...result.steps.map((x) => `  ${x.what}`), ...result.games.map((g) => `  ${g.id}: ${g.play}`));
@@ -221,7 +248,8 @@ function print(result) {
       }
       lines.push(`Live: ${result.url}`, ...(result.workersDev && result.workersDev !== result.url ? [`  also at ${result.workersDev}`] : []),
         ...(result.local ? [`  (the workers.dev address names your Cloudflare account, so it is kept in ${result.local} on this computer, never in studio.json)`] : []),
-        ...result.games.map((g) => `  ${g.id}: ${g.play}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}. All on the free Workers plan${result.r2 ? ' plus R2' : ''}.`,
+        ...result.games.map((g) => `  ${g.id}: ${g.play}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`),
+        ...(result.media?.moved ?? []).map((m) => `  moved to R2 (checked by SHA-256): ${m.path}, still at ${m.url}`), ...(result.media?.failed ?? []).map((m) => `  not moved to R2: ${m.path}: ${m.why}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}. All on the free Workers plan${result.r2 ? ' plus R2' : ''}.`,
         result.claim ? 'The site claimed itself in the directory: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim yet (the site claims itself when the directory first reads it; publish does).');
       break;
     case 'deploy plan':
@@ -410,6 +438,12 @@ function print(result) {
         if (!flags.has('diff')) lines.push('  (--diff shows how each differs from the template: "-" this studio\'s lines, "+" the template\'s)');
       }
       if (result.uncommitted && !result.applied && result.changes.length) lines.push('', `Note: ${result.uncommitted} file(s) have uncommitted changes; commit them first so the upgrade is a change of its own.`);
+      if (result.media) {
+        lines.push('', `Big media (songs and videos over ${result.media.over === null ? '(off)' : lineOf(result.media.over)}, or left out of git):`);
+        for (const r of result.media.inR2) lines.push(`  = ${r.path}  in R2`);
+        for (const r of result.media.big) lines.push(`  > ${r.path}  ${r.bytes ? sizeOf(r.bytes) : ''}  ${r.state === 'too-big' ? r.why : r.reason ?? ''}`);
+        if (result.media.next) lines.push(`  ${result.media.next}`);
+      }
       if (result.next?.length) lines.push('', 'Next:', ...result.next.map((n) => `  ${n}`));
       break;
     }
@@ -553,11 +587,21 @@ async function main() {
     return { ok: false, command: 'agents', why: `unknown: agents ${sub ?? ''} (pass, passes, revoke, brain, brain key, sit)` };
   }
   if (cmd === 'media' && sub === 'put') return mediaPut(root, positional[2], flags.get('as'));
+  if (cmd === 'media' && sub === 'move') return mediaMove(root, { paths: positional.slice(2), dryRun: flags.has('dry-run') || flags.has('plan'), verify: flags.has('verify'), log });
   if (cmd === 'media' && sub === 'list') {
     const studio = readStudio(root);
     const r2 = Boolean(studio.cloudflare?.r2 && (studio.cloudflare?.created ?? []).includes(`r2:${studio.cloudflare.r2}`));
-    const view = (kind) => { const r = resolveMedia(root, kind, { r2 }); return { pages: r.entries.map((e) => ({ slug: e.slug, title: e.title, kind: e.kind, files: e.files.map(({ abs, rel, ...f }) => f) })), skipped: r.skipped }; };
-    return { ok: true, command: 'media list', r2, site: siteUrl(root, studio), music: view('music'), videos: view('videos') };
+    // What a deploy would serve (deploy: true), so "from r2" means the site no longer carries the file.
+    const view = (kind) => { const r = resolveMedia(root, kind, { r2, deploy: true }); return { pages: r.entries.map((e) => ({ slug: e.slug, title: e.title, kind: e.kind, files: e.files.map(({ abs, rel, ...f }) => f) })), skipped: r.skipped, notes: r.notes }; };
+    const over = r2OverOf(studio);
+    const plan = mediaPlan(root, { over });
+    const moves = plan.filter((x) => x.state === 'move' || x.state === 'too-big').map(({ abs, held, ...x }) => x);
+    const inR2 = plan.filter((x) => x.state === 'r2' || x.state === 'move').reduce((n, x) => n + (x.bytes ?? 0), 0);
+    return {
+      ok: true, command: 'media list', r2, site: siteUrl(root, studio), music: view('music'), videos: view('videos'), over, moves, inR2,
+      storage: r2 ? (moves.length ? 'the next deploy (or media move now) puts these in R2, checked by SHA-256; their addresses stay the same' : 'every big file is in R2') : (moves.length ? 'no storage: these stay on the site (files up to 25 MiB each), and a deploy from another computer or Workers Builds leaves out any file git does not keep. homie-studio storage add (a payment method on the Cloudflare account, asked first) fixes both' : null),
+      cost: R2_COST,
+    };
   }
   return { ok: false, command: cmd, why: `unknown command "${[cmd, sub].filter(Boolean).join(' ')}" (homie-studio help)` };
 }

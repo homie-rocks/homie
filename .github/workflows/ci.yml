@@ -78,8 +78,10 @@ jobs:
       - run: npm ci
       - name: The template is what the toolkit writes
         run: node scripts/template.mjs --check
-      - name: New studio, dev site, two-browser check (Chrome for Testing, as a machine without Chrome gets)
-        run: node scripts/studio-check.mjs --chrome-for-testing
+      - name: ffmpeg (the video skill's page recorder encodes its takes)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: New studio, dev site, two-browser check, and the video skill's recorded examples (Chrome for Testing, as a machine without Chrome gets)
+        run: node scripts/studio-check.mjs --chrome-for-testing --record
 
   leaks:
     name: Leak audit

@@ -104,8 +104,11 @@ first used:
 - **`video`** (*"make a 15-second trailer of my game"*): trailers from your game's real
   gameplay (free: nothing generated), and music videos and cutscenes with fal on your own key,
   every call priced first, capped by your budget and receipted. 16:9 and 9:16 cuts, a sync
-  check and a contact sheet, and a video page. It never passes generated footage off as
-  gameplay, and puts no real people or brands in a video.
+  check and a contact sheet, and a video page. It also records any page while a script drives it
+  (*"record my game page: press Play and move around"*, a site walkthrough, a demo): clicks,
+  taps, keys, typing and waits, in real time, every frame one the page drew. It never passes
+  generated footage off as gameplay, and puts no real people or brands in a video. With storage,
+  a studio's big videos and songs live in its own R2, at the same addresses.
 
 - **`art`** (*"make a cover for my game"*): a cover from a real frame of the game (free), and
   painted covers, backdrops and textures with fal on your own key, priced, capped and receipted;

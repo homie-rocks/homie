@@ -1,6 +1,6 @@
 ---
 name: video
-description: Make trailers, music videos and cutscenes for a Homie studio — a gameplay trailer captured from the studio's own running game and cut on the beat of its music, or generated footage from fal (Seedance and friends) through the creator's OWN fal account under a hard budget with a receipt for every call, drawn over with a JavaScript look and kinetic type, sync-checked, reviewed on contact sheets, delivered 16:9 and 9:16, and published as a video page on the studio's site. Use when someone in a studio asks for a trailer, a teaser, a music video, a cutscene, a clip for social media, or "a video of my game".
+description: Make trailers, music videos, cutscenes and page recordings for a Homie studio — a gameplay trailer captured from the studio's own running game and cut on the beat of its music; a recording of any web page while a script drives it (clicks, taps, keys, typing, scrolls, waits; Play and a few moves on the studio's own game page; a site walkthrough or product demo) in real time with honest frames; or generated footage from fal (Seedance and friends) through the creator's OWN fal account under a hard budget with a receipt for every call, drawn over with a JavaScript look and kinetic type, sync-checked, reviewed on contact sheets, delivered 16:9 and 9:16, and published as a video page on the studio's site (big files in the studio's own R2 when it has storage). Use when someone in a studio asks for a trailer, a teaser, a music video, a cutscene, a clip for social media, "a video of my game", a demo, a walkthrough or tutorial video of a site or app, or a recording of a page.
 ---
 
 # Video for a studio
@@ -35,6 +35,9 @@ once encoded. Finish in this turn: start the local site with the app's backgroun
   `references/TRAILER.md`.
 - **A music video, a cutscene, a teaser with generated footage**: fal models under a budget,
   then drawn over. Section B, detail in `references/METHOD.md`.
+- **A recording of a page while it is used**: the studio's own game page (land, press Play, play a
+  little), a site walkthrough, a product demo, a tutorial. A steps file drives it. Section C, detail in
+  `references/RECORD.md`.
 
 Both start with `node <video.mjs> check` (ffmpeg, Chrome, the studio; fal only if a key is set).
 
@@ -126,6 +129,32 @@ the riskiest shot first (the pilot), look at it, then the rest.
    `scripts/qa.mjs <cut>` on each delivery (`references/DELIVERY.md`: continuity, faces, green screens).
 9. **Deliver** 16:9 and 9:16 (the film's two modes), then the page (below).
 
+## C. A page recording: a script drives the page
+
+```sh
+npm run dev                                                    # background task; the site at http://127.0.0.1:8787
+node <video.mjs> record <slug> --steps <steps.json> --url http://127.0.0.1:8787 [--device phone] [--name <take>]
+node <video.mjs> sheet <slug> --in videos/<slug>/work/record/recording.mp4
+```
+
+- The steps file says where to start and what to do, one step after another: `click`, `tap`, `drag`,
+  `hover`, `key`, `keys`, `type`, `scroll`, `goto`, `wait`, and `waitFor` a selector, a text or a state
+  (`"js"`), in the page or in the game's own frame (`"frame": "game"`). Any step can carry a
+  `"caption"`. `references/examples/studio-play.json` records a studio's own game from its landing:
+  Play, then the arrow keys; `studio-play-phone.json` the same on a phone with the game's touch stick.
+  Both are tested against a real studio. Every step: `references/RECORD.md`.
+- It runs in real time on a headless GPU Chrome: nothing sped up, nothing cut. Every frame is one the
+  page drew; a moment it did not repaint is held and counted, never interpolated. A visible cursor and
+  press rings show where the script pointed (`--no-cursor` drops them); the take's honesty line says so.
+- `recording.json` has each step's second, what its frame received (keys, presses, touches: delivered,
+  not judged), the page's and the game's real frame rates and the renderer. Under 20 fps or on a
+  software renderer it warns: that take shows a slow computer, not the page.
+- Then `sheet` and look; `add <slug> --file videos/<slug>/work/record/recording.mp4 --kind clip
+  --title "…"` (copy its `captions.vtt` to `videos/<slug>/captions.vtt` first) and `publish`. Or cut
+  it into a trailer like any capture.
+- Outside a studio: `node <skill folder>/scripts/record-page.mjs --steps <steps.json> --out <folder>`
+  records any address (it needs Chrome, ffmpeg and puppeteer-core).
+
 ## The game's landing
 
 A published trailer with `--for-game <id>` plays, muted, in the hero of that game's landing page when the
@@ -142,14 +171,19 @@ node <video.mjs> publish <slug>
 
 A studio needs no storage for this: the site serves each file itself, up to 25 MiB a file, and
 `cut` and `film render` hold their deliveries under that (a longer video gets a lower bitrate).
-Bigger masters stay in the studio folder; `storage add` (R2, which asks the person for a payment
-method on their Cloudflare account) is only for someone who wants bigger files online.
+Bigger masters stay in the studio folder. A studio with storage (`storage add`: R2 on the studio's
+own Cloudflare account, which asks the person for a payment method first) keeps its big media there
+by default: the deploy uploads each delivery (over 1 MiB, or left out of git), reads it back and
+checks it by SHA-256 before the site stops carrying it, and the page plays it at the same address.
+Cuts can then run at 12 Mbit/s. R2 has no egress fees; storage is free up to 10 GB-month, then
+US$0.015 per GB-month.
 
 `add` writes the manifest entry: the 16:9 cut the player plays, the 9:16 cut, the poster,
 captions if there is a `captions.vtt`, the credits (the models used, the song's credits), the
-honesty line from the capture, and the money spent. `publish` uploads to the studio's storage when
-it has some (otherwise the site serves the files), redeploys, and checks the page (200) and the
-video (a byte range, 206: phones seek with them). A studio not online yet: the `publish` skill first.
+honesty line from the capture (or the recording), and the money spent. `publish` redeploys (with
+storage, the deploy moves the big files to R2 first, each checked by SHA-256), and checks the page
+(200) and the video (a byte range, 206: phones seek with them) at its address. A studio not online
+yet: the `publish` skill first.
 
 ## Tell the person
 

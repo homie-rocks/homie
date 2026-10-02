@@ -11,6 +11,10 @@
   Held frames are counted in `capture.json`; if the game ran slowly, say so or capture again.
 - Bots are bots. The game's own bots fill empty seats; never caption or voice them as people,
   and never claim player counts the room did not have.
+- A page recording (`record`) is pressed by a script, in real time: it says so, and the cursor and
+  press rings it draws are the recorder's, not the page's. Its frames are the page's own, held when the
+  page did not repaint, never interpolated; on a software renderer or under 20 fps it is a recording
+  of a slow computer, and is not shown as the game's speed.
 - A studio's score or player numbers shown on screen are what the game drew during the capture.
 
 ## No real people, no real brands

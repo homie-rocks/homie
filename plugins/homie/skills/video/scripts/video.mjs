@@ -16,6 +16,10 @@
  *   lag <slug> --base <clip.mp4> --ref <cut.wav> how far a generated clip's own sound sits from its reference
  *   capture <slug> --game <id> --url <site> [--seconds 60] [--view tv|play] [--scale 0.67] [--fps 30]
  *                                         real gameplay (capture-game.mjs); --scale renders a heavy game smaller
+ *   record <slug> --steps <steps.json> [--url <site>] [--device computer|phone] [--name <take>] [--seconds 120]
+ *          [--fps 30] [--scale 1] [--no-cursor]
+ *                                         any page, driven by a script (record-page.mjs; references/RECORD.md):
+ *                                         clicks, taps, keys, typing, scrolls, waits, in real time, honest frames
  *   edl <slug> --length <s> [--song <slug>] [--bed-from-bar <k>] [--title "…"] [--end "…"]   an edit, cut on bars
  *   card <slug> --name <title|end> --text "…" [--sub "…"]    a title or end card, 16:9 and 9:16
  *   cut <slug> [--edl work/edl.json]             the 16:9 and 9:16 deliveries, loudness to -14 LUFS, a poster
@@ -43,7 +47,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const flags = new Map();
 const pos = [];
-const BOOL = new Set(['json', 'yes', 'dry-run', 'publish', 'no-deploy', 'no-game-audio']);
+const BOOL = new Set(['json', 'yes', 'dry-run', 'publish', 'no-deploy', 'no-game-audio', 'no-cursor']);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a.startsWith('--')) {
@@ -243,6 +247,35 @@ function capture(root) {
   let j = null; try { j = JSON.parse(r.stdout.trim().split('\n').pop()); } catch { /* */ }
   if (r.status !== 0 || !j?.ok) throw new Error('the capture failed (its log is above)');
   return { ok: true, command: 'capture', slug, file: rel(root, j.file), seconds: j.seconds, sourceFps: j.sourceFps, heldFrames: j.heldFrames, audio: j.audio, ...(j.advice ? { advice: j.advice } : {}) };
+}
+
+/**
+ * A page recording (record-page.mjs): a steps file drives the page (Play, keys, taps, typing, scrolls, waits) while it
+ * is recorded in real time. The take lands in work/record (or work/record-<name>): recording.mp4, recording.json (each
+ * step's second, frame rates, held frames, the input each frame received) and captions.vtt. Paths only, never media.
+ */
+function record(root) {
+  const slug = pos[1];
+  const dir = jobDir(root, slug);
+  const steps = flags.get('steps');
+  if (!steps || !existsSync(resolve(String(steps)))) throw new Error('--steps <steps.json>: what to press and wait for (references/RECORD.md; references/examples/studio-play.json records a studio\'s own game)');
+  const take = flags.get('name') ? String(flags.get('name')) : null;
+  if (take && !/^[a-z0-9-]{1,40}$/.test(take)) throw new Error('--name <take>: lowercase letters, digits and hyphens');
+  const out = join(dir, 'work', take ? `record-${take}` : 'record');
+  const args = [join(HERE, 'record-page.mjs'), '--steps', resolve(String(steps)), '--out', out];
+  const url = flags.get('url') ?? readJson(join(root, 'studio.json'), {}).cloudflare?.url ?? null;
+  if (url) args.push('--url', String(url));
+  for (const k of ['device', 'seconds', 'fps', 'scale', 'width', 'height', 'min-fps']) if (flags.has(k)) args.push(`--${k}`, String(flags.get(k)));
+  if (flags.has('no-cursor')) args.push('--no-cursor');
+  const r = spawnSync(process.execPath, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], timeout: 20 * 60_000 });
+  let j = null; try { j = JSON.parse(r.stdout.trim().split('\n').pop()); } catch { /* */ }
+  if (!j) throw new Error('the recording failed (its log is above)');
+  return {
+    ok: j.ok, command: 'record', slug, file: rel(root, j.file), json: rel(root, j.json), ...(j.captions ? { captions: rel(root, j.captions) } : {}),
+    seconds: j.seconds, pageFps: j.pageFps, inputs: j.inputs, paintedFps: j.paintedFps, heldFrames: j.heldFrames, steps: j.steps,
+    ...(j.failed ? { failed: j.failed } : {}), ...(j.warnings ? { warnings: j.warnings } : {}), ...(j.why ? { why: j.why } : {}),
+    next: `look at it (sheet ${slug} --in ${rel(root, j.file)}), then: add ${slug} --file ${rel(root, j.file)} --kind clip --title "<title>"${j.captions ? ` (copy ${rel(root, j.captions)} to videos/${slug}/captions.vtt first for the page's captions)` : ''}`,
+  };
 }
 
 /**
@@ -635,16 +668,18 @@ function add(root) {
   if (existsSync(join(dir, 'captions.vtt'))) files.push({ role: 'captions', path: rel(root, join(dir, 'captions.vtt')), type: 'text/vtt' });
   const budget = readJson(join(dir, 'budget.json'), null);
   const cutInfo = readJson(join(dir, 'cut.json'), null);
+  // A page recording delivered as it is: its own honesty line (recorded in real time, frames held, the cursor drawn).
+  const recInfo = src ? readJson(join(dirname(src), 'recording.json'), null) : null;
   const kind = String(flags.get('kind') ?? (flags.has('for-song') ? 'music-video' : 'trailer'));
   const models = [...new Set((budget?.calls ?? []).map((c) => c.model))];
   const song = flags.has('for-song') ? getEntry(root, 'music', String(flags.get('for-song'))) : null;
   const entry = {
     slug, kind, title: String(title), blurb: flags.get('blurb') ?? '', published: flags.has('publish'), duration: probe(main).duration, files,
     credits: flags.get('credits') ?? ([models.length ? `Generated footage: ${models.join(', ')} on fal.` : null, song?.credits ?? null].filter(Boolean).join(' ') || null),
-    honesty: flags.get('honesty') ?? cutInfo?.edl?.honesty ?? null,
+    honesty: flags.get('honesty') ?? cutInfo?.edl?.honesty ?? recInfo?.honesty ?? null,
     rights: budget ? { provider: 'fal', models, commercial: null } : null,
     ...(flags.has('for-game') || flags.has('for-song') ? { for: { ...(flags.has('for-game') ? { game: String(flags.get('for-game')) } : {}), ...(flags.has('for-song') ? { song: String(flags.get('for-song')) } : {}) } } : {}),
-    made: { at: new Date().toISOString(), provider: models.length ? 'fal' : 'capture', receipt: budget ? rel(root, join(dir, 'budget.json')) : null, spentUsd: budget?.spent ?? 0 },
+    made: { at: new Date().toISOString(), provider: models.length ? 'fal' : recInfo ? 'recording' : 'capture', receipt: budget ? rel(root, join(dir, 'budget.json')) : null, spentUsd: budget?.spent ?? 0 },
   };
   upsertEntry(root, 'videos', entry);
   return { ok: true, command: 'add', slug, published: entry.published, files: files.map((f) => `${f.role} ${f.path}`), manifest: 'videos/manifest.json' };
@@ -662,6 +697,11 @@ function print(r) {
     case 'gen': L.push(r.already ? `already made: ${r.already}` : r.dryRun ? `dry run: US$${r.price.usd.toFixed(4)} (${r.price.basis}); nothing sent` : `made ${r.files.join(', ')} for US$${r.usd.toFixed(2)}; this video has spent US$${Number(r.spent).toFixed(2)}`); break;
     case 'grid': L.push(`${r.bpm} BPM (confidence ${r.confidence}), bars of ${r.barSeconds} s from ${r.offset} s; ${r.bars} bars, ${r.words} sung words. ${r.file}`); break;
     case 'lag': L.push(`${r.base}: ${r.lagMs} ms (${r.lagFramesAt24} frames at 24 fps), peak ${r.peak}: ${r.verdict}`); break;
+    case 'record':
+      L.push(r.failed ? `recorded ${r.seconds} s, but step ${r.failed.step} (${r.failed.do}) failed: ${r.failed.why}` : `recorded ${r.seconds} s (${r.steps} steps) to ${r.file}`,
+        `  the page drew ${r.pageFps?.page ?? '?'} fps${r.pageFps?.game ? `, the game ${r.pageFps.game} fps` : ''}; ${r.heldFrames} frames held; input received: ${Object.entries(r.inputs ?? {}).map(([k, v]) => `${k} ${v.keys} keys, ${v.pointers} pointer presses, ${v.touches} touches`).join('; ') || 'none'}`,
+        ...(r.captions ? [`  captions: ${r.captions}`] : []), ...(r.warnings ?? []).map((w) => `  warning: ${w}`), `  next: ${r.next}`);
+      break;
     case 'capture': L.push(`captured ${r.seconds} s (${r.sourceFps} fps from the page, ${r.heldFrames} held) to ${r.file}; ${r.audio ? `game sound ${r.audio.seconds} s, peak ${r.audio.peakDb} dB` : 'the game made no sound'}`); if (r.advice) L.push(`  note: ${r.advice}`); break;
     case 'edl': L.push(`${r.shots} shots of ${r.shotSeconds} s${r.title ? `, title ${r.title} s` : ''}, end card ${r.end} s; cuts at ${r.cuts.join(', ')}. ${r.file}`); break;
     case 'cut': L.push(`${r.seconds} s: ${r.outputs['16x9'].file} (${r.outputs['16x9'].loudness?.lufs ?? '-'} LUFS), ${r.outputs['9x16'].file}; poster ${r.poster}`); break;
@@ -687,6 +727,7 @@ async function main() {
     case 'slice': return slice(root);
     case 'lag': return lag(root);
     case 'capture': return capture(root);
+    case 'record': return record(root);
     case 'edl': return edl(root);
     case 'card': return card(root);
     case 'cut': return cut(root);

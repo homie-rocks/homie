@@ -42,10 +42,18 @@ export function readManifest(root, kind) {
   return { v: 1, ...m, items: Array.isArray(m.items) ? m.items : [] };
 }
 
-/** Put an entry in a manifest: replace the one with the same slug, else add it FIRST (the site shows newest first). */
+/**
+ * Put an entry in a manifest: replace the one with the same slug, else add it FIRST (the site shows newest first).
+ * A file that keeps its path keeps its R2 record (`r2`, from `homie-studio media move`): the studio checks it against
+ * the file's SHA-256 before it trusts it, so a re-cut at the same path is uploaded again, never served stale.
+ */
 export function upsertEntry(root, kind, entry) {
   const m = readManifest(root, kind);
   const i = m.items.findIndex((x) => x?.slug === entry.slug);
+  if (i >= 0 && Array.isArray(entry.files)) {
+    const held = new Map((m.items[i].files ?? []).filter((f) => f?.path && f?.r2).map((f) => [f.path, f.r2]));
+    entry = { ...entry, files: entry.files.map((f) => (f?.path && held.has(f.path) && !f.r2 ? { ...f, r2: held.get(f.path) } : f)) };
+  }
   if (i >= 0) m.items[i] = { ...m.items[i], ...entry };
   else m.items.unshift(entry);
   writeJson(join(root, kind, 'manifest.json'), m);
@@ -122,7 +130,8 @@ export function studioHasMediaPages(root) {
   const bin = join(root, 'node_modules', '.bin', 'homie-studio');
   if (!existsSync(bin)) return { ok: false, why: 'the studio has no node_modules yet: run npm install in the studio' };
   const r = spawnSync(bin, ['media', 'list', '--json'], { cwd: root, encoding: 'utf8', timeout: 60_000 });
-  try { const j = JSON.parse(r.stdout); if (j.command === 'media list') return { ok: true }; } catch { /* old CLI */ }
+  // 0.18.0 and later answer with `moves` and have `media move`: big media goes to R2, checked by SHA-256, at the same address.
+  try { const j = JSON.parse(r.stdout); if (j.command === 'media list') return { ok: true, move: Array.isArray(j.moves) }; } catch { /* old CLI */ }
   const pkg = readJson(join(root, 'node_modules', '@homie-rocks', 'studio', 'package.json'), {});
   return { ok: false, why: `this studio's @homie-rocks/studio ${pkg.version ?? '(unknown)'} predates song and video pages; update it to the version that has \`homie-studio media list\`` };
 }

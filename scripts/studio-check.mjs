@@ -6,8 +6,12 @@
  * Testing when the machine has none, the site under `homie-studio dev`, and the real two-browser `check` against
  * it: a computer and a phone press Play, land in the same public room and finish a round.
  *
- *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing]
+ *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing] [--record]
  *     --chrome-for-testing: Chrome for Testing even when the machine has a Chrome, as a machine without one gets
+ *     --record: then the video skill's page recorder runs its tested examples against the same dev site
+ *               (plugins/homie/skills/video/references/examples/studio-play.json and studio-play-phone.json): the
+ *               landing, Play, a few moves on a computer and on a phone, recorded in real time; it fails when a
+ *               step fails or the game's frame received none of the input, never on a slow frame rate
  *
  * CI runs it on ubuntu-24.04 (no GPU), the closest free stand-in for a cloud session's VM: it prints how fast each
  * browser drew the game and on which renderer (SwiftShader there), and fails only when the round does not finish.
@@ -84,9 +88,25 @@ try {
     ...(result.frames ?? []).map((f) => `- ${f.browser} drew **${f.fps ?? '?'} fps** on ${f.renderer ?? 'an unknown renderer'}`),
     ...(result.software ? [`- ${result.software}`] : []),
   ];
+  // The video skill's page recorder, on the same site: its tested examples (a studio's own game, Play, a few moves).
+  let recorded = true;
+  if (process.argv.includes('--record')) {
+    const recorder = join(ROOT, 'plugins', 'homie', 'skills', 'video', 'scripts', 'record-page.mjs');
+    for (const name of ['studio-play', 'studio-play-phone']) {
+      const steps = join(ROOT, 'plugins', 'homie', 'skills', 'video', 'references', 'examples', `${name}.json`);
+      const outDir = join(studio, 'videos', 'demo', 'work', name);
+      const rec = spawnSync(process.execPath, [recorder, '--steps', steps, '--url', `http://127.0.0.1:${port}`, '--out', outDir], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 5 * 60_000, maxBuffer: 16 * 1024 * 1024 });
+      let j = null; try { j = JSON.parse(rec.stdout.trim().split('\n').pop()); } catch { /* none */ }
+      const got = j?.inputs?.game ?? {};
+      const delivered = (got.keys ?? 0) + (got.pointers ?? 0) + (got.touches ?? 0);
+      const ok = Boolean(j?.ok) && delivered > 0;
+      recorded &&= ok;
+      lines.push(`- recorded ${name}: ${ok ? `${j.seconds} s, ${j.steps} steps, the game's frame received ${got.keys ?? 0} key presses, ${got.pointers ?? 0} pointer presses and ${got.touches ?? 0} touches; the page drew ${j.pageFps?.page ?? '?'} fps, the game ${j.pageFps?.game ?? '?'} fps, ${j.heldFrames} frames held${j.warnings?.length ? ` (${j.warnings.join(' ')})` : ''}` : `FAILED: ${j?.failed ? `step ${j.failed.step} (${j.failed.do}): ${j.failed.why}` : j ? `the game's frame received no input` : ((rec.stderr ?? '').split('\n').filter((l) => /record-page:|Error|error:/.test(l)).slice(0, 3).join(' ') || (rec.stderr ?? '').trim().split('\n').slice(-3).join(' ')).slice(0, 600)}`}`);
+    }
+  }
   say(lines.join('\n'));
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
-  process.exitCode = result.ok ? 0 : 1;
+  process.exitCode = result.ok && recorded ? 0 : 1;
 } catch (error) {
   say(String(error?.message ?? error));
   process.exitCode = 1;

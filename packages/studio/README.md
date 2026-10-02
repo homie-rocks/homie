@@ -414,21 +414,26 @@ it says the frame rate is not a person's, and judges only seats, rooms and round
 
 `deploy` creates only what Cloudflare's free Workers plan gives a new account with no
 payment method: one Worker, one D1 database and two SQLite-backed Durable Objects
-(`Table`, `Lobby`). It never creates or binds R2. A brand-new Cloudflare account verifies
+(`Table`, `Lobby`). It never creates R2. A brand-new Cloudflare account verifies
 its email address before it can run a Worker; a missing `workers.dev` subdomain is
 registered by Wrangler when Claude Code or Codex runs the deploy.
 
-Storage for large media (songs, videos, big art) is a separate, optional step:
+Storage for songs and videos is a separate, optional step. Once a studio has it, its big media
+lives in R2 by default:
 
 ```sh
-npx homie-studio storage add                           # an R2 bucket, bound as MEDIA, served at /media/<key>
-npx homie-studio deploy
-npx homie-studio media put music/theme.wav
+npx homie-studio storage add                           # the studio's R2 bucket, bound as MEDIA
+npx homie-studio media move --dry-run                  # what goes: over 1 MiB, or left out of git
+npx homie-studio deploy                                # moves it (uploaded, read back, SHA-256 checked), then deploys
 ```
 
-Cloudflare asks for a payment method on the account before R2 works, even inside R2's free
-tier (10 GB-month of storage, 1 million writes and 10 million reads a month), so `storage add`
-refuses with the dashboard link until the account has R2 turned on, and creates nothing.
+Each moved file keeps its address (`/videos/<slug>/<file>.mp4`), served from R2 with byte ranges,
+HEAD, ETags and the site's own cache headers, and the site's static files stop carrying it; the file
+stays in the studio folder, and the committed manifest names its R2 copy, so a deploy from another
+computer or Workers Builds still has it (`media/MEDIA.md`). Cloudflare asks for a payment method on
+the account before R2 works, even inside R2's free tier (10 GB-month of storage, 1 million writes and
+10 million reads a month; no egress fees; then US$0.015 per GB-month), so `storage add` refuses with
+the dashboard link until the account has R2 turned on, and creates nothing.
 The free plan's daily limits (100,000 Worker requests; D1 5 million rows read and 100,000
 written) reset at 00:00 UTC; past them requests fail until the reset and nothing is charged.
 
@@ -446,7 +451,7 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `bin/homie-studio.mjs` | The CLI. |
 | `lib/scaffold.mjs` | `new`: the studio monorepo, only into a new or empty folder, every file listed. |
 | `lib/build.mjs` | `build`: games bundled with esbuild into `site/dist`, `games.json`, each game's shared `source.json`. |
-| `lib/cloudflare.mjs` | `deploy` (and `deploy --plan`): Wrangler, D1, migrations; refuses resources it did not create. In Workers Builds, migrations and deploy only. `storage add`: the optional R2 bucket. |
+| `lib/cloudflare.mjs` | `deploy` (and `deploy --plan`): Wrangler, D1, migrations; refuses resources it did not create. In Workers Builds, migrations and deploy only. `storage add`: the optional R2 bucket; `media move`: big media into it, checked by SHA-256 (every deploy runs it). |
 | `lib/check.mjs` | `check`: two fresh Chrome processes (computer + phone) must share a room and finish a round with both in it, with each one's frame rate; on a busy computer it waits out a round a browser was dropped from, and says why when none counts. `lib/chrome.mjs`: which Chrome, and how (the GPU on a Mac, SwiftShader on Linux). |
 | `lib/upgrade.mjs`, `lib/template-history.json` | `upgrade`: an existing studio takes what a newer template adds, never over its own edits. |
 | `lib/progress.mjs`, `lib/setup.mjs` | The progress feed (`progress …`), a build the chat opened (`progress attach`), a change as a pull request (`progress change`, `progress pr`), and `setup attach`. |
@@ -455,10 +460,10 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `lib/port.mjs` | `port plan` (reads a game and grades the port) and `port import`. |
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
 | `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`. |
-| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/<game>/watch` watches a live room from any player's view (NETPLAY.md section 16); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site or from storage at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
+| `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/<game>/watch` watches a live room from any player's view (NETPLAY.md section 16); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site's files or, once moved, from the studio's R2 at the same address; a loose file from `media put` at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
 | `worker/site.mjs`, `lib/site.mjs`, `lib/markdown.mjs`, `site/SITE.md` | The site: its sections, each game's landing, posts and their feeds, the look (theme tokens) and what the studio's `site/` folder overrides; the safe markdown posts are written in. `worker/pages.mjs`: the play page. |
 | `worker/stats.mjs`, `worker/stats-page.mjs`, `lib/stats.mjs` | The studio's own stats: what is counted and how, the owner-only `/api/stats` and `/_studio/stats`, and `homie-studio stats`. |
-| `lib/media.mjs`, `media/MEDIA.md` | The `music/` and `videos/` manifests: which entries get a page, and where each file's bytes come from (the site itself up to 25 MiB a file, the studio's storage, or a link). `media list` shows it; `media put` uploads a file to storage and records its key. |
+| `lib/media.mjs`, `media/MEDIA.md` | The `music/` and `videos/` manifests: which entries get a page, and where each file's bytes come from (the site itself up to 25 MiB a file, the studio's R2, or a link). `media list` shows it; `media move` puts the big ones in R2 and records each one's SHA-256; `media put` uploads a loose file to `/media/<key>`. |
 | `netplay/` | The netplay contract (`NETPLAY.md`) and its game helper (`@homie-rocks/studio/netplay`). |
 | `starters/gem-rush/` | The reference multiplayer starter. |
 

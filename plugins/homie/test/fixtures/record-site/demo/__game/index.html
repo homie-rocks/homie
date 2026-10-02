@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Demo Dash</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d14; } canvas { display: block; width: 100%; height: 100%; }</style>
+<canvas id="c"></canvas>
+<script>
+  // A tiny game: a square that the arrow keys move, a colour that a click or a tap changes, a beep on every move
+  // (WebAudio, so the recorder's tap hears it). window.__demo says what happened, for the test.
+  const c = document.getElementById('c'); const g = c.getContext('2d');
+  const S = window.__demo = { x: 0.5, y: 0.5, hue: 200, keys: 0, clicks: 0, frames: 0, started: true };
+  const held = new Set();
+  let ctx = null;
+  function beep() {
+    try {
+      ctx = ctx || new AudioContext();
+      const o = ctx.createOscillator(); const v = ctx.createGain();
+      o.frequency.value = 440 + S.keys * 40; v.gain.value = 0.2;
+      o.connect(v); v.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.08);
+    } catch (e) {}
+  }
+  addEventListener('keydown', (e) => { if (e.key.startsWith('Arrow')) { e.preventDefault(); if (!held.has(e.key)) { S.keys++; beep(); } held.add(e.key); } });
+  addEventListener('keyup', (e) => held.delete(e.key));
+  addEventListener('pointerdown', () => { S.clicks++; S.hue = (S.hue + 70) % 360; beep(); });
+  function frame(t) {
+    S.frames++;
+    const dpr = devicePixelRatio || 1; const w = c.clientWidth * dpr; const h = c.clientHeight * dpr;
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const sp = 0.006;
+    if (held.has('ArrowLeft')) S.x -= sp; if (held.has('ArrowRight')) S.x += sp;
+    if (held.has('ArrowUp')) S.y -= sp; if (held.has('ArrowDown')) S.y += sp;
+    S.x = Math.min(0.95, Math.max(0.05, S.x)); S.y = Math.min(0.95, Math.max(0.05, S.y));
+    g.fillStyle = '#0b0d14'; g.fillRect(0, 0, w, h);
+    // A sweeping line: the page draws a new picture every frame, as a game does.
+    g.fillStyle = '#26304a'; g.fillRect(((t / 8) % w), 0, 6 * dpr, h);
+    g.fillStyle = `hsl(${S.hue} 80% 60%)`;
+    const s = Math.min(w, h) * 0.12; g.fillRect(S.x * w - s / 2, S.y * h - s / 2, s, s);
+    g.fillStyle = '#f2f4fa'; g.font = `${24 * dpr}px system-ui`; g.fillText(`keys ${S.keys}  clicks ${S.clicks}`, 20 * dpr, 40 * dpr);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>

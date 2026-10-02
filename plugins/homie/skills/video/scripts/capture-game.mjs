@@ -26,12 +26,12 @@
  *
  * It never presses anything in the game: what it records is the game as it plays.
  */
-import { spawnSync } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statfsSync, writeFileSync, writeSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
 import { cpus, loadavg } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from './lib/browser.mjs';
+import { TapReader, constantRate, encodeMp4, fitAudio, startScreencast, writeConcat } from './lib/frames.mjs';
 import { findStudio } from '../../music/scripts/lib/studio.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -68,17 +68,14 @@ const root = findStudio(OUT) ?? findStudio();
 const frameDir = join(OUT, 'frames');
 rmSync(frameDir, { recursive: true, force: true });
 mkdirSync(frameDir, { recursive: true });
-const frames = []; // { file, t } t = presentation time (epoch seconds)
-const pulls = []; // { ctxFrame, fileFrame, frames }
-const clock = []; // tap clock samples
-let pcmFrames = 0; let ctxRate = null;
+let frames = []; // { file, t } t = presentation time (epoch seconds)
 const pcmFile = join(OUT, 'game-audio.s16le');
-const pcm = openSync(pcmFile, 'w');
+const tap = new TapReader(pcmFile);
 const report = { ran: new Date().toISOString(), url: `${URL_}/${GAME}/${VIEW}`, seconds: SECONDS, fps: FPS, size: [W, H], ...(SCALE !== 1 ? { scale: SCALE, rendered: [RW, RH] } : {}), notes: [] };
 
 const { browser, close, pid } = await launch(root, { width: RW, height: RH, extra: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] });
 log('browser', { pid });
-const stop = async (why) => { log('stop', { why }); try { closeSync(pcm); } catch { /* */ } await close(); process.exit(3); };
+const stop = async (why) => { log('stop', { why }); tap.close(); await close(); process.exit(3); };
 process.on('SIGINT', () => stop('SIGINT'));
 process.on('SIGTERM', () => stop('SIGTERM'));
 
@@ -105,37 +102,23 @@ try {
   report.tap = tapStart;
   log('ready', { room: report.room, tap: tapStart });
 
-  const cdp = await page.createCDPSession();
-  cdp.on('Page.screencastFrame', async (e) => {
-    const file = join(frameDir, `${String(frames.length).padStart(6, '0')}.jpg`);
-    writeFileSync(file, Buffer.from(e.data, 'base64'));
-    frames.push({ file, t: e.metadata.timestamp });
-    cdp.send('Page.screencastFrameAck', { sessionId: e.sessionId }).catch(() => {});
-  });
-  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 88, maxWidth: RW, maxHeight: RH, everyNthFrame: 1 });
+  const cast = await startScreencast(page, { dir: frameDir, width: RW, height: RH });
+  frames = cast.frames;
   const until = Date.now() + SECONDS * 1000 + 600;
   let lastLog = 0;
   while (Date.now() < until) {
-    try {
-      const got = await game.evaluate(() => ({ runs: window.__homieTap ? window.__homieTap.take() : [], c: window.__homieTap ? window.__homieTap.clock() : null }));
-      if (got.c) { clock.push(got.c); ctxRate = got.c.rate ?? ctxRate; }
-      for (const r of got.runs) {
-        pulls.push({ ctxFrame: r.f, fileFrame: pcmFrames, frames: r.frames });
-        writeSync(pcm, Buffer.from(r.b64, 'base64'));
-        pcmFrames += r.frames;
-      }
-    } catch (error) { report.notes.push(`poll: ${String(error.message).slice(0, 120)}`); }
-    if (Date.now() - lastLog > 10_000) { lastLog = Date.now(); log('recording', { frames: frames.length, audioS: ctxRate ? +(pcmFrames / ctxRate).toFixed(1) : 0, freeGB: +freeGB().toFixed(1) }); }
+    try { await tap.poll(game); } catch (error) { report.notes.push(`poll: ${String(error.message).slice(0, 120)}`); }
+    if (Date.now() - lastLog > 10_000) { lastLog = Date.now(); log('recording', { frames: frames.length, audioS: tap.rate ? +(tap.frames / tap.rate).toFixed(1) : 0, freeGB: +freeGB().toFixed(1) }); }
     if (freeGB() < MIN_FREE_GB) { report.notes.push('stopped early: disk low'); break; }
     await sleep(250);
   }
-  await cdp.send('Page.stopScreencast').catch(() => {});
+  await cast.stop();
   await sleep(300);
   report.errors = errors;
 } catch (error) {
   report.failed = String(error.stack ?? error);
 } finally {
-  try { closeSync(pcm); } catch { /* */ }
+  tap.close();
   await close();
 }
 
@@ -145,68 +128,23 @@ if (report.failed || frames.length < 10) {
   fail(report.failed ? `capture failed: ${report.failed.split('\n')[0]}` : `the page painted only ${frames.length} frames`);
 }
 
-/* ---- picture onto a constant frame rate: output frame k shows the newest frame presented by t0 + k/fps */
-frames.sort((a, b) => a.t - b.t);
-const t0 = frames[0].t;
-const total = Math.floor((frames.at(-1).t - t0) * FPS);
-const list = [];
-let j = 0; let held = 0; let last = -1;
-for (let k = 0; k < total; k++) {
-  const t = t0 + k / FPS;
-  while (j + 1 < frames.length && frames[j + 1].t <= t + 1e-4) j++;
-  if (j === last) held++;
-  last = j;
-  list.push(frames[j].file);
-}
-const concat = join(OUT, 'frames.txt');
-writeFileSync(concat, `ffconcat version 1.0\n${list.map((f) => `file '${f}'\nduration ${(1 / FPS).toFixed(6)}`).join('\n')}\nfile '${list.at(-1)}'\n`);
-const distinct = new Set(list).size;
+/* ---- picture onto a constant frame rate: output frame k shows the newest frame presented by t0 + k/fps (lib/frames.mjs) */
+const cfr = constantRate(frames, FPS);
+const { t0, total, list, held, distinct } = cfr;
+const concat = writeConcat(join(OUT, 'frames.txt'), list, FPS);
 
 /* ---- sound onto the same clock: fit epoch(ms) = a + b * contextTime from the output timestamps */
-let audio = null;
-if (pcmFrames > 0 && ctxRate) {
-  const pts = clock.filter((c) => c.ot && c.state === 'running').map((c) => c.ot);
-  const use = pts.length >= 8 ? pts : clock.filter((c) => c.now != null).map((c) => [c.now, c.wall]);
-  const n = use.length; const mx = use.reduce((s, p) => s + p[0], 0) / n; const my = use.reduce((s, p) => s + p[1], 0) / n;
-  let sxy = 0; let sxx = 0; for (const [x, y] of use) { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; }
-  const b = sxx ? sxy / sxx : 1000; const a = my - b * mx;
-  const raw = readFileSync(pcmFile);
-  const src = new Int16Array(raw.buffer, raw.byteOffset, Math.floor(raw.byteLength / 2));
-  const outFrames = Math.round((total / FPS) * ctxRate);
-  const dst = new Int16Array(outFrames * 2);
-  let filled = 0;
-  pulls.sort((x, y) => x.ctxFrame - y.ctxFrame);
-  let q = -1;
-  for (let i = 0; i < outFrames; i++) {
-    const epochMs = (t0 + i / ctxRate) * 1000;
-    const ctxT = (epochMs - a) / b;
-    const F = Math.round(ctxT * ctxRate);
-    while (q + 1 < pulls.length && pulls[q + 1].ctxFrame <= F) q++;
-    const p = q >= 0 ? pulls[q] : null;
-    if (!p || F - p.ctxFrame >= p.frames) continue;
-    const at = p.fileFrame + (F - p.ctxFrame);
-    dst[i * 2] = src[at * 2]; dst[i * 2 + 1] = src[at * 2 + 1]; filled++;
-  }
-  let peak = 0; for (let i = 0; i < dst.length; i++) peak = Math.max(peak, Math.abs(dst[i]));
-  const wav = join(OUT, 'game-audio.raw');
-  writeFileSync(wav, Buffer.from(dst.buffer));
-  audio = { rate: ctxRate, seconds: +(outFrames / ctxRate).toFixed(3), covered: +(filled / Math.max(1, outFrames)).toFixed(3), peakDb: peak ? +(20 * Math.log10(peak / 32767)).toFixed(1) : null, fitMsPerS: +b.toFixed(3), samples: use.length };
-  if (!peak) audio.note = 'the game made no sound while it was recorded';
-}
+const audio = fitAudio(tap, { t0, total, fps: FPS, out: join(OUT, 'game-audio.raw') });
+if (audio && !audio.peakDb) audio.note = 'the game made no sound while it was recorded';
 rmSync(pcmFile, { force: true });
 
 const mp4 = join(OUT, 'capture.mp4');
-const args = ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', concat];
-if (audio?.peakDb != null) args.push('-f', 's16le', '-ar', String(audio.rate), '-ac', '2', '-i', join(OUT, 'game-audio.raw'));
-args.push('-map', '0:v', ...(audio?.peakDb != null ? ['-map', '1:a', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000'] : []),
-  '-vf', `fps=${FPS},scale=${W}:${H}:flags=lanczos,format=yuv420p`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '16', '-r', String(FPS),
-  '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-movflags', '+faststart', '-t', (total / FPS).toFixed(3), mp4);
-const enc = spawnSync('ffmpeg', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const enc = encodeMp4({ concat, audio, fps: FPS, width: W, height: H, seconds: total / FPS, out: mp4 });
 rmSync(frameDir, { recursive: true, force: true });
 rmSync(concat, { force: true });
-rmSync(join(OUT, 'game-audio.raw'), { force: true });
-if (enc.status !== 0) fail(`encode failed: ${enc.stderr.trim().split('\n').pop()}`);
-const spanS = frames.at(-1).t - t0;
+if (audio) delete audio.raw;
+if (!enc.ok) fail(`encode failed: ${enc.why}`);
+const spanS = cfr.frames.at(-1).t - t0;
 const sourceFps = +(frames.length / spanS).toFixed(1);
 // Too few frames from the page: a smaller page paints more (the frame count grows about with the pixels saved).
 let advice = null;

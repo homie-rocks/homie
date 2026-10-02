@@ -40,18 +40,27 @@ delete, rename or redeploy anything the studio did not create. When it answers w
 `needs` step (a new account verifies its email address; an account with no workers.dev
 address picks one), say that step to the person and wait.
 
-Storage for large media (`npx --no-install homie-studio storage add`, an R2 bucket) is
+Storage for songs and videos (`npx --no-install homie-studio storage add`, an R2 bucket) is
 separate and optional: Cloudflare asks for a payment method before R2 works, so only
-when the person wants it, after saying so.
+when the person wants it, after saying so (R2 has no egress fees; storage is free up to
+10 GB-month, then US$0.015 per GB-month).
 
 ## Songs and videos
 
 Published entries of `music/manifest.json` and `videos/manifest.json` become pages at
 `/music/<slug>/` and `/videos/<slug>/` with every deploy (the `music` and `video` skills write
-them and redeploy). The site serves each file itself, up to 25 MiB a file, with no storage;
-only bigger media needs `storage add` (and `media put`), after the person agrees to R2's payment
-method. `npx --no-install homie-studio media list` shows what the site will show and why anything
-is left out. A studio with songs or videos and no games can still deploy.
+them and redeploy). Without storage the site serves each file itself, up to 25 MiB a file. Once
+the studio has storage, big media lives in its R2 by default: every deploy moves each public file
+over 1 MiB, or left out of git, into R2 (uploaded, read back, checked by SHA-256) before the site
+stops carrying it, and serves it at the same address; the file stays in the studio folder.
+`npx --no-install homie-studio media move --dry-run` says what would move; `media list` shows what
+the site will show, where each file is served from, and why anything is left out. A studio with
+songs or videos and no games can still deploy.
+
+**An existing studio** (made before @homie-rocks/studio 0.18.0) moving its media: `upgrade` (it
+lists the big media and moves nothing), `npm install`, `media move --dry-run`, `media move`, then
+`npm run deploy`, then curl one moved file with a byte range: a 206 with the file's full size in
+`content-range`, at the address it always had. Never delete the local files.
 
 ## The site
 

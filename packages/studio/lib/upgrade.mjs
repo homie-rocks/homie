@@ -21,11 +21,16 @@
  * Without --apply it changes nothing and says what --apply would do: the person agrees first. It never touches
  * studio.json beyond `homie.studio`, the studio's look (site/theme.json), its Worker config (deploy's), its games,
  * media or posts.
+ *
+ * Media (0.18.0): the plan also says which songs and videos are big media (over studio.json media.r2Over, 1 MiB
+ * unless set, or left out of git), what is in the studio's R2 already, and the step that moves the rest
+ * (`media move`, which every deploy of a studio with storage also runs). Upgrade itself never moves a file.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { R2_COST, mediaPlan, r2OverOf, sizeOf } from './media.mjs';
 import { studioFiles } from './scaffold.mjs';
 import { readStudio } from './studio.mjs';
 import { STUDIO_VERSION, packageSpec } from './version.mjs';
@@ -210,11 +215,33 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
 
   const git = spawnSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
   const dirty = git.status === 0 ? git.stdout.split('\n').filter(Boolean).length : null;
+  const media = mediaNote(root, studio);
   return {
     ok: true, command: 'upgrade', applied: false, root, studio: name, from, to: STUDIO_VERSION,
     changes, kept,
+    ...(media ? { media } : {}),
     ...(dirty ? { uncommitted: dirty } : {}),
     next: changes.length ? ['npx --no-install homie-studio upgrade --apply   (after the person agrees)'] : [],
+  };
+}
+
+/** What the studio's big media does from this version on: what R2 holds, what would go there, and the step that does it. */
+function mediaNote(root, studio) {
+  const cf = studio.cloudflare ?? {};
+  const storage = cf.r2 && (cf.created ?? []).includes(`r2:${cf.r2}`) ? cf.r2 : null;
+  const over = r2OverOf(studio);
+  let rows = [];
+  try { rows = mediaPlan(root, { over }); } catch { return null; }
+  const big = rows.filter((r) => r.state === 'move' || r.state === 'too-big').map(({ abs, held, ...r }) => r);
+  const inR2 = rows.filter((r) => r.state === 'r2').map(({ abs, held, ...r }) => r);
+  if (!big.length && !inR2.length) return null;
+  const bytes = big.reduce((n, r) => n + (r.bytes ?? 0), 0);
+  return {
+    storage, over, big, inR2,
+    next: !big.length ? null : storage
+      ? `npx --no-install homie-studio media move --dry-run, then media move (the next npm run deploy also does it): ${big.length} file(s), ${sizeOf(bytes)}, go to R2 ${storage}, each read back and checked by SHA-256 before the site stops carrying it; the addresses stay the same and the files stay in this folder. Upgrade itself moves nothing.`
+      : `no storage: these stay on the site (up to 25 MiB a file), and a deploy from another computer or Workers Builds leaves out any that git does not keep. With the person's agreement: npx --no-install homie-studio storage add (Cloudflare asks for a payment method on the account first), then media move.`,
+    cost: R2_COST,
   };
 }
 

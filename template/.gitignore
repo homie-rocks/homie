@@ -13,7 +13,7 @@ site/.wrangler/
 games/*/.port/
 # Screenshots from check and look runs.
 .checks/
-# Large media lives in this studio's storage (R2, after storage add) or is served by the site; the manifests beside it are committed.
+# Large media lives in this studio's storage (R2, after storage add: media move) or is served by the site; the manifests beside it (which name each file's R2 copy) are committed.
 # Working files of the music and video skills (frames, captures, provider answers) stay on this computer.
 music/**/work/
 videos/**/work/

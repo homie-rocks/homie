@@ -9,19 +9,24 @@
  * brand-new account with no payment method, by the names in studio.json:
  *   the Worker (pages + rooms), a D1 database, and the Table/Lobby Durable
  *   Objects (SQLite-backed, declared by the Worker).
- * It never creates or binds R2: Cloudflare asks for a payment method before R2
- * works, even inside its free tier, so storage for large media is its own later
- * step (`homie-studio storage add`) that the person agrees to.
+ * It never creates R2: Cloudflare asks for a payment method before R2 works,
+ * even inside its free tier, so storage for large media is its own later step
+ * (`homie-studio storage add`) that the person agrees to. Once a studio has it,
+ * deploy binds it and moves the big songs and videos there first (mediaMove:
+ * uploaded, read back, checked by SHA-256), so the site stops carrying them and
+ * serves them from R2 at the same addresses.
  *
  * It REFUSES to touch a Worker, database or bucket of that name that this
  * studio did not create (studio.json `cloudflare.created` is the record), so it
  * can never overwrite someone's existing site. `deploy --plan` says all of this
  * before anything happens and calls nothing.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from './build.mjs';
+import { MAX_ASSET_BYTES, R2_COST, mediaPlan, r2OverOf, recordMove, sha256File, sizeOf } from './media.mjs';
 import { repoOf } from './repo.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
@@ -101,11 +106,11 @@ export function deployPlan(root) {
       { kind: 'Durable Object', name: 'Table', what: 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
       { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
       storage
-        ? { kind: 'R2 bucket', name: storage, what: 'large media for /media/<key> (added with storage add)', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
+        ? { kind: 'R2 bucket', name: storage, what: 'the studio\'s big media: songs and videos over the size studio.json media.r2Over names (1 MiB unless set) or that git leaves out, uploaded and checked by SHA-256 before the site stops carrying them, served at their same addresses', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
         : { kind: 'R2 bucket', name: null, what: 'none: a new studio needs no storage. `homie-studio storage add` adds it later, for large media only', state: 'not created', plan: null },
     ],
     cost: storage
-      ? 'Free on Cloudflare\'s Workers Free plan. R2 storage is free up to 10 GB-month; beyond that Cloudflare bills the account directly.'
+      ? `Free on Cloudflare's Workers Free plan. ${R2_COST} Beyond the free tier Cloudflare bills the account directly.`
       : 'Free: everything above is on Cloudflare\'s Workers Free plan, which needs no payment method. Its daily limits (100,000 Worker requests; D1 5 million rows read and 100,000 written) reset at 00:00 UTC; past them requests fail until the reset, nothing is charged.',
     login: 'One approval: `npx wrangler login` opens Cloudflare in the person\'s browser (a free account works; a new one verifies its email address first).',
     address: `https://${cf.worker}.<the account's workers.dev subdomain>.workers.dev`,
@@ -158,9 +163,22 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
     for (const line of announced) log(line);
   }
 
-  const b = await build(root, { log });
+  // Big media into the studio's R2 before the build (0.18.0): only with storage this studio made, so a free account
+  // with no payment method is never asked anything about R2. Each file is read back and its SHA-256 compared before
+  // the build stops carrying it; a file that did not make it stays on the site (when it fits) and is named here.
+  const storage = cf.r2 && created.has(`r2:${cf.r2}`) ? cf.r2 : null;
+  let media = null;
+  if (storage) {
+    media = await mediaMove(root, { auto: true, accountId, log });
+    for (const m of media.moved ?? []) step(`moved ${m.path} (${sizeOf(m.bytes)}) to R2 and checked it by SHA-256; the site serves it at the same address, ${m.url}`);
+    for (const m of media.failed ?? []) step(`not moved to R2: ${m.path}: ${m.why}`);
+    if (media.why && !media.ok) step(`big media stays on the site this time: ${media.why}`);
+  }
+
+  const b = await build(root, { log, deploy: true });
   // A new studio goes live with its own Home ("First game coming soon") before it has a game.
   step(b.catalogue.length || b.songs.length || b.videos.length ? `built ${b.catalogue.length} game(s), ${b.songs.length} song(s), ${b.videos.length} video(s)` : 'built the home page (no game yet: "First game coming soon")');
+  for (const n of b.mediaNotes ?? []) step(`note: ${n.file}: ${n.why}`);
 
   // The Worker: never one this studio did not make.
   if (!created.has(`worker:${cf.worker}`)) {
@@ -189,7 +207,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
 
   // Storage (R2) is bound only when `storage add` made the bucket. Deploy itself never creates or lists R2, so a
   // free account with no payment method deploys the whole studio.
-  const r2 = cf.r2 && created.has(`r2:${cf.r2}`) ? cf.r2 : null;
+  const r2 = storage;
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
   writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root) }));
@@ -237,6 +255,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   writeStudio(root, { ...readStudio(root), cloudflare: next });
   return {
     ok: true, command: 'deploy', url, ...(workersDev ? { workersDev, local: LOCAL_STATE } : {}), worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
+    ...(media ? { media: { moved: media.moved ?? [], failed: media.failed ?? [], inR2: media.inR2 ?? null } } : {}),
     games: b.catalogue.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null })),
     songs: b.songs.map((slug) => ({ slug, page: url ? `${url}/music/${slug}/` : null })),
     videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),
@@ -400,5 +419,112 @@ export async function storageAdd(root, { log = () => {} } = {}) {
     writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root) }));
   }
   log(`created R2 ${bucket}`);
-  return { ok: true, command: 'storage add', bucket, account: accountId, next: ['npm run deploy   (binds the bucket as MEDIA; the site serves it at /media/<key>)', 'npx --no-install homie-studio media put <file>'] };
+  return { ok: true, command: 'storage add', bucket, account: accountId, cost: R2_COST, next: ['npx --no-install homie-studio media move --dry-run   (which songs and videos go to R2: over 1 MiB, or left out of git)', 'npm run deploy   (binds the bucket as MEDIA, moves them, checks each by SHA-256, and serves them from R2 at the same addresses; the files stay in this folder)'] };
+}
+
+/** One Wrangler command, run without blocking (an upload of a music video takes a while); the last of its words kept. */
+function wranglerRun(bin, args, { cwd, env }) {
+  return new Promise((done) => {
+    const p = spawn(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    const keep = (d) => { out = `${out}${d}`.slice(-8000); };
+    p.stdout.on('data', keep);
+    p.stderr.on('data', keep);
+    p.on('error', (e) => done({ code: 1, out: String(e.message) }));
+    p.on('close', (code) => done({ code: code ?? 1, out: out.replace(ANSI, '') }));
+  });
+}
+
+/** Read an object back from R2 (`wrangler r2 object get --pipe`) and hash it as it streams: nothing is written to disk. */
+function hashRemote(bin, path, { cwd, env }) {
+  return new Promise((done) => {
+    const p = spawn(bin, ['r2', 'object', 'get', path, '--remote', '--pipe'], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const h = createHash('sha256');
+    let bytes = 0;
+    let err = '';
+    p.stdout.on('data', (d) => { h.update(d); bytes += d.length; });
+    p.stderr.on('data', (d) => { err = `${err}${d}`.slice(-4000); });
+    p.on('error', (e) => done({ code: 1, err: String(e.message) }));
+    p.on('close', (code) => done({ code: code ?? 1, sha256: h.digest('hex'), bytes, err: err.replace(ANSI, '') }));
+  });
+}
+
+/*
+ * `homie-studio media move [<file>...] [--dry-run] [--verify]` (and every `deploy` of a studio with storage): the big
+ * public files of the studio's published songs and videos go into its own R2, at the key that is their path, so the
+ * site keeps serving them at the same address.
+ *
+ *   1. hash the file on this computer (SHA-256);
+ *   2. `wrangler r2 object put <bucket>/<path>`;
+ *   3. read it back (`wrangler r2 object get --pipe`) and hash what R2 returns;
+ *   4. only when size and hash match, record `r2: { key, sha256, bytes, at }` on the manifest's file.
+ *
+ * The next deploy's build leaves a recorded file out of the site's static assets (and serves it from R2). The file
+ * on this computer is never deleted, moved or changed. A file that fails any step is named, and stays on the site.
+ * `--verify` reads every file already recorded back from R2 and checks its hash again (it changes nothing).
+ */
+export async function mediaMove(root, { paths = null, dryRun = false, verify = false, auto = false, accountId = null, log = () => {} } = {}) {
+  const studio = readStudio(root);
+  const cf = { created: [], ...studio.cloudflare };
+  const bucket = cf.r2 && (cf.created ?? []).includes(`r2:${cf.r2}`) ? cf.r2 : null;
+  const over = r2OverOf(studio);
+  const named = Array.isArray(paths) && paths.length ? paths : null;
+  const rows = mediaPlan(root, { over, paths: named });
+  const view = (r) => ({ path: r.path, kind: r.kind, slug: r.slug, role: r.role, state: r.state, bytes: r.bytes ?? null, ...(r.reason ? { reason: r.reason } : {}), ...(r.why ? { why: r.why } : {}) });
+  const held = rows.filter((r) => r.state === 'r2');
+  const todo = rows.filter((r) => r.state === 'move');
+  const inR2 = [...held, ...todo].reduce((n, r) => n + (r.bytes ?? 0), 0);
+  const base = {
+    command: 'media move', bucket, over, rows: rows.map(view), inR2, cost: R2_COST,
+    // Over the free 10 GB-month, Cloudflare bills the account: say so with the number.
+    ...(inR2 > 10e9 ? { warning: `R2 would hold ${sizeOf(inR2)} of this studio's media, over the 10 GB-month free tier: about US$${(((inR2 - 10e9) / 1e9) * 0.015).toFixed(2)} a month more, billed by Cloudflare to the account` } : {}),
+  };
+  if (!bucket) {
+    return { ok: false, ...base, needs: 'storage', why: 'this studio has no storage yet, so its media stays on the site (files up to 25 MiB each). `npx --no-install homie-studio storage add` adds an R2 bucket; Cloudflare asks for a payment method on the account before R2 works, so ask the person first. Games never need it.' };
+  }
+  if (auto && over === null && !named) return { ok: true, ...base, off: true, moved: [], failed: [], why: 'studio.json media.r2Over is false: nothing moves on its own' };
+  if (dryRun || (!todo.length && !verify)) return { ok: true, ...base, dryRun, moved: [], failed: [], next: todo.length ? 'npx --no-install homie-studio media move   (then npm run deploy)' : null };
+  const bin = wranglerBin(root);
+  if (!bin) return { ok: false, ...base, why: 'Wrangler is not installed in this studio yet: run `npm install` in the studio folder first' };
+  const account = accountId || process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || null;
+  const opts = { cwd: workerDir(root), env: { ...process.env, ...(account ? { CLOUDFLARE_ACCOUNT_ID: account } : {}), WRANGLER_SEND_METRICS: 'false', CI: '1' } };
+  const moved = [];
+  const failed = [];
+  const verified = [];
+  if (verify) {
+    for (const r of held) {
+      const key = r.held?.key ?? r.path;
+      const got = await hashRemote(bin, `${bucket}/${key}`, opts);
+      const ok = got.code === 0 && got.sha256 === r.held?.sha256 && got.bytes === Number(r.held?.bytes);
+      verified.push({ path: r.path, key, ok, bytes: got.bytes, ...(ok ? {} : { why: got.code !== 0 ? `could not read it back: ${got.err.trim().split('\n').slice(-2).join(' ')}` : 'R2 returned different bytes than were recorded' }) });
+      log(`${ok ? 'verified' : 'MISMATCH'} ${r.path} in R2 ${bucket}/${key}`);
+    }
+  }
+  for (const r of todo) {
+    const key = r.path;
+    const url = `/${key.split('/').map(encodeURIComponent).join('/')}`;
+    const sha256 = sha256File(r.abs);
+    log(`uploading ${r.path} (${sizeOf(r.bytes)}) to R2 ${bucket}/${key}`);
+    const put = await wranglerRun(bin, ['r2', 'object', 'put', `${bucket}/${key}`, '--file', r.abs, '--content-type', r.type, '--remote'], opts);
+    // Where the file is meanwhile: on the site when it fits; a bigger one keeps an older R2 copy, or waits.
+    const meanwhile = r.bytes <= MAX_ASSET_BYTES ? ' It stays on the site.' : r.held ? ' Its page keeps playing the older copy in R2.' : ' At this size the site cannot carry it, so its page waits until it is in R2.';
+    if (put.code !== 0) {
+      failed.push({ path: r.path, bytes: r.bytes, why: `${explainCloudflare(put.out, account)?.why ?? `the upload failed: ${put.out.trim().split('\n').slice(-3).join(' ')}`}${meanwhile}` });
+      continue;
+    }
+    const got = await hashRemote(bin, `${bucket}/${key}`, opts);
+    if (got.code !== 0 || got.sha256 !== sha256 || got.bytes !== r.bytes) {
+      failed.push({ path: r.path, bytes: r.bytes, why: `${got.code !== 0 ? `uploaded, but it could not be read back to check it (${got.err.trim().split('\n').slice(-2).join(' ')}); nothing recorded.` : `R2 returned ${got.bytes} bytes with a different SHA-256 from this file's ${r.bytes}; nothing recorded.`}${meanwhile}` });
+      continue;
+    }
+    const at = new Date().toISOString();
+    const manifests = recordMove(root, r.path, { key, sha256, bytes: r.bytes, at });
+    moved.push({ path: r.path, key, bytes: r.bytes, sha256, url, manifests });
+    log(`checked ${r.path} in R2 by SHA-256 (${sha256.slice(0, 12)}…); its address stays ${url}`);
+  }
+  const bad = verified.filter((v) => !v.ok);
+  return {
+    ok: !failed.length && !bad.length, ...base, moved, failed, ...(verify ? { verified } : {}),
+    ...(moved.length ? { next: 'npm run deploy: the site stops carrying these files and serves them from R2 at the same addresses. The files stay in this folder; commit the manifests (they name each file\'s R2 copy), never the media.' } : {}),
+  };
 }

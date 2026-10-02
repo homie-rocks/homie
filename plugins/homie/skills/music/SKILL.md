@@ -152,10 +152,12 @@ node <music.mjs> publish <slug>
 `add` writes the manifest entry from what is in `music/<slug>/` (the mp3 the page plays, the
 master kept off the site, loops and stems offered for download, the lyrics, the plan and rights
 at render time, the credits line). `publish` rebuilds and redeploys the site and checks the
-page answers 200 and the audio answers a byte range. The site serves the song itself (a song is a
-few MB; the limit is 25 MiB a file), so no storage is needed; a studio that has storage (`storage
-add`) gets its files uploaded there instead. If the studio is not online yet, use the `publish` skill first. If `check` says the
-studio's `@homie-rocks/studio` predates song pages, say so and update it.
+page answers 200 and the audio answers a byte range. Without storage the site serves the song
+itself (a song is a few MB; the limit is 25 MiB a file). A studio that has storage (`storage add`)
+keeps its big media in its own R2: the deploy uploads the song (over 1 MiB, or left out of git),
+reads it back, checks it by SHA-256 and serves it from R2 at the same address. If the studio is
+not online yet, use the `publish` skill first. If `check` says the studio's `@homie-rocks/studio`
+predates song pages, say so and update it.
 
 ## 9. Tell the person
 
