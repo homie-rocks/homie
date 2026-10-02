@@ -9,8 +9,8 @@
  *
  *   added      a file, an AGENTS.md section, a .gitignore line or a package.json script the studio does not have;
  *   updated    a file or an AGENTS.md section the studio never changed since an older template wrote it (its text
- *              is exactly an earlier version's: lib/template-history.json keeps a fingerprint of every one), so the
- *              template's newer text replaces it;
+ *              is exactly an earlier version's: lib/template-history.json keeps a fingerprint of every one, and of
+ *              every one as a studio the template itself names reads it), so the template's newer text replaces it;
  *   kept       anything the studio changed, or wrote itself: never touched. The plan says it differs, and
  *              `--diff` prints the difference, so the person can take the template's words by hand.
  *
@@ -42,6 +42,14 @@ export const ADD_ONLY = ['music/manifest.json', 'videos/manifest.json', '.claude
 const MIGRATIONS = /^site\/migrations\/[^/]+\.sql$/;
 /** The name and slug stand-ins the history is fingerprinted with. */
 export const STAND_IN = { name: '{{studio.name}}', slug: '{{studio.slug}}' };
+/**
+ * Studios the template's own words name: `demo` plays a live game "on Homie Arcade" (the Commands section). A
+ * studio's text is compared with its own name and slug made neutral (normalize), so for the studio that IS Homie
+ * Arcade that mention turns into the stand-in too, and no stand-in fingerprint could ever match its untouched text:
+ * it read as changed by the studio, and kept the template's older words for good. The history also keeps, for each of
+ * these names, the fingerprints that differ when the template is written for that studio (`named`).
+ */
+export const NAMED_IN_TEMPLATE = Object.freeze([Object.freeze({ name: 'Homie Arcade', slug: 'homie-arcade' })]);
 const INTRO = '(intro)';
 
 /** A text as the template compares it: line ends, trailing spaces and the studio's own name and slug made neutral. */
@@ -64,9 +72,9 @@ export function sections(text) {
   return out.map((s) => ({ heading: s.heading, text: s.lines.join('\n') })).filter((s, i) => i > 0 || s.text.trim());
 }
 
-/** What the history keeps of one template: a fingerprint of every whole file and every AGENTS.md section. */
-export function templatePrint(files) {
-  const who = STAND_IN;
+/** What the history keeps of one template: a fingerprint of every whole file and every AGENTS.md section, as `who`
+ * (the stand-ins, or a studio the template names) reads them. */
+export function templatePrint(files, who = STAND_IN) {
   return {
     files: Object.fromEntries(TEMPLATE_FILES.filter((f) => f !== 'AGENTS.md' && files[f] !== undefined).map((f) => [f, fingerprint(files[f], who)])),
     sections: { 'AGENTS.md': Object.fromEntries(sections(files['AGENTS.md']).map((s) => [s.heading, fingerprint(s.text, who)])) },
@@ -77,14 +85,33 @@ export function readHistory() {
   try { return JSON.parse(readFileSync(new URL('./template-history.json', import.meta.url), 'utf8')); } catch { return { v: 1, versions: {} }; }
 }
 
-/** Every fingerprint an older template wrote, per file and per AGENTS.md section. */
-function known(history) {
+/**
+ * A template as the studios it names read it (NAMED_IN_TEMPLATE): for each, the fingerprints that differ from the
+ * stand-ins' (only a file or section that names it does). `render(who)` is what `homie-studio new` writes for `who`.
+ */
+export function namedPrint(render, plain = templatePrint(render(STAND_IN))) {
+  const named = {};
+  for (const who of NAMED_IN_TEMPLATE) {
+    const p = templatePrint(render(who), who);
+    const files = Object.fromEntries(Object.entries(p.files).filter(([f, h]) => plain.files[f] !== h));
+    const secs = Object.fromEntries(Object.entries(p.sections['AGENTS.md']).filter(([s, h]) => plain.sections['AGENTS.md'][s] !== h));
+    if (Object.keys(files).length || Object.keys(secs).length) named[who.name] = { ...(Object.keys(files).length ? { files } : {}), sections: { 'AGENTS.md': secs } };
+  }
+  return named;
+}
+
+/** Every fingerprint an older template wrote, per file and per AGENTS.md section, as this studio (`who`) reads it. */
+function known(history, who = {}) {
   const files = new Map();
   const secs = new Map();
   for (const v of Object.values(history.versions ?? {})) {
-    // A version may hold more than one hash for a file (two templates published under it): a list.
-    for (const [f, h] of Object.entries(v.files ?? {})) for (const x of [h].flat()) (files.get(f) ?? files.set(f, new Set()).get(f)).add(x);
-    for (const [heading, h] of Object.entries(v.sections?.['AGENTS.md'] ?? {})) for (const x of [h].flat()) (secs.get(heading) ?? secs.set(heading, new Set()).get(heading)).add(x);
+    // A studio the template names reads those mentions as its own name: its fingerprints are kept beside the rest.
+    const as = who.name && v.named && Object.hasOwn(v.named, who.name) ? v.named[who.name] : null;
+    for (const p of as ? [v, as] : [v]) {
+      // A version may hold more than one hash for a file (two templates published under it): a list.
+      for (const [f, h] of Object.entries(p.files ?? {})) for (const x of [h].flat()) (files.get(f) ?? files.set(f, new Set()).get(f)).add(x);
+      for (const [heading, h] of Object.entries(p.sections?.['AGENTS.md'] ?? {})) for (const x of [h].flat()) (secs.get(heading) ?? secs.set(heading, new Set()).get(heading)).add(x);
+    }
   }
   return { files, secs };
 }
@@ -137,7 +164,7 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
   if (!name || !slug) return { ok: false, command: 'upgrade', why: 'studio.json has no name or slug; this does not look like a studio made with homie-studio new' };
   const who = { name, slug };
   const tmpl = studioFiles({ name, slug, homie: studio.homie?.directory ?? 'https://homie.rocks' });
-  const { files: oldFiles, secs: oldSecs } = known(history);
+  const { files: oldFiles, secs: oldSecs } = known(history, who);
   const changes = [];
   const kept = [];
 

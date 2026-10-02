@@ -501,7 +501,9 @@ test('the build knows a game\'s netplay revision: a build without the helper\'s 
 
 /* ------------------------------------------------------------------ 0.17.0: AI guides at the Table */
 
-test('AI guides at the Table: consent, house guides, a Workers AI decision on the alarm, its neurons counted, the budget, talk off', async () => {
+test('AI guides at the Table: consent, house guides, a Workers AI decision on the alarm, its neurons counted, the budget, talk off', async (t) => {
+  // The clock is the test's: the guides' 3 s between decisions passes when the test says, not on the wall.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const { env, DB, fetchSite, seat, owner, post, waits } = await site();
   const calls = [];
   env.AI = { run: async (model, input) => { calls.push({ model, input }); return { response: { goal: 'quest', args: { quest: 'slime-hunt' }, say: 'quest_help', sayArgs: { quest: 'slime-hunt' } }, usage: { prompt_tokens: 700, completion_tokens: 40 } }; } };
@@ -555,7 +557,7 @@ test('AI guides at the Table: consent, house guides, a Workers AI decision on th
   assert.equal(r.status, 200, 'lowering the budget happens at once');
   await table.readBrainDay();
   const before = calls.length;
-  await new Promise((done) => setTimeout(done, 3100));
+  t.mock.timers.tick(3100);
   host.h.onMessage(JSON.stringify({ t: 'ev', k: 'ask:lead_me', to: g, d: { slot: 0, seat: g, args: { place: 'camp' } } }));
   await table.alarm();
   assert.equal(calls.length, before, 'no Workers AI call over budget');

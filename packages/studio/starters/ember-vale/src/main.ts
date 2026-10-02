@@ -15,6 +15,12 @@
  * hero and saves it. A hardcore hero who falls becomes a memorial in the Hall of the Fallen, and its save is wiped
  * in the same step (saves.fall). Canvas 2D on purpose: the point is the pattern, in a few hundred lines.
  *
+ * NAMES: the room knows a person by their seat's name (their account's, else a two-word handle such as "Velvet
+ * Comet"); the vale shows their HERO's name, over their head and in the night's ranking, for them and for everyone
+ * else. Each hero's browser tells the host its hero's name (a `hero` event); the host keeps every seat's in the keyed
+ * state `heroes`, which a new host and a late joiner have already. On a kids server nobody's typed name reaches
+ * anyone else (NETPLAY.md section 17): there the others are shown by their handles, as the room has them.
+ *
  * A watcher (/<game>/watch, contract revision 5) has no hero and makes none: `room.viewSeat()` is the hero it
  * follows, drawn in gold as a hero's own browser draws itself, with that hero's panel; nobody followed, the vale.
  * The host says who slew what (`slain`), so a watcher on Auto cuts to the kill.
@@ -31,7 +37,7 @@
  * none, or between its decisions, `decide` below is the floor. A guide's line is drawn as a bubble from agents.json,
  * never from a model; "Quiet AI" hides them.
  */
-import { AI_MARK, createControls, createLabels, createRoom, createSaves, easeView, exposePort, fitView, jitter, q, standoff, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
+import { AI_MARK, createControls, createLabels, createRoom, createSaves, easeView, exposePort, fitView, jitter, q, standoff, stripAi, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
 import { useAgents, type Goal, type Vocabulary } from '@homie-rocks/studio/agents';
 import vocabulary from '../agents.json';
 
@@ -46,6 +52,8 @@ const DOWN_MS = 4000;
 const DOWN = 1;
 const STRIKING = 2;
 const BOT_NAMES = ['Rook', 'Vex', 'Moth', 'Kilo', 'Juno', 'Pike', 'Nyx', 'Ash'];
+/** The eight spots round the camp, in the order bodies take them: any first few are spread all the way round. */
+const SPREAD = [0, 4, 2, 6, 1, 5, 3, 7];
 const xpFor = (level: number): number => Math.round(20 * level ** 1.5);
 const maxHpOf = (level: number): number => 60 + level * 12;
 const damageOf = (level: number): number => 10 + level * 3;
@@ -129,10 +137,13 @@ const room = createRoom<Body, SlimeRow[], { slimes: Slime[]; seq: number }>({
   roundSeconds: 90,
   breakSeconds: 8,
   botName: (slot) => BOT_NAMES[slot % BOT_NAMES.length] as string,
+  // createRoom gives every body in the room its own index (a mid-round arrival the lowest free one), so no two
+  // bodies ever spawn on one spot; SPREAD puts the first few far apart round the camp (0°, 180°, 90°, 270°…).
   spawn: (slot, i) => {
-    const a = (i / 8) * Math.PI * 2;
+    const a = ((SPREAD[i % SPREAD.length] as number) / SPREAD.length) * Math.PI * 2;
+    const ring = 1 + Math.floor(i / SPREAD.length) * 0.5;
     const lvl = slot.bot ? 1 + (slot.slot % 4) : 1;
-    const x = W / 2 + Math.cos(a) * 160; const y = H / 2 + Math.sin(a) * 120;
+    const x = W / 2 + Math.cos(a) * 160 * ring; const y = H / 2 + Math.sin(a) * 120 * ring;
     return { slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, score: 0, x, y, hp: maxHpOf(lvl), maxHp: maxHpOf(lvl), level: lvl, face: a, flags: 0, downUntil: 0, atkAt: 0, strikeAt: 0, tx: x, ty: y };
   },
   pack: (b) => [q(b.x, 0), q(b.y, 0), Math.max(0, Math.round(b.hp)), b.maxHp, b.level, q(b.face, 2), b.flags],
@@ -156,6 +167,51 @@ const room = createRoom<Body, SlimeRow[], { slimes: Slime[]; seq: number }>({
 });
 const net = room.net;
 const myLevel = (): number => hero?.level ?? 1;
+
+/* ------------------------------------------------------------------ heroes' names */
+/** A hero's name as the vale shows it: one line of at most 20 characters, never ending in an AI or bot mark. */
+const heroName = (raw: unknown): string =>
+  stripAi(String(raw ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, ' ')).slice(0, 20).trim();
+/** On a kids server nobody's typed name reaches anyone else: the room's handles stay. */
+const kids = (): boolean => net.policy.kids === true;
+/** Every seat's hero name, as the host keeps it (keyed state `heroes`: seat → name). */
+const heroNames = (): Record<string, string> => net.stateOf<Record<string, string>>('heroes') ?? {};
+/** Host: one seat's hero name (null or '': none). */
+function setHeroName(seat: number, name: string | null): void {
+  const next = { ...heroNames() };
+  if (name && !kids()) next[seat] = name; else delete next[seat];
+  net.state('heroes', next);
+}
+/** The name over a body and in the ranking: a person's hero's (on your own screen, yours at once), else the room's. */
+function nameOf(b: { seat: number | null; bot: boolean; name: string; agent?: unknown }): string {
+  // A bot or an AI is always the room's name for it: an AI's ends in " · AI", and no hero name may hide that.
+  if (b.bot || b.agent || b.seat === null || net.isAgent(b.seat)) return b.name;
+  if (!lookOnly && hero && b.seat === room.mySeat()) return heroName(hero.name) || b.name;
+  return (kids() ? '' : heroNames()[b.seat]) || b.name;
+}
+/**
+ * Every frame: my hero's name goes to the host until the room has it (so a new host, a reload and a lost event all
+ * heal by themselves); the host keeps only seats a person still holds.
+ */
+let heroToldAt = 0;
+let heroesKeptAt = 0;
+function keepNames(now: number): void {
+  const seat = room.mySeat();
+  if (!lookOnly && seat !== null) {
+    const want = hero && !kids() ? heroName(hero.name) : '';
+    if ((heroNames()[seat] ?? '') !== want) {
+      if (room.hosting) setHeroName(seat, want);
+      else if (now - heroToldAt > 1500) { heroToldAt = now; net.send('hero', { name: want }); }
+    }
+  }
+  if (!room.hosting || now - heroesKeptAt < 1000) return;
+  heroesKeptAt = now;
+  const held = new Set([...net.peers.values()].filter((p) => p.seat !== null && !p.agent && !p.watch).map((p) => String(p.seat)));
+  if (seat !== null) held.add(String(seat));
+  const names = heroNames();
+  const keep = kids() ? {} : Object.fromEntries(Object.entries(names).filter(([k]) => held.has(k)));
+  if (Object.keys(keep).length !== Object.keys(names).length) net.state('heroes', keep);
+}
 
 /* ------------------------------------------------------------------ the guides' brain (agents.json) */
 type PartyRow = { seat: number; dist: number; hp: number; down: boolean };
@@ -223,6 +279,8 @@ net.on('event', (e: NetEvent) => {
   if (e.k === 'loot' && d.to === room.mySeat()) gain(Math.max(0, Number(d.xp) || 0), Math.max(0, Number(d.gold) || 0));
   if (e.k === 'down' && d.to === room.mySeat()) void fell(String(d.cause ?? 'a slime').slice(0, 40));
   if (e.k === 'slain' && typeof (e.d as { seat?: unknown })?.seat === 'number') net.spotlight((e.d as { seat: number }).seat);
+  // A hero's browser names its hero (its own seat only: the relay stamps who sent it).
+  if (e.k === 'hero' && room.hosting && typeof e.from === 'number' && !net.isAgent(e.from)) setHeroName(e.from, heroName((e.d as { name?: unknown } | null)?.name));
 });
 function tell(b: Body, k: 'loot' | 'down', d: Record<string, unknown>): void {
   if (b.bot || b.seat === null) return;
@@ -552,7 +610,7 @@ function draw(t: number): void {
     ctx.fillStyle = '#7ad35a'; ctx.fillRect(x - 24, y - R - 12, (48 * clamp(b.hp, 0, b.maxHp)) / Math.max(1, b.maxHp), 5);
     ctx.globalAlpha = 1;
     // An AI's name already ends in " · AI" (a guide, a companion); a plain bot says bot.
-    const text = `${b.name}${b.bot && !b.name.endsWith(AI_MARK) ? ' · bot' : ''}${isGuide ? ' · guide' : ''} · ${b.level}`;
+    const text = `${nameOf(b)}${b.bot && !b.name.endsWith(AI_MARK) ? ' · bot' : ''}${isGuide ? ' · guide' : ''} · ${b.level}`;
     const near = meAt ? Math.hypot(x - meAt.x, y - meAt.y) : 0;
     // Its spot is above its health bar; its body (and bar) is what other names keep off. People first, then guides,
     // then bots; nearer you first.
@@ -635,7 +693,7 @@ function hud(t: number): void {
   // A watcher's panel is the followed hero's, as the room has them (their save stays in their own browser).
   const v = lookOnly ? room.viewBody() : null;
   const heroes = room.view().filter((b) => !b.bot).length;
-  const title = lookOnly ? (v ? `${v.name} · Lv ${v.level}` : 'Watching the vale') : hero ? `${hero.name}${hero.hardcore ? ' ☠' : ''} · Lv ${hero.level}` : heroLoaded ? 'No hero yet' : 'Loading your hero…';
+  const title = lookOnly ? (v ? `${nameOf(v)} · Lv ${v.level}` : 'Watching the vale') : hero ? `${hero.name}${hero.hardcore ? ' ☠' : ''} · Lv ${hero.level}` : heroLoaded ? 'No hero yet' : 'Loading your hero…';
   const sub = lookOnly ? (v ? `${v.score} xp tonight${v.flags & DOWN ? ' · down' : ''}` : `${heroes} ${heroes === 1 ? 'hero' : 'heroes'} · ${(room.fast() ?? []).length} slimes`) : hero ? `${hero.gold} gold · ${hero.kills} slain` : '';
   const bar = v ? { colour: '#7ad35a', of: clamp(v.hp, 0, v.maxHp) / Math.max(1, v.maxHp) } : hero && !lookOnly ? { colour: '#ffcf6e', of: hero.xp / xpFor(hero.level) } : null;
   // The panel is as wide as what it says: on a phone the vale runs under it, and the clock sits beside it.
@@ -665,7 +723,7 @@ function hud(t: number): void {
     ctx.fillStyle = 'rgba(10,14,9,.78)'; ctx.fillRect(cw / 2 - 150, top, 300, 30 + rows.length * 22);
     ctx.font = TITLE; ctx.fillStyle = '#ffcf6e'; ctx.fillText('Tonight\'s hunters', cw / 2, top + 22);
     ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#e7d9b4';
-    rows.forEach((r, i) => ctx.fillText(`${r.place}. ${r.name}${r.bot && !r.name.endsWith(AI_MARK) ? ' (bot)' : ''} — ${r.score} xp`, cw / 2, top + 46 + i * 22));
+    rows.forEach((r, i) => ctx.fillText(`${r.place}. ${nameOf(r)}${r.bot && !r.name.endsWith(AI_MARK) ? ' (bot)' : ''} — ${r.score} xp`, cw / 2, top + 46 + i * 22));
   }
   if (performance.now() < bannerUntil) { ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = '#ffcf6e'; ctx.fillText(bannerText, cw / 2, canvas.height / k - 90); }
   const st = saves.status();
@@ -797,6 +855,7 @@ function frame(t: number): void {
   const dt = Math.min(0.05, (t - last) / 1000);
   last = t;
   stepMe(dt);
+  keepNames(t);
   if (room.hosting) stepHost(dt);
   draw(t);
   frames += 1;
@@ -813,9 +872,9 @@ net.expose({
     me: me.has ? { x: Math.round(me.x), y: me.y | 0 } : null,
     log: guideLog.slice(),
   }),
-  // Where the camera looks, and the names as drawn (boxes only: the e2e probe counts overlaps and checks your own).
+  // Where the camera looks, and the names as drawn (the e2e probe counts overlaps, checks your own, and reads them).
   camera: () => (cam ? { x: cam.x, y: cam.y, scale: cam.scale, follow: cam.follow } : null),
-  labels: () => shownLabels.map((l) => ({ self: Boolean(l.self), alpha: l.alpha, moved: l.moved, left: Math.round(l.left), top: Math.round(l.top), right: Math.round(l.right), bottom: Math.round(l.bottom) })),
+  labels: () => shownLabels.map((l) => ({ text: l.text, self: Boolean(l.self), alpha: l.alpha, moved: l.moved, left: Math.round(l.left), top: Math.round(l.top), right: Math.round(l.right), bottom: Math.round(l.bottom) })),
 });
 
 exposePort(net, {

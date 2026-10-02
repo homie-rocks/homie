@@ -34,7 +34,7 @@ import {
 export interface BodyBase { slot: number; seat: number | null; name: string; bot: boolean; score: number; agent?: Slot['agent'] }
 
 export interface RoomSnap<F = unknown> { r: [n: number, phase: number, startedAt: number, endsAt: number]; b: number[][]; w?: F }
-export interface RoomCkpt<B, S> { round: RoundInfo | null; roster: Slot[]; bodies: B[]; world: S | null; tick: number }
+export interface RoomCkpt<B, S> { round: RoundInfo | null; roster: Slot[]; bodies: B[]; world: S | null; tick: number; spawns?: [slot: number, index: number][] }
 
 export interface RoomOptions<B extends BodyBase, F = unknown, S = unknown> {
   /** The game id (the relay's logs). */
@@ -50,7 +50,11 @@ export interface RoomOptions<B extends BodyBase, F = unknown, S = unknown> {
   /** Results on screen between rounds (default 7). */
   breakSeconds?: number;
   botName?: (slot: number) => string;
-  /** A fresh body for a slot. `index` counts bodies at a round start (spread the spawns with it). */
+  /**
+   * A fresh body for a slot. Spread the spawns with `index`: at a round start the bodies get 0, 1, 2… in slot order; a
+   * body that arrives mid-round (a joiner with no bot to take over, a guide's seat) gets the lowest index no body in
+   * the room holds, so two bodies never get the same one.
+   */
   spawn: (slot: Slot, index: number) => B;
   /** The body's fast fields for the snapshot, after [slot, seat, score]: small numbers only (use q()). */
   pack: (b: B) => number[];
@@ -143,6 +147,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   const policy = (): Policy => net.policy;
   let roster = new Roster({ min, max, botName, policy });
   let bodies = new Map<number, B>();
+  /** The index each body was spawned with (slot → index), so a body that arrives mid-round never gets one in use. */
+  let spawned = new Map<number, number>();
   let round: RoundInfo | null = null;
   let hosting = false;
   let tick = 0;
@@ -150,7 +156,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   const net = createNetplay<RoomSnap<F>, unknown[], RoomCkpt<B, S>>({
     game: opts.game, maxPlayers: max, movement: opts.movement ?? 'owner',
     snapshotHz: 20, inputHz: 20, checkpointMs: 1000,
-    checkpoint: () => ({ round, roster: roster.toJSON(), bodies: [...bodies.values()].map((b) => ({ ...b })), world: opts.saveWorld ? opts.saveWorld() : null, tick }),
+    checkpoint: () => ({ round, roster: roster.toJSON(), bodies: [...bodies.values()].map((b) => ({ ...b })), world: opts.saveWorld ? opts.saveWorld() : null, tick, spawns: [...spawned].filter(([slot]) => bodies.has(slot)) }),
     ...(opts.netplay ?? {}),
     // createRoom claims an AI's slot for it (its join passes `p.agent`), so its host can move an AI's body.
     caps: [...new Set([...(opts.netplay?.caps ?? []), 'agents' as const])],
@@ -163,17 +169,31 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     return null;
   };
 
-  function syncBodies(atIndex = 0): void {
+  /** The lowest spawn index no body in the room holds. */
+  function freeIndex(): number {
+    const held = new Set<number>();
+    for (const slot of bodies.keys()) { const i = spawned.get(slot); if (i !== undefined) held.add(i); }
+    let i = 0;
+    while (held.has(i)) i += 1;
+    return i;
+  }
+
+  function syncBodies(): void {
     const seen = new Set<number>();
-    let i = atIndex;
     for (const s of roster.slots) {
       seen.add(s.slot);
       const b = bodies.get(s.slot);
-      if (!b) { const nb = opts.spawn(s, i++); nb.slot = s.slot; nb.seat = s.seat; nb.name = s.name; nb.bot = s.bot; nb.score = nb.score ?? 0; if (s.agent) nb.agent = { ...s.agent }; bodies.set(s.slot, nb); continue; }
+      if (!b) {
+        // Mid-round (a joiner, a guide's seat): never an index another body holds, so never another body's spot.
+        const i = freeIndex();
+        const nb = opts.spawn(s, i); nb.slot = s.slot; nb.seat = s.seat; nb.name = s.name; nb.bot = s.bot; nb.score = nb.score ?? 0; if (s.agent) nb.agent = { ...s.agent };
+        bodies.set(s.slot, nb); spawned.set(s.slot, i);
+        continue;
+      }
       b.seat = s.seat; b.name = s.name; b.bot = s.bot;
       if (s.agent) b.agent = { ...s.agent }; else delete b.agent;
     }
-    for (const k of [...bodies.keys()]) if (!seen.has(k)) bodies.delete(k);
+    for (const k of [...bodies.keys()]) if (!seen.has(k)) { bodies.delete(k); spawned.delete(k); }
   }
 
   function moved(b: B): void {
@@ -195,7 +215,9 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     roster.trim();
     syncBodies();
     let i = 0;
+    spawned = new Map();
     for (const s of [...roster.slots].sort((a, c) => a.slot - c.slot)) {
+      spawned.set(s.slot, i);
       const fresh = opts.spawn(s, i++);
       fresh.slot = s.slot; fresh.seat = s.seat; fresh.name = s.name; fresh.bot = s.bot; fresh.score = 0;
       if (s.agent) fresh.agent = { ...s.agent };
@@ -228,11 +250,14 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     if (ck) {
       roster = Roster.from(ck.roster, { min, max, botName, policy });
       bodies = new Map(ck.bodies.map((b) => [b.slot, { ...b }]));
+      // A checkpoint from before spawns were kept: the round start's order (slot order) is the best guess.
+      spawned = new Map(ck.spawns ?? [...bodies.keys()].sort((a, c) => a - c).map((slot, i) => [slot, i]));
       round = ck.round;
       tick = ck.tick;
     } else {
       roster = Roster.from(e.roster ?? [], { min, max, botName, policy });
       bodies = new Map();
+      spawned = new Map();
       syncBodies();
     }
     // The snapshot is newer than the checkpoint (20 Hz vs 1 Hz): positions and scores from it.
@@ -243,8 +268,9 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
         let b = bodies.get(slot);
         if (!b) {
           const sl = roster.slots.find((r) => r.slot === slot) ?? { slot, seat: seat >= 0 ? seat : null, name: seat >= 0 ? `Player ${seat + 1}` : botName(slot), bot: seat < 0 };
-          b = opts.spawn(sl, slot); b.slot = slot; b.seat = sl.seat; b.name = sl.name; b.bot = sl.bot;
-          bodies.set(slot, b);
+          const i = freeIndex();
+          b = opts.spawn(sl, i); b.slot = slot; b.seat = sl.seat; b.name = sl.name; b.bot = sl.bot;
+          bodies.set(slot, b); spawned.set(slot, i);
         }
         b.score = score;
         opts.unpack(row.slice(3), b);
@@ -268,6 +294,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     else {
       roster = new Roster({ min, max, botName, policy });
       bodies = new Map();
+      spawned = new Map();
       const seat = mySeat();
       if (seat !== null) roster.claim(seat, net.offline ? 'You' : net.name);
       syncBodies();

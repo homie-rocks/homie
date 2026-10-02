@@ -108,6 +108,9 @@ forgets everything 60 s after its last player leaves.
   key. Lifetime numbers: `saves.stats.add({ kills: 1 })`. Hardcore: `saves.fall({ character, summary, wipe: true })`.
 - The host decides what happened and tells the player's own browser (a netplay event to its seat); only that
   browser changes and saves the player's progress.
+- A character's name is the save's, not the room's: the room knows a person by their account's name or a two-word
+  handle. Draw the character's name over its body and in the ranking (the browser tells the host, the host keeps
+  every seat's in keyed state), except on a kids server, where the others stay handles. Ember Vale does it.
 - Show who is playing (`saves.player.name`, guest or signed in) and a small "Keep my progress" button that calls
   `saves.signIn()`; the play page shows its passkey sheet. Pressing Play never needs an account.
 - Prove it: build, `npm run dev`, open `http://localhost:8787/<id>/play` (passkeys need `localhost`, not

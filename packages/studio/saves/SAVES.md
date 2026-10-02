@@ -23,7 +23,10 @@ The pattern (the `ember-vale` starter does exactly this):
 1. When the player arrives, **load** the hero from saves; until it loads, play as a level-1 body.
 2. The host decides what happened (who killed what) and tells **that player's own browser** (a netplay event
    to its seat). Only the hero's own browser changes the hero and **saves** it.
-3. The room carries what the others need to see (my level, so my health bar is right), never the save itself.
+3. The room carries what the others need to see (my level, so my health bar is right; my hero's name, so it is
+   the name over my head), never the save itself. The name goes to the host as an event, and the host keeps every
+   seat's in keyed state (`net.state('heroes', { [seat]: name })`), which a new host and a late joiner already have.
+   On a kids server nobody's typed name reaches anyone else: the others keep seeing the room's handles.
 
 ## Quick start
 

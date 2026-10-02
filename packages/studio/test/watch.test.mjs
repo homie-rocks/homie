@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { NET_PALETTE, NetRoom } from '../worker/room.mjs';
 import { OFFICE_MIGRATION_FILE } from '../worker/office.mjs';
 import { STATS_MIGRATION_FILE } from '../worker/stats.mjs';
+import { virtualTime } from './virtual-time.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
@@ -37,7 +38,6 @@ const sha = (s) => createHash('sha256').update(s).digest('hex');
 const BROWSER = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 const KEY_A = 'aaaaaaaaaaaaaaaaaaaaaa';
 const KEY_B = 'bbbbbbbbbbbbbbbbbbbbbb';
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* ------------------------------------------------------------------ the relay */
 
@@ -178,6 +178,7 @@ const cfg = (extra = {}) => ({ v: 1, url: 'ws://relay/x/__net?room=pub-1', room:
 
 test('netplay helper: a watcher follows a player, Auto picks one, and a player who leaves hands the view back on return', async (t) => {
   const { createNetplay } = await netplayModule();
+  const { wait } = virtualTime(t);
   const { socket } = memoryRoom();
   const open = [];
   t.after(() => { for (const n of open) n.close(); });
@@ -239,6 +240,7 @@ test('netplay helper: a watcher follows a player, Auto picks one, and a player w
 
 test('netplay helper: Auto cuts to the newest spotlight after a moment, else follows the leader of the scores probe', async (t) => {
   const { createNetplay } = await netplayModule();
+  const { wait } = virtualTime(t);
   const { socket } = memoryRoom();
   const open = [];
   t.after(() => { for (const n of open) n.close(); });
@@ -250,20 +252,20 @@ test('netplay helper: Auto cuts to the newest spotlight after a moment, else fol
   make({ config: cfg({ name: 'Cy' }) });
   await wait(30);
   const w = make({ config: cfg({ watch: true }) });
+  let shownAt = null;
+  w.on('view', (v) => { if (v.seat === 1 && shownAt === null) shownAt = Date.now(); });
   let scores = [{ seat: 0, score: 3 }, { seat: 1, score: 9 }, { seat: 2, score: 1 }];
   w.expose({ scores: () => scores });
   await wait(80);
   assert.equal(w.viewSeat, 1, 'the leader');
+  assert.ok(shownAt !== null);
   // Action on Cy: Auto has shown Bo for less than 3.5 s, so it waits, then cuts the moment Bo's time is up.
-  const shownAt = Date.now() - 80;
   w.spotlight(2);
   assert.equal(w.viewSeat, 1);
-  await wait(2500);
-  assert.equal(w.viewSeat, 1, 'the player shown keeps the view for a moment');
-  const deadline = Date.now() + 4000;
-  while (w.viewSeat !== 2 && Date.now() < deadline) await wait(50);
-  assert.equal(w.viewSeat, 2, 'the newest action, once the player shown has had a moment');
-  assert.ok(Date.now() - shownAt < 5000, `and not long after (${Date.now() - shownAt} ms)`);
+  await wait(shownAt + 3500 - Date.now() - 5);
+  assert.equal(w.viewSeat, 1, 'the player shown keeps the view for 3.5 s');
+  await wait(15);
+  assert.equal(w.viewSeat, 2, 'the newest action, the moment the player shown has had 3.5 s');
   // A tie with the player shown keeps them; a new leader is looked at on the next hold.
   scores = [{ seat: 0, score: 1 }, { seat: 1, score: 1 }, { seat: 2, score: 1 }];
   w.spotlight(null);
@@ -272,6 +274,7 @@ test('netplay helper: Auto cuts to the newest spotlight after a moment, else fol
 
 test('netplay helper: an "overview" game and a seat in the same browser show the whole room; an older relay says nothing', async (t) => {
   const { createNetplay } = await netplayModule();
+  const { wait } = virtualTime(t);
   const open = [];
   t.after(() => { for (const n of open) n.close(); });
   {

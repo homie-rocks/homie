@@ -23,12 +23,12 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULT_POLICY, NetRoom, medianVote, normalizePolicy } from '../worker/room.mjs';
 import { AI_MARK, SKILLS, aiName, decodeFacts, encodeFacts, isAiName, skillPreset, stripAi } from '../worker/agents.mjs';
 import { cleanName } from '../worker/players.mjs';
+import { virtualTime } from './virtual-time.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_NM = join(PKG, '..', '..', 'node_modules');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-agents-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const POL = (extra = {}) => ({ ...DEFAULT_POLICY, at: 10, ...extra });
 const AGENT = (extra = {}) => ({ pass: 'abcdef0123', role: 'party', hands: 'self', by: 'studio', name: 'Claude', ...extra });
@@ -476,6 +476,7 @@ const cfg = (extra = {}) => ({ v: 1, url: 'ws://relay/x/__net?room=s-night-shift
 
 test('netplay helper: the policy and the dial, caps, the vote, an agent\'s hello, and Quiet AI', async (t) => {
   const { createNetplay } = await netplayModule();
+  const { wait } = virtualTime(t);
   const { room, socket } = memoryRoom({}, POL({ kind: 'hybrid', aiSeats: 2, level: 2 }));
   const open = [];
   t.after(() => { for (const n of open) n.close(); });
@@ -531,6 +532,7 @@ test('netplay helper: the policy and the dial, caps, the vote, an agent\'s hello
 
 test('netplay helper: an older relay says no policy: open, Fair, and nothing breaks', async (t) => {
   const { createNetplay } = await netplayModule();
+  const { wait } = virtualTime(t);
   const { socket } = memoryRoom();
   const strip = socket();
   const n = createNetplay({ post: null, game: 'x', WebSocketImpl: strip, config: cfg() });

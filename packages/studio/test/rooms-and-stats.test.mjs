@@ -3,7 +3,9 @@
  *
  *   - a game's netplay manifest (game.json `netplay`, or netplay.json beside it or in its build) sets its seats,
  *     up to 32; the relay seats 32 from one address (a party on one Wi-Fi) and the 33rd waits;
- *   - the netplay helper sends an idle input frame four times a second, a moving one at its input rate;
+ *   - the netplay helper sends an idle input frame four times a second, a moving one at its input rate (on virtual
+ *     time, 0.18.2: what it schedules, however busy the machine is);
+ *   - createRoom (the port kit) never spawns a body that arrives mid-round at an index, so a spot, another body holds;
  *   - the site counts page opens, Play presses by where they came from, rooms, rounds and peaks, never a
  *     prefetch, a crawler or house QA; only the owner reads them (a read key, or the one-time sign-in's session);
  *   - a song's or video's start is one beacon; "played this week" is in the manifest only when the studio shares;
@@ -24,6 +26,7 @@ import { NetRoom } from '../worker/room.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from '../worker/seats.mjs';
 import { STATS_MIGRATION, STATS_MIGRATION_FILE, isVisit, kindOf, sourceOf } from '../worker/stats.mjs';
 import { ensureStatsMigration, studioFiles } from '../lib/scaffold.mjs';
+import { virtualTime } from './virtual-time.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
@@ -138,11 +141,13 @@ test('the relay at 32: one address fills every seat (a party on one Wi-Fi), the 
   assert.deepEqual(refused, [12, 13]);
 });
 
-test('netplay helper: an idle input frame goes out four times a second; a moving one at the input rate', async () => {
+test('netplay helper: an idle input frame goes out four times a second; a moving one at the input rate', async (t) => {
   const esbuild = (await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'))).default;
   const file = join(scratch, 'netplay.mjs');
   await esbuild.build({ entryPoints: [join(PKG, 'netplay', 'netplay.ts')], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent' });
   const { createNetplay } = await import(file);
+  // Virtual time from here on: the frames counted are the ones the helper schedules, however busy the machine is.
+  const clock = virtualTime(t);
   const room = new NetRoom({ code: 'r', maxPlayers: 4 });
   const sent = [];
   class MemorySocket {
@@ -156,22 +161,68 @@ test('netplay helper: an idle input frame goes out four times a second; a moving
   }
   const cfg = (who) => ({ v: 1, url: 'ws://relay/x/__net?room=r', room: 'r', device: 'desk', want: 'play', name: who });
   const host = createNetplay({ config: cfg('host'), WebSocketImpl: MemorySocket, canHost: true, post: null, game: 'x' });
-  await new Promise((r) => setTimeout(r, 50));
+  await clock.wait(50);
   const replica = createNetplay({ config: cfg('replica'), WebSocketImpl: MemorySocket, canHost: false, post: null, game: 'x' });
-  await new Promise((r) => setTimeout(r, 100));
+  await clock.wait(100);
   assert.equal(host.isHost, true);
   assert.equal(replica.seat, 1);
-  const drive = async (ms, frame) => { const end = Date.now() + ms; let i = 0; while (Date.now() < end) { replica.input(frame(i++), []); await new Promise((r) => setTimeout(r, 16)); } };
+  // A game's frame loop: a frame every 16 ms for `ms`.
+  const drive = async (ms, frame) => { for (let i = 0; i * 16 < ms; i++) { replica.input(frame(i), []); await clock.wait(16); } };
+  const gaps = (at) => at.slice(1).map((x, i) => x - at[i]);
   sent.length = 0;
   await drive(2000, () => [10, 20, 0, 0]);
-  const idle = sent.length;
+  const idle = [...sent];
   sent.length = 0;
   await drive(2000, (i) => [10 + i, 20, 1, 0]);
-  const moving = sent.length;
+  const moving = [...sent];
   host.close?.(); replica.close?.();
-  assert.ok(idle >= 6 && idle <= 11, `idle: ${idle} frames in 2 s (about 4 a second)`);
-  assert.ok(moving >= 34 && moving <= 44, `moving: ${moving} frames in 2 s (about 20 a second)`);
+  // Standing still: the same frame again only as a keepalive, every 250 ms (the next game frame after it is due).
+  assert.ok(idle.length >= 7 && idle.length <= 9, `idle: ${idle.length} frames in 2 s (about 4 a second)`);
+  for (const g of gaps(idle)) assert.ok(g >= 250 && g < 250 + 16, `an idle frame ${g} ms after the last (every 250 ms): ${gaps(idle)}`);
+  // Moving: every frame differs, so one goes out at the input rate (20 a second), never faster.
+  assert.ok(moving.length >= 38 && moving.length <= 41, `moving: ${moving.length} frames in 2 s (about 20 a second)`);
+  for (const g of gaps(moving)) assert.ok(g >= 50 && g < 50 + 16, `a moving frame ${g} ms after the last (every 50 ms): ${gaps(moving)}`);
   assert.ok(replica.stats().idleInputsSkipped > 50);
+});
+
+test('createRoom (the port kit): a body that arrives mid-round never gets a spawn index, so a spot, another body has', async (t) => {
+  const esbuild = (await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'))).default;
+  const file = join(scratch, 'room-kit.mjs');
+  await esbuild.build({ entryPoints: [join(PKG, 'port', 'room.ts')], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent' });
+  const { createRoom } = await import(file);
+  const clock = virtualTime(t);
+  const relay = new NetRoom({ code: 'r', maxPlayers: 8 });
+  class MemorySocket {
+    constructor() {
+      this.readyState = 0; this.bufferedAmount = 0;
+      this.h = relay.attach({ send: (t) => setTimeout(() => this.onmessage?.({ data: t }), 0), close: () => {}, buffered: () => 0 });
+      setTimeout(() => { this.readyState = 1; this.onopen?.({}); }, 0);
+    }
+    send(t) { this.h.onMessage(t); }
+    close() { this.readyState = 3; this.h.onClose(); }
+  }
+  const spawns = [];
+  const make = (who) => createRoom({
+    game: 'x', maxPlayers: 8, minBodies: 3, roundSeconds: 90,
+    // Every spawn on a ring by its index, as Ember Vale and the recipe's coin-dash do.
+    spawn: (slot, i) => { spawns.push({ who, slot: slot.slot, i }); return { slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, score: 0, x: Math.round(Math.cos((i / 8) * Math.PI * 2) * 160), y: Math.round(Math.sin((i / 8) * Math.PI * 2) * 120) }; },
+    pack: (b) => [b.x, b.y], unpack: (f, b) => { b.x = f[0]; b.y = f[1]; },
+    netplay: { config: { v: 1, url: 'ws://relay/x/__net?room=r', room: 'r', device: 'desk', want: 'play', name: who }, WebSocketImpl: MemorySocket, canHost: who === 'host', post: null },
+  });
+  const host = make('host');
+  await clock.wait(100);
+  assert.equal(host.hosting, true);
+  assert.deepEqual([...new Map(spawns.map((s) => [s.slot, s.i])).values()], [0, 1, 2], 'a round starts with the host and two bots: 0, 1, 2');
+  spawns.length = 0;
+  // Five people arrive one after another: two take the bots' places, three have no bot to take over.
+  const rooms = [];
+  for (const who of ['ann', 'ben', 'cal', 'dot', 'eve']) { rooms.push(make(who)); await clock.wait(100); }
+  const bodies = [...host.bodies.values()];
+  assert.equal(bodies.filter((b) => !b.bot).length, 6);
+  assert.deepEqual(spawns.filter((s) => s.who === 'host').map((s) => s.i), [3, 4, 5], 'each arrival with no bot to take over: the lowest index nobody holds (it was 0 for every one)');
+  const spots = new Set(bodies.map((b) => `${b.x},${b.y}`));
+  assert.equal(spots.size, bodies.length, `no two bodies on one spot: ${JSON.stringify(bodies.map((b) => [b.name, b.x, b.y]))}`);
+  for (const r of [host, ...rooms]) r.net.close?.();
 });
 
 test('stats: what counts as a visit, where it came from, and what a referrer is', () => {

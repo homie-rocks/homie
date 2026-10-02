@@ -1,6 +1,6 @@
 {
  "v": 1,
- "about": "Fingerprints of every studio template version (scripts/studio-template-history.mjs): homie-studio upgrade replaces a file or an AGENTS.md section only when it is exactly one of these.",
+ "about": "Fingerprints of every studio template version (scripts/studio-template-history.mjs): homie-studio upgrade replaces a file or an AGENTS.md section only when it is exactly one of these. A version's named entries are for a studio the template itself names (lib/upgrade.mjs NAMED_IN_TEMPLATE), as that studio reads them.",
  "versions": {
   "0.2.0": {
    "files": {
@@ -138,14 +138,23 @@
     "music/README.md": "b8a828de9311bd28",
     "videos/README.md": "70614388cbb203c7",
     "posts/README.md": "37841aae476bd540",
-    "site/README.md": "0fd152a20a3eb55f",
+    "site/README.md": [
+     "0fd152a20a3eb55f",
+     "ca131cd0472464fb"
+    ],
     "site/src/worker.mjs": "ca3f1630f2420ad3"
    },
    "sections": {
     "AGENTS.md": {
      "(intro)": "214aa46eb3a895d5",
-     "## Layout": "b5f801e112d163a9",
-     "## Commands (all through the pinned CLI in node_modules)": "63833b7006efdef4",
+     "## Layout": [
+      "b5f801e112d163a9",
+      "dc8ce5f6276d369e"
+     ],
+     "## Commands (all through the pinned CLI in node_modules)": [
+      "2af7c804c1e81d86",
+      "63833b7006efdef4"
+     ],
      "## The site": "7d3525ba39b7f262",
      "## Making games": "c204473d9b468f49",
      "## Rules": "969318425c99f5a5",
@@ -252,24 +261,44 @@
    "files": {
     "CLAUDE.md": "ddf2b2a0376202f6",
     "README.md": "684b3cca8001673c",
-    "games/README.md": "5e5e942baa7e0372",
+    "games/README.md": [
+     "5ad32fe80c61f117",
+     "5e5e942baa7e0372"
+    ],
     "music/README.md": "b8a828de9311bd28",
     "videos/README.md": "70614388cbb203c7",
     "posts/README.md": "37841aae476bd540",
     "site/README.md": "ca131cd0472464fb",
-    "site/src/worker.mjs": "ca3f1630f2420ad3"
+    "site/src/worker.mjs": "ca3f1630f2420ad3",
+    "HANDOFF.md": "ce7a8fd91c6bbee2"
    },
    "sections": {
     "AGENTS.md": {
      "(intro)": "214aa46eb3a895d5",
      "## Layout": "f14d641159480e6c",
-     "## Commands (all through the pinned CLI in node_modules)": "3a3d3bef7e8d1a50",
-     "## The site": "7d3525ba39b7f262",
+     "## Commands (all through the pinned CLI in node_modules)": [
+      "3a3d3bef7e8d1a50",
+      "e579cd6ce3ce342a"
+     ],
+     "## The site": [
+      "7c1618431bae6324",
+      "7d3525ba39b7f262"
+     ],
      "## Making games": "63069b31c87a2aa2",
      "## The Game Codex and progress": "0738ef719cef3a4c",
      "## Running live games (the back office)": "f0566f07cff04113",
      "## Rules": "969318425c99f5a5",
-     "## Beta": "9d02638207a26e73"
+     "## Beta": "9d02638207a26e73",
+     "## Continuing a build from the Claude app": "0d68081e924ca419"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
     }
    }
   },
@@ -298,6 +327,15 @@
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
     }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
+    }
    }
   },
   "0.14.1": {
@@ -324,6 +362,15 @@
      "## Continuing a build from the Claude app": "0d68081e924ca419",
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
     }
    }
   },
@@ -352,6 +399,15 @@
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
     }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
+    }
    }
   },
   "0.14.3": {
@@ -378,6 +434,15 @@
      "## Continuing a build from the Claude app": "0d68081e924ca419",
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
     }
    }
   },
@@ -406,6 +471,15 @@
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
     }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
+    }
    }
   },
   "0.15.0": {
@@ -432,6 +506,15 @@
      "## Continuing a build from the Claude app": "0d68081e924ca419",
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
     }
    }
   },
@@ -461,6 +544,15 @@
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
     }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
+    }
    }
   },
   "0.16.1": {
@@ -488,6 +580,15 @@
      "## Continuing a build from the Claude app": "0d68081e924ca419",
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
     }
    }
   },
@@ -517,6 +618,15 @@
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
     }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "befe520937e71984"
+      }
+     }
+    }
    }
   },
   "0.18.0": {
@@ -545,6 +655,15 @@
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
     }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "eedef844b7aaf7ad"
+      }
+     }
+    }
    }
   },
   "0.18.1": {
@@ -572,6 +691,52 @@
      "## Continuing a build from the Claude app": "0d68081e924ca419",
      "## Rules": "969318425c99f5a5",
      "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "eedef844b7aaf7ad"
+      }
+     }
+    }
+   }
+  },
+  "0.18.2": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "HANDOFF.md": "ce7a8fd91c6bbee2",
+    "games/README.md": "5ad32fe80c61f117",
+    "music/README.md": "a3dc042dadd39df8",
+    "videos/README.md": "16babc3437d5545b",
+    "posts/README.md": "37841aae476bd540",
+    "site/README.md": "ca131cd0472464fb",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "eb1942414b8af7f8",
+     "## Commands (all through the pinned CLI in node_modules)": "9c51f189412e6a9f",
+     "## The site": "ab922bb6bde23293",
+     "## Making games": "a8a893eeada33bf5",
+     "## The Game Codex and progress": "0738ef719cef3a4c",
+     "## Running live games (the back office)": "f0566f07cff04113",
+     "## Servers and AI seats": "0a332b07e22d3fce",
+     "## Continuing a build from the Claude app": "0d68081e924ca419",
+     "## Rules": "969318425c99f5a5",
+     "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": "eedef844b7aaf7ad"
+      }
+     }
     }
    }
   }

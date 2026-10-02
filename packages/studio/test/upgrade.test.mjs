@@ -6,8 +6,11 @@
  *     a section the studio changed, or wrote itself, is kept byte for byte; a new one goes in after its neighbour;
  *   - a missing README, D1 migration or .gitignore line is added; the pin moves to this version;
  *   - nothing is written without --apply, and a second run finds nothing to do;
- *   - the history of template fingerprints knows this version's template (a test fails until it is regenerated).
- * The fixture is the AGENTS.md @homie-rocks/studio 0.7.0 wrote for a studio called Night Owls.
+ *   - the history of template fingerprints knows this version's template (a test fails until it is regenerated);
+ *   - a studio the template's own words name (Homie Arcade, where `demo` plays) still reads its untouched sections
+ *     as the template's (0.18.2).
+ * The fixtures are the AGENTS.md @homie-rocks/studio 0.7.0 wrote for a studio called Night Owls, and the one 0.17.0
+ * wrote for Homie Arcade.
  * Run: node --test packages/studio/test/upgrade.test.mjs
  */
 import assert from 'node:assert/strict';
@@ -18,12 +21,14 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { studioFiles } from '../lib/scaffold.mjs';
-import { STAND_IN, lineDiff, pinnedVersion, readHistory, sections, templatePrint } from '../lib/upgrade.mjs';
+import { NAMED_IN_TEMPLATE, STAND_IN, lineDiff, namedPrint, pinnedVersion, readHistory, sections, templatePrint, upgradePlan } from '../lib/upgrade.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const OLD_AGENTS = readFileSync(join(PKG, 'test', 'fixtures', 'studio-0.7.0', 'AGENTS.md'), 'utf8');
+const ARCADE_AGENTS = readFileSync(join(PKG, 'test', 'fixtures', 'studio-0.17.0-homie-arcade', 'AGENTS.md'), 'utf8');
+const COMMANDS = '## Commands (all through the pinned CLI in node_modules)';
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-upgrade-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'], { cwd, encoding: 'utf8' });
@@ -156,6 +161,59 @@ test('the history knows this version\'s template (run node scripts/studio-templa
   // The fixture is exactly 0.7.0's, so the test above is a real upgrade from a real template.
   const fixture = templatePrint({ ...studioFiles({ ...STAND_IN, homie: 'https://homie.rocks' }), 'AGENTS.md': OLD_AGENTS.split('Night Owls').join(STAND_IN.name).split('night-owls').join(STAND_IN.slug) });
   for (const [s, h] of Object.entries(fixture.sections['AGENTS.md'])) assert.ok(has(history.versions['0.7.0'].sections['AGENTS.md'][s], h), `the 0.7.0 fixture's "${s}"`);
+  // And as the studios the template names read it.
+  const named = namedPrint((who) => studioFiles({ ...who, homie: 'https://homie.rocks' }), now);
+  assert.ok(named['Homie Arcade']?.sections['AGENTS.md'][COMMANDS], 'the Commands section names Homie Arcade (demo), so the history keeps it as Homie Arcade reads it');
+  for (const [name, p] of Object.entries(named)) {
+    for (const [f, h] of Object.entries(p.files ?? {})) assert.ok(has(entry.named?.[name]?.files?.[f], h), `${f} as ${name} reads it: run node scripts/studio-template-history.mjs`);
+    for (const [s, h] of Object.entries(p.sections['AGENTS.md'])) assert.ok(has(entry.named?.[name]?.sections['AGENTS.md'][s], h), `AGENTS.md "${s}" as ${name} reads it: run node scripts/studio-template-history.mjs`);
+  }
+});
+
+test('Homie Arcade, which the template names (demo plays there), takes the template\'s new text where it never changed it', () => {
+  const who = NAMED_IN_TEMPLATE.find((n) => n.name === 'Homie Arcade');
+  const dir = join(scratch, 'homie-arcade');
+  assert.equal(run(['new', dir, '--name', who.name, '--homie', 'https://homie.rocks', '--no-install'], scratch).status, 0);
+  assert.equal(json(dir, 'studio.json').slug, who.slug);
+  // Its AGENTS.md exactly as 0.17.0 wrote it: "on Homie Arcade" in the demo command is the template's words, not the
+  // studio's name, but reads the same.
+  save(dir, 'AGENTS.md', ARCADE_AGENTS);
+  const pkg = json(dir, 'package.json');
+  pkg.devDependencies['@homie-rocks/studio'] = '0.17.0';
+  save(dir, 'package.json', pkg);
+  const s = json(dir, 'studio.json');
+  s.homie.studio = '0.17.0';
+  save(dir, 'studio.json', s);
+  const old = sections(ARCADE_AGENTS).find((x) => x.heading === COMMANDS).text;
+  assert.match(old, /on Homie Arcade, with/);
+  assert.doesNotMatch(old, /homie-studio media move/, '0.17.0 had no media move');
+  const plan = out(run(['upgrade'], dir));
+  assert.equal(plan.ok, true, JSON.stringify(plan));
+  assert.deepEqual(plan.kept.filter((k) => k.file === 'AGENTS.md').map((k) => k.section), [], 'no AGENTS.md section reads as the studio\'s own');
+  assert.ok(plan.changes.some((c) => c.kind === 'update-section' && c.section === COMMANDS), JSON.stringify(plan.changes.map((c) => [c.kind, c.section])));
+  // What it was before: with only the stand-in's fingerprints, the untouched Commands read as changed by the studio.
+  const bare = readHistory();
+  for (const v of Object.values(bare.versions)) delete v.named;
+  assert.deepEqual(upgradePlan(dir, { history: bare }).kept.filter((k) => k.file === 'AGENTS.md').map((k) => k.section), [COMMANDS], 'the bug this guards');
+  // Applied: the media move lines land, and the demo still plays on Homie Arcade.
+  const r = out(run(['upgrade', '--apply'], dir));
+  assert.equal(r.applied, true, JSON.stringify(r));
+  assert.equal(r.skipped.length, 0);
+  const want = sections(studioFiles({ ...who, homie: 'https://homie.rocks' })['AGENTS.md']);
+  const mine = sections(read(dir, 'AGENTS.md'));
+  for (const t of want) assert.equal(mine.find((x) => x.heading === t.heading)?.text.trimEnd(), t.text.trimEnd(), `${t.heading} is the template's`);
+  const now = mine.find((x) => x.heading === COMMANDS).text;
+  assert.match(now, /homie-studio media move/);
+  assert.match(now, /on Homie Arcade, with/);
+  assert.deepEqual(out(run(['upgrade'], dir)).kept.filter((k) => k.file === 'AGENTS.md'), [], 'nothing more to do');
+  // A word of its own in that section is still its own.
+  save(dir, 'AGENTS.md', ARCADE_AGENTS.replace('Nothing is copied into this studio.', 'Nothing is copied into the Arcade.'));
+  const own = out(run(['upgrade'], dir));
+  assert.deepEqual(own.kept.filter((k) => k.file === 'AGENTS.md').map((k) => k.section), [COMMANDS]);
+  assert.equal(own.changes.some((c) => c.section === COMMANDS), false);
+  // The fixture is exactly 0.17.0's, as Homie Arcade reads it.
+  const fp = templatePrint({ 'AGENTS.md': ARCADE_AGENTS }, who).sections['AGENTS.md'][COMMANDS];
+  assert.ok([readHistory().versions['0.17.0'].named['Homie Arcade'].sections['AGENTS.md'][COMMANDS]].flat().includes(fp));
 });
 
 test('a line diff keeps the lines both have and marks the rest', () => {
