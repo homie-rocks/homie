@@ -16,8 +16,12 @@ Collect all eight topics, in whatever order the conversation goes:
 
 1. **Game type and genre**: what kind of game, what a player does in the first ten seconds, how a round
    is won. Why it is fun with strangers who just pressed Play.
-2. **Style and art direction**: pixel, painterly, low-poly, neon, hand-drawn; mood; two or three games,
-   films or pictures it should feel like; the palette.
+2. **Style and art direction** (the Style phase): pixel, painterly, low-poly, neon, hand-drawn; mood; two or
+   three games, films or pictures it should feel like; the palette. Ask once whether they want to steer the
+   look closely (the style board) or have you pick, and the art budget (free only, a small budget on their own
+   fal account, or their number). Then the decisions: `npx --no-install homie-studio style init <id> --prompt
+   "<their words>"` (add `--hands-on` and `--budget <usd>` from their answers) fills every look decision with a
+   pick and a why, which the codex's Art direction tab draws; the `style` skill has the rest.
 3. **Devices**: phone, computer, TV with phones as pads. Every Homie game plays on phones and computers;
    say what changes on each (touch on the lower left, keys, the big screen).
 4. **Players and rooms**: how many in a room (up to 32), teams or free-for-all, round length, what bots do
@@ -121,7 +125,14 @@ address and the codex's `try:` line), and what was spent. In Claude Code the sta
 of it (offered in the setup step: `homie-studio statusline --install`). Codex CLI has no command status
 line (its `tui.status_line` takes only built-in items), so there the codex page is the progress view.
 
-## 6. Then build
+## 6. The look, before the first model
+
+Before anything is made for the game's look, its decisions exist (`style init`, above): the automatic path says
+one line ("Look: flat low-poly, autumn grove palette, golden hour, high three-quarter camera; open the codex to
+change anything"); the hands-on path shows the style board (`style_explore`, or `style board <id>`) and lets them
+pick, mix, steer and lock. Models then come from the `models` skill, free routes first.
+
+## 7. Then build
 
 Offer the choice in the `parallel` skill (one agent, or several at once), then build with the `game`
 skill, a milestone at a time.

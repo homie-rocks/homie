@@ -118,28 +118,30 @@ const PAID_HOSTS = [
 
 /**
  * A paid media call in this command line, or null:
- *   { provider: 'fal', unit: 'usd', script: 'art'|'video', kind: 'art'|'videos', slug, words, i, dir, dryRun: [argv] }
+ *   { provider: 'fal', unit: 'usd', script: 'art'|'video'|'models', kind: 'art'|'videos', slug, words, i, dir, dryRun: [argv] }
  *   { provider: 'ElevenLabs', unit: 'credits', script: 'music', kind: 'music', slug, ... }
  *   { provider, unit, raw: true }   a request straight at the provider: its cost cannot be read first
- * A skill's call without `--yes` only prices or asks, so it is free and not held.
+ * A skill's call without `--yes` only prices or asks, so it is free and not held. The models skill's `prop` and
+ * `mood` are one fal call each; every model of a game shares one cap, `art/<game>-models/budget.json`.
  */
 export function paidOf(command) {
   for (const seg of segments(command)) {
     const w = seg.words;
-    const i = w.findIndex((x) => /(^|\/)(art|video|music)\.mjs$/.test(x));
+    const i = w.findIndex((x) => /(^|\/)(art|video|music|models)\.mjs$/.test(x));
     if (i >= 0) {
-      const script = /art\.mjs$/.test(w[i]) ? 'art' : /video\.mjs$/.test(w[i]) ? 'video' : 'music';
-      const { flags, pos } = flagsOf(w.slice(i + 1), ['yes', 'dry-run', 'json', 'vocals', 'no-deploy']);
+      const script = /(^|\/)art\.mjs$/.test(w[i]) ? 'art' : /video\.mjs$/.test(w[i]) ? 'video' : /models\.mjs$/.test(w[i]) ? 'models' : 'music';
+      const { flags, pos } = flagsOf(w.slice(i + 1), ['yes', 'dry-run', 'json', 'vocals', 'no-deploy', 'mesh', 'concept-again']);
       const verb = pos[0];
-      const paid = script === 'music' ? ['render', 'stems'].includes(verb) : verb === 'gen';
+      const paid = script === 'music' ? ['render', 'stems'].includes(verb) : script === 'models' ? ['prop', 'mood'].includes(verb) : verb === 'gen';
       if (!paid || !flags.has('yes') || flags.has('dry-run')) continue;
       // The same call priced and not made: the skill's own --dry-run (free; it asks the provider's price list).
       const head = /(^|\/)node$/.test(w[0]) ? w.slice(0, i) : ['node'];
       const dryRun = [...head, w[i], ...w.slice(i + 1).filter((x) => x !== '--yes' && x !== '--json'), '--dry-run', '--json'];
       return {
         provider: script === 'music' ? 'ElevenLabs' : 'fal', unit: script === 'music' ? 'credits' : 'usd', script, verb,
-        kind: script === 'art' ? 'art' : script === 'video' ? 'videos' : 'music', slug: pos[1] ?? null, model: flags.get('model') ?? null,
-        dir: seg.dir, dryRun, text: seg.text,
+        kind: script === 'video' ? 'videos' : script === 'music' ? 'music' : 'art',
+        slug: script === 'models' ? (pos[1] ? `${pos[1]}-models` : null) : pos[1] ?? null, model: flags.get('model') ?? null,
+        ...(script === 'models' ? { tool: `models ${verb}` } : {}), dir: seg.dir, dryRun, text: seg.text,
       };
     }
     if (['curl', 'wget', 'http', 'xh'].includes(w[0].split('/').pop())) {
@@ -158,6 +160,59 @@ export function paidMcpOf(tool) {
   if (!provider) return null;
   if (/^(list|get|search|check|status|describe|read|find|voices?|models?|usage|balance|price|quote)/i.test(name)) return null;
   return { provider, unit: provider === 'fal' ? 'usd' : 'credits', raw: true, tool: name };
+}
+
+// git's own options before the subcommand that take a value, and the subcommands' (a value is never a path).
+const GIT_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env']);
+const STAGE_VALUE = {
+  add: new Set(['--chmod', '--pathspec-from-file']),
+  commit: new Set(['-m', '--message', '-F', '--file', '-C', '--reuse-message', '-c', '--reedit-message', '--author', '--date', '-t', '--template', '--fixup', '--squash', '--cleanup', '--pathspec-from-file', '--trailer']),
+};
+
+/**
+ * Each `git add` and `git commit` in a command line: { verb, dir, paths, all } where `dir` is the folder git runs in
+ * (a `cd` before it, or `git -C <dir>`; null: the session's), `paths` the paths it names, and `all` what a flag adds
+ * besides: 'all' (`add -A`), 'tracked' (`add -u`, `commit -a`) or null. What gets staged is read from git itself.
+ */
+export function gitStagesOf(command) {
+  const out = [];
+  for (const seg of segments(command)) {
+    const w = seg.words;
+    if (!/(^|\/)git$/.test(w[0])) continue;
+    let dir = seg.dir;
+    let i = 1;
+    while (i < w.length && w[i].startsWith('-')) {
+      if (w[i] === '-C' && w[i + 1]) { const d = w[i + 1]; dir = d.startsWith('/') || !dir ? d : `${dir}/${d}`; i += 2; }
+      else if (GIT_VALUE.has(w[i])) i += 2;
+      else i++;
+    }
+    const verb = w[i];
+    if (verb !== 'add' && verb !== 'commit') continue;
+    const values = STAGE_VALUE[verb];
+    const paths = [];
+    let all = null;
+    let rest = false;
+    for (let k = i + 1; k < w.length; k++) {
+      const x = w[k];
+      if (rest || x === '-' || !x.startsWith('-')) { paths.push(x); continue; }
+      if (x === '--') { rest = true; continue; }
+      if (x.startsWith('--')) {
+        const name = x.split('=')[0];
+        if (verb === 'add' && ['--all', '--no-ignore-removal'].includes(name)) all = 'all';
+        else if ((verb === 'add' && name === '--update') || (verb === 'commit' && name === '--all')) all = all ?? 'tracked';
+        if (values.has(name) && !x.includes('=')) k++;
+        continue;
+      }
+      // Short flags, perhaps bundled ("-am msg"): a flag that takes a value takes the next word when it ends the bundle.
+      const letters = x.slice(1);
+      if (verb === 'add' && letters.includes('A')) all = 'all';
+      else if ((verb === 'add' && letters.includes('u')) || (verb === 'commit' && /^[^mFCct]*a/.test(letters))) all = all ?? 'tracked';
+      const at = [...letters].findIndex((ch) => values.has(`-${ch}`));
+      if (at === letters.length - 1) k++;
+    }
+    out.push({ verb, dir, paths, all });
+  }
+  return out;
 }
 
 /** A path inside a folder? Both absolute; forward slashes. */

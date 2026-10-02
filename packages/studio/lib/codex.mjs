@@ -42,6 +42,7 @@ import { latestFeedFor, summarize } from './feed-summary.mjs';
 import { escapeHtml as esc, renderMarkdown } from './markdown.mjs';
 import { readTheme } from './site.mjs';
 import { GAME_ID, listGames, readStudio } from './studio.mjs';
+import { decisionRows, readDecisions } from './decisions.mjs';
 
 export const CODEX_FILE = 'CODEX.md';
 export const CODEX_DIR = join('.studio', 'codex');
@@ -314,6 +315,9 @@ function sectionHtml(section, emb, ctx) {
   }
   const questions = section.key === 'questions';
   let body = blocks(intro, emb, { dated: section.key === 'latest' });
+  // The Art direction tab is the style bible: the decisions (games/<id>/codex/decisions.json) drawn after the prose.
+  const decided = section.key === 'art' && ctx.decisions ? decisionsHtml(ctx.decisions, emb) : '';
+  if (decided) body += decided;
   if (questions) body = body.replace(/^<(ul|ol)>/, '<ol class="questions">').replace(/<\/(ul|ol)>$/, '</ol>');
   const empty = !body && !cards.length;
   return `<section class="tab" id="${esc(section.id)}" data-key="${esc(section.key ?? '')}">
@@ -322,6 +326,29 @@ function sectionHtml(section, emb, ctx) {
 ${body ? `<div class="prose">${body}</div>` : ''}${empty ? '<p class="empty">Not decided yet. Your AI asks about it in the plan, or tell it what you want here.</p>' : ''}
 ${cards.length ? `<div class="cards">${cards.map((c) => card(c.title, c.lines, emb, ctx)).join('\n')}</div>` : ''}
 </section>`;
+}
+
+/* ------------------------------------------------------------------ the art direction decisions */
+
+const STATE_WORD = { auto: 'Auto', steered: 'Steered', pinned: 'Pinned by use', locked: 'Locked' };
+
+/**
+ * The decisions as the style bible: the board's directions (the engine's swatches, a painted mood image only as a
+ * labelled target), the golden images, then one table per phase: decision, value (with the palette's colours), why, its
+ * state and who set it. Pictures come from codex/board/ inside the game's folder, embedded like any codex picture.
+ */
+function decisionsHtml(doc, emb) {
+  const phases = decisionRows(doc);
+  if (!phases.length) return '';
+  const swatch = (c) => `<span class="sw" style="background:${esc(c)}" title="${esc(c)}"></span>`;
+  const board = (doc.board?.directions ?? []).map((d) => {
+    const pic = d.swatch ? emb.image(d.swatch) : null;
+    const mood = d.mood?.path ? emb.image(d.mood.path) : null;
+    return `<figure class="dir${doc.board.chosen === d.id ? ' chosen' : ''}">${pic ? `<img src="${pic}" alt="Direction ${esc(d.id.toUpperCase())}, drawn by the game engine">` : ''}${mood ? `<img src="${mood}" alt="A painted mood image for direction ${esc(d.id.toUpperCase())} (a target)">` : ''}<figcaption><b>${esc(d.id.toUpperCase())}</b> ${esc(d.label)}${doc.board.chosen === d.id ? ' · chosen' : ''}${mood ? ' · the painting is a target, not what the game draws' : ''}</figcaption></figure>`;
+  }).join('');
+  const golden = (doc.golden ?? []).map((g) => { const pic = emb.image(g.path); return pic ? `<img src="${pic}" alt="Golden image">` : ''; }).join('');
+  const tables = phases.map((p) => `<h3 class="phase">${esc(p.label)}</h3><div class="scroll"><table class="decisions"><thead><tr><th>Decision</th><th>Value</th><th>Why</th><th>State</th></tr></thead><tbody>${p.rows.map((r) => `<tr class="${esc(r.state)}"><td>${esc(r.name)}</td><td>${r.colours ? `<span class="sws">${r.colours.map(swatch).join('')}</span> ` : ''}${esc(r.label)}${r.steer.length ? ` <em>(“${esc(r.steer.at(-1))}”)</em>` : ''}</td><td>${esc(r.why ?? '')}</td><td><span class="st ${esc(r.state)}">${esc(STATE_WORD[r.state] ?? r.state)}</span>${r.by === 'person' ? ' <small>the person</small>' : ''}${r.at ? ` <small>${esc(String(r.at).slice(0, 10))}</small>` : ''}</td></tr>`).join('')}</tbody></table></div>`).join('');
+  return `<div class="decided"><p class="eyebrow">The decisions</p><p class="sub">Every look decision with its why. Auto: picked from the plan; steered: nudged by the person; pinned: an asset is built on it; locked: frozen by the person. Your AI changes a locked one only after you say so, and shows what would need remaking first.</p>${board ? `<div class="board">${board}</div>` : ''}${golden ? `<p class="eyebrow">Golden images</p><div class="gallery golden">${golden}</div>` : ''}${tables}${doc.derived?.prompt?.text ? `<details class="prompt"><summary>The style prompt every generated picture starts from</summary><p>${esc(doc.derived.prompt.text)}</p></details>` : ''}</div>`;
 }
 
 /* ------------------------------------------------------------------ the build status tab */
@@ -432,6 +459,13 @@ code{font-family:var(--mono);font-size:.92em}pre{overflow-x:auto;background:var(
 .try{margin:16px 0;padding:14px 16px;border:1px solid var(--gold);border-radius:14px;background:color-mix(in srgb,var(--gold) 8%,transparent)}.try .eyebrow{color:var(--gold)}.try p{margin:0}
 .panel h3{margin-bottom:6px}.status .panel{margin-top:14px}
 footer{max-width:1080px;margin:0 auto;padding:18px 16px 40px;color:var(--dim);font-size:13px;border-top:1px solid var(--line)}
+.decided{margin-top:22px}.decided h3.phase{margin:22px 0 4px;font:600 13px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent2)}
+table.decisions td:first-child{white-space:nowrap;font-weight:600}table.decisions td:nth-child(3){color:var(--dim);font-size:14px}
+.sws{display:inline-flex;gap:3px;vertical-align:middle}.sw{display:inline-block;width:16px;height:16px;border-radius:4px;border:1px solid var(--line)}
+.st{display:inline-block;padding:1px 8px;border-radius:999px;font:600 12px/1.6 var(--mono);border:1px solid var(--line);color:var(--dim)}
+.st.locked{color:var(--gold);border-color:var(--gold)}.st.pinned{color:var(--accent2);border-color:color-mix(in srgb,var(--accent2) 60%,transparent)}.st.steered{color:var(--ink)}
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px;margin:12px 0}.board figure{margin:0}.board figure.chosen img:first-child{outline:3px solid var(--accent);outline-offset:-3px}.board img+img{margin-top:6px}
+details.prompt{margin:16px 0;color:var(--dim);font-size:14px}details.prompt summary{cursor:pointer;color:var(--accent2)}
 @media (max-width:560px){.card .art{width:72px;height:72px}ol.timeline li{grid-template-columns:1fr;gap:2px}}`;
 }
 
@@ -502,10 +536,17 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   let studio = {};
   try { studio = readStudio(root); } catch { studio = {}; }
   const emb = new Embedder(root, game.dir);
+  let decisions = null;
+  try { decisions = readDecisions(root, id); } catch { decisions = null; }
+  // A palette or fonts the person steered or locked, or an asset pinned, is the game's look: the codex wears it too.
+  const pal = decisions?.decisions?.['style.palette'];
+  const ui = decisions?.decisions?.['style.ui'];
+  if (pal && pal.state !== 'auto') meta.palette = { ...(meta.palette ?? {}), ...Object.fromEntries(['bg', 'ink', 'accent', 'accent2', 'danger', 'good', 'gold'].filter((k) => pal.value?.[k]).map((k) => [k, pal.value[k]])) };
+  if (ui && ui.state !== 'auto' && ui.value?.display) meta.fonts = { ...(meta.fonts ?? {}), display: ui.value.display, body: ui.value.body ?? meta.fonts?.body };
   const look = lookOf(root, game, meta, emb);
   const title = parsed.title ?? game.name ?? id;
   const eyebrow = typeof meta.eyebrow === 'string' && meta.eyebrow.trim() ? meta.eyebrow.trim() : `${studio.name ?? 'Studio'} · ${title}`;
-  const ctx = { eyebrow: String(eyebrow).slice(0, 80), pixel: meta.pixel === true, try: typeof meta.try === 'string' ? meta.try.slice(0, 300) : '', mode };
+  const ctx = { eyebrow: String(eyebrow).slice(0, 80), pixel: meta.pixel === true, try: typeof meta.try === 'string' ? meta.try.slice(0, 300) : '', mode, decisions };
   const s = summarize(feed === undefined ? latestFeedFor(root, id) : feed);
   const sections = parsed.sections.filter((x) => x.body.join('\n').trim() || x.key);
   const tabs = sections.map((x) => `<a href="#${esc(x.id)}">${esc(x.title)}</a>`);
@@ -519,6 +560,7 @@ export function renderCodex(root, id, { mode = 'file', feed, now = new Date() } 
   const start = s?.state === 'running' ? 'build-status' : (sections[0]?.id ?? 'build-status');
   const tagline = typeof meta.tagline === 'string' ? meta.tagline : '';
   const gaps = codexGaps(parsed);
+  if (decisions) gaps.missing = gaps.missing.filter((x) => x !== 'Art direction');
   const html = `<!doctype html>
 <html lang="en">
 <head>

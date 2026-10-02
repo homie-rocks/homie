@@ -46,7 +46,7 @@ Both start with `node <video.mjs> check` (ffmpeg, Chrome, the studio; fal only i
 ```sh
 npm run dev                                                    # background task; the site at http://127.0.0.1:8787
 node <video.mjs> capture <slug> --game <id> --url http://127.0.0.1:8787 --seconds 60
-node <video.mjs> card <slug> --name title --text "<GAME NAME>" --sub "<one line>"
+node <video.mjs> card <slug> --name title --text "<GAME NAME>" --sub "<one line>" --game <id>   # the game's palette and font
 node <video.mjs> card <slug> --name end --text "Play free" --sub "<site>/<id>/play" --small "Real gameplay. Empty seats are filled by bots."
 node <video.mjs> edl <slug> --length 30 --song <music slug> --title "<GAME NAME>"
 node <video.mjs> cut <slug>
@@ -70,7 +70,8 @@ node <video.mjs> sheet <slug> --in videos/<slug>/<slug>.mp4
   way), or the `music` skill renders one with ElevenLabs (credits: ask).
 - `edl` finds the song's bar lines, picks the busiest moments of the capture (motion, not guesses),
   and writes `work/edl.json`: a title card of one bar, shots of one bar each, the end card on what
-  is left. Every cut lands on a bar line. Read it and change it: order, which moments, where the
+  is left. Title and end cards made with `card … --game <id>` wear the game's palette and display font
+  (`games/<id>/style.json`, the `style` skill's decisions). Every cut lands on a bar line. Read it and change it: order, which moments, where the
   song starts (`--bed-from-bar`).
 - `cut` renders both deliveries: 16:9 (1920x1080) and 9:16 (1080x1920, the whole game frame over a
   blurred fill, never a crop that hides the action), 30 fps, the song and the game's sound mixed,

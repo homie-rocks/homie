@@ -17,6 +17,9 @@ npx homie-studio dev                                   # the whole site locally
 npx homie-studio check crown-thief --url http://127.0.0.1:8787
 npx homie-studio perf crown-thief --url http://127.0.0.1:8787   # how fast it runs: a computer and an emulated phone, host and replica
 npx homie-studio lab crown-thief                       # the Game Lab: how a move feels, New beside Today, frame by frame
+npx homie-studio style board crown-thief               # its look as decisions: three directions drawn by the engine (free)
+npx homie-studio assets find "pine tree"               # free CC0 models from Homie's starter library, phone-sized
+npx homie-studio assets check crown-thief              # every model against phone budgets, the validator and its licence
 npx homie-studio deploy --plan                         # what deploy will create, and what it costs; changes nothing
 npx homie-studio deploy                                # the studio's own Cloudflare
 npx homie-studio publish                               # the homie.rocks directory
@@ -490,6 +493,58 @@ replay check), REPORT.md (New against Today), sheet.png (the lab at each phase's
 `.studio/lab/<id>/latest.json`, the last check in a few fields (`.studio/lab/server.json` says where a running lab is).
 The local MCP's `game_lab` starts the lab and answers with a card. The Homie plugin's `lab` skill has the method:
 instrument and commit first (Today is the game as it is), then change how it feels, and keep what the person likes.
+
+## Art direction and models (`homie-studio style`, `homie-studio assets`)
+
+```sh
+npx homie-studio style init crown-thief --prompt "a cozy low-poly forest where foxes gather berries"
+npx homie-studio style crown-thief                       # every decision: · auto  ~ steered  ● pinned by use  ■ locked
+npx homie-studio style board crown-thief                 # three directions, drawn by the game engine: codex/board/*.jpg
+npx homie-studio style pick crown-thief b --mix style.camera=a
+npx homie-studio style steer crown-thief style.palette "warmer"
+npx homie-studio style lock crown-thief style.palette --words "keep that palette"
+npx homie-studio style blast crown-thief style.palette   # what a change would make stale, and what remaking costs
+npx homie-studio assets find "fox" --kind creature        # the starter library (HOMIE_LIBRARY: another copy)
+npx homie-studio assets add crown-thief kenney-cube-pets/animal-fox --height 0.7 --card "Characters/Fox"
+npx homie-studio assets add crown-thief --file ./lantern.glb --license own --height 0.6
+npx homie-studio assets check crown-thief                # budgets, the glTF-Validator, licences, staleness, big files
+npx homie-studio assets lineup crown-thief               # true scale, silhouettes, palette drift: .studio/art/<id>/
+npx homie-studio assets rights crown-thief               # games/<id>/assets/RIGHTS.md and the credits
+npx homie-studio assets redo crown-thief lantern         # made again from its kept raw file, free
+npx homie-studio assets remove crown-thief lantern       # the record and the copy the game ships
+```
+
+A game's look is a set of decisions (`games/<id>/codex/decisions.json`, private like the codex, drawn in its Art
+direction tab): render style, palette, shape, proportions, materials, light, camera, fonts and effects; the cast, its
+library family, scale and phone budgets; rigs and animation (later phases). Each starts as an automatic pick with a
+why. A person's nudge makes it steered, their lock freezes it, and the first asset built on an automatic one pins it.
+Every asset records the revision of each decision it was made under, so changing one lists exactly what went stale and
+what remaking it would cost; nothing is remade by itself. `games/<id>/style.json` (public) is the palette, fonts, light
+and camera the game, its landing and its title cards draw with.
+
+Every model, texture and sky a game ships has an entry in `games/<id>/assets/manifest.json`: its route (procedural,
+library, generated, imported), each step that made it, its licence and what a remix gets, its measurements. From it:
+`RIGHTS.md`, the credits on the game's landing, `assets check`, the licence check `publish` makes, and
+`/games/<id>/assets.json` on the site, from which `game remix` fetches every model its licence lets a remix carry
+(checked by SHA-256; a grey placeholder of the same size for the rest). Models are refused when they load anything
+from an address or are over the size caps; `assets add` makes them phone-sized (meshopt geometry, WebP pictures, the
+pivot at the bottom centre, scaled to metres) with @gltf-transform, meshoptimizer and sharp; raw files stay in
+`art/<slug>/raw/`, which git ignores.
+
+In a three.js game, `@homie-rocks/studio/assets` is the one loader:
+
+```ts
+import { createModels } from '@homie-rocks/studio/assets';
+const models = createModels();
+const fox = await models.instance('./models/fox.glb').catch(() => models.placeholder({ x: 0.6, y: 0.7, z: 0.9 }));
+```
+
+It checks every file before three.js parses it (no external URIs, no buffer over the cap, only extensions three.js
+reads), decodes meshopt, clones skinned models properly, and says in development when a model is over its budget
+(`stats()`, `window.__homieModels`). `game new <id> --from gem-rush-3d` is Gem Rush in 3D, dressed from the library.
+The local MCP's `style_explore`, `decision_set`, `assets_plan`, `assets_find`, `asset_add`, `asset_make`,
+`asset_check`, `asset_lineup` and `asset_rights` do the same with cards. Generated props (on the person's own fal
+account, under a budget, receipted) are the Homie plugin's `models` skill.
 
 ## Checks on a computer without a GPU
 

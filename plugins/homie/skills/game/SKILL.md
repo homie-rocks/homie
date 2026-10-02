@@ -17,8 +17,9 @@ is none, use the `studio-setup` skill first.
   changes it goes into it in the same change, with a dated line under Latest, and the page is redrawn
   (`npx --no-install homie-studio codex <id>`). A big change to a game without one: plan it first.
 - **New game:** call the Homie MCP tool `game_make` (id, name) for the exact command
-  and rules, then run `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`.
-  The id becomes the game's address (`/<id>/`); lowercase, digits, hyphens.
+  and rules, then run `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`
+  (`--from gem-rush-3d` for a 3D game: three.js with free library models). The id becomes the game's
+  address (`/<id>/`); lowercase, digits, hyphens.
 - **Make an existing single-player web game multiplayer:** use the `port` skill (it
   grades the port, brings the game in, and proves it with the owner tests).
 - **Remix a directory game:** `directory_search`, then `game_remix` returns
@@ -179,8 +180,18 @@ Then make it good, not just working:
 
 - **Sound**: the `sound` skill makes the game's effects and a synthesized theme for free and wires
   them in (`sound.play('coin')` where it happens, in every browser). A silent game is not finished.
-- **Look**: the `art` skill makes the cover from a real frame and, with a budget, painted backdrops
-  and textures.
+- **Look**: first the decisions (the `style` skill: render style, palette, light, camera, fonts, budgets; automatic
+  from the person's words, drawn in the codex), then the models (the `models` skill: the engine and the free CC0
+  starter library first, the person's own files with their licence, generated props only on their own fal account
+  under a budget), then the `art` skill's cover from a real frame and, with a budget, painted backdrops and
+  textures. "Make the look better" goes through `style` and `models` before any painting.
+- **Models in code**: a three.js game loads every model through `@homie-rocks/studio/assets` (`createModels()`,
+  `instance(url)`, `placeholder(size)`): it refuses unsafe or oversized files and decodes the phone-sized format
+  `assets add` writes. Read colours and fonts from the game's `style.json` instead of hard-coding them, so the
+  locked palette reaches the world and the HUD. `games/<id>/assets/manifest.json` records every model's origin and
+  licence; keep it true (`assets add` and `assets remove`, never a hand-copied .glb), and `assets check <id>`
+  before a deploy. The `gem-rush-3d` starter (`game new <id> --from gem-rush-3d`) is Gem Rush in 3D with library
+  models: start a 3D game from it.
 - **Playtest**: the `playtest` skill plays it on a computer and a phone held both ways, measures the
   first ten seconds, the look, the UI, the real sound and a round, runs the owner tests, and hands a
   blind review to a fresh reviewer. Fix what it ranks first; run it again.

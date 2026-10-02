@@ -1,0 +1,2031 @@
+{
+  "v": 1,
+  "assets": [
+    {
+      "id": "animal-cat",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Cat",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-cat",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-cat.glb",
+        "sha256": "bcdf361411535b8e37b09aed9acef6c1c397b96d3d6269d81debfe5c97cc0772",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-cat.glb",
+          "bytes": 48124,
+          "sha256": "bcdf361411535b8e37b09aed9acef6c1c397b96d3d6269d81debfe5c97cc0772"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 684,
+        "materials": 1,
+        "drawCalls": 7,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.71,
+        "box": {
+          "size": [
+            1.25,
+            1.71,
+            1.806
+          ]
+        },
+        "glbKB": 47,
+        "colours": [
+          "#73758b"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-cat",
+            "sha256": "bcdf361411535b8e37b09aed9acef6c1c397b96d3d6269d81debfe5c97cc0772"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.4678)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.049Z"
+    },
+    {
+      "id": "animal-caterpillar",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Caterpillar",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-caterpillar",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-caterpillar.glb",
+        "sha256": "b1375bb89a2b97c5c00379081bfaa25eb88cd2c01f4d46e2ea41027749cf87d4",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-caterpillar.glb",
+          "bytes": 36800,
+          "sha256": "b1375bb89a2b97c5c00379081bfaa25eb88cd2c01f4d46e2ea41027749cf87d4"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 578,
+        "materials": 1,
+        "drawCalls": 5,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.747,
+        "box": {
+          "size": [
+            1.444,
+            1.747,
+            1.332
+          ]
+        },
+        "glbKB": 36,
+        "colours": [
+          "#3da679",
+          "#ffc95b"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-caterpillar",
+            "sha256": "b1375bb89a2b97c5c00379081bfaa25eb88cd2c01f4d46e2ea41027749cf87d4"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.4579)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.051Z"
+    },
+    {
+      "id": "animal-chick",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Chick",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-chick",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-chick.glb",
+        "sha256": "e9eb45348542ce5b83e215e3ee611c9db96ebb40ef323390f7ffd68b6a27b515",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-chick.glb",
+          "bytes": 37332,
+          "sha256": "e9eb45348542ce5b83e215e3ee611c9db96ebb40ef323390f7ffd68b6a27b515"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 490,
+        "materials": 1,
+        "drawCalls": 5,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.594,
+        "box": {
+          "size": [
+            2.196,
+            1.594,
+            1.35
+          ]
+        },
+        "glbKB": 36,
+        "colours": [
+          "#fec457",
+          "#f9a140",
+          "#e58746"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-chick",
+            "sha256": "e9eb45348542ce5b83e215e3ee611c9db96ebb40ef323390f7ffd68b6a27b515"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.5019)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.047Z"
+    },
+    {
+      "id": "animal-crab",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Crab",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-crab",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-crab.glb",
+        "sha256": "29a1e9cc50efd78f7b0f4ecc1e9b2b50f0d26b5fb69242519c2f1356b72b8d9a",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-crab.glb",
+          "bytes": 42288,
+          "sha256": "29a1e9cc50efd78f7b0f4ecc1e9b2b50f0d26b5fb69242519c2f1356b72b8d9a"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 676,
+        "materials": 1,
+        "drawCalls": 6,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.431,
+        "box": {
+          "size": [
+            2.336,
+            1.431,
+            1.347
+          ]
+        },
+        "glbKB": 41,
+        "colours": [
+          "#f16643",
+          "#db5a4a",
+          "#af413d"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-crab",
+            "sha256": "29a1e9cc50efd78f7b0f4ecc1e9b2b50f0d26b5fb69242519c2f1356b72b8d9a"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.559)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.048Z"
+    },
+    {
+      "id": "animal-elephant",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Elephant",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-elephant",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-elephant.glb",
+        "sha256": "76468cb85526119cb4753742a42819f2b62298d80a2cf036a811b954edb74aab",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-elephant.glb",
+          "bytes": 43604,
+          "sha256": "76468cb85526119cb4753742a42819f2b62298d80a2cf036a811b954edb74aab"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 676,
+        "materials": 1,
+        "drawCalls": 6,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.431,
+        "box": {
+          "size": [
+            1.878,
+            1.431,
+            1.675
+          ]
+        },
+        "glbKB": 43,
+        "colours": [
+          "#9da4c5",
+          "#b7bfe4",
+          "#8389a4",
+          "#e4e5ed"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-elephant",
+            "sha256": "76468cb85526119cb4753742a42819f2b62298d80a2cf036a811b954edb74aab"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.559)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.049Z"
+    },
+    {
+      "id": "animal-fox",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Fox",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-fox",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-fox.glb",
+        "sha256": "0f437b40f2a68e364c62d91e4fbb2eeb07b2e956ce35b8baf289d365aebb6154",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-fox.glb",
+          "bytes": 43884,
+          "sha256": "0f437b40f2a68e364c62d91e4fbb2eeb07b2e956ce35b8baf289d365aebb6154"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 568,
+        "materials": 1,
+        "drawCalls": 6,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.686,
+        "box": {
+          "size": [
+            1.25,
+            1.686,
+            2.308
+          ]
+        },
+        "glbKB": 43,
+        "colours": [
+          "#e68c47",
+          "#cecee0",
+          "#a75e40",
+          "#e8ba96"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-fox",
+            "sha256": "0f437b40f2a68e364c62d91e4fbb2eeb07b2e956ce35b8baf289d365aebb6154"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.4745)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.046Z"
+    },
+    {
+      "id": "animal-panda",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Panda",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-panda",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-panda.glb",
+        "sha256": "4d0affaa956a949aa73fe3ce9b0f5f1857717dbfb5c11b4a5c3d56391ba43e81",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-panda.glb",
+          "bytes": 38612,
+          "sha256": "4d0affaa956a949aa73fe3ce9b0f5f1857717dbfb5c11b4a5c3d56391ba43e81"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 734,
+        "materials": 1,
+        "drawCalls": 5,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.501,
+        "box": {
+          "size": [
+            1.343,
+            1.501,
+            1.44
+          ]
+        },
+        "glbKB": 38,
+        "colours": [
+          "#414350",
+          "#dbdde8",
+          "#4e515f",
+          "#f0f2f6",
+          "#c9c8dd"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-panda",
+            "sha256": "4d0affaa956a949aa73fe3ce9b0f5f1857717dbfb5c11b4a5c3d56391ba43e81"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.533)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.050Z"
+    },
+    {
+      "id": "animal-pig",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Pig",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-cube-pets",
+        "packLabel": "Kenney Cube Pets",
+        "packUrl": "https://kenney.nl/assets/cube-pets",
+        "item": "kenney-cube-pets/animal-pig",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/cube-pets",
+        "source": "Models/GLB format/animal-pig.glb",
+        "sha256": "d4d170c42c8b17df5e33bfcf29d7c6dca41b8f9bb476603d2acd9a2c31463d18",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/animal-pig.glb",
+          "bytes": 40844,
+          "sha256": "d4d170c42c8b17df5e33bfcf29d7c6dca41b8f9bb476603d2acd9a2c31463d18"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-cube-pets); the pack's own licence text: licenses/kenney-cube-pets.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.8,
+        "repaint": null
+      },
+      "measured": {
+        "tris": 424,
+        "materials": 1,
+        "drawCalls": 6,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 8,
+        "clipNames": [
+          "static",
+          "idle",
+          "walk",
+          "run",
+          "eat",
+          "dance",
+          "gesture-positive",
+          "gesture-negative"
+        ],
+        "heightM": 1.584,
+        "box": {
+          "size": [
+            1.25,
+            1.584,
+            1.46
+          ]
+        },
+        "glbKB": 40,
+        "colours": [
+          "#e085a3",
+          "#e894c0",
+          "#e68e64"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-cube-pets/animal-pig",
+            "sha256": "d4d170c42c8b17df5e33bfcf29d7c6dca41b8f9bb476603d2acd9a2c31463d18"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.8 m tall (x 0.5051)",
+              "its own colours"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "style.proportions": 1,
+          "cast.scale": 1,
+          "rig.skeleton": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.052Z"
+    },
+    {
+      "id": "bush",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Bush",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/plant-bush-large",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/plant_bushLarge.glb",
+        "sha256": "c858e3ad619af48d52035a33d7ec6f21443de01a7f377e6dd3ac8a835ccb0c02",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/bush.glb",
+          "bytes": 3224,
+          "sha256": "c858e3ad619af48d52035a33d7ec6f21443de01a7f377e6dd3ac8a835ccb0c02"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.9,
+        "repaint": "leaves"
+      },
+      "measured": {
+        "tris": 60,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 0,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.243,
+        "box": {
+          "size": [
+            0.374,
+            0.243,
+            0.336
+          ]
+        },
+        "glbKB": 3,
+        "colours": [
+          "#2cd8b8"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/plant-bush-large",
+            "sha256": "c858e3ad619af48d52035a33d7ec6f21443de01a7f377e6dd3ac8a835ccb0c02"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.9 m tall (x 3.7037)",
+              "palette swap to style.json: leaves"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.055Z"
+    },
+    {
+      "id": "fence",
+      "kind": "kit",
+      "tier": "kit",
+      "card": "Places/Fence",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/fence-simple",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/fence_simple.glb",
+        "sha256": "d3caaf53557452153faaea874c1040b24849800bdc2633c8c611685a4061852d",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/fence.glb",
+          "bytes": 3260,
+          "sha256": "d3caaf53557452153faaea874c1040b24849800bdc2633c8c611685a4061852d"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.7,
+        "repaint": "wood"
+      },
+      "measured": {
+        "tris": 64,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.345,
+        "box": {
+          "size": [
+            1,
+            0.345,
+            0.07
+          ]
+        },
+        "glbKB": 3,
+        "colours": [
+          "#fe8e62",
+          "#c46d4b"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/fence-simple",
+            "sha256": "d3caaf53557452153faaea874c1040b24849800bdc2633c8c611685a4061852d"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.7 m tall (x 2.029)",
+              "palette swap to style.json: wood"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.materials": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.060Z"
+    },
+    {
+      "id": "flower-purple",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Purple flower",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/flower-purple-a",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/flower_purpleA.glb",
+        "sha256": "fa89f036e32f17a39b1b1be31e6d8524159619addcc4221a8034acc7e62f8098",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/flower-purple.glb",
+          "bytes": 3872,
+          "sha256": "fa89f036e32f17a39b1b1be31e6d8524159619addcc4221a8034acc7e62f8098"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.4,
+        "repaint": "petals and leaves"
+      },
+      "measured": {
+        "tris": 76,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.242,
+        "box": {
+          "size": [
+            0.159,
+            0.242,
+            0.181
+          ]
+        },
+        "glbKB": 4,
+        "colours": [
+          "#9f89fe",
+          "#2cd8b8"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/flower-purple-a",
+            "sha256": "fa89f036e32f17a39b1b1be31e6d8524159619addcc4221a8034acc7e62f8098"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.4 m tall (x 1.6529)",
+              "palette swap to style.json: petals and leaves"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.058Z"
+    },
+    {
+      "id": "flower-red",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Red flower",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/flower-red-a",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/flower_redA.glb",
+        "sha256": "4b732d263b248c58999964895e0ea73494cbb342ffae2cfecdcdbf3fb9f4eae4",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/flower-red.glb",
+          "bytes": 3852,
+          "sha256": "4b732d263b248c58999964895e0ea73494cbb342ffae2cfecdcdbf3fb9f4eae4"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.4,
+        "repaint": "petals and leaves"
+      },
+      "measured": {
+        "tris": 76,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.292,
+        "box": {
+          "size": [
+            0.159,
+            0.292,
+            0.181
+          ]
+        },
+        "glbKB": 4,
+        "colours": [
+          "#e04a50",
+          "#2cd8b8"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/flower-red-a",
+            "sha256": "4b732d263b248c58999964895e0ea73494cbb342ffae2cfecdcdbf3fb9f4eae4"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.4 m tall (x 1.3699)",
+              "palette swap to style.json: petals and leaves"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.057Z"
+    },
+    {
+      "id": "flower-yellow",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Yellow flower",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/flower-yellow-a",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/flower_yellowA.glb",
+        "sha256": "f84292bd4594f477e263ade709072d60974c83a1a127fa6dcbc2d562c66bbe50",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/flower-yellow.glb",
+          "bytes": 3860,
+          "sha256": "f84292bd4594f477e263ade709072d60974c83a1a127fa6dcbc2d562c66bbe50"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.4,
+        "repaint": "petals and leaves"
+      },
+      "measured": {
+        "tris": 76,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.192,
+        "box": {
+          "size": [
+            0.159,
+            0.192,
+            0.181
+          ]
+        },
+        "glbKB": 4,
+        "colours": [
+          "#feb147",
+          "#2cd8b8"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/flower-yellow-a",
+            "sha256": "f84292bd4594f477e263ade709072d60974c83a1a127fa6dcbc2d562c66bbe50"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.4 m tall (x 2.0833)",
+              "palette swap to style.json: petals and leaves"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.058Z"
+    },
+    {
+      "id": "gem",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Items/Gem",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/stone-tall-b",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/stone_tallB.glb",
+        "sha256": "c2bec39ed35137c4a46eef410647e17a414613176f4e1ba06eb630d069052142",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/gem.glb",
+          "bytes": 5000,
+          "sha256": "c2bec39ed35137c4a46eef410647e17a414613176f4e1ba06eb630d069052142"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.42,
+        "repaint": "pale to gold"
+      },
+      "measured": {
+        "tris": 172,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.884,
+        "box": {
+          "size": [
+            0.765,
+            0.884,
+            0.77
+          ]
+        },
+        "glbKB": 5,
+        "colours": [
+          "#b8e2e8",
+          "#fefefe"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/stone-tall-b",
+            "sha256": "c2bec39ed35137c4a46eef410647e17a414613176f4e1ba06eb630d069052142"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.42 m tall (x 0.4751)",
+              "palette swap to style.json: pale to gold"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.052Z"
+    },
+    {
+      "id": "grass",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Grass",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/grass-large",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/grass_large.glb",
+        "sha256": "94778ac7dfbfc1d61c754c76822116d92f1db86d4743338d1282068b28d2af31",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/grass.glb",
+          "bytes": 5916,
+          "sha256": "94778ac7dfbfc1d61c754c76822116d92f1db86d4743338d1282068b28d2af31"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.35,
+        "repaint": "blades"
+      },
+      "measured": {
+        "tris": 224,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 0,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.254,
+        "box": {
+          "size": [
+            0.409,
+            0.254,
+            0.408
+          ]
+        },
+        "glbKB": 6,
+        "colours": [
+          "#2cd8b8"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/grass-large",
+            "sha256": "94778ac7dfbfc1d61c754c76822116d92f1db86d4743338d1282068b28d2af31"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.35 m tall (x 1.378)",
+              "palette swap to style.json: blades"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.060Z"
+    },
+    {
+      "id": "mushrooms",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Mushrooms",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/mushroom-red-group",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/mushroom_redGroup.glb",
+        "sha256": "b7e8cccce9e541c54f38b6cbb7dbc0eb6f90c4b931fabbfab836bc154381f411",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/mushrooms.glb",
+          "bytes": 4920,
+          "sha256": "b7e8cccce9e541c54f38b6cbb7dbc0eb6f90c4b931fabbfab836bc154381f411"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.45,
+        "repaint": "caps and stems"
+      },
+      "measured": {
+        "tris": 144,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.25,
+        "box": {
+          "size": [
+            0.27,
+            0.25,
+            0.254
+          ]
+        },
+        "glbKB": 5,
+        "colours": [
+          "#fefefe",
+          "#e04a50"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/mushroom-red-group",
+            "sha256": "b7e8cccce9e541c54f38b6cbb7dbc0eb6f90c4b931fabbfab836bc154381f411"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.45 m tall (x 1.8)",
+              "palette swap to style.json: caps and stems"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.059Z"
+    },
+    {
+      "id": "rock",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Rock",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/rock-large-d",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/rock_largeD.glb",
+        "sha256": "57b8fbf15a551f1bf9653b08cd60fc3383f39be38bb1141647a56cf9f28e1b45",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/rock.glb",
+          "bytes": 3876,
+          "sha256": "57b8fbf15a551f1bf9653b08cd60fc3383f39be38bb1141647a56cf9f28e1b45"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.75,
+        "repaint": "earth, grass and stone"
+      },
+      "measured": {
+        "tris": 80,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 16,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.568,
+        "box": {
+          "size": [
+            1.069,
+            0.568,
+            1.03
+          ]
+        },
+        "glbKB": 4,
+        "colours": [
+          "#e28357",
+          "#fefefe",
+          "#2cd8b8"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/rock-large-d",
+            "sha256": "57b8fbf15a551f1bf9653b08cd60fc3383f39be38bb1141647a56cf9f28e1b45"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.75 m tall (x 1.3204)",
+              "palette swap to style.json: earth, grass and stone"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.055Z"
+    },
+    {
+      "id": "stone",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Standing stone",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/stone-tall-a",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/stone_tallA.glb",
+        "sha256": "f95e216f991150c6f31d0f5823b82da9232a641a84a57c57fd33ad079ed9fe82",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/stone.glb",
+          "bytes": 4740,
+          "sha256": "f95e216f991150c6f31d0f5823b82da9232a641a84a57c57fd33ad079ed9fe82"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 1,
+        "repaint": "stone"
+      },
+      "measured": {
+        "tris": 136,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.996,
+        "box": {
+          "size": [
+            0.983,
+            0.996,
+            0.683
+          ]
+        },
+        "glbKB": 5,
+        "colours": [
+          "#b8e2e8",
+          "#fefefe"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/stone-tall-a",
+            "sha256": "f95e216f991150c6f31d0f5823b82da9232a641a84a57c57fd33ad079ed9fe82"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 1 m tall (x 1.004)",
+              "palette swap to style.json: stone"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.056Z"
+    },
+    {
+      "id": "tree-oak",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Oak tree",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/tree-oak",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/tree_oak.glb",
+        "sha256": "515bad9cf85cdba961ccd078e9d7496d611d5c35b8fb7ab02b866940ca3b1610",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/tree-oak.glb",
+          "bytes": 5532,
+          "sha256": "515bad9cf85cdba961ccd078e9d7496d611d5c35b8fb7ab02b866940ca3b1610"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 3.6,
+        "repaint": "leaves and bark"
+      },
+      "measured": {
+        "tris": 196,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 1.226,
+        "box": {
+          "size": [
+            0.641,
+            1.226,
+            0.74
+          ]
+        },
+        "glbKB": 5,
+        "colours": [
+          "#29c9ab",
+          "#e28357"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/tree-oak",
+            "sha256": "515bad9cf85cdba961ccd078e9d7496d611d5c35b8fb7ab02b866940ca3b1610"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 3.6 m tall (x 2.9364)",
+              "palette swap to style.json: leaves and bark"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.053Z"
+    },
+    {
+      "id": "tree-pine",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Pine",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/tree-pine-round-a",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/tree_pineRoundA.glb",
+        "sha256": "f66be386d55e63f1d65186ac3f891256143885ccd0b4eb6a4a825520cffd53b4",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/tree-pine.glb",
+          "bytes": 5336,
+          "sha256": "f66be386d55e63f1d65186ac3f891256143885ccd0b4eb6a4a825520cffd53b4"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 4,
+        "repaint": "needles and bark"
+      },
+      "measured": {
+        "tris": 204,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 1.366,
+        "box": {
+          "size": [
+            0.617,
+            1.366,
+            0.713
+          ]
+        },
+        "glbKB": 5,
+        "colours": [
+          "#2ba6aa",
+          "#cc765e"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/tree-pine-round-a",
+            "sha256": "f66be386d55e63f1d65186ac3f891256143885ccd0b4eb6a4a825520cffd53b4"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 4 m tall (x 2.9283)",
+              "palette swap to style.json: needles and bark"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.054Z"
+    },
+    {
+      "id": "tree-round",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Round tree",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/tree-default",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/tree_default.glb",
+        "sha256": "5a21cac5c28d5ca86b2462b286b20d7ca0e02ae4d305f3ed7339f0d3995e1004",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/tree-round.glb",
+          "bytes": 4368,
+          "sha256": "5a21cac5c28d5ca86b2462b286b20d7ca0e02ae4d305f3ed7339f0d3995e1004"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 3.2,
+        "repaint": "leaves and bark"
+      },
+      "measured": {
+        "tris": 114,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 1.708,
+        "box": {
+          "size": [
+            0.755,
+            1.708,
+            0.654
+          ]
+        },
+        "glbKB": 4,
+        "colours": [
+          "#29c9ab",
+          "#e28357"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/tree-default",
+            "sha256": "5a21cac5c28d5ca86b2462b286b20d7ca0e02ae4d305f3ed7339f0d3995e1004"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 3.2 m tall (x 1.8735)",
+              "palette swap to style.json: leaves and bark"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-02T22:02:52.054Z"
+    }
+  ]
+}

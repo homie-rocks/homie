@@ -14,6 +14,9 @@ const PRICES = {
   'fal-ai/nano-banana-pro': { unit_price: 0.15, unit: 'images' },
   'bytedance/seedance-2.5/reference-to-video': { unit_price: 0.0214, unit: '1000 tokens' },
   'bytedance/seedance-2.5/image-to-video': { unit_price: 0.0214, unit: '1000 tokens' },
+  'fal-ai/bytedance/seedream/v5/lite/text-to-image': { unit_price: 0.035, unit: 'images' },
+  'fal-ai/bytedance/seedream/v5/lite/edit': { unit_price: 0.035, unit: 'images' },
+  'tripo3d/p1/image-to-3d': { unit_price: 0.01, unit: 'credits' },
 };
 
 function media(kind, audioFile = null) {
@@ -27,6 +30,12 @@ function media(kind, audioFile = null) {
   return b;
 }
 
+/** A small textured-looking model for image-to-3D answers: a box, as the models skill's tests need. */
+async function meshBytes() {
+  const { placeholderGlb } = await import('../../../../packages/studio/lib/optimise.mjs');
+  return Buffer.from(await placeholderGlb([1.2, 2.4, 1.2], { name: 'tripo-mesh' }));
+}
+
 export async function startFakeFal({ key = 'test-key' } = {}) {
   const stats = { submits: 0, uploads: 0, lastInput: null };
   const uploads = new Map();
@@ -35,7 +44,7 @@ export async function startFakeFal({ key = 'test-key' } = {}) {
   const server = createServer((req, res) => {
     const chunks = [];
     req.on('data', (d) => chunks.push(d));
-    req.on('end', () => {
+    req.on('end', async () => {
       const u = new URL(req.url, 'http://x');
       const body = Buffer.concat(chunks);
       const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
@@ -58,6 +67,7 @@ export async function startFakeFal({ key = 'test-key' } = {}) {
         const j = jobs.get(id);
         if (!j) return json(404, {});
         if (what === 'status') { j.polls++; return json(200, { status: j.polls > 1 ? 'COMPLETED' : 'IN_PROGRESS' }); }
+        if (j.kind === 'mesh') return json(200, { model_mesh: { url: `${base}/media/${id}`, content_type: 'model/gltf-binary', file_name: 'model.glb' }, model_urls: { glb: { url: `${base}/media/${id}` } }, task_id: 't-1' });
         return json(200, j.kind === 'image' ? { images: [{ url: `${base}/media/${id}` }], seed: 7 } : { video: { url: `${base}/media/${id}` }, seed: 9 });
       }
       if (req.method === 'POST') {
@@ -67,14 +77,14 @@ export async function startFakeFal({ key = 'test-key' } = {}) {
         const input = JSON.parse(body.toString('utf8'));
         stats.lastInput = input;
         const id = `req-${stats.submits}`;
-        const kind = /video/.test(model) ? 'video' : 'image';
+        const kind = /video/.test(model) ? 'video' : /3d/.test(model) ? 'mesh' : 'image';
         let audio = null;
         if (kind === 'video' && Array.isArray(input.audio_urls) && input.audio_urls[0]) {
           // The generated clip "sings" the reference: its own sound is the reference, at 0 ms.
           const id2 = String(input.audio_urls[0]).split('/files/')[1];
           if (uploads.has(id2)) { audio = join(tmpdir(), `fake-fal-ref-${process.pid}.wav`); writeFileSync(audio, uploads.get(id2)); }
         }
-        jobs.set(id, { kind, polls: 0, bytes: media(kind, audio) });
+        jobs.set(id, { kind, polls: 0, bytes: kind === 'mesh' ? await meshBytes() : media(kind, audio) });
         return json(200, { request_id: id, status_url: `${base}/requests/${id}/status`, response_url: `${base}/requests/${id}` });
       }
       json(404, {});

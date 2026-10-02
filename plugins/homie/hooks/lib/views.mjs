@@ -7,6 +7,7 @@
  * Drawn for the terminal and the Claude desktop app's Code tab alike: pictures are a `Raster` (or an `Image`) in the
  * terminal and an `Svg` on the desktop; everything else is Box, Text, Button, Link, Code, Select and Input.
  */
+import { BY, LEGEND, MARK, budgetRows, usd } from './art.mjs';
 import { ago, bar, markOf } from './feed.mjs';
 
 export const ACCENT = '#ffcf5a';
@@ -75,7 +76,7 @@ export function band(t, s, columns) {
 
 /* ------------------------------------------------------------------ the pane's frame */
 
-export const TABS = [['build', 'Build', '1'], ['rooms', 'Rooms', '2'], ['games', 'Games', '3'], ['stats', 'Stats', '4'], ['codex', 'Codex', '5'], ['lab', 'Lab', '6'], ['parts', 'Parts', '7']];
+export const TABS = [['build', 'Build', '1'], ['rooms', 'Rooms', '2'], ['games', 'Games', '3'], ['stats', 'Stats', '4'], ['codex', 'Codex', '5'], ['lab', 'Lab', '6'], ['parts', 'Parts', '7'], ['art', 'Art', '8']];
 
 export function paneFrame(t, { s, tab, onTab, body, columns }) {
   const site = s.live ? ['live', s.live] : s.dev ? ['here', s.dev] : null;
@@ -329,6 +330,118 @@ export function labTab(t, { lab, games, columns, now }) {
     c.report ? span(t, fit(c.report, columns), DIM) : null,
     lab.url ? link(t, `${lab.url}/${c.game}/`, `Open ${name(c.game)} in the lab ↗`) : null,
   ], { marginBottom: 1 }))]);
+}
+
+/* ------------------------------------------------------------------ Art */
+
+const STATE_STYLE = { auto: DIM, steered: { color: 'cyan' }, pinned: { color: 'green' }, locked: { color: ACCENT, bold: true } };
+
+/** The phase strip as spans: a settled phase ✓ green, one under way with its count, one not started dim. */
+function phaseRow(t, phases) {
+  const kids = [];
+  phases.forEach((p, i) => {
+    if (i) kids.push(span(t, '→', DIM));
+    const done = p.total > 0 && p.settled === p.total;
+    kids.push(span(t, done ? `${p.label} ✓` : p.settled ? `${p.label} ${p.settled}/${p.total}` : p.label, done ? { color: 'green' } : p.settled ? { color: 'cyan' } : DIM));
+  });
+  return t.Box({ flexDirection: 'row', columnGap: 1, flexWrap: 'wrap', children: kids });
+}
+
+/** One decision: its state mark, name, value (a palette's colours as swatches), who set it, and Lock or Unlock. */
+function decisionRow(t, game, d, columns, on) {
+  const nameW = 16;
+  return row(t, [
+    span(t, MARK[d.state], STATE_STYLE[d.state]),
+    span(t, fit(d.name, nameW).padEnd(nameW), d.state === 'locked' ? { bold: true } : {}),
+    span(t, fit(d.label, Math.max(12, columns - nameW - 36)), d.state === 'auto' ? DIM : {}),
+    d.colours ? line(t, d.colours.map((c) => span(t, '██', { color: c }))) : null,
+    d.state !== 'auto' && d.by ? span(t, BY[d.by], DIM) : null,
+    d.state === 'locked'
+      ? t.Button({ key: `art-unlock-${game}-${d.id}`, label: 'Unlock', plain: true, onPress: () => on.unlock(game, d) })
+      : t.Button({ key: `art-lock-${game}-${d.id}`, label: 'Lock', plain: true, dimColor: true, onPress: () => on.lock(game, d) }),
+  ]);
+}
+
+/** The cast: route, licence, state and cost per asset; STALE when made under an older decision. */
+function castRows(t, a) {
+  if (!a.cast.length) return [span(t, 'No assets yet: Claude finds them in the free starter library, imports yours with their licence, or makes one within the budget.', DIM)];
+  const stale = new Set(a.stale);
+  const idW = Math.min(18, Math.max(6, ...a.cast.map((c) => c.id.length)));
+  return a.cast.slice(0, 24).map((c) => row(t, [
+    span(t, fit(c.id, idW).padEnd(idW)),
+    span(t, `${c.kind} · ${c.route}`, DIM),
+    span(t, c.license ?? 'no licence', c.license ? DIM : { color: 'red', bold: true }),
+    span(t, c.state, c.state === 'approved' ? { color: 'green' } : DIM),
+    span(t, c.usd ? usd(c.usd) : 'free', c.usd ? {} : DIM),
+    stale.has(c.id) ? span(t, 'STALE', { color: 'yellow', bold: true }) : null,
+  ], { paddingLeft: 2 })).concat(a.cast.length > 24 ? [span(t, `  … ${a.cast.length - 24} more (/assets ${a.game})`, DIM)] : []);
+}
+
+/** The scene's budgets as bars (draw calls, triangles, picture memory, first-play download), red when over. */
+function budgetBars(t, check, columns, now) {
+  const width = Math.max(8, Math.min(20, Math.floor(columns / 6)));
+  const n = (v) => (v === null ? '?' : Number.isInteger(v) ? v.toLocaleString('en-US') : String(+v.toFixed(1)));
+  return [
+    line(t, [span(t, 'Scene budgets', { bold: true }), span(t, `  assets check ${check.at ? ago(check.at, now) : ''}`, DIM), check.ok ? span(t, '  ✓ within', { color: 'green' }) : span(t, '  ✗ over', { color: 'red' })]),
+    ...budgetRows(check).map((b) => {
+      const bars = bar(b.percent, width);
+      return row(t, [
+        span(t, b.label.padEnd(15), DIM),
+        b.value === null ? span(t, '·'.repeat(width), DIM) : line(t, [span(t, bars.done, { color: b.over ? 'red' : 'green' }), span(t, bars.left, DIM)]),
+        span(t, b.value === null ? `not measured / ${n(b.budget)}${b.unit ? ` ${b.unit}` : ''}` : `${n(b.value)} / ${n(b.budget)}${b.unit ? ` ${b.unit}` : ''}`, b.over ? { color: 'red', bold: true } : b.value === null ? DIM : {}),
+      ], { paddingLeft: 2 });
+    }),
+    check.failing.length ? span(t, `  ✗ over its own budget: ${check.failing.join(', ')}`, { color: 'red' }) : null,
+  ];
+}
+
+/**
+ * Art direction (the style and models skills; .studio/art/<game>/latest.json, newest game first): the phase strip,
+ * the look, the style phase's decisions with Lock (the person's word) and Unlock (asked first, with what goes stale),
+ * the cast, the scene budgets, the spend against the cap and the licence problems. Read from files; Lock and Unlock
+ * run the studio's own `homie-studio style`.
+ */
+export function artTab(t, { art, games, columns, now, busy, why, on }) {
+  const name = (id) => games.find((g) => g.id === id)?.name ?? id;
+  if (!art.length) {
+    return col(t, [
+      span(t, 'No art direction yet.', { bold: true }),
+      span(t, 'Ask Claude for a look ("cozy and low-poly, foxes in an autumn wood"): the style skill decides the style with you, and this tab follows every decision, the cast, the scene budgets and the spend.', DIM),
+    ]);
+  }
+  return col(t, [
+    busy ? span(t, `… ${busy}`, { color: 'cyan' }) : null,
+    why ? span(t, fit(why, columns * 3), { color: 'yellow' }) : null,
+    ...art.map((a) => {
+      const style = a.decisions.find((d) => d.phase === 'style');
+      const rest = a.decisions.filter((d) => d.phase !== 'style' && d.rows.length);
+      const more = rest.reduce((n, d) => n + d.rows.length, 0);
+      const refuse = a.licence.filter((x) => x.level === 'refuse');
+      const over = a.spend.cap !== null && a.spend.used > a.spend.cap;
+      return col(t, [
+        row(t, [span(t, fit(name(a.game), Math.max(12, columns - 44)), { bold: true, color: ACCENT }), span(t, a.game, DIM), a.path ? span(t, a.path, DIM) : null, span(t, ago(a.at, now), DIM)]),
+        phaseRow(t, a.phases),
+        a.line ? span(t, fit(a.line, columns * 2)) : null,
+        a.board ? span(t, `style board: ${a.board.chosen ? `${a.board.chosen.toUpperCase()} chosen (${fit(a.board.directions.find((d) => d.id === a.board.chosen)?.label ?? '', columns - 28)})` : `${a.board.directions.length} directions, none chosen yet`}`, DIM) : null,
+        style ? col(t, [span(t, style.label, { bold: true }), ...style.rows.map((d) => decisionRow(t, a.game, d, columns, on))], { marginTop: 1 }) : null,
+        more ? span(t, `+ ${more} more decision${more === 1 ? '' : 's'} in ${rest.map((d) => d.label).join(', ')} (/look ${a.game})`, DIM) : null,
+        col(t, [span(t, `Cast · ${a.cast.length} asset${a.cast.length === 1 ? '' : 's'}${a.stale.length ? ` · ${a.stale.length} stale` : ''}`, { bold: true }), ...castRows(t, a)], { marginTop: 1 }),
+        a.check ? col(t, budgetBars(t, a.check, columns, now), { marginTop: 1 }) : span(t, `No scene check yet: homie-studio assets check ${a.game} measures every asset against the phone budgets.`, DIM),
+        line(t, [span(t, 'Spend  ', { bold: true }), span(t, `${usd(a.spend.used)}${a.spend.cap !== null ? ` of ${usd(a.spend.cap)}` : ''}`, over ? { color: 'red', bold: true } : {}), span(t, a.spend.cap === null ? '  no art budget: free routes only' : a.spend.items.length ? `  ${a.spend.items.length} paid step${a.spend.items.length === 1 ? '' : 's'}, receipts in art/` : '  nothing paid yet', DIM)]),
+        a.lineup ? span(t, `lineup ${ago(a.lineup.at, now)}: ${a.lineup.flagged ? `${a.lineup.flagged} flagged` : 'nothing flagged'} (/lineup ${a.game})`, a.lineup.flagged ? { color: 'yellow' } : DIM) : null,
+        a.licence.length
+          ? col(t, [
+              span(t, `Licences: ${refuse.length ? `${refuse.length} to fix before a public deploy` : 'warnings'}`, { bold: true, color: refuse.length ? 'red' : 'yellow' }),
+              ...a.licence.slice(0, 8).flatMap((x) => [
+                span(t, `  ${x.level === 'refuse' ? '✗' : '!'} ${fit(`${x.asset}: ${x.problem}`, columns * 2)}`, { color: x.level === 'refuse' ? 'red' : 'yellow' }),
+                x.fix ? span(t, `      → ${fit(x.fix, columns * 2)}`, DIM) : null,
+              ]),
+            ])
+          : a.cast.length ? span(t, '✓ Licences: every asset recorded and allowed', { color: 'green' }) : null,
+      ], { marginBottom: 1 });
+    }),
+    span(t, `${LEGEND}. Lock is your word; Unlock asks first, with what goes stale.`, DIM),
+  ]);
 }
 
 /* ------------------------------------------------------------------ Parts */

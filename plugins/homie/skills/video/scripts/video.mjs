@@ -21,7 +21,8 @@
  *                                         any page, driven by a script (record-page.mjs; references/RECORD.md):
  *                                         clicks, taps, keys, typing, scrolls, waits, in real time, honest frames
  *   edl <slug> --length <s> [--song <slug>] [--bed-from-bar <k>] [--title "…"] [--end "…"]   an edit, cut on bars
- *   card <slug> --name <title|end> --text "…" [--sub "…"]    a title or end card, 16:9 and 9:16
+ *   card <slug> --name <title|end> --text "…" [--sub "…"] [--game <id>]   a title or end card, 16:9 and 9:16 (--game: in
+ *                                           that game's palette and display font, from games/<id>/style.json)
  *   cut <slug> [--edl work/edl.json]             the 16:9 and 9:16 deliveries, loudness to -14 LUFS, a poster
  *   film init <slug> | film render <slug> [--mode h|v] [--from s --to s]   the draw-over + kinetic type renderer
  *   sheet <slug> --in <mp4> [--every 1]          a contact sheet to look at before anyone else does
@@ -368,10 +369,11 @@ function edl(root) {
   return { ok: true, command: 'edl', slug, file: rel(root, join(dir, 'work', 'edl.json')), shots: nClips, shotSeconds: +shot.toFixed(3), title: titleDur, end: endDur, cuts, bed: out.bed, gameAudio: out.gameAudio };
 }
 
-function cardHtml({ text, sub, small, w, h, bg = '#07080d', ink = '#f2f4fa', accent = '#ffcf5a' }) {
+function cardHtml({ text, sub, small, w, h, bg = '#07080d', ink = '#f2f4fa', accent = '#ffcf5a', font = null }) {
   const v = h > w;
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;width:${w}px;height:${h}px;background:${bg};color:${ink};font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+  const face = font && /^[A-Za-z0-9 ]{1,40}$/.test(font) ? font : null;
+  return `<!doctype html><html><head><meta charset="utf-8">${face ? `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(face).replace(/%20/g, '+')}:wght@400;700;900&display=block">` : ''}<style>
+html,body{margin:0;width:${w}px;height:${h}px;background:${bg};color:${ink};font-family:${face ? `"${face}",` : ''}ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
 .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:${v ? 90 : 80}px}
 h1{margin:0;font-size:${v ? 118 : 132}px;line-height:.95;letter-spacing:-.03em;font-weight:900;max-width:${v ? 900 : 1600}px}
 p{margin:${v ? 44 : 36}px 0 0;font-size:${v ? 46 : 44}px;color:${accent};font-weight:700;letter-spacing:.01em}
@@ -386,10 +388,19 @@ async function card(root) {
   if (!/^[a-z0-9-]+$/.test(name)) throw new Error('--name title|end|<word>');
   const text = String(flags.get('text') ?? '');
   if (!text) throw new Error('--text "<the words on the card>"');
+  // --game <id>: the card wears the game's look (games/<id>/style.json: its palette and display font).
+  const look = {};
+  if (flags.get('game')) {
+    const t = readJson(join(root, 'games', String(flags.get('game')), 'style.json'), null);
+    const hex = (c) => (/^#[0-9a-f]{6}$/i.test(String(c ?? '')) ? c : undefined);
+    if (t?.palette) Object.assign(look, { bg: hex(t.palette.bg), ink: hex(t.palette.ink), accent: hex(t.palette.accent) });
+    if (t?.fonts?.display) look.font = t.fonts.display;
+    for (const k of Object.keys(look)) if (look[k] === undefined) delete look[k];
+  }
   const files = [];
   for (const [w, h, tag] of [[1920, 1080, '16x9'], [1080, 1920, '9x16']]) {
     const out = join(dir, 'work', `card-${name}-${tag}.png`);
-    await htmlToPng(root, cardHtml({ text, sub: flags.get('sub') ?? '', small: flags.get('small') ?? '', w, h }), out, { width: w, height: h });
+    await htmlToPng(root, cardHtml({ text, sub: flags.get('sub') ?? '', small: flags.get('small') ?? '', w, h, ...look }), out, { width: w, height: h });
     files.push(rel(root, out));
   }
   return { ok: true, command: 'card', slug, files };

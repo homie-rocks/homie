@@ -5,17 +5,22 @@
  * - the diffs drawn above the question dialog parse as unified hunks even when cut short;
  * - the result readers agree with the studio's own formatters (the setup status from lib/doctor.mjs) and with the
  *   CLI's own print templates, so a change there fails here;
- * - the game bridge's PNG decoder and cell packer, against a PNG Node writes.
+ * - the game bridge's PNG decoder and cell packer, against a PNG Node writes;
+ * - art direction: the Art tab's reader keeps every field the toolkit's own latest.json writer puts there, the lock
+ *   guard reads a real decisions.json, the licence guard knows every licence kind the toolkit knows, and the shell
+ *   readers find `git add` / `git commit` and the models skill's paid calls.
  *
  * Run: node --test plugins/homie/test/mod-lib.test.mjs
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
-import { deployOf, globMatch, paidMcpOf, paidOf, protectedBy, studioCalls } from '../hooks/lib/commands.mjs';
+import { artFor, artSummaryOf, budgetWords, decisionsFileOf, licenceIssues, lockedChanges, lookText, phaseStrip, publicSource } from '../hooks/lib/art.mjs';
+import { deployOf, gitStagesOf, globMatch, paidMcpOf, paidOf, protectedBy, studioCalls } from '../hooks/lib/commands.mjs';
 import { applyEdit, unifiedDiff } from '../hooks/lib/diff.mjs';
 import { summarize } from '../hooks/lib/feed.mjs';
 import { redact, redactText } from '../hooks/lib/redact.mjs';
@@ -93,6 +98,32 @@ test('commands: paid calls, priced by the skill\'s own --dry-run', () => {
   assert.equal(paidMcpOf('mcp__fal__generate_image').provider, 'fal');
   assert.equal(paidMcpOf('mcp__elevenlabs__get_voices'), null);
   assert.equal(paidMcpOf('mcp__github__create_issue'), null);
+});
+
+test('commands: the models skill\'s prop and mood are fal calls, capped per game in art/<game>-models', () => {
+  const prop = paidOf('node /p/skills/models/scripts/models.mjs prop owl-rush lantern --card "Items/Lantern" --what "a brass lantern" --mesh --yes --json');
+  assert.deepEqual([prop.provider, prop.unit, prop.script, prop.verb, prop.kind, prop.slug], ['fal', 'usd', 'models', 'prop', 'art', 'owl-rush-models']);
+  assert.deepEqual(prop.dryRun, ['node', '/p/skills/models/scripts/models.mjs', 'prop', 'owl-rush', 'lantern', '--card', 'Items/Lantern', '--what', 'a brass lantern', '--mesh', '--dry-run', '--json']);
+  const mood = paidOf('cd studio && node skills/models/scripts/models.mjs mood owl-rush all --yes');
+  assert.deepEqual([mood.verb, mood.slug, mood.dir], ['mood', 'owl-rush-models', 'studio']);
+  for (const free of ['node skills/models/scripts/models.mjs prop owl-rush lantern --what x', 'node skills/models/scripts/models.mjs mood owl-rush all --yes --dry-run', 'node skills/models/scripts/models.mjs quote owl-rush --yes', 'node skills/models/scripts/models.mjs budget owl-rush --cap 5 --yes', 'node skills/models/scripts/models.mjs registry --write --yes']) {
+    assert.equal(paidOf(free), null, free);
+  }
+  assert.equal(paidOf('node skills/art/scripts/art.mjs gen cover --yes').script, 'art', 'the art skill is still the art skill');
+});
+
+test('commands: git add and git commit, with their folder, paths and flags', () => {
+  const one = (c) => gitStagesOf(c)[0];
+  assert.deepEqual(one('git add games/owl-rush/raw/owl.glb'), { verb: 'add', dir: null, paths: ['games/owl-rush/raw/owl.glb'], all: null });
+  assert.deepEqual(one('cd games && git add .'), { verb: 'add', dir: 'games', paths: ['.'], all: null });
+  assert.deepEqual(one('git -C games/owl-rush add -A'), { verb: 'add', dir: 'games/owl-rush', paths: [], all: 'all' });
+  assert.deepEqual(one('git add -u -- "games/my owl"'), { verb: 'add', dir: null, paths: ['games/my owl'], all: 'tracked' });
+  assert.deepEqual(one('git commit -m "games/owl.glb is in"'), { verb: 'commit', dir: null, paths: [], all: null });
+  assert.deepEqual(one('git commit -am "all of it" games/a.glb'), { verb: 'commit', dir: null, paths: ['games/a.glb'], all: 'tracked' });
+  assert.deepEqual(one('git commit -ma'), { verb: 'commit', dir: null, paths: [], all: null }, '-ma is the message "a"');
+  assert.deepEqual(one('git -c user.name=x --no-pager commit --all --author "a friend" -F msg.txt'), { verb: 'commit', dir: null, paths: [], all: 'tracked' });
+  assert.deepEqual(gitStagesOf('git add -A && git commit -m x').map((x) => x.verb), ['add', 'commit']);
+  for (const c of ['git status', 'git push', 'git log -- games', 'echo git add x', 'npm run build']) assert.deepEqual(gitStagesOf(c), [], c);
 });
 
 test('commands: protect globs', () => {
@@ -234,6 +265,114 @@ test('bridge: a PNG decodes, and a picture packs into Raster cells (▀, the pix
   assert.deepEqual([cells[0], cells[1], cells[2]], [0x2580, 0xff0000, 0x0000ff]);
 });
 
+/** A studio on disk with one game whose style the toolkit decided, its palette locked by the person. */
+async function artStudio() {
+  const { initDecisions, lockDecision } = await import(join(STUDIO, 'lib', 'decisions.mjs'));
+  const root = mkdtempSync(join(tmpdir(), 'homie-mod-art-'));
+  writeFileSync(join(root, 'studio.json'), '{"name":"Fox Den"}');
+  mkdirSync(join(root, 'games', 'fox-grove'), { recursive: true });
+  writeFileSync(join(root, 'games', 'fox-grove', 'game.json'), '{"id":"fox-grove","name":"Fox Grove"}');
+  initDecisions(root, 'fox-grove', { prompt: 'a cozy low-poly game where foxes gather berries' });
+  lockDecision(root, 'fox-grove', 'style.palette', { words: 'keep that palette' });
+  return root;
+}
+
+test('art: the Art tab\'s reader keeps every field the toolkit\'s own latest.json carries (lib/art-cli.mjs)', async () => {
+  const { writeArtSummary } = await import(join(STUDIO, 'lib', 'art-cli.mjs'));
+  const root = await artStudio();
+  try {
+    const theirs = writeArtSummary(root, 'fox-grove');
+    assert.ok(theirs, 'the toolkit wrote a summary');
+    const file = JSON.parse(readFileSync(join(root, '.studio', 'art', 'fox-grove', 'latest.json'), 'utf8'));
+    const ours = artSummaryOf(file, 'fox-grove');
+    assert.ok(ours, 'the mod reads it');
+    assert.equal(ours.line, theirs.line);
+    assert.deepEqual(ours.phases.map((p) => [p.id, p.total, p.settled]), theirs.phases.map((p) => [p.id, p.total, p.settled]));
+    assert.deepEqual(ours.decisions.flatMap((p) => p.rows.map((r) => `${r.id}:${r.state}:${r.by}`)), theirs.decisions.flatMap((p) => p.rows.map((r) => `${r.id}:${r.state}:${r.by}`)), 'every decision is kept');
+    const palette = ours.decisions[0].rows.find((r) => r.id === 'style.palette');
+    assert.equal(palette.state, 'locked');
+    assert.ok(palette.colours.length >= 3);
+    assert.match(phaseStrip(ours.phases), /^Style 1\/10 → Cast → Rigs → Animations → In game$/);
+    assert.match(lookText(ours, 'Fox Grove', Date.now()), /^Fox Grove \(fox-grove\): Look: /);
+    assert.ok(lookText(ours, 'Fox Grove', Date.now()).includes('■ palette'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('art: a latest.json that is not one is ignored, and what it carries is cleaned', () => {
+  const ok = { v: 1, game: 'g', at: '2026-10-02T10:00:00.000Z', phases: [], decisions: [], cast: [] };
+  assert.ok(artSummaryOf(ok, 'g'));
+  for (const bad of [null, [], 'x', { ...ok, v: 2 }, { ...ok, at: 'yesterday' }, { ...ok, at: 5 }, { ...ok, game: 'other' }]) assert.equal(artSummaryOf(bad, 'g'), null, JSON.stringify(bad));
+  assert.equal(artSummaryOf(ok, '../etc'), null);
+  const a = artSummaryOf({
+    ...ok,
+    line: 'Look: \u001b[2Jcleared',
+    phases: [{ id: 'style', label: 'Style', total: 2, settled: 3 }, { id: 'rigs', label: 'Rigs', total: 2, settled: 2 }, { id: 'nope', total: 1, settled: 0 }],
+    decisions: [{ phase: 'style', label: 'Style', rows: [{ id: 'style.palette', name: 'palette', label: 'P', state: 'locked', by: 'person', colours: ['#ffffff', 'red', '#12345'] }, { id: 'Style Palette', state: 'auto' }, { id: 'style.light', state: 'sideways' }] }],
+    cast: [{ id: 'ok-1', route: 'teleported', usd: -3 }, { id: '../x' }],
+    licence: [{ asset: 'a', level: 'refuse', problem: 'no licence record', fix: 'add one' }, { asset: 'b', level: 'panic', problem: 'x' }],
+    spend: { used: 'lots', cap: -1, items: [{ what: 'w', usd: 1 }, { what: 'x' }] },
+    check: { ok: 'yes' },
+    lineup: { at: '2026-10-02T10:00:00.000Z', flagged: 2, images: { front: '../../secret.jpg', quarter: 'a/b.jpg', silhouettes: '/abs.jpg' } },
+  }, 'g');
+  assert.equal(a.line, 'Look: cleared');
+  assert.deepEqual(a.phases.map((p) => p.id), ['rigs']);
+  assert.deepEqual(a.decisions[0].rows.map((r) => r.id), ['style.palette']);
+  assert.deepEqual(a.decisions[0].rows[0].colours, ['#ffffff']);
+  assert.deepEqual(a.cast, [{ id: 'ok-1', kind: 'asset', route: 'unknown', tier: null, license: null, state: 'auto', usd: 0 }]);
+  assert.deepEqual(a.licence.map((x) => x.asset), ['a']);
+  assert.deepEqual(a.spend, { used: 0, cap: null, items: [{ what: 'w', usd: 1 }] });
+  assert.equal(a.check, null);
+  assert.deepEqual(a.lineup.images, { front: null, quarter: 'a/b.jpg', silhouettes: null });
+  assert.equal(budgetWords({ ok: false, totals: { drawCalls: 120, triangles: 900, textureMB: 2.66, firstPlayMB: null }, budgets: { drawCalls: 100, triangles: 150000, textureMB: 48, firstPlayMB: 5 } }), '120/100 draw calls (OVER), 900/150,000 triangles, 2.7/48 MB picture memory, ?/5 MB first play');
+  assert.match(artFor([], '').why, /^No art direction yet/);
+  assert.match(artFor([a], 'h').why, /^h has no art direction yet \(games with one: g\)/);
+});
+
+test('art: the lock guard, on the toolkit\'s own decisions.json', async () => {
+  const root = await artStudio();
+  try {
+    const rel = 'games/fox-grove/codex/decisions.json';
+    assert.equal(decisionsFileOf(rel), 'fox-grove');
+    for (const not of ['games/fox-grove/decisions.json', 'games/fox-grove/codex/decisions.json.bak', 'x/games/a/codex/decisions.json', 'games/../codex/decisions.json']) assert.equal(decisionsFileOf(not), null, not);
+    const text = readFileSync(join(root, rel), 'utf8');
+    const doc = JSON.parse(text);
+    const edit = (fn) => { const d = structuredClone(doc); fn(d.decisions); return JSON.stringify(d, null, 2); };
+    assert.deepEqual(lockedChanges(text, edit((d) => { d['style.palette'].value.bg = '#000000'; })), ['style.palette']);
+    assert.deepEqual(lockedChanges(text, edit((d) => { d['style.palette'].state = 'steered'; })), ['style.palette']);
+    assert.deepEqual(lockedChanges(text, edit((d) => { delete d['style.palette']; })), ['style.palette']);
+    assert.deepEqual(lockedChanges(text, edit((d) => { d['style.camera'].value = 'top-down'; d['style.palette'].label = 'Renamed'; d['style.palette'].why = 'x'; })), []);
+    assert.deepEqual(lockedChanges(text, JSON.stringify(JSON.parse(text))), [], 'the same file, other spacing');
+    assert.equal(lockedChanges(text, `${text},`), null, 'not JSON while something is locked');
+    assert.deepEqual(lockedChanges('{"decisions":{}}', 'not json'), [], 'nothing locked: nothing to guard');
+    assert.deepEqual(lockedChanges('not json', '{}'), []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('art: the licence guard knows every licence kind the toolkit knows (lib/asset-manifest.mjs)', async () => {
+  const { LICENSES, licenseInfo } = await import(join(STUDIO, 'lib', 'asset-manifest.mjs'));
+  for (const [kind, info] of Object.entries(LICENSES)) {
+    const ok = licenceIssues({ assets: [{ id: 'a', license: { kind, remix: info.remix, attribution: info.attribution ? 'A friend, example.org' : null } }] });
+    assert.deepEqual(ok, { count: 1, problems: [] }, `${kind} with its own remix and credit`);
+  }
+  for (const kind of ['eula:unity', 'market:fab-1234']) {
+    assert.equal(licenseInfo(kind).redistribute, false);
+    assert.equal(licenceIssues({ assets: [{ id: 'a', license: { kind, remix: 'none' } }] }).problems.length, 0, kind);
+    assert.equal(licenceIssues({ assets: [{ id: 'a', license: { kind, remix: 'include' } }] }).problems.length, 1, `${kind} handed to remixers`);
+  }
+  assert.equal(licenseInfo('eula:turbosquid').web, false);
+  const refused = licenceIssues({ assets: [
+    { id: 'none', license: {} }, { id: 'null-licence', license: null }, { id: 'ts', license: { kind: 'eula:turbosquid', remix: 'none' } },
+    { id: 'by', license: { kind: 'cc-by-4.0', remix: 'include', attribution: '  ' } }, { id: 'odd', license: { kind: 'CC0' } },
+    { id: 'mixamo', license: { kind: 'mixamo', remix: 'include' } }, { id: 'qal', license: { kind: 'qal' } },
+  ] });
+  assert.deepEqual(refused.problems.map((p) => p.asset), ['none', 'null-licence', 'ts', 'by', 'odd', 'mixamo', 'qal']);
+  assert.equal(licenceIssues({ v: 1 }).problems.length, 1, 'a manifest with no assets list is not one the toolkit wrote');
+  assert.equal(licenceIssues(null).problems.length, 1);
+  assert.ok(publicSource({ id: 'g' }));
+  assert.ok(publicSource({ launch: 'public', share: { source: true } }));
+  for (const not of [null, { launch: 'private' }, { launch: 'invite' }, { share: { source: false } }]) assert.equal(publicSource(not), false, JSON.stringify(not));
+});
+
 test('the mod\'s hooks module calls only what the README lists', () => {
   // The code, without its comments (which name calls in prose).
   const src = readFileSync(join(PLUGIN, 'hooks', 'homie.mjs'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -243,4 +382,25 @@ test('the mod\'s hooks module calls only what the README lists', () => {
   const section = readme.slice(readme.indexOf('## What the Homie mod does'));
   for (const c of calls) assert.ok(section.includes(c), `README's "What the Homie mod does" names ${c}`);
   assert.ok(!/\$\.env\.|\$\.settings\.|\$\.model\.|\$\.prompt\.submit|\$\.session\.send|tool\.check|\$\.fs\.write/.test(src), 'no environment, settings, model, prompt, messaging, permission or file-writing calls');
+});
+
+test('the README names every hook and every command the hooks module has', () => {
+  const src = readFileSync(join(PLUGIN, 'hooks', 'homie.mjs'), 'utf8');
+  const readme = readFileSync(join(PLUGIN, 'README.md'), 'utf8');
+  const section = readme.slice(readme.indexOf('## What the Homie mod does'));
+  const mod = readme.slice(readme.indexOf('## The Homie mod'), readme.indexOf('## What the Homie mod does'));
+  // Every command it registers: in COMMANDS, handled by its own command.run hook, in the README's commands and in the
+  // validate listing ("command.run{command=<name>}").
+  const commands = [...src.slice(src.indexOf('const COMMANDS = ['), src.indexOf('];', src.indexOf('const COMMANDS = ['))).matchAll(/^\s*\['([a-z-]+)', '/gm)].map((m) => m[1]);
+  assert.ok(commands.length >= 15, commands.join(' '));
+  for (const c of commands) {
+    assert.ok(src.includes(`on('command.run', { command: '${c}' }`), `a command.run hook for /${c}`);
+    assert.ok(mod.includes(`\`/${c}`), `"The Homie mod" names /${c}`);
+    assert.ok(section.includes(`command.run{command=${c}}`), `"What the Homie mod does" lists command.run{command=${c}}`);
+  }
+  const handled = [...src.matchAll(/on\('command\.run', \{ command: '([a-z-]+)' \}/g)].map((m) => m[1]);
+  assert.deepEqual([...handled].sort(), [...commands].sort(), 'every command.run hook is a registered command');
+  assert.ok(section.includes(`its ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'][commands.length]} commands only`), 'the events list counts the commands');
+  // Every event it handles.
+  for (const ev of new Set([...src.matchAll(/\bon\('([a-z]+\.[a-z]+)'/g)].map((m) => m[1]))) assert.ok(section.includes(`\`${ev}\``), `"What the Homie mod does" names ${ev}`);
 });

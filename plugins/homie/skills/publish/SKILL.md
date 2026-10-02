@@ -89,6 +89,10 @@ landing page" makes one epic). Every page ends with "Made with Homie"; restyle i
 
 ## List in the directory
 
+Licences first: `publish` refuses to list a studio while a public game ships an asset with no licence record, a
+licence that forbids a web game, or a credit it owes but does not show (`npx --no-install homie-studio assets check
+<id>` names each one and its fix; the `models` skill has the rules). Fix them, deploy, then publish.
+
 Call the Homie MCP tool `studio_publish` with the live site (or run
 `npx --no-install homie-studio publish`). It answers with each listed game's Play link. A game
 refused for a protected name stays on the studio's site but is not listed. The directory

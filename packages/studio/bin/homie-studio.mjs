@@ -163,6 +163,31 @@
  *                                         Claude artifact; --open: open it in this computer's browser
  *   homie-studio codex link <id>          a one-time link to the codex on the live site (a private page for the owner)
  *
+ *   homie-studio style init <id> [--prompt "<the person's words>"] [--hands-on] [--budget <usd>]
+ *                                         art direction as decisions (games/<id>/codex/decisions.json): render style,
+ *                                          palette, shape, proportions, materials, light, camera, fonts, effects; the cast,
+ *                                          its routes, library family, scale and budgets; rigs, animation, in-game budgets.
+ *                                          Each starts as an automatic pick with a why; the first asset built on one pins it
+ *   homie-studio style [show] <id> [--phase style]   the decisions (· auto, ~ steered, ● pinned by use, ■ locked)
+ *   homie-studio style set|steer|lock|unlock <id> <decision> …   change one ("warmer"), lock it for the person (--words
+ *                                          "<what they said>"); a locked one changes only with --unlock --reason, and
+ *                                          --confirm after the person saw what goes stale (style blast)
+ *   homie-studio style board <id>         three directions drawn by the engine (free): swatches in codex/board/
+ *   homie-studio style pick <id> <a|b|c> [--mix style.palette=b]   the person's pick (or a mix) from the board
+ *   homie-studio style mood|golden|blast|prompt <id> …   a paid mood image's record, golden images, the blast radius
+ *                                          of a change, the derived style prompt every generation starts from
+ *   homie-studio assets [list] <id>       every asset: route, licence, measurements, spend (games/<id>/assets/manifest.json)
+ *   homie-studio assets find "<words>" [--kind prop] [--family kenney]   the free CC0 starter library (HOMIE_LIBRARY: a copy)
+ *   homie-studio assets add <id> <library item> [--height <m>] | --file <model> --license <kind> [--attribution "…"]
+ *                                          copied in, checked (no external URIs, no oversized files), made phone-sized,
+ *                                          recorded with its licence; RIGHTS.md and credits.json follow
+ *   homie-studio assets redo <id> <asset>   made again from its kept raw file, free (today's budgets and style)
+ *   homie-studio assets optimise <in> --out <file> [--triangles 1500] [--texture 512] [--height <m>]
+ *   homie-studio assets check <id>        phone budgets (triangles, draw calls, picture memory, download), the
+ *                                          glTF-Validator, licences, stale assets, big files in git
+ *   homie-studio assets lineup|review|rights|stale|remove <id> …   the lineup (true scale, silhouettes, palette drift),
+ *                                          a reviewer's score, RIGHTS.md, what a changed decision made stale
+ *
  *   homie-studio statusline               the current build in one line (what Claude Code's status line shows)
  *   homie-studio statusline --install [--project <folder>]
  *                                         turn it on in Claude Code for this studio (.claude/settings.local.json);
@@ -203,11 +228,12 @@ import { installStatusLine, statusLine } from '../lib/statusline.mjs';
 import { restartWithProxy } from '../lib/net.mjs';
 import { demoGames, formatDemo } from '../lib/demo.mjs';
 import { serveMcp } from '../lib/mcp.mjs';
+import { artLines, assetsCommand, styleCommand } from '../lib/art-cli.mjs';
 import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -226,15 +252,27 @@ function print(result) {
   if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
   if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
   const lines = [];
+  if (/^(style|assets)( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${artLines(result).join('\n')}\n`); return; }
   switch (result.command) {
     case 'new':
       lines.push(`${result.name} is a studio now: ${result.dir}`, '', 'Wrote:', ...result.wrote.map((f) => `  ${f}`), '', `Dependencies: ${result.installed}`, '', 'Next:', ...result.next.map((n) => `  ${n}`), '', result.online);
       break;
     case 'game remix':
       lines.push(`games/${result.id} is a remix of ${result.from} (${result.files.length} files). Its game.json credits the original: "${result.credit}"${result.page ? ` (${result.page})` : ''}, on its landing and in its credits. Make it yours in games/${result.id}/src/, then: npx homie-studio dev`);
+      if (result.assets?.carried) lines.push(`  assets: ${result.assets.fetched.length} carried from the original (checked by SHA-256)${result.assets.placeholders.length ? `, ${result.assets.placeholders.length} grey placeholder(s) where the licence does not let a remix carry them (${result.assets.placeholders.map((p) => p.asset).join(', ')}): see games/${result.id}/assets/RIGHTS.md` : ''}`);
+      if (result.installNeeded) lines.push(`It needs ${result.needsAdded.map((n) => `${n.name} ${n.version}`).join(', ')}, now in the studio's package.json: run npm install first.`);
+      for (const h of result.needsHeld ?? []) lines.push(`It was written against ${h.name} ${h.want}; this studio pins ${h.have}, which stays.`);
+      if (result.needsNotAdded?.length) lines.push(`Its game.json also asks for ${result.needsNotAdded.join(', ')}: not added (a remix adds only what the toolkit's starters use). Read the code before adding any.`);
       break;
     case 'game new':
       lines.push(`games/${result.id} is a new game from the ${result.from} starter. Change it in games/${result.id}/src/, then: npx homie-studio dev`);
+      if (result.installNeeded) lines.push(`It needs ${result.needsAdded.map((n) => `${n.name} ${n.version}`).join(', ')}, now in the studio's package.json: run npm install first.`);
+      for (const h of result.needsHeld ?? []) lines.push(`It was written against ${h.name} ${h.want}; this studio pins ${h.have}, which stays.`);
+      if (result.models) {
+        const m = result.models;
+        lines.push(`Models: ${m.fetched} from the starter library (${m.from}) into games/${result.id}/public/models/, each checked by SHA-256.`);
+        if (m.missing.length) lines.push(`  ${m.missing.length} not here${m.why ? ` (${m.why})` : `: ${m.missing.map((x) => `${x.asset} (${x.why})`).join(', ')}`}. The game draws stand-ins for them; once the library is reachable, homie-studio assets add ${result.id} <item> --as <asset> brings each in (assets/manifest.json names them).`);
+      }
       break;
     case 'dev stop':
       lines.push(result.stopped.length ? `Stopped this studio's dev server (${result.stopped.join(', ')}).` : `Nothing to stop: ${result.why ?? 'no dev server of this studio is running'}.`);
@@ -573,7 +611,11 @@ async function main() {
     if (!positional[2] || !positional[3]) return { ok: false, command: 'perf compare', why: 'usage: homie-studio perf compare <before dir> <after dir> [--goal <metric>] [--min 3]' };
     return perfCompare(positional[2], positional[3], { goal: String(flags.get('goal') ?? DEFAULT_GOAL), min: flags.has('min') ? Number(flags.get('min')) / 100 : 0.03, guards: flags.get('guards') ? String(flags.get('guards')).split(',').map((x) => x.trim()).filter(Boolean) : null, also: flags.get('also') ? String(flags.get('also')).split(',').map((x) => x.trim()).filter(Boolean) : [] });
   }
+  // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
+  if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
   const root = requireStudio();
+  if (cmd === 'style') return styleCommand(root, sub, positional, flags, { log });
+  if (cmd === 'assets') return assetsCommand(root, sub, positional, flags, { log });
   if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);
@@ -614,6 +656,10 @@ async function main() {
     const game = positional[1] ?? listGames(root)[0]?.id;
     const url = flags.get('url') ?? siteUrl(root);
     if (!url) return { ok: false, command: 'check', why: 'give --url (the local dev address or the live site)' };
+    // A big binary committed under games/ fails the check before any browser starts: it belongs in R2, never in git.
+    const { bigCommittedFiles } = await import('../lib/asset-check.mjs');
+    const big = bigCommittedFiles(root).filter((f) => f.path.startsWith(`games/${game}/`));
+    if (big.length) return { ok: false, command: 'check', why: `committed files over 5 MB under games/${game}: ${big.map((f) => `${f.path} (${(f.bytes / 1024 / 1024).toFixed(1)} MB)`).join(', ')}. Big media goes to the studio's R2 (homie-studio storage add, then media move); raw models stay in art/<slug>/raw/ (git-ignored); a shipped model is made phone-sized with homie-studio assets optimise. Take it out of git (git rm --cached), then check again.` };
     return tracked(root, 'checks', (report) => check({ url, game, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'check');
   }
   if (cmd === 'look') {

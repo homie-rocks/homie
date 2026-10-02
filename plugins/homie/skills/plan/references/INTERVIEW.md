@@ -19,6 +19,12 @@ said; these are starting points, not a script.
 - "Day or night, cosy or tense, bright or moody?" Then propose a palette of four or five colours.
 - Fonts: suggest one display font that fits (pixel: "Press Start 2P", "Silkscreen"; storybook: "Fraunces";
   sci-fi: "Orbitron", "Exo 2"; clean: "Inter").
+- Ask once: "Do you want to steer the look closely (I'll show you three directions, drawn by the game itself,
+  and you lock what you like), or should I pick and show you?" Hands-on: the `style` skill's board. Pick for me:
+  `style init` with their words, then one line about the look.
+- And once: "Art budget: free only (the starter library and the engine), a small budget on your own fal account
+  (I'd suggest US$5 for a handful of generated props), or your own number?" Free only means no generated assets
+  at all; the number is a hard cap (the `models` skill's `budget`).
 
 ## 3. Devices
 
@@ -52,6 +58,8 @@ Always ask: **"Does progress need to persist across sessions or devices?"** Then
 - "Places: one arena, or several levels or zones?"
 - "A cover and a trailer come from the game itself, free. Painted art or generated video is on your own
   fal account with a budget you set: want any of it, and how much at most?"
+- For a 3D game: "Models come free from the engine and Homie's CC0 starter library first; a few signature props
+  can be generated in your locked style for about US$0.54 each. Any you already own to bring in?"
 
 ## 7. Music and sound
 

@@ -66,6 +66,11 @@ Comparing against other games (the person's references, the studio's last versio
 admire): give the reviewer frames of each under shuffled labels, scored before the labels are revealed.
 A reference is a bar ("is it as good as that"), never a template ("make it look like that").
 
+A game with models: give the reviewer the style board, the golden images and the lineup pictures
+(`homie-studio assets lineup <id>`, in `.studio/art/<id>/`) beside the frames, and add one question: "does every
+frame look like ONE game?" (1-10, naming outliers). Record it with `homie-studio assets review <id> --score <n>
+--outliers <ids>`.
+
 ## 3. Say what is weak
 
 Lead with the numbers and the review, most important first: what fails, then what the reviewer would

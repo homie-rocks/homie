@@ -417,7 +417,12 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
 
   const words = L.players && typeof L.players === 'object' ? { one: str(L.players.one, 24), many: str(L.players.many, 24) } : null;
   // The landing's own colours (landing.theme): only colours, and the ink on its own accent worked out like the studio's.
-  const theme = L.theme && typeof L.theme === 'object' ? Object.fromEntries(['accent', 'glow', 'bg', 'fg'].filter((k) => COLOR.test(String(L.theme[k] ?? ''))).map((k) => [k, L.theme[k]])) : null;
+  // Else the game's own palette (games/<id>/style.json, its art-direction decisions): one look from the game to its page.
+  const style = !L.theme ? readJson(join(g.dir, 'style.json'))?.palette : null;
+  // Its accents only: the page keeps the studio's light or dark scheme, so its text always reads.
+  const fromStyle = style && typeof style === 'object' ? { accent: style.accent, glow: style.accent2 } : null;
+  const raw = L.theme && typeof L.theme === 'object' ? L.theme : fromStyle;
+  const theme = raw ? Object.fromEntries(['accent', 'glow', 'bg', 'fg'].filter((k) => COLOR.test(String(raw[k] ?? ''))).map((k) => [k, raw[k]])) : null;
   if (theme?.accent) { const l = luminance(theme.accent); if (l !== null) theme.accentInk = l > 0.4 ? '#0b0b10' : '#ffffff'; }
   // landing.scheme: "light" for a white or cream game (its hero is tinted light and its words dark), "dark" for a
   // dark game in a light studio. Anything else follows the studio's look.

@@ -35,6 +35,7 @@ import { pinnedVersion } from './upgrade.mjs';
 import { AgentSeat } from './agent-seat.mjs';
 import { LAB_PORT, runningLab } from './lab.mjs';
 import { pictureFor } from './pictures.mjs';
+import { ART_UI, artToolDefs } from './art-tools.mjs';
 
 export const UI = Object.freeze({
   setup: 'ui://homie-studio/setup',
@@ -42,6 +43,7 @@ export const UI = Object.freeze({
   studio: 'ui://homie-studio/studio',
   codex: 'ui://homie-studio/codex',
   lab: 'ui://homie-studio/lab',
+  ...ART_UI,
 });
 
 const inside = (base, p) => p === base || p.startsWith(base.endsWith(sep) ? base : `${base}${sep}`);
@@ -698,7 +700,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_make', title: 'Make a multiplayer game',
-      description: 'Make a game in the studio from a multiplayer starter, under the id you choose, to change into the person\'s game: gem-rush (an arena: every browser renders, one hosts the rules, bots fill empty seats, rounds restart) or ember-vale (a hero who lasts for days, with cloud saves: for persistent games). In a new studio only once their game is planned (game_plan), or when they ask for a copy of a working starter; never as a first step. A planned game\'s codex stays.',
+      description: 'Make a game in the studio from a multiplayer starter, under the id you choose, to change into the person\'s game: gem-rush (an arena: every browser renders, one hosts the rules, bots fill empty seats, rounds restart), gem-rush-3d (the same arena in three.js, dressed with free CC0 models through @homie-rocks/studio/assets: the start for a 3D game) or ember-vale (a hero who lasts for days, with cloud saves: for persistent games). In a new studio only once their game is planned (game_plan), or when they ask for a copy of a working starter; never as a first step. A planned game\'s codex stays.',
       inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens): its address'), name: str('The game\'s display name'), from: str('Starter id (default gem-rush)'), ...STUDIO_ARG }, required: ['id', 'name'] },
       annotations: { title: 'Make a game', ...RW },
       run: async (a) => {
@@ -707,7 +709,21 @@ export function toolDefs(ctx, avail = {}) {
         const r = await cli(ctx, root, `game new ${a.id}`, ['game', 'new', a.id, '--from', String(a.from ?? 'gem-rush'), '--name', String(a.name ?? a.id).slice(0, 60)]);
         if (!r.ended) return stillRunning(r.job, 'Making the game');
         if (r.job.code !== 0) return fail(`Not made: ${whyOf(r.job)}`);
-        return ok(`games/${a.id} is ${a.name}, from the ${a.from ?? 'gem-rush'} starter (${(r.result?.files ?? []).length} files). Change it in games/${a.id}/src/main.ts (file_read, file_edit), then build and preview_run; check proves two browsers finish a round.`, { kind: 'game', ...r.result });
+        // A starter that needs a library the studio did not have (game.json "needs", e.g. three.js): it is in the
+        // studio's package.json now, and nothing builds until it is installed, so the install starts here.
+        let install = '';
+        if (r.result?.installNeeded) {
+          const libs = (r.result.needsAdded ?? []).map((n) => `${n.name} ${n.version}`).join(', ');
+          if (ctx.install) {
+            const running = runningJobs(root).find((j) => j.label.startsWith('npm install'));
+            let job = running ?? null;
+            if (!job) { try { job = installJob(root); } catch (error) { install = ` It needs ${libs}, added to the studio's package.json, but the install did not start (${error.message}): studio_install installs it.`; } }
+            if (job) install = ` It needs ${libs}, added to the studio's package.json; npm install is running (job ${job.id}): build once studio_job says it is done.`;
+          } else install = ` It needs ${libs}, added to the studio's package.json: studio_install installs it before the first build.`;
+        }
+        const m = r.result?.models;
+        const got = m ? ` Its models: ${m.fetched} from the starter library${m.missing.length ? `; ${m.missing.length} could not be fetched (${m.why ?? m.missing[0].why}), and it draws stand-ins for those` : ''}.` : '';
+        return ok(`games/${a.id} is ${a.name}, from the ${a.from ?? 'gem-rush'} starter (${(r.result?.files ?? []).length} files).${got}${install} Change it in games/${a.id}/src/main.ts (file_read, file_edit), then build and preview_run; check proves two browsers finish a round.`, { kind: 'game', ...r.result });
       },
     },
     {
@@ -1152,6 +1168,8 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
   ];
+  // Art direction, the cast, the starter library, generated props, checks, the lineup and the rights (lib/art-tools.mjs).
+  tools.push(...artToolDefs(ctx, { ok, fail, cli, stillRunning, whyOf, needsInstall, ui, str, STUDIO_ARG, RO, RW, pictureFor, findNode, startJob, waitJob }));
   const topics = guideTopics(ctx);
   if (topics.length) {
     tools.push({
@@ -1173,7 +1191,7 @@ export function toolDefs(ctx, avail = {}) {
     });
   }
   // The media skills' own scripts, where their provider (or the free tool they need) is set up on this computer.
-  for (const [name, title, needs] of [['music', 'Music (ElevenLabs)', 'elevenlabs'], ['sound', 'Sound effects and a theme (free)', 'ffmpeg'], ['art', 'Art: covers, frames, painted art', 'ffmpeg'], ['video', 'Video: trailers and clips', 'ffmpeg']]) {
+  for (const [name, title, needs] of [['music', 'Music (ElevenLabs)', 'elevenlabs'], ['sound', 'Sound effects and a theme (free)', 'ffmpeg'], ['art', 'Art: covers, frames, painted art', 'ffmpeg'], ['video', 'Video: trailers and clips', 'ffmpeg'], ['models', 'Models: generated 3D props (paid, on your fal account)', 'node']]) {
     const script = ctx.skillsDir ? join(ctx.skillsDir, name, 'scripts', `${name}.mjs`) : null;
     if (!script || !existsSync(script) || !avail[needs]) continue;
     tools.push({
@@ -1201,7 +1219,7 @@ export function toolDefs(ctx, avail = {}) {
 
 /** What the media tools need, cheaply (no network): ffmpeg on the PATH, ElevenLabs' CLI or key. */
 export function availability(env = process.env) {
-  return { ffmpeg: Boolean(which(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')), elevenlabs: Boolean(env.ELEVENLABS_API_KEY || which(process.platform === 'win32' ? 'elevenlabs.exe' : 'elevenlabs')) };
+  return { node: true, ffmpeg: Boolean(which(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')), elevenlabs: Boolean(env.ELEVENLABS_API_KEY || which(process.platform === 'win32' ? 'elevenlabs.exe' : 'elevenlabs')) };
 }
 
 /** The codex page small enough to hand a card (a tool result over ~150,000 characters is not shown). */

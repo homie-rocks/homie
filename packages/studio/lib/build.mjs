@@ -5,6 +5,8 @@
  *   site/dist/games/<id>/index.html        the game's page (the Worker adds HOMIE_NET)
  *   site/dist/games/<id>/assets/main.js    its bundle (esbuild; @homie-rocks/studio/netplay inlined)
  *   site/dist/games/<id>/...               everything in games/<id>/public/
+ *   site/dist/games/<id>/assets.json       its assets' licences and, for those a remix may carry, their address and SHA-256
+ *                                          (games/<id>/assets/manifest.json; lib/asset-manifest.mjs servedAssets)
  *   site/dist/games/<id>/agents.json       the AI guides' vocabulary (games/<id>/agents.json, checked; NETPLAY.md
  *                                          section 18): the only goals and lines an AI in its rooms has
  *   site/dist/games.json                   { studio, games[], songs[], videos[], posts[], site } from studio.json,
@@ -35,6 +37,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 import { buildCodexPages } from './codex.mjs';
+import { servedAssets } from './asset-manifest.mjs';
 import { buildMedia } from './media.mjs';
 import { buildSiteFiles, landingOf, readPosts, readTheme } from './site.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
@@ -46,7 +49,7 @@ import { vocabularyOf } from '../worker/brain.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
-const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json']);
+const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);
 const LOADERS = { '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file', '.webp': 'file', '.mp3': 'file', '.ogg': 'file', '.wav': 'file', '.m4a': 'file', '.glb': 'file', '.gltf': 'file', '.bin': 'file', '.hdr': 'file', '.svg': 'file', '.json': 'json', '.woff2': 'file', '.ttf': 'file' };
 
 /** The port toolkit as one classic script (window.HomiePort), for static games. Built once per build. */
@@ -84,7 +87,8 @@ export function sourceOf(dir, id, { studio = null, game = null, license } = {}) 
   let total = 0;
   const walk = (rel) => {
     for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
-      if (entry.name.startsWith('.') || SOURCE_SKIP.has(entry.name) || (!rel && entry.name === 'CODEX.md')) continue;
+      // The codex (CODEX.md, and codex/: the art-direction decisions and the style board) is the owner's, never shared.
+      if (entry.name.startsWith('.') || SOURCE_SKIP.has(entry.name) || (!rel && (entry.name === 'CODEX.md' || entry.name === 'codex'))) continue;
       const path = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(path);
       else if (TEXT.test(entry.name)) {
@@ -298,6 +302,9 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     vocabFor(g, out);
     // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).
     if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id, { studio: studio.name ?? null, game: g.name ?? g.id, license: g.license }))}\n`);
+    // Its assets' licences, and the address and SHA-256 of each one a remix may carry (`game remix` fetches them).
+    if (g.share?.source !== false && existsSync(join(g.dir, 'assets', 'manifest.json'))) writeFileSync(join(out, 'assets.json'), `${JSON.stringify(servedAssets(root, g.id, out))}\n`);
+    else rmSync(join(out, 'assets.json'), { force: true });
     const main = join(out, 'assets', 'main.js');
     const bytes = existsSync(main) ? statSync(main).size : dirBytes(out);
     const seats = seatsFor(g, netplayOf(g, out));

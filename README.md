@@ -53,7 +53,7 @@ Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a
 session afterwards so the skills and tools load.
 
 Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
-`port`, `publish`, `sound`, `music`, `art`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
+`port`, `publish`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
 `https://homie.rocks/mcp`, which has creator tools only: set up a studio, make or remix a game, make an
 existing single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.
@@ -129,8 +129,17 @@ first used:
 - **`art`** (*"make a cover for my game"*): a cover from a real frame of the game (free), and
   painted covers, backdrops and textures with fal on your own key, priced, capped and receipted;
   checks that a texture tiles and that files are small enough for a phone.
+- **`style`** (*"show me other looks"*, *"make it warmer"*, *"keep that palette"*): a game's look as
+  decisions (render style, palette, light, camera, fonts, budgets), picked automatically from your
+  words, drawn in the Game Codex; a style board of three directions drawn by the game engine itself
+  (free); steer, lock, and the blast radius before a locked one changes.
+- **`models`** (*"find free models for my game"*, *"make a lantern prop"*): free CC0 models from
+  Homie's starter library (Kenney, KayKit, Poly Haven, ambientCG), your own models with their
+  licence, and generated props (a concept in the locked style, then Tripo P1 image-to-3D) on your
+  own fal key, priced, capped and receipted; every model checked for phones, licensed, credited
+  and shown in a lineup at true scale.
 
-All of them but `lab` need ffmpeg; `video`, `art`, `playtest`, `perf` and `lab` use Chrome.
+All of them but `lab`, `style` and `models` need ffmpeg; `video`, `art`, `style`, `models`, `playtest`, `perf` and `lab` use Chrome.
 
 ## In the Claude desktop app: one chat
 

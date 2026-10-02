@@ -17,9 +17,44 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.22.0] - 2026-10-02
+
+**Plugin 0.23.0** · [#32](https://github.com/homie-rocks/homie/pull/32)
+
+Your game's look as decisions you can steer and lock, a style board the engine draws for free, free CC0 3D models, props made on your own fal account, and every asset licensed and checked for phones.
+
+### Added
+
+- `homie-studio style`: your game's look as about thirty decisions (render style, palette, shape, proportions, materials, light, camera, fonts, effects; the cast, its library family, scale and phone budgets; rigs and animation for later). `style init <game> --prompt "…"` picks each from your words, the codex and the genre, with a one-line why, and the Game Codex's Art direction tab draws them. `style steer` nudges one in your words ("warmer", "closer", "golden hour"), `style lock` freezes one for you, and the first model built on an automatic decision pins it.
+- `homie-studio style board <game>`: three coherent directions, each drawn by the game's own engine (its palette, light, camera, material model, fonts and proportions, with the starter library's pieces re-tinted into its palette). Free, in about 20 seconds. Pick one, mix rows from several, steer, lock. A painted mood image per direction is optional and paid, on your own fal account, and labelled a target.
+- Changing a locked decision shows its blast radius first (`style blast`): every model made under it that would go stale, what remaking each would cost, and what a free palette re-tint fixes. Nothing is ever remade by itself.
+- `homie-studio assets`: every model, texture and sky a game ships is recorded in `games/<id>/assets/manifest.json` with where it came from, each step that made it, its licence and what a remix gets. `assets rights` writes `RIGHTS.md` in plain words, credits go on the game's landing, and `assets remove` takes a model out with the copy the game ships.
+- Homie's starter library: free CC0 models, materials and skies from Kenney, KayKit, Poly Haven and ambientCG, made phone-sized, with thumbnails and their licences. `assets find "pine tree"` searches it and `assets add <game> <item>` copies one into the game (never hot-linked). It is served from homie.rocks; `HOMIE_LIBRARY` points at another copy.
+- `assets add <game> --file <model> --license <kind>`: your own models, checked first (a file that loads anything from an address, or is too big, is refused), made phone-sized (meshopt geometry, WebP pictures, the pivot at the bottom centre, scaled to metres) and recorded. The raw file stays in `art/<slug>/raw/`, which git ignores, and `assets redo <game> <asset>` makes it again from there for free. Unless the game's render style is `pbr`, models are made non-metal: metal with nothing to reflect draws black on a phone.
+- `assets check <game>`: every model against phone budgets (triangles, draw calls, picture memory, the first-play download), the Khronos glTF-Validator, its licence, and whether a decision it was made under has changed. `assets lineup <game>` draws them side by side at true scale on a 1 m grid, with their silhouettes and how far their colours drift from the palette.
+- `@homie-rocks/studio/assets`: one model loader for three.js games. It refuses unsafe or oversized files before three.js reads them, decodes meshopt, clones skinned models properly, and says in development when a model is over its budget.
+- A starter in 3D: `game new <id> --from gem-rush-3d` is Gem Rush's rules drawn with three.js and dressed with models from the starter library. `game new` fetches them, checked by SHA-256 (the repository holds no model file), and a game you already planned keeps its decisions, its `style.json` and its own models. `assets lineup` draws each model at the height and in the colours the game gives it.
+- A remix now arrives with its models: the original site serves `/games/<id>/assets.json`, and `game remix` fetches every model its licence lets a remix carry, checked by SHA-256, with a grey placeholder of the same size for the rest. It adds three.js when the game needs it, and no other package by itself.
+- Homie for Claude Desktop: the tools `style_explore`, `style_board`, `decision_set`, `assets_plan`, `assets_find`, `asset_add`, `asset_make`, `asset_check`, `asset_lineup` and `asset_rights`, with style board, look decision, cast, lineup and rights cards.
+- Plugin: the `style` skill (decisions, the board, locks and the blast radius) and the `models` skill (the starter library, your own models, and generated props: a concept in the locked style, then Tripo P1 image-to-3D, on your own fal account under a budget with a receipt per call, about US$0.54 a prop). The plan asks whether you want to steer the look and what art budget you have.
+- Plugin: the Studio mod's Art tab and its commands `/look`, `/lock`, `/assets`, `/lineup` and `/rights`; it refuses a hand edit to a locked decision, a deploy that ships an unlicensed model, and a commit of a big binary under `games/`, and holds a paid prop past the budget.
+- `games/<id>/style.json`: the palette, fonts, light and camera a game draws with. Its landing takes its accents from it, and the video skill's title cards (`card --game <id>`) wear its palette and font.
+
+### Changed
+
+- `publish` refuses to list a studio while a public game ships a model with no licence record, or one whose licence forbids it.
+- `check` refuses a game with a binary over 5 MB committed under `games/` (it belongs in R2).
+- The remix source leaves out each game's `codex/` folder (its decisions and style board), like `CODEX.md`.
+- `@homie-rocks/studio` now depends on three.js, @gltf-transform, meshoptimizer, sharp and the Khronos glTF-Validator (about 60 MB more in a studio's `node_modules`).
+
+### Upgrade notes
+
+- `homie-studio upgrade --apply` adds the art section to AGENTS.md and `.gitignore` lines for raw 3D files (`art/**/raw/`, `*.blend`, `*.fbx`). Commit no raw model file: move any already committed into `art/<slug>/raw/`.
+- The starter library is served from homie.rocks once it is online; until then `assets find` says so, and `HOMIE_LIBRARY` can point at a local copy.
+
 ## [0.21.0] - 2026-10-02
 
-**Plugin 0.22.0** · [#31](https://github.com/homie-rocks/homie/pull/31)
+**Plugin 0.22.0** · [#31](https://github.com/homie-rocks/homie/pull/31) · [release-2026-10-02-studio-0.21.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.21.0)
 
 The Homie mod for Claude Code: your studio, its rooms and a real seat in a live game beside the chat, with a look
 before protected files, deploys and spending, and keys kept out of what Claude reads.

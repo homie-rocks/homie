@@ -6,34 +6,41 @@
  * - the Studio pane (/studio): Build (the progress feed, stages going green, the latest check frame, a live Watch),
  *   Rooms (live rooms with players and AI, Watch/Join links, Announce, Kick and Mute through the studio's own back
  *   office, which only ASKS for a kick or a mute: the owner confirms each with one tap in their own browser),
- *   Games (launch state and the remix switch, asked for the same way), Stats, Codex, and Parts (the parallel skill's
- *   agents); it opens by itself when a build starts, where the terminal is wide enough for a pane nobody asked for;
+ *   Games (launch state and the remix switch, asked for the same way), Stats, Codex, Lab, Parts (the parallel skill's
+ *   agents) and Art (art direction: the phase strip, the look, each decision with Lock and Unlock, the cast, the scene
+ *   budgets, the spend and the licences); it opens by itself when a build starts, where the terminal is wide enough
+ *   for a pane nobody asked for;
  * - the arcade (/arcade): a real seat in a public room of a live Homie game, played in the pane while Claude works;
  * - Homie's tool results as checklists, check rows, verdicts and live links (and the commands' rows in words).
- * Instant commands, no Claude turn: /studio /play /watch /rooms /build /codex /deploy-status /perf-numbers /parts /arcade.
+ * Instant commands, no Claude turn: /studio /play /watch /rooms /build /codex /deploy-status /perf-numbers /parts
+ * /arcade /look /lock /assets /lineup /rights.
  * Guards on tool calls: an edit to a file studio.json "protect" lists, a production deploy, and a paid media call
- * past the studio's budget are held with what would change and Proceed / Cancel; secrets are taken out of every
- * tool result before Claude reads it.
+ * past the studio's budget are held with what would change and Proceed / Cancel. Refused outright: a change to a
+ * decision the person locked (games/<id>/codex/decisions.json), a deploy that ships an asset with no allowed licence
+ * in a public game, and a `git add` or `git commit` that would put a file over 5 MB under games/ into git. Secrets
+ * are taken out of every tool result before Claude reads it.
  *
- * WHAT IT REACHES. Files: the studio's own (studio.json, .studio/, games/*, budgets, CODEX.md, .perf/) and the file
- * a held edit names. Network ($.http.fetch): only the studio's own site (its live address or this computer's dev
- * site), *.homie.rocks (the Homie Arcade game list), and its own game bridge over a private Unix socket. Processes:
- * `git` (read-only), the studio's own pinned `homie-studio` (office, stats, codex link, progress stop; each with
- * --json), a media skill's own `--dry-run` price, and the plugin's game bridge (mod/bridge.mjs: a headless Chrome
- * seat, only while the arcade or a live Watch is open). It never reads a key file, the keychain or the environment,
- * never approves a permission, never opens a browser, and never sends anything to a model.
+ * WHAT IT REACHES. Files: the studio's own (studio.json, .studio/, games/*, budgets, CODEX.md, .perf/), the file a
+ * held edit names, and the size of a file a `git add` or `git commit` would stage. Network ($.http.fetch): only the
+ * studio's own site (its live address or this computer's dev site), *.homie.rocks (the Homie Arcade game list), and
+ * its own game bridge over a private Unix socket. Processes: `git` (read-only), the studio's own pinned
+ * `homie-studio` (office, stats, codex link, progress stop, style lock / unlock / blast; each with --json), a media
+ * skill's own `--dry-run` price, and the plugin's game bridge (mod/bridge.mjs: a headless Chrome seat, only while the
+ * arcade or a live Watch is open). It never reads a key file, the keychain or the environment, never approves a
+ * permission, never opens a browser, and never sends anything to a model.
  *
  * Mods have strict rules for the mods API (the README's "What the Homie mod does"): every call is spelled
  * `$.namespace.method(...)` here, and a helper that takes `$` is a function declared at the top of this file.
  */
 import { applyEdit, unifiedDiff } from './lib/diff.mjs';
+import { GAME_ID, artFor, artSummaryOf, castText, decisionsFileOf, licenceIssues, lineupText, lockedChanges, lookText, publicSource, rightsText, usd } from './lib/art.mjs';
 import { summarizeCodex } from './lib/codex.mjs';
-import { deployOf, inside, paidMcpOf, paidOf, protectedBy, studioCalls } from './lib/commands.mjs';
+import { deployOf, gitStagesOf, inside, paidMcpOf, paidOf, protectedBy, studioCalls } from './lib/commands.mjs';
 import { ago, feedOf, summarize } from './lib/feed.mjs';
 import { redact } from './lib/redact.mjs';
 import { readResult } from './lib/results.mjs';
 import {
-  arcadeView, band, buildCard, buildTab, checksCard, codexTab, deployCard, gamesTab, guardPanel, holdPane, labTab, partsView, linkable,
+  arcadeView, artTab, band, buildCard, buildTab, checksCard, codexTab, deployCard, gamesTab, guardPanel, holdPane, labTab, partsView, linkable,
   paneFrame, roomsTab, setupCard, statsTab, studioCard, toolUseRow,
 } from './lib/views.mjs';
 
@@ -62,6 +69,7 @@ const LABELS = {
   'codex new': 'New Game Codex', 'codex link': 'Codex link', perf: 'Performance run', 'perf compare': 'Performance compare', 'perf sizes': 'Download sizes',
   'game new': 'New game', 'game remix': 'Remix a game', games: 'Games', status: 'Studio status', upgrade: 'Upgrade the studio', look: 'Look at the site',
   servers: 'Servers', 'servers new': 'New server', 'agents pass': 'Agent pass', demo: 'A working game', new: 'New studio',
+  style: 'Art direction', assets: 'Game assets',
 };
 
 const idleBridge = () => ({ state: 'idle', sock: null, status: null, pic: null, why: null, fps: 0, frames: [], n: 0 });
@@ -72,7 +80,7 @@ const S = {
   root: null, studio: null, name: null, local: {}, toolkit: false, games: [], live: null, dev: null,
   feedId: null, feed: null, feedMtime: 0, last: null, autoOpened: new Set(),
   preview: null, rooms: { live: null, dev: null, games: null, at: 0 }, office: null, stats: null,
-  busy: {}, why: {}, asks: [], forYou: [], codexes: [], codexLinks: {}, lab: { url: null, checks: [] },
+  busy: {}, why: {}, asks: [], forYou: [], codexes: [], codexLinks: {}, lab: { url: null, checks: [] }, art: [],
   tab: 'build', tickN: 0, ticking: false, drawn: '',
   calls: new Map(), parts: new Map(), partsAutoOpened: false, agentsAt: 0,
   guards: new Map(), guardN: 0, held: null,
@@ -108,12 +116,13 @@ export function register(on, options) {
 
   on('command.run', { command: 'studio' }, async ($, e) => {
     const tab = String(e.args ?? '').trim().toLowerCase();
-    if (['build', 'rooms', 'games', 'stats', 'codex', 'lab', 'parts'].includes(tab)) S.tab = tab;
+    if (['build', 'rooms', 'games', 'stats', 'codex', 'lab', 'parts', 'art'].includes(tab)) S.tab = tab;
     if (!S.root) return { text: 'Not inside a Homie studio (no studio.json here or above). /arcade plays a Homie game meanwhile; ask Claude to set up a studio to get the rest.' };
     await tick($, { force: true });
     if (S.tab === 'rooms') void loadRooms($);
     if (S.tab === 'lab') void readLab($);
-    if (!(await openPane($, PANE, `◆ ${S.name}`))) return { text: studioText() };
+    if (S.tab === 'art') await readArt($);
+    if (!(await openPane($, PANE, `◆ ${S.name}`))) return { text: S.tab === 'art' ? artText('look', '') : studioText() };
     return {};
   });
 
@@ -203,6 +212,43 @@ export function register(on, options) {
     return {};
   });
 
+  // Art direction (the style and models skills; .studio/art/<game>/latest.json). /style is the style skill's own
+  // (plugin skills answer to their bare names), so the Art tab's command is /look.
+  on('command.run', { command: 'look' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readArt($);
+    S.tab = 'art';
+    await openPane($, PANE, `◆ ${S.name}`);
+    return { text: artText('look', String(e.args ?? '').trim()) };
+  });
+
+  on('command.run', { command: 'lock' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    return { text: await lockCommand($, String(e.args ?? '').trim()) };
+  });
+
+  on('command.run', { command: 'assets' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readArt($);
+    return { text: artText('assets', String(e.args ?? '').trim()) };
+  });
+
+  on('command.run', { command: 'lineup' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readArt($);
+    return { text: artText('lineup', String(e.args ?? '').trim()) };
+  });
+
+  on('command.run', { command: 'rights' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readArt($);
+    const picked = artFor(S.art, String(e.args ?? '').trim());
+    if (!picked.list) return { text: picked.why };
+    const out = [];
+    for (const a of picked.list) out.push(rightsText(a, gameName(a.game), await $.fs.exists(`${S.root}/games/${a.game}/assets/RIGHTS.md`)));
+    return { text: out.join('\n') };
+  });
+
   /* ------------------------------------------------------------ tool calls */
 
   // Outermost: every tool call's result has its secrets taken out (after the guards below have decided), and the
@@ -217,11 +263,19 @@ export function register(on, options) {
 
   on('tool.call', { tool: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] }, async ($, e, next) => {
     if (!OPT.guardFiles) return next(e);
+    // A decision the person locked is refused outright (nobody is asked: the person's lock is the answer).
+    const locked = await guardLocks($, e);
+    if (locked) return locked;
     const held = await guardFile($, e);
     return held ?? next(e);
-  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this edit ran.' } : { deny: 'The Homie mod could not check this edit against the studio\'s protected files (studio.json "protect"), so it was not made. Ask the person, or try again.' }));
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this edit ran.' } : { deny: 'The Homie mod could not check this edit against the studio\'s protected files (studio.json "protect") and locked art decisions, so it was not made. Ask the person, or try again.' }));
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    const stages = OPT.guardFiles ? gitStagesOf(e.command) : [];
+    if (stages.length) {
+      const big = await guardBigFiles($, stages);
+      if (big) return big;
+    }
     const deploy = OPT.guardDeploys ? deployOf(e.command) : null;
     if (deploy) {
       const root = await studioFor($, deploy.dir);
@@ -239,7 +293,7 @@ export function register(on, options) {
       if (held) return held;
     }
     return next(e);
-  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this command ran.' } : { deny: 'The Homie mod could not check this command (a deploy or a paid media call), so it was not run. Ask the person, or try again.' }));
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this command ran.' } : { deny: 'The Homie mod could not check this command (a deploy, a paid media call, or big files into git), so it was not run. Ask the person, or try again.' }));
 
   on('tool.call', { tool: /^mcp__.+__studio_deploy$/ }, async ($, e, next) => {
     if (!OPT.guardDeploys || !S.root) return next(e);
@@ -324,10 +378,11 @@ export function register(on, options) {
       codex: () => codexTab(t, { s, codexes: S.codexes, links: S.codexLinks, columns, busy: S.busy.codex, on: { link: (c) => codexLink($, c) } }),
       lab: () => labTab(t, { lab: S.lab, games: S.games, columns, now }),
       parts: () => partsView(t, { parts: partList(), checks: S.feed ? summarize(S.feed).checks : [], columns, now }),
+      art: () => artTab(t, { art: S.art, games: S.games, columns, now, busy: S.busy.art, why: S.why.art, on: { lock: (game, d) => artLock($, game, d), unlock: (game, d) => artUnlock($, game, d) } }),
     };
     return paneFrame(t, {
       s, tab: S.tab, columns,
-      onTab: (id) => { S.tab = id; if (id === 'rooms') void loadRooms($); if (id === 'codex') void readCodexes($); if (id === 'lab') void readLab($); $.ui.invalidate('ui.render'); },
+      onTab: (id) => { S.tab = id; if (id === 'rooms') void loadRooms($); if (id === 'codex') void readCodexes($); if (id === 'lab') void readLab($); if (id === 'art') void readArt($); $.ui.invalidate('ui.render'); },
       body: (tabs[S.tab] ?? tabs.build)(),
     });
   });
@@ -395,7 +450,7 @@ export function register(on, options) {
 /* ================================================================== options and commands */
 
 const COMMANDS = [
-  ['studio', 'Homie: the Studio pane (build, rooms, games, stats, codex, parts)', '[build|rooms|games|stats|codex|parts]'],
+  ['studio', 'Homie: the Studio pane (build, rooms, games, stats, codex, lab, parts, art)', '[build|rooms|games|stats|codex|lab|parts|art]'],
   ['play', 'Homie: Play links for this studio\'s games', '[game]'],
   ['watch', 'Homie: Watch links for the rooms playing now', '[room|game]'],
   ['rooms', 'Homie: live rooms with players and AI, and the back office', null],
@@ -406,6 +461,12 @@ const COMMANDS = [
   ['perf-numbers', 'Homie: the latest performance run\'s numbers', '[game]'],
   ['parts', 'Homie: the parallel agents building now', null],
   ['arcade', 'Homie: play a live Homie game with strangers while Claude works', '[game]'],
+  // /style is the style skill's own, so the art direction at a glance is /look.
+  ['look', 'Homie: the game\'s look: its art direction, decision by decision (the Studio pane\'s Art tab)', '[game]'],
+  ['lock', 'Homie: lock one art decision, in your own words (unlocking is asked for in the Art tab)', '<decision> [game]'],
+  ['assets', 'Homie: the game\'s cast: routes, licences, costs, and what is stale', '[game]'],
+  ['lineup', 'Homie: the last asset lineup: what it flagged, and where its pictures are', '[game]'],
+  ['rights', 'Homie: licence problems with their fixes, and the game\'s RIGHTS.md', '[game]'],
 ];
 
 /** The plugin's userConfig values, with defaults for anything unset. */
@@ -434,7 +495,7 @@ async function findStudio($) {
     if (up === at) break;
     at = up;
   }
-  if (S.root !== before) { S.studio = null; S.feed = null; S.feedId = null; S.last = null; S.rooms = { live: null, dev: null, games: null, at: 0 }; S.office = null; S.stats = null; S.codexes = []; S.lab = { url: null, checks: [] }; }
+  if (S.root !== before) { S.studio = null; S.feed = null; S.feedId = null; S.last = null; S.rooms = { live: null, dev: null, games: null, at: 0 }; S.office = null; S.stats = null; S.codexes = []; S.lab = { url: null, checks: [] }; S.art = []; }
 }
 
 /** The studio whose folder a command line's `cd` names, or the session's. */
@@ -793,6 +854,115 @@ function labCheckOf(l, id) {
   };
 }
 
+/**
+ * Art direction (the style and models skills): .studio/art/<game>/latest.json, which the studio toolkit writes after
+ * every `style` and `assets` command. Read with every field checked (lib/art.mjs); newest first.
+ */
+async function readArt($) {
+  if (!S.root) return;
+  const dir = `${S.root}/.studio/art`;
+  let names = [];
+  try { names = (await $.fs.list(dir)).filter((d) => d.kind !== 'file' && GAME_ID.test(d.name)).map((d) => d.name); } catch { names = []; }
+  const out = [];
+  for (const id of names.slice(0, 16)) {
+    const a = artSummaryOf(await readJsonFile($, `${dir}/${id}/latest.json`), id);
+    if (a) out.push(a);
+  }
+  S.art = out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  redraw($);
+}
+
+function gameName(id) { return S.games.find((g) => g.id === id)?.name ?? id; }
+
+/** Lock, from the Art tab: the person's press, recorded as their words. Only the person locks. */
+async function artLock($, game, d) {
+  if (S.busy.art) return;
+  S.busy.art = `locking ${d.name}`;
+  S.why.art = null;
+  redraw($);
+  try {
+    const r = await studioCli($, ['style', 'lock', game, d.id, '--words', 'pressed Lock in the Studio pane']);
+    if (r.ok) $.ui.toast(r.locked?.length ? `Locked: ${d.name} (${d.label}).` : `${d.name} was locked already.`);
+    else S.why.art = `Not locked: ${r.why ?? r.message ?? 'no reason given'}`;
+  } finally { S.busy.art = null; }
+  await readArt($);
+}
+
+/**
+ * Unlock, from the Art tab: asked first, with the blast radius (`style blast`: the assets that go stale, what remaking
+ * them costs, what is free), and only on Proceed run with the person's press as the reason.
+ */
+async function artUnlock($, game, d) {
+  if (S.busy.art) return;
+  S.busy.art = `reading what unlocking ${d.name} would make stale`;
+  S.why.art = null;
+  redraw($);
+  try {
+    const r = await studioCli($, ['style', 'blast', game, d.id]);
+    const b = r.ok && r.blast && typeof r.blast === 'object' ? r.blast : null;
+    if (!b || !Array.isArray(b.assets)) {
+      S.why.art = `Not unlocked: the blast radius could not be read (${r.why ?? r.message ?? 'no answer'}), and nothing is unlocked without it.`;
+      return;
+    }
+    const assets = b.assets.filter((a) => a && typeof a === 'object').slice(0, 40);
+    const paid = assets.filter((a) => !a.free && Number(a.remake?.usd) > 0);
+    const cost = Number(b.totals?.usd) || 0;
+    S.busy.art = `waiting for your answer: unlock ${d.name}?`;
+    redraw($);
+    const answer = await ask($, {
+      question: `Unlock ${d.name} in ${gameName(game)}?`,
+      title: `Unlock ${d.name}`,
+      lines: [
+        { k: 'Now', v: String(b.from ?? d.label) },
+        { k: 'Stale', v: assets.length ? `${assets.length} asset${assets.length === 1 ? '' : 's'} if it changes` : 'nothing made under it', ...(assets.length ? { style: { color: 'yellow' } } : {}) },
+        { k: 'Remake', v: cost ? `about ${usd(cost)} (${paid.length} paid)` : 'free', ...(cost ? { style: { color: 'yellow', bold: true } } : {}) },
+        ...(Number(b.totals?.free) > 0 ? [{ k: 'Free', v: `${Number(b.totals.free)} by a re-tint or the library` }] : []),
+      ],
+      detail: {
+        lines: [
+          { k: 'Decision', v: `${d.id} (${d.name}), locked by the person: ${b.from ?? d.label}` },
+          ...(Array.isArray(b.decisions) && b.decisions.length ? [{ k: 'Also moves', v: b.decisions.map(String).join(', ') }] : []),
+          ...assets.map((a) => ({ k: String(a.id), v: `${a.kind ?? 'asset'}, ${a.route ?? '?'}: ${a.free ?? `${a.remake?.how ?? 'remade'}${Number(a.remake?.usd) > 0 ? `, about ${usd(a.remake.usd)}` : ''}`}` })),
+          { k: 'Remaking all', v: cost ? `about ${usd(cost)}, under the game's art budget` : 'costs nothing', style: { bold: true } },
+          String(b.note ?? 'Nothing is remade by itself.'),
+          'Proceed unlocks it (your press is recorded as the reason). It stays as it is until you or Claude change it.',
+        ],
+      },
+    });
+    if (answer !== 'Proceed') { $.ui.toast(`${d.name} stays locked.`); return; }
+    S.busy.art = `unlocking ${d.name}`;
+    redraw($);
+    const u = await studioCli($, ['style', 'unlock', game, d.id, '--reason', 'pressed Unlock in the Studio pane']);
+    if (u.ok) $.ui.toast(u.already ? `${d.name} was not locked.` : `Unlocked ${d.name} (now steered: Claude may change it with you).`);
+    else S.why.art = `Not unlocked: ${u.why ?? u.message ?? 'no reason given'}`;
+  } finally {
+    S.busy.art = null;
+    await readArt($);
+  }
+}
+
+/** `/lock <decision> [game]`: the person typed it, so it is their word. */
+async function lockCommand($, args) {
+  const [did, want] = args.split(/\s+/).filter(Boolean);
+  if (!did || !/^[a-z]+(?:\.[a-z0-9-]{1,40}){0,2}$/.test(did)) return 'Usage: /lock <decision> [game], for example /lock style.palette (or /lock style for the whole style phase). /look lists the decisions.';
+  if (want && !GAME_ID.test(want)) return `"${want.slice(0, 40)}" is not a game id.`;
+  await readArt($);
+  const picked = artFor(S.art, want);
+  if (!picked.list) return picked.why;
+  if (picked.list.length > 1) return `Several games have art direction (${picked.list.map((a) => a.game).join(', ')}): /lock ${did} <game>.`;
+  const game = picked.list[0].game;
+  const r = await studioCli($, ['style', 'lock', game, did, '--words', `/lock ${did}`]);
+  await readArt($);
+  if (!r.ok) return `Not locked: ${r.why ?? r.message ?? 'no reason given'}`;
+  const all = (S.art.find((a) => a.game === game)?.decisions ?? []).flatMap((p) => p.rows);
+  const words = (id) => { const x = all.find((y) => y.id === id); return x ? `${x.name} (${x.label})` : id; };
+  return [
+    r.locked?.length ? `Locked in ${gameName(game)}: ${r.locked.map(words).join('; ')}.` : `Nothing new to lock in ${gameName(game)}.`,
+    ...(r.already?.length ? [`  already locked: ${r.already.join(', ')}`] : []),
+    '  Claude cannot change a locked decision; unlocking is asked for in the Studio pane (/look, then Unlock), with what goes stale.',
+  ].join('\n');
+}
+
 async function codexLink($, c) {
   S.busy.codex = `a private link to ${c.title ?? c.id}`;
   redraw($);
@@ -824,6 +994,7 @@ async function tick($, { force = false } = {}) {
       if (S.tickN % 15 === 2 || (force && Date.now() - S.rooms.at > 5000)) { await loadRooms($); changed = true; }
       if (S.tab === 'codex' && S.tickN % 15 === 4) await readCodexes($);
       if (S.tab === 'lab' && S.tickN % 5 === 3) await readLab($);
+      if (S.tab === 'art' && S.tickN % 5 === 3) await readArt($);
     }
     if (await readParts($)) changed = true;
     await keepBridges($);
@@ -880,6 +1051,8 @@ function afterCall($, e, result) {
     if (e.tool === 'Bash') {
       const c = S.calls.get(e.tool_use_id);
       if (c?.homie && /^(progress|check|port check|build|deploy|dev|game|codex|office|stats)/.test(c.sub)) void tick($, { force: true });
+      // A style or assets command rewrites .studio/art/<game>/latest.json: the open Art tab shows it now, not in 10 s.
+      if (c?.homie && /^(style|assets)\b/.test(c.sub) && S.tab === 'art') void readArt($);
     }
     if (e.tool === 'Agent' || e.tool === 'Task') void readParts($, { force: true });
   } catch { /* never */ }
@@ -978,8 +1151,140 @@ async function guardFile($, e) {
     : `The person said no to this change to ${rel} (studio.json "protect": "${glob}"). Do not retry it unless they ask; say what you wanted to change and why.` };
 }
 
+/**
+ * An Edit, Write or MultiEdit to games/<id>/codex/decisions.json that changes the value or the state of a decision
+ * the person locked: refused, nobody asked (their lock is the answer). The toolkit writes this file; the way to change
+ * a locked decision is its own `style set … --unlock --reason`, after the person saw the blast radius.
+ */
+async function guardLocks($, e) {
+  if (!S.root || !['Edit', 'Write', 'MultiEdit'].includes(e.tool)) return null;
+  const path = String(e.file_path ?? '');
+  if (!path.startsWith('/')) return null;
+  let real = path;
+  try { real = (await $.fs.stat(path, { resolve: true })).realPath ?? path; } catch { real = path; }
+  const root = S.root;
+  const hit = [path, real].find((p) => inside(root, p) && decisionsFileOf(p.slice(root.length + 1)));
+  if (!hit) return null;
+  const game = decisionsFileOf(hit.slice(root.length + 1));
+  const before = await readText($, path);
+  if (before === null) return null;
+  const after = applyEdit(e.tool, before, e);
+  // An edit that cannot apply is refused by the tool itself.
+  if (after === null) return null;
+  const changed = lockedChanges(before, after);
+  if (changed && !changed.length) return null;
+  const how = (id) => `${id} is locked by the person; change it with homie-studio style set ${game} ${id} <value> --unlock --reason "<what they asked for>" after they saw the blast radius (homie-studio style blast ${game} ${id})`;
+  return { deny: changed === null
+    ? `games/${game}/codex/decisions.json holds decisions the person locked, and this edit would leave it unreadable (not JSON). The studio toolkit writes this file: homie-studio style set / steer / lock / unlock ${game} … changes a decision, and a locked one changes only after the person saw the blast radius (homie-studio style blast).`
+    : `${changed.map(how).join('. ')}. Nothing was changed.` };
+}
+
+/**
+ * A `git add` or `git commit` in a studio that would put a file over 5 MB under games/ into git: refused, naming each
+ * file and its size. What gets staged is read from git itself (read-only): the index for a commit, `status` for a
+ * folder or `-A`; the sizes from the files.
+ */
+async function guardBigFiles($, stages) {
+  const big = new Map();
+  for (const st of stages.slice(0, 6)) {
+    const here = S.cwd ?? S.root;
+    const base = st.dir ? (st.dir.startsWith('/') ? st.dir : `${here}/${st.dir}`) : here;
+    if (!base) continue;
+    const root = await studioFor($, base);
+    if (!root) continue;
+    const git = async (dir, args) => { try { const r = await $.process.run(['git', '-C', dir, ...args], { timeoutMs: 15_000 }); return r.exitCode === 0 ? String(r.stdout ?? '') : ''; } catch { return ''; } };
+    // git names files from the top of the repository; the studio may sit inside a bigger one.
+    const prefix = (await git(root, ['rev-parse', '--show-prefix'])).trim();
+    const files = new Set();
+    const listed = async (dir, args, mode) => {
+      // `-z` entries: a path (diff), or "XY path" (status; a rename or copy is followed by its old path, which is
+      // skipped). A deleted file has no size; `tracked` leaves out untracked files ("??").
+      const parts = (await git(dir, args)).split('\0');
+      for (let i = 0; i < parts.length; i++) {
+        let p = parts[i];
+        if (!p) continue;
+        if (mode) {
+          const xy = p.slice(0, 2);
+          if (/^[RC]/.test(xy)) i++;
+          if (xy.includes('D') || (mode === 'tracked' && xy === '??')) continue;
+          p = p.slice(3);
+        }
+        if (p.startsWith(prefix)) files.add(`${root}/${p.slice(prefix.length)}`);
+      }
+    };
+    if (st.verb === 'commit') {
+      await listed(root, ['diff', '--cached', '--name-only', '-z'], null);
+      if (st.all) await listed(root, ['diff', '--name-only', '-z'], null);
+    } else if (st.all && !st.paths.length) {
+      await listed(root, ['status', '--porcelain', '-z', '--untracked-files=all', '--', 'games'], st.all);
+    }
+    // A commit names only files git tracks; `add -u` only those too.
+    const mode = st.verb === 'commit' || st.all === 'tracked' ? 'tracked' : 'all';
+    for (const p of st.paths.slice(0, 200)) {
+      const abs = normalPath(p.startsWith('/') ? p : `${base}/${p}`);
+      let kind = null;
+      try { kind = (await $.fs.stat(abs)).kind; } catch { kind = null; }
+      if (kind === 'file') files.add(abs);
+      // A folder, a glob, or a path only git knows (git expands pathspecs itself).
+      else await listed(base, ['status', '--porcelain', '-z', '--untracked-files=all', '--', abs === root ? 'games' : p], mode);
+    }
+    let n = 0;
+    for (const f of files) {
+      const abs = normalPath(f);
+      if (!inside(`${root}/games`, abs) || big.has(abs) || ++n > 2000) continue;
+      let size = 0;
+      try { size = Number((await $.fs.stat(abs)).size) || 0; } catch { size = 0; }
+      if (size > BIG_FILE) big.set(abs, { rel: abs.slice(root.length + 1), size });
+    }
+  }
+  if (!big.size) return null;
+  const named = [...big.values()].map((b) => `${b.rel} (${(b.size / 1024 / 1024).toFixed(1)} MB)`);
+  return { deny: `Not run: ${named.join(', ')} ${big.size === 1 ? 'is' : 'are'} over 5 MB under games/, and a studio keeps big files out of git. Big files go to the studio's R2 (homie-studio storage add, then media move); raw models stay in art/<slug>/raw/ (git-ignored); a shipped model is made phone-sized with homie-studio assets optimise.` };
+}
+
+const BIG_FILE = 5 * 1024 * 1024;
+
+/** An absolute path with its "." and ".." folded, so it compares with the studio's own. */
+function normalPath(p) {
+  const out = [];
+  for (const part of String(p).split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') out.pop();
+    else out.push(part);
+  }
+  return `/${out.join('/')}`;
+}
+
+/**
+ * The licences a deploy ships: every public game's assets/manifest.json (game.json `launch` not private or invite,
+ * `share.source` not false). { count, games, problems: [{ game, asset, problem }] }.
+ */
+async function licenceFacts($, root) {
+  const out = { count: 0, games: 0, problems: [] };
+  let dirs = [];
+  try { dirs = await $.fs.list(`${root}/games`); } catch { dirs = []; }
+  for (const d of dirs.slice(0, 200)) {
+    if (d.kind === 'file' || !GAME_ID.test(d.name)) continue;
+    if (!publicSource(await readJsonFile($, `${root}/games/${d.name}/game.json`))) continue;
+    const path = `${root}/games/${d.name}/assets/manifest.json`;
+    if (!(await $.fs.exists(path))) continue;
+    const r = licenceIssues(await readJsonFile($, path));
+    out.count += r.count;
+    out.games++;
+    for (const p of r.problems) out.problems.push({ game: d.name, ...p });
+  }
+  return out;
+}
+
 /** A production deploy: held, with what will change, until the person says Proceed. */
 async function guardDeploy($, e, root, what) {
+  // A public game shipping an asset with no allowed licence is refused before anyone is asked.
+  const lic = await licenceFacts($, root);
+  if (lic.problems.length) {
+    const games = [...new Set(lic.problems.map((p) => p.game))];
+    return { deny: `Not deployed: ${lic.problems.length} asset${lic.problems.length === 1 ? '' : 's'} in a public game ${lic.problems.length === 1 ? 'has' : 'have'} no allowed licence: ${lic.problems.slice(0, 12).map((p) => `${p.game}/${p.asset}: ${p.problem}`).join('; ')}${lic.problems.length > 12 ? '; …' : ''}. Fix each with the studio's toolkit (${games.map((g) => `homie-studio assets check ${g}`).join(', ')} says what is wrong and how to fix it), then deploy again.` };
+  }
+  const licences = lic.count ? `${lic.count} asset${lic.count === 1 ? '' : 's'}, all licensed` : null;
   const d = await deployFacts($, root);
   const short = [
     { k: 'Where', v: d.live ? d.where : 'a new workers.dev address', style: { bold: true } },
@@ -990,6 +1295,7 @@ async function guardDeploy($, e, root, what) {
     ...(d.uncommitted ? [{ k: 'Uncommitted', v: `${d.uncommitted} file${d.uncommitted === 1 ? '' : 's'}`, style: { color: 'yellow' } }] : []),
     ...(d.newGames.length ? [{ k: 'New', v: d.newGames.join(', '), style: { color: 'green' } }] : []),
     { k: 'Checks', v: d.checksShort, ...(d.checksOk ? {} : { style: { color: 'yellow' } }) },
+    ...(licences ? [{ k: 'Licences', v: licences, style: { color: 'green' } }] : []),
     ...(d.playing ? [{ k: 'Playing', v: `${d.playing} ${d.playing === 1 ? 'person' : 'people'} now` }] : []),
   ];
   const long = [
@@ -1001,6 +1307,7 @@ async function guardDeploy($, e, root, what) {
     ...(d.uncommitted ? [{ k: 'Uncommitted', v: `${d.uncommitted} file${d.uncommitted === 1 ? '' : 's'} changed and not committed (deployed as they are now)`, style: { color: 'yellow' } }] : []),
     ...(d.newGames.length ? [{ k: 'New games', v: d.newGames.join(', '), style: { color: 'green' } }] : []),
     { k: 'Checks', v: d.checks, ...(d.checksOk ? {} : { style: { color: 'yellow' } }) },
+    ...(licences ? [{ k: 'Licences', v: `${licences} (assets/manifest.json of ${lic.games} public game${lic.games === 1 ? '' : 's'})`, style: { color: 'green' } }] : []),
     ...(d.playing ? [{ k: 'Playing now', v: `${d.playing} ${d.playing === 1 ? 'person' : 'people'} (rooms reconnect and keep their seats)` }] : []),
     `Run as Claude wrote it: ${what}`,
   ];
@@ -1070,7 +1377,10 @@ async function guardSpend($, e, paid) {
       const dir = paid.dir ? (paid.dir.startsWith('/') ? paid.dir : `${S.cwd}/${paid.dir}`) : S.cwd;
       const r = await $.process.run(paid.dryRun, { cwd: dir, timeoutMs: 45_000 });
       const j = JSON.parse(String(r.stdout).slice(String(r.stdout).indexOf('{')));
+      const images = Array.isArray(j?.images) ? j.images.filter((x) => Number.isFinite(Number(x?.price?.usd))) : [];
       if (j?.price && Number.isFinite(Number(j.price.usd))) { est = Number(j.price.usd); basis = j.price.basis ?? ''; }
+      // The models skill's `mood` prices one image per style-board direction: the call costs their sum.
+      else if (images.length) { est = images.reduce((n, x) => n + Number(x.price.usd), 0); basis = `${images.length} mood image${images.length === 1 ? '' : 's'}`; }
       else if (j?.quote && Number.isFinite(Number(j.quote.music))) { est = Number(j.quote.music); basis = j.quote.basis ?? ''; }
       else { const m = /guess of (\d+) credits/.exec(String(j?.why ?? '')); if (m) { est = Number(m[1]); basis = 'a guess from the length'; } }
     } catch { est = null; }
@@ -1405,6 +1715,14 @@ function partsText() {
   const parts = partList();
   if (!parts.length) return 'No parts: nothing is building in parallel now.';
   return parts.map((l) => `${l.status === 'running' ? '●' : l.status === 'completed' ? '✓' : '✗'} ${l.description || l.id}: ${l.tools} tools, ${l.edits} files${l.last ? ` · ${l.last}` : ''}`).join('\n');
+}
+
+/** The art commands' words: the look (/look), the cast (/assets) or the lineup (/lineup), for the game named or each. */
+function artText(what, want) {
+  const picked = artFor(S.art, want);
+  if (!picked.list) return picked.why;
+  const now = Date.now();
+  return picked.list.slice(0, 6).map((a) => (what === 'assets' ? castText(a, gameName(a.game)) : what === 'lineup' ? lineupText(a, gameName(a.game), now) : lookText(a, gameName(a.game), now))).join('\n\n');
 }
 
 function deployText(d) {

@@ -1,0 +1,127 @@
+---
+name: models
+description: Give a game real 3D models that fit together and run on a phone — free CC0 models from Homie's starter library (Kenney, KayKit, Poly Haven, ambientCG) copied in with their licence, the person's own files checked and made phone-sized, and generated props (a concept image in the game's locked style, then Tripo P1 image-to-3D) on the person's OWN fal account under a hard budget with a receipt per call — every asset recorded with its provenance and licence (RIGHTS.md, the credits page), checked against phone budgets, shown in a lineup at true scale, and loaded through one safe loader. Use when someone wants 3D models, props, characters, scenery or "free assets" for a game, asks where a model came from or whether it may be used, or says the models look like they are from different games.
+---
+
+# Models for a game: free first, everything licensed, one look
+
+Read the `style` skill first: a game's models are made under its decisions (render style, palette, scale,
+budgets). Routes, cheapest coherent one first:
+
+1. **The engine** (free): procedural geometry, tinted from the palette. The house's best looks are procedural;
+   never replace one with generated meshes without the owner's ask.
+2. **The starter library** (free, CC0): `assets find`, then `assets add`.
+3. **The person's own files**: `assets add --file … --license …` (ask whose it is).
+4. **Generated** (paid, their own fal account, under a budget): a concept, then a mesh. Props only in phase 1.
+
+Commands run from inside the studio: `npx --no-install homie-studio assets …` (free) and this skill's script for
+the paid route: `node "${CLAUDE_PLUGIN_ROOT}/skills/models/scripts/models.mjs" <command>` (in an app with Homie's
+tools: `assets_find`, `asset_add`, `asset_make`, `asset_check`, `asset_lineup`, `asset_rights`).
+
+## The starter library (free)
+
+```sh
+npx --no-install homie-studio assets find "fox"                    # CC0 items, phone-sized, with triangles and size
+npx --no-install homie-studio assets find "pine tree" --family kenney
+npx --no-install homie-studio assets add <id> kenney-cube-pets/animal-fox --height 0.7 --card "Characters/Fox"
+```
+
+One library family per game (`cast.family`): mixing Kenney with KayKit shows. An added item is COPIED into
+`games/<id>/public/models/` (never loaded from homie.rocks at runtime), recorded in `assets/manifest.json` with its
+pack, origin and SHA-256, and its pack is credited on the landing's credits page (kindly: CC0 needs no credit).
+`HOMIE_LIBRARY` points at another copy of the library (a folder or an address).
+
+## The person's own files
+
+```sh
+npx --no-install homie-studio assets add <id> --file /path/to/lantern.glb --license own --as lantern --height 0.6
+```
+
+Ask whose it is and under what licence: `own`, `cc0`, `cc-by-4.0` (with `--attribution "<who, where>"`),
+`eula:<store>`, `market:<listing>`, `other` (with `--notes`). The file is refused before anything reads it when it
+loads anything from an address (an external URI), declares a buffer over the import cap, or is over 64 MB; a
+.gltf may bring its .bin and pictures from its own folder only. Then it is made phone-sized (its tier's
+triangles and picture size, the pivot at the bottom centre, its height in metres, meshopt geometry, WebP
+pictures); the raw file stays in `art/<slug>/raw/` (git-ignored; the studio's R2 with `media move` once it has
+storage), never shipped and never committed. FBX, OBJ and .blend: export a .glb first (Blender: File > Export >
+glTF 2.0, binary).
+
+## Generated props (paid): price, budget, look, then the mesh
+
+```sh
+node <models.mjs> check                                  # the fal key (a free check) and the registry
+node <models.mjs> quote <id> --count 3                   # concept + mesh, priced live (about US$0.54 a prop)
+node <models.mjs> budget <id> --cap 3                    # the cap the person agreed to, for this game's models
+node <models.mjs> prop <id> lantern --card "Items/Ember Lantern" --what "an iron lantern with a warm ember inside" --height 0.6 --dry-run
+node <models.mjs> prop <id> lantern --card "Items/Ember Lantern" --what "…" --height 0.6 --yes     # the concept only
+#   LOOK at art/lantern/concept.*: the thing, whole, in the game's style, on a plain background?
+node <models.mjs> prop <id> lantern --mesh --yes          # Tripo P1, textured, face_limit 1500; then optimised and recorded
+npx --no-install homie-studio assets lineup <id>         # true scale, silhouettes, palette drift
+```
+
+- Tell the person the price first and agree a cap; `prop` refuses with no budget, refuses past the cap, and asks
+  again without `--yes`. The receipt is written the moment fal accepts the job (`art/receipts.jsonl`, the
+  game's `art/<id>-models/budget.json`); running the same step again resumes it and never pays twice.
+- The concept starts from the derived style prompt (`homie-studio style prompt <id>`) with the golden images as
+  references, on a plain background with even light (baked light is the top quality problem of image-to-3D).
+- **Never a loop.** Look at the concept before the mesh, and at the model in the lineup before the next one. A
+  bad concept: change the words and `--concept-again` once. Spend the riskiest prop first.
+- `references/models.json` is the dated registry of endpoints, prices and schemas. Endpoints retire and reprice
+  monthly: `node <models.mjs> registry` reads every price again for free; update the registry (`--write`) when one
+  moved, and never hard-code an endpoint anywhere else.
+- A painted mood image for the style board: `node <models.mjs> mood <id> b --yes` (about US$0.035; a target).
+
+## Check, lineup, rights
+
+```sh
+npx --no-install homie-studio assets check <id>    # phone budgets, the glTF-Validator, licences, staleness, big files
+npx --no-install homie-studio assets lineup <id>   # pictures in .studio/art/<id>/; look at them
+npx --no-install homie-studio assets rights <id>   # games/<id>/assets/RIGHTS.md and the credits
+npx --no-install homie-studio assets redo <id> <asset>   # made again from its kept raw file, free
+```
+
+`assets redo` runs only the free steps again (today's budgets and render style, from `art/<slug>/raw/`). A model
+drawn black in the game is metal with nothing to reflect: every style but `pbr` makes models non-metal, and a redo
+applies it to one made before. A palette or shape change needs a new concept and mesh (paid), not a redo.
+
+Phone budgets (per asset): a prop 1,500 triangles and 512 px pictures, a hero 8,000 and 1,024 px, one material;
+the scene: about 100 draw calls, 150,000 triangles, 48 MB of picture memory, 5 MB to download before the first
+round. `assets check` holds the game to them; the `perf` skill is the real gate on a phone.
+
+After the lineup, have a FRESH reviewer (the `playtest` skill's blind review: a new agent that never saw your
+reasoning) look at the style board, the golden images and the lineup pictures and score "does every model look
+like one game?" from 1 to 10, naming outliers; record it: `assets review <id> --score <n> --outliers a,b`.
+Under 7, or any outlier, those assets need another look.
+
+## Loading them in the game
+
+Every model loads through `@homie-rocks/studio/assets`:
+
+```ts
+import { createModels } from '@homie-rocks/studio/assets';
+const models = createModels();
+const fox = await models.instance('./models/fox.glb').catch(() => models.placeholder({ x: 0.5, y: 0.7, z: 0.8 }));
+```
+
+It refuses an unsafe or oversized file (an external URI, a buffer over the cap, an extension three.js cannot
+read) before parsing it, decodes meshopt geometry, clones skinned models properly, and warns in development
+when a model is over its budget. The `gem-rush-3d` starter shows the whole pattern.
+
+## Licences, plainly
+
+- `references/RIGHTS.md` keeps what the providers' terms say, with read dates. Read the live pages again before
+  anything commercial is published (`registry` re-reads prices; terms you read by hand).
+- A public game may contain only assets whose licence lets them sit in a public source: CC0, CC BY with credit,
+  the studio's own, and generated ones. Anything else is `remix: none` (remixers get a grey placeholder) and the
+  studio's repository must stay private while it holds the raw file. `publish` refuses a game with an asset that
+  has no licence record.
+- Never fetch from Poly Pizza or ShareTextures by script, never use Quaternius, Mixamo, Synty, Fab, Unity Asset
+  Store or TurboSquid files in a public game's repository, never use a model or dataset under non-commercial
+  terms.
+
+## Never
+
+- Never spend without a budget, past it, or without a receipt; never run paid generation in a loop; never print
+  or store a key.
+- Never ship a raw provider file, never commit one, never ship an asset with no licence record.
+- Never replace a model the person made without asking.

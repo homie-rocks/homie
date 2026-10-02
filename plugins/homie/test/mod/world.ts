@@ -87,6 +87,7 @@ export function world(on: any, opts: {
   run?: (argv: readonly string[], init?: any) => { exitCode: number; stdout: string; stderr: string } | null;
   ask?: string | null; tool?: (e: any) => any; agents?: any[]; panes?: any[] | null; http?: Record<string, unknown>; options?: Record<string, unknown>;
   spawn?: (req: any) => AsyncGenerator<any, any, any>; register?: (e: any) => void; open?: (e: any) => any;
+  sizes?: Record<string, number>;
 } = {}): World {
   const clock = mock.clock(on)
   const log: Record<string, any[]> = { toasts: [], logs: [], opened: [], closed: [], asked: [], blits: [], fetched: [], ran: [], spawned: [], stored: [], tools: [] }
@@ -137,7 +138,8 @@ export function world(on: any, opts: {
     return { deny: `ENOENT: ${e.path}` }
   })
   on('fs.list', ($: any, e: any) => { const d = dirOf(e.path); return d ? { value: d } : { deny: `ENOENT: ${e.path}` } })
-  on('fs.stat', ($: any, e: any) => (files.has(e.path) || bytes.has(e.path) ? { value: { kind: 'file', size: 1, mtimeMs: 2000, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } } : { deny: 'ENOENT' }))
+  // A file's size is 1 byte unless `sizes` says otherwise (a big model, for the raw-file guard).
+  on('fs.stat', ($: any, e: any) => (files.has(e.path) || bytes.has(e.path) ? { value: { kind: 'file', size: opts.sizes?.[e.path] ?? 1, mtimeMs: 2000, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } } : { deny: 'ENOENT' }))
   on('http.fetch', ($: any, e: any) => {
     log.fetched.push(e.init?.socketPath ? `${e.url} via ${e.init.socketPath} ${e.init.body ?? ''}` : e.url)
     if (e.init?.socketPath) return { value: { status: 200, ok: true, headers: {}, text: '{"ok":true}' } }

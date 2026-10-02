@@ -1,0 +1,66 @@
+{
+  "v": 1,
+  "palette": {
+    "bg": "#cfe8f5",
+    "ink": "#1d2b3a",
+    "accent": "#ff8a5b",
+    "accent2": "#5cbf8a",
+    "danger": "#e2553f",
+    "good": "#45b36b",
+    "gold": "#ffd25a",
+    "ramp": [
+      "#9fd3ef",
+      "#cfe8f5",
+      "#f8f3e6",
+      "#8fd06a",
+      "#5cbf8a",
+      "#3f8f5a",
+      "#ffd25a",
+      "#ffb347",
+      "#ff8a5b",
+      "#e86a6a",
+      "#b07ad9",
+      "#8a6a4a",
+      "#5a4a3a",
+      "#ffffff"
+    ]
+  },
+  "fonts": {
+    "display": "Fredoka",
+    "body": "Nunito"
+  },
+  "light": {
+    "time": "morning",
+    "key": [
+      -0.5,
+      -1,
+      -0.35
+    ],
+    "intensity": 2.2,
+    "hardness": 0.35,
+    "sky": "#e0f0f9",
+    "ground": "#79c9a5",
+    "fog": 0.35,
+    "bloom": 0.1
+  },
+  "camera": {
+    "angle": "high-3/4",
+    "projection": "perspective",
+    "pitch": 52,
+    "distance": 22,
+    "fov": 38
+  },
+  "render": "lowpoly-flat",
+  "materials": {
+    "model": "flat",
+    "outline": false,
+    "texelDensity": null,
+    "atlas": true
+  },
+  "rev": {
+    "style.palette": 1,
+    "style.ui": 1,
+    "style.light": 1,
+    "style.camera": 1
+  }
+}

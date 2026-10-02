@@ -70,6 +70,14 @@ node <art.mjs> gen cover --model fal-ai/flux/dev --input art/cover/input.json --
   the prompt, run it once more. Spend the riskiest image first.
 - No real people, no real brands, no copyrighted characters, no "in the style of" a living artist, in
   prompts or references.
+- **Every prompt starts from the game's derived style prompt** (`homie-studio style prompt <id>`: medium,
+  shape, palette hexes, light, framing; computed from the decisions, never edited by hand) and uses the golden
+  images as references on a multi-reference model. A picture made under an older palette is listed stale when
+  the palette changes (the `style` skill's blast radius).
+- What the provider's terms say about the pictures, with read dates: `references/RIGHTS.md`. Read the live page
+  again before anything commercial is published.
+- 3D models (props, characters) are the `models` skill's; mood images for the style board are too
+  (`models.mjs mood`).
 
 ## 3. Backdrops, textures, plates
 
@@ -98,10 +106,13 @@ Images do not fix a game that looks unfinished; the best-loved browser games oft
 files at all. What makes a frame look finished is light, contrast between the subject and the ground,
 detail at more than one scale, and a clear horizon or depth. The method:
 
-1. **A style sheet** (`art/STYLE.md`): palette (five colours with their jobs), light (where it comes
-   from, how hard), shapes, type, and what the look is willing to risk.
-2. **Paintovers**: real frames of the game (`frame`), painted over by an image model with the style
-   sheet as the prompt and the frame as the reference. These are the TARGET, never shipped as the game.
+1. **The style bible is the game's decisions** (the `style` skill): render style, palette with its jobs,
+   light, shape language, camera, fonts, drawn in the codex's Art direction tab. An older studio's
+   `art/STYLE.md` retires into it: carry what it says into `style set` / `style steer`, then keep only the
+   decisions. Paint with the LOCKED palette and light.
+2. **Paintovers**: real frames of the game (`frame`), painted over by an image model with the derived style
+   prompt (`npx --no-install homie-studio style prompt <id>`) and the frame as the reference, plus the golden
+   images (`style golden`) where there are any. These are the TARGET, never shipped as the game.
 3. **Change the game's own rendering** (lights, materials, fog, the floor, the camera) until frames of
    the running game match the paintover; compare them side by side.
 4. **Judge blind**: frames of the old build, the new one and a reference game the person admires,

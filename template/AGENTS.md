@@ -13,6 +13,7 @@ directory lists its games; homie.rocks does not host them.
 | --- | --- |
 | `games/<id>/` | One game: `game.json` (id, name, blurb, players, round length), `index.html`, `src/main.ts`; and, when it has them, `tunables.json` (the numbers that shape how it feels: the Game Lab's sliders, kept values written back) and `lab.json` (the Game Lab's takes). |
 | `music/`, `videos/` | Songs, scores, loops; trailers, music videos, cutscenes. `manifest.json` lists each one (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/music/<slug>/` or `/videos/<slug>/`. Without storage the site serves each file itself (up to 25 MiB). Once the studio has storage (see below), its big media (over 1 MiB, or left out of git) lives in its own R2: every deploy uploads it, checks it by SHA-256 and serves it from R2 at the same address. Large files never go into git. The Homie plugin's `music` and `video` skills make them. |
+| `games/<id>/assets/` | Every model and texture a game ships, with where it came from and its licence (`manifest.json`), and `RIGHTS.md` in plain words; `games/<id>/codex/decisions.json` (private, like the codex) is its look as decisions, and `style.json` the palette, fonts, light and camera the game draws with. `art/<slug>/` holds art jobs (concepts, receipts; `raw/` is git-ignored). |
 | `posts/` | The studio's news and drops: one markdown file each (`posts/2026-09-30-we-are-live.md`: `title:`, `date:`, `summary:`, and `game:` / `song:` / `video:` to link one). They are the site's Posts, with Atom and JSON feeds. |
 | `site/` | The studio's site: its look (`theme.json`), and anything of its own that wins over the generated pages (`site/README.md`); the Worker (`src/worker.mjs`) and its D1 migrations. |
 | `wrangler.jsonc` | The Worker's Cloudflare config (the Worker, D1, the Table and Lobby Durable Objects, and `previews` for branch Previews), at the root, where Cloudflare's Workers Builds reads it. A studio made before 0.10.0 keeps it in `site/` and deploys from a computer; every command finds either. |
@@ -170,6 +171,26 @@ studio's pinned copy, never a registry lookup of the bare name.
 - `npx --no-install homie-studio setup status` says what this computer and the person's accounts have (Node,
   Cloudflare, Chrome, ffmpeg, GitHub, ElevenLabs, fal), what each unlocks, and the exact fix. Optional ones never
   block anything.
+
+## Art direction and models
+
+- **A game's look is a set of decisions** (`games/<id>/codex/decisions.json`, drawn in the codex's Art direction
+  tab): render style, palette, shape, proportions, materials, light, camera, fonts, effects; the cast, its library
+  family, scale and phone budgets. `npx --no-install homie-studio style init <id> --prompt "<the person's words>"`
+  picks every one automatically with a why. The person can steer one ("warmer"), lock one, or explore three
+  directions drawn by the game engine itself (`style board <id>`, free). The first asset built on a decision pins
+  it; a locked one changes only with the person's yes after `style blast` shows what goes stale and what remaking
+  it would cost. Nothing is ever remade by itself. The Homie plugin's `style` skill has the rest.
+- **Models come free first**: the engine, then Homie's CC0 starter library (`assets find "<words>"`, then
+  `assets add <id> <item>`, copied in, never hot-linked), then the person's own files (`assets add <id> --file …
+  --license …`), then generated props on the person's own fal account under a budget with receipts (the plugin's
+  `models` skill). Every model is checked (no external URIs, no oversized files), made phone-sized and recorded
+  with its licence; `RIGHTS.md` and the credits page follow. `assets check <id>` holds a game to the phone
+  budgets; `assets lineup <id>` shows everything at true scale. A three.js game loads models through
+  `@homie-rocks/studio/assets` (`createModels`); `game new <id> --from gem-rush-3d` starts one.
+- **Licences**: a public game ships only assets whose licence allows it (CC0, CC BY with credit, the studio's own,
+  generated); `publish` refuses an asset with no licence record. A remix gets each redistributable model,
+  checked by SHA-256, and a grey placeholder for the rest.
 
 ## Running live games (the back office)
 

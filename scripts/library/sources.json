@@ -1,0 +1,215 @@
+{
+  "v": 1,
+  "about": "The packs of the Homie starter library v0, built by scripts/library.mjs (fetch, then build). CC0 only: the build reads each pack's own licence text first and refuses a pack whose text does not say CC0. Chosen for small multiplayer games played on phones: low-poly packs that look right together, rigged and animated characters, modular kit pieces, and a short shelf of real-world props, materials and skies. A pack marked srgbFactors (Kenney's 2020 exports) stores its flat colours as sRGB where glTF reads linear; the build converts them so they draw as the pack's own previews show them. In \"select\" the first glob that matches a file decides its kind and tier: kit pieces (1,000 triangles), props (1,500), signature pieces (5,000), heroes and characters (8,000).",
+  "packs": [
+    { "id":"kenney-cube-pets","label":"Kenney Cube Pets","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/cube-pets","license":"cc0","kind":"creature","tier":"prop","theme":["animal","pet","cute"],
+      "source": {"kind":"kenney","slug":"cube-pets"},
+      "select": [
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-food-kit","label":"Kenney Food Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/food-kit","license":"cc0","kind":"prop","tier":"prop","theme":["food","kitchen","pickup"],
+      "source": {"kind":"kenney","slug":"food-kit"},
+      "select": [
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-nature-kit","label":"Kenney Nature Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/nature-kit","license":"cc0","kind":"prop","tier":"prop","srgbFactors":true,"theme":["nature","forest","outdoor"],
+      "source": {"kind":"kenney","slug":"nature-kit"},
+      "select": [
+        {"glob":"Models/GLTF format/{cliff,ground,path,platform,bridge}_*.glb","kind":"kit","tier":"kit"},
+        "Models/GLTF format/*.glb"
+      ] },
+    { "id":"kenney-platformer-kit","label":"Kenney Platformer Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/platformer-kit","license":"cc0","kind":"prop","tier":"prop","theme":["platformer","level","jump"],
+      "source": {"kind":"kenney","slug":"platformer-kit"},
+      "select": [
+        {"glob":"Models/GLB format/character-*.glb","kind":"character","tier":"hero","rigged":true},
+        {"glob":"Models/GLB format/{block,platform,brick}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-fantasy-town-kit","label":"Kenney Fantasy Town Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/fantasy-town-kit","license":"cc0","kind":"prop","tier":"prop","theme":["town","medieval","village"],
+      "source": {"kind":"kenney","slug":"fantasy-town-kit"},
+      "select": [
+        {"glob":"Models/GLB format/{wall,roof,stairs,road,balcony,overhang,chimney,planks,pillar}*.glb","kind":"kit","tier":"kit"},
+        {"glob":"Models/GLB format/{windmill,watermill,fountain}*.glb","kind":"prop","tier":"signature"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-pirate-kit","label":"Kenney Pirate Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/pirate-kit","license":"cc0","kind":"prop","tier":"prop","theme":["pirate","sea","island"],
+      "source": {"kind":"kenney","slug":"pirate-kit"},
+      "select": [
+        {"glob":"Models/GLB format/{ship,castle,tower,structure}*.glb","kind":"prop","tier":"signature"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-graveyard-kit","label":"Kenney Graveyard Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/graveyard-kit","license":"cc0","kind":"prop","tier":"prop","theme":["graveyard","spooky","halloween"],
+      "source": {"kind":"kenney","slug":"graveyard-kit"},
+      "select": [
+        {"glob":"Models/GLB format/character-*.glb","kind":"character","tier":"hero","rigged":true},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-mini-dungeon","label":"Kenney Mini Dungeon","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/mini-dungeon","license":"cc0","kind":"prop","tier":"prop","theme":["dungeon","fantasy"],
+      "source": {"kind":"kenney","slug":"mini-dungeon"},
+      "select": [
+        {"glob":"Models/GLB format/character-*.glb","kind":"character","tier":"hero","rigged":true},
+        {"glob":"Models/GLB format/{wall,floor,stairs,gate,column,dirt}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-mini-arena","label":"Kenney Mini Arena","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/mini-arena","license":"cc0","kind":"prop","tier":"prop","theme":["arena","fight"],
+      "source": {"kind":"kenney","slug":"mini-arena"},
+      "select": [
+        {"glob":"Models/GLB format/character-*.glb","kind":"character","tier":"hero","rigged":true},
+        {"glob":"Models/GLB format/{wall,floor,stairs,column,border,block,bricks}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-castle-kit","label":"Kenney Castle Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/castle-kit","license":"cc0","kind":"prop","tier":"prop","theme":["castle","medieval","fortress"],
+      "source": {"kind":"kenney","slug":"castle-kit"},
+      "select": [
+        {"glob":"Models/GLB format/{wall,stairs,bridge,gate,door,ground,metal}*.glb","kind":"kit","tier":"kit"},
+        {"glob":"Models/GLB format/{tower,siege}*.glb","kind":"prop","tier":"signature"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-car-kit","label":"Kenney Car Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/car-kit","license":"cc0","kind":"prop","tier":"prop","theme":["car","vehicle","road"],
+      "source": {"kind":"kenney","slug":"car-kit"},
+      "select": [
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-city-kit-suburban","label":"Kenney City Kit (Suburban)","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/city-kit-suburban","license":"cc0","kind":"prop","tier":"prop","theme":["city","suburb","house","street"],
+      "source": {"kind":"kenney","slug":"city-kit-suburban"},
+      "select": [
+        {"glob":"Models/GLB format/{path,driveway,fence}*.glb","kind":"kit","tier":"kit"},
+        {"glob":"Models/GLB format/building*.glb","kind":"prop","tier":"signature"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-city-kit-roads","label":"Kenney City Kit (Roads)","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/city-kit-roads","license":"cc0","kind":"prop","tier":"prop","theme":["road","street","city","traffic"],
+      "source": {"kind":"kenney","slug":"city-kit-roads"},
+      "select": [
+        {"glob":"Models/GLB format/{road,tile,bridge}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-toy-car-kit","label":"Kenney Toy Car Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/toy-car-kit","license":"cc0","kind":"prop","tier":"prop","theme":["toy","race","track"],
+      "source": {"kind":"kenney","slug":"toy-car-kit"},
+      "select": [
+        {"glob":"Models/GLB format/{track,supports,gate}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-minigolf-kit","label":"Kenney Minigolf Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/minigolf-kit","license":"cc0","kind":"prop","tier":"prop","theme":["minigolf","golf","course"],
+      "source": {"kind":"kenney","slug":"minigolf-kit"},
+      "select": [
+        "Models/GLB format/{club,ball,flag}*.glb",
+        {"glob":"Models/GLB format/*.glb","kind":"kit","tier":"kit"}
+      ] },
+    { "id":"kenney-tower-defense-kit","label":"Kenney Tower Defense Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/tower-defense-kit","license":"cc0","kind":"prop","tier":"prop","theme":["tower","defense","strategy"],
+      "source": {"kind":"kenney","slug":"tower-defense-kit"},
+      "select": [
+        {"glob":"Models/GLB format/{tile,snow-tile}-corner-large.glb","kind":"kit","tier":"prop"},
+        {"glob":"Models/GLB format/{tile,snow,wood,spawn,detail}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-survival-kit","label":"Kenney Survival Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/survival-kit","license":"cc0","kind":"prop","tier":"prop","theme":["survival","camp","outdoor"],
+      "source": {"kind":"kenney","slug":"survival-kit"},
+      "select": [
+        {"glob":"Models/GLB format/{structure,floor,fence,patch}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-blaster-kit","label":"Kenney Blaster Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/blaster-kit","license":"cc0","kind":"prop","tier":"prop","theme":["blaster","weapon","sci-fi"],
+      "source": {"kind":"kenney","slug":"blaster-kit"},
+      "select": [
+        "Models/GLB format/*.glb"
+      ] },
+    { "id":"kenney-space-kit","label":"Kenney Space Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/space-kit","license":"cc0","kind":"prop","tier":"prop","srgbFactors":true,"theme":["space","sci-fi","planet"],
+      "source": {"kind":"kenney","slug":"space-kit"},
+      "select": [
+        {"glob":"Models/GLTF format/{astronaut,alien}*.glb","kind":"character","tier":"hero"},
+        {"glob":"Models/GLTF format/{corridor,platform,pipe,terrain,rail,monorail,stairs,supports,structure,hangar}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLTF format/*.glb"
+      ] },
+    { "id":"kenney-furniture-kit","label":"Kenney Furniture Kit","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/furniture-kit","license":"cc0","kind":"prop","tier":"prop","srgbFactors":true,"theme":["furniture","home","interior"],
+      "source": {"kind":"kenney","slug":"furniture-kit"},
+      "select": [
+        {"glob":"Models/GLTF format/{wall,floor,doorway,stairs,paneling}*.glb","kind":"kit","tier":"kit"},
+        "Models/GLTF format/*.glb"
+      ] },
+    { "id":"kenney-mini-characters","label":"Kenney Mini Characters","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/mini-characters","license":"cc0","kind":"prop","tier":"prop","theme":["person","people"],
+      "source": {"kind":"kenney","slug":"mini-characters"},
+      "select": [
+        {"glob":"Models/GLB format/character-*.glb","kind":"character","tier":"hero","rigged":true},
+        {"glob":"Models/GLB format/*.glb","tags":["accessibility"]}
+      ] },
+    { "id":"kenney-blocky-characters","label":"Kenney Blocky Characters","family":"kenney","author":"Kenney","url":"https://kenney.nl/assets/blocky-characters","license":"cc0","kind":"character","tier":"prop","theme":["person","people","blocky"],
+      "source": {"kind":"kenney","slug":"blocky-characters"},
+      "select": [
+        {"glob":"Models/GLB format/character-*.glb","kind":"character","tier":"hero","rigged":true}
+      ] },
+    { "id":"kaykit-adventurers","label":"KayKit Adventurers","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["adventurer","fantasy","rpg"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0"},
+      "select": [
+        {"glob":"**/Characters/gltf/*.glb","kind":"character","tier":"hero","rigged":true},
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"kaykit-skeletons","label":"KayKit Skeletons","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["skeleton","undead","fantasy","enemy"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0"},
+      "select": [
+        {"glob":"**/Characters/gltf/*.glb","kind":"character","tier":"hero","rigged":true},
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"kaykit-dungeon","label":"KayKit Dungeon Remastered","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["dungeon","fantasy"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0"},
+      "select": [
+        {"glob":"**/Assets/gltf/{wall_cracked,wall_doorway_Tsplit,wall_doorway_sides,wall_shelves}*.glb","kind":"kit","tier":"prop"},
+        {"glob":"**/Assets/gltf/stairs_wood_decorated*.glb","kind":"kit","tier":"signature"},
+        {"glob":"**/Assets/gltf/{floor,wall,stairs,pillar,column,barrier}*.glb","kind":"kit","tier":"kit"},
+        {"glob":"**/Assets/gltf/{box_stacked,table_long_decorated_C}*.glb","kind":"prop","tier":"signature"},
+        "**/Assets/gltf/*.glb"
+      ] },
+    { "id":"kaykit-medieval-hexagon","label":"KayKit Medieval Hexagon","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["medieval","hexagon","strategy"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0"},
+      "select": [
+        {"glob":"**/Assets/gltf/tiles/**/*.gltf","kind":"kit","tier":"kit"},
+        {"glob":"**/Assets/gltf/buildings/**/*.gltf","kind":"prop","tier":"signature"},
+        {"glob":"**/Assets/gltf/decoration/nature/{hills,mountain}*.gltf","kind":"prop","tier":"signature"},
+        "**/Assets/gltf/decoration/**/*.gltf"
+      ] },
+    { "id":"kaykit-city-builder","label":"KayKit City Builder Bits","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-City-Builder-Bits-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["city","town","street"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-City-Builder-Bits-1.0"},
+      "select": [
+        {"glob":"**/Assets/gltf/{road,base}*.gltf","kind":"kit","tier":"kit"},
+        {"glob":"**/Assets/gltf/{building,watertower}*.gltf","kind":"prop","tier":"signature"},
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"kaykit-restaurant","label":"KayKit Restaurant Bits","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Restaurant-Bits-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["restaurant","kitchen","cooking"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Restaurant-Bits-1.0"},
+      "select": [
+        {"glob":"**/Assets/gltf/wall_decorated.gltf","kind":"kit","tier":"prop"},
+        {"glob":"**/Assets/gltf/{wall,floor,door,pillar}*.gltf","kind":"kit","tier":"kit"},
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"kaykit-halloween","label":"KayKit Halloween Bits","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Halloween-Bits-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["halloween","spooky","graveyard"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Halloween-Bits-1.0"},
+      "select": [
+        {"glob":"**/Assets/gltf/{floor,path,fence}*.gltf","kind":"kit","tier":"kit"},
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"kaykit-furniture","label":"KayKit Furniture Bits","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Furniture-Bits-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["furniture","home","interior"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Furniture-Bits-1.0"},
+      "select": [
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"kaykit-prototype","label":"KayKit Prototype Bits","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Prototype-Bits-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["prototype","blockout","level"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Prototype-Bits-1.0"},
+      "select": [
+        {"glob":"**/Assets/gltf/{primitive,floor,wall,cube,pillar,door}*.gltf","kind":"kit","tier":"kit"},
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"kaykit-space-base","label":"KayKit Space Base Bits","family":"kaykit","author":"KayKit","url":"https://github.com/KayKit-Game-Assets/KayKit-Space-Base-Bits-1.0","license":"cc0","kind":"prop","tier":"prop","theme":["space","base","sci-fi"],
+      "source": {"kind":"github","repo":"KayKit-Game-Assets/KayKit-Space-Base-Bits-1.0"},
+      "select": [
+        {"glob":"**/Assets/gltf/{terrain,tunnel,basemodule,roofmodule,structure,landingpad}*.gltf","kind":"kit","tier":"kit"},
+        "**/Assets/gltf/*.gltf"
+      ] },
+    { "id":"polyhaven-models","label":"Poly Haven models","family":"polyhaven","author":"Poly Haven","url":"https://polyhaven.com/models","license":"cc0","kind":"prop","tier":"signature","theme":["realistic","scanned"],
+      "source": {"kind":"polyhaven","type":"models","res":"1k","ids":["barrel_03","wine_barrel_01","wooden_crate_01","wooden_crate_02","treasure_chest","wooden_bucket_01","metal_trash_can","rock_09","namaqualand_boulder_02","rock_07","tree_stump_01","dead_tree_trunk","fern_02","shrub_sorrel_01","potted_plant_04","wooden_lantern_01","street_lamp_02","stone_fire_pit","wooden_table_02","painted_wooden_chair_01","cannon_01","football"]} },
+    { "id":"polyhaven-textures","label":"Poly Haven textures","family":"polyhaven","author":"Poly Haven","url":"https://polyhaven.com/textures","license":"cc0","kind":"texture","theme":["pbr","tileable","realistic"],
+      "source": {"kind":"polyhaven","type":"textures","res":"1k","ids":["forrest_ground_01","leafy_grass","grass_path_2","gravelly_sand","sand_01","snow_02","rock_face_03","cobblestone_floor_04","red_brick","weathered_brown_planks"]} },
+    { "id":"polyhaven-skies","label":"Poly Haven skies","family":"polyhaven","author":"Poly Haven","url":"https://polyhaven.com/hdris","license":"cc0","kind":"sky","theme":["environment","lighting"],
+      "source": {"kind":"polyhaven","type":"hdris","res":"1k","ids":["kloofendal_48d_partly_cloudy_puresky","autumn_field_puresky","kloppenheim_06_puresky","belfast_sunset_puresky","overcast_soil_puresky","rogland_clear_night"]} },
+    { "id":"ambientcg-materials","label":"ambientCG materials","family":"ambientcg","author":"ambientCG","url":"https://ambientcg.com/","license":"cc0","kind":"texture","theme":["pbr","tileable"],
+      "source": {"kind":"ambientcg","res":"1K-JPG","ids":["Grass004","Ground037","Gravel023","Rock030","PavingStones070","Bricks059","Tiles074","Concrete034","Wood049","Planks023A","MetalPlates006","Fabric062"]} }
+  ]
+}

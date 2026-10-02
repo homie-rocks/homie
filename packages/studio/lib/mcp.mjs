@@ -48,10 +48,12 @@ Links are the person's to open: give them in your reply (the cards have their ow
 
 To make one mechanic of a game feel better (a jump, a hit, a dash), game_lab opens the Game Lab: New beside Today, one take, its phases and sliders (studio_guide { "topic": "lab" }).
 
+A game's look is a set of decisions (render style, palette, light, camera, fonts, the cast and its budgets), automatic from the person's words until they steer or lock one (studio_guide { "topic": "style" }). style_explore draws three directions with the game engine for free; decision_set picks, steers and locks; assets_find searches the free CC0 starter library and asset_add copies a model in with its licence; asset_make makes a prop on the person's own fal account only after they agreed to its price; asset_check, asset_lineup and asset_rights keep it one game, phone-sized and properly licensed (studio_guide { "topic": "models" }).
+
 Long work (npm install, check, playtest, deploy, renders) runs in the background: the tool answers at once with a card that follows it, and build_progress or studio_job reads where it is. studio_guide has Homie's full guide for each job (game, plan, port, playtest, publish, music, sound, art, video). Never put a key or password in a file or the chat. If Homie's homie.rocks connector is connected too, its tools of the same names say what to run; these run it.`;
 
-const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js', [UI.lab]: 'lab.js' };
-const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex', [UI.lab]: 'Game Lab' };
+const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js', [UI.lab]: 'lab.js', [UI.style]: 'style.js', [UI.decision]: 'decision.js', [UI.cast]: 'cast.js', [UI.lineup]: 'lineup.js', [UI.rights]: 'rights.js' };
+const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex', [UI.lab]: 'Game Lab', [UI.style]: 'Style board', [UI.decision]: 'Look decision', [UI.cast]: 'Cast', [UI.lineup]: 'Lineup', [UI.rights]: 'Rights' };
 const UI_DIR = join(PACKAGE_ROOT, 'mcp', 'ui');
 
 /** One card's whole document: the shared look and bridge, and the card's own script, as the files are. */
@@ -67,7 +69,8 @@ export function cardHtml(uri) {
 
 /** What a card may load: nothing from the network, except the codex page's Google Fonts. */
 export function cardCsp(uri) {
-  if (uri === UI.codex) return { connectDomains: [], resourceDomains: ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'] };
+  // The codex page, and the style board's type samples in each direction's fonts: Google Fonts only.
+  if (uri === UI.codex || uri === UI.style) return { connectDomains: [], resourceDomains: ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'] };
   return { connectDomains: [], resourceDomains: [] };
 }
 

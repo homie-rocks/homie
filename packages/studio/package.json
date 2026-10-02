@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/studio",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "A studio for games, music and video on its own Cloudflare: scaffold, multiplayer starters on the netplay contract, a port toolkit that makes existing single-player web games multiplayer, the site Worker with public rooms (Table/Lobby Durable Objects and D1, all on the free Workers plan, no payment method), a site with the hub's sections (Home, Games, Music, Videos, Rooms, Posts with feeds) in the studio's own look, an epic landing page for every game, big songs and videos in the studio's own R2 once it has storage (uploaded, checked by SHA-256, served at the same addresses), deploy, and the homie.rocks directory.",
   "type": "module",
   "license": "Apache-2.0",
@@ -38,6 +38,10 @@
       "types": "./lab/lab.ts",
       "default": "./lab/lab.ts"
     },
+    "./assets": {
+      "types": "./assets/assets.ts",
+      "default": "./assets/assets.ts"
+    },
     "./worker": "./worker/index.mjs",
     "./package.json": "./package.json"
   },
@@ -51,6 +55,7 @@
     "saves/",
     "agents/",
     "lab/",
+    "assets/",
     "starters/",
     "media/",
     "site/",
@@ -64,8 +69,15 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
     "esbuild": "0.28.1",
-    "puppeteer-core": "25.8.0"
+    "gltf-validator": "2.0.0-dev.3.10",
+    "meshoptimizer": "1.3.0",
+    "puppeteer-core": "25.8.0",
+    "sharp": "0.35.5",
+    "three": "0.185.1"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
