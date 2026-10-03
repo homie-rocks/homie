@@ -1,5 +1,5 @@
 /**
- * `homie-studio handoff <hb_…>` — what a Claude Code session started from the Claude app does with the ONE line it
+ * `homie-studio handoff <hb_…|hs_…>` — what a session started from the chat does with the ONE line it
  * was given ("Continue building <Studio>: build hb_…", HANDOFF.md in every studio):
  *
  *   1. fetch the brief the person gave in the chat from the directory (GET /api/studio/progress/<hb>/brief: the
@@ -42,7 +42,7 @@ export function stepsFor(h, { games = [] } = {}) {
   const q = (s) => JSON.stringify(String(s));
   const work = {
     setup: [
-      'This studio was just set up from the Claude app. Go through the new-studio checklist with the person, one step at a time and never ahead (the plugin\'s studio-setup skill): it has no game yet, and its home page says "First game coming soon".',
+      'This studio was just set up. Go through the new-studio checklist with the person, one step at a time and never ahead (the plugin\'s studio-setup skill): it has no game yet, and its home page says "First game coming soon".',
       'See a working game: `npx --no-install homie-studio demo` names a live one on Homie Arcade; copy a starter in only if they ask.',
       'One small change from one sentence of theirs (the studio\'s colours in site/theme.json, a tagline in studio.json, or a first post in posts/), then plan their game into its Game Codex (`npx --no-install homie-studio codex new <id> --name "<Name>"`) before any game is made.',
     ],
@@ -67,16 +67,16 @@ export function stepsFor(h, { games = [] } = {}) {
   ];
 }
 
-export async function handoff(root, build, { homie, fetchFn = globalThis.fetch, attach = startProgress, checkIn = setupAttach, repoOf = originRepo } = {}) {
+export async function handoff(root, build, { homie, client, fetchFn = globalThis.fetch, attach = startProgress, checkIn = setupAttach, repoOf = originRepo } = {}) {
   const studio = readStudio(root);
   // "Continue building <Studio>: setup hs_…": a studio being set up, before any build: check in, then the checklist.
   if (SETUP.test(String(build ?? ''))) {
-    const r = await checkIn(root, build, { homie });
+    const r = await checkIn(root, build, { homie, client });
     if (!r.ok) return { ok: false, command: 'handoff', setup: build, why: r.why, ...(r.needs ? { needs: r.needs } : {}) };
     const h = { kind: 'setup', what: 'game', title: 'first steps', studio: r.name ?? studio.name, brief: '', setup: build };
     return { ok: true, command: 'handoff', build: null, ...h, setup: { ok: true, message: r.message, renamed: r.renamed ?? [] }, attached: null, attachWhy: 'no build was opened in the chat yet (the setup card\'s Start building opens one)', steps: stepsFor(h) };
   }
-  if (!BUILD.test(String(build ?? ''))) return { ok: false, command: 'handoff', why: 'the id from the one line the Claude app gave: hb_ (a build) or hs_ (a setup) and 32 hex digits' };
+  if (!BUILD.test(String(build ?? ''))) return { ok: false, command: 'handoff', why: 'the id from the one line the chat gave: hb_ (a build) or hs_ (a setup) and 32 hex digits' };
   const directory = String(homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
   // lib/net.mjs: through the environment's proxy, and an honest reason when it fails (the directory's own words, or
   // the connection's error; only a refusal by the proxy names the network setting).
@@ -98,7 +98,7 @@ export async function handoff(root, build, { homie, fetchFn = globalThis.fetch, 
   };
   let setup = null;
   if (h.setup) {
-    const r = await checkIn(root, h.setup, { homie: directory });
+    const r = await checkIn(root, h.setup, { homie: directory, client });
     setup = { ok: r.ok, message: r.ok ? r.message : r.why, renamed: r.renamed ?? [] };
   }
   const taken = await attach(root, { attach: build, what: h.what, id: h.id, directory });
