@@ -92,6 +92,21 @@ Make it the game the person asked for, in small steps:
   only (seats, never names; under 2 KB), `decide(view)` is the scripted floor, the hands read
   `agents.goalOf(slot)` and call `agents.done(slot)`, and lines are bubbles from `agents.on('say')`. Ember Vale
   (`--from ember-vale`) is the worked example. The brain itself is the owner's switch (the `servers` skill).
+- **Room chat and speech bubbles** (NETPLAY.md section 19; `chat/CHAT.md`). Every game has room chat on its
+  play page with no code: reactions that float up every screen, quick lines, and typing where the rules allow.
+  Give it the game's own voice in `game.json` `"chat"`: `"lines"` (up to 12 quick lines, short and kind:
+  `{ "gg": "Good game!", "gem": "Grab that gem!" }`), up to 3 extra `"emoji"` (`{ "gem": "💎" }`), and the
+  defaults that suit its players (`"mode": "lines"` for a game for children; the owner can change any of it).
+  Draw what players say over their characters with the port kit, after the name labels:
+
+  ```ts
+  const bubbles = createBubbles({ measure: (t) => { ctx.font = BUBBLE_FONT; return ctx.measureText(t).width; } });
+  net.on('say', (s) => bubbles.say(s.seat, s.text, { id: s.id, kind: s.kind }));
+  net.on('unchat', (e) => e.ids.forEach((id) => bubbles.remove(id)));
+  paintBubbles(ctx, bubbles.place(speakers.map((p) => ({ key: p.seat, x: p.labelX, y: p.labelTop, self: p.mine }))));
+  ```
+  A game's own chat keys (a quick-line wheel): `net.sayLine('gg')`, `net.react('fire')`. Never draw a name or a
+  message as markup.
 - Update `game.json` `name` and `blurb`, and the `<title>`.
 
 ## Progress that lasts: cloud saves

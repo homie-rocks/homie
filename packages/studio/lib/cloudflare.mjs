@@ -218,7 +218,7 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   // Workers AI (0.17.0): bound only when a server's AI guides think with it.
   if (needsWorkersAi(root, w, cf.d1)) {
     writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true }));
-    step('Workers AI bound (AI): a server\'s AI guides think with it, within the day\'s budget (free allocation: 10,000 neurons a day)');
+    step('Workers AI bound (AI): a server\'s AI guides think with it and typed room chat is reviewed with it, each within its day\'s budget (free allocation: 10,000 neurons a day)');
   }
 
   const started = Date.now();
@@ -271,6 +271,9 @@ export function needsWorkersAi(root, w, db) {
   try {
     const cat = JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8'));
     if ((cat.games ?? []).some((g) => (g.servers ?? []).some((s) => s.brain === 'workers-ai'))) return true;
+    // Room chat (0.23.0): a game whose players may type has its messages reviewed by the studio's own Workers AI
+    // (Cloudflare's Clef decision model, within a day's budget of the free allocation) unless its game.json says no.
+    if ((cat.games ?? []).some((g) => g.chat !== false && (g.chat?.mode ?? 'text') === 'text' && g.chat?.ai !== false)) return true;
   } catch { /* not built */ }
   const r = w(['d1', 'execute', db, '--remote', '--json', '--command', "SELECT COUNT(*) AS n FROM servers WHERE brain = 'workers-ai' AND state = 'open'"]);
   if (r.code !== 0) return false;
@@ -343,7 +346,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
     try {
       const json = JSON.parse(readFileSync(configPath(root), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
       if (!json.ai) { json.ai = { binding: 'AI' }; writeFileSync(configPath(root), `${JSON.stringify(json, null, 2)}\n`); }
-      step('Workers AI bound (AI) for the AI guides');
+      step('Workers AI bound (AI): the AI guides and the review of typed room chat');
     } catch { step('could not add the Workers AI binding to wrangler.jsonc: the guides answer from the game\'s script'); }
   }
   const started = Date.now();

@@ -100,6 +100,10 @@
  *                                          tap in their own browser, from the link this prints)
  *   homie-studio office revoke            (every office key, play ticket and pending ask ends)
  *
+ *   homie-studio chat [--game <id>]       room chat (NETPLAY.md section 19): each game's rules, every live room's last
+ *                                          minutes, players' reports, the review's day; chat rules <game> [--server <id>]
+ *                                          --mode off|emoji|lines|text --who anyone|signed-in|members … | --reset;
+ *                                          chat remove <game> <room> <line id>; chat budget <neurons>; chat words
  *   homie-studio servers [--game <id>]    every server of every game (worker/servers.mjs): its policy, door, the AI's
  *                                          level, live rooms and AI, members, and builds that predate servers
  *   homie-studio servers new <game> "<Name>" --policy open|humans-only|hybrid|beginner [--ai <n>] [--guides <n>]
@@ -219,6 +223,7 @@ import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
 import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeMute, officeRevoke, officeShow } from '../lib/office.mjs';
+import { chatBudget, chatLines, chatRemove, chatRulesSet, chatShow, chatWords } from '../lib/chat-cli.mjs';
 import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
@@ -426,6 +431,20 @@ function print(result) {
     case 'servers':
       lines.push(...serversLines(result));
       break;
+    case 'chat':
+      lines.push(...chatLines(result));
+      break;
+    case 'chat words':
+      for (const [k, v] of Object.entries(result.groups)) lines.push(`${k}: ${v.join(', ')}`);
+      lines.push(result.note);
+      break;
+    case 'chat remove':
+      lines.push(result.message);
+      break;
+    case 'chat rules':
+    case 'chat budget':
+      lines.push(result.asked ? `Asked: ${result.what}` : result.message, ...(result.asked ? [`Owner's one-tap link (until the ask ends, 15 min): ${result.link}`, result.use] : []));
+      break;
     case 'servers new':
       lines.push(result.message, ...(result.notes ?? []).map((n) => `  ${n}`));
       break;
@@ -590,6 +609,8 @@ async function main() {
   if (cmd === 'version' || flags.has('version')) return { ok: true, command: 'version', version: STUDIO_VERSION };
   if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install'), template: flags.has('template') });
   if (cmd === 'starters') return { ok: true, command: 'starters', starters: starters() };
+  // The floor's built-in words need no studio: anyone can read what a studio's chat always holds.
+  if (cmd === 'chat' && sub === 'words') return chatWords();
   if (cmd === 'demo') return demoGames();
   if (cmd === 'mcp') {
     // stdout carries MCP messages only from here on (lib/mcp.mjs); every word for a person goes to stderr.
@@ -705,6 +726,16 @@ async function main() {
     if (sub === 'mute') return officeMute(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes'), off: flags.has('off') });
     if (sub === 'close') return officeClose(root, positional[2], positional[3], { url, minutes: flags.get('minutes'), reopen: flags.has('reopen') });
     if (sub === 'revoke') return officeRevoke(root, { url });
+  }
+  if (cmd === 'chat') {
+    // Room chat (0.23.0, NETPLAY.md section 19): rules, the room's last minutes, reports, the review's budget.
+    const url = flags.get('url');
+    if (sub === 'words') return chatWords();
+    if (!sub) return chatShow(root, { url, game: flags.get('game') });
+    if (sub === 'rules') return chatRulesSet(root, positional[2], flags, { url });
+    if (sub === 'remove') return chatRemove(root, positional[2], positional[3], positional[4], { url, all: flags.has('all') });
+    if (sub === 'budget') return chatBudget(root, positional[2], { url });
+    return { ok: false, command: 'chat', why: `unknown: chat ${sub} (rules, remove, budget, words)` };
   }
   if (cmd === 'servers') {
     const url = flags.get('url');
@@ -928,7 +959,9 @@ async function dev(root) {
   log(`Local site: http://127.0.0.1:${port}/  (each game: http://127.0.0.1:${port}/<id>/play — open it in two browsers)`);
   const ai = devConfig(root, flags.has('remote-ai'));
   if (ai.note) log(ai.note);
-  const child = spawn(bin, ['dev', '--local', '--ip', '127.0.0.1', '--port', port, ...ai.args], { cwd: workerDir(root), env, stdio: 'inherit' });
+  // --remote-ai: Wrangler's --local turns every remote binding off ("not supported"), so a dev with the real Workers AI
+  // (the guides' brains, room chat's review) runs without it; everything else stays local all the same.
+  const child = spawn(bin, ['dev', ...(flags.has('remote-ai') ? [] : ['--local']), '--ip', '127.0.0.1', '--port', port, ...ai.args], { cwd: workerDir(root), env, stdio: 'inherit' });
   mkdirSync(dirname(devFile(root)), { recursive: true });
   writeFileSync(devFile(root), `${JSON.stringify({ pid: process.pid, child: child.pid, port: Number(port), at: new Date().toISOString() })}\n`);
   log(`Stop it with: npx --no-install homie-studio dev --stop   (this studio's dev server only)`);

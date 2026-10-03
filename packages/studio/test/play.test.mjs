@@ -46,6 +46,8 @@ async function shell(search, { lobby = 'pub-3', screen = false, room = null, g =
         setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] ?? null; },
         addEventListener(t, fn) { (this.listeners[t] ??= []).push(fn); }, querySelector: (s) => el(s), contains: () => false,
         append() {}, focus() {}, contentWindow: { focus() {} },
+        // Room chat's component (0.23.0) builds its pill and sheet into the band: a stand-in takes them.
+        appendChild(c) { return c; }, insertBefore(c) { return c; }, remove() {},
       });
     }
     return els.get(sel);

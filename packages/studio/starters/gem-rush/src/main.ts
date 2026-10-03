@@ -39,7 +39,7 @@
 import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` reads for the owner tests, and sandbox + audio shims),
 // and a flat world on every screen (port/view.ts: the camera, and name labels that never pile up).
-import { createLabels, exposePort, fitView, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
+import { BUBBLE_FONT, createBubbles, createLabels, exposePort, fitView, paintBubbles, type BubbleIn, type BubbleOut, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
 // The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
 import { lab } from '@homie-rocks/studio/lab';
 import tuning from '../tunables.json';
@@ -768,6 +768,12 @@ resize();
 
 const cam = { x: W / 2, y: H / 2, scale: 0 };
 const labels = createLabels({ screen: () => ({ w: innerWidth, h: innerHeight }) });
+// Room chat (NETPLAY.md section 19): what a player says in the room's chat (the play page's Chat, or a quick line) shows
+// over their body for a few seconds, when they want it there. The studio taking a message down takes its bubble too.
+const bubbles = createBubbles({ measure: (t) => { ctx.font = BUBBLE_FONT; return ctx.measureText(t).width; }, screen: () => ({ w: innerWidth, h: innerHeight }) });
+net.on('say', (s) => bubbles.say(s.seat, s.text, { id: s.id, kind: s.kind }));
+net.on('unchat', (e) => { for (const id of e.ids) bubbles.remove(id); });
+let shownBubbles: BubbleOut[] = [];
 let shownLabels: LabelOut[] = [];
 let lastDraw = 0;
 /** Where a seat's body is drawn now (host: the real body; replica: interpolated), or null. */
@@ -868,6 +874,7 @@ function draw(t: number): void {
   const fs = Math.round(Math.max(15, Math.min(22, (15 * Math.min(cw, ch)) / 720)));
   ctx.font = `600 ${fs}px ui-sans-serif, system-ui, sans-serif`;
   const tags: LabelIn[] = [];
+  const heads = new Map<number, { x: number; y: number; seat: number; mine: boolean }>();
   const viewAt = list.find((a) => a.mine) ?? null;
   for (const a of list) {
     const colour = colourOf(a.slot, a.bot ? null : a.seat);
@@ -884,6 +891,7 @@ function draw(t: number): void {
     const text = a.mine && !net.watching ? 'You' : label(a.name, a.bot);
     const sx = cw / 2 + (a.x - cam.x) * scale; const sy = ch / 2 + (a.y - cam.y) * scale; const r = (R_AV + (a.mine ? 7 : 0)) * scale;
     if (sx + r < 0 || sx - r > cw || sy + r < 0 || sy - r > ch) continue; // off screen: no name at the edge
+    if (a.seat !== null && !a.bot) heads.set(a.slot, { x: sx, y: sy - r - 5, seat: a.seat, mine: a.mine });
     // People before bots, nearer the view's body first; each keeps off the others' bodies when it can.
     tags.push({ key: a.slot, text, x: sx, y: sy - r - 5, w: ctx.measureText(text).width, h: fs * 1.2, below: sy + r + 4 + fs * 1.2, body: { left: sx - r, top: sy - r, right: sx + r, bottom: sy + r }, self: a.mine, rank: (a.bot ? 10_000 : 0) + (viewAt ? Math.hypot(a.x - viewAt.x, a.y - viewAt.y) : 0) });
   }
@@ -909,6 +917,16 @@ function draw(t: number): void {
     ctx.fillText(l.text, l.cx, l.cy);
   }
   ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+  // Speech bubbles (room chat): over each speaker's name, the view's own player first.
+  if (bubbles.size) {
+    const anchors: BubbleIn[] = [];
+    for (const [slot, h] of heads) {
+      const l = shownLabels.find((x) => x.key === slot && x.alpha > 0 && !x.moved);
+      anchors.push({ key: h.seat, x: l ? l.cx : h.x, y: l ? l.top - 1 : h.y, self: h.mine });
+    }
+    shownBubbles = bubbles.place(anchors);
+    paintBubbles(ctx, shownBubbles);
+  } else shownBubbles = [];
 
   hud(cw, ch, phone, list);
   if (stick.active) {
@@ -985,6 +1003,8 @@ function frame(t: number): void {
 }
 
 net.expose({
+  // Room chat's bubbles on this screen now: whose, what, and where (an end-to-end test reads them).
+  bubbles: () => shownBubbles.map((b) => ({ seat: b.key, text: b.lines.join(' '), alpha: b.alpha, left: Math.round(b.left), top: Math.round(b.top), right: Math.round(b.right), bottom: Math.round(b.bottom) })),
   self: () => (me.has ? { x: me.x, y: me.y } : null),
   peer: (seat: number) => {
     if (hosting) { const b = [...bodies.values()].find((x) => x.seat === seat); return b ? { x: b.x, y: b.y } : null; }

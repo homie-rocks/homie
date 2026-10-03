@@ -45,7 +45,7 @@ import { createModels, instancedCopies, placeCopy, repaint, stylize, type Copies
 import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` and `perf` read, and sandbox + audio shims), and name
 // labels that never pile up (port/view.ts).
-import { createLabels, exposePort, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
+import { createBubbles, createLabels, exposePort, paintBubbles, type BubbleIn, type BubbleOut, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
 // The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
 import { lab } from '@homie-rocks/studio/lab';
 import tuning from '../tunables.json';
@@ -1659,6 +1659,13 @@ resize();
 let zoneMark: { left: number; top: number; right: number; bottom: number } | null = null;
 const labels = createLabels({ screen: () => ({ w: innerWidth, h: innerHeight }), avoid: () => (zoneMark ? [zoneMark] : []) });
 let shownLabels: LabelOut[] = [];
+// Room chat (NETPLAY.md section 19): what a player says in the room's chat shows over their animal for a few seconds,
+// on the HUD's own paper (one UI with the names, the clock and the board). The studio taking a message down takes it too.
+const BUBBLE_TYPE = `600 14px ${FONT_BODY}`;
+const bubbles = createBubbles({ measure: (t) => { ctx.font = BUBBLE_TYPE; return ctx.measureText(t).width; }, screen: () => ({ w: innerWidth, h: innerHeight }), avoid: () => (zoneMark ? [zoneMark] : []) });
+net.on('say', (s) => bubbles.say(s.seat, s.text, { id: s.id, kind: s.kind }));
+net.on('unchat', (e) => { for (const id of e.ids) bubbles.remove(id); });
+let shownBubbles: BubbleOut[] = [];
 let lastDraw = 0;
 /** Where a seat's body is drawn now (host: the real body; replica: interpolated), or null. */
 function seatPos(seat: number): { x: number; y: number } | null {
@@ -1823,6 +1830,7 @@ function draw(t: number, dt: number): void {
   const fs = Math.round(Math.max(15, Math.min(22, (15 * Math.min(cw, ch)) / 720)));
   ctx.font = `700 ${fs}px ${FONT_BODY}`;
   const tags: LabelIn[] = [];
+  const heads = new Map<number, { x: number; y: number; seat: number; mine: boolean }>();
   const viewAt = list.find((a) => a.mine) ?? null;
   for (const a of list) {
     const text = a.mine && !net.watching ? 'You' : label(a.name, a.bot);
@@ -1833,6 +1841,7 @@ function draw(t: number, dt: number): void {
     const r = Math.max(6, Math.hypot(side.x - mid.x, side.y - mid.y));
     if (mid.x + r < 0 || mid.x - r > cw || head.y > ch || mid.y + r < 0) continue; // off screen: no name at the edge
     const foot = onScreen(a.x, a.y, 0, cw, ch);
+    if (a.seat !== null && !a.bot) heads.set(a.slot, { x: head.x, y: head.y - 3, seat: a.seat, mine: a.mine });
     // People before bots, nearer the view's body first; each keeps off the others' bodies when it can.
     tags.push({ key: a.slot, text, x: head.x, y: head.y - 3, w: ctx.measureText(text).width, h: fs * 1.2, below: foot.y + r * 0.6 + 4 + fs * 1.2, body: { left: mid.x - r, top: head.y, right: mid.x + r, bottom: foot.y + r * 0.4 }, self: a.mine, rank: (a.bot ? 10_000 : 0) + (viewAt ? Math.hypot(a.x - viewAt.x, a.y - viewAt.y) * 50 : 0) });
   }
@@ -1855,6 +1864,16 @@ function draw(t: number, dt: number): void {
     ctx.fillText(l.text, l.cx, l.cy);
   }
   ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+  // Speech bubbles (room chat): over each speaker's name pill, the view's own player first.
+  if (bubbles.size) {
+    const anchors: BubbleIn[] = [];
+    for (const [slot, h] of heads) {
+      const l = shownLabels.find((x) => x.key === slot && x.alpha > 0 && !x.moved);
+      anchors.push({ key: h.seat, x: l ? l.cx : h.x, y: l ? l.top - 3 : h.y, self: h.mine });
+    }
+    shownBubbles = bubbles.place(anchors);
+    paintBubbles(ctx, shownBubbles, { font: BUBBLE_TYPE, paper: PAPER, ink: TEXT, edge: mixHex(TEXT, PAPER, 0.7) });
+  } else shownBubbles = [];
 
   hud(cw, ch, phone, list);
   if (stick.active) {
@@ -2028,6 +2047,8 @@ function frame(t: number): void {
 }
 
 net.expose({
+  // Room chat's bubbles on this screen now: whose, what, and where (an end-to-end test reads them).
+  bubbles: () => shownBubbles.map((b) => ({ seat: b.key, text: b.lines.join(' '), alpha: b.alpha, left: Math.round(b.left), top: Math.round(b.top), right: Math.round(b.right), bottom: Math.round(b.bottom) })),
   self: () => (me.has ? { x: me.x, y: me.y } : null),
   peer: (seat: number) => {
     if (hosting) { const b = [...bodies.values()].find((x) => x.seat === seat); return b ? { x: b.x, y: b.y } : null; }

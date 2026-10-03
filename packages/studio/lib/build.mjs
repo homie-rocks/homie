@@ -45,6 +45,7 @@ import { SEAT_MAX } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { licenseOf, remixRow } from '../worker/license.mjs';
 import { SERVER_LIMITS, serverOf } from '../worker/servers.mjs';
+import { chatProblems } from '../worker/chat.mjs';
 import { vocabularyOf } from '../worker/brain.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
@@ -312,6 +313,9 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     const { mode, warnings } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log });
     // The guides' vocabulary (NETPLAY.md section 18): checked here, so a room never meets a line it cannot say.
     vocabFor(g, out);
+    // Room chat (NETPLAY.md section 19): game.json "chat", checked here (its quick lines pass the chat floor too).
+    const chatBad = chatProblems(g.chat);
+    if (chatBad.length) throw new Error(`games/${g.id}/game.json: ${chatBad.join('; ')}`);
     // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).
     if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id, { studio: studio.name ?? null, game: g.name ?? g.id, license: g.license }))}\n`);
     // Its assets' licences, and the address and SHA-256 of each one a remix may carry (`game remix` fetches them).
@@ -356,6 +360,9 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
       // game.json `"watch"` (NETPLAY.md section 16): watchers see any player's view (the default), only the whole room
       // ("overview": hidden hands or roles), or nothing (false: no watch door).
       ...(g.watch === 'overview' ? { watch: 'overview' } : g.watch === false || g.watch === 'off' ? { watch: 'off' } : {}),
+      // game.json `"chat"` (0.23.0, NETPLAY.md section 19): the room chat's defaults for this game (the owner's office
+      // overrides them), or false for none.
+      ...(g.chat === false ? { chat: false } : g.chat && typeof g.chat === 'object' ? { chat: g.chat } : {}),
       // Servers (0.16.0): the seeds game.json ships, the netplay revision its build speaks (the office warns when it
       // predates servers), and game.json "agents": { "vote": "game" | false } (the game draws its own vote card, or none).
       ...(seeds.length ? { servers: seeds } : {}),

@@ -158,6 +158,8 @@ export function serverOf(raw, { from = 'd1' } = {}) {
     state: ['open', 'closed', 'archived'].includes(raw.state) ? raw.state : 'open',
     createdAt: Number(pick('created_at', 'createdAt')) || 0,
     updatedAt: Number(pick('updated_at', 'updatedAt')) || 0,
+    // A game.json seed's own chat rules (0.23.0): under the owner's for this server (worker/chat-store.mjs chatOf).
+    ...(from === 'game.json' && raw.chat && typeof raw.chat === 'object' && !Array.isArray(raw.chat) ? { chat: raw.chat } : {}),
     from,
   };
 }
@@ -206,7 +208,7 @@ export async function serversOf(env, meta, { fresh = false } = {}) {
  * together are at most one fewer than the room's seats (at least one seat is a person's); a kids server caps the
  * dial at 3 and keeps speech to quick lines. `server: null` is a named room (it takes the public server's rules).
  */
-export function policyOf(server, { seats = 8, named = false } = {}) {
+export function policyOf(server, { seats = 8, named = false, chat = null } = {}) {
   const s = server ?? PUBLIC_SERVER;
   const room = Math.max(1, Math.min(seats, s.seats ?? seats));
   const guides = s.policy === 'beginner' ? Math.max(0, Math.min(s.guides, room - 1)) : 0;
@@ -219,6 +221,8 @@ export function policyOf(server, { seats = 8, named = false } = {}) {
     level: Math.min(levelMax, s.level), levelMax,
     speech: s.kids && s.speech === 'game' ? 'lines' : s.speech,
     kids: Boolean(s.kids), brain: s.brain,
+    // Room chat (0.23.0, worker/chat-store.mjs chatOf): the room's chat rules; an owner's change makes the policy newer.
+    ...(chat ? { chat, at: Math.max(Math.max(0, Number(s.updatedAt) || 0), Number(chat.at) || 0) } : {}),
   };
 }
 

@@ -231,7 +231,7 @@ test('the office makes servers at once; their pages, the Servers band and the li
   const list = await (await fetchSite('/_studio/api/servers', { headers: key })).json();
   const owl = list.games.find((g) => g.id === 'owl-run');
   assert.deepEqual(owl.servers.map((s) => s.id), ['public', 'night-shift', 'evil', 'people-only']);
-  assert.equal(owl.build.netplayRev, 7);
+  assert.equal(owl.build.netplayRev, 8, 'revision 8: room chat (section 19)');
   assert.equal(owl.build.predates, false);
   const vale = list.games.find((g) => g.id === 'vale');
   assert.equal(vale.servers.find((s) => s.id === 'hearth').from, 'game.json');
@@ -489,7 +489,7 @@ test('the office: narrowing a server from an office key is an ASK the owner conf
 test('the build knows a game\'s netplay revision: a build without the helper\'s mark predates servers', async () => {
   const { dir } = await site();
   const { netplayRevOf } = await import('../lib/build.mjs');
-  assert.equal(netplayRevOf(join(dir, 'site', 'dist', 'games', 'owl-run')), 7);
+  assert.equal(netplayRevOf(join(dir, 'site', 'dist', 'games', 'owl-run')), 8);
   const old = join(scratch, 'old-build');
   mkdirSync(join(old, 'assets'), { recursive: true });
   writeFileSync(join(old, 'assets', 'main.js'), 'console.log("netplay v1, revision 5")');

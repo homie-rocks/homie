@@ -30,7 +30,17 @@ songs (each with a `cover`), videos (each with a `poster`), the latest posts, an
 (`games[].played`, `{ "days": 7, "plays", "rounds" }`). To keep the studio's rooms off the hub, studio.json takes
 `"rooms": { "share": false }`: the manifest then names no `rooms` (the studio's own pages still list them).
 Each room in `/api/rooms` carries `play` and, unless its game says `"watch": false`, `watch` (its watch door), so
-the hub offers Watch beside Join.
+the hub offers Watch beside Join. From 0.23.0 a room whose chat is on and whose rules let homie.rocks show it
+(`hub`, on by default) also says `chat: true`: the hub's room card then has Chat, which opens the room's own watch
+socket from the visitor's browser and shows its lines and reactions live (NETPLAY.md section 19). A visitor there
+sends what a watcher may send (reactions and quick lines when the room's `react` is `anyone`), never types.
+
+## Room chat on the play, watch and TV pages
+
+Every play page, big screen and watch page carries room chat (worker/chat-page.mjs; chat/CHAT.md): the Chat pill
+and its sheet, the float, the ticker, the big screen's corner. Reports go to `POST /<id>/api/chat/report` (this
+site's pages only); the owner's tools are `/_studio/api/chat`, `/_studio/api/chat/rules`, `/_studio/api/chat/remove`,
+`/_studio/api/chat/report` (dismiss) and `/_studio/api/chat/budget`, and `mute`/`kick` take a chat line.
 
 ## A game's landing: `/<id>/`
 

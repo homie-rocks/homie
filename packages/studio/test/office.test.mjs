@@ -608,12 +608,13 @@ test('a new studio has the back office\'s migration, after the players one, and 
   const files = studioFiles({ name: 'X', slug: 'x', homie: 'https://homie.test' });
   assert.equal(files[`site/migrations/${OFFICE_MIGRATION_FILE}`], OFFICE_MIGRATION);
   // 0.12.0 shipped 0004_players.sql: a studio upgrading from it applies this one after it, in order.
-  // 0.16.0 added 0006_studio_servers.sql after it (servers and agent seats; test/servers.test.mjs).
-  assert.deepEqual(Object.keys(files).filter((f) => f.startsWith('site/migrations/')).sort(), ['site/migrations/0001_studio.sql', 'site/migrations/0002_studio_stats.sql', 'site/migrations/0004_players.sql', 'site/migrations/0005_studio_office.sql', 'site/migrations/0006_studio_servers.sql']);
+  // 0.16.0 added 0006_studio_servers.sql after it (servers and agent seats; test/servers.test.mjs), and 0.23.0
+  // 0007_studio_chat.sql (room chat's rules and reports; test/chat.test.mjs).
+  assert.deepEqual(Object.keys(files).filter((f) => f.startsWith('site/migrations/')).sort(), ['site/migrations/0001_studio.sql', 'site/migrations/0002_studio_stats.sql', 'site/migrations/0004_players.sql', 'site/migrations/0005_studio_office.sql', 'site/migrations/0006_studio_servers.sql', 'site/migrations/0007_studio_chat.sql']);
   const dir = join(scratch, 'from-012');
   mkdirSync(join(dir, 'site', 'migrations'), { recursive: true });
   for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql']) writeFileSync(join(dir, 'site', 'migrations', f), files[`site/migrations/${f}`]);
-  assert.deepEqual(ensureMigrations(dir), [`site/migrations/${OFFICE_MIGRATION_FILE}`, 'site/migrations/0006_studio_servers.sql'], 'a 0.12.0 studio gets the office migration, then the servers one');
+  assert.deepEqual(ensureMigrations(dir), [`site/migrations/${OFFICE_MIGRATION_FILE}`, 'site/migrations/0006_studio_servers.sql', 'site/migrations/0007_studio_chat.sql'], 'a 0.12.0 studio gets the office migration, then the servers one, then room chat\'s');
   assert.deepEqual(ensureMigrations(dir), []);
   const sql = new DatabaseSync(':memory:');
   sql.exec(OFFICE_MIGRATION);

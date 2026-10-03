@@ -42,6 +42,7 @@ what you read and shown to the person in that pane: tell them it is there.
 | "Kick / boot that player" | `office kick <id> <room> <seat number or name>` (`room_kick`) | ASKED: the owner taps once to confirm. They are removed with a polite notice and cannot come back to that room for 10 minutes (`--minutes`). |
 | "Mute that player" | `office mute <id> <room> <seat number or name>` (`--off` lifts it) | ASKED, like a kick: their chat and emotes reach nobody for 10 minutes (`--minutes`). |
 | "Close that room" | `office close <id> <room>` (`room_close`) | ASKED, then everyone is sent out with a thank-you; nobody gets in for 10 minutes. |
+| "What are people saying?", "take that message down", "chat rules", "emoji only", "only signed-in players can type", "slow mode", "reports" | `chat` (rules, every room's last minutes, reports, the review's day), `chat remove <id> <room> <line id>`, `chat rules <id> [--server <s>] --mode off\|emoji\|lines\|text --who anyone\|signed-in\|members --slow <s> …`, `chat budget <n>`; a mute or kick of a line's sender is in the office page (or the studio API's `mute`/`kick` with `line`) | Room chat (0.23.0, `chat/CHAT.md`). Removing a line happens at once, on every screen. A rule change that tightens chat happens at once; one that opens it up (a wider mode or audience, less slow, links or swears, the review off) and a bigger review budget are ASKED. Say what the rules mean for the game's players in plain words, and point the owner at `chat/OWNERS.md` (what is stored, children's data; not legal advice). |
 | "Make servers", "humans only", "AI companions or guides", "guides that talk", "how strong are the bots", "let my AI play" | the `servers` skill: `servers new`, `servers set`, `servers level`, `agents pass`, `agents brain` (`server_create`, `server_set`, `room_level`, `agent_pass`, `agents_brain`; locally `agent_sit`) | Servers are named room pools with their own rules (humans-only, hybrid, beginner); see that skill. Narrowing one or closing it is ASKED, like a kick, and so is the first time AI guides may talk. |
 | "Make it private / an invite-only beta / public", "players per room", "stop/allow remixes" | `office launch <id> private\|invite\|public [--max <n>] [--remixable on\|off]` (`game_launch_state`) | ASKED. Private: only the owner. Invite: invited browsers only. Public: anyone, listed. Going private or invite-only lets each live room finish its current round with a notice to the players; then everyone the new state leaves out is sent out with a thank-you (the owner, and in a beta the invited, play on). The game leaves the homie.rocks directory the next time it reads the studio (`studio_publish` reads it at once). |
 
@@ -53,6 +54,9 @@ you asked for, give them the link, and check afterwards (`office`, or the ask's 
 
 - To keep a NEW game private from its very first deploy, put `"launch": "private"` in its
   `game.json` before deploying; the owner opens it with `office link --to /<id>/play`.
+- Mute stops a player's room chat too (the play page's Chat: their lines and reactions reach nobody, and the
+  sheet tells them so); from a chat line (the office, or the owner's own game) it also holds a watcher with no
+  seat, and can take their lines down with it.
 - Mute stops a player's chat and emotes: the relay drops their `ev` whose kind starts with
   `say`, `chat` or `emote`, so a game that sends its chat, quick lines and emotes under those
   kinds is muted for free. If the game has other ways to talk, make it hide them with

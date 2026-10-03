@@ -105,6 +105,8 @@ Non-negotiable, every port:
    bot's choices. `createRoom` keeps a hybrid server's AI seats and labels them AI.
    For guides that talk (a beginner server), give the game a vocabulary and `useAgents`
    (the game skill's "Write the guide vocabulary"; NETPLAY.md section 18).
+   Room chat needs nothing from a port (the play page has it); draw speech bubbles over
+   characters with `createBubbles` / `paintBubbles` from `net.on('say')` (NETPLAY.md section 19).
 4. **Host handoff.** Everything the rules need is in the checkpoint; a promoted
    browser continues the SAME round (clock, scores, world).
 5. **Controls mean the same thing every second.** Input is read on the camera's

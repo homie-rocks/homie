@@ -1,0 +1,46 @@
+/**
+ * The built-in floor of room chat (worker/chat.mjs): a short list of English words and phrases that never go out,
+ * whatever any model says. Kept as base64 only so this source does not read as a list of slurs; it is not a secret.
+ * `npx --no-install homie-studio chat words` prints it, and a studio adds its own words (game.json "chat": { "block" },
+ * or the office) and lets a word through (`"allow"`).
+ *
+ *   slurs     always held (whole words; `anywhere`: also inside a word)
+ *   sexual    always held
+ *   swears    held unless the game or the office says `"swears": "allow"`
+ *   harm      phrases that tell a person to hurt themselves, always held
+ *   contact   phrases that move a player off the game (another app, pictures), always held
+ */
+export const WORDS_B64 = [
+  'eyJzbHVycyI6WyJmYWciLCJmYWdzIiwiZmFnZ3kiLCJkeWtlIiwiZHlrZXMiLCJraWtlIiwia2lrZXMiLCJzcGljIiwic3BpY3MiLCJjaGluay',
+  'IsImNoaW5rcyIsImdvb2siLCJnb29rcyIsImNvb24iLCJjb29ucyIsImJlYW5lciIsImJlYW5lcnMiLCJwYWtpIiwicGFraXMiLCJjdW50Iiwi',
+  'Y3VudHMiLCJyZXRhcmQiLCJyZXRhcmRzIiwicmV0YXJkZWQiLCJ0cmFubnkiLCJ0cmFubmllcyIsImhvbW8iLCJob21vcyIsInNwYXoiLCJnb2',
+  'xsaXdvZyIsImRhcmtpZSIsImRhcmt5IiwiamlnYWJvbyIsInBvcmNobW9ua2V5IiwiemlwcGVyaGVhZCIsInNoZW1hbGUiXSwic2x1cnNBbnl3',
+  'aGVyZSI6WyJuaWdnZXIiLCJuaWdnYSIsIm5pZ2dheiIsImZhZ2dvdCIsImZhZ290Iiwid2V0YmFjayIsInRvd2VsaGVhZCIsInJhZ2hlYWQiLC',
+  'JzYW5kbmlnZ2VyIiwia2lrZXMiLCJ0cmFubmllIl0sInNleHVhbCI6WyJwb3JuIiwicG9ybm8iLCJudWRlIiwibnVkZXMiLCJzZXgiLCJzZXh5',
+  'Iiwic2V4dCIsInNleHRpbmciLCJkaWNrIiwiZGlja3MiLCJjb2NrIiwiY29ja3MiLCJwdXNzeSIsInB1c3NpZXMiLCJwZW5pcyIsInZhZ2luYS',
+  'IsImJvb2IiLCJib29icyIsInRpdHMiLCJ0aXR0aWVzIiwiYmxvd2pvYiIsImhhbmRqb2IiLCJjdW0iLCJjdW1taW5nIiwiaG9ybnkiLCJtaWxm',
+  'IiwiaGVudGFpIiwiYW5hbCIsIm9yZ2FzbSIsImRpbGRvIiwicmFwZSIsInJhcGVkIiwicmFwaW5nIiwicmFwaXN0IiwibW9sZXN0IiwibW9sZX',
+  'N0ZXIiLCJwZWRvIiwicGVkb3MiLCJvbmx5ZmFucyIsIm5zZnciLCJqZXJrb2ZmIiwid2FuayIsImJvbmVyIiwiZXJlY3Rpb24iLCJjbGl0Iiwi',
+  'dGhvdCIsIndob3JlIiwid2hvcmVzIiwic2x1dCIsInNsdXRzIiwic2thbmsiXSwic2V4dWFsQW55d2hlcmUiOlsicGVkb3BoaWwiLCJwYWVkb3',
+  'BoaWwiLCJibG93am9iIiwiaGFuZGpvYiIsInBvcm5odWIiLCJ4dmlkZW9zIiwibWFzdHVyYmF0IiwibW9sZXN0Il0sInN3ZWFycyI6WyJzaGl0',
+  'Iiwic2hpdHMiLCJzaGl0dHkiLCJiaXRjaCIsImJpdGNoZXMiLCJiYXN0YXJkIiwiYmFzdGFyZHMiLCJhc3MiLCJhc3NlcyIsInBpc3MiLCJwaX',
+  'NzZWQiLCJ3dGYiLCJzdGZ1IiwidHdhdCIsIndhbmtlciIsImJvbGxvY2tzIiwicHJpY2siLCJkb3VjaGUiLCJkb3VjaGViYWciLCJkdW1iYXNz',
+  'IiwiamFja2FzcyIsImRpcHNoaXQiLCJidWxsc2hpdCIsImdvZGRhbW4iLCJhcnNlIiwiYXJzZWhvbGUiLCJiZWxsZW5kIiwidG9zc2VyIiwiZn',
+  'VrIiwiZnVxIiwiZnVrZXIiLCJmdWtpbiIsImZ1a24iXSwic3dlYXJzQW55d2hlcmUiOlsiZnVjayIsImZjayIsInNoaXRoZWFkIiwiYXNzaG9s',
+  'ZSIsIm1vdGhlcmYiLCJiaXRjaGFzcyIsImNvY2tzdWNrIiwiZGlja2hlYWQiXSwiaGFybSI6WyJraWxsIHlvdXJzZWxmIiwia2lsbCB1cnNlbG',
+  'YiLCJraWxsIHVyIHNlbGYiLCJraWxsIHlvdXIgc2VsZiIsImt5cyIsImdvIGRpZSIsImdvIGtpbGwgeW91cnNlbGYiLCJuZWNrIHlvdXJzZWxm',
+  'IiwiaGFuZyB5b3Vyc2VsZiIsInlvdSBzaG91bGQgZGllIiwiZHJpbmsgYmxlYWNoIiwic2xpdCB5b3VyIHdyaXN0cyIsImVuZCB5b3Vyc2VsZi',
+  'IsInVuYWxpdmUgeW91cnNlbGYiLCJpIGhvcGUgeW91IGRpZSJdLCJjb250YWN0IjpbInNuYXAgbWUiLCJhZGQgbWUgb24gc25hcCIsImFkZCBt',
+  'ZSBvbiBpbnN0YSIsImFkZCBtZSBvbiBkaXNjb3JkIiwiYWRkIG1lIG9uIHRpa3RvayIsImFkZCBtZSBvbiB3aGF0c2FwcCIsImFkZCBtZSBvbi',
+  'B0ZWxlZ3JhbSIsImFkZCBtZSBvbiBraWsiLCJkbSBtZSBvbiIsIm15IHNuYXAgaXMiLCJteSBpbnN0YSBpcyIsIm15IGRpc2NvcmQgaXMiLCJz',
+  'ZW5kIHBpY3MiLCJzZW5kIG1lIHBpY3MiLCJzZW5kIGEgcGljIiwic2VuZCBtZSBhIHBpYyIsInNlbmQgbnVkZXMiLCJzZW5kIG1lIG51ZGVzIi',
+  'wic2VuZCBwaG90b3MiLCJzZW5kIG1lIHBob3RvcyIsInNlbmQgbWUgYSBwaG90byIsIm1lZXQgbWUgaXJsIiwibWVldCB1cCBpcmwiLCJ3aGF0',
+  'cyB5b3VyIGFkZHJlc3MiLCJ3aGF0IGlzIHlvdXIgYWRkcmVzcyIsIndoYXRzIHlvdXIgbnVtYmVyIiwid2hhdCBpcyB5b3VyIG51bWJlciIsIm',
+  'dpdmUgbWUgeW91ciBudW1iZXIiLCJob3cgb2xkIGFyZSB5b3UiLCJob3cgb2xkIHIgdSIsImhvdyBvbGQgcnUiLCJ3aGF0IGlzIHlvdXIgYWdl',
+  'Iiwid2hhdHMgeW91ciBhZ2UiLCJ3aGVyZSBkbyB5b3UgbGl2ZSIsIndoZXJlIGRvIHUgbGl2ZSIsIndoaWNoIGNpdHkgZG8geW91IGxpdmUgaW',
+  '4iLCJ3aGF0IGNpdHkgZG8geW91IGxpdmUgaW4iLCJ3aGF0IHNjaG9vbCBkbyB5b3UgZ28gdG8iLCJ3aGljaCBzY2hvb2wgZG8geW91IGdvIHRv',
+  'Iiwid2hhdCBncmFkZSBhcmUgeW91IGluIiwiYXJlIHlvdSBob21lIGFsb25lIiwic2VuZCBtZSB5b3VyIGFkZHJlc3MiLCJsZXRzIG1lZXQgdX',
+  'AiLCJ3YW5uYSBtZWV0IHVwIiwid2hhdHMgeW91ciBzbmFwY2hhdCIsIndoYXQgaXMgeW91ciBzbmFwY2hhdCIsIndoYXRzIHlvdXIgc25hcCIs',
+  'IndoYXRzIHVyIHNuYXAiLCJ3aGF0cyB5b3VyIGluc3RhIiwid2hhdHMgeW91ciBkaXNjb3JkIiwiYWRkIG1lIG9uIGluc3RhZ3JhbSIsImFkZC',
+  'BtZSBvbiBzbmFwY2hhdCIsIm15IHNuYXBjaGF0IGlzIiwibXkgaW5zdGFncmFtIGlzIl19',
+].join('');

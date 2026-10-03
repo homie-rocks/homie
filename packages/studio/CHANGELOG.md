@@ -17,9 +17,38 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.23.0] - 2026-10-03
+
+**Plugin 0.24.0** · [#33](https://github.com/homie-rocks/homie/pull/33)
+
+Room chat in every game: reactions that float up every screen, quick lines, typing where the rules allow, speech bubbles over characters, rules per game and server, moderation in your own Worker, and the owner's tools.
+
+### Added
+
+- Room chat on every game's play page, with no game code: a Chat pill beside the room button (the corner `screen.share` keeps clear of the game's HUD) and its sheet: the room's last minutes, the five reactions (fire, clap, laugh, heart, wow, in homie.rocks's order, plus up to three of the game's own), the game's quick lines, typing where the rules allow it (and why not where they do not), and Report on a line. New lines show for a moment where the status chip sits (game.json `"screen": { "chat": … }` moves them).
+- Reactions float up every screen in the room, as on the television: the players', the watchers' and the big screen's (at most six a second, eighteen at once). The big screen (`/<game>/tv`) shows the room's lines in a corner, and the watch page has a Chat button and panel. Measured in Chrome with four browsers in one room: a reaction is on the other screens within about 15 ms of the press locally.
+- Speech bubbles over characters: the port kit's `createBubbles` and `paintBubbles` (beside `createLabels`), and the helper's `net.on('say')`. Gem Rush, Ember Vale and Gem Rush 3D draw what a player says over their name. Each player chooses "Show my messages over my character" and "Show chat on this screen".
+- Rules per game and per server: game.json `"chat"` sets a game's defaults (off, emoji, quick lines or typing; who may type and who may react: anyone, signed in with a passkey, or members; slow mode, length, links, swears, the review, bubbles, watchers, homie.rocks), and the owner overrides them in the office or with `homie-studio chat rules`. A kids server and every beginner server keep chat to emoji and quick lines. By default emoji and quick lines are open to everyone and typing needs a signed-in player account.
+- Moderation in the studio's own Worker before a typed line reaches anyone: a built-in word list and patterns (slurs, sexual words, self-harm, personal questions such as a player's age or where they live, contact details and other apps, links, swears) plus your own words, then a review on your own Workers AI with Cloudflare's Clef decision model (`@cf/cloudflare/clef-flash`), within a daily budget of 2,000 neurons (about 850 typed messages; inside the free allocation). Emoji and quick lines are never reviewed. When the review cannot answer, the word list decides alone. `chat/CHAT.md` says why Clef and what the alternatives cost.
+- The owner's tools: every live room's last minutes in the office with Remove (from every screen), Mute and Kick from a line (a watcher too, their lines taken down with them), the same three in the owner's own game, players' reports with Dismiss, the review's day, and an announcement as a studio line in the chat. `homie-studio chat` (rules, rooms, reports), `chat rules`, `chat remove`, `chat budget` and `chat words`.
+- A studio's `/api/rooms` says which rooms let homie.rocks show their chat (`chat: true`), so homie.rocks's room cards can show a room's chat and emoji live from the room's own socket (the hub's side ships with homie.rocks). Turn it off per game or server with the `hub` rule.
+- `chat/OWNERS.md`: a plain note for studio owners on what the chat tooling does, what is stored and for how long, and children's data (not legal advice).
+- Netplay revision 8 (NETPLAY.md section 19): `say` and `react` frames up, `line`, `react`, `lines`, `unline` and `held` down, `policy.chat`, and the owner's `unsay`; the helper's `net.say`, `net.sayLine`, `net.react`, `net.chatRules` and `on('chat' | 'say' | 'unchat' | 'held')`.
+
+### Changed
+
+- `homie-studio deploy` binds Workers AI when a game lets its players type (the review), not only when an AI guide thinks with it.
+- `homie-studio dev --remote-ai` works again: Wrangler's `--local` turned every remote binding off.
+
+### Upgrade notes
+
+- `homie-studio upgrade --apply` (or the next deploy) adds migration `0007_studio_chat.sql`: the owner's chat rules and players' reports. The chat itself is never stored.
+- Games get the chat panel, the float and the ticker as soon as the studio deploys this version. Rebuild a game to draw speech bubbles (its netplay helper is revision 8).
+- Typing needs a signed-in player account by default. To let guests type, or to keep a game to emoji and quick lines, set game.json `"chat"` or use `homie-studio chat rules`.
+
 ## [0.22.0] - 2026-10-02
 
-**Plugin 0.23.0** · [#32](https://github.com/homie-rocks/homie/pull/32)
+**Plugin 0.23.0** · [#32](https://github.com/homie-rocks/homie/pull/32) · [release-2026-10-03-studio-0.22.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.22.0)
 
 Your game's look as decisions you can steer and lock, a style board the engine draws for free, free CC0 3D models, props made on your own fal account, and every asset licensed and checked for phones.
 

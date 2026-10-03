@@ -1,9 +1,25 @@
-# Homie netplay contract, v1 (revision 7)
+# Homie netplay contract, v1 (revision 8)
 
-Status: **v1, revision 7** (2026-10-02, `@homie-rocks/studio` 0.17.0). The wire version is
-`v: 1`. Everything revisions 2 to 7 added is either an optional field, a new message type,
+Status: **v1, revision 8** (2026-10-03, `@homie-rocks/studio` 0.23.0). The wire version is
+`v: 1`. Everything revisions 2 to 8 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
 not know. A change to the contract bumps `v` and keeps v1 working.
+
+**What revision 8 added** (a game that knows none of it has room chat anyway: the play page's
+panel, the float and the big screen's corner need no game code):
+- **Room chat** (section 19): anyone in a room (a player, a watcher, the big screen's page, a
+  homie.rocks room page) says a line (`say`) or sends a reaction (`react`), on the game's socket
+  or the shell's watch socket. The relay checks the room's chat rules (`policy.chat`), runs the
+  floor on typed text, waits for the studio's own review (Cloudflare's Clef decision model on its
+  Workers AI) and fans the line out to every socket and every watching shell, in homie.rocks's
+  room-chat shapes (`line`, `react`). It keeps the last few minutes in memory and nothing else.
+- New frames `say` and `react` (client → relay), `line`, `react`, `lines`, `unline` and `held`
+  (relay → client; `slow` as homie.rocks says it); `policy.chat`; the owner's `unsay` control, and
+  `line` and `purge` on `mute` and `kick`.
+- The helper: `net.on('chat' | 'say' | 'unchat' | 'held')`, `net.say(text)`, `net.sayLine(id)`,
+  `net.react(kind)`, `net.chatRules`, `net.chatShown`; `NETPLAY_REVISION` 8 and the build mark
+  `homie-netplay-rev:8`. The port kit: `createBubbles` and `paintBubbles` (speech bubbles over
+  characters, beside `createLabels`).
 
 **What revision 7 added** (a game that knows none of it plays on every server; its AI guide
 seats are the game's own bots, silent):
@@ -97,6 +113,9 @@ the notices and the banner):
 | `agents/agents.ts` | `useAgents`, the AI guides' host side and every browser's asks and lines (section 18), imported as `@homie-rocks/studio/agents`. |
 | `worker/brain.mjs` | The vocabulary, prompts, `parseDecision`, the scripted floor and the providers (section 18). |
 | `starters/ember-vale/` | Ember Vale: saves (a hero that lasts), and the AI guides' reference (`agents.json`, section 18). |
+| `worker/chat.mjs` | Room chat's rules, the floor every typed message passes, and the studio's review on Clef (section 19). |
+| `worker/chat-page.mjs` | The chat panel, the float and the big screen's corner: one component for the play, watch and TV pages. |
+| `chat/CHAT.md`, `chat/OWNERS.md` | Room chat for game makers, and a plain note for studio owners on chat and children's data. |
 
 ---
 
@@ -1154,3 +1173,172 @@ A beginner server's chat is quick lines only; on a kids server names are handles
 text ever reaches a brain. The owner's controls work on AI, and "AI talk off" (agents_brain
 `script`) silences every AI at once. Quiet AI hides every AI line on a player's own screen.
 
+
+---
+
+## 19. Room chat (revision 8)
+
+Every room has a chat: reactions that float up every screen in it, the game's quick lines,
+and typed messages where the room's rules allow them. It is the Homie app's live-room chat and
+homie.rocks's room chat, in a studio's own game: the same five reactions in the same order
+(fire 🔥, clap 👏, laugh 😂, heart ❤️, wow 🤯), the same frames (`line` and `react`), the same
+slow word ("One line at a time."), the same float on the big screen.
+
+**Where it runs.** In the room's own Table on the studio's Worker. A line goes up on the game's
+socket (`net.say`) or on the shell's watch socket (the play page's panel, the watch page, the big
+screen's page, a homie.rocks room page); the relay checks it, the floor reads typed text, the
+studio's review reads what the floor let through, and the relay fans it out to every socket and
+every watching shell. homie.rocks runs nothing: its room page opens the room's own watch socket.
+
+### The rules: `policy.chat`
+
+| Field | Values (default) | |
+|---|---|---|
+| `mode` | `off`, `emoji`, `lines`, `text` (`text`) | What may be sent: each mode allows what the one before it does. |
+| `who` | `anyone`, `signed-in`, `members` (`signed-in`) | Who may type. Signed in: a player account with a passkey (saves/SAVES.md), never a guest. Members: players who belong to the room's server (on Quick play: any signed-in player). |
+| `react` | the same (`anyone`) | Who may send a reaction or a quick line. |
+| `slow` | 0–120 s (2) | Slow mode: between one person's lines (reactions have their own bucket). |
+| `max` | 20–280 characters (140) | A typed line. |
+| `links` | `block`, `allow` (`block`) | A link is never clickable either way. |
+| `swears` | `block`, `allow` (`block`) | Slurs, sexual words, threats and contact details are held whatever this says. |
+| `ai` | `true`, `false` (`true`) | The studio's review of typed text. |
+| `bubbles`, `watchers`, `hub` | `true` | A line may show over its sender's character; watchers may send (not only read); homie.rocks's page for the room may show it. |
+| `emoji` | the five, then up to 3 of the game's own | `{ k, e }`: a kind and its glyph. |
+| `lines` | 8 default lines, or up to 12 of the game's own | `{ id, text }`: the game's words; each passes the floor at build. |
+| `capped` | `kids`, `server-lines`, `server-off` | Why the mode is lower than the game asks. |
+
+The rules come in layers: game.json `"chat"` (the game's defaults, or `false` for none), then
+the owner's for the game, then the owner's for a server (worker/chat-store.mjs, D1 `chat_rules`),
+then the server's own caps: **a kids server, or a server whose speech is quick lines (every
+beginner server), keeps chat to emoji and quick lines; speech `off` turns it off.** The Worker
+composes them for every socket and the room applies the newest; an owner's change reaches every
+live room at once (a signed `policy` control). The studio's own word list (`block`, `allow`)
+stays in the room; clients get the rest in `welcome.policy.chat` and every `policy` frame.
+
+```json
+"chat": {
+  "mode": "text", "who": "signed-in", "react": "anyone", "slow": 2, "max": 140,
+  "emoji": { "gem": "💎" },
+  "lines": { "gg": "Good game!", "gem": "Grab that gem!", "help": "Help me!" }
+}
+```
+
+### Frames
+
+| `t` | Direction | Fields | |
+|---|---|---|---|
+| `say` | up | `text` or `say` (a quick line's id), `n?`, `bubble?: false` | A typed line or a quick line. `n`: the sender's own id for it (1–16 of `A-Za-z0-9_-`), back on its own copy only. `bubble: false`: not over my character. |
+| `react` | up | `kind`, `n?`, `bubble?: false` | One of the room's reactions. |
+| `line` | down, everyone | `id`, `at`, `name`, `seat`, `colour`, `by`, `text`, `say?`, `bubble?`, `acct?`, `owner?`, `n?` | `by`: `player`, `watcher`, `hub` (a page of another site), `studio` (an announcement, which is a line too). |
+| `react` | down, everyone | `id`, `at`, `name`, `seat`, `colour`, `by`, `react`, `glyph`, `bubble?`, `n?` | |
+| `lines` | down, a watching shell as it opens | `lines` | The window: the last 50 lines of the last 15 minutes. Never to a page the room holds out. |
+| `unline` | down, everyone | `ids` | The owner took them down: hide them, and their bubbles. |
+| `held` / `slow` | down, the sender | `why`, `message`, `n?`, `until?` | Not sent. `why`: `off`, `emoji`, `lines`, `sign-in`, `sign-in-react`, `members`, `members-react`, `watchers`, `hub`, `muted`, `slow`, `repeat`, `words`, `harm`, `contact`, `link`, `swears`, `ai`, `busy`, `unknown`, `empty`, `ai_seat`. |
+
+A line's sender is the socket's own client, or for a watch socket the client of the same browser
+(its room key) or account in the room: its seat, name and colour. A page with no client in the
+room (homie.rocks, a watch page before its game connects) is a watcher with a handle. **An AI never
+types in room chat** (section 18: it says only its game's lines, as `ev`). The relay's caps: a
+`say` frame at most 1.5 KB and 4 a second, a `react` 256 B and 10 a second; token buckets per
+sender (lines: 4 at once, then one every 2 s, as homie.rocks; reactions: 6, then one every
+0.4 s), 30 at once per address (then one every 0.15 s), and at most 40 reactions a second fanned
+out per room (the float draws six a second anyway); the same words from one person within 30 s
+are a `repeat`.
+
+### The floor and the review
+
+**The floor** (worker/chat.mjs `floor`) always runs, needs nothing, and costs nothing: a short
+built-in English list (slurs, sexual words, telling someone to hurt themselves, moving a player to
+another app or asking for pictures; worker/chat-words.mjs, `homie-studio chat words` prints it),
+emails and phone numbers, links, swears, and the studio's own words (`block`, `word*` inside words;
+`allow` lets one through). It reads through spacing ("f u c k"), repeats, leet and look-alike
+letters, and never across two words ("this hit").
+
+**The review** (`reviewChat`) reads what the floor let through, on the studio's own Workers AI:
+Cloudflare's **Clef** decision model (`@cf/cloudflare/clef-flash`, launched 2026-10-01; var
+`HOMIE_CHAT_MODEL` changes it to `@cf/cloudflare/clef` or `@cf/meta/llama-guard-3-8b`). One
+typed question: is this message `ok`, an `insult`, `hate`, `sexual`, `grooming` (asks a player's
+age, where they live, for photos or to move apps), `harm` or `spam`? Clef answers with a
+probability for each; the message is held when `ok` is under 0.5, and the likeliest other answer
+is kept as why (in the office's counts, never shown to anyone as a label). The message waits for
+the answer (Clef-flash: about 40 ms median by Cloudflare's numbers, plus the round trip) and goes
+out only after it. **Emoji and quick lines are never reviewed** (they are the studio's own words)
+and reach every screen at once.
+
+| Review | |
+|---|---|
+| Budget | A day, for the whole studio (meta `chat_budget`): 2,000 neurons by default. With the AI guides' 8,000 that is the 10,000 Workers AI gives an account free a day. A short message measured about 2.3 neurons (clef-flash: $0.09 per million input tokens, no output charge; the question and its answers are most of the input), so about 850 reviewed messages a day. Counted in `stats_daily` (`chat-reviews`, `chat-neurons`). |
+| No review | No `AI` binding (`homie-studio dev` without `--remote-ai`), the day's budget used, the model failing or slower than 1.5 s, more than 8 messages waiting: the floor alone decides, the message goes out, and the office counts it. |
+| The owner | The studio's owner is never reviewed or held by slow mode (their lines are marked `owner`). |
+
+### The owner's tools
+
+`unsay { id | ids | all }` takes lines down on every screen. `mute` and `kick` take `line` (a
+chat line's id) instead of a seat: the room holds that line's sender by token, browser and
+account, a watcher with no seat too; `purge: true` takes their lines down with it. The office
+(`/_studio/office`, `/_studio/api/chat…`) shows each live room's last minutes with Remove, Mute
+and Kick, each game's rules (and each server's) with what set them, the reports, and the review's
+day; the owner in their own game has Remove, Mute and Kick on every line in the chat sheet. An
+office key (the owner's AI) changes rules that tighten chat at once and only ASKS for a change
+that opens it up (a wider mode or audience, less slow, links or swears allowed, the review off,
+new lines or emoji).
+
+**Reports.** A player taps a line, then Report, and picks a reason (mean, hate, sexual, unsafe,
+spam, other). The Worker files **the room's own copy** of that one line (its words, its sender's
+room name and account id if signed in, the room, when) for 30 days or until the owner dismisses
+it, once per line; never who reported it, never an address. 8 reports per browser per 10 minutes.
+
+### What the game does (the helper)
+
+```ts
+import { createBubbles, paintBubbles, BUBBLE_FONT } from '@homie-rocks/studio/port';
+const bubbles = createBubbles({ measure: (t) => { ctx.font = BUBBLE_FONT; return ctx.measureText(t).width; } });
+net.on('say', (s) => bubbles.say(s.seat, s.text, { id: s.id, kind: s.kind }));     // over the speaker's character
+net.on('unchat', (e) => e.ids.forEach((id) => bubbles.remove(id)));                // the studio took it down
+// each frame, after the names: anchors just over each speaking body's name label
+paintBubbles(ctx, bubbles.place(seats.map((s) => ({ key: s.seat, x: s.labelX, y: s.labelTop, self: s.mine }))));
+```
+
+| Call | Meaning |
+|---|---|
+| `net.on('chat', m)` | Every line and reaction: `{ id, at, kind: 'text'\|'line'\|'react'\|'studio', name, seat, colour, by, text?, say?, react?, glyph?, bubble?, acct?, owner?, mine? }`. A game with its own chat log draws these. |
+| `net.on('say', s)` | One to draw over a character: `{ id, seat, name, text, glyph?, kind }`. Only when its sender wants it there (`bubble`), the room's `bubbles` rule allows it, the sender holds a seat, and this browser shows chat. |
+| `net.on('unchat', { ids })`, `net.on('held', h)` | Lines taken down; a line of mine not sent (`why`, `message`). |
+| `net.say(text)`, `net.sayLine(id)`, `net.react(kind)` | The game's own chat UI (a keyboard key, a wheel of quick lines): checked by the relay like the panel's. False when not sent. |
+| `net.chatRules`, `net.chatShown` | The room's rules; whether this browser shows chat. |
+| `createBubbles({ measure, lineHeight?, maxWidth?, maxLines?, ms?, avoid?, screen? })` | `say(key, text, { id, kind })`, `remove(id)`, `clear(key?)`, `place(anchors, dt)` → `BubbleOut[]` (the player's own first, none covering another, wrapped to 3 lines, popping in and fading out), `boxes()` (for `createLabels`' `avoid`), `size`. |
+| `paintBubbles(ctx, list, { font, paper, ink, edge, radius })` | Draws them on a 2D canvas; a reaction alone is a bigger glyph. |
+
+Gem Rush, Ember Vale and Gem Rush 3D draw bubbles over the speaker's name; Ember Vale keeps them
+clear of its guides' own bubbles. A game that draws none still has the panel, the float and the
+ticker.
+
+### What the page does (worker/chat-page.mjs)
+
+- **Play:** a Chat pill in the room button's band (game.json `screen.share` already keeps that
+  corner clear of the game's HUD), with a count of unread lines; its sheet: the room's last
+  minutes, a row of reactions (2.5 rem circles that pop), the quick lines, typing where the rules
+  allow it (and why not where they do not: "Sign in to type here. Emoji are open to everyone."),
+  Report on a line, and two switches kept in this browser: **Show my messages over my character**
+  and **Show chat on this screen** (off: no ticker, no float, no bubbles in this game). New lines
+  show for a moment where the status chip sits (game.json `"screen": { "chat": "bottom-right" }`
+  moves them; `false` keeps only the pill's count).
+- **Float:** every reaction rises up every screen in the room, as on the television: at most six
+  a second and eighteen at once, 2.4 s each with a little sway. The sender's own floats at once.
+- **TV** (`/<game>/tv`): the room's lines in the corner the QR card does not use, no typing.
+- **Watch:** a Chat button in the band; its panel over the stage (a bottom sheet on a phone).
+
+**Privacy.** Nothing a person says is stored: the room keeps the last 50 lines of the last 15
+minutes in its memory (never in Durable Object storage), and an empty room forgets them with
+everything else a minute after its last person leaves. The counts (lines, reactions, held by why,
+reviews and neurons) are daily numbers in the studio's own D1, never a message or a sender. A
+report keeps one message for 30 days. The review sends the message's words (and nothing about who
+said it) to the studio's own Workers AI; Cloudflare says it does not keep or train on them.
+
+**Cost.** A line or a reaction is one incoming message on the room's object (billed 20:1); the
+fan-out is outgoing (free). A homie.rocks page or a watcher is one more socket. The review is
+about 2.3 neurons a typed line, inside the free allocation by default.
+
+**Old games and old relays.** A game built before revision 8 has the panel, the float, the ticker
+and the TV corner; it draws no bubbles and its own UI cannot send. A revision-8 helper on an older
+relay never hears a `line` and has `chatRules` null.

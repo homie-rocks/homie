@@ -690,7 +690,7 @@ export function watchOf(g) {
  * A room as the live list draws it (the same fields /api/rooms and /<game>/live give the script). A server's room
  * (0.16.0) names its server and policy, and how many AI are in it (always marked AI).
  */
-export function roomView(g, r, max, srv = null) {
+export function roomView(g, r, max, srv = null, { chat = false } = {}) {
   const room = r.name ?? r.room;
   const m = /^(?:pub|s-[a-z0-9-]+)-(\d+)$/.exec(String(room ?? ''));
   const n = m ? Number(m[1]) : null;
@@ -701,6 +701,9 @@ export function roomView(g, r, max, srv = null) {
     server: srv && srv.id !== 'public' ? { id: srv.id, name: srv.name, badge: policyWords(srv).badge } : null,
     policy: srv?.policy ?? 'open',
     ai: Number(r.ai ?? r.agents ?? 0) || 0,
+    // Room chat (0.23.0, NETPLAY.md section 19): its chat is on and homie.rocks's page for it may show it (and open the
+    // room's watch socket for its lines and emoji).
+    ...(chat ? { chat: true } : {}),
   };
 }
 

@@ -59,7 +59,10 @@ CREATE TABLE IF NOT EXISTS stats_keys (
 ) WITHOUT ROWID;
 `;
 
-export const METRICS = Object.freeze(['visit', 'play', 'screen', 'watch', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video', 'agent-minutes', 'brain-calls', 'brain-neurons', 'brain-microdollars']);
+export const METRICS = Object.freeze(['visit', 'play', 'screen', 'watch', 'room', 'round', 'humans', 'peak', 'peak-room', 'song', 'video', 'agent-minutes', 'brain-calls', 'brain-neurons', 'brain-microdollars',
+  // Room chat (0.23.0): lines and reactions sent, messages held (by why: words, link, ai…), the review's calls and neurons.
+  // Counts only: never a message, never who.
+  'chat-lines', 'chat-reacts', 'chat-held', 'chat-reviews', 'chat-neurons']);
 const MAX_METRICS = new Set(['peak', 'peak-room']);
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;

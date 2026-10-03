@@ -7,6 +7,7 @@ import { NET_PALETTE } from './room.mjs';
 import { SKILLS } from './agents.mjs';
 import { KIDS_LINE, POLICY_WORDS } from './servers.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
+import { CHAT_CSS, CHAT_JS, CHAT_OWNER_JS, chatBoot } from './chat-page.mjs';
 
 export { homePage, mediaIndexPage, notFoundPage, songPage, videoPage } from './site.mjs';
 
@@ -84,7 +85,7 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null } = {}) {
+export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
   const places = sharePlaces(g.screen?.share);
@@ -159,7 +160,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .notice .acts a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; text-decoration: none; font-weight: 700; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
 .notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
 [hidden] { display: none !important; }
-${SERVER_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${pillUi}`;
+${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${pillUi}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
   // The server this page plays on (0.16.0): its pool (the Lobby), its badge and line for the chip, its ceiling.
@@ -202,8 +203,10 @@ ${SERVER_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${pillUi}`;
 <div class="card" data-screen hidden></div>
 ${joinCard}${share}
 <script>window.__HOMIE_PLAY=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
+<script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: screen ? 'tv' : 'play', owner, acct, member })).replace(/</g, '\\u003c')};</script>
+<script>${CHAT_JS}</script>
 <script>${SHELL_JS}</script>${g.saves && !screen ? `
-<script>${SAVES_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
+<script>${SAVES_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script><script>${CHAT_OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
 }
 
 /*
@@ -399,6 +402,8 @@ const SHELL_JS = String.raw`(function () {
     if (params.get('debug') === '1') q.set('debug', '1');
     // Quiet AI (this browser hides AI speech): the helper starts hushed, and hears a change by message.
     if (state.quietAi) q.set('hush', '1');
+    // Room chat (section 19): this browser's "Show chat" and "Show my messages over my character", for the game's bubbles.
+    try { if (localStorage.getItem('homie-chat-show') === '0') q.set('chat', '0'); if (localStorage.getItem('homie-chat-bubble') === '0') q.set('bub', '0'); } catch (e) {}
     // The frame cannot read this page's address (it is an opaque origin): hand it the game's own switches.
     ['touchdebug', 'cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
     frame.src = '/' + boot.game + '/__game/?' + q.toString();
@@ -409,7 +414,7 @@ const SHELL_JS = String.raw`(function () {
       var m = ev.data;
       if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
       if (m.what === 'attached') state.attached = true;
-      if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} }
+      if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
       if (m.what === 'stats') state.stats = m.stats;
       if (m.what === 'round') onRound(m.round);
       if (m.what === 'roster') state.roster = m.slots;
@@ -455,6 +460,8 @@ const SHELL_JS = String.raw`(function () {
     try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
     catch (e) { setTimeout(function () { watch(room); }, 2000); return; }
     state.watchSocket = ws;
+    // Room chat (section 19) speaks on this socket: lines, reactions and what the room keeps of the last minutes.
+    if (window.__homieChat) window.__homieChat.socket(ws, room);
     ws.onmessage = function (ev) {
       var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
       if (!m || typeof m !== 'object') return;
@@ -463,7 +470,9 @@ const SHELL_JS = String.raw`(function () {
       if (m.t === 'announce') { banner(m); return; }
       if (m.t === 'muted') { mutedNote(m); return; }
       if (m.t === 'vote') { onVote(m); return; }
+      if (window.__homieChat && window.__homieChat.receive(m)) return;
       if (m.t !== 'net') return;
+      if (window.__homieChat) window.__homieChat.facts(m);
       state.facts = m;
       if (typeof m.st === 'number') state.offset = m.st - Date.now();
       if (m.announce && m.announce.text) banner(m.announce, true);
@@ -834,11 +843,11 @@ const OWNER_JS = String.raw`(function () {
  * watchers see the whole room only. A private or invite-only game is watched only by whoever may play it (the door
  * is the play door's). Every name a player typed is set with textContent.
  */
-export function watchPage(cat, g, { room = null, ticket = null, policy = 'follow' } = {}) {
+export function watchPage(cat, g, { room = null, ticket = null, policy = 'follow', owner = false, acct = false, member = false } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const hot = /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a';
   const boot = { game: g.id, name: g.name, policy, palette: NET_PALETTE, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}) };
-  const css = `:root{--hot:${hot}}${WATCH_CSS}`;
+  const css = `:root{--hot:${hot}}${WATCH_CSS}${CHAT_CSS}`;
   return layoutless(`Watch ${g.name}`, `
 <header class="wtop" data-top>
   <span class="live" data-live><i aria-hidden="true"></i><b>Live</b></span>
@@ -855,6 +864,8 @@ export function watchPage(cat, g, { room = null, ticket = null, policy = 'follow
 </footer>
 <div class="wnote" data-note hidden></div>
 <script>window.__HOMIE_WATCH=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
+<script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: 'watch', owner, acct, member })).replace(/</g, '\\u003c')};</script>
+<script>${CHAT_JS}</script>${owner ? `<script>${CHAT_OWNER_JS}</script>` : ''}
 <script>${WATCH_JS}</script>`, css, frameAncestors(cat));
 }
 
@@ -1055,12 +1066,16 @@ const WATCH_JS = String.raw`(function () {
     try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + boot.game + '/__watch?room=' + encodeURIComponent(room) + extra); }
     catch (e) { setTimeout(function () { watch(room); }, 2000); return; }
     state.socket = ws;
+    // Room chat (section 19): a watcher reads the room's chat and sends what the room's rules let a watcher send.
+    if (window.__homieChat) window.__homieChat.socket(ws, room);
     ws.onmessage = function (ev) {
       var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
       if (!m || typeof m !== 'object') return;
       if (m.t === 'kicked') { shut('kicked', m); return; }
       if (m.t === 'closed') { shut('closed', m); return; }
+      if (window.__homieChat && window.__homieChat.receive(m)) return;
       if (m.t !== 'net') return;
+      if (window.__homieChat) window.__homieChat.facts(m);
       state.facts = m;
       if (typeof m.st === 'number') state.offset = m.st - Date.now();
       if (m.round) state.round = m.round;

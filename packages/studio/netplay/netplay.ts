@@ -44,6 +44,12 @@
  *     sends its seat and moves through `agent:do` goals; it speaks only the
  *     game's `agents.json` lines (`say:<lineId>`). `@homie-rocks/studio/agents`
  *     (`useAgents`) is the host's side of it; this file only carries the frames.
+ *   - Room chat (revision 8, NETPLAY.md section 19): everyone's lines and
+ *     reactions (`on('chat')`), the ones to draw over a character
+ *     (`on('say')`: a speech bubble, `createBubbles` in the port kit draws
+ *     them), messages taken down (`on('unchat')`), and the game's own chat UI
+ *     (`net.say(text)`, `net.sayLine(id)`, `net.react(kind)`); the room's rules
+ *     are `net.chatRules`. The play page's chat panel needs none of it.
  *
  * WHAT IT DOES NOT DO: rendering, physics, input devices, bots. `Roster` below
  * is the bot-yield bookkeeping a host needs; the bots themselves are the game's.
@@ -52,9 +58,9 @@
 
 export const NETPLAY_VERSION = 1;
 /** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
-export const NETPLAY_REVISION = 7;
+export const NETPLAY_REVISION = 8;
 /** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
-export const NETPLAY_MARK = 'homie-netplay-rev:7';
+export const NETPLAY_MARK = 'homie-netplay-rev:8';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -100,7 +106,69 @@ export interface NetConfig {
   agent?: { hands: 'self' | 'host'; role: AgentRole };
   /** Revision 6: the play page's "Quiet AI" is on: AI speech is not shown on this browser. */
   hush?: boolean;
+  /** Revision 8: this browser hides room chat (the play page's "Show chat" is off): no `say` bubbles either. */
+  chatOff?: boolean;
+  /** Revision 8: this player does not want their own messages over their character (the play page's toggle). */
+  bubbleOff?: boolean;
 }
+
+/* ------------------------------------------------- room chat (revision 8, section 19) */
+
+export type ChatMode = 'off' | 'emoji' | 'lines' | 'text';
+export type ChatWho = 'anyone' | 'signed-in' | 'members';
+/** A room's chat rules (the policy's `chat`): what may be sent, who may send it, and the room's reactions and lines. */
+export interface ChatRules {
+  mode: ChatMode;
+  /** Who may type (`text`), and who may send a reaction or a quick line. */
+  who: ChatWho;
+  react: ChatWho;
+  /** Slow mode: seconds between one person's messages (0: off). */
+  slow: number;
+  /** A typed message's length. */
+  max: number;
+  links: 'block' | 'allow';
+  swears: 'block' | 'allow';
+  /** The studio's Workers AI reviews typed messages (the word list always runs). */
+  ai: boolean;
+  /** A message may show over its sender's character. */
+  bubbles: boolean;
+  watchers: boolean;
+  hub: boolean;
+  /** The room's reactions: homie.rocks's five (fire, clap, laugh, heart, wow) and up to three of the game's own. */
+  emoji: { k: string; e: string }[];
+  /** The room's quick lines: the game's own words (game.json "chat": { "lines" }). */
+  lines: { id: string; text: string }[];
+  kids?: boolean;
+  /** Why the mode is lower than the game asks: `kids`, `server-lines` or `server-off`. */
+  capped?: string;
+}
+/**
+ * One message in the room (`on('chat')`): a typed line, a quick line (`say`: its id), a reaction (`react`, `glyph`), or
+ * the studio's own line (an announcement). `seat` is the sender's (null: a watcher, a homie.rocks page, the studio);
+ * `bubble`: the sender wants it over their character. Names and text are data: draw them as text, never as markup.
+ */
+export interface ChatLine {
+  id: string;
+  at: number;
+  kind: 'text' | 'line' | 'react' | 'studio';
+  name: string;
+  seat: number | null;
+  colour: number | null;
+  by: 'player' | 'watcher' | 'hub' | 'studio';
+  text?: string;
+  say?: string;
+  react?: string;
+  glyph?: string;
+  bubble?: boolean;
+  acct?: boolean;
+  owner?: boolean;
+  /** This browser sent it. */
+  mine?: boolean;
+}
+/** A message to draw over a character (`on('say')`): the seat's, with its words or its emoji. */
+export interface SayBubble { id: string; seat: number; name: string; text: string; glyph?: string; kind: 'text' | 'line' | 'react' }
+/** A message that was not sent (to this browser only): `why` is a word (slow, sign-in, words, link, ai…), `message` says it. */
+export interface ChatHeld { why: string; message: string; until?: number }
 
 /* ------------------------------------------------- servers and agent seats (revision 6, section 17) */
 
@@ -130,6 +198,8 @@ export interface Policy {
   brain: string;
   skill: Skill;
   by?: 'vote' | 'owner';
+  /** Revision 8: the room's chat rules (section 19). */
+  chat?: ChatRules;
 }
 /** What a room says about an AI in a seat (`peer.agent`). */
 export interface AgentFacts { pass: string; role: AgentRole; hands: 'self' | 'host'; by: 'studio' | 'guest' | 'service' }
@@ -411,6 +481,14 @@ export interface NetHandlers<S, A, C> {
   policy: (p: Policy) => void;
   /** Revision 6: the party's vote on the dial opened, moved or closed. */
   vote: (v: VoteState) => void;
+  /** Revision 8: a line or a reaction in the room's chat (anyone's, the studio's, mine). */
+  chat: (m: ChatLine) => void;
+  /** Revision 8: a message to draw over a seat's character (its sender wants it there and this browser shows chat). */
+  say: (s: SayBubble) => void;
+  /** Revision 8: the studio took messages down: hide them (and their bubbles). */
+  unchat: (e: { ids: string[] }) => void;
+  /** Revision 8: a message of mine was not sent (slow mode, sign in to type, a word, the studio's filter…). */
+  held: (h: ChatHeld) => void;
 }
 
 export interface Netplay<S = unknown, A = unknown, C = unknown> {
@@ -503,6 +581,17 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   /** Resolves with the first role (welcome, or offline fallback). */
   readonly ready: Promise<RoleChange<S, C>>;
   on<K extends keyof NetHandlers<S, A, C>>(kind: K, fn: NetHandlers<S, A, C>[K]): () => void;
+  /**
+   * ROOM CHAT (revision 8, NETPLAY.md section 19). `chatRules`: the room's rules (null before the relay says them).
+   * `say(text)` types a line, `sayLine(id)` sends one of the room's quick lines, `react(kind)` an emoji (fire, clap,
+   * laugh, heart, wow, or the game's own): checked by the relay like the play page's own panel; false when not sent
+   * (offline, or the room's rules say no). `chatShown`: this browser shows chat (its player can turn it off).
+   */
+  readonly chatRules: ChatRules | null;
+  say(text: string, opts?: { bubble?: boolean }): boolean;
+  sayLine(id: string, opts?: { bubble?: boolean }): boolean;
+  react(kind: string, opts?: { bubble?: boolean }): boolean;
+  readonly chatShown: boolean;
   /** Server time in ms (relay clock). Offline: Date.now(). */
   now(): number;
   /** Host: true when the next `snapshot()` would be sent. Build the state only then. */
@@ -890,7 +979,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const handlers: { [K in keyof NetHandlers<S, A, C>]: Set<NetHandlers<S, A, C>[K]> } = {
     role: new Set(), join: new Set(), leave: new Set(), input: new Set(), event: new Set(),
     snapshot: new Set(), control: new Set(), state: new Set(), round: new Set(), roster: new Set(), status: new Set(), announce: new Set(), mute: new Set(), view: new Set(),
-    policy: new Set(), vote: new Set(),
+    policy: new Set(), vote: new Set(), chat: new Set(), say: new Set(), unchat: new Set(), held: new Set(),
   };
   const emit = <K extends keyof NetHandlers<S, A, C>>(kind: K, arg: Parameters<NetHandlers<S, A, C>[K]>[0]): void => {
     for (const fn of [...handlers[kind]]) {
@@ -1018,6 +1107,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const asAgent = cfg?.agent && typeof cfg.agent === 'object' ? { hands: cfg.agent.hands === 'host' ? 'host' : 'self', role: cfg.agent.role ?? 'party' } : null;
   let hushed = cfg?.hush === true;
   let aloneUntil = 0;
+  // room chat (section 19): this browser shows chat (the play page's "Show chat"), and wants its own lines over its character.
+  let chatShown = cfg?.chatOff !== true;
+  let bubbleMine = cfg?.bubbleOff !== true;
+  let chatSeq = 0;
 
   const wall = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const now = (): number => (offline ? Date.now() : Date.now() + offset);
@@ -1253,6 +1346,27 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       case 'vote': {
         voteState = readVote(m);
         if (voteState) { emit('vote', voteState); post?.({ what: 'vote', vote: voteState }); }
+        return;
+      }
+      case 'line':
+      case 'react': {
+        // Room chat (section 19): a line or a reaction, anyone's. One the sender wants over their character is a `say`.
+        const line = readChatLine(m);
+        if (!line) return;
+        emit('chat', line);
+        if (line.bubble && line.seat !== null && chatShown && line.kind !== 'studio') {
+          emit('say', { id: line.id, seat: line.seat, name: line.name, text: line.kind === 'react' ? (line.glyph ?? '') : (line.text ?? ''), ...(line.glyph ? { glyph: line.glyph } : {}), kind: line.kind === 'react' ? 'react' : line.kind === 'line' ? 'line' : 'text' });
+        }
+        return;
+      }
+      case 'unline': {
+        const ids = Array.isArray(m['ids']) ? (m['ids'] as unknown[]).filter((x): x is string => typeof x === 'string').slice(0, 64) : [];
+        if (ids.length) emit('unchat', { ids });
+        return;
+      }
+      case 'held':
+      case 'slow': {
+        emit('held', { why: String(m['why'] ?? (m['t'] === 'slow' ? 'slow' : 'held')), message: String(m['message'] ?? ''), ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}) });
         return;
       }
       case 'state': if (typeof m['k'] === 'string') applyState(m['k'], m['d']); return;
@@ -1784,6 +1898,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (ev.source !== g.parent || !ev.data || typeof ev.data !== 'object') return;
       const d = ev.data as { t?: unknown; on?: unknown };
       if (d.t === 'homie-hush') hushed = d.on === true;
+      // Room chat (section 19): the play page's "Show chat" and "Show my messages over my character".
+      if (d.t === 'homie-chat') {
+        const c = d as { show?: unknown; bubble?: unknown };
+        if (typeof c.show === 'boolean') chatShown = c.show;
+        if (typeof c.bubble === 'boolean') bubbleMine = c.bubble;
+      }
     });
   } catch { /* not a browser */ }
 
@@ -1812,6 +1932,24 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       level: Math.max(1, Math.min(levelMax, Number(p.level) || 3)), levelMax, kids,
       skill: { ...skillPreset(Number(sk.level) || 3, kids), ...sk },
     } as Policy;
+  }
+  function readChatLine(m: Record<string, unknown>): ChatLine | null {
+    if (typeof m['id'] !== 'string') return null;
+    const react = m['t'] === 'react';
+    const by = m['by'] === 'watcher' || m['by'] === 'hub' || m['by'] === 'studio' ? m['by'] : 'player';
+    return {
+      id: m['id'], at: Number(m['at']) || now(), kind: react ? 'react' : by === 'studio' ? 'studio' : typeof m['say'] === 'string' ? 'line' : 'text',
+      name: String(m['name'] ?? '').slice(0, 40), seat: typeof m['seat'] === 'number' ? m['seat'] : null, colour: typeof m['colour'] === 'number' ? m['colour'] : null, by,
+      ...(typeof m['text'] === 'string' ? { text: m['text'] } : {}), ...(typeof m['say'] === 'string' ? { say: m['say'] } : {}),
+      ...(react ? { react: String(m['react'] ?? ''), glyph: String(m['glyph'] ?? '') } : {}),
+      ...(m['bubble'] === true ? { bubble: true } : {}), ...(m['acct'] === true ? { acct: true } : {}), ...(m['owner'] === true ? { owner: true } : {}),
+      ...(typeof m['n'] === 'string' ? { mine: true } : {}),
+    };
+  }
+  function chatSend(msg: Record<string, unknown>, bubble?: boolean): boolean {
+    if (offline || asAgent) return false;
+    chatSeq += 1;
+    return raw({ ...msg, n: `g${chatSeq}`, ...((bubble ?? bubbleMine) ? {} : { bubble: false }) });
   }
   function readVote(m: Record<string, unknown>): VoteState | null {
     if (!Array.isArray(m['options']) || typeof m['id'] !== 'string') return null;
@@ -1894,6 +2032,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     },
     get hushed() { return hushed; },
     set hushed(on: boolean) { hushed = Boolean(on); },
+    get chatRules() { return policy.chat ?? null; },
+    get chatShown() { return chatShown; },
+    say(text: string, o?: { bubble?: boolean }): boolean {
+      const t = String(text ?? '').trim();
+      if (!t) return false;
+      return chatSend({ t: 'say', text: t.slice(0, 280) }, o?.bubble);
+    },
+    sayLine(id: string, o?: { bubble?: boolean }): boolean { return chatSend({ t: 'say', say: String(id ?? '').slice(0, 16) }, o?.bubble); },
+    react(kind: string, o?: { bubble?: boolean }): boolean { return chatSend({ t: 'react', kind: String(kind ?? '').slice(0, 16) }, o?.bubble); },
     get asAgent() { return Boolean(asAgent); },
     ready,
     on(kind, fn) {

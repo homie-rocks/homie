@@ -192,6 +192,7 @@ studio and changes nothing):
 | Durable Object `Table` | one per room | The netplay relay (`worker/room.mjs`): seats, host election, snapshots, keyed state, checkpoints. It runs no game code. |
 | Durable Object `Lobby` | one per game | Puts strangers who press Play into the same public room, and opens the next room when one is full. |
 | D1 database | `<studio>-db` | The directory claim and every finished round. |
+| Workers AI binding | `AI` | Only when a game's players may type (room chat's review, Cloudflare's Clef decision model) or a server's AI guides think with it; within the free allocation (10,000 neurons a day) by default. |
 
 From 0.10.0 the Worker's config (`wrangler.jsonc`) sits at the studio's root, so Cloudflare's
 **Workers Builds** can deploy it from GitHub: `npm run build` and `npm run deploy` on the

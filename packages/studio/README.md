@@ -26,6 +26,7 @@ npx homie-studio publish                               # the homie.rocks directo
 npx homie-studio stats                                 # the studio's own numbers, for its owner
 npx homie-studio office                                 # who is playing now, in every live room (the back office)
 npx homie-studio servers                                # each game's servers: humans-only, hybrid AI seats, beginner guides
+npx homie-studio chat                                   # room chat: each game's rules, the rooms' last minutes, reports
 npx homie-studio upgrade                               # what a newer template adds to this studio (--apply to take it)
 ```
 
@@ -285,6 +286,42 @@ npx homie-studio agents pass night-rush --label Claude                          
   [agents/GUIDES.md](agents/GUIDES.md) is the short path for an existing RPG.
 - Everything is in the studio's own Worker and D1 (migration `0006_studio_servers.sql`). The site's side is in
   [site/SITE.md](site/SITE.md); the room's in [netplay/NETPLAY.md](netplay/NETPLAY.md) sections 17 and 18.
+
+## Room chat
+
+Every game has room chat (0.23.0), with no game code: reactions that float up every screen in the room (players,
+watchers, the big screen), the game's quick lines, and typing where the room's rules allow it. It is the Homie app's
+live-room chat and homie.rocks's room chat in a studio's own game: the same five reactions in the same order, the
+same message shapes, the same float on a television.
+
+```sh
+npx homie-studio chat rules night-rush --mode lines                    # emoji and quick lines only
+npx homie-studio chat rules night-rush --who anyone --slow 5           # guests may type, one line every 5 s
+npx homie-studio chat rules night-rush --server first-light --mode emoji
+npx homie-studio chat                                                   # rules, every room's last minutes, reports
+npx homie-studio chat remove night-rush pub-3 <line id>                 # take a line down on every screen
+npx homie-studio chat words                                             # the built-in word list the floor holds
+```
+
+- **The play page:** a Chat pill beside the room button (the corner `screen.share` keeps clear of the HUD), its
+  sheet (the last minutes, the reactions, the quick lines, typing, Report), a short ticker of new lines, and two
+  switches each player keeps: "Show my messages over my character" and "Show chat on this screen". The big screen
+  shows the lines in a corner; the watch page has a Chat button; homie.rocks shows a room's chat on its card.
+- **Rules** per game (game.json `"chat"`) and per server, in the office or with `chat rules`: off, emoji, quick
+  lines or typing; who may type and who may react (anyone, signed in with a passkey, members); slow mode, length,
+  links, swears, the review, bubbles, watchers, homie.rocks. Default: emoji and quick lines for anyone, typing for
+  signed-in players. A kids server and every beginner server keep chat to emoji and quick lines.
+- **Moderation, in the studio's own Worker, before anyone sees a typed line:** a built-in word list and patterns
+  (slurs, sexual words, self-harm, personal questions and contact details, links, swears, your own words), then
+  Cloudflare's **Clef** decision model on the studio's own Workers AI (`@cf/cloudflare/clef-flash`, about 2.3
+  neurons a message measured, 2,000 a day by default: inside the free allocation). Emoji and quick lines are never reviewed.
+- **The owner:** every live room's last minutes in the office with Remove, Mute and Kick (from a line, with their
+  lines taken down), the same in the owner's own game, the reports players make, and Announce (a studio line).
+- **Speech bubbles:** `net.on('say')` and the port kit's `createBubbles` / `paintBubbles`; Gem Rush, Ember Vale and
+  Gem Rush 3D draw them over the speaker.
+- **Nothing is stored** but a report (the one message, 30 days): the room keeps 15 minutes in memory.
+  [chat/CHAT.md](chat/CHAT.md) is the short version and why Clef; [chat/OWNERS.md](chat/OWNERS.md) a plain note for
+  studio owners on chat and children's data; NETPLAY.md section 19 the wire.
 
 ## Setup status
 

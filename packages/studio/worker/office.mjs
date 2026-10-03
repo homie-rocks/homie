@@ -42,6 +42,13 @@
  * passes (issued and revoked at once; the secret is shown once), a room's dial (room_level), and whether AI guides
  * may talk (the first time is an ASK: the owner's consent). A server change reaches its live rooms as a signed
  * `policy` control; AI leave after the round when a server becomes humans-only.
+ *
+ * ROOM CHAT (0.23.0, worker/chat.mjs and worker/chat-store.mjs; NETPLAY.md section 19): each game's chat rules (its
+ * game.json defaults, the owner's for the game, the owner's for each server), the last minutes of every live room's
+ * chat with Remove (a signed `unsay`), and Mute or Kick from a line (its sender, with their lines taken down), the
+ * reports players made (each the one message it is about) with Dismiss, and the review's day (Workers AI neurons).
+ * From an office key, a change that opens chat up (more allowed, fewer checks) is an ASK; one that tightens it, or
+ * taking a message down, happens at once.
  */
 import { SEAT_MAX, seatsOf } from './seats.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
@@ -51,6 +58,8 @@ import { OWNER_COOKIE, cookieValues, ownerAllowed, ownerSession, today } from '.
 import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
 import { licenseOf } from './license.mjs';
+import { CHAT_MODES, CHAT_WHO, checkChatRules, publicChat } from './chat.mjs';
+import { chatDay, chatOf, chatRowsOf, clearChatRules, dismissReport, reportsOf, writeChatRules } from './chat-store.mjs';
 
 export { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from './office-schema.mjs';
 
@@ -456,6 +465,8 @@ async function roomRow(env, meta, room, max) {
     host: f.host ?? null, announce: f.announce ?? null,
     slots: slots.slice(0, 64).map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot), ...(s.agent ? { agent: { role: s.agent.role ?? 'party', seat: s.agent.seat ?? null } } : {}) })),
     clients, bans: office.bans ?? [], mutes: office.mutes ?? [],
+    // Room chat (0.23.0): the room's last minutes, with who sent each line (a client id and account; never an address).
+    chat: office.chat ? { mode: office.chat.rules?.mode ?? null, pending: office.chat.pending ?? 0, lines: (office.chat.lines ?? []).slice(-50).map((l) => ({ id: l.id, at: l.at, t: l.t, kind: l.kind, name: oneLine(l.name, 40), seat: l.seat ?? null, by: l.by, text: l.text ?? null, glyph: l.glyph ?? null, react: l.react ?? null, say: l.say ?? null, acct: Boolean(l.acct), owner: Boolean(l.owner), client: l.client ?? null, player: l.player ?? null, browser: l.browser ?? null, ...(l.review ? { review: l.review } : {}) })) } : null,
     // The house guides' brains (0.17.0): which brain, why not when it is not, and the last decisions (seats and ids).
     ...(f.brains && typeof f.brains === 'object' ? { brains: {
       brain: String(f.brains.brain ?? ''), why: f.brains.why ? oneLine(f.brains.why, 120) : null, calls: Number(f.brains.calls) || 0,
@@ -517,14 +528,23 @@ export async function officeView(env, cat, origin) {
     const row = settings.get(g.id);
     const max = seatsFor(g, settings);
     const rooms = (await Promise.all((await liveRooms(env, g.id)).map((r) => roomRow(env, g, r.room, max)))).filter(Boolean)
-      .filter((r) => r.players + r.screens > 0 || r.closedUntil || r.bans.length);
+      .filter((r) => r.players + r.screens > 0 || r.closedUntil || r.bans.length || (r.chat && r.chat.lines.length));
     rooms.sort((a, b) => b.players - a.players || a.room.localeCompare(b.room));
     const servers = await serversOf(env, g, { fresh: true });
     const byServer = {};
     for (const r of rooms) { const b = (byServer[r.server] ??= { rooms: 0, players: 0, ai: 0 }); b.rooms += 1; b.players += r.players; b.ai += r.ai; }
     const members = await memberCountsOf(env, g.id);
+    const chatRows = await chatRowsOf(env, { fresh: true });
     return {
       id: g.id, name: g.name, launch, launchFrom: row?.launch ? 'office' : g.launch ? 'game.json' : 'default',
+      // Room chat (0.23.0): the game's rules as Quick play has them, where each came from, and each server's own.
+      chat: {
+        rules: publicChat(chatOf(g, servers.find((x) => x.id === 'public') ?? null, chatRows)),
+        from: chatRows.get(`${g.id}/`) ? 'office' : g.chat !== undefined ? 'game.json' : 'default',
+        office: chatRows.get(`${g.id}/`) ?? null,
+        servers: servers.filter((x) => x.id !== 'public' || chatRows.get(`${g.id}/public`)).map((sv) => ({ id: sv.id, name: sv.name, rules: publicChat(chatOf(g, sv, chatRows)), office: chatRows.get(`${g.id}/${sv.id}`) ?? null })),
+        reports: await reportsOf(env, { game: g.id }),
+      },
       // Servers (0.16.0): each with its policy and what is on it now; its build reads the dial only from netplay rev 6.
       servers: servers.map((sv) => ({ ...serverView(sv, { origin, game: g.id }), live: byServer[sv.id] ?? { rooms: 0, players: 0, ai: 0 }, members: members[sv.id] ?? 0 })),
       build: { netplayRev: Number.isInteger(g.netplayRev) ? g.netplayRev : null, predates: !(Number(g.netplayRev) >= 6), caps: g.caps ?? null, guides: Number(g.netplayRev) >= 7 },
@@ -545,6 +565,7 @@ export async function officeView(env, cat, origin) {
     fillSpot: { available: Boolean(fillSpot()), note: 'Let a fill-a-spot service seat AI (coming later)' },
     agentsTalk: await talkConsented(env),
     brain: await brainDay(env),
+    chat: await chatDay(env, today()),
   };
 }
 async function memberCountsOf(env, game) {
@@ -579,8 +600,10 @@ function checkAction(cat, op, body) {
       if (!room) return bad('room is the room\'s code (pub-3, or a named room)');
       const id = typeof body.id === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(body.id) ? body.id : null;
       const seat = Number.isInteger(body.seat) && body.seat >= 0 && body.seat < SEAT_MAX ? body.seat : null;
-      if (id === null && seat === null) return bad('name the player: id (from the office) or seat');
-      return { ok: true, action: { op, game: meta.id, room, id, seat, minutes, ...(op === 'kick' ? { address: body.address === true, message: oneLine(body.message, 200) || null } : { off: body.off === true }), name: oneLine(body.name, 40) || null } };
+      // From a chat line (0.23.0): its sender, whoever they are now (a watcher too); `purge` takes their lines down.
+      const line = typeof body.line === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(body.line) ? body.line : null;
+      if (id === null && seat === null && line === null) return bad('name the player: id (from the office), seat, or line (a chat message of theirs)');
+      return { ok: true, action: { op, game: meta.id, room, id, seat, ...(line ? { line, purge: body.purge === true } : {}), minutes, ...(op === 'kick' ? { address: body.address === true, message: oneLine(body.message, 200) || null } : { off: body.off === true }), name: oneLine(body.name, 40) || null } };
     }
     case 'close': {
       if (!meta) return bad('game is one of this studio\'s game ids');
@@ -659,9 +682,54 @@ function checkAction(cat, op, body) {
       if (budget !== undefined && (!['workers-ai', 'owner-key'].includes(body.mode) || !(budget >= 0) || budget > (body.mode === 'owner-key' ? 100 : 1e7))) return bad('budget goes with workers-ai (neurons a day; the free allocation is 10,000 an account) or owner-key (dollars a day, at most 100)');
       return { ok: true, action: { op, game: meta.id, server: body.server, mode: body.mode, ...(budget !== undefined ? { budget } : {}) } };
     }
+    case 'chat-rules': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      const server = body.server === undefined || body.server === null || body.server === '' ? '' : String(body.server);
+      if (server && !(server === 'public' || /^[a-z0-9][a-z0-9-]{1,19}$/.test(server))) return bad('server is a server\'s id, or leave it out for the whole game');
+      if (body.reset === true) return { ok: true, action: { op, game: meta.id, server, reset: true } };
+      const { game: _g, server: _s, ...rest } = body;
+      const c = checkChatRules(rest);
+      if (!c.ok) return c;
+      if (!Object.keys(c.fields).length) return bad(`say what to change: mode (${CHAT_MODES.join(', ')}), who / react (${CHAT_WHO.join(', ')}), slow, max, links, swears, ai, bubbles, watchers, hub, block, allow, lines, emoji; or reset: true`);
+      return { ok: true, action: { op, game: meta.id, server, fields: c.fields } };
+    }
+    case 'chat-remove': {
+      if (!meta) return bad('game is one of this studio\'s game ids');
+      if (!room) return bad('room is the room\'s code');
+      const ids = (Array.isArray(body.ids) ? body.ids : body.id !== undefined ? [body.id] : []).filter((x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(x)).slice(0, 64);
+      if (!ids.length && body.all !== true) return bad('id is the message\'s id (from the office), or all: true');
+      return { ok: true, action: { op, game: meta.id, room, ...(body.all === true ? { all: true } : { ids }) } };
+    }
+    case 'chat-report': {
+      if (!/^cr_[a-f0-9]{16}$/.test(String(body.id ?? ''))) return bad('id is the report\'s id');
+      return { ok: true, action: { op, id: body.id } };
+    }
+    case 'chat-budget': {
+      const n = Math.floor(Number(body.neurons));
+      if (!(n >= 0 && n <= 1e7)) return bad('neurons is the review\'s day for the whole studio (0 to 10,000,000; Workers AI gives an account 10,000 a day free)');
+      return { ok: true, action: { op, neurons: n } };
+    }
     default:
       return bad('unknown control');
   }
+}
+
+/** Whether a chat change opens chat up (an office key only ASKS for these): more allowed, fewer checks, wider doors. */
+export function chatOpensUp(before, f) {
+  const rank = { off: 0, emoji: 1, lines: 2, text: 3 };
+  const who = { members: 0, 'signed-in': 1, anyone: 2 };
+  if (f.mode !== undefined && rank[f.mode] > rank[before.mode]) return true;
+  for (const k of ['who', 'react']) if (f[k] !== undefined && who[f[k]] > who[before[k]]) return true;
+  if (f.slow !== undefined && f.slow < before.slow) return true;
+  if (f.max !== undefined && f.max > before.max) return true;
+  if (f.links === 'allow' && before.links !== 'allow') return true;
+  if (f.swears === 'allow' && before.swears !== 'allow') return true;
+  for (const k of ['watchers', 'hub']) if (f[k] === true && !before[k]) return true;
+  if (f.ai === false && before.ai) return true;
+  if (f.allow !== undefined && f.allow.some((w) => !(before.allow ?? []).includes(w))) return true;
+  if (f.block !== undefined && (before.block ?? []).some((w) => !f.block.includes(w))) return true;
+  if (f.lines !== undefined || f.emoji !== undefined) return true;
+  return false;
 }
 
 /** The action in plain words, for the owner's confirm page and the AI's card. */
@@ -705,6 +773,26 @@ export function describe(cat, a) {
     case 'agents-brain': return ['workers-ai', 'owner-key'].includes(a.mode)
       ? `Let the AI guides on ${gname}'s server ${a.server} talk: they speak only the lines the game's own agents.json gives them (never free text), at most one line every 8 seconds, never about a person, and a player can quiet them. Their brain runs on ${a.mode === 'workers-ai' ? `this studio's own Workers AI (free allowance${a.budget !== undefined ? `; at most ${Math.round(a.budget).toLocaleString('en-US')} neurons a day` : ''})` : `your own AI provider key (claude-haiku-4-5, your money${a.budget !== undefined ? `, at most $${Number(a.budget).toFixed(2)} a day` : ', capped daily'})`}.`
       : `Set the AI guides' brain on ${gname}'s server ${a.server} to ${a.mode}.`;
+    case 'chat-rules': {
+      const where = a.server ? `${gname}'s server ${a.server}` : gname;
+      if (a.reset) return `Give ${where} its own chat rules back (the game's game.json, or Homie's defaults).`;
+      const f = a.fields;
+      const bits = [];
+      if (f.mode) bits.push({ off: 'turn chat off', emoji: 'keep chat to emoji', lines: 'keep chat to emoji and quick lines', text: 'let players type' }[f.mode]);
+      if (f.who) bits.push(`typing for ${f.who === 'anyone' ? 'anyone, guests too' : f.who === 'signed-in' ? 'signed-in players (a passkey)' : 'members only'}`);
+      if (f.react) bits.push(`emoji and quick lines for ${f.react === 'anyone' ? 'anyone' : f.react === 'signed-in' ? 'signed-in players' : 'members only'}`);
+      if (f.slow !== undefined) bits.push(f.slow ? `slow mode: one message every ${f.slow} s` : 'no slow mode');
+      if (f.max !== undefined) bits.push(`messages up to ${f.max} characters`);
+      if (f.links) bits.push(f.links === 'allow' ? 'allow links' : 'hold links');
+      if (f.swears) bits.push(f.swears === 'allow' ? 'allow swearing' : 'hold swearing');
+      if (f.ai !== undefined) bits.push(f.ai ? 'review typed messages with this studio\'s Workers AI' : 'stop the AI review (the word list still runs)');
+      const rest = Object.keys(f).filter((k) => !['mode', 'who', 'react', 'slow', 'max', 'links', 'swears', 'ai'].includes(k));
+      if (rest.length) bits.push(`change its ${rest.join(', ')}`);
+      return `Room chat in ${where}: ${bits.join('; ')}.`;
+    }
+    case 'chat-remove': return a.all ? `Take every message down in ${where}.` : `Take ${a.ids.length === 1 ? 'a message' : `${a.ids.length} messages`} down in ${where}.`;
+    case 'chat-report': return 'Dismiss a chat report (it is deleted).';
+    case 'chat-budget': return `Let room chat's review use up to ${a.neurons.toLocaleString('en-US')} Workers AI neurons a day for the whole studio (about ${a.neurons.toLocaleString('en-US')} typed messages; the free allocation is 10,000 an account, shared with the AI guides; past it on Workers Paid, $0.011 per 1,000).`;
     default: return 'A control.';
   }
 }
@@ -718,6 +806,15 @@ export async function needsAsk(env, cat, a) {
     const meta = (cat.games ?? []).find((g) => g.id === a.game);
     const before = meta ? (await serversOf(env, meta, { fresh: true })).find((x) => x.id === a.server) : null;
     return narrows(before, a.fields);
+  }
+  // A bigger review budget can cost money on Workers Paid: the owner says yes. A smaller one happens at once.
+  if (a.op === 'chat-budget') return a.neurons > (await chatDay(env, today())).budget.neurons;
+  if (a.op === 'chat-rules') {
+    if (a.reset) return true;
+    const meta = (cat.games ?? []).find((g) => g.id === a.game);
+    const servers = meta ? await serversOf(env, meta, { fresh: true }) : [];
+    const before = chatOf(meta, servers.find((x) => x.id === (a.server || 'public')) ?? null, await chatRowsOf(env, { fresh: true }));
+    return chatOpensUp(before, a.fields);
   }
   if (a.op === 'agents-brain') {
     if (['workers-ai', 'owner-key'].includes(a.mode) && !(await talkConsented(env))) return true;
@@ -735,7 +832,7 @@ async function serverRooms(env, game, server) {
 
 /** A server's policy reaches every live room of it now (a signed `policy` control; section 17). */
 async function pushPolicy(env, meta, settings, server) {
-  const pol = policyOf(server, { seats: seatsFor(meta, settings) });
+  const pol = policyOf(server, { seats: seatsFor(meta, settings), chat: chatOf(meta, server, await chatRowsOf(env, { fresh: true })) });
   const rooms = await serverRooms(env, meta.id, server.id);
   const res = await Promise.all(rooms.map((r) => roomControl(env, meta, settings, r.room, 'policy', { pol })));
   return { rooms: rooms.length, leaving: res.reduce((n, r) => n + (r.leaving ?? 0), 0) };
@@ -748,9 +845,10 @@ export async function perform(env, cat, a) {
   switch (a.op) {
     case 'kick':
     case 'mute': {
+      const line = a.line ? { line: a.line, purge: a.purge === true } : {};
       const r = await roomControl(env, meta, settings, a.room, a.op, a.op === 'kick'
-        ? { id: a.id, seat: a.seat, minutes: a.minutes, address: a.address, ...(a.message ? { message: a.message } : {}) }
-        : { id: a.id, seat: a.seat, minutes: a.minutes, off: a.off });
+        ? { id: a.id, seat: a.seat, minutes: a.minutes, address: a.address, ...line, ...(a.message ? { message: a.message } : {}) }
+        : { id: a.id, seat: a.seat, minutes: a.minutes, off: a.off, ...line });
       return r;
     }
     case 'close': return roomControl(env, meta, settings, a.room, 'close', a.reopen ? { reopen: true } : { minutes: a.minutes, ...(a.message ? { message: a.message } : {}) });
@@ -868,6 +966,32 @@ export async function perform(env, cat, a) {
       } catch (error) { return { ok: false, error: 'not-migrated', message: `Agent passes need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
     }
     case 'room-level': return roomControl(env, meta, settings, a.room, 'level', { level: a.level });
+    case 'chat-rules': {
+      if (!env?.DB) return { ok: false, error: 'no-db', message: 'This studio has no D1 for its office.' };
+      try {
+        if (a.reset) await clearChatRules(env, meta.id, a.server);
+        else await writeChatRules(env, meta.id, a.server, a.fields);
+      } catch (error) { return { ok: false, error: 'not-migrated', message: `Chat rules need migration 0007_studio_chat.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }; }
+      // Every live room the change reaches hears its new rules now (a signed policy control, as a server change does).
+      const servers = await serversOf(env, meta, { fresh: true });
+      const reach = a.server ? servers.filter((x) => x.id === a.server) : servers;
+      let rooms = 0;
+      for (const sv of reach) rooms += (await pushPolicy(env, meta, settings, sv)).rooms;
+      const rows = await chatRowsOf(env, { fresh: true });
+      const rules = publicChat(chatOf(meta, servers.find((x) => x.id === (a.server || 'public')) ?? PUBLIC_SERVER, rows));
+      return { ok: true, op: a.op, game: meta.id, server: a.server || null, rules, rooms };
+    }
+    case 'chat-remove': {
+      const r = await roomControl(env, meta, settings, a.room, 'unsay', a.all ? { all: true } : { ids: a.ids });
+      return r;
+    }
+    case 'chat-report': {
+      try { return { op: a.op, ...(await dismissReport(env, a.id)) }; } catch (error) { return { ok: false, error: 'not-migrated', message: String(error?.message ?? error).slice(0, 120) }; }
+    }
+    case 'chat-budget': {
+      try { await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('chat_budget', ?1)").bind(JSON.stringify({ neurons: a.neurons })).run(); } catch (error) { return { ok: false, error: 'no-db', message: String(error?.message ?? error).slice(0, 120) }; }
+      return { ok: true, op: a.op, budget: { neurons: a.neurons }, note: `Room chat's review may use ${a.neurons.toLocaleString('en-US')} neurons a day from now on (rooms read it again within a minute).` };
+    }
     case 'agents-brain': {
       const before = (await serversOf(env, meta, { fresh: true })).find((x) => x.id === a.server);
       if (!before) return { ok: false, error: 'no-server', message: `${meta.name} has no server called ${a.server}.` };
@@ -1025,7 +1149,14 @@ async function api(request, env, url, cat) {
       return json({ ok: true, game, server, members });
     } catch (error) { return json({ ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503); }
   }
+  // Room chat (0.23.0): every game's rules, every live room's last minutes, the reports, the review's day.
+  if (path === '/_studio/api/chat' && request.method === 'GET') {
+    const metas = (cat.games ?? []).filter((g) => !url.searchParams.get('game') || g.id === url.searchParams.get('game'));
+    const view = await officeView(env, { ...cat, games: metas }, url.origin);
+    return json({ ok: true, day: view.chat, games: view.games.map((g) => ({ id: g.id, name: g.name, chat: g.chat, rooms: g.rooms.map((r) => ({ room: r.room, label: r.label, players: r.players, chat: r.chat })) })) });
+  }
   const OPS = {
+    '/_studio/api/chat/rules': 'chat-rules', '/_studio/api/chat/remove': 'chat-remove', '/_studio/api/chat/report': 'chat-report', '/_studio/api/chat/budget': 'chat-budget',
     '/_studio/api/kick': 'kick', '/_studio/api/mute': 'mute', '/_studio/api/close': 'close', '/_studio/api/announce': 'announce', '/_studio/api/game': 'game',
     '/_studio/api/servers': 'server-create', '/_studio/api/servers/set': 'server-set', '/_studio/api/servers/close': 'server-close', '/_studio/api/servers/member': 'member',
     '/_studio/api/agents/pass': 'pass', '/_studio/api/room-level': 'room-level', '/_studio/api/agents/brain': 'agents-brain',

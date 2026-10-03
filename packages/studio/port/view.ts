@@ -11,6 +11,10 @@
  *                         label is placed first and nothing covers it; a moved label keeps its new spot while it is
  *                         free (no flicker), and labels fade in and out rather than pop.
  *
+ *   createBubbles()       speech bubbles over characters (room chat, NETPLAY.md section 19): what a player said, over
+ *                         their body for a few seconds, the player's own placed first, never covering another bubble;
+ *                         `paintBubbles` draws them on a canvas, and their boxes keep the name labels off them.
+ *
  * Everything is in CSS pixels (screen) and world units; the game draws. See the starters (gem-rush, ember-vale).
  */
 
@@ -210,4 +214,238 @@ export function createLabels(opts: LabelOptions = {}): { place(labels: LabelIn[]
       return out;
     },
   };
+}
+
+/* ------------------------------------------------------------------ speech bubbles (room chat, NETPLAY.md section 19) */
+
+export interface BubbleOptions {
+  /** A line's width as drawn, CSS px: `(t) => ctx.measureText(t).width` with the bubble's font set (paintBubbles uses BUBBLE_FONT). */
+  measure: (text: string) => number;
+  /** A text line's height, CSS px (default 17). */
+  lineHeight?: number;
+  /** The widest a bubble's text gets before it wraps, CSS px (default 190). */
+  maxWidth?: number;
+  /** Lines at most; the rest is cut with "…" (default 3). */
+  maxLines?: number;
+  /** How long a message stays, ms: default 4 s and 50 ms a character (at most 9 s); an emoji 2.6 s. */
+  ms?: (b: { text: string; kind: 'text' | 'line' | 'react' }) => number;
+  /** Space inside the bubble, CSS px (default x 8, y 5). */
+  pad?: { x: number; y: number };
+  /** The tail under the bubble, CSS px (default 7). */
+  tail?: number;
+  /** CSS px kept clear between two bubbles (default 4). */
+  gap?: number;
+  /** The screen, so a bubble is never pushed off it (default the window). */
+  screen?: () => { w: number; h: number };
+  /** Milliseconds now (default performance.now()). */
+  now?: () => number;
+  /** Boxes bubbles keep clear of, CSS px (a game's own speech bubbles, a panel): a bubble moves up past them. */
+  avoid?: () => LabelBox[];
+}
+
+export interface BubbleIn {
+  /** Whose bubble: the key `say(key, …)` was given (a seat, a slot). */
+  key: string | number;
+  /** Where the tail points, CSS px: just over the body's name label (its box's top middle) or its head. */
+  x: number;
+  y: number;
+  /** The player's own (or the player a watcher follows): placed first. */
+  self?: boolean;
+}
+
+export interface BubbleOut extends LabelBox {
+  key: string | number;
+  id: string;
+  kind: 'text' | 'line' | 'react';
+  /** The text, wrapped: one string per line (one line with the glyph for an emoji). */
+  lines: string[];
+  /** An emoji-only bubble (a reaction): draw it bigger, no words. */
+  emoji: boolean;
+  lineHeight: number;
+  pad: { x: number; y: number };
+  /** Where the tail points (the anchor), and the bubble's middle. */
+  tip: { x: number; y: number };
+  cx: number;
+  cy: number;
+  /** 0..1: fading in and out. `scale` pops in from 0.86. */
+  alpha: number;
+  scale: number;
+}
+
+export interface Bubbles {
+  /** A message over `key`'s character: it replaces what that key was saying. `id` lets `remove(id)` take it down. */
+  say(key: string | number, text: string, o?: { id?: string; kind?: 'text' | 'line' | 'react' }): void;
+  /** The studio took a message down (net.on('unchat')): its bubble goes at once. */
+  remove(id: string): void;
+  /** Every bubble, or one key's, goes. */
+  clear(key?: string | number): void;
+  /** Each frame: where every speaking key's anchor is now. Keys not in the list are not drawn (off screen). */
+  place(anchors: BubbleIn[], dt?: number): BubbleOut[];
+  /** The boxes placed last frame: give them to createLabels' `avoid` so names keep off the bubbles. */
+  boxes(): LabelBox[];
+  /** How many keys are speaking now. */
+  readonly size: number;
+}
+
+/** The bubble's font (paintBubbles draws with it; measure with it too). */
+export const BUBBLE_FONT = '600 14px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+
+/** Words to lines no wider than `max` (a word wider than a line is broken), at most `n` lines (the last cut with …). */
+export function wrapText(text: string, max: number, measure: (t: string) => number, n = 3): string[] {
+  const words = String(text ?? '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines: string[] = [];
+  let cur = '';
+  const push = (s: string): void => { lines.push(s); };
+  for (const w0 of words) {
+    let w = w0;
+    // A word wider than a line: broken by characters.
+    while (measure(w) > max) {
+      let cut = [...w].length - 1;
+      const chars = [...w];
+      while (cut > 1 && measure(chars.slice(0, cut).join('')) > max) cut -= 1;
+      if (cur) { push(cur); cur = ''; }
+      push(chars.slice(0, cut).join(''));
+      w = chars.slice(cut).join('');
+    }
+    const next = cur ? `${cur} ${w}` : w;
+    if (measure(next) <= max) cur = next; else { if (cur) push(cur); cur = w; }
+  }
+  if (cur) push(cur);
+  if (lines.length <= n) return lines;
+  const kept = lines.slice(0, n);
+  let last = `${kept[n - 1]}…`;
+  while (measure(last) > max && last.length > 2) last = `${[...last].slice(0, -2).join('')}…`;
+  kept[n - 1] = last;
+  return kept;
+}
+
+/**
+ * Speech bubbles over characters: what a player said in the room's chat, over their body, for a few seconds. Feed it
+ * from the netplay helper (`net.on('say', (s) => bubbles.say(s.seat, s.text, { id: s.id, kind: s.kind }))` and
+ * `net.on('unchat', (e) => e.ids.forEach((id) => bubbles.remove(id)))`), place it each frame with every speaking
+ * body's anchor (over its name label), and draw what comes back (`paintBubbles` on a canvas, or your own). Bubbles
+ * never cover each other: a bubble that would sits above the one in its way; the player's own is placed first.
+ */
+export function createBubbles(opts: BubbleOptions): Bubbles {
+  const lh = opts.lineHeight ?? 17;
+  const maxW = opts.maxWidth ?? 190;
+  const maxLines = opts.maxLines ?? 3;
+  const pad = opts.pad ?? { x: 8, y: 5 };
+  const tail = opts.tail ?? 7;
+  const gap = opts.gap ?? 4;
+  const clock = opts.now ?? ((): number => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
+  const screen = opts.screen ?? ((): { w: number; h: number } => ({ w: typeof innerWidth === 'number' ? innerWidth : 1e9, h: typeof innerHeight === 'number' ? innerHeight : 1e9 }));
+  const life = opts.ms ?? ((b: { text: string; kind: string }): number => (b.kind === 'react' ? 2600 : Math.min(9000, 4000 + 50 * [...b.text].length)));
+  type Live = { id: string; key: string | number; kind: 'text' | 'line' | 'react'; text: string; lines: string[]; w: number; h: number; at: number; until: number };
+  const live = new Map<string | number, Live>();
+  let last: LabelBox[] = [];
+  let seq = 0;
+  return {
+    say(key, text, o = {}) {
+      const kind = o.kind ?? 'text';
+      const t = String(text ?? '').trim();
+      if (!t) return;
+      const emoji = kind === 'react';
+      const lines = emoji ? [t] : wrapText(t, maxW, opts.measure, maxLines);
+      const w = emoji ? lh * 1.6 : Math.max(...lines.map((l) => opts.measure(l)));
+      const h = emoji ? lh * 1.6 : lines.length * lh;
+      const at = clock();
+      seq += 1;
+      live.set(key, { id: o.id ?? `b${seq}`, key, kind, text: t, lines, w, h, at, until: at + life({ text: t, kind }) });
+    },
+    remove(id) { for (const [k, b] of live) if (b.id === id) live.delete(k); },
+    clear(key) { if (key === undefined) live.clear(); else live.delete(key); },
+    get size() { return live.size; },
+    boxes() { return last; },
+    place(anchors) {
+      const t = clock();
+      for (const [k, b] of live) if (t >= b.until) live.delete(k);
+      const { w: sw, h: sh } = screen();
+      const keep = opts.avoid?.() ?? [];
+      const placed: LabelBox[] = [];
+      const out: BubbleOut[] = [];
+      // The player's own first, then the newest: a new message keeps its spot and an older one moves up.
+      const order = anchors.filter((a) => live.has(a.key)).sort((a, b) => Number(Boolean(b.self)) - Number(Boolean(a.self)) || (live.get(b.key)!.at - live.get(a.key)!.at));
+      for (const a of order) {
+        const b = live.get(a.key)!;
+        const bw = b.w + pad.x * 2;
+        const bh = b.h + pad.y * 2;
+        const left = Math.max(2, Math.min(sw - bw - 2, a.x - bw / 2));
+        let bottom = a.y - tail;
+        let box = { left, top: bottom - bh, right: left + bw, bottom };
+        const hits = (x: LabelBox): boolean => box.left < x.right + gap && x.left < box.right + gap && box.top < x.bottom + gap && x.top < box.bottom + gap;
+        for (let i = 0; i < 6; i += 1) {
+          const other = placed.find(hits) ?? keep.find(hits);
+          if (!other) break;
+          bottom = other.top - gap;
+          box = { left, top: bottom - bh, right: left + bw, bottom };
+        }
+        if (box.top < 0 || box.left > sw || box.right < 0 || a.y > sh + bh) continue;
+        placed.push(box);
+        const age = t - b.at;
+        const leftMs = b.until - t;
+        const alpha = Math.max(0, Math.min(1, age / 120, leftMs / 400));
+        const scale = 0.86 + 0.14 * Math.min(1, age / 160);
+        out.push({ ...box, key: b.key, id: b.id, kind: b.kind, lines: b.lines, emoji: b.kind === 'react', lineHeight: lh, pad, tip: { x: Math.max(box.left + 8, Math.min(box.right - 8, a.x)), y: a.y }, cx: (box.left + box.right) / 2, cy: (box.top + box.bottom) / 2, alpha: Math.round(alpha * 100) / 100, scale: Math.round(scale * 1000) / 1000 });
+      }
+      last = placed;
+      return out;
+    },
+  };
+}
+
+export interface BubbleStyle {
+  font?: string;
+  /** The bubble's paper and ink (default white paper, near-black ink), its edge, and the player's own bubble's edge. */
+  paper?: string;
+  ink?: string;
+  edge?: string;
+  selfEdge?: string;
+  /** Corner radius, CSS px (default 10). */
+  radius?: number;
+}
+
+/** Draw placed bubbles on a 2D canvas (CSS px, the context's transform already set for the device pixel ratio). */
+export function paintBubbles(ctx: CanvasRenderingContext2D, list: BubbleOut[], style: BubbleStyle = {}): void {
+  const font = style.font ?? BUBBLE_FONT;
+  const paper = style.paper ?? '#ffffff';
+  const ink = style.ink ?? '#15171f';
+  const edge = style.edge ?? 'rgba(0,0,0,0.18)';
+  const r = style.radius ?? 10;
+  for (const b of list) {
+    if (b.alpha <= 0) continue;
+    ctx.save();
+    ctx.globalAlpha = b.alpha;
+    const cx = b.cx;
+    const cy = b.bottom;
+    ctx.translate(cx, cy);
+    ctx.scale(b.scale, b.scale);
+    ctx.translate(-cx, -cy);
+    ctx.fillStyle = paper;
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(b.left, b.top, b.right - b.left, b.bottom - b.top, Math.min(r, (b.bottom - b.top) / 2));
+    ctx.fill();
+    ctx.stroke();
+    // The tail: a small triangle from the bubble's bottom to where it points.
+    const tx = b.tip.x;
+    ctx.beginPath();
+    ctx.moveTo(tx - 6, b.bottom - 1);
+    ctx.lineTo(tx, Math.min(b.tip.y, b.bottom + 7));
+    ctx.lineTo(tx + 6, b.bottom - 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (b.emoji) {
+      ctx.font = font.replace(/\d+(?:\.\d+)?px/, `${Math.round(b.lineHeight * 1.35)}px`);
+      ctx.fillText(b.lines[0] ?? '', b.cx, b.cy + 1);
+    } else {
+      ctx.font = font;
+      b.lines.forEach((line, i) => ctx.fillText(line, b.cx, b.top + b.pad.y + b.lineHeight * (i + 0.5) + 0.5));
+    }
+    ctx.restore();
+  }
 }

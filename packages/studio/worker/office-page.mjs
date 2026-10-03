@@ -105,6 +105,16 @@ button.small { min-height: 30px; padding: 4px 10px; font-size: 13px; border-radi
 .warnbox { margin: 10px 16px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,179,92,.45); color: var(--warn); font-size: 14px; }
 .secret { font: 600 13px/1.4 ui-monospace, Menlo, monospace; word-break: break-all; padding: 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--warn); }
 .chip.ai { color: #ffe7a8; border-color: rgba(255,207,90,.6); }
+/* Room chat (0.23.0): a room's last minutes, and each game's rules and reports. */
+.chatlog { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.chatlog h4 { margin: 0 0 6px; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); }
+.chatlog .cl { display: grid; grid-template-columns: minmax(80px, auto) minmax(0, 1fr) auto auto; gap: 4px 10px; align-items: center; padding: 6px 0; border-top: 1px dashed var(--line); font-size: 14px; }
+.chatlog .cl:first-of-type { border-top: 0; }
+.chatlog .cl .txt { overflow-wrap: anywhere; }
+.chatlog .cl.react .txt { font-size: 18px; }
+.chatlog .cl.studio b { color: var(--accent); }
+.chatbox .inv span { overflow-wrap: anywhere; }
+@media (max-width: 720px) { .chatlog .cl { grid-template-columns: 1fr; } }
 /* The New server form: one panel, grouped, every control labelled, help under it in the office's quiet grey. */
 .newsrv { display: grid; gap: 16px; max-width: 820px; margin-top: 10px; padding: 16px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); }
 .newsrv [hidden] { display: none !important; }
@@ -588,6 +598,103 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     return box;
   }
 
+  /* ---------------------------------------------------------------- room chat (0.23.0, NETPLAY.md section 19) */
+  var CHAT_MODES = [['off', 'Off'], ['emoji', 'Emoji'], ['lines', 'Emoji + quick lines'], ['text', 'Typing too']];
+  var CHAT_WHO = [['anyone', 'Anyone'], ['signed-in', 'Signed in'], ['members', 'Members']];
+  var CHAT_MODE_HELP = { off: 'No chat at all in this game\'s rooms.', emoji: 'Players and watchers send the five reactions (and the game\'s own); they float up every screen.', lines: 'Reactions and the game\'s own quick lines ("Good game!"): nothing anyone types. What a kids or beginner server always keeps to.', text: 'Reactions, quick lines and typed messages. Every typed message passes the word list first, and this studio\'s Workers AI when the review is on.' };
+  function ago(ms) { var s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'; }
+  /** The game's chat rules (for the whole game, or one server), the review's day, and the reports players made. */
+  function chatBox(g) {
+    var c = g.chat || {};
+    var box = el('div', 'servers chatbox');
+    var key = g.id + '/chat';
+    var d = S.drafts[key] || (S.drafts[key] = { server: '' });
+    var target = d.server ? ((c.servers || []).filter(function (x) { return x.id === d.server; })[0] || {}) : null;
+    var r = Object.assign({}, (target && target.rules) || c.rules || {}, d.edit || {});
+    var head = el('h3', '', 'Room chat');
+    var summary = el('div', 'line dim');
+    var from = c.from === 'office' ? 'your rules' : c.from === 'game.json' ? 'the game\'s game.json' : 'Homie\'s defaults';
+    summary.textContent = (c.rules ? ({ off: 'Off', emoji: 'Emoji only', lines: 'Emoji and quick lines', text: 'Typing allowed' }[c.rules.mode] || c.rules.mode) : '–') + (c.rules && c.rules.mode === 'text' ? ' · typing: ' + c.rules.who + (c.rules.ai ? ' · AI review on' : ' · word list only') : '') + ' · from ' + from + '.';
+    add(box, head, summary);
+    if (!S.open[key]) {
+      add(box, add(el('div', 'line'), btn('Change chat rules', 'ghost small', function () { S.open[key] = true; render(); })));
+    } else {
+      var form = el('form', 'newsrv');
+      var scope = sel([['', 'The whole game']].concat((g.servers || []).map(function (x) { return [x.id, 'Server: ' + x.name]; })), d.server, 'Rules for');
+      scope.onchange = function () { d.server = scope.value; d.edit = {}; render(); };
+      var set = function (k, v) { d.edit = d.edit || {}; d.edit[k] = v; };
+      var mode = segment(g.id + 'cmode', CHAT_MODES, r.mode, 'What chat allows', function (v) { set('mode', v); help.textContent = CHAT_MODE_HELP[v]; });
+      var help = el('p', 'help', CHAT_MODE_HELP[r.mode] || '');
+      var who = segment(g.id + 'cwho', CHAT_WHO, r.who, 'Who may type', function (v) { set('who', v); });
+      var react = segment(g.id + 'creact', CHAT_WHO, r.react, 'Who may react', function (v) { set('react', v); });
+      var slow = num(r.slow === undefined ? 2 : r.slow, 0, 120, 'Slow mode, seconds'); slow.onchange = function () { set('slow', Number(slow.value)); };
+      var max = num(r.max || 140, 20, 280, 'Longest message'); max.onchange = function () { set('max', Number(max.value)); };
+      var check = function (k, label, on) { var x = el('input'); x.type = 'checkbox'; x.checked = Boolean(on); x.onchange = function () { set(k, x.checked); }; return add(el('label', 'check'), x, el('span', '', label)); };
+      var words = el('input'); words.type = 'text'; words.placeholder = 'Words to hold, comma separated (word* holds it inside words too)'; words.value = (d.edit && d.edit.block !== undefined ? d.edit.block : (target ? (target.office || {}).block : (c.office || {}).block) || []).join(', ');
+      words.onchange = function () { set('block', words.value.split(',').map(function (w) { return w.trim(); }).filter(Boolean)); };
+      add(form,
+        row('Rules for', null, scope, el('p', 'help', 'A server\'s rules sit over the game\'s; a kids or beginner server always keeps chat to emoji and quick lines.')),
+        row('Chat', null, mode.box, help),
+        row('Who may type', null, who.box, el('p', 'help', 'Signed in: a player account with a passkey (no password, no email). Members: players who belong to the room\'s server.')),
+        row('Emoji and lines', null, react.box, el('p', 'help', 'Who may send reactions and quick lines. Anyone keeps the room lively for guests.')),
+        row('Slow mode', null, add(el('div', 'line'), slow, el('span', 'dim', 'seconds between one person\'s messages')), null),
+        row('Longest message', null, add(el('div', 'line'), max, el('span', 'dim', 'characters')), null),
+        row('Checks', null, add(el('div', 'ctl'),
+          check('ai', 'Review typed messages with this studio\'s Workers AI (Cloudflare\'s Clef decision model)', r.ai !== false),
+          check('links', 'Allow links (they are never clickable)', r.links === 'allow'),
+          check('swears', 'Allow swearing (slurs, sexual words and threats are always held)', r.swears === 'allow')), el('p', 'help', 'The word list always runs, and needs nothing. The review adds what a list misses (bullying, a stranger asking a kid where they live), within a day\'s budget of Cloudflare\'s free allocation; past it, the word list alone decides.')),
+        row('Your words', null, words, null),
+        row('Shown', null, add(el('div', 'ctl'),
+          check('bubbles', 'Over the speaker\'s character, in games that draw it', r.bubbles !== false),
+          check('watchers', 'Watchers may send too (not just read)', r.watchers !== false),
+          check('hub', 'On homie.rocks\'s page for the room', r.hub !== false)), null));
+      var acts = el('div', 'acts');
+      add(acts,
+        btn('Save', '', function () {
+          var body = Object.assign({ game: g.id }, d.server ? { server: d.server } : {}, d.edit || {});
+          if (Object.keys(d.edit || {}).length === 0) { toast('Nothing changed.'); return; }
+          act('/_studio/api/chat/rules', body, 'Chat rules saved: every live room has them now.').then(function (res) { if (res && res.ok) { d.edit = {}; S.open[key] = false; } });
+        }),
+        btn('Back to the game\'s own', 'ghost', function () { act('/_studio/api/chat/rules', Object.assign({ game: g.id, reset: true }, d.server ? { server: d.server } : {}), 'Back to the game\'s own chat rules.').then(function () { d.edit = {}; }); }),
+        btn('Close', 'ghost', function () { S.open[key] = false; d.edit = {}; render(); }));
+      form.appendChild(acts);
+      form.onsubmit = function (e) { e.preventDefault(); };
+      box.appendChild(form);
+    }
+    // What players reported: one message each, kept 30 days or until you dismiss it.
+    var reps = c.reports || [];
+    if (reps.length) {
+      add(box, el('h3', '', 'Reports (' + reps.length + ')'));
+      reps.forEach(function (p) {
+        var rowEl = el('div', 'inv');
+        add(rowEl, el('b', '', p.name || 'Someone'), el('span', '', '"' + p.text + '"'), el('span', 'chip muted', p.reasonText || p.reason), el('span', 'faint', p.room + ' · ' + ago(Date.now() - (S.skew || 0) - p.at)), p.player ? el('span', 'faint', 'account ' + p.player.slice(0, 10) + '…') : null,
+          btn('Dismiss', 'ghost small', function () { act('/_studio/api/chat/report', { id: p.id }, 'Report dismissed (deleted).'); }));
+        box.appendChild(rowEl);
+      });
+    }
+    return box;
+  }
+  /** A room's last minutes of chat, with Remove, Mute and Kick from a line. */
+  function roomChat(g, r, now) {
+    var ch = r.chat;
+    if (!ch || !(ch.lines || []).length) return null;
+    var box = el('div', 'chatlog');
+    add(box, el('h4', '', 'Chat · last ' + ch.lines.length + (ch.lines.length === 1 ? ' message' : ' messages')));
+    ch.lines.slice().reverse().slice(0, 20).forEach(function (l) {
+      var rowEl = el('div', 'cl' + (l.kind === 'react' ? ' react' : '') + (l.by === 'studio' ? ' studio' : ''));
+      add(rowEl, el('b', '', l.by === 'studio' ? 'Studio' : l.name), el('span', 'txt', l.kind === 'react' ? (l.glyph || '') : (l.text || '')),
+        el('span', 'faint', ago(now - l.at) + (l.by === 'watcher' ? ' · watching' : l.by === 'hub' ? ' · on homie.rocks' : l.seat !== null && l.seat !== undefined ? ' · seat ' + (l.seat + 1) : '') + (l.review && l.review.by === 'ai' ? ' · reviewed' : '')));
+      if (l.by !== 'studio') {
+        add(rowEl, add(el('span', 'pacts'),
+          btn('Remove', 'ghost small', function () { act('/_studio/api/chat/remove', { game: g.id, room: r.room, id: l.id }, 'Removed from every screen.'); }),
+          btn('Mute', 'warn small', function () { act('/_studio/api/mute', { game: g.id, room: r.room, line: l.id, minutes: hold(), purge: true }, (l.name || 'They') + ' is muted for ' + hold() + ' min; their messages are down.'); }),
+          armed('Kick', 'bad', function () { act('/_studio/api/kick', { game: g.id, room: r.room, line: l.id, minutes: hold(), purge: true }, (l.name || 'They') + ' was removed from ' + r.label + ' for ' + hold() + ' min.'); })));
+      }
+      box.appendChild(rowEl);
+    });
+    return box;
+  }
+
   function person(g, r, c, now) {
     var row = el('div', 'person');
     var who = el('div', 'who');
@@ -649,6 +756,8 @@ export const OFFICE_SCRIPT = String.raw`(function () {
         people.appendChild(el('div', 'held', 'Guides\' brain: ' + (r.brains.brain || 'script') + (r.brains.why ? ' · ' + r.brains.why : '') + ' · ' + r.brains.calls + ' calls' + (last.length ? ' · ' + last.join('; ') : '')));
       }
       (r.bans || []).forEach(function (b) { people.appendChild(el('div', 'held', 'Kicked: ' + (b.name || 'someone') + ', may come back in ' + dur(b.until - now) + (b.address ? ' (their network too)' : ''))); });
+      var said = roomChat(g, r, now);
+      if (said) people.appendChild(said);
       box.appendChild(people);
     }
     return box;
@@ -662,6 +771,10 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     document.getElementById('livedot').className = 'dot' + (d.playing ? ' on' : '');
     var at = document.activeElement;
     var focus = at && root.contains(at) && (/INPUT|SELECT/.test(at.tagName) || Boolean(at.closest && at.closest('.newsrv')));
+    // The day's chat review across the studio: what it used of its budget, and what it held.
+    var cd = d.chat;
+    var chatEl = document.getElementById('chatday');
+    if (chatEl && cd) chatEl.textContent = 'Chat review today: ' + (cd.ai ? Math.round(cd.used.neurons).toLocaleString() + ' of ' + Math.round(cd.budget.neurons).toLocaleString() + ' neurons, ' + cd.used.reviews + ' reviewed, ' + cd.used.held + ' held' + (cd.used.errors ? ', ' + cd.used.errors + ' unanswered (the word list decided)' : '') : 'off (no Workers AI binding on this Worker yet: deploy once more; the word list decides meanwhile)') + '.';
     // Never redraw under a typing owner (or one working in the New server form), a control waiting for its second
     // tap, or a pass secret shown once.
     if (focus || root.querySelector('[data-armed="1"]') || root.querySelector('.secret')) return;
@@ -676,6 +789,7 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       // A build from before servers (netplay rev 5 or older): what it cannot do yet, and the fix.
       if (g.build && g.build.predates && (g.servers || []).some(function (x) { return x.id !== 'public' && (x.aiSeats || x.guides); })) card.appendChild(el('div', 'warnbox', 'This build predates servers (netplay rev ' + (g.build.netplayRev || '5 or older') + '): reserved AI seats stay empty and its bots don\'t read the dial. Rebuild with @homie-rocks/studio 0.16.'));
       card.appendChild(serversBox(g));
+      card.appendChild(chatBox(g));
       card.appendChild(passes(g));
       if (g.launch === 'invite' || (g.invites && g.invites.length)) card.appendChild(invites(g));
       var rooms = el('div', 'rooms');
@@ -734,6 +848,7 @@ export async function officePage(cat, headers = {}) {
 <select id="announce-scope" aria-label="Who sees it"><option value="">every room of every game</option>${options}</select><button type="submit">Send</button>
 <label for="hold" style="margin-left:auto">Kick, mute and close for</label><select id="hold"><option value="5">5 min</option><option value="10" selected>10 min</option><option value="30">30 min</option><option value="60">1 hour</option><option value="1440">a day</option></select></form>
 <p class="dim" id="status" role="status"></p>
+<p class="dim" id="chatday"></p>
 <div id="games" aria-live="polite"><p class="empty">Reading the rooms…</p></div>
 <div class="toast" id="toast" role="status" hidden></div>
 <p class="note">Servers: each game's named room pools. Open: anyone, AI with a pass marked AI. Humans only: no AI at all. Hybrid: some seats in every room are AI companions; the party votes their level. Beginner: new players, AI guides, quick lines only. Changing a server reaches its live rooms at once; AI leave after the round when a server becomes humans-only.</p>

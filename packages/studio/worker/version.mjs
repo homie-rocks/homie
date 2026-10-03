@@ -1,2 +1,2 @@
 /** The @homie-rocks/studio version this Worker code is (package.json's; a test keeps them equal). Cache-busts /_homie/site.js. */
-export const STUDIO_VERSION_TAG = '0.22.0';
+export const STUDIO_VERSION_TAG = '0.23.0';

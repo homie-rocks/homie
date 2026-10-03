@@ -51,6 +51,9 @@
  *   /account/                  a player's account: a passkey, a name, their data (worker/players.mjs, saves/SAVES.md)
  *   /api/player/...            sign in and up, saves, lifetime stats and memorials (the game's saves bridge, via the
  *                              play shell), export and delete
+ *   /<game>/api/chat/report    a player reports one chat line (POST, this site's pages): the room's own copy of it is kept
+ *                              for the owner, 30 days (worker/chat-store.mjs); room chat itself rides the sockets above
+ *                              (NETPLAY.md section 19) and is never stored
  *
  * A page in the studio's site/pages wins over the generated one at the same address. Every HTML answer is
  * `no-transform` (an edge in front of a custom domain injects nothing) and is never framed by another site.
@@ -80,6 +83,8 @@ import {
 } from './servers.mjs';
 import { BRAIN_BUDGET, HouseAgents, agentFacts, aiName, decodeFacts, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
 import { talks } from './brain.mjs';
+import { REACTIONS, reviewChat } from './chat.mjs';
+import { REPORT_REASONS, chatDay, chatOf, chatRowsOf, fileReport } from './chat-store.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
@@ -232,6 +237,8 @@ function named(cat, env) {
 async function roomsOf(env, games, { servers = null } = {}) {
   const rooms = [];
   const live = {};
+  // Room chat (section 19): whether each room's chat is on and may show on homie.rocks's page for it.
+  const chatRows = await chatRowsOf(env);
   await Promise.all(games.map(async (g) => {
     let list = [];
     try { list = (await (await env.LOBBY.get(env.LOBBY.idFromName(g.id)).fetch('https://lobby/rooms')).json()).rooms ?? []; } catch { list = []; }
@@ -242,7 +249,8 @@ async function roomsOf(env, games, { servers = null } = {}) {
       const sid = r.server ?? roomServer(r.name);
       const srv = sid === 'public' ? (known.find((x) => x.id === 'public') ?? PUBLIC_SERVER) : known.find((x) => x.id === sid);
       if (!srv || (sid !== 'public' && (!srv.listed || srv.state !== 'open' || srv.door !== 'open'))) continue;
-      rooms.push(roomView(g, r, seatsOf(g), srv));
+      const chat = chatOf(g, srv, chatRows);
+      rooms.push(roomView(g, r, seatsOf(g), srv, { chat: chat.mode !== 'off' && chat.hub }));
     }
   }));
   rooms.sort((a, b) => b.players - a.players || a.game.localeCompare(b.game) || String(a.room).localeCompare(String(b.room)));
@@ -381,6 +389,30 @@ function mediaRow(e, origin, kind, cat) {
  * wrapper Worker of its own for this. A preflight (a POST's content-type) is answered too.
  */
 const KNOCK_CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' };
+/**
+ * Who a browser is to a room's chat (section 19): signed in with a passkey (an account, not a guest), and a member of the
+ * server (on the public server, any signed-in account). One D1 read for a signed-in player, none for a guest.
+ */
+async function chatWho(env, game, srv, holder) {
+  const pid = holders(holder).find((x) => x.startsWith('p-'))?.slice(2) ?? null;
+  if (!pid || !env.DB) return { acct: false, member: false };
+  let acct = false;
+  try { acct = Number((await env.DB.prepare('SELECT guest FROM players WHERE id = ?1').bind(pid).first())?.guest) === 0; } catch { acct = false; }
+  const member = acct && (!srv || srv.id === 'public' || Boolean(await memberOf(env, game, srv.id, pid)));
+  return { acct, member };
+}
+
+/** Reports a browser (and its address) may make: 8 in 10 minutes, counted in this Worker's memory and forgotten. */
+const reportsMade = new Map();
+function reportAllowed(key, now = Date.now()) {
+  const list = (reportsMade.get(key) ?? []).filter((at) => now - at < 10 * 60_000);
+  if (list.length >= 8) { reportsMade.set(key, list); return false; }
+  list.push(now);
+  reportsMade.set(key, list);
+  if (reportsMade.size > 5000) for (const [k, v] of reportsMade) if (!v.some((at) => now - at < 10 * 60_000)) reportsMade.delete(k);
+  return true;
+}
+
 function notAHomie(request) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...KNOCK_CORS, 'cache-control': 'no-store' } });
   return json({ ok: false, error: 'not-a-homie', message: 'this is a studio site, not a Homie box; a game here plays on its own' }, 200, KNOCK_CORS);
@@ -419,6 +451,9 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     ...(agent ? { agent: { hands: agent.hands, role: agent.role } } : {}),
     // The play page's "Quiet AI": this browser hides AI speech (the helper's `net.hushed`).
     ...(url.searchParams.get('hush') === '1' ? { hush: true } : {}),
+    // Room chat (section 19): this browser hides chat ("Show chat" off), or its player's own lines stay off their character.
+    ...(url.searchParams.get('chat') === '0' ? { chatOff: true } : {}),
+    ...(url.searchParams.get('bub') === '0' ? { bubbleOff: true } : {}),
     ...(device ? { device } : {}),
     want,
     ...(watching ? { watch: true, follow: /^\d+$/.test(follow) ? Number(follow) : follow, watchPolicy: policy } : {}),
@@ -854,7 +889,7 @@ async function route(request, env, ctx) {
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      return playPage(cat, meta, { ticket, owner: d.owner, launch, server });
+      return playPage(cat, meta, { ticket, owner: d.owner, launch, server, ...(await chatWho(env, game, srv, d.acct)) });
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
@@ -871,7 +906,7 @@ async function route(request, env, ctx) {
       const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
       await countVisit(request, env, ctx, game, 'watch');
       shareDaily(cat, url, ctx);
-      return watchPage(cat, meta, { room: asked, ticket, policy });
+      return watchPage(cat, meta, { room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
     }
     if (sub === 'api/watch') {
       if (!door.ok || watchOf(meta) === 'off') return json({ ok: false, error: 'not-found' }, 404);
@@ -912,6 +947,27 @@ async function route(request, env, ctx) {
         },
       });
     }
+    if (sub === 'api/chat/report') {
+      // A player reports one chat line (section 19): the room's own copy of it is what is kept, never the reporter's words.
+      if (request.method !== 'POST' || !sameOrigin(request, url)) return json({ ok: false, error: 'origin', message: 'a report comes from this site\'s own pages' }, 403);
+      if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
+      let body = {};
+      try { body = JSON.parse((await request.text()).slice(0, 2048) || '{}'); } catch { return json({ ok: false, error: 'json' }, 400); }
+      const room = String(body.room ?? '');
+      const id = String(body.id ?? '');
+      if (!ROOM_ID.test(room) || !/^[A-Za-z0-9_-]{1,16}$/.test(id)) return json({ ok: false, error: 'bad-request', message: 'room and id name the message' }, 400);
+      const reason = REPORT_REASONS.includes(body.reason) ? body.reason : 'other';
+      const key = `${BROWSER_KEY.test(String(body.b ?? '')) ? body.b : ''}|${request.headers.get('cf-connecting-ip') ?? ''}`;
+      if (!reportAllowed(key)) return json({ ok: false, error: 'rate', message: 'That is a lot of reports: the studio has them. Try again in a few minutes.' }, 429);
+      let line = null;
+      try { line = (await (await env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`)).fetch(`https://table/__chat?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}&op=line&id=${encodeURIComponent(id)}`)).json()).line ?? null; } catch { line = null; }
+      if (!line) return json({ ok: false, error: 'gone', message: 'That message is no longer in the room.' }, 404);
+      if (line.by === 'studio') return json({ ok: false, error: 'studio', message: 'That is the studio\'s own line.' }, 400);
+      try { await fileReport(env, { game, room, line, reason }); } catch (error) {
+        return json({ ok: false, error: 'not-migrated', message: `Reports need migration 0007_studio_chat.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503);
+      }
+      return json({ ok: true, message: 'Thanks for telling the studio. They will look at it.' });
+    }
     if (sub === '__net' || sub === '__watch') {
       if (request.headers.get('upgrade') !== 'websocket') return new Response('websocket only', { status: 426 });
       const room = url.searchParams.get('room') || 'main';
@@ -942,8 +998,15 @@ async function route(request, env, ctx) {
         const access = await serverAccess(env, { game, server: srv, holders: parts, watching: w || sub === '__watch' });
         if (!access.ok) return new Response('this server is not open to you', { status: 403 });
       }
+      // Room chat (section 19): the room's rules, and who this socket is to them: an account with a passkey (not a
+      // guest), a member of this server, or another site's page watching from elsewhere (homie.rocks's room page).
+      const chat = chatOf(meta, srv, await chatRowsOf(env));
+      const { acct, member } = await chatWho(env, game, srv, who);
+      const origin = request.headers.get('origin');
+      const hub = sub === '__watch' && Boolean(origin) && origin !== 'null' && origin !== url.origin;
+      const lean = { ...chat, emoji: chat.emoji.filter((e) => !REACTIONS.some((r) => r.k === e.k)) };
       const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}${ag ? `&ag=${encodeFacts(ag)}` : ''}`;
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}`;
       return stub.fetch(new Request(target, request));
     }
     // The same knock, relative to the game's own page: the same answer (see notAHomie).
@@ -1031,6 +1094,12 @@ export class Table {
     this.brainUsed = { neurons: 0, micros: 0 };
     this.brainPending = { calls: {}, neurons: 0, micros: 0 };
     this.brainReadAt = 0;
+    /** Room chat's review (section 19): the studio's day (budget and use, read at most once a minute) and what is not counted yet. */
+    this.chatCap = null;
+    this.chatUsed = 0;
+    this.chatReadAt = 0;
+    this.chatPend = { neurons: 0, ok: 0, held: 0, error: 0 };
+    this.chatSent = { chatLines: 0, chatReacts: 0, held: {} };
     ctx.blockConcurrencyWhile(async () => {
       this.saved = (await ctx.storage.get('net')) ?? null;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
@@ -1055,7 +1124,61 @@ export class Table {
     if (this.saved) this.room.restore(this.saved);
     if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
     this.vocabRead = this.readVocab(game).catch(() => false);
+    // Room chat (section 19): typed text the floor let through waits for the studio's own Workers AI.
+    this.room.review = (text, opts) => this.reviewChat(text, opts);
     return this.room;
+  }
+
+  /**
+   * One typed chat message, reviewed by the studio's decision model (worker/chat.mjs reviewChat) within the day's
+   * budget for the whole studio. No binding (`homie-studio dev` without --remote-ai), no budget left, or an error: the
+   * floor alone has decided (`by` says which), and the message goes out.
+   */
+  async reviewChat(text, { links = 'block' } = {}) {
+    if (!this.env.AI) return { ok: true, by: 'none' };
+    if (this.chatCap === null || Date.now() - this.chatReadAt > 60_000) await this.readChatDay().catch(() => {});
+    if (this.chatUsed >= (this.chatCap ?? 0)) return { ok: true, by: 'budget' };
+    try {
+      const v = await reviewChat(this.env, text, { links });
+      this.chatUsed += v.neurons;
+      this.chatPend.neurons += v.neurons;
+      this.chatPend[v.ok ? 'ok' : 'held'] += 1;
+      return { ok: v.ok, by: 'ai', why: v.why, ms: v.ms, p: v.p };
+    } catch (error) {
+      this.chatPend.error += 1;
+      try { console.log(JSON.stringify({ ev: 'chat-review-failed', room: this.code, error: String(error?.message ?? error).slice(0, 200) })); } catch { /* no console */ }
+      return { ok: true, by: 'error' };
+    }
+  }
+
+  async readChatDay() {
+    const day = await chatDay(this.env, today());
+    this.chatCap = day.budget.neurons;
+    this.chatUsed = day.used.neurons + this.chatPend.neurons;
+    this.chatReadAt = Date.now();
+  }
+
+  /** Chat's counts into D1 (stats_daily): lines, reactions, held by why, reviews and neurons. Never a message or a sender. */
+  async flushChat() {
+    const s = this.room?.stats;
+    if (!s || !this.env.DB) return;
+    const game = this.game ?? '';
+    const rows = [];
+    for (const [k, metric] of [['chatLines', 'chat-lines'], ['chatReacts', 'chat-reacts']]) {
+      const d = (s[k] ?? 0) - (this.chatSent[k] ?? 0);
+      if (d > 0) { rows.push(counter(this.env, { metric, subject: game, n: d })); this.chatSent[k] = s[k]; }
+    }
+    for (const [why, n] of Object.entries(s.chatHeld ?? {})) {
+      const d = n - (this.chatSent.held[why] ?? 0);
+      if (d > 0) { rows.push(counter(this.env, { metric: 'chat-held', subject: game, source: why, n: d })); this.chatSent.held[why] = n; }
+    }
+    const p = this.chatPend;
+    for (const k of ['ok', 'held', 'error']) if (p[k]) rows.push(counter(this.env, { metric: 'chat-reviews', subject: game, source: k, n: p[k] }));
+    const neurons = Math.floor(p.neurons);
+    if (neurons) rows.push(counter(this.env, { metric: 'chat-neurons', subject: game, n: neurons }));
+    this.chatPend = { neurons: p.neurons - neurons, ok: 0, held: 0, error: 0 };
+    const list = rows.filter(Boolean);
+    if (list.length) await this.env.DB.batch(list).catch(() => {});
   }
 
   /** The game's agents.json from the build (the only words an AI in this room may say), once. */
@@ -1156,6 +1279,12 @@ export class Table {
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
     if (url.pathname === '/__facts') return json({ ...room.officeFacts(), ...(this.house ? { brains: this.house.facts() } : {}) });
+    // A chat line as the room keeps it (section 19), for a report: the Worker files the room's own copy, never a reporter's.
+    if (url.pathname === '/__chat') {
+      const id = url.searchParams.get('id');
+      const r = room.chatLog.find((x) => x.id === id);
+      return json({ ok: Boolean(r), line: r ? { id: r.id, kind: r.kind, text: r.text ?? null, glyph: r.glyph ?? null, name: r.name, seat: r.seat, at: r.at, by: r.by, player: r.from?.player ?? null } : null });
+    }
     if (url.pathname === '/__office') {
       const ctl = await request.json().catch(() => null);
       const why = await verifyControl(this.env, ctl, { game: this.game, room: this.code }, this.seen);
@@ -1172,6 +1301,9 @@ export class Table {
     if (room.seatCap !== max) room.setSeats(max, perAddress(max));
     // The room's policy (section 17), composed by the Worker for every socket: a newer one than the room's applies.
     const pol = decodeFacts(url.searchParams.get('pol'));
+    // The room's chat rules ride beside it (they may be longer than a policy): section 19.
+    const chatRules = decodeFacts(url.searchParams.get('chat'), 16384);
+    if (pol && chatRules && typeof chatRules === 'object') pol.chat = chatRules;
     if (pol) room.setPolicy(pol);
     if (this.house) this.house.sync();
     const agent = decodeFacts(url.searchParams.get('ag'));
@@ -1191,11 +1323,20 @@ export class Table {
       watchPolicy: WATCH_POLICIES.includes(url.searchParams.get('wp')) ? url.searchParams.get('wp') : 'follow',
       // House QA and `homie-studio check` mark their browsers; their rooms, rounds and peaks are not the studio's numbers.
       qa: isQa(request),
+      // Room chat (section 19), the Worker's word: a signed-in account (a passkey), a member of this server, a page of
+      // another site (homie.rocks's room page) watching from elsewhere.
+      acct: url.searchParams.get('acct') === '1',
+      member: url.searchParams.get('mem') === '1',
+      hub: url.pathname === '/__watch' && url.searchParams.get('hub') === '1',
       send: (text) => { try { server.send(text); } catch { /* closed */ } },
       close: (c, r) => { try { server.close(c, r); } catch { /* closed */ } },
       buffered: () => 0,
     };
     if (url.pathname === '/__watch') {
+      // Watching shells are cheap (outgoing is free) but not free: a room holds at most 256, and 24 from one address
+      // (room chat, 0.23.0: another site's page can open one too).
+      const same = conn.ip ? [...room.watchers].filter((x) => x.ip === conn.ip).length : 0;
+      if (room.watchers.size >= 256 || same >= 24) { try { server.close(1013, 'too many watching'); } catch { /* gone */ } return new Response(null, { status: 101, webSocket: client }); }
       const w = room.watch(conn);
       // The play page's vote card speaks on this socket (section 17); nothing else it says is read.
       server.addEventListener('message', (e) => { if (typeof e.data === 'string') w.onMessage(e.data); });
@@ -1247,8 +1388,10 @@ export class Table {
       if (room.officeDirty) { room.officeDirty = false; this.ctx.storage.put('office', room.officeSaved()).catch(() => {}); }
       n += 1;
       if (n % 4 === 0) { room.tellWatchers(); this.report(); this.recordRound(); this.syncHouse(); }
+      // Room chat's counts, once a minute (section 19).
+      if (n % 240 === 0) this.ctx.waitUntil(this.flushChat().catch(() => {}));
       if (room.seats.size === 0 && room.clients.size === 0) this.openCounted = false;
-      if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
+      if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => {})); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
     }, 250);
   }
 

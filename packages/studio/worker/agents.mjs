@@ -74,10 +74,10 @@ export function encodeFacts(value) {
   for (const b of bytes) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-/** The reverse, or null for anything that is not one (at most 4 KB). */
-export function decodeFacts(text) {
+/** The reverse, or null for anything that is not one (at most 4 KB, or `max`: a room's chat rules may be longer). */
+export function decodeFacts(text, max = 4096) {
   const t = String(text ?? '');
-  if (!t || t.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(t)) return null;
+  if (!t || t.length > max || !/^[A-Za-z0-9_-]+$/.test(t)) return null;
   try {
     const s = atob(t.replace(/-/g, '+').replace(/_/g, '/'));
     const bytes = Uint8Array.from(s, (c) => c.charCodeAt(0));

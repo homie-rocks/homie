@@ -43,7 +43,7 @@
  * The take "strike" (lab.json) stands a big training slime in front of the hero (lab.stage "dummy"). Outside the lab
  * every lab call is a no-op.
  */
-import { AI_MARK, createControls, createLabels, createRoom, createSaves, easeView, exposePort, fitView, jitter, q, standoff, stripAi, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
+import { AI_MARK, BUBBLE_FONT, createBubbles, createControls, createLabels, createRoom, paintBubbles, type BubbleIn, type BubbleOut, createSaves, easeView, exposePort, fitView, jitter, q, standoff, stripAi, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
 import { useAgents, type Goal, type Vocabulary } from '@homie-rocks/studio/agents';
 import vocabulary from '../agents.json';
 // The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
@@ -712,8 +712,14 @@ const INSET = { top: 124, bottom: 100 }; // the hero panel and its pills; STRIKE
 let cam: Fit | null = null;
 let lastDraw = 0;
 // Names keep clear of the guides' bubbles and of the ask panel (a page element over the canvas).
-const labels = createLabels({ screen: () => ({ w: vw, h: vh }), avoid: () => { const p = document.getElementById('asks'); return p && !p.hidden ? [...bubbleBoxes, p.getBoundingClientRect()] : bubbleBoxes; } });
+const labels = createLabels({ screen: () => ({ w: vw, h: vh }), avoid: () => { const p = document.getElementById('asks'); const all = [...bubbleBoxes, ...chatBubbles.boxes()]; return p && !p.hidden ? [...all, p.getBoundingClientRect()] : all; } });
 let bubbleBoxes: { left: number; top: number; right: number; bottom: number }[] = [];
+// Room chat (NETPLAY.md section 19): what a hero's player says in the room's chat shows over the hero for a few seconds,
+// clear of the guides' own bubbles. The studio taking a message down takes its bubble too.
+const chatBubbles = createBubbles({ measure: (t) => { ctx.font = BUBBLE_FONT; return ctx.measureText(t).width; }, screen: () => ({ w: vw, h: vh }), avoid: () => bubbleBoxes });
+net.on('say', (e) => chatBubbles.say(e.seat, e.text, { id: e.id, kind: e.kind }));
+net.on('unchat', (e) => { for (const id of e.ids) chatBubbles.remove(id); });
+let shownChat: BubbleOut[] = [];
 let shownLabels: LabelOut[] = [];
 function aim(): Fit {
   const v = lookOnly ? room.viewBody() : null;
@@ -772,6 +778,7 @@ function draw(t: number): void {
   ctx.font = `600 ${fs}px ui-sans-serif, system-ui, sans-serif`;
   const names: LabelIn[] = [];
   const said: { x: number; y: number; head: number; text: string }[] = [];
+  const heads = new Map<number, { x: number; y: number; seat: number; self: boolean }>();
   const mine: ScreenBox[] = []; // your own hero and its name: no bubble covers them
   const meAt = (() => { const v = room.view().find((b) => !b.bot && b.seat === viewS); return v ? { x: v.x, y: v.y } : null; })();
   for (const b of room.view()) {
@@ -801,6 +808,7 @@ function draw(t: number): void {
     const body = { left: sx(x - 24), top: sy(y - R - 12), right: sx(x + 24), bottom: sy(y + R) };
     if (body.right < 0 || body.left > vw || body.bottom < 0 || body.top > vh) continue; // off screen: no name at the edge
     if (self) { const w = ctx.measureText(text).width; mine.push(body, { left: sx(x) - w / 2 - 6, top: body.top - 4 - fs * 1.2, right: sx(x) + w / 2 + 6, bottom: body.top }); }
+    if (!b.bot && b.seat !== null && b.seat !== undefined) heads.set(b.slot, { x: sx(x), y: body.top - 3, seat: b.seat, self });
     names.push({ key: b.slot, text, x: sx(x), y: body.top - 3, w: ctx.measureText(text).width, h: fs * 1.2, below: body.bottom + 4 + fs * 1.2, body, self, rank: (b.bot ? (isGuide ? 1 : 2) : 0) * 10_000 + near });
     const line = bubbles.get(b.slot);
     // The bubble's tail stops just above the guide's own name, so the name keeps its spot while it speaks.
@@ -830,6 +838,16 @@ function draw(t: number): void {
     ctx.fillText(l.text, l.cx, l.cy);
   }
   ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+  // Room chat's bubbles: over each speaking hero's name (your own placed first), clear of the guides' bubbles.
+  if (chatBubbles.size) {
+    const anchors: BubbleIn[] = [];
+    for (const [slot, h] of heads) {
+      const l = shownLabels.find((x) => x.key === slot && x.alpha > 0 && !x.moved);
+      anchors.push({ key: h.seat, x: l ? l.cx : h.x, y: l ? l.top - 1 : h.y, self: h.self });
+    }
+    shownChat = chatBubbles.place(anchors);
+    paintBubbles(ctx, shownChat, { paper: '#f6efdc', ink: '#1a1710', edge: 'rgba(40,30,10,.35)' });
+  } else shownChat = [];
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   hud(t);
 }
@@ -1116,6 +1134,8 @@ function frame(t: number): void {
 
 // Tonight's experience per hero: the watch page's live scores, and who Auto follows when nobody is slaying.
 net.expose({
+  // Room chat's bubbles on this screen now: whose, what, and where (an end-to-end test reads them).
+  chatBubbles: () => shownChat.map((b) => ({ seat: b.key, text: b.lines.join(' '), alpha: b.alpha, left: Math.round(b.left), top: Math.round(b.top), right: Math.round(b.right), bottom: Math.round(b.bottom) })),
   scores: () => room.view().map((b) => ({ slot: b.slot, seat: b.seat, bot: b.bot, score: b.score })),
   // The guides, for the e2e probe: each guide's goal now, and the log of goals, asks and lines (seats and ids only).
   guides: () => ({

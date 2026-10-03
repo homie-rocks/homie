@@ -34,14 +34,22 @@
  * `agent:do` (a goal of the game's agents.json, at most one every 3 s). It says only `say:<lineId>` lines of that
  * vocabulary, with arguments that fit, and only on a server whose AI may talk: the relay drops everything else an AI
  * says (`stats.agentDrops`). The Table's own house agents (worker/agents.mjs) are peers like any other, on a loopback.
+ *
+ * ROOM CHAT (revision 8, NETPLAY.md section 19): anyone in the room (a player, a watcher, the big screen's page, a
+ * homie.rocks room page) says a line (`say`) or a reaction (`react`) on the game's socket or the shell's watch socket.
+ * The relay checks the room's chat rules (`policy.chat`: what may be sent, who may send it, slow mode), runs the floor
+ * on typed text (worker/chat.mjs), waits for the studio's review when there is one (the Table's Workers AI), and fans
+ * the line out to every socket and every watching shell. It keeps the last few minutes in memory for a page that just
+ * opened, and nothing anywhere else.
  * =============================================================================
  */
 import { aiName, skillPreset, stripAi } from './agents.mjs';
 import { checkArgs, talks, vocabularyOf } from './brain.mjs';
+import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normalizeChat, publicChat } from './chat.mjs';
 
 export const NET_VERSION = 1;
 /** The contract revision this relay speaks (NETPLAY.md): optional fields, frames and refusals; the wire stays `v: 1`. */
-export const NET_REVISION = 7;
+export const NET_REVISION = 8;
 const POLICY_KINDS = ['open', 'humans-only', 'hybrid', 'beginner'];
 /**
  * A room's policy before the Worker says anything (and the public server's with nothing set): today's behaviour.
@@ -77,6 +85,8 @@ export function normalizePolicy(p) {
     bots: p.bots === 'off' ? 'off' : 'fill', level: Math.min(levelMax, int(p.level, 1, 5, 3)), levelMax,
     speech: ['game', 'lines', 'off'].includes(p.speech) ? p.speech : 'game', kids,
     brain: kind === 'humans-only' ? 'off' : ['off', 'script', 'workers-ai', 'owner-key'].includes(p.brain) ? p.brain : 'script',
+    // Revision 8: the room's chat rules (section 19), capped by the server's speech and kids.
+    ...(p.chat !== undefined ? { chat: normalizeChat(p.chat === false ? { mode: 'off' } : p.chat, { kids, speech: ['game', 'lines', 'off'].includes(p.speech) ? p.speech : 'game' }) } : {}),
   };
 }
 const policySig = (p) => JSON.stringify({ ...p, at: 0 });
@@ -91,6 +101,8 @@ const DEVICE_RANK = { desk: 0, tv: 1, phone: 2 };
 /** Size caps (bytes of the JSON text as received), for a room of up to 16 seats. */
 export const LIMITS = Object.freeze({
   hello: 2048, snap: 16384, in: 2048, ev: 4096, ckpt: 65536, state: 8192, round: 8192, roster: 4096, ping: 256, other: 512,
+  // Room chat (revision 8): a typed line (280 characters, emoji count double), a reaction.
+  say: 1536, react: 256,
 });
 /**
  * What grows with the seats (every body, every result, every slot): the checkpoint, round and roster caps double
@@ -100,7 +112,7 @@ export const LIMITS = Object.freeze({
 export const GROWS = Object.freeze(['ckpt', 'round', 'roster']);
 export const capOf = (t, seats) => (LIMITS[t] ?? LIMITS.other) * (GROWS.includes(t) && seats > 16 ? 2 : 1);
 /** Rate caps (messages per rolling second, per client). Over the cap a message is dropped, counted and reported. */
-export const RATES = Object.freeze({ snap: 30, in: 60, ev: 30, ckpt: 4, state: 64, round: 4, roster: 8, ping: 8, other: 8 });
+export const RATES = Object.freeze({ snap: 30, in: 60, ev: 30, ckpt: 4, state: 64, round: 4, roster: 8, ping: 8, other: 8, say: 4, react: 10 });
 /** `ev` per second by the sender's role: a screen is a spectator, and the host is somebody's phone. */
 export const EV_RATES = Object.freeze({ host: 30, replica: 10, screen: 2 });
 /** The keyed state channel: at most this many keys and bytes per room. */
@@ -276,6 +288,19 @@ export class NetRoom {
     this.askedMax = null;
     /** A launch change waiting for the round to finish: who may stay (ticket kinds), and when it applies at the latest. */
     this.regate = null;
+    /**
+     * Room chat (revision 8, section 19): the last few minutes of lines and reactions (memory only, never stored), each
+     * sender's buckets, the studio's review of typed text (the Table sets `review`; null: the floor alone decides), and
+     * the messages waiting for it.
+     */
+    this.chatLog = [];
+    this.chatBuckets = new Map();
+    this.chatAddress = new Map();
+    this.chatReacts = [];
+    this.chatPending = 0;
+    this.review = null;
+    this.watchIds = new WeakMap();
+    this.defaultChat = null;
   }
 
   /* ------------------------------------------------------------ sockets */
@@ -285,6 +310,9 @@ export class NetRoom {
     const now = this.now();
     const c = {
       id: randomId(6), conn, ip: conn.ip ?? null, browser: conn.browser ?? null, player: conn.player ?? null, via: conn.via ?? null, helloed: false, seat: null, token: null, name: '', typed: '', colour: 0,
+      // Room chat (section 19): the Worker's word that this socket's account is a signed-in one (a passkey, not a guest),
+      // and that it belongs to this room's server.
+      acct: conn.acct === true, member: conn.member === true,
       device: 'desk', want: 'play', canHost: true, hidden: false, waiting: false, joinedAt: now, lastSeen: now, lastSnapAt: 0,
       rates: new Map(), drops: [], errAt: 0,
       // A watcher (section 16): the Worker's word for a socket opened through a watch door, else the hello's own.
@@ -312,16 +340,21 @@ export class NetRoom {
     // A shell that comes back to a room it was kicked from (or that is closed) hears so at once.
     const held = this.heldNotice(conn);
     if (held) this.sendText(conn, JSON.stringify(held));
+    // Room chat (section 19): the last few minutes, so a page that just opened has the conversation (never to a page the
+    // studio holds out of the room, or a room it closed).
+    if ((!held || held.t === 'muted') && (!conn.hub || this.chatRules().hub)) this.sendText(conn, JSON.stringify({ t: 'lines', lines: this.recentChat().map((r) => this.wireLine(r)) }));
     const rate = [];
     return {
       onClose: () => this.watchers.delete(conn),
       onMessage: (text) => {
         const now = this.now();
         while (rate.length && rate[0] <= now - 1000) rate.shift();
-        if (rate.length >= 4 || String(text).length > 256) return;
+        if (rate.length >= 10 || String(text).length > LIMITS.say) return;
         rate.push(now);
         let m = null;
         try { m = JSON.parse(String(text)); } catch { return; }
+        // Room chat from the shell (the play page, the big screen's page, the watch page, a homie.rocks room page).
+        if (m && (m.t === 'say' || m.t === 'react')) { this.onChat({ conn }, m); return; }
         if (!m || m.t !== 'vote' || !conn.browser) return;
         const c = this.live().find((o) => o.browser === conn.browser && o.seat !== null && !o.agent && !o.watch);
         if (c) this.onVote(c, m, conn);
@@ -358,7 +391,7 @@ export class NetRoom {
   levelNow() { return Math.max(1, Math.min(this.policy.levelMax, this.level ?? this.policy.level)); }
   policyOut() {
     const level = this.levelNow();
-    return { ...this.policy, skill: skillPreset(level, { kids: this.policy.kids }), ...(this.levelBy ? { by: this.levelBy } : {}) };
+    return { ...this.policy, chat: publicChat(this.chatRules()), skill: skillPreset(level, { kids: this.policy.kids }), ...(this.levelBy ? { by: this.levelBy } : {}) };
   }
   /** Send to every client in the room (a lite agent too: it hears join/leave, roster, round, policy and votes). */
   broadcast(msg) {
@@ -548,6 +581,12 @@ export class NetRoom {
       }
       case 'vote': {
         this.onVote(c, m);
+        return;
+      }
+      case 'say':
+      case 'react': {
+        // Room chat (section 19): the game's own chat UI (`net.say`, `net.react`), checked like the shell's.
+        this.onChat({ client: c }, m);
         return;
       }
       case 'ping': {
@@ -866,6 +905,216 @@ export class NetRoom {
     for (const o of this.live()) if (o !== c && this.lite(o) && o.id !== this.hostId) this.send(o, out);
   }
 
+  /* ------------------------------------------------------------ room chat (revision 8, section 19) */
+
+  /** The room's chat rules: the Worker's (in the policy), else the defaults for this server's speech and kids. */
+  chatRules() {
+    if (this.policy.chat) return this.policy.chat;
+    const sig = `${this.policy.kids}|${this.policy.speech}`;
+    if (!this.defaultChat || this.defaultChat.sig !== sig) this.defaultChat = { sig, rules: normalizeChat(null, { kids: this.policy.kids, speech: this.policy.speech }) };
+    return this.defaultChat.rules;
+  }
+
+  /** The window a page that just opened gets: the last `keep` messages of the last `keepMs`. */
+  recentChat(now = this.now()) {
+    return this.chatLog.filter((r) => now - r.at <= CHAT_LIMITS.keepMs).slice(-CHAT_LIMITS.keep);
+  }
+
+  /** A line or a reaction as every screen gets it (homie.rocks's room chat shapes: `line` and `react`). */
+  wireLine(r) {
+    const base = { id: r.id, at: r.at, name: r.name, seat: r.seat, colour: r.colour, by: r.by, ...(r.bubble ? { bubble: true } : {}), ...(r.acct ? { acct: true } : {}), ...(r.owner ? { owner: true } : {}) };
+    if (r.kind === 'react') return { t: 'react', ...base, react: r.react, glyph: r.glyph };
+    return { t: 'line', ...base, text: r.text, ...(r.say ? { say: r.say } : {}) };
+  }
+
+  watchIdOf(conn) {
+    let id = this.watchIds.get(conn);
+    if (!id) { id = randomId(6); this.watchIds.set(conn, id); }
+    return id;
+  }
+
+  /**
+   * Who is speaking: a game socket's own client, or for a shell's watch socket the client of the same browser (or
+   * account) in this room: its seat, name and colour. A page with no client here (a homie.rocks room page, a watch
+   * page before its game connects) is a watcher with a handle. Signed in, a member, the owner: the Worker's word.
+   */
+  chatter(client, conn) {
+    let g = client;
+    if (!g && conn) {
+      const mine = this.live().filter((o) => !o.agent && ((conn.browser && o.browser === conn.browser) || (conn.player && o.player === conn.player)));
+      g = mine.find((o) => o.seat !== null) ?? mine.find((o) => o.watch) ?? mine[0] ?? null;
+    }
+    const via = String(g?.via ?? conn?.via ?? '');
+    const owner = via.split('~').includes('o');
+    const seat = g ? g.seat : null;
+    const handle = handleFor(g?.token || g?.browser || conn?.browser || `w-${this.watchIdOf(conn ?? g?.conn ?? {})}`);
+    const name = seat !== null ? g.name : oneLine(g?.typed, CHAT_LIMITS.name) || handle;
+    return {
+      key: g ? `c:${g.id}` : `w:${this.watchIdOf(conn)}`, client: g, seat, name, colour: seat !== null ? g.colour : null,
+      player: g?.player ?? conn?.player ?? null, acct: Boolean(g?.acct || conn?.acct), member: Boolean(g?.member || conn?.member) || owner,
+      owner, browser: g?.browser ?? conn?.browser ?? null, token: g?.token ?? null, ip: g?.ip ?? conn?.ip ?? null,
+      watch: seat === null, hub: Boolean(conn?.hub) && !g, agent: Boolean(g?.agent), conn: conn ?? g?.conn ?? null,
+    };
+  }
+
+  /** A token bucket: true (and one token spent) when there is one. */
+  takeToken(map, key, rate, now) {
+    let b = map.get(key);
+    if (!b) { b = { tokens: rate.burst, at: now }; map.set(key, b); }
+    b.tokens = Math.min(rate.burst, b.tokens + (now - b.at) / rate.refillMs);
+    b.at = now;
+    if (b.tokens < 1) return false;
+    b.tokens -= 1;
+    return true;
+  }
+
+  /**
+   * One message from anyone in the room: `{ t: 'say', text }` (typed), `{ t: 'say', say: '<line id>' }` (a quick line)
+   * or `{ t: 'react', kind }` (an emoji), with an optional `n` (the sender's own id for it) and `bubble: false` (not
+   * over my character). Refused with `held` (or homie.rocks's `slow`) to the sender only; else published to everyone,
+   * after the studio's review for typed text when there is one.
+   */
+  onChat({ client = null, conn = null }, m) {
+    const now = this.now();
+    const rules = this.chatRules();
+    const who = this.chatter(client, conn);
+    const n = typeof m.n === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(m.n) ? m.n : null;
+    const kind = m.t === 'react' ? 'react' : typeof m.say === 'string' || typeof m.line === 'string' ? 'line' : 'text';
+    const stats = this.stats;
+    const reply = (why, extra = {}) => {
+      stats.chatHeld = stats.chatHeld ?? {};
+      stats.chatHeld[why] = (stats.chatHeld[why] ?? 0) + 1;
+      const out = JSON.stringify({ t: why === 'slow' ? 'slow' : 'held', why, message: HELD_WORDS[why] ?? HELD_WORDS.unknown, ...(n ? { n } : {}), ...extra });
+      if (who.conn) this.sendText(who.conn, out);
+      return { ok: false, why };
+    };
+    if (who.agent) return reply('ai_seat');
+    if (!allows(rules, kind)) return reply(rules.mode === 'off' ? 'off' : rules.mode === 'emoji' ? 'emoji' : 'lines');
+    if (who.hub && !rules.hub) return reply('hub');
+    if (who.watch && !rules.watchers && !who.owner) return reply('watchers');
+    const need = kind === 'text' ? rules.who : rules.react;
+    if (!who.owner && need === 'signed-in' && !who.acct) return reply(kind === 'text' ? 'sign-in' : 'sign-in-react');
+    if (!who.owner && need === 'members' && !who.member) return reply(kind === 'text' ? 'members' : 'members-react');
+    const mute = this.muteOf({ token: who.token, browser: who.browser, player: who.player });
+    if (mute) return reply('muted', { until: mute.until });
+    const b = this.chatBuckets.get(who.key) ?? { lastSayAt: -Infinity, lastText: '', lastTextAt: -Infinity };
+    this.chatBuckets.set(who.key, b);
+    if (!this.takeToken(this.chatBuckets, `${who.key}|${kind === 'react' ? 'react' : 'say'}`, kind === 'react' ? CHAT_RATES.react : CHAT_RATES.say, now)) return reply('slow');
+    if (who.ip && !this.takeToken(this.chatAddress, who.ip, CHAT_RATES.address, now)) return reply('slow');
+    if (kind !== 'react' && rules.slow && !who.owner && now - b.lastSayAt < rules.slow * 1000) return reply('slow', { until: b.lastSayAt + rules.slow * 1000, slow: rules.slow });
+    let rec;
+    if (kind === 'react') {
+      const k = String(m.kind ?? m.react ?? '');
+      const r = rules.emoji.find((x) => x.k === k);
+      if (!r) return reply('unknown');
+      // A storm of reactions: the room fans out at most so many a second (the sender's own still floats for them).
+      while (this.chatReacts.length && this.chatReacts[0] <= now - 1000) this.chatReacts.shift();
+      if (this.chatReacts.length >= CHAT_RATES.roomReactsPerSecond) { stats.chatDrops = (stats.chatDrops ?? 0) + 1; return { ok: true, dropped: true }; }
+      this.chatReacts.push(now);
+      rec = { kind: 'react', react: r.k, glyph: r.e };
+    } else if (kind === 'line') {
+      const id = String(m.say ?? m.line ?? '');
+      const l = rules.lines.find((x) => x.id === id);
+      if (!l) return reply('unknown');
+      rec = { kind: 'line', say: l.id, text: l.text };
+    } else {
+      const text = cleanText(m.text, rules.max);
+      if (!text) return reply('empty');
+      const f = floor(text, rules);
+      if (!f.ok) return reply(f.why);
+      if (b.lastText === text.toLowerCase() && now - b.lastTextAt < CHAT_LIMITS.repeatMs) return reply('repeat');
+      b.lastText = text.toLowerCase();
+      b.lastTextAt = now;
+      rec = { kind: 'text', text };
+    }
+    if (kind !== 'react') b.lastSayAt = now;
+    Object.assign(rec, {
+      name: who.name, seat: who.seat, colour: who.colour, by: who.hub ? 'hub' : who.watch ? 'watcher' : 'player',
+      bubble: m.bubble !== false && rules.bubbles && who.seat !== null, acct: who.acct, owner: who.owner,
+      // Only the office sees these: who sent it, so a mute or a kick from the line reaches them (never an address).
+      from: { client: who.client?.id ?? null, token: who.token, browser: who.browser, player: who.player },
+    });
+    if (kind === 'text' && rules.ai && typeof this.review === 'function' && !who.owner) {
+      if (this.chatPending >= CHAT_LIMITS.pending) return reply('busy');
+      this.chatPending += 1;
+      const t0 = now;
+      Promise.resolve()
+        .then(() => this.review(rec.text, { room: this.code, links: rules.links }))
+        .then((v) => v, (error) => ({ ok: true, by: 'error', error: String(error?.message ?? error).slice(0, 120) }))
+        .then((v) => {
+          this.chatPending = Math.max(0, this.chatPending - 1);
+          if (v && v.ok === false) {
+            stats.chatAiHeld = (stats.chatAiHeld ?? 0) + 1;
+            // What the review thought it was (insult, hate, sexual, grooming, harm, spam): counts for the office only.
+            stats.chatAiWhy = stats.chatAiWhy ?? {};
+            const why = String(v.why ?? 'held').slice(0, 24);
+            stats.chatAiWhy[why] = (stats.chatAiWhy[why] ?? 0) + 1;
+            reply('ai');
+            return;
+          }
+          if (v?.by === 'error') stats.chatAiErrors = (stats.chatAiErrors ?? 0) + 1;
+          rec.review = { by: v?.by ?? 'ai', ms: this.now() - t0, ...(Number.isFinite(v?.p) ? { p: v.p } : {}) };
+          // A mute that came while it was being reviewed still holds it.
+          if (this.muteOf({ token: who.token, browser: who.browser, player: who.player })) { reply('muted'); return; }
+          this.publishChat(rec, who.conn, n);
+        });
+      return { ok: true, pending: true };
+    }
+    return this.publishChat(rec, who.conn, n);
+  }
+
+  /** A message every socket and every watching shell gets now (the sender's own copy carries its `n`). */
+  publishChat(rec, senderConn = null, n = null) {
+    const now = this.now();
+    rec.id = randomId(6);
+    rec.at = now;
+    this.chatLog.push(rec);
+    while (this.chatLog.length > CHAT_LIMITS.keep || (this.chatLog.length && now - this.chatLog[0].at > CHAT_LIMITS.keepMs)) this.chatLog.shift();
+    const msg = this.wireLine(rec);
+    const text = JSON.stringify(msg);
+    const mine = n ? JSON.stringify({ ...msg, n }) : text;
+    const hub = this.chatRules().hub;
+    for (const o of this.live()) if (!this.lite(o)) this.sendText(o.conn, o.conn === senderConn ? mine : text);
+    for (const w of this.watchers) if (!w.hub || hub) this.sendText(w, w === senderConn ? mine : text);
+    if (rec.kind === 'react') this.stats.chatReacts = (this.stats.chatReacts ?? 0) + 1;
+    else this.stats.chatLines = (this.stats.chatLines ?? 0) + 1;
+    return { ok: true, id: rec.id };
+  }
+
+  /** Take messages down (the owner's `unsay`): from the window, and from every screen that shows them. */
+  unsay(ids) {
+    const gone = new Set(ids);
+    const before = this.chatLog.length;
+    this.chatLog = this.chatLog.filter((r) => !gone.has(r.id));
+    const text = JSON.stringify({ t: 'unline', ids: [...gone] });
+    for (const o of this.live()) if (!this.lite(o)) this.sendText(o.conn, text);
+    for (const w of this.watchers) this.sendText(w, text);
+    return before - this.chatLog.length;
+  }
+
+  /**
+   * A mute or a kick for a chat line whose sender holds no socket in this room now (a watcher, a homie.rocks page): held
+   * by that browser and account, as a kick holds a player's other tabs.
+   */
+  holdSender(line, minutes, now, { kick = false, message = '', purge = false } = {}) {
+    const f = line.from ?? {};
+    if (!f.token && !f.browser && !f.player) return { ok: false, error: 'no-player', message: 'that line has nobody to hold' };
+    const until = now + minutes * 60_000;
+    const hold = { token: f.token ?? null, browser: f.browser ?? null, player: f.player ?? null, name: line.name, seat: line.seat, until, at: now };
+    if (kick) this.bans = [...this.bans, { ...hold, ip: null, pass: null, message }].slice(-CONTROL_LIMITS.bans);
+    else this.mutes = [...this.mutes, hold].slice(-CONTROL_LIMITS.mutes);
+    this.tellBrowser(hold, kick ? { t: 'kicked', room: this.code, until, message } : { t: 'muted', room: this.code, until });
+    const removed = purge ? this.unsay(this.linesOf(f)) : 0;
+    this.tellWatchers();
+    return { ok: true, op: kick ? 'kick' : 'mute', name: line.name, seat: line.seat, until, sockets: 0, ...(removed ? { removed } : {}) };
+  }
+
+  /** The lines of one sender (a line's `from`), for a mute or a kick that also takes their messages down. */
+  linesOf(from) {
+    if (!from) return [];
+    return this.chatLog.filter((r) => (from.client && r.from?.client === from.client) || (from.token && r.from?.token === from.token) || (from.browser && r.from?.browser === from.browser) || (from.player && r.from?.player === from.player)).map((r) => r.id);
+  }
+
   /* ------------------------------------------------------------ watchers (section 16) */
 
   /**
@@ -1008,6 +1257,10 @@ export class NetRoom {
     }
     this.reapSeats(now);
     this.seatWaiting();
+    // The chat window is minutes long; buckets of senders who went quiet are dropped.
+    while (this.chatLog.length && now - this.chatLog[0].at > CHAT_LIMITS.keepMs) this.chatLog.shift();
+    if (this.chatBuckets.size > 512) this.chatBuckets.clear();
+    if (this.chatAddress.size > 512) this.chatAddress.clear();
     if (!this.live().some((c) => !c.agent) && this.emptySince && now - this.emptySince > this.forgetMs) {
       for (const c of this.live()) this.kick(c, 'agents-alone', 4001);
       this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
@@ -1015,6 +1268,8 @@ export class NetRoom {
       this.emptySince = 0; this.openedAt = 0; this.askedMax = null;
       // The party's dial and vote are the room's: a new party starts from the server's level.
       this.level = null; this.levelBy = null; this.vote = null; this.agentsOut = null;
+      // Room chat (section 19): an empty room forgets what was said, as it forgets everything else.
+      this.chatLog = []; this.chatBuckets.clear(); this.chatAddress.clear(); this.chatReacts = [];
       this.seatsDirty = false; this.persistDirty = false;
       try { this.store?.clear?.(); } catch { /* best effort */ }
     }
@@ -1333,13 +1588,17 @@ export class NetRoom {
     this.mutes = this.mutes.filter((m) => m.until > now);
     switch (op) {
       case 'kick': {
-        const target = this.findClient(a);
+        // From a chat line (section 19): its sender, in this room now or not (a watcher with no seat is held too).
+        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) : null;
+        const target = this.findClient(a) ?? (line?.from?.client ? this.clients.get(line.from.client) ?? null : null);
+        if (!target && line) return this.holdSender(line, minutes, now, { kick: true, message: oneLine(a.message, CONTROL_LIMITS.message) || 'The studio removed you from this room.', purge: a.purge === true });
         if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
+        const purged = a.purge === true ? this.unsay(this.linesOf({ client: target.id, token: target.token, browser: target.browser, player: target.player })) : 0;
         const until = now + minutes * 60_000;
         // The message is the studio's words; `until` says when (the shell says it in the player's own time).
         const message = oneLine(a.message, CONTROL_LIMITS.message) || 'The studio removed you from this room.';
         // An AI is held out by its pass (its seat becomes a brainless AI seat again); a person by token, browser, account.
-        const ban = { token: target.token, browser: target.browser, player: target.player, ip: a.address ? target.ip : null, pass: target.agent?.pass ?? null, name: target.name, seat: target.seat, until, at: now, message };
+        const ban = { token: target.token, browser: target.browser, player: target.player, ip: a.address ? target.ip : null, pass: target.agent?.pass ?? null, name: line?.name ?? target.name, seat: target.seat, until, at: now, message };
         this.bans = [...this.bans, ban].slice(-CONTROL_LIMITS.bans);
         // Every socket of that player in this room: the seat itself, and its browser's or account's other tabs.
         const out = this.live().filter((o) => o === target || (ban.browser && o.browser === ban.browser) || (ban.player && o.player === ban.player));
@@ -1357,21 +1616,32 @@ export class NetRoom {
         this.tellBrowser(ban, { t: 'kicked', room: this.code, until, message });
         this.persist(now);
         this.tellWatchers();
-        return { ok: true, op, name: ban.name, seat: ban.seat, sockets: out.length, until };
+        return { ok: true, op, name: ban.name, seat: ban.seat, sockets: out.length, until, ...(purged ? { removed: purged } : {}) };
       }
       case 'mute': {
-        const target = this.findClient(a);
+        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) : null;
+        const target = this.findClient(a) ?? (line?.from?.client ? this.clients.get(line.from.client) ?? null : null);
+        if (!target && line && a.off !== true) return this.holdSender(line, minutes, now, { kick: false, purge: a.purge === true });
         if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
         const off = a.off === true;
+        const purged = !off && a.purge === true ? this.unsay(this.linesOf({ client: target.id, token: target.token, browser: target.browser, player: target.player })) : 0;
         const same = (m) => (m.token && m.token === target.token) || (m.browser && m.browser === target.browser) || (m.player && m.player === target.player);
         this.mutes = this.mutes.filter((m) => !same(m));
         const until = off ? 0 : now + minutes * 60_000;
-        if (!off) this.mutes = [...this.mutes, { token: target.token, browser: target.browser, player: target.player, name: target.name, seat: target.seat, until, at: now }].slice(-CONTROL_LIMITS.mutes);
+        if (!off) this.mutes = [...this.mutes, { token: target.token, browser: target.browser, player: target.player, name: line?.name ?? target.name, seat: target.seat, until, at: now }].slice(-CONTROL_LIMITS.mutes);
         const note = { t: 'mute', id: target.id, seat: target.seat, until };
         for (const o of this.live()) this.send(o, note);
         this.tellBrowser(target, { t: 'muted', room: this.code, until });
         this.tellWatchers();
-        return { ok: true, op, name: target.name, seat: target.seat, until };
+        return { ok: true, op, name: line?.name ?? target.name, seat: target.seat, until, ...(purged ? { removed: purged } : {}) };
+      }
+      case 'unsay': {
+        // Room chat (section 19): the owner takes a message down (or every message: `all`), on every screen at once.
+        const ids = a.all === true ? this.chatLog.map((r) => r.id) : (Array.isArray(a.ids) ? a.ids : [a.id]).filter((x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(x)).slice(0, 64);
+        if (!ids.length) return { ok: false, error: 'no-line', message: 'which message?' };
+        const removed = this.unsay(ids);
+        this.stats.chatRemoved = (this.stats.chatRemoved ?? 0) + removed;
+        return { ok: true, op, removed };
       }
       case 'announce': {
         const text = oneLine(a.text, CONTROL_LIMITS.announce);
@@ -1387,6 +1657,8 @@ export class NetRoom {
         const msg = JSON.stringify({ t: 'announce', ...this.announcement });
         for (const o of this.live()) this.sendText(o.conn, msg);
         for (const w of this.watchers) this.sendText(w, msg);
+        // The room's chat shows it too, as the studio's own line (section 19).
+        this.publishChat({ kind: 'studio', text, name: 'Studio', seat: null, colour: null, by: 'studio', bubble: false, acct: false, owner: true, from: null });
         this.tellWatchers();
         return { ok: true, op, id: this.announcement.id, people: this.live().length, until: this.announcement.until };
       }
@@ -1541,6 +1813,12 @@ export class NetRoom {
         }),
         bans: this.bans.filter((b) => b.until > now).map((b) => ({ name: b.name, seat: b.seat, until: b.until, at: b.at, address: Boolean(b.ip), browser: browserTag(b.browser) })),
         mutes: this.mutes.filter((m) => m.until > now).map((m) => ({ name: m.name, seat: m.seat, until: m.until })),
+        // Room chat (section 19): the window as the owner sees it, with who sent each line (never an address).
+        chat: {
+          rules: this.chatRules(),
+          pending: this.chatPending,
+          lines: this.recentChat(now).map((r) => ({ ...this.wireLine(r), kind: r.kind, client: r.from?.client ?? null, player: r.from?.player ?? null, browser: browserTag(r.from?.browser), ...(r.review ? { review: r.review } : {}) })),
+        },
       },
     };
   }

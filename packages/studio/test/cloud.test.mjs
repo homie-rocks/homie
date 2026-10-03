@@ -143,6 +143,10 @@ esac
 test('Workers Builds: `npm run deploy` only migrates and deploys (by binding name); the first one makes the database as it deploys', () => {
   const dir = studio('builds');
   assert.equal(out(run(['game', 'new', 'owl-run', '--name', 'Owl Run'], dir)).ok, true);
+  // Room chat's review (0.23.0) binds Workers AI for any game whose players may type; this game keeps chat to emoji
+  // and quick lines, so only a server's AI guides decide the binding here (test/chat.test.mjs covers the review's).
+  const gj = join(dir, 'games', 'owl-run', 'game.json');
+  writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), chat: { mode: 'lines' } }, null, 2));
   const before = readFileSync(join(dir, 'studio.json'), 'utf8');
   const cf = workersBuilds(dir);
   const env = { WORKERS_CI: '1', WORKERS_CI_COMMIT_SHA: 'a'.repeat(40), WORKERS_CI_BRANCH: 'main' };
