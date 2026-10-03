@@ -5,7 +5,7 @@
  *   https://deploy.workers.cloudflare.com/?url=https://github.com/homie-rocks/homie/tree/main/template
  *
  * It is exactly what `homie-studio new --template` writes for a studio called "My Studio" (a first game, a
- * "Connect to Claude" band on Home, wrangler.jsonc at the root with Previews, and @homie-rocks/studio pinned to
+ * "Connect this chat" band on Home, wrangler.jsonc at the root with Previews, and @homie-rocks/studio pinned to
  * this repository's version from registry.npmjs.org), so it is generated, never edited by hand:
  *
  *   node scripts/template.mjs          rewrite template/
