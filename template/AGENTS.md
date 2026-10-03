@@ -126,10 +126,16 @@ studio's pinned copy, never a registry lookup of the bare name.
 - Import it as `import { createNetplay } from '@homie-rocks/studio/netplay'`.
 - Phones and computers: touch controls on phones only, keys on computers; keep the
   centre of the screen clear during play.
-- The play page's small room button (Invite, Big screen, the room code) sits top right. If the game's
-  scoreboard or a bar is there, move it in game.json `"screen": { "share": … }`: a corner or `top-center`, per
-  device (`desk`, `phone`, `sideways`), with an `x` / `y` offset in pixels, and `"label": false` to keep it
-  a small icon (`node_modules/@homie-rocks/studio/site/SITE.md`). Look at it on a phone and a computer.
+- The play page's small room button (Invite, Big screen, the room code) sits top right, with the Chat pill
+  beside it (a round icon on a phone, as the room button is). If the game's scoreboard or a bar is there, move
+  both in game.json `"screen": { "share": … }`: a corner or `top-center`, per device (`desk`, `phone`,
+  `sideways`), with an `x` / `y` offset in pixels, and `"label": false` to keep them small icons
+  (`node_modules/@homie-rocks/studio/site/SITE.md`). Room chat's strip of new lines shows for a moment at the
+  bottom left: if the game's HUD or controls are there, `"screen": { "chat": … }` puts it where the game has
+  room (`at`: a corner, `top-center` or `bottom-center`; `x` / `y`; per device, and `tv` for the big
+  screen), or `"lines": "sheet-only"` keeps new lines in the Chat sheet, the pill counting them, so a game with
+  a busy HUD keeps typed chat (`node_modules/@homie-rocks/studio/chat/CHAT.md`). Look at both on a phone and a
+  computer while a round is on and somebody says something.
 - **Watch any player.** Every live room can be watched at `/<id>/watch?room=<room>` (each room on the Rooms page
   and the landing has a Watch button): the game itself, drawn by the watcher's own browser, which never takes a
   seat, with a strip of the players to switch between (a tap, keys 1-9, A for Auto, O for the whole room). Point the

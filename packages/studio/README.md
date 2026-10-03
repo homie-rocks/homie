@@ -316,8 +316,9 @@ npx homie-studio chat remove night-rush pub-3 <line id>                 # take a
 npx homie-studio chat words                                             # the built-in word list the floor holds
 ```
 
-- **The play page:** a Chat pill beside the room button (the corner `screen.share` keeps clear of the HUD), its
-  sheet (the last minutes, the reactions, the quick lines, typing, Report), a short ticker of new lines, and two
+- **The play page:** a Chat pill beside the room button (the corner `screen.share` keeps clear of the HUD; a round
+  icon on a phone), its sheet (the last minutes, the reactions, the quick lines, typing, Report), a short strip of
+  new lines (game.json `screen.chat` puts it where the game has room, or keeps new lines in the sheet), and two
   switches each player keeps: "Show my messages over my character" and "Show chat on this screen". The big screen
   shows the lines in a corner; the watch page has a Chat button; homie.rocks shows a room's chat on its card.
 - **Rules** per game (game.json `"chat"`) and per server, in the office or with `chat rules`: off, emoji, quick

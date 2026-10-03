@@ -1340,16 +1340,20 @@ ticker.
 ### What the page does (worker/chat-page.mjs)
 
 - **Play:** a Chat pill in the room button's band (game.json `screen.share` already keeps that
-  corner clear of the game's HUD), with a count of unread lines; its sheet: the room's last
+  corner clear of the game's HUD; a round icon on a phone and beside a room button kept an icon,
+  and on a computer wherever its word would reach the middle third of the top), with a count of
+  unread lines; its sheet: the room's last
   minutes, a row of reactions (2.5 rem circles that pop), the quick lines, typing where the rules
   allow it (and why not where they do not: "Sign in to type here. Emoji are open to everyone."),
   Report on a line, and two switches kept in this browser: **Show my messages over my character**
-  and **Show chat on this screen** (off: no ticker, no float, no bubbles in this game). New lines
-  show for a moment where the status chip sits (game.json `"screen": { "chat": "bottom-right" }`
-  moves them; `false` keeps only the pill's count).
+  and **Show chat on this screen** (off: no strip, no float, no bubbles in this game). New lines
+  show for a moment where the status chip sits; game.json `"screen": { "chat": … }` moves that
+  strip per device (`at`, `x` / `y`, `desk`, `phone`, `sideways`, `tv`) or keeps new lines in the
+  sheet (`"lines": "sheet-only"`, or `false`: only the pill's count). chat/CHAT.md has the fields.
 - **Float:** every reaction rises up every screen in the room, as on the television: at most six
   a second and eighteen at once, 2.4 s each with a little sway. The sender's own floats at once.
-- **TV** (`/<game>/tv`): the room's lines in the corner the QR card does not use, no typing.
+- **TV** (`/<game>/tv`): the room's lines in the corner the QR card does not use (or game.json
+  `screen.chat`'s corner), no typing.
 - **Watch:** a Chat button in the band; its panel over the stage (a bottom sheet on a phone).
 
 **Privacy.** Nothing a person says is stored: the room keeps the last 50 lines of the last 15

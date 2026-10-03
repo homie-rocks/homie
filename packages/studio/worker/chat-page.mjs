@@ -3,10 +3,11 @@
  * screen (the TV view) and the watch page. It speaks on the page's own watch socket, so every game has it, old builds
  * too, with no game code:
  *
- *   play      a Chat pill beside the room button (the corner game.json screen.share keeps clear of the game's HUD),
- *             its sheet (the room's last minutes, the room's emoji, its quick lines, typing where the rules allow,
- *             Report on a line, and for the studio's owner Remove, Mute and Kick), a short ticker of new lines where the
- *             status chip sits, and reactions floating up the screen
+ *   play      a Chat pill beside the room button (the corner game.json screen.share keeps clear of the game's HUD; the
+ *             round icon on a phone, as the room button is), its sheet (the room's last minutes, the room's emoji, its
+ *             quick lines, typing where the rules allow, Report on a line, and for the studio's owner Remove, Mute and
+ *             Kick), a short strip of new lines where the status chip sits or where game.json screen.chat puts it
+ *             (chatPlaces; "sheet-only" keeps them in the sheet), and reactions floating up the screen
  *   tv        the room's lines in a corner (no typing: a television is read across a room) and the float
  *   watch     a Chat button in the watch page's band, its panel over the stage, and the float
  *
@@ -22,17 +23,86 @@ import { REACTIONS } from './chat.mjs';
 import { REPORT_REASONS, REPORT_WORDS } from './chat-store.mjs';
 import { NET_PALETTE } from './room.mjs';
 
+/** Where room chat's strip of new lines may sit: a corner, or the middle of the top or bottom edge. */
+export const CHAT_PLACES = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];
+const CHAT_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+const CHAT_DEVICES = ['desk', 'phone', 'sideways', 'tv'];
+const CHAT_FIELDS = ['at', 'x', 'y', 'lines'];
+
+/** One entry of game.json `screen.chat` as written (a place, false, or an object), keeping only the fields that are right. */
+function chatEntry(v) {
+  if (v === false) return { lines: 'sheet-only' };
+  if (typeof v === 'string') return CHAT_PLACES.includes(v) ? { at: v } : {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const o = {};
+  if (CHAT_PLACES.includes(v.at)) o.at = v.at;
+  for (const k of ['x', 'y']) if (v[k] !== undefined && v[k] !== null && v[k] !== '' && Number.isFinite(Number(v[k]))) o[k] = Math.round(Number(v[k]));
+  if (v.lines === 'strip' || v.lines === 'sheet-only') o.lines = v.lines;
+  return o;
+}
+
+/**
+ * Where room chat sits on each screen, from game.json `screen.chat` (0.24.5), so a game with a busy HUD keeps its chat
+ * off its clock, its title and its controls. The Chat pill itself sits in the room button's band (`screen.share`
+ * places both); this places the strip of new lines that shows for a moment, and the big screen's corner of lines:
+ *
+ *   "chat": "bottom-right"                                   every device's strip there (and the big screen's corner)
+ *   "chat": false                                            no strip: new lines wait in the sheet, the pill counts them
+ *   "chat": { "at": "top-left", "y": 120 }                   moved 120 px in from its edge (x: from its side)
+ *   "chat": { "lines": "strip", "phone": { "lines": "sheet-only" }, "tv": { "at": "top-right" } }
+ *
+ * `at` is a place from CHAT_PLACES (default: the bottom left, or the bottom right when the room button is there); `x`
+ * and `y` move it in, 0 to 600 px (in the middle of an edge, `x` moves it either way); `lines` is "strip" (the default)
+ * or "sheet-only". `desk`, `phone` (held upright), `sideways` (else as `phone`) and `tv` (the big screen) each change
+ * only what they name. The big screen has no sheet: it takes a corner only, its place follows the top level's when that
+ * is a corner, and its lines stay unless its own entry says "sheet-only" (then it shows only the float).
+ */
+export function chatPlaces(value) {
+  const top = chatEntry(value);
+  const per = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const done = (o) => {
+    const at = o.at ?? null;
+    const clamp = (n, lo) => Math.max(lo, Math.min(600, n ?? 0));
+    return { at, x: clamp(o.x, at && at.endsWith('center') ? -600 : 0), y: clamp(o.y, 0), lines: o.lines ?? 'strip' };
+  };
+  const phone = { ...top, ...chatEntry(per.phone) };
+  const { lines: _l, ...where } = top;
+  const own = chatEntry(per.tv);
+  if (own.at && !CHAT_CORNERS.includes(own.at)) delete own.at;
+  const tv = { ...(CHAT_CORNERS.includes(where.at) ? where : {}), ...own };
+  return { desk: done({ ...top, ...chatEntry(per.desk) }), phone: done(phone), sideways: done({ ...phone, ...chatEntry(per.sideways) }), tv: done(tv) };
+}
+
+/** game.json `screen.chat` as the build reads it: the problems in words (the page uses the default for anything wrong). */
+export function screenChatProblems(value) {
+  if (value === undefined || value === null || value === false) return [];
+  const out = [];
+  const one = (v, name, top) => {
+    if (v === false) return;
+    if (typeof v === 'string') { if (!CHAT_PLACES.includes(v)) out.push(`${name} "${v}" is not a place (${CHAT_PLACES.join(', ')})`); return; }
+    if (!v || typeof v !== 'object' || Array.isArray(v)) { out.push(`${name} is a place, false, or { "at", "x", "y", "lines" }`); return; }
+    for (const k of Object.keys(v)) {
+      if (top && CHAT_DEVICES.includes(k)) continue;
+      if (!CHAT_FIELDS.includes(k)) out.push(`${name}.${k} is not a field (${k === 'corner' || k === 'place' ? 'the place is "at"' : `${CHAT_FIELDS.join(', ')}${top ? `, or ${CHAT_DEVICES.join(', ')}` : ''}`})`);
+    }
+    if (v.at !== undefined && !CHAT_PLACES.includes(v.at)) out.push(`${name}.at "${v.at}" is not a place (${CHAT_PLACES.join(', ')})`);
+    if (name.endsWith('.tv') && v.at !== undefined && !CHAT_CORNERS.includes(v.at)) out.push(`${name}.at: the big screen takes a corner`);
+    for (const k of ['x', 'y']) if (v[k] !== undefined && !Number.isFinite(Number(v[k]))) out.push(`${name}.${k} is a number of pixels`);
+    if (v.lines !== undefined && v.lines !== 'strip' && v.lines !== 'sheet-only') out.push(`${name}.lines is "strip" or "sheet-only"`);
+  };
+  one(value, 'screen.chat', true);
+  if (value && typeof value === 'object' && !Array.isArray(value)) for (const d of CHAT_DEVICES) if (value[d] !== undefined) one(value[d], `screen.chat.${d}`, false);
+  return out.slice(0, 8);
+}
+
 /** What a page's chat starts from (`window.__HOMIE_CHAT`): its surface, the game, and who this browser is to the studio. */
-export function chatBoot(g, { surface = 'play', owner = false, acct = false, member = false, room = null, place = null } = {}) {
-  const screen = g?.screen?.chat;
-  const ticker = screen === false ? false : typeof screen === 'string' ? screen : screen && typeof screen === 'object' && typeof screen.at === 'string' ? screen.at : null;
+export function chatBoot(g, { surface = 'play', owner = false, acct = false, member = false, room = null } = {}) {
   return {
     surface, game: g.id, name: g.name, owner: Boolean(owner), acct: Boolean(acct), member: Boolean(member), palette: NET_PALETTE,
     reactions: REACTIONS, reasons: REPORT_REASONS.map((k) => ({ k, text: REPORT_WORDS[k] })),
     ...(room ? { room } : {}),
-    // game.json "screen": { "chat": "bottom-right" | false }: where new lines show for a moment (false: only the pill's count).
-    ...(ticker !== null ? { ticker } : {}),
-    ...(place ? { place } : {}),
+    // game.json "screen": { "chat": … }: where the strip of new lines sits on each device, or "sheet-only" (chatPlaces).
+    places: chatPlaces(g?.screen?.chat),
     account: '/account/',
   };
 }
@@ -42,7 +112,11 @@ export const CHAT_CSS = `
 .cpill .cico { width: 15px; height: 15px; flex: none; }
 .cpill .cbadge { min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: var(--hot); color: #0b0b10; font: 800 10px/16px ui-sans-serif, system-ui, sans-serif; text-align: center; }
 .cpill.dim .cbadge { display: inline-block; }
+/* The pill as the room button's round icon (on a phone, beside a room button kept an icon, or where its word would reach
+   the game's clock or title): its word goes, and the count rides its corner. */
+.cpill.icon-only, .cpill.icon-only:hover, .cpill.icon-only:focus-visible, .cpill.icon-only[aria-expanded="true"] { position: relative; width: 34px; padding: 0; justify-content: center; }
 .cpill.icon-only span.cword { display: none; }
+.cpill.icon-only .cbadge { position: absolute; top: -5px; right: -5px; min-width: 16px; box-shadow: 0 0 0 2px rgba(6,9,16,.85); }
 .csheet { display: flex; flex-direction: column; gap: 8px; width: min(340px, calc(100vw - 16px)); }
 .chead { display: flex; align-items: center; gap: 8px; margin: 0 2px; }
 .chead b { font: 800 15px/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.01em; }
@@ -88,24 +162,25 @@ export const CHAT_CSS = `
 .creport { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0 2px; }
 .creport p { grid-column: 1 / -1; margin: 0; color: #c3cad9; font: 600 12.5px/1.35 ui-sans-serif, system-ui, sans-serif; }
 .creport button { min-height: 32px; padding: 0 8px; border-radius: 9px; border: 1px solid rgba(255,255,255,.16); background: transparent; color: inherit; font: 700 12px/1.2 ui-sans-serif, system-ui, sans-serif; cursor: pointer; text-align: left; }
-.ctick { position: fixed; z-index: 5; display: flex; flex-direction: column; gap: 4px; max-width: min(320px, calc(100vw - 24px)); pointer-events: none; }
-.ctick.at-bottom-left { left: max(10px, env(safe-area-inset-left)); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 36px); align-items: flex-start; }
-.ctick.at-bottom-right { right: max(10px, env(safe-area-inset-right)); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 36px); align-items: flex-end; }
-.ctick.at-bottom-center { left: 50%; transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 36px); align-items: center; }
-.ctick.at-top-left { left: max(10px, env(safe-area-inset-left)); top: calc(max(10px, env(safe-area-inset-top)) + 48px); align-items: flex-start; flex-direction: column-reverse; }
-.ctick.at-top-right { right: max(10px, env(safe-area-inset-right)); top: calc(max(10px, env(safe-area-inset-top)) + 48px); align-items: flex-end; flex-direction: column-reverse; }
-.ctick.at-top-center { left: 50%; transform: translateX(-50%); top: calc(max(10px, env(safe-area-inset-top)) + 48px); align-items: center; flex-direction: column-reverse; }
+/* The strip of new lines (game.json screen.chat: its place, moved in by --chat-x / --chat-y). */
+.ctick { --chat-x: 0px; --chat-y: 0px; position: fixed; z-index: 5; display: flex; flex-direction: column; gap: 4px; max-width: min(320px, calc(100vw - 24px)); pointer-events: none; }
+.ctick.at-bottom-left { left: calc(max(10px, env(safe-area-inset-left)) + var(--chat-x)); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 36px + var(--chat-y)); align-items: flex-start; }
+.ctick.at-bottom-right { right: calc(max(10px, env(safe-area-inset-right)) + var(--chat-x)); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 36px + var(--chat-y)); align-items: flex-end; }
+.ctick.at-bottom-center { left: calc(50% + var(--chat-x)); transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 36px + var(--chat-y)); align-items: center; }
+.ctick.at-top-left { left: calc(max(10px, env(safe-area-inset-left)) + var(--chat-x)); top: calc(max(10px, env(safe-area-inset-top)) + 48px + var(--chat-y)); align-items: flex-start; flex-direction: column-reverse; }
+.ctick.at-top-right { right: calc(max(10px, env(safe-area-inset-right)) + var(--chat-x)); top: calc(max(10px, env(safe-area-inset-top)) + 48px + var(--chat-y)); align-items: flex-end; flex-direction: column-reverse; }
+.ctick.at-top-center { left: calc(50% + var(--chat-x)); transform: translateX(-50%); top: calc(max(10px, env(safe-area-inset-top)) + 48px + var(--chat-y)); align-items: center; flex-direction: column-reverse; }
 .ctick div { padding: 5px 10px; border-radius: 12px; background: rgba(6,9,16,.66); color: #eef1f8; font: 600 13px/1.3 ui-sans-serif, system-ui, -apple-system, sans-serif; overflow-wrap: anywhere; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: ctin .2s ease-out; transition: opacity .5s; }
 .ctick div b { font-weight: 800; margin-right: 6px; }
 .ctick div.cout { opacity: 0; }
 @keyframes ctin { from { opacity: 0; transform: translateY(6px); } }
 .cfloat { position: fixed; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
-.ctv { position: fixed; z-index: 6; box-sizing: border-box; width: min(26rem, 30vw); max-height: 42vh; display: flex; flex-direction: column; justify-content: flex-end; gap: .3em; padding: .55em .8em; border-radius: 16px; background: rgba(8,12,22,.7); border: 1px solid rgba(255,255,255,.12); color: #eef1f8; font: 600 clamp(14px, 1.6vmin, 24px)/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; pointer-events: none; overflow: hidden; }
+.ctv { --chat-x: 0px; --chat-y: 0px; position: fixed; z-index: 6; box-sizing: border-box; width: min(26rem, 30vw); max-height: 42vh; display: flex; flex-direction: column; justify-content: flex-end; gap: .3em; padding: .55em .8em; border-radius: 16px; background: rgba(8,12,22,.7); border: 1px solid rgba(255,255,255,.12); color: #eef1f8; font: 600 clamp(14px, 1.6vmin, 24px)/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; pointer-events: none; overflow: hidden; }
 .ctv:empty { display: none; }
-.ctv.at-bottom-left { left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); }
-.ctv.at-bottom-right { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); }
-.ctv.at-top-left { left: max(16px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); justify-content: flex-start; }
-.ctv.at-top-right { right: max(16px, env(safe-area-inset-right)); top: max(16px, env(safe-area-inset-top)); justify-content: flex-start; }
+.ctv.at-bottom-left { left: calc(max(16px, env(safe-area-inset-left)) + var(--chat-x)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--chat-y)); }
+.ctv.at-bottom-right { right: calc(max(16px, env(safe-area-inset-right)) + var(--chat-x)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--chat-y)); }
+.ctv.at-top-left { left: calc(max(16px, env(safe-area-inset-left)) + var(--chat-x)); top: calc(max(16px, env(safe-area-inset-top)) + var(--chat-y)); justify-content: flex-start; }
+.ctv.at-top-right { right: calc(max(16px, env(safe-area-inset-right)) + var(--chat-x)); top: calc(max(16px, env(safe-area-inset-top)) + var(--chat-y)); justify-content: flex-start; }
 .ctv div { overflow-wrap: anywhere; transition: opacity 1s; }
 .ctv div.cout { opacity: 0; }
 .ctv b { font-weight: 800; margin-right: .4em; }
@@ -221,21 +296,41 @@ export const CHAT_JS = String.raw`(function () {
     if (parts.length) raf = requestAnimationFrame(paint);
   }
 
-  /* ------------------------------------------------------------ the ticker: new lines, for a moment, where the chip sits */
+  /* ------------------------------------------------------------ where chat sits on this screen (game.json screen.chat) */
+  // This screen as the room button knows it (desk, phone held upright, phone turned sideways), else by its size.
+  function device() {
+    if (surface === 'tv') return 'tv';
+    var s = window.__shell && window.__shell.share;
+    if (s && s.device) return s.device;
+    var w = window.innerWidth || 0; var h = window.innerHeight || 0;
+    return w && h && Math.min(w, h) <= 540 ? (w > h ? 'sideways' : 'phone') : 'desk';
+  }
+  function placeHere() { var p = cfg.places || {}; return p[device()] || p.desk || { at: null, x: 0, y: 0, lines: 'strip' }; }
+
+  /* ------------------------------------------------------------ the strip: new lines, for a moment, where the chip sits */
   var tickEl = null;
   function tickPlace() {
-    if (cfg.ticker) return cfg.ticker;
+    var p = placeHere();
+    if (p.at) return p.at;
     var s = window.__shell && window.__shell.share;
     return s && s.at === 'bottom-left' ? 'bottom-right' : 'bottom-left';
   }
   function tick(m) {
-    if (surface === 'tv' || cfg.ticker === false || !st.show || st.open) return;
+    if (surface === 'tv' || !st.show || st.open) return;
+    // "sheet-only": a busy HUD keeps new lines in the sheet; the pill's count says they are there.
+    var p = placeHere();
+    if (p.lines === 'sheet-only') return;
     if (!tickEl) {
       var host = (surface === 'watch' ? document.querySelector('.stage') : null) || document.body;
       if (!host) return;
       tickEl = el('div', 'ctick'); tickEl.setAttribute('aria-hidden', 'true'); host.appendChild(tickEl); if (surface === 'watch') tickEl.style.position = 'absolute';
     }
-    tickEl.className = 'ctick at-' + tickPlace();
+    var at = tickPlace();
+    tickEl.className = 'ctick at-' + at;
+    // Moved in by the game's x / y, and past the room button when the strip shares its place.
+    var s = window.__shell && window.__shell.share; var same = surface === 'play' && s && s.at === at;
+    tickEl.style.setProperty('--chat-x', ((p.x || 0) + (same ? s.x || 0 : 0)) + 'px');
+    tickEl.style.setProperty('--chat-y', ((p.y || 0) + (same ? s.y || 0 : 0)) + 'px');
     var row = el('div');
     if (m.name) { var b = el('b', '', m.name); b.style.color = colourOf(m); row.appendChild(b); }
     row.appendChild(document.createTextNode(m.glyph && m.react ? m.glyph : (m.text || '')));
@@ -247,13 +342,16 @@ export const CHAT_JS = String.raw`(function () {
   /* ------------------------------------------------------------ the TV's corner */
   var tvEl = null;
   function tvLine(m) {
-    if (!st.show) return;
+    var p = placeHere();
+    if (!st.show || p.lines === 'sheet-only') return;
     if (!tvEl) {
       if (!document.body) return;
       tvEl = el('div', 'ctv');
       var join = document.querySelector('[data-join]');
       var at = join && /join-bottom-left/.test(join.className) ? 'bottom-right' : join && /join-top-left|join-top-right/.test(join.className) ? 'bottom-left' : 'bottom-left';
-      tvEl.className = 'ctv at-' + (cfg.ticker && cfg.ticker !== 'bottom-center' && cfg.ticker !== 'top-center' ? cfg.ticker : at);
+      tvEl.className = 'ctv at-' + (p.at || at);
+      tvEl.style.setProperty('--chat-x', (p.x || 0) + 'px');
+      tvEl.style.setProperty('--chat-y', (p.y || 0) + 'px');
       document.body.appendChild(tvEl);
     }
     var row = el('div', m.t === 'react' ? 'creact' : '');
@@ -277,6 +375,7 @@ export const CHAT_JS = String.raw`(function () {
       pill = el('button', 'pill cpill'); pill.type = 'button'; pill.setAttribute('data-chat-toggle', ''); pill.setAttribute('aria-expanded', 'false'); pill.setAttribute('aria-controls', 'chat-sheet'); pill.setAttribute('aria-label', 'Room chat');
       pill.innerHTML = ICON; pill.appendChild(el('span', 'cword', 'Chat')); badge = el('b', 'cbadge'); badge.hidden = true; pill.appendChild(badge);
       band.appendChild(pill);
+      watchBand(band);
       sheet = el('div', 'sheet csheet'); sheet.id = 'chat-sheet'; sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-label', 'Room chat'); sheet.hidden = true;
       ui.appendChild(sheet);
       // One sheet at a time: the room's and the server's close this one, and this one closes theirs.
@@ -318,6 +417,52 @@ export const CHAT_JS = String.raw`(function () {
     renderFeed();
     paintRules();
   }
+  /*
+   * The pill's word, as the room button's: on a phone (either way up), or beside a room button that game.json keeps an
+   * icon ("label": false), the pill is the round icon from the start. Elsewhere its word shows unless, with it, the band
+   * would leave the screen or reach from its corner into the middle third of the screen's width (where games keep a
+   * clock or a title); once it has, it stays the icon until the screen changes size, so it never flickers as the room
+   * button's own label comes and goes.
+   */
+  var narrow = false;
+  function shareHere() { var s = window.__shell && window.__shell.share; return s || {}; }
+  function wordCollides() {
+    var band = pill && pill.parentNode;
+    var w = window.innerWidth || 0;
+    if (!band || !band.getBoundingClientRect || !w) return false;
+    var had = pill.classList.contains('icon-only');
+    if (had) pill.classList.remove('icon-only');
+    var r = band.getBoundingClientRect();
+    if (had) pill.classList.add('icon-only');
+    if (!r.width) return false;
+    if (r.left < 4 || r.right > w - 4) return true;
+    var at = shareHere().at || 'top-right';
+    if (/center/.test(at)) return false;
+    return /right/.test(at) ? r.left < w * 2 / 3 : r.right > w / 3;
+  }
+  function fitPill() {
+    if (!pill || surface !== 'play') return;
+    var s = shareHere();
+    if (!narrow && s.device !== 'phone' && s.device !== 'sideways' && s.label !== false) narrow = wordCollides();
+    var icon = s.device === 'phone' || s.device === 'sideways' || s.label === false || narrow;
+    if (icon) { pill.classList.add('icon-only'); pill.title = 'Room chat'; } else { pill.classList.remove('icon-only'); pill.title = ''; }
+    st.compact = icon;
+  }
+  var fitQueued = false;
+  function fitSoon() {
+    if (fitQueued) return;
+    fitQueued = true;
+    var go = function () { fitQueued = false; fitPill(); };
+    if (window.requestAnimationFrame) window.requestAnimationFrame(go); else setTimeout(go, 16);
+  }
+  function watchBand(band) {
+    fitPill();
+    // The band changes as the room code arrives, the server's pill shows and the labels fade to dots: look again.
+    try { if (window.ResizeObserver) new ResizeObserver(fitSoon).observe(band); } catch (e) {}
+    // A new size (a turned phone, a resized window): the room button moves first, then the word is measured afresh.
+    window.addEventListener('resize', function () { setTimeout(function () { narrow = false; fitPill(); }, 60); });
+  }
+  st.fit = fitPill;
   function openChat(on, quiet) {
     if (!sheet) return;
     st.open = Boolean(on);

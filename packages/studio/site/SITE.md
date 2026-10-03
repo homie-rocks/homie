@@ -169,6 +169,10 @@ where the game has room, per device:
 - A button at the bottom left sends the "finding a room" chip to the bottom right.
 - On a server, the server's pill sits beside the button, on its inner side in the same band, never under it: on a
   phone held upright it is one more dot; elsewhere its name shows for a few seconds, then it is a dot too.
+- Room chat's Chat pill sits in the same band: a round icon on a phone (either way up) and beside a button kept an
+  icon; on a computer it says "Chat" unless the word would take the band off the screen or into the middle third of
+  its width, where games keep a clock or a title. Its strip of new lines (bottom left by default) moves with
+  `"screen": { "chat": … }`, per device, or stays in the Chat sheet (`"lines": "sheet-only"`): chat/CHAT.md.
 
 Look at the play page on a computer and a phone (both ways up) once a round is on: the button must not sit on a
 score, a timer or a bar. A room code the relay cannot use (1 to 32 letters, digits, `-` or `_`) is refused

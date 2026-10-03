@@ -288,7 +288,9 @@ Pick the multiplayer shape that keeps the game's feel:
 ## 8. The big screen
 
 Its join card (QR and address) sits bottom-right; if that covers the game's own HUD,
-move it with `game.json` `"screen": { "join": "top-left" }` (any corner).
+move it with `game.json` `"screen": { "join": "top-left" }` (any corner). Room chat's
+lines sit in a corner the card leaves free; `"screen": { "chat": { "tv": { "at": "top-right" } } }`
+moves them (and `"phone"` / `"desk"` move the play page's strip of new lines: `chat/CHAT.md`).
 
 
 `/<id>/tv` opens the room as a spectator (`room.mySeat()` is null) with a QR code

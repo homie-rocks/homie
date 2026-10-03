@@ -132,7 +132,12 @@ Make it the game the person asked for, in small steps:
   paintBubbles(ctx, bubbles.place(speakers.map((p) => ({ key: p.seat, x: p.labelX, y: p.labelTop, self: p.mine }))));
   ```
   A game's own chat keys (a quick-line wheel): `net.sayLine('gg')`, `net.react('fire')`. Never draw a name or a
-  message as markup.
+  message as markup. **Where chat sits:** the Chat pill rides the room button's band (`screen.share` below; a
+  round icon on a phone), and the strip of new lines shows for a moment at the bottom left. If the game's HUD or
+  controls are there, put the strip where it has room in `game.json` `"screen": { "chat": { "at": "top-right",
+  "y": 110 } }` (a corner, `top-center` or `bottom-center`; `x` / `y` in pixels; per device: `desk`, `phone`,
+  `sideways`, `tv`), or keep new lines in the Chat sheet with `"lines": "sheet-only"` (the pill counts them).
+  Never turn typing off to make room: place the strip instead (`chat/CHAT.md` has every field).
 - Update `game.json` `name` and `blurb`, and the `<title>`.
 
 ## Progress that lasts: cloud saves
@@ -294,11 +299,12 @@ page epic" means all of this, in this order:
    mode, a season): `site/partials/game-<id>.html`, a short section in the page's own classes
    (`<p class="kicker">`, `<h2>`, `<p class="lead">`, `<a class="ghost">`).
 
-**The play page's room button** (Invite, Big screen, the room code) sits top right. If the game draws a
-score, a timer or a bar there, move it in game.json: `"screen": { "share": { "desk": "bottom-left",
-"phone": { "at": "top-left", "y": 56 } } }` (a corner or `top-center`, per device: `desk`, `phone`,
-`sideways`; `x` / `y` move it in, in pixels; `"label": false` keeps it a small icon). Look at
-`/<id>/play` on a computer and a phone, both ways up, while a round is on.
+**The play page's room button** (Invite, Big screen, the room code) sits top right, with the Chat pill
+beside it. If the game draws a score, a timer or a bar there, move them in game.json: `"screen": { "share":
+{ "desk": "bottom-left", "phone": { "at": "top-left", "y": 56 } } }` (a corner or `top-center`, per device:
+`desk`, `phone`, `sideways`; `x` / `y` move it in, in pixels; `"label": false` keeps both small icons). Room
+chat's strip of new lines moves with `"screen": { "chat": … }` (above). Look at `/<id>/play` on a computer and
+a phone, both ways up, while a round is on and somebody says something in chat.
 
 Then `npm run build`, `npm run dev`, and look at `http://127.0.0.1:8787/<id>/` as a stranger would:
 a computer (1440 wide) and a phone (390 wide, and turned sideways), from the top, scrolling to the end.

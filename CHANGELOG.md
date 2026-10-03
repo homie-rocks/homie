@@ -17,9 +17,32 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.24.5] - 2026-10-03
+
+**Plugin 0.25.5** · [#39](https://github.com/homie-rocks/homie/pull/39)
+
+Room chat keeps off your game's HUD: on a phone the Chat pill is a round icon, as the room button is, and your game can say where the strip of new lines sits, or keep new lines in the Chat sheet, so a game with a busy HUD keeps typed chat.
+
+### Added
+
+- game.json `"screen": { "chat": … }` says where room chat's strip of new lines sits on each screen: `at` (a corner, `top-center` or `bottom-center`), `x` / `y` to move it in from its side and its edge, and `"lines": "sheet-only"` to keep new lines in the Chat sheet while the pill counts them. `desk`, `phone`, `sideways` and `tv` (the big screen's corner of lines) each take their own, changing only what they name. A game whose HUD or controls sit where the strip shows no longer has to keep chat to emoji to stay clear. `chat/CHAT.md` has every field; the template's AGENTS.md and the game skill say when to use it.
+- `homie-studio build` warns about a wrong field in `screen.chat` (the play page uses the default there), and says so when a place or `"sheet-only"` is written in game.json `"chat"` (the room's rules) instead.
+
+### Changed
+
+- The Chat pill follows the room button: on a phone (either way up), and beside a room button your game keeps an icon (`screen.share` `"label": false`), it is a round icon with the count of new lines on its corner. On a computer it still says "Chat", unless the word would take the room button's band off the screen or into the middle third of its width, where games keep a clock or a title; then it stays the icon until the window changes size.
+
+### Fixed
+
+- On a phone, the Chat pill's word no longer covers the HUD beside the room button: the first digit of a clock, the last letter of a title.
+
+### Upgrade notes
+
+- Nothing to do: a game without `screen.chat` shows the strip where it did. If you kept a game's chat to emoji only so the strip stayed off its HUD, tell Claude: "Put room chat where my game has room, and let players type again." It places the strip with `screen.chat` and resets the game's chat rules (`homie-studio chat rules <game> --reset`).
+
 ## [0.24.4] - 2026-10-03
 
-**Plugin 0.25.4** · [#37](https://github.com/homie-rocks/homie/pull/37)
+**Plugin 0.25.4** · [#37](https://github.com/homie-rocks/homie/pull/37) · [release-2026-10-03-studio-0.24.4](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.24.4)
 
 Your AI guides think with Cloudflare's Clef decision model, which does what a player asks; Clef runs on your own computer while you build; and your games can ask it for their own decisions (tactics, a director's call, a turn) in about a quarter of a second.
 

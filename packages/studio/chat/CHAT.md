@@ -14,9 +14,12 @@ studio's owner is responsible for, read [OWNERS.md](OWNERS.md).
 
 - **The Chat pill** on the play page, beside the room button: the room's last minutes, the
   reactions, the quick lines, typing where allowed, Report on a line, and two switches ("Show my
-  messages over my character", "Show chat on this screen").
+  messages over my character", "Show chat on this screen"). On a phone it is a round icon, as the
+  room button is, with the count of new lines on its corner; on a computer it says "Chat" unless
+  the word would reach the middle of the top edge, where games keep a clock or a title.
 - **The float:** every reaction rises up every screen in the room.
-- **The ticker:** a new line shows for a moment where the play page's status chip sits.
+- **The strip:** a new line shows for a moment where the play page's status chip sits (the bottom
+  left), or where the game says (below).
 - **The big screen** (`/<game>/tv`) shows the room's lines in a corner; the **watch page** has a
   Chat button; **homie.rocks** shows the room's chat on its card when the studio allows it.
 
@@ -49,9 +52,37 @@ studio's owner is responsible for, read [OWNERS.md](OWNERS.md).
 | `block`, `allow` | the studio's own words to hold (`word*` inside words) or to let through | none |
 
 `"chat": false` turns it off. A kids server, and every beginner server, keeps chat to emoji and
-quick lines whatever the game says. Where new lines show for a moment: game.json
-`"screen": { "chat": "bottom-right" }` (any corner, `top-center` or `bottom-center`), or `false`
-for only the pill's count.
+quick lines whatever the game says.
+
+**Where it sits on the screen, in game.json `"screen"`**, so a game with a busy HUD keeps typed
+chat without anything covering its clock, its title or its controls. The Chat pill sits in the
+room button's band, so `"screen": { "share": … }` places both (`"label": false` keeps both round
+icons). `"screen": { "chat": … }` places the strip of new lines and the big screen's corner:
+
+```json
+"screen": {
+  "share": { "phone": { "at": "top-left", "label": false } },
+  "chat": {
+    "desk": { "at": "top-left", "y": 130 },
+    "phone": { "lines": "sheet-only" },
+    "tv": { "at": "top-right" }
+  }
+}
+```
+
+| Field | | Default |
+|---|---|---|
+| `at` | `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center` or `bottom-right` | the bottom left (the bottom right when the room button is at the bottom left) |
+| `x`, `y` | move it in from its side and its edge, in CSS pixels (0 to 600; in the middle of an edge, `x` moves it either way). Sharing the room button's place, it also sits past the button | 0 |
+| `lines` | `strip` (new lines show for a moment), or `sheet-only` (they wait in the Chat sheet and the pill counts them) | `strip` |
+| `desk`, `phone`, `sideways`, `tv` | a computer, a phone held upright, a phone turned sideways (else as `phone`), the big screen: each changes only what it names | |
+
+A plain string (`"chat": "bottom-right"`) is a place for every device, and `false` is
+`"lines": "sheet-only"` for every device. The big screen has no sheet: it takes a corner only
+(the top level's when that is a corner, else the one its join card leaves free) and keeps its
+lines unless its own `tv` entry says `"sheet-only"`, which leaves it the float. A wrong field is
+the default on the page, and `homie-studio build` says which. Look at the play page on a phone
+and a computer while a round is on and somebody says something, and at `/<id>/tv`.
 
 **Speech bubbles over characters**, with the port kit (the starters draw them):
 

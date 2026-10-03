@@ -47,6 +47,7 @@ import { STUDIO_VERSION } from './version.mjs';
 import { licenseOf, remixRow } from '../worker/license.mjs';
 import { SERVER_LIMITS, serverOf } from '../worker/servers.mjs';
 import { chatProblems } from '../worker/chat.mjs';
+import { screenChatProblems } from '../worker/chat-page.mjs';
 import { vocabularyOf } from '../worker/brain.mjs';
 import { shopForBuild } from './shop.mjs';
 import { audienceOf } from '../worker/shop-rules.mjs';
@@ -323,6 +324,8 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     if (chatBad.length) throw new Error(`games/${g.id}/game.json: ${chatBad.join('; ')}`);
     // A game's own decisions (NETPLAY.md section 20): game.json "decide" is true or false (the Worker answers net.decide only then).
     if (g.decide !== undefined && typeof g.decide !== 'boolean') throw new Error(`games/${g.id}/game.json: "decide" is true (the host may ask the studio's decision model, within the AI brains' day) or false`);
+    // Where chat sits on the screen (game.json "screen": { "chat" }, 0.24.5): a wrong field is the default on the page.
+    for (const p of screenChatProblems(g.screen?.chat)) log(`warning: games/${g.id}/game.json: ${p}; the play page uses the default there`);
     // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).
     if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id, { studio: studio.name ?? null, game: g.name ?? g.id, license: g.license }))}\n`);
     // Its assets' licences, and the address and SHA-256 of each one a remix may carry (`game remix` fetches them).

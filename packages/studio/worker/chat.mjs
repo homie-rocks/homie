@@ -209,7 +209,10 @@ export function chatProblems(raw) {
   const out = [];
   if (raw.mode !== undefined && !CHAT_MODES.includes(raw.mode)) out.push('chat.mode is off, emoji, lines or text');
   for (const k of ['who', 'react']) if (raw[k] !== undefined && !CHAT_WHO.includes(raw[k])) out.push(`chat.${k} is anyone, signed-in or members`);
-  if (raw.lines !== undefined && raw.lines !== null) {
+  // Where chat sits on the screen is the page's (game.json "screen": { "chat" }), never the room's rules.
+  for (const k of ['corner', 'place', 'at']) if (raw[k] !== undefined && (k !== 'at' || typeof raw.at === 'string')) out.push(`chat.${k}: where chat sits on the screen goes in "screen": { "chat": { "at": … } }`);
+  if (raw.lines === 'strip' || raw.lines === 'sheet-only') out.push(`chat.lines is the quick lines ({ "id": "text" }); "${raw.lines}" goes in "screen": { "chat": { "lines": "${raw.lines}" } }`);
+  else if (raw.lines !== undefined && raw.lines !== null) {
     const pairs = Array.isArray(raw.lines) ? raw.lines.map((x) => [x?.id, x?.text]) : typeof raw.lines === 'object' ? Object.entries(raw.lines) : null;
     if (!pairs) out.push('chat.lines is { "id": "text" }');
     else {
