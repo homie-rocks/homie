@@ -59,6 +59,19 @@ test('the .codex-plugin manifest agrees with plugin.json, and its paths and icon
   assert.equal(json(join(PLUGIN, codex.mcpServers)).mcpServers.homie.url, MCP_URL);
 });
 
+test('the Grok plugin manifest names the same plugin, its skills and the Homie MCP server', () => {
+  const grok = json(join(PLUGIN, '.grok-plugin', 'plugin.json'));
+  const claude = json(join(PLUGIN, '.claude-plugin', 'plugin.json'));
+  assert.equal(grok.name, 'homie');
+  assert.equal(grok.version, claude.version);
+  assert.equal(grok.license, 'Apache-2.0');
+  assert.equal(grok.skills, './skills/');
+  assert.ok(existsSync(join(PLUGIN, grok.skills)), 'skills folder');
+  assert.equal(json(join(PLUGIN, grok.mcpServers)).mcpServers.homie.url, MCP_URL);
+  assert.match(grok.description, /Grok/);
+  assert.equal(grok.hooks, undefined, 'Grok does not run the Codex hooks; the studio-setup skill asks instead');
+});
+
 test('both MCP configurations point at the Homie MCP server', () => {
   const claude = json(join(PLUGIN, '.mcp.json'));
   const codex = json(join(PLUGIN, 'mcp.json'));
