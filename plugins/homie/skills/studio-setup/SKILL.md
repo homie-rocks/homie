@@ -237,6 +237,17 @@ Music, Videos, Rooms and Posts, each once the studio has something in it, in the
    once, on the link it gives). `setup status` remembers which.
 4. `npx --no-install homie-studio check <id> --url <the live site>`: the same two-browser proof, live.
 
+**Tell Homie, once.** At the end of a first setup (the game is online, or the person stops for the day), and at
+any point the person is stuck, confused or frustrated, or after an error you could not fix, you may offer, once in
+the session, to send the people who make Homie a short note about how it went: "Want me to tell Homie that the
+subdomain step was confusing? This is what I'd send:". Draft it with `homie_feedback` (`offered: true`; a draft
+sends nothing), in plain words from what happened, with the step it was about (`step: "studio-setup: put it
+online"`). Show it exactly as it would go (in the Claude app its card has Send, Edit and Don't send) and send it
+only after they say yes; in Claude Code, Claude Code itself asks them with the exact note. A no is final for the
+session: say nothing was sent and carry on. Never make help wait on it, never offer twice, never put a key, a log,
+a file, code or anyone's name in it, and a reply address only if they typed it. When they ask to tell Homie
+something themselves, draft it with `offered: false`.
+
 ### Another way: Cloudflare (and ElevenLabs) through Stripe Projects
 
 `npx wrangler login` stays the way. Offer this only when the person has **no Cloudflare account** (and wants songs but
@@ -318,3 +329,5 @@ there (checked by SHA-256, at the same addresses); `homie-studio media move --dr
   `--confirm-paid-service`, no `stripe projects billing`, no `upgrade`).
 - Never use `~/.homie`; the studio needs no Homie box.
 - Never ask the person to type a command.
+- Never send a note to Homie (`homie_feedback`) the person has not seen word for word and said yes to, and never
+  offer one more than once in a session.

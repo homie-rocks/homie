@@ -127,7 +127,7 @@ export function parseDeploy(text) {
 /** Which reader a result goes to, from what the tool call was (when the mod saw it) or from the text alone. */
 export function readResult({ tool, call, output }) {
   const s = structuredOf(output);
-  if (s && ['setup', 'build', 'studio'].includes(s.kind)) return { kind: `card:${s.kind}`, data: s };
+  if (s && ['setup', 'build', 'studio', 'feedback'].includes(s.kind)) return { kind: `card:${s.kind}`, data: s };
   const text = textOf(output);
   if (!text) return null;
   const sub = call?.sub ?? null;

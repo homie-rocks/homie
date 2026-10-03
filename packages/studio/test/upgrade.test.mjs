@@ -82,6 +82,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'add-section AGENTS.md ## Running live games (the back office)',
     'add-section AGENTS.md ## Selling things (the shop)',
     'add-section AGENTS.md ## Servers and AI seats',
+    'add-section AGENTS.md ## Telling Homie',
     'add-section AGENTS.md ## The Game Codex and progress',
     'pin package.json',
     'scripts package.json',

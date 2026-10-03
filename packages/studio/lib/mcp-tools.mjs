@@ -37,6 +37,7 @@ import { detectLocalAi } from './local-ai.mjs';
 import { LAB_PORT, runningLab } from './lab.mjs';
 import { pictureFor } from './pictures.mjs';
 import { ART_UI, artToolDefs } from './art-tools.mjs';
+import { FEEDBACK_APPS, FEEDBACK_KINDS, FEEDBACK_LIMITS, appOf, cleanNote, draftId, noteBlock, sendNote, withLine } from './feedback.mjs';
 
 export const UI = Object.freeze({
   setup: 'ui://homie-studio/setup',
@@ -44,6 +45,7 @@ export const UI = Object.freeze({
   studio: 'ui://homie-studio/studio',
   codex: 'ui://homie-studio/codex',
   lab: 'ui://homie-studio/lab',
+  feedback: 'ui://homie-studio/feedback',
   ...ART_UI,
 });
 
@@ -72,6 +74,10 @@ export class StudioContext {
     this.notes = new Map();
     this.runs = new Map();
     this.status = null;
+    // Tell Homie: this session's drafts (what the person was shown), and whether an offered note was answered.
+    this.feedback = { drafts: new Map(), sent: 0, offeredDone: false, declined: false };
+    // The MCP client (initialize's clientInfo), which a note names as an app and nothing more.
+    this.client = null;
   }
 
   note(root) { if (!this.notes.has(root)) this.notes.set(root, {}); return this.notes.get(root); }
@@ -578,6 +584,93 @@ async function githubLogin(ctx) {
   if (!code) return fail(`GitHub's sign-in did not start: ${jobView(job, { lines: 3 }).tail.join(' ') || 'no answer from the GitHub CLI'}`);
   ctx.status = null;
   return ok(`GitHub's sign-in is waiting for the person: open https://github.com/login/device and enter the code ${code} (job ${job.id}; studio_job says when it is done). The code is GitHub's one-time device code, not a password.`, { kind: 'job', ...jobView(job), deviceCode: code });
+}
+
+/* ------------------------------------------------------------------ Tell Homie (lib/feedback.mjs) */
+
+/** The plugin's version, from the skills folder this server was given (the plugin's own manifest beside it). */
+function pluginVersion(ctx) {
+  if (!ctx.skillsDir) return null;
+  for (const f of [join(ctx.skillsDir, '..', '.claude-plugin', 'plugin.json'), join(ctx.skillsDir, '..', 'plugin.json')]) {
+    try { const v = JSON.parse(readFileSync(f, 'utf8')).version; if (typeof v === 'string') return v; } catch { /* not here */ }
+  }
+  return null;
+}
+
+/** What this server knows that a note carries: the toolkit's version (the studio's own pin, in a studio), the plugin's, the app, and where notes go. */
+function feedbackFacts(ctx, studioArg) {
+  let root = null;
+  try { root = ctx.root(studioArg, { need: false }); } catch { root = null; }
+  let studio = null;
+  try { studio = root ? readStudio(root) : null; } catch { studio = null; }
+  const pinned = (() => {
+    try { const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')); return pinnedVersion(pkg?.devDependencies?.['@homie-rocks/studio'] ?? pkg?.dependencies?.['@homie-rocks/studio']); } catch { return null; }
+  })();
+  const fromStudio = String(studio?.homie?.directory ?? '');
+  const okDirectory = (d) => { try { const u = new URL(d); return u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(u.hostname)); } catch { return false; } };
+  const directory = [ctx.directory, fromStudio, 'https://homie.rocks'].find((d) => d && okDirectory(d));
+  return { studioVersion: pinned ?? STUDIO_VERSION, pluginVersion: pluginVersion(ctx), app: appOf(ctx.client), directory: directory.replace(/\/+$/, '') };
+}
+
+const hostOfUrl = (u) => { try { return new URL(u).host; } catch { return 'homie.rocks'; } };
+
+/**
+ * homie_feedback: draft (shows the note exactly as it would go, sends nothing), send (only the note a draft showed,
+ * after the person's yes), decline (the person said no: nothing is sent, and no note is offered again this session).
+ *
+ * A send is tied to its draft by the draft's id alone (a hash of the whole note), never by this process's memory: an
+ * app may start a new server between the draft and the yes (a resumed session, a restart), and the remote Homie MCP
+ * keeps no session at all. What this process remembers is only a convenience (a send that names just its draft) and
+ * the once-a-session rule.
+ */
+async function feedbackTool(ctx, a) {
+  const action = ['draft', 'send', 'decline'].includes(a.action) ? a.action : 'draft';
+  const session = ctx.feedback;
+  const facts = feedbackFacts(ctx, a.studio);
+  const to = hostOfUrl(facts.directory);
+  const view = (state, extra = {}) => ({ kind: 'feedback', state, to, ...extra });
+  if (action === 'decline') {
+    const kept = a.draft ? session.drafts.get(String(a.draft)) : null;
+    session.declined = true;
+    if (kept?.note.offered || !kept) session.offeredDone = true;
+    if (kept) session.drafts.delete(String(a.draft));
+    return ok('Not sent: nothing left this computer. Tell the person so in a few words, and do not offer to send a note again in this session.',
+      view('declined', { draft: a.draft ?? null, note: kept?.note ?? null, taken: kept?.taken ?? [], with: kept ? withLine(kept.note) : null, next: 'Not sent. Say so in a few words, and do not offer to send a note again in this session.' }));
+  }
+  // A send with only its draft id sends that draft; with fields, they must be the draft's own.
+  const known = a.draft ? session.drafts.get(String(a.draft)) : null;
+  const input = action === 'send' && known && (a.text === undefined || a.text === null || a.text === '')
+    ? known.note
+    : { kind: a.kind, text: a.text, step: a.step, email: a.email, offered: a.offered === true, studioVersion: facts.studioVersion, pluginVersion: facts.pluginVersion, app: facts.app };
+  const c = cleanNote(input);
+  if (!c.ok) return fail(`Not sent: ${c.why}.`, view('invalid', { why: c.why }));
+  const id = await draftId(c.note);
+  const shown = { draft: id, note: c.note, taken: c.taken, with: withLine(c.note) };
+  if (action === 'draft') {
+    if (c.note.offered && (session.declined || session.offeredDone)) {
+      return fail(`Not drafted: ${session.declined ? 'the person said no to a note earlier in this session' : 'a note was already offered in this session'}, and Homie offers at most once a session. Do not offer again. If the person asks, in their own words, to tell Homie something, draft it with offered: false.`, view('invalid', { why: 'offered once already this session' }));
+    }
+    session.drafts.set(id, { note: c.note, taken: c.taken, at: Date.now() });
+    const next = `Nothing has been sent. Show the person this note exactly as it is and ask whether to send it. Only after they say yes in their own words: homie_feedback { "action": "send", "draft": "${id}" } with the same kind and text. If they want it worded differently, draft it again in their words. If they say no: homie_feedback { "action": "decline", "draft": "${id}" }, say nothing was sent, and do not offer again in this session.`;
+    return ok([
+      'Nothing has been sent. Show the person this note exactly as it is (where a card shows, it has Send, Edit and Don\'t send), and ask whether to send it to Homie:',
+      '',
+      noteBlock(c.note, c.taken),
+      '',
+      `Send it only after they say yes in their own words: homie_feedback { "action": "send", "draft": "${id}" } with the same kind and text. If they want it worded differently, draft it again in their words and show the new note. If they say no: homie_feedback { "action": "decline", "draft": "${id}" }, tell them nothing was sent, and do not offer again in this session. It goes privately to the people who make Homie (${to}).`,
+    ].join('\n'), view('draft', { ...shown, next }));
+  }
+  // send
+  if (!a.draft) return fail(`Not sent: a send names the draft the person saw (homie_feedback { "action": "draft", … } first, show it, and send its "draft" id after their yes).`, view('invalid', { why: 'no draft' }));
+  if (String(a.draft) !== id) return fail('Not sent: this is not the note the person was shown (its words or details changed since the draft). Draft it again, show them the new note, and send that one after their yes.', view('changed', { ...shown, why: 'changed since the draft' }));
+  if (session.sent >= FEEDBACK_LIMITS.perSession) return fail(`Not sent: ${FEEDBACK_LIMITS.perSession} notes is the most one session sends.`, view('invalid', { ...shown, why: 'too many this session' }));
+  const r = await sendNote(c.note, { directory: facts.directory, source: 'plugin', consent: ['card', 'dialog'].includes(a.by) ? a.by : 'chat' });
+  if (!r.ok) return fail(`Not sent: ${r.why}`, view('failed', { ...shown, why: r.why }));
+  session.sent += 1;
+  session.drafts.delete(id);
+  if (c.note.offered) session.offeredDone = true;
+  return ok(`Sent to Homie${r.repeat ? ' (it had this exact note already)' : ''}: reference ${r.reference.slice(0, 8)}. Thank the person in one line. The note is private: only the people who make Homie read it. Do not offer another note in this session.`,
+    view('sent', { ...shown, reference: r.reference, next: 'Sent. Thank the person in one line, and do not offer another note in this session.' }));
 }
 
 /* ------------------------------------------------------------------ guides (the plugin's skills) */
@@ -1121,6 +1214,29 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'homie_feedback', title: 'Tell Homie',
+      description: 'A short private note to the people who make Homie, and ONLY with the person\'s yes. action "draft" (the default) sends nothing: it shows the note exactly as it would go (a card with Send, Edit and Don\'t send; the words, the step, the studio and plugin versions and the app, after keys, paths, emails and code are taken out), and you show the same text in the chat and ask. action "send" sends that draft (its "draft" id, with the same kind and text) only after the person said yes in their own words; "decline" records their no. OFFER it (offered: true) at most once a session, at a natural moment: after an error you could not fix, when the person sounds confused or frustrated, or at the end of their first studio setup or first publish. Never nag; a no is final for the session. When the person asks to tell Homie something, draft it with offered: false. Write it in plain words from what happened (what they tried, what they expected, what they saw), never a log, a file, code, a key or someone\'s name; a reply address only if they typed it themselves.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: str('draft (show it; sends nothing), send (after the person\'s yes) or decline (their no)', { enum: ['draft', 'send', 'decline'] }),
+          kind: str('What it is', { enum: [...FEEDBACK_KINDS] }),
+          text: str(`What happened, in plain words, at most ${FEEDBACK_LIMITS.text.toLocaleString('en-US')} characters: your draft, or the person\'s own words`),
+          step: str('Optional: the step or skill it is about, e.g. "studio-setup: put it online" or "publish"'),
+          email: str('Optional: a reply address, only if the person typed it themselves'),
+          offered: { type: 'boolean', description: 'true when you offered it; false when the person asked to tell Homie' },
+          draft: str('With send or decline: the draft id the draft returned (fd_…)'),
+          by: str('How the person said yes: chat (in their own words), card (the card\'s Send) or dialog (Send in Claude Code\'s own question, which the Homie mod asks)', { enum: ['chat', 'card', 'dialog'] }),
+          studioVersion: str('Filled in here from the studio (the remote Homie MCP takes it from you)'),
+          pluginVersion: str('Filled in here from the plugin (the remote Homie MCP takes it from you)'),
+          app: str('Filled in here from this app (the remote Homie MCP takes it from you)', { enum: [...FEEDBACK_APPS] }),
+          ...STUDIO_ARG,
+        },
+      },
+      annotations: { title: 'Tell Homie', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }, _meta: ui(UI.feedback),
+      run: async (a) => feedbackTool(ctx, a),
+    },
+    {
       name: 'file_list', title: 'List studio files',
       description: 'The files and folders in the studio (or one folder of it), two levels deep. Paths are relative to the studio.',
       inputSchema: { type: 'object', properties: { path: str('A folder in the studio (default: its root)'), depth: { type: 'number', description: '1 to 4 (default 2)' }, ...STUDIO_ARG } },
@@ -1238,4 +1354,4 @@ export function slimCodex(html, { max = 140_000, pictures = true } = {}) {
   return h.length <= max ? h : null;
 }
 
-export const _test = { checklist, feedFor, slimCodex, expandHome };
+export const _test = { checklist, feedFor, slimCodex, expandHome, feedbackFacts };
