@@ -354,6 +354,9 @@ test('robots.txt, sitemap.xml, llms.txt and llms-full.txt: every public page, re
   const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
   const withdrawn = llmsTxt({ ...cat, games: cat.games.filter((g) => !g.launch) }, ORIGIN, { remixable: () => false });
   assert.doesNotMatch(withdrawn, /## Remix|source\.json|Open to remix/);
+  // A studio says what it has, never what it might: a music studio makes no game, and a new one says its first is coming.
+  assert.match(llmsTxt({ ...cat, games: [], posts: [] }, ORIGIN).split('\n')[2], /\. It publishes songs and videos\. Its site is/);
+  assert.match(llmsTxt({ studio: { name: 'Fresh' }, games: [], songs: [], videos: [], posts: [] }, ORIGIN), /^> Fresh is a studio made with Homie\. Its first game is coming soon\. Its site is https:\/\/owls\.example\/\.$/m);
 });
 
 test('a studio\'s own robots.txt, sitemap.xml and llms.txt win; a Preview asks not to be crawled', async () => {
@@ -383,6 +386,7 @@ test('the check itself: it catches what a search engine would refuse', () => {
   assert.match(bad({ '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 2, name: 'a' }, { '@type': 'ListItem', position: 3, name: 'b' }] }).google.join(), /position is 1[\s\S]*has an item/);
   assert.match(bad({ '@type': 'Gizmo', name: 'x' }).errors.join(), /"Gizmo" is not a schema.org type/);
   assert.match(bad({ '@type': 'BlogPosting', headline: 'x', datePublished: 'yesterday', author: { '@type': 'Person' } }).errors.join(), /not an ISO 8601 date/);
+  assert.match(bad({ '@type': 'TechArticle', headline: 'x' }).google.join(), /an article has datePublished[\s\S]*author has a name/, 'every kind of article');
   assert.match(checkHtml('<script type="application/ld+json">{nope}</script>').errors.join(), /not valid JSON/);
   assert.match(checkJsonLd({ '@type': 'Thing', name: 'x' }).errors.join(), /@context/);
   assert.equal(isoDuration(3725), 'PT1H2M5S');

@@ -120,9 +120,12 @@ function summaryOf(cat, origin) {
   const name = studioName(cat);
   const tag = one(cat.studio?.tagline, 140);
   const games = (cat.games ?? []).length;
+  // What it has, never what it might: a studio with no game says only what it publishes (a music studio makes no game).
+  const has = [(cat.songs ?? []).length ? 'songs' : null, (cat.videos ?? []).length ? 'videos' : null, (cat.posts ?? []).length ? 'posts' : null].filter(Boolean);
+  const kinds = has.length > 1 ? `${has.slice(0, -1).join(', ')} and ${has.at(-1)}` : has[0];
   const what = games
     ? 'It makes free multiplayer games that play in a web browser on a phone, a computer or a TV; press Play and you are in a live public room with whoever is playing, and bots hold the empty seats.'
-    : 'It publishes songs, videos and posts; its first game is on the way.';
+    : has.length ? `It publishes ${kinds}.` : 'Its first game is coming soon.';
   return [
     `# ${one(name, 120)}`,
     '',

@@ -11,8 +11,8 @@
  *            Software App: name and offers.price, co-typed with another app type), VideoObject (name, thumbnailUrl,
  *            uploadDate), BreadcrumbList (each ListItem's position and name, and its item except the last's),
  *            ItemList (each ListItem's position and url), and the fields Homie holds itself to where Google requires
- *            none (BlogPosting: headline, datePublished, author.name; Organization: name, url; MusicRecording: name,
- *            url, byArtist).
+ *            none (BlogPosting and every other Article: headline, datePublished, author.name; Organization: name, url;
+ *            MusicRecording: name, url, byArtist).
  *   notes    what is true and not a fault: a Software App is shown as a rich result only with ratings or reviews,
  *            which Homie never invents.
  *
@@ -181,12 +181,12 @@ export function checkJsonLd(value) {
         if (!li?.url && !li?.item) google.push(`${at}.itemListElement[${i}]: a list item has a url`);
       });
     }
-    if (top && known.some((t) => isA(t, 'BlogPosting', v) || t === 'Article' || t === 'NewsArticle')) {
-      if (!has('headline')) google.push(`${at}: a BlogPosting has a headline`);
+    if (top && known.some((t) => isA(t, 'Article', v))) {
+      if (!has('headline')) google.push(`${at}: an article has a headline`);
       if (has('headline') && String(node.headline).length > 110) google.push(`${at}: a headline is at most 110 characters`);
-      if (!has('datePublished')) google.push(`${at}: a BlogPosting has datePublished`);
+      if (!has('datePublished')) google.push(`${at}: an article has datePublished`);
       const authors = Array.isArray(node.author) ? node.author : node.author ? [node.author] : [];
-      if (!authors.length || authors.some((a) => !a?.name)) google.push(`${at}: a BlogPosting's author has a name`);
+      if (!authors.length || authors.some((a) => !a?.name)) google.push(`${at}: an article's author has a name`);
     }
     if (top && known.some((t) => t === 'Organization' || isA(t, 'Organization', v)) && !known.some((t) => isA(t, 'CreativeWork', v))) {
       if (!has('name')) google.push(`${at}: an Organization has a name`);
