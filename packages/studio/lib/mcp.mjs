@@ -52,8 +52,8 @@ A game's look is a set of decisions (render style, palette, light, camera, fonts
 
 Long work (npm install, check, playtest, deploy, renders) runs in the background: the tool answers at once with a card that follows it, and build_progress or studio_job reads where it is. studio_guide has Homie's full guide for each job (game, plan, port, playtest, publish, music, sound, art, video). Never put a key or password in a file or the chat. If Homie's homie.rocks connector is connected too, its tools of the same names say what to run; these run it.`;
 
-const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js', [UI.lab]: 'lab.js', [UI.style]: 'style.js', [UI.decision]: 'decision.js', [UI.cast]: 'cast.js', [UI.lineup]: 'lineup.js', [UI.rights]: 'rights.js' };
-const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex', [UI.lab]: 'Game Lab', [UI.style]: 'Style board', [UI.decision]: 'Look decision', [UI.cast]: 'Cast', [UI.lineup]: 'Lineup', [UI.rights]: 'Rights' };
+const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js', [UI.lab]: 'lab.js', [UI.style]: 'style.js', [UI.decision]: 'decision.js', [UI.cast]: 'cast.js', [UI.lineup]: 'lineup.js', [UI.rights]: 'rights.js', [UI.animation]: 'animation.js' };
+const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex', [UI.lab]: 'Game Lab', [UI.style]: 'Style board', [UI.decision]: 'Look decision', [UI.cast]: 'Cast', [UI.lineup]: 'Lineup', [UI.rights]: 'Rights', [UI.animation]: 'Clips' };
 const UI_DIR = join(PACKAGE_ROOT, 'mcp', 'ui');
 
 /** One card's whole document: the shared look and bridge, and the card's own script, as the files are. */

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Hero Rush 3D</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #cfe8f5; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* The HUD is drawn over the world and never takes a touch: every touch reaches the world's canvas. */
+  #hud { pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="hud"></canvas>
+<script type="module" crossorigin src="./assets/main.js"></script>
+</body>
+</html>

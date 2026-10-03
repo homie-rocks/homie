@@ -14,6 +14,13 @@
  *          references when there are any), plain background, even light. Then STOP: look at it.
  *        step 2 (`prop … --mesh --yes`): Tripo P1 image-to-3D from that concept (textured, face_limit from the tier),
  *          then `homie-studio assets add` makes it phone-sized for free and records it with every step and receipt.
+ *   character <game> <asset> --card "Players/Ranger" --what "<who, in plain words>" [--height <m>] [--like <library item>]
+ *                                          [--faces 7000] [--dry-run | --yes]
+ *        step 1: ONE full-body concept in an A-pose, front view, in the locked style (the golden images, or --like: a
+ *          library character's thumbnail as the style reference). Then STOP: look at it.
+ *        step 2 (`character … --mesh --yes`): Meshy 7.1 image-to-3D with a humanoid auto-rig (textured, about US$1.40),
+ *          then `homie-studio assets add --rigged` makes it phone-sized for free, maps its skeleton to the standard and
+ *          retargets the library's clips onto it (KayKit's CC0 humanoid set by default; --clips-from another).
  *   mood <game> <a|b|c|all> [--yes]        a painted mood image per style-board direction (a target, never shipped)
  *   receipts <game>                        what this game's models cost so far, from art/receipts.jsonl
  *
@@ -101,11 +108,11 @@ function fixExt(file) {
  * One paid call: priced (live), checked against the cap, asked for without --yes, receipted on acceptance, resumed on
  * a rerun. Returns { ok, file, usd } or { ok: false, needs: 'approval', price } or { already }.
  */
-async function paid(root, game, { model, input, out, base, credits = null, what, asset }) {
+async function paid(root, game, { model, input, out, base, credits = null, addons = null, what, asset }) {
   // Done before (the file and its answer are both there): never paid twice.
   const done = [...new Set(['.png', '.jpg', '.webp', '.glb'].map((e) => out.replace(/\.[a-z0-9]+$/i, e)))].find((f) => existsSync(f) && existsSync(`${f}.json`));
   if (done) return { ok: true, already: true, file: done, usd: readJson(`${done}.json`, {})?.price?.usd ?? 0 };
-  const p = await priceOf(model, input, { credits });
+  const p = await priceOf(model, input, { credits, addons });
   if (flags.has('dry-run')) return { ok: true, dryRun: true, price: p };
   const dir = budgetDir(root, game);
   const resuming = existsSync(`${out}.request`);
@@ -218,6 +225,88 @@ async function prop(root) {
   return { ok: true, command: 'prop', step: 'mesh', game, asset, model: added.file, before: added.before, after: added.after, usd: r.usd, spent: readBudget(budgetDir(root, game))?.spent ?? null, receipts: steps.map((s) => s.receipt), next: `homie-studio assets lineup ${game} (true scale, silhouettes, palette drift); look at it` };
 }
 
+/** A character's concept words: who, the derived style prompt without its prop framing, then an A-pose, front view. */
+function characterConcept(root, game, what, like) {
+  const reg = registry();
+  const style = studio(root, ['style', 'prompt', game]);
+  const golden = (style.golden ?? []).map((g) => join('games', game, g.path)).filter((p) => existsSync(join(root, p))).slice(0, 4);
+  const refs = [...golden, ...(like ? [like] : [])].slice(0, 4);
+  const look = String(style.prompt.text).replace(/,?\s*3\/4 view, centred, whole object in frame[^]*$/, '');
+  const prompt = `${String(what).trim().replace(/\.$/, '')}. One game character, full body from head to feet, standing in an A-pose (arms straight and angled down about 45 degrees away from the body, hands open, legs slightly apart), front view facing the camera, centred. ${look}, lit evenly and neutrally for modelling, plain light grey background, no ground shadow, no text, no logo.`;
+  if (refs.length) {
+    const c = reg.concept.withRefs;
+    return { model: c.endpoint, input: { ...c.input, image_size: { width: 1536, height: 2560 }, prompt: `${prompt} Match the style of the reference images exactly (shapes, proportions, colours, how it is shaded); do not copy their content.`, [c.refs]: refs.map((g) => `@file:${g}`) }, refs, rev: style.prompt.rev };
+  }
+  const c = reg.concept.noRefs;
+  return { model: c.endpoint, input: { ...c.input, image_size: { width: 1536, height: 2560 }, prompt }, refs: [], rev: style.prompt.rev };
+}
+
+/** A library item's thumbnail into the job's folder, as a style reference (CC0, the library's own render). */
+async function likeRef(root, dir, item) {
+  if (!item) return null;
+  // The studio's own toolkit and its sharp (both installed in the studio), never this plugin's.
+  const { createRequire } = await import('node:module');
+  const { pathToFileURL } = await import('node:url');
+  const need = createRequire(join(root, 'package.json'));
+  const { libraryBase, loadIndex, itemThumb } = await import(pathToFileURL(join(root, 'node_modules', '@homie-rocks', 'studio', 'lib', 'library.mjs')).href);
+  const { index, lib } = await loadIndex({ lib: libraryBase() });
+  const it = index.items.find((x) => x.id === item);
+  if (!it) throw new Error(`no library item "${item}" (homie-studio assets find "<words>" --kind character)`);
+  const bytes = await itemThumb(lib, it);
+  if (!bytes) throw new Error(`${item} has no thumbnail`);
+  const sharp = (await import(pathToFileURL(need.resolve('sharp')).href)).default;
+  const file = join(dir, 'like.png');
+  await sharp(Buffer.from(bytes)).resize(768, 768, { fit: 'contain', background: '#d9d9d9' }).flatten({ background: '#d9d9d9' }).png().toFile(file);
+  return rel(root, file);
+}
+
+async function character(root) {
+  const [, game, asset] = pos;
+  gameDir(root, game);
+  if (!SLUG.test(String(asset ?? ''))) throw new Error('name the asset: models.mjs character <game> <asset id> --card "Players/<Name>" --what "<who>"');
+  const reg = registry();
+  const dir = join(root, 'art', asset);
+  mkdirSync(join(dir, 'raw'), { recursive: true });
+  const conceptFile = ['concept.png', 'concept.jpg', 'concept.webp'].map((f) => join(dir, f)).find((f) => existsSync(f) && existsSync(`${f}.json`));
+  const card = String(flags.get('card') ?? `Players/${asset}`);
+  const height = flags.has('height') ? Number(flags.get('height')) : null;
+  const m = reg.character.mesh;
+  const meshInput = (concept) => ({ ...m.input, image_url: concept, [m.polycount]: Number(flags.get('faces') ?? m.input.target_polycount), ...(height ? { [m.height]: height } : {}) });
+  if (!conceptFile || flags.has('concept-again')) {
+    const what = flags.get('what');
+    if (!what) throw new Error('--what "<who, in plain words: build, clothes, colours, what they carry>" (the style comes from the game\'s locked decisions)');
+    const like = flags.has('dry-run') ? (flags.get('like') ? 'like.png' : null) : await likeRef(root, dir, flags.get('like') ?? null);
+    const c = characterConcept(root, game, what, like);
+    if (flags.has('concept-again') && conceptFile) {
+      const was = `concept-was-${Date.now()}`;
+      for (const f of [conceptFile, `${conceptFile}.json`, `${conceptFile}.request`]) if (existsSync(f)) renameSync(f, f.replace(/concept(?=\.[a-z]+)/, was));
+    }
+    const meshPrice = await priceOf(m.endpoint, meshInput('x'), { addons: m.addons }).catch(() => null);
+    const r = await paid(root, game, { model: c.model, input: c.input, out: join(dir, 'concept.png'), base: root, what: `the character concept for ${asset}`, asset });
+    if (!r.ok || r.dryRun) return { ...r, command: 'character', step: 'concept', game, asset, then: meshPrice ? { what: 'the rigged, textured model (Meshy 7.1)', usd: meshPrice.usd, basis: meshPrice.basis } : null, total: r.price && meshPrice ? +(r.price.usd + meshPrice.usd).toFixed(3) : null };
+    const file = fixExt(r.file);
+    writeJson(join(dir, 'concept.meta.json'), { what: String(what), card, height, model: c.model, refs: c.refs, promptRev: c.rev, prompt: c.input.prompt, like: flags.get('like') ?? null });
+    return { ok: true, command: 'character', step: 'concept', game, asset, concept: rel(root, file), usd: r.usd, spent: readBudget(budgetDir(root, game))?.spent ?? null, next: `look at ${rel(root, file)} first (one character, whole, in an A-pose, in the game's style, on a plain background?). Then: models.mjs character ${game} ${asset} --mesh --yes (about US$${meshPrice?.usd ?? '1.40'}); or change --what and --concept-again (never a loop)` };
+  }
+  if (!flags.has('mesh')) return { ok: true, command: 'character', step: 'look', game, asset, concept: rel(root, conceptFile), next: `the concept exists: look at it, then models.mjs character ${game} ${asset} --mesh --yes` };
+  const meta = readJson(join(dir, 'concept.meta.json'), {});
+  const input = meshInput(`@file:${rel(root, conceptFile)}`);
+  if (meta.height && !height) input[m.height] = meta.height;
+  const meshOut = join(dir, 'raw', 'rigged.glb');
+  const r = await paid(root, game, { model: m.endpoint, input, out: meshOut, base: root, credits: null, addons: m.addons, what: `the rigged 3D character for ${asset}`, asset });
+  if (!r.ok || r.dryRun) return { ...r, command: 'character', step: 'mesh', game, asset };
+  const concept = readJson(`${conceptFile}.json`, {});
+  const mesh = readJson(`${r.file}.json`, {});
+  const steps = [
+    { what: 'concept', provider: 'fal', endpoint: concept.model ?? meta.model, usd: concept.price?.usd ?? null, receipt: rel(root, `${conceptFile}.json`), refs: meta.refs ?? [], promptRev: meta.promptRev ?? null, requestId: concept.requestId ?? null, at: concept.at ?? null },
+    { what: 'mesh and rig', provider: 'fal', endpoint: m.endpoint, input: { [m.polycount]: input[m.polycount], pose_mode: input.pose_mode, enable_rigging: true, should_texture: true }, usd: mesh.price?.usd ?? r.usd, receipt: rel(root, `${r.file}.json`), requestId: mesh.requestId ?? r.requestId ?? null, at: mesh.at ?? null },
+  ];
+  const stepsFile = join(dir, 'steps.json');
+  writeJson(stepsFile, steps);
+  const added = studio(root, ['assets', 'add', game, '--file', rel(root, r.file), '--route', 'generated', '--license', 'generated', '--as', asset, '--kind', 'character', '--rigged', '--card', meta.card ?? card, '--steps', rel(root, stepsFile), '--concept', rel(root, conceptFile), '--slug', asset, ...(flags.get('clips-from') ? ['--clips-from', String(flags.get('clips-from'))] : []), ...((meta.height ?? height) ? ['--height', String(meta.height ?? height)] : [])]);
+  return { ok: true, command: 'character', step: 'mesh', game, asset, model: added.model ?? added.file, anims: added.anims ?? null, skeleton: added.skeleton ?? null, verbs: added.verbs ?? [], before: added.before, after: added.after, usd: r.usd, spent: readBudget(budgetDir(root, game))?.spent ?? null, receipts: steps.map((s) => s.receipt), next: `homie-studio anim preview ${game} --asset ${asset} (its clips, looping) and homie-studio assets lineup ${game}; look at both` };
+}
+
 async function quote(root) {
   const game = pos[1];
   gameDir(root, game);
@@ -268,6 +357,7 @@ async function main() {
   if (cmd === 'budget') return budget(root);
   if (cmd === 'quote') return quote(root);
   if (cmd === 'prop') return prop(root);
+  if (cmd === 'character') return character(root);
   if (cmd === 'mood') return mood(root);
   if (cmd === 'receipts') return receiptsOf(root);
   return { ok: false, command: cmd, why: `unknown command "${cmd}" (models.mjs help)` };

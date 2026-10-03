@@ -601,7 +601,7 @@ npx homie-studio assets remove crown-thief lantern       # the record and the co
 
 A game's look is a set of decisions (`games/<id>/codex/decisions.json`, private like the codex, drawn in its Art
 direction tab): render style, palette, shape, proportions, materials, light, camera, fonts and effects; the cast, its
-library family, scale and phone budgets; rigs and animation (later phases). Each starts as an automatic pick with a
+library family, scale and phone budgets; the skeleton standard and the clips each role needs. Each starts as an automatic pick with a
 why. A person's nudge makes it steered, their lock freezes it, and the first asset built on an automatic one pins it.
 Every asset records the revision of each decision it was made under, so changing one lists exactly what went stale and
 what remaking it would cost; nothing is remade by itself. `games/<id>/style.json` (public) is the palette, fonts, light
@@ -630,6 +630,52 @@ reads), decodes meshopt, clones skinned models properly, and says in development
 The local MCP's `style_explore`, `decision_set`, `assets_plan`, `assets_find`, `asset_add`, `asset_make`,
 `asset_check`, `asset_lineup` and `asset_rights` do the same with cards. Generated props (on the person's own fal
 account, under a budget, receipted) are the Homie plugin's `models` skill.
+
+## Characters, rigs and clips (`homie-studio cast`, `homie-studio anim`)
+
+```sh
+npx homie-studio assets find "knight" --kind character   # animated CC0 characters: KayKit, Kenney
+npx homie-studio assets add heroes kaykit-adventurers/knight --as knight --height 1.45 \
+  --keep "1H_Sword,Round_Shield,Knight_Helmet,Knight_Cape" --verbs idle,walk,run,jump,attack,hit,die
+npx homie-studio assets add heroes --file ./hero.glb --kind character --rigged --license own --as hero
+npx homie-studio cast heroes                               # proportions, palette, skeleton family, every character
+npx homie-studio anim plan heroes                          # each character's clips against the verbs the game needs
+npx homie-studio anim add heroes knight --verbs block,dodge # more, retargeted onto its skeleton (free)
+npx homie-studio anim preview heroes --asset knight        # looping previews and a sheet: .studio/art/<id>/anim/
+```
+
+A rigged character comes in as two files: `public/models/<asset>.glb` (its joints renamed to the skeleton standard:
+VRM 1.0 humanoid names, a mini family for one-piece limbs, a quadruped family; helper bones that move nothing removed;
+every part and every held thing it keeps merged into one skinned mesh, one draw call; phone-sized) and its skeleton's
+clip library `public/anims/<skeleton>.glb`, shared by every character with that skeleton. Clips are its own where it
+has them, else retargeted at build time from the starter library's CC0 humanoid clips (KayKit's): every bone turns in
+the world the way the source's turned from its rest, after the two rest poses are lined up bone by bone, so a T-pose
+clip plays on an A-pose rig; a one-piece limb aims where the source's whole limb points. It is plain matrix math in
+Node (no renderer), so it runs in CI and a cloud session too. `assets check` holds characters to four influences a
+vertex, the tier's bones, a clip library of 1 MB at 30 samples a second, every verb the game's `anim.clips` names,
+and the skinning a room costs on a phone (players times the heaviest character: 60,000 vertices and 1,200 bones a
+frame).
+
+In the game, `@homie-rocks/studio/animate`:
+
+```ts
+import { crowd, loadCharacter, ANIM_TUNING } from '@homie-rocks/studio/animate';
+const knight = await loadCharacter(models, './models/knight.glb', { tune: T });   // finds its clip library itself
+scene.add(knight.root);
+// each frame: knight.root.position.set(x, h, z); knight.face(yaw, dt); knight.move(speed); knight.air(onGround, vy); knight.update(dt);
+// events: knight.jump(); knight.act('attack', { from: 0.15 }); knight.hit(dx, dz); knight.die(); knight.hold('win');
+crowd(characters, camera);                                  // far and off-screen characters pose less often
+```
+
+Idle, walk and run blend by ground speed at the rate the feet need; an action while moving plays on the upper body;
+a hit is an additive flinch with a hit-stop; jump, fall and land squash and stretch on springs; it leans into turns,
+turns its head toward a point, swings tails and capes on springs and plants humanoid feet on slopes. Every number is
+an `ANIM_TUNING` entry for the game's tunables.json, so the Game Lab tunes it New beside Today.
+`game new <id> --from hero-rush-3d` is the arena with KayKit's animated heroes and skeletons: run, jump, swing, a
+cheer for the winner. The local MCP's `cast_plan`, `anim_plan` (looping previews; Feel opens the Game Lab on the
+move), `anim_add`, `anim_preview` and `character_make` do the same with cards. A generated, rigged character (a concept
+in the locked style, then Meshy's mesh and auto-rig on the person's own fal account, about US$1.44, priced and
+receipted) is the Homie plugin's `models` skill; rigs, clips and feel are its `animate` skill.
 
 ## Checks on a computer without a GPU
 

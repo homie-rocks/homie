@@ -17,6 +17,8 @@ const PRICES = {
   'fal-ai/bytedance/seedream/v5/lite/text-to-image': { unit_price: 0.035, unit: 'images' },
   'fal-ai/bytedance/seedream/v5/lite/edit': { unit_price: 0.035, unit: 'images' },
   'tripo3d/p1/image-to-3d': { unit_price: 0.01, unit: 'credits' },
+  // Meshy 7.1: the pricing API's figure is the base; the page's add-ons (textures, rigging) come from the registry.
+  'meshy/v7.1/image-to-3d': { unit_price: 0.8, unit: 'generations' },
 };
 
 function media(kind, audioFile = null) {
@@ -34,6 +36,11 @@ function media(kind, audioFile = null) {
 async function meshBytes() {
   const { placeholderGlb } = await import('../../../../packages/studio/lib/optimise.mjs');
   return Buffer.from(await placeholderGlb([1.2, 2.4, 1.2], { name: 'tripo-mesh' }));
+}
+/** A rigged character for a rigging answer: an A-pose humanoid under a centimetre armature, named as Meshy names it. */
+async function riggedBytes() {
+  const { humanoidGlb } = await import('../../../../packages/studio/test/rig-fixtures.mjs');
+  return Buffer.from(await humanoidGlb({ scheme: 'meshy', cm: true, apose: true, clips: false }));
 }
 
 export async function startFakeFal({ key = 'test-key' } = {}) {
@@ -67,6 +74,7 @@ export async function startFakeFal({ key = 'test-key' } = {}) {
         const j = jobs.get(id);
         if (!j) return json(404, {});
         if (what === 'status') { j.polls++; return json(200, { status: j.polls > 1 ? 'COMPLETED' : 'IN_PROGRESS' }); }
+        if (j.kind === 'mesh' && j.rigged) return json(200, { model_glb: { url: `${base}/media/${id}-plain` }, rigged_character_glb: { url: `${base}/media/${id}`, file_name: 'rigged.glb' }, basic_animations: { walking_glb: { url: `${base}/media/${id}` } }, rig_task_id: 'r-1' });
         if (j.kind === 'mesh') return json(200, { model_mesh: { url: `${base}/media/${id}`, content_type: 'model/gltf-binary', file_name: 'model.glb' }, model_urls: { glb: { url: `${base}/media/${id}` } }, task_id: 't-1' });
         return json(200, j.kind === 'image' ? { images: [{ url: `${base}/media/${id}` }], seed: 7 } : { video: { url: `${base}/media/${id}` }, seed: 9 });
       }
@@ -84,7 +92,8 @@ export async function startFakeFal({ key = 'test-key' } = {}) {
           const id2 = String(input.audio_urls[0]).split('/files/')[1];
           if (uploads.has(id2)) { audio = join(tmpdir(), `fake-fal-ref-${process.pid}.wav`); writeFileSync(audio, uploads.get(id2)); }
         }
-        jobs.set(id, { kind, polls: 0, bytes: kind === 'mesh' ? await meshBytes() : media(kind, audio) });
+        const rigged = kind === 'mesh' && input.enable_rigging === true;
+        jobs.set(id, { kind, rigged, polls: 0, bytes: rigged ? await riggedBytes() : kind === 'mesh' ? await meshBytes() : media(kind, audio) });
         return json(200, { request_id: id, status_url: `${base}/requests/${id}/status`, response_url: `${base}/requests/${id}` });
       }
       json(404, {});

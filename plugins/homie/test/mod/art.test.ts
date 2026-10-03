@@ -46,6 +46,13 @@ export const ART = {
   check: { ok: false, at: '2026-10-02T10:00:30.000Z', totals: { assets: 3, triangles: 2400, drawCalls: 120, textureMB: 2.7, firstPlayMB: null }, budgets: { drawCalls: 100, triangles: 150000, textureMB: 48, firstPlayMB: 5 }, failing: ['owl'] },
   lineup: { at: '2026-10-02T09:59:00.000Z', flagged: 1, images: { front: '.studio/art/owl-rush/lineup-front.jpg', quarter: '.studio/art/owl-rush/lineup-quarter.jpg', silhouettes: '/etc/passwd' } },
   board: { chosen: 'b', directions: [{ id: 'a', label: 'Toon / cel · Autumn grove', swatch: 'codex/board/a-swatch.jpg', mood: null }, { id: 'b', label: 'Flat low-poly · Meadow morning', swatch: 'codex/board/b-swatch.jpg', mood: null }] },
+  need: ['idle', 'run', 'jump', 'attack'],
+  characters: [
+    { id: 'owl', kind: 'character', route: 'library', family: 'humanoid', skeleton: 'humanoid-7a503a', bones: 23, verbs: ['idle', 'run', 'jump'], missing: ['attack'], retargeted: 0, animsKB: 83 },
+    { id: 'ranger', kind: 'character', route: 'generated', family: 'humanoid', skeleton: 'humanoid-5cc359', bones: 24, verbs: ['idle', 'run', 'jump', 'attack'], missing: [], retargeted: 4, animsKB: 91 },
+    { id: '../evil', kind: 'character', route: 'library', verbs: ['idle'], missing: [] },
+  ],
+  skinning: { players: 8, vertices: 73312, bones: 192, budget: { vertices: 60000, bones: 1200 } },
 }
 
 const ART_FILE = `${ROOT}/.studio/art/owl-rush/latest.json`
@@ -294,6 +301,20 @@ describe('the art commands', () => {
     expect(r.text).toContain('spent $0.54 of $2.00 on 2 paid steps')
     expect(r.text).toContain('120/100 draw calls (OVER)')
     expect(r.text).toContain('licences: 1 to fix before a public deploy (/rights owl-rush)')
+  })
+
+  test('/cast prints the characters with their skeletons and clips; /clips what each lacks', async ($, on) => {
+    artWorld(on)
+    await start($)
+    const cast = (await run($, 'cast')).text
+    expect(cast).toContain('Owl Rush (owl-rush): 2 characters; the game needs idle, run, jump, attack')
+    expect(cast).toContain('owl     character · library · humanoid skeleton · 23 bones · 3 clips  MISSING attack')
+    expect(cast).toContain('ranger  character · generated · humanoid skeleton · 24 bones · 4 clips (4 retargeted)')
+    expect(cast).toContain('skinning a room of 8: 73,312/60,000 vertices, 192/1,200 bones a frame on a phone (OVER')
+    expect(cast).not.toContain('evil')
+    const clips = (await run($, 'clips')).text
+    expect(clips).toContain('missing attack (homie-studio anim add owl-rush owl --verbs attack)')
+    expect(textOf(await (await $.ui.mount(pane('homie-studio', 'terminal'))).drawn())).toContain('Characters · 2')
   })
 
   test('/lineup prints the last lineup\'s flags and its pictures; it never renders one', async ($, on) => {

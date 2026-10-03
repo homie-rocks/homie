@@ -7,6 +7,7 @@
  *     const jpg = await r.swatch(tokens, models, { title })      // a data: URL
  *     const l = await r.lineup(models, tokens)                    // { front, quarter, silhouettes, rows }
  *     const t = await r.thumb({ id, glb })                        // { image, size }
+ *     const f = await r.frames({ id, glb, anims }, tokens, { verbs: ['idle', 'run'], count: 12 })   // a character's clips, frame by frame
  *   });
  *
  * Models go in as { id, glb: <base64>, label }. Nothing is fetched but Google Fonts (the swatch's title font).
@@ -72,6 +73,7 @@ export async function withRenderer(fn, { log = () => {} } = {}) {
       swatch: (tokens, models = [], opts = {}) => call('swatch', tokens, models, opts),
       lineup: (models, tokens, opts = {}) => call('lineup', models, tokens, opts),
       thumb: (model, opts = {}) => call('thumb', model, opts),
+      frames: (model, tokens, opts = {}) => call('frames', model, tokens, opts),
     });
   } finally {
     await browser.close().catch(() => {});

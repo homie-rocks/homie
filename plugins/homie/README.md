@@ -89,8 +89,10 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     download; red when over), the spend against the art budget, and licence problems with their
     fix. **Lock** on a decision is your word (`homie-studio style lock`); **Unlock** first asks,
     with what goes stale and what remaking it costs (`style blast`), and unlocks only on Proceed.
-    Read from `.studio/art/<game>/latest.json`, which the studio's toolkit writes after every
-    `style` and `assets` command; the tab rereads it while it is open.
+    Its Characters section lists each rigged character with its skeleton family, bones and clips (how many
+    retargeted onto it, which verbs it lacks) and a skinning bar: a full room's skinned vertices a frame on
+    a phone. Read from `.studio/art/<game>/latest.json`, which the studio's toolkit writes after every
+    `style`, `assets` and `anim` command; the tab rereads it while it is open.
 - **The parts pane** (`/parts`): when Claude builds in parallel (the `parallel` skill), each agent
   with its time, tool calls, files changed and last step, and the build feed's checks for each
   part. It opens by itself when two agents run at once.
@@ -103,7 +105,9 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   `/parts`, `/arcade [game]`, and for art direction `/look [game]` (the look and the style
   decisions; it opens the Art tab, since the style skill owns `/style`), `/lock <decision> [game]`
   (your typed words lock it), `/assets [game]` (the cast, the spend, licence problems),
-  `/lineup [game]` (the last lineup's flags and where its pictures are; it never renders one) and
+  `/cast [game]` (the characters: skeleton, bones, source, clips, and what skinning a full room costs on a
+  phone), `/clips [game]` (each character's clips against the verbs the game needs, and the command that adds
+  what is missing), `/lineup [game]` (the last lineup's flags and where its pictures are; it never renders one) and
   `/rights [game]` (licence problems with their fixes, and the game's `RIGHTS.md`).
 - **Guards:** a call is held in Claude Code's own question dialog (Proceed or Cancel), with what
   would change drawn above it and in full in the Hold pane:
@@ -216,7 +220,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   command.run{command=rooms}, command.run{command=play}, command.run{command=watch}, command.run{command=codex},
   command.run{command=deploy-status}, command.run{command=perf-numbers}, command.run{command=parts},
   command.run{command=arcade}, command.run{command=look}, command.run{command=lock}, command.run{command=assets},
-  command.run{command=lineup}, command.run{command=rights}, tool.call, tool.call{tool=Edit|Write|MultiEdit|NotebookEdit}, tool.call{tool=Bash},
+  command.run{command=cast}, command.run{command=clips}, command.run{command=lineup}, command.run{command=rights}, tool.call, tool.call{tool=Edit|Write|MultiEdit|NotebookEdit}, tool.call{tool=Bash},
   tool.call{tool=/"^mcp__.+__studio_deploy$"/}, tool.call{tool=/"^mcp__.*(?:fal|eleven|tripo).*__"/i},
   tool.call{tool=/"^mcp__.*cloudflare.*__"/i}, turn.complete,
   ui.render{component=AbovePrompt}, ui.render{component=Pane}, ui.render{component=AskUserQuestion},
@@ -231,7 +235,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 
 - `session.start` / `session.end`: find the studio, register the commands, start a 2-second
   timer that rereads the studio's files; end any game bridge.
-- `command.run` (its fifteen commands only).
+- `command.run` (its seventeen commands only).
 - `tool.call` (every tool): after the tool ran, take secrets out of its result; note which Homie
   command ran (for drawing it) and which agent ran what (for the parts). It never changes a tool's
   input.

@@ -194,6 +194,13 @@ studio's pinned copy, never a registry lookup of the bare name.
   with its licence; `RIGHTS.md` and the credits page follow. `assets check <id>` holds a game to the phone
   budgets; `assets lineup <id>` shows everything at true scale. A three.js game loads models through
   `@homie-rocks/studio/assets` (`createModels`); `game new <id> --from gem-rush-3d` starts one.
+- **Characters and clips**: an animated library character (`assets find "knight" --kind character`) comes in
+  phone-sized, one draw call, its bones named by the skeleton standard, its clips in one shared clip library per
+  skeleton (`public/anims/<skeleton>.glb`); `anim plan <id>` lists each one's clips against the verbs the game
+  needs, `anim add <id> <asset> --verbs jump,attack` retargets more onto it (free), `anim preview <id>` draws
+  them looping. A game plays them through `@homie-rocks/studio/animate` (`loadCharacter`: blends, hits, jumps,
+  lean, look-at, crowds; every number a Game Lab tunable); `game new <id> --from hero-rush-3d` starts one. The
+  plugin's `animate` skill has the rest.
 - **Licences**: a public game ships only assets whose licence allows it (CC0, CC BY with credit, the studio's own,
   generated); `publish` refuses an asset with no licence record. A remix gets each redistributable model,
   checked by SHA-256, and a grey placeholder for the rest.

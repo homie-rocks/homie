@@ -29,6 +29,14 @@
  *   assets stale <id>       assets made under an older decision
  *   assets redo <id> <asset>            made again from its kept raw file (free): today's budgets and render style
  *   assets remove <id> <asset>
+ *   assets add <id> <character item> [--keep "1H_Sword,Round_Shield"] [--verbs jump,attack] [--clips-from <item|file>]
+ *                   an animated library character (a rig, or parts with clips): the character pipeline (lib/characters.mjs)
+ *   assets add <id> --file <rigged.glb> --kind character --rigged --license <kind> [--clips-from <item>]
+ *
+ *   cast <id>                         the characters: proportions, silhouette, palette, skeleton family, source, clips
+ *   anim [plan] <id>                  each character's clips against the verbs the game needs, and where each comes from
+ *   anim add <id> <asset> --verbs jump,attack [--from <library item | file>]   more verbs, retargeted onto its skeleton
+ *   anim preview <id> [--asset <asset>] [--verbs idle,run]   looping previews (animated WebP) and a sheet, free
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -36,6 +44,7 @@ import { licenceProblems, readManifest, removeAsset, rightsMarkdown, syncCredits
 import { CATALOGUE_IDS, PHASES, blastRadius, decisionRows, derivedPrompt, initDecisions, lockDecision, oneLine, phaseProgress, pickDirection, readDecisions, setDecision, staleAssets, steerDecision, unlockDecision } from './decisions.mjs';
 import { listGames } from './studio.mjs';
 import { checkLines } from './asset-check.mjs';
+import { animPlan as animPlanOf } from './characters.mjs';
 
 /** The game a command means: the one named, else the only one. */
 function gameOf(root, id, command) {
@@ -91,6 +100,13 @@ export function writeArtSummary(root, id) {
       spend: artSpend(root, id),
       check: check ? { ok: check.ok, at: check.at, totals: check.totals, budgets: { drawCalls: check.budgets?.drawCalls, triangles: check.budgets?.triangles, textureMB: check.budgets?.textureMB, firstPlayMB: check.budgets?.firstPlayMB }, failing: check.rows.filter((r) => !r.ok).map((r) => r.id) } : null,
       lineup: lineup ? { at: lineup.at, flagged: lineup.flagged, images: lineup.images } : null,
+      // The characters and their clips (lib/characters.mjs animPlan): the Art tab's Characters, /cast and /clips.
+      ...(() => {
+        try {
+          const plan = animPlanOf(root, id);
+          return { need: plan.verbs, characters: plan.rows.map((r) => ({ id: r.id, kind: r.kind, route: r.route, family: r.family, skeleton: r.skeleton, bones: r.bones, verbs: [...r.clips.filter((c) => c.have).map((c) => c.verb), ...r.extra], missing: r.missing, retargeted: r.clips.filter((c) => c.retargeted).length, animsKB: r.animsKB })), skinning: check?.skinning ? { players: check.skinning.players, vertices: check.skinning.vertices, bones: check.skinning.bones, budget: check.skinning.budget } : null };
+        } catch { return { need: [], characters: [], skinning: null }; }
+      })(),
       board: doc?.board ? { chosen: doc.board.chosen, directions: doc.board.directions.map((d) => ({ id: d.id, label: d.label, swatch: d.swatch, mood: d.mood?.path ?? null })) } : null,
     };
     writeFileSync(join(dir, 'latest.json'), `${JSON.stringify(summary, null, 2)}\n`);
@@ -99,6 +115,18 @@ export function writeArtSummary(root, id) {
 }
 
 const list = (v) => String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+
+/** A raw character file kept beside its art job (art/<slug>/raw/, git-ignored), as importModel keeps a prop's. */
+async function keepRaw(root, file, slug) {
+  const { copyFileSync } = await import('node:fs');
+  const { basename } = await import('node:path');
+  const src = resolve(root, file);
+  const safe = String(slug).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'character';
+  const dir = join(root, 'art', safe, 'raw');
+  const to = join(dir, basename(src));
+  if (src !== to) { mkdirSync(dir, { recursive: true }); copyFileSync(src, to); }
+  return `../../art/${safe}/raw/${basename(src)}`;
+}
 
 export async function styleCommand(root, sub, positional, flags, { log = () => {} } = {}) {
   const known = ['init', 'show', 'set', 'steer', 'lock', 'unlock', 'board', 'pick', 'mood', 'golden', 'blast', 'prompt'];
@@ -165,15 +193,30 @@ export async function assetsCommand(root, sub, positional, flags, { log = () => 
     const doc = readDecisions(root, id);
     r = { ok: true, command: 'assets', id, assets: m.assets.map((a) => ({ id: a.id, kind: a.kind, route: a.route, tier: a.tier ?? null, card: a.card ?? null, license: a.license?.kind ?? null, remix: a.license?.remix ?? null, file: (a.files ?? []).find((f) => f.role === 'model')?.path ?? null, tris: a.measured?.tris ?? null, kb: a.measured?.glbKB ?? null, usd: +(a.made?.steps ?? []).reduce((n, s) => n + (Number(s.usd) || 0), 0).toFixed(3) })), stale: doc ? staleAssets(doc, m).map((s) => s.id) : [], spend: artSpend(root, id) };
   } else if (verb === 'add') {
-    if (flags.get('file')) {
+    const rigFlags = { keep: flags.has('keep') ? list(flags.get('keep')) : null, verbs: list(flags.get('verbs')), clipsFrom: flags.get('clips-from') ?? null, texture: flags.get('texture') ?? null, triangles: flags.get('triangles') ?? null };
+    const characterKind = ['character', 'creature'].includes(String(flags.get('kind') ?? ''));
+    if (flags.get('file') && (flags.has('rigged') && characterKind) && !flags.has('no-rig')) {
+      // A rigged character file (the person's own, or a provider's): the character pipeline, clips and all.
+      const { addCharacter } = await import('./characters.mjs');
+      let steps = [];
+      if (flags.get('steps')) steps = JSON.parse(readFileSync(resolve(String(flags.get('steps'))), 'utf8'));
+      const raw = await keepRaw(root, String(flags.get('file')), flags.get('slug') ?? flags.get('as') ?? 'character');
+      r = await addCharacter(root, id, { file: String(flags.get('file')), as: flags.get('as') ?? args[1] ?? null, kind: flags.get('kind'), card: flags.get('card') ?? null, height: flags.get('height') ?? null, license: flags.get('license') ?? null, attribution: flags.get('attribution') ?? null, owner: flags.get('owner') ?? null, notes: flags.get('notes') ?? null, route: flags.get('route') ?? 'imported', steps, concept: flags.get('concept') ?? null, rawPath: raw, ...rigFlags });
+    } else if (flags.get('file')) {
       const { importModel } = await import('./asset-import.mjs');
       let steps = [];
       if (flags.get('steps')) steps = JSON.parse(readFileSync(resolve(String(flags.get('steps'))), 'utf8'));
       r = await importModel(root, id, String(flags.get('file')), { as: flags.get('as') ?? args[1] ?? null, kind: flags.get('kind') ?? 'prop', tier: flags.get('tier') ?? null, card: flags.get('card') ?? null, height: flags.get('height') ?? null, triangles: flags.get('triangles') ?? null, texture: flags.get('texture') ?? null, license: flags.get('license') ?? null, attribution: flags.get('attribution') ?? null, notes: flags.get('notes') ?? null, owner: flags.get('owner') ?? null, route: flags.get('route') ?? 'imported', steps, concept: flags.get('concept') ?? null, slug: flags.get('slug') ?? null, rigged: flags.has('rigged') });
     } else {
       if (!args[1]) return { ok: false, command: 'assets add', why: 'usage: homie-studio assets add <game> <library item> (assets find "<words>" lists them), or --file <model> --license <kind>' };
-      const { addFromLibrary, libraryBase } = await import('./library.mjs');
-      r = await addFromLibrary(root, id, args[1], { as: flags.get('as') ?? null, height: flags.get('height') ?? null, card: flags.get('card') ?? null, lib: libraryBase(flags.get('library') ?? undefined) });
+      const { addFromLibrary, libraryBase, loadIndex } = await import('./library.mjs');
+      const lib = libraryBase(flags.get('library') ?? undefined);
+      const { index } = await loadIndex({ lib });
+      const item = index.items.find((x) => x.id === args[1]) ?? index.items.find((x) => x.item === args[1]);
+      const { addCharacter, isAnimated } = await import('./characters.mjs');
+      // An animated character (a rig, or parts with clips): phone-sized with its clips in its skeleton's clip library.
+      if (isAnimated(item) && !flags.has('no-rig')) r = await addCharacter(root, id, { item: item.id, as: flags.get('as') ?? null, height: flags.get('height') ?? null, card: flags.get('card') ?? null, kind: flags.get('kind') ?? null, lib, index, ...rigFlags });
+      else r = await addFromLibrary(root, id, args[1], { as: flags.get('as') ?? null, height: flags.get('height') ?? null, card: flags.get('card') ?? null, lib, index });
     }
   } else if (verb === 'redo') {
     if (!args[1]) return { ok: false, command: 'assets redo', why: 'usage: homie-studio assets redo <game> <asset> (made again from its kept raw file, free)' };
@@ -189,6 +232,44 @@ export async function assetsCommand(root, sub, positional, flags, { log = () => 
   return r;
 }
 
+/** `cast <id>`: the game's characters and the decisions that shape them (a cast list for the cast card and the mod). */
+export function castView(root, id) {
+  const doc = readDecisions(root, id);
+  const m = readManifest(root, id);
+  const d = doc?.decisions ?? {};
+  const pal = d['style.palette']?.value ?? null;
+  const planned = (d['cast.list']?.value ?? []).filter((c) => c.kind === 'character' || c.kind === 'creature');
+  const made = m.assets.filter((a) => a.kind === 'character' || a.kind === 'creature');
+  const rows = [
+    ...made.map((a) => ({ id: a.id, card: a.card ?? null, kind: a.kind, state: 'made', route: a.route, source: a.from?.item ?? (a.route === 'generated' ? 'generated' : a.license?.kind ?? null), family: a.rig?.family ?? null, skeleton: a.rig?.skeleton ?? null, bones: a.rig?.bones ?? a.measured?.bones ?? null, tris: a.measured?.tris ?? null, heightM: a.measured?.heightM ?? null, kb: a.measured?.glbKB ?? null, verbs: a.rig?.verbs ?? [], keep: a.rig?.keep ?? [], usd: +(a.made?.steps ?? []).reduce((n, s) => n + (Number(s.usd) || 0), 0).toFixed(3), license: a.license?.kind ?? null })),
+    ...planned.filter((c) => !made.some((a) => a.id === c.id || a.card === c.card)).map((c) => ({ id: c.id, card: c.card, kind: c.kind, state: 'planned', route: null, source: null, family: null, skeleton: null, bones: null, tris: null, heightM: c.heightM ?? null, kb: null, verbs: [], keep: [], usd: 0, license: null })),
+  ];
+  return {
+    ok: true, command: 'cast', id,
+    decisions: Object.fromEntries(['style.proportions', 'style.shape', 'style.palette', 'cast.family', 'cast.scale', 'cast.variation', 'rig.skeleton', 'rig.source', 'rig.bones'].map((k) => [k, d[k] ? { label: d[k].label, state: d[k].state, why: d[k].why } : null])),
+    silhouette: d['style.shape']?.value?.silhouette ?? 'every character readable black on white at 64 px tall',
+    palette: pal ? ['bg', 'ink', 'accent', 'accent2', 'danger', 'good', 'gold'].map((k) => pal[k]).filter(Boolean) : [],
+    rows,
+    spend: artSpend(root, id),
+  };
+}
+
+export async function animCommand(root, sub, positional, flags, { log = () => {} } = {}) {
+  const known = ['plan', 'add', 'preview'];
+  const verb = known.includes(sub) ? sub : 'plan';
+  const args = known.includes(sub) ? positional.slice(2) : positional.slice(1);
+  const id = gameOf(root, args[0], `anim ${verb}`);
+  const C = await import('./characters.mjs');
+  let r;
+  if (verb === 'plan') r = C.animPlan(root, id);
+  else if (verb === 'add') {
+    if (!args[1]) return { ok: false, command: 'anim add', why: 'usage: homie-studio anim add <game> <character asset> --verbs jump,attack [--from <library item | file>]' };
+    r = await C.bakeClips(root, id, args[1], { verbs: list(flags.get('verbs')), from: flags.get('from') ?? null });
+  } else r = await C.animPreview(root, id, { asset: flags.get('asset') ?? args[1] ?? null, verbs: flags.has('verbs') ? list(flags.get('verbs')) : null, log });
+  writeArtSummary(root, id);
+  return r;
+}
+
 /* ------------------------------------------------------------------ what a person reads */
 
 const MARK = { auto: '·', steered: '~', pinned: '●', locked: '■' };
@@ -197,7 +278,7 @@ export function artLines(r) {
   const L = [];
   switch (r.command) {
     case 'style init':
-      L.push(`${r.summary}.`, `  ${r.picked.length} decision${r.picked.length === 1 ? '' : 's'} picked automatically (a ${r.genre} game)${r.kept.length ? `; ${r.kept.length} kept as the person set them` : ''}. ${r.file}`, '  Open the codex to change anything; steer, lock or the style board give the person control.');
+      L.push(`${r.summary}.`, `  ${r.picked.length} decision${r.picked.length === 1 ? '' : 's'} picked automatically (a ${r.genre} game)${r.kept.length ? `; ${r.kept.length} kept (set by the person, or what the game already draws)` : ''}. ${r.file}`, '  Open the codex to change anything; steer, lock or the style board give the person control.');
       break;
     case 'style': {
       L.push(`${r.id}: ${r.line}`, `  path: ${r.path}${r.budget ? `, art budget US$${r.budget.usd}` : ', free routes only (no art budget)'}`);
@@ -252,7 +333,8 @@ export function artLines(r) {
       if (r.items.length) L.push(`  Add one: homie-studio assets add <game> ${r.items[0].id} [--height <m>]`);
       break;
     case 'assets add':
-      L.push(`games/${r.game}: ${r.asset} added (${r.item ? `from the library: ${r.item}` : r.route}; licence ${r.license}).`, ...(r.after ? [`  ${r.before.tris} -> ${r.after.tris} triangles, ${r.before.kb} -> ${r.after.kb} KB, ${r.after.heightM} m tall; raw kept in ${r.raw} (git-ignored)`] : []), ...(r.pinned?.length ? [`  pinned by use: ${r.pinned.join(', ')}`] : []), ...(r.warnings ?? []).map((w) => `  note: ${w}`));
+      L.push(`games/${r.game}: ${r.asset} added (${r.item ? `from the library: ${r.item}` : r.route}; licence ${r.license}).`, ...(r.after ? [`  ${r.before.tris} -> ${r.after.tris} triangles, ${r.before.kb} -> ${r.after.kb} KB, ${r.after.heightM} m tall${r.raw ? `; raw kept in ${r.raw} (git-ignored)` : ''}`] : []),
+        ...(r.skeleton ? [`  ${r.family} skeleton ${r.skeleton} (${r.after?.bones ?? '?'} bones, ${r.after?.drawCalls ?? '?'} draw call${r.after?.drawCalls === 1 ? '' : 's'}${r.merged ? `, ${r.merged} parts merged` : ''}${r.dropped?.length ? `, left out: ${r.dropped.join(', ')}` : ''}); clips in ${r.anims}: ${r.verbs.join(', ')}${r.clipsFrom?.length ? ` (retargeted from ${r.clipsFrom.join(', ')})` : ''}${r.missing?.length ? `; no source for ${r.missing.join(', ')}` : ''}`] : []), ...(r.pinned?.length ? [`  pinned by use: ${r.pinned.join(', ')}`] : []), ...(r.warnings ?? []).map((w) => `  note: ${w}`));
       break;
     case 'assets redo':
       L.push(`games/${r.game}: ${r.asset} made again from its raw file (free): ${r.before.tris} -> ${r.after.tris} triangles, ${r.after.kb} KB, ${r.after.heightM} m (${r.ops.join(', ')})`, ...(r.warnings ?? []).map((w) => `  note: ${w}`));
@@ -278,6 +360,24 @@ export function artLines(r) {
     case 'assets remove':
       L.push(r.ok ? `Removed ${r.asset} from the manifest${r.deleted.length ? `, and its shipped copy (${r.deleted.join(', ')})` : ''}.${r.kept.length ? ` Kept ${r.kept.join(', ')}: changed since it was recorded, so delete it yourself if it is unused.` : ''} A raw file in art/ stays.` : r.why);
       break;
+    case 'cast': {
+      const out = [`The cast of ${r.id}: ${r.rows.length} character${r.rows.length === 1 ? '' : 's'}`];
+      for (const [k, v] of Object.entries(r.decisions)) if (v) out.push(`  ${k}: ${v.label} [${v.state}]`);
+      for (const row of r.rows) out.push(`  ${row.state === 'made' ? 'made   ' : 'planned'} ${row.id} (${row.kind}${row.route ? `, ${row.route}` : ''})${row.family ? `: ${row.family} skeleton ${row.skeleton}, ${row.bones} bones, ${row.tris} triangles, ${row.heightM} m, ${row.verbs.length} clips` : ''}${row.usd ? `, US$${row.usd}` : ''}`);
+      return out;
+    }
+    case 'anim plan': {
+      const out = [`Clips for ${r.game}: the game needs ${r.verbs.join(', ')}`];
+      for (const row of r.rows) {
+        out.push(`  ${row.id} (${row.familyLabel}, ${row.skeleton}, ${row.bones} bones${row.animsKB ? `, its clip library ${row.animsKB} KB` : ''})`);
+        for (const c of row.clips) out.push(`    ${c.have ? 'ok  ' : 'MISS'} ${c.verb}${c.have ? ` <- ${c.source}${c.retargeted ? ` (retargeted from ${c.from})` : ''}` : ''}`);
+        if (row.extra.length) out.push(`    also: ${row.extra.join(', ')}`);
+      }
+      for (const u of r.unrigged) out.push(`  ${u}: no rig (a static model; the animate guide says how to rig one)`);
+      return out;
+    }
+    case 'anim add': return [`${r.asset}: ${r.added.length ? `added ${r.added.join(', ')}` : 'nothing new'} (its skeleton ${r.skeleton}: ${r.verbs.join(', ')}${r.kb ? `; ${r.kb} KB` : ''})${r.missing.length ? `; no source has ${r.missing.join(', ')}` : ''}${r.why ? ` (${r.why})` : ''}`];
+    case 'anim preview': return [`Previews in .studio/art/${r.game}/anim/:`, ...r.rows.map((row) => `  ${row.id}: ${row.verbs.map((v) => v.verb).join(', ')}${row.sheet ? ` (sheet ${row.sheet})` : ''}`)];
     case 'assets check':
       L.push(...checkLines(r));
       break;

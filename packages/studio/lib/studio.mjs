@@ -3,7 +3,7 @@
  * current directory, and its games.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { httpsPage, licenseOf, pageOfSource, remixAllowed, remixCredit, remixRow } from '../worker/license.mjs';
 
@@ -208,7 +208,10 @@ async function fetchStarterModels(dest, only = null) {
   }
   const missing = [];
   let fetched = 0;
-  for (const a of wanted) {
+  // A character the starter names with a `rig` recipe goes through the character pipeline (lib/characters.mjs): made
+  // phone-sized, its held things picked, its clips baked into its skeleton's clip library. Everything else is copied.
+  const rigged = wanted.filter((a) => a.rig && ['character', 'creature'].includes(a.kind));
+  for (const a of wanted.filter((x) => !rigged.includes(x))) {
     const item = index.items.find((x) => x.id === a.from.item);
     const f = a.files.find((x) => x.role === 'model');
     if (!item) { missing.push({ asset: a.id, item: a.from.item, why: `the library has no ${a.from.item}` }); continue; }
@@ -222,7 +225,19 @@ async function fetchStarterModels(dest, only = null) {
     } catch (error) { missing.push({ asset: a.id, item: a.from.item, why: error.message }); }
   }
   writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
-  return { fetched, missing, from: lib.base };
+  let baked = 0;
+  if (rigged.length) {
+    const { addCharacter } = await import('./characters.mjs');
+    const root = join(dest, '..', '..');
+    const game = basename(dest);
+    for (const a of rigged) {
+      try {
+        await addCharacter(root, game, { item: a.from.item, as: a.id, kind: a.kind, card: a.card ?? null, height: a.rig.heightM ?? null, keep: a.rig.keep ?? null, verbs: a.rig.verbs ?? [], lib, index });
+        fetched += 1; baked += 1;
+      } catch (error) { missing.push({ asset: a.id, item: a.from.item, why: error.message }); }
+    }
+  }
+  return { fetched, missing, from: lib.base, ...(baked ? { characters: baked } : {}) };
 }
 
 /**

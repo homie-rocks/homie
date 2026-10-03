@@ -1,0 +1,68 @@
+{
+  "v": 1,
+  "palette": {
+    "bg": "#cfe6f2",
+    "ink": "#1e2a38",
+    "accent": "#e8833a",
+    "accent2": "#4fa36a",
+    "danger": "#d9483b",
+    "good": "#5bb36a",
+    "gold": "#fdbf41",
+    "ramp": [
+      "#9fcfe6",
+      "#cfe6f2",
+      "#f6f1e4",
+      "#7cc46a",
+      "#4fa36a",
+      "#2f7a52",
+      "#007650",
+      "#fdbf41",
+      "#f68537",
+      "#e8833a",
+      "#9f5e48",
+      "#6b4a3a",
+      "#99a6ab",
+      "#a63c49",
+      "#3d395c",
+      "#ffffff"
+    ]
+  },
+  "fonts": {
+    "display": "Lilita One",
+    "body": "Nunito"
+  },
+  "light": {
+    "time": "morning",
+    "key": [
+      -0.5,
+      -1,
+      -0.35
+    ],
+    "intensity": 2.3,
+    "hardness": 0.4,
+    "sky": "#dcedf5",
+    "ground": "#86c47c",
+    "fog": 0.3,
+    "bloom": 0.1
+  },
+  "camera": {
+    "angle": "low-3/4",
+    "projection": "perspective",
+    "pitch": 38,
+    "distance": 13,
+    "fov": 42
+  },
+  "render": "painted",
+  "materials": {
+    "model": "hand-painted",
+    "outline": false,
+    "texelDensity": 256,
+    "atlas": false
+  },
+  "rev": {
+    "style.palette": 1,
+    "style.ui": 1,
+    "style.light": 1,
+    "style.camera": 1
+  }
+}

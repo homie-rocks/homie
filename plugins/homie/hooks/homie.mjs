@@ -36,7 +36,7 @@
  * `$.namespace.method(...)` here, and a helper that takes `$` is a function declared at the top of this file.
  */
 import { applyEdit, unifiedDiff } from './lib/diff.mjs';
-import { GAME_ID, artFor, artSummaryOf, castText, decisionsFileOf, licenceIssues, lineupText, lockedChanges, lookText, publicSource, rightsText, usd } from './lib/art.mjs';
+import { GAME_ID, artFor, artSummaryOf, castText, charactersText, clipsText, decisionsFileOf, licenceIssues, lineupText, lockedChanges, lookText, publicSource, rightsText, usd } from './lib/art.mjs';
 import { summarizeCodex } from './lib/codex.mjs';
 import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, modelPullOf, paidMcpOf, paidOf, protectedBy, stripeSecretWriteOf, studioCalls } from './lib/commands.mjs';
 import { ago, feedOf, summarize } from './lib/feed.mjs';
@@ -234,6 +234,21 @@ export function register(on, options) {
     if (!S.root) return { text: 'Not inside a Homie studio.' };
     await readArt($);
     return { text: artText('assets', String(e.args ?? '').trim()) };
+  });
+
+  on('command.run', { command: 'cast' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readArt($);
+    // The characters are in the Art tab: it opens, as /look opens it.
+    S.tab = 'art';
+    await openPane($, PANE, `◆ ${S.name}`);
+    return { text: artText('cast', String(e.args ?? '').trim()) };
+  });
+
+  on('command.run', { command: 'clips' }, async ($, e) => {
+    if (!S.root) return { text: 'Not inside a Homie studio.' };
+    await readArt($);
+    return { text: artText('clips', String(e.args ?? '').trim()) };
   });
 
   on('command.run', { command: 'lineup' }, async ($, e) => {
@@ -497,6 +512,8 @@ const COMMANDS = [
   ['look', 'Homie: the game\'s look: its art direction, decision by decision (the Studio pane\'s Art tab)', '[game]'],
   ['lock', 'Homie: lock one art decision, in your own words (unlocking is asked for in the Art tab)', '<decision> [game]'],
   ['assets', 'Homie: the game\'s cast: routes, licences, costs, and what is stale', '[game]'],
+  ['cast', 'Homie: the game\'s characters: skeleton, bones, source and clips', '[game]'],
+  ['clips', 'Homie: each character\'s clips against the verbs the game needs', '[game]'],
   ['lineup', 'Homie: the last asset lineup: what it flagged, and where its pictures are', '[game]'],
   ['rights', 'Homie: licence problems with their fixes, and the game\'s RIGHTS.md', '[game]'],
 ];
@@ -1829,12 +1846,13 @@ function partsText() {
   return parts.map((l) => `${l.status === 'running' ? '●' : l.status === 'completed' ? '✓' : '✗'} ${l.description || l.id}: ${l.tools} tools, ${l.edits} files${l.last ? ` · ${l.last}` : ''}`).join('\n');
 }
 
-/** The art commands' words: the look (/look), the cast (/assets) or the lineup (/lineup), for the game named or each. */
+/** The art commands' words: the look (/look), the assets (/assets), the characters (/cast), their clips (/clips) or
+ * the lineup (/lineup), for the game named or each. */
 function artText(what, want) {
   const picked = artFor(S.art, want);
   if (!picked.list) return picked.why;
   const now = Date.now();
-  return picked.list.slice(0, 6).map((a) => (what === 'assets' ? castText(a, gameName(a.game)) : what === 'lineup' ? lineupText(a, gameName(a.game), now) : lookText(a, gameName(a.game), now))).join('\n\n');
+  return picked.list.slice(0, 6).map((a) => (what === 'assets' ? castText(a, gameName(a.game)) : what === 'cast' ? charactersText(a, gameName(a.game)) : what === 'clips' ? clipsText(a, gameName(a.game)) : what === 'lineup' ? lineupText(a, gameName(a.game), now) : lookText(a, gameName(a.game), now))).join('\n\n');
 }
 
 function deployText(d) {

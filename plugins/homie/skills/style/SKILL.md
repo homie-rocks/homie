@@ -63,6 +63,16 @@ before you show them (file_read), and say in one line each what is different.
 - **Golden images**: once the style is locked, two to six approved pictures (a chosen mood image, a concept they
   loved, their own art) become the references of every generated concept: `style golden <id> add <image>`.
 
+## The characters: the cast card
+
+`cast_plan` (or `npx --no-install homie-studio cast <id>`) shows the decisions that shape characters together:
+proportions (heads tall, metres), the shape language and its silhouette rule (every character readable black on white
+at 64 px: the lineup checks it), the palette, the library family, the skeleton family (`rig.skeleton`) and where rigs
+come from; then every character made or planned, with its source, skeleton, bones, triangles and clips. A library
+character comes in free (`asset_add`); a generated one through the `models` skill's `character` (paid, priced first);
+their clips and feel are the `animate` skill's. A starter game's own `style.json` is what `style init` starts from:
+it never repaints a working game behind its back.
+
 ## Changing a locked decision: the blast radius first
 
 When the person wants a locked or pinned decision changed, never just change it:

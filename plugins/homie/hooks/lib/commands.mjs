@@ -123,8 +123,8 @@ const PAID_HOSTS = [
  *   { provider: 'fal', unit: 'usd', script: 'art'|'video'|'models', kind: 'art'|'videos', slug, words, i, dir, dryRun: [argv] }
  *   { provider: 'ElevenLabs', unit: 'credits', script: 'music', kind: 'music', slug, ... }
  *   { provider, unit, raw: true }   a request straight at the provider: its cost cannot be read first
- * A skill's call without `--yes` only prices or asks, so it is free and not held. The models skill's `prop` and
- * `mood` are one fal call each; every model of a game shares one cap, `art/<game>-models/budget.json`.
+ * A skill's call without `--yes` only prices or asks, so it is free and not held. The models skill's `prop`,
+ * `character` and `mood` are one fal call each; every model of a game shares one cap, `art/<game>-models/budget.json`.
  */
 export function paidOf(command) {
   for (const seg of segments(command)) {
@@ -134,7 +134,7 @@ export function paidOf(command) {
       const script = /(^|\/)art\.mjs$/.test(w[i]) ? 'art' : /video\.mjs$/.test(w[i]) ? 'video' : /models\.mjs$/.test(w[i]) ? 'models' : 'music';
       const { flags, pos } = flagsOf(w.slice(i + 1), ['yes', 'dry-run', 'json', 'vocals', 'no-deploy', 'mesh', 'concept-again']);
       const verb = pos[0];
-      const paid = script === 'music' ? ['render', 'stems'].includes(verb) : script === 'models' ? ['prop', 'mood'].includes(verb) : verb === 'gen';
+      const paid = script === 'music' ? ['render', 'stems'].includes(verb) : script === 'models' ? ['prop', 'mood', 'character'].includes(verb) : verb === 'gen';
       if (!paid || !flags.has('yes') || flags.has('dry-run')) continue;
       // The same call priced and not made: the skill's own --dry-run (free; it asks the provider's price list).
       const head = /(^|\/)node$/.test(w[0]) ? w.slice(0, i) : ['node'];

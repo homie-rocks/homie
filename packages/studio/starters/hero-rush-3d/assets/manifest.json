@@ -1,0 +1,1471 @@
+{
+  "v": 1,
+  "assets": [
+    {
+      "id": "barbarian",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Barbarian",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-adventurers",
+        "packLabel": "KayKit Adventurers",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "item": "kaykit-adventurers/barbarian",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "source": "addons/kaykit_character_pack_adventures/Characters/gltf/Barbarian.glb",
+        "sha256": "931c558d96d09ea526d497341b70d2472014f3a6bd97c306a0ab423f8767c0df",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/barbarian.glb",
+          "bytes": 2049644,
+          "sha256": "931c558d96d09ea526d497341b70d2472014f3a6bd97c306a0ab423f8767c0df"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 6543,
+        "materials": 1,
+        "drawCalls": 13,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 76,
+        "heightM": 2.398,
+        "box": {
+          "size": [
+            2.975,
+            2.398,
+            1.85
+          ]
+        },
+        "glbKB": 2002
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-adventurers/barbarian",
+            "sha256": "931c558d96d09ea526d497341b70d2472014f3a6bd97c306a0ab423f8767c0df"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "1H_Axe",
+          "Barbarian_Round_Shield",
+          "Barbarian_Hat",
+          "Barbarian_Cape"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "barrel",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Barrel",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-medieval-hexagon",
+        "packLabel": "KayKit Medieval Hexagon",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "item": "kaykit-medieval-hexagon/barrel",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "source": "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/barrel.gltf",
+        "sha256": "b1730c64a241c31b7ea244d5549f266099c35d86d8921cfa355f69e33b87a2d5",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/barrel.glb",
+          "bytes": 11428,
+          "sha256": "b1730c64a241c31b7ea244d5549f266099c35d86d8921cfa355f69e33b87a2d5"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 240,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 0.212,
+        "box": {
+          "size": [
+            0.201,
+            0.212,
+            0.201
+          ]
+        },
+        "glbKB": 11
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-medieval-hexagon/barrel",
+            "sha256": "b1730c64a241c31b7ea244d5549f266099c35d86d8921cfa355f69e33b87a2d5"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 0.8
+      }
+    },
+    {
+      "id": "chest",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Treasure Chest",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-dungeon",
+        "packLabel": "KayKit Dungeon Remastered",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+        "item": "kaykit-dungeon/chest-gold",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+        "source": "addons/kaykit_dungeon_remastered/Assets/gltf/chest_gold.glb",
+        "sha256": "d6d138a6e61d37b8fadca428dea834eff5afd2f4bf8df8d663a6bf730e78dc1b",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/chest.glb",
+          "bytes": 37388,
+          "sha256": "d6d138a6e61d37b8fadca428dea834eff5afd2f4bf8df8d663a6bf730e78dc1b"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-dungeon); the pack's own licence text: licenses/kaykit-dungeon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 1461,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 1.3,
+        "box": {
+          "size": [
+            1.7,
+            1.3,
+            1.426
+          ]
+        },
+        "glbKB": 37
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-dungeon/chest-gold",
+            "sha256": "d6d138a6e61d37b8fadca428dea834eff5afd2f4bf8df8d663a6bf730e78dc1b"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 0.95
+      }
+    },
+    {
+      "id": "coin",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Items/Coin",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-dungeon",
+        "packLabel": "KayKit Dungeon Remastered",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+        "item": "kaykit-dungeon/coin",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+        "source": "addons/kaykit_dungeon_remastered/Assets/gltf/coin.gltf.glb",
+        "sha256": "1373c25a408b055369a89c1697c468a41a7d934eae62ec4655d71aaedbb99866",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/coin.glb",
+          "bytes": 8168,
+          "sha256": "1373c25a408b055369a89c1697c468a41a7d934eae62ec4655d71aaedbb99866"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-dungeon); the pack's own licence text: licenses/kaykit-dungeon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 80,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 0.125,
+        "box": {
+          "size": [
+            0.36,
+            0.125,
+            0.36
+          ]
+        },
+        "glbKB": 8
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-dungeon/coin",
+            "sha256": "1373c25a408b055369a89c1697c468a41a7d934eae62ec4655d71aaedbb99866"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 0.56
+      }
+    },
+    {
+      "id": "crate",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Crate",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-medieval-hexagon",
+        "packLabel": "KayKit Medieval Hexagon",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "item": "kaykit-medieval-hexagon/crate-a-big",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "source": "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/crate_A_big.gltf",
+        "sha256": "c169ba8c947d1aad1f3b07316e9b4d41a1ae688d2979da261a87a852907841b5",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/crate.glb",
+          "bytes": 8112,
+          "sha256": "c169ba8c947d1aad1f3b07316e9b4d41a1ae688d2979da261a87a852907841b5"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 132,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 0.21,
+        "box": {
+          "size": [
+            0.21,
+            0.21,
+            0.21
+          ]
+        },
+        "glbKB": 8
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-medieval-hexagon/crate-a-big",
+            "sha256": "c169ba8c947d1aad1f3b07316e9b4d41a1ae688d2979da261a87a852907841b5"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 0.72
+      }
+    },
+    {
+      "id": "grove",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Grove",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-medieval-hexagon",
+        "packLabel": "KayKit Medieval Hexagon",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "item": "kaykit-medieval-hexagon/trees-a-medium",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "source": "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/nature/trees_A_medium.gltf",
+        "sha256": "f31db934213d209c59fbeb307a1d057f71010121cc8846d0f2211ecfab506719",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/grove.glb",
+          "bytes": 17684,
+          "sha256": "f31db934213d209c59fbeb307a1d057f71010121cc8846d0f2211ecfab506719"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 480,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 1.295,
+        "box": {
+          "size": [
+            1.751,
+            1.295,
+            1.814
+          ]
+        },
+        "glbKB": 17
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-medieval-hexagon/trees-a-medium",
+            "sha256": "f31db934213d209c59fbeb307a1d057f71010121cc8846d0f2211ecfab506719"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 3.4
+      }
+    },
+    {
+      "id": "knight",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Knight",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-adventurers",
+        "packLabel": "KayKit Adventurers",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "item": "kaykit-adventurers/knight",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "source": "addons/kaykit_character_pack_adventures/Characters/gltf/Knight.glb",
+        "sha256": "b21c3e590fb97f6ec5db56dd75ddc144aaaa637ab30f064ead0f3d84351064f6",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/knight.glb",
+          "bytes": 2074184,
+          "sha256": "b21c3e590fb97f6ec5db56dd75ddc144aaaa637ab30f064ead0f3d84351064f6"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 6952,
+        "materials": 1,
+        "drawCalls": 15,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 76,
+        "heightM": 2.467,
+        "box": {
+          "size": [
+            2.689,
+            2.467,
+            2.577
+          ]
+        },
+        "glbKB": 2026
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-adventurers/knight",
+            "sha256": "b21c3e590fb97f6ec5db56dd75ddc144aaaa637ab30f064ead0f3d84351064f6"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "1H_Sword",
+          "Round_Shield",
+          "Knight_Helmet",
+          "Knight_Cape"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "mage",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Mage",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-adventurers",
+        "packLabel": "KayKit Adventurers",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "item": "kaykit-adventurers/mage",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "source": "addons/kaykit_character_pack_adventures/Characters/gltf/Mage.glb",
+        "sha256": "c4e8caab760eee7f1bdd5dc7af90e8a6a012e61df8ff799cd2ad4b45d356ce78",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/mage.glb",
+          "bytes": 2041292,
+          "sha256": "c4e8caab760eee7f1bdd5dc7af90e8a6a012e61df8ff799cd2ad4b45d356ce78"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 5683,
+        "materials": 1,
+        "drawCalls": 12,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 76,
+        "heightM": 2.716,
+        "box": {
+          "size": [
+            2.426,
+            2.716,
+            2.271
+          ]
+        },
+        "glbKB": 1993
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-adventurers/mage",
+            "sha256": "c4e8caab760eee7f1bdd5dc7af90e8a6a012e61df8ff799cd2ad4b45d356ce78"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "1H_Wand",
+          "Spellbook",
+          "Mage_Hat",
+          "Mage_Cape"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "pine",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Pine",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-medieval-hexagon",
+        "packLabel": "KayKit Medieval Hexagon",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "item": "kaykit-medieval-hexagon/tree-single-a",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "source": "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/nature/tree_single_A.gltf",
+        "sha256": "277c160d937c625cac18450aa7e395ea53cc9dfbea53f937f075e8247cb966a3",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/pine.glb",
+          "bytes": 7132,
+          "sha256": "277c160d937c625cac18450aa7e395ea53cc9dfbea53f937f075e8247cb966a3"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 50,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 1.196,
+        "box": {
+          "size": [
+            0.574,
+            1.196,
+            0.547
+          ]
+        },
+        "glbKB": 7
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-medieval-hexagon/tree-single-a",
+            "sha256": "277c160d937c625cac18450aa7e395ea53cc9dfbea53f937f075e8247cb966a3"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 3.8
+      }
+    },
+    {
+      "id": "pine-round",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Round Pine",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-medieval-hexagon",
+        "packLabel": "KayKit Medieval Hexagon",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "item": "kaykit-medieval-hexagon/tree-single-b",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "source": "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/nature/tree_single_B.gltf",
+        "sha256": "1d7d459243468b020c39d9a37902696d5bef489305855ded574cdfe56e826f4e",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/pine-round.glb",
+          "bytes": 8604,
+          "sha256": "1d7d459243468b020c39d9a37902696d5bef489305855ded574cdfe56e826f4e"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 220,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 1.213,
+        "box": {
+          "size": [
+            0.685,
+            1.213,
+            0.72
+          ]
+        },
+        "glbKB": 8
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-medieval-hexagon/tree-single-b",
+            "sha256": "1d7d459243468b020c39d9a37902696d5bef489305855ded574cdfe56e826f4e"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 3.3
+      }
+    },
+    {
+      "id": "rock",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Rock",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-medieval-hexagon",
+        "packLabel": "KayKit Medieval Hexagon",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "item": "kaykit-medieval-hexagon/rock-single-e",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "source": "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/nature/rock_single_E.gltf",
+        "sha256": "b9d650d1ca2f3545e4e61b57b85d0bfb9f7adf95abe5d637c72eec24cf2c04a1",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/rock.glb",
+          "bytes": 7424,
+          "sha256": "b9d650d1ca2f3545e4e61b57b85d0bfb9f7adf95abe5d637c72eec24cf2c04a1"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 71,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 0.195,
+        "box": {
+          "size": [
+            0.488,
+            0.195,
+            0.347
+          ]
+        },
+        "glbKB": 7
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-medieval-hexagon/rock-single-e",
+            "sha256": "b9d650d1ca2f3545e4e61b57b85d0bfb9f7adf95abe5d637c72eec24cf2c04a1"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 0.75
+      }
+    },
+    {
+      "id": "rocks",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Rocks",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-medieval-hexagon",
+        "packLabel": "KayKit Medieval Hexagon",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "item": "kaykit-medieval-hexagon/rock-single-c",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+        "source": "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/nature/rock_single_C.gltf",
+        "sha256": "70f2b56a7b2fe451c2d64f23940f95fb1c39838de096a590d851015551a11515",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/rocks.glb",
+          "bytes": 6712,
+          "sha256": "70f2b56a7b2fe451c2d64f23940f95fb1c39838de096a590d851015551a11515"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 40,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 0.195,
+        "box": {
+          "size": [
+            0.344,
+            0.195,
+            0.344
+          ]
+        },
+        "glbKB": 7
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-medieval-hexagon/rock-single-c",
+            "sha256": "70f2b56a7b2fe451c2d64f23940f95fb1c39838de096a590d851015551a11515"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 0.55
+      }
+    },
+    {
+      "id": "rogue",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Rogue",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-adventurers",
+        "packLabel": "KayKit Adventurers",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "item": "kaykit-adventurers/rogue",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "source": "addons/kaykit_character_pack_adventures/Characters/gltf/Rogue.glb",
+        "sha256": "b9c0bcc9c3e25fb746b3f8c034a8f1e46a3fb18112675fc8fd3ab4d70673a14f",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/rogue.glb",
+          "bytes": 2047336,
+          "sha256": "b9c0bcc9c3e25fb746b3f8c034a8f1e46a3fb18112675fc8fd3ab4d70673a14f"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 6377,
+        "materials": 1,
+        "drawCalls": 12,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 76,
+        "heightM": 2.187,
+        "box": {
+          "size": [
+            2.945,
+            2.187,
+            1.477
+          ]
+        },
+        "glbKB": 1999
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-adventurers/rogue",
+            "sha256": "b9c0bcc9c3e25fb746b3f8c034a8f1e46a3fb18112675fc8fd3ab4d70673a14f"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "Knife",
+          "Knife_Offhand",
+          "Rogue_Cape"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "rogue-hooded",
+      "kind": "character",
+      "tier": "hero",
+      "card": "Players/Hooded Rogue",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-adventurers",
+        "packLabel": "KayKit Adventurers",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "item": "kaykit-adventurers/rogue-hooded",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+        "source": "addons/kaykit_character_pack_adventures/Characters/gltf/Rogue_Hooded.glb",
+        "sha256": "b9ecf057463cc606f6244413dd179ec62941d9ebc1a280a65ae21b96bcfb1c55",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/rogue-hooded.glb",
+          "bytes": 2041472,
+          "sha256": "b9ecf057463cc606f6244413dd179ec62941d9ebc1a280a65ae21b96bcfb1c55"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 6035,
+        "materials": 1,
+        "drawCalls": 12,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 76,
+        "heightM": 2.251,
+        "box": {
+          "size": [
+            2.945,
+            2.251,
+            1.548
+          ]
+        },
+        "glbKB": 1994
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-adventurers/rogue-hooded",
+            "sha256": "b9ecf057463cc606f6244413dd179ec62941d9ebc1a280a65ae21b96bcfb1c55"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "Knife",
+          "Knife_Offhand",
+          "Rogue_Cape"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "skeleton-mage",
+      "kind": "creature",
+      "tier": "npc",
+      "card": "Creatures/Skeleton Mage",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-skeletons",
+        "packLabel": "KayKit Skeletons",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "item": "kaykit-skeletons/skeleton-mage",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "source": "addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Mage.glb",
+        "sha256": "25740ef86df575c0b5e375505e84af168243554ceabb426693a2790990848a0b",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/skeleton-mage.glb",
+          "bytes": 2623220,
+          "sha256": "25740ef86df575c0b5e375505e84af168243554ceabb426693a2790990848a0b"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 4588,
+        "materials": 2,
+        "drawCalls": 9,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 95,
+        "heightM": 2.63,
+        "box": {
+          "size": [
+            1.938,
+            2.63,
+            1.735
+          ]
+        },
+        "glbKB": 2562
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-skeletons/skeleton-mage",
+            "sha256": "25740ef86df575c0b5e375505e84af168243554ceabb426693a2790990848a0b"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "Skeleton_Mage_Hat"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "skeleton-minion",
+      "kind": "creature",
+      "tier": "npc",
+      "card": "Creatures/Skeleton Minion",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-skeletons",
+        "packLabel": "KayKit Skeletons",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "item": "kaykit-skeletons/skeleton-minion",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "source": "addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Minion.glb",
+        "sha256": "a0755a259290a93b5aca26910eea2ef896efcce0e0f1fe91b7818d11ef7c6ca9",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/skeleton-minion.glb",
+          "bytes": 2646224,
+          "sha256": "a0755a259290a93b5aca26910eea2ef896efcce0e0f1fe91b7818d11ef7c6ca9"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 5288,
+        "materials": 2,
+        "drawCalls": 9,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 95,
+        "heightM": 2.166,
+        "box": {
+          "size": [
+            1.938,
+            2.166,
+            0.912
+          ]
+        },
+        "glbKB": 2584
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-skeletons/skeleton-minion",
+            "sha256": "a0755a259290a93b5aca26910eea2ef896efcce0e0f1fe91b7818d11ef7c6ca9"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "skeleton-rogue",
+      "kind": "creature",
+      "tier": "npc",
+      "card": "Creatures/Skeleton Rogue",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-skeletons",
+        "packLabel": "KayKit Skeletons",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "item": "kaykit-skeletons/skeleton-rogue",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "source": "addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Rogue.glb",
+        "sha256": "31a74554cbc39cb802e853d951955189a23377b20e437b983d67d067c55a8001",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/skeleton-rogue.glb",
+          "bytes": 2656192,
+          "sha256": "31a74554cbc39cb802e853d951955189a23377b20e437b983d67d067c55a8001"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 5278,
+        "materials": 2,
+        "drawCalls": 10,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 95,
+        "heightM": 2.308,
+        "box": {
+          "size": [
+            1.943,
+            2.308,
+            1.153
+          ]
+        },
+        "glbKB": 2594
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-skeletons/skeleton-rogue",
+            "sha256": "31a74554cbc39cb802e853d951955189a23377b20e437b983d67d067c55a8001"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "Skeleton_Rogue_Hood",
+          "Skeleton_Rogue_Cape"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "skeleton-warrior",
+      "kind": "creature",
+      "tier": "npc",
+      "card": "Creatures/Skeleton Warrior",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-skeletons",
+        "packLabel": "KayKit Skeletons",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "item": "kaykit-skeletons/skeleton-warrior",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+        "source": "addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Warrior.glb",
+        "sha256": "0a5413d3c2a6685c95a5083d3f0b18b5ded839852235fca7250e6e472fd0cf0f",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/skeleton-warrior.glb",
+          "bytes": 2670708,
+          "sha256": "0a5413d3c2a6685c95a5083d3f0b18b5ded839852235fca7250e6e472fd0cf0f"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models."
+      },
+      "measured": {
+        "tris": 5934,
+        "materials": 2,
+        "drawCalls": 10,
+        "texturePx": 1024,
+        "bones": 41,
+        "clips": 95,
+        "heightM": 2.59,
+        "box": {
+          "size": [
+            1.943,
+            2.59,
+            1.459
+          ]
+        },
+        "glbKB": 2608
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-skeletons/skeleton-warrior",
+            "sha256": "0a5413d3c2a6685c95a5083d3f0b18b5ded839852235fca7250e6e472fd0cf0f"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "rig": {
+        "heightM": 1.45,
+        "keep": [
+          "Skeleton_Warrior_Helmet"
+        ],
+        "verbs": [
+          "idle",
+          "walk",
+          "run",
+          "jump",
+          "fall",
+          "land",
+          "attack",
+          "cast",
+          "hit",
+          "die",
+          "emote",
+          "win"
+        ],
+        "note": "`game new` runs the character pipeline (lib/characters.mjs): joints to the skeleton standard, the held things kept merged into one skinned mesh, the clips into public/anims/<skeleton>.glb"
+      }
+    },
+    {
+      "id": "torch",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Torch",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kaykit-dungeon",
+        "packLabel": "KayKit Dungeon Remastered",
+        "packUrl": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+        "item": "kaykit-dungeon/torch-lit",
+        "author": "KayKit",
+        "origin": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+        "source": "addons/kaykit_dungeon_remastered/Assets/gltf/torch_lit.gltf.glb",
+        "sha256": "3ec3cefa422b69365f7a203742152957fef17923a2d167227c65ed78d4fb6170",
+        "paletteSwap": false
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/torch.glb",
+          "bytes": 11128,
+          "sha256": "3ec3cefa422b69365f7a203742152957fef17923a2d167227c65ed78d4fb6170"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "KayKit",
+        "attribution": null,
+        "notes": "From the Homie starter library (kaykit-dungeon); the pack's own licence text: licenses/kaykit-dungeon.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "measured": {
+        "tris": 270,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 512,
+        "bones": 0,
+        "clips": 0,
+        "heightM": 1.126,
+        "box": {
+          "size": [
+            0.55,
+            1.126,
+            0.55
+          ]
+        },
+        "glbKB": 11
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kaykit-dungeon/torch-lit",
+            "sha256": "3ec3cefa422b69365f7a203742152957fef17923a2d167227c65ed78d4fb6170"
+          }
+        ]
+      },
+      "review": {
+        "state": "auto"
+      },
+      "inGame": {
+        "heightM": 1.6
+      }
+    }
+  ]
+}

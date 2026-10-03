@@ -1,7 +1,7 @@
 ---
 name: models
-description: Give a game real 3D models that fit together and run on a phone — free CC0 models from Homie's starter library (Kenney, KayKit, Poly Haven, ambientCG) copied in with their licence, the person's own files checked and made phone-sized, and generated props (a concept image in the game's locked style, then Tripo P1 image-to-3D) on the person's OWN fal account under a hard budget with a receipt per call — every asset recorded with its provenance and licence (RIGHTS.md, the credits page), checked against phone budgets, shown in a lineup at true scale, and loaded through one safe loader. Use when someone wants 3D models, props, characters, scenery or "free assets" for a game, asks where a model came from or whether it may be used, or says the models look like they are from different games.
-compatibility: Node 22. Generated props use Tripo's models on the creator's own fal account (FAL_KEY); fal's own MCP server (https://mcp.fal.ai/mcp-relay) reads schemas and prices.
+description: Give a game real 3D models that fit together and run on a phone — free CC0 models from Homie's starter library (Kenney, KayKit, Poly Haven, ambientCG) copied in with their licence, the person's own files checked and made phone-sized, and generated props (a concept image in the game's locked style, then Tripo P1 image-to-3D) and generated rigged characters (an A-pose concept, then Meshy 7.1 with its auto-rig, the library's clips retargeted onto it) on the person's OWN fal account under a hard budget with a receipt per call — every asset recorded with its provenance and licence (RIGHTS.md, the credits page), checked against phone budgets, shown in a lineup at true scale, and loaded through one safe loader. Use when someone wants 3D models, props, characters, scenery or "free assets" for a game, asks where a model came from or whether it may be used, or says the models look like they are from different games.
+compatibility: Node 22. Generated props use Tripo's models, and generated characters Meshy's, on the creator's own fal account (FAL_KEY); fal's own MCP server (https://mcp.fal.ai/mcp-relay) reads schemas and prices.
 metadata:
   providers: fal tripo
 ---
@@ -15,7 +15,8 @@ budgets). Routes, cheapest coherent one first:
    never replace one with generated meshes without the owner's ask.
 2. **The starter library** (free, CC0): `assets find`, then `assets add`.
 3. **The person's own files**: `assets add --file … --license …` (ask whose it is).
-4. **Generated** (paid, their own fal account, under a budget): a concept, then a mesh. Props only in phase 1.
+4. **Generated** (paid, their own fal account, under a budget): a concept, then a mesh: props, and rigged characters
+   (below). A character's rig, clips and feel are the `animate` skill's.
 
 Commands run from inside the studio: `npx --no-install homie-studio assets …` (free) and this skill's script for
 the paid route: `node "${CLAUDE_PLUGIN_ROOT}/skills/models/scripts/models.mjs" <command>` (in an app with Homie's
@@ -80,6 +81,26 @@ npx --no-install homie-studio assets lineup <id>         # true scale, silhouett
   (`references/RIGHTS.md`): keep a game's models on the fal route. In Claude Code the Homie mod holds a `tripo`
   generating command or a Tripo MCP tool as a call whose cost cannot be read first.
 - A painted mood image for the style board: `node <models.mjs> mood <id> b --yes` (about US$0.035; a target).
+
+## Generated characters (paid): an A-pose concept, then a rigged mesh
+
+Library characters first (`assets find "knight" --kind character`: KayKit's adventurers and skeletons, Kenney's mini
+and blocky characters, all CC0 and animated). For one the library cannot cover:
+
+```sh
+node <models.mjs> character <id> ranger --card "Players/Ranger" --what "a forest ranger: green hooded cloak, leather tunic, a bow on the back" --height 1.45 --like kaykit-adventurers/rogue --dry-run
+node <models.mjs> character <id> ranger --card "Players/Ranger" --what "…" --height 1.45 --like kaykit-adventurers/rogue --yes   # the concept only
+#   LOOK at art/ranger/concept.*: one character, whole, in an A-pose, in the game's style, on a plain background?
+node <models.mjs> character <id> ranger --mesh --yes     # Meshy 7.1 + auto-rig, about US$1.40; then free: optimised, rig mapped, clips retargeted
+npx --no-install homie-studio anim preview <id> --asset ranger   # LOOK at the preview sheet
+```
+
+`--like` takes a library character's own thumbnail as the style reference (so a generated hero stands beside the
+library's in one look); golden images, when the game has them, come first. The concept is a full body in an A-pose,
+front view, plain background (what auto-rigging needs). Humanoids with clear limbs only. The quote reads fal's pricing
+API and the model page's add-ons (textures, rigging) and takes the higher. The raw rigged file stays in
+`art/<asset>/raw/`; the shipped character is phone-sized with its skeleton mapped to the standard and the library's
+CC0 clips (idle, run, jump, attack, hit, die, ...) retargeted onto it, recorded with both receipts.
 
 ## Check, lineup, rights
 

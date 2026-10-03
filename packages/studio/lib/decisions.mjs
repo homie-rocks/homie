@@ -56,7 +56,27 @@ export function contextOf(root, id, { prompt = '' } = {}) {
   const mood = Object.fromEntries(Object.entries(MOODS).map(([m, re]) => [m, score(re)]));
   let theme = {};
   try { theme = readTheme(root); } catch { theme = {}; }
-  return { id, prompt: clean(prompt, 600), words, score, genre, mood, codexPalette: pal, codexFonts: fonts, theme, cards, players: Number(game.players?.max ?? game.netplay?.maxPlayers ?? 8) || 8, name: game.name ?? id, codexArt: clean(section('(?:art|look|style|visual)'), 400) };
+  // A game made from a starter already draws with a style.json (its palette, fonts, light, camera, render style): the
+  // automatic picks start from what it draws, so `style init` never repaints a working game behind its back.
+  let drawn = null;
+  try { const t = JSON.parse(readFileSync(join(dir, 'style.json'), 'utf8')); if (t?.palette?.bg && !existsSync(join(dir, DECISIONS_FILE))) drawn = t; } catch { drawn = null; }
+  // The verbs its characters already play (a starter's clip libraries): the clip set starts from them.
+  // And how tall its characters already stand (the median measured height): the proportions start from them.
+  let clipVerbs = [];
+  let castHeightM = null;
+  try {
+    const assets = JSON.parse(readFileSync(join(dir, 'assets', 'manifest.json'), 'utf8')).assets ?? [];
+    // A verb counts when at least half the characters can play it: one generated hero's extra clip is its own, not
+    // a verb the whole cast now lacks.
+    const libs = new Map(assets.filter((a) => a.kind === 'clip').map((a) => [a.rig?.skeleton, (a.clips ?? []).map((c) => c.verb)]));
+    const cast = assets.filter((a) => (a.kind === 'character' || a.kind === 'creature') && a.rig);
+    const count = new Map();
+    for (const a of cast) for (const v of libs.get(a.rig.skeleton) ?? a.rig.verbs ?? []) count.set(v, (count.get(v) ?? 0) + 1);
+    clipVerbs = cast.length ? [...count].filter(([, n]) => n * 2 >= cast.length).map(([v]) => v) : [...new Set([...libs.values()].flat())];
+    const hs = assets.filter((a) => a.kind === 'character' && Number(a.measured?.heightM) > 0).map((a) => Number(a.measured.heightM)).sort((a, b) => a - b);
+    if (hs.length) castHeightM = Math.round(hs[Math.floor(hs.length / 2)] * 100) / 100;
+  } catch { clipVerbs = []; }
+  return { id, prompt: clean(prompt, 600), words, score, genre, mood, codexPalette: pal, codexFonts: fonts, theme, cards, players: Number(game.players?.max ?? game.netplay?.maxPlayers ?? 8) || 8, name: game.name ?? id, codexArt: clean(section('(?:art|look|style|visual)'), 400), drawn, clipVerbs, castHeightM };
 }
 
 /** The best match in a preset table by word score: [key, score] or null. */
@@ -107,11 +127,13 @@ function cameraValue(key, over = {}) {
  */
 export const CATALOGUE = Object.freeze([
   ['style.render', 'style', 'How is the world drawn?', [], (ctx) => {
+    if (ctx.drawn?.render && RENDERS[ctx.drawn.render]) return { value: ctx.drawn.render, label: RENDERS[ctx.drawn.render].label, why: 'what the game draws now (its style.json)', options: Object.entries(RENDERS).map(([k, v]) => ({ id: k, label: v.label, value: k })) };
     const hit = best(RENDERS, ctx);
     const key = hit?.[0] ?? 'lowpoly-flat';
     return { value: key, label: RENDERS[key].label, why: hit ? `your words ${said(ctx, RENDERS[key].words)}: ${RENDERS[key].note}` : `nothing named a look: ${RENDERS[key].note}`, options: Object.entries(RENDERS).map(([k, v]) => ({ id: k, label: v.label, value: k })) };
   }],
   ['style.palette', 'style', 'Which colours, and what is each one for?', ['style.render', 'style.light'], (ctx) => {
+    if (ctx.drawn?.palette) { const v = paletteValue('custom', ctx.drawn.palette); v.ramp = Array.isArray(ctx.drawn.palette.ramp) && ctx.drawn.palette.ramp.length ? ctx.drawn.palette.ramp.filter((c) => HEX.test(String(c))) : rampFrom(v); return { value: v, label: 'The game\'s own colours', why: 'what the game draws now (its style.json)', options: paletteOptions(ctx) }; }
     const own = PALETTE_KEYS.filter((k) => ctx.codexPalette[k]).length >= 3 && !isStudioTheme(ctx.codexPalette, ctx.theme);
     if (own) {
       const v = paletteValue('custom', ctx.codexPalette);
@@ -131,29 +153,34 @@ export const CATALOGUE = Object.freeze([
     const g = GENRES[ctx.genre] ?? GENRES.party;
     const cute = /\b(cute|chibi|tiny|little|baby)\b/i.test(ctx.words); const real = /\b(realistic|heroic|tall)\b/i.test(ctx.words);
     const heads = cute ? 2.5 : real ? 6.5 : g.heads;
-    return { value: { heads, heightM: real ? 1.8 : g.heightM, hands: heads < 4 ? 'big' : 'normal' }, label: `${heads} heads tall, ${real ? 1.8 : g.heightM} m`, why: cute || real ? 'your words' : `a ${ctx.genre} game seen from ${CAMERAS[g.camera].label.toLowerCase()}: big heads read on a phone`, options: [2.5, 4.5, 6.5].map((h) => ({ id: `h${h}`, label: `${h} heads`, value: { heads: h, heightM: h < 3 ? 0.9 : h < 5 ? 1.5 : 1.8, hands: h < 4 ? 'big' : 'normal' } })) };
+    const heightM = ctx.castHeightM ?? (real ? 1.8 : g.heightM);
+    const why = ctx.castHeightM ? `the characters it already has stand ${ctx.castHeightM} m` : cute || real ? 'your words' : `a ${ctx.genre} game seen from ${CAMERAS[g.camera].label.toLowerCase()}: big heads read on a phone`;
+    return { value: { heads, heightM, hands: heads < 4 ? 'big' : 'normal' }, label: `${heads} heads tall, ${heightM} m`, why, options: [2.5, 4.5, 6.5].map((h) => ({ id: `h${h}`, label: `${h} heads`, value: { heads: h, heightM: h < 3 ? 0.9 : h < 5 ? 1.5 : 1.8, hands: h < 4 ? 'big' : 'normal' } })) };
   }],
   ['style.materials', 'style', 'What are surfaces made of: flat colour, a gradient atlas, painted pictures or PBR?', ['style.render', 'game.devices'], (ctx, p) => {
+    if (ctx.drawn?.materials?.model) { const m = ctx.drawn.materials; return { value: { model: m.model, outline: Boolean(m.outline), texelDensity: m.texelDensity ?? null, atlas: Boolean(m.atlas) }, label: labelOf('style.materials', m), why: 'what the game draws now (its style.json)', options: [] }; }
     const r = RENDERS[p['style.render']] ?? RENDERS['lowpoly-flat'];
     const density = { flat: null, toon: 128, 'hand-painted': 256, pbr: 384, pixel: 32 }[r.materials] ?? null;
     return { value: { model: r.materials, outline: r.outline, texelDensity: density, atlas: r.materials === 'flat' }, label: `${({ flat: 'Flat palette colours', toon: 'Toon ramp', 'hand-painted': 'Hand-painted albedo', pbr: 'PBR metal and roughness', pixel: 'Pixel textures' })[r.materials]}${r.outline ? ', outlines' : ''}`, why: `follows the render style (${r.label}); phones: one material per asset`, options: [['flat', 'Flat palette colours'], ['toon', 'Toon ramp'], ['hand-painted', 'Hand-painted albedo'], ['pbr', 'PBR']].map(([k, l]) => ({ id: k, label: l, value: { model: k, outline: k === 'toon', texelDensity: null, atlas: k === 'flat' } })) };
   }],
   ['style.light', 'style', 'Where does the light come from, how hard, and what time of day?', ['style.render'], (ctx, p) => {
+    if (ctx.drawn?.light?.time && LIGHTS[ctx.drawn.light.time]) { const base = lightValue(ctx.drawn.light.time, p['style.palette'] ?? paletteValue('meadow-morning')); return { value: { ...base, ...Object.fromEntries(Object.entries(ctx.drawn.light).filter(([k]) => k in base)) }, label: LIGHTS[ctx.drawn.light.time].label, why: 'what the game draws now (its style.json)', options: Object.entries(LIGHTS).map(([k, v]) => ({ id: k, label: v.label, value: k })) }; }
     const hit = best(LIGHTS, ctx);
     const palName = p['style.palette']?.name;
     const key = hit?.[0] ?? ({ 'moonlit-grove': 'night', 'neon-dusk': 'night', 'embers-night': 'night', 'desert-noon': 'noon', 'autumn-grove': 'golden', 'ash-dawn': 'overcast', 'space-ink': 'night' })[palName] ?? 'morning';
     return { value: lightValue(key, p['style.palette'] ?? paletteValue('meadow-morning')), label: LIGHTS[key].label, why: hit ? `your words ${said(ctx, LIGHTS[key].words)}` : 'fits the palette', options: Object.entries(LIGHTS).map(([k, v]) => ({ id: k, label: v.label, value: k })) };
   }],
   ['style.camera', 'style', 'Where does the camera sit?', [], (ctx) => {
+    if (ctx.drawn?.camera?.angle && CAMERAS[ctx.drawn.camera.angle]) { const c = ctx.drawn.camera; return { value: cameraValue(c.angle, Object.fromEntries(['pitch', 'distance', 'fov', 'projection'].filter((k) => c[k] !== undefined).map((k) => [k, c[k]]))), label: CAMERAS[c.angle].label, why: 'what the game draws now (its style.json)', options: Object.entries(CAMERAS).map(([k, v]) => ({ id: k, label: v.label, value: k })) }; }
     const asked = /\btop[- ]?down\b/i.test(ctx.words) ? 'top-down' : /\biso(metric)?\b/i.test(ctx.words) ? 'iso' : /\bside[- ]?(on|scroll\w*|view)?\b/i.test(ctx.words) ? 'side' : /\b(chase|third[- ]person)\b/i.test(ctx.words) ? 'chase' : null;
     const key = asked ?? (GENRES[ctx.genre] ?? GENRES.party).camera;
     return { value: cameraValue(key), label: CAMERAS[key].label, why: asked ? 'your words' : `a ${ctx.genre} game: ${CAMERAS[key].note}`, options: Object.entries(CAMERAS).map(([k, v]) => ({ id: k, label: v.label, value: k })) };
   }],
   ['style.ui', 'style', 'Which fonts, icons and HUD shape?', ['style.render', 'style.shape'], (ctx, p) => {
     const r = RENDERS[p['style.render']] ?? RENDERS['lowpoly-flat'];
-    const fonts = { display: ctx.codexFonts.display ?? r.fonts.display, body: ctx.codexFonts.body ?? r.fonts.body };
+    const fonts = { display: ctx.codexFonts.display ?? ctx.drawn?.fonts?.display ?? r.fonts.display, body: ctx.codexFonts.body ?? ctx.drawn?.fonts?.body ?? r.fonts.body };
     const radius = p['style.shape']?.language === 'angular' ? 4 : p['style.shape']?.language === 'blocky' ? 8 : 14;
-    return { value: { ...fonts, icons: p['style.render'] === 'pixel-hd2d' ? 'pixel' : 'filled', radius, hud: 'chips' }, label: `${fonts.display} and ${fonts.body}`, why: ctx.codexFonts.display ? 'the codex names the fonts' : `Google Fonts (OFL) that suit ${r.label.toLowerCase()}`, options: Object.entries(FONT_SETS).map(([k, v]) => ({ id: k, label: `${v.display} / ${v.body}`, value: v })) };
+    return { value: { ...fonts, icons: p['style.render'] === 'pixel-hd2d' ? 'pixel' : 'filled', radius, hud: 'chips' }, label: `${fonts.display} and ${fonts.body}`, why: ctx.codexFonts.display ? 'the codex names the fonts' : ctx.drawn?.fonts?.display ? 'what the game draws now (its style.json)' : `Google Fonts (OFL) that suit ${r.label.toLowerCase()}`, options: Object.entries(FONT_SETS).map(([k, v]) => ({ id: k, label: `${v.display} / ${v.body}`, value: v })) };
   }],
   ['style.vfx', 'style', 'What do effects look like?', ['style.render', 'style.light'], (ctx, p) => {
     const r = RENDERS[p['style.render']] ?? RENDERS['lowpoly-flat'];
@@ -188,7 +215,7 @@ export const CATALOGUE = Object.freeze([
     const beast = /\b(fox(es)?|cats?|dogs?|wolf|wolves|bears?|horses?|deer|rabbits?|bunn(y|ies)|animals?|pets?|creatures?|dragons?)\b/i.test(ctx.words);
     return { value: beast ? 'quadruped' : 'humanoid', label: beast ? 'Per-species (four legs)' : 'Homie humanoid (VRM names, Mixamo in)', why: beast ? `your characters are animals (${said(ctx, /\b(fox(es)?|cats?|dogs?|wolf|wolves|bears?|horses?|deer|rabbits?|bunn(y|ies)|animals?|pets?|creatures?|dragons?)\b/i)})` : 'people: one humanoid vocabulary shares one clip library', options: [{ id: 'humanoid', label: 'Humanoid', value: 'humanoid' }, { id: 'quadruped', label: 'Quadruped', value: 'quadruped' }, { id: 'none', label: 'None', value: 'none' }] };
   }],
-  ['rig.source', 'rigs', 'Where do rigs come from?', ['rig.skeleton'], () => ({ value: 'library', label: 'The library\'s rigs', why: 'free; generated rigs are phase 2', options: [] })],
+  ['rig.source', 'rigs', 'Where do rigs come from?', ['rig.skeleton'], () => ({ value: 'library', label: 'The library\'s rigs', why: 'free; a character the library cannot cover can be generated with its rig on your fal account (the models skill)', options: [] })],
   ['rig.bones', 'rigs', 'How many bones?', ['cast.tiers', 'style.camera'], () => ({ value: { hero: 48, npc: 32, fingers: false, influences: 4 }, label: '48 a hero, 32 an NPC, 4 influences', why: 'three.js reads 4 influences; fingers only for close cameras', options: [] })],
   ['rig.sockets', 'rigs', 'Where do held things attach?', [], () => ({ value: ['hand.R', 'hand.L', 'head', 'back'], label: 'hand.R, hand.L, head, back', why: 'the standard set', options: [] })],
   ['rig.face', 'rigs', 'How do faces move?', ['style.camera'], () => ({ value: 'none', label: 'None (phones)', why: 'a face is a few pixels on a phone at this camera', options: [] })],
@@ -197,8 +224,10 @@ export const CATALOGUE = Object.freeze([
     const k = p['style.render'] === 'pixel-hd2d' ? 'stepped' : ctx.genre === 'rpg' ? 'grounded' : 'snappy';
     return { value: k, label: ({ snappy: 'Snappy cartoon', grounded: 'Grounded, stylised', stepped: 'Stepped (pixel)' })[k], why: `a ${ctx.genre} game`, options: [] };
   }],
-  ['anim.clips', 'animations', 'Which clips each role needs?', [], (ctx) => ({ value: (GENRES[ctx.genre] ?? GENRES.party).clips, label: (GENRES[ctx.genre] ?? GENRES.party).clips.join(', '), why: `the verbs of a ${ctx.genre} game`, options: [] })],
-  ['anim.source', 'animations', 'Where do clips come from?', ['anim.clips'], () => ({ value: 'library', label: 'Library clips, retargeted', why: 'free first (phase 2 adds generated motion)', options: [] })],
+  ['anim.clips', 'animations', 'Which clips each role needs?', [], (ctx) => (ctx.clipVerbs?.length
+    ? { value: ctx.clipVerbs, label: ctx.clipVerbs.join(', '), why: 'the clips its characters already play', options: [] }
+    : { value: (GENRES[ctx.genre] ?? GENRES.party).clips, label: (GENRES[ctx.genre] ?? GENRES.party).clips.join(', '), why: `the verbs of a ${ctx.genre} game`, options: [] })],
+  ['anim.source', 'animations', 'Where do clips come from?', ['anim.clips'], () => ({ value: 'library', label: 'Library clips, retargeted', why: 'free CC0 clips, retargeted onto every skeleton; text-to-motion is not offered (the models available are non-commercial in effect)', options: [] })],
   ['anim.motion', 'animations', 'In place or root motion?', [], () => ({ value: { root: 'in-place', fps: 30 }, label: 'In place, 30 fps', why: 'the host moves bodies; clips never do (netplay)', options: [] })],
   ['anim.blend', 'animations', 'Crossfades and layers?', ['anim.style'], (ctx, p) => ({ value: { crossfadeS: p['anim.style'] === 'grounded' ? 0.25 : 0.12, upperBody: true, additiveHits: true }, label: p['anim.style'] === 'grounded' ? '0.25 s crossfades' : '0.12 s crossfades', why: 'follows the motion style', options: [] })],
   ['anim.procedural', 'animations', 'Which procedural layers?', ['style.camera'], (ctx) => ({ value: { lookAt: true, footIK: false, springs: /\b(tail|cape|hair|fox|ears?)\b/i.test(ctx.words), lean: true, squash: true }, label: 'Look-at, lean, squash; springs on tails and capes', why: 'cheap life on top of clips; foot planting off at this camera', options: [] })],
@@ -340,7 +369,8 @@ export function initDecisions(root, id, { prompt = '', path = null, budget = nul
   for (const [did] of CATALOGUE) {
     const def = CAT.get(did);
     const rec = doc.decisions[did];
-    if (rec && rec.state !== 'auto') { picked[did] = rec.value; kept.push(did); continue; }
+    // Kept: anything the person steered or locked, anything pinned, and what a starter's style.json already draws.
+    if (rec && (rec.state !== 'auto' || /^what the game draws now/.test(String(rec.why ?? '')))) { picked[did] = rec.value; kept.push(did); continue; }
     const pick = def.pick(ctx, picked);
     picked[did] = pick.value;
     if (rec && JSON.stringify(rec.value) === JSON.stringify(pick.value)) continue;

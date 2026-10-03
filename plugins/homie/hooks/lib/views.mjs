@@ -377,6 +377,38 @@ function castRows(t, a) {
   ], { paddingLeft: 2 })).concat(a.cast.length > 24 ? [span(t, `  … ${a.cast.length - 24} more (/assets ${a.game})`, DIM)] : []);
 }
 
+/**
+ * The characters (the animate skill): each one's skeleton family and bones, its clips (how many of the game's verbs,
+ * how many retargeted onto it) and what it lacks.
+ */
+function characterRows(t, a, columns) {
+  const idW = Math.min(18, Math.max(6, ...a.characters.map((c) => c.id.length)));
+  const need = a.need.length;
+  return [
+    span(t, `Characters · ${a.characters.length}${need ? ` · the game needs ${need} clip${need === 1 ? '' : 's'}` : ''}`, { bold: true }),
+    ...a.characters.slice(0, 16).map((c) => row(t, [
+      span(t, fit(c.id, idW).padEnd(idW)),
+      span(t, `${c.family ?? '?'} · ${c.bones ?? '?'} bones · ${c.route}`, DIM),
+      span(t, `${c.verbs.length} clips${c.retargeted ? ` (${c.retargeted} retargeted)` : ''}`, c.missing.length ? {} : { color: 'green' }),
+      c.missing.length ? span(t, fit(`missing ${c.missing.join(', ')}`, Math.max(12, columns - idW - 50)), { color: 'yellow' }) : null,
+    ], { paddingLeft: 2 })),
+    a.characters.length > 16 ? span(t, `  … ${a.characters.length - 16} more (/cast ${a.game})`, DIM) : null,
+  ];
+}
+
+/** Skinning on a phone: the room's players times the heaviest character, against the budget. */
+function skinRow(t, k, columns) {
+  const width = Math.max(8, Math.min(20, Math.floor(columns / 6)));
+  const budget = k.budget.vertices ?? 0;
+  const over = budget > 0 && k.vertices > budget;
+  const bars = bar(budget ? Math.min(100, (k.vertices / budget) * 100) : 0, width);
+  return row(t, [
+    span(t, 'skinning'.padEnd(15), DIM),
+    line(t, [span(t, bars.done, { color: over ? 'red' : 'green' }), span(t, bars.left, DIM)]),
+    span(t, `${k.vertices.toLocaleString('en-US')} / ${budget.toLocaleString('en-US')} vertices (a room of ${k.players})`, over ? { color: 'red', bold: true } : {}),
+  ], { paddingLeft: 2 });
+}
+
 /** The scene's budgets as bars (draw calls, triangles, picture memory, first-play download), red when over. */
 function budgetBars(t, check, columns, now) {
   const width = Math.max(8, Math.min(20, Math.floor(columns / 6)));
@@ -426,7 +458,9 @@ export function artTab(t, { art, games, columns, now, busy, why, on }) {
         style ? col(t, [span(t, style.label, { bold: true }), ...style.rows.map((d) => decisionRow(t, a.game, d, columns, on))], { marginTop: 1 }) : null,
         more ? span(t, `+ ${more} more decision${more === 1 ? '' : 's'} in ${rest.map((d) => d.label).join(', ')} (/look ${a.game})`, DIM) : null,
         col(t, [span(t, `Cast · ${a.cast.length} asset${a.cast.length === 1 ? '' : 's'}${a.stale.length ? ` · ${a.stale.length} stale` : ''}`, { bold: true }), ...castRows(t, a)], { marginTop: 1 }),
+        a.characters.length ? col(t, characterRows(t, a, columns), { marginTop: 1 }) : null,
         a.check ? col(t, budgetBars(t, a.check, columns, now), { marginTop: 1 }) : span(t, `No scene check yet: homie-studio assets check ${a.game} measures every asset against the phone budgets.`, DIM),
+        a.skinning ? skinRow(t, a.skinning, columns) : null,
         line(t, [span(t, 'Spend  ', { bold: true }), span(t, `${usd(a.spend.used)}${a.spend.cap !== null ? ` of ${usd(a.spend.cap)}` : ''}`, over ? { color: 'red', bold: true } : {}), span(t, a.spend.cap === null ? '  no art budget: free routes only' : a.spend.items.length ? `  ${a.spend.items.length} paid step${a.spend.items.length === 1 ? '' : 's'}, receipts in art/` : '  nothing paid yet', DIM)]),
         a.lineup ? span(t, `lineup ${ago(a.lineup.at, now)}: ${a.lineup.flagged ? `${a.lineup.flagged} flagged` : 'nothing flagged'} (/lineup ${a.game})`, a.lineup.flagged ? { color: 'yellow' } : DIM) : null,
         a.licence.length

@@ -21,6 +21,8 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { AnimationMixer, LoopRepeat, LoopOnce, type AnimationClip } from 'three';
 
 interface Palette { bg: string; ink: string; accent: string; accent2: string; danger: string; good: string; gold: string; ramp?: string[] }
 interface Tokens {
@@ -33,7 +35,7 @@ interface Tokens {
   shape?: { language?: string; bevel?: number };
   proportions?: { heads?: number; heightM?: number };
 }
-interface ModelIn { id: string; glb: string; label?: string; place?: 'hero' | 'prop' | 'dressing'; scale?: number; retint?: boolean; tint?: string; pull?: number }
+interface ModelIn { id: string; glb: string; label?: string; place?: 'hero' | 'prop' | 'dressing'; scale?: number; retint?: boolean; tint?: string; pull?: number; anims?: string; pose?: string; poseAt?: number }
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
@@ -46,8 +48,15 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 
 const b64 = (s: string): ArrayBuffer => { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
 async function parse(m: ModelIn): Promise<Group> {
-  const gltf = await new Promise<{ scene: Group }>((res, rej) => loader.parse(b64(m.glb), '', res as never, rej));
+  const gltf = await new Promise<{ scene: Group; animations: AnimationClip[] }>((res, rej) => loader.parse(b64(m.glb), '', res as never, rej));
   gltf.scene.name = m.id;
+  // A character with a clip library stands in a pose (idle, a little way in), not in its bind pose.
+  const clips = m.anims ? (await new Promise<{ animations: AnimationClip[] }>((res, rej) => loader.parse(b64(m.anims as string), '', res as never, rej))).animations : gltf.animations;
+  gltf.scene.userData.clips = clips;
+  if (clips?.length && (m.anims || m.pose)) {
+    const clip = clips.find((c) => c.name === (m.pose ?? 'idle')) ?? clips.find((c) => c.name === 'idle') ?? clips[0];
+    if (clip) { const mixer = new AnimationMixer(gltf.scene); mixer.clipAction(clip).play(); mixer.setTime(Math.min(clip.duration, m.poseAt ?? 0.25)); gltf.scene.updateMatrixWorld(true); }
+  }
   return gltf.scene;
 }
 const col = (hex: string | undefined, fallback = '#888888'): Color => new Color(/^#[0-9a-f]{3,8}$/i.test(String(hex)) ? hex as string : fallback);
@@ -573,7 +582,8 @@ async function lineup(models: ModelIn[], t: Tokens, opts: { w?: number; h?: numb
   const solo = new Scene(); solo.background = new Color('#ffffff');
   for (let k = 0; k < parsed.length; k++) {
     const it = parsed[k] as (typeof parsed)[number];
-    const clone = it.g.clone(true);
+    // A skinned character's copy needs its own bones (a plain clone would draw with the original's, elsewhere).
+    const clone = cloneSkinned(it.g);
     clone.position.set(0, 0, 0);
     clone.traverse((o) => { const m = o as Mesh; if (m.isMesh) m.material = black; });
     solo.add(clone);
@@ -622,8 +632,71 @@ async function thumb(m: ModelIn, opts: { size?: number; bg?: string } = {}): Pro
   return { image: shot.toDataURL('image/webp', 0.82), size: [size.x, size.y, size.z].map((v) => +v.toFixed(3)) };
 }
 
+/* ------------------------------------------------------------------ frames of a clip */
+
+/**
+ * A character playing its clips: for each verb, `count` frames spread over the clip (a loop's last frame is its first,
+ * so it is left out), seen three-quarter on a ground under the game's light, each `size` pixels square. The card's
+ * looping previews are made from these (lib/characters.mjs joins them into an animated WebP); `sheet` puts every verb
+ * in a row on one picture for a person to look at.
+ */
+async function frames(m: ModelIn, t: Tokens, opts: { verbs?: string[]; count?: number; size?: number; sheet?: boolean; loops?: string[] } = {}): Promise<{ verbs: { verb: string; duration: number; frames: string[] }[]; sheet: string | null; missing: string[] }> {
+  const size = opts.size ?? 160; const count = Math.max(2, Math.min(24, opts.count ?? 12));
+  const g = await parse({ ...m, pose: undefined, anims: m.anims });
+  const clips = (g.userData.clips ?? []) as AnimationClip[];
+  const want = opts.verbs?.length ? opts.verbs : clips.map((c) => c.name);
+  const p = t.palette;
+  const scene = new Scene(); scene.background = col(mixHex(p.bg, '#ffffff', 0.1));
+  renderer.toneMapping = NoToneMapping;
+  const b = boxOf(g); const sz = b.getSize(new Vector3()); const c = b.getCenter(new Vector3());
+  g.position.sub(new Vector3(c.x, b.min.y, c.z));
+  const tall = Math.max(0.1, sz.y);
+  lights(scene, t, tall * 4);
+  const floor = new Mesh(new PlaneGeometry(tall * 40, tall * 40), new MeshStandardMaterial({ color: col(t.light?.ground ?? mixHex(p.accent2, p.bg, 0.5)), roughness: 1 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  g.traverse((o) => { const mm = o as Mesh; if (mm.isMesh) { mm.castShadow = true; mm.receiveShadow = false; mm.frustumCulled = false; } });
+  scene.add(g);
+  const cam = new PerspectiveCamera(30, 1, tall * 0.02, tall * 60);
+  const d = tall * 3.1;
+  cam.position.set(d * 0.55, tall * 0.55 + d * 0.32, d * 0.78); cam.lookAt(0, tall * 0.45, 0);
+  const mixer = new AnimationMixer(g);
+  const out: { verb: string; duration: number; frames: string[] }[] = [];
+  const missing: string[] = [];
+  for (const verb of want) {
+    const clip = clips.find((x) => x.name === verb);
+    if (!clip) { missing.push(verb); continue; }
+    mixer.stopAllAction();
+    const action = mixer.clipAction(clip);
+    const loop = (opts.loops ?? []).includes(verb);
+    action.setLoop(loop ? LoopRepeat : LoopOnce, Infinity); action.clampWhenFinished = true; action.reset().play();
+    const shots: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const at = loop ? (clip.duration * i) / count : (clip.duration * i) / (count - 1);
+      mixer.setTime(Math.min(clip.duration - 1e-4, at));
+      g.updateMatrixWorld(true);
+      shots.push(snapshot(size, size, scene, cam).toDataURL('image/png'));
+    }
+    action.stop();
+    out.push({ verb, duration: +clip.duration.toFixed(3), frames: shots });
+  }
+  let sheet: string | null = null;
+  if (opts.sheet && out.length) {
+    const sc = document.createElement('canvas'); sc.width = size * count + 90; sc.height = size * out.length;
+    const sg = sc.getContext('2d') as CanvasRenderingContext2D;
+    sg.fillStyle = '#ffffff'; sg.fillRect(0, 0, sc.width, sc.height);
+    for (let r = 0; r < out.length; r++) {
+      const row = out[r] as (typeof out)[number];
+      sg.fillStyle = '#222'; sg.font = '600 13px system-ui, sans-serif'; sg.fillText(row.verb, 6, r * size + size / 2);
+      for (let k = 0; k < row.frames.length; k++) { const im = new Image(); im.src = row.frames[k] as string; await im.decode(); sg.drawImage(im, 90 + k * size, r * size); }
+    }
+    sheet = sc.toDataURL('image/jpeg', 0.85);
+  }
+  disposeScene(scene);
+  return { verbs: out, sheet, missing };
+}
+
 function disposeScene(scene: Scene): void {
   scene.traverse((o) => { const m = o as Mesh; if (m.isMesh) { m.geometry?.dispose(); const mats = Array.isArray(m.material) ? m.material : [m.material]; for (const x of mats) x?.dispose(); } });
 }
 
-(window as unknown as { homieRender: unknown }).homieRender = { swatch, lineup, thumb, ready: true };
+(window as unknown as { homieRender: unknown }).homieRender = { swatch, lineup, thumb, frames, ready: true };

@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
-import { artFor, artSummaryOf, budgetWords, decisionsFileOf, licenceIssues, lockedChanges, lookText, phaseStrip, publicSource } from '../hooks/lib/art.mjs';
+import { artFor, artSummaryOf, budgetWords, charactersText, clipsText, decisionsFileOf, licenceIssues, lockedChanges, lookText, phaseStrip, publicSource } from '../hooks/lib/art.mjs';
 import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, globMatch, modelPullOf, paidMcpOf, paidOf, programOf, protectedBy, readOnlySql, studioCalls } from '../hooks/lib/commands.mjs';
 import { applyEdit, unifiedDiff } from '../hooks/lib/diff.mjs';
 import { summarize } from '../hooks/lib/feed.mjs';
@@ -220,6 +220,27 @@ test('commands: the models skill\'s prop and mood are fal calls, capped per game
     assert.equal(paidOf(free), null, free);
   }
   assert.equal(paidOf('node skills/art/scripts/art.mjs gen cover --yes').script, 'art', 'the art skill is still the art skill');
+  const character = paidOf('node /p/skills/models/scripts/models.mjs character owl-rush ranger --mesh --yes');
+  assert.deepEqual([character.verb, character.slug, character.tool], ['character', 'owl-rush-models', 'models character']);
+  assert.equal(paidOf('node /p/skills/models/scripts/models.mjs character owl-rush ranger --what x --dry-run'), null);
+});
+
+test('art: the characters and their clips in latest.json, cleaned; /cast and /clips in words', () => {
+  const a = artSummaryOf({
+    v: 1, game: 'g', at: '2026-10-02T10:00:00.000Z', phases: [], decisions: [], cast: [],
+    need: ['idle', 'jump', 'Bad Verb', 7],
+    characters: [{ id: 'knight', kind: 'character', route: 'library', family: 'humanoid', skeleton: 'humanoid-7a503a', bones: 23, verbs: ['idle', 'jump\u001b[2J'], missing: ['attack'], retargeted: 0, animsKB: 83 }, { id: '../x', verbs: [] }, { id: 'ok', route: 'teleported', bones: -1 }],
+    skinning: { players: 8, vertices: 40000, bones: 184, budget: { vertices: 60000, bones: 1200 } },
+  }, 'g');
+  assert.deepEqual(a.need, ['idle', 'jump']);
+  assert.deepEqual(a.characters.map((c) => c.id), ['knight', 'ok']);
+  assert.deepEqual(a.characters[0].verbs, ['idle'], 'a verb with a terminal escape is dropped');
+  assert.equal(a.characters[1].route, 'unknown');
+  assert.equal(a.characters[1].bones, null);
+  assert.match(charactersText(a, 'Heroes'), /^Heroes \(g\): 2 characters; the game needs idle, jump/);
+  assert.match(charactersText(a, 'Heroes'), /skinning a room of 8: 40,000\/60,000 vertices/);
+  assert.match(clipsText(a, 'Heroes'), /missing attack \(homie-studio anim add g knight --verbs attack\)/);
+  assert.match(charactersText({ ...a, characters: [] }, 'Heroes'), /no characters with a rig yet/);
 });
 
 test('commands: git add and git commit, with their folder, paths and flags', () => {

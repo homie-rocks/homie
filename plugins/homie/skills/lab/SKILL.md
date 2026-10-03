@@ -38,6 +38,11 @@ Make the lab able to see the mechanic **without changing how it feels** (Today m
    every few frames), `arcs` (the path with a dot a frame: spacing) and a `reach` or hit box (`lab.overlay`), drawn
    by `lab.draw(ctx, scale)` in world space.
 5. **Views**: `lab.camera({ game: null, close: { zoom: 2.4 }, arena: { whole: true } })`; 3D: side, front, top, orbit.
+6. **Characters** (`@homie-rocks/studio/animate`): pass the lab's tunables to `loadCharacter(models, url, { tune: T })`
+   and copy its `ANIM_TUNING` (fade, walkSpeed, runSpeed, actSpeed, jumpStretch, landSquash, squashHz, lean, flinch,
+   lookAt, spring) into tunables.json's "Motion" group: the clips' blends, the squash and stretch and the lean become
+   sliders too. Report the character's own `state` (IDLE, RUN, JUMP, FALL, LAND, ATTACK, HIT) as phases when the move
+   is an animation. The `hero-rush-3d` starter's takes ("jump", "swing") show it; the `animate` skill has the rest.
 6. **A stage** when the mechanic needs a target (a dummy to hit, a ledge to jump from): `lab.stage === 'dummy'`
    where the round starts. Only the lab ever sets it. Keep a real-play take too.
 7. **A take** in lab.json: a few seconds, a seed, the presses (`{ "at": 0.5, "key": "Space" }`), the view and track

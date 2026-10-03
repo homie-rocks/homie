@@ -5,9 +5,14 @@
  *               glTF-Validator; triangles, materials, picture sizes, bones and bytes against its tier's budget
  *               (the game's cast.tiers decision, else the phone defaults); the pivot at the bottom centre; its height against
  *               the card's; its licence (lib/asset-manifest.mjs); whether a decision it was made under has moved on
+ *   characters  four influences a vertex (three.js reads no more), bones within the tier, its skeleton's clip library
+ *               present, and every verb the game needs (anim.clips) in it
+ *   clips       a skeleton's clip library (kind clip): at most 1 MB (3 MB hard), sampled at no more than 30 a second
  *   the game    shipped models with no record; draw calls, triangles and picture memory summed (each asset times its
  *               `placements`, instanced ones drawn once); the first-play download from the last build (gzip); a
- *               committed binary over 5 MB under games/ (it belongs in R2, never in git)
+ *               committed binary over 5 MB under games/ (it belongs in R2, never in git); skinning on a phone: the
+ *               room's players times the heaviest character's skinned vertices and bones, against SKINNING (beyond it,
+ *               far characters must pose less often: @homie-rocks/studio/animate's crowd())
  *
  * The result also goes to .studio/art/<id>/check.json, which the Studio mod's Art tab and the cards read.
  */
@@ -28,10 +33,15 @@ export const BUDGETS = Object.freeze({
   kit: { triangles: 1000, texturePx: 512, kb: 200, bones: 0, materials: 1 },
   scene: { drawCalls: 100, triangles: 150_000, textureMB: 48, firstPlayMB: 5 },
 });
+/**
+ * Skinning on a phone, every frame (judgment, from the house's 32-player rooms; the perf skill's measured gate decides):
+ * the vertices the GPU skins and the bones the CPU poses. Characters past `crowdFrom` need crowd mode.
+ */
+export const SKINNING = Object.freeze({ vertices: 60_000, bones: 1_200, crowdFrom: 12, clipKB: 1024, clipHardKB: 3072, clipRate: 30 });
 export const HARD_CAPS = Object.freeze({ triangles: { hero: 15000, npc: 6000, prop: 8000, signature: 8000, kit: 3000 }, texturePx: 2048, kb: 5120, bones: 64, materials: 2, scene: { drawCalls: 150, triangles: 250_000, textureMB: 64, firstPlayMB: 8 } });
 const BIG_FILE = 5 * 1024 * 1024;
 
-const tierOf = (a) => (BUDGETS[a.tier] ? a.tier : a.kind === 'character' ? 'hero' : a.kind === 'creature' ? 'npc' : a.kind === 'kit' || a.kind === 'environment' ? 'kit' : 'prop');
+const tierOf = (a) => (a.kind === 'clip' ? 'clip' : BUDGETS[a.tier] ? a.tier : a.kind === 'character' ? 'hero' : a.kind === 'creature' ? 'npc' : a.kind === 'kit' || a.kind === 'environment' ? 'kit' : 'prop');
 
 /** The budgets this game holds itself to: its cast.tiers decision over the phone defaults, never past a hard cap. */
 export function budgetsFor(doc) {
@@ -97,11 +107,16 @@ export async function assetsCheck(root, id, { validate = true, write = true } = 
   const rows = [];
   let tris = 0; let draws = 0; let texBytes = 0;
   const seenFiles = new Set();
+  const { verbsFor } = await import('./characters.mjs');
+  const needVerbs = verbsFor(doc);
+  const libs = new Map(manifest.assets.filter((x) => x.kind === 'clip').map((x) => [x.rig?.skeleton, x]));
+  let heaviest = { vertices: 0, bones: 0, id: null };
   for (const a of manifest.assets) {
     const problems = []; const warnings = [];
     const tier = tierOf(a);
     const b = budgets[tier] ?? budgets.prop;
     const n = Math.max(1, Number(a.placements ?? 1) || 1);
+    if (a.kind === 'clip') { rows.push(await clipRow(gdir, a, tools)); continue; }
     const model = (a.files ?? []).find((f) => f.role === 'model');
     let m = null;
     if (model) {
@@ -126,6 +141,19 @@ export async function assetsCheck(root, id, { validate = true, write = true } = 
           else if (m.materials > b.materials) warnings.push(`${m.materials} materials (the budget is ${b.materials}: one draw call per material)`);
           if (bytes.byteLength / 1024 > b.kb) problems.push(`${kb(bytes.byteLength)} KB (a ${tier}'s budget is ${b.kb} KB)`);
           if (m.bones > (b.bones || HARD_CAPS.bones)) problems.push(`${m.bones} bones (a ${tier}'s budget is ${b.bones || HARD_CAPS.bones})`);
+          if (m.influences > 4) problems.push(`${m.influences} joints move one vertex (JOINTS_1): three.js reads 4, so the rest are dropped and the mesh tears; export with 4 influences a vertex`);
+          if (m.skinnedVertices > heaviest.vertices) heaviest = { ...heaviest, vertices: m.skinnedVertices, id: a.id };
+          if (m.bones > heaviest.bones) heaviest.bones = m.bones;
+          if (a.rig) {
+            const lib = libs.get(a.rig.skeleton);
+            const animsFile = a.rig.anims ? join(gdir, a.rig.anims) : null;
+            if (!animsFile || !existsSync(animsFile)) problems.push(`its clip library ${a.rig.anims ?? '(none named)'} is missing: homie-studio anim add ${id} ${a.id} --verbs ${needVerbs.join(',')}`);
+            else {
+              const have = lib?.clips?.map((c) => c.verb) ?? a.rig.verbs ?? [];
+              const lacking = needVerbs.filter((v) => !have.includes(v));
+              if (lacking.length) warnings.push(`the game's clips (anim.clips) name ${lacking.join(', ')}, which ${a.id}'s clip library has not: homie-studio anim add ${id} ${a.id} --verbs ${lacking.join(',')}`);
+            }
+          }
           if (m.pivot && !(m.pivot.bottom && m.pivot.centred)) warnings.push('its pivot is not at the bottom centre (assets optimise puts it there)');
           const want = Number(a.heightM ?? a.card?.heightM ?? 0);
           if (want > 0 && m.heightM && Math.abs(m.heightM / want - 1) > 0.1) warnings.push(`${m.heightM} m tall; its card says ${want} m`);
@@ -141,14 +169,23 @@ export async function assetsCheck(root, id, { validate = true, write = true } = 
     if (a.route === 'procedural' && a.measured) { tris += (a.measured.tris ?? 0) * n; draws += a.instanced ? (a.measured.drawCalls ?? 1) : (a.measured.drawCalls ?? 1) * n; }
     rows.push({ id: a.id, kind: a.kind, tier, route: a.route, ok: problems.length === 0, problems, warnings, measured: m ? { tris: m.triangles, drawCalls: m.drawCalls, materials: m.materials, maxTexturePx: m.maxTexturePx, textureKB: kb(m.textureGpuBytes), bones: m.bones, heightM: m.heightM, kb: model ? kb(statSync(join(gdir, model.path)).size) : null } : null, budget: b, placements: n });
   }
+  // Skinning on a phone: the room's players, each the heaviest character (the worst case a room can draw).
+  let players = 8;
+  try { players = Math.max(1, Number(JSON.parse(readFileSync(join(gdir, 'game.json'), 'utf8')).players?.max ?? 8) || 8); } catch { players = 8; }
+  const skinning = heaviest.vertices ? { players, character: heaviest.id, vertices: heaviest.vertices * players, bones: heaviest.bones * players, budget: { vertices: SKINNING.vertices, bones: SKINNING.bones } } : null;
   const licence = licenceProblems(root, id, manifest, { public: publicSource(root, id) });
   const stale = doc ? staleAssets(doc, manifest) : [];
   const unrecorded = unrecordedModels(root, id, manifest);
   const bigFiles = bigCommittedFiles(root).filter((f) => f.path.startsWith(`games/${id}/`));
   const firstPlay = firstPlayBytes(root, id);
   const s = budgets.scene;
-  const totals = { assets: manifest.assets.length, triangles: tris, drawCalls: draws, textureMB: +(texBytes / 1024 / 1024).toFixed(1), firstPlayMB: firstPlay ? +(firstPlay.gzip / 1024 / 1024).toFixed(2) : null };
+  const totals = { assets: manifest.assets.length, triangles: tris, drawCalls: draws, textureMB: +(texBytes / 1024 / 1024).toFixed(1), firstPlayMB: firstPlay ? +(firstPlay.gzip / 1024 / 1024).toFixed(2) : null, skinnedVertices: skinning?.vertices ?? 0, bones: skinning?.bones ?? 0 };
   const problems = [];
+  if (skinning && (skinning.vertices > SKINNING.vertices || skinning.bones > SKINNING.bones)) {
+    const crowd = `far characters must pose less often: call crowd(characters, camera) from @homie-rocks/studio/animate every frame (and lighter characters, or fewer, for the rest)`;
+    if (players >= SKINNING.crowdFrom) problems.push(`a room of ${players} skins about ${skinning.vertices.toLocaleString('en-US')} vertices and poses ${skinning.bones.toLocaleString('en-US')} bones a frame on a phone (budget ${SKINNING.vertices.toLocaleString('en-US')} and ${SKINNING.bones.toLocaleString('en-US')}): ${crowd}`);
+    else problems.push(`a room of ${players} skins about ${skinning.vertices.toLocaleString('en-US')} vertices and poses ${skinning.bones.toLocaleString('en-US')} bones a frame (budget ${SKINNING.vertices.toLocaleString('en-US')} and ${SKINNING.bones.toLocaleString('en-US')}): a lighter character (assets optimise --triangles), or ${crowd}`);
+  }
   if (totals.drawCalls > s.drawCalls) problems.push(`about ${totals.drawCalls} draw calls in a scene (the phone budget is ${s.drawCalls}): instance repeated props (placements with instanced: true), or fewer materials`);
   if (totals.triangles > s.triangles) problems.push(`about ${totals.triangles.toLocaleString('en-US')} triangles in a scene (the phone budget is ${s.triangles.toLocaleString('en-US')})`);
   if (totals.textureMB > s.textureMB) problems.push(`${totals.textureMB} MB of picture memory (the phone budget is ${s.textureMB} MB; an iPhone page dies near 100 MB)`);
@@ -156,13 +193,41 @@ export async function assetsCheck(root, id, { validate = true, write = true } = 
   for (const l of licence.filter((x) => x.level === 'refuse')) problems.push(`${l.asset}: ${l.problem}${l.fix ? ` (${l.fix})` : ''}`);
   for (const f of bigFiles) problems.push(`${f.path} is ${(f.bytes / 1024 / 1024).toFixed(1)} MB in git: big files go to the studio's R2 (homie-studio storage add, then media move), raw files to art/<slug>/raw/ (git-ignored)`);
   const ok = rows.every((r) => r.ok) && problems.length === 0;
-  const result = { ok, command: 'assets check', game: id, rows, totals, budgets: { ...s, tiers: Object.fromEntries(['hero', 'npc', 'prop', 'signature', 'kit'].map((t) => [t, budgets[t]])) }, licence, stale, unrecorded, bigFiles, firstPlay, problems, at: new Date().toISOString() };
+  const result = { ok, command: 'assets check', game: id, rows, totals, skinning, budgets: { ...s, skinning: SKINNING, tiers: Object.fromEntries(['hero', 'npc', 'prop', 'signature', 'kit'].map((t) => [t, budgets[t]])) }, licence, stale, unrecorded, bigFiles, firstPlay, problems, at: new Date().toISOString() };
   if (write) {
     const dir = join(root, '.studio', 'art', id);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'check.json'), `${JSON.stringify(result, null, 2)}\n`);
   }
   return result;
+}
+
+/** A clip library's row: its file there and recorded, its size and sample rate against SKINNING, what it holds. */
+async function clipRow(gdir, a, tools) {
+  const problems = []; const warnings = [];
+  const f = (a.files ?? []).find((x) => x.role === 'clip');
+  let measured = null;
+  if (!f) problems.push('no clip library file recorded');
+  else if (!existsSync(join(gdir, f.path))) problems.push(`${f.path} is missing`);
+  else {
+    const bytes = readFileSync(join(gdir, f.path));
+    const safe = checkGlb(bytes, LIMITS.game);
+    if (!safe.ok) problems.push(...safe.problems.map((p) => `unsafe: ${p}`));
+    const k = Math.round(bytes.byteLength / 1024);
+    if (k > SKINNING.clipHardKB) problems.push(`${k} KB of clips (at most ${SKINNING.clipHardKB} KB): fewer verbs, or resample`);
+    else if (k > SKINNING.clipKB) warnings.push(`${k} KB of clips (the budget is ${SKINNING.clipKB} KB a skeleton)`);
+    if (f.sha256 && tools && tools.sha256(bytes) !== f.sha256) warnings.push('the file changed since it was recorded (its SHA-256 differs)');
+    if (safe.ok && tools) {
+      const ins = await tools.inspectModel(bytes, { limits: LIMITS.game }).catch(() => null);
+      const m = ins?.measured;
+      if (m) {
+        measured = { clips: m.clips.length, verbs: m.clips, kb: k, rate: m.clipRate, seconds: m.clipSeconds, keys: m.clipKeys };
+        if (m.clipRate > SKINNING.clipRate + 0.5) warnings.push(`sampled at about ${m.clipRate} keys a second (30 is plenty: homie-studio anim add bakes at 30)`);
+        if (!m.clips.length) problems.push('it holds no clips');
+      }
+    }
+  }
+  return { id: a.id, kind: 'clip', tier: 'clip', route: a.route, ok: problems.length === 0, problems, warnings, measured: measured ? { tris: 0, drawCalls: 0, materials: 0, maxTexturePx: 0, textureKB: 0, bones: 0, heightM: null, kb: measured.kb, clips: measured.clips, verbs: measured.verbs, rate: measured.rate } : null, budget: { kb: SKINNING.clipKB }, placements: 1 };
 }
 
 /** Whether a game's source is shared (game.json share.source is not false) and it is meant to be public. */
@@ -175,13 +240,15 @@ export function checkLines(r) {
   const lines = [`${r.ok ? 'PASS' : 'NOT YET'}: ${r.game}'s ${r.totals.assets} asset${r.totals.assets === 1 ? '' : 's'} against the phone budgets`];
   for (const row of r.rows) {
     const m = row.measured;
-    lines.push(`  ${row.ok ? 'ok  ' : 'FIX '} ${row.id} (${row.kind}, ${row.tier}, ${row.route})${m ? `: ${m.tris} triangles, ${m.drawCalls} draw${m.drawCalls === 1 ? '' : 's'}, ${m.kb} KB, ${m.maxTexturePx ? `${m.maxTexturePx} px pictures` : 'no pictures'}${m.heightM ? `, ${m.heightM} m` : ''}` : ''}`);
+    if (row.kind === 'clip') { lines.push(`  ${row.ok ? 'ok  ' : 'FIX '} ${row.id} (clip library, ${row.route})${m ? `: ${m.clips} clips (${(m.verbs ?? []).join(', ')}), ${m.kb} KB, ${m.rate} keys a second` : ''}`); for (const p of row.problems) lines.push(`        ${p}`); for (const w of row.warnings) lines.push(`        note: ${w}`); continue; }
+    lines.push(`  ${row.ok ? 'ok  ' : 'FIX '} ${row.id} (${row.kind}, ${row.tier}, ${row.route})${m ? `: ${m.tris} triangles, ${m.drawCalls} draw${m.drawCalls === 1 ? '' : 's'}, ${m.kb} KB, ${m.maxTexturePx ? `${m.maxTexturePx} px pictures` : 'no pictures'}${m.heightM ? `, ${m.heightM} m` : ''}${m.bones ? `, ${m.bones} bones` : ''}` : ''}`);
     for (const p of row.problems) lines.push(`        ${p}`);
     for (const w of row.warnings) lines.push(`        note: ${w}`);
   }
   for (const u of r.unrecorded) lines.push(`  FIX  ${u}: shipped with no record (homie-studio assets add ${r.game} --file ${u} --license <kind>)`);
   const s = r.budgets;
   lines.push(`  scene: about ${r.totals.drawCalls} draw calls (budget ${s.drawCalls}), ${r.totals.triangles.toLocaleString('en-US')} triangles (${s.triangles.toLocaleString('en-US')}), ${r.totals.textureMB} MB of picture memory (${s.textureMB} MB)${r.totals.firstPlayMB !== null ? `, ${r.totals.firstPlayMB} MB first play (${s.firstPlayMB} MB)` : ', first play: build first'}`);
+  if (r.skinning) lines.push(`  skinning: a room of ${r.skinning.players} skins about ${r.skinning.vertices.toLocaleString('en-US')} vertices (budget ${r.skinning.budget.vertices.toLocaleString('en-US')}) and poses ${r.skinning.bones.toLocaleString('en-US')} bones (${r.skinning.budget.bones.toLocaleString('en-US')}) a frame on a phone; the heaviest is ${r.skinning.character}`);
   for (const l of r.licence) lines.push(`  ${l.level === 'refuse' ? 'FIX ' : 'note'} licence ${l.asset}: ${l.problem}${l.fix ? ` (${l.fix})` : ''}`);
   for (const st of r.stale) lines.push(`  stale ${st.id}: made under an older ${st.decisions.map((d) => d.id).join(', ')} (homie-studio style blast shows the cost; nothing is remade by itself)`);
   for (const p of r.problems.filter((x) => !/^[a-z0-9-]+: /.test(x))) lines.push(`  FIX  ${p}`);

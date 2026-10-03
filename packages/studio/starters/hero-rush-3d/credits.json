@@ -1,0 +1,40 @@
+{
+  "parts": [
+    {
+      "what": "KayKit Adventurers (models)",
+      "author": "KayKit",
+      "url": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "note": "Copied from the Homie starter library",
+      "asset": true
+    },
+    {
+      "what": "KayKit Medieval Hexagon (models)",
+      "author": "KayKit",
+      "url": "https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "note": "Copied from the Homie starter library",
+      "asset": true
+    },
+    {
+      "what": "KayKit Dungeon Remastered (models)",
+      "author": "KayKit",
+      "url": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "note": "Copied from the Homie starter library",
+      "asset": true
+    },
+    {
+      "what": "KayKit Skeletons (models)",
+      "author": "KayKit",
+      "url": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "note": "Copied from the Homie starter library",
+      "asset": true
+    }
+  ]
+}

@@ -21,7 +21,8 @@ is none, use the `studio-setup` skill first.
   (`npx --no-install homie-studio codex <id>`). A big change to a game without one: plan it first.
 - **New game:** call the Homie MCP tool `game_make` (id, name) for the exact command
   and rules, then run `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`
-  (`--from gem-rush-3d` for a 3D game: three.js with free library models). The id becomes the game's
+  (`--from gem-rush-3d` for a 3D game: three.js with free library models; `--from hero-rush-3d` for a 3D game with
+  animated characters that run, jump and swing). The id becomes the game's
   address (`/<id>/`); lowercase, digits, hyphens.
 - **Make an existing single-player web game multiplayer:** use the `port` skill (it
   grades the port, brings the game in, and proves it with the owner tests).
@@ -228,8 +229,8 @@ Then make it good, not just working:
   them in (`sound.play('coin')` where it happens, in every browser). A silent game is not finished.
 - **Look**: first the decisions (the `style` skill: render style, palette, light, camera, fonts, budgets; automatic
   from the person's words, drawn in the codex), then the models (the `models` skill: the engine and the free CC0
-  starter library first, the person's own files with their licence, generated props only on their own fal account
-  under a budget), then the `art` skill's cover from a real frame and, with a budget, painted backdrops and
+  starter library first, the person's own files with their licence, generated props and characters only on their own
+  fal account under a budget), the characters' rigs and clips (the `animate` skill), then the `art` skill's cover from a real frame and, with a budget, painted backdrops and
   textures. "Make the look better" goes through `style` and `models` before any painting.
 - **Match the brief's tone**: a cozy, calm or gentle brief is not a fight. Score together (in `gem-rush-3d`,
   game.json `"scoring": "together"`: one total the room fills, no places), make contact gentle or none, and give the
@@ -244,7 +245,10 @@ Then make it good, not just working:
   locked palette reaches the world and the HUD. `games/<id>/assets/manifest.json` records every model's origin and
   licence; keep it true (`assets add` and `assets remove`, never a hand-copied .glb), and `assets check <id>`
   before a deploy. The `gem-rush-3d` starter (`game new <id> --from gem-rush-3d`) is Gem Rush in 3D with library
-  models: start a 3D game from it.
+  models: start a 3D game from it. With characters that move (people, heroes, fighters, creatures), start from
+  `hero-rush-3d` instead: animated CC0 heroes through `@homie-rocks/studio/animate` (idle, walk, run, jump, a swing,
+  hits, a cheer), one shared clip library per skeleton, a jump and a swing tuned in the Game Lab. The `animate` skill
+  has rigs, clips, retargeting and feel.
 - **Playtest**: the `playtest` skill plays it on a computer and a phone held both ways, measures the
   first ten seconds, the look, the UI, the real sound and a round, runs the owner tests, and hands a
   blind review to a fresh reviewer. Fix what it ranks first; run it again.

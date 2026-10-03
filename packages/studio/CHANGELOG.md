@@ -17,9 +17,40 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.25.0] - 2026-10-03
+
+**Plugin 0.26.0** · [#38](https://github.com/homie-rocks/homie/pull/38)
+
+Animated characters for 3D games: free CC0 heroes or one generated and auto-rigged on your fal account, on one skeleton standard with the library's clips retargeted onto it, and a shared player that runs, jumps and swings with IK feet and springs.
+
+### Added
+
+- A skeleton standard (`lib/rig.mjs`): a humanoid family with VRM 1.0 bone names, a mini family for one-piece limbs (Kenney's mini and blocky characters), a quadruped and a rigid "parts" family. A rig from Mixamo, KayKit, Blender, Unreal or Meshy is mapped onto it by name and by its hierarchy, and recorded with a skeleton id (`humanoid-3fa2c1`): characters with the same skeleton share one clip library.
+- `homie-studio assets add` takes animated characters from the free library (KayKit's adventurers and skeletons, Kenney's mini and blocky characters, all CC0) and `--file <model> --kind character --rigged` for your own. The shipped character is phone-sized: joints renamed to the standard, helper bones dropped, skinned parts and the accessories you keep (`--keep sword,shield`) merged into one draw call, its clips moved out.
+- Clip libraries: `public/anims/<skeleton>.glb` holds one clip per verb (idle, walk, run, jump, fall, land, attack, cast, hit, die, ...), 30 frames a second, compressed, with where each clip came from. Clips are retargeted at build time from the library's CC0 sources onto any humanoid or mini skeleton (rest-pose alignment per bone, hips scaled by leg height, loops kept in place).
+- `homie-studio cast <id>`: the characters, with their proportions, silhouette, palette, skeleton family and clips. `homie-studio anim plan|add|preview <id>`: each character's clips against the verbs the game needs, more verbs retargeted on, and looping previews (animated WebP) with a sheet.
+- `@homie-rocks/studio/animate`: one shared three.js `AnimationMixer` player. `loadCharacter` finds a character's clip library from the model; `createCharacter` blends idle, walk and run by speed, plays upper-body actions while running, an additive hit flinch and hit-stop, jump, fall and land with squash and stretch on a spring, lean into turns, look-at, springs and two-bone IK feet, and a cheaper crowd mode past a dozen characters. `ANIM_TUNING` is what the Game Lab tunes.
+- A 3D starter with animated heroes, `hero-rush-3d`: knights, mages, rogues and barbarians race for coins in a clearing, jump, dodge and swing at each other, on a phone (Jump and Swing buttons) and a computer, multiplayer with skeleton bots in empty seats. Each round opens on a close-up of your own hero that pulls back to play, and the Game Lab has takes for the jump and the swing.
+- Generated characters (paid, on your own fal account): the models skill's `character` command makes an A-pose concept in the game's style (`--like` a library character's thumbnail), then Meshy 7.1 image-to-3D with its auto-rig (about US$1.40 with textures and the rig), then free: made phone-sized, mapped to the standard and given the library's clips. Both calls have receipts under the budget.
+- MCP tools and cards: `cast_plan` (the cast card), `character_make` (the lineup with a character beside the others), `anim_plan`, `anim_add` and `anim_preview` (an Animation card of looping clips: Add is free, Feel opens the Game Lab on that move, New against Today).
+- An `animate` skill: the skeleton standard, retargeting, clip rights (KayKit and Kenney CC0; Quaternius's own licence since 2026-08-28 is not CC0 and is not used; text-to-motion models are not offered, because the ones available are non-commercial in effect).
+- In Claude Code, `/cast` and `/clips`, and the Studio pane's Art tab shows the characters (skeleton, bones, clips) and the skinning cost on a phone.
+
+### Changed
+
+- `assets check` checks skinned meshes: more than four bone influences per vertex, a character without its clip library or missing a verb the game needs, clip libraries over 1 MB (3 MB is a problem) or over 30 frames a second, and the skinning cost of every player's character at once against a phone's budget (skinned vertices and bones), with crowd mode past twelve characters.
+- A rigged model is measured by its skin (its joints' positions), so a character exported in centimetres is no longer 100 times too big, and it is centred by a wrapper node instead of moving its skeleton.
+- The lineup poses rigged characters in their idle clip and draws their silhouettes from the posed skin.
+- `style init` on a starter keeps what the starter already draws (its `style.json`: render, palette, materials, light, camera, fonts) as the automatic picks, and the clip decision lists the clips the game has.
+- The fal price check adds a model page's add-ons (Meshy's textures and rig) and quotes the higher of fal's pricing API and the page.
+
+### Upgrade notes
+
+- Nothing to do: games without characters are unchanged. To animate a 3D game's characters, tell Claude: "Give my game animated characters."
+
 ## [0.24.5] - 2026-10-03
 
-**Plugin 0.25.5** · [#39](https://github.com/homie-rocks/homie/pull/39)
+**Plugin 0.25.5** · [#39](https://github.com/homie-rocks/homie/pull/39) · [release-2026-10-03-studio-0.24.5](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.24.5)
 
 Room chat keeps off your game's HUD: on a phone the Chat pill is a round icon, as the room button is, and your game can say where the strip of new lines sits, or keep new lines in the Chat sheet, so a game with a busy HUD keeps typed chat.
 

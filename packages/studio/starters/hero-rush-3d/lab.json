@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "default": "jump",
+  "takes": {
+    "jump": {
+      "note": "Jump in an open spot: take-off, the top, the landing",
+      "seconds": 1.8,
+      "seed": 7,
+      "stage": "jump",
+      "device": "desk",
+      "fps": 60,
+      "view": "close",
+      "track": "height",
+      "inputs": [
+        { "at": 0.4, "key": "Space", "hold": 0.1 }
+      ]
+    },
+    "swing": {
+      "note": "Swing at the dummy beside you",
+      "seconds": 2.2,
+      "seed": 7,
+      "stage": "dummy",
+      "device": "desk",
+      "fps": 60,
+      "view": "close",
+      "track": "speed",
+      "inputs": [
+        { "at": 0.5, "key": "KeyF", "hold": 0.1 }
+      ]
+    }
+  }
+}

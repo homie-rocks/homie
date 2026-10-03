@@ -170,7 +170,9 @@ export async function assetsLineup(root, id, { log = () => {} } = {}) {
     // `inGame`: what the game's code does to it at runtime (drawn at another height, repainted from style.json): the
     // lineup draws it the same way (the repaint as the board's re-tint, the nearest the game's own swap can be shown).
     const scale = a.inGame?.heightM && a.measured?.heightM ? a.inGame.heightM / a.measured.heightM : null;
-    models.push({ a, input: modelIn(a.id, readFileSync(abs), { label: a.card ? String(a.card).split('/').pop() : a.id, ...(scale ? { scale } : {}), ...(a.inGame?.tint ? { tint: lightColours({ sky: a.inGame.tint, ground: a.inGame.tint }, tokens.palette).sky } : a.inGame?.repaint ? { retint: true } : Number(a.inGame?.pull) > 0 ? { pull: Number(a.inGame.pull) } : {}) }), abs });
+    // A character stands in its idle pose from its skeleton's clip library (not its bind pose: arms out in a T).
+    const anims = a.rig?.anims && existsSync(join(root, 'games', id, a.rig.anims)) ? readFileSync(join(root, 'games', id, a.rig.anims)).toString('base64') : null;
+    models.push({ a, input: modelIn(a.id, readFileSync(abs), { label: a.card ? String(a.card).split('/').pop() : a.id, ...(scale ? { scale } : {}), ...(anims ? { anims, pose: 'idle', poseAt: 0.3 } : {}), ...(a.inGame?.tint ? { tint: lightColours({ sky: a.inGame.tint, ground: a.inGame.tint }, tokens.palette).sky } : a.inGame?.repaint ? { retint: true } : Number(a.inGame?.pull) > 0 ? { pull: Number(a.inGame.pull) } : {}) }), abs });
   }
   if (!models.length) return { ok: false, command: 'assets lineup', id, why: `games/${id} has no recorded models yet (assets add, or the models skill)` };
   const dir = join(root, '.studio', 'art', id);

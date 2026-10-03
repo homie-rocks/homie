@@ -219,6 +219,12 @@
  *                                          glTF-Validator, licences, stale assets, big files in git
  *   homie-studio assets lineup|review|rights|stale|remove <id> …   the lineup (true scale, silhouettes, palette drift),
  *                                          a reviewer's score, RIGHTS.md, what a changed decision made stale
+ *   homie-studio cast <id>                the characters: proportions, silhouette, palette, skeleton family, clips
+ *   homie-studio anim [plan] <id>         each character's clips against the verbs the game needs (idle, run, jump,
+ *                                          attack, hit, die, ...) and where each comes from
+ *   homie-studio anim add <id> <asset> --verbs jump,attack [--from <library item>]   more verbs, retargeted onto its
+ *                                          skeleton at build time into its clip library (public/anims/<skeleton>.glb)
+ *   homie-studio anim preview <id> [--asset <asset>]   looping previews of every clip (animated WebP) and a sheet
  *
  *   homie-studio statusline               the current build in one line (what Claude Code's status line shows)
  *   homie-studio statusline --install [--project <folder>]
@@ -266,12 +272,12 @@ import { installStatusLine, statusLine } from '../lib/statusline.mjs';
 import { restartWithProxy } from '../lib/net.mjs';
 import { demoGames, formatDemo } from '../lib/demo.mjs';
 import { serveMcp } from '../lib/mcp.mjs';
-import { artLines, assetsCommand, styleCommand } from '../lib/art-cli.mjs';
+import { animCommand, artLines, assetsCommand, castView, styleCommand } from '../lib/art-cli.mjs';
 import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -287,10 +293,11 @@ const log = asJson ? () => {} : (line) => process.stderr.write(`${line}\n`);
 
 function print(result) {
   if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
-  if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
+  // A check that found problems still prints them (its rows say what to fix), never a bare "failed".
+  if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows) && !(result.command === 'assets check' && result.rows)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
   if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
   const lines = [];
-  if (/^(style|assets)( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${artLines(result).join('\n')}\n`); return; }
+  if (/^(style|assets|cast|anim)( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${artLines(result).join('\n')}\n`); return; }
   switch (result.command) {
     case 'new':
       lines.push(`${result.name} is a studio now: ${result.dir}`, '', 'Wrote:', ...result.wrote.map((f) => `  ${f}`), '', `Dependencies: ${result.installed}`, '', 'Next:', ...result.next.map((n) => `  ${n}`), '', result.online);
@@ -686,6 +693,8 @@ async function main() {
   const root = requireStudio();
   if (cmd === 'style') return styleCommand(root, sub, positional, flags, { log });
   if (cmd === 'assets') return assetsCommand(root, sub, positional, flags, { log });
+  if (cmd === 'anim') return animCommand(root, sub, positional, flags, { log });
+  if (cmd === 'cast') { const games = listGames(root); const id = sub ?? (games.length === 1 ? games[0].id : null); if (!id) return { ok: false, command: 'cast', why: `name the game: homie-studio cast <id>${games.length ? ` (${games.map((g) => g.id).join(', ')})` : ''}` }; return castView(root, id); }
   if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);

@@ -77,10 +77,18 @@ export function artSummaryOf(l, id) {
   const b = l.board;
   const directions = b && typeof b === 'object' ? list(b.directions, 6).flatMap((d) => (/^[a-f]$/.test(d?.id) && str(d.label, 100) ? [{ id: d.id, label: str(d.label, 100) }] : [])) : [];
   const board = directions.length ? { chosen: /^[a-f]$/.test(b.chosen) ? b.chosen : null, directions } : null;
+  const VERB = /^[a-z][a-z0-9]{1,15}$/;
+  const verbs = (v, n = 24) => list(v, n).filter((x) => typeof x === 'string' && VERB.test(x));
+  const characters = list(l.characters, 40).flatMap((c) => {
+    if (typeof c?.id !== 'string' || !GAME_ID.test(c.id)) return [];
+    return [{ id: c.id, kind: str(c.kind, 16) ?? 'character', route: ROUTES.includes(c.route) ? c.route : 'unknown', family: str(c.family, 16), skeleton: str(c.skeleton, 40), bones: count(c.bones), verbs: verbs(c.verbs), missing: verbs(c.missing), retargeted: count(c.retargeted) ?? 0, animsKB: count(c.animsKB) }];
+  });
+  const k = l.skinning;
+  const skinning = k && typeof k === 'object' && count(k.vertices) !== null ? { players: count(k.players) ?? 0, vertices: k.vertices, bones: count(k.bones) ?? 0, budget: { vertices: count(k.budget?.vertices), bones: count(k.budget?.bones) } } : null;
   return {
     game: id, at: l.at, path: ['automatic', 'hands-on'].includes(l.path) ? l.path : null, line: str(l.line, 240),
     phases, decisions, cast, stale: list(l.stale, 80).filter((s) => typeof s === 'string' && GAME_ID.test(s)),
-    licence, spend, check, lineup, board,
+    licence, spend, check, lineup, board, need: verbs(l.need), characters, skinning,
   };
 }
 
@@ -128,6 +136,27 @@ export function castText(a, name) {
     `  spent ${usd(a.spend.used)}${a.spend.cap !== null ? ` of ${usd(a.spend.cap)}` : ' (no art budget: free routes only)'}${a.spend.items.length ? ` on ${a.spend.items.length} paid step${a.spend.items.length === 1 ? '' : 's'}` : ''}`,
     ...(a.check ? [`  scene: ${budgetWords(a.check)}`] : []),
     ...(a.licence.length ? [`  licences: ${refuse.length ? `${refuse.length} to fix before a public deploy` : 'warnings only'} (/rights ${a.game})`] : a.cast.length ? ['  licences: every asset recorded and allowed'] : []),
+  ].join('\n');
+}
+
+/** `/cast`: the characters, each with its skeleton, bones, source and how many of the game's clips it has. */
+export function charactersText(a, name) {
+  if (!a.characters.length) return `${title(a, name)}: no characters with a rig yet (homie-studio assets find "<words>" --kind character: free, animated, CC0).`;
+  const width = Math.max(6, ...a.characters.map((c) => c.id.length));
+  return [
+    `${title(a, name)}: ${a.characters.length} character${a.characters.length === 1 ? '' : 's'}${a.need.length ? `; the game needs ${a.need.join(', ')}` : ''}`,
+    ...a.characters.map((c) => `  ${c.id.padEnd(width)}  ${[c.kind, c.route, `${c.family ?? '?'} skeleton`, `${c.bones ?? '?'} bones`, `${c.verbs.length} clips${c.retargeted ? ` (${c.retargeted} retargeted)` : ''}`].join(' · ')}${c.missing.length ? `  MISSING ${c.missing.join(', ')}` : ''}`),
+    ...(a.skinning ? [`  skinning a room of ${a.skinning.players}: ${fmt(a.skinning.vertices)}/${fmt(a.skinning.budget.vertices ?? 0)} vertices, ${fmt(a.skinning.bones)}/${fmt(a.skinning.budget.bones ?? 0)} bones a frame on a phone${a.skinning.budget.vertices !== null && a.skinning.vertices > a.skinning.budget.vertices ? ' (OVER: crowd mode, or lighter characters)' : ''}`] : []),
+    '  /clips <game> lists each one\'s clips; ask Claude for the animation card to see them move.',
+  ].join('\n');
+}
+
+/** `/clips`: every character's clips against the verbs the game needs. */
+export function clipsText(a, name) {
+  if (!a.characters.length) return `${title(a, name)}: no characters with clips yet.`;
+  return [
+    `${title(a, name)}: the game needs ${a.need.length ? a.need.join(', ') : '(no anim.clips decision yet)'}`,
+    ...a.characters.flatMap((c) => [`  ${c.id} (${c.skeleton ?? c.family ?? '?'}${c.animsKB !== null ? `, ${c.animsKB} KB of clips` : ''})`, `    ${c.verbs.join(', ') || 'no clips'}${c.missing.length ? `  · missing ${c.missing.join(', ')} (homie-studio anim add ${a.game} ${c.id} --verbs ${c.missing.join(',')})` : ''}`]),
   ].join('\n');
 }
 

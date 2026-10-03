@@ -37,25 +37,25 @@
       var a = { game: sc.game, asset: sc.asset };
       for (var q in (sc.request || {})) a[q] = sc.request[q];
       for (var k in args) a[k] = args[k];
-      C.call('asset_make', a).then(function (r) { state.busy = null; C.take(r); }).catch(function () { state.busy = 'That did not reach the studio.'; C.render(); });
+      C.call(sc.character ? 'character_make' : 'asset_make', a).then(function (r) { state.busy = null; C.take(r); }).catch(function () { state.busy = 'That did not reach the studio.'; C.render(); });
     };
     if (sc.concept) { var i = C.img(sc.concept, 'The concept for ' + sc.asset); if (i) { i.style.maxHeight = '360px'; i.style.objectFit = 'contain'; card.appendChild(C.add(C.el('div', 'preview'), i)); } }
     if (sc.dryRun) {
-      card.appendChild(C.el('p', 'sub', (sc.step === 'mesh' ? 'The 3D model' : 'The concept image') + ' costs about US$' + (sc.price ? sc.price.usd : '?') + (sc.total ? '; the whole prop about US$' + sc.total : '') + ', on your own fal account.'));
+      card.appendChild(C.el('p', 'sub', (sc.step === 'mesh' ? (sc.character ? 'The rigged character' : 'The 3D model') : 'The concept image') + ' costs about US$' + (sc.price ? sc.price.usd : '?') + (sc.total ? '; the whole ' + (sc.character ? 'character' : 'prop') + ' about US$' + sc.total : '') + ', on your own fal account.'));
       card.appendChild(C.add(C.el('div', 'actions'), C.btn('Make it (US$' + (sc.price ? sc.price.usd : '?') + ')', '', function () { C.tell('approve:' + sc.asset + sc.step, 'The person approved US$' + (sc.price && sc.price.usd) + ' for the ' + sc.step + ' of ' + sc.asset + ' on the card.'); run({ step: sc.step, approve: true }, 'Making it…'); })));
     } else if (sc.needs === 'approval' || sc.why) card.appendChild(C.el('p', 'note', sc.why || 'Needs the person\'s yes.'));
     else if ((sc.step === 'concept' || sc.step === 'look') && sc.concept) {
-      card.appendChild(C.el('p', 'sub', 'Look at it: the thing, whole, in the game\'s style, on a plain background? Then the 3D model (about US$' + (sc.then ? sc.then.usd : '0.50') + ').'));
-      card.appendChild(C.add(C.el('div', 'actions'), C.btn('Make the 3D model', '', function () { C.tell('mesh:' + sc.asset, 'The person approved the 3D model of ' + sc.asset + ' (about US$' + (sc.then ? sc.then.usd : '0.50') + ') on the card.'); run({ step: 'mesh', approve: true }, 'Making the model (1 to 3 minutes)…'); })));
+      card.appendChild(C.el('p', 'sub', sc.character ? 'Look at it: one character, whole, in an A-pose, in the game\'s style, on a plain background? Then the rigged 3D character (about US$' + (sc.then ? sc.then.usd : '1.40') + '); its clips come from the free library.' : 'Look at it: the thing, whole, in the game\'s style, on a plain background? Then the 3D model (about US$' + (sc.then ? sc.then.usd : '0.50') + ').'));
+      card.appendChild(C.add(C.el('div', 'actions'), C.btn(sc.character ? 'Make the rigged character' : 'Make the 3D model', '', function () { C.tell('mesh:' + sc.asset, 'The person approved the ' + (sc.character ? 'rigged character' : '3D model') + ' of ' + sc.asset + ' (about US$' + (sc.then ? sc.then.usd : sc.character ? '1.40' : '0.50') + ') on the card.'); run({ step: 'mesh', approve: true }, sc.character ? 'Making the rigged character (2 to 5 minutes)…' : 'Making the model (1 to 3 minutes)…'); })));
     } else if (sc.step === 'mesh' && sc.after) {
-      card.appendChild(C.el('p', 'note ok', sc.asset + ': ' + sc.before.tris + ' → ' + sc.after.tris + ' triangles, ' + sc.after.kb + ' KB, ' + sc.after.heightM + ' m. Recorded with its receipts and licence.'));
-      card.appendChild(C.add(C.el('div', 'actions'), C.btn('Show the lineup', 'ghost', function () { state.busy = 'Drawing the lineup…'; C.render(); C.call('asset_lineup', { game: sc.game }).then(function (r) { state.busy = null; C.take(r); }); })));
+      card.appendChild(C.el('p', 'note ok', sc.asset + ': ' + sc.before.tris + ' → ' + sc.after.tris + ' triangles, ' + sc.after.kb + ' KB, ' + sc.after.heightM + ' m. Recorded with its receipts and licence.' + (sc.character && sc.verbs && sc.verbs.length ? ' Clips (the library\'s, retargeted, free): ' + sc.verbs.join(', ') + '.' : '')));
+      card.appendChild(C.add(C.el('div', 'actions'), C.btn('Show the lineup', 'ghost', function () { state.busy = 'Drawing the lineup…'; C.render(); C.call('asset_lineup', { game: sc.game }).then(function (r) { state.busy = null; C.take(r); }); }), sc.character ? C.btn('Show its clips', 'ghost', function () { state.busy = 'Drawing its clips…'; C.render(); C.call('anim_preview', { game: sc.game, asset: sc.asset }).then(function (r) { state.busy = null; C.take(r); }); }) : null));
     }
   }
   function render(sc) {
     var card = C.el('main', 'card');
     var flagged = sc.mode === 'lineup' ? sc.flagged : null;
-    C.add(card, C.top(sc.mode === 'make' ? 'Make a prop' : 'Lineup', C.add(C.el('div', 'actions'), flagged !== null && flagged !== undefined ? C.pill(flagged ? flagged + ' flagged' : 'One look', flagged ? 'warn' : 'ok') : null, C.fullscreenButton())),
+    C.add(card, C.top(sc.mode === 'make' ? (sc.character ? 'Make a character' : 'Make a prop') : 'Lineup', C.add(C.el('div', 'actions'), flagged !== null && flagged !== undefined ? C.pill(flagged ? flagged + ' flagged' : 'One look', flagged ? 'warn' : 'ok') : null, C.fullscreenButton())),
       C.el('h1', '', sc.mode === 'make' ? sc.asset : 'The cast of ' + sc.game + ', at true scale'));
     if (state.busy) card.appendChild(C.el('p', 'note', state.busy));
     if (sc.mode === 'make') make(card, sc); else lineup(card, sc);

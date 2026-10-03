@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { startFakeFal } from './fixtures/fake-fal.mjs';
-import { unitsFor } from '../skills/video/scripts/lib/fal.mjs';
+import { priceOf, unitsFor } from '../skills/video/scripts/lib/fal.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MODELS = join(HERE, '..', 'skills', 'models', 'scripts', 'models.mjs');
@@ -105,5 +105,61 @@ test('models: a prop priced, capped, the concept first, then the mesh; receipts;
     assert.equal(fal.stats.submits, 2, 'a rerun never pays twice');
     assert.match(readFileSync(join(dir, 'games', 'grove', 'assets', 'RIGHTS.md'), 'utf8'), /### lantern[\s\S]*tripo3d\/p1\/image-to-3d[\s\S]*Generated on the studio's own account/);
     assert.equal((await models(['receipts', 'grove'], dir)).usd, 0.535);
+  } finally { await fal.close(); }
+});
+
+test('models: a generated character: the A-pose concept, then Meshy with its auto-rig priced with its add-ons, then the library\'s clips retargeted onto it', async () => {
+  const fal = await startFakeFal();
+  const { humanoidGlb, writeLibrary } = await import('../../../packages/studio/test/rig-fixtures.mjs');
+  const lib = writeLibrary(join(scratch, 'library'), [{ id: 'kaykit-adventurers/knight', kind: 'character', bytes: Buffer.from(await humanoidGlb({ scheme: 'kaykit' })), rigged: true, clips: ['Idle', 'Running_A', 'Jump_Start', '1H_Melee_Attack_Chop'] }]);
+  const env = { ...process.env, FAL_KEY: 'test-key', FAL_QUEUE_URL: fal.base, FAL_API_URL: fal.base, FAL_STORAGE_URL: fal.base, HOMIE_STUDIO_CLI: CLI, HOMIE_LIBRARY: lib };
+  delete env.HOMIE_SPEND_LEDGER;
+  const models = (args, cwd) => new Promise((ok) => {
+    const p = spawn(process.execPath, [MODELS, ...args, '--json'], { cwd, env });
+    let out = ''; let err = '';
+    p.stdout.on('data', (d) => { out += d; }); p.stderr.on('data', (d) => { err += d; });
+    p.on('close', () => { try { ok(JSON.parse(out)); } catch { ok({ ok: false, why: `no JSON: ${out} ${err}` }); } });
+  });
+  try {
+    process.env.FAL_KEY = 'test-key'; process.env.FAL_API_URL = fal.base;
+    const p = await priceOf('meshy/v7.1/image-to-3d', { should_texture: true, enable_rigging: true }, { addons: { base: 0.8, should_texture: 0.4, enable_rigging: 0.2, enable_animation: 0.12 } });
+    assert.equal(p.usd, 1.4, 'the base and the add-ons that are on');
+    assert.match(p.basis, /enable_rigging \+US\$0\.20/);
+    delete process.env.FAL_KEY; delete process.env.FAL_API_URL;
+    const dir = studio('character');
+    const what = ['--card', 'Players/Ranger', '--what', 'a forest ranger in a green hooded cloak', '--height', '1.45'];
+    const dry = await models(['character', 'grove', 'ranger', ...what, '--dry-run'], dir);
+    assert.equal(dry.price.usd, 0.035);
+    assert.equal(dry.then.usd, 1.4);
+    assert.equal(dry.total, 1.435);
+    await models(['budget', 'grove', '--cap', '2'], dir);
+    const concept = await models(['character', 'grove', 'ranger', ...what, '--yes'], dir);
+    assert.equal(concept.ok, true, JSON.stringify(concept));
+    assert.match(fal.stats.lastInput.prompt, /A-pose/);
+    assert.match(fal.stats.lastInput.prompt, /full body/);
+    assert.doesNotMatch(fal.stats.lastInput.prompt, /3\/4 view, centred, whole object/, 'a character concept, not a prop\'s framing');
+    const mesh = await models(['character', 'grove', 'ranger', '--mesh', '--yes'], dir);
+    assert.equal(mesh.ok, true, JSON.stringify(mesh));
+    assert.equal(fal.stats.lastInput.enable_rigging, true);
+    assert.equal(fal.stats.lastInput.pose_mode, 'a-pose');
+    assert.equal(fal.stats.lastInput.rigging_height_meters, 1.45);
+    assert.match(mesh.skeleton, /^humanoid-/);
+    assert.ok(mesh.verbs.includes('idle'), 'clips from the library, retargeted onto it');
+    assert.ok(Math.abs(mesh.after.heightM - 1.45) < 0.03, `a centimetre rig measured true: ${mesh.after.heightM}`);
+    const manifest = JSON.parse(readFileSync(join(dir, 'games', 'grove', 'assets', 'manifest.json'), 'utf8'));
+    const a = manifest.assets.find((x) => x.id === 'ranger');
+    assert.equal(a.kind, 'character');
+    assert.equal(a.route, 'generated');
+    assert.equal(a.license.kind, 'generated');
+    assert.deepEqual(a.made.steps.map((s) => s.what), ['concept', 'mesh and rig', 'rig', 'clips', 'optimise']);
+    assert.equal(a.made.steps[1].endpoint, 'meshy/v7.1/image-to-3d');
+    assert.equal(+(a.made.steps[0].usd + a.made.steps[1].usd).toFixed(3), 1.435);
+    const receipts = readFileSync(join(dir, 'art', 'receipts.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.equal(receipts.at(-1).model, 'meshy/v7.1/image-to-3d');
+    assert.equal(receipts.at(-1).cost, 1.4);
+    assert.ok(existsSync(join(dir, 'art', 'ranger', 'raw', 'rigged.glb')), 'the raw rigged file stays beside its job');
+    const again = await models(['character', 'grove', 'ranger', '--mesh', '--yes'], dir);
+    assert.equal(again.ok, true);
+    assert.equal(fal.stats.submits, 2, 'a rerun never pays twice');
   } finally { await fal.close(); }
 });

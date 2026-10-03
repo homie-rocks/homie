@@ -14,6 +14,14 @@
  *   asset_check     phone budgets, the validator, licences, staleness
  *   asset_lineup    true scale, silhouettes, palette drift, flags                                                 lineup card
  *   asset_rights    RIGHTS.md and every asset's licence                                                           rights card
+ *   cast_plan       the characters: proportions, silhouette, palette, skeleton family, source, clips, cost         cast card
+ *   character_make  one generated, rigged character on the person's own fal account: a priced dry run unless approve;
+ *                   the A-pose concept first, then (after looking) Meshy's mesh and auto-rig, the library's clips
+ *                   retargeted onto it for free                                                                    lineup card
+ *   anim_plan       each character's clips against the verbs the game needs, as looping previews; Feel opens the
+ *                   Game Lab on the move                                                                          animation card
+ *   anim_add        more verbs for a character, retargeted onto its skeleton (free)                              animation card
+ *   anim_preview    the looping previews drawn again (free)                                                       animation card
  *
  * Work that needs the studio's own tools (rendering, optimising) runs the studio's pinned CLI as a job; decisions are
  * plain files and change here directly. Pictures go to cards as small data: URLs (each a few hundred KB at most).
@@ -21,7 +29,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { readManifest } from './asset-manifest.mjs';
-import { artSpend, writeArtSummary } from './art-cli.mjs';
+import { artSpend, castView, writeArtSummary } from './art-cli.mjs';
+import { animPlan } from './characters.mjs';
 import { CATALOGUE_IDS, decisionRows, lockDecision, oneLine, phaseProgress, pickDirection, readDecisions, setDecision, staleAssets, steerDecision, unlockDecision } from './decisions.mjs';
 import { libraryBase, loadIndex, searchLibrary, itemThumb } from './library.mjs';
 import { boardView } from './style-board.mjs';
@@ -33,6 +42,7 @@ export const ART_UI = Object.freeze({
   cast: 'ui://homie-studio/cast',
   lineup: 'ui://homie-studio/lineup',
   rights: 'ui://homie-studio/rights',
+  animation: 'ui://homie-studio/animation',
 });
 
 /** A picture file as a data: URL no bigger than `max` (a smaller JPEG when it is over), or null. */
@@ -74,6 +84,68 @@ function styleText(d) {
     ...(d.phases.find((p) => p.id === 'style')?.rows ?? []).map((r) => `  ${r.id}: ${r.label} [${r.state}]`),
     ...(d.stale.length ? [`Stale: ${d.stale.join(', ')}.`] : []),
     `Spent US$${d.spend.used.toFixed(2)}${d.spend.cap !== null ? ` of US$${d.spend.cap}` : ' (no art budget: free routes only)'}.`,
+  ].join('\n');
+}
+
+/** A character's small picture: its looping idle preview, else its library thumbnail, else its concept. */
+async function characterThumb(h, root, game, row) {
+  const idle = join(root, '.studio', 'art', game, 'anim', `${row.id}-idle.webp`);
+  if (existsSync(idle)) return picture(h, idle, 40 * 1024);
+  const m = readManifest(root, game).assets.find((a) => a.id === row.id);
+  if (m?.from?.item) {
+    try { const lib = await loadIndex({ lib: libraryBase() }); const it = lib.index.items.find((x) => x.id === m.from.item); const t = it ? await itemThumb(lib.lib, it) : null; if (t) return `data:image/webp;base64,${Buffer.from(t).toString('base64')}`; } catch { /* no library here */ }
+  }
+  const concept = (m?.files ?? []).find((f) => f.role === 'concept');
+  return concept ? picture(h, join(root, 'games', game, concept.path), 60 * 1024) : null;
+}
+
+/** Which Game Lab take tunes a verb (lab.json): one named for it or whose note says it, else the default. */
+function takeFor(lab, verb) {
+  const takes = Object.entries(lab?.takes ?? {});
+  const words = { attack: /swing|attack|strike|hit|punch|knock/i, jump: /jump|hop|leap/i, cast: /cast|spell/i, dodge: /dodge|roll/i, run: /run|dash|sprint/i };
+  const hit = takes.find(([k]) => k === verb) ?? takes.find(([k, t]) => (words[verb] ?? new RegExp(verb, 'i')).test(`${k} ${t?.note ?? ''}`));
+  return hit ? hit[0] : null;
+}
+
+/** The animation card's data: the plan, with looping previews for up to `max` characters (the answer stays small). */
+function animationData(h, root, game, { asset = null, max = 4 } = {}) {
+  const plan = animPlan(root, game);
+  const dir = join(root, '.studio', 'art', game, 'anim');
+  let budget = 560 * 1024;
+  const order = asset ? [...plan.rows.filter((r) => r.id === asset), ...plan.rows.filter((r) => r.id !== asset)] : plan.rows;
+  // One character a skeleton first (its clips are its skeleton's), then the rest.
+  const seen = new Set(); const first = []; const rest = [];
+  for (const r of order) { if (!seen.has(r.skeleton) || r.id === asset) { seen.add(r.skeleton); first.push(r); } else rest.push(r); }
+  const shown = new Set([...first, ...rest].slice(0, Math.max(1, max)).map((r) => r.id));
+  // Each shown character gets an even share of the answer, its core verbs first, so none is left all placeholders.
+  const CORE = ['idle', 'run', 'jump', 'attack', 'cast', 'hit', 'walk', 'land'];
+  const share = Math.floor(budget / Math.max(1, shown.size));
+  const rows = order.map((r) => {
+    const have = [...r.clips.filter((c) => c.have).map((c) => c.verb), ...r.extra];
+    const verbs = [...CORE.filter((v) => have.includes(v)), ...have.filter((v) => !CORE.includes(v))];
+    const previews = {};
+    if (shown.has(r.id)) {
+      let left = Math.min(share, budget);
+      for (const v of verbs) {
+        const f = join(dir, `${r.id}-${v}.webp`);
+        if (!existsSync(f)) continue;
+        const pic = picture(h, f, 40 * 1024);
+        if (!pic || pic.length > left) continue;
+        left -= pic.length; budget -= pic.length; previews[v] = pic;
+      }
+    }
+    return { ...r, shown: shown.has(r.id), previews, previewed: Object.keys(previews).length };
+  });
+  const takes = plan.lab?.takes ? Object.fromEntries(Object.entries(plan.lab.takes).map(([k, t]) => [k, t?.note ?? ''])) : {};
+  const feel = Object.fromEntries(['jump', 'attack', 'cast', 'run', 'dodge', 'hit', 'land'].map((v) => [v, takeFor(plan.lab, v)]).filter(([, t]) => t));
+  return { kind: 'animation', game, verbs: plan.verbs, rows, decisions: plan.decisions, takes, feel, unrigged: plan.unrigged };
+}
+
+function animationText(d) {
+  return [
+    `Clips for ${d.game}: the game needs ${d.verbs.join(', ')}.`,
+    ...d.rows.map((r) => `  ${r.id} (${r.familyLabel}, ${r.bones} bones): ${r.clips.map((c) => `${c.verb}${c.have ? '' : ' MISSING'}`).join(', ')}${r.extra.length ? `; also ${r.extra.join(', ')}` : ''}${r.previewed ? ` (${r.previewed} previews on the card)` : ''}`),
+    ...(Object.keys(d.feel).length ? [`Feel: the Game Lab tunes ${Object.entries(d.feel).map(([v, t]) => `${v} (take "${t}")`).join(', ')} New beside Today (game_lab { "take": "<take>" }).`] : ['Feel: the game has no Game Lab take for a move yet (lab.json; the lab guide).']),
   ].join('\n');
 }
 
@@ -325,6 +397,101 @@ export function artToolDefs(ctx, h) {
         const m = readManifest(root, game);
         const rows = m.assets.map((e) => ({ id: e.id, kind: e.kind, route: e.route, license: e.license?.kind ?? null, remix: e.license?.remix ?? null, attribution: e.license?.attribution ?? null, from: e.from?.pack ?? e.from?.item ?? null, placeholder: Boolean(e.placeholder) }));
         return ok(`${x.file}:\n\n${x.text.slice(0, 6000)}`, { kind: 'rights', game, file: x.file, rows, problems: x.licence, text: x.text.slice(0, 20_000) });
+      },
+    },
+    {
+      name: 'cast_plan', title: 'Plan the characters',
+      description: 'The cast card for a game\'s characters: the decisions that shape them (proportions in heads and metres, the silhouette rule, the palette, the skeleton family, where rigs come from) and every character made or planned, with its picture, source (the free CC0 starter library, generated on the person\'s fal account, their own), skeleton and bones, triangles, height and clips. Free; nothing is made. A library character comes in with asset_add (its clips baked into its skeleton\'s clip library); a generated one with character_make (paid, priced first).',
+      inputSchema: { type: 'object', properties: { ...GAME } },
+      annotations: { title: 'Plan the characters', ...RO }, _meta: ui(ART_UI.cast),
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const game = gameOf(root, a.game);
+        const c = castView(root, game);
+        const rows = [];
+        for (const r of c.rows) rows.push({ ...r, thumb: r.state === 'made' ? await characterThumb(h, root, game, r) : null });
+        const data = { kind: 'cast', mode: 'characters', game, decisions: c.decisions, silhouette: c.silhouette, palette: c.palette, rows, spend: c.spend };
+        return ok([`The characters of ${game} (${rows.length}):`, ...Object.entries(c.decisions).filter(([, v]) => v).map(([k, v]) => `  ${k}: ${v.label} [${v.state}]`), ...rows.map((r) => `  ${r.state} ${r.id}${r.family ? `: ${r.family} skeleton, ${r.bones} bones, ${r.tris} triangles, ${r.heightM} m, clips ${r.verbs.join(', ')}` : ''} (${r.route ?? 'planned'}${r.usd ? `, US$${r.usd}` : ''})`), 'anim_plan shows each one\'s clips, looping.'].join('\n'), data);
+      },
+    },
+    {
+      name: 'character_make', title: 'Make a character (paid)',
+      description: 'One generated, rigged character for a game, in its locked style, on the person\'s OWN fal account: a full-body concept image in an A-pose (the derived style prompt; the golden images, or like: a library character, as the style reference), then Meshy 7.1 image-to-3D with its humanoid auto-rig, then free local work: made phone-sized, its skeleton mapped to the standard, the starter library\'s CC0 clips retargeted onto it (idle, run, jump, attack, hit, ...), recorded with receipts and licence. About US$1.44 (US$0.035 concept + US$1.40 mesh and rig). Without approve it is a priced dry run: tell the person the price and ask. budget sets the cap they agreed to. Step 1 makes only the concept: LOOK at it; then step: "mesh" with approve. Humanoids with clear limbs only. Never in a loop.',
+      inputSchema: { type: 'object', properties: { ...GAME, asset: str('The new character\'s id, e.g. ranger'), card: str('Its codex card, e.g. "Players/Ranger"'), what: str('Who, in plain words: build, clothes, colours, what they carry'), height: { type: 'number', description: 'Its height in metres (default: the game\'s character height)' }, like: str('A starter-library character whose look it should match (a style reference), e.g. kaykit-adventurers/rogue'), step: str('concept (default) or mesh', { enum: ['concept', 'mesh'] }), approve: { type: 'boolean', description: 'The person agreed to the price' }, budget: { type: 'number', description: 'The cap in US dollars the person agreed to for this game\'s models' }, again: { type: 'boolean', description: 'A new concept with changed words (costs another concept)' } }, required: ['asset'] },
+      annotations: { title: 'Make a character (paid)', readOnlyHint: false, destructiveHint: false, openWorldHint: true }, _meta: ui(ART_UI.lineup),
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const need = needsInstall(ctx, root); if (need) return need;
+        const game = gameOf(root, a.game);
+        const asset = String(a.asset ?? '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+        if (a.budget !== undefined) {
+          const b = await models(root, `budget for ${game}`, ['budget', game, '--cap', String(Number(a.budget))], { wait: 20_000 }).catch((e) => ({ error: e.message }));
+          if (b.error || b.job?.code) return fail(`The budget was not set: ${b.error ?? whyOf(b.job)}`);
+        }
+        const args = ['character', game, asset, ...(a.card ? ['--card', String(a.card)] : []), ...(a.what ? ['--what', String(a.what)] : []), ...(a.height ? ['--height', String(a.height)] : []), ...(a.like ? ['--like', String(a.like)] : []), ...(a.step === 'mesh' ? ['--mesh'] : []), ...(a.again ? ['--concept-again'] : []), ...(a.approve === true ? ['--yes'] : ['--dry-run'])];
+        let r;
+        try { r = await models(root, `${a.step === 'mesh' ? 'the rigged character' : 'the concept'} for ${asset}`, args, { wait: a.approve === true ? ctx.waitMs : 30_000 }); } catch (error) { return fail(error.message); }
+        if (!r.ended) return stillRunning(r.job, a.step === 'mesh' ? `The rigged character ${asset} (about 2 to 5 minutes)` : `The concept for ${asset}`);
+        const x = r.result ?? {};
+        writeArtSummary(root, game);
+        const concept = x.concept ? picture(h, join(root, x.concept), 260 * 1024) : null;
+        const request = { ...(a.card ? { card: String(a.card) } : {}), ...(a.what ? { what: String(a.what) } : {}), ...(a.height ? { height: Number(a.height) } : {}), ...(a.like ? { like: String(a.like) } : {}) };
+        const data = { kind: 'lineup', mode: 'make', character: true, game, asset, request, step: x.step ?? a.step ?? 'concept', dryRun: Boolean(x.dryRun), price: x.price ?? null, total: x.total ?? null, then: x.then ?? null, needs: x.needs ?? null, concept, model: x.model ?? null, before: x.before ?? null, after: x.after ?? null, usd: x.usd ?? null, verbs: x.verbs ?? [], skeleton: x.skeleton ?? null, spend: artSpend(root, game), next: x.next ?? null, why: x.why ?? null };
+        if (r.job.code !== 0 && !x.needs) return fail(`Not made: ${x.why ?? whyOf(r.job)}`, data);
+        const text = x.dryRun ? `${x.step === 'mesh' ? 'The rigged character' : `The concept for ${asset}`} would cost about US$${x.price?.usd} (${x.price?.basis})${x.total ? `; with the mesh and rig, about US$${x.total} for the character` : ''}, on the person's own fal account. Ask them; then character_make with approve: true (and budget: <their cap> the first time).`
+          : x.needs === 'approval' ? x.why
+            : x.step === 'concept' ? `The concept for ${asset} is made (US$${x.usd}). LOOK at it (file_read ${x.concept}): one character, whole, in an A-pose, in the game's style, on a plain background? Then character_make { "asset": "${asset}", "step": "mesh", "approve": true } (about US$${x.then?.usd ?? '1.40'}), or new words with again: true.`
+              : x.step === 'mesh' ? `${asset} is a rigged character in games/${game}: ${x.after?.tris} triangles, ${x.after?.kb} KB, ${x.after?.heightM} m, skeleton ${x.skeleton}; clips (retargeted, free): ${(x.verbs ?? []).join(', ')} (US$${x.usd}; receipts ${x.receipts?.join(', ')}). anim_preview shows its clips looping; asset_lineup shows it beside the rest.`
+                : (x.next ?? JSON.stringify(x));
+        return ok(text, data);
+      },
+    },
+    {
+      name: 'anim_plan', title: 'Clips',
+      description: 'The animation card: every character\'s clips against the verbs the game needs (its anim.clips decision: idle, walk, run, jump, attack, hit, die, ...), each as a LOOPING PREVIEW (when drawn: anim_preview), where it came from (its own, or the CC0 library\'s retargeted onto its skeleton), what is missing (anim_add adds it, free), and Feel: the Game Lab on the move (game_lab with the take that plays it), New beside Today. Free.',
+      inputSchema: { type: 'object', properties: { ...GAME, asset: str('Optional: the character to show first') } },
+      annotations: { title: 'Clips', ...RO }, _meta: ui(ART_UI.animation),
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const game = gameOf(root, a.game);
+        const d = animationData(h, root, game, { asset: a.asset ?? null });
+        if (!d.rows.length) return fail(`${game} has no rigged characters yet: asset_add a library character (assets_find "knight" kind character), or character_make`, d);
+        return ok(animationText(d), d);
+      },
+    },
+    {
+      name: 'anim_add', title: 'Add clips',
+      description: 'More verbs for a character (jump, attack, hit, die, emote, cast, block, dodge, ...): baked into its skeleton\'s clip library at build time, its own clip where it has one, else retargeted from the starter library\'s CC0 humanoid clips (from: another library item or a file). Free, a few seconds; every character with that skeleton gets them.',
+      inputSchema: { type: 'object', properties: { ...GAME, asset: str('The character'), verbs: { description: 'Verbs to add, e.g. ["jump","attack"] or "jump,attack"' }, from: str('Optional: a library item or a file to take them from') }, required: ['asset', 'verbs'] },
+      annotations: { title: 'Add clips', ...RW }, _meta: ui(ART_UI.animation),
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const need = needsInstall(ctx, root); if (need) return need;
+        const game = gameOf(root, a.game);
+        const verbs = (Array.isArray(a.verbs) ? a.verbs : String(a.verbs ?? '').split(',')).map((v) => String(v).trim()).filter(Boolean);
+        const r = await cli(ctx, root, `clips for ${a.asset}`, ['anim', 'add', game, String(a.asset), '--verbs', verbs.join(','), ...(a.from ? ['--from', String(a.from)] : [])]);
+        if (!r.ended) return stillRunning(r.job, 'Baking the clips');
+        if (r.job.code !== 0) return fail(`Not added: ${whyOf(r.job)}`);
+        const p = await cli(ctx, root, `previews of ${a.asset}`, ['anim', 'preview', game, '--asset', String(a.asset)]).catch(() => null);
+        const d = animationData(h, root, game, { asset: String(a.asset) });
+        const x = r.result ?? {};
+        return ok(`${a.asset}: ${x.added?.length ? `added ${x.added.join(', ')}` : 'nothing new'}${x.missing?.length ? `; no source has ${x.missing.join(', ')}` : ''}.${p?.ended ? '' : ' (Its previews are still being drawn.)'}\n${animationText(d)}`, { ...d, added: x.added ?? [], missing: x.missing ?? [] });
+      },
+    },
+    {
+      name: 'anim_preview', title: 'Draw the clips',
+      description: 'Draw every character\'s clips as small looping previews (animated WebP, under the game\'s light; free, one headless Chrome on this computer, a few seconds a character) and answer with the animation card.',
+      inputSchema: { type: 'object', properties: { ...GAME, asset: str('Optional: only this character') } },
+      annotations: { title: 'Draw the clips', ...RW }, _meta: ui(ART_UI.animation),
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const need = needsInstall(ctx, root); if (need) return need;
+        const game = gameOf(root, a.game);
+        const r = await cli(ctx, root, `clip previews for ${game}`, ['anim', 'preview', game, ...(a.asset ? ['--asset', String(a.asset)] : [])]);
+        if (!r.ended) return stillRunning(r.job, 'The previews');
+        if (r.job.code !== 0) return fail(`Not drawn: ${whyOf(r.job)}`);
+        const d = animationData(h, root, game, { asset: a.asset ?? null });
+        return ok(`${animationText(d)}\nSheets (a person reads them with file_read): ${(r.result?.rows ?? []).map((x) => x.sheet).filter(Boolean).join(', ')}`, d);
       },
     },
   ];

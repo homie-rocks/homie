@@ -137,9 +137,14 @@ first used:
   Homie's starter library (Kenney, KayKit, Poly Haven, ambientCG), your own models with their
   licence, and generated props (a concept in the locked style, then Tripo P1 image-to-3D) on your
   own fal key, priced, capped and receipted; every model checked for phones, licensed, credited
-  and shown in a lineup at true scale.
+  and shown in a lineup at true scale. Characters too: free animated heroes from the library, or
+  one generated and auto-rigged on your fal key (an A-pose concept, then Meshy image-to-3D).
+- **`animate`** (*"give my game animated characters"*, *"the jump feels floaty"*): one skeleton
+  standard, the library's CC0 clips (idle, run, jump, attack, hit, ...) retargeted onto every
+  character, and one shared player with blends, IK feet, springs and look-at; an Animation card
+  of looping previews, and "feel" opens the Game Lab on that move. Free.
 
-All of them but `lab`, `style` and `models` need ffmpeg; `video`, `art`, `style`, `models`, `playtest`, `perf` and `lab` use Chrome.
+All of them but `lab`, `style`, `models` and `animate` need ffmpeg; `video`, `art`, `style`, `models`, `animate`, `playtest`, `perf` and `lab` use Chrome.
 
 ## In the Claude desktop app: one chat
 

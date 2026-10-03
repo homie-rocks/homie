@@ -134,13 +134,31 @@ export async function measureDoc(doc) {
     return { name: t.getName() || t.getURI() || '', mimeType: t.getMimeType(), px: px ? [px[0], px[1]] : null, bytes: t.getImage()?.byteLength ?? 0, gpuBytes: px ? Math.round(px[0] * px[1] * 4 * (4 / 3)) : 0, slots };
   });
   let box = null;
+  const skins = root.listSkins();
   if (scene) {
-    const b = fn.getBounds(scene);
+    // A skinned model is where its bones put it (its mesh node's own transform does nothing): measured skinned.
+    const b = skins.length ? skinnedBounds(doc) ?? fn.getBounds(scene) : fn.getBounds(scene);
     if (Number.isFinite(b.min[0]) && Number.isFinite(b.max[0])) box = { min: b.min.map((v) => round(v)), max: b.max.map((v) => round(v)), size: b.max.map((v, i) => round(v - b.min[i])) };
   }
-  const skins = root.listSkins();
+  // Skinning: vertices a skin moves, and the most joints one vertex reads (three.js reads JOINTS_0 only: 4).
+  let skinnedVertices = 0; let influences = 0;
+  for (const node of root.listNodes()) {
+    if (!node.getSkin() || !node.getMesh()) continue;
+    for (const prim of node.getMesh().listPrimitives()) {
+      skinnedVertices += prim.getAttribute('POSITION')?.getCount() ?? 0;
+      influences = Math.max(influences, prim.getAttribute('JOINTS_1') ? 8 : prim.getAttribute('JOINTS_0') ? 4 : 0);
+    }
+  }
+  const anims = root.listAnimations();
+  const keys = anims.reduce((n, a) => n + a.listSamplers().reduce((m, x) => m + x.getInput().getCount(), 0), 0);
+  const clipSeconds = anims.reduce((n, a) => n + a.listSamplers().reduce((m, x) => Math.max(m, x.getInput().getMax([])[0] ?? 0), 0), 0);
+  const channels = anims.reduce((n, a) => n + a.listChannels().length, 0);
   return {
     triangles, vertices, drawCalls,
+    skinnedVertices, influences,
+    clipKeys: keys, clipSeconds: round(clipSeconds, 2), clipChannels: channels,
+    // Keys a second per channel: 30 is the house rate (resampled clips usually sit well under it).
+    clipRate: channels && clipSeconds ? round(keys / channels / (clipSeconds / Math.max(1, anims.length)), 1) : 0,
     materials: seenMaterials.size,
     textures,
     textureGpuBytes: textures.reduce((s, t) => s + t.gpuBytes, 0),
@@ -153,6 +171,52 @@ export async function measureDoc(doc) {
     // Where the pivot is: the bottom centre is (0, min.y = 0, 0) with the footprint around x = z = 0.
     pivot: box ? { bottom: Math.abs(box.min[1]) < 0.01 * Math.max(0.01, box.size[1]), centred: Math.abs((box.min[0] + box.max[0]) / 2) < 0.05 * Math.max(0.01, box.size[0]) && Math.abs((box.min[2] + box.max[2]) / 2) < 0.05 * Math.max(0.01, box.size[2]) } : null,
   };
+}
+
+/**
+ * The rest-pose bounds of a model's skinned meshes, as a renderer draws them: every vertex through its joints
+ * (joint world matrix x inverse bind matrix, weighted), never through the mesh node's own transform (glTF ignores it
+ * for a skinned mesh). A rig in centimetres under a 0.01 armature, or one scaled by a wrapper node, measures true.
+ * Returns { min, max } or null when nothing is skinned. Up to 40,000 vertices are read (evenly spread).
+ */
+export function skinnedBounds(doc) {
+  const min = [Infinity, Infinity, Infinity]; const max = [-Infinity, -Infinity, -Infinity];
+  const v = [0, 0, 0]; const j = [0, 0, 0, 0]; const w = [0, 0, 0, 0];
+  let any = false;
+  for (const node of doc.getRoot().listNodes()) {
+    const skin = node.getSkin(); const mesh = node.getMesh();
+    if (!skin || !mesh) continue;
+    const joints = skin.listJoints();
+    const ibm = skin.getInverseBindMatrices()?.getArray() ?? null;
+    const mats = joints.map((jn, k) => mul4(jn.getWorldMatrix(), ibm ? Array.from(ibm.subarray(k * 16, k * 16 + 16)) : IDENTITY));
+    for (const prim of mesh.listPrimitives()) {
+      const P = prim.getAttribute('POSITION'); const J = prim.getAttribute('JOINTS_0'); const W = prim.getAttribute('WEIGHTS_0');
+      if (!P || !J || !W) continue;
+      const step = Math.max(1, Math.floor(P.getCount() / 40000));
+      for (let i = 0; i < P.getCount(); i += step) {
+        P.getElement(i, v); J.getElement(i, j); W.getElement(i, w);
+        let x = 0; let y = 0; let z = 0; let sum = 0;
+        for (let k = 0; k < 4; k++) {
+          const m = mats[j[k]]; const wk = w[k];
+          if (!m || !wk) continue;
+          x += wk * (m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12]); y += wk * (m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13]); z += wk * (m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]);
+          sum += wk;
+        }
+        if (sum <= 0) continue;
+        x /= sum; y /= sum; z /= sum;
+        if (x < min[0]) min[0] = x; if (y < min[1]) min[1] = y; if (z < min[2]) min[2] = z;
+        if (x > max[0]) max[0] = x; if (y > max[1]) max[1] = y; if (z > max[2]) max[2] = z;
+        any = true;
+      }
+    }
+  }
+  return any ? { min, max } : null;
+}
+const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+function mul4(a, b) {
+  const o = new Array(16);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { let t = 0; for (let k = 0; k < 4; k++) t += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = t; }
+  return o;
 }
 
 /** The Khronos glTF-Validator's verdict: { errors, warnings, messages: [first few] } (null when it is not installed). */
@@ -289,7 +353,19 @@ export async function optimiseModel(input, { out = null, triangles = 1500, textu
       ops.push(`scale ${round(s, 4)} (to ${height} m)`);
     }
   }
-  await doc.transform(fn.center({ pivot: 'below' }));
+  if (hasRig && doc.getRoot().listSkins().length) {
+    // A skinned model's pivot is set on a wrapper over everything (its bones carry its mesh): gltf-transform's center
+    // measures a skinned mesh by its node, which a rig in centimetres gets wrong a hundredfold.
+    const b = skinnedBounds(doc);
+    if (b) {
+      const top = scene.listChildren();
+      const wrap = top.length === 1 && top[0].getName() === 'homie-scale' ? top[0] : null;
+      const holder = wrap ?? doc.createNode('homie-pivot');
+      if (!wrap) { for (const child of scene.listChildren()) { scene.removeChild(child); holder.addChild(child); } scene.addChild(holder); }
+      const t = holder.getTranslation();
+      holder.setTranslation([t[0] - (b.min[0] + b.max[0]) / 2, t[1] - b.min[1], t[2] - (b.min[2] + b.max[2]) / 2]);
+    }
+  } else await doc.transform(fn.center({ pivot: 'below' }));
   ops.push('center bottom');
 
   // Simplify to the triangle budget, loosening the error until it fits (a closed silhouette first).
