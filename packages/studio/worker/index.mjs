@@ -92,6 +92,8 @@ import { BRAIN_BUDGET, HouseAgents, agentFacts, aiName, decodeFacts, encodeFacts
 import { CLEF, DECIDE, clefRun, costOf, localAiOf, picksOf, talks } from './brain.mjs';
 import { REACTIONS, reviewChat } from './chat.mjs';
 import { REPORT_REASONS, chatDay, chatOf, chatRowsOf, fileReport } from './chat-store.mjs';
+import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs';
+import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
@@ -601,6 +603,11 @@ async function route(request, env, ctx) {
     if (shopped) return shopped;
   }
   if (path.startsWith('/api/player/') || path === '/account' || path === '/account/' || path === '/_homie/account.js') return playerRoutes(request, env, ctx, url, { catalogueOf: getCat });
+  // The Lounge (0.29.0, chat/LOUNGE.md): the studio's own community room, when studio.json turns it on.
+  if (isLoungePath(path)) {
+    const lounged = await loungeRoutes(request, env, ctx, url, { catalogueOf: getCat, roomsOf });
+    if (lounged) return lounged;
+  }
   if (path === '/_homie/site.js') return new Response(SITE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   if (path === '/api/stats/beat' && request.method === 'POST') return mediaBeat(request, env, ctx, url);
   if (path === '/api/stats') {
@@ -658,6 +665,8 @@ async function route(request, env, ctx) {
       // The studio's posts, for the hub (the full text is in /posts/feed.json).
       posts: (cat.posts ?? []).slice(0, 20).map((p) => ({ slug: p.slug, title: p.title, date: p.date, summary: p.summary, page: `${url.origin}/posts/${p.slug}/`, image: p.image ? (p.image.startsWith('/') ? `${url.origin}${p.image}` : p.image) : null, links: p.links ?? {} })),
       ...(shareRooms ? { rooms: `${url.origin}/api/rooms` } : {}),
+      // The studio's Lounge (0.29.0), for a directory that shows lounges: its page and its public facts.
+      ...(cat.studio?.lounge ? { lounge: { name: cat.studio.lounge.name, page: `${url.origin}/lounge/`, now: `${url.origin}/lounge/api/now` } } : {}),
       // Shared only when studio.json says `stats.share`: two numbers for the whole studio, for the hub.
       ...(played ? { played } : {}),
       // The shop (0.24.0): whether it sells and its till, never a key or a sale; and referrals: this studio takes
@@ -1200,9 +1209,28 @@ export class Table {
     this.vocabRead = this.readVocab(game).catch(() => false);
     // Room chat (section 19): typed text the floor let through waits for the studio's own Workers AI.
     this.room.review = (text, opts) => this.reviewChat(text, opts);
+    // Kept chat (0.29.0): a room whose rules keep `history` writes what was said to D1 and deletes what is taken down,
+    // one after another (a line removed the moment it went out is never written after its delete).
+    this.room.onPublished = (rec) => this.keptQueue(() => keepLines(this.env, this.game, this.code, [rec]));
+    this.room.onUnsaid = (ids) => this.keptQueue(() => forgetLines(this.env, this.game, this.code, ids));
     // A game's own decisions (section 20): the host's typed questions, for a game whose game.json opts in.
     this.room.decider = (state, questions, opts) => this.decide(state, questions, opts);
     return this.room;
+  }
+
+  /** Kept chat's writes, in order, each finished before the next (D1 calls from one room never pass each other). */
+  keptQueue(fn) {
+    if (!this.env.DB) return;
+    this.kept = (this.kept ?? Promise.resolve()).then(fn).catch((error) => { try { console.log(JSON.stringify({ ev: 'chat-history-failed', room: this.code, error: String(error?.message ?? error).slice(0, 200) })); } catch { /* no console */ } });
+    this.ctx.waitUntil(this.kept);
+  }
+
+  /** A room that keeps history puts what it kept back in its window before its first page opens (once per opening). */
+  async hydrateHistory(room) {
+    const days = room.chatRules().history;
+    if (!(days > 0) || room.hydrated || !this.env.DB) return;
+    room.hydrated = true;
+    try { await this.kept; room.hydrate(await historyOf(this.env, this.game, this.code, { days })); } catch { /* the window alone (before migration 0009) */ }
   }
 
   /** Whether this game asked for decisions (game.json "decide": true, in the built catalogue), read once a minute. */
@@ -1411,14 +1439,16 @@ export class Table {
     // A chat line as the room keeps it (section 19), for a report: the Worker files the room's own copy, never a reporter's.
     if (url.pathname === '/__chat') {
       const id = url.searchParams.get('id');
-      const r = room.chatLog.find((x) => x.id === id);
-      return json({ ok: Boolean(r), line: r ? { id: r.id, kind: r.kind, text: r.text ?? null, glyph: r.glyph ?? null, name: r.name, seat: r.seat, at: r.at, by: r.by, player: r.from?.player ?? null } : null });
+      // A line older than the window is in the room's kept history, when it keeps one (0.29.0).
+      const r = room.chatLog.find((x) => x.id === id) ?? (room.chatRules().history > 0 ? await keptLine(this.env, this.game, this.code, id) : null);
+      return json({ ok: Boolean(r), line: r ? { id: r.id, kind: r.kind, text: r.text ?? null, glyph: r.glyph ?? null, name: r.name, seat: r.seat, at: r.at, by: r.by, player: r.from?.player ?? null, owner: Boolean(r.owner), mod: Boolean(r.mod) } : null });
     }
     if (url.pathname === '/__office') {
       const ctl = await request.json().catch(() => null);
       const why = await verifyControl(this.env, ctl, { game: this.game, room: this.code }, this.seen);
       if (why) return json({ ok: false, error: 'refused', why }, 403);
-      const res = room.control(ctl.op, ctl.args && typeof ctl.args === 'object' ? ctl.args : {});
+      // A Lounge card waits for the studio's review (0.29.0); every other control answers at once.
+      const res = await room.control(ctl.op, ctl.args && typeof ctl.args === 'object' ? ctl.args : {});
       // AI talk turned off (a policy) or a guide kicked: the house guides follow at once.
       if (this.house) this.house.sync();
       await this.ctx.storage.put('office', room.officeSaved()).catch(() => {});
@@ -1436,6 +1466,8 @@ export class Table {
     if (pol) room.setPolicy(pol);
     if (this.house) this.house.sync();
     const agent = decodeFacts(url.searchParams.get('ag'));
+    // Kept chat (0.29.0): the room's history is back in its window before this page hears it.
+    await this.hydrateHistory(room);
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
     const via = url.searchParams.get('via');
@@ -1459,6 +1491,9 @@ export class Table {
       acct: url.searchParams.get('acct') === '1',
       member: url.searchParams.get('mem') === '1',
       hub: url.pathname === '/__watch' && url.searchParams.get('hub') === '1',
+      // The Lounge (0.29.0): the signed-in account's name and a moderator's mark, the Worker's word on a watch socket.
+      ...(url.pathname === '/__watch' && url.searchParams.get('nm') ? { name: String(url.searchParams.get('nm')).slice(0, 40) } : {}),
+      ...(url.pathname === '/__watch' && url.searchParams.get('mod') === '1' ? { mod: true } : {}),
       send: (text) => { try { server.send(text); } catch { /* closed */ } },
       close: (c, r) => { try { server.close(c, r); } catch { /* closed */ } },
       buffered: () => 0,

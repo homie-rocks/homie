@@ -47,6 +47,8 @@ export const UI = Object.freeze({
   ...ART_UI,
 });
 
+/** Homie's own updates by email (0.29.0): the sign-up page on homie.rocks, double opt-in, for the first-run card. */
+export const HOMIE_UPDATES = 'https://homie.rocks/updates/?from=plugin';
 const inside = (base, p) => p === base || p.startsWith(base.endsWith(sep) ? base : `${base}${sep}`);
 const realOr = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
 
@@ -208,6 +210,9 @@ async function setupCard(ctx, root, { fresh = false, made = null, install = null
     studios, checklist: steps,
     status: { rows: status.rows.map(({ parts, ...r }) => r), features: status.features, next: status.next, meanwhile: status.meanwhile, blocking: status.blocking },
     install: job ? jobView(job) : null, made,
+    // Homie's own updates by email (0.29.0): a link the person opens and signs up at themselves (double opt-in on
+    // homie.rocks). The card never asks for an address, and an agent never types one in for the person.
+    updates: HOMIE_UPDATES,
   };
   const text = [
     current ? `Studio: ${current.name} (${root})${current.installed ? '' : job ? ' (installing its toolkit)' : ''}` : `No studio yet${ctx.studiosDir ? ` in ${ctx.studiosDir}` : ''}.`,
@@ -217,6 +222,7 @@ async function setupCard(ctx, root, { fresh = false, made = null, install = null
     '',
     formatStatus(status),
     '',
+    `Homie updates by email (optional): ${HOMIE_UPDATES} (the person signs up there themselves; never type an address in for them).`,
     'The card on screen shows this; it follows the install by itself.',
   ].join('\n');
   return ok(text, data);

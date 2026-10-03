@@ -53,8 +53,11 @@ const I = {
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   home: '<path d="M4 11.5 12 5l8 6.5V20H4z"/><path d="M10 20v-5h4v5"/>',
   eye: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  lounge: '<path d="M4.5 5h15A1.5 1.5 0 0 1 21 6.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V16h-1A1.5 1.5 0 0 1 3 14.5v-8A1.5 1.5 0 0 1 4.5 5Z"/><path d="M8 9.5h8M8 12.5h5"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
 };
-const icon = (name, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[name] ?? ''}</svg>`;
+export const icon = (name, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[name] ?? ''}</svg>`;
 const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8Z" fill="currentColor"/></svg>';
 /** Homie's mark, for the "Made with Homie" footer. */
 const HOMIE_MARK = '<svg class="homie" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 11.2 12 4.5l8.5 6.7V20a.5.5 0 0 1-.5.5h-5v-5.5h-6v5.5H4a.5.5 0 0 1-.5-.5Z" fill="currentColor"/></svg>';
@@ -558,6 +561,8 @@ export function sectionsOf(cat) {
     (cat.videos ?? []).length > 0 && { key: 'videos', href: '/videos/', label: 'Videos' },
     games && { key: 'rooms', href: '/rooms/', label: 'Rooms' },
     (cat.posts ?? []).length > 0 && { key: 'posts', href: '/posts/', label: 'Posts' },
+    // The Lounge (0.29.0): the studio's own community room, when studio.json turns it on.
+    cat.studio?.lounge && { key: 'lounge', href: '/lounge/', label: cat.studio.lounge.tab ?? 'Lounge' },
   ].filter(Boolean);
 }
 

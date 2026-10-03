@@ -163,6 +163,13 @@ button.small { min-height: 30px; padding: 4px 10px; font-size: 13px; border-radi
   .newsrv .frow > label, .newsrv .frow > .lbl { padding-top: 0; }
   .policies { grid-template-columns: 1fr; }
 }
+/* The Lounge (0.29.0): its rules, play nights, moderators and last lines. */
+.lounge { margin: 18px 0 6px; padding: 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+.lounge .lhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.lounge .lset { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; font-size: 14px; }
+.lounge .lset label { display: inline-flex; gap: 8px; align-items: center; }
+.lounge .nightf { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.lounge .nightf input[type=text] { min-width: 220px; }
 @media (max-width: 720px) { .srvhead { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) {
   .rhead { grid-template-columns: 1fr 1fr 1fr; }
@@ -763,9 +770,100 @@ export const OFFICE_SCRIPT = String.raw`(function () {
     return box;
   }
 
+  /* ---------------------------------------------------------------- the Lounge (0.29.0, chat/LOUNGE.md) */
+  var loungeEl = document.getElementById('lounge');
+  var KEEP_DAYS = [[0, 'Nothing past a few minutes'], [1, '1 day'], [7, '7 days'], [14, '14 days'], [30, '30 days'], [90, '90 days']];
+  function loungeBox(L, now) {
+    var box = el('section', 'lounge'); box.id = 'lounge-box';
+    var r = L.rules || {};
+    add(box, add(el('div', 'lhead'), add(el('div'), el('h2', '', L.name), el('span', 'faint', (L.here ? L.here + ' here now · ' : 'quiet · ') + (r.mode === 'text' ? 'typing: ' + r.who : r.mode) + (r.slow ? ' · slow ' + r.slow + ' s' : '') + ' · ' + (r.history ? 'kept ' + r.history + (r.history === 1 ? ' day' : ' days') : 'nothing kept') + (r.hub ? ' · shown on homie.rocks' : '') + (L.kids ? ' · kids' : '') + ' · rules from ' + (L.from === 'office' ? 'you' : 'the defaults'))),
+      add(el('div', 'links'), Object.assign(el('a', '', 'Open the Lounge'), { href: L.page, target: '_blank', rel: 'noopener' }))));
+    var keep = sel(KEEP_DAYS, r.history || 0, 'Keep what is said');
+    keep.disabled = Boolean(L.kids);
+    keep.onchange = function () {
+      var n = Number(keep.value);
+      if (n < (r.history || 0) && !confirm(n ? 'Keep only ' + n + ' days? Anything older is deleted now.' : 'Keep nothing past a few minutes? Everything the Lounge kept is deleted now.')) { keep.value = String(r.history || 0); return; }
+      act('/_studio/api/lounge/rules', { history: n }, n ? 'The Lounge keeps what is said for ' + n + (n === 1 ? ' day.' : ' days.') : 'The Lounge keeps nothing now.');
+    };
+    var slow = sel([[0, 'Off'], [3, '3 s'], [10, '10 s'], [30, '30 s'], [120, '2 min']], r.slow || 0, 'Slow mode');
+    slow.onchange = function () { act('/_studio/api/lounge/rules', { slow: Number(slow.value) }, 'Slow mode set.'); };
+    var who = sel([['anyone', 'Anyone'], ['signed-in', 'Signed in']], r.who === 'anyone' ? 'anyone' : 'signed-in', 'Who may type');
+    who.onchange = function () { act('/_studio/api/lounge/rules', { who: who.value }, who.value === 'anyone' ? 'Guests may type too.' : 'Typing is for signed-in people.'); };
+    var hub = el('input'); hub.type = 'checkbox'; hub.checked = Boolean(r.hub);
+    hub.onchange = function () { act('/_studio/api/lounge/rules', { hub: hub.checked }, hub.checked ? 'homie.rocks shows the Lounge live.' : 'The Lounge stays on this site.'); };
+    add(box, add(el('div', 'lset'),
+      add(el('label'), el('span', 'dim', 'Keep what is said'), keep),
+      add(el('label'), el('span', 'dim', 'Slow mode'), slow),
+      add(el('label'), el('span', 'dim', 'Typing'), who),
+      add(el('label', 'check'), hub, el('span', '', 'Show it live on homie.rocks'))));
+    if (L.kids) box.appendChild(el('p', 'faint', 'A kids Lounge keeps chat to emoji and quick lines and keeps nothing.'));
+    // Play nights: the owner's own time in, everyone's own time out.
+    add(box, el('h3', '', 'Play nights'));
+    (L.nights || []).forEach(function (n) {
+      var rowEl = el('div', 'inv');
+      add(rowEl, el('b', '', n.title), el('span', '', new Date(n.at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })), el('span', 'faint', n.minutes + ' min' + (n.on ? ' · on now' : '') + (n.game && n.game.name ? ' · ' + n.game.name : '')),
+        armed('Remove', 'bad', function () { act('/_studio/api/lounge/night', { remove: n.id }, 'Play night removed.'); }));
+      box.appendChild(rowEl);
+    });
+    var key = 'lounge/night';
+    var dn = S.drafts[key] || (S.drafts[key] = {});
+    var title = el('input'); title.type = 'text'; title.placeholder = 'What it is ("Night Rush night")'; title.maxLength = 80; title.value = dn.title || ''; title.oninput = function () { dn.title = title.value; };
+    var when = el('input'); when.type = 'datetime-local'; when.value = dn.when || ''; when.setAttribute('aria-label', 'When (your time)'); when.oninput = function () { dn.when = when.value; };
+    var mins = sel([[60, '1 hour'], [90, '90 min'], [120, '2 hours'], [180, '3 hours']], dn.minutes || 120, 'How long'); mins.onchange = function () { dn.minutes = Number(mins.value); };
+    var game = sel([['', 'Any game']].concat((S.data && S.data.games || []).map(function (g) { return [g.id, g.name]; })), dn.game || '', 'Which game'); game.onchange = function () { dn.game = game.value; };
+    add(box, add(el('form', 'nightf'), title, when, mins, game, btn('Add', 'small', function () {
+      if (!title.value.trim() || !when.value) { toast('Give it a name and a time.', true); return; }
+      var at = new Date(when.value);
+      act('/_studio/api/lounge/night', { title: title.value, at: at.toISOString(), minutes: Number(mins.value), game: game.value || undefined }, 'Play night added: it shows in the Lounge in everyone\'s own time.').then(function (res) { if (res && res.ok) S.drafts[key] = {}; });
+    })));
+    // Moderators: accounts the owner trusts with Remove, Mute, Kick (an hour at most) and slow mode in the Lounge.
+    add(box, el('h3', '', 'Moderators'));
+    if (!(L.mods || []).length) box.appendChild(el('p', 'faint', 'None yet. Make someone a moderator from one of their lines below.'));
+    (L.mods || []).forEach(function (m) {
+      add(box, add(el('div', 'inv'), el('b', '', m.name || m.player), el('span', 'faint', 'since ' + new Date(m.addedAt).toLocaleDateString()),
+        armed('Remove', 'bad', function () { act('/_studio/api/lounge/mod', { player: m.player, remove: true, name: m.name }, (m.name || 'They') + ' is not a moderator now.'); })));
+    });
+    // The Lounge's last lines, with Remove, Mute, Kick, and Make moderator for a signed-in sender.
+    var lines = (L.lines || []).filter(function (l) { return l.kind !== 'react'; });
+    if (lines.length) {
+      var log = el('div', 'chatlog');
+      add(log, el('h4', '', 'Last ' + lines.length + (lines.length === 1 ? ' message' : ' messages')));
+      lines.slice().reverse().slice(0, 30).forEach(function (l) {
+        var rowEl = el('div', 'cl' + (l.by === 'studio' ? ' studio' : ''));
+        add(rowEl, el('b', '', l.by === 'studio' ? 'Studio' : l.name), el('span', 'txt', l.card ? 'Showed: ' + (l.card.title || '') + (l.card.studio ? ' by ' + l.card.studio : '') + (l.text && l.text.indexOf('Made: ') !== 0 ? ' · ' + l.text : '') : (l.text || '')),
+          el('span', 'faint', ago(now - l.at) + (l.by === 'hub' ? ' · on homie.rocks' : '') + (l.owner ? ' · you' : l.mod ? ' · mod' : l.acct ? ' · signed in' : ' · guest')));
+        var acts = el('span', 'pacts');
+        acts.appendChild(btn('Remove', 'ghost small', function () { act('/_studio/api/lounge/remove', { id: l.id }, 'Removed from every screen.'); }));
+        if (l.by !== 'studio' && !l.owner) {
+          acts.appendChild(btn('Mute', 'warn small', function () { act('/_studio/api/lounge/hold', { line: l.id, minutes: hold() }, (l.name || 'They') + ' is muted for ' + hold() + ' min; their messages are down.'); }));
+          acts.appendChild(armed('Kick', 'bad', function () { act('/_studio/api/lounge/hold', { line: l.id, kick: true, minutes: hold() }, (l.name || 'They') + ' is out of the Lounge for ' + hold() + ' min.'); }));
+          if (l.player && l.acct && !l.mod && !(L.mods || []).some(function (m) { return m.player === l.player; })) acts.appendChild(btn('Make moderator', 'ghost small', function () { if (confirm('Make ' + l.name + ' a moderator of the Lounge? They can take messages down, mute or kick someone for up to an hour, and set slow mode.')) act('/_studio/api/lounge/mod', { player: l.player, name: l.name }, l.name + ' is a moderator from their next visit.'); }));
+        }
+        rowEl.appendChild(acts);
+        log.appendChild(rowEl);
+      });
+      box.appendChild(log);
+    } else box.appendChild(el('p', 'faint', 'Nothing said in the Lounge lately.'));
+    var reps = L.reports || [];
+    if (reps.length) {
+      add(box, el('h3', '', 'Reports (' + reps.length + ')'));
+      reps.forEach(function (p) {
+        add(box, add(el('div', 'inv'), el('b', '', p.name || 'Someone'), el('span', '', '"' + p.text + '"'), el('span', 'chip muted', p.reasonText || p.reason), el('span', 'faint', ago(now - p.at)),
+          btn('Dismiss', 'ghost small', function () { act('/_studio/api/chat/report', { id: p.id }, 'Report dismissed (deleted).'); })));
+      });
+    }
+    return box;
+  }
+
   function render() {
     var d = S.data;
     if (!d) return;
+    // The Lounge, above the games (never redrawn under a typing owner or a control waiting for its second tap).
+    var lat = document.activeElement;
+    if (loungeEl && !(lat && loungeEl.contains(lat) && /INPUT|SELECT/.test(lat.tagName)) && !loungeEl.querySelector('[data-armed="1"]')) {
+      loungeEl.textContent = '';
+      if (d.lounge) loungeEl.appendChild(loungeBox(d.lounge, Date.now() - (S.skew || 0)));
+    }
     var now = Date.now() - (S.skew || 0);
     liveEl.textContent = d.playing ? d.playing + (d.playing === 1 ? ' playing now' : ' playing now') : 'nobody playing right now';
     document.getElementById('livedot').className = 'dot' + (d.playing ? ' on' : '');
@@ -849,6 +947,7 @@ export async function officePage(cat, headers = {}) {
 <label for="hold" style="margin-left:auto">Kick, mute and close for</label><select id="hold"><option value="5">5 min</option><option value="10" selected>10 min</option><option value="30">30 min</option><option value="60">1 hour</option><option value="1440">a day</option></select></form>
 <p class="dim" id="status" role="status"></p>
 <p class="dim" id="chatday"></p>
+<div id="lounge"></div>
 <div id="games" aria-live="polite"><p class="empty">Reading the rooms…</p></div>
 <div class="toast" id="toast" role="status" hidden></div>
 <p class="note">Servers: each game's named room pools. Open: anyone, AI with a pass marked AI. Humans only: no AI at all. Hybrid: some seats in every room are AI companions; the party votes their level. Beginner: new players, AI guides, quick lines only. Changing a server reaches its live rooms at once; AI leave after the round when a server becomes humans-only.</p>

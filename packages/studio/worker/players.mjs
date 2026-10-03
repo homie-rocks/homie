@@ -31,6 +31,7 @@ import { adoptStatements, bumpPlayerStats, dropPlayerData, fall, fallenList, get
 import { bytesToB64url, randomToken, sha256Hex, verifyAssertion, verifyRegistration } from './webauthn.mjs';
 import { ACCOUNT_JS, accountPage } from './account-page.mjs';
 import { forgetPlayerShop, livePurchases, shopDataOf } from './shop-store.mjs';
+import { forgetPlayerHistory, playerHistory } from './lounge-store.mjs';
 
 export const PLAYERS_MIGRATION_FILE = '0004_players.sql';
 export const PLAYERS_MIGRATION = `-- Players and cloud saves (@homie-rocks/studio 0.12.0): accounts on this studio only (saves/SAVES.md).
@@ -326,6 +327,8 @@ async function removePlayer(env, id) {
   try { await env.DB.prepare('DELETE FROM server_members WHERE player = ?1').bind(id).run(); } catch { /* not migrated */ }
   // What they bought goes with them; the orders stay, without the player (0.24.0; none before migration 0008).
   try { await env.DB.batch(forgetPlayerShop(env, id)); } catch { /* not migrated */ }
+  // Every line they said in a room that keeps its chat, the Lounge too (0.29.0; none before migration 0009).
+  await forgetPlayerHistory(env, id);
   await data.after();
 }
 
@@ -513,6 +516,8 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
       games: await playerData(env, s.player.id),
       // The shop (0.24.0): their orders, what they own and the age band they gave; never a card or an email.
       ...(await shopDataOf(env, s.player.id).then((x) => (x ? { shop: x } : {}))),
+      // What they said in a room that keeps its chat, the Lounge too (0.29.0): each line, where and when.
+      ...(await playerHistory(env, s.player.id).then((x) => (x.length ? { chat: x } : {}))),
       note: 'Everything this studio keeps about this player. A passkey\'s private key never left your device; this site keeps only its public key.',
     };
     return json(body, 200, { 'content-disposition': `attachment; filename="${s.player.id}.json"` });

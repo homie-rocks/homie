@@ -20,6 +20,9 @@
  *
  * Emoji and quick lines are the studio's own words: they never need a review, so they reach every screen at once.
  * NOTHING is stored here: the relay keeps a short window in memory (section 19), and a report keeps only the message.
+ * A room keeps its words longer only when its owner turns `history` on (a number of days, 0.29.0; off for every game
+ * by default, never on a kids server): then the Table writes what was said, never a reaction, to the studio's own D1
+ * (worker/lounge-store.mjs) and forgets it after that many days.
  */
 import { WORDS_B64 } from './chat-words.mjs';
 import { clefRun, localAiOf } from './brain.mjs';
@@ -55,6 +58,8 @@ export const CHAT_LIMITS = Object.freeze({
   /** A typed message: `max` is the room's, at most this (homie.rocks's LINE_MAX). */
   text: 280, minText: 20, name: 24,
   lineText: 60, lines: 12, extraEmoji: 3, words: 64, word: 32, slowMax: 120,
+  /** `history`: the most days a room may keep what was said (0, the default, keeps nothing past the window). */
+  historyMax: 90,
   /** The room's window: the last `keep` messages from the last `keepMs` (memory only), for a page that just opened. */
   keep: 50, keepMs: 15 * 60_000,
   /** The same words from the same person within this long are not sent again. */
@@ -77,8 +82,11 @@ export const CHAT_RATES = Object.freeze({
 /** A game with no "chat" in its game.json: emoji and quick lines for everyone, typing for signed-in players (reviewed). */
 export const CHAT_DEFAULTS = Object.freeze({
   mode: 'text', who: 'signed-in', react: 'anyone', slow: 2, max: 140, links: 'block', swears: 'block', ai: true,
-  bubbles: true, watchers: true, hub: true,
+  bubbles: true, watchers: true, hub: true, history: 0,
 });
+
+/** How long a room with these rules keeps what was said: its `history` days, else the window's few minutes. */
+export const windowMsOf = (rules) => (rules?.history > 0 ? rules.history * 86_400_000 : CHAT_LIMITS.keepMs);
 
 const ID = /^[a-z][a-z0-9_]{0,15}$/;
 const PICTO = /\p{Extended_Pictographic}/u;
@@ -151,6 +159,8 @@ export function normalizeChat(raw, { kids = false, speech = 'game' } = {}) {
     links: r.links === 'allow' ? 'allow' : 'block',
     swears: r.swears === 'allow' ? 'allow' : 'block',
     ai: bool('ai'), bubbles: bool('bubbles'), watchers: bool('watchers'), hub: bool('hub'),
+    // Kept words (0.29.0): only when the owner asks, never on a kids server or a capped one, never with chat off.
+    history: kids || capped || mode === 'off' ? 0 : int(r.history, 0, CHAT_LIMITS.historyMax, CHAT_DEFAULTS.history),
     emoji: [...REACTIONS.map((x) => ({ ...x })), ...extraEmoji(r.emoji)],
     lines: quickLines(r.lines),
     block: wordList(r.block), allow: wordList(r.allow),
@@ -191,6 +201,7 @@ export function checkChatRules(body) {
   for (const k of ['who', 'react']) if (b[k] !== undefined) { if (!CHAT_WHO.includes(b[k])) return bad(`${k} is anyone, signed-in or members`); f[k] = b[k]; }
   if (b.slow !== undefined) { const n = Math.floor(Number(b.slow)); if (!Number.isFinite(n) || n < 0 || n > CHAT_LIMITS.slowMax) return bad(`slow is 0 to ${CHAT_LIMITS.slowMax} seconds`); f.slow = n; }
   if (b.max !== undefined) { const n = Math.floor(Number(b.max)); if (!Number.isFinite(n) || n < CHAT_LIMITS.minText || n > CHAT_LIMITS.text) return bad(`max is ${CHAT_LIMITS.minText} to ${CHAT_LIMITS.text} characters`); f.max = n; }
+  if (b.history !== undefined) { const n = Math.floor(Number(b.history)); if (!Number.isFinite(n) || n < 0 || n > CHAT_LIMITS.historyMax) return bad(`history is 0 (keep nothing) to ${CHAT_LIMITS.historyMax} days`); f.history = n; }
   if (b.links !== undefined) { if (!['block', 'allow'].includes(b.links)) return bad('links is block or allow'); f.links = b.links; }
   if (b.swears !== undefined) { if (!['block', 'allow'].includes(b.swears)) return bad('swears is block or allow'); f.swears = b.swears; }
   for (const k of ['ai', 'bubbles', 'watchers', 'hub']) if (b[k] !== undefined) f[k] = b[k] === true || b[k] === 'on' || b[k] === 'true';
@@ -208,6 +219,7 @@ export function chatProblems(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ['"chat" is an object (or false for no chat)'];
   const out = [];
   if (raw.mode !== undefined && !CHAT_MODES.includes(raw.mode)) out.push('chat.mode is off, emoji, lines or text');
+  if (raw.history !== undefined && !(Number.isInteger(raw.history) && raw.history >= 0 && raw.history <= CHAT_LIMITS.historyMax)) out.push(`chat.history is a number of days, 0 to ${CHAT_LIMITS.historyMax} (0 keeps nothing past the room's few minutes)`);
   for (const k of ['who', 'react']) if (raw[k] !== undefined && !CHAT_WHO.includes(raw[k])) out.push(`chat.${k} is anyone, signed-in or members`);
   // Where chat sits on the screen is the page's (game.json "screen": { "chat" }), never the room's rules.
   for (const k of ['corner', 'place', 'at']) if (raw[k] !== undefined && (k !== 'at' || typeof raw.at === 'string')) out.push(`chat.${k}: where chat sits on the screen goes in "screen": { "chat": { "at": … } }`);

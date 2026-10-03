@@ -603,6 +603,8 @@ export function setupCard(t, d, columns) {
     }),
     d.ready.length ? t.Box({ flexDirection: 'row', columnGap: 2, flexWrap: 'wrap', children: [span(t, 'Ready:', DIM), ...d.ready.map((f) => span(t, `${f.state === 'ready' ? '✓' : f.state === 'later' ? '…' : '○'} ${f.feature}`, f.state === 'ready' ? { color: 'green' } : DIM))] }) : null,
     d.next.length ? col(t, [span(t, 'Do this now:', { bold: true }), ...d.next.slice(0, 4).map((n) => span(t, `  → ${fit(n, columns * 2)}`, { color: 'yellow' }))]) : null,
+    // Homie's own updates by email (0.29.0): the person signs up there, double opt-in; nothing here asks for an address.
+    d.updates ? line(t, [span(t, 'Homie updates by email (optional): ', DIM), link(t, d.updates)], { wrap: 'truncate-end' }) : null,
   ]);
 }
 

@@ -17,9 +17,38 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.29.0] - 2026-10-03
+
+**Plugin 0.30.0** · [#44](https://github.com/homie-rocks/homie/pull/44)
+
+The Lounge: a community room on your own studio, with play nights, moderators, live rooms and "show what you made" cards, and chat history you can turn on.
+
+### Added
+
+- The Lounge. `"lounge": true` in studio.json gives your studio a community room at `/lounge/`, in your studio's own look: one column of talk on a phone with "What's on" a tap away, the talk beside a sidebar on a computer. It is room chat in a room of its own, on your own Cloudflare: reactions and quick lines for anyone, typing for players signed in with a passkey (Sign in and Make a passkey are on the page itself), and every typed line through the word list and your Workers AI review (Clef) before anyone sees it. Slow mode is 3 s to start with. `chat/LOUNGE.md` has the whole of it.
+- Play nights. Set them in the office (a name, a time in your own zone, how long, a game) or with `homie-studio lounge night "<title>" --at <time>`. Everyone sees the time in their own zone, a countdown, "On now", the game's Play, and Add to calendar (a small `.ics` the browser makes).
+- Live rooms in the Lounge, each with Watch and Join: your studio's own, and with a directory the busiest across it (`"featured": "studio"` keeps it to yours, `"none"` shows none).
+- Show what you made. A signed-in person pastes a link to a game and it becomes a card with the game's own title, pitch, picture and a Play button. Only a Homie studio's game can be one (yours, or a site that answers the studio manifest), its words pass the word list and the review like a typed line, and each person posts three an hour. Typed links stay held.
+- Moderators. Name a player account as a moderator from one of their lines in the office (or `homie-studio lounge mod <player id>`): from the Lounge page they take a line down, mute or kick its sender for up to an hour (their lines come down with them) and set slow mode, never on your lines or another moderator's. You have the same from the page, for up to a day, and everything else in the office's new Lounge section: its rules, play nights, moderators, last lines and reports.
+- Chat history you can turn on (`history`, a number of days, 1 to 90). In the office, "Keep what is said" for the Lounge, or `homie-studio lounge history <days>`; for a game, `"chat": { "history": 7 }` or the office. What is kept, in your studio's own D1: typed lines, quick lines, cards and your own studio lines, the name shown, when, and for a signed-in sender their account id. Never a reaction, an address or a browser key. It is deleted after that many days; keeping fewer days (or none) deletes the rest at once. The room gives kept lines back when it opens ("Earlier messages" pages further), a report still finds an older line, and a mute or kick from a kept line holds its sender's account.
+- Anyone takes their own message down: Delete on their own line in the Lounge (a signed-in person's kept lines too, a guest's while it is in the room's last minutes). Deleting an account at `/account/` deletes every line it kept, and the account's download has them.
+- `homie-studio lounge` (rules, play nights, moderators, last lines, reports), `lounge night`, `lounge history`, `lounge rules`, `lounge mod` and `lounge remove`. From your AI's office key, keeping more days, opening chat up, a new moderator, a mute or a kick only ASK (your one tap); a play night, slow mode, taking a line down and keeping less happen at once.
+- `/lounge/api/now`: the Lounge's public facts (its rules, play nights and live rooms) as JSON, and the studio's manifest names its Lounge. homie.rocks can show a Lounge live when its rules allow it (`hub`): a visitor's own browser opens the Lounge's socket, as for a room's card; they react there and type on your site. The sitemap and llms.txt list the Lounge's page; robots.txt keeps its socket and APIs out.
+- "Get Homie updates" on the setup card (Claude, Claude Desktop and the Claude Code mod): a link to homie.rocks's own sign-up for a short email when Homie ships something. The person signs up there themselves (double opt-in); the card never asks for an address.
+
+### Changed
+
+- Room chat's rules have one more field, `history`. It is 0 for every game and for the Lounge until an owner turns it on, and always 0 on a kids server, a beginner server and a kids Lounge, so nothing changes for a studio that does nothing: a room still keeps the last 50 lines of the last 15 minutes in memory and nothing else.
+- A line on the wire may carry `card`, `mod`, `kept` and, on a page's own copy, `mine`; a page that knows none of them shows the line's words. A watching page may send `unsay` for its own line. The room's facts count watching pages (`counts.shells`). The relay stays revision 8.
+
+### Upgrade notes
+
+- `homie-studio upgrade` adds migration `0009_studio_lounge.sql` (kept chat, play nights, moderators; all empty until you use them) and `npm run deploy` applies it. Nothing else changes until you add `"lounge": true` to studio.json and deploy. A game already called `lounge` keeps its page, and the build says the Lounge is off.
+- Before you turn history on, read `chat/OWNERS.md`: it says what is kept and what that means for children's data. The Lounge's page tells people what is kept, in its "How it works".
+
 ## [0.27.0] - 2026-10-03
 
-**Plugin 0.28.0** · [#42](https://github.com/homie-rocks/homie/pull/42)
+**Plugin 0.28.0** · [#42](https://github.com/homie-rocks/homie/pull/42) · [release-2026-10-03-studio-0.27.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.27.0)
 
 Search engines and AI agents read a studio's site correctly: schema.org data on every page, a full VideoGame on every landing, and a sitemap, robots.txt and llms.txt made from what is public.
 
