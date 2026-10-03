@@ -8,12 +8,12 @@ import { LIVE, ROOT, start, world } from './world.ts'
 const run = ($: any, command: string, args = '') => $.command.run({ command, args, origin: { kind: 'composer' } })
 
 describe('commands', () => {
-  test('session.start registers all seventeen, each to run at once (immediate)', async ($, on) => {
+  test('session.start registers all eighteen, each to run at once (immediate)', async ($, on) => {
     const seen: any[] = []
     world(on, { register: (e) => seen.push(e) })
     await start($)
     // /style is the style skill's own (plugin skills answer to their bare names), so the Art tab's command is /look.
-    expect(seen.map((c) => c.name)).toEqual(['studio', 'play', 'watch', 'rooms', 'build', 'codex', 'deploy-status', 'perf-numbers', 'parts', 'arcade', 'look', 'lock', 'assets', 'cast', 'clips', 'lineup', 'rights'])
+    expect(seen.map((c) => c.name)).toEqual(['studio', 'play', 'watch', 'rooms', 'build', 'codex', 'deploy-status', 'perf-numbers', 'parts', 'arcade', 'look', 'lock', 'assets', 'cast', 'clips', 'lineup', 'rights', 'feedback'])
     expect(seen.every((c) => c.immediate === true)).toBe(true)
   })
 

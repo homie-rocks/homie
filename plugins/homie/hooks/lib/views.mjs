@@ -78,13 +78,17 @@ export function band(t, s, columns) {
 
 export const TABS = [['build', 'Build', '1'], ['rooms', 'Rooms', '2'], ['games', 'Games', '3'], ['stats', 'Stats', '4'], ['codex', 'Codex', '5'], ['lab', 'Lab', '6'], ['parts', 'Parts', '7'], ['art', 'Art', '8']];
 
-export function paneFrame(t, { s, tab, onTab, body, columns }) {
+export function paneFrame(t, { s, tab, onTab, body, columns, onTell = null }) {
   const site = s.live ? ['live', s.live] : s.dev ? ['here', s.dev] : null;
-  const head = row(t, [
-    span(t, `◆ ${s.name}`, { bold: true, color: ACCENT }),
-    site ? span(t, '·', DIM) : null,
-    site ? link(t, linkable(site[1]), site[0] === 'live' ? 'live' : 'this computer') : span(t, '· not online yet', DIM),
-  ]);
+  const head = t.Box({ flexDirection: 'row', justifyContent: 'space-between', children: [
+    row(t, [
+      span(t, `◆ ${s.name}`, { bold: true, color: ACCENT }),
+      site ? span(t, '·', DIM) : null,
+      site ? link(t, linkable(site[1]), site[0] === 'live' ? 'live' : 'this computer') : span(t, '· not online yet', DIM),
+    ]),
+    // Tell Homie: a short note to the people who make Homie (the Tell Homie pane; nothing is sent without Send).
+    onTell ? t.Button({ key: 'tell-homie', label: 'Tell Homie', hotkey: 't', plain: true, dimColor: true, onPress: onTell }) : null,
+  ].filter(Boolean) });
   const tabs = t.Box({
     flexDirection: 'row', columnGap: 2, flexWrap: 'wrap',
     children: TABS.map(([id, label, key]) => t.Button({ key: `tab-${id}`, label, hotkey: key, plain: true, ...(id === tab ? {} : { dimColor: true }), onPress: () => onTab(id) })),
@@ -643,6 +647,78 @@ export function studioCard(t, d, columns) {
     ...(d.games ?? []).map((g) => line(t, [span(t, `  ${g.live ? '●' : '○'} ${fit(g.name, 24)}  `, g.live ? { color: 'green' } : {}), g.play?.live ? link(t, g.play.live, '▶ Play') : g.play?.dev ? link(t, linkable(g.play.dev), '▶ Play here') : span(t, 'not deployed yet', DIM)])),
     d.site ? line(t, ['  live: ', link(t, d.site)], DIM) : span(t, '  not online yet', DIM),
     ...(d.rooms ?? []).slice(0, 4).map((r) => span(t, `  room ${r.room} of ${r.game}: ${r.players} playing`, { color: 'green' })),
+  ]);
+}
+
+/* ------------------------------------------------------------------ Tell Homie */
+
+const NOTE_KINDS = [['stuck', 'Stuck'], ['confusing', 'Confusing'], ['idea', 'Idea'], ['praise', 'Praise'], ['bug', 'Bug']];
+const KIND_WORD = Object.fromEntries(NOTE_KINDS);
+
+/** The note's words, in a frame: exactly what would go. */
+function noteBox(t, note, columns) {
+  return t.Box({ flexDirection: 'column', borderStyle: 'round', borderColor: ACCENT, paddingX: 1, width: Math.max(24, Math.min(columns, 96)), children: [
+    span(t, KIND_WORD[note.kind] ?? note.kind, { bold: true, color: ACCENT }),
+    ...String(note.text).split('\n').map((l) => span(t, l || ' ', { wrap: 'wrap' })),
+  ] });
+}
+
+/**
+ * The Tell Homie pane: a note to the people who make Homie, exactly as it would go, with Send and Don't send; the
+ * words, the kind and a reply address can be changed first. With no note yet, a field for the person's own words and
+ * a button that asks Claude to draft one from the session. Nothing is sent but by Send.
+ */
+export function tellPane(t, { tell, columns, on }) {
+  const tl = tell ?? {};
+  const kids = [line(t, [span(t, '◆ Tell Homie', { bold: true, color: ACCENT }), span(t, '  a note to the people who make Homie', DIM)])];
+  if (tl.state === 'sent') {
+    kids.push(span(t, `✓ Sent to Homie. Thank you.${tl.reference ? ` (ref ${String(tl.reference).slice(0, 8)})` : ''}`, { bold: true, color: 'green' }));
+    if (tl.note) kids.push(noteBox(t, tl.note, columns));
+    kids.push(span(t, 'Notes are private: only the people who make Homie read them.', DIM));
+    kids.push(t.Button({ key: 'tell-close', label: 'Close', hotkey: 'c', plain: true, onPress: on.close }));
+    return col(t, kids);
+  }
+  if (tl.state === 'declined') {
+    kids.push(span(t, 'Not sent. Nothing left this computer.', { bold: true }));
+    kids.push(t.Button({ key: 'tell-close', label: 'Close', hotkey: 'c', plain: true, onPress: on.close }));
+    return col(t, kids);
+  }
+  if (!tl.note) {
+    kids.push(span(t, 'Say what was hard, confusing or good, in your own words. Nothing is sent until you press Send.', DIM));
+    kids.push(t.Select({ key: 'tell-kind', label: 'Kind', value: tl.kind ?? 'idea', options: NOTE_KINDS.map(([value, label]) => ({ value, label })), onSelect: on.kind }));
+    kids.push(t.Input({ key: 'tell-words', label: 'Your note', placeholder: 'What happened, what you expected, what you saw', value: '', submitLabel: 'show it', autoFocus: true, onSubmit: on.words }));
+    if (tl.why) kids.push(span(t, tl.why, { color: 'red' }));
+    kids.push(row(t, [
+      t.Button({ key: 'tell-draft', label: 'Ask Claude to draft it from this session', hotkey: 'd', plain: true, onPress: on.draft }),
+      t.Button({ key: 'tell-close', label: 'Close', hotkey: 'c', plain: true, dimColor: true, onPress: on.close }),
+    ], { columnGap: 3 }));
+    return col(t, kids);
+  }
+  kids.push(span(t, 'This is exactly what would go:', DIM));
+  kids.push(noteBox(t, tl.note, columns));
+  kids.push(span(t, `With it: ${tl.with ?? ''}`, { ...DIM, wrap: 'wrap' }));
+  if (tl.taken?.length) kids.push(span(t, `Homie took out ${tl.taken.join(', ')}.`, { ...DIM, wrap: 'wrap' }));
+  kids.push(t.Select({ key: 'tell-kind', label: 'Kind', value: tl.note.kind, options: NOTE_KINDS.map(([value, label]) => ({ value, label })), onSelect: on.kind }));
+  kids.push(t.Input({ key: 'tell-words', label: 'Change the words', placeholder: 'Type the note as you want it, then Enter', value: '', submitLabel: 'use these', onSubmit: on.words }));
+  kids.push(t.Input({ key: 'tell-email', label: 'Reply email (optional)', placeholder: tl.note.email ?? 'only if you want a reply', value: '', submitLabel: 'add', onSubmit: on.email }));
+  if (tl.why) kids.push(span(t, tl.why, { color: 'red', wrap: 'wrap' }));
+  kids.push(row(t, [
+    t.Button({ key: 'tell-send', label: tl.busy ? 'Sending…' : 'Send', hotkey: 's', plain: true, onPress: on.send }),
+    t.Button({ key: 'tell-no', label: 'Don’t send', hotkey: 'n', plain: true, onPress: on.decline }),
+  ], { columnGap: 3 }));
+  kids.push(span(t, `Nothing is sent until you press Send. Goes to ${tl.to ?? 'homie.rocks'}, privately.`, DIM));
+  return col(t, kids);
+}
+
+/** A homie_feedback result in the transcript: the note as it would go (or went), and what happens next. */
+export function feedbackCard(t, d, columns) {
+  if (!d?.note) return null;
+  const head = d.state === 'sent' ? ['✓ Sent to Homie', 'green'] : d.state === 'declined' ? ['Not sent', undefined] : d.state === 'draft' ? ['A note to Homie (not sent yet)', ACCENT] : ['Not sent', 'red'];
+  return col(t, [
+    span(t, `◆ ${head[0]}`, { bold: true, ...(head[1] ? { color: head[1] } : {}) }),
+    noteBox(t, d.note, columns),
+    d.with ? span(t, `With it: ${d.with}`, { ...DIM, wrap: 'wrap' }) : null,
+    d.state === 'draft' ? span(t, 'Nothing is sent until you say yes: Claude Code asks you, with this text, before anything leaves.', DIM) : null,
   ]);
 }
 

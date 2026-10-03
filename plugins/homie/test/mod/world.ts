@@ -90,7 +90,7 @@ export function world(on: any, opts: {
   sizes?: Record<string, number>;
 } = {}): World {
   const clock = mock.clock(on)
-  const log: Record<string, any[]> = { toasts: [], logs: [], opened: [], closed: [], asked: [], blits: [], fetched: [], ran: [], spawned: [], stored: [], tools: [] }
+  const log: Record<string, any[]> = { toasts: [], logs: [], opened: [], closed: [], asked: [], blits: [], fetched: [], posted: [], ran: [], spawned: [], stored: [], tools: [], filled: [] }
   const files = new Map<string, string>()
   const bytes = new Map<string, string>()
   const store = new Map<string, unknown>()
@@ -142,6 +142,7 @@ export function world(on: any, opts: {
   on('fs.stat', ($: any, e: any) => (files.has(e.path) || bytes.has(e.path) ? { value: { kind: 'file', size: opts.sizes?.[e.path] ?? 1, mtimeMs: 2000, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } } : { deny: 'ENOENT' }))
   on('http.fetch', ($: any, e: any) => {
     log.fetched.push(e.init?.socketPath ? `${e.url} via ${e.init.socketPath} ${e.init.body ?? ''}` : e.url)
+    if (e.init?.method === 'POST' && !e.init?.socketPath) log.posted.push({ url: e.url, body: JSON.parse(e.init.body ?? 'null'), headers: e.init.headers })
     if (e.init?.socketPath) return { value: { status: 200, ok: true, headers: {}, text: '{"ok":true}' } }
     const h = http[e.url]
     return h ? { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(h) } } : { value: { status: 404, ok: false, headers: {}, text: 'not found' } }
@@ -178,6 +179,7 @@ export function world(on: any, opts: {
   if (opts.panes !== null) on('ui.panes', () => ({ value: opts.panes ?? log.opened.map((id) => ({ id, title: id, isShown: true, isFocused: true, isPlaced: true })) }))
   on('ui.blit', ($: any, e: any) => { log.blits.push(e); return { value: {} } })
   on('agent.list', () => ({ value: opts.agents ?? [] }))
+  on('prompt.fill', ($: any, e: any) => { log.filled.push(e.text); return { isFilled: true, box: { text: e.text, cursor: e.text.length } } })
   on('tool.call', ($: any, e: any) => {
     log.tools.push(e.tool)
     if (e.tool === 'AskUserQuestion') {

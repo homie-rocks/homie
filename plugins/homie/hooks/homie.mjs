@@ -13,7 +13,10 @@
  * - the arcade (/arcade): a real seat in a public room of a live Homie game, played in the pane while Claude works;
  * - Homie's tool results as checklists, check rows, verdicts and live links (and the commands' rows in words).
  * Instant commands, no Claude turn: /studio /play /watch /rooms /build /codex /deploy-status /perf-numbers /parts
- * /arcade /look /lock /assets /lineup /rights.
+ * /arcade /look /lock /assets /lineup /rights /feedback.
+ * Tell Homie: /feedback (and the Studio pane's Tell Homie) shows a note to the people who make Homie exactly as it would
+ * go, with Send and Don't send, and sends it from here only on Send; a homie_feedback send from Claude waits for the
+ * person's own Send in Claude Code's question dialog, with the note's exact words.
  * Guards on tool calls: an edit to a file studio.json "protect" lists, a production deploy, a paid media call past
  * the studio's budget, and a Clef model download through Ollama (about 11 GB) are held with what would change and
  * Proceed / Cancel. Refused outright: a change to a
@@ -24,7 +27,8 @@
  *
  * WHAT IT REACHES. Files: the studio's own (studio.json, .studio/, games/*, budgets, CODEX.md, .perf/), the file a
  * held edit names, and the size of a file a `git add` or `git commit` would stage. Network ($.http.fetch): only the
- * studio's own site (its live address or this computer's dev site), *.homie.rocks (the Homie Arcade game list), its
+ * studio's own site (its live address or this computer's dev site), *.homie.rocks (the Homie Arcade game list, and a
+ * note the person pressed Send on, to homie.rocks/api/feedback/tell), its
  * own game bridge over a private Unix socket, and Ollama's list of models on this computer (loopback, before a Clef
  * model would be downloaded). Processes: `git` (read-only), the studio's own pinned
  * `homie-studio` (office, stats, codex link, progress stop, style lock / unlock / blast; each with --json), a media
@@ -39,18 +43,20 @@ import { GAME_ID, artFor, artSummaryOf, castText, charactersText, clipsText, lin
 import { summarizeCodex } from './lib/codex.mjs';
 import { studioCalls } from './lib/commands.mjs';
 import { ago, feedOf, summarize } from './lib/feed.mjs';
-import { claudeEditOf, cloudflareMcpDecision, deployFacts, editDecision, holdText, liveSite, mcpDeployDecision, paidMcpDecision, shellDecision, stripeDecision } from './lib/holds.mjs';
+import { claudeEditOf, cloudflareMcpDecision, deployFacts, editDecision, feedbackDecision, holdText, liveSite, mcpDeployDecision, paidMcpDecision, shellDecision, stripeDecision } from './lib/holds.mjs';
 import { redact } from './lib/redact.mjs';
+import { cleanNote, draftId, feedbackUrl, noteBody, withLine } from './lib/feedback.mjs';
 import { readResult } from './lib/results.mjs';
 import {
-  arcadeView, artTab, band, buildCard, buildTab, checksCard, codexTab, deployCard, gamesTab, guardPanel, holdPane, labTab, partsView, linkable,
-  paneFrame, roomsTab, setupCard, statsTab, studioCard, toolUseRow,
+  arcadeView, artTab, band, buildCard, buildTab, checksCard, codexTab, deployCard, feedbackCard, gamesTab, guardPanel, holdPane, labTab, partsView, linkable,
+  paneFrame, roomsTab, setupCard, statsTab, studioCard, tellPane, toolUseRow,
 } from './lib/views.mjs';
 
 const PANE = 'homie-studio';
 const PARTS = 'homie-parts';
 const ARCADE = 'homie-arcade';
 const HOLD = 'homie-hold';
+const TELL = 'homie-tell';
 const ARCADE_HOME = 'https://arcade.homie.rocks';
 const TICK_MS = 2000;
 const RECENT_MS = 10 * 60_000;
@@ -88,6 +94,9 @@ const S = {
   calls: new Map(), parts: new Map(), partsAutoOpened: false, agentsAt: 0,
   guards: new Map(), guardN: 0, held: null,
   arcade: { ...idleBridge(), pick: null, game: null }, watch: idleBridge(), arcadeGames: [], arcadeGamesAt: 0,
+  // Tell Homie: the note in the Tell Homie pane, the drafts Claude's homie_feedback showed (by id), and whether the
+  // person already answered a note this session (sent or said no), after which nothing is offered again.
+  tell: { state: null, note: null, kind: 'idea', answered: false, seen: new Map() },
 };
 
 /* ================================================================== register */
@@ -267,6 +276,31 @@ export function register(on, options) {
     return { text: out.join('\n') };
   });
 
+  // Tell Homie. `/feedback <words>` shows the person's own note exactly as it would go, in the Tell Homie pane (or as
+  // text where no pane draws, with `/feedback send`); `/feedback` alone opens the pane to write one, or to let Claude
+  // draft one. Only the person's own Send (a press, or `/feedback send` they typed) sends anything.
+  on('command.run', { command: 'feedback' }, async ($, e) => {
+    const words = String(e.args ?? '').trim();
+    const person = ['composer', 'bridge'].includes(e.origin?.kind);
+    if (/^send$/i.test(words)) {
+      if (!person) return { text: 'Only the person sends a note: /feedback send is theirs to type.' };
+      if (S.tell.state !== 'draft' || !S.tell.note) return { text: 'There is no note waiting. /feedback <your words> shows one first.' };
+      await tellSend($, 'chat');
+      return { text: S.tell.state === 'sent' ? `Sent to Homie. Thank you (ref ${String(S.tell.reference).slice(0, 8)}).` : `Not sent: ${S.tell.why}` };
+    }
+    if (/^(cancel|no|don.?t send)$/i.test(words)) {
+      if (S.tell.state === 'draft') S.tell = { ...S.tell, state: 'declined', answered: true };
+      return { text: 'Not sent. Nothing left this computer.' };
+    }
+    if (words) {
+      const ok = await tellDraft($, { kind: guessKind(words), text: words });
+      if (!ok) return { text: `Not shown: ${S.tell.why}` };
+    } else if (S.tell.state !== 'draft') S.tell = { ...S.tell, state: null, note: null, why: null };
+    if (await openPane($, TELL, 'Tell Homie')) return {};
+    if (!S.tell.note) return { text: 'Tell Homie: /feedback <what happened, in your words> shows the note before anything is sent. Or ask Claude to draft one.' };
+    return { text: `Not sent yet. This is exactly what would go to the people who make Homie:\n${tellText(S.tell)}\nType /feedback send to send it, or /feedback cancel.` };
+  });
+
   /* ------------------------------------------------------------ tool calls */
 
   // Outermost: every tool call's result has its secrets taken out (after the guards below have decided), and the
@@ -308,6 +342,38 @@ export function register(on, options) {
     return result;
   }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this deploy ran.' } : { deny: 'The Homie mod could not summarise this deploy, so it was not run. Ask the person, or try again.' }));
 
+  // Tell Homie, from Claude (the Homie MCP's homie_feedback, local or remote): a draft gets this studio's facts and a word
+  // that Claude Code will ask; a send waits for the person's own Send in the question dialog, with the note's exact
+  // words; an offer after the person already answered one this session is refused. No switch turns this off.
+  on('tool.call', { tool: /^mcp__.*homie.*__homie_feedback$/ }, async ($, e, next) => {
+    const action = ['send', 'decline'].includes(e.action) ? e.action : 'draft';
+    if (action === 'decline') { S.tell.answered = true; return next(e); }
+    const facts = await noteFacts($);
+    const extra = {};
+    if (!e.studioVersion && facts.studioVersion) extra.studioVersion = facts.studioVersion;
+    if (!e.pluginVersion && facts.pluginVersion) extra.pluginVersion = facts.pluginVersion;
+    if (!e.app) extra.app = 'claude-code';
+    if (action === 'draft') {
+      if (e.offered === true && S.tell.answered) return { deny: 'The person already answered a note to Homie in this session (sent or said no). Homie offers at most once a session: do not offer again. If they ask to tell Homie something themselves, draft it with offered: false.' };
+      const result = await next({ ...e, ...extra });
+      const d = result?.result?.structuredContent ?? result?.result ?? null;
+      if (d?.kind === 'feedback' && d.draft && d.note) { S.tell.seen.set(d.draft, d); if (S.tell.seen.size > 20) S.tell.seen.delete(S.tell.seen.keys().next().value); }
+      if (!result || result.deny || result.result === undefined) return result;
+      return { ...result, context: [...(result.context ?? []), 'The Homie mod is here: Claude Code itself asks the person before a note leaves. Show them the note and, unless they already said no, call homie_feedback with action "send", this draft and the same fields: Claude Code shows them the exact note with Send and Don\'t send, and only their Send sends it.'] };
+    }
+    // send: held in Claude Code's own question with the note's exact words (lib/holds.mjs, as Codex holds it).
+    const send = { ...e, ...extra };
+    const d = feedbackDecision(e.tool, send, { seen: e.draft ? S.tell.seen.get(String(e.draft)) : null });
+    if (!d) return next(send);
+    if (d.deny) return { deny: d.deny };
+    const answer = await ask($, d.hold);
+    if (answer === d.hold.yes) { S.tell.answered = true; return next({ ...send, by: 'dialog' }); }
+    if (answer === null) return { deny: d.hold.nobody };
+    S.tell.answered = true;
+    if (d.hold.options.includes(answer)) return { deny: d.hold.no };
+    return { deny: `The person did not choose Send; they wrote: "${String(answer).replace(/\s+/g, ' ').slice(0, 300)}". Nothing was sent. If they want it worded differently, draft it again in their words (offered: false), and they are asked again.` };
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this note was sent.' } : { deny: 'The Homie mod could not ask the person about this note, so nothing was sent. Ask them in the chat, and try again.' }));
+
   // Stripe's MCP: a write whose answer would carry a webhook's signing secret into the conversation is refused, always
   // (the shop's own page makes the webhook, and the secret goes straight to the Worker).
   on('tool.call', { tool: /^mcp__.*stripe.*__stripe_api_write$/i }, async ($, e, next) => {
@@ -346,11 +412,26 @@ export function register(on, options) {
   });
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-    if (e.requestId !== PANE && e.requestId !== PARTS && e.requestId !== ARCADE && e.requestId !== HOLD) return next(e);
+    if (e.requestId !== PANE && e.requestId !== PARTS && e.requestId !== ARCADE && e.requestId !== HOLD && e.requestId !== TELL) return next(e);
     const t = $.ui.resolve(e);
     const columns = Math.max(30, e.props.bodyColumns ?? 80);
     const now = Date.now();
     if (e.requestId === HOLD) return holdPane(t, S.held);
+    if (e.requestId === TELL) {
+      return tellPane(t, {
+        tell: S.tell, columns,
+        on: {
+          kind: (v) => { if (S.tell.note) return tellDraft($, { ...S.tell.note, kind: v }); S.tell.kind = v; redraw($); return undefined; },
+          words: (v) => (String(v ?? '').trim() ? tellDraft($, { ...(S.tell.note ?? {}), kind: S.tell.note?.kind ?? S.tell.kind ?? guessKind(v), text: v }) : undefined),
+          email: (v) => (S.tell.note ? tellDraft($, { ...S.tell.note, email: String(v ?? '').trim() || null }) : undefined),
+          send: () => tellSend($, 'pane'),
+          decline: () => { S.tell = { ...S.tell, state: 'declined', answered: true }; redraw($); },
+          // The ask goes into the prompt box as the person's draft: they send it to Claude themselves, with Enter.
+          draft: async () => { await $.prompt.fill({ text: 'Please draft a short note to the people who make Homie about this session: what was confusing, where I got stuck, or what was good, in plain words. Use homie_feedback with offered: false, and send nothing until I say yes.' }); await $.ui.close({ id: TELL }); },
+          close: () => { void $.ui.close({ id: TELL }); if (S.tell.state !== 'draft') S.tell = { ...S.tell, state: null, note: null, why: null }; },
+        },
+      });
+    }
     if (e.requestId === PARTS) return partsView(t, { parts: partList(), checks: S.feed ? summarize(S.feed).checks : [], columns, now });
     if (e.requestId === ARCADE) {
       const size = arcadeSize(columns, e.props.scroll?.bodyRows ?? 30);
@@ -397,7 +478,7 @@ export function register(on, options) {
       art: () => artTab(t, { art: S.art, games: S.games, columns, now, busy: S.busy.art, why: S.why.art, on: { lock: (game, d) => artLock($, game, d), unlock: (game, d) => artUnlock($, game, d) } }),
     };
     return paneFrame(t, {
-      s, tab: S.tab, columns,
+      s, tab: S.tab, columns, onTell: () => { void openPane($, TELL, 'Tell Homie'); },
       onTab: (id) => { S.tab = id; if (id === 'rooms') void loadRooms($); if (id === 'codex') void readCodexes($); if (id === 'lab') void readLab($); if (id === 'art') void readArt($); $.ui.invalidate('ui.render'); },
       body: (tabs[S.tab] ?? tabs.build)(),
     });
@@ -485,6 +566,7 @@ const COMMANDS = [
   ['clips', 'Homie: each character\'s clips against the verbs the game needs', '[game]'],
   ['lineup', 'Homie: the last asset lineup: what it flagged, and where its pictures are', '[game]'],
   ['rights', 'Homie: licence problems with their fixes, and the game\'s RIGHTS.md', '[game]'],
+  ['feedback', 'Homie: tell the people who make Homie something (you see the exact note, and only your Send sends it)', '[your words | send | cancel]'],
 ];
 
 /** The plugin's userConfig values, with defaults for anything unset. */
@@ -1073,6 +1155,77 @@ function keepLinks(links) {
   S.forYou = S.forYou.slice(-6);
 }
 
+/* ------------------------------------------------------------------ Tell Homie (lib/feedback.mjs) */
+
+/** What a note carries from here: the studio's pinned toolkit, this plugin's version, the app, and where it goes. */
+async function noteFacts($) {
+  let studioVersion = null;
+  if (S.root) {
+    const pkg = await readJsonFile($, `${S.root}/package.json`);
+    const spec = pkg?.devDependencies?.['@homie-rocks/studio'] ?? pkg?.dependencies?.['@homie-rocks/studio'];
+    studioVersion = /(\d+\.\d+\.\d+)/.exec(String(spec ?? ''))?.[1] ?? (typeof S.studio?.homie?.studio === 'string' ? S.studio.homie.studio : null);
+  }
+  let pluginVersion = null;
+  for (const f of [`${$.plugin.root}/.claude-plugin/plugin.json`, `${$.plugin.root}/plugin.json`]) {
+    const v = (await readJsonFile($, f))?.version;
+    if (typeof v === 'string') { pluginVersion = v; break; }
+  }
+  const named = String(S.studio?.homie?.directory ?? '').replace(/\/+$/, '');
+  const directory = named && allowedUrl(`${named}/`) ? named : 'https://homie.rocks';
+  return { studioVersion, pluginVersion, app: 'claude-code', directory };
+}
+
+/** The kind a person's own words most likely are (they can change it in the pane). */
+function guessKind(words) {
+  const w = String(words ?? '').toLowerCase();
+  if (/\b(bug|broke|broken|crash|error|fails?|failed|wrong)\b/.test(w)) return 'bug';
+  if (/\b(stuck|can.?t|cannot|won.?t|blocked)\b/.test(w)) return 'stuck';
+  if (/\b(confus\w*|unclear|don.?t understand|did ?n.?o?t (?:know|understand)|no idea|not sure what|makes? no sense|lost|what does)\b/.test(w)) return 'confusing';
+  if (/\b(love|great|thanks?|thank you|awesome|nice|lovely|amazing)\b/.test(w)) return 'praise';
+  return 'idea';
+}
+
+/** The Homie step this session ran last (a command in words), within ten minutes: what a note is about. */
+function lastStep() {
+  const recent = [...S.calls.values()].filter((c) => c.homie && c.label).pop();
+  return recent ? recent.label : null;
+}
+
+/** A note in the Tell Homie pane: drafted from the person's words through the same rules as everywhere. */
+async function tellDraft($, { kind, text, email = null, step }) {
+  const facts = await noteFacts($);
+  const c = cleanNote({ kind, text, step: step === undefined ? lastStep() : step, email, offered: false, studioVersion: facts.studioVersion, pluginVersion: facts.pluginVersion, app: facts.app });
+  if (!c.ok) { S.tell = { ...S.tell, why: `${c.why[0].toUpperCase()}${c.why.slice(1)}.` }; redraw($); return false; }
+  const to = (() => { try { return new URL(facts.directory).host; } catch { return 'homie.rocks'; } })();
+  S.tell = { ...S.tell, state: 'draft', note: c.note, taken: c.taken, with: withLine(c.note), draft: await draftId(c.note), directory: facts.directory, to, why: null, busy: false, reference: null };
+  redraw($);
+  return true;
+}
+
+/** The person's Send: the note in the pane, exactly, to the Homie directory. Never retried by itself. */
+async function tellSend($, consent) {
+  const tl = S.tell;
+  if (tl.state !== 'draft' || !tl.note || tl.busy) return;
+  const url = feedbackUrl(tl.directory);
+  if (!allowedUrl(url)) { S.tell = { ...tl, why: 'Notes go only to Homie (homie.rocks). Nothing was sent.' }; redraw($); return; }
+  S.tell = { ...tl, busy: true, why: null };
+  redraw($);
+  let res = null;
+  try {
+    res = await $.http.fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': 'homie-claude-code-mod' }, body: JSON.stringify(noteBody(tl.note, { source: 'mod', consent })) });
+  } catch { res = null; }
+  let body = null;
+  try { body = res ? JSON.parse(res.text) : null; } catch { body = null; }
+  if (res?.ok && body?.ok === true && typeof body.reference === 'string') S.tell = { ...S.tell, state: 'sent', busy: false, reference: body.reference, answered: true, why: null };
+  else S.tell = { ...S.tell, busy: false, why: res ? `${typeof body?.message === 'string' ? body.message.slice(0, 200) : `Homie answered ${res.status}`} Nothing was sent.` : 'Homie could not be reached. Nothing was sent; try again later.' };
+  redraw($);
+}
+
+/** The note as text, where no pane draws. */
+function tellText(tl) {
+  return [`  ${tl.note.kind}:`, ...tl.note.text.split('\n').map((l) => `    ${l}`), `  With it: ${tl.with}`, ...(tl.taken?.length ? [`  Homie took out ${tl.taken.join(', ')}.`] : [])].join('\n');
+}
+
 /* ------------------------------------------------------------------ guards */
 
 // What each hold means is decided in lib/holds.mjs, which Codex's hooks (hooks/codex.mjs) share; here a hold is asked
@@ -1130,7 +1283,7 @@ async function ask($, g) {
     if (!placed) $.ui.log(holdText(g).slice(0, 4000));
   }
   try {
-    return await $.ui.ask(q, { options: ['Proceed', 'Cancel'], header: 'Homie' });
+    return await $.ui.ask(q, { options: g.options ?? ['Proceed', 'Cancel'], header: 'Homie' });
   } catch { return null; } finally {
     S.guards.delete(q);
     if (S.held === g) { S.held = null; try { await $.ui.close({ id: HOLD }); } catch { /* closed */ } }
@@ -1382,6 +1535,7 @@ function resultCard(t, tool, call, output, viewport) {
   if (read.kind === 'card:setup') return setupFromCard(t, read.data, columns);
   if (read.kind === 'card:build') return read.data.feed ? buildCard(t, summarize(read.data.feed), columns) : null;
   if (read.kind === 'card:studio') return studioCard(t, read.data, columns);
+  if (read.kind === 'card:feedback') return feedbackCard(t, read.data, columns);
   return null;
 }
 
