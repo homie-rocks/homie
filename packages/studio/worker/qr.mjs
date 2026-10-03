@@ -489,6 +489,17 @@ export function encodeQr(text, { minLevel = 'M' } = {}) {
 
 
 /** The symbol as an SVG string: one path, dark modules on a light square with the quiet zone. */
+/**
+ * An address only this computer can open (local development: localhost, 127.x, ::1, 0.0.0.0). A page never puts one in
+ * a QR code or tells a phone to open it: a phone cannot reach it. It says "deploy to share" instead.
+ */
+export function isLocalOrigin(origin) {
+  let host = '';
+  try { host = new URL(String(origin)).hostname; } catch { return false; }
+  host = host.replace(/^\[|\]$/g, '');
+  return host === 'localhost' || host.endsWith('.localhost') || /^127\./.test(host) || host === '::1' || host === '0.0.0.0';
+}
+
 export function qrSvg(text, { minLevel = 'M', quiet = 4, dark = '#000000', light = '#ffffff', title = '' } = {}) {
   const q = encodeQr(text, { minLevel });
   const total = q.size + quiet * 2;

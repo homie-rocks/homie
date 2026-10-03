@@ -9,7 +9,7 @@
  * What a studio puts in site/ wins: a whole page (site/pages), a partial (site/partials), its tokens
  * (site/theme.json) and CSS (site/theme.css). The build gathers them into games.json and site/dist/_site/.
  */
-import { qrSvg } from './qr.mjs';
+import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 import { licenseLabel, licenseOf, remixRow } from './license.mjs';
 import { POLICY_WORDS, policyWords } from './servers.mjs';
@@ -1080,7 +1080,9 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   const host = origin.replace(/^https?:\/\//, '');
   const playUrl = `${origin}/${g.id}/play`;
   let qr = '';
-  try { qr = qrSvg(playUrl, { title: `Play ${g.name} on your phone` }); } catch { qr = ''; }
+  // Local development: no code a phone cannot open; the landing says to deploy instead of naming this computer's address.
+  const local = isLocalOrigin(origin);
+  if (!local) try { qr = qrSvg(playUrl, { title: `Play ${g.name} on your phone` }); } catch { qr = ''; }
   const tvOn = L.tv !== false;
   const max = g.players?.max ?? 8;
   const words = L.words ?? {};
@@ -1111,7 +1113,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     <p class="lead">Nothing to download and nothing to install: ${esc(g.name)} runs in the browser you already have, and everyone who presses Play meets in the same public room.</p>
     <ol class="ways">
       <li class="way"><span class="n">${icon('phone')}</span><div><h3>On your phone</h3><p>${esc(L.controls?.phone ?? 'Touch controls appear under your thumbs; the middle of the screen stays clear.')}</p>
-        <div class="scan desk-only">${qr ? `<span class="qr" role="img" aria-label="A code for your phone’s camera: ${esc(host)}/${esc(g.id)}/play">${qr}</span>` : ''}<p>Point your phone’s camera at the code, or open <span class="addr">${esc(host)}/${esc(g.id)}/play</span>.</p></div>
+        <div class="scan desk-only">${qr ? `<span class="qr" role="img" aria-label="A code for your phone’s camera: ${esc(host)}/${esc(g.id)}/play">${qr}</span>` : ''}<p>${local ? 'Deploy to share: once the studio is online, a code here takes a phone straight to the game.' : `Point your phone’s camera at the code, or open <span class="addr">${esc(host)}/${esc(g.id)}/play</span>.`}</p></div>
         <p class="phone-only" style="margin-top:8px"><strong>You are on it:</strong> press Play above.</p></div></li>
       <li class="way"><span class="n">${icon('computer')}</span><div><h3>On your computer</h3><p>${esc(L.controls?.computer ?? 'Keys and mouse, in any modern browser; the game shows you which keys.')}</p></div></li>
       ${tvOn ? `<li class="way"><span class="n">${icon('tv')}</span><div><h3>On the TV</h3><ol><li>Open <span class="addr">${esc(host)}/${esc(g.id)}/tv</span> in the TV’s browser, or on a laptop plugged into it.</li><li>Scan the code it shows with your phone’s camera.</li><li>Play on your phone. Everyone on the couch joins the same way, up to ${esc(max)} ${esc(many)}, and the TV shows the whole room.</li></ol>${L.controls?.tv ? `<p style="margin-top:8px">${esc(L.controls.tv)}</p>` : ''}</div></li>` : ''}

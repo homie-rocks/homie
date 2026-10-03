@@ -16,8 +16,8 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { extname, join, relative } from 'node:path';
 import { readManifest } from './asset-manifest.mjs';
 import { assetsCheck } from './asset-check.mjs';
-import { nearest } from './colour.mjs';
-import { directionsFor, initDecisions, labelOf, readDecisions, staleAssets, styleTokens, writeDecisions, addLatestLine } from './decisions.mjs';
+import { mix, nearest } from './colour.mjs';
+import { directionsFor, initDecisions, labelOf, lightColours, readDecisions, staleAssets, styleTokens, writeDecisions, addLatestLine } from './decisions.mjs';
 import { PALETTE_KEYS } from './style-presets.mjs';
 import { loadIndex, searchLibrary, fetchItemFile, libraryBase } from './library.mjs';
 import { modelIn, saveDataUrl, withRenderer, dataUrlBytes } from './render3d.mjs';
@@ -170,7 +170,7 @@ export async function assetsLineup(root, id, { log = () => {} } = {}) {
     // `inGame`: what the game's code does to it at runtime (drawn at another height, repainted from style.json): the
     // lineup draws it the same way (the repaint as the board's re-tint, the nearest the game's own swap can be shown).
     const scale = a.inGame?.heightM && a.measured?.heightM ? a.inGame.heightM / a.measured.heightM : null;
-    models.push({ a, input: modelIn(a.id, readFileSync(abs), { label: a.card ? String(a.card).split('/').pop() : a.id, ...(scale ? { scale } : {}), ...(a.inGame?.repaint ? { retint: true } : {}) }), abs });
+    models.push({ a, input: modelIn(a.id, readFileSync(abs), { label: a.card ? String(a.card).split('/').pop() : a.id, ...(scale ? { scale } : {}), ...(a.inGame?.tint ? { tint: lightColours({ sky: a.inGame.tint, ground: a.inGame.tint }, tokens.palette).sky } : a.inGame?.repaint ? { retint: true } : Number(a.inGame?.pull) > 0 ? { pull: Number(a.inGame.pull) } : {}) }), abs });
   }
   if (!models.length) return { ok: false, command: 'assets lineup', id, why: `games/${id} has no recorded models yet (assets add, or the models skill)` };
   const dir = join(root, '.studio', 'art', id);
@@ -189,7 +189,10 @@ export async function assetsLineup(root, id, { log = () => {} } = {}) {
     let drift = null;
     try {
       const colours = await albedoOf(m.abs);
-      const scored = colours.map((c) => { const n = nearest(c.hex, palette); return { hex: c.hex, share: c.share, palette: n.hex, delta: +n.delta.toFixed(1) }; });
+      // A model the game pulls toward the palette (inGame.pull) is scored on the colours it is drawn in.
+      const pull = Math.max(0, Math.min(1, Number(m.a.inGame?.pull) || 0));
+      const drawn = colours.map((c) => (pull ? { ...c, hex: mix(c.hex, nearest(c.hex, palette).hex, pull) } : c));
+      const scored = drawn.map((c) => { const n = nearest(c.hex, palette); return { hex: c.hex, share: c.share, palette: n.hex, delta: +n.delta.toFixed(1) }; });
       const mean = scored.reduce((n, c) => n + c.delta * c.share, 0) / Math.max(0.0001, scored.reduce((n, c) => n + c.share, 0));
       drift = { mean: +mean.toFixed(1), colours: scored };
       if (m.a.inGame?.repaint) drift.repaint = m.a.inGame.repaint;

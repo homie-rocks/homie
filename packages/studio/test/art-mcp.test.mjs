@@ -67,7 +67,7 @@ test('art tools: listed with their cards; a locked change shows its blast radius
     assert.equal(done.isError, undefined);
     assert.equal(readDecisions(dir, 'fox-grove').decisions['style.palette'].value.name, 'neon-dusk');
     const steer = await call(s, 'decision_set', { game: 'fox-grove', decision: 'style.camera', steer: 'closer', by: 'person' });
-    assert.match(steer.content[0].text, /style\.camera: High three-quarter, \d+(\.\d+)? m away \(steered\)/);
+    assert.match(steer.content[0].text, /style\.camera: Low three-quarter, \d+(\.\d+)? m away \(steered\)/);
     for (const uri of ['style', 'decision', 'cast', 'lineup', 'rights']) {
       const r = await s.request('resources/read', { uri: `ui://homie-studio/${uri}` });
       assert.match(r.result.contents[0].text, /<script>/, `${uri} card served`);

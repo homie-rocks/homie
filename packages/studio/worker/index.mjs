@@ -81,7 +81,7 @@ import {
 import { BRAIN_BUDGET, HouseAgents, agentFacts, aiName, decodeFacts, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
 import { talks } from './brain.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
-import { qrSvg } from './qr.mjs';
+import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
 import {
   SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homePage, jsonFeed, mediaArt, mediaIndexPage,
@@ -846,9 +846,11 @@ async function route(request, env, ctx) {
           try { room = (await (await lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
         }
         const joinUrl = `${url.origin}/${game}/play${room ? `?room=${encodeURIComponent(room)}` : ''}`;
+        // Local development: no phone can open this computer's own address, so no code for it; the card says to deploy.
+        const local = isLocalOrigin(url.origin);
         let qr = null;
-        try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
-        return playPage(cat, meta, { screen: true, joinUrl, qr, room, ticket, owner: d.owner, launch, server });
+        if (!local) try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
+        return playPage(cat, meta, { screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server });
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);

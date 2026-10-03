@@ -227,3 +227,31 @@ test('on a server: the pill shares the room button\'s band, a server room says "
   const named = await shell('?room=owl-party', { server });
   assert.equal(named.el('[data-room-code]').textContent, 'owl-party');
 });
+
+test('local development: the TV view and the landing never put this computer\'s own address in a code; the share sheet and the landing say deploy to share', async () => {
+  const { isLocalOrigin } = await import('../worker/qr.mjs');
+  for (const o of ['http://127.0.0.1:8787', 'http://localhost:8931', 'http://[::1]:8787', 'http://0.0.0.0:80', 'http://dev.localhost']) assert.equal(isLocalOrigin(o), true, o);
+  for (const o of ['https://night-owls.workers.dev', 'http://192.168.1.20:8787', 'https://homie.rocks']) assert.equal(isLocalOrigin(o), false, o);
+  const cat = { studio: { name: 'Test Studio' }, games: [] };
+  const game = { id: 'tiny-arena', name: 'Tiny Arena', players: { min: 1, max: 8 } };
+  const local = await playPage(cat, game, { screen: true, joinUrl: 'http://127.0.0.1:8787/tiny-arena/play?room=pub-1', qr: null, local: true }).text();
+  assert.doesNotMatch(local, /Scan to play|data-join>|127\.0\.0\.1:8787\/tiny-arena/);
+  assert.match(local, /Deploy to share: this preview address works on this computer only/, 'the room button\'s sheet says so');
+  const online = await playPage(cat, game, { screen: true, joinUrl: 'https://studio.test/tiny-arena/play?room=pub-1', qr: '<svg></svg>' }).text();
+  assert.match(online, /Scan to play[\s\S]*studio\.test\/tiny-arena\/play\?room=pub-1/);
+  const { gameLanding } = await import('../worker/site.mjs');
+  const landing = gameLanding(cat, { ...game, landing: {} }, { origin: 'http://127.0.0.1:8787' });
+  const html = typeof landing === 'string' ? landing : await landing.text();
+  assert.doesNotMatch(html, /<svg[^>]*role="img"[^>]*>|Point your phone’s camera at the code/);
+  assert.match(html, /Deploy to share/);
+});
+
+test('a game with an art direction: the play page\'s pills wear its paper and text (games.json ui), like its own HUD', async () => {
+  const cat = { studio: { name: 'Test Studio' }, games: [] };
+  const plain = await playPage(cat, { id: 'tiny', name: 'Tiny', players: { max: 4 } }).text();
+  assert.doesNotMatch(plain, /\.pill, \.chip, \.pill\.dim \{ background: #/);
+  const styled = await playPage(cat, { id: 'tiny', name: 'Tiny', players: { max: 4 }, ui: { paper: '#f6ecd9', text: '#1f2a24' } }).text();
+  assert.match(styled, /\.pill, \.chip, \.pill\.dim \{ background: #f6ecd9e6; color: #1f2a24;/);
+  const junk = await playPage(cat, { id: 'tiny', name: 'Tiny', players: { max: 4 }, ui: { paper: 'red;}body{display:none', text: '#000000' } }).text();
+  assert.doesNotMatch(junk, /display:none/);
+});

@@ -68,6 +68,7 @@ export const LIGHTS = Object.freeze({
 /** Camera set-ups (the style.camera decision): distance in metres, field of view in degrees, the angle above the ground. */
 export const CAMERAS = Object.freeze({
   'high-3/4': { label: 'High three-quarter', projection: 'perspective', pitch: 52, distance: 22, fov: 38, note: 'the whole arena and every player readable on a phone' },
+  'low-3/4': { label: 'Low three-quarter', projection: 'perspective', pitch: 34, distance: 20, fov: 42, note: 'down among the players, the woods beyond the clearing in view: a place, not a board' },
   'close-3/4': { label: 'Close three-quarter', projection: 'perspective', pitch: 40, distance: 11, fov: 42, note: 'nearer the characters: more detail on screen, less of the world' },
   iso: { label: 'Isometric', projection: 'orthographic', pitch: 35.264, distance: 20, fov: 30, note: 'a diorama: tidy and readable, the HD-2D and tactics look' },
   'top-down': { label: 'Top-down', projection: 'perspective', pitch: 80, distance: 24, fov: 35, note: 'the map is the screen: best for a crowd and for aiming' },
@@ -77,7 +78,7 @@ export const CAMERAS = Object.freeze({
 
 /** Genres (from the prompt and the codex), with the defaults they bring. */
 export const GENRES = Object.freeze({
-  gather: { words: /\b(gather|collect|harvest|forag\w*|berr(y|ies)|gems?|coins?|pick ?up|treasure|loot|farm)\b/i, camera: 'high-3/4', heads: 2.5, heightM: 0.9, clips: ['idle', 'walk', 'run', 'pick-up', 'emote'] },
+  gather: { words: /\b(gather|collect|harvest|forag\w*|berr(y|ies)|gems?|coins?|pick ?up|treasure|loot|farm)\b/i, camera: 'low-3/4', heads: 2.5, heightM: 0.9, clips: ['idle', 'walk', 'run', 'pick-up', 'emote'] },
   brawl: { words: /\b(brawl|fight|arena|knock|bump|smash|wrestl\w*|sumo|battle royale)\b/i, camera: 'high-3/4', heads: 2.5, heightM: 1.0, clips: ['idle', 'run', 'jump', 'attack', 'hit', 'die'] },
   race: { words: /\b(race|racing|kart|car|drive|driving|drift|speed)\b/i, camera: 'chase', heads: 3, heightM: 1.0, clips: ['idle', 'drive', 'boost', 'crash'] },
   rpg: { words: /\b(rpg|quest|dungeon|adventure|mmo|wow|zones?|class(es)?|loot|level up)\b/i, camera: 'iso', heads: 4.5, heightM: 1.7, clips: ['idle', 'walk', 'run', 'attack', 'cast', 'hit', 'die', 'interact'] },

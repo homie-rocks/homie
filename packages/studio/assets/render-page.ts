@@ -33,7 +33,7 @@ interface Tokens {
   shape?: { language?: string; bevel?: number };
   proportions?: { heads?: number; heightM?: number };
 }
-interface ModelIn { id: string; glb: string; label?: string; place?: 'hero' | 'prop' | 'dressing'; scale?: number; retint?: boolean }
+interface ModelIn { id: string; glb: string; label?: string; place?: 'hero' | 'prop' | 'dressing'; scale?: number; retint?: boolean; tint?: string; pull?: number }
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
@@ -162,19 +162,30 @@ function inkShader(width: number): (sh: { vertexShader: string }) => void {
   };
 }
 
+/**
+ * A part too thin for the line (a flower's stem, a post): its thickness as drawn under three line widths would turn it
+ * into a dark stick, so it goes without. The shell's own units are measured against the mesh's world size.
+ */
+function tooThin(m: Mesh, shell: BufferGeometry, width: number, drawn: number): boolean {
+  shell.computeBoundingBox();
+  const local = (shell.boundingBox as Box3).getSize(new Vector3());
+  const world = new Box3().setFromObject(m, true).getSize(new Vector3());
+  const units = Math.max(world.x, world.y, world.z) / Math.max(1e-9, local.x, local.y, local.z);
+  return thicknessOf(shell) * units * drawn < 3 * width;
+}
+
 /** Ink outlines (an inverted hull pushed out along the normals): the toon look's line. */
-function outline(root: Object3D, ink: string, width: number): void {
+function outline(root: Object3D, ink: string, width: number, drawn = 1): void {
   const hulls: Mesh[] = [];
+  root.updateMatrixWorld(true);
   const mat = new MeshBasicMaterial({ color: col(ink), side: BackSide });
   mat.onBeforeCompile = inkShader(width);
   mat.customProgramCacheKey = () => `ink:${width}`;
   root.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh || m.name === 'hull') return;
-    // No line on a two-sided card (leaves, grass): a shell around nothing draws it black.
-    if ((Array.isArray(m.material) ? m.material : [m.material]).some((x) => x.side === DoubleSide)) return;
     const shell = hullGeometry(m.geometry);
-    if (!shell) return;
+    if (!shell || tooThin(m, shell, width, drawn)) return;
     const h = new Mesh(shell, mat);
     h.name = 'hull';
     hulls.push(h);
@@ -213,10 +224,10 @@ function nearestOf(ramp: Rgb[], r: number, g: number, b: number): [number, numbe
   const [L, A, B] = lab(r, g, b);
   const C = Math.hypot(A, B); const H = Math.atan2(B, A);
   const pool = ramp.map((c) => [c, lchOf(c)] as const);
-  if (C < 10) {
+  if (C < 16) {
     const greys = pool.filter(([, v]) => v[1] < 24);
     const [, v] = (greys.length ? greys : pool).reduce((x, y) => (Math.abs(y[1][0] - L) < Math.abs(x[1][0] - L) ? y : x));
-    return fromLab(L, Math.cos(v[2]) * Math.min(C + 4, v[1]), Math.sin(v[2]) * Math.min(C + 4, v[1]));
+    return fromLab(L, Math.cos(v[2]) * Math.min(C, 6, v[1]), Math.sin(v[2]) * Math.min(C, 6, v[1]));
   }
   const hues = pool.filter(([, v]) => v[1] >= 18);
   if (!hues.length) return [r, g, b];
@@ -226,7 +237,7 @@ function nearestOf(ramp: Rgb[], r: number, g: number, b: number): [number, numbe
   const LL = L * 0.6 + L2 * 0.4; const CC = C * 0.45 + C2 * 0.55;
   return fromLab(LL, Math.cos(H2) * CC, Math.sin(H2) * CC);
 }
-export function retint(root: Object3D, hexes: string[]): void {
+export function retint(root: Object3D, hexes: string[], strength = 1): void {
   // sRGB 0..1, read straight from the hex (three.js's Color would hold linear values).
   const ramp: Rgb[] = hexes.filter((h) => /^#[0-9a-f]{6}$/i.test(h)).map((h) => ({ r: parseInt(h.slice(1, 3), 16) / 255, g: parseInt(h.slice(3, 5), 16) / 255, b: parseInt(h.slice(5, 7), 16) / 255 }));
   if (!ramp.length) return;
@@ -242,28 +253,43 @@ export function retint(root: Object3D, hexes: string[]): void {
         const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
         const g = c.getContext('2d') as CanvasRenderingContext2D; g.drawImage(img, 0, 0);
         const d = g.getImageData(0, 0, c.width, c.height);
-        for (let i = 0; i < d.data.length; i += 4) { const n = nearestOf(ramp, (d.data[i] as number) / 255, (d.data[i + 1] as number) / 255, (d.data[i + 2] as number) / 255); d.data[i] = n[0] * 255; d.data[i + 1] = n[1] * 255; d.data[i + 2] = n[2] * 255; }
+        const k = Math.max(0, Math.min(1, strength));
+        for (let i = 0; i < d.data.length; i += 4) {
+          const r = (d.data[i] as number) / 255; const gg = (d.data[i + 1] as number) / 255; const b = (d.data[i + 2] as number) / 255;
+          const n = nearestOf(ramp, r, gg, b);
+          d.data[i] = (r + (n[0] - r) * k) * 255; d.data[i + 1] = (gg + (n[1] - gg) * k) * 255; d.data[i + 2] = (b + (n[2] - b) * k) * 255;
+        }
         g.putImageData(d, 0, 0);
         const t = new CanvasTexture(c); t.colorSpace = SRGBColorSpace; t.flipY = mat.map.flipY; t.userData.retinted = true;
         mat.map = t; mat.needsUpdate = true;
       } else if (mat.color && !mat.map) {
         const s = mat.color.clone().convertLinearToSRGB();
         const n = nearestOf(ramp, s.r, s.g, s.b);
-        mat.color.setRGB(n[0], n[1], n[2]).convertSRGBToLinear();
+        const k = Math.max(0, Math.min(1, strength));
+        mat.color.setRGB(s.r + (n[0] - s.r) * k, s.g + (n[1] - s.g) * k, s.b + (n[2] - s.b) * k).convertSRGBToLinear();
       }
     }
   });
 }
 
+/** One colour for the whole model (a game that paints it so: a gem in the palette's gold), its own shading kept by the light. */
+function tintAll(root: Object3D, hex: string): void {
+  root.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh) return;
+    for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as MeshStandardMaterial[]) { mat.map = null; mat.color = col(hex); mat.needsUpdate = true; }
+  });
+}
+
 /** `line`: the outline's thickness in world units (the board: a share of its size; the lineup: 5 cm at true scale). */
-function restyle(root: Object3D, t: Tokens, size: number, line?: number): void {
+function restyle(root: Object3D, t: Tokens, size: number, line?: number, drawn = 1): void {
   root.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh) return;
     m.castShadow = true; m.receiveShadow = true;
     m.material = Array.isArray(m.material) ? m.material.map((x) => styled(x, t)) : styled(m.material, t);
   });
-  if (t.materials?.outline) outline(root, mixHex(t.palette.bg, '#000000', 0.7), line ?? Math.max(0.012, size * 0.03));
+  if (t.materials?.outline) outline(root, mixHex(t.palette.bg, '#000000', 0.7), line ?? Math.max(0.012, size * 0.03), drawn);
 }
 
 function mixHex(a: string, b: string, k: number): string { return `#${col(a).lerp(col(b), k).getHexString()}`; }
@@ -433,7 +459,7 @@ async function lineup(models: ModelIn[], t: Tokens, opts: { w?: number; h?: numb
   const p = t.palette;
   const parsed: { m: ModelIn; g: Group; size: Vector3 }[] = [];
   for (const m of models) {
-    try { const g = await parse(m); if (m.retint) retint(g, [...(p.ramp ?? []), p.accent, p.accent2, p.gold, p.good]); restyle(g, t, Math.max(0.1, ...boxOf(g).getSize(new Vector3()).toArray()), 0.05); if (m.scale && m.scale > 0) { g.scale.multiplyScalar(m.scale); g.updateMatrixWorld(true); } const b = boxOf(g); g.position.y -= b.min.y; g.position.x -= (b.min.x + b.max.x) / 2; g.position.z -= (b.min.z + b.max.z) / 2; parsed.push({ m, g, size: b.getSize(new Vector3()) }); } catch { /* skipped */ }
+    try { const g = await parse(m); if (m.tint) tintAll(g, m.tint); else if (m.retint || m.pull) retint(g, [...(p.ramp ?? []), p.accent, p.accent2, p.gold, p.good], m.pull ?? 1); restyle(g, t, Math.max(0.1, ...boxOf(g).getSize(new Vector3()).toArray()), Math.min(0.05, 0.06 * Math.max(...boxOf(g).getSize(new Vector3()).toArray()) * (m.scale && m.scale > 0 ? m.scale : 1)), m.scale && m.scale > 0 ? m.scale : 1); if (m.scale && m.scale > 0) { g.scale.multiplyScalar(m.scale); g.updateMatrixWorld(true); } const b = boxOf(g); g.position.y -= b.min.y; g.position.x -= (b.min.x + b.max.x) / 2; g.position.z -= (b.min.z + b.max.z) / 2; parsed.push({ m, g, size: b.getSize(new Vector3()) }); } catch { /* skipped */ }
   }
   const gap = 0.5;
   const room = 0.45; // under each shelf, for its labels

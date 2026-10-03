@@ -38,7 +38,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 684,
@@ -101,7 +102,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.049Z"
+      "recordedAt": "2026-10-03T02:06:16.780Z"
     },
     {
       "id": "animal-caterpillar",
@@ -140,7 +141,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 578,
@@ -204,7 +206,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.051Z"
+      "recordedAt": "2026-10-03T02:06:16.782Z"
     },
     {
       "id": "animal-chick",
@@ -243,7 +245,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 490,
@@ -308,7 +311,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.047Z"
+      "recordedAt": "2026-10-03T02:06:16.777Z"
     },
     {
       "id": "animal-crab",
@@ -347,7 +350,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 676,
@@ -412,7 +416,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.048Z"
+      "recordedAt": "2026-10-03T02:06:16.778Z"
     },
     {
       "id": "animal-elephant",
@@ -451,7 +455,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 676,
@@ -517,7 +522,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.049Z"
+      "recordedAt": "2026-10-03T02:06:16.779Z"
     },
     {
       "id": "animal-fox",
@@ -556,7 +561,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 568,
@@ -622,7 +628,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.046Z"
+      "recordedAt": "2026-10-03T02:06:16.776Z"
     },
     {
       "id": "animal-panda",
@@ -661,7 +667,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 734,
@@ -728,7 +735,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.050Z"
+      "recordedAt": "2026-10-03T02:06:16.781Z"
     },
     {
       "id": "animal-pig",
@@ -767,7 +774,8 @@
       },
       "inGame": {
         "heightM": 0.8,
-        "repaint": null
+        "repaint": null,
+        "pull": 0.35
       },
       "measured": {
         "tris": 424,
@@ -832,7 +840,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.052Z"
+      "recordedAt": "2026-10-03T02:06:16.783Z"
     },
     {
       "id": "bush",
@@ -846,19 +854,19 @@
         "pack": "kenney-nature-kit",
         "packLabel": "Kenney Nature Kit",
         "packUrl": "https://kenney.nl/assets/nature-kit",
-        "item": "kenney-nature-kit/plant-bush-large",
+        "item": "kenney-nature-kit/tree-fat",
         "author": "Kenney",
         "origin": "https://kenney.nl/assets/nature-kit",
-        "source": "Models/GLTF format/plant_bushLarge.glb",
-        "sha256": "c858e3ad619af48d52035a33d7ec6f21443de01a7f377e6dd3ac8a835ccb0c02",
+        "source": "Models/GLTF format/tree_fat.glb",
+        "sha256": "738bb528ad795f01e3c2a684348f20e69a7c4bd0a05a7bdda6778e411c9133bb",
         "paletteSwap": true
       },
       "files": [
         {
           "role": "model",
           "path": "public/models/bush.glb",
-          "bytes": 3224,
-          "sha256": "c858e3ad619af48d52035a33d7ec6f21443de01a7f377e6dd3ac8a835ccb0c02"
+          "bytes": 3500,
+          "sha256": "738bb528ad795f01e3c2a684348f20e69a7c4bd0a05a7bdda6778e411c9133bb"
         }
       ],
       "license": {
@@ -870,43 +878,44 @@
         "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
       },
       "inGame": {
-        "heightM": 0.9,
-        "repaint": "leaves"
+        "heightM": 1.1,
+        "repaint": "leaves and bark"
       },
       "measured": {
-        "tris": 60,
+        "tris": 50,
         "materials": 1,
         "drawCalls": 1,
-        "texturePx": 0,
+        "texturePx": 8,
         "bones": 0,
         "clips": 0,
         "clipNames": [],
-        "heightM": 0.243,
+        "heightM": 1.15,
         "box": {
           "size": [
-            0.374,
-            0.243,
-            0.336
+            0.755,
+            1.15,
+            0.654
           ]
         },
         "glbKB": 3,
         "colours": [
-          "#2cd8b8"
+          "#29c9ab",
+          "#e28357"
         ]
       },
       "made": {
         "steps": [
           {
             "what": "library",
-            "item": "kenney-nature-kit/plant-bush-large",
-            "sha256": "c858e3ad619af48d52035a33d7ec6f21443de01a7f377e6dd3ac8a835ccb0c02"
+            "item": "kenney-nature-kit/tree-fat",
+            "sha256": "738bb528ad795f01e3c2a684348f20e69a7c4bd0a05a7bdda6778e411c9133bb"
           },
           {
             "what": "in game",
             "tool": "src/main.ts",
             "ops": [
-              "drawn 0.9 m tall (x 3.7037)",
-              "palette swap to style.json: leaves"
+              "drawn 1.1 m tall (x 0.9565)",
+              "palette swap to style.json: leaves and bark"
             ]
           }
         ],
@@ -923,7 +932,99 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.055Z"
+      "recordedAt": "2026-10-03T02:06:16.787Z"
+    },
+    {
+      "id": "campfire",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Campfire",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/campfire-stones",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/campfire_stones.glb",
+        "sha256": "4604f108a651e3bafcda50c3356488dbb9746c184f459db53730ba6cedb84fec",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/campfire.glb",
+          "bytes": 5428,
+          "sha256": "4604f108a651e3bafcda50c3356488dbb9746c184f459db53730ba6cedb84fec"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.16,
+        "repaint": "stone",
+        "tint": "mix:bg>ink:0.5"
+      },
+      "measured": {
+        "tris": 264,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 0,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.078,
+        "box": {
+          "size": [
+            0.541,
+            0.078,
+            0.515
+          ]
+        },
+        "glbKB": 5,
+        "colours": [
+          "#b8e2e8"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/campfire-stones",
+            "sha256": "4604f108a651e3bafcda50c3356488dbb9746c184f459db53730ba6cedb84fec"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.16 m tall (x 2.0513)",
+              "palette swap to style.json: stone"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-03T02:06:16.792Z"
     },
     {
       "id": "fence",
@@ -1013,7 +1114,99 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.060Z"
+      "recordedAt": "2026-10-03T02:06:16.796Z"
+    },
+    {
+      "id": "firewood",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Firewood",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/campfire-logs",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/campfire_logs.glb",
+        "sha256": "f58a020f665c6fc2c66fefb39b32b8dddfb147f90acf13d76031eece90470a81",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/firewood.glb",
+          "bytes": 4168,
+          "sha256": "f58a020f665c6fc2c66fefb39b32b8dddfb147f90acf13d76031eece90470a81"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.14,
+        "repaint": "wood"
+      },
+      "measured": {
+        "tris": 112,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.063,
+        "box": {
+          "size": [
+            0.292,
+            0.063,
+            0.292
+          ]
+        },
+        "glbKB": 4,
+        "colours": [
+          "#c46d4b",
+          "#fe8e62"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/campfire-logs",
+            "sha256": "f58a020f665c6fc2c66fefb39b32b8dddfb147f90acf13d76031eece90470a81"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.14 m tall (x 2.2222)",
+              "palette swap to style.json: wood"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-03T02:06:16.793Z"
     },
     {
       "id": "flower-purple",
@@ -1105,7 +1298,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.058Z"
+      "recordedAt": "2026-10-03T02:06:16.791Z"
     },
     {
       "id": "flower-red",
@@ -1197,7 +1390,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.057Z"
+      "recordedAt": "2026-10-03T02:06:16.790Z"
     },
     {
       "id": "flower-yellow",
@@ -1289,7 +1482,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.058Z"
+      "recordedAt": "2026-10-03T02:06:16.790Z"
     },
     {
       "id": "gem",
@@ -1300,22 +1493,22 @@
       "from": {
         "library": "homie-starter",
         "version": "v0",
-        "pack": "kenney-nature-kit",
-        "packLabel": "Kenney Nature Kit",
-        "packUrl": "https://kenney.nl/assets/nature-kit",
-        "item": "kenney-nature-kit/stone-tall-b",
+        "pack": "kenney-platformer-kit",
+        "packLabel": "Kenney Platformer Kit",
+        "packUrl": "https://kenney.nl/assets/platformer-kit",
+        "item": "kenney-platformer-kit/jewel",
         "author": "Kenney",
-        "origin": "https://kenney.nl/assets/nature-kit",
-        "source": "Models/GLTF format/stone_tallB.glb",
-        "sha256": "c2bec39ed35137c4a46eef410647e17a414613176f4e1ba06eb630d069052142",
+        "origin": "https://kenney.nl/assets/platformer-kit",
+        "source": "Models/GLB format/jewel.glb",
+        "sha256": "c3024b25c2a165beba90f7c99f5b97f77ef1a9aaac952bdb8a167a299aed0cd3",
         "paletteSwap": true
       },
       "files": [
         {
           "role": "model",
           "path": "public/models/gem.glb",
-          "bytes": 5000,
-          "sha256": "c2bec39ed35137c4a46eef410647e17a414613176f4e1ba06eb630d069052142"
+          "bytes": 5316,
+          "sha256": "c3024b25c2a165beba90f7c99f5b97f77ef1a9aaac952bdb8a167a299aed0cd3"
         }
       ],
       "license": {
@@ -1324,47 +1517,48 @@
         "spdx": "CC0-1.0",
         "owner": "Kenney",
         "attribution": null,
-        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+        "notes": "From the Homie starter library (kenney-platformer-kit); the pack's own licence text: licenses/kenney-platformer-kit.txt. `game new` fetches the file; the repository holds no models."
       },
       "inGame": {
         "heightM": 0.42,
-        "repaint": "pale to gold"
+        "repaint": "gold",
+        "tint": "gold"
       },
       "measured": {
-        "tris": 172,
+        "tris": 12,
         "materials": 1,
         "drawCalls": 1,
-        "texturePx": 8,
+        "texturePx": 512,
         "bones": 0,
         "clips": 0,
         "clipNames": [],
-        "heightM": 0.884,
+        "heightM": 0.37,
         "box": {
           "size": [
-            0.765,
-            0.884,
-            0.77
+            0.333,
+            0.37,
+            0.288
           ]
         },
         "glbKB": 5,
         "colours": [
-          "#b8e2e8",
-          "#fefefe"
+          "#5c6bc8",
+          "#627ece"
         ]
       },
       "made": {
         "steps": [
           {
             "what": "library",
-            "item": "kenney-nature-kit/stone-tall-b",
-            "sha256": "c2bec39ed35137c4a46eef410647e17a414613176f4e1ba06eb630d069052142"
+            "item": "kenney-platformer-kit/jewel",
+            "sha256": "c3024b25c2a165beba90f7c99f5b97f77ef1a9aaac952bdb8a167a299aed0cd3"
           },
           {
             "what": "in game",
             "tool": "src/main.ts",
             "ops": [
-              "drawn 0.42 m tall (x 0.4751)",
-              "palette swap to style.json: pale to gold"
+              "drawn 0.42 m tall (x 1.1351)",
+              "palette swap to style.json: gold"
             ]
           }
         ],
@@ -1381,7 +1575,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.052Z"
+      "recordedAt": "2026-10-03T02:06:16.784Z"
     },
     {
       "id": "grass",
@@ -1395,19 +1589,19 @@
         "pack": "kenney-nature-kit",
         "packLabel": "Kenney Nature Kit",
         "packUrl": "https://kenney.nl/assets/nature-kit",
-        "item": "kenney-nature-kit/grass-large",
+        "item": "kenney-nature-kit/grass-leafs-large",
         "author": "Kenney",
         "origin": "https://kenney.nl/assets/nature-kit",
-        "source": "Models/GLTF format/grass_large.glb",
-        "sha256": "94778ac7dfbfc1d61c754c76822116d92f1db86d4743338d1282068b28d2af31",
+        "source": "Models/GLTF format/grass_leafsLarge.glb",
+        "sha256": "7dcd72e17d0bc8a69f7be40ad4880c02aa25c440a0b916f3a39af547356bd281",
         "paletteSwap": true
       },
       "files": [
         {
           "role": "model",
           "path": "public/models/grass.glb",
-          "bytes": 5916,
-          "sha256": "94778ac7dfbfc1d61c754c76822116d92f1db86d4743338d1282068b28d2af31"
+          "bytes": 4744,
+          "sha256": "7dcd72e17d0bc8a69f7be40ad4880c02aa25c440a0b916f3a39af547356bd281"
         }
       ],
       "license": {
@@ -1419,26 +1613,26 @@
         "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
       },
       "inGame": {
-        "heightM": 0.35,
+        "heightM": 0.3,
         "repaint": "blades"
       },
       "measured": {
-        "tris": 224,
+        "tris": 144,
         "materials": 1,
         "drawCalls": 1,
         "texturePx": 0,
         "bones": 0,
         "clips": 0,
         "clipNames": [],
-        "heightM": 0.254,
+        "heightM": 0.142,
         "box": {
           "size": [
-            0.409,
-            0.254,
-            0.408
+            0.476,
+            0.142,
+            0.487
           ]
         },
-        "glbKB": 6,
+        "glbKB": 5,
         "colours": [
           "#2cd8b8"
         ]
@@ -1447,14 +1641,14 @@
         "steps": [
           {
             "what": "library",
-            "item": "kenney-nature-kit/grass-large",
-            "sha256": "94778ac7dfbfc1d61c754c76822116d92f1db86d4743338d1282068b28d2af31"
+            "item": "kenney-nature-kit/grass-leafs-large",
+            "sha256": "7dcd72e17d0bc8a69f7be40ad4880c02aa25c440a0b916f3a39af547356bd281"
           },
           {
             "what": "in game",
             "tool": "src/main.ts",
             "ops": [
-              "drawn 0.35 m tall (x 1.378)",
+              "drawn 0.3 m tall (x 2.1127)",
               "palette swap to style.json: blades"
             ]
           }
@@ -1472,7 +1666,99 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.060Z"
+      "recordedAt": "2026-10-03T02:06:16.795Z"
+    },
+    {
+      "id": "log",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Log seat",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/log-large",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/log_large.glb",
+        "sha256": "32e4c573f88de2bedac49aa6722b8e2683996651fa3d6be72c390a9f6284c503",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/log.glb",
+          "bytes": 3964,
+          "sha256": "32e4c573f88de2bedac49aa6722b8e2683996651fa3d6be72c390a9f6284c503"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 0.42,
+        "repaint": "wood"
+      },
+      "measured": {
+        "tris": 96,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.417,
+        "box": {
+          "size": [
+            1,
+            0.417,
+            0.549
+          ]
+        },
+        "glbKB": 4,
+        "colours": [
+          "#e28357",
+          "#f5d7bb"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/log-large",
+            "sha256": "32e4c573f88de2bedac49aa6722b8e2683996651fa3d6be72c390a9f6284c503"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 0.42 m tall (x 1.0072)",
+              "palette swap to style.json: wood"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-03T02:06:16.794Z"
     },
     {
       "id": "mushrooms",
@@ -1564,7 +1850,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.059Z"
+      "recordedAt": "2026-10-03T02:06:16.791Z"
     },
     {
       "id": "rock",
@@ -1578,19 +1864,19 @@
         "pack": "kenney-nature-kit",
         "packLabel": "Kenney Nature Kit",
         "packUrl": "https://kenney.nl/assets/nature-kit",
-        "item": "kenney-nature-kit/rock-large-d",
+        "item": "kenney-nature-kit/stone-large-d",
         "author": "Kenney",
         "origin": "https://kenney.nl/assets/nature-kit",
-        "source": "Models/GLTF format/rock_largeD.glb",
-        "sha256": "57b8fbf15a551f1bf9653b08cd60fc3383f39be38bb1141647a56cf9f28e1b45",
+        "source": "Models/GLTF format/stone_largeD.glb",
+        "sha256": "9da8eb473248a491c81fa57d89da61738d64a9a37b63ce1c3761293aaab860ab",
         "paletteSwap": true
       },
       "files": [
         {
           "role": "model",
           "path": "public/models/rock.glb",
-          "bytes": 3876,
-          "sha256": "57b8fbf15a551f1bf9653b08cd60fc3383f39be38bb1141647a56cf9f28e1b45"
+          "bytes": 3852,
+          "sha256": "9da8eb473248a491c81fa57d89da61738d64a9a37b63ce1c3761293aaab860ab"
         }
       ],
       "license": {
@@ -1603,13 +1889,14 @@
       },
       "inGame": {
         "heightM": 0.75,
-        "repaint": "earth, grass and stone"
+        "repaint": "stone",
+        "tint": "mix:bg>ink:0.5"
       },
       "measured": {
         "tris": 80,
         "materials": 1,
         "drawCalls": 1,
-        "texturePx": 16,
+        "texturePx": 8,
         "bones": 0,
         "clips": 0,
         "clipNames": [],
@@ -1623,99 +1910,6 @@
         },
         "glbKB": 4,
         "colours": [
-          "#e28357",
-          "#fefefe",
-          "#2cd8b8"
-        ]
-      },
-      "made": {
-        "steps": [
-          {
-            "what": "library",
-            "item": "kenney-nature-kit/rock-large-d",
-            "sha256": "57b8fbf15a551f1bf9653b08cd60fc3383f39be38bb1141647a56cf9f28e1b45"
-          },
-          {
-            "what": "in game",
-            "tool": "src/main.ts",
-            "ops": [
-              "drawn 0.75 m tall (x 1.3204)",
-              "palette swap to style.json: earth, grass and stone"
-            ]
-          }
-        ],
-        "under": {
-          "style.render": 1,
-          "style.palette": 1,
-          "style.shape": 1,
-          "style.materials": 1,
-          "style.light": 1,
-          "cast.scale": 1,
-          "cast.family": 1
-        }
-      },
-      "review": {
-        "state": "auto"
-      },
-      "recordedAt": "2026-10-02T22:02:52.055Z"
-    },
-    {
-      "id": "stone",
-      "kind": "prop",
-      "tier": "prop",
-      "card": "Places/Standing stone",
-      "route": "library",
-      "from": {
-        "library": "homie-starter",
-        "version": "v0",
-        "pack": "kenney-nature-kit",
-        "packLabel": "Kenney Nature Kit",
-        "packUrl": "https://kenney.nl/assets/nature-kit",
-        "item": "kenney-nature-kit/stone-tall-a",
-        "author": "Kenney",
-        "origin": "https://kenney.nl/assets/nature-kit",
-        "source": "Models/GLTF format/stone_tallA.glb",
-        "sha256": "f95e216f991150c6f31d0f5823b82da9232a641a84a57c57fd33ad079ed9fe82",
-        "paletteSwap": true
-      },
-      "files": [
-        {
-          "role": "model",
-          "path": "public/models/stone.glb",
-          "bytes": 4740,
-          "sha256": "f95e216f991150c6f31d0f5823b82da9232a641a84a57c57fd33ad079ed9fe82"
-        }
-      ],
-      "license": {
-        "remix": "include",
-        "kind": "cc0",
-        "spdx": "CC0-1.0",
-        "owner": "Kenney",
-        "attribution": null,
-        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
-      },
-      "inGame": {
-        "heightM": 1,
-        "repaint": "stone"
-      },
-      "measured": {
-        "tris": 136,
-        "materials": 1,
-        "drawCalls": 1,
-        "texturePx": 8,
-        "bones": 0,
-        "clips": 0,
-        "clipNames": [],
-        "heightM": 0.996,
-        "box": {
-          "size": [
-            0.983,
-            0.996,
-            0.683
-          ]
-        },
-        "glbKB": 5,
-        "colours": [
           "#b8e2e8",
           "#fefefe"
         ]
@@ -1724,14 +1918,14 @@
         "steps": [
           {
             "what": "library",
-            "item": "kenney-nature-kit/stone-tall-a",
-            "sha256": "f95e216f991150c6f31d0f5823b82da9232a641a84a57c57fd33ad079ed9fe82"
+            "item": "kenney-nature-kit/stone-large-d",
+            "sha256": "9da8eb473248a491c81fa57d89da61738d64a9a37b63ce1c3761293aaab860ab"
           },
           {
             "what": "in game",
             "tool": "src/main.ts",
             "ops": [
-              "drawn 1 m tall (x 1.004)",
+              "drawn 0.75 m tall (x 1.3204)",
               "palette swap to style.json: stone"
             ]
           }
@@ -1749,7 +1943,100 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.056Z"
+      "recordedAt": "2026-10-03T02:06:16.788Z"
+    },
+    {
+      "id": "stone",
+      "kind": "prop",
+      "tier": "prop",
+      "card": "Places/Standing stone",
+      "route": "library",
+      "from": {
+        "library": "homie-starter",
+        "version": "v0",
+        "pack": "kenney-nature-kit",
+        "packLabel": "Kenney Nature Kit",
+        "packUrl": "https://kenney.nl/assets/nature-kit",
+        "item": "kenney-nature-kit/stone-tall-c",
+        "author": "Kenney",
+        "origin": "https://kenney.nl/assets/nature-kit",
+        "source": "Models/GLTF format/stone_tallC.glb",
+        "sha256": "b5745eb68d47df133a0c0b5dbd25ba20ad33366b8e368f0047942c75abbf2f3f",
+        "paletteSwap": true
+      },
+      "files": [
+        {
+          "role": "model",
+          "path": "public/models/stone.glb",
+          "bytes": 3232,
+          "sha256": "b5745eb68d47df133a0c0b5dbd25ba20ad33366b8e368f0047942c75abbf2f3f"
+        }
+      ],
+      "license": {
+        "remix": "include",
+        "kind": "cc0",
+        "spdx": "CC0-1.0",
+        "owner": "Kenney",
+        "attribution": null,
+        "notes": "From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models."
+      },
+      "inGame": {
+        "heightM": 1,
+        "repaint": "stone",
+        "tint": "mix:bg>ink:0.5"
+      },
+      "measured": {
+        "tris": 37,
+        "materials": 1,
+        "drawCalls": 1,
+        "texturePx": 8,
+        "bones": 0,
+        "clips": 0,
+        "clipNames": [],
+        "heightM": 0.783,
+        "box": {
+          "size": [
+            0.456,
+            0.783,
+            0.437
+          ]
+        },
+        "glbKB": 3,
+        "colours": [
+          "#b8e2e8",
+          "#fefefe"
+        ]
+      },
+      "made": {
+        "steps": [
+          {
+            "what": "library",
+            "item": "kenney-nature-kit/stone-tall-c",
+            "sha256": "b5745eb68d47df133a0c0b5dbd25ba20ad33366b8e368f0047942c75abbf2f3f"
+          },
+          {
+            "what": "in game",
+            "tool": "src/main.ts",
+            "ops": [
+              "drawn 1 m tall (x 1.2771)",
+              "palette swap to style.json: stone"
+            ]
+          }
+        ],
+        "under": {
+          "style.render": 1,
+          "style.palette": 1,
+          "style.shape": 1,
+          "style.materials": 1,
+          "style.light": 1,
+          "cast.scale": 1,
+          "cast.family": 1
+        }
+      },
+      "review": {
+        "state": "auto"
+      },
+      "recordedAt": "2026-10-03T02:06:16.789Z"
     },
     {
       "id": "tree-oak",
@@ -1841,7 +2128,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.053Z"
+      "recordedAt": "2026-10-03T02:06:16.785Z"
     },
     {
       "id": "tree-pine",
@@ -1933,7 +2220,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.054Z"
+      "recordedAt": "2026-10-03T02:06:16.786Z"
     },
     {
       "id": "tree-round",
@@ -2025,7 +2312,7 @@
       "review": {
         "state": "auto"
       },
-      "recordedAt": "2026-10-02T22:02:52.054Z"
+      "recordedAt": "2026-10-03T02:06:16.785Z"
     }
   ]
 }

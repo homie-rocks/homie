@@ -60,17 +60,27 @@ export function firstPlayBytes(root, id) {
   const dir = join(root, 'site', 'dist', 'games', id);
   if (!existsSync(dir)) return null;
   let raw = 0; let gz = 0; let files = 0;
+  // The same sound in several formats (an .ogg and its .wav fallback for an old Safari): a browser fetches one, so
+  // only the smallest of each set counts.
+  const audio = new Map();
   const walk = (d) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const p = join(d, e.name);
       if (e.isDirectory()) { if (e.name !== '_landing') walk(p); continue; }
       if (/^(source|assets)\.json$|\.map$/.test(e.name)) continue;
       const b = readFileSync(p);
+      if (/\.(ogg|mp3|m4a|aac|wav|webm|opus|flac)$/i.test(e.name)) {
+        const stem = p.replace(/\.[^.\/]+$/, '');
+        const prev = audio.get(stem);
+        if (!prev || b.byteLength < prev) audio.set(stem, b.byteLength);
+        continue;
+      }
       raw += b.byteLength; files += 1;
-      gz += /\.(png|jpe?g|webp|glb|mp3|ogg|m4a|mp4|woff2|ktx2)$/i.test(e.name) ? b.byteLength : gzipSync(b, { level: 6 }).byteLength;
+      gz += /\.(png|jpe?g|webp|glb|mp4|woff2|ktx2)$/i.test(e.name) ? b.byteLength : gzipSync(b, { level: 6 }).byteLength;
     }
   };
   walk(dir);
+  for (const bytes of audio.values()) { raw += bytes; gz += bytes; files += 1; }
   return { raw, gzip: gz, files };
 }
 

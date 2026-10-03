@@ -77,7 +77,15 @@ Read on the dates shown. Terms change: read the live page again before publishin
 ### bush
 
 - **What:** prop (Places/Bush): `public/models/bush.glb`
-- **From:** from the Homie starter library: Kenney Nature Kit, plant-bush-large (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **From:** from the Homie starter library: Kenney Nature Kit, tree-fat (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
+- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
+- **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
+
+### campfire
+
+- **What:** prop (Places/Campfire): `public/models/campfire.glb`
+- **From:** from the Homie starter library: Kenney Nature Kit, campfire-stones (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
 - **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
@@ -86,6 +94,14 @@ Read on the dates shown. Terms change: read the live page again before publishin
 
 - **What:** kit (Places/Fence): `public/models/fence.glb`
 - **From:** from the Homie starter library: Kenney Nature Kit, fence-simple (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
+- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
+- **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
+
+### firewood
+
+- **What:** prop (Places/Firewood): `public/models/firewood.glb`
+- **From:** from the Homie starter library: Kenney Nature Kit, campfire-logs (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
 - **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
@@ -117,15 +133,23 @@ Read on the dates shown. Terms change: read the live page again before publishin
 ### gem
 
 - **What:** prop (Items/Gem): `public/models/gem.glb`
-- **From:** from the Homie starter library: Kenney Nature Kit, stone-tall-b (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **From:** from the Homie starter library: Kenney Platformer Kit, jewel (https://kenney.nl/assets/platformer-kit); library, in game (src/main.ts)
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
 - **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
-- **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
+- **Notes:** From the Homie starter library (kenney-platformer-kit); the pack's own licence text: licenses/kenney-platformer-kit.txt. `game new` fetches the file; the repository holds no models.
 
 ### grass
 
 - **What:** prop (Places/Grass): `public/models/grass.glb`
-- **From:** from the Homie starter library: Kenney Nature Kit, grass-large (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **From:** from the Homie starter library: Kenney Nature Kit, grass-leafs-large (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
+- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
+- **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
+
+### log
+
+- **What:** prop (Places/Log seat): `public/models/log.glb`
+- **From:** from the Homie starter library: Kenney Nature Kit, log-large (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
 - **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
@@ -141,7 +165,7 @@ Read on the dates shown. Terms change: read the live page again before publishin
 ### rock
 
 - **What:** prop (Places/Rock): `public/models/rock.glb`
-- **From:** from the Homie starter library: Kenney Nature Kit, rock-large-d (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **From:** from the Homie starter library: Kenney Nature Kit, stone-large-d (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
 - **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.
@@ -149,7 +173,7 @@ Read on the dates shown. Terms change: read the live page again before publishin
 ### stone
 
 - **What:** prop (Places/Standing stone): `public/models/stone.glb`
-- **From:** from the Homie starter library: Kenney Nature Kit, stone-tall-a (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
+- **From:** from the Homie starter library: Kenney Nature Kit, stone-tall-c (https://kenney.nl/assets/nature-kit); library, in game (src/main.ts)
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: Kenney
 - **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kenney-nature-kit); the pack's own licence text: licenses/kenney-nature-kit.txt. `game new` fetches the file; the repository holds no models.

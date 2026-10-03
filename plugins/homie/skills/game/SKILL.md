@@ -185,6 +185,13 @@ Then make it good, not just working:
   starter library first, the person's own files with their licence, generated props only on their own fal account
   under a budget), then the `art` skill's cover from a real frame and, with a budget, painted backdrops and
   textures. "Make the look better" goes through `style` and `models` before any painting.
+- **Match the brief's tone**: a cozy, calm or gentle brief is not a fight. Score together (in `gem-rush-3d`,
+  game.json `"scoring": "together"`: one total the room fills, no places), make contact gentle or none, and give the
+  bots friendly names; keep rivals, rankings and knocks for briefs that ask for competition.
+- **A place, not a board**: a 3D game's play area reads as somewhere. Give it a heart the theme names (a den, a
+  campfire, a well, a market stall) built in the game's style, a few solid features players move round, and
+  something to do within a few steps of any spot, so a phone's close view is never bare ground. Look at the computer
+  and phone frames before you call it done.
 - **Models in code**: a three.js game loads every model through `@homie-rocks/studio/assets` (`createModels()`,
   `instance(url)`, `placeholder(size)`): it refuses unsafe or oversized files and decodes the phone-sized format
   `assets add` writes. Read colours and fonts from the game's `style.json` instead of hard-coding them, so the

@@ -82,6 +82,18 @@ const TEXT = /\.(ts|tsx|js|mjs|jsx|json|html|css|md|txt|svg|glsl|wgsl|frag|vert)
  * it (`credit`: the studio and the game; the live site adds the page, worker/index.mjs) and its licence (game.json
  * "license", worker/license.mjs).
  */
+/** From games/<id>/style.json: the light colour as paper, the dark as text, and the accent; null without one. */
+function uiOf(g) {
+  let pal = null;
+  try { pal = JSON.parse(readFileSync(join(g.dir, 'style.json'), 'utf8'))?.palette ?? null; } catch { pal = null; }
+  const hex = (v) => (/^#[0-9a-f]{6}$/i.test(String(v ?? '')) ? String(v).toLowerCase() : null);
+  const ink = hex(pal?.ink); const bg = hex(pal?.bg);
+  if (!ink || !bg) return null;
+  const lum = (h) => (0.2126 * parseInt(h.slice(1, 3), 16) + 0.7152 * parseInt(h.slice(3, 5), 16) + 0.0722 * parseInt(h.slice(5, 7), 16)) / 255;
+  const light = lum(ink) >= lum(bg);
+  return { paper: light ? ink : bg, text: light ? bg : ink, ...(hex(pal?.accent) ? { hot: hex(pal.accent) } : {}) };
+}
+
 export function sourceOf(dir, id, { studio = null, game = null, license } = {}) {
   const files = {};
   let total = 0;
@@ -328,8 +340,12 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     const net = netplayOf(g, join(dist, 'games', g.id));
     const { min, max } = seatsFor(g, net);
     const seeds = serverSeeds(g, log);
+    // The game's own palette (style.json, its art direction): the play page's buttons wear its paper and ink, so the
+    // page's pills and the game's own HUD are one UI.
+    const ui = uiOf(g);
     return {
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
+      ...(ui ? { ui } : {}),
       roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
       ...(g.screen ? { screen: g.screen } : {}),
       // game.json "saves": true — player accounts and cloud saves (saves/SAVES.md): the play shell answers the game's

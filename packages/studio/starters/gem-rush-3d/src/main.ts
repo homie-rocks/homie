@@ -9,7 +9,7 @@
  * nearby bodies back (the host TAKES a client-owned body, drives the knockback, and GIVES it back); the hot zone
  * (keyed state) scores double; a watcher follows any player (`net.viewSeat`, `net.spotlight`); bots play at the
  * room's skill dial; the knock is tuned in the Game Lab (tunables.json, lab.json). Only the units changed: the
- * world is in metres, a 32 x 20 m meadow (Gem Rush's 1600 x 1000 px at 50 px a metre), x across and y deep (y is
+ * world is in metres, a 26 x 16 m clearing with a few bushes, rocks and a tree in it (solid: bodies go round them), x across and y deep (y is
  * three.js's z; the ground is y = 0 in three.js).
  *
  * THE LOOK comes from files beside game.json:
@@ -23,9 +23,9 @@
  * byte). A model that is refused or not there is drawn as a stand-in in the same colours (see "models" below): a
  * round never waits on, or breaks for, a model.
  *
- * PHONE BUDGETS (DESIGN 8.1): under 100 draw calls and 150k triangles a frame (the `drawCalls` and `triangles`
- * probes read renderer.info), the pixel ratio at most 1.5 on a phone and 2 on a computer, and no shadow maps: a soft
- * disc under each body, gem, tree and rock. Repeated things (gems, trees, flowers, the fence, the discs) are one
+ * PHONE BUDGETS: under 100 draw calls and 150k triangles a frame (the `drawCalls` and `triangles` probes read
+ * renderer.info), the pixel ratio at most 1.5 on a phone and 2 on a computer, and no shadow map on a phone: a soft
+ * disc under each body, gem, tree and rock (a computer draws the sun's real shadows). Repeated things (gems, trees, flowers, the fence, the discs) are one
  * InstancedMesh per model.
  *
  * The HUD (clock, scores, names, results, "Reconnecting…", the controls hint, the role badge) is a 2D canvas over
@@ -36,7 +36,7 @@ import {
   DodecahedronGeometry, IcosahedronGeometry, OctahedronGeometry,
   DirectionalLight, DynamicDrawUsage, Euler, ExtrudeGeometry, Fog, Group, HemisphereLight, InstancedMesh, LineBasicMaterial,
   LineSegments, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial, NoToneMapping, Object3D, Path,
-  PerspectiveCamera, PlaneGeometry, Quaternion, RepeatWrapping, RingGeometry, Scene, Shape, SRGBColorSpace, Vector3, WebGLRenderer,
+  PCFSoftShadowMap, PerspectiveCamera, PlaneGeometry, Quaternion, RingGeometry, Scene, Shape, SRGBColorSpace, Vector3, WebGLRenderer,
   type AnimationAction, type Material,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -50,11 +50,32 @@ import { createLabels, exposePort, type LabelIn, type LabelOut } from '@homie-ro
 import { lab } from '@homie-rocks/studio/lab';
 import tuning from '../tunables.json';
 import styleFile from '../style.json';
+import gameFile from '../game.json';
 
 /* ------------------------------------------------------------------ rules */
-const W = 32;
-const H = 20;
+const W = 26;
+const H = 16;
 const R_AV = 0.44;
+/**
+ * The clearing's own features, solid (rules coordinates, metres): bodies slide round them, gems never land in them.
+ * Away from the middle row, where bodies start and the Game Lab stages its knock.
+ */
+const OBSTACLES: readonly { x: number; y: number; r: number; kind: 'camp' | 'bush' | 'rock' | 'stone' | 'tree' }[] = [
+  // The clearing's heart: a campfire ring with log seats (a game makes it its den, its camp, its well).
+  { x: 13.0, y: 4.0, r: 1.05, kind: 'camp' },
+  { x: 4.6, y: 3.8, r: 0.75, kind: 'bush' }, { x: 21.4, y: 4.6, r: 0.55, kind: 'rock' }, { x: 6.0, y: 12.6, r: 0.5, kind: 'rock' },
+  { x: 20.2, y: 12.2, r: 0.75, kind: 'bush' }, { x: 9.6, y: 13.4, r: 0.45, kind: 'stone' }, { x: 23.6, y: 2.0, r: 0.5, kind: 'tree' },
+];
+/** A position kept in the clearing and out of its features (pushed to their edge, so a body slides round them). */
+function bound(x: number, y: number): { x: number; y: number } {
+  x = Math.max(R_AV, Math.min(W - R_AV, x)); y = Math.max(R_AV, Math.min(H - R_AV, y));
+  for (const o of OBSTACLES) {
+    const dx = x - o.x; const dy = y - o.y; const d = Math.hypot(dx, dy); const min = o.r + R_AV;
+    if (d >= min) continue;
+    if (d > 1e-6) { x = o.x + (dx / d) * min; y = o.y + (dy / d) * min; } else x = o.x + min;
+  }
+  return { x, y };
+}
 const R_GEM = 0.26;
 const SPEED = 6.8;
 const BOT_SPEED = 5;
@@ -139,7 +160,11 @@ const spawnPoint = (i: number): { x: number; y: number } => {
   const a = (i / MAX_SLOTS) * Math.PI * 2;
   return { x: W / 2 + Math.cos(a) * 6.6, y: H / 2 + Math.sin(a) * 5 };
 };
-const newGem = (): Gem => ({ id: ++gemSeq, x: rnd(1.2, W - 1.2), y: rnd(1.2, H - 1.2) });
+const newGem = (): Gem => {
+  let x = rnd(1.2, W - 1.2); let y = rnd(1.2, H - 1.2);
+  for (let i = 0; i < 12 && OBSTACLES.some((o) => Math.hypot(o.x - x, o.y - y) < o.r + 0.7); i += 1) { x = rnd(1.2, W - 1.2); y = rnd(1.2, H - 1.2); }
+  return { id: ++gemSeq, x, y };
+};
 
 function bodyFor(slot: Slot): Body {
   const sp = spawnPoint(slot.slot);
@@ -399,8 +424,7 @@ function knock(b: Body, fx: number, fy: number, by: number): void {
 function slide(o: Knock & { x: number; y: number; vx: number; vy: number }, now: number, dt: number): void {
   const u = Number.isFinite(o.kat) ? Math.max(0, Math.min(1, (now - o.kat) / Math.max(1, T.knockMs))) : 1;
   const e = 1 - (1 - u) ** Math.max(1, T.knockEase);
-  const x = Math.max(R_AV, Math.min(W - R_AV, o.kx + o.kvx * T.knockDistance * e));
-  const y = Math.max(R_AV, Math.min(H - R_AV, o.ky + o.kvy * T.knockDistance * e));
+  const { x, y } = bound(o.kx + o.kvx * T.knockDistance * e, o.ky + o.kvy * T.knockDistance * e);
   if (u >= 1) { o.vx = 0; o.vy = 0; } else if (dt > 0) { o.vx = (x - o.x) / dt; o.vy = (y - o.y) / dt; }
   o.x = x; o.y = y;
 }
@@ -432,8 +456,8 @@ function integrate(o: { x: number; y: number; vx: number; vy: number }, mx: numb
   const k = Math.min(1, dt * 14);
   o.vx += (mx * SPEED - o.vx) * k;
   o.vy += (my * SPEED - o.vy) * k;
-  o.x = Math.max(R_AV, Math.min(W - R_AV, o.x + o.vx * dt));
-  o.y = Math.max(R_AV, Math.min(H - R_AV, o.y + o.vy * dt));
+  const p = bound(o.x + o.vx * dt, o.y + o.vy * dt);
+  o.x = p.x; o.y = p.y;
 }
 
 function stepMe(dt: number): void {
@@ -511,8 +535,8 @@ function stepBots(dt: number): void {
     const k = Math.min(1, dt * 5);
     b.vx += ((dx / len) * speed - b.vx) * k;
     b.vy += ((dy / len) * speed - b.vy) * k;
-    b.x = Math.max(R_AV, Math.min(W - R_AV, b.x + b.vx * dt));
-    b.y = Math.max(R_AV, Math.min(H - R_AV, b.y + b.vy * dt));
+    const p = bound(b.x + b.vx * dt, b.y + b.vy * dt);
+    b.x = p.x; b.y = p.y;
   }
 }
 
@@ -564,7 +588,7 @@ function stepHost(dt: number): void {
     if (a && Array.isArray(a)) {
       // Client-owned movement, bounded: to the arena, and to 1.3x top speed per frame. A legitimate avatar catches
       // up within a frame; a teleport crawls, and a claim more than half a second of running away is reset.
-      const claim = { x: Math.max(R_AV, Math.min(W - R_AV, Number(a[0]))), y: Math.max(R_AV, Math.min(H - R_AV, Number(a[1]))) };
+      const claim = bound(Number(a[0]) || 0, Number(a[1]) || 0);
       const m = capMove(b, claim, SPEED * 1.3 * dt + 0.12);
       if (m.over > SPEED * 0.5) { net.reset(b.seat); cheatResets += 1; }
       else { b.x = m.x; b.y = m.y; b.vx = Number(a[2]) || 0; b.vy = Number(a[3]) || 0; }
@@ -710,7 +734,7 @@ function stageDummy(): void {
 function standStill(b: Body, dt: number): void {
   const k = Math.min(1, dt * 5);
   b.vx -= b.vx * k; b.vy -= b.vy * k;
-  b.x = Math.max(R_AV, Math.min(W - R_AV, b.x + b.vx * dt)); b.y = Math.max(R_AV, Math.min(H - R_AV, b.y + b.vy * dt));
+  const p = bound(b.x + b.vx * dt, b.y + b.vy * dt); b.x = p.x; b.y = p.y;
 }
 const subject = { slot: -1, at: 0, x0: 0, y0: 0, px: 0, py: 0, has: false };
 function labKnock(b: Body): void {
@@ -755,6 +779,12 @@ interface StyleTokens {
   materials?: { model?: string; outline?: boolean } | null;
 }
 const STYLE = styleFile as unknown as StyleTokens & { materials?: { model?: string; outline?: boolean } };
+/**
+ * How the room scores (game.json "scoring"): "rivals" (the default: a ranking, a winner) or "together" (one total the
+ * whole room fills, each player's share shown without places: a cozy game's room works as one). The rules are the
+ * same; only what the HUD and the results card say changes.
+ */
+const TOGETHER = (gameFile as { scoring?: string }).scoring === 'together';
 const PAL = STYLE.palette;
 const LIGHT = { key: [-0.5, -1, -0.35], intensity: 2.2, hardness: 0.35, sky: PAL.bg, ground: PAL.accent2, fog: 0.35, ...(STYLE.light ?? {}) };
 const CAM = { pitch: 52, distance: 22, fov: 38, ...(STYLE.camera ?? {}) };
@@ -765,15 +795,29 @@ function mixHex(a: string, b: string, k: number): string {
   const m = (s: number): number => Math.round(ch(pa, s) + (ch(pb, s) - ch(pa, s)) * k);
   return `#${((m(16) << 16) | (m(8) << 8) | m(0)).toString(16).padStart(6, '0')}`;
 }
+/** sRGB luminance, 0 to 1. */
+function lumOf(hex: string): number { const c = new Color(hex).getHex(); return (0.2126 * ((c >> 16) & 255) + 0.7152 * ((c >> 8) & 255) + 0.0722 * (c & 255)) / 255; }
+/**
+ * The HUD's paper and its text: the palette's light colour as paper (cream cards, like the title card) and its dark
+ * one as text, whichever way round the palette has them, so every chip and card reads and they are one UI.
+ */
+const PAPER = lumOf(PAL.ink) >= lumOf(PAL.bg) ? PAL.ink : PAL.bg;
+const TEXT = lumOf(PAL.ink) >= lumOf(PAL.bg) ? mixHex(PAL.bg, '#000000', 0.25) : PAL.ink;
+const HOT = lumOf(PAL.accent) > 0.62 ? mixHex(PAL.accent, TEXT, 0.35) : PAL.accent;
+/** A night light (style.json light.time): the grass goes dark with it. */
+const NIGHT = LIGHT.time === 'night';
 /** The world's own colours, all from the palette: so a new style.json repaints everything the code draws. */
 const COL = {
   sky: LIGHT.sky ?? PAL.bg,
   // The ground of the style board when the light names one (a night grove is dark grass), else the palette's greens.
-  meadow: STYLE.light?.ground ? mixHex(STYLE.light.ground, PAL.accent2, 0.15) : mixHex(mixHex(PAL.accent2, PAL.good, 0.5), PAL.ink, 0.1),
-  meadowSpot: mixHex(STYLE.light?.ground ? mixHex(STYLE.light.ground, PAL.accent2, 0.3) : PAL.accent2, PAL.gold, 0.25),
-  floor: mixHex(mixHex(PAL.good, PAL.gold, 0.36), STYLE.light?.ground ?? PAL.good, STYLE.light?.ground ? 0.4 : 0),
-  floorStripe: mixHex(mixHex(mixHex(PAL.good, PAL.gold, 0.36), STYLE.light?.ground ?? PAL.good, STYLE.light?.ground ? 0.4 : 0), mixHex(PAL.good, PAL.ink, 0.25), 0.3),
-  path: mixHex(PAL.gold, '#ffffff', 0.72),
+  // Grass is the palette's greens, a little shaded, tinted by the light's ground colour (a night grove is darker, a
+  // golden hour warmer): never the light's ground alone, which can be mud.
+  meadow: mixHex(mixHex(mixHex(PAL.good, PAL.accent2, 0.55), PAL.bg, NIGHT ? 0.55 : 0.08), STYLE.light?.ground ?? PAL.accent2, NIGHT ? 0.3 : 0.06),
+  meadowSpot: mixHex(mixHex(mixHex(PAL.good, PAL.accent2, 0.55), NIGHT ? PAL.bg : PAL.gold, NIGHT ? 0.45 : 0.14), STYLE.light?.ground ?? PAL.accent2, NIGHT ? 0.25 : 0.1),
+  floor: mixHex(mixHex(mixHex(PAL.good, PAL.accent2, 0.4), NIGHT ? PAL.bg : PAL.gold, NIGHT ? 0.45 : 0.12), STYLE.light?.ground ?? PAL.good, STYLE.light?.ground ? 0.2 : 0),
+  floorStripe: mixHex(mixHex(mixHex(mixHex(PAL.good, PAL.accent2, 0.4), NIGHT ? PAL.bg : PAL.gold, NIGHT ? 0.45 : 0.12), STYLE.light?.ground ?? PAL.good, STYLE.light?.ground ? 0.2 : 0), PAL.bg, 0.08),
+  // The arena's edge: a worn earth-and-moss path, a step from the grass, never a painted stripe.
+  path: mixHex(mixHex(PAL.good, PAL.accent2, 0.5), mixHex(PAL.accent, PAL.ink, 0.55), 0.38),
   shadow: mixHex(PAL.ink, PAL.accent2, 0.25),
   zone: PAL.accent,
   gem: PAL.gold,
@@ -806,15 +850,34 @@ scene.background = new Color(COL.sky);
 scene.fog = new Fog(COL.sky, 40, 90);
 const camera = new PerspectiveCamera(CAM.fov, 1, 1, 320);
 // The light of the style board (assets/render-page.ts): a sun along style.json's key, a sky-to-ground fill, a little ambient.
+/*
+ * Shadows: real ones on a computer (a sun's shadow map that follows the camera, as the style board draws them), soft
+ * discs under things on a phone (the phone budgets: one less pass). Decided once, by the screen the game opens on.
+ */
+const REAL_SHADOWS = Math.min(innerWidth, innerHeight) > 540;
+if (REAL_SHADOWS) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFSoftShadowMap; }
+const SUN_DIR = new Vector3(-(LIGHT.key[0] ?? -0.5), -(LIGHT.key[1] ?? -1), -(LIGHT.key[2] ?? -0.35)).normalize();
+let sun: DirectionalLight;
 {
-  const key = LIGHT.key;
   const night = LIGHT.time === 'night';
-  const sun = new DirectionalLight(night ? mixHex(PAL.accent2, '#ffffff', 0.55) : LIGHT.time === 'golden' ? mixHex(PAL.gold, '#ffffff', 0.4) : '#ffffff', (LIGHT.intensity ?? 2.2) * 1.05);
-  sun.position.set(-(key[0] ?? -0.5) * 30, -(key[1] ?? -1) * 30, -(key[2] ?? -0.35) * 30);
+  sun = new DirectionalLight(night ? mixHex(PAL.accent2, '#ffffff', 0.55) : LIGHT.time === 'golden' ? mixHex(PAL.gold, '#ffffff', 0.62) : '#ffffff', (LIGHT.intensity ?? 2.2) * 1.05);
+  sun.position.copy(SUN_DIR).multiplyScalar(30);
+  if (REAL_SHADOWS) {
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 90 });
+    sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03; sun.shadow.radius = 3;
+    scene.add(sun.target);
+  }
   scene.add(sun, new HemisphereLight(new Color(night ? mixHex(LIGHT.sky ?? PAL.bg, '#9fb4ff', 0.5) : LIGHT.sky), new Color(LIGHT.ground), night ? 1.6 : 1.3), new AmbientLight(0xffffff, night ? 0.35 : 0.25));
 }
 const XZ = (x: number, y: number): [number, number] => [x - W / 2, y - H / 2]; // rules (x, y) to three.js (x, z)
 const EDGE = 0.55; // the path around the arena, metres
+/**
+ * A clearing (false: the meadow runs on, a ring of bushes and rocks marks the edge) or a fenced, mown pitch (true: the
+ * fence, the striped lawn and the path round it). A cozy game is a clearing; a sport is a pitch.
+ */
+const FENCED = false;
 
 /* ------------------------------------------------------------------ the meadow and the arena (procedural) */
 /** A small seeded dice for the dressing: never Math.random (the world's dice, which the Game Lab keeps the same in both builds). */
@@ -828,43 +891,68 @@ function canvasTexture(w: number, h: number, paint: (g: CanvasRenderingContext2D
   const t = new CanvasTexture(c); t.colorSpace = SRGBColorSpace;
   return t;
 }
+/**
+ * The ground is faceted low poly, like everything standing on it: every triangle its own shade of the palette's greens,
+ * crisp at any distance (no blurred texture). Inside the arena it is flat and mown in broad stripes, so it reads as a
+ * pitch; outside it rolls a little, more the farther it is. heightAt is the one place the ground's height comes from,
+ * so the trees, rocks and shadows stand on it.
+ */
+const FLAT = EDGE + 5; // metres past the arena's edge that stay flat: the path, the fence, the flowers
+function heightAt(x: number, z: number): number {
+  const dx = Math.max(0, Math.abs(x) - (W / 2 + FLAT)); const dz = Math.max(0, Math.abs(z) - (H / 2 + FLAT));
+  const away = Math.min(1, Math.hypot(dx, dz) / 14);
+  return away * 0.55 * (0.5 + 0.5 * Math.sin(x * 0.23 + z * 0.11) * Math.cos(z * 0.19 - x * 0.08));
+}
+/** A non-indexed triangle list, one colour per triangle (flat faces: each its own normal). */
+function facets(tris: number[][], colours: string[]): BufferGeometry {
+  const pos = new Float32Array(tris.length * 9); const col = new Float32Array(tris.length * 9); const c = new Color();
+  tris.forEach((t, i) => { pos.set(t, i * 9); c.set(colours[i] as string); for (let k = 0; k < 3; k += 1) col.set([c.r, c.g, c.b], i * 9 + k * 3); });
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(pos, 3)); g.setAttribute('color', new BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
 {
-  // The meadow: soft brighter patches on the grass, tiled every 6 m.
+  // The meadow: a jittered 2.2 m grid, gently rolling away from the arena.
   const roll = dice(11);
-  const tex = canvasTexture(128, 128, (g) => {
-    g.fillStyle = COL.meadow; g.fillRect(0, 0, 128, 128);
-    for (let i = 0; i < 26; i += 1) {
-      const x = roll() * 128; const y = roll() * 128; const r = 8 + roll() * 22;
-      for (const ox of [-128, 0, 128]) for (const oy of [-128, 0, 128]) {
-        const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-        gr.addColorStop(0, `${COL.meadowSpot}88`); gr.addColorStop(1, `${COL.meadowSpot}00`);
-        g.fillStyle = gr; g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
-      }
-    }
-  });
-  tex.wrapS = RepeatWrapping; tex.wrapT = RepeatWrapping; tex.repeat.set(220 / 6, 180 / 6);
-  const meadow = new Mesh(new PlaneGeometry(220, 180), new MeshLambertMaterial({ map: tex }));
-  meadow.rotation.x = -Math.PI / 2; meadow.position.set(0, -0.01, -30);
+  const cell = 2.2; const x0 = -110; const z0 = -120; const nx = 100; const nz = 82;
+  const vx: number[] = []; const vz: number[] = [];
+  for (let j = 0; j <= nz; j += 1) for (let i = 0; i <= nx; i += 1) {
+    const edge = i === 0 || j === 0 || i === nx || j === nz;
+    vx.push(x0 + i * cell + (edge ? 0 : (roll() - 0.5) * cell * 0.6)); vz.push(z0 + j * cell + (edge ? 0 : (roll() - 0.5) * cell * 0.6));
+  }
+  const at = (i: number, j: number): [number, number, number] => { const k = j * (nx + 1) + i; const x = vx[k] as number; const z = vz[k] as number; return [x, heightAt(x, z) - 0.01, z]; };
+  // Shades a step apart, never a patchwork: the faces read as facets, not as tiles.
+  const tones = [COL.meadow, COL.meadow, mixHex(COL.meadow, mixHex(PAL.good, PAL.ink, 0.25), 0.18), mixHex(COL.meadow, COL.meadowSpot, 0.3), mixHex(COL.meadow, PAL.ink, 0.04), mixHex(COL.meadow, PAL.bg, 0.07)];
+  const tris: number[][] = []; const cols: string[] = [];
+  for (let j = 0; j < nz; j += 1) for (let i = 0; i < nx; i += 1) {
+    const a = at(i, j); const b = at(i + 1, j); const c = at(i + 1, j + 1); const d = at(i, j + 1);
+    const flip = roll() < 0.5;
+    for (const t of flip ? [[a, d, b], [b, d, c]] : [[a, d, c], [a, c, b]]) { tris.push(t.flat()); cols.push(tones[Math.floor(roll() * tones.length)] as string); }
+  }
+  const meadow = new Mesh(facets(tris, cols), new MeshLambertMaterial({ vertexColors: true }));
+  meadow.receiveShadow = REAL_SHADOWS;
+  stylize(meadow, STYLE);
   scene.add(meadow);
-  // The arena: a mown lawn, stripes 4 m wide, so it reads as a pitch at a glance.
-  // 16 px a metre: the stripes' edges stay crisp up close, and soft clover patches keep the lawn from looking painted.
+  // The arena: a mown lawn, stripes 4 m wide so it reads as a pitch at a glance, faceted in 1 m triangles whose
+  // shades differ a little (the same hand as the meadow, never a painted texture).
   const lawn = dice(5);
-  const floorTex = canvasTexture(512, 320, (g) => {
-    for (let i = 0; i < 8; i += 1) { g.fillStyle = i % 2 ? COL.floorStripe : COL.floor; g.fillRect(i * 64, 0, 64, 320); }
-    g.fillStyle = 'rgba(255,255,255,0.05)'; for (let j = 0; j < 5; j += 2) g.fillRect(0, j * 64, 512, 64);
-    for (let k = 0; k < 90; k += 1) {
-      const x = lawn() * 512; const y = lawn() * 320; const r = 6 + lawn() * 26;
-      const gr = g.createRadialGradient(x, y, 0, x, y, r);
-      const tone = lawn() < 0.5 ? '255,255,235' : '20,60,30';
-      gr.addColorStop(0, `rgba(${tone},0.07)`); gr.addColorStop(1, `rgba(${tone},0)`);
-      g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+  const ltris: number[][] = []; const lcols: string[] = [];
+  for (let j = 0; j < H; j += 1) for (let i = 0; i < W; i += 1) {
+    const [ax, az] = XZ(i, j); const y = 0.004;
+    const a = [ax, y, az]; const b = [ax + 1, y, az]; const c = [ax + 1, y, az + 1]; const d = [ax, y, az + 1];
+    const base = Math.floor(i / 4) % 2 ? COL.floorStripe : COL.floor;
+    for (const t of lawn() < 0.5 ? [[a, d, b], [b, d, c]] : [[a, d, c], [a, c, b]]) {
+      ltris.push(t.flat());
+      const r = lawn();
+      lcols.push(r < 0.3 ? mixHex(base, PAL.ink, 0.035) : r < 0.6 ? mixHex(base, PAL.bg, 0.04) : base);
     }
-  });
-  floorTex.anisotropy = 4; // the far side is seen at a slant
-  const floor = new Mesh(new PlaneGeometry(W, H), new MeshLambertMaterial({ map: floorTex }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.004;
-  scene.add(floor);
-  // Its edge: a pale path, a hand's height above the grass.
+  }
+  const floor = new Mesh(facets(ltris, lcols), new MeshLambertMaterial({ vertexColors: true }));
+  floor.receiveShadow = REAL_SHADOWS;
+  stylize(floor, STYLE);
+  if (FENCED) scene.add(floor);
+  // Its edge: a pale path, a hand's height above the grass (inked like the models when the style draws lines).
   const outer = new Shape();
   outer.moveTo(-W / 2 - EDGE, -H / 2 - EDGE); outer.lineTo(W / 2 + EDGE, -H / 2 - EDGE); outer.lineTo(W / 2 + EDGE, H / 2 + EDGE); outer.lineTo(-W / 2 - EDGE, H / 2 + EDGE); outer.closePath();
   const hole = new Path();
@@ -872,7 +960,8 @@ function canvasTexture(w: number, h: number, paint: (g: CanvasRenderingContext2D
   outer.holes.push(hole);
   const path = new Mesh(new ExtrudeGeometry(outer, { depth: 0.07, bevelEnabled: false }), new MeshLambertMaterial({ color: COL.path }));
   path.rotation.x = -Math.PI / 2;
-  scene.add(path);
+  stylize(path, STYLE);
+  if (FENCED) scene.add(path);
 }
 
 /* ------------------------------------------------------------------ models */
@@ -933,21 +1022,35 @@ const nearestHue = (hue: number, fallback: string): string => (PAL.ramp ?? []).m
 const PAINT = {
   leaf: mixHex(PAL.good, PAL.ink, 0.25), leafLight: mixHex(mixHex(PAL.good, PAL.ink, 0.25), PAL.gold, 0.22), needle: mixHex(PAL.good, PAL.ink, 0.45),
   wood: mixHex(PAL.accent, PAL.ink, 0.45), earth: mixHex(mixHex(PAL.accent, PAL.ink, 0.4), mixHex(PAL.bg, PAL.ink, 0.12), 0.35), blade: mixHex(PAL.good, PAL.accent2, 0.5),
-  stone: mixHex(PAL.bg, PAL.ink, 0.12), cream: mixHex(PAL.gold, '#ffffff', 0.8), purple: nearestHue(270, '#b07ad9'),
+  stone: mixHex(mixHex(PAL.bg, PAL.ink, 0.5), '#8c8f96', 0.35), cream: mixHex(PAL.gold, '#ffffff', 0.8), purple: nearestHue(270, '#b07ad9'),
 };
 const SWAPS = {
   tree: swapTo({ leaf: PAINT.leaf, wood: PAINT.wood }),
   treeLight: swapTo({ leaf: PAINT.leafLight, wood: PAINT.wood }),
   pine: swapTo({ leaf: PAINT.needle, wood: mixHex(PAINT.wood, PAL.ink, 0.3) }),
-  bush: swapTo({ leaf: PAINT.leaf }),
+  bush: swapTo({ leaf: PAINT.leaf, wood: PAINT.wood }),
   blade: swapTo({ leaf: PAINT.blade }),
   flower: swapTo({ leaf: PAINT.leaf, red: PAL.danger, yellow: PAL.gold, purple: PAINT.purple }),
   mushroom: swapTo({ pale: PAINT.cream, red: PAL.danger }),
   rock: swapTo({ wood: PAINT.earth, leaf: mixHex(PAL.good, PAL.gold, 0.2), pale: PAINT.stone }),
   stone: swapTo({ pale: PAINT.stone }),
-  gem: swapTo({ pale: PAL.gold, yellow: PAL.gold }),
+  gem: swapTo({ pale: PAL.gold, yellow: PAL.gold, purple: PAL.gold }),
   fence: swapTo({ wood: PAINT.wood }),
 };
+
+/**
+ * The animals keep their own painted colours (a fox stays a fox) pulled a third of the way to the palette's nearest, so
+ * they sit in this world rather than on top of it (assets/manifest.json says so: `inGame.pull`, the lineup draws it).
+ */
+const PULL_TO: RGB[] = [...new Set([...(PAL.ramp ?? []), PAL.accent, PAL.accent2, PAL.gold, PAL.good, PAL.danger, PAL.ink])].map((hex) => { const c = new Color(hex).getHex(); return [(c >> 16) & 255, (c >> 8) & 255, c & 255] as RGB; });
+function pullToPalette(k: number): (r: number, g: number, b: number) => RGB {
+  return (r, g, b) => {
+    let best = PULL_TO[0] as RGB; let bd = Infinity;
+    for (const p of PULL_TO) { const d = 0.3 * (p[0] - r) ** 2 + 0.59 * (p[1] - g) ** 2 + 0.11 * (p[2] - b) ** 2; if (d < bd) { bd = d; best = p; } }
+    return [Math.round(r + (best[0] - r) * k), Math.round(g + (best[1] - g) * k), Math.round(b + (best[2] - b) * k)];
+  };
+}
+const ANIMAL_PULL = pullToPalette(0.35);
 
 /** Stand-ins, drawn in the same colours when a model is not there: low-poly shapes, one draw call each. */
 type Stand = 'gem' | 'tree' | 'pine' | 'bush' | 'rock' | 'stone' | 'fence' | 'critter';
@@ -979,39 +1082,60 @@ function standIn(kind: Stand, colour = PAL.accent): Mesh {
   return mesh;
 }
 
+/** One colour for a whole model, its picture dropped: its faces keep their shading from the light. */
+function paintAll(model: Object3D, hex: string): void {
+  model.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    for (const mat of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as MeshStandardMaterial[]) { mat.map = null; mat.color = new Color(hex); mat.needsUpdate = true; }
+  });
+}
 /** Every model the game draws: its file, how tall it stands, its palette swap and its stand-in. */
-interface Spec { url: string; m: number; swap: ((r: number, g: number, b: number) => RGB | null) | null; stand: Stand | null }
-const GEM: Spec = { url: './models/gem.glb', m: 0.42, swap: SWAPS.gem, stand: 'gem' };
+interface Spec { url: string; m: number; swap: ((r: number, g: number, b: number) => RGB | null) | null; stand: Stand | null; tint?: string; px?: number }
+// The gem is one colour, the palette's gold (its pack paints it from a picture atlas: the tint replaces that).
+const GEM: Spec = { url: './models/gem.glb', m: 0.42, swap: SWAPS.gem, stand: 'gem', tint: PAL.gold };
 const FENCE: Spec = { url: './models/fence.glb', m: 0.7, swap: SWAPS.fence, stand: 'fence' };
+// The camp at the clearing's heart: a ring of stones round its logs, two logs to sit on, and a flame made here.
+const CAMPFIRE: Spec = { url: './models/campfire.glb', m: 0.16, swap: swapTo({ pale: PAINT.stone, wood: PAINT.wood }), stand: 'rock' };
+const LOG: Spec = { url: './models/log.glb', m: 0.42, swap: swapTo({ wood: PAINT.wood, pale: mixHex(PAINT.wood, PAL.ink, 0.45) }), stand: null };
+const FIREWOOD: Spec = { url: './models/firewood.glb', m: 0.14, swap: swapTo({ wood: mixHex(PAINT.wood, PAL.bg, 0.25) }), stand: null };
 /** The dressing: how many, where, its footprint in metres (for spacing), its shadow's radius and its size range. */
-type Where = 'far' | 'any' | 'low';
+type Where = 'far' | 'any' | 'low' | 'inside' | 'edge';
 const DRESSING: (Spec & { count: number; where: Where; foot: number; shadow: number; scale: [number, number] })[] = [
   { url: './models/tree-oak.glb', m: 3.6, swap: SWAPS.tree, stand: 'tree', count: 14, where: 'far', foot: 2.1, shadow: 1.3, scale: [0.85, 1.2] },
   { url: './models/tree-round.glb', m: 3.2, swap: SWAPS.treeLight, stand: 'tree', count: 14, where: 'far', foot: 1.4, shadow: 1.0, scale: [0.85, 1.25] },
   { url: './models/tree-pine.glb', m: 4, swap: SWAPS.pine, stand: 'pine', count: 16, where: 'far', foot: 2.1, shadow: 1.2, scale: [0.8, 1.3] },
   { url: './models/stone.glb', m: 1, swap: SWAPS.stone, stand: 'stone', count: 6, where: 'far', foot: 1, shadow: 0.6, scale: [0.8, 1.3] },
-  { url: './models/bush.glb', m: 0.9, swap: SWAPS.bush, stand: 'bush', count: 26, where: 'any', foot: 1.4, shadow: 0.75, scale: [0.7, 1.15] },
+  { url: './models/bush.glb', m: 1.1, swap: SWAPS.bush, stand: 'bush', count: 22, where: 'any', foot: 1.4, shadow: 0.75, scale: [0.7, 1.15] },
   { url: './models/rock.glb', m: 0.75, swap: SWAPS.rock, stand: 'rock', count: 12, where: 'any', foot: 1.4, shadow: 0.75, scale: [0.6, 1.1] },
   { url: './models/flower-red.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 30, where: 'low', foot: 0.3, shadow: 0, scale: [0.9, 1.5] },
   { url: './models/flower-yellow.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 30, where: 'low', foot: 0.4, shadow: 0, scale: [0.9, 1.5] },
   { url: './models/flower-purple.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 30, where: 'low', foot: 0.3, shadow: 0, scale: [0.9, 1.5] },
   { url: './models/mushrooms.glb', m: 0.45, swap: SWAPS.mushroom, stand: null, count: 12, where: 'any', foot: 0.5, shadow: 0, scale: [0.8, 1.3] },
-  { url: './models/grass.glb', m: 0.35, swap: SWAPS.blade, stand: null, count: 70, where: 'low', foot: 0.56, shadow: 0, scale: [0.9, 1.6] },
+  // The clearing's edge, when it has no fence: bushes and rocks just outside it (never on the camera's side).
+  { url: './models/bush.glb', m: 1.1, swap: SWAPS.bush, stand: 'bush', count: FENCED ? 0 : 26, where: 'edge', foot: 1.2, shadow: 0.7, scale: [0.75, 1.15] },
+  { url: './models/rock.glb', m: 0.75, swap: SWAPS.rock, stand: 'rock', count: FENCED ? 0 : 10, where: 'edge', foot: 1.1, shadow: 0.6, scale: [0.6, 1] },
+  // Tufts of grass in and around the clearing: the lawn is a meadow, never a bare board (they never block a move).
+  { url: './models/grass.glb', m: 0.18, swap: SWAPS.blade, stand: null, count: 36, where: 'inside', foot: 0.9, shadow: 0, scale: [0.7, 1.1] },
+  { url: './models/grass.glb', m: 0.18, swap: SWAPS.blade, stand: null, count: 36, where: 'low', foot: 0.6, shadow: 0, scale: [0.8, 1.2] },
+  { url: './models/flower-red.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 22, where: 'inside', foot: 0.9, shadow: 0, scale: [0.55, 0.8] },
+  { url: './models/flower-purple.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 22, where: 'inside', foot: 0.9, shadow: 0, scale: [0.55, 0.8] },
 ];
 
 /** A model loaded once, repainted and measured: `fit` scales it to its height, `size` is its box at that height. */
 interface Ready { scene: Object3D; fit: number; size: Vector3 }
 const ready = new Map<string, Promise<Ready | null>>();
 const standIns = new Set<string>();
-function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap'>): Promise<Ready | null> {
+function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap' | 'tint' | 'px'>): Promise<Ready | null> {
   let p = ready.get(spec.url);
   if (!p) {
     p = models.load(spec.url).then((m) => {
-      if (spec.swap) repaint(m.scene, spec.swap);
+      if (spec.swap) repaint(m.scene, spec.swap, spec.px ? { maxPx: spec.px } : undefined);
+      if (spec.tint) paintAll(m.scene, spec.tint);
       const size = new Box3().setFromObject(m.scene).getSize(new Vector3());
       const fit = size.y > 1e-3 ? spec.m / size.y : 1;
       // The art direction's material model and ink line (style.json), as the style board drew them.
-      stylize(m.scene, STYLE);
+      stylize(m.scene, STYLE, { scale: fit });
       return { scene: m.scene, fit, size: size.multiplyScalar(fit) };
     }, () => { standIns.add(spec.url); return null; });
     ready.set(spec.url, p);
@@ -1020,7 +1144,7 @@ function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap'>): Promise<Ready | null> 
 }
 // The Game Lab plays a take only once the models have settled (loaded or not there), so both builds start alike.
 lab.hold();
-void Promise.all([...ANIMALS.map((_, i) => prepare({ url: animalUrl(i), m: ANIMAL_M, swap: null })), prepare(GEM), prepare(FENCE), ...DRESSING.map(prepare)]).then(() => lab.ready());
+void Promise.all([...ANIMALS.map((_, i) => prepare({ url: animalUrl(i), m: ANIMAL_M, swap: ANIMAL_PULL, px: 512 })), prepare(GEM), ...(FENCED ? [prepare(FENCE)] : []), prepare(CAMPFIRE), prepare(FIREWOOD), prepare(LOG), ...DRESSING.map(prepare)]).then(() => lab.ready());
 
 /**
  * A model as instanced copies (instancedCopies: one InstancedMesh per mesh, placed with placeCopy, never by baking into
@@ -1045,7 +1169,7 @@ const blobs = new InstancedMesh(flatDisc(), shadowMaterial, MAX_SLOTS + 40);
 blobs.frustumCulled = false; blobs.count = 0; blobs.position.y = 0.012;
 scene.add(blobs);
 /** The glow under each gem: it says "take me" before the gem is near. */
-const glows = new InstancedMesh(flatDisc(), new MeshBasicMaterial({ map: discTexture, color: COL.gem, transparent: true, opacity: 0.55, depthWrite: false }), 40);
+const glows = new InstancedMesh(flatDisc(), new MeshBasicMaterial({ map: discTexture, color: COL.gem, transparent: true, opacity: 0.32, depthWrite: false }), 40);
 glows.frustumCulled = false; glows.count = 0; glows.position.y = 0.016;
 scene.add(glows);
 
@@ -1057,13 +1181,24 @@ const placed: { x: number; z: number; r: number }[] = [];
  * and beside its far half: never between the camera and the play.
  */
 function spotFor(roll: () => number, where: Where, r: number): { x: number; z: number } | null {
-  const [lo, hi] = where === 'low' ? [1.2, 7] : where === 'any' ? [1.5, 9] : [3, 18];
+  if (where === 'inside') {
+    // A few small flowers on the lawn itself, so a phone's close view is never bare grass (they never block a move).
+    for (let tries = 0; tries < 60; tries += 1) {
+      const x = (roll() - 0.5) * (W - 1.6); const z = (roll() - 0.5) * (H - 1.6);
+      if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r)) continue;
+      placed.push({ x, z, r });
+      return { x, z };
+    }
+    return null;
+  }
+  const [lo, hi] = where === 'edge' ? [0.15, 1.4] : where === 'low' ? [1.2, 7] : where === 'any' ? [1.5, 9] : [1.8, 16];
   for (let tries = 0; tries < 60; tries += 1) {
     const out = lo + (hi - lo) * roll() ** 1.5;
     const hw = W / 2 + EDGE + out; const hh = H / 2 + EDGE + out;
     let u = roll() * (4 * hw + 4 * hh); let x: number; let z: number;
     if (u < 2 * hw) { x = -hw + u; z = -hh; } else if ((u -= 2 * hw) < 2 * hh) { x = hw; z = -hh + u; } else if ((u -= 2 * hh) < 2 * hw) { x = hw - u; z = hh; } else { u -= 2 * hw; x = -hw; z = hh - u; }
     if (where === 'far' && z > 0) continue;
+    if (where === 'edge' && z > H / 2) continue; // the near side stays open to the camera
     if (where === 'any' && z > H / 2 && out > 4) continue; // little on the camera's side
     if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r)) continue;
     placed.push({ x, z, r });
@@ -1072,9 +1207,51 @@ function spotFor(roll: () => number, where: Where, r: number): { x: number; z: n
   return null;
 }
 const shadowSpots: { x: number; z: number; r: number }[] = [];
+/** The flame at the camp's heart (flickered in draw): two cones in the palette's gold and accent, and its glow. */
+let flame: Object3D | null = null;
+async function buildCamp(o: { x: number; y: number; r: number }): Promise<void> {
+  const [x, z] = XZ(o.x, o.y);
+  const camp = new Group(); camp.position.set(x, 0, z); scene.add(camp);
+  const ring = await prepare(CAMPFIRE);
+  if (ring) {
+    const obj = ring.scene.clone(true);
+    const wide = Math.max(ring.size.x, ring.size.z) || 1;
+    obj.scale.setScalar(ring.fit * (1.5 / wide));
+    camp.add(obj);
+  }
+  const wood = await prepare(FIREWOOD);
+  if (wood) {
+    const obj = wood.scene.clone(true);
+    obj.scale.setScalar(wood.fit * (0.85 / (Math.max(wood.size.x, wood.size.z) || 1)));
+    camp.add(obj);
+  }
+  const log = await prepare(LOG);
+  if (log) for (const [lx, lz, rot] of [[-1.55, 0.25, 0.2], [1.5, -0.35, -0.25]] as [number, number, number][]) {
+    const l = log.scene.clone(true); l.position.set(lx, 0, lz); l.rotation.y = Math.PI / 2 + rot; l.scale.setScalar(log.fit); camp.add(l);
+  }
+  const f = new Group();
+  const outer = new Mesh(new ConeGeometry(0.26, 0.75, 6), new MeshBasicMaterial({ color: PAL.accent }));
+  const inner = new Mesh(new ConeGeometry(0.15, 0.5, 6), new MeshBasicMaterial({ color: PAL.gold }));
+  outer.position.y = 0.42; inner.position.y = 0.32; f.add(outer, inner);
+  const glow = new Mesh(new CircleGeometry(1.3, 24), new MeshBasicMaterial({ map: discTexture, color: PAL.gold, transparent: true, opacity: 0.45, depthWrite: false }));
+  glow.rotation.x = -Math.PI / 2; glow.position.y = 0.02; f.add(glow);
+  camp.add(f); flame = f;
+  if (REAL_SHADOWS) camp.traverse((n) => { const mm = n as Mesh; if (mm.isMesh && mm.name !== 'hull' && n !== glow) mm.castShadow = true; });
+}
+
+/** The clearing's solid features (OBSTACLES), drawn with the dressing's own models. */
+const OBSTACLE_SPEC = {
+  camp: null,
+  bush: DRESSING.find((d) => d.url.endsWith('/bush.glb')),
+  rock: DRESSING.find((d) => d.url.endsWith('/rock.glb')),
+  stone: DRESSING.find((d) => d.url.endsWith('/stone.glb')),
+  tree: DRESSING.find((d) => d.url.endsWith('/tree-round.glb')),
+} as const;
 async function dressMeadow(): Promise<void> {
   const roll = dice(2024);
   const m = new Matrix4(); const qt = new Quaternion(); const e = new Euler(); const p = new Vector3(); const s = new Vector3();
+  // The clearing's features first: the dressing keeps clear of them, and each gets its shadow.
+  for (const o of OBSTACLES) { const [x, z] = XZ(o.x, o.y); placed.push({ x, z, r: o.r + 0.3 }); shadowSpots.push({ x, z, r: o.r * 1.4 }); }
   // Decided before any model arrives, so the meadow is the same on every screen whatever loads first.
   const plans = DRESSING.map((d) => {
     const spots: { x: number; z: number; rot: number; sc: number }[] = [];
@@ -1088,18 +1265,35 @@ async function dressMeadow(): Promise<void> {
   for (const { d, spots } of plans) if (d.shadow) for (const sp of spots) shadowSpots.push({ x: sp.x, z: sp.z, r: d.shadow * sp.sc });
   // Their shadows: one draw call for the lot.
   const still = new InstancedMesh(flatDisc(), shadowMaterial, shadowSpots.length || 1);
-  shadowSpots.forEach((sp, i) => still.setMatrixAt(i, m.compose(p.set(sp.x, 0.008, sp.z), qt.identity(), s.set(sp.r, 1, sp.r))));
+  shadowSpots.forEach((sp, i) => still.setMatrixAt(i, m.compose(p.set(sp.x, heightAt(sp.x, sp.z) + 0.008, sp.z), qt.identity(), s.set(sp.r, 1, sp.r))));
   still.count = shadowSpots.length;
   still.computeBoundingSphere();
+  still.visible = !REAL_SHADOWS; // a computer draws the real shadows
   scene.add(still);
   await Promise.all(plans.map(async ({ d, spots }) => {
     const { parts, fit } = await instancedFrom(d, Math.max(1, spots.length));
     for (const c of parts) {
-      spots.forEach((sp, i) => placeCopy(c, i, m.compose(p.set(sp.x, 0, sp.z), qt.setFromEuler(e.set(0, sp.rot, 0)), s.setScalar(sp.sc * fit))));
+      spots.forEach((sp, i) => placeCopy(c, i, m.compose(p.set(sp.x, heightAt(sp.x, sp.z) - 0.02, sp.z), qt.setFromEuler(e.set(0, sp.rot, 0)), s.setScalar(sp.sc * fit))));
       c.mesh.count = spots.length;
       c.mesh.computeBoundingSphere();
+      c.mesh.castShadow = REAL_SHADOWS && c.mesh.name !== 'hull'; c.mesh.receiveShadow = REAL_SHADOWS;
       scene.add(c.mesh);
     }
+  }));
+  // The features themselves: a copy of each model (or its stand-in) where the rules put it.
+  const turn = dice(77);
+  await Promise.all(OBSTACLES.map(async (o) => {
+    if (o.kind === 'camp') { await buildCamp(o); return; }
+    const spec = OBSTACLE_SPEC[o.kind];
+    if (!spec) return;
+    const r = await prepare(spec);
+    const obj = r ? r.scene.clone(true) : spec.stand ? standIn(spec.stand) : null;
+    if (!obj) return;
+    const [x, z] = XZ(o.x, o.y);
+    obj.position.set(x, 0, z); obj.rotation.y = turn() * Math.PI * 2;
+    obj.scale.setScalar((r?.fit ?? 1) * (o.kind === 'tree' ? 0.8 : 1.1));
+    if (REAL_SHADOWS) obj.traverse((n) => { const mm = n as Mesh; if (mm.isMesh && mm.name !== 'hull') mm.castShadow = true; });
+    scene.add(obj);
   }));
 }
 /** The fence just outside the path: a ring of the same piece, each stretched a little to fit its side; one draw call. */
@@ -1123,11 +1317,12 @@ async function buildFence(): Promise<void> {
     runs.forEach((r, i) => placeCopy(c, i, m.compose(p.set(r.x, 0, r.z), qt.setFromEuler(e.set(0, r.rot, 0)), s.set(r.stretch * fit, fit, fit))));
     c.mesh.count = runs.length;
     c.mesh.computeBoundingSphere();
+    c.mesh.castShadow = REAL_SHADOWS;
     scene.add(c.mesh);
   }
 }
 void dressMeadow();
-void buildFence();
+if (FENCED) void buildFence();
 
 /* ------------------------------------------------------------------ gems */
 const GEM_CAP = 40;
@@ -1238,7 +1433,7 @@ function dressAnimal(a: Animal, colour: string): void {
   void models.instance(url).then(async (obj) => {
     if (a.kind !== want || animals.get(a.slot) !== a) return; // it changed while loading
     const clips = (await models.load(url)).animations;
-    const fit = (await prepare({ url, m: ANIMAL_M, swap: null }))?.fit ?? 1;
+    const fit = (await prepare({ url, m: ANIMAL_M, swap: ANIMAL_PULL, px: 512 }))?.fit ?? 1;
     if (a.kind !== want || animals.get(a.slot) !== a) return;
     clearModel(a);
     obj.scale.setScalar(fit);
@@ -1252,6 +1447,7 @@ function dressAnimal(a: Animal, colour: string): void {
       if (!c) { c = m.clone(); own.set(m, c); a.mats.push(c); }
       mesh.material = c;
     });
+    if (REAL_SHADOWS) obj.traverse((o) => { const mm = o as Mesh; if (mm.isMesh && mm.name !== 'hull') mm.castShadow = true; });
     a.model = obj; a.turn.add(obj);
     a.mixer = new AnimationMixer(obj);
     for (const name of ['idle', 'walk', 'run', 'dance']) { const clip = AnimationClip.findByName(clips, name); if (clip) a.actions.set(name, a.mixer.clipAction(clip)); }
@@ -1349,16 +1545,37 @@ lab.overlay('reach', (c) => {
  * far as the perspective allows); following nobody, it frames the whole arena (turned on a tall screen, so the
  * arena's long side runs up it).
  */
-const PITCH = (CAM.pitch * Math.PI) / 180;
+const PITCH0 = (CAM.pitch * Math.PI) / 180;
 const HALF = (CAM.fov * Math.PI) / 360;
-const MARGIN = EDGE + 3; // how far past the arena the camera may look: the path, the fence and the flowers beyond it
+/*
+ * A phone held upright sees the ground through a slit: its width is the short side. Followed from style.json's pitch
+ * and distance it shows a long strip of mostly empty grass with a small animal in it. So, like the port kit's fitView
+ * (fill a phone held upright and follow the player), it frames the action instead: closer (about 7 m across at the
+ * player, an animal a fifth of the screen's width) at 44 to 50 degrees, the player in the lower half and what is
+ * around and ahead of it filling the rest, the woods' edge at the top (never a wall of canopy).
+ */
+const UPRIGHT_PITCH = Math.max((44 * Math.PI) / 180, Math.min((50 * Math.PI) / 180, PITCH0 + (6 * Math.PI) / 180));
+let PITCH = PITCH0;
+const MARGIN = EDGE + 3; // how far past the arena's near side and ends the camera may look: the path, the fence, the flowers
+// Past its far side it may look into the woods (the trees stand 3 to 18 m out): the clearing reads as a place.
+const MARGIN_FAR = EDGE + 18;
 const WHOLE_MARGIN = EDGE + 1.2; // the whole arena: the path and the fence round it
 const view3 = { x: W / 2, y: H / 2, dist: 0, yaw: 0 };
 /** Ground reach from the point looked at, toward the camera (near, the screen's bottom) and away (far, its top), per metre of distance. */
-const NEAR_K = Math.cos(PITCH) - Math.sin(PITCH) / Math.tan(PITCH + HALF);
-const FAR_K = PITCH > HALF + 0.05 ? Math.sin(PITCH) / Math.tan(PITCH - HALF) - Math.cos(PITCH) : 4;
-function followDistance(cw: number, ch: number, phone: boolean): number {
-  const span = (phone ? 9.5 : 13.5) * ((CAM.distance ?? 22) / 22);
+let NEAR_K = 0; let FAR_K = 0;
+/** The pitch this frame looks down at (style.json's, or an upright phone's steeper one), and the ground reach it gives. */
+function setPitch(p: number): void {
+  if (p === PITCH && NEAR_K) return;
+  PITCH = p;
+  NEAR_K = Math.cos(PITCH) - Math.sin(PITCH) / Math.tan(PITCH + HALF);
+  FAR_K = PITCH > HALF + 0.05 ? Math.sin(PITCH) / Math.tan(PITCH - HALF) - Math.cos(PITCH) : 4;
+}
+setPitch(PITCH0);
+function followDistance(cw: number, ch: number, phone: boolean, upright = false): number {
+  // style.json's distance scales the view (22 is these spans); an upright phone's stays near 5.5 m whatever it says,
+  // or a close camera would show one animal and nothing round it.
+  const k = (CAM.distance ?? 22) / 22;
+  const span = upright ? 7 * Math.max(0.9, Math.min(1.3, k)) : (phone ? 9.5 : 13.5) * k;
   return span / (2 * Math.tan(HALF) * Math.min(1, cw / ch));
 }
 /** How far away the whole arena fits; `turned`: seen from its side, its 32 m running up the screen (a tall screen). */
@@ -1387,13 +1604,18 @@ function screenY(s: number, d: number): number {
  * its near and far edges equally far from the screen's bottom and top (on the screen, not in metres: the near side of
  * a three-quarter view is the bigger).
  */
-function aimAt(focus: { x: number; y: number } | null, d: number, cw: number, ch: number, whole: boolean, turned = false): { x: number; y: number } {
+function aimAt(focus: { x: number; y: number } | null, d: number, cw: number, ch: number, whole: boolean, turned = false, upright = false): { x: number; y: number } {
   // Turned (the whole arena on a tall screen, seen from its left side): its far edge is x = W.
   if (turned) return { x: W - middleOf(W, d), y: H / 2 };
-  const loY = FAR_K * d - MARGIN; const hiY = H + MARGIN - NEAR_K * d;
+  // An upright phone follows its player everywhere (past the edge it sees the fence and the woods), looking a little
+  // ahead so the player stands in the lower half and what is coming fills the top.
+  if (upright && focus) return { x: focus.x, y: focus.y - d * 0.18 };
+  const loY = FAR_K * d - MARGIN_FAR; const hiY = H + MARGIN - NEAR_K * d;
   let y: number;
   if (whole || loY > hiY) y = middleOf(H, d);
-  else y = !focus ? (loY + hiY) / 2 : Math.max(loY, Math.min(hiY, focus.y));
+  // Following: a little ahead of the player, so it stands below the middle and the clearing and the woods it is
+  // heading into fill the top.
+  else y = !focus ? (loY + hiY) / 2 : Math.max(loY, Math.min(hiY, focus.y - d * 0.12));
   const hw = d * Math.tan(HALF) * (cw / ch); // half the view's width where it looks
   const loX = hw - MARGIN; const hiX = W - hw + MARGIN;
   const x = whole || !focus || loX > hiX ? W / 2 : Math.max(loX, Math.min(hiX, focus.x));
@@ -1410,16 +1632,19 @@ function placeCamera(want: { x: number; y: number; dist: number; yaw: number }, 
   camera.position.set(tx + kx + Math.sin(view3.yaw) * back, Math.sin(PITCH) * view3.dist, tz + kz + Math.cos(view3.yaw) * back);
   camera.lookAt(tx + kx, 0, tz + kz);
   camera.updateMatrixWorld();
+  // The sun's shadow box follows what the camera looks at (a little toward the far side, where the view widens).
+  if (REAL_SHADOWS) { sun.target.position.set(tx, 0, tz - view3.dist * 0.25); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 40); }
   const fog = LIGHT.fog ?? 0.35;
   const f = scene.fog as Fog;
-  f.near = view3.dist * (1.55 - fog * 0.5); f.far = view3.dist * (3.4 - fog * 1.2);
+  // A light haze far off only: the woods beyond the clearing stay clear.
+  f.near = view3.dist * (2.6 - fog * 0.6); f.far = view3.dist * (6 - fog * 1.5);
 }
 
 /* ------------------------------------------------------------------ size */
 let dpr = 1;
 function resize(): void {
   const phone = Math.min(innerWidth, innerHeight) <= 540;
-  // Pixel budgets (DESIGN 8.1): 1.5 on a phone, 2 on a computer; the HUD's text stays sharp at the screen's own.
+  // Pixel budgets: 1.5 on a phone, 2 on a computer; the HUD's text stays sharp at the screen's own.
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, phone ? 1.5 : 2));
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / Math.max(1, innerHeight); camera.updateProjectionMatrix();
@@ -1464,11 +1689,15 @@ function draw(t: number, dt: number): void {
   const whole = overview || Boolean(lv?.whole);
   // Only a watcher's overview on a tall screen turns (nobody steers there): the arena's long side runs up the screen.
   const turned = overview && ch > cw * 1.15;
-  const dist = whole ? wholeDistance(cw, ch, turned) : followDistance(cw, ch, phone) / (lv?.zoom ?? 1);
-  const aim = aimAt(lv?.zoom ? subjectAt() ?? focus : focus, dist, cw, ch, whole, turned);
+  // A player's own phone held upright: steeper and closer, so the action fills it (the overview keeps style.json's).
+  const upright = phone && !whole && ch > cw * 1.15;
+  setPitch(upright ? UPRIGHT_PITCH : PITCH0);
+  const dist = whole ? wholeDistance(cw, ch, turned) : followDistance(cw, ch, phone, upright) / (lv?.zoom ?? 1);
+  const aim = aimAt(lv?.zoom ? subjectAt() ?? focus : focus, dist, cw, ch, whole, turned, upright);
   // The camera's kick (a bump you were in): a few centimetres, gone in a fifth of a second.
   const kick = t - kickAt < 200 ? T.shake * (1 - (t - kickAt) / 200) ** 2 : 0;
   placeCamera({ ...aim, dist, yaw: turned ? -Math.PI / 2 : 0 }, dt, kick);
+  if (flame) { const k = 1 + 0.12 * Math.sin(t / 95) + 0.06 * Math.sin(t / 37); flame.children[0]?.scale.set(1, k, 1); flame.children[1]?.scale.set(1, 2 - k, 1); }
 
   // hot zone (keyed state): gems inside score double
   zoneFill.visible = zoneRing.visible = Boolean(zone);
@@ -1620,9 +1849,9 @@ function draw(t: number, dt: number): void {
       ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(l.cx, under ? l.top : l.bottom); ctx.lineTo(l.x, under ? (l.body?.bottom ?? l.top - 6) : l.y + 2); ctx.stroke();
     }
-    if (l.self) { ctx.fillStyle = PAL.ink; ctx.globalAlpha = l.alpha * 0.86; ctx.beginPath(); ctx.roundRect(l.left - 6, l.top - 1, l.right - l.left + 12, l.bottom - l.top + 2, 8); ctx.fill(); ctx.globalAlpha = l.alpha; }
-    else { ctx.strokeStyle = PAL.ink; ctx.lineWidth = 3.5; ctx.globalAlpha = l.alpha * 0.8; ctx.strokeText(l.text, l.cx, l.cy); ctx.globalAlpha = l.alpha; }
-    ctx.fillStyle = '#ffffff';
+    // Every name on the HUD's paper (yours fuller, a bot's fainter): one UI with the clock and the board.
+    ctx.fillStyle = PAPER; ctx.globalAlpha = l.alpha * (l.self ? 0.94 : 0.8); ctx.beginPath(); ctx.roundRect(l.left - 6, l.top - 1, l.right - l.left + 12, l.bottom - l.top + 2, 8); ctx.fill(); ctx.globalAlpha = l.alpha;
+    ctx.fillStyle = l.self ? TEXT : mixHex(TEXT, PAPER, 0.25);
     ctx.fillText(l.text, l.cx, l.cy);
   }
   ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
@@ -1638,10 +1867,47 @@ function draw(t: number, dt: number): void {
 }
 
 /** A rounded panel behind HUD text (style.json's "chips"): the palette's ink, a little see-through. */
-function chip(x: number, y: number, w: number, h: number, alpha = 0.78): void {
-  ctx.fillStyle = PAL.ink; ctx.globalAlpha = alpha;
+function chip(x: number, y: number, w: number, h: number, alpha = 0.88): void {
+  ctx.fillStyle = PAPER; ctx.globalAlpha = Math.max(alpha, 0.82);
   ctx.beginPath(); ctx.roundRect(x, y, w, h, Math.min(12, h / 2)); ctx.fill();
   ctx.globalAlpha = 1;
+}
+
+/**
+ * The game's own first screen: its name and one line, on a card in the palette, for the first few seconds (it never
+ * waits for a press and never takes one: the round is already on underneath). game.json's name and the first sentence
+ * of its blurb.
+ */
+const BOOT_AT = performance.now();
+const TITLE = String((gameFile as { name?: string }).name ?? document.title).slice(0, 40);
+const TAGLINE = String((gameFile as { blurb?: string }).blurb ?? '').split(/(?<=[.!?])\s/)[0]?.slice(0, 90) ?? '';
+function titleCard(cw: number, ch: number, phone: boolean): void {
+  const since = performance.now() - BOOT_AT;
+  if (since > 4600) return;
+  const a = since < 3400 ? 1 : 1 - (since - 3400) / 1200;
+  const w = Math.min(cw - 32, phone ? 340 : 460);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, a);
+  ctx.font = `700 ${phone ? 15 : 17}px ${FONT_BODY}`;
+  const words = TAGLINE.split(' '); const lines: string[] = []; let line = '';
+  for (const word of words) { const next = line ? `${line} ${word}` : word; if (ctx.measureText(next).width > w - 40 && line) { lines.push(line); line = word; } else line = next; }
+  if (line) lines.push(line);
+  const titleSize = phone ? 34 : 44; const lineH = phone ? 21 : 24;
+  const h = 34 + titleSize + (lines.length ? 14 + lines.length * lineH : 0) + 26;
+  const x = (cw - w) / 2; const y = phone ? ch * 0.3 - h / 2 : (ch - h) / 2;
+  ctx.fillStyle = mixHex(PAPER, '#ffffff', 0.35);
+  ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+  ctx.beginPath();
+  const rr = (ctx as CanvasRenderingContext2D & { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect;
+  if (rr) rr.call(ctx, x, y, w, h, 18); else ctx.rect(x, y, w, h);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = HOT; ctx.font = `700 ${titleSize}px ${FONT_DISPLAY}`;
+  ctx.fillText(TITLE, cw / 2, y + 30 + titleSize / 2);
+  ctx.fillStyle = TEXT; ctx.font = `600 ${phone ? 15 : 17}px ${FONT_BODY}`;
+  lines.forEach((l, i) => ctx.fillText(l, cw / 2, y + 30 + titleSize + 14 + lineH * i + lineH / 2));
+  ctx.restore();
 }
 
 function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat: number | null; name: string; bot: boolean; mine: boolean }[]): void {
@@ -1659,70 +1925,89 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
   const cwid = ctx.measureText(said).width;
   const chH = phone ? 34 : 40;
   chip(pad, top, cwid + 26, chH);
-  ctx.fillStyle = r?.phase === 'live' && left <= 10 ? PAL.gold : '#ffffff';
+  ctx.fillStyle = r?.phase === 'live' && left <= 10 ? PAL.danger : TEXT;
   ctx.fillText(said, pad + 13, top + chH / 2 + 1);
   // scores: the play page's room button (and a server's pill beside it) sit at the top right (game.json screen.share's
   // default): the scores start under that band, so the buttons never cover a score.
   const scores = new Map<number, number>();
   if (hosting) for (const b of bodies.values()) scores.set(b.slot, b.score);
   else for (const d of drawn.values()) scores.set(d.slot, d.score);
-  const rows = [...list].sort((a, b) => (scores.get(b.slot) ?? 0) - (scores.get(a.slot) ?? 0)).slice(0, phone ? 4 : 6);
-  ctx.font = `700 ${phone ? 14 : 16}px ${FONT_BODY}`;
-  const rowH = phone ? 22 : 25;
-  const texts = rows.map((a) => `${a.mine && !net.watching ? 'You' : label(a.name, a.bot)}`);
+  // A phone's board is compact (the top three, names without " · bot": a bot's dot is hollow), so a game's own HUD at
+  // the top left (a basket, a timer) has room beside it.
+  const rows = [...list].sort((a, b) => (scores.get(b.slot) ?? 0) - (scores.get(a.slot) ?? 0)).slice(0, phone ? 3 : 6);
+  ctx.font = `700 ${phone ? 13 : 16}px ${FONT_BODY}`;
+  const rowH = phone ? 20 : 25;
+  const fit = (t: string, max: number): string => { let x = t; while (x.length > 3 && ctx.measureText(x).width > max) x = `${x.slice(0, -2)}…`; return x; };
+  const texts = rows.map((a) => (a.mine && !net.watching ? 'You' : phone ? fit(a.name.replace(AI_MARK, '').trim(), 104) : label(a.name, a.bot)));
   const nameW = Math.max(0, ...texts.map((x) => ctx.measureText(x).width));
-  const boardW = nameW + (phone ? 64 : 74);
-  const board = top + 18 + 44 - rowH / 2;
-  if (rows.length) chip(cw - pad - boardW, board - 6, boardW, rows.length * rowH + 12, 0.7);
+  const boardW = nameW + (phone ? 56 : 74);
+  // Together: the room's total heads the board, which moves down by a row so it stays under the room buttons.
+  const board = top + 18 + 44 - rowH / 2 + (TOGETHER ? rowH + 6 : 0);
+  if (TOGETHER) {
+    // One total for the room, then each share (no places): a cozy room works as one.
+    const total = [...scores.values()].reduce((n, v) => n + v, 0);
+    const head = `Together · ${total}`;
+    ctx.font = `700 ${phone ? 15 : 17}px ${FONT_DISPLAY}`;
+    const hw = Math.max(boardW, ctx.measureText(head).width + 28);
+    chip(cw - pad - hw, board - 6 - (rowH + 6), hw, rowH + 6 + rows.length * rowH + 12, 0.7);
+    ctx.textAlign = 'left'; ctx.fillStyle = HOT;
+    ctx.fillText(head, cw - pad - hw + 14, board - rowH / 2 + 1);
+    ctx.font = `700 ${phone ? 13 : 16}px ${FONT_BODY}`;
+  } else if (rows.length) chip(cw - pad - boardW, board - 6, boardW, rows.length * rowH + 12, 0.7);
   rows.forEach((a, i) => {
     const y = board + i * rowH + rowH / 2;
     const colour = colourOf(a.slot, a.bot ? null : a.seat);
     ctx.fillStyle = a.bot ? mixHex(colour, '#9aa3ad', 0.55) : colour;
-    ctx.beginPath(); ctx.arc(cw - pad - boardW + 14, y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cw - pad - boardW + 14, y, 5, 0, Math.PI * 2);
+    if (a.bot && phone) { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 2; ctx.stroke(); } else ctx.fill();
     ctx.textAlign = 'left';
-    ctx.fillStyle = a.mine ? '#ffffff' : a.bot ? 'rgba(255,255,255,0.62)' : 'rgba(255,255,255,0.9)';
+    ctx.fillStyle = a.mine ? TEXT : mixHex(TEXT, PAPER, a.bot ? 0.42 : 0.15);
     ctx.fillText(texts[i] as string, cw - pad - boardW + 26, y + 1);
     ctx.textAlign = 'right';
-    ctx.fillStyle = a.mine ? PAL.gold : '#ffffff';
+    ctx.fillStyle = a.mine ? HOT : TEXT;
     ctx.fillText(String(scores.get(a.slot) ?? 0), cw - pad - 12, y + 1);
   });
-  // role badge
-  ctx.textAlign = 'left'; ctx.font = '600 11px ui-monospace, Menlo, monospace';
-  const badge = net.offline ? 'OFFLINE HOST' : net.watching ? 'WATCHING' : net.role.toUpperCase();
-  chip(pad - 4, ch - pad - 16, ctx.measureText(badge).width + 12, 20, 0.55);
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillText(badge, pad + 2, ch - pad - 5);
+  // The role badge (host, replica, watching): a debugging aid, only with ?debug=1 (a player never needs it).
+  if (debugStrip) {
+    ctx.textAlign = 'left'; ctx.font = '600 11px ui-monospace, Menlo, monospace';
+    const badge = net.offline ? 'OFFLINE HOST' : net.watching ? 'WATCHING' : net.role.toUpperCase();
+    chip(pad - 4, ch - pad - 16, ctx.measureText(badge).width + 12, 20, 0.55);
+    ctx.fillStyle = mixHex(TEXT, PAPER, 0.2);
+    ctx.fillText(badge, pad + 2, ch - pad - 5);
+  }
   if (r && r.phase === 'over' && r.results) {
     // The results card: the palette's own paper and ink, the winner in gold.
     const w = Math.min(380, cw - 32); const h = 64 + Math.min(6, r.results.length) * 30;
     const x = (cw - w) / 2; const y = (ch - h) / 2;
-    ctx.fillStyle = mixHex(PAL.gold, '#ffffff', 0.85); ctx.globalAlpha = 0.96;
+    ctx.fillStyle = mixHex(PAPER, '#ffffff', 0.35); ctx.globalAlpha = 0.96;
     ctx.beginPath(); ctx.roundRect(x, y, w, h, 18); ctx.fill(); ctx.globalAlpha = 1;
-    ctx.strokeStyle = PAL.ink; ctx.globalAlpha = 0.2; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
-    ctx.textAlign = 'center'; ctx.fillStyle = PAL.ink; ctx.font = `700 ${phone ? 20 : 22}px ${FONT_DISPLAY}`;
-    ctx.fillText(`Round ${r.n} results`, cw / 2, y + 32);
+    ctx.strokeStyle = TEXT; ctx.globalAlpha = 0.12; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.textAlign = 'center'; ctx.fillStyle = HOT; ctx.font = `700 ${phone ? 20 : 22}px ${FONT_DISPLAY}`;
+    const sum = r.results.reduce((n, row) => n + row.score, 0);
+    ctx.fillText(TOGETHER ? `Together: ${sum}` : `Round ${r.n} results`, cw / 2, y + 32);
     ctx.font = `700 ${phone ? 15 : 16}px ${FONT_BODY}`;
     const view = viewSeat();
     r.results.slice(0, 6).forEach((row, i) => {
       const mine = !row.bot && row.seat !== null && row.seat === view;
       const ry = y + 66 + i * 30;
       if (mine) { ctx.fillStyle = PAL.gold; ctx.globalAlpha = 0.55; ctx.beginPath(); ctx.roundRect(x + 14, ry - 13, w - 28, 26, 10); ctx.fill(); ctx.globalAlpha = 1; }
-      ctx.fillStyle = row.bot ? mixHex(PAL.ink, '#ffffff', 0.4) : PAL.ink;
-      ctx.fillText(`${row.place}. ${mine && !net.watching ? 'You' : label(row.name, row.bot)}${mine && net.watching ? ' ◂' : ''} — ${row.score}`, cw / 2, ry + 1);
+      ctx.fillStyle = row.bot ? mixHex(TEXT, PAPER, 0.4) : TEXT;
+      ctx.fillText(`${TOGETHER ? '' : `${row.place}. `}${mine && !net.watching ? 'You' : label(row.name, row.bot)}${mine && net.watching ? ' ◂' : ''} — ${row.score}`, cw / 2, ry + 1);
     });
   }
   if (!net.offline && !net.connected && net.role !== 'host') {
     ctx.textAlign = 'center'; ctx.font = `700 15px ${FONT_BODY}`;
     const text = 'Reconnecting…'; const tw = ctx.measureText(text).width;
     chip(cw / 2 - tw / 2 - 12, ch - pad - 24, tw + 24, 26);
-    ctx.fillStyle = PAL.gold; ctx.fillText(text, cw / 2, ch - pad - 10);
+    ctx.fillStyle = HOT; ctx.fillText(text, cw / 2, ch - pad - 10);
   }
+  titleCard(cw, ch, phone);
   if (frames < 240 && mySeat() !== null) {
     ctx.textAlign = 'center'; ctx.font = `700 14px ${FONT_BODY}`;
     const text = phone ? 'Drag to move · second finger bumps' : 'WASD / arrows to move · Space bumps';
     const tw = ctx.measureText(text).width;
     chip(cw / 2 - tw / 2 - 12, ch - pad - 56, tw + 24, 26, 0.6);
-    ctx.fillStyle = '#ffffff'; ctx.fillText(text, cw / 2, ch - pad - 42);
+    ctx.fillStyle = TEXT; ctx.fillText(text, cw / 2, ch - pad - 42);
   }
   ctx.textBaseline = 'alphabetic';
 }
@@ -1769,7 +2054,7 @@ net.expose({
   labels: () => shownLabels.map((l) => ({ self: Boolean(l.self), alpha: l.alpha, moved: l.moved, left: Math.round(l.left), top: Math.round(l.top), right: Math.round(l.right), bottom: Math.round(l.bottom) })),
   /** performance.now() of the first keyed-state value and the first live snapshot this browser received. */
   arrivals: () => ({ firstStateAt, firstSnapAt }),
-  /** The last frame's draw calls and triangles (renderer.info), against the phone budgets (DESIGN 8.1: 100 and 150k). */
+  /** The last frame's draw calls and triangles (renderer.info), against the phone budgets (100 and 150k). */
   drawCalls: () => renderer.info.render.calls,
   triangles: () => renderer.info.render.triangles,
   /** The models: how many loaded, their triangles, texture memory and bytes, and any refused (with why). */

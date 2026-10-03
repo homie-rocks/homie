@@ -84,12 +84,16 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, room = null, ticket = null, owner = false, launch = 'public', server = null } = {}) {
+export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
   const places = sharePlaces(g.screen?.share);
   // The phone's glass belongs to the game: no page pan, pinch-zoom, text selection or callout under a thumb
   // (a pinch between a stick thumb and a button thumb made the browser cancel both touches).
+  // A game with an art direction (games.json `ui`, from its style.json): the pills wear its paper and text, like its HUD.
+  const okHex = (v) => /^#[0-9a-f]{6}$/i.test(String(v ?? ''));
+  const ui = okHex(g.ui?.paper) && okHex(g.ui?.text) ? g.ui : null;
+  const pillUi = ui ? `\n.pill, .chip, .pill.dim { background: ${ui.paper}e6; color: ${ui.text}; border-color: ${ui.text}22; }\n.pill svg { color: ${ui.text}; }` : '';
   const css = `:root{--hot:${/^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a'}}
 html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #04060c; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; touch-action: none; }
@@ -155,7 +159,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .notice .acts a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; text-decoration: none; font-weight: 700; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
 .notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
 [hidden] { display: none !important; }
-${SERVER_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}`;
+${SERVER_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${pillUi}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
   // The server this page plays on (0.16.0): its pool (the Lobby), its badge and line for the chip, its ceiling.
@@ -166,7 +170,9 @@ ${SERVER_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}`;
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
-  const joinCard = screen && joinUrl ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
+  // Local development: no join card at all on the big screen (no phone can open this computer's address); the room
+  // button's sheet says to deploy to share, for whoever looks for a link.
+  const joinCard = screen && joinUrl && !local ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
   const share = screen ? '' : `<div class="room at-${first.at}" style="--dx:${first.x}px;--dy:${first.y}px" data-room-ui>
   <div class="pills"><button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room, invite and big screen"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
   <button class="pill spill" type="button" data-server-toggle aria-expanded="false" aria-controls="server-sheet" hidden><span class="sdot" aria-hidden="true"></span><span data-server-label></span></button></div>
@@ -267,6 +273,8 @@ const SHELL_JS = String.raw`(function () {
   var boot = window.__HOMIE_PLAY;
   var params = new URLSearchParams(location.search);
   var screenMode = params.get('screen') === '1' || boot.screen === true;
+  // Local development (this computer's own address): never hand a phone a link it cannot open.
+  var LOCAL = /^(localhost|.*\.localhost|127\..*|\[::1\]|0\.0\.0\.0)$/.test(location.hostname);
   var asked = params.get('hand');
   var device = asked === 'phone' || asked === 'desk' || asked === 'tv' ? asked : Math.min(innerWidth, innerHeight) <= 540 ? 'phone' : 'desk';
   var want = screenMode ? 'screen' : 'play';
@@ -352,7 +360,7 @@ const SHELL_JS = String.raw`(function () {
     state.link = link;
     ui.querySelector('[data-room-code]').textContent = labelOf(room);
     ui.querySelector('[data-room-label]').textContent = labelOf(room);
-    ui.querySelector('[data-room-link]').textContent = link.replace(/^https?:\/\//, '');
+    ui.querySelector('[data-room-link]').textContent = LOCAL ? 'Deploy to share: this preview address works on this computer only.' : link.replace(/^https?:\/\//, '');
     ui.querySelector('[data-bigscreen]').href = '/' + boot.game + '/tv?room=' + encodeURIComponent(room);
     toggle.addEventListener('click', function (e) { e.stopPropagation(); open(sheet.hidden); });
     ui.querySelector('[data-invite]').addEventListener('click', function () {
@@ -412,7 +420,7 @@ const SHELL_JS = String.raw`(function () {
     });
     watch(room);
     shareReady(room);
-    if (screenMode && !document.querySelector('[data-join]')) {
+    if (screenMode && !document.querySelector('[data-join]') && !LOCAL) {
       var h2 = document.createElement('h2'); h2.textContent = 'Join on your phone';
       var div = document.createElement('div'); div.textContent = location.origin + '/' + boot.game + '/play?room=' + encodeURIComponent(room);
       screenCard.append(h2, div); screenCard.hidden = false;

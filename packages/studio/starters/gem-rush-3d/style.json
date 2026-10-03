@@ -44,11 +44,11 @@
     "bloom": 0.1
   },
   "camera": {
-    "angle": "high-3/4",
+    "angle": "low-3/4",
     "projection": "perspective",
-    "pitch": 52,
-    "distance": 22,
-    "fov": 38
+    "pitch": 34,
+    "distance": 20,
+    "fov": 42
   },
   "render": "lowpoly-flat",
   "materials": {

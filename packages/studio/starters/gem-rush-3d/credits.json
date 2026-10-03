@@ -17,6 +17,15 @@
       "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
       "note": "Copied from the Homie starter library",
       "asset": true
+    },
+    {
+      "what": "Kenney Platformer Kit (models)",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/platformer-kit",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "note": "Copied from the Homie starter library",
+      "asset": true
     }
   ]
 }

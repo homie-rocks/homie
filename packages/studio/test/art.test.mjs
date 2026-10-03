@@ -355,3 +355,16 @@ test('publish refuses a public game that ships a model with no licence record', 
   assert.notEqual(r.code, 0);
   assert.match(r.text, /licence problem[\s\S]*found-online\.glb/);
 });
+
+test('first play counts one file per sound: a browser fetches the .ogg or its .wav fallback, never both', async () => {
+  const { firstPlayBytes } = await import('../lib/asset-check.mjs');
+  const dir = join(scratch, 'first-play');
+  const game = join(dir, 'site', 'dist', 'games', 'tiny', 'sound');
+  mkdirSync(game, { recursive: true });
+  writeFileSync(join(game, 'theme.ogg'), Buffer.alloc(300_000));
+  writeFileSync(join(game, 'theme.wav'), Buffer.alloc(2_000_000));
+  writeFileSync(join(game, 'pop.wav'), Buffer.alloc(10_000));
+  const r = firstPlayBytes(dir, 'tiny');
+  assert.equal(r.raw, 310_000);
+  assert.equal(r.files, 2);
+});

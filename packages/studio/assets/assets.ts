@@ -39,7 +39,7 @@
  * hand-painted or pbr, and `materials.outline`), the same material model and ink line the style board was drawn with.
  * Once, on the loaded model, after `repaint` and before it is copied: its outline hulls are instanced with it.
  */
-import { BackSide, DoubleSide, Box3, BoxGeometry, BufferGeometry, Float32BufferAttribute, CanvasTexture, Color, DataTexture, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial, MeshToonMaterial, NearestFilter, RedFormat, SRGBColorSpace, Vector3, type AnimationClip, type Group, type Material, type Object3D, type Texture } from 'three';
+import { BackSide, Box3, BoxGeometry, BufferGeometry, Float32BufferAttribute, CanvasTexture, Color, DataTexture, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial, MeshToonMaterial, NearestFilter, RedFormat, SRGBColorSpace, Vector3, type AnimationClip, type Group, type Material, type Object3D, type Texture } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -156,7 +156,7 @@ export function instancedCopies(model: Object3D, count: number): Copies[] {
   const out: Copies[] = [];
   model.traverse((o) => {
     const m = o as Mesh;
-    if (m.isMesh) out.push({ mesh: new InstancedMesh(m.geometry, m.material, count), base: m.matrixWorld.clone() });
+    if (m.isMesh) { const mesh = new InstancedMesh(m.geometry, m.material, count); mesh.name = m.name; out.push({ mesh, base: m.matrixWorld.clone() }); }
   });
   return out;
 }
@@ -344,11 +344,12 @@ const MODEL_OF_RENDER: Record<string, string> = { toon: 'toon', 'lowpoly-flat': 
 /**
  * Draw a loaded model the way the game's art direction says: its material model (style.json `materials.model`, else
  * the render style's) on every mesh, and with `materials.outline` an ink line (an inverted hull: a back-faced copy
- * pushed out along the normals, `line` metres in the world: as thick on a flower as on a tree, at whatever scale the
- * game draws it). Skinned meshes, two-sided cards and paper-thin shells get the material, not the line. Call it once on the loaded model, after `repaint`; `instancedCopies` copies the line with it. Returns how many
+ * pushed out along the normals, `line` metres in the world, as thick on a bush as on a tree, finer on something small:
+ * pass `scale`, the scale the game draws it at). Skinned meshes, open cards and paper-thin shells get the material,
+ * not the line. Call it once on the loaded model, after `repaint`; `instancedCopies` copies the line with it. Returns how many
  * meshes changed.
  */
-export function stylize(model: Object3D, style: StyleLike, { line = 0.05, ink }: { line?: number; ink?: string } = {}): number {
+export function stylize(model: Object3D, style: StyleLike, { line = 0.05, scale = 1, ink }: { line?: number; scale?: number; ink?: string } = {}): number {
   const kind = style.materials?.model ?? MODEL_OF_RENDER[String(style.render ?? '')] ?? 'pbr';
   const swapped = new Map<Material, Material>();
   const meshes: Mesh[] = [];
@@ -359,15 +360,23 @@ export function stylize(model: Object3D, style: StyleLike, { line = 0.05, ink }:
   }
   if (style.materials?.outline) {
     const colour = new Color(ink ?? (style.palette?.bg ? `#${new Color(style.palette.bg).lerp(new Color('#000000'), 0.7).getHexString()}` : '#1a1410'));
+    // A small thing (a flower, a gem) gets a finer line: never more than 6% of its size as the game draws it (`scale`).
+    const box = new Box3().setFromObject(model).getSize(new Vector3());
+    const width = Math.min(line, 0.06 * Math.max(box.x, box.y, box.z) * scale);
     const inkMaterial = new MeshBasicMaterial({ color: colour, side: BackSide });
-    inkMaterial.onBeforeCompile = inkShader(line);
-    inkMaterial.customProgramCacheKey = () => `ink:${line}`;
+    inkMaterial.onBeforeCompile = inkShader(width);
+    inkMaterial.customProgramCacheKey = () => `ink:${width}`;
     for (const m of meshes) {
-      // No line on a skinned mesh, nor on a two-sided card (leaves, grass: a shell around nothing draws it black).
+      // No line on a skinned mesh; cards of leaves and grass (open, or two faces back to back) get none from hullGeometry.
       if ((m as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh) continue;
-      if ((Array.isArray(m.material) ? m.material : [m.material]).some((x) => x.side === DoubleSide)) continue;
       const shell = hullGeometry(m.geometry);
       if (!shell) continue;
+      // A part too thin for the line (a flower's stem, a post) goes without: three widths of ink would make it a stick.
+      shell.computeBoundingBox();
+      const local = (shell.boundingBox as Box3).getSize(new Vector3());
+      const world = new Box3().setFromObject(m, true).getSize(new Vector3());
+      const units = Math.max(world.x, world.y, world.z) / Math.max(1e-9, local.x, local.y, local.z);
+      if (thicknessOf(shell) * units * scale < 3 * width) continue;
       const hull = new Mesh(shell, inkMaterial);
       hull.name = 'hull';
       hull.castShadow = false; hull.receiveShadow = false;
