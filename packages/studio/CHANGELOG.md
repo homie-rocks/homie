@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.30.0] - 2026-10-03
 
-**Plugin 0.31.0**
+**Plugin 0.31.0** · [#45](https://github.com/homie-rocks/homie/pull/45)
 
 Grok can set up a studio and run it with the same holds as Claude Code and Codex.
 
