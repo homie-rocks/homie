@@ -17,9 +17,43 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.27.0] - 2026-10-03
+
+**Plugin 0.28.0** · [#42](https://github.com/homie-rocks/homie/pull/42)
+
+Search engines and AI agents read a studio's site correctly: schema.org data on every page, a full VideoGame on every landing, and a sitemap, robots.txt and llms.txt made from what is public.
+
+### Added
+
+- Structured data (schema.org JSON-LD) on every generated page, from the studio's own files and nothing else:
+  - Home: the studio as an `Organization` (its name, address, logo, share picture and tagline) and its `WebSite`.
+  - Each game's landing: a `VideoGame` (co-typed `WebApplication`, as Google asks) with its description and pitch, pictures and screenshots, genre, players (fewest and most), play modes, platforms, the studio as author and publisher, the source's licence (linked to its SPDX page when it names one), what it is based on (a remix's original page, a port's original), its trailer as a `VideoObject`, when it came out and last changed, a Play action and a free-to-play offer.
+  - Music: `MusicRecording` (the studio as the artist, its length, its audio file, its cover, its key and date) and a `MusicAlbum` when the music manifest names one. Videos: `VideoObject` (poster, upload date, length, the file itself). Posts: `BlogPosting` and the studio's `Blog`. Games and Rooms: an `ItemList` of the public games. Every page but Home: a `BreadcrumbList`.
+- Never a rating or a review, and no price for anything the shop does not sell. While your shop really sells, each item sold in a game is an add-on of that game's free offer, in real money. The Rooms page's data names the games, never who is playing this minute.
+- `/robots.txt`, `/sitemap.xml`, `/llms.txt` and `/llms-full.txt`, made from your public catalogue:
+  - robots.txt lets crawlers read every public page, keeps them off your office, the APIs, accounts and each game's play, TV, watch and socket doors, and names the sitemap. A Preview asks not to be crawled.
+  - The sitemap lists Home, Games and each landing, Music, Videos, Rooms, Posts and your own pages, with dates only where a real date says when each changed.
+  - llms.txt tells an AI agent what your studio is: each game with its pitch, players, Play, Watch and big-screen links; which games are open to remix, with the licence, the source and the words to say to Claude Code or Codex with Homie; songs, videos, posts with their feeds, your own pages, and homie.rocks's llms.txt. llms-full.txt adds each game's whole description, how to play and credits, and every post's text.
+  - A private or invite-only game is in none of them, and a game is offered for remixing only when its source is shared, your Remixable switch is on and its licence allows it.
+- game.json takes `"genre"` (a word, or up to three), `"released"` (the day it came out) and `"schema"` (schema.org properties of your own on the game). studio.json takes `"site": { "schema": { … } }` for the studio, such as `"sameAs"` links to its other pages. Homie's own properties always win, and ratings, reviews and offers are refused (the build says so).
+- Screenshots: pictures in `games/<id>/screenshots/` (or game.json `landing.screenshots`), at most eight, get a band on the landing and go into its VideoGame. A game's genre shows with its room facts.
+- A video's or song's `"date"` in its manifest; without one, when it was made (`made.at`). Search engines show no video without an upload date, so the build says when a video has neither.
+- `<!-- homie:schema -->` in the `<head>` of a page of your own (`site/pages`) puts there the structured data the generated page would carry.
+- `lib/schema-check.mjs` checks every JSON-LD block of a page against schema.org's own vocabulary (types, properties, which type each property is for, value kinds, enumerations) and against what Google documents as required for VideoGame, VideoObject, BreadcrumbList, ItemList, BlogPosting, Organization and MusicRecording.
+
+### Changed
+
+- A landing's VideoGame was a short block with a price of 0 and no co-type; it is now the full record above, inside one `@graph` with the page's breadcrumbs.
+- A private or invite-only game's landing, which only its owner and invitees see, answers `x-robots-tag: noindex`.
+
+### Upgrade notes
+
+- Nothing to do: `homie-studio upgrade` and a deploy bring all of it. Give each game a `"genre"`, put a few pictures of real play in `games/<id>/screenshots/`, give each video a `"date"` if it has no `made.at`, and add your studio's other pages to `studio.json` `"site": { "schema": { "sameAs": [...] } }`.
+- A `robots.txt`, `sitemap.xml`, `llms.txt` or `llms-full.txt` you already keep in `site/public/` still wins over the made one. A landing or Home page of your own in `site/pages/` is left exactly as it is; add `<!-- homie:schema -->` to its `<head>` to give it the structured data.
+
 ## [0.26.1] - 2026-10-03
 
-**Plugin 0.27.1** · [#41](https://github.com/homie-rocks/homie/pull/41)
+**Plugin 0.27.1** · [#41](https://github.com/homie-rocks/homie/pull/41) · [release-2026-10-03-studio-0.26.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.26.1)
 
 In Codex, Homie now holds what the Claude Code mod holds: protected files, deploys, Cloudflare changes, spending past the budget and model downloads wait for your own "proceed", and secrets come out of what Codex reads.
 

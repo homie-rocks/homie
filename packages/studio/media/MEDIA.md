@@ -25,6 +25,7 @@ show and why anything is left out.
       "title": "Night Owls Theme",
       "blurb": "The studio's theme: a short sung hook over a driving synth line.",
       "published": true,
+      "date": "2026-09-30",
       "duration": 16.0,
       "bpm": 120,
       "key": "A minor",
@@ -57,6 +58,10 @@ show and why anything is left out.
   `poster`, `captions` (WebVTT), `master`. `"public": false` keeps a file off the site (masters,
   raw captures). Loops and stems are offered for download on the song page, so another game can
   use them.
+- `date` (0.27.0): the day (or day and time, UTC) it came out; without one, `made.at`. A video's page gives it to
+  search engines as the video's upload date, and they show no video without one (the build says when a video has
+  neither). A music manifest's top-level `"album": "Night Route"` (or an entry's own `album`) makes its songs one
+  album in the pages' structured data (site/SITE.md, "Search engines and AI agents").
 - `rights` and `credits` are shown on the page, in plain words. Say what the provider's terms
   say for the plan the file was made on; nothing on the site claims more.
 

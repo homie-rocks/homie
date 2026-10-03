@@ -97,9 +97,16 @@ game.json's `landing` block, every key optional:
   "credits": [{ "role": "Music", "name": "Low Tide", "url": "https://example.com" }],
   "theme": { "accent": "#ff3bd4", "glow": "#00eaff" },
   "scheme": "light",
+  "screenshots": ["shots/rocks.jpg", "shots/finish.jpg"],
   "tv": true
 }
 ```
+
+**Screenshots** (0.27.0): `landing.screenshots` (pictures in the game's folder), else every picture in
+`games/<id>/screenshots/` by name, at most eight. The landing shows them in a band of their own, and its VideoGame
+names them. Beside the `landing` block, game.json takes `"genre"` (a word, or up to three: `["Racing", "Party"]`,
+shown with the room facts), `"released"` (the day it came out, else the commit that added its game.json) and
+`"schema"` (structured data of the owner's own: [Search engines and AI agents](#search-engines-and-ai-agents)).
 
 ## Posts: `posts/*.md`
 
@@ -141,8 +148,8 @@ atproto later. `/.well-known/homie-studio.json` lists the latest posts for the h
 | `site/theme.json` | The tokens every page uses: `bg`, `fg`, `accent`, `glow`, `panel`, `accentInk` (colours: `#hex`, `rgb()`, `hsl()`, `oklch()`), `display`, `text`, `mono` (font lists), `fonts` (`[{ "family", "src": "/fonts/x.woff2", "weight": "400 800" }]`, files in `site/public`), `radius` (0 to 40), `mark` (a logo), `icon`, `social` (the share picture), `wordmark`, `uppercase: false`, `scheme: "light"`. Or `palette`: neon, dock, gold, acid, ember, orchid, tide, candy. A value that is not what it should be is dropped, with a warning. |
 | `site/theme.css` | CSS after the site's own, on every generated page: restyle anything. |
 | `site/partials/<name>.html` | A piece of every generated page: `head` (in `<head>`), `header` (the top line and its tabs), `footer` (the "Made with Homie" footer), `home` (a band on Home), `game` (a band on every landing), `game-<id>` (a band on one), `post` (after a post). `{{studio.name}}`, `{{game.name}}`, `{{game.id}}`, `{{game.play}}`, `{{year}}` are filled in. A band partial sits in one of the page's bands, unless it is its own `<section class="band">`. |
-| `site/pages/<path>/index.html` (or `site/pages/<path>.html`) | A whole page at `/<path>/`, served as it is, instead of the generated one (`site/pages/index.html` is Home, `site/pages/<id>/index.html` a game's landing) or beside them (`/about/`). It may borrow the site's parts: `<!-- homie:style -->`, `<!-- homie:header -->`, `<!-- homie:footer -->`, `<!-- homie:script -->`. The rooms, the game files, the API and the owner's pages are never a page's. |
-| `site/public/` | Files served as they are at the same path: fonts, a logo, hero footage, a page's pictures. |
+| `site/pages/<path>/index.html` (or `site/pages/<path>.html`) | A whole page at `/<path>/`, served as it is, instead of the generated one (`site/pages/index.html` is Home, `site/pages/<id>/index.html` a game's landing) or beside them (`/about/`). It may borrow the site's parts: `<!-- homie:style -->`, `<!-- homie:header -->`, `<!-- homie:footer -->`, `<!-- homie:script -->`, and in its `<head>` `<!-- homie:schema -->` (the structured data the generated page there would carry: Home's, a landing's, else the studio's Organization). The rooms, the game files, the API and the owner's pages are never a page's. |
+| `site/public/` | Files served as they are at the same path: fonts, a logo, hero footage, a page's pictures. A `robots.txt`, `sitemap.xml`, `llms.txt` or `llms-full.txt` here replaces the one the site makes. |
 | `site/src/worker.mjs` | The Worker. A studio that keeps a whole brand site of its own (with its own routes) wraps the template's Worker here, as the house brands do; everything it does not answer goes to the template. |
 
 A studio with its own landing in `site/` keeps it: the template never replaces what the studio made.
@@ -305,6 +312,64 @@ A game made with Homie's arcade controls asks its page's origin for a Homie box 
 goes there as a POST. The site answers at its root and under every game with `{ "ok": false, "error":
 "not-a-homie" }` (JSON, CORS-open, 200, a preflight answered), so the game stops asking and plays on its own; no
 studio needs a Worker of its own for it.
+
+## Search engines and AI agents
+
+From 0.27.0 the site tells search engines and AI agents what it is, from its own files, and nothing more
+(worker/schema.mjs, worker/discover.mjs).
+
+**Structured data.** Every generated page carries one `<script type="application/ld+json">` in its `<head>`, a
+schema.org `@graph`:
+
+| Page | Types |
+| --- | --- |
+| Home | `Organization` (the studio: name, address, `site/theme.json` `mark` as its logo, `social` as its image, the tagline) and `WebSite` |
+| `/games/`, `/rooms/` | `BreadcrumbList`, `ItemList` of the public games' landings (the Rooms page's data never carries a live count) |
+| `/<id>/` | `BreadcrumbList`, `VideoGame` co-typed `WebApplication`: name, description, the pitch as `abstract`, its pictures and screenshots, `genre`, `numberOfPlayers` (min and max), `playMode`, `gamePlatform`, the studio as author and publisher, `license` (the source's licence, linked to its SPDX page), `isBasedOn` (a remix's original page, a port's original), `trailer` (a `VideoObject`), `datePublished` and `dateModified`, a `PlayAction`, and one free-to-play `Offer` (price 0) |
+| `/<id>/credits`, `/<id>/servers/`, a server's page | `BreadcrumbList` |
+| `/music/`, `/music/<slug>/` | `MusicAlbum` (every song names one album) or an `ItemList`; `MusicRecording` (`byArtist` the studio, its duration, its `AudioObject`, its cover, `inAlbum`, `musicalKey`, its date) |
+| `/videos/`, `/videos/<slug>/` | `ItemList`; `VideoObject` (`thumbnailUrl`, `uploadDate`, `duration`, `contentUrl`: the file at its own address, from R2 or the site) |
+| `/posts/`, `/posts/<slug>/` | `Blog`; `BlogPosting` (headline, dates, the author it names or the studio, the publisher, its picture, the game it is about) |
+
+Never: a rating or a review (the page shows none), a price for anything the shop does not sell, or a number that is
+only true this minute. While the studio's shop really sells (shop/SHOP.md: shop.json checked, its key, webhook
+secret and tables in place), each item sold in a game is an `addOn` of that game's free offer, in real money; a tip
+has no price and is left out. A game that is not public yet (private, or an invite-only beta) offers nothing, and its
+landing answers `x-robots-tag: noindex`.
+
+A video's `uploadDate` is its manifest entry's `"date"`, else `made.at`; a video with neither is said by the build,
+because search engines show no video without it. A song's date is the same, and a music manifest's `"album"` (or an
+entry's own) makes the songs a `MusicAlbum`. A game's `datePublished` is game.json `"released"`, else the commit that
+added its game.json; `dateModified` is the last commit that touched its folder (nothing from a shallow clone).
+
+**The owner's own.** game.json `"schema"` adds schema.org properties to the game's `VideoGame`, and studio.json
+`"site": { "schema": { … } }` to the studio's `Organization` (its `sameAs`, say):
+
+```json
+"site": { "schema": { "sameAs": ["https://github.com/night-owls", "https://www.youtube.com/@nightowls"], "foundingDate": "2026" } }
+```
+
+Homie's own properties always win; `aggregateRating`, `review` and `offers` are refused, and the build says so, with
+any property schema.org does not put on that type. A whole block of the owner's own still goes in
+`site/partials/head.html`.
+
+**Files for crawlers and agents**, made from the public catalogue: a private or invite-only game is in none of them.
+
+- `/robots.txt`: every public page may be crawled; `/_studio/`, `/api/`, `/account/`, the shop's private steps
+  and each game's play, TV, watch, live, invite, API and socket doors may not; then the sitemap's address. A
+  Preview answers `Disallow: /`.
+- `/sitemap.xml`: Home, Games and each landing (and its credits), Rooms, Music, Videos, Posts and every page in
+  `site/pages`, with `lastmod` only where a real date says when it changed.
+- `/llms.txt`, following the llms.txt convention (an H1, a `>` summary, then `##` sections of links): what the
+  studio is; each game with its pitch, players, rounds, Play, Watch and the big screen; which games are open to remix,
+  with their licence, their `source.json` and the words to say to Claude Code or Codex with Homie (the plugin's
+  `game_remix` tool, or `homie-studio game remix <source> --id <new-id>`); songs; videos; posts with their Atom and
+  JSON feeds; the studio's own pages (a changelog among them); and homie.rocks's own llms.txt.
+- `/llms-full.txt`: the same, with each game's whole description, how to play, controls and credits, and every
+  post's text.
+
+A game is offered for remixing only when its source is shared, its owner's Remixable switch is on and its licence
+allows it, as for the directory. They are cached for five minutes. A file of the studio's own in `site/public` wins.
 
 ## Headers
 

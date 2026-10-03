@@ -105,6 +105,11 @@ landing page" makes one epic). Every page ends with "Made with Homie"; restyle i
   hand-made landing at `site/pages/<id>/index.html`), a piece of every page in `site/partials/` (`footer`,
   `header`, `home`, `game`, `game-<id>`, `post`, `head`), files in `site/public/`. `site/README.md` in the
   studio lists them.
+- **Search engines and AI agents**: every page carries schema.org JSON-LD (a full VideoGame on each landing,
+  the studio's Organization on Home), and the site makes `/robots.txt`, `/sitemap.xml`, `/llms.txt` and
+  `/llms-full.txt` from what is public (SITE.md, "Search engines and AI agents"). The studio's links elsewhere
+  go in studio.json `"site": { "schema": { "sameAs": [...] } }`; a hand-made page takes `<!-- homie:schema -->`
+  in its `<head>`. Ratings, reviews and prices are never added by hand.
 - **The play page** shares its room: the room is in the address, and a small button at the edge gives
   Invite, Big screen and the room code. Nothing to set up.
 - Before and after a deploy, look: `npx --no-install homie-studio look --url <site>` (the local dev address,

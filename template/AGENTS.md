@@ -115,6 +115,9 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **Cards and the directory** show each game's landing still (`hero/wide.jpg`), else its cover. A song without
   a cover of its own shows the music manifest's `cover`, else its game's still.
 - **Live rooms** are listed on homie.rocks too; studio.json `"rooms": { "share": false }` keeps them off it.
+- **Search engines and AI agents** read every page's schema.org data (a full VideoGame on each landing) and
+  `/robots.txt`, `/sitemap.xml`, `/llms.txt`, made from what is public. Give a game game.json `"genre"`, put
+  pictures of play in `games/<id>/screenshots/`, give each video a `"date"`, and never invent ratings.
 - Every page ends with "Made with Homie", linking to homie.rocks/studio/. Restyle it in `site/theme.css`; keep it.
 
 ## Making games

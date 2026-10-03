@@ -297,6 +297,9 @@ page epic" means all of this, in this order:
    white or cream (a light arena) takes `"scheme": "light"`: its landing is drawn light, where the studio's
    dark tint would turn the picture grey. `hero/wide.jpg` is also the game's picture on every card and in
    the directory, and the play page's arrival card while the game loads, so pick a frame that reads small.
+   game.json `"genre"` (a word, or up to three: `["Racing", "Party"]`) and pictures of real play in
+   `games/<id>/screenshots/` (at most eight) go on the landing and into its structured data for search
+   engines; say what the game is, never invent a rating or a review.
 3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "..." }]`). A port
    keeps its `credits.json` (the original, its author and licence, every part inside); a remix keeps
    game.json `remixOf`; never drop either.

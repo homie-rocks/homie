@@ -255,7 +255,8 @@ test('a game\'s landing: its footage, the pitch, Play into a public room, phone 
   assert.match(html, /href="https:\/\/homie\.rocks\/studio\/\?remix=https%3A%2F%2Fowls\.example%2Fgames%2Frock-race%2Fsource\.json"/);
   assert.match(html, /data-copy="\/plugin marketplace add homie-rocks\/homie"/);
   assert.match(html, /data-copy="Remix Rock &lt;Race&gt; from https:\/\/owls\.example\/games\/rock-race\/source\.json into a game of my own in my Homie studio"/);
-  assert.match(html, /<script type="application\/ld\+json">\{"@context":"https:\/\/schema\.org","@type":"VideoGame","name":"Rock \\u003cRace>"/);
+  assert.match(html, /<script type="application\/ld\+json">\{"@context":"https:\/\/schema\.org","@graph":\[\{"@type":"BreadcrumbList"/);
+  assert.match(html, /\{"@type":\["VideoGame","WebApplication"\],"@id":"https:\/\/owls\.example\/rock-race\/#game","name":"Rock \\u003cRace>"/, 'the name escaped: no value can end the block');
   assert.match(html, /data-made-with-homie/);
   // A game with no art of its own: the studio's colours and its name, drawn big.
   const bare = await (await site('/crown-thief/')).text();

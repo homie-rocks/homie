@@ -378,6 +378,20 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
   }
   if (!hero.wideImage) hero.wideImage = (trailer && hero.fromTrailer ? fileUrl(trailer, 'poster') : null) ?? cover;
   for (const k of Object.keys(hero)) if (!hero[k]) delete hero[k];
+  // Screenshots (0.27.0): game.json landing.screenshots (paths in the game's folder), else the pictures in
+  // games/<id>/screenshots/, by name; at most eight. The landing shows them and its VideoGame names them.
+  let screenshots = [];
+  if (Array.isArray(L.screenshots)) {
+    screenshots = L.screenshots.slice(0, 8).map((rel) => {
+      const abs = typeof rel === 'string' && IMAGE.test(rel) ? inside(g.dir, rel) : null;
+      const url = abs ? serve(abs, `screenshot ${rel}`) : null;
+      if (!url) log(`warning: games/${g.id}/game.json landing.screenshots "${String(rel).slice(0, 60)}" is not a picture in the game's folder`);
+      return url;
+    }).filter(Boolean);
+  } else if (existsSync(join(g.dir, 'screenshots')) && statSync(join(g.dir, 'screenshots')).isDirectory()) {
+    screenshots = readdirSync(join(g.dir, 'screenshots')).filter((n) => IMAGE.test(n) && !n.startsWith('.')).sort().slice(0, 8)
+      .map((n) => serve(join(g.dir, 'screenshots', n), `screenshots/${n}`)).filter(Boolean);
+  }
   const focus = /^\d{1,3}% \d{1,3}%$/.test(String(H.focus ?? '')) ? String(H.focus) : null;
   const tint = Number.isFinite(Number(H.tint)) && H.tint !== null && H.tint !== '' ? Math.max(0, Math.min(80, Math.round(Number(H.tint)))) : null;
   const alt = str(H.alt, 300);
@@ -446,6 +460,7 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
     hero: { ...hero, ...(focus ? { focus } : {}), ...(alt ? { alt } : {}), ...(tint !== null ? { tint } : {}) },
     headline: str(L.headline, 120),
     cover,
+    ...(screenshots.length ? { screenshots } : {}),
     words: words && (words.one || words.many) ? words : null,
     credits: { people, original, parts, texts: texts.length },
     trailer: trailer ? trailer.slug : null,

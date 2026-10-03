@@ -13,9 +13,9 @@ import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 import { licenseLabel, licenseOf, remixRow } from './license.mjs';
 import { POLICY_WORDS, policyWords } from './servers.mjs';
+import { blogNode, breadcrumbs, gameNode, itemList, ldScript, musicIndexNode, postNode, songNode, studioNode, videoNode, websiteNode } from './schema.mjs';
 
 export const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const jsonScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
 
 /* ------------------------------------------------------------------ headers */
 
@@ -288,6 +288,9 @@ img,video{display:block;max-width:100%}
 .credit li{margin:4px 0}
 .credit strong{color:var(--fg)}
 .credit a{color:var(--fg)}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px;margin-top:24px}
+.shots a{display:block;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:var(--panel)}
+.shots img{width:100%;aspect-ratio:16/9;object-fit:cover}
 
 /* make a game like this */
 .make{position:relative;overflow:hidden;border-radius:calc(var(--r) + 8px);padding:clamp(26px,4vw,48px);border:1px solid color-mix(in srgb,var(--hot) 55%,transparent);
@@ -599,7 +602,7 @@ const ogTags = (props) => Object.entries(props).filter(([, v]) => v).map(([k, v]
  * A whole generated page. `hero` pages draw the top line over the hero; `style` is the game's own accent on its
  * landing (game.json landing.theme).
  */
-export function layout(cat, { title, description = '', origin = '', path = '/', image = null, type = 'website', active = null, page = 'page', hero = false, head = '', main, over = null, status = 200, extraHeaders = {} }) {
+export function layout(cat, { title, description = '', origin = '', path = '/', image = null, type = 'website', active = null, page = 'page', hero = false, head = '', ld = null, main, over = null, status = 200, extraHeaders = {} }) {
   const theme = cat.studio?.theme ?? {};
   const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u);
   const icon = theme.icon ? `<link rel="icon" href="${esc(theme.icon)}">` : `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="3" fill="${(over?.accent ?? theme.accent ?? TOKEN_DEFAULTS.accent)}"/></svg>`)}">`;
@@ -614,7 +617,7 @@ ${description ? `<meta name="description" content="${esc(description)}">` : ''}
 ${origin ? `<link rel="canonical" href="${esc(`${origin}${path}`)}">` : ''}
 <meta name="theme-color" content="${esc(over?.bg ?? theme.bg ?? TOKEN_DEFAULTS.bg)}">
 ${ogTags({ 'og:title': title, 'og:description': description, 'og:type': type, 'og:url': origin ? `${origin}${path}` : null, 'og:image': abs(image ?? theme.social ?? null), 'og:site_name': studioName(cat), 'twitter:card': image || theme.social ? 'summary_large_image' : 'summary' })}
-${icon}${feeds}${head}
+${icon}${feeds}${head}${origin && ld ? ldScript(ld) : ''}
 <style>${tokensCss(theme, over)}${BASE_CSS}${cat.site?.css ?? ''}</style>
 ${partial(cat, 'head') ?? ''}
 </head>
@@ -632,12 +635,14 @@ ${footer(cat)}
 }
 
 /**
- * A whole page from site/pages, served as it is, in the site's frame rules (never framed, no-transform). Four
+ * A whole page from site/pages, served as it is, in the site's frame rules (never framed, no-transform). Five
  * markers let it borrow the generated parts: <!-- homie:style --> (the tokens and the stylesheet),
- * <!-- homie:header -->, <!-- homie:footer --> ("Made with Homie") and <!-- homie:script -->.
+ * <!-- homie:header -->, <!-- homie:footer --> ("Made with Homie"), <!-- homie:script --> and, in its <head>,
+ * <!-- homie:schema --> (the structured data the generated page at that address would carry: worker/schema.mjs).
  */
-export function customPage(cat, html, { active = null } = {}) {
+export function customPage(cat, html, { active = null, schema = '' } = {}) {
   const out = String(html)
+    .replace(/<!--\s*homie:schema\s*-->/g, () => schema)
     .replace(/<!--\s*homie:style\s*-->/g, () => `<style>${tokensCss(cat.studio?.theme ?? {})}${BASE_CSS}${cat.site?.css ?? ''}</style>`)
     .replace(/<!--\s*homie:header\s*-->/g, () => header(cat, active))
     .replace(/<!--\s*homie:footer\s*-->/g, () => footer(cat))
@@ -770,6 +775,15 @@ export function featuredOf(cat) {
   return games.find((g) => g.id === want) ?? games.find((g) => g.landing?.hero?.wide || g.landing?.hero?.tall) ?? games.find((g) => coverOf(g)) ?? games[0] ?? null;
 }
 
+/** Home's structured data: the studio (an Organization) and its site. */
+export const homeLd = (cat, origin) => [studioNode(cat, origin, { full: true }), websiteNode(cat, origin)];
+
+/** A game landing's structured data: its breadcrumbs and its VideoGame (worker/schema.mjs gameNode). */
+export const landingLd = (cat, g, origin, opts = {}) => [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`]]), gameNode(cat, g, origin, opts)];
+
+/** The public games as a list of their landings (Games, Rooms). */
+const gamesList = (cat, origin, id, name) => itemList(origin, id, name, (cat.games ?? []).map((g) => ({ name: g.name, path: `/${g.id}/` })));
+
 export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   const name = studioName(cat);
   const games = cat.games ?? [];
@@ -846,7 +860,7 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   return layout(cat, {
     title: tagline ? `${name} — ${tagline}` : name,
     description: tagline || (f ? `${name}: ${games.map((g) => g.name).join(', ')}. Free in your browser, on a phone, a computer or a TV.` : soon ? `${name}: first game coming soon.` : name),
-    origin, path: '/', image: f ? (f.landing?.hero?.wideImage ?? coverOf(f)) : null, page: 'home', hero: true,
+    origin, path: '/', image: f ? (f.landing?.hero?.wideImage ?? coverOf(f)) : null, page: 'home', hero: true, ld: homeLd(cat, origin),
     head: f?.landing?.hero?.wideImage ? `<link rel="preload" as="image" href="${esc(f.landing.hero.tallImage ?? f.landing.hero.wideImage)}">` : '',
     main: `${hero}${extra ? `<section class="band">${extra}</section>` : ''}${roomsBand}${gamesBand}${postsBand}${soon}${mediaBand(videos, 'videos', 'Trailers and clips')}${mediaBand(songs, 'music', 'Songs and scores')}`,
   });
@@ -863,6 +877,7 @@ export function gamesPage(cat, { origin = '', live = {} } = {}) {
   const name = studioName(cat);
   return layout(cat, {
     title: `Games · ${name}`, description: `Every game from ${name}: press Play and you are in a live room.`, origin, path: '/games/', page: 'games', active: 'games',
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/']]), gamesList(cat, origin, '/games/#list', `Games from ${name}`)],
     main: `${pageHead(name, 'Games', `${games.length === 1 ? 'One game' : `${games.length} games`}. Press Play on a phone, a computer or a TV browser and you are in a live public room with whoever is playing; bots hold the empty seats.`)}
 <div class="wrap"><div class="cards">${games.map((g) => gameCard(g, live[g.id] ?? 0)).join('')}</div></div>`,
   });
@@ -874,6 +889,8 @@ export function roomsPage(cat, { origin = '', rooms = [] } = {}) {
   const total = rooms.reduce((n, r) => n + r.players, 0);
   return layout(cat, {
     title: `Rooms · ${name}`, description: `Public rooms playing now across ${name}'s games. Join one.`, origin, path: '/rooms/', page: 'rooms', active: 'rooms',
+    // The games a room can be opened in, never who is in one now: a cached copy of the page must not go stale.
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Rooms', '/rooms/']]), gamesList(cat, origin, '/rooms/#games', `Games with public rooms at ${name}`)],
     main: `${pageHead('Live now', 'Rooms', rooms.length ? `${total} ${total === 1 ? 'person' : 'people'} playing in ${rooms.length} public ${rooms.length === 1 ? 'room' : 'rooms'} right now. Join one, or press Play on any game.` : `Public rooms across ${name}'s games, as they happen.`)}
 <div class="wrap">
   <ol class="rooms" data-rooms data-src="/api/rooms"${rooms.length ? '' : ' hidden'}>${roomRows(rooms)}</ol>
@@ -921,6 +938,7 @@ export function serversPage(cat, g, { origin = '', servers = [], hidden = false,
   const cards = [...(pub && !hidden ? [pub] : []), ...shown];
   return layout(cat, {
     title: `Servers · ${g.name}`, description: `${g.name}'s servers: ${SERVERS_LEAD}`, origin, path: `/${g.id}/servers/`, page: 'servers', active: 'games',
+    ld: pick ? null : [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`], ['Servers', `/${g.id}/servers/`]])],
     main: `${pageHead(g.name, pick ? 'Pick a server' : 'Servers', SERVERS_LEAD)}
 <div class="wrap">${cards.length ? `<div class="scards">${cards.map((sv) => serverCard(g, sv)).join('')}</div>` : `<p class="quiet">No server is open right now.</p>`}
 <p class="sec">Every policy</p><ul class="howto">${Object.values(POLICY_WORDS).map((w) => `<li>${esc(w.line.replace('{n}', 'N'))}</li>`).join('')}</ul></div>`,
@@ -942,6 +960,7 @@ export function serverPage(cat, g, sv, { origin = '', rooms = [], door = { ok: t
   const blocked = !door.ok ? `<p class="door-why">${esc(doorWords(g, sv, door).line)}</p>` : '';
   return layout(cat, {
     title: `${sv.name} · ${g.name}`, description: `${sv.name}, a ${words.badge.toLowerCase()} server of ${g.name}. ${words.line}`, origin, path: `/${g.id}/s/${sv.id}/`, page: 'server', active: 'games',
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`], ['Servers', `/${g.id}/servers/`], [sv.name, `/${g.id}/s/${sv.id}/`]])],
     main: `<header class="head"><p class="kicker">${esc(g.name)} · server</p><h1>${esc(sv.name)}</h1>
 <p class="lead"><span class="pol ${esc(sv.policy)}">${esc(words.badge)}</span> ${esc(words.line)}</p>${sv.blurb ? `<p class="lead">${esc(sv.blurb)}</p>` : ''}
 ${blocked}<div class="keys">${door.ok ? `<a class="btn" href="${esc(play)}" data-play>${PLAY_ICON}<span>Play on ${esc(sv.name)}</span></a>` : ''}${membership}</div></header>
@@ -988,6 +1007,7 @@ export function postsPage(cat, { origin = '' } = {}) {
   const items = posts.map((p) => `<li class="pitem reveal"><a href="/posts/${esc(p.slug)}/"><div><time datetime="${esc(p.date)}">${esc(fmtDay(p.date))}</time><h3>${esc(p.title)}</h3><p>${esc(p.summary)}</p>${p.links?.game && gameName(p.links.game) ? `<div class="chips"><span>${esc(gameName(p.links.game))}</span></div>` : ''}</div>${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" decoding="async">` : ''}</a></li>`).join('');
   return layout(cat, {
     title: `Posts · ${name}`, description: `News and drops from ${name}.`, origin, path: '/posts/', page: 'posts', active: 'posts',
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Posts', '/posts/']]), blogNode(cat, origin, posts)],
     main: `${pageHead(name, 'Posts', 'News, drops and notes from the studio.', `<div class="feeds"><a href="/posts/feed.xml">${icon('feed')}Atom feed</a><a href="/posts/feed.json">${icon('feed')}JSON feed</a></div>`)}
 <div class="wrap"><ol class="plist">${items}</ol></div>`,
   });
@@ -1003,6 +1023,7 @@ export function postPage(cat, p, { origin = '' } = {}) {
   const linked = [g ? gameCard(g) : '', video ? mediaCard(video, 'videos', cat) : '', song ? mediaCard(song, 'music', cat) : ''].filter(Boolean).join('');
   return layout(cat, {
     title: `${p.title} · ${name}`, description: p.summary, origin, path: `/posts/${p.slug}/`, image: p.image ?? (g ? coverOf(g) : null), type: 'article', page: 'post', active: 'posts',
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Posts', '/posts/'], [p.title, `/posts/${p.slug}/`]]), postNode(cat, p, origin, { image: p.image ?? (g ? coverOf(g) : null) })],
     head: `<meta property="article:published_time" content="${esc(p.date)}">${p.updated ? `<meta property="article:modified_time" content="${esc(p.updated)}">` : ''}`,
     main: `<div class="wrap" style="padding-top:clamp(36px,7vw,90px)"><article class="article">
   <p class="post-meta"><time datetime="${esc(p.date)}">${esc(fmtDay(p.date))}</time>${p.author ? ` · ${esc(p.author)}` : ''}</p>
@@ -1092,7 +1113,7 @@ export function jsonFeed(cat, posts, origin) {
  * public room, phone / computer / TV (with the join code), live rooms, how to play, credits, and "Make a game like
  * this". A studio's site/pages/<id>/index.html replaces it; site/partials/game.html and game-<id>.html add a band.
  */
-export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, remix = true, servers = null } = {}) {
+export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, remix = true, servers = null, listed = true, shop = null } = {}) {
   const name = studioName(cat);
   const L = g.landing ?? {};
   // A remix says what it is a remix of, linked, under its name and in its credits (game.json `remixOf`).
@@ -1155,7 +1176,8 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   ${week ? `<div class="stat"><span>Played this week: <b>${esc(week.plays)}</b> ${week.plays === 1 ? 'time' : 'times'}</span><span><b>${esc(week.rounds)}</b> ${week.rounds === 1 ? 'round' : 'rounds'} with people</span>${week.peak ? `<span>Most at once today: <b>${esc(week.peak)}</b></span>` : ''}</div>` : ''}
 </div></section>`;
 
-  const facts = ['free, in the browser', 'bots fill empty seats', 'join any time: take a bot’s place', 'rounds restart on their own', ...(tvOn ? ['phones as controllers on a TV'] : [])];
+  const genres = (Array.isArray(g.genre) ? g.genre : g.genre ? [g.genre] : []).filter((x) => typeof x === 'string' && x.trim());
+  const facts = [...genres, 'free, in the browser', 'bots fill empty seats', 'join any time: take a bot’s place', 'rounds restart on their own', ...(tvOn ? ['phones as controllers on a TV'] : [])];
   const side = trailer ? mediaCard(trailer, 'videos', cat) : song ? mediaCard(song, 'music', cat) : (L.cover ? `<figure class="media-card reveal" style="margin:0"><span class="art"><img src="${esc(L.cover)}" alt="${esc(g.name)}, a moment of play" loading="lazy"></span><figcaption class="cap"><b>${esc(g.name)}</b><span>${esc(playersText(g))}${minutes(g.roundSeconds) ? ` · ${esc(minutes(g.roundSeconds))}` : ''}</span></figcaption></figure>` : '');
   const howBand = `<section class="band hotband" aria-labelledby="how-title"><div class="band-in split">
   <div class="reveal">
@@ -1167,6 +1189,11 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   </div>
   ${side ? `<div>${side}${trailer && song ? `<div style="margin-top:14px">${mediaCard(song, 'music', cat)}</div>` : ''}</div>` : ''}
 </div></section>`;
+
+  // Screenshots (landing.screenshots, else games/<id>/screenshots/): what the game looks like in play.
+  const shots = (L.screenshots ?? []).slice(0, 8);
+  const shotsBand = shots.length ? `<section class="band tight" aria-labelledby="shots-title"><div class="band-in"><p class="kicker reveal">Screenshots</p><h2 class="small-h reveal" id="shots-title">${esc(g.name)}, in play</h2>
+  <div class="shots reveal">${shots.map((u, i) => `<a href="${esc(u)}"><img src="${esc(u)}" alt="${esc(`${g.name}: screenshot ${i + 1}`)}" loading="lazy" decoding="async"></a>`).join('')}</div></div></section>` : '';
 
   const C = L.credits ?? {};
   const o = C.original;
@@ -1199,13 +1226,14 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   // A partial that is its own <section> stands as it is; anything else sits in one of the page's bands.
   const band = (html) => (!html ? '' : /^\s*<section\b/i.test(html) ? html : `<section class="band tight"><div class="band-in">${html}</div></section>`);
   const vars = { 'game.name': g.name, 'game.id': g.id, 'game.play': `/${g.id}/play` };
-  const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.name, description: L.pitch ?? g.blurb ?? '', url: `${origin}/${g.id}/`, playMode: 'MultiPlayer', gamePlatform: ['Web browser', 'Phone', 'TV'], applicationCategory: 'Game', ...(h.wideImage ? { image: `${origin}${h.wideImage}` } : {}), author: { '@type': 'Organization', name, url: `${origin}/` }, offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' } };
   return layout(cat, {
     title: `${g.name} — play free in your browser`,
     description: `${g.name}: ${L.pitch ?? g.blurb ?? ''} Free in your browser, nothing to download; a TV or laptop browser can be the big screen, with phones as controllers.`.replace(/\s+/g, ' ').trim(),
     origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: 'games', over: landingTokens(cat, L),
-    head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}<script type="application/ld+json">${jsonScript(ld)}</script>`,
-    main: `${hero}${ways}${liveBand}${servers ? serversBand(g, servers) : ''}${howBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}${makeBand}`,
+    head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}`,
+    // A game that is not public yet (private, or an invite-only beta) is never indexed, and offers nothing.
+    ld: landingLd(cat, g, origin, { listed, shop }), ...(listed ? {} : { extraHeaders: { 'x-robots-tag': 'noindex' } }),
+    main: `${hero}${ways}${liveBand}${servers ? serversBand(g, servers) : ''}${howBand}${shotsBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}${makeBand}`,
   });
 }
 
@@ -1216,6 +1244,7 @@ export function creditsPage(cat, g, texts, { origin = '' } = {}) {
   const of = lineage ? `<p class="sec">Remix of</p><p>${lineage.page ? `<a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.name)}</a>` : esc(lineage.name)}${lineage.studio ? ` by ${esc(lineage.studio)}` : ''}</p>` : '';
   return layout(cat, {
     title: `Credits · ${g.name} · ${name}`, description: `Credits and licences for ${g.name}.`, origin, path: `/${g.id}/credits`, page: 'credits', active: 'games',
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`], ['Credits', `/${g.id}/credits`]])],
     main: `${pageHead(g.name, 'Credits and licences', null, `<div class="keys"><a class="ghost" href="/${esc(g.id)}/">${icon('arrow')}<span>Back to ${esc(g.name)}</span></a></div>`)}
 <div class="wrap">${of}${texts.map(({ file, text }) => `<p class="sec">${esc(file)}</p><pre class="licence">${esc(text)}</pre>`).join('')}</div>`,
   });
@@ -1246,6 +1275,9 @@ export function mediaIndexPage(cat, kind, { origin = '' } = {}) {
   const title = kind === 'music' ? 'Music' : 'Videos';
   return layout(cat, {
     title: `${title} · ${name}`, description: `${title} from ${name}.`, origin, path: `/${kind}/`, page: kind, active: kind,
+    ld: [breadcrumbs(origin, [['Home', '/'], [title, `/${kind}/`]]), kind === 'music'
+      ? musicIndexNode(cat, origin, list, { art: (e) => mediaArt(e, 'music', cat) })
+      : itemList(origin, '/videos/#list', `Videos from ${name}`, list.map((e) => ({ name: e.title, path: `/videos/${e.slug}/` })))],
     main: `${pageHead(name, title, kind === 'music' ? 'Songs, scores and loops from the studio.' : 'Trailers, music videos and clips from the studio.')}
 <div class="wrap"><div class="cards">${list.map((e) => mediaCard(e, kind, cat)).join('')}</div></div>`,
   });
@@ -1261,6 +1293,7 @@ export function songPage(cat, e, origin = '') {
   const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u);
   return layout(cat, {
     title: `${e.title} · ${name}`, description: e.blurb ?? '', origin, path: `/music/${e.slug}/`, image: cover?.url ?? null, type: 'music.song', page: 'song', active: 'music',
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Music', '/music/'], [e.title, `/music/${e.slug}/`]]), songNode(cat, e, origin, { art: cover?.url ?? null })],
     head: ogTags({ 'og:audio': abs(audio.url) }),
     main: `<div class="wrap" style="padding-top:clamp(36px,7vw,90px)">
   <section class="songhead${cover ? ' has-cover' : ''}">
@@ -1293,6 +1326,7 @@ export function videoPage(cat, e, origin = '') {
   const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u);
   return layout(cat, {
     title: `${e.title} · ${name}`, description: e.blurb ?? '', origin, path: `/videos/${e.slug}/`, image: poster?.url ?? null, type: 'video.other', page: 'video', active: 'videos',
+    ld: [breadcrumbs(origin, [['Home', '/'], ['Videos', '/videos/'], [e.title, `/videos/${e.slug}/`]]), videoNode(cat, e, origin, { art: poster?.url ?? null })],
     head: ogTags({ 'og:video': abs(video.url) }),
     main: `<div class="wrap" style="padding-top:clamp(28px,5vw,64px)">
   <div class="player"${beaconAttr('video', e.slug)}${vertical ? ` data-vertical="${esc(vertical.url)}"` : ''}><video data-main controls playsinline preload="metadata" src="${esc(video.url)}"${poster ? ` poster="${esc(poster.url)}"` : ''}>${captions ? `<track kind="captions" src="${esc(captions.url)}" srclang="en" label="English">` : ''}</video></div>

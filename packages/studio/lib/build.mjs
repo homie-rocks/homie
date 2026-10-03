@@ -40,7 +40,9 @@ import { join, relative } from 'node:path';
 import { buildCodexPages } from './codex.mjs';
 import { servedAssets } from './asset-manifest.mjs';
 import { buildMedia } from './media.mjs';
-import { buildSiteFiles, landingOf, readPosts, readTheme } from './site.mjs';
+import { buildSiteFiles, isoDate, landingOf, readPosts, readTheme } from './site.mjs';
+import { checkJsonLd } from './schema-check.mjs';
+import { SCHEMA_REFUSED } from '../worker/schema.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
 import { SEAT_MAX } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
@@ -150,6 +152,57 @@ export function buildInfo(root) {
 
 function readJson(path) {
   try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
+}
+
+/**
+ * When a game came and last changed (its landing's datePublished and dateModified, and the sitemap's lastmod):
+ * game.json `"released"` (a day) when the owner says so, else the commit that added its game.json; and the last
+ * commit that touched its folder. Nothing from a shallow clone (its first commit would claim every file was made that
+ * day) or a folder git does not track.
+ */
+export function gameDates(root, g, log = () => {}) {
+  const git = (args) => { try { const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', timeout: 5000 }); return r.status === 0 ? r.stdout.trim() : null; } catch { return null; } };
+  const released = isoDate(g.released);
+  if (g.released !== undefined && !released) log(`warning: games/${g.id}/game.json "released" is a day (2026-09-30); left out`);
+  const shallow = git(['rev-parse', '--is-shallow-repository']);
+  if (shallow !== 'false') return released ? { published: released } : null;
+  const rel = relative(root, g.dir).split('\\').join('/');
+  const added = git(['log', '--diff-filter=A', '--format=%cI', '--', `${rel}/game.json`])?.split('\n').filter(Boolean).pop() ?? null;
+  const last = git(['log', '-1', '--format=%cI', '--', rel]) || null;
+  const iso = (v) => (v && Number.isFinite(Date.parse(v)) ? new Date(Date.parse(v)).toISOString() : null);
+  const out = { published: released ?? iso(added), modified: iso(last) };
+  if (out.published && out.modified && Date.parse(out.modified) < Date.parse(out.published)) out.modified = out.published;
+  return out.published || out.modified ? Object.fromEntries(Object.entries(out).filter(([, v]) => v)) : null;
+}
+
+/**
+ * The owner's own structured data (game.json "schema", studio.json "site": { "schema" }): a plain object of schema.org
+ * properties put on the game's VideoGame (the studio's Organization), under Homie's own. Ratings, reviews and offers
+ * are refused (Homie shows no ratings on the page; prices are shop.json's), and so is anything that is not JSON-LD a
+ * page can carry; a property schema.org does not have, or does not put on that type, is warned about.
+ */
+export function schemaExtras(value, { where, types, log = () => {} }) {
+  if (value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) { log(`warning: ${where} "schema" is an object of schema.org properties; left out`); return null; }
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (SCHEMA_REFUSED.includes(k)) { log(`warning: ${where} schema.${k} is left out: Homie publishes no ${k === 'offers' ? 'prices but the shop\'s (shop.json)' : 'ratings or reviews the page does not show'}`); continue; }
+    if (!/^[a-z][A-Za-z0-9]{0,63}$/.test(k)) { log(`warning: ${where} schema "${k.slice(0, 40)}" is not a property name (Homie sets @type and @id); left out`); continue; }
+    out[k] = v;
+  }
+  const json = JSON.stringify(out);
+  if (json.length > 8192) { log(`warning: ${where} "schema" is over 8 KB; left out`); return null; }
+  const { errors } = checkJsonLd({ '@context': 'https://schema.org', '@type': types, ...out });
+  for (const e of errors) log(`warning: ${where} schema: ${e.replace(/^\$: /, '')}`);
+  return Object.keys(out).length ? out : null;
+}
+
+/** game.json "genre": a word or up to three ("Arcade", ["Racing", "Party"]); its landing and VideoGame say it. */
+export function genreOf(g, log = () => {}) {
+  if (g.genre === undefined) return null;
+  const list = (Array.isArray(g.genre) ? g.genre : [g.genre]).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, 40)).slice(0, 3);
+  if (!list.length) log(`warning: games/${g.id}/game.json "genre" is a word or a list of up to three; left out`);
+  return list.length ? list : null;
 }
 
 /**
@@ -357,6 +410,11 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     // The game's own palette (style.json, its art direction): the play page's buttons wear its paper and ink, so the
     // page's pills and the game's own HUD are one UI.
     const ui = uiOf(g);
+    // Search engines and agents (0.27.0, worker/schema.mjs): its genre, when it came and last changed, and the owner's
+    // own schema.org properties.
+    const genre = genreOf(g, log);
+    const dates = gameDates(root, g, log);
+    const extras = schemaExtras(g.schema, { where: `games/${g.id}/game.json`, types: ['VideoGame', 'WebApplication'], log });
     return {
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
       ...(ui ? { ui } : {}),
@@ -384,6 +442,9 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
       // Its source licence (worker/license.mjs), and, for a remix, what it is a remix of (shown on its landing).
       license: licenseOf(g.license),
       ...(remixRow(g.remixOf) ? { remixOf: remixRow(g.remixOf) } : {}),
+      ...(genre ? { genre } : {}),
+      ...(dates ? { dates } : {}),
+      ...(extras ? { schema: extras } : {}),
       landing: landingOf(g, join(dist, 'games', g.id), { videos: media.videos, songs: media.songs, log }),
     };
   });
@@ -394,11 +455,14 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   mkdirSync(join(dist, '_site'), { recursive: true });
   writeFileSync(join(dist, '_site', 'posts.json'), `${JSON.stringify({ v: 1, posts })}\n`);
   const s = studio.site && typeof studio.site === 'object' ? studio.site : {};
+  const studioExtras = schemaExtras(s.schema, { where: 'studio.json site', types: 'Organization', log });
   const catalogue = {
     studio: {
       name: studio.name, slug: studio.slug, version: STUDIO_VERSION,
       ...(typeof studio.tagline === 'string' && studio.tagline.trim() ? { tagline: studio.tagline.trim().slice(0, 140) } : {}),
       theme,
+      // studio.json "site": { "schema": { … } }: the owner's own schema.org properties on the studio (sameAs, …).
+      ...(studioExtras ? { schema: studioExtras } : {}),
       site: {
         ...(rows.some((g) => g.id === s.featured) ? { featured: s.featured } : {}),
         ...(Array.isArray(s.frameAncestors) ? { frameAncestors: s.frameAncestors.filter((o) => /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(String(o))).slice(0, 8) } : {}),

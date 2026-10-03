@@ -107,6 +107,14 @@ in that palette, light or dark as its paper is (0.26.0). Every HTML answer is `n
 site. A game made with Homie's arcade controls that knocks for a Homie box (`/__homie/call`) is told
 `not-a-homie`, at the site's root as under the game.
 
+Search engines and AI agents read a studio correctly (0.27.0): every generated page carries schema.org JSON-LD
+(`worker/schema.mjs`: the studio's `Organization` and `WebSite` on Home, a full `VideoGame` on each landing with its
+players, platforms, licence, remix original, trailer, dates and a free-to-play offer whose add-ons are what the shop
+really sells, `MusicRecording`, `VideoObject`, `BlogPosting`, `ItemList` and `BreadcrumbList`; never a rating), and the
+site makes `/robots.txt`, `/sitemap.xml`, `/llms.txt` and `/llms-full.txt` from its public catalogue
+(`worker/discover.mjs`). `lib/schema-check.mjs` checks every block against schema.org's own vocabulary and what Google
+documents as required. game.json `"schema"` and studio.json `site.schema` add the owner's own properties.
+
 Anyone can **watch** a live room from any player's view at `/<game>/watch?room=<room>` (a Watch button sits beside
 Join on every room): the game itself, drawn by the watcher's own browser as a watcher that never takes a seat,
 with a strip of the players to switch between (a tap, keys 1-9, Auto, the whole room). A game draws the followed

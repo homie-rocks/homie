@@ -25,7 +25,9 @@ Night Owls and make a multiplayer game"* and it:
    every game gets a landing page of its own, in the game's own palette: a full-bleed hero
    from its footage or art, a big Play button into a public room, phone / computer / TV,
    live rooms, credits, and "Make a game like this". Play never opens on a blank screen:
-   the game's title, art and a progress line show while its room connects and it loads;
+   the game's title, art and a progress line show while its room connects and it loads.
+   Search engines and AI agents read it correctly: schema.org data on every page (a full
+   VideoGame on each landing), and a sitemap, robots.txt and llms.txt made from what is public;
 5. **lists** the games in the [homie.rocks](https://homie.rocks/studios/) directory, so
    people can find them.
 
@@ -197,7 +199,7 @@ studio and changes nothing):
 
 | Resource | Name | What it does |
 | --- | --- | --- |
-| Worker | `<studio>` | The studio's pages (Home, Games, Music, Videos, Rooms, Posts and their feeds), each game's landing and play shell, the game files, `/api/games`, `/api/rooms`, and `/.well-known/homie-studio.json` for the directory (`packages/studio/site/SITE.md`). |
+| Worker | `<studio>` | The studio's pages (Home, Games, Music, Videos, Rooms, Posts and their feeds), each game's landing and play shell, the game files, `/api/games`, `/api/rooms`, `/.well-known/homie-studio.json` for the directory, and `/robots.txt`, `/sitemap.xml`, `/llms.txt` for search engines and AI agents (`packages/studio/site/SITE.md`). |
 | Durable Object `Table` | one per room | The netplay relay (`worker/room.mjs`): seats, host election, snapshots, keyed state, checkpoints. It runs no game code. |
 | Durable Object `Lobby` | one per game | Puts strangers who press Play into the same public room, and opens the next room when one is full. |
 | D1 database | `<studio>-db` | The directory claim and every finished round. |

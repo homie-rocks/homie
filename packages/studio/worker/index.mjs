@@ -36,6 +36,9 @@
  *   /__homie/..., /<game>/__homie/...   `not-a-homie`: the answer a game with Homie's arcade controls gets when it
  *                              knocks for a Homie box, so it stops knocking (a studio site is not a box)
  *   /.well-known/homie-studio.json   what the homie.rocks directory reads
+ *   /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt   for search engines and AI agents, made from the public
+ *                              catalogue (worker/discover.mjs); every generated page also carries schema.org JSON-LD
+ *                              (worker/schema.mjs)
  *   /games/<id>/source.json    a public game's source for remixing, with its credit and licence (worker/license.mjs)
  *   /media/<key>               a loose file in the studio's R2 (`media put`), with byte ranges
  *   /music/<slug>/<file>, /videos/<slug>/<file>   a song's or video's files: from the site's own files, or, for a
@@ -93,7 +96,7 @@ import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
 import {
-  SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homePage, jsonFeed, mediaArt, mediaIndexPage,
+  SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homeLd, homePage, jsonFeed, landingLd, mediaArt, mediaIndexPage,
   notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage, watchOf,
 } from './site.mjs';
 import { cookieValues, count, countVisit, counter, isQa, onlyOf, ownerAllowed, playedByGame, playedThisWeek, rangeOf, readStats, today } from './stats.mjs';
@@ -108,7 +111,9 @@ import {
 // every device, and the owner's own account (`homie-studio players owner`) counts as the owner.
 usePlayers(playerAccounts);
 import { STUDIO_VERSION_TAG } from './version.mjs';
-import { roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs';
+import { readiness, roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs';
+import { DISCOVERY_FILES, discoveryResponse, llmsTxt, robotsTxt, sitemapXml } from './discover.mjs';
+import { ldScript, studioNode } from './schema.mjs';
 import { arrivalCookie, manifestReferrals } from './referrals.mjs';
 import { licenseOf, remixAllowed, remixRow } from './license.mjs';
 
@@ -143,6 +148,14 @@ async function catalogue(env, origin) {
 }
 
 /** The posts with their HTML (site/dist/_site/posts.json), for a post's page and the feeds. */
+/** The studio's shop when it really sells (shop.json checked, the key, the webhook secret and its tables in): its items
+ * are a landing's offers (worker/schema.mjs). Else null: a landing never names a price nobody can pay. */
+async function sellingShop(env, cat) {
+  const shop = shopOf(cat);
+  if (!shop || shop.broken) return null;
+  try { return (await readiness(env, shop)).ready ? shop : null; } catch { return null; }
+}
+
 async function postsOf(env, origin) {
   try {
     const res = await env.ASSETS.fetch(new Request(`${origin}/_site/posts.json`));
@@ -701,6 +714,23 @@ async function route(request, env, ctx) {
     }
   }
 
+  // Search engines and AI agents (0.27.0, worker/discover.mjs): robots.txt, sitemap.xml, llms.txt and llms-full.txt,
+  // made from the public catalogue (a private or invite-only game is in none of them); a file of the studio's own in
+  // site/public wins.
+  if (read && DISCOVERY_FILES.includes(path)) {
+    const own = await env.ASSETS.fetch(new Request(`${url.origin}${path}`));
+    if (own.ok) return own;
+    const cat = await getCat();
+    const method = request.method;
+    if (path === '/robots.txt') return discoveryResponse(robotsTxt(cat, url.origin, { preview: env.HOMIE_PREVIEW === '1' }), 'text/plain', { method });
+    const all = await getAll();
+    if (path === '/sitemap.xml') return discoveryResponse(sitemapXml(cat, url.origin, { all }), 'application/xml', { method });
+    const settings = await settingsOf(env);
+    const remixable = (g) => g.landing?.source !== false && remixOf(g, settings) && remixAllowed(g.license);
+    const full = path === '/llms-full.txt';
+    return discoveryResponse(llmsTxt(cat, url.origin, { remixable, directory: directoryOf(cat), full, posts: full ? await postsOf(env, url.origin) : null, all }), 'text/plain', { method });
+  }
+
   // A page the studio made itself (site/pages) wins at its address.
   if (read && (path.endsWith('/') || !path.includes('.'))) {
     const cat = await getCat();
@@ -714,7 +744,14 @@ async function route(request, env, ctx) {
         const game = (cat.games ?? []).find((g) => g.id === top);
         await countVisit(request, env, ctx, parts.length === 0 ? 'home' : game && parts.length === 1 ? game.id : parts.join('/').slice(0, 80));
         const active = game ? 'games' : sectionsOf(cat).some((s) => s.key === top) ? top : null;
-        return customPage(cat, await res.text(), { active });
+        const html = await res.text();
+        // <!-- homie:schema -->: the structured data the generated page here would carry (Home's, a landing's), else the
+        // studio's own Organization (an About page).
+        const schema = !/<!--\s*homie:schema\s*-->/.test(html) ? ''
+          : want === '/' ? ldScript(homeLd(cat, url.origin))
+            : game && parts.length === 1 ? ldScript(landingLd(cat, game, url.origin, { shop: await sellingShop(env, cat) }))
+              : ldScript([studioNode(cat, url.origin, { full: true })]);
+        return customPage(cat, html, { active, schema });
       }
     }
   }
@@ -825,7 +862,7 @@ async function route(request, env, ctx) {
       const { rooms, live } = await roomsOf(env, [meta], { servers: { [game]: servers } });
       const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
       const band = servers.some((x) => x.id !== 'public' && x.listed && x.state === 'open') ? await serverLive(env, meta, servers, url.origin, lobby) : null;
-      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, remix: launch === 'public' && remixOf(meta, settings), servers: band });
+      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, remix: launch === 'public' && remixOf(meta, settings), servers: band, listed: launch === 'public', shop: launch === 'public' ? await sellingShop(env, cat) : null });
     }
     if (sub === 'live') {
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);

@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, relative, resolve, sep } from 'node:path';
+import { isoDate } from './site.mjs';
 
 export const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export const KINDS = {
@@ -177,12 +178,18 @@ export function resolveMedia(root, kind, { r2 = false, deploy = false } = {}) {
     }
     const main = kind === 'music' ? 'audio' : 'video';
     if (!files.some((f) => f.role === main)) { skipped.push({ kind, item: item.slug, why: `no playable "${main}" file reachable (see the file lines above)` }); continue; }
+    if (kind === 'videos' && !isoDate(item.date) && !isoDate(item.made?.at)) notes.push({ kind, item: item.slug, file: 'date', why: 'no "date" (or made.at): its page names no upload date, so search engines will not show it as a video; add "date": "2026-09-30"' });
     entries.push({
       slug: item.slug, kind: KINDS[kind].includes(item.kind) ? item.kind : KINDS[kind][0], title: String(item.title).slice(0, 120), blurb: String(item.blurb ?? '').slice(0, 600),
       duration: Number.isFinite(item.duration) ? item.duration : null, bpm: Number.isFinite(item.bpm) ? item.bpm : null, key: item.key ?? null,
       lyrics: typeof item.lyrics === 'string' ? item.lyrics.slice(0, 8000) : null, credits: typeof item.credits === 'string' ? item.credits.slice(0, 600) : null,
       rights: item.rights && typeof item.rights === 'object' ? item.rights : null, for: item.for && typeof item.for === 'object' ? item.for : null,
       honesty: typeof item.honesty === 'string' ? item.honesty.slice(0, 600) : null, made: item.made?.at ? { at: item.made.at, provider: item.made.provider ?? null } : null,
+      // When it came out (0.27.0): `date` (a day, or a day and a time), else when it was made (`made.at`). A video's
+      // VideoObject needs it as its uploadDate; a song's MusicRecording says it as datePublished.
+      date: isoDate(item.date) ?? isoDate(item.made?.at) ?? null,
+      // A music manifest's `album` (or an entry's own): the songs' MusicAlbum.
+      ...(kind === 'music' && typeof (item.album ?? manifest.album) === 'string' && (item.album ?? manifest.album).trim() ? { album: String(item.album ?? manifest.album).trim().slice(0, 120) } : {}),
       files,
     });
   }
