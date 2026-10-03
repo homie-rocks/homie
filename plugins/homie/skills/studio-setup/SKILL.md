@@ -113,6 +113,24 @@ They answer in their own message, `proceed <code>` (that exact call goes through
 command or a file: only the person's own message counts. `node <this plugin's folder>/hooks/codex.mjs check
 -- <command>` (the folder above `skills/`) says what Homie would do with a command, and runs nothing.
 
+## Grok and Grok Bot
+
+Grok chat already has the Homie connector (`https://homie.rocks/mcp`). Use it. Do not send the person to
+Claude's GitHub app, to claude.ai/code, or to a button that only says "Connect to Claude".
+
+- **Cloudflare** stays one tap on Cloudflare's own page. Grok has no Cloudflare connector and must never
+  ask for a token. On a phone, the setup card's "Make the studio on Cloudflare" is that tap. On a computer,
+  `npx wrangler login` opens the same approval.
+- **This computer** is a Grok Bot, or Grok Build with a folder. Run the checklist here. When the chat has a
+  setup id `hs_…`, check in once from the studio's own repository:
+  `npx --no-install homie-studio setup attach <hs_…> --client grok`. That tells the directory Grok works in
+  this repository. It does not need Claude's GitHub app. GitHub, when this chat already has it, is enough
+  to push the branch and open the pull request.
+- **A build** the chat opened (`hb_…`): `npx --no-install homie-studio handoff <hb_…> --client grok`. The
+  session fetches the brief itself. There is no Claude Code window to open, and no second session to start.
+- **Holds.** Grok does not run Homie's Codex hooks. Before a production deploy, a Cloudflare change outside
+  that deploy, or a paid call, say what it would do in one sentence and wait for a yes.
+
 ## 1. The studio
 
 Ask for a name if there is none ("What should the studio be called? It's the name on your site.").
