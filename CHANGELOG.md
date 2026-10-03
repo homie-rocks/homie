@@ -35,7 +35,7 @@ Grok can set up a studio and run it with the same holds as Claude Code and Codex
 
 ## [0.29.0] - 2026-10-03
 
-**Plugin 0.30.0** · [#44](https://github.com/homie-rocks/homie/pull/44)
+**Plugin 0.30.0** · [#44](https://github.com/homie-rocks/homie/pull/44) · [release-2026-10-03-studio-0.29.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.29.0)
 
 The Lounge: a community room on your own studio, with play nights, moderators, live rooms and "show what you made" cards, and chat history you can turn on.
 
