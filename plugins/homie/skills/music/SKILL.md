@@ -1,6 +1,9 @@
 ---
 name: music
 description: Make songs, themes and game scores for a Homie studio with ElevenLabs Music, through the creator's OWN ElevenLabs account — a composition plan for anything sung, a transcription check that every line is actually sung, mastering to a loudness target, seamless loops and stems for games — then a song page on the studio's site. It tells the person the plan, the rights and the credit cost before anything is rendered, and never spends past the budget they set. Use when someone in a studio asks for a song, a theme song, a jingle, background music, a game score, loops or stems.
+compatibility: Node 22 and ffmpeg. ElevenLabs' own CLI (elevenlabs, signed in with elevenlabs auth login) or ELEVENLABS_API_KEY, on the creator's own ElevenLabs account.
+metadata:
+  providers: elevenlabs
 ---
 
 # Music for a studio
@@ -34,15 +37,25 @@ the rights that plan gives, ffmpeg, and whether the studio's site has song pages
 
 Not connected? Offer ElevenLabs' own tools, never a copy of anyone's key or code:
 
-- **The official CLI** (what this skill uses for music): `brew install elevenlabs/tap/elevenlabs`,
-  then `elevenlabs auth login`. It opens ElevenLabs in the browser; the person signs in once and the
-  sign-in stays in the OS keychain. Nobody pastes a key. The person approves the install.
+- **The official CLI** (what this skill uses for music): `brew install elevenlabs/tap/elevenlabs`
+  (or `npm install -g @elevenlabs/cli`), then `elevenlabs auth login`. It opens ElevenLabs in the
+  browser; the person signs in once and the sign-in stays in the OS keychain. Nobody pastes a key.
+  The person approves the install. An older CLI works; `brew upgrade elevenlabs` keeps it current
+  (1.4.0 on 2026-09-25).
 - **Or their own API key** from https://elevenlabs.io/app/developers/api-keys, set as
   `ELEVENLABS_API_KEY` in the environment Claude or Codex runs in. Never ask them to paste it
   into the chat and never write it into the studio.
-- **ElevenLabs' plugin** for Claude Code / Codex (`/plugin marketplace add elevenlabs/plugin`, then
-  `/plugin install elevenlabs@elevenlabs`) brings their own skills and their hosted MCP
-  (voices, speech, agents). It is optional here.
+- **ElevenLabs' plugin** for Claude Code (`/plugin marketplace add elevenlabs/plugin`, then
+  `/plugin install elevenlabs@elevenlabs`; in Codex `codex plugin marketplace add elevenlabs/plugin`)
+  brings their own skills and their hosted MCP (`https://api.elevenlabs.io/v1/mcp`, signed in on
+  ElevenLabs' page: speech, voices, transcription, agents). Their skills alone: `npx skills add
+  elevenlabs/skills`. It is optional here, and their MCP has no music tools: songs, stems and the
+  lyric check go through this skill's script, which keeps the budget, the receipts and the rights.
+  Their speech and sound-effect tools spend the same credits: tell the person the cost first, and in
+  Claude Code the Homie mod holds a generating tool (an `estimate_only` call is free).
+
+Prefer the CLI to a raw API call or a pasted key; never call ElevenLabs' API with `curl` for a song
+(the same request twice is twice the bill, and nothing records it).
 
 No ffmpeg: offer `brew install ffmpeg` (macOS) or the system package; the person approves.
 

@@ -1,6 +1,9 @@
 ---
 name: video
 description: Make trailers, music videos, cutscenes and page recordings for a Homie studio — a gameplay trailer captured from the studio's own running game and cut on the beat of its music; a recording of any web page while a script drives it (clicks, taps, keys, typing, scrolls, waits; Play and a few moves on the studio's own game page; a site walkthrough or product demo) in real time with honest frames; or generated footage from fal (Seedance and friends) through the creator's OWN fal account under a hard budget with a receipt for every call, drawn over with a JavaScript look and kinetic type, sync-checked, reviewed on contact sheets, delivered 16:9 and 9:16, and published as a video page on the studio's site (big files in the studio's own R2 when it has storage). Use when someone in a studio asks for a trailer, a teaser, a music video, a cutscene, a clip for social media, "a video of my game", a demo, a walkthrough or tutorial video of a site or app, or a recording of a page.
+compatibility: Node 22, ffmpeg and Chrome. Generated footage uses the creator's own fal account (FAL_KEY); fal's own MCP server (https://mcp.fal.ai/mcp-relay) finds models and reads prices.
+metadata:
+  providers: fal
 ---
 
 # Video for a studio
@@ -88,10 +91,14 @@ node <video.mjs> sheet <slug> --in videos/<slug>/<slug>.mp4
 **The provider, only now.** fal through the person's own account: they create a key at
 https://fal.ai/dashboard/keys and set `FAL_KEY` in the environment Claude or Codex runs in
 (never pasted into the chat, never written into the studio). `check` tests it for free.
-fal's hosted MCP (`https://mcp.fal.ai/mcp`; in Codex, fal's plugin) is the way to find models,
-read their input schemas and prices (`search_models`, `get_model_schema`, `get_pricing`). Paid
-calls go through `video.mjs gen`, never the MCP's `run_model`: `gen` prices, caps, receipts and
-resumes; the MCP call does none of that.
+**fal's own MCP server** is the way to find models and read their input schemas and prices
+(`search_models`, `recommend_model`, `get_model_schema`, `get_pricing`): use it rather than memory,
+because video endpoints retire and reprice monthly. Not connected? Offer it, and the person signs in
+on fal's own page (no key): in Claude Code `claude mcp add --transport http --scope user fal
+https://mcp.fal.ai/mcp-relay`, then `/mcp`; in Codex `codex mcp add fal --url
+https://mcp.fal.ai/mcp-relay`, then `codex mcp login fal`. **Paid calls go through `video.mjs gen`,
+never the MCP's `run_model` or `submit_job`**: `gen` prices, caps, receipts and resumes; the MCP call
+does none of that (in Claude Code the Homie mod holds one, as a call whose cost cannot be read first).
 
 **The budget, before the first call.** Plan the shots, price one of each kind, add them up, and
 ask the person for a cap in dollars:

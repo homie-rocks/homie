@@ -1,6 +1,9 @@
 ---
 name: style
-description: A game's look as a set of decisions that fit together — render style, palette, shape language, proportions, materials, light, camera, fonts and effects; then the cast, its library family, scale and phone budgets — each picked automatically from the person's words with a one-line why, which the person can steer ("warmer", "closer"), lock, or explore on a style board of three directions drawn by the game engine itself (free; a painted mood image only on their own fal account). Locked and pinned decisions keep every asset coherent: change one and the blast radius lists exactly what went stale and what remaking it would cost, and nothing is remade without a yes. Use when someone talks about a game's look or style, "make it look like…", "show me other looks", "keep that palette", "darker", "the art doesn't fit together", or before making any models or art for a game.
+description: "A game's look as a set of decisions that fit together — render style, palette, shape language, proportions, materials, light, camera, fonts and effects; then the cast, its library family, scale and phone budgets — each picked automatically from the person's words with a one-line why, which the person can steer (\"warmer\", \"closer\"), lock, or explore on a style board of three directions drawn by the game engine itself (free; a painted mood image only on their own fal account). Locked and pinned decisions keep every asset coherent: change one and the blast radius lists exactly what went stale and what remaking it would cost, and nothing is remade without a yes. Use when someone talks about a game's look or style, \"make it look like…\", \"show me other looks\", \"keep that palette\", \"darker\", \"the art doesn't fit together\", or before making any models or art for a game."
+compatibility: Node 22 and Chrome. The style board is free; a painted mood image uses the creator's own fal account (FAL_KEY), through the models skill.
+metadata:
+  providers: fal
 ---
 
 # The look of a game: decisions, the board, locks

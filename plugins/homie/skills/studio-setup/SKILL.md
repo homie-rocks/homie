@@ -1,6 +1,9 @@
 ---
 name: studio-setup
-description: Set up a Homie studio (one repository with games/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare, free plan, no payment method) by a built-in checklist that never jumps ahead: setup status first (accounts and tools, what each unlocks, the exact fix), name the studio, see a working game, make one small change, plan the game into its Game Codex, build it (alone or with parallel agents) with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says "set up a game studio called X" (with or without "and make a multiplayer game").
+description: "Set up a Homie studio (one repository with games/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare, free plan, no payment method) by a built-in checklist that never jumps ahead: setup status first (accounts and tools, what each unlocks, the exact fix), name the studio, see a working game, make one small change, plan the game into its Game Codex, build it (alone or with parallel agents) with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says \"set up a game studio called X\" (with or without \"and make a multiplayer game\")."
+compatibility: Node 22. Reads, and offers only when a feature needs them, each provider's own tools (Wrangler (Cloudflare, pinned in the studio), the GitHub CLI, the ElevenLabs CLI, a fal key). The plugin's providers.json lists them.
+metadata:
+  providers: cloudflare github elevenlabs fal
 ---
 
 # Set up a studio
@@ -79,6 +82,13 @@ few seconds, and never prints a key:
    agree. A row the person does on their own (`fix.open`) can be done any time, even while they wait
    for something else: give them the link.
 5. Run it again whenever they say they did something, and tick the row.
+
+**Each provider's own tools, lazily.** Homie works through each provider's own CLI, plugin or MCP
+server (Wrangler for Cloudflare, the GitHub CLI, ElevenLabs' CLI, fal's MCP server), never a copy of
+their code: the plugin's `providers.json` lists them, with what stays Homie's (budgets and receipts,
+the kids rules, the owner's one-tap asks, secrets never in the chat, the rights notes). Offer one only
+when the person wants what it unlocks, in the skill that needs it; they approve every install and sign
+in on the provider's own page.
 
 **The status line (Claude Code only).** The moment the studio exists (end of step 1), add one line to
 your reply offering it: "Want the build's progress as a line under the prompt? Say yes and I'll turn it

@@ -194,6 +194,95 @@ describe('paid media calls', () => {
   })
 })
 
+describe('the providers\' own tools', () => {
+  test('a paid call through a provider\'s own CLI cannot be priced first, so it is held; their free commands are not', async ($, on) => {
+    const w = world(on, { feed: null, ask: 'Cancel' })
+    await start($)
+    const r = await $.tool.call({ tool: 'Bash', command: 'elevenlabs music compose --format json --json - < music/theme/body.json' })
+    expect(w.log.asked[0]).toContain('Make a paid ElevenLabs call whose cost could not be read first?')
+    expect(r.deny).toContain('The person said no')
+    await $.tool.call({ tool: 'Bash', command: 'fal api fal-ai/flux/dev prompt="an owl"' })
+    await $.tool.call({ tool: 'Bash', command: 'tripo make "a brass lantern"' })
+    await $.tool.call({ tool: 'Bash', command: 'elevenlabs auth status --format json' })
+    await $.tool.call({ tool: 'Bash', command: 'elevenlabs music compose --dry-run --json -' })
+    await $.tool.call({ tool: 'Bash', command: 'genmedia pricing fal-ai/flux/dev' })
+    expect(w.log.asked.length).toBe(3)
+    expect(w.log.tools).toEqual(['AskUserQuestion', 'AskUserQuestion', 'AskUserQuestion', 'Bash', 'Bash', 'Bash'])
+  })
+
+  test('fal\'s and ElevenLabs\' own MCP servers: a run is held, finding a model, its price or an estimate is not; Tripo\'s too', async ($, on) => {
+    const w = world(on, { feed: null })
+    await start($)
+    await $.tool.call({ tool: 'mcp__fal__run_model', endpoint_id: 'fal-ai/flux/dev', input: { prompt: 'an owl' } })
+    await $.tool.call({ tool: 'mcp__plugin_elevenlabs_elevenlabs__creative_generate_speech', text: 'hoot' })
+    await $.tool.call({ tool: 'mcp__tripo__generate_model', prompt: 'a lantern' })
+    await $.tool.call({ tool: 'mcp__fal__get_pricing', endpoint_id: 'fal-ai/flux/dev' })
+    await $.tool.call({ tool: 'mcp__fal__recommend_model', task: 'a cover' })
+    await $.tool.call({ tool: 'mcp__plugin_elevenlabs_elevenlabs__creative_generate_speech', text: 'hoot', estimate_only: true })
+    expect(w.log.asked.length).toBe(3)
+  })
+})
+
+describe('Cloudflare changes outside the studio\'s deploy', () => {
+  test('Wrangler deleting the studio\'s own database is held; Cancel refuses it with a reason', async ($, on) => {
+    const w = world(on, { feed: null, ask: 'Cancel' })
+    await start($)
+    const r = await $.tool.call({ tool: 'Bash', command: 'npx wrangler d1 delete night-owls-db' })
+    expect(w.log.asked[0]).toContain('Delete something on Cloudflare for Night Owls, outside the studio\'s deploy?')
+    expect(r.deny).toContain('The person said no to this Cloudflare change (wrangler d1 delete)')
+    expect(w.log.tools).toEqual(['AskUserQuestion'])
+  })
+
+  test('the dialog names the change and the studio\'s own database, above Claude Code\'s own question', async ($, on) => {
+    let release: (v: unknown) => void = () => {}
+    const asked: string[] = []
+    on('tool.call', { tool: 'AskUserQuestion' }, ($: any, e: any) => new Promise((resolve) => { asked.push(e.questions[0].question); release = () => resolve({ result: { answers: { [e.questions[0].question]: 'Cancel' } } }) }))
+    world(on, { feed: null, tool: () => ({ result: { stdout: '' } }) })
+    await start($)
+    const held = $.tool.call({ tool: 'Bash', command: 'npx wrangler d1 delete night-owls-db' })
+    for (let i = 0; i < 20 && !asked.length; i++) await new Promise((r) => setTimeout(r, 5))
+    const ui = await $.ui.mount({ plugin: 'homie', component: 'AskUserQuestion', requestId: 'q1', surface: 'terminal', viewport: { columns: 120, rows: 40, isFullscreen: false }, props: { tool: 'AskUserQuestion', questions: [{ question: asked[0], header: 'Homie', options: [{ label: 'Proceed' }, { label: 'Cancel' }], multiSelect: false }] } })
+    const text = textOf(await ui.drawn())
+    expect(text).toContain('Cloudflare: wrangler d1 delete')
+    expect(text).toContain('its own D1 night-owls-db')
+    release(null)
+    expect((await held).deny).toContain('said no')
+  })
+
+  test('a secret put, a hand rollout, a remote migration and a writing query are held; reads, creates and --local are not', async ($, on) => {
+    const w = world(on, { feed: null })
+    await start($)
+    for (const command of ['npx wrangler secret put STRIPE_KEY', 'npx wrangler versions deploy', 'npx wrangler d1 migrations apply night-owls-db --remote', 'npx wrangler d1 execute night-owls-db --remote --command "DELETE FROM rounds"']) {
+      await $.tool.call({ tool: 'Bash', command })
+    }
+    expect(w.log.asked.length).toBe(4)
+    for (const command of ['npx wrangler whoami --json', 'npx wrangler d1 execute night-owls-db --remote --command "SELECT count(*) FROM rounds"', 'npx wrangler r2 bucket create night-owls-media', 'npx wrangler d1 migrations apply night-owls-db --local', 'npx wrangler ai models list --json']) {
+      await $.tool.call({ tool: 'Bash', command })
+    }
+    expect(w.log.asked.length).toBe(4)
+  })
+
+  test('Cloudflare\'s own MCP servers and the claude.ai connector: a delete or a write is held, a read is not', async ($, on) => {
+    const w = world(on, { feed: null, ask: 'Cancel' })
+    await start($)
+    const r = await $.tool.call({ tool: 'mcp__plugin_cloudflare_cloudflare__execute', code: 'async () => cloudflare.request({ method: "DELETE", path: `/accounts/${id}/workers/scripts/night-owls` })' })
+    expect(r.deny).toContain('The person said no to this Cloudflare change')
+    await $.tool.call({ tool: 'mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_delete', database_id: 'night-owls-db' })
+    await $.tool.call({ tool: 'mcp__plugin_cloudflare_cloudflare__execute', code: 'async () => cloudflare.request({ method: "GET", path: `/accounts/${id}/workers/scripts` })' })
+    await $.tool.call({ tool: 'mcp__claude_ai_Cloudflare_Developer_Platform__workers_list' })
+    await $.tool.call({ tool: 'mcp__cloudflare-docs__search_cloudflare_documentation', query: 'D1 free plan limits' })
+    expect(w.log.asked.length).toBe(2)
+  })
+
+  test('guardDeploys: false holds none of it', { options: { guardDeploys: false } }, async ($, on) => {
+    const w = world(on, { feed: null })
+    await start($)
+    await $.tool.call({ tool: 'Bash', command: 'npx wrangler d1 delete night-owls-db' })
+    await $.tool.call({ tool: 'mcp__plugin_cloudflare_cloudflare__execute', code: 'cloudflare.request({ method: "DELETE", path: "/x" })' })
+    expect(w.log.asked).toEqual([])
+  })
+})
+
 describe('secrets in tool output', () => {
   const KEY = `hsk_${'0123456789abcdef'.repeat(3)}`
   const PASS = `hap_0123456789_${'A'.repeat(40)}`

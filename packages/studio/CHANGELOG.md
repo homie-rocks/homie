@@ -17,9 +17,33 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.24.2] - 2026-10-03
+
+**Plugin 0.25.2** · [#35](https://github.com/homie-rocks/homie/pull/35)
+
+Homie's skills work through each provider's own CLI, plugin and MCP server, declared so they load only when a skill needs them, and the Homie mod holds the paid calls and Cloudflare changes those tools can make.
+
+### Added
+
+- `providers.json` in the plugin: each provider's own CLI, plugin, MCP servers and skills, the skills that use them, and what stays Homie's (budgets and receipts, the kids rules, secrets never in the chat, the owner's one-tap asks, phone budgets, the rights notes). The plugin's `plugin.json` points at it (`extensions["rocks.homie"].providers`). Nothing installs by itself: a skill offers a provider's tool when the person wants what it unlocks, and the person approves the install and signs in on the provider's own page.
+- Each skill that uses a provider names it in its own frontmatter (`metadata.providers`, and `compatibility` in words: the Agent Skills fields). The art, video, models, style, publish and servers skills declare their provider's MCP server for Codex in `agents/openai.yaml` (fal's MCP server; Cloudflare's docs server, which needs no sign-in), so Codex can wire it when the skill is used.
+- The Homie mod holds a change to a studio's Cloudflare account made outside its deploy, inside the studio: Wrangler deleting something (a Worker, a D1 database, an R2 bucket or object, a KV namespace or key, a queue, a secret), a `secret put`, a version rolled out or back by hand, a migration or a writing query on the live database (`--remote`), and the same through Cloudflare's own MCP servers or a claude.ai Cloudflare connector (the API server's `execute` sending anything but a GET or a GraphQL read; a tool that deletes, updates or edits). The hold names the studio's own Worker, database or bucket when the change touches one. Creating something and reading are not held; `guardDeploys: false` turns it off.
+- The mod's spending guard knows the providers' own CLIs and MCP servers: a generating command of `elevenlabs`, `fal api` or `fal run`, `genmedia run` and `tripo` is held as a call whose cost cannot be read first, and so is a run on fal's, ElevenLabs' or Tripo's MCP server. Their help, dry runs, sign-ins, prices, listings and ElevenLabs' `estimate_only` are free.
+
+### Changed
+
+- The art and video skills find models and read prices on fal's own MCP server at its sign-in address (`https://mcp.fal.ai/mcp-relay`: the person signs in on fal's page, no key), with the commands that connect it in Claude Code and in Codex. Paid runs still go through the skills' scripts (priced, capped, receipted, resumable), never the MCP's `run_model`.
+- The publish skill points at Cloudflare's own tools for questions beyond the deploy (its docs MCP server; its plugin's skills and API server, from `cloudflare/skills` or Claude's plugin directory; `wrangler login --device` where no browser can open) and says the studio's own Worker, database, storage and secrets change only through its deploy. The servers skill reads Cloudflare's model catalogue (`wrangler ai models list --json`) rather than memory.
+- The music skill names ElevenLabs' plugin for Codex too, their skills on their own (`npx skills add elevenlabs/skills`) and their hosted MCP server, which has no music tools, and prefers the CLI to a raw API call.
+- The models skill keeps Tripo on fal: Tripo's own CLI and MCP server bill a separate Tripo account outside the skill's budget and receipts.
+
+### Fixed
+
+- The studio-setup and style skills' descriptions are plain YAML now. Each held a `: `, which a strict YAML reader refuses.
+
 ## [0.24.0] - 2026-10-03
 
-**Plugin 0.25.0** · [#34](https://github.com/homie-rocks/homie/pull/34)
+**Plugin 0.25.0** · [#34](https://github.com/homie-rocks/homie/pull/34) · [release-2026-10-03-studio-0.24.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.24.0)
 
 Sell things in your games with your own Stripe account: a supporter pack, cosmetics, a pass, an unlock or a tip, in real money, with refunds from your office and the kids rules built in; Homie never sees the money.
 

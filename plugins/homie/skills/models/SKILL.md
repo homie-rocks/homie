@@ -1,6 +1,9 @@
 ---
 name: models
 description: Give a game real 3D models that fit together and run on a phone — free CC0 models from Homie's starter library (Kenney, KayKit, Poly Haven, ambientCG) copied in with their licence, the person's own files checked and made phone-sized, and generated props (a concept image in the game's locked style, then Tripo P1 image-to-3D) on the person's OWN fal account under a hard budget with a receipt per call — every asset recorded with its provenance and licence (RIGHTS.md, the credits page), checked against phone budgets, shown in a lineup at true scale, and loaded through one safe loader. Use when someone wants 3D models, props, characters, scenery or "free assets" for a game, asks where a model came from or whether it may be used, or says the models look like they are from different games.
+compatibility: Node 22. Generated props use Tripo's models on the creator's own fal account (FAL_KEY); fal's own MCP server (https://mcp.fal.ai/mcp-relay) reads schemas and prices.
+metadata:
+  providers: fal tripo
 ---
 
 # Models for a game: free first, everything licensed, one look
@@ -68,7 +71,14 @@ npx --no-install homie-studio assets lineup <id>         # true scale, silhouett
   bad concept: change the words and `--concept-again` once. Spend the riskiest prop first.
 - `references/models.json` is the dated registry of endpoints, prices and schemas. Endpoints retire and reprice
   monthly: `node <models.mjs> registry` reads every price again for free; update the registry (`--write`) when one
-  moved, and never hard-code an endpoint anywhere else.
+  moved, and never hard-code an endpoint anywhere else. fal's own MCP server (`get_model_schema`, `get_pricing`,
+  `search_models` for a newer Tripo version; the `art` skill says how to connect it) reads the same facts; a paid
+  run still goes through `models.mjs`, never the MCP's `run_model`.
+- Tripo's models run **on fal** here (`tripo3d/...` endpoints): one account, prices read live, the receipts above.
+  Tripo's own CLI and MCP server (`tripo-cli`, `tripo mcp`) bill a separate Tripo account in Tripo credits, outside
+  this skill's budget and receipts, and a free Tripo plan makes its outputs public under CC BY 4.0
+  (`references/RIGHTS.md`): keep a game's models on the fal route. In Claude Code the Homie mod holds a `tripo`
+  generating command or a Tripo MCP tool as a call whose cost cannot be read first.
 - A painted mood image for the style board: `node <models.mjs> mood <id> b --yes` (about US$0.035; a target).
 
 ## Check, lineup, rights

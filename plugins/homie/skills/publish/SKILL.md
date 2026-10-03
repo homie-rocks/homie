@@ -1,6 +1,9 @@
 ---
 name: publish
 description: Put a Homie studio's site and games online on the studio's OWN Cloudflare account (Worker, D1 and public-room Durable Objects, all on the free plan with no payment method; R2 storage only when added), run its site (the hub's sections in the studio's own look, a landing for every game, news posts with feeds, and what the studio's site/ folder overrides), list them in the homie.rocks directory, and read the studio's own stats (visits, plays, rooms, rounds, players, songs, videos, where people came from); ask an owner for a grant when a game uses a protected name. Use when someone asks to deploy, publish, go live, share a studio's games, write a news post or announce a drop, change how the studio's site looks, list games in the Homie directory, or how their studio or a game is doing.
+compatibility: Node 22 and the studio's own pinned Wrangler, signed in to the studio's Cloudflare account. Cloudflare's own plugin (cloudflare/skills) and docs MCP are optional helpers.
+metadata:
+  providers: cloudflare
 ---
 
 # Publish a studio
@@ -13,11 +16,28 @@ A studio's site runs on the studio's own Cloudflare account; homie.rocks only li
 2. Not signed in: run `npx wrangler login`. Tell the person in one line that Cloudflare
    opened in their browser and they approve once (a free account works, no payment
    method). Wait, then
-   `whoami` again. Never ask for, paste or store an API key.
+   `whoami` again. Never ask for, paste or store an API key. Where no browser can open on
+   this computer (a remote or cloud session), `npx wrangler login --device` prints a code the
+   person approves on any device.
 3. Several accounts: ask the person which one, and put its id in `studio.json`
    (`cloudflare.accountId`).
-4. The Cloudflare plugin for Claude Code / Codex (github.com/cloudflare/skills) is
-   useful but optional; offer it only if the person wants Cloudflare help beyond this.
+4. **Cloudflare's own tools**, for Cloudflare questions beyond the studio's deploy (a
+   Worker's logs, a limit, what a Wrangler flag does, building on Cloudflare yourself):
+   - Current facts come from Cloudflare's docs, not memory: its docs MCP server
+     (`https://docs.mcp.cloudflare.com/mcp`, no sign-in) or any developers.cloudflare.com
+     page with `/index.md` added for Markdown.
+   - Cloudflare's plugin brings its own skills (`wrangler`, `workers-best-practices`,
+     `durable-objects` and more) and its API MCP server. Offer it when the person wants that
+     help, and they approve the install: in Claude Code `/plugin marketplace add
+     cloudflare/skills`, then `/plugin install cloudflare@cloudflare` (it is also in Claude's
+     plugin directory as `cloudflare@claude-plugins-official`); in Codex `codex plugin
+     marketplace add cloudflare/skills`, then `codex plugin add cloudflare@cloudflare`.
+   - **The studio's own Worker, database, storage and secrets change only through `npm run
+     deploy` and `homie-studio`**, which record what they create in `studio.json` and never
+     touch what they did not create. Never create, change or delete them with Cloudflare's
+     MCP (its `execute`, a bindings or connector tool) or a bare `wrangler` command. In Claude
+     Code the Homie mod holds such a change inside a studio (a delete, a secret, a hand
+     rollout, a write to the live database) until the person says Proceed.
 
 ## Deploy
 

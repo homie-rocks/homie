@@ -35,7 +35,7 @@
 import { applyEdit, unifiedDiff } from './lib/diff.mjs';
 import { GAME_ID, artFor, artSummaryOf, castText, decisionsFileOf, licenceIssues, lineupText, lockedChanges, lookText, publicSource, rightsText, usd } from './lib/art.mjs';
 import { summarizeCodex } from './lib/codex.mjs';
-import { deployOf, gitStagesOf, inside, paidMcpOf, paidOf, protectedBy, studioCalls } from './lib/commands.mjs';
+import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, paidMcpOf, paidOf, protectedBy, studioCalls } from './lib/commands.mjs';
 import { ago, feedOf, summarize } from './lib/feed.mjs';
 import { redact } from './lib/redact.mjs';
 import { readResult } from './lib/results.mjs';
@@ -287,13 +287,21 @@ export function register(on, options) {
         return result;
       }
     }
+    const change = OPT.guardDeploys ? cloudflareChangeOf(e.command) : null;
+    if (change) {
+      const root = await studioFor($, change.dir);
+      if (root) {
+        const held = await guardCloudflare($, root, change);
+        if (held) return held;
+      }
+    }
     const paid = OPT.guardSpend ? paidOf(e.command) : null;
     if (paid) {
       const held = await guardSpend($, e, paid);
       if (held) return held;
     }
     return next(e);
-  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this command ran.' } : { deny: 'The Homie mod could not check this command (a deploy, a paid media call, or big files into git), so it was not run. Ask the person, or try again.' }));
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this command ran.' } : { deny: 'The Homie mod could not check this command (a deploy, a Cloudflare change, a paid media call, or big files into git), so it was not run. Ask the person, or try again.' }));
 
   on('tool.call', { tool: /^mcp__.+__studio_deploy$/ }, async ($, e, next) => {
     if (!OPT.guardDeploys || !S.root) return next(e);
@@ -304,12 +312,21 @@ export function register(on, options) {
     return result;
   }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this deploy ran.' } : { deny: 'The Homie mod could not summarise this deploy, so it was not run. Ask the person, or try again.' }));
 
-  on('tool.call', { tool: /^mcp__.*(?:fal|eleven).*__/i }, async ($, e, next) => {
-    const paid = OPT.guardSpend ? paidMcpOf(e.tool) : null;
+  on('tool.call', { tool: /^mcp__.*(?:fal|eleven|tripo).*__/i }, async ($, e, next) => {
+    const paid = OPT.guardSpend ? paidMcpOf(e.tool, e) : null;
     if (!paid) return next(e);
     const held = await guardSpend($, e, paid);
     return held ?? next(e);
   }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this call ran.' } : { deny: 'The Homie mod could not check this paid call against the studio\'s budget, so it was not made. Ask the person.' }));
+
+  // Cloudflare's own MCP servers (and a claude.ai Cloudflare connector), inside a studio: a tool that deletes or changes
+  // something on the account goes around the studio's deploy and its record of what it created, so it is held.
+  on('tool.call', { tool: /^mcp__.*cloudflare.*__/i }, async ($, e, next) => {
+    const change = OPT.guardDeploys && S.root ? cloudflareMcpChangeOf(e.tool, e) : null;
+    if (!change) return next(e);
+    const held = await guardCloudflare($, S.root, change);
+    return held ?? next(e);
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this call ran.' } : { deny: 'The Homie mod could not check this change to the Cloudflare account, so it was not made. Ask the person.' }));
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e);
@@ -1366,6 +1383,42 @@ async function deployFacts($, root) {
  * A paid media call: held when it would take the studio, the open build or the job past its budget, or when its
  * cost cannot be read first. The price comes from the skill's own --dry-run (free).
  */
+/**
+ * A change to a studio's Cloudflare account outside its own deploy (lib/commands.mjs says which): held in Claude
+ * Code's question dialog until the person says Proceed. The studio's deploy records what it creates and never
+ * touches what it did not; a delete, a secret, a hand rollout or a write to the live database made here goes around
+ * that record, and what is deleted does not come back.
+ */
+async function guardCloudflare($, root, c) {
+  const studio = root === S.root && S.studio ? S.studio : (await readJsonFile($, `${root}/studio.json`)) ?? {};
+  const cf = studio.cloudflare ?? {};
+  const own = [['Worker', cf.worker, 'Worker'], ['D1 database', cf.d1, 'D1'], ['R2 bucket', cf.r2, 'R2']].filter(([, n]) => n);
+  const text = `${(c.names ?? []).join(' ')} ${c.code ?? ''}`;
+  const hits = own.filter(([, n]) => (c.names ?? []).includes(n) || (c.code && text.includes(n)));
+  const name = String(studio.name ?? root.split('/').pop()).slice(0, 60);
+  const verb = { delete: 'Delete something on', secret: 'Change a secret on', deploy: 'Roll out a version on', schema: 'Change the live database on', data: 'Write to the live database on' }[c.kind] ?? 'Change something on';
+  const answer = await ask($, {
+    question: `${verb} Cloudflare for ${name}, outside the studio's deploy?`,
+    title: `Cloudflare: ${String(c.what).slice(0, 60)}`,
+    lines: [
+      { k: 'Change', v: String(c.what).slice(0, 80), style: { color: 'yellow', bold: true } },
+      ...(hits.length ? [{ k: 'Studio', v: `its own ${hits.map(([, n, short]) => `${short} ${n}`).join(', ')}`, style: { color: 'red' } }] : []),
+    ],
+    detail: {
+      lines: [
+        { k: 'Change', v: String(c.what), style: { color: 'yellow', bold: true } },
+        ...(hits.length ? [{ k: 'Studio\'s own', v: hits.map(([k, n]) => `${k} ${n}`).join(', '), style: { color: 'red' } }] : []),
+        { k: 'Account', v: 'the Cloudflare account this computer is signed in to' },
+        { k: 'Call', v: String(c.text ?? '').slice(0, 300) },
+        `The studio's deploy (npm run deploy) records what it creates in studio.json and never touches what it did not create; this goes around that record${c.kind === 'delete' ? ', and what is deleted does not come back' : ''}.`,
+        'Proceed lets this one call through. Cancel stops it here.',
+      ],
+    },
+  });
+  if (answer === 'Proceed') return null;
+  return { deny: answer === null ? `This changes the Cloudflare account outside the studio's deploy (${c.what}) and nobody could be asked here, so it was not made. Ask the person first; the studio's own Worker, database, storage and secrets change through npm run deploy and homie-studio.` : `The person said no to this Cloudflare change (${c.what}). Do not retry it unless they ask for it.` };
+}
+
 async function guardSpend($, e, paid) {
   const root = S.root;
   const unit = paid.unit;

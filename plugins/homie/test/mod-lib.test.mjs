@@ -20,7 +20,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 import { artFor, artSummaryOf, budgetWords, decisionsFileOf, licenceIssues, lockedChanges, lookText, phaseStrip, publicSource } from '../hooks/lib/art.mjs';
-import { deployOf, gitStagesOf, globMatch, paidMcpOf, paidOf, protectedBy, studioCalls } from '../hooks/lib/commands.mjs';
+import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, globMatch, paidMcpOf, paidOf, programOf, protectedBy, readOnlySql, studioCalls } from '../hooks/lib/commands.mjs';
 import { applyEdit, unifiedDiff } from '../hooks/lib/diff.mjs';
 import { summarize } from '../hooks/lib/feed.mjs';
 import { redact, redactText } from '../hooks/lib/redact.mjs';
@@ -98,6 +98,91 @@ test('commands: paid calls, priced by the skill\'s own --dry-run', () => {
   assert.equal(paidMcpOf('mcp__fal__generate_image').provider, 'fal');
   assert.equal(paidMcpOf('mcp__elevenlabs__get_voices'), null);
   assert.equal(paidMcpOf('mcp__github__create_issue'), null);
+});
+
+test('commands: the providers\' own CLIs, where a command spends; help, dry runs, sign-ins and listings are free', () => {
+  assert.deepEqual(programOf(['npx', '-y', '@elevenlabs/cli@1.4.0', 'music', 'compose']), { prog: 'elevenlabs', args: ['music', 'compose'] });
+  assert.deepEqual(programOf(['npm', 'exec', '--', 'wrangler', 'whoami']), { prog: 'wrangler', args: ['whoami'] });
+  assert.equal(programOf(['pnpm', 'dlx', 'tripo-cli', 'make']).prog, 'tripo');
+  const paid = {
+    'elevenlabs music compose --format json --json -': ['ElevenLabs', 'credits', 'elevenlabs music compose'],
+    'elevenlabs music compose_detailed --output-format mp3_44100_128 --json -': ['ElevenLabs', 'credits', 'elevenlabs music compose_detailed'],
+    'npx -y @elevenlabs/cli text-to-speech convert --voice-id x --text hi': ['ElevenLabs', 'credits', 'elevenlabs text-to-speech convert'],
+    'elevenlabs speech-to-text convert --model-id scribe_v2 --file song.mp3': ['ElevenLabs', 'credits', 'elevenlabs speech-to-text convert'],
+    'elevenlabs text-to-sound-effects convert --text "a door"': ['ElevenLabs', 'credits', 'elevenlabs text-to-sound-effects convert'],
+    'elevenlabs say "hoot"': ['ElevenLabs', 'credits', 'elevenlabs say'],
+    'fal api fal-ai/flux/dev prompt="an owl"': ['fal', 'usd', 'fal api'],
+    'genmedia run fal-ai/flux/dev --prompt owl': ['fal', 'usd', 'genmedia run'],
+    'tripo make "a brass lantern"': ['Tripo', 'usd', 'tripo make'],
+  };
+  for (const [c, [provider, unit, tool]] of Object.entries(paid)) {
+    const p = paidOf(c);
+    assert.deepEqual([p?.provider, p?.unit, p?.tool, p?.raw], [provider, unit, tool, true], c);
+  }
+  for (const free of ['elevenlabs auth login', 'elevenlabs auth status --format json', 'elevenlabs user subscription get --format json', 'elevenlabs music compose --dry-run --json -',
+    'elevenlabs music compose --help', 'elevenlabs music --schema', 'elevenlabs music finetunes list', 'elevenlabs voices search --search owl', 'elevenlabs dubbing get abc', 'elevenlabs generate-skills',
+    'elevenlabs --version', 'fal auth login', 'fal keys create --scope API', 'genmedia pricing fal-ai/flux/dev', 'genmedia schema fal-ai/flux/dev', 'tripo balance', 'tripo login', 'tripo --help', 'brew install elevenlabs/tap/elevenlabs']) {
+    assert.equal(paidOf(free), null, free);
+  }
+});
+
+test('commands: changes to the Cloudflare account outside the studio\'s deploy, by Wrangler or an MCP tool', () => {
+  const held = {
+    'npx wrangler d1 delete night-owls-db': ['delete', 'wrangler d1 delete', ['night-owls-db']],
+    'cd night-owls && npx wrangler r2 bucket delete night-owls-media': ['delete', 'wrangler r2 bucket delete', ['night-owls-media']],
+    'wrangler r2 object delete night-owls-media/videos/trailer.mp4 --remote': ['delete', 'wrangler r2 object delete', ['night-owls-media/videos/trailer.mp4']],
+    'wrangler delete': ['delete', 'wrangler delete', []],
+    'wrangler kv key delete --binding CACHE k --remote': ['delete', 'wrangler kv key delete', ['k']],
+    'npx wrangler secret put STRIPE_KEY': ['secret', 'wrangler secret put', ['STRIPE_KEY']],
+    'wrangler versions secret bulk secrets.json': ['secret', 'wrangler versions secret bulk', ['secrets.json']],
+    'wrangler versions deploy': ['deploy', 'wrangler versions deploy', []],
+    'wrangler rollback': ['deploy', 'wrangler rollback', []],
+    'npx wrangler d1 migrations apply night-owls-db --remote': ['schema', 'wrangler d1 migrations apply', ['night-owls-db']],
+    'npx wrangler d1 execute night-owls-db --remote --command "DELETE FROM rounds"': ['data', 'wrangler d1 execute', ['night-owls-db']],
+    'npx wrangler d1 execute night-owls-db --remote --file wipe.sql': ['data', 'wrangler d1 execute', ['night-owls-db']],
+  };
+  for (const [c, [kind, what, names]] of Object.entries(held)) {
+    const r = cloudflareChangeOf(c);
+    assert.deepEqual([r?.kind, r?.what, r?.names], [kind, what, names], c);
+  }
+  assert.equal(cloudflareChangeOf('cd night-owls && npx wrangler d1 delete db').dir, 'night-owls');
+  for (const free of ['npx wrangler whoami --json', 'npx wrangler deploy', 'npx wrangler d1 create night-owls-db', 'npx wrangler r2 bucket create night-owls-media', 'npx wrangler d1 migrations apply db --local',
+    'npx wrangler d1 execute db --remote --command "SELECT count(*) FROM rounds"', 'npx wrangler d1 execute db --local --command "DELETE FROM rounds"', 'npx wrangler d1 delete db --help',
+    'npx wrangler ai models list --json', 'npx wrangler r2 object get b/k --remote --pipe', 'npx wrangler login --device', 'npx wrangler tail', 'npx wrangler secret list']) {
+    assert.equal(cloudflareChangeOf(free), null, free);
+  }
+  assert.ok(readOnlySql('SELECT 1; PRAGMA table_list'));
+  assert.ok(!readOnlySql('SELECT 1; DROP TABLE rounds'));
+  assert.ok(!readOnlySql(''));
+  // Cloudflare's own MCP servers: the API server's execute, and the bindings tools (also the claude.ai connector's).
+  const exec = (code) => cloudflareMcpChangeOf('mcp__plugin_cloudflare_cloudflare__execute', { code });
+  assert.equal(exec('async () => cloudflare.request({ method: "DELETE", path: `/accounts/${a}/d1/database/${id}` })').kind, 'delete');
+  assert.equal(exec('async () => cloudflare.request({ method: "PUT", path: `/accounts/${a}/workers/scripts/x` })').kind, 'change');
+  assert.equal(exec('async () => cloudflare.request({ method: "GET", path: `/accounts/${a}/workers/scripts` })'), null);
+  assert.equal(exec('async () => cloudflare.request({ method: "POST", path: "/graphql", body: { query } })'), null, 'a GraphQL read is a POST');
+  assert.equal(cloudflareMcpChangeOf('mcp__plugin_cloudflare_cloudflare__search', { code: 'spec.paths' }), null);
+  const del = cloudflareMcpChangeOf('mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_delete', { database_id: 'night-owls-db' });
+  assert.deepEqual([del.kind, del.what, del.names], ['delete', 'd1_database_delete', ['night-owls-db']]);
+  assert.equal(cloudflareMcpChangeOf('mcp__cloudflare-bindings__r2_bucket_delete', { name: 'b' }).kind, 'delete');
+  assert.equal(cloudflareMcpChangeOf('mcp__cloudflare-bindings__kv_namespace_update', { namespace_id: 'x', title: 'y' }).kind, 'change');
+  assert.equal(cloudflareMcpChangeOf('mcp__cloudflare-bindings__d1_database_query', { database_id: 'x', sql: 'UPDATE rounds SET x = 1' }).kind, 'data');
+  for (const [tool, input] of [['mcp__cloudflare-bindings__d1_database_query', { sql: 'SELECT 1' }], ['mcp__cloudflare-bindings__r2_bucket_create', { name: 'b' }],
+    ['mcp__cloudflare-bindings__set_active_account', { activeAccountId: 'x' }], ['mcp__cloudflare-bindings__workers_list', {}], ['mcp__cloudflare-docs__search_cloudflare_documentation', { query: 'd1 limits' }],
+    ['mcp__github__delete_file', {}]]) {
+    assert.equal(cloudflareMcpChangeOf(tool, input), null, tool);
+  }
+});
+
+test('commands: the providers\' own MCP servers, generating tools held, listing, pricing and estimates free', () => {
+  for (const t of ['mcp__fal__run_model', 'mcp__fal__submit_job', 'mcp__plugin_elevenlabs_elevenlabs__creative_generate_speech', 'mcp__elevenlabs__text_to_speech', 'mcp__tripo__generate_model']) {
+    assert.ok(paidMcpOf(t, {})?.raw, t);
+  }
+  assert.equal(paidMcpOf('mcp__tripo__generate_model').provider, 'Tripo');
+  for (const t of ['mcp__fal__search_models', 'mcp__fal__get_model_schema', 'mcp__fal__get_pricing', 'mcp__fal__recommend_model', 'mcp__fal__check_job', 'mcp__fal__get_job_result', 'mcp__fal__upload_file',
+    'mcp__fal__cancel_job', 'mcp__fal__search_docs', 'mcp__plugin_elevenlabs_elevenlabs__creative_list_voices', 'mcp__plugin_elevenlabs_elevenlabs__create_agent', 'mcp__tripo__balance']) {
+    assert.equal(paidMcpOf(t, {}), null, t);
+  }
+  assert.equal(paidMcpOf('mcp__plugin_elevenlabs_elevenlabs__creative_generate_speech', { estimate_only: true }), null, 'an estimate makes nothing');
 });
 
 test('commands: the models skill\'s prop and mood are fal calls, capped per game in art/<game>-models', () => {

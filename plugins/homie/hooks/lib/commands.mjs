@@ -1,6 +1,8 @@
 /**
  * What a shell command Claude is about to run means for a studio: a `homie-studio` command (and which), a production
- * deploy, or a paid media call (fal, ElevenLabs). It reads the command's text only; it never runs anything.
+ * deploy, a paid media call (fal, ElevenLabs, Tripo; through Homie's skills, the providers' own CLIs or their APIs),
+ * or a change to the Cloudflare account outside the studio's deploy. It reads the command's text only; it never runs
+ * anything.
  *
  * Like any reading of shell text it is a net, not a sandbox: `$(...)`, aliases, `eval`, `bash -c "..."` and scripts
  * that call these commands are not seen. The plugin README says so.
@@ -147,19 +149,135 @@ export function paidOf(command) {
     if (['curl', 'wget', 'http', 'xh'].includes(w[0].split('/').pop())) {
       for (const [re, provider, unit] of PAID_HOSTS) if (re.test(seg.text)) return { provider, unit, raw: true, dir: seg.dir, text: seg.text };
     }
+    const cli = providerCliOf(w);
+    if (cli) return { ...cli, raw: true, dir: seg.dir, text: seg.text };
   }
   return null;
 }
 
-/** An MCP tool that spends money at a media provider (a fal or ElevenLabs connector's generating tool), or null. */
-export function paidMcpOf(tool) {
+/*
+ * THE PROVIDERS' OWN CLIs, where a command spends (read from each one's --help on 2026-10-03). A call made with one of
+ * them goes straight at the provider and its cost cannot be read first, so it is held like a request at their API.
+ * Help, a schema, a dry run, a sign-in and a listing are free and never held.
+ *   elevenlabs   ElevenLabs' CLI (brew elevenlabs/tap/elevenlabs, npm @elevenlabs/cli): its generating groups
+ *   fal          fal's CLI (pip install fal): `fal api <model>` runs a hosted model, `fal run` runs an app on fal
+ *   genmedia     fal's genmedia CLI: `genmedia run <model>`
+ *   tripo        Tripo's CLI (npm tripo-cli): everything but its sign-in, balance, usage, status and docs
+ */
+const LAUNCHERS = new Set(['npx', 'bunx', 'pnpx', 'uvx']);
+const CLI_PACKAGES = { '@elevenlabs/cli': 'elevenlabs', 'tripo-cli': 'tripo' };
+const CLI_FREE_FLAGS = ['--help', '-h', '--dry-run', '--schema', '--spec', '--spec-raw', '--version', '-V', '-v'];
+const ELEVEN_SPENDS = new Set(['music', 'text-to-speech', 'text-to-sound-effects', 'text-to-dialogue', 'text-to-voice', 'speech-to-speech',
+  'speech-to-text', 'audio-isolation', 'dubbing', 'forced-alignment', 'flows', 'say', 'studio', 'productions', 'speech-engine']);
+const ELEVEN_FREE_VERB = /^(list|get|delete|help|status|search|show|upload)$/;
+const TRIPO_FREE = new Set(['login', 'logout', 'whoami', 'balance', 'usage', 'status', 'docs', 'mcp', 'help', 'config', 'list', 'get', 'download', 'models', 'version']);
+const CLI_BOOLS = ['dry-run', 'human', 'quiet', 'debug', 'help', 'schema', 'spec', 'spec-raw', 'version', 'json', 'yes', 'no-browser', 'remote', 'local', 'force'];
+
+/** The program a command line runs, past `npx -y`, `bunx`, `pnpm dlx`, `npm exec --` and `uvx`: { prog, args } or null. */
+export function programOf(words) {
+  let i = 0;
+  const bare = (x) => String(x ?? '').replace(/^(@[^/@]+\/[^@]+|[^@]+)@.*$/, '$1');
+  for (let guard = 0; guard < 4 && i < words.length; guard++) {
+    const n = words[i].split('/').pop();
+    if (LAUNCHERS.has(n)) i += 1;
+    else if ((n === 'pnpm' && ['dlx', 'exec'].includes(words[i + 1])) || (n === 'npm' && words[i + 1] === 'exec')) i += 2;
+    else break;
+    while (i < words.length && words[i].startsWith('-')) i += words[i] === '-p' || words[i] === '--package' ? 2 : 1;
+  }
+  if (i >= words.length) return null;
+  const word = bare(words[i]);
+  const prog = CLI_PACKAGES[word] ?? word.split('/').pop();
+  return { prog, args: words.slice(i + 1) };
+}
+
+/** A paid call through a provider's own CLI: { provider, unit, tool } or null. */
+export function providerCliOf(words) {
+  const p = programOf(words);
+  if (!p || !['elevenlabs', 'fal', 'genmedia', 'tripo'].includes(p.prog)) return null;
+  if (p.args.some((a) => CLI_FREE_FLAGS.includes(a))) return null;
+  const { pos } = flagsOf(p.args, CLI_BOOLS);
+  if (!pos.length) return null;
+  const tool = `${p.prog} ${pos.slice(0, p.prog === 'elevenlabs' && pos[0] !== 'say' ? 2 : 1).join(' ')}`;
+  if (p.prog === 'elevenlabs') {
+    if (!ELEVEN_SPENDS.has(pos[0])) return null;
+    if (pos[0] !== 'say' && pos.slice(1).some((x) => ELEVEN_FREE_VERB.test(x))) return null;
+    if (pos[0] !== 'say' && pos.length < 2) return null;
+    return { provider: 'ElevenLabs', unit: 'credits', tool };
+  }
+  if (p.prog === 'fal') return ['api', 'run'].includes(pos[0]) ? { provider: 'fal', unit: 'usd', tool } : null;
+  if (p.prog === 'genmedia') return pos[0] === 'run' ? { provider: 'fal', unit: 'usd', tool } : null;
+  return TRIPO_FREE.has(pos[0]) ? null : { provider: 'Tripo', unit: 'usd', tool };
+}
+
+/**
+ * An MCP tool that spends money at a media provider (a fal, ElevenLabs or Tripo connector's generating tool), or null.
+ * Their own servers' listing, schema, pricing and job-status tools are free, and so is ElevenLabs' `estimate_only`
+ * (it prices a call and makes nothing); its agent-building tools spend nothing by themselves.
+ */
+export function paidMcpOf(tool, input = {}) {
   const m = /^mcp__(.+?)__(.+)$/.exec(String(tool ?? ''));
   if (!m) return null;
-  const [, server, name] = m;
-  const provider = /fal/i.test(server) ? 'fal' : /eleven/i.test(server) ? 'ElevenLabs' : null;
+  const [, server, full] = m;
+  const provider = /fal/i.test(server) ? 'fal' : /eleven/i.test(server) ? 'ElevenLabs' : /tripo/i.test(server) ? 'Tripo' : null;
   if (!provider) return null;
-  if (/^(list|get|search|check|status|describe|read|find|voices?|models?|usage|balance|price|quote)/i.test(name)) return null;
-  return { provider, unit: provider === 'fal' ? 'usd' : 'credits', raw: true, tool: name };
+  const name = full.replace(/^creative_/i, '');
+  if (/^(list|get|search|check|status|describe|read|find|voices?|models?|usage|balance|price|pricing|quote|recommend|cancel|upload|estimate|schema|docs?)/i.test(name)) return null;
+  if (provider === 'ElevenLabs' && (input?.estimate_only === true || /agent|knowledge|widget|conversation|webhook|workspace/i.test(name))) return null;
+  return { provider, unit: provider === 'ElevenLabs' ? 'credits' : 'usd', raw: true, tool: full };
+}
+
+/*
+ * A CHANGE TO A CLOUDFLARE ACCOUNT OUTSIDE THE STUDIO'S OWN DEPLOY. `npm run deploy` (homie-studio deploy) records
+ * what it creates in studio.json and never touches what it did not create; Wrangler run by hand, and the tools of
+ * Cloudflare's own MCP servers, go around that record. What is held (inside a studio, with guardDeploys on):
+ *   anything deleted (a Worker, a D1 database, an R2 bucket or object, a KV namespace or key, a queue, a secret);
+ *   a secret put (Cloudflare: a secret put is itself a deployment), a version rolled out or rolled back by hand;
+ *   a migration applied to the live database, and SQL that writes to it;
+ *   through an MCP server: a delete, update, edit, put, deploy or rollback tool, a live-database query that writes,
+ *   and an `execute` (Cloudflare's API server) whose code sends anything but GET (a GraphQL read is a POST and is free).
+ * Creating something new and reading anything are not held. `--local` never touches the account.
+ */
+const READ_SQL = /^\s*(select|pragma|explain|with\b[\s\S]*\bselect)\b/i;
+export function readOnlySql(sql) {
+  const parts = String(sql ?? '').split(';').map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 && parts.every((s) => READ_SQL.test(s) && !/\b(insert|update|delete|drop|alter|create|replace)\b/i.test(s));
+}
+
+/** Wrangler, run by hand, changing the account: { what, kind, names, dir, text } or null. */
+export function cloudflareChangeOf(command) {
+  for (const seg of segments(command)) {
+    const p = programOf(seg.words);
+    if (!p || p.prog !== 'wrangler') continue;
+    if (p.args.some((a) => a === '--help' || a === '-h' || a === '--local' || a === '--dry-run')) continue;
+    const { flags, pos } = flagsOf(p.args, CLI_BOOLS);
+    const at = (kind, n) => ({ what: `wrangler ${pos.slice(0, n).join(' ')}`.trim(), kind, names: pos.slice(n), dir: seg.dir, text: seg.text });
+    const del = pos.indexOf('delete');
+    if (del >= 0 && del <= 2) return at('delete', del + 1);
+    if ((pos[0] === 'secret' && ['put', 'bulk'].includes(pos[1])) || (pos[0] === 'versions' && pos[1] === 'secret' && ['put', 'bulk'].includes(pos[2]))) return at('secret', pos[0] === 'versions' ? 3 : 2);
+    if ((pos[0] === 'versions' && pos[1] === 'deploy') || pos[0] === 'rollback' || (pos[0] === 'deployments' && pos[1] === 'rollback')) return at('deploy', pos[0] === 'rollback' ? 1 : 2);
+    if (pos[0] === 'd1' && pos[1] === 'migrations' && pos[2] === 'apply' && flags.has('remote')) return at('schema', 3);
+    if (pos[0] === 'd1' && pos[1] === 'execute' && flags.has('remote') && (flags.has('file') || !readOnlySql(flags.get('command')))) return at('data', 2);
+  }
+  return null;
+}
+
+/** A tool of a Cloudflare MCP server (Cloudflare's own, or a claude.ai connector) changing the account, or null. */
+export function cloudflareMcpChangeOf(tool, input = {}) {
+  const m = /^mcp__(.+?)__(.+)$/.exec(String(tool ?? ''));
+  if (!m || !/cloudflare/i.test(m[1])) return null;
+  const name = m[2];
+  const names = Object.entries(input ?? {}).filter(([k, v]) => typeof v === 'string' && /(^|_)(name|id|bucket|database|script)/i.test(k)).map(([, v]) => v);
+  if (name === 'execute') {
+    const code = String(input?.code ?? '');
+    const methods = [...code.matchAll(/\bmethod\s*:\s*["'`](POST|PUT|PATCH|DELETE)["'`]/gi)].map((x) => x[1].toUpperCase());
+    const writes = [...new Set(methods.filter((x) => x !== 'POST' || !/graphql/i.test(code)))];
+    if (!writes.length) return null;
+    return { what: `Cloudflare's API (${writes.join(', ')}) through its MCP`, kind: writes.includes('DELETE') ? 'delete' : 'change', names: [], code, text: code.slice(0, 300) };
+  }
+  if (/(^|_)(delete|remove|destroy|purge)(_|$)/i.test(name)) return { what: name, kind: 'delete', names, text: name };
+  if (/(^|_)(update|edit|put|deploy|rollback)(_|$)/i.test(name)) return { what: name, kind: 'change', names, text: name };
+  if (/(^|_)query$/i.test(name) && !readOnlySql(input?.sql ?? input?.query)) return { what: name, kind: 'data', names, text: String(input?.sql ?? input?.query ?? '').slice(0, 300) };
+  return null;
 }
 
 // git's own options before the subcommand that take a value, and the subcommands' (a value is never a path).

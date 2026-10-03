@@ -10,6 +10,7 @@ on the free plan.
   creator tools only. Nothing in this folder runs a command on install.
 - **The Homie mod** (`hooks/`, `mod/`): a Claude Code mod (Claude Code 2.1.287 or later, the CLI and
   the desktop app's Code tab). Below: what it adds, and everything it does.
+- **The providers' own tools** (`providers.json`): see below.
 - **Manifests:** `.claude-plugin/plugin.json` (Claude Code), `.codex-plugin/plugin.json`
   (Codex), and `plugin.json` (the agent-plugins standard). They say the same thing, and
   `test/manifests.test.mjs` checks that they do. Codex reads the skills and the MCP server and
@@ -18,6 +19,28 @@ on the free plan.
 Install it, and read what a studio is and what it costs, in the
 [repository's README](https://github.com/homie-rocks/homie#readme). Report a vulnerability
 as [SECURITY.md](SECURITY.md) says.
+
+## The providers' own tools
+
+Homie works through each provider's own CLI, plugin, MCP server and skills, on the creator's own
+account, and keeps only its own layer on top: budgets and receipts, the kids rules, secrets never in the
+chat, the owner's one-tap asks, phone budgets, and the rights and licence notes. Nothing here installs by
+itself. `providers.json` lists each provider's tools (checked 2026-10-03), the skills that use them, and
+what stays Homie's; `plugin.json` points at it (`extensions["rocks.homie"].providers`). Each skill names
+its providers in its own frontmatter (`metadata.providers`, and `compatibility` in words), and a skill
+that uses a provider's MCP server declares it for Codex in `agents/openai.yaml`, so Codex can wire it
+when the skill is used. A skill offers a provider's tool only when the person wants what it unlocks; the
+person approves every install and signs in on the provider's own page.
+
+| Provider | What Homie's skills use | Offered when the person wants it |
+| --- | --- | --- |
+| Cloudflare | Wrangler, pinned in the studio (`login`, `--device` where no browser opens; `deploy`, D1, R2, secrets, `ai models list`) | Cloudflare's plugin (`cloudflare/skills`: its skills and API MCP server), its docs MCP server |
+| ElevenLabs | ElevenLabs' CLI (`elevenlabs auth login`; music, stems, speech to text, the subscription) | ElevenLabs' plugin (`elevenlabs/plugin`: its skills and hosted MCP server), `npx skills add elevenlabs/skills` |
+| fal | fal's MCP server to find models and read schemas and prices; the skills' scripts for paid runs (priced, capped, receipted, resumable) | fal's CLI (`fal auth login`, `fal keys create`) to make the key |
+| Tripo | Tripo's models on fal (`tripo3d/...`) | none: Tripo's own CLI and MCP server bill a separate account |
+| GitHub | the GitHub CLI (`gh auth login --web`, `gh pr create`) | GitHub's MCP server (`github@claude-plugins-official`) |
+
+Stripe is the `shop` skill's, with its own rules for Stripe's tools.
 
 ## The Homie mod
 
@@ -82,11 +105,26 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     `studio_deploy`, a song or video `publish`), with where it goes, what it creates, the commits
     and files since the last deploy, uncommitted changes, new games, the last checks and who is
     playing;
-  - a paid media call (fal, ElevenLabs: the skills' `gen`, `render` and `stems` with `--yes`, the
-    models skill's `prop` and `mood` with `--yes`, a request straight at their APIs, a
-    connector's generating tool) that would pass `studio.json` `"budget"`, the build's budget or
-    the job's cap (a game's models share `art/<game>-models/budget.json`), or whose cost cannot be
-    read first, with the estimate from the skill's own `--dry-run`.
+  - a paid media call (fal, ElevenLabs, Tripo: the skills' `gen`, `render` and `stems` with `--yes`,
+    the models skill's `prop` and `mood` with `--yes`, a request straight at their APIs, a
+    generating command of the provider's own CLI (`elevenlabs music compose`, `elevenlabs
+    text-to-speech`, `fal api`, `genmedia run`, `tripo make` and the like; their help, `--dry-run`,
+    sign-in, pricing and listings are free), a generating tool of their own MCP server or a
+    connector (a run or a job; finding a model, its schema or its price, and an ElevenLabs
+    `estimate_only`, are free)) that would pass `studio.json` `"budget"`, the build's budget or the
+    job's cap (a game's models share `art/<game>-models/budget.json`), or whose cost cannot be read
+    first, with the estimate from the skill's own `--dry-run`;
+  - a change to the studio's Cloudflare account outside its deploy, inside a studio: Wrangler
+    deleting something (a Worker, a D1 database, an R2 bucket or object, a KV namespace or key, a
+    queue, a secret), a `secret put` or `bulk` (to Cloudflare, a secret put is a deployment), a
+    version rolled out or rolled back by hand, a migration applied or SQL that writes, on the live
+    database (`--remote`); and the same through Cloudflare's own MCP servers or a claude.ai
+    Cloudflare connector (the API server's `execute` sending anything but a GET or a GraphQL read;
+    a tool that deletes, updates, edits, puts, deploys or rolls back; a database query that
+    writes). The studio's deploy records what it creates in `studio.json` and never touches what it
+    did not create; these go around that record. The hold names the studio's own Worker, database
+    or bucket when the change does. Creating something new and reading anything are not held, and
+    `--local` never is.
   Cancel, a dismissed question, and a run with nobody to ask (`claude -p`) all refuse the call,
   with a reason Claude can act on. The guards hold even in bypass-permissions mode.
 - **Refused outright** (nobody is asked; the reason says what to do instead):
@@ -135,8 +173,8 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 | `paneAutoOpen` | on | The Studio pane when a build starts, the parts pane for two agents |
 | `band` | on | The band above the prompt |
 | `guardFiles` | on | Holding edits to protected files; refusing changes to locked art decisions and files over 5 MB under `games/` into git |
-| `guardDeploys` | on | Holding production deploys; refusing one that ships an asset with no allowed licence |
-| `guardSpend` | on | Holding paid media calls past the budget (the models skill's too) |
+| `guardDeploys` | on | Holding production deploys, and changes to the studio's Cloudflare account outside its deploy (deletes, secrets, hand rollouts, writes to the live database, by Wrangler or Cloudflare's MCP); refusing a deploy that ships an asset with no allowed licence |
+| `guardSpend` | on | Holding paid media calls past the budget (the models skill's too), and the ones whose cost cannot be read first (a provider's own CLI, MCP server or API) |
 | `redactSecrets` | on | Taking secrets out of tool output |
 | `renderResults` | on | Homie's results and command rows drawn natively |
 | `arcade` | on | `/arcade` and the live Watch views |
@@ -161,7 +199,8 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   command.run{command=deploy-status}, command.run{command=perf-numbers}, command.run{command=parts},
   command.run{command=arcade}, command.run{command=look}, command.run{command=lock}, command.run{command=assets},
   command.run{command=lineup}, command.run{command=rights}, tool.call, tool.call{tool=Edit|Write|MultiEdit|NotebookEdit}, tool.call{tool=Bash},
-  tool.call{tool=/"^mcp__.+__studio_deploy$"/}, tool.call{tool=/"^mcp__.*(?:fal|eleven).*__"/i}, turn.complete,
+  tool.call{tool=/"^mcp__.+__studio_deploy$"/}, tool.call{tool=/"^mcp__.*(?:fal|eleven|tripo).*__"/i},
+  tool.call{tool=/"^mcp__.*cloudflare.*__"/i}, turn.complete,
   ui.render{component=AbovePrompt}, ui.render{component=Pane}, ui.render{component=AskUserQuestion},
   ui.render{component=ToolUse}, ui.render{component=ToolResult}, ui.render{component=ToolGroup}, ui.message, ui.close
 ❯ ./homie.mjs calls: $.agent.list, $.clock.every, $.command.register, $.fs.exists, $.fs.list, $.fs.read, $.fs.stat,
@@ -179,8 +218,9 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   command ran (for drawing it) and which agent ran what (for the parts). It never changes a tool's
   input.
 - `tool.call` on Edit, Write, MultiEdit, NotebookEdit (protected files, locked art decisions); on
-  Bash (big files into git, deploys and their licences, paid calls); on `studio_deploy` (a deploy
-  and its licences); on fal and ElevenLabs connector tools (paid calls): the guards. They hold or
+  Bash (big files into git, deploys and their licences, Cloudflare changes, paid calls); on
+  `studio_deploy` (a deploy and its licences); on fal, ElevenLabs and Tripo MCP tools (paid calls);
+  on Cloudflare MCP tools (account changes): the guards. They hold or
   refuse; they never approve. The mod has no `tool.check` hook, so it cannot approve a call a
   permission rule would ask about or deny.
 - `turn.complete`: a part (a subagent) ended; reread the build after a turn.

@@ -1,6 +1,9 @@
 ---
 name: servers
 description: Give a Homie studio game lasting servers - named communities with their own rooms and rules - humans-only, hybrid (seats reserved for AI companions), beginner (new players, AI guides, kids-safe) - plus agent passes, the AI skill dial, the party's level vote, and AI guides that talk (a game vocabulary, Workers AI or the owner's key, or the owner's own Claude in a seat). Use when someone asks for servers, realms or shards, human-only play, AI party members or companions, guides or helpers for new players or kids, guides that answer "help me with this quest", "fill empty spots with AI", letting Claude play as a guide, or how strong the bots should be.
+compatibility: The studio's own Cloudflare account, with Workers AI through its Worker, Wrangler for the model catalogue and the doctor's probe.
+metadata:
+  providers: cloudflare
 ---
 
 # Servers and AI seats
@@ -44,6 +47,9 @@ bot code is the guides' **hands**: they carry the goal out every frame at the pa
 | "What are the guides doing?" / "how much AI did we use?" | `servers`, the office (`/_studio/office`) | Today's neurons or dollars against the budget, why a guide is scripted (no binding, no key, budget spent), and each room's last decisions. |
 
 Under `homie-studio dev` guides think from the script unless `dev --remote-ai` (real Workers AI, billed).
+**Which Workers AI models exist now** is Cloudflare's to say, not memory: `npx wrangler ai models list --json --task
+"Text Generation"` and `npx wrangler ai models schema <model>` (free; the studio's Wrangler, signed in). Pick one for
+`HOMIE_BRAIN_MODEL` that is not marked Workers Paid; the doctor's Workers AI row then proves it answers on this account.
 **Adopting guides in an existing RPG** (zones, quests, a party): `node_modules/@homie-rocks/studio/agents/GUIDES.md`
 is the short path, in the game's own repository and with its owner's say.
 

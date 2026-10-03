@@ -1,6 +1,9 @@
 ---
 name: game
 description: Make or remix a multiplayer web game inside a Homie studio — every browser renders the game, strangers meet in public rooms, bots fill empty seats, rounds end and restart — prove it with two browsers finishing a round, and give it an epic landing page (a full-bleed hero from its own footage or art, the pitch, Play, phone / computer / TV, live rooms, how to play, credits). Use when someone in a Homie studio (a folder with studio.json) asks for a new game, a change to a game, a remix of a game from the Homie directory, or a better page for a game ("make my game's landing page epic").
+compatibility: Node 22 and Chrome. The studio's pinned Wrangler runs the dev site; the GitHub CLI (gh) opens a pull request when the studio publishes that way.
+metadata:
+  providers: cloudflare github
 ---
 
 # Make or remix a game

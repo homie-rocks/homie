@@ -1,0 +1,131 @@
+{
+  "v": 1,
+  "checked": "2026-10-03",
+  "about": "The providers' own agent tools (CLIs, MCP servers, plugins and skills) that Homie's skills use or offer, and what stays Homie's. Nothing here installs by itself: a skill names its providers in its SKILL.md metadata, offers their tools only when the person wants that feature, and the person approves every install and signs in on the provider's own page. plugin.json points here (extensions.rocks.homie.providers); test/providers.test.mjs keeps this file, the skills and the Homie mod's guards in step.",
+  "load": "on-use",
+  "providers": {
+    "cloudflare": {
+      "name": "Cloudflare",
+      "account": "the studio's own Cloudflare account (the free Workers plan, no payment method)",
+      "skills": ["studio-setup", "publish", "servers", "game"],
+      "cli": {
+        "name": "wrangler",
+        "install": "the studio's own pinned copy, installed with the studio (npx wrangler in the studio folder)",
+        "signIn": "npx wrangler login (opens Cloudflare in the browser; --device prints a code to approve on any device when no browser can open here)",
+        "homieUses": "whoami --json, deploy, d1 create, d1 migrations apply --remote, r2 bucket create, r2 object put and get --remote, secret put (from a page on this computer, never the chat), ai models list --json",
+        "docs": "https://developers.cloudflare.com/workers/wrangler/commands/"
+      },
+      "plugin": {
+        "claudeCode": ["/plugin marketplace add cloudflare/skills", "/plugin install cloudflare@cloudflare"],
+        "codex": ["codex plugin marketplace add cloudflare/skills", "codex plugin add cloudflare@cloudflare"],
+        "directory": "cloudflare@claude-plugins-official",
+        "source": "https://github.com/cloudflare/skills",
+        "brings": "Cloudflare's own skills (cloudflare, wrangler, workers-best-practices, durable-objects, agents-sdk and more) and its API MCP server"
+      },
+      "skillsOnly": "npx skills add https://github.com/cloudflare/skills",
+      "mcp": [
+        { "name": "cloudflare-docs", "url": "https://docs.mcp.cloudflare.com/mcp", "auth": "none", "writes": false, "use": "Cloudflare's current docs (limits, Wrangler flags, Workers AI models) instead of memory" },
+        { "name": "cloudflare", "url": "https://mcp.cloudflare.com/mcp", "auth": "oauth", "writes": true, "use": "the whole Cloudflare API (search, execute): reading the account; the studio's own resources change only through its deploy" },
+        { "name": "cloudflare-bindings", "url": "https://bindings.mcp.cloudflare.com/mcp", "auth": "oauth", "writes": true, "use": "listing Workers, D1, R2 and KV (the claude.ai Cloudflare Developer Platform connector is this server)" },
+        { "name": "cloudflare-observability", "url": "https://observability.mcp.cloudflare.com/mcp", "auth": "oauth", "writes": false, "use": "a live Worker's logs and errors" }
+      ],
+      "homieKeeps": [
+        "the studio's own Worker, D1 database, R2 bucket and secrets are created, changed and deleted only by npm run deploy and homie-studio, which record what they create in studio.json and never touch what they did not create",
+        "the free plan: no payment method, R2 only when the person adds storage",
+        "secrets go from a page on this computer straight to wrangler secret put, never through the chat",
+        "the Workers AI model probe and the AI guides' daily budget"
+      ]
+    },
+    "elevenlabs": {
+      "name": "ElevenLabs",
+      "account": "the creator's own ElevenLabs account and plan",
+      "skills": ["studio-setup", "music"],
+      "cli": {
+        "name": "elevenlabs",
+        "install": "brew install elevenlabs/tap/elevenlabs (or npm install -g @elevenlabs/cli)",
+        "signIn": "elevenlabs auth login (opens ElevenLabs in the browser; the sign-in stays in the OS keychain)",
+        "homieUses": "auth status, user subscription get, music compose_detailed (with --dry-run first), speech-to-text convert, music separate_stems",
+        "docs": "https://github.com/elevenlabs/cli"
+      },
+      "plugin": {
+        "claudeCode": ["/plugin marketplace add elevenlabs/plugin", "/plugin install elevenlabs@elevenlabs"],
+        "codex": ["codex plugin marketplace add elevenlabs/plugin"],
+        "source": "https://github.com/elevenlabs/plugin",
+        "brings": "ElevenLabs' own skills (music, sound effects, text to speech, speech to text and more) and its hosted MCP server"
+      },
+      "skillsOnly": "npx skills add elevenlabs/skills",
+      "mcp": [
+        { "name": "elevenlabs", "url": "https://api.elevenlabs.io/v1/mcp", "auth": "oauth", "writes": true, "spends": true, "use": "speech, voices, transcription and agents; it has no music tools, so songs go through the CLI here" }
+      ],
+      "homieKeeps": [
+        "the plan, the credits left and the rights that plan gives, said before anything is made",
+        "a cap the person agreed to, a dry run first, the cost read off the account before and after, a receipt per render, never the same paid request twice",
+        "the composition plan for anything sung and the check that every line was sung",
+        "the song pages and the RIGHTS notes"
+      ]
+    },
+    "fal": {
+      "name": "fal",
+      "account": "the creator's own fal account",
+      "skills": ["studio-setup", "art", "video", "models", "style"],
+      "cli": {
+        "name": "fal",
+        "install": "pip install fal",
+        "signIn": "fal auth login (opens fal in the browser); fal keys create --scope API makes the key the skills read as FAL_KEY",
+        "homieUses": "none: the skills call fal's documented queue and pricing APIs themselves, so every paid call is priced, capped, receipted and resumable",
+        "docs": "https://pypi.org/project/fal/"
+      },
+      "skillsOnly": "https://github.com/fal-ai-community/skills (installed by fal's genmedia CLI: genmedia init)",
+      "mcp": [
+        { "name": "fal", "url": "https://mcp.fal.ai/mcp-relay", "auth": "oauth", "writes": true, "spends": true, "use": "finding models, reading their input schemas and prices (search_models, recommend_model, get_model_schema, get_pricing, search_docs); paid runs go through the skills' scripts, never its run_model or submit_job" }
+      ],
+      "homieKeeps": [
+        "the price read from fal's own pricing API before every call, a cap the person agreed to, a receipt the moment fal accepts a job, and a resume that never pays twice",
+        "the derived style prompt and the golden images every prompt starts from",
+        "the checks (does a texture tile, is it small enough for a phone, does a cover promise only what the game holds) and the RIGHTS notes"
+      ]
+    },
+    "tripo": {
+      "name": "Tripo",
+      "account": "the creator's own fal account (Tripo's models run on fal)",
+      "skills": ["models"],
+      "cli": {
+        "name": "tripo",
+        "install": "npm install -g tripo-cli",
+        "signIn": "tripo login",
+        "homieUses": "none: generated props use Tripo's models on fal (tripo3d/p1/image-to-3d), where fal's terms and receipts apply",
+        "docs": "https://developers.tripo3d.ai"
+      },
+      "mcp": [],
+      "homieKeeps": [
+        "Tripo on fal only, until Tripo's own terms for what it makes have been read and recorded in the models skill's RIGHTS notes",
+        "the concept in the game's locked style first, then the mesh, optimised to the phone budgets and recorded with its licence"
+      ]
+    },
+    "github": {
+      "name": "GitHub",
+      "account": "the creator's own GitHub account (optional: a private backup and publishing by pull request)",
+      "skills": ["studio-setup", "game"],
+      "cli": {
+        "name": "gh",
+        "install": "brew install gh (or the GitHub CLI's own installer)",
+        "signIn": "gh auth login --hostname github.com --git-protocol https --web (a one-time code typed at github.com/login/device)",
+        "homieUses": "auth status, pr create",
+        "docs": "https://cli.github.com/manual/"
+      },
+      "plugin": {
+        "claudeCode": ["/plugin install github@claude-plugins-official"],
+        "directory": "github@claude-plugins-official",
+        "source": "https://github.com/anthropics/claude-plugins-official",
+        "brings": "GitHub's MCP server (it reads a personal access token from GITHUB_PERSONAL_ACCESS_TOKEN; the gh sign-in needs none)"
+      },
+      "mcp": [
+        { "name": "github", "url": "https://api.githubcopilot.com/mcp/", "auth": "oauth", "writes": true, "use": "issues, pull requests and Actions runs, when the person wants them; /readonly reads only" }
+      ],
+      "homieKeeps": [
+        "the sign-in through GitHub's own device page, never a token pasted into the chat",
+        "a pull request the person merges in GitHub: Homie never merges it for them"
+      ]
+    }
+  }
+}
