@@ -5,7 +5,7 @@ What changed in each release of Homie's open parts, newest first:
 - **`@homie-rocks/studio`**: the `homie-studio` command, your studio's site Worker, its multiplayer rooms (the
   netplay contract), the port kit and the starter games. Every version is on npm, and Homie for Claude Desktop
   (`homie-studio-<version>.mcpb` on each GitHub release) is built from it.
-- **The Homie plugin** for Claude Code and Codex: its skills. It ships from this repository's marketplace with its
+- **The Homie plugin** for Claude Code, Codex and Grok: its skills. It ships from this repository's marketplace with its
   own version number, given beside each studio version below.
 
 Each version says what you can now do (**Added**), what works differently (**Changed**), what was broken and is
@@ -16,6 +16,22 @@ things and a patch (0.19.1) fixes or polishes them.
 To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homie." It runs
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
+
+## [0.30.0] - 2026-10-03
+
+**Plugin 0.31.0**
+
+Grok can set up a studio and run it with the same holds as Claude Code and Codex.
+
+### Added
+
+- `homie-studio setup attach <hs_…> --client grok` and `homie-studio handoff <hb_…> --client grok`. A Grok Bot in the studio folder checks the repository in. The directory is told the chat is Grok. Claude and Codex pass `--client claude` or `--client codex`; with no `--client` the words stay "the chat".
+- Homie's hooks for Grok Build (`plugins/homie/.grok-plugin/plugin.json`, `hooks/grok.json`, `hooks/grok.mjs`). They ask `hooks/lib/holds.mjs`, the module the Claude Code mod and the Codex hooks already ask, so the three hold the same calls with the same words. A held call waits for your own `proceed <code>`. Secrets are taken out of what Grok reads.
+- A new studio's home band says **Connect this chat**, for Claude, Codex or Grok. Grok has no Cloudflare connector: approving Cloudflare in the browser is still your step.
+
+### Changed
+
+- The plugin manifests (Claude Code, Codex, Grok and `plugin.json`) name plugin 0.31.0 and say the same thing. `plugins/homie/test/manifests.test.mjs` checks the Grok manifest with the others.
 
 ## [0.29.0] - 2026-10-03
 

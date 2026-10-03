@@ -1,7 +1,7 @@
 /**
  * The plugin's manifests agree with each other and with what is in the folder: the
- * Claude Code and Codex marketplaces list the same plugin at the same path, its two
- * plugin manifests (Claude Code, and the agent-plugins one Codex reads) say the same
+ * Claude Code and Codex marketplaces list the same plugin at the same path, its plugin
+ * manifests (Claude Code, Codex, Grok, and the agent-plugins one) say the same
  * name, version and description, both MCP configurations point at the Homie MCP
  * server, and every skill folder has a SKILL.md whose name is the folder's and whose
  * relative references exist. `claude plugin validate` checks each file's shape; this
@@ -57,6 +57,23 @@ test('the .codex-plugin manifest agrees with plugin.json, and its paths and icon
     assert.ok(existsSync(join(PLUGIN, p)), `.codex-plugin/plugin.json names ${p}, which exists`);
   }
   assert.equal(json(join(PLUGIN, codex.mcpServers)).mcpServers.homie.url, MCP_URL);
+});
+
+test('the Grok plugin manifest agrees with plugin.json, and its skills, MCP server and hooks exist', () => {
+  const standard = json(join(PLUGIN, 'plugin.json'));
+  const grok = json(join(PLUGIN, '.grok-plugin', 'plugin.json'));
+  for (const k of ['name', 'version', 'description', 'homepage', 'repository', 'license', 'keywords', 'author']) {
+    assert.deepEqual(grok[k], standard[k], `.grok-plugin/plugin.json and plugin.json agree on ${k}`);
+  }
+  for (const p of [grok.skills, grok.mcpServers, grok.hooks]) {
+    assert.ok(existsSync(join(PLUGIN, p)), `.grok-plugin/plugin.json names ${p}, which exists`);
+  }
+  assert.equal(json(join(PLUGIN, grok.mcpServers)).mcpServers.homie.url, MCP_URL);
+  const hooks = json(join(PLUGIN, grok.hooks));
+  const commands = JSON.stringify(hooks.hooks);
+  assert.match(commands, /hooks\/grok\.mjs/);
+  assert.match(readFileSync(join(PLUGIN, 'hooks', 'grok.mjs'), 'utf8'), /from '\.\/lib\/holds\.mjs'|from '\.\/codex\.mjs'/);
+  assert.match(readFileSync(join(PLUGIN, 'hooks', 'lib', 'holds.mjs'), 'utf8'), /hooks\/grok\.mjs/);
 });
 
 test('both MCP configurations point at the Homie MCP server', () => {

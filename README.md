@@ -58,6 +58,20 @@ hold an edit to a protected file, a deploy, a Cloudflare change, spending past t
 download until you answer `proceed <code>`, and they take secrets out of what Codex reads. Codex runs no
 plugin's hooks until you trust them (the plugin README's "Homie's holds in Codex" says what they cover).
 
+**Grok**
+
+Grok chat uses the same Homie connector, `https://homie.rocks/mcp`. There is no Cloudflare connector in
+Grok: approving Cloudflare in the browser (the setup card's Deploy to Cloudflare, or `npx wrangler login`
+on a computer) is still your step. A Grok Bot that has the studio folder runs the checklist. It checks
+the repository in with `npx --no-install homie-studio setup attach <hs_…> --client grok`. That does not
+need Claude's GitHub app.
+
+The plugin for Grok Build is `plugins/homie` (`.grok-plugin/plugin.json`, the same skills and MCP server).
+Its hooks (`hooks/grok.json`) ask the same module as the Claude Code mod and the Codex hooks
+(`hooks/lib/holds.mjs`), so a deploy, a protected edit or a paid call waits for your `proceed <code>`,
+and secrets are taken out of what Grok reads. To list it in the [xAI plugin marketplace](https://github.com/xai-org/plugin-marketplace), point a remote
+source at this repository with `"path": "plugins/homie"`.
+
 Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
 `port`, `publish`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
 `https://homie.rocks/mcp`, which has creator tools only: set up a studio, make or remix a game, make an

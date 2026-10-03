@@ -1,6 +1,6 @@
 # Homie plugin
 
-The Homie plugin for Claude Code and Codex: a studio in a box for your AI. It makes games,
+The Homie plugin for Claude Code, Codex and Grok: a studio in a box for your AI. It makes games,
 music and video, and publishes them from a studio that runs on your own Cloudflare account,
 on the free plan.
 
@@ -13,11 +13,15 @@ on the free plan.
 - **Homie's hooks for Codex** (`hooks/codex.json`, `hooks/codex.mjs`): the mod's holds, refusals and
   secret redaction as Codex lifecycle hooks, decided by the same module (`hooks/lib/holds.mjs`). See
   "Homie's holds in Codex" below for what Codex can and cannot do.
+- **Homie's hooks for Grok** (`hooks/grok.json`, `hooks/grok.mjs`): the same holds, decided by the same
+  module (`hooks/lib/holds.mjs`, through `hooks/codex.mjs`), so Claude Code, Codex and Grok cannot drift.
+  Grok Build answers allow or deny; a hold denies the call until the person says `proceed <code>`.
 - **Tell Homie** (the Homie MCP's `homie_feedback`, the mod's `/feedback`): a short note to the people who make
   Homie, which the person sees word for word and sends only with their yes. See "Tell Homie" below.
 - **The providers' own tools** (`providers.json`): see below.
 - **Manifests:** `.claude-plugin/plugin.json` (Claude Code), `.codex-plugin/plugin.json`
-  (Codex), and `plugin.json` (the agent-plugins standard). They say the same thing, and
+  (Codex), `.grok-plugin/plugin.json` (Grok Build: the same skills, the Homie MCP server and
+  `hooks/grok.json`), and `plugin.json` (the agent-plugins standard). They say the same thing, and
   `test/manifests.test.mjs` checks that they do. Codex reads the skills, the MCP server and Homie's
   hooks from `.codex-plugin/plugin.json`, and ignores the mod. `plugin.json` declares no `$schema`:
   Codex (0.156.1 to 0.160.0, tested) reads a root `plugin.json` only when it declares the Agent

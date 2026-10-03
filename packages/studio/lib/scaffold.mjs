@@ -666,14 +666,14 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
   return files;
 }
 
-/** The template's first-run band on Home: one link that connects this studio to the Claude chat that set it up. */
-export const CONNECT_BAND = `<!-- A new studio from the Homie template. This band goes away once Claude works in the studio
+/** The template's first-run band on Home: one link that connects this studio to the chat that set it up. */
+export const CONNECT_BAND = `<!-- A new studio from the Homie template. This band goes away once a chat works in the studio
      (homie-studio setup attach removes it); delete it by hand any time. -->
 <div class="band-in" style="text-align:center">
   <p class="kicker">New studio</p>
   <h2>{{studio.name}} is live</h2>
-  <p>It runs on your own Cloudflare account. Connect it to the Claude chat that set it up, and Claude takes it from here.</p>
-  <p><a class="btn" href="/_studio/connect">Connect to Claude</a></p>
+  <p>It runs on your own Cloudflare account. Connect it to the chat that set it up, and that chat takes it from here.</p>
+  <p><a class="btn" href="/_studio/connect">Connect this chat</a></p>
 </div>
 `;
 
@@ -689,8 +689,9 @@ The button copies this studio into your GitHub, creates its Worker, database and
 deploys it with Workers Builds: every push to \`main\` goes live, and every other branch gets its own Preview.
 The site goes live at once with its own home page ("first game coming soon"); the games come next.
 
-Then open the site and tap **Connect to Claude**, or ask Claude in the Claude app to set up your studio with the
-Homie connector: it makes games, songs and videos here, in a pull request you merge with one tap.
+Then open the site and tap **Connect this chat**, or ask Claude, Codex or Grok (with the Homie connector,
+https://homie.rocks/mcp) to set up your studio: it makes games, songs and videos here, in a pull request you merge
+with one tap. Grok has no Cloudflare connector. Approving Cloudflare in the browser is still your step.
 
 \`AGENTS.md\` says how everything here works.
 `;

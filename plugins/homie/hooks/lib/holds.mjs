@@ -1,13 +1,15 @@
 /**
- * THE HOLDS, DECIDED IN ONE PLACE. Claude Code's Homie mod (hooks/homie.mjs) and Codex's hooks (hooks/codex.mjs) both
- * ask this module what a tool call means for a studio, so the two apps cannot drift apart:
+ * THE HOLDS, DECIDED IN ONE PLACE. Claude Code's Homie mod (hooks/homie.mjs), Codex's hooks (hooks/codex.mjs)
+ * and Grok's hooks (hooks/grok.mjs) all ask this module what a tool call means for a studio, so the three apps
+ * cannot drift apart:
  *   null                  let it through;
  *   { deny }              refused outright, nobody is asked (the reason says what to do instead);
  *   { hold }              the person says Proceed or Cancel first: { question, title, lines, diff?, more?, detail,
  *                         no (the reason when they said no), nobody (the reason when nobody could be asked) };
  *   { note }              let it through, with one line for the person (the mod's toast).
- * Each app shows a hold its own way: the mod in Claude Code's question dialog with the Hold pane, Codex in its own
- * approval prompt (hooks/codex.mjs says how far Codex goes).
+ * Each app shows a hold its own way: the mod in Claude Code's question dialog with the Hold pane, Codex and Grok
+ * by refusing the call with a short code the person answers in their own message (hooks/codex.mjs and hooks/grok.mjs
+ * say how far each app goes).
  *
  * Everything here reads through `io`, which each app builds from what it may reach:
  *   io.exists(path) → boolean          io.read(path) → text (throws when missing)

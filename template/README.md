@@ -9,7 +9,8 @@ The button copies this studio into your GitHub, creates its Worker, database and
 deploys it with Workers Builds: every push to `main` goes live, and every other branch gets its own Preview.
 The site goes live at once with its own home page ("first game coming soon"); the games come next.
 
-Then open the site and tap **Connect to Claude**, or ask Claude in the Claude app to set up your studio with the
-Homie connector: it makes games, songs and videos here, in a pull request you merge with one tap.
+Then open the site and tap **Connect this chat**, or ask Claude, Codex or Grok (with the Homie connector,
+https://homie.rocks/mcp) to set up your studio: it makes games, songs and videos here, in a pull request you merge
+with one tap. Grok has no Cloudflare connector. Approving Cloudflare in the browser is still your step.
 
 `AGENTS.md` says how everything here works.

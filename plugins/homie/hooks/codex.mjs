@@ -53,7 +53,7 @@ function allowedUrl(url, live) {
   return u.protocol === 'https:' && Boolean(live) && new URL(live).host === u.host;
 }
 
-export function nodeIo({ live = null } = {}) {
+export function nodeIo({ live = null, who = 'homie-codex-hooks' } = {}) {
   return {
     exists: async (path) => { try { await stat(path); return true; } catch { return false; } },
     read: (path) => readFile(path, 'utf8'),
@@ -70,7 +70,7 @@ export function nodeIo({ live = null } = {}) {
     fetchJson: async (url, { timeoutMs = 3000 } = {}) => {
       if (!allowedUrl(url, live)) return null;
       try {
-        const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'homie-codex-hooks' }, signal: AbortSignal.timeout(timeoutMs) });
+        const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': who }, signal: AbortSignal.timeout(timeoutMs) });
         return res.ok ? await res.json() : null;
       } catch { return null; }
     },
@@ -84,7 +84,7 @@ const HOUR = 60 * 60_000;
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 export function dataDir() {
-  return process.env.HOMIE_HOLDS_DATA || process.env.PLUGIN_DATA || process.env.CLAUDE_PLUGIN_DATA || join(tmpdir(), `homie-holds-${userInfo().username}`);
+  return process.env.HOMIE_HOLDS_DATA || process.env.PLUGIN_DATA || process.env.GROK_PLUGIN_DATA || process.env.CLAUDE_PLUGIN_DATA || join(tmpdir(), `homie-holds-${userInfo().username}`);
 }
 
 async function readState(dir) {
@@ -132,13 +132,13 @@ export function callOf(p) {
 }
 
 /** What only a hook can add about a deploy: its record of the last one, and the live site's games and rooms. */
-async function deployKnown(io, root, state) {
+async function deployKnown(io, root, state, by = 'Codex') {
   const studio = (await readJson(io, `${root}/studio.json`)) ?? {};
   const local = (await readJson(io, `${root}/.studio/local.json`)) ?? {};
   const live = liveSite(studio, local);
-  const fetchLive = io.fetchLive ?? nodeIo({ live }).fetchJson;
+  const fetchLive = io.fetchLive ?? nodeIo({ live, who: by === 'Grok' ? 'homie-grok-hooks' : 'homie-codex-hooks' }).fetchJson;
   const [games, rooms] = live ? await Promise.all([fetchLive(`${live}/api/games`), fetchLive(`${live}/api/rooms`)]) : [null, null];
-  const known = { by: 'Codex', stored: state.deployed[root] ?? null };
+  const known = { by, stored: state.deployed[root] ?? null };
   if (Array.isArray(games?.games)) known.liveIds = games.games.map((g) => g.id);
   if (Number.isFinite(Number(rooms?.playing))) known.playing = Number(rooms.playing);
   let ids = [];
@@ -149,15 +149,15 @@ async function deployKnown(io, root, state) {
 }
 
 /** A decision for one call: null, { deny }, { hold }, { note } (lib/holds.mjs). */
-export async function decide(p, { io = nodeIo(), state = { holds: [], deployed: {} }, guards = settings().guards } = {}) {
+export async function decide(p, { io = nodeIo(), state = { holds: [], deployed: {} }, guards = settings().guards, app = 'codex', by = 'Codex' } = {}) {
   const call = callOf(p);
   if (!call) return null;
-  const ctx = await contextOf(io, p.cwd, { app: 'codex', guards });
+  const ctx = await contextOf(io, p.cwd, { app, guards });
   if (call.kind === 'edit') {
     if (!call.changes?.length) return null;
-    return editDecision(io, ctx, { tool: call.tool ?? 'apply_patch', changes: call.changes, by: 'Codex' });
+    return editDecision(io, ctx, { tool: call.tool ?? 'apply_patch', changes: call.changes, by });
   }
-  const known = (root) => deployKnown(io, root, state);
+  const known = (root) => deployKnown(io, root, state, by);
   if (call.kind === 'shell') return (await shellDecision(io, ctx, call.command, known)).decision;
   return (await mcpDecision(io, ctx, call.tool, call.input, known)).decision;
 }
@@ -168,9 +168,9 @@ const preOut = (decision, reason, systemMessage) => ({
   hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: decision, permissionDecisionReason: String(reason).replace(/\.+\s*$/, '') },
 });
 
-export async function pre(p, { io, guards, dir = dataDir() } = {}) {
+export async function pre(p, { io, guards, dir = dataDir(), app = 'codex', by = 'Codex' } = {}) {
   const state = await readState(dir);
-  const d = await decide(p, { io, state, guards });
+  const d = await decide(p, { io, state, guards, app, by });
   if (!d) return null;
   // A paid call inside every budget goes through, and the person reads what it costs (the mod's toast).
   if (d.note) return { systemMessage: `Homie: ${d.note}` };

@@ -83,8 +83,8 @@ The button copies the public template (`template/` in this repository, exactly w
 writes) into the person's GitHub, makes the Worker, the D1 database and the rooms on their Cloudflare account,
 and connects Workers Builds. The site goes live with its own home page ("First game coming soon": no starter game
 is put in a studio unless the person asks for one), and its Home has a
-**Connect to Claude** band: one tap links it to the Claude chat that set it up (the Homie MCP tool `studio_setup`).
-In the Claude Code session that works in the repository, `homie-studio setup attach <hs_…>` then gives the studio
+**Connect this chat** band: one tap links it to the chat that set it up (the Homie MCP tool `studio_setup`).
+In the session that works in the repository, `homie-studio setup attach <hs_…> [--client claude|codex|grok]` then gives the studio
 the name chosen in the chat and removes the band.
 
 **The site claims itself in the directory.** The homie.rocks directory lists a studio only when its site serves

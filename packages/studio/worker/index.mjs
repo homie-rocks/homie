@@ -589,7 +589,7 @@ async function route(request, env, ctx) {
   const getAll = () => (catP ??= catalogue(env, url.origin).then((cat) => named(cat, env)));
   const getCat = () => (pubP ??= Promise.all([getAll(), settingsOf(env)]).then(([cat, settings]) => publicCatalogue(cat, settings, env)));
 
-  // "Connect to Claude" (the template's first-run band): the directory's setup page, for this site's address.
+  // "Connect this chat" (the template's first-run band): the directory's setup page, for this site's address.
   if (path === '/_studio/connect' && read) {
     const directory = directoryOf(await getCat());
     if (!directory || env.HOMIE_PREVIEW === '1') return json({ ok: false, error: 'no-directory', message: 'This studio is not connected to a directory.' }, 404);

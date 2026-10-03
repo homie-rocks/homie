@@ -173,10 +173,12 @@
  *                                         into it (stage, each check going green, a preview picture) and stop
  *                                         when asked. Without one, nothing changes.
  *
- *   homie-studio handoff <hb_…>           (a Claude Code session started from the Claude app with one line, "Continue building
+ *   homie-studio handoff <hb_…> [--client claude|codex|grok]
+ *                                          (a session started from the chat with one line, "Continue building
  *                                          <Studio>: build hb_…": fetch the person's brief, check in for a new studio, take
  *                                          the build so the chat's card follows it, and print the steps; HANDOFF.md)
- *   homie-studio setup attach <hs_…>      (this repository is the studio the Claude app's setup card is making: say so, once,
+ *   homie-studio setup attach <hs_…> [--client claude|codex|grok]
+ *                                          (this repository is the studio the chat's setup card is making: say so, once,
  *                                          learn its live address, and give a template copy its real name)
  *   homie-studio setup --via stripe-projects [--with elevenlabs] [--accept-tos] [--dry-run]
  *                                         (a prototype, 0.24.3: Cloudflare, and ElevenLabs with --with, made or linked
@@ -711,14 +713,14 @@ async function main() {
   if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);
-  if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie') });
+  if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie'), client: flags.get('client') });
   if (cmd === 'setup' && flags.has('via')) {
     if (flags.get('via') !== 'stripe-projects') return { ok: false, command: 'setup', why: '--via stripe-projects is the one other way this version knows (the default is npx wrangler login)' };
     const extra = String(flags.get('with') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
     if (extra.some((x) => x !== 'elevenlabs')) return { ok: false, command: 'setup', why: '--with takes elevenlabs (Cloudflare is always set up)' };
     return setupViaProjects(root, { withElevenlabs: extra.includes('elevenlabs'), acceptTos: flags.has('accept-tos'), dryRun: flags.has('dry-run'), log });
   }
-  if (cmd === 'handoff') return handoff(root, sub, { homie: flags.get('homie') });
+  if (cmd === 'handoff') return handoff(root, sub, { homie: flags.get('homie'), client: flags.get('client') });
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
     const game = positional[2] ?? listGames(root)[0]?.id;

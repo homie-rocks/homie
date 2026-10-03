@@ -329,6 +329,22 @@ test('setup attach: this repository is the chat\'s studio; a template copy takes
     assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /^# Night Owls$/m);
     assert.equal(JSON.parse(readFileSync(join(dir, '.studio/local.json'), 'utf8')).url, 'https://test-studio.acct.workers.dev');
     assert.ok(r.renamed.includes('studio.json') && r.renamed.includes('wrangler.jsonc'));
+    assert.match(r.message, /The setup card shows it/);
+    assert.doesNotMatch(r.message, /Claude/);
+    const grokDir = studio('setup-grok', ['--template']);
+    spawnSync('git', ['remote', 'add', 'origin', 'https://github.com/octo-studios/rain-city.git'], { cwd: grokDir });
+    const hsG = `hs_${'a'.repeat(32)}`;
+    const gdir = await directory({ [`/api/studio/setup/${hsG}/attach`]: () => [200, { ok: true, name: 'Rain City', site: 'https://test-studio.acct.workers.dev' }] });
+    try {
+      const g = out(await runAsync(['setup', 'attach', hsG, '--client', 'grok', '--homie', gdir.url], grokDir, { HOMIE_CLIENT: '' }));
+      assert.equal(g.ok, true, JSON.stringify(g));
+      assert.equal(g.client, 'grok');
+      const gsent = JSON.parse(gdir.seen.find((x) => x.path === `/api/studio/setup/${hsG}/attach`).body);
+      assert.equal(gsent.client, 'grok');
+      assert.equal(gsent.repo, 'octo-studios/rain-city');
+      assert.match(g.message, /Grok's card shows it/);
+      assert.ok(g.next.some((n) => /Grok Bot/.test(n)));
+    } finally { gdir.close(); }
   } finally { dirx.close(); }
 });
 

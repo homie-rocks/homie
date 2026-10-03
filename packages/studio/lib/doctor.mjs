@@ -152,7 +152,7 @@ export async function setupStatus({
   {
     const fixConnector = {
       who: 'person',
-      say: 'Turn the Homie connector on. Claude Code: run /plugin, install or enable "homie" (marketplace homie-rocks/homie), then /mcp shows homie connected. Codex: install the Homie plugin from the same marketplace. The Claude app: Settings, Connectors, Add custom connector, https://homie.rocks/mcp; then its setup card (studio_setup) makes the studio on your own Cloudflare and GitHub in three taps.',
+      say: 'Turn the Homie connector on. Claude Code: run /plugin, install or enable "homie" (marketplace homie-rocks/homie), then /mcp shows homie connected. Codex: install the Homie plugin from the same marketplace. Grok Build: the same plugin (.grok-plugin/plugin.json). The Claude app, or Grok: add the connector https://homie.rocks/mcp; its setup card (studio_setup) makes the studio on your own Cloudflare. Grok has no Cloudflare connector: you still approve Cloudflare in the browser. A Grok Bot on this computer runs the checklist and checks in with setup attach <hs_…> --client grok.',
     };
     let state; let detail;
     if (net.blocked) { state = 'act'; detail = `the network proxy of this machine refused ${new URL(directory).host}`; }
@@ -162,7 +162,7 @@ export async function setupStatus({
     else { state = 'unknown'; detail = net.ok ? `${new URL(directory).host} answers; your AI knows whether its Homie tools (studio_scaffold) are here` : `this computer's request to the directory failed: ${net.why}`; }
     rows.push({
       id: 'connector', label: 'Homie connector', need: 'required', state, detail,
-      unlocks: 'making the studio with the right toolkit version, listing games in the homie.rocks directory, and the cards in the Claude app',
+      unlocks: 'making the studio with the right toolkit version, listing games in the homie.rocks directory, and the setup cards',
       fix: state === 'ok' ? null : net.blocked
         ? { who: 'person', say: `In claude.ai/code, open this environment's settings, set Network access to Custom, add ${new URL(directory).host} (keep the default package managers), and start a new session.` }
         : said === 'no' || net.ok ? fixConnector : null,
@@ -174,13 +174,13 @@ export async function setupStatus({
     const local = root ? readLocal(root) : {};
     const created = studio?.cloudflare?.created ?? [];
     const deployed = Boolean(local.deployedAt || created.some((c) => String(c).startsWith('worker:')));
-    // A studio the Claude app's setup card made (`setup attach` wrote connectedAt): Cloudflare's Deploy button made
+    // A studio the setup card made (`setup attach` wrote connectedAt): Cloudflare's Deploy button made
     // it on the person's account and Workers Builds deploys every merge, so no sign-in is needed on this computer.
     const attached = Boolean(local.connectedAt);
     const signedIn = attached || who.signedIn === true ? 'ok' : who.signedIn === false ? 'act' : 'later';
     const verified = deployed || attached ? 'ok' : local.needs === 'cloudflare-verify-email' ? 'act' : 'later';
     const parts = attached ? [
-      { label: 'connected', state: 'ok', detail: 'through the Claude app\'s setup card (Deploy to Cloudflare); Workers Builds deploys every merge' },
+      { label: 'connected', state: 'ok', detail: 'through the setup card (Deploy to Cloudflare); Workers Builds deploys every merge' },
       { label: 'email verified', state: 'ok', detail: 'the site is live' },
     ] : [
       { label: 'signed in', state: signedIn, detail: who.signedIn === true ? (who.how ?? `${who.accounts ?? 1} account${who.accounts === 1 || who.accounts === null || who.accounts === undefined ? '' : 's'}`) : who.signedIn === false ? 'not signed in' : root ? (who.why ?? 'run npm install in the studio, then this again') : 'checked once the studio exists (it brings its own Wrangler)' },
