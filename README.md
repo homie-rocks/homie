@@ -424,12 +424,15 @@ add versions to a package that exists.
 
 **The leak audit.** Nothing private goes into this repository: `scripts/audit.mjs` fails a
 home path, an email address other than the security contact, a key or account id, the old
-`@homie/` scope, a placeholder, and the maintainers' private terms (names and private
-projects, which live in a repository secret and are never printed). CI runs it on every
-pull request, over the tree and every commit the pull request adds.
+`@homie/` scope, a placeholder, and the maintainers' private terms (private projects,
+paths and names, which live in a repository secret and are never printed). CI runs it on
+every pull request, over the tree and every commit the pull request adds. It does not
+check who made a commit: an author, a committer and the trailers that name a person
+(`Signed-off-by`, `Co-authored-by` and the like) carry anybody's own name and address.
 
 Contributions come in under Apache-2.0 with a DCO sign-off (`git commit -s`), and no
-CLA: [CONTRIBUTING.md](CONTRIBUTING.md) says how a change gets in. To report a
+CLA, from people under their own names: [CONTRIBUTING.md](CONTRIBUTING.md) says how a
+change gets in, how a maintainer merges it, and what the leak audit checks. To report a
 vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License

@@ -13,19 +13,22 @@
  *                           variable HOMIE_AUDIT_TERMS may hold the same JSON instead
  *     --require-terms       fail when no private terms were given (CI on this repository's
  *                           own branches, where the secret is available)
- *     --identity <name>     every audited commit is by <name>, with no email address (the
- *                           maintainers' own commits; a contributor's commit carries theirs)
+ *     --identity <name>     every audited commit is by <name>, with no email address, in its
+ *                           identity or in its message (an export made under one name; never
+ *                           a pull request, whose commits are by the people who made them)
  *     --report <file>       also write the report to a file
  *
  * It FAILS on, in any file or commit message:
  *   - home and machine paths (/Users/…, /home/…, C:\Users, /private/tmp, /var/folders)
  *     and home-relative paths (~/…);
- *   - email addresses, except the security contact (and, in a commit message, a
- *     contributor's own Signed-off-by line);
+ *   - email addresses, except the security contact (and, in a commit message, a person's
+ *     trailer: see "People" below);
  *   - secret shapes: keys, tokens, JWTs, bearer values, 32-hex ids, UUIDs and workers.dev
  *     hosts (a test's made-up values are listed below);
  *   - the old npm scope @homie/ (the npm org "homie" is someone else's), a path to a
- *     package folder this repository does not have, a private commit id;
+ *     package folder this repository does not have, a private commit id (in a commit
+ *     message, the id of a commit of this repository is INFO: a revert names the commit it
+ *     undoes);
  *   - words of a private build process (lanes, benches, worktrees, critics, HQ), except
  *     where a file uses one in its ordinary sense (ALLOWED_WORDS);
  *   - a placeholder or TODO left in a file;
@@ -36,9 +39,24 @@
  *     number and kind, never the term.
  * Words a reviewer should still see (TV as a device class, a game's camera) are INFO.
  *
+ * People. A commit is made by a person, under their own name and address, and anybody may
+ * author, commit or merge one: a contributor, a maintainer, GitHub's merge button.
+ *   - A commit's author and committer are never held against a private term that is a
+ *     person's name. Every other private term (a private path or repository, an account id,
+ *     a host, an internal name) still fails there: none of those is somebody's name.
+ *   - A commit message may carry the trailers that name a person (PERSON_TRAILERS), each
+ *     alone on its line as `Key: Name <address>`, with any name and address. Such a line is
+ *     an INFO row: `git commit -s` writes Signed-off-by, GitHub writes Co-authored-by on a
+ *     squash merge, and AI tools add themselves as co-authors. Its address, a private term
+ *     that is a person's name, and a name that happens to be a build-process word pass on
+ *     that line; everything else on it is still checked.
+ *   - Everywhere else nothing changes: an address or a person's private name in the prose of
+ *     a message fails, and so does either one in a file.
+ *
  * Private terms JSON: { "v": 1, "terms": [{ "kind": "name", "re": "<regex source>", "flags": "i" }, ...] }.
+ * A term is a person's name when it says "person": true, or says nothing and its kind is "name".
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,6 +110,18 @@ const SECRET_SHAPES = [
 ];
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
 
+/**
+ * A commit message's trailers that name a person. The line is theirs, whatever the name and
+ * address on it: `Key: Name <address>`, alone on its line, in any letter case.
+ */
+export const PERSON_TRAILERS = ['Signed-off-by', 'Co-authored-by', 'Reviewed-by', 'Acked-by', 'Tested-by', 'Reported-by', 'Helped-by'];
+const PERSON_TRAILER = new RegExp(`^\\s*(${PERSON_TRAILERS.join('|')}):\\s+[^<>]{0,100}?[^<>\\s]\\s*<[^<>\\s@]+@[^<>\\s@]+>\\s*$`, 'i');
+/** The trailer a line is (as PERSON_TRAILERS spells it), or null. */
+export function personTrailer(line) {
+  const m = PERSON_TRAILER.exec(line);
+  return m ? PERSON_TRAILERS.find((k) => k.toLowerCase() === m[1].toLowerCase()) : null;
+}
+
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /*
  * MCP's own method names (tools/list, tools/call, resources/templates/list, notifications/tools/list_changed and the
@@ -108,17 +138,27 @@ const sanitizer = (terms) => (line) => {
 const mask = (s) => (s.length <= 4 ? '****' : `${s.slice(0, 2)}${'*'.repeat(Math.min(12, s.length - 2))}`);
 const global = (re) => new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
 
-/** Read the private terms: { v: 1, terms: [{ kind, re, flags }] } -> [{ n, kind, re }]. */
+/**
+ * Read the private terms: { v: 1, terms: [{ kind, re, flags, person }] } -> [{ n, kind, re, person }].
+ * `person` says the term is a person's name: private in a file and in the prose of a commit
+ * message, and never held against a commit's author, committer or trailers. A term that
+ * does not say is a person when its kind is "name".
+ */
 export function parseTerms(text) {
   if (!text || !text.trim()) return [];
   const doc = JSON.parse(text);
   if (doc?.v !== 1 || !Array.isArray(doc.terms)) throw new Error('private terms: expected { "v": 1, "terms": [...] }');
-  return doc.terms.map((t, i) => ({ n: i + 1, kind: String(t.kind ?? 'private'), re: new RegExp(t.re, (t.flags ?? 'i').replace('g', '')) }));
+  return doc.terms.map((t, i) => {
+    const kind = String(t.kind ?? 'private');
+    return { n: i + 1, kind, person: typeof t.person === 'boolean' ? t.person : kind === 'name', re: new RegExp(t.re, (t.flags ?? 'i').replace('g', '')) };
+  });
 }
 
 /**
  * The checks of one text (a file, or a commit message when `path` is null).
- * `ctx`: { terms, openPackages: Set, allowed: ALLOWED_WORDS }. Each finding is
+ * `ctx`: { terms, openPackages: Set, allowed: ALLOWED_WORDS, trailers, ownCommit }. `trailers`
+ * says a commit message may carry people's trailers (not under --identity); `ownCommit(id)`
+ * says an id names a commit of the audited repository. Each finding is
  * { check, level: 'fail'|'info', where, what }.
  */
 export function auditText(path, text, ctx) {
@@ -132,6 +172,8 @@ export function auditText(path, text, ctx) {
   const hit = (check, level, i, what) => { if (!(skip.has(check) && level === 'fail')) out.push({ check, level, where: where(i), what }); };
   const each = (re, fn) => { const g = global(re); lines.forEach((line, i) => { for (const m of line.matchAll(g)) fn(i, line, m[0]); }); };
   const allowedHere = (m) => (!isMessage && (ctx.allowed[path]?.words ?? []).some((w) => [m.toLowerCase(), m.toLowerCase().replace(/s$/, '')].includes(w.toLowerCase())));
+  // The lines of a commit message that are a person's trailer (never a line of a file).
+  const trailers = lines.map((line) => (isMessage && ctx.trailers ? personTrailer(line) : null));
 
   // Home and machine paths.
   each(/\/Users\/|\/home\/[a-z]|[A-Z]:\\Users|\/private\/tmp\/|\/var\/folders\//, (i, line) => hit('paths', 'fail', i, `home or machine path: ${excerpt(line)}`));
@@ -144,7 +186,7 @@ export function auditText(path, text, ctx) {
   // Email addresses.
   each(EMAIL, (i, line, m) => {
     if (m.toLowerCase() === SECURITY_CONTACT) hit('email', 'info', i, `${m} (the security contact)`);
-    else if (isMessage && ctx.signoffs && /^\s*Signed-off-by:/i.test(line)) hit('email', 'info', i, `a contributor's sign-off (${mask(m)})`);
+    else if (trailers[i]) hit('email', 'info', i, `a ${trailers[i]} trailer, the person's own (${mask(m)})`);
     else hit('email', 'fail', i, `an email address (${mask(m)})`);
   });
 
@@ -166,13 +208,19 @@ export function auditText(path, text, ctx) {
   }
   const open = [...ctx.openPackages].map(esc).join('|') || 'studio';
   each(new RegExp(`\\bpackages\\/(?!(${open})(?![a-z0-9-]))[a-z0-9-]+`), (i, line, m) => hit('paths', 'fail', i, `${clean(m)}: not a package of this repository: ${excerpt(line)}`));
-  each(/\bcommit [0-9a-f]{7,40}\b/, (i, line, m) => hit('paths', 'fail', i, `a private commit id (${m})`));
+  // A commit id. In a commit message, the id of a commit of this repository is public: `git revert` and GitHub's
+  // Revert button write "This reverts commit <id>". Any other id, and every id in a file, is some other repository's.
+  each(/\bcommit [0-9a-f]{7,40}\b/, (i, line, m) => (isMessage && ctx.ownCommit?.(m.slice(7))
+    ? hit('paths', 'info', i, `${m}: a commit of this repository`)
+    : hit('paths', 'fail', i, `a private commit id (${m})`)));
 
-  // Words of a private build process.
+  // Words of a private build process (a person's trailer may hold one: it is their name).
   for (const re of PROCESS_WORDS) {
-    each(re, (i, line, m) => (allowedHere(m)
-      ? hit('process', 'info', i, `"${m}" allowed here (${ctx.allowed[path].why})`)
-      : hit('process', 'fail', i, `build-process word "${m}": ${excerpt(line)}`)));
+    each(re, (i, line, m) => {
+      if (trailers[i]) return;
+      if (allowedHere(m)) hit('process', 'info', i, `"${m}" allowed here (${ctx.allowed[path].why})`);
+      else hit('process', 'fail', i, `build-process word "${m}": ${excerpt(line)}`);
+    });
   }
 
   // Placeholders (a placeholder starts with a letter, so `a << 8 | b >>> 0` is not one).
@@ -181,8 +229,9 @@ export function auditText(path, text, ctx) {
   // The device-class words a reviewer should see in context.
   if (!isMessage) each(/\b(TV|tv|television|camera|speakers?|lights?|microphone)\b/, (i, line, m) => hit('context', 'info', i, `"${m}": ${excerpt(line)}`));
 
-  // The maintainers' private terms: the number and kind only, never the term.
-  for (const t of ctx.terms) lines.forEach((line, i) => { if (t.re.test(line.replace(MCP_METHOD, ''))) hit('private', 'fail', i, `private term #${t.n} (${t.kind})`); });
+  // The maintainers' private terms: the number and kind only, never the term. A person's name passes on a
+  // person's trailer; every other term is checked there too.
+  for (const t of ctx.terms) lines.forEach((line, i) => { if (!(t.person && trailers[i]) && t.re.test(line.replace(MCP_METHOD, ''))) hit('private', 'fail', i, `private term #${t.n} (${t.kind})`); });
   return out;
 }
 
@@ -262,7 +311,12 @@ export function auditRepo(repo, { ref = 'HEAD', history = null, workingTree = fa
   // A path to a package folder is public when the newest audited tree has that folder.
   const tip = commits[commits.length - 1];
   const openPackages = new Set(tip ? treeEntries(repo, tip).filter((e) => e.path.startsWith('packages/')).map((e) => e.path.split('/')[1]) : []);
-  const ctx = { terms, openPackages, allowed: ALLOWED_WORDS, signoffs: !identity };
+  const known = new Map();
+  const ownCommit = (id) => {
+    if (!known.has(id)) known.set(id, spawnSync('git', ['-C', repo, 'cat-file', '-e', `${id}^{commit}`], { stdio: 'ignore' }).status === 0);
+    return known.get(id);
+  };
+  const ctx = { terms, openPackages, allowed: ALLOWED_WORDS, trailers: !identity, ownCommit };
   const findings = [];
   const cache = new Map();
   const failedCommits = new Set();
@@ -289,7 +343,9 @@ export function auditRepo(repo, { ref = 'HEAD', history = null, workingTree = fa
       const meta = [];
       if (identity && (an !== identity || cn !== identity)) meta.push({ check: 'git', level: 'fail', where: 'identity', what: `not by ${identity} (${mask(an)} / ${mask(cn)})` });
       if (identity && (ae || ce)) meta.push({ check: 'git', level: 'fail', where: 'identity', what: 'an author or committer email is set' });
-      for (const t of terms) if (t.re.test(`${an}\n${ae}\n${cn}\n${ce}`)) meta.push({ check: 'private', level: 'fail', where: 'identity', what: `private term #${t.n} (${t.kind})` });
+      // The author and the committer are people, under their own names: a private term that is a person's name is
+      // never held against them. A private path, repository, id, host or internal name there still fails.
+      for (const t of terms) if (!t.person && t.re.test(`${an}\n${ae}\n${cn}\n${ce}`)) meta.push({ check: 'private', level: 'fail', where: 'identity', what: `private term #${t.n} (${t.kind})` });
       meta.push(...auditText(null, msg, ctx));
       for (const f of meta) { if (f.level === 'fail') failedCommits.add(c); findings.push({ ...f, commit: c, key: `commit ${c}` }); }
     }
@@ -306,13 +362,13 @@ export function auditRepo(repo, { ref = 'HEAD', history = null, workingTree = fa
 const TITLES = {
   files: 'Files: no symlinks, submodules, binaries or secret-bearing files',
   paths: 'Home, machine and private paths; package folders this repository does not have; private commit ids',
-  email: `Email addresses (only ${SECURITY_CONTACT})`,
+  email: `Email addresses (only ${SECURITY_CONTACT}; in a commit message, a person's trailer)`,
   secrets: 'Tokens, keys, account ids, UUIDs, workers.dev hosts',
   scope: 'npm scope: @homie-rocks/ only, never @homie/',
   process: 'Words of a private build process',
   placeholders: 'No placeholder or TODO left',
   private: "The maintainers' private terms (number and kind only)",
-  git: 'Git: commit identity, and no remote but the public repository',
+  git: 'Git: under --identity, who made each commit; no remote but the public repository',
   context: 'Words a reviewer should see in context (INFO only)',
 };
 

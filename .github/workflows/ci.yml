@@ -3,11 +3,15 @@
 # version, and the leak audit passes on the tree and on every commit the change adds.
 # Releases are publish.yml (a release-* tag).
 #
-# The leak audit's private terms (names and private projects that must never appear
-# here) come from the repository secret HOMIE_AUDIT_TERMS; the maintainers set it, and
-# the audit prints a hit as "private term #n (kind)", never the term. A pull request
-# from a fork gets no secrets, so there the audit runs its public checks and says so;
-# the maintainers' own branches and main require the terms.
+# The leak audit's private terms (private projects, paths and names that must never be
+# written here) come from the repository secret HOMIE_AUDIT_TERMS; the maintainers set
+# it, and the audit prints a hit as "private term #n (kind)", never the term. A pull
+# request from a fork gets no secrets, so there the audit runs its public checks and
+# says so; the maintainers' own branches and main require the terms.
+#
+# The audit does not check who made a commit. An author, a committer and a message's
+# person trailers (Signed-off-by, Co-authored-by and the like) carry anybody's own name
+# and address, so a contributor's commit, a maintainer's and the merge button's all pass.
 name: CI
 
 on:

@@ -6,6 +6,8 @@
  *     and gives the section to write, the plugin's version in it, and the --sync step;
  *   - a Plugin line that names another plugin version, a copy that differs, and a section ahead of the package's
  *     version each fail with the fix;
+ *   - an older version's section is asked to link its release tag only once the checkout has the tag, and the
+ *     message is the line to write; the package's own version is never asked;
  *   - --sync makes the copy; --notes prints the section with the Desktop extension's line, and refuses a version
  *     with no section.
  * Run: node --test scripts/changelog.test.mjs
@@ -99,6 +101,47 @@ test('a Plugin line for another plugin version, a different copy, and a section 
   assert.equal(sh.status, 1);
   assert.match(sh.stderr, /the heading has no date/);
   assert.match(sh.stderr, /no "\*\*Plugin x\.y\.z\*\* · …" line under the heading/);
+});
+
+test('an older section links its release tag once the tag exists, and the check gives the line to write', () => {
+  const root = checkout('tags', { studio: '0.20.0', plugin: '0.21.0', sections: [section('0.20.0', '0.21.0'), section('0.19.2', '0.20.2')] });
+  const check = () => run(['--check', '--root', root]);
+  // Not a repository, then a repository with no tag: nothing says 0.19.2 was released, so nothing is asked.
+  const bare = check();
+  assert.equal(bare.status, 0, bare.stderr);
+  assert.match(bare.stdout, /Release tags: this checkout has none, so no section was asked to link one\./);
+  git(root, 'init', '-q', '-b', 'main');
+  git(root, 'add', '-A');
+  git(root, 'commit', '-q', '-m', 'base');
+  assert.equal(check().status, 0);
+  // The package's own version is tagged: its section is never asked (the published package ships this file).
+  git(root, 'tag', 'release-2026-10-03-studio-0.20.0');
+  assert.equal(check().status, 0);
+  // The version before it is tagged: now its section links the tag, and the message is the whole line.
+  git(root, 'tag', 'release-2026-10-02-studio-0.19.2');
+  const text = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
+  const lines = text.split('\n');
+  const at = lines.lastIndexOf('**Plugin 0.20.2** · [#1](https://github.com/homie-rocks/homie/pull/1)');
+  const wanted = `${lines[at]} · [release-2026-10-02-studio-0.19.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.19.2)`;
+  const r = check();
+  assert.equal(r.status, 1);
+  assert.ok(r.stderr.includes(`0.19.2 was released (the tag release-2026-10-02-studio-0.19.2), and its section does not link the tag yet. Make line ${at + 1} of CHANGELOG.md:\n\n      ${wanted}\n`), r.stderr);
+  assert.match(r.stderr, /then run node scripts\/changelog\.mjs --sync and commit CHANGELOG\.md and packages\/studio\/CHANGELOG\.md/);
+  assert.doesNotMatch(r.stderr, /0\.20\.0 was released/);
+  // Written as it says, and synced: it passes.
+  lines[at] = wanted;
+  writeFileSync(join(root, 'CHANGELOG.md'), lines.join('\n'));
+  run(['--sync', '--root', root]);
+  const ok = check();
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /Release tags: this checkout has 2; older sections that link theirs: 1\./);
+  // A link to some other version's tag is not this section's.
+  lines[at] = wanted.replaceAll('studio-0.19.2', 'studio-0.19.1');
+  writeFileSync(join(root, 'CHANGELOG.md'), lines.join('\n'));
+  run(['--sync', '--root', root]);
+  const other = check();
+  assert.equal(other.status, 1);
+  assert.match(other.stderr, /the 0\.19\.2 section links release-2026-10-02-studio-0\.19\.1, which is not a tag of 0\.19\.2: its tag is release-2026-10-02-studio-0\.19\.2/);
 });
 
 test('--notes: a release\'s notes are the section with the Desktop extension\'s line; no section, no notes', () => {
