@@ -1,6 +1,7 @@
 # The shop: selling in a studio's games with the studio's own Stripe
 
-`@homie-rocks/studio` 0.24.0. A studio sells items for its games through **its own Stripe account**. The studio
+`@homie-rocks/studio` 0.24.0, set up with Stripe's own agent tools since 0.24.3. A studio sells items for its games
+through **its own Stripe account**. The studio
 is the seller; homie.rocks never holds, routes or settles its money, is not a Stripe Connect platform, and takes
 no cut. There is no shared currency between studios. `SELLING.md` beside this file is the owner's plain-words
 note on what selling means for them (refunds, disputes, tax, kids; not legal advice).
@@ -40,6 +41,7 @@ At the studio's root, reviewed in git. Nothing secret is ever in it.
 | `items[].advantage` | `true` when it changes how the game plays: never offered, and never counted as owned, on a beginner or kids server. |
 | `items[].taxCode` | a Stripe product tax code. Managed Payments needs one: by default `txcd_10201000` (video games, downloaded, permanent) or `txcd_10201001` (limited time). |
 | `referrals` | what this studio pays a referrer for a new player's purchase (left out: nothing). |
+| `catalog` | where the items are Products in Stripe: `["test"]`, `["test", "live"]`. `homie-studio shop catalog` writes it once Stripe's catalog matches; the Worker's checkouts then name each item's Product (0.24.3). |
 
 `homie-studio shop check`, and every `homie-studio build`, refuse: anything that names chance, odds, random, a
 crate, a box, a mystery, loot, a gacha, a spin or a roll; fields for odds or drop pools; a countdown, timer or
@@ -107,23 +109,59 @@ homie.rocks: not involved at any step.
 - Each Checkout Session says beside the pay button that the item is delivered at once (the EU and UK withdrawal
   acknowledgement) and that an unused item can still be refunded.
 
-## Setting it up (Claude does the commands; the owner only uses pages)
+## Setting it up (the AI does the commands; the owner only uses Stripe's pages and one page here)
+
+The AI works with **Stripe's own agent tools** (0.24.3): Stripe's agent plugin (`npm install -g @stripe/cli@latest &&
+stripe agent setup`: Stripe's MCP server at `https://mcp.stripe.com` and Stripe's skills, for Claude Code and Codex) or
+Stripe's connector in the Claude app. The owner signs it in once on Stripe's consent page and gives it **a sandbox
+first**. An agent that cannot do OAuth uses an **Agent key** (a restricted key Stripe tags "Agent") from its
+environment; from **2026-10-31** Stripe's MCP refuses full secret keys and restricted keys without that tag. The shop's
+own key, in the Worker, is a plain restricted key and is not affected.
+
+What only the owner does: make the Stripe account and (for live) activate it: business details, bank, identity, and,
+for Managed Payments, its terms and Stripe's eligibility review; approve Stripe's sign-in page; make **one restricted
+key** in Stripe's Dashboard (Stripe has no API that makes API keys) and paste it on the connect page; approve any
+write Stripe sends to them for confirmation (a refund through Stripe's MCP, for one).
 
 1. `npx --no-install homie-studio shop init --supporter` (shop.json and SELLING.md), then `shop check`, commit,
    `npm run deploy` (it applies migration `0008_studio_shop.sql`; the shop stays closed).
-2. In Stripe (the owner): a restricted key with **Checkout Sessions: Write, Charges: Write (refunds),
-   PaymentIntents: Read, Disputes: Read**, and a webhook endpoint at `https://<site>/api/shop/hook` for
-   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
-   `checkout.session.expired`, `charge.refunded`, `refund.created`, `refund.updated`, `charge.dispute.created`,
-   `charge.dispute.closed`.
-3. `npx --no-install homie-studio shop connect`: a page on the owner's computer (127.0.0.1, one use, ten minutes)
-   with those steps, both fields and the seller choice (the studio, or Stripe Managed Payments, with what each
-   costs and does). The key and the secret go straight to the Worker secrets `STRIPE_KEY` and
-   `STRIPE_WEBHOOK_SECRET` on Wrangler's standard input. Test keys only, unless `--live`.
-4. `homie-studio shop` says whether anything is still missing. Buy your own item with a Stripe test card, and
-   refund it from `/_studio/office/shop`.
+2. **The catalog**, through Stripe's MCP: `homie-studio shop catalog` names the one read to make
+   (`stripe_api_read GET /v1/products`, expanding each default price); `homie-studio shop catalog --have <the saved
+   answer>` lists exactly the `stripe_api_write` calls still needed: each item a Product with the id
+   `homie_<studio slug>_<item id>` (the same in a sandbox and live), its name, blurb, a tax code (video games,
+   downloaded: `txcd_10201000`, or `txcd_10201001` for an item that lasts days or ends on a date; eligible for
+   Managed Payments) and metadata naming the studio and the item, with a default Price of shop.json's amount (a tip:
+   the Product only). A changed price is a new Price made the default; an item gone from shop.json is archived, never
+   deleted; a product the studio did not make is never named. When Stripe matches, it says so and writes
+   `"catalog": ["test"]` into shop.json (commit, deploy). shop.json's checked price is always what is charged; the
+   checkout names the Product so Stripe's Dashboard, reports and MCP see sales by product, and a Product missing in
+   this mode falls back to the item described inline.
+3. **Tax**, read through Stripe's MCP: `GET /v1/tax/settings` (with the studio as the seller, Stripe Tax needs
+   `status: active`, the business address, or checkouts fail) and `GET /v1/tax/registrations` (none: Stripe Tax
+   collects nothing anywhere until the owner registers somewhere). Reading only; the owner and their accountant decide.
+4. `npx --no-install homie-studio shop connect`: a page on the owner's computer (127.0.0.1, one use, ten minutes). The
+   owner makes one restricted key with **Checkout Sessions: Write, Charges: Write (refunds), PaymentIntents: Read,
+   Disputes: Read, Webhook Endpoints: Write**, not an Agent key, and pastes it. With it the page reads once (a typo is
+   caught here), **makes the webhook** at `https://<site>/api/shop/hook` for `checkout.session.completed`,
+   `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`,
+   `charge.refunded`, `refund.created`, `refund.updated`, `charge.dispute.created`, `charge.dispute.closed` (API version
+   `2025-03-31.basil`, metadata `homie: shop-v1`), and puts the key and the webhook's signing secret, which Stripe hands
+   back once, straight into the Worker secrets `STRIPE_KEY` and `STRIPE_WEBHOOK_SECRET` on Wrangler's standard input.
+   An older endpoint the kit made for the same address is turned off, never deleted. The page offers the seller
+   choice (the studio, or Stripe Managed Payments, with what each costs and does) and, in test mode with Managed
+   Payments, tries one test checkout with it (expired at once) and says whether Stripe took it. Afterwards the owner
+   may set the key's Webhook Endpoints back to None (recommended; the shop never needs it again). A key without
+   Webhook Endpoints: the page takes a webhook signing secret the owner made and revealed in Stripe instead. Test keys
+   only, unless `--live`.
+5. `homie-studio shop` says whether anything is still missing. Buy your own item with a Stripe test card, and
+   refund it from `/_studio/office/shop`. Through Stripe's MCP, `GET /v1/webhook_endpoints` shows the endpoint the
+   page made (its `we_…` id): if it is not there, the MCP is signed in to another account or sandbox than the key.
+6. **Live**, only when the owner says so: they activate the account, give Stripe's MCP access to the live account,
+   `shop catalog --mode live` makes the live catalog the same way, and `shop connect --live` takes a live key.
 
-Never ask for a key in a chat, never put one in a file, an argument, a log or a commit.
+Never ask for a key in a chat, never put one in a file, an argument, a log or a commit. **Never make a webhook endpoint
+or event destination through Stripe's MCP**: its answer carries the signing secret into the conversation (in Claude
+Code the Homie mod refuses the call). Never use a Stripe CLI login or a key found on the computer.
 
 ## The office
 
@@ -132,6 +170,15 @@ the last 30 days, every order with its Stripe page, Refund (one tap), disputes, 
 to the studio's own Stripe Dashboard, a CSV for the accountant, and the referral books. From an office key a
 refund (`POST /_studio/api/shop/refund`, `homie-studio shop refund <order>`) is always an ASK the owner confirms
 with one tap; so is marking a referrer paid.
+
+A refund made anywhere else (in Stripe's Dashboard, or through Stripe's MCP after the owner approved Stripe's own
+confirmation link) reaches the shop as `refund.created` / `charge.refunded`, and the item leaves the player's account
+the same way. If the Worker's key is an Agent key, Stripe holds the Worker's refunds for a person's approval
+(`approval_required`): the office answers 202 "held", nothing changes until someone approves it in Stripe (Settings,
+Approvals), and the webhook finishes it. Reconnect with a plain restricted key to get the one tap back.
+
+"How are sales?": `homie-studio shop` and `shop orders` (the studio's own books, no names), and through Stripe's MCP,
+read-only, `stripe_analytics` or `stripe_api_read` on the balance, payouts and checkout sessions.
 
 ## Referrals
 
@@ -150,5 +197,7 @@ with one tap; so is marking a referrer paid.
 ## Testing without money
 
 The kit's tests run the Worker against `stripe-mock` (Stripe's open-source API mock, which checks every parameter
-against Stripe's own API description) and sign webhooks with a test secret. `STRIPE_API_BASE` (a loopback address
+against Stripe's own API description) and sign webhooks with a test secret. stripe-mock also takes every write
+`shop catalog` lists, a checkout that names its Product, and the webhook the connect page makes. Stripe's MCP is
+never called by the tests: `shop catalog --have` reads an answer in the shapes Stripe's API documents. `STRIPE_API_BASE` (a loopback address
 only) points a Worker at such a mock; it is never honoured for anything but 127.0.0.1 or localhost.

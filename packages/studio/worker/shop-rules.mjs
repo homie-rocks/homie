@@ -206,14 +206,30 @@ export function checkShop(raw, { games = null, audience = 'general' } = {}) {
     }
   }
 
+  // Where `homie-studio shop catalog` made the items' Products in Stripe (0.24.3): the Worker's checkouts then name them.
+  let catalog = [];
+  if (raw.catalog !== undefined && raw.catalog !== null) {
+    if (!Array.isArray(raw.catalog) || raw.catalog.some((m) => m !== 'test' && m !== 'live')) err('catalog', 'catalog lists where the items are Products in Stripe: ["test"], ["test", "live"] (homie-studio shop catalog writes it)');
+    else catalog = [...new Set(raw.catalog)].sort();
+  }
+
   const kids = audience === 'kids';
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
   if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off whatever shop.json says).' });
   const shop = {
     v: 1, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
-    open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}),
+    open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };
   return { ok: errors.length === 0, shop, errors, warnings };
+}
+
+/**
+ * The Stripe product tax code an item gets when shop.json names none: video games, downloaded, permanent rights
+ * (txcd_10201000), or limited rights for an item that lasts a number of days or ends on a date (txcd_10201001).
+ * Managed Payments needs one of its eligible codes on every product; these two are.
+ */
+export function defaultTaxCode(item) {
+  return item?.taxCode ?? (item?.days || item?.ends ? 'txcd_10201001' : 'txcd_10201000');
 }
 
 /** studio.json "audience": "general" (the default), "teens" or "kids". */

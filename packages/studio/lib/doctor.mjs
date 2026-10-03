@@ -16,6 +16,9 @@
  *   GitHub             optional    a private backup, publishing by pull request, building from the Claude app
  *   ElevenLabs         optional    songs and game scores
  *   fal                optional    painted art and generated video
+ *   Stripe             for selling only in a studio with shop.json (0.24.3): Stripe's own agent plugin (its MCP server
+ *                                  and skills) for this AI, set up when the studio starts selling; the shop's key itself
+ *                                  goes in through `homie-studio shop connect`, never here
  *   status line        optional    (Claude Code only) the build's progress under the prompt
  *
  * It is safe at any time, inside a studio or before one exists: it only reads (local files, `--version` of a few
@@ -32,6 +35,7 @@ import { findChrome } from './chrome.mjs';
 import { whyFailed } from './net.mjs';
 import { isOurs } from './statusline.mjs';
 import { findStudio, readLocal, readStudio } from './studio.mjs';
+import { projectsCloudflareEnv, projectsElevenLabs } from './projects-env.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
 /** A command's result, never throwing: code 127 when the program is not installed, 124 when it ran out of time. */
@@ -101,7 +105,12 @@ export async function setupStatus({
       if (env.CLOUDFLARE_API_TOKEN) return { signedIn: true, how: 'an API token in the environment' };
       const bin = root ? join(root, 'node_modules', '.bin', win ? 'wrangler.cmd' : 'wrangler') : null;
       if (!bin || !existsSync(bin)) return { signedIn: null };
-      const r = await exec(bin, ['whoami', '--json'], { cwd: root, timeout: 25_000, env: { ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' } });
+      // Through Stripe Projects (studio.json "auth": "stripe-projects"): Wrangler with the token Projects synced.
+      const projects = projectsCloudflareEnv(root);
+      const r = await exec(bin, ['whoami', '--json'], { cwd: root, timeout: 25_000, env: { ...env, ...projects, WRANGLER_SEND_METRICS: 'false', CI: '1' } });
+      if (projects.CLOUDFLARE_API_TOKEN && r.code === 0) {
+        try { if (JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('{')))).loggedIn) return { signedIn: true, how: 'through Stripe Projects (its token, in the studio\'s git-ignored .env; never shown)', accounts: 1, accountIds: [projects.CLOUDFLARE_ACCOUNT_ID].filter(Boolean) }; } catch { /* read below */ }
+      }
       if (r.code === 124) return { signedIn: null, why: 'Wrangler did not answer in time' };
       // The accounts' ids stay in this process (the Workers AI row calls the studio's own account); never printed.
       try { const d = JSON.parse(r.stdout.slice(Math.max(0, r.stdout.indexOf('{')))); return { signedIn: Boolean(d.loggedIn), accounts: Array.isArray(d.accounts) ? d.accounts.length : null, accountIds: Array.isArray(d.accounts) ? d.accounts.map((a) => a?.id).filter(Boolean) : [] }; } catch { return { signedIn: false }; }
@@ -124,7 +133,7 @@ export async function setupStatus({
         const s = await exec(cliBin, ['auth', 'status', '--format', 'json'], { timeout: 10_000 });
         try { signedIn = Boolean(JSON.parse(s.stdout)?.schemes?.some((x) => x.logged_in)); } catch { signedIn = false; }
       }
-      return { cli: v.code === 0, signedIn, key: Boolean(env.ELEVENLABS_API_KEY) };
+      return { cli: v.code === 0, signedIn, key: Boolean(env.ELEVENLABS_API_KEY), projects: root ? projectsElevenLabs(root) : false };
     })(),
     (async () => {
       const key = String(env.FAL_KEY ?? '').trim();
@@ -231,10 +240,10 @@ export async function setupStatus({
 
   // ElevenLabs.
   rows.push({
-    id: 'elevenlabs', label: 'ElevenLabs', need: 'optional', state: eleven.signedIn || eleven.key ? 'ok' : 'optional',
-    detail: eleven.signedIn ? 'the elevenlabs CLI is signed in' : eleven.key ? 'ELEVENLABS_API_KEY is set' : eleven.cli ? 'the elevenlabs CLI is here, not signed in' : 'not connected',
+    id: 'elevenlabs', label: 'ElevenLabs', need: 'optional', state: eleven.signedIn || eleven.key || eleven.projects ? 'ok' : 'optional',
+    detail: eleven.signedIn ? 'the elevenlabs CLI is signed in' : eleven.key ? 'ELEVENLABS_API_KEY is set' : eleven.projects ? 'through Stripe Projects (its key, in the studio\'s git-ignored .env; never shown)' : eleven.cli ? 'the elevenlabs CLI is here, not signed in' : 'not connected',
     unlocks: 'songs and game scores (the music skill), billed to your own ElevenLabs plan; every render is quoted first',
-    fix: eleven.signedIn || eleven.key ? null : eleven.cli
+    fix: eleven.signedIn || eleven.key || eleven.projects ? null : eleven.cli
       ? { who: 'ai', run: 'elevenlabs auth login', say: 'ElevenLabs opens in your browser; sign in once. No key is pasted anywhere.' }
       : { who: mac ? 'ai' : 'person', run: mac ? 'brew install elevenlabs/tap/elevenlabs && elevenlabs auth login' : undefined, open: 'https://elevenlabs.io/sign-up', say: 'Make an ElevenLabs account when you want songs; your AI installs their CLI and you sign in once in the browser.' },
   });
@@ -246,6 +255,24 @@ export async function setupStatus({
     unlocks: 'painted art and backdrops (the art skill) and generated video clips (the video skill), on your own fal account under a budget; covers from a real frame and captured trailers are free',
     fix: fal.key && fal.valid !== false ? null : { who: 'person', open: 'https://fal.ai/dashboard/keys', say: 'Make a key, put FAL_KEY in the environment your AI runs in (for example a line in your shell profile), and start a new session. Never paste it into the chat.' },
   });
+
+  // Stripe, only in a studio that sells (shop.json): Stripe's own agent plugin, set up when selling starts (lazy, like
+  // every provider here). The shop's key never comes through here: `homie-studio shop connect` takes it on a page.
+  if (root && existsSync(join(root, 'shop.json'))) {
+    const v = await exec('stripe', ['--version']);
+    const version = v.code === 0 ? /(\d+\.\d+\.\d+)/.exec(v.stdout)?.[1] ?? null : null;
+    const mcp = stripeAgentConfigured({ root, env });
+    rows.push({
+      id: 'stripe', label: 'Stripe', need: 'for selling', state: mcp ? 'ok' : 'act',
+      detail: [mcp ? `Stripe's MCP is set up for ${mcp}` : 'Stripe\'s MCP is not set up for this AI', version ? `the Stripe CLI ${version}` : 'no Stripe CLI'].join('; '),
+      unlocks: 'the shop: your AI makes the catalog, checks tax and Managed Payments and answers "how are sales?" with Stripe\'s own tools, on your own Stripe account; you sign in on Stripe\'s page',
+      fix: mcp ? null : {
+        who: 'ai', run: 'npm install -g @stripe/cli@latest && stripe agent setup',
+        say: 'Stripe\'s own agent plugin for Claude Code and Codex (its MCP server and skills, kept up to date); you approve the install. Then sign in once on Stripe\'s page and give access to your Stripe sandbox first.',
+        open: 'https://dashboard.stripe.com/register',
+      },
+    });
+  }
 
   // The Claude Code status line (only in Claude Code, only in a studio).
   if (root && env.CLAUDECODE === '1') {
@@ -270,6 +297,7 @@ export async function setupStatus({
     { feature: 'Songs and game scores', state: ready(by.elevenlabs.state), needs: ['elevenlabs'] },
     { feature: 'Painted art and generated video', state: ready(by.fal.state), needs: ['fal'] },
     ...(by['workers-ai'] ? [{ feature: 'AI guides that think (Workers AI)', state: ready(by['workers-ai'].state), needs: ['workers-ai'] }] : []),
+    ...(by.stripe ? [{ feature: 'Sell in the games (the shop, with Stripe\'s own tools)', state: ready(by.stripe.state), needs: ['stripe'] }] : []),
   ];
   const now = rows.filter((r) => ['missing', 'act'].includes(r.state) && r.fix);
   const meanwhile = rows.filter((r) => r.fix?.open && r.state !== 'ok' && (r.fix.who === 'person' || r.state === 'later'));
@@ -282,6 +310,23 @@ export async function setupStatus({
     meanwhile: meanwhile.map((r) => ({ id: r.id, open: r.fix.open, say: r.fix.say })),
     note: 'Optional rows never block anything: each one is set up the first time a feature needs it.',
   };
+}
+
+/**
+ * Where Stripe's MCP server (https://mcp.stripe.com) is set up for this person's AI: Claude Code (the Stripe plugin,
+ * or an MCP entry in .claude.json in the home folder, or the studio's .mcp.json) or Codex (config.toml in the Codex
+ * home folder). It only looks for the address or the plugin's name in those files; it never reads a key and never
+ * prints what it found. Null when nowhere.
+ */
+export function stripeAgentConfigured({ root, env = process.env } = {}) {
+  const home = env.HOME || env.USERPROFILE || '';
+  const look = (file, re) => {
+    try { if (!file || !existsSync(file)) return false; const t = readFileSync(file, 'utf8'); return t.length < 64 * 1024 * 1024 && re.test(t); } catch { return false; }
+  };
+  const mcp = /mcp\.stripe\.com/;
+  if (look(home && join(home, '.claude', 'plugins', 'installed_plugins.json'), /"stripe@/) || look(home && join(home, '.claude.json'), mcp) || look(root && join(root, '.mcp.json'), mcp)) return 'Claude Code';
+  if (look(join(env.CODEX_HOME || (home && join(home, '.codex')) || '', 'config.toml'), /mcp\.stripe\.com|\[mcp_servers\.stripe\]|stripe@openai-curated/)) return 'Codex';
+  return null;
 }
 
 /** The checklist as a person reads it in a terminal. */

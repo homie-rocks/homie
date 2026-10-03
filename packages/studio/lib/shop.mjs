@@ -7,11 +7,15 @@
  *                                           writes shop.json (a $5 Supporter pack with --supporter) and SELLING.md
  *   homie-studio shop check                 shop.json against the kit's rules (no randomness, real money, the cap…)
  *   homie-studio shop connect [--managed] [--live]   a page on THIS computer (127.0.0.1, one use, ten minutes) where the owner
- *                                           pastes the studio's restricted Stripe key and webhook signing secret; they
- *                                           go straight to the Worker secrets STRIPE_KEY and STRIPE_WEBHOOK_SECRET on
- *                                           Wrangler's standard input: never a chat, a file, an argument or a log.
- *                                           The page also offers Stripe Managed Payments in plain words. Test keys
- *                                           only, unless --live (then live keys only).
+ *                                           pastes the studio's restricted Stripe key (the one thing only they can make);
+ *                                           with it this process makes the webhook (0.24.3), and the key and the
+ *                                           webhook's signing secret go straight to the Worker secrets STRIPE_KEY and
+ *                                           STRIPE_WEBHOOK_SECRET on Wrangler's standard input: never a chat, a file,
+ *                                           an argument or a log. The page also offers Stripe Managed Payments in plain
+ *                                           words (and in test mode tries one test checkout with it). Test keys only,
+ *                                           unless --live (then live keys only).
+ *   homie-studio shop catalog [--have <file>|-] [--mode test|live]   the items as Products in Stripe, made through
+ *                                           Stripe's own MCP (lib/shop-catalog.mjs): the read to make, then the writes
  *   homie-studio shop disconnect            removes both secrets (the shop closes at once)
  *   homie-studio shop orders                the latest orders (never a card or an email)
  *   homie-studio shop refund <order> [--reason requested_by_customer|duplicate|fraudulent] [--note "<why>"]
@@ -28,8 +32,11 @@ import { fileURLToPath } from 'node:url';
 import { askedFor, withKey } from './office.mjs';
 import { runner } from './cloudflare.mjs';
 import { listGames, readStudio, siteUrl } from './studio.mjs';
-import { SHOP_FILE, audienceOf, checkShop, money } from '../worker/shop-rules.mjs';
-import { KEY_SHAPE, WEBHOOK_SECRET_SHAPE, apiBase, modeOf } from '../worker/stripe.mjs';
+import { SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
+import {
+  KEY_SHAPE, STRIPE_VERSION, StripeError, WEBHOOK_SECRET_SHAPE, createWebhookEndpoint, expireCheckoutSession, isPermissionError, listWebhookEndpoints, modeOf,
+  stripeCall, updateWebhookEndpoint,
+} from '../worker/stripe.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SELLING = join(HERE, '..', 'shop', 'SELLING.md');
@@ -44,6 +51,7 @@ export const KEY_PERMISSIONS = Object.freeze([
   ['Charges', 'Write', 'refunds (Stripe keeps refunds under Charges)'],
   ['PaymentIntents', 'Read', 'which payment an order was'],
   ['Disputes', 'Read', 'see a dispute; you answer it in Stripe'],
+  ['Webhook Endpoints', 'Write', 'only so this page makes the webhook for you; you can set it back to None afterwards'],
 ]);
 
 /** shop.json read and checked with the studio's games and audience: { ok, shop, errors, warnings, file }. */
@@ -126,46 +134,105 @@ export async function shopStatements(root, { url, period, send = false } = {}) {
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-/** The one page the owner uses: what to make in Stripe, what Managed Payments costs and does, two fields, one button. */
+/** Where Stripe sends the shop's events, on the studio's live site. */
+export const hookUrlOf = (site) => `${String(site).replace(/\/+$/, '')}/api/shop/hook`;
+const HOOK_MARK = 'shop-v1';
+
+/** The one page the owner uses: what to make in Stripe, what Managed Payments costs and does, one field, one button. */
 export function connectPage({ nonce, site, studio, till = 'stripe', test = true }) {
   const dash = `https://dashboard.stripe.com${test ? '/test' : ''}`;
   const perms = KEY_PERMISSIONS.map(([n, level, why]) => `<li><b>${esc(n)}</b>: ${esc(level)} <small>(${esc(why)})</small></li>`).join('');
   const events = HOOK_EVENTS.map((e) => `<code>${esc(e)}</code>`).join(', ');
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Connect your shop to Stripe</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2.5rem auto;padding:0 1rem;color:#1b1b1b}h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:1.8rem}input[type=password]{width:100%;box-sizing:border-box;font:inherit;padding:.6rem;border:1px solid #999;border-radius:8px}label{display:block;margin:.8rem 0 .3rem;font-weight:600}fieldset{border:1px solid #ccc;border-radius:10px;padding:.6rem 1rem}fieldset label{font-weight:400;display:flex;gap:.6rem;align-items:flex-start}button{margin-top:1.2rem;font:inherit;font-weight:700;padding:.7rem 1.3rem;border:0;border-radius:8px;background:#1b1b1b;color:#fff}small{color:#555}code{font-size:.85em;background:#f2f2f2;padding:0 .25em;border-radius:4px}ol li,ul li{margin:.25rem 0}.box{background:#f6f6f2;border-radius:10px;padding:.8rem 1rem}</style>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2.5rem auto;padding:0 1rem;color:#1b1b1b}h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:1.8rem}input[type=password]{width:100%;box-sizing:border-box;font:inherit;padding:.6rem;border:1px solid #999;border-radius:8px}label{display:block;margin:.8rem 0 .3rem;font-weight:600}fieldset{border:1px solid #ccc;border-radius:10px;padding:.6rem 1rem}fieldset label{font-weight:400;display:flex;gap:.6rem;align-items:flex-start}button{margin-top:1.2rem;font:inherit;font-weight:700;padding:.7rem 1.3rem;border:0;border-radius:8px;background:#1b1b1b;color:#fff}small{color:#555}code{font-size:.85em;background:#f2f2f2;padding:0 .25em;border-radius:4px}ol li,ul li{margin:.25rem 0}.box{background:#f6f6f2;border-radius:10px;padding:.8rem 1rem}details{margin-top:1rem}summary{cursor:pointer}</style>
 <h1>Connect ${esc(studio)}'s shop to your Stripe</h1>
-<p>Money goes straight from players to <b>your own Stripe account</b>. Homie never sees it and takes no cut. What you paste here goes from this page to your studio's Worker as two secrets, and nowhere else: not to the chat, not to a file, not to a log.</p>
-<p class="box">${test ? '<b>Test mode first.</b> Use your Stripe account in test mode (the keys start with <code>rk_test_</code>): nothing real is charged, and test cards work. Switch to live keys only when the house is ready to sell.' : '<b>Live mode.</b> Real cards, real money.'}</p>
-<h2>1. In Stripe: a restricted key</h2>
-<ol><li>Open <a href="${dash}/apikeys" target="_blank" rel="noopener">Developers → API keys</a> and press <b>Create restricted key</b>.</li>
+<p>Money goes straight from players to <b>your own Stripe account</b>. Homie never sees it and takes no cut. What you paste here goes from this page to Stripe (one check) and to your studio's Worker as a secret, and nowhere else: not to the chat, not to a file, not to a log.</p>
+<p class="box">${test ? '<b>Test mode first.</b> Use your Stripe sandbox or test mode (the key starts with <code>rk_test_</code>): nothing real is charged, and test cards work. Live keys only when you say the shop is ready to sell.' : '<b>Live mode.</b> Real cards, real money.'}</p>
+<h2>1. In Stripe: one restricted key</h2>
+<ol><li>Open <a href="${dash}/apikeys" target="_blank" rel="noopener">Developers → API keys</a> and press <b>Create restricted key</b>. If Stripe asks what the key is for, choose your own integration, <b>not</b> "Authorizing agent access" (Stripe holds an agent key's refunds for a second approval).</li>
 <li>Name it "${esc(studio)} shop" and give it exactly these permissions (leave everything else at None):<ul>${perms}</ul></li>
 <li>Create it and copy the key (it starts with <code>rk_</code>).</li></ol>
-<h2>2. In Stripe: where Stripe tells your shop about payments</h2>
-<ol><li>Open <a href="${dash}/workbench/webhooks" target="_blank" rel="noopener">Webhooks</a> and press <b>Create an event destination</b> (Your account, a Webhook endpoint).</li>
-<li>Endpoint URL: <code>${esc(site)}/api/shop/hook</code></li>
-<li>Events: ${events}</li>
-<li>Create it, press <b>Reveal</b> on the signing secret, and copy it (it starts with <code>whsec_</code>).</li></ol>
+<h2>2. The webhook: this page makes it</h2>
+<p>With your key, this page makes the endpoint where Stripe tells your shop about payments (<code>${esc(hookUrlOf(site))}</code>, for ${HOOK_EVENTS.length} events), and its signing secret goes straight to your Worker. Nobody sees it. An older one this page made for the same address is turned off, never deleted.</p>
 <form method="post" action="/key"><input type="hidden" name="n" value="${esc(nonce)}">
-<h2>3. Paste both here</h2>
+<h2>3. Paste the key here</h2>
 <label for="key">Restricted key</label><input id="key" name="key" type="password" autocomplete="off" placeholder="rk_test_…" required>
-<label for="hook">Webhook signing secret</label><input id="hook" name="hook" type="password" autocomplete="off" placeholder="whsec_…" required>
+<details><summary>I made the webhook myself (or my key has no Webhook Endpoints permission)</summary>
+<ol><li>Open <a href="${dash}/workbench/webhooks" target="_blank" rel="noopener">Webhooks</a> and press <b>Create an event destination</b> (Your account, a Webhook endpoint).</li>
+<li>Endpoint URL: <code>${esc(hookUrlOf(site))}</code></li><li>Events: ${events}</li>
+<li>Create it, press <b>Reveal</b> on the signing secret, and paste it here (it starts with <code>whsec_</code>).</li></ol>
+<label for="hook">Webhook signing secret</label><input id="hook" name="hook" type="password" autocomplete="off" placeholder="whsec_…"></details>
 <h2>4. Who is the seller?</h2>
 <fieldset>
 <label><input type="radio" name="till" value="stripe"${till !== 'stripe-managed' ? ' checked' : ''}> <span><b>You are</b> (standard Stripe). Stripe takes its usual card fee (in the US 2.9% + 30¢ a sale; in Canada 2.9% + CA$0.30). Stripe Tax is on: it works out and collects sales tax and VAT where you have told Stripe you are registered (0.5% a sale there). Registering and filing are yours, and some countries (the EU, the UK) expect a foreign seller to register from the first sale.</span></label>
-<label><input type="radio" name="till" value="stripe-managed"${till === 'stripe-managed' ? ' checked' : ''}> <span><b>Stripe is</b> (Stripe Managed Payments). <b>3.5% more</b> a sale, on top of the card fee. Stripe becomes the seller of record: it registers for, collects, files and pays sales tax and VAT in 80+ countries, runs fraud checks, answers card disputes for you and handles buyers' payment questions. Statements read <code>LINK.COM*</code>. You still cover the money of a lost dispute, and Stripe may refund a buyer within 60 days. Turn it on in Stripe first (<a href="${dash}/settings/managed-payments" target="_blank" rel="noopener">Managed Payments</a>, after Stripe's eligibility review; Canada and the US are among the countries it serves).</span></label>
+<label><input type="radio" name="till" value="stripe-managed"${till === 'stripe-managed' ? ' checked' : ''}> <span><b>Stripe is</b> (Stripe Managed Payments). <b>3.5% more</b> a sale, on top of the card fee. Stripe becomes the seller of record: it registers for, collects, files and pays sales tax and VAT in 80+ countries, runs fraud checks, answers card disputes for you and handles buyers' payment questions. Statements read <code>LINK.COM*</code>. You still cover the money of a lost dispute, and Stripe may refund a buyer within 60 days. Turn it on in Stripe first (<a href="${dash}/settings/managed-payments" target="_blank" rel="noopener">Managed Payments</a>, after Stripe's eligibility review; Canada and the US are among the countries it serves).${test ? ' In test mode this page tries one test checkout with Managed Payments (expired at once) and says whether Stripe takes it.' : ''}</span></label>
 </fieldset>
 <button>Save to my Worker</button></form>
 <p><small>This page works once and closes in ten minutes. You can change the seller later in shop.json ("till"). This is not legal or tax advice: an accountant can tell you where you must register.</small></p>`;
 }
 
+const said = (status, text) => ({ status, text });
+
 /**
- * `homie-studio shop connect`: the page above on 127.0.0.1 (one use, ten minutes). The key and the secret go straight
- * to `wrangler secret put` on its standard input. The command never prints them; it checks only their shape (and,
- * when `verify` is on, that Stripe accepts the key with one read).
+ * The webhook, made on the owner's computer with the key they just pasted: Stripe answers the new endpoint's signing
+ * secret once, and it goes straight to the Worker secret. Never printed, never returned. Older endpoints this kit made
+ * for the same address are turned off (not deleted) once the new secret is saved. { ok, id, secret, older } or
+ * { ok: false, page } (what the page tells the owner).
+ */
+async function makeWebhook(env, site, { fetcher }) {
+  const url = hookUrlOf(site);
+  let older = [];
+  try {
+    const list = await listWebhookEndpoints(env, { fetcher });
+    older = (list?.data ?? []).filter((e) => e?.url === url && e?.metadata?.homie === HOOK_MARK && e?.status !== 'disabled').map((e) => e.id).filter((id) => typeof id === 'string');
+  } catch (error) {
+    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".') };
+    return { ok: false, page: said(502, `Stripe did not answer the webhook list (${error instanceof StripeError ? error.message : 'no answer'}). Nothing was saved. Go back and try again.`) };
+  }
+  let made = null;
+  try {
+    made = await createWebhookEndpoint(env, {
+      url, enabled_events: [...HOOK_EVENTS], api_version: STRIPE_VERSION,
+      description: 'Homie shop (made by homie-studio shop connect)', metadata: { homie: HOOK_MARK },
+    }, { fetcher });
+  } catch (error) {
+    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".') };
+    return { ok: false, page: said(502, `Stripe did not make the webhook (${error instanceof StripeError ? error.message : 'no answer'}). Nothing was saved. Go back and try again.`) };
+  }
+  const secret = typeof made?.secret === 'string' ? made.secret : '';
+  if (!WEBHOOK_SECRET_SHAPE.test(secret) || typeof made?.id !== 'string') return { ok: false, page: said(502, 'Stripe made a webhook but did not hand back its signing secret. Nothing was saved. Make the webhook yourself and paste its secret under "I made the webhook myself".') };
+  return { ok: true, id: made.id, secret, older };
+}
+
+/**
+ * Managed Payments, tried once in TEST mode before the first buyer: a test Checkout Session with
+ * `managed_payments[enabled]`, expired at once. Stripe's answer says whether Managed Payments is on for this account
+ * (there is no API to read it). Never in live mode.
+ */
+async function probeManaged(env, shop, { fetcher }) {
+  const item = shop?.items?.find((i) => i.kind !== 'tip') ?? null;
+  try {
+    const s = await stripeCall(env, 'POST', '/v1/checkout/sessions', {
+      mode: 'payment', success_url: 'https://example.com/homie-shop-check', cancel_url: 'https://example.com/homie-shop-check',
+      line_items: [{ quantity: 1, price_data: { currency: shop?.currency ?? 'usd', unit_amount: item?.price ?? 500, tax_behavior: 'exclusive', product_data: { name: 'Homie shop check (test, expired at once)', tax_code: defaultTaxCode(item ?? {}) } } }],
+      managed_payments: { enabled: true }, metadata: { homie: 'shop-check' },
+    }, { fetcher, idempotencyKey: `homie-check-${randomBytes(8).toString('hex')}` });
+    if (typeof s?.id === 'string') { try { await expireCheckoutSession(env, s.id, { fetcher }); } catch { /* it expires by itself */ } }
+    return { ok: true, words: 'Stripe took a test checkout with Managed Payments: it is on for this account (test mode).' };
+  } catch (error) {
+    return { ok: false, words: `Stripe refused a test checkout with Managed Payments (${error instanceof StripeError ? error.message : 'no answer'}). Finish Managed Payments in Stripe (Settings → Managed Payments: accept the terms, pass the eligibility review), or pick "You are" the seller.` };
+  }
+}
+
+/**
+ * `homie-studio shop connect`: the page above on 127.0.0.1 (one use, ten minutes). The key goes to Stripe once (a
+ * read, then the webhook), and to `wrangler secret put` on its standard input; so does the webhook's signing secret,
+ * which Stripe hands this process when it makes the endpoint. Nothing is printed or returned but ids and words.
  */
 export async function shopConnect(root, { managed = null, live = false, log = () => {}, port = 0, wait = 10 * 60_000, verify = true, fetcher = fetch } = {}) {
   const studio = readStudio(root);
-  const site = siteUrl(root) ?? 'https://<your studio>';
+  const site = siteUrl(root);
+  if (!site) return { ok: false, command: 'shop connect', needs: 'deploy', why: 'the studio has no live address yet, and Stripe needs one to send payments to (the webhook): run npm run deploy first, then this' };
   const env = studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {};
   const w = runner(root, env);
   const shopNow = readShop(root);
@@ -174,6 +241,7 @@ export async function shopConnect(root, { managed = null, live = false, log = ()
   const page = connectPage({ nonce, site, studio: studio.name ?? 'Your studio', till, test: !live });
   return await new Promise((done) => {
     let finished = false;
+    let busy = false;
     const server = createServer((req, res) => {
       if (req.method === 'GET' && req.url === `/${nonce}`) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' }); res.end(page); return; }
       if (req.method === 'POST' && req.url === '/key') {
@@ -182,43 +250,66 @@ export async function shopConnect(root, { managed = null, live = false, log = ()
         req.on('end', async () => {
           const form = new URLSearchParams(body);
           const key = String(form.get('key') ?? '').trim();
-          const hook = String(form.get('hook') ?? '').trim();
+          let hook = String(form.get('hook') ?? '').trim();
           const chosen = form.get('till') === 'stripe-managed' ? 'stripe-managed' : 'stripe';
-          const say = (status, text) => { res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); res.end(text); };
-          if (form.get('n') !== nonce || finished) { say(403, 'This page was used already.'); return; }
-          if (/^sk_live_/.test(key)) { say(400, 'That is a full secret key. The shop takes only a RESTRICTED key (rk_…) with the four permissions on the page. Go back and make one.'); return; }
-          if (!KEY_SHAPE.test(key) || !/^rk_/.test(key)) { say(400, 'That does not look like a restricted key (rk_test_… or rk_live_…). Go back and try again.'); return; }
+          const say = ({ status, text }) => { res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); res.end(text); };
+          if (form.get('n') !== nonce || finished) { say(said(403, 'This page was used already.')); return; }
+          if (busy) { say(said(409, 'Still saving the last press. Wait a moment.')); return; }
+          if (/^sk_live_/.test(key)) { say(said(400, 'That is a full secret key. The shop takes only a RESTRICTED key (rk_…) with the permissions on the page. Go back and make one.')); return; }
+          if (!KEY_SHAPE.test(key) || !/^rk_/.test(key)) { say(said(400, 'That does not look like a restricted key (rk_test_… or rk_live_…). Go back and try again.')); return; }
           // Test mode unless the owner's AI ran it with --live on purpose: a live key on the test page is refused.
-          if (modeOf(key) !== (live ? 'live' : 'test')) { say(400, live ? 'This page takes a LIVE restricted key (rk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --live).'); return; }
-          if (!WEBHOOK_SECRET_SHAPE.test(hook)) { say(400, 'That does not look like a webhook signing secret (whsec_…). Go back and try again.'); return; }
-          finished = true;
-          // One read with the key, so a typo is caught here and not at the first sale. It never leaves this computer
-          // except to Stripe itself.
-          if (verify) {
-            let ok = false;
-            try {
-              const r = await fetcher(`${apiBase(process.env)}/v1/checkout/sessions?limit=1`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10_000) });
-              ok = r.ok;
-            } catch { ok = false; }
-            if (!ok) { finished = false; say(400, 'Stripe did not accept that key for reading checkouts. Check its permissions (Checkout Sessions: Write) and that it is the account you mean, then go back and paste it again.'); return; }
-          }
-          const a = w(['secret', 'put', 'STRIPE_KEY'], { input: `${key}\n` });
-          const b = a.code === 0 ? w(['secret', 'put', 'STRIPE_WEBHOOK_SECRET'], { input: `${hook}\n` }) : { code: 1 };
-          const okay = a.code === 0 && b.code === 0;
-          let tillNote = '';
-          if (okay && shopNow.shop && !shopNow.absent && chosen !== shopNow.shop.till) {
-            try {
-              const raw = JSON.parse(readFileSync(shopNow.file, 'utf8'));
-              raw.till = chosen;
-              writeFileSync(shopNow.file, `${JSON.stringify(raw, null, 2)}\n`);
-              tillNote = ` shop.json now says "till": "${chosen}" (deploy to use it).`;
-            } catch { tillNote = ''; }
-          }
-          say(okay ? 200 : 500, okay ? `Saved to your Worker (${modeOf(key)} mode). You can close this page.` : 'Wrangler could not save it (is this computer signed in to Cloudflare? npx wrangler login). Nothing was kept.');
-          server.close();
-          done(okay
-            ? { ok: true, command: 'shop connect', saved: true, mode: modeOf(key), till: chosen, message: `Saved as the Worker secrets STRIPE_KEY and STRIPE_WEBHOOK_SECRET (never shown), ${modeOf(key)} mode, seller: ${chosen === 'stripe-managed' ? 'Stripe (Managed Payments)' : 'the studio'}.${tillNote} homie-studio shop says whether anything else is missing.` }
-            : { ok: false, command: 'shop connect', why: 'wrangler secret put failed (sign in with npx wrangler login, then run this again)' });
+          if (modeOf(key) !== (live ? 'live' : 'test')) { say(said(400, live ? 'This page takes a LIVE restricted key (rk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --live).')); return; }
+          if (hook && !WEBHOOK_SECRET_SHAPE.test(hook)) { say(said(400, 'That does not look like a webhook signing secret (whsec_…). Go back and try again, or leave it empty and this page makes the webhook.')); return; }
+          busy = true;
+          try {
+            const sk = { STRIPE_KEY: key, STRIPE_API_BASE: process.env.STRIPE_API_BASE };
+            // One read with the key, so a typo is caught here and not at the first sale. It never leaves this computer
+            // except to Stripe itself.
+            if (verify) {
+              try { await stripeCall(sk, 'GET', '/v1/checkout/sessions', { limit: 1 }, { fetcher }); } catch {
+                say(said(400, 'Stripe did not accept that key for reading checkouts. Check its permissions (Checkout Sessions: Write) and that it is the account you mean, then go back and paste it again.')); return;
+              }
+            }
+            let webhook = { made: false };
+            if (!hook) {
+              const m = await makeWebhook(sk, site, { fetcher });
+              if (!m.ok) { say(m.page); return; }
+              hook = m.secret;
+              webhook = { made: true, id: m.id, older: m.older };
+            }
+            finished = true;
+            const a = w(['secret', 'put', 'STRIPE_KEY'], { input: `${key}\n` });
+            const b = a.code === 0 ? w(['secret', 'put', 'STRIPE_WEBHOOK_SECRET'], { input: `${hook}\n` }) : { code: 1 };
+            hook = '';
+            const okay = a.code === 0 && b.code === 0;
+            // The new secret is saved: the older endpoints this kit made for the same address stop sending (turned off,
+            // not deleted: the owner can turn one back on in Stripe).
+            let disabled = 0;
+            if (okay && webhook.made) {
+              for (const id of webhook.older) { try { await updateWebhookEndpoint(sk, id, { disabled: true }, { fetcher }); disabled += 1; } catch { /* left on; Stripe retries and says so */ } }
+            }
+            const check = okay && !live && chosen === 'stripe-managed' ? await probeManaged(sk, shopNow.shop, { fetcher }) : null;
+            let tillNote = '';
+            if (okay && shopNow.shop && !shopNow.absent && chosen !== shopNow.shop.till) {
+              try {
+                const raw = JSON.parse(readFileSync(shopNow.file, 'utf8'));
+                raw.till = chosen;
+                writeFileSync(shopNow.file, `${JSON.stringify(raw, null, 2)}\n`);
+                tillNote = ` shop.json now says "till": "${chosen}" (deploy to use it).`;
+              } catch { tillNote = ''; }
+            }
+            const narrow = webhook.made ? ' Recommended, 20 seconds: in Stripe, open this key (… → Edit key) and set Webhook Endpoints back to None. The shop never needs it again.' : '';
+            say(said(okay ? 200 : 500, okay ? `Saved to your Worker (${modeOf(key)} mode).${webhook.made ? ' Stripe made the webhook; its secret went straight to your Worker.' : ''}${check ? ` ${check.words}` : ''}${narrow} You can close this page.` : 'Wrangler could not save it (is this computer signed in to Cloudflare? npx wrangler login). Nothing was kept.'));
+            server.close();
+            done(okay
+              ? {
+                ok: true, command: 'shop connect', saved: true, mode: modeOf(key), till: chosen,
+                webhook: webhook.made ? { made: true, id: webhook.id, url: hookUrlOf(site), turnedOff: disabled } : { made: false, url: hookUrlOf(site) },
+                ...(check ? { managedPayments: check } : {}),
+                message: `Saved as the Worker secrets STRIPE_KEY and STRIPE_WEBHOOK_SECRET (never shown), ${modeOf(key)} mode, seller: ${chosen === 'stripe-managed' ? 'Stripe (Managed Payments)' : 'the studio'}.${webhook.made ? ` Stripe made the webhook ${webhook.id} for ${hookUrlOf(site)}${disabled ? ` and ${disabled} older one(s) were turned off` : ''}.` : ''}${tillNote}${narrow} homie-studio shop says whether anything else is missing.`,
+              }
+              : { ok: false, command: 'shop connect', why: 'wrangler secret put failed (sign in with npx wrangler login, then run this again)' });
+          } finally { busy = false; }
         });
         return;
       }

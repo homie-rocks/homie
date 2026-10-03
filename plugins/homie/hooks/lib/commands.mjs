@@ -163,6 +163,9 @@ export function paidOf(command) {
  *   fal          fal's CLI (pip install fal): `fal api <model>` runs a hosted model, `fal run` runs an app on fal
  *   genmedia     fal's genmedia CLI: `genmedia run <model>`
  *   tripo        Tripo's CLI (npm tripo-cli): everything but its sign-in, balance, usage, status and docs
+ *   stripe       Stripe's CLI, its Projects plugin only: `stripe projects upgrade`, `billing add` / `billing update`
+ *                (a payment method or a spend limit) and anything with --confirm-paid-service; the rest (status,
+ *                catalog, search, a free add, link, env) spends nothing
  */
 const LAUNCHERS = new Set(['npx', 'bunx', 'pnpx', 'uvx']);
 const CLI_PACKAGES = { '@elevenlabs/cli': 'elevenlabs', 'tripo-cli': 'tripo' };
@@ -193,7 +196,7 @@ export function programOf(words) {
 /** A paid call through a provider's own CLI: { provider, unit, tool } or null. */
 export function providerCliOf(words) {
   const p = programOf(words);
-  if (!p || !['elevenlabs', 'fal', 'genmedia', 'tripo'].includes(p.prog)) return null;
+  if (!p || !['elevenlabs', 'fal', 'genmedia', 'tripo', 'stripe'].includes(p.prog)) return null;
   if (p.args.some((a) => CLI_FREE_FLAGS.includes(a))) return null;
   const { pos } = flagsOf(p.args, CLI_BOOLS);
   if (!pos.length) return null;
@@ -206,6 +209,11 @@ export function providerCliOf(words) {
   }
   if (p.prog === 'fal') return ['api', 'run'].includes(pos[0]) ? { provider: 'fal', unit: 'usd', tool } : null;
   if (p.prog === 'genmedia') return pos[0] === 'run' ? { provider: 'fal', unit: 'usd', tool } : null;
+  if (p.prog === 'stripe') {
+    if (pos[0] !== 'projects') return null;
+    const paid = pos[1] === 'upgrade' || (pos[1] === 'billing' && ['add', 'update'].includes(pos[2])) || p.args.includes('--confirm-paid-service');
+    return paid ? { provider: 'Stripe Projects', unit: 'usd', tool: `stripe projects ${pos.slice(1, pos[1] === 'billing' ? 3 : 2).join(' ')}` } : null;
+  }
   return TRIPO_FREE.has(pos[0]) ? null : { provider: 'Tripo', unit: 'usd', tool };
 }
 
@@ -278,6 +286,24 @@ export function cloudflareMcpChangeOf(tool, input = {}) {
   if (/(^|_)(update|edit|put|deploy|rollback)(_|$)/i.test(name)) return { what: name, kind: 'change', names, text: name };
   if (/(^|_)query$/i.test(name) && !readOnlySql(input?.sql ?? input?.query)) return { what: name, kind: 'data', names, text: String(input?.sql ?? input?.query ?? '').slice(0, 300) };
   return null;
+}
+
+/**
+ * A write through Stripe's MCP server whose answer would carry a secret into the conversation, or null. Stripe hands a
+ * new webhook endpoint's signing secret back once, in the create call's answer (and an event destination's, when asked
+ * to include it). The shop's webhook is made on the owner's computer instead (`homie-studio shop connect`), where
+ * the secret goes straight to the studio's Worker. An update of an existing endpoint (we_…) carries no secret.
+ */
+export function stripeSecretWriteOf(tool, input) {
+  if (!/^mcp__.*stripe.*__stripe_api_write$/i.test(String(tool ?? ''))) return null;
+  let text = '';
+  try { text = JSON.stringify(input ?? {}); } catch { text = String(input ?? ''); }
+  // A path (/v1/webhook_endpoints), an operation's name (PostWebhookEndpoints) or a resource word: all the same here.
+  const flat = text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const newEndpoint = flat.includes('webhookendpoint') && !flat.includes('eventdestination') && !/\bwe_[A-Za-z0-9]{6,}/.test(text);
+  const destinationSecret = flat.includes('eventdestination') && flat.includes('signingsecret');
+  if (!newEndpoint && !destinationSecret) return null;
+  return 'Refused by the Homie mod: Stripe answers a new webhook\'s signing secret in this call, and it would land in the conversation. A studio\'s shop webhook is made on the owner\'s computer instead: run `npx --no-install homie-studio shop connect` and give the owner the 127.0.0.1 link; the page makes the webhook with the shop\'s key and the secret goes straight to the Worker. (Reading or turning off an existing endpoint through Stripe\'s MCP is fine.)';
 }
 
 // git's own options before the subcommand that take a value, and the subcommands' (a value is never a path).

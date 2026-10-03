@@ -4,6 +4,10 @@
  *
  *   createCheckoutSession(env, params)   POST /v1/checkout/sessions (Stripe's hosted page; the TV never calls it)
  *   createRefund(env, params)            POST /v1/refunds (only ever from the owner's tap, or a confirmed ask)
+ *   webhook endpoints                    list, create and turn off: only `homie-studio shop connect` calls these, on the
+ *                                        owner's computer with the key the owner pasted there (0.24.3), so a new
+ *                                        endpoint's signing secret goes straight to the Worker secret
+ *   productIdOf(slug, item)              the catalog Product a shop item is (`homie-studio shop catalog`, 0.24.3)
  *   verifyWebhook(payload, header, secret)   the `Stripe-Signature` header: t=<seconds>,v1=<hex HMAC-SHA256 of
  *                                        "<t>.<payload>"> with the endpoint's whsec_ secret, within 5 minutes
  *
@@ -54,7 +58,28 @@ export class StripeError extends Error {
     this.status = status;
     this.code = e.code ?? e.type ?? 'stripe';
     this.type = e.type ?? null;
+    this.param = typeof e.param === 'string' ? e.param.slice(0, 120) : null;
   }
+}
+
+/** Stripe has no such Product (a catalog Product the shop names, in a mode the catalog was never made in). */
+export const isMissingProduct = (error) => error instanceof StripeError && error.code === 'resource_missing' && /product/.test(String(error.param ?? error.message));
+/**
+ * Stripe is holding the call for a person's approval: an Agent-tagged key's refund meets Stripe's approval rules
+ * (docs.stripe.com/account/approvals). Nothing happened yet; it happens when someone approves it in Stripe.
+ */
+export const isApprovalRequired = (error) => error instanceof StripeError && error.code === 'approval_required';
+/** The key may not do this (a restricted key without the permission). */
+export const isPermissionError = (error) => error instanceof StripeError && (error.status === 403 || error.status === 401 || /permission|restricted key/i.test(error.message));
+
+/**
+ * The catalog Product a shop item is, the same id in a sandbox and in live mode: `homie_<studio slug>_<item id>`
+ * (Stripe takes a product id of our choosing). Null without a slug or an item id.
+ */
+export function productIdOf(slug, item) {
+  const s = String(slug ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48);
+  const i = String(item ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+  return s && i ? `homie_${s}_${i}` : null;
 }
 
 /** One call with the studio's key. `idempotencyKey` makes a retried POST do the work once (Stripe keeps it 24 h). */
@@ -83,6 +108,11 @@ export async function stripeCall(env, method, path, params = null, { idempotency
 export const createCheckoutSession = (env, params, opts) => stripeCall(env, 'POST', '/v1/checkout/sessions', params, opts);
 export const retrieveCheckoutSession = (env, id, opts) => stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(id)}`, null, opts);
 export const createRefund = (env, params, opts) => stripeCall(env, 'POST', '/v1/refunds', params, opts);
+export const expireCheckoutSession = (env, id, opts) => stripeCall(env, 'POST', `/v1/checkout/sessions/${encodeURIComponent(id)}/expire`, {}, opts);
+export const listWebhookEndpoints = (env, opts) => stripeCall(env, 'GET', '/v1/webhook_endpoints', { limit: 100 }, opts);
+/** The answer carries the endpoint's signing secret (`secret`), once: the caller puts it in the Worker and drops it. */
+export const createWebhookEndpoint = (env, params, opts) => stripeCall(env, 'POST', '/v1/webhook_endpoints', params, opts);
+export const updateWebhookEndpoint = (env, id, params, opts) => stripeCall(env, 'POST', `/v1/webhook_endpoints/${encodeURIComponent(id)}`, params, opts);
 
 /* ------------------------------------------------------------------ webhooks */
 

@@ -364,9 +364,16 @@ studio's pinned copy, never a registry lookup of the bare name.
   \`shop.entitlements()\`, \`shop.on('change', …)\`, \`shop.open(item)\` from a button the player pressed (never the
   play button, never on a timer), \`shop.used(key)\` when it is equipped. A supporter's badge rides on their seat
   (\`peer.badge\`, set by the Worker, never by a hello). The guide is \`node_modules/@homie-rocks/studio/shop/SHOP.md\`.
+- **Stripe's own tools** (set up when the studio starts selling): \`npm install -g @stripe/cli@latest && stripe agent
+  setup\` installs Stripe's agent plugin (its MCP server and skills); the owner signs in once on Stripe's page and
+  gives access to a sandbox first. With it you make the catalog (\`npx --no-install homie-studio shop catalog\` says
+  the read, then the exact \`stripe_api_write\` calls), check tax settings, and answer "how are sales?" read-only.
+  Never make a webhook or an API key through the MCP (a secret would land in the chat), and never retry a write
+  Stripe sent to the owner for confirmation until they approved it.
 - **The key** goes in only from a page on the owner's own computer: \`npx --no-install homie-studio shop connect\`
-  prints a 127.0.0.1 link; the owner pastes a restricted key and the webhook secret there, and they go straight to
-  the Worker secrets. Test keys only unless \`--live\`. Never ask for a key in the chat; never write one anywhere.
+  prints a 127.0.0.1 link; the owner pastes one restricted key there, the page makes the webhook with it, and the
+  key and the webhook's secret go straight to the Worker secrets. Test keys only unless \`--live\`. Never ask for a
+  key in the chat; never write one anywhere.
 - **Refunds:** the owner's one tap in the office (\`/_studio/office/shop\`). You may only ASK:
   \`homie-studio shop refund <order>\` gives the owner a one-tap link. A card dispute never touches the player's
   account. \`shop\` says what is missing; \`shop orders\` lists orders (never a card or an email).
@@ -522,6 +529,10 @@ site/.wrangler/
 .wrangler/
 .dev.vars
 .env
+# Stripe Projects (setup --via stripe-projects): credentials stay in its vault and the .env files it syncs, never in git.
+.env.*
+.projects/vault/
+.projects/cache/
 *.log
 # Port checks: receipts and screenshots of each run (games/<id>/.port/check-*/).
 games/*/.port/

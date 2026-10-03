@@ -17,8 +17,9 @@
  * Guards on tool calls: an edit to a file studio.json "protect" lists, a production deploy, and a paid media call
  * past the studio's budget are held with what would change and Proceed / Cancel. Refused outright: a change to a
  * decision the person locked (games/<id>/codex/decisions.json), a deploy that ships an asset with no allowed licence
- * in a public game, and a `git add` or `git commit` that would put a file over 5 MB under games/ into git. Secrets
- * are taken out of every tool result before Claude reads it.
+ * in a public game, a `git add` or `git commit` that would put a file over 5 MB under games/ into git, and a write
+ * through Stripe's MCP whose answer would carry a webhook's signing secret into the conversation. Secrets are taken
+ * out of every tool result before Claude reads it.
  *
  * WHAT IT REACHES. Files: the studio's own (studio.json, .studio/, games/*, budgets, CODEX.md, .perf/), the file a
  * held edit names, and the size of a file a `git add` or `git commit` would stage. Network ($.http.fetch): only the
@@ -35,7 +36,7 @@
 import { applyEdit, unifiedDiff } from './lib/diff.mjs';
 import { GAME_ID, artFor, artSummaryOf, castText, decisionsFileOf, licenceIssues, lineupText, lockedChanges, lookText, publicSource, rightsText, usd } from './lib/art.mjs';
 import { summarizeCodex } from './lib/codex.mjs';
-import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, paidMcpOf, paidOf, protectedBy, studioCalls } from './lib/commands.mjs';
+import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, paidMcpOf, paidOf, protectedBy, stripeSecretWriteOf, studioCalls } from './lib/commands.mjs';
 import { ago, feedOf, summarize } from './lib/feed.mjs';
 import { redact } from './lib/redact.mjs';
 import { readResult } from './lib/results.mjs';
@@ -311,6 +312,13 @@ export function register(on, options) {
     await afterDeploy($, S.root, result);
     return result;
   }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this deploy ran.' } : { deny: 'The Homie mod could not summarise this deploy, so it was not run. Ask the person, or try again.' }));
+
+  // Stripe's MCP: a write whose answer would carry a webhook's signing secret into the conversation is refused, always
+  // (the shop's own page makes the webhook, and the secret goes straight to the Worker).
+  on('tool.call', { tool: /^mcp__.*stripe.*__stripe_api_write$/i }, async ($, e, next) => {
+    const why = stripeSecretWriteOf(e.tool, e);
+    return why ? { deny: why } : next(e);
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this Stripe call ran.' } : { deny: 'The Homie mod could not check this Stripe write for a secret in its answer, so it was not made. Ask the person, or make it in Stripe\'s Dashboard.' }));
 
   on('tool.call', { tool: /^mcp__.*(?:fal|eleven|tripo).*__/i }, async ($, e, next) => {
     const paid = OPT.guardSpend ? paidMcpOf(e.tool, e) : null;

@@ -71,7 +71,7 @@ test('plugin.json points at providers.json, a dated list loaded on use', () => {
   assert.equal(r.v, 1);
   assert.match(r.checked, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(r.load, 'on-use', 'nothing installs by itself');
-  assert.deepEqual(Object.keys(r.providers).sort(), ['cloudflare', 'elevenlabs', 'fal', 'github', 'tripo']);
+  assert.deepEqual(Object.keys(r.providers).sort(), ['cloudflare', 'elevenlabs', 'fal', 'github', 'stripe', 'tripo']);
 });
 
 test('every provider names its account, its skills, its own tools on https, and what stays Homie\'s', () => {
@@ -127,13 +127,13 @@ test('a skill\'s Codex MCP dependency is one of its own providers\' servers, and
       assert.equal(server.name, t.value, `skills/${skill}: the server's name is providers.json's`);
     }
   }
-  assert.deepEqual(declared.sort(), ['art', 'models', 'publish', 'servers', 'style', 'video']);
+  assert.deepEqual(declared.sort(), ['art', 'models', 'publish', 'servers', 'shop', 'style', 'video']);
 });
 
 test('the Homie mod\'s guards know every provider\'s paid and account-changing tools; sign-ins stay free', () => {
   const r = registry().providers;
   // A generating command of each provider's own CLI is held as a call whose cost cannot be read first; signing in is not.
-  const generating = { elevenlabs: 'elevenlabs music compose --json -', fal: 'fal api fal-ai/flux/dev prompt=owl', tripo: 'tripo make "a lantern"' };
+  const generating = { elevenlabs: 'elevenlabs music compose --json -', fal: 'fal api fal-ai/flux/dev prompt=owl', tripo: 'tripo make "a lantern"', stripe: 'stripe projects upgrade cloudflare/workers' };
   for (const [id, command] of Object.entries(generating)) {
     assert.equal(paidOf(command)?.raw, true, `${id}: ${command} is held`);
     const signIn = r[id].cli.signIn.split(/ \(|;/)[0].trim();

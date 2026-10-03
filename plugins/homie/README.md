@@ -39,8 +39,11 @@ person approves every install and signs in on the provider's own page.
 | fal | fal's MCP server to find models and read schemas and prices; the skills' scripts for paid runs (priced, capped, receipted, resumable) | fal's CLI (`fal auth login`, `fal keys create`) to make the key |
 | Tripo | Tripo's models on fal (`tripo3d/...`) | none: Tripo's own CLI and MCP server bill a separate account |
 | GitHub | the GitHub CLI (`gh auth login --web`, `gh pr create`) | GitHub's MCP server (`github@claude-plugins-official`) |
+| Stripe | Stripe's MCP server (the shop's catalog, tax settings and sales, as the owner signed it in, a sandbox first); the shop's key only through `homie-studio shop connect` | Stripe's agent plugin (`stripe agent setup`: its MCP server and skills) once a studio sells; Stripe Projects (`setup --via stripe-projects`) as an option for Cloudflare and ElevenLabs |
 
-Stripe is the `shop` skill's, with its own rules for Stripe's tools.
+Stripe is the `shop` skill's, with its own rules for Stripe's tools: never a webhook or an API key through the MCP
+(the mod refuses a write that would hand a signing secret back), Stripe's own confirmation link for a refund it
+holds, and live mode only when the owner says so.
 
 ## The Homie mod
 
@@ -139,11 +142,16 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     than `none` or `reference`. When every asset is licensed, the deploy's hold says so;
   - a `git add` or `git commit` that would put a file over 5 MB under `games/` into git (what is
     staged is read from git itself), naming each file and its size: big files go to the studio's
-    R2, raw models stay in `art/<slug>/raw/`.
+    R2, raw models stay in `art/<slug>/raw/`;
+  - a write through Stripe's MCP (`stripe_api_write`, from Stripe's plugin, `claude mcp add` or the
+    Claude app's connector) that makes a webhook endpoint, or an event destination with its signing
+    secret included: Stripe answers the secret in that call, so it would land in the conversation.
+    `homie-studio shop connect` makes the shop's webhook instead, and the secret goes straight to the
+    Worker. Reads, the catalog's writes and turning an endpoint off go through.
 - **Secrets out of tool output:** before Claude reads any tool's result, keys and tokens come
   out: office and stats keys (`hsk_`), progress keys (`hbk_`), agent passes (`hap_…`, whose public
-  id stays), Cloudflare tokens and keys, fal, ElevenLabs, Anthropic, OpenAI, GitHub, npm, Stripe,
-  AWS and Google keys, bearer tokens, private keys, and any `NAME=value` whose name says key,
+  id stays), Cloudflare tokens and keys, fal, ElevenLabs, Anthropic, OpenAI, GitHub, npm, Stripe
+  keys and webhook signing secrets, AWS and Google keys, bearer tokens, private keys, and any `NAME=value` whose name says key,
   token or secret and whose value looks like one. A one-time owner link goes to the person in
   the Studio pane (Rooms, "Links for you"); Claude reads that it is there.
 - **Homie's results, drawn:** the setup status as a checklist with what to do now, a check's and

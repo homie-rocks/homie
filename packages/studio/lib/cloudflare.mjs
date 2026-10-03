@@ -30,6 +30,7 @@ import { MAX_ASSET_BYTES, R2_COST, mediaPlan, r2OverOf, recordMove, sha256File, 
 import { repoOf } from './repo.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
+import { projectsCloudflareEnv } from './projects-env.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 
@@ -38,13 +39,17 @@ export function wranglerBin(root) {
   return existsSync(local) ? local : null;
 }
 
-/** Wrangler from the studio's own node_modules, run in site/ with the given environment. */
+/**
+ * Wrangler from the studio's own node_modules, run in site/ with the given environment. A studio whose Cloudflare came
+ * through Stripe Projects (studio.json `cloudflare.auth: "stripe-projects"`, 0.24.3) runs it with the token and account
+ * Projects synced to its git-ignored output file; every other studio with Wrangler's own sign-in.
+ */
 export function runner(root, env) {
   const bin = wranglerBin(root);
   if (!bin) throw new Error('Wrangler is not installed in this studio yet: run `npm install` in the studio folder first');
   return (args, { cwd = workerDir(root), input } = {}) => {
     const res = spawnSync(bin, args, {
-      cwd, env: { ...process.env, ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
+      cwd, env: { ...process.env, ...projectsCloudflareEnv(root), ...env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, encoding: 'utf8',
       input, maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60_000,
     });
     const out = `${res.stdout ?? ''}${res.stderr ?? ''}`.replace(ANSI, '');
@@ -128,6 +133,9 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const created = new Set(cf.created ?? []);
   const who = whoami(root);
   if (!who) {
+    if (cf.auth === 'stripe-projects') {
+      return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler did not accept the Cloudflare token Stripe Projects keeps for this studio (studio.json "auth": "stripe-projects"). Run `stripe projects env --pull` in the studio folder (it rewrites the git-ignored .env from Projects\' vault), then `npm run deploy` again; or sign in the usual way (`npx wrangler login`) and remove "auth" from studio.json.' };
+    }
     return { ok: false, command: 'deploy', needs: 'cloudflare-login', why: 'Wrangler is not signed in to Cloudflare. Run `npx wrangler login` in the studio folder: it opens Cloudflare in the browser and the person approves once (a free account works, no payment method). Then run `npm run deploy` again.' };
   }
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || (who.accounts.length === 1 ? who.accounts[0].id : null);
@@ -490,7 +498,7 @@ export async function mediaMove(root, { paths = null, dryRun = false, verify = f
   const bin = wranglerBin(root);
   if (!bin) return { ok: false, ...base, why: 'Wrangler is not installed in this studio yet: run `npm install` in the studio folder first' };
   const account = accountId || process.env.CLOUDFLARE_ACCOUNT_ID || cf.accountId || null;
-  const opts = { cwd: workerDir(root), env: { ...process.env, ...(account ? { CLOUDFLARE_ACCOUNT_ID: account } : {}), WRANGLER_SEND_METRICS: 'false', CI: '1' } };
+  const opts = { cwd: workerDir(root), env: { ...process.env, ...projectsCloudflareEnv(root), ...(account ? { CLOUDFLARE_ACCOUNT_ID: account } : {}), WRANGLER_SEND_METRICS: 'false', CI: '1' } };
   const moved = [];
   const failed = [];
   const verified = [];

@@ -8,6 +8,10 @@ site/.wrangler/
 .wrangler/
 .dev.vars
 .env
+# Stripe Projects (setup --via stripe-projects): credentials stay in its vault and the .env files it syncs, never in git.
+.env.*
+.projects/vault/
+.projects/cache/
 *.log
 # Port checks: receipts and screenshots of each run (games/<id>/.port/check-*/).
 games/*/.port/

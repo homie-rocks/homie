@@ -126,6 +126,41 @@
         "the sign-in through GitHub's own device page, never a token pasted into the chat",
         "a pull request the person merges in GitHub: Homie never merges it for them"
       ]
+    },
+    "stripe": {
+      "name": "Stripe",
+      "account": "the studio's own Stripe account (the shop's: a sandbox first, live only when the owner says the shop is ready), and for Stripe Projects the creator's own Stripe sign-in",
+      "skills": ["studio-setup", "shop"],
+      "cli": {
+        "name": "stripe",
+        "install": "npm install -g @stripe/cli@latest (or brew install stripe/stripe-cli/stripe)",
+        "signIn": "stripe agent setup (it installs Stripe's agent plugin, whose MCP server signs in on Stripe's own consent page); Stripe Projects signs in with stripe projects init. The shop never uses the CLI's own login to touch an account",
+        "homieUses": "agent setup; and for setup --via stripe-projects (a prototype; 1.40.0 or later with the projects plugin): projects status, search, add (free plans, never --confirm-paid-service), link, env --json (names only), env show, env --pull",
+        "docs": "https://docs.stripe.com/agents/plugin"
+      },
+      "plugin": {
+        "claudeCode": ["claude plugin install stripe@claude-plugins-official"],
+        "codex": ["codex plugin add stripe@openai-curated"],
+        "setup": "npm install -g @stripe/cli@latest && stripe agent setup (it finds Claude Code, Codex and others, and installs the plugin for each)",
+        "directory": "stripe@claude-plugins-official",
+        "source": "https://docs.stripe.com/agents/plugin",
+        "brings": "Stripe's MCP server and Stripe's own skills (stripe-best-practices, stripe-docs, stripe-projects and more), kept up to date"
+      },
+      "skillsOnly": "npx skills add https://docs.stripe.com",
+      "mcp": [
+        { "name": "stripe", "url": "https://mcp.stripe.com", "auth": "oauth", "writes": true, "use": "the shop's catalog (shop catalog lists the writes), tax settings and registrations, and how sales are, read-only; the claude.ai Stripe connector is this server. Never a webhook endpoint or an API key through it (the mod refuses a write that would hand back a signing secret); refunds and money going out wait for Stripe's own confirmation link. From 2026-10-31 it takes only OAuth or Agent-tagged keys" }
+      ],
+      "projects": {
+        "what": "Stripe Projects: Stripe's CLI plugin that makes or links provider accounts (Cloudflare, ElevenLabs and more) on the creator's own Stripe sign-in, and syncs their credentials to the project's git-ignored .env",
+        "skill": "npx skills add https://docs.stripe.com --skill stripe-projects -g -y",
+        "docs": "https://docs.stripe.com/projects"
+      },
+      "homieKeeps": [
+        "the shop's money rules: the studio's own Stripe, shop.json's checked prices, the kids rules and the monthly cap; homie.rocks never holds money",
+        "one restricted key the owner makes in Stripe's Dashboard and pastes on a page on their own computer, straight to the Worker secret; the webhook made there with it, its signing secret never in the chat",
+        "refunds are the owner's one tap; Stripe's own confirmation link for anything Stripe holds",
+        "Stripe Projects on free plans only: no payment method, no paid tier, never a credential's value in output"
+      ]
     }
   }
 }

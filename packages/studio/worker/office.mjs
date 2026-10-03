@@ -1213,7 +1213,8 @@ async function api(request, env, url, cat) {
     }
   }
   const result = await perform(env, cat, action);
-  return json({ ...result, what: describe(cat, action), by: who }, result.ok ? 200 : result.error === 'no-player' ? 404 : 400);
+  // A refund Stripe holds for a person's approval (an Agent-tagged key) is accepted, not refused: it happens there.
+  return json({ ...result, what: describe(cat, action), by: who }, result.ok ? 200 : result.held ? 202 : result.error === 'no-player' ? 404 : 400);
 }
 
 /** /_studio/office, /_studio/confirm/<ask> and /_studio/api/*; null for any other path. */

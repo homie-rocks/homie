@@ -4,7 +4,7 @@
  *
  * What it hides: the studio's own one-time and owner keys (office and stats keys `hsk_`, progress write keys `hbk_`,
  * agent passes `hap_…`, whose public id part stays), Cloudflare API tokens and global keys, provider keys (fal,
- * ElevenLabs, Anthropic, OpenAI, GitHub, npm, Stripe, AWS, Google), bearer tokens, private key blocks, and the value
+ * ElevenLabs, Anthropic, OpenAI, GitHub, npm, Stripe keys and webhook secrets, AWS, Google), bearer tokens, private key blocks, and the value
  * of any `NAME=value` whose name says key, token or secret.
  *
  * A link that carries one (the owner's one-time sign-in link, a confirm link, a player-owner link) is a link for the
@@ -24,7 +24,9 @@ export const RULES = [
   { kind: 'Anthropic key', re: /\bsk-ant-[A-Za-z0-9_-]{20,}/g },
   { kind: 'OpenAI key', re: /\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,}/g },
   { kind: 'ElevenLabs key', re: /\bsk_[a-f0-9]{48}\b/g },
-  { kind: 'Stripe key', re: /\b(?:sk|rk|whsec)_(?:live|test)_[A-Za-z0-9]{16,}\b/g },
+  { kind: 'Stripe key', re: /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g },
+  // A webhook signing secret has no live/test part: whsec_ and the secret itself.
+  { kind: 'Stripe webhook secret', re: /\bwhsec_[A-Za-z0-9+/=_-]{16,}/g },
   { kind: 'fal key', re: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{32}\b/g },
   { kind: 'GitHub token', re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b/g },
   { kind: 'npm token', re: /\bnpm_[A-Za-z0-9]{36}\b/g },

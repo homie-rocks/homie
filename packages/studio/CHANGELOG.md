@@ -17,9 +17,37 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.24.3] - 2026-10-03
+
+**Plugin 0.25.3** · [#36](https://github.com/homie-rocks/homie/pull/36)
+
+Set up your shop with Stripe's own tools for AI: your AI makes the products, checks tax, makes the webhook and answers "how are sales?"; you make the account, approve Stripe's pages and paste one key.
+
+### Added
+
+- Stripe's agent plugin is how your AI works with your Stripe (`npm install -g @stripe/cli@latest && stripe agent setup`: Stripe's own MCP server and skills for Claude Code and Codex, or Stripe's connector in the Claude app). It is set up when your studio starts selling, never before: `setup status` shows a Stripe row once `shop.json` exists. You sign in once on Stripe's page and give it a sandbox first.
+- `homie-studio shop catalog`: your items as Products in Stripe, made by your AI through Stripe's MCP. It names the one read to make, then (`--have <Stripe's answer>`) exactly the writes still needed: a Product per item with a tax code eligible for Managed Payments and a default Price of `shop.json`'s amount. A new price becomes a new default Price; an item you removed is archived, never deleted; products you made yourself are never touched. In sync, `shop.json` records `"catalog": ["test"]` and checkouts name each item's Product, so Stripe's Dashboard and reports see sales by product. `shop.json`'s price is still what is charged.
+- `homie-studio shop connect` now makes the webhook itself: you paste one restricted key (with Webhook Endpoints: Write added to its permissions), the page makes the endpoint with it, and Stripe's signing secret goes straight to your Worker without anyone seeing it. An older endpoint the kit made for the same address is turned off, not deleted. A key without that permission still works with a webhook secret you made yourself.
+- With Managed Payments chosen in test mode, the connect page tries one test checkout with it (expired at once) and tells you whether Stripe has it on for your account.
+- A refund Stripe holds for approval (when the shop's key is an Agent key) is shown as held, not failed: approve it in Stripe and the item leaves the player's account when Stripe refunds. Refunds made in Stripe's Dashboard or through Stripe's MCP take the item back the same way.
+- `homie-studio setup --via stripe-projects [--with elevenlabs]` (a prototype): for a creator with no Cloudflare account, Stripe Projects makes or links one (and ElevenLabs) on their own Stripe sign-in, on free plans. It stops at each step that is yours (Stripe's sign-in, the providers' terms, Cloudflare's approval page), puts the account id in `studio.json`, keeps the token in Projects' vault and its git-ignored `.env`, and every Wrangler run in the studio uses it. `npx wrangler login` stays the default.
+- The plugin's shop skill now walks a creator with a fresh Stripe account through it: what you click, what to tell your AI, and what stays yours. The studio-setup skill has the Stripe Projects option.
+
+### Changed
+
+- The Homie mod refuses a write through Stripe's MCP that would make a webhook endpoint (or an event destination with its secret): Stripe answers the signing secret in that call, and it would land in the conversation. The connect page makes the webhook instead.
+- The Homie mod now takes Stripe webhook signing secrets (`whsec_…`) out of tool output, as it does Stripe keys.
+- `providers.json` lists Stripe: its agent plugin and MCP server for the shop skill, and Stripe Projects for studio-setup. The shop skill declares Stripe's MCP server for Codex. The Homie mod holds `stripe projects upgrade`, `billing add` / `billing update` and anything with `--confirm-paid-service` as paid calls whose cost cannot be read first.
+- A new studio's `.gitignore` also keeps `.env.*`, `.projects/vault/` and `.projects/cache/` out of git; `upgrade` adds them to yours.
+
+### Upgrade notes
+
+- Stripe's MCP accepts only its sign-in page (OAuth) or keys tagged "Agent" from 2026-10-31. If you gave an AI a plain Stripe key for the MCP, replace it with an Agent key or sign in again. The shop's own key in your Worker is not affected, and must stay a plain restricted key.
+- To have the connect page make your webhook, add Webhook Endpoints: Write to the shop's restricted key (or make a new key) and run `homie-studio shop connect` again. Afterwards you can set that permission back to None.
+
 ## [0.24.2] - 2026-10-03
 
-**Plugin 0.25.2** · [#35](https://github.com/homie-rocks/homie/pull/35)
+**Plugin 0.25.2** · [#35](https://github.com/homie-rocks/homie/pull/35) · [release-2026-10-03-studio-0.24.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.24.2)
 
 Homie's skills work through each provider's own CLI, plugin and MCP server, declared so they load only when a skill needs them, and the Homie mod holds the paid calls and Cloudflare changes those tools can make.
 

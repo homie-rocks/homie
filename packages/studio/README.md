@@ -325,7 +325,7 @@ npx homie-studio chat words                                             # the bu
 
 ## Selling things: the shop
 
-A studio sells items for its games (0.24.0) with **its own Stripe account**: the studio is the seller, money goes
+A studio sells items for its games (0.24.0; Stripe's own agent tools since 0.24.3) with **its own Stripe account**: the studio is the seller, money goes
 straight from players to its Stripe, and homie.rocks never sees, holds or moves it (Homie takes no cut; no shared
 currency; not a Connect platform). Real-money prices only, nothing random, the kids rules built in (no shop on a kids
 server, spending off until a neutral age question says adult, nothing for under-13s, 13-17 through a parent's own
@@ -334,10 +334,19 @@ checkout, a monthly cap), and the television only shows a code to buy on a phone
 ```sh
 npx homie-studio shop init --supporter        # shop.json with a US$5 Supporter pack, and SELLING.md (the owner's plain words)
 npx homie-studio shop check                   # the kit's rules; every build checks them too
-npx homie-studio shop connect                 # a page on THIS computer: the owner pastes a restricted key and the webhook secret
+npx homie-studio shop catalog [--have <file>] # the items as Products in Stripe: the read, then the exact writes (Stripe's MCP)
+npx homie-studio shop connect                 # a page on THIS computer: the owner pastes one restricted key; it makes the webhook
 npx homie-studio shop                         # open (test or live) or what is missing
 npx homie-studio shop refund ord_…            # an ASK: the owner taps once (or Refund in /_studio/office/shop)
 ```
+
+Since 0.24.3 the owner's AI sets it up with **Stripe's own agent tools** (`npm install -g @stripe/cli@latest && stripe
+agent setup`: Stripe's MCP server and skills; the owner signs in once on Stripe's page, a sandbox first): it makes the
+catalog through the MCP (`shop catalog` says exactly what to write), reads the tax settings, and answers "how are
+sales?" read-only. The owner makes the account, approves Stripe's pages and pastes **one** restricted key on the
+connect page, which makes the webhook with it, so its signing secret goes straight to the Worker and never through a
+chat. A webhook is never made through Stripe's MCP (its answer carries the secret). From 2026-10-31 Stripe's MCP takes
+only OAuth or Agent-tagged keys; the shop's own key is a plain restricted key and is not affected.
 
 In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`); a
 supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), Stripe Tax on, or Stripe Managed
@@ -356,7 +365,8 @@ One checklist of what this computer and the person's accounts have for a studio:
 connector (the AI says whether its Homie tools are there; the directory is reached), Cloudflare (signed in
 with the studio's own Wrangler, and the account's email verified: a deploy that went through proves it, a
 deploy refused for it is remembered), Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and
-fal (and, in Claude Code, the status line). Each row is green, missing or "do this now", says what it
+fal (and, in Claude Code, the status line); in a studio that sells (shop.json), a Stripe row: whether Stripe's own
+agent plugin (its MCP server) is set up for this AI, with `stripe agent setup` as the fix (0.24.3). Each row is green, missing or "do this now", says what it
 unlocks, and gives the exact fix: a command the AI runs or a page the person taps. It only reads, answers in
 seconds, and never prints a key, a token or an account's name or id. A studio the Claude app's setup card made
 (`setup attach`) counts as connected to Cloudflare and GitHub there. `--json` gives the rows.
@@ -612,6 +622,27 @@ session, GitHub Actions, a container) `npx homie-studio chrome install` puts Chr
 the home folder's `.cache/homie-studio` (from storage.googleapis.com, which a cloud session's default network reaches), and WebGL
 renders with SwiftShader. `check` reports how fast each browser drew the game and on what renderer; on SwiftShader
 it says the frame rate is not a person's, and judges only seats, rooms and rounds.
+
+## Another way to Cloudflare: Stripe Projects (a prototype, 0.24.3)
+
+`npx wrangler login` stays the way. For a creator with no Cloudflare account (and no ElevenLabs), Stripe Projects
+(Stripe's CLI plugin, docs.stripe.com/projects) can make or link both on the person's own Stripe sign-in, on free
+plans, and hand the credentials to the studio folder:
+
+```sh
+npx homie-studio setup --via stripe-projects [--with elevenlabs] --dry-run   # what it would do; changes nothing
+npx homie-studio setup --via stripe-projects [--with elevenlabs] --accept-tos  # after the person accepted the providers' terms
+```
+
+It stops with a `needs` step at each thing that is the person's (the Stripe CLI and its Projects plugin, Stripe's
+sign-in, the providers' terms, Cloudflare's own approval page for an existing account); it never adds a paid plan or
+a payment method. The Cloudflare account id goes in studio.json with `"auth": "stripe-projects"`; the token stays in
+Projects' vault and the git-ignored `.env` it syncs, and every Wrangler run in the studio takes it from there
+(`deploy`, `dev`, secrets, the office). It checks read-only what the token can do (Wrangler signed in, D1, Workers AI;
+R2 is optional) and that `.gitignore` keeps `.env`, `.env.*`, `.projects/vault/` and `.projects/cache/` out of git.
+With `--with elevenlabs` the music skill finds the ElevenLabs key there too (ElevenLabs' free plan has no commercial
+licence). Unverified until a real run: the exact JSON of the Projects commands, and the Cloudflare token's permission
+groups, which the checks measure instead of assuming.
 
 ## No payment method needed
 

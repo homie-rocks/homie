@@ -22,17 +22,23 @@
  * player's account: it changes nothing until it is decided, and a lost one is a refund of that one item.
  *
  * SECRETS (Worker secrets, put there by `homie-studio shop connect` from a page on the owner's own computer):
- * STRIPE_KEY (a restricted key: Checkout Sessions write, Charges write for refunds, PaymentIntents and Disputes read)
- * and STRIPE_WEBHOOK_SECRET. Never in a file, a chat, a log or a page.
+ * STRIPE_KEY (a restricted key: Checkout Sessions write, Charges write for refunds, PaymentIntents and Disputes read;
+ * from 0.24.3 also Webhook Endpoints write, which only the connect page on the owner's computer uses) and
+ * STRIPE_WEBHOOK_SECRET. Never in a file, a chat, a log or a page.
+ *
+ * THE CATALOG (0.24.3): once `homie-studio shop catalog` has made the items' Products in Stripe (shop.json `catalog`
+ * names the modes), a checkout names its item's Product, so the Dashboard, Stripe's reports and Stripe's MCP see sales
+ * by product. The price is always shop.json's (the rules checked it), never one read from Stripe. A Product missing
+ * in this mode falls back to the item described inline, so a sale never fails over the catalog.
  */
 import { players } from './players.mjs';
 import { serversOf } from './servers.mjs';
-import { CAP_CEILING, audienceOf, bandOf, checkShop, money, wayFor } from './shop-rules.mjs';
+import { CAP_CEILING, audienceOf, bandOf, checkShop, defaultTaxCode, money, wayFor } from './shop-rules.mjs';
 import {
   bandOfPlayer, forgetPlayerShop, grantStatements, migrated, newOrderId, orderById, orderByPayment, orderBySession, orderView, ownsOf, restoreStatement, revokeStatement,
   setBand, shopDataOf, spentThisMonth,
 } from './shop-store.mjs';
-import { KEY_SHAPE, StripeError, WEBHOOK_SECRET_SHAPE, createCheckoutSession, createRefund, dashboardLink, modeOf, verifyWebhook } from './stripe.mjs';
+import { KEY_SHAPE, StripeError, WEBHOOK_SECRET_SHAPE, createCheckoutSession, createRefund, dashboardLink, isApprovalRequired, isMissingProduct, modeOf, productIdOf, verifyWebhook } from './stripe.mjs';
 import { arrivalOf, booksOf, lineFor, receiveStatement, referrerOk, sendStatements, settle, statementFor, statementsIn, voidLineStatements } from './referrals.mjs';
 import { SHOP_JS, officeShopPage, parentPage, refundsPage, shopPage, thanksPage } from './shop-page.mjs';
 import { notFoundPage } from './site.mjs';
@@ -270,11 +276,10 @@ async function ageRoute(request, env) {
   return json({ ok: true, asked: true });
 }
 
-function sessionParams(shop, item, order, { origin, amount, player, game, parent = false, studio }) {
+export function sessionParams(shop, item, order, { origin, amount, player, game, parent = false, studio, product = null }) {
   const managed = shop.till === 'stripe-managed';
-  const limited = Boolean(item.days || item.ends);
   // Managed Payments needs an eligible digital-goods tax code on every product (video games, downloaded).
-  const taxCode = item.taxCode ?? (managed ? (limited ? 'txcd_10201001' : 'txcd_10201000') : undefined);
+  const taxCode = item.taxCode ?? (managed ? defaultTaxCode(item) : undefined);
   const back = game ? `&game=${encodeURIComponent(game)}` : '';
   return {
     mode: 'payment',
@@ -282,7 +287,8 @@ function sessionParams(shop, item, order, { origin, amount, player, game, parent
       quantity: 1,
       price_data: {
         currency: shop.currency, unit_amount: amount, tax_behavior: 'exclusive',
-        product_data: { name: item.name.slice(0, 120), ...(item.blurb ? { description: item.blurb.slice(0, 300) } : {}), ...(taxCode ? { tax_code: taxCode } : {}), metadata: { item: item.id } },
+        // The catalog's Product (its name and tax code are Stripe's copy of shop.json's), or the item described inline.
+        ...(product ? { product } : { product_data: { name: item.name.slice(0, 120), ...(item.blurb ? { description: item.blurb.slice(0, 300) } : {}), ...(taxCode ? { tax_code: taxCode } : {}), metadata: { item: item.id } } }),
       },
     }],
     client_reference_id: player,
@@ -306,8 +312,18 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
   await env.DB.prepare("INSERT INTO shop_orders (id, player, item, game, amount, currency, till, mode, status, parent, via, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'started', ?9, ?10, ?11, ?11)")
     .bind(order.id, player.id, item.id, game ?? item.game ?? null, amount, shop.currency, shop.till, modeOf(env.STRIPE_KEY), parent ? 1 : 0, order.via, now).run();
   let session = null;
+  const mode = modeOf(env.STRIPE_KEY);
+  const product = Array.isArray(shop.catalog) && shop.catalog.includes(mode) ? productIdOf(cat.studio?.slug, item.id) : null;
+  const params = (p) => sessionParams(shop, item, order, { origin: url.origin, amount, player: player.id, game, parent, studio: cat.studio?.name, product: p });
   try {
-    session = await createCheckoutSession(env, sessionParams(shop, item, order, { origin: url.origin, amount, player: player.id, game, parent, studio: cat.studio?.name }), { idempotencyKey: `checkout-${order.id}` });
+    try {
+      session = await createCheckoutSession(env, params(product), { idempotencyKey: `checkout-${order.id}` });
+    } catch (error) {
+      // shop.json says the catalog is made in this mode, but Stripe has no such Product (made in the sandbox only, or
+      // archived by hand): the item described inline still sells, and `homie-studio shop catalog` says what to make.
+      if (!product || !isMissingProduct(error)) throw error;
+      session = await createCheckoutSession(env, params(null), { idempotencyKey: `checkout-${order.id}-inline` });
+    }
   } catch (error) {
     await env.DB.prepare("UPDATE shop_orders SET status = 'failed', note = ?2, updated_at = ?3 WHERE id = ?1").bind(order.id, String(error?.code ?? 'stripe').slice(0, 60), Date.now()).run();
     const why = error instanceof StripeError ? error.message : 'Stripe did not answer';
@@ -441,6 +457,7 @@ async function selfRefundRoute(request, env, shop, ready) {
   if (!refundableNow(orderView(o), Number(used?.n) ? [{ item: o.item, used: true }] : [], shop)) return fail(403, 'not-refundable', `Only an unused item, within ${shop.refundDays} days. Ask the studio for anything else.`);
   if (!KEY_SHAPE.test(String(env.STRIPE_KEY ?? ''))) return fail(503, 'closed', MISSING_WORDS['stripe-key']);
   const r = await refundOrder(env, o, { reason: 'requested_by_customer', by: 'player' });
+  if (r.held) return json({ ok: false, held: true, error: 'held', message: 'The studio approves this refund in Stripe first. Your money comes back once they do, and the item leaves your account then.' }, 202);
   return json(r, r.ok ? 200 : 502);
 }
 
@@ -553,6 +570,9 @@ async function disputeClosed(env, payment, status) {
   return 'kept';
 }
 
+/** What the owner reads when Stripe holds a refund for approval (the shop's key is an Agent key). */
+export const REFUND_HELD = 'Stripe is holding this refund until a person approves it in Stripe (Settings, Approvals, Requests): the shop\'s Stripe key is marked as an Agent key, and Stripe asks a person before an agent\'s refund. Approve it there; Stripe then refunds, and the item leaves the player\'s account when Stripe says so. To refund with one tap again, connect the shop with a plain restricted key (homie-studio shop connect), not one made for "Authorizing agent access".';
+
 /** Refund one order in full with Stripe, then take back that one item. The webhook confirms the same (idempotent). */
 export async function refundOrder(env, o, { reason = 'requested_by_customer', by = 'owner' } = {}) {
   if (o.status !== 'paid') return { ok: false, error: 'state', message: o.status === 'disputed' ? 'This order is disputed: the card network decides it now (answer it in Stripe).' : `This order is ${o.status}, not paid.` };
@@ -561,6 +581,9 @@ export async function refundOrder(env, o, { reason = 'requested_by_customer', by
   try {
     refund = await createRefund(env, { payment_intent: o.payment, reason: ['duplicate', 'fraudulent', 'requested_by_customer'].includes(reason) ? reason : 'requested_by_customer', metadata: { order: o.id, by } }, { idempotencyKey: `refund-${o.id}` });
   } catch (error) {
+    // An Agent-tagged key: Stripe holds an agent's refund for a person's approval. Nothing happened yet; once someone
+    // approves it in Stripe, Stripe refunds and the webhook (refund.created, charge.refunded) takes the item back.
+    if (isApprovalRequired(error)) return { ok: false, error: 'approval', held: true, message: REFUND_HELD };
     return { ok: false, error: 'stripe', message: `Stripe did not refund it (${error instanceof StripeError ? error.message : 'no answer'}). Nothing changed.` };
   }
   const now = Date.now();

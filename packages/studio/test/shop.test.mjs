@@ -193,6 +193,9 @@ function namespace(Klass, envRef, waits) {
  */
 async function fakeStripe() {
   const calls = [];
+  // What the stand-in does on purpose (a test sets these): a missing catalog Product, a refund Stripe holds for
+  // approval (an Agent key), a key without Webhook Endpoints, Managed Payments not on, the account's endpoints.
+  const behave = { missingProduct: false, approval: false, webhookDenied: false, managedRefused: false, endpoints: [], made: [], updated: [] };
   let n = 0;
   const server = createServer((req, res) => {
     let body = '';
@@ -203,6 +206,23 @@ async function fakeStripe() {
       calls.push({ method: req.method, path: url.pathname, form, auth: String(req.headers.authorization ?? '').replace(/^Bearer (rk|sk)_(test|live)_.*/, '$1_$2'), version: req.headers['stripe-version'], idem: req.headers['idempotency-key'] ?? null });
       const send = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
       n += 1;
+      const denied = () => send(403, { error: { type: 'invalid_request_error', message: 'The provided key does not have the required permissions for this endpoint. Having the \'rak_webhook_write\' permission would allow this request to continue.' } });
+      if (req.method === 'GET' && url.pathname === '/v1/webhook_endpoints') return behave.webhookDenied ? denied() : send(200, { object: 'list', data: behave.endpoints, has_more: false });
+      if (req.method === 'POST' && url.pathname === '/v1/webhook_endpoints') {
+        if (behave.webhookDenied) return denied();
+        const made = { id: `we_test_${n}`, object: 'webhook_endpoint', url: form.get('url'), enabled_events: [...form].filter(([k]) => k.startsWith('enabled_events[')).map(([, v]) => v), api_version: form.get('api_version'), metadata: { homie: form.get('metadata[homie]') }, status: 'enabled', livemode: false, secret: `whsec_${'Q7'.repeat(16)}${n}` };
+        behave.made.push(made);
+        return send(200, made);
+      }
+      if (req.method === 'POST' && /^\/v1\/webhook_endpoints\/we_/.test(url.pathname)) { behave.updated.push({ id: url.pathname.split('/').pop(), disabled: form.get('disabled') }); return send(200, { id: url.pathname.split('/').pop(), object: 'webhook_endpoint', status: form.get('disabled') === 'true' ? 'disabled' : 'enabled' }); }
+      if (req.method === 'POST' && /^\/v1\/checkout\/sessions\/cs_[\w]+\/expire$/.test(url.pathname)) return send(200, { id: url.pathname.split('/')[4], object: 'checkout.session', status: 'expired' });
+      if (req.method === 'POST' && url.pathname === '/v1/checkout/sessions' && behave.missingProduct && form.get('line_items[0][price_data][product]')) {
+        return send(400, { error: { type: 'invalid_request_error', code: 'resource_missing', param: 'line_items[0][price_data][product]', message: `No such product: '${form.get('line_items[0][price_data][product]')}'` } });
+      }
+      if (req.method === 'POST' && url.pathname === '/v1/checkout/sessions' && behave.managedRefused && form.get('managed_payments[enabled]') === 'true') {
+        return send(400, { error: { type: 'invalid_request_error', message: 'Managed Payments is not enabled on this account.' } });
+      }
+      if (req.method === 'POST' && url.pathname === '/v1/refunds' && behave.approval) return send(400, { error: { type: 'invalid_request_error', code: 'approval_required', message: 'This request requires approval.' } });
       if (req.method === 'POST' && url.pathname === '/v1/checkout/sessions') {
         const id = `cs_test_${String(n).padStart(6, '0')}abc`;
         return send(200, { id, object: 'checkout.session', url: `https://checkout.stripe.com/c/pay/${id}`, mode: 'payment', livemode: false, client_reference_id: form.get('client_reference_id'), metadata: Object.fromEntries([...form].filter(([k]) => k.startsWith('metadata[')).map(([k, v]) => [k.slice(9, -1), v])), currency: form.get('line_items[0][price_data][currency]'), amount_subtotal: Number(form.get('line_items[0][price_data][unit_amount]')), payment_status: 'unpaid', status: 'open' });
@@ -213,13 +233,13 @@ async function fakeStripe() {
     });
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  const handle = { calls, base: `http://127.0.0.1:${server.address().port}`, close: () => { server.closeAllConnections?.(); server.close(); } };
+  const handle = { calls, behave, base: `http://127.0.0.1:${server.address().port}`, close: () => { server.closeAllConnections?.(); server.close(); } };
   open.push(handle);
   return handle;
 }
 
 let built = null;
-async function site({ key = true, managed = false } = {}) {
+async function site({ key = true, managed = false, catalog = null } = {}) {
   if (!built) {
     const dir = studio('worker');
     assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
@@ -238,11 +258,14 @@ async function site({ key = true, managed = false } = {}) {
     built = dir;
   }
   const dir = built;
-  if (managed) {
-    // The same build, with Managed Payments as the till (games.json is what the Worker reads).
+  const variant = managed || catalog;
+  const mdir = join(scratch, `variant-dist-${managed ? 'managed' : 'stripe'}-${(catalog ?? []).join('-') || 'inline'}`);
+  if (variant) {
+    // The same build, with Managed Payments as the till and/or the catalog made in Stripe (games.json is what the
+    // Worker reads).
     const cat = JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games.json'), 'utf8'));
-    cat.shop.till = 'stripe-managed';
-    const mdir = join(scratch, 'managed-dist');
+    if (managed) cat.shop.till = 'stripe-managed';
+    if (catalog) cat.shop.catalog = catalog;
     mkdirSync(join(mdir, 'site', 'dist'), { recursive: true });
     writeFileSync(join(mdir, 'site', 'dist', 'games.json'), JSON.stringify(cat));
   }
@@ -254,8 +277,8 @@ async function site({ key = true, managed = false } = {}) {
   const ref = {};
   const DB = fakeD1(dir);
   const base = assetsOf(dir);
-  const managedAssets = managed ? assetsOf(join(scratch, 'managed-dist')) : null;
-  const ASSETS = managed ? { fetch: async (req) => (new URL(req.url).pathname === '/games.json' ? managedAssets.fetch(req) : base.fetch(req)) } : base;
+  const managedAssets = variant ? assetsOf(mdir) : null;
+  const ASSETS = variant ? { fetch: async (req) => (new URL(req.url).pathname === '/games.json' ? managedAssets.fetch(req) : base.fetch(req)) } : base;
   const env = { ASSETS, DB, STUDIO_NAME: 'Shop Owls', STRIPE_API_BASE: stripe.base, ...(key ? { STRIPE_KEY: TEST_KEY, STRIPE_WEBHOOK_SECRET: HOOK_SECRET } : {}) };
   ref.env = env;
   env.TABLE = namespace(Table, ref, waits);
@@ -621,6 +644,116 @@ test('managed payments: Stripe is the seller of record; a tax code, no automatic
   s.stripe.close();
 });
 
+test('the catalog: a checkout names the item\'s Product, at shop.json\'s price; a Product missing in this mode sells inline', async () => {
+  const s = await site({ catalog: ['test'] });
+  const p = s.player(400, { band: 'adult' });
+  const b = await s.buyPaid(p);
+  const f = b.call.form;
+  assert.equal(f.get('line_items[0][price_data][product]'), 'homie_shop_owls_supporter', 'the catalog Product, by the id the catalog made');
+  assert.equal(f.has('line_items[0][price_data][product_data][name]'), false);
+  assert.equal(f.get('line_items[0][price_data][unit_amount]'), '500', 'the price is shop.json\'s, never one read from Stripe');
+  assert.equal(b.call.idem, `checkout-${b.order}`);
+  // shop.json says the catalog is made in test mode, but Stripe has no such Product (archived by hand): it still sells.
+  s.stripe.behave.missingProduct = true;
+  const p2 = s.player(400, { band: 'adult' });
+  const r = await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p2));
+  assert.equal(r.status, 200, await r.clone().text());
+  const tries = s.stripe.calls.filter((c) => c.path === '/v1/checkout/sessions' && c.method === 'POST').slice(-2);
+  assert.equal(tries[0].form.get('line_items[0][price_data][product]'), 'homie_shop_owls_supporter');
+  assert.equal(tries[1].form.get('line_items[0][price_data][product_data][name]'), 'Supporter', 'described inline the second time');
+  assert.match(tries[1].idem, /^checkout-ord_\w+-inline$/, 'a new idempotency key for different parameters');
+  s.stripe.close();
+  // A catalog made only in live mode: a test key's checkout describes the item inline.
+  const t = await site({ catalog: ['live'] });
+  const q = t.player(400, { band: 'adult' });
+  const c = await t.buyPaid(q);
+  assert.equal(c.call.form.has('line_items[0][price_data][product]'), false);
+  assert.equal(c.call.form.get('line_items[0][price_data][product_data][name]'), 'Supporter');
+  t.stripe.close();
+});
+
+test('a refund Stripe holds for approval (an Agent key) is accepted, not refused; the webhook takes the item back later', async () => {
+  const s = await site();
+  const p = s.player(400, { band: 'adult' });
+  const a = await s.buyPaid(p);
+  s.stripe.behave.approval = true;
+  const tap = await s.fetchSite('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: a.order }) });
+  assert.equal(tap.status, 202);
+  const j = await tap.json();
+  assert.equal(j.held, true);
+  assert.match(j.message, /Approvals/);
+  assert.match(j.message, /plain restricted key/);
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'paid', 'nothing changes until Stripe refunds');
+  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns.length > 0, true);
+  // Someone approves it in Stripe; Stripe refunds and says so: the item leaves the account.
+  assert.equal((await (await s.hook('refund.created', { id: 're_test_held', object: 'refund', status: 'succeeded', payment_intent: a.payment })).json()).did, 'refunded');
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'refunded');
+  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns, []);
+  // A player's own refund, held the same way: plain words for the player, not Stripe's settings.
+  const p2 = s.player(400, { band: 'adult' });
+  s.stripe.behave.approval = false;
+  const d = await s.buyPaid(p2, 'ember', { game: 'owl-run' });
+  s.stripe.behave.approval = true;
+  const own = await s.post('/api/shop/refund', { order: d.order }, s.as(p2));
+  assert.equal(own.status, 202);
+  assert.match((await own.json()).message, /approves this refund in Stripe first/);
+  s.stripe.close();
+});
+
+test('shop catalog: the read, then exactly the writes Stripe still needs; in sync, shop.json records the mode', () => {
+  const dir = studio('catalog');
+  const TIP = { id: 'tip', kind: 'tip', name: 'A coffee', price: 'choose', min: 200, max: 1000 };
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe-managed', currency: 'usd', items: [SUPPORTER, TIP] }, null, 2));
+  let r = JSON.parse(run(['shop', 'catalog'], dir).stdout);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.step, 'read');
+  assert.equal(r.read.tool, 'stripe_api_read');
+  assert.equal(r.read.path, '/v1/products');
+  assert.deepEqual(r.products.map((x) => x.id), ['homie_shop_owls_supporter', 'homie_shop_owls_tip']);
+  // An account with someone else's product only.
+  const other = { id: 'prod_TheirOwn', object: 'product', name: 'Not ours', active: true, livemode: false, metadata: {} };
+  const have = join(dir, 'have.json');
+  writeFileSync(have, JSON.stringify({ object: 'list', data: [other], has_more: false }));
+  r = JSON.parse(run(['shop', 'catalog', '--have', have], dir).stdout);
+  assert.equal(r.inSync, false);
+  assert.equal(r.writes.length, 2);
+  const [sup, tip] = r.writes;
+  assert.deepEqual([sup.tool, sup.method, sup.path], ['stripe_api_write', 'POST', '/v1/products']);
+  assert.equal(sup.params.id, 'homie_shop_owls_supporter');
+  assert.equal(sup.params.tax_code, 'txcd_10201001', 'a year\'s pack: video games, limited rights (eligible for Managed Payments)');
+  assert.deepEqual(sup.params.default_price_data, { currency: 'usd', unit_amount: 500, tax_behavior: 'exclusive' });
+  assert.deepEqual(sup.params.metadata, { homie: 'shop-v1', homie_studio: 'shop-owls', homie_item: 'supporter' });
+  assert.equal(tip.params.id, 'homie_shop_owls_tip');
+  assert.equal(tip.params.default_price_data, undefined, 'a tip has no fixed price');
+  assert.doesNotMatch(JSON.stringify(r.writes), /prod_TheirOwn/, 'never a product this studio did not make');
+  // What Stripe holds after those writes, as Stripe's MCP answers it: in sync, and shop.json records the mode.
+  const product = (w, extra = {}) => ({ id: w.params.id, object: 'product', name: w.params.name, description: w.params.description ?? null, active: true, livemode: false, tax_code: w.params.tax_code, metadata: w.params.metadata, default_price: w.params.default_price_data ? { id: 'price_1Test', object: 'price', active: true, currency: 'usd', unit_amount: w.params.default_price_data.unit_amount, tax_behavior: 'exclusive' } : null, ...extra });
+  writeFileSync(have, JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ object: 'list', data: [product(sup), product(tip), other] }) }] }));
+  r = JSON.parse(run(['shop', 'catalog', '--have', have], dir).stdout);
+  assert.equal(r.inSync, true, JSON.stringify(r.writes));
+  assert.equal(r.mode, 'test');
+  assert.match(r.recorded, /"catalog" now includes "test"/);
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8')).catalog, ['test']);
+  assert.equal(JSON.parse(run(['shop', 'check'], dir).stdout).ok, true, 'shop check takes the catalog field');
+  // A new price and a removed item: a new Price made the default, and the tip archived (never deleted).
+  const shop = JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8'));
+  shop.items = [{ ...SUPPORTER, price: 700 }];
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify(shop));
+  const piped = spawnSync(process.execPath, [CLI, 'shop', 'catalog', '--have', '-', '--json'], { cwd: dir, encoding: 'utf8', input: readFileSync(have, 'utf8'), env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
+  r = JSON.parse(piped.stdout);
+  assert.deepEqual(r.writes.map((w) => `${w.method} ${w.path}`), ['POST /v1/prices', 'POST /v1/products/homie_shop_owls_supporter', 'POST /v1/products/homie_shop_owls_tip']);
+  assert.equal(r.writes[0].params.unit_amount, 700);
+  assert.equal(r.writes[0].params.lookup_key, 'homie_shop_owls_supporter_usd');
+  assert.equal(r.writes[0].params.transfer_lookup_key, true);
+  assert.deepEqual(r.writes[2].params, { active: false });
+  // Test and live in one answer: one environment at a time.
+  writeFileSync(have, JSON.stringify([product(sup), product(tip, { livemode: true })]));
+  assert.match(JSON.parse(run(['shop', 'catalog', '--have', have], dir).stdout).why, /one environment at a time/);
+  // A catalog field the rules do not know is refused.
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ ...shop, catalog: ['prod'] }));
+  assert.match(JSON.stringify(JSON.parse(run(['shop', 'check'], dir).stdout).errors), /catalog/);
+});
+
 test('referrals: an arrival from another site, a new player\'s sale, a held line, a signed statement the referrer checks', async () => {
   const s = await site();
   const realFetch = globalThis.fetch;
@@ -721,6 +854,41 @@ test('stripe-mock: Stripe\'s own API description accepts both tills\' Checkout S
   }
 });
 
+test('stripe-mock: the catalog\'s writes, a checkout that names its Product, and the webhook the connect page makes', { skip: MOCK ? false : 'STRIPE_MOCK_URL is not set (CI starts stripe-mock; locally: stripe-mock -http-port 12111)' }, async () => {
+  const { stripeCall, createWebhookEndpoint, updateWebhookEndpoint } = await import('../worker/stripe.mjs');
+  const { HOOK_EVENTS } = await import('../lib/shop.mjs');
+  const env = { STRIPE_KEY: TEST_KEY, STRIPE_API_BASE: MOCK };
+  // The writes `shop catalog --have` lists for an empty account, then a price change, as the owner's AI sends them.
+  const dir = studio('catalog-mock');
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe-managed', currency: 'usd', items: [SUPPORTER, { id: 'tip', kind: 'tip', name: 'A coffee', price: 'choose', min: 200, max: 1000 }] }));
+  const have = join(dir, 'have.json');
+  writeFileSync(have, JSON.stringify({ object: 'list', data: [] }));
+  const plan = JSON.parse(run(['shop', 'catalog', '--have', have], dir).stdout);
+  for (const w of plan.writes) await stripeCall(env, w.method, w.path, w.params);
+  const sj = JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8'));
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ ...sj, items: [{ ...SUPPORTER, price: 700 }] }));
+  writeFileSync(have, JSON.stringify({ object: 'list', data: [{ id: 'homie_shop_owls_supporter', object: 'product', name: 'Supporter', active: true, livemode: false, tax_code: 'txcd_10201001', metadata: { homie: 'shop-v1', homie_studio: 'shop-owls', homie_item: 'supporter' }, default_price: { id: 'price_x', object: 'price', active: true, currency: 'usd', unit_amount: 500 } }] }));
+  const change = JSON.parse(run(['shop', 'catalog', '--have', have], dir).stdout);
+  // The blurb (missing on Stripe's copy) first, then the new Price, then that Price made the default: in order.
+  assert.deepEqual(change.writes.map((w) => w.path), ['/v1/products/homie_shop_owls_supporter', '/v1/prices', '/v1/products/homie_shop_owls_supporter']);
+  await stripeCall(env, change.writes[0].method, change.writes[0].path, change.writes[0].params);
+  const price = await stripeCall(env, change.writes[1].method, change.writes[1].path, change.writes[1].params);
+  await stripeCall(env, 'POST', change.writes[2].path, { default_price: price.id });
+  // The webhook, as the connect page makes it, and an older one turned off.
+  const made = await createWebhookEndpoint(env, { url: 'https://owls.example/api/shop/hook', enabled_events: [...HOOK_EVENTS], api_version: '2025-03-31.basil', description: 'Homie shop', metadata: { homie: 'shop-v1' } });
+  assert.match(String(made.id), /^we_/);
+  await updateWebhookEndpoint(env, made.id, { disabled: true });
+  // A checkout naming the catalog's Product, both tills.
+  for (const managed of [false, true]) {
+    const s = await site({ managed, catalog: ['test'] });
+    s.env.STRIPE_API_BASE = MOCK;
+    const p = s.player(400, { band: 'adult' });
+    const r = await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p));
+    assert.equal(r.status, 200, `stripe-mock refused a checkout that names its Product: ${await r.clone().text()}`);
+    s.stripe.close();
+  }
+});
+
 /* ------------------------------------------------------------------ the CLI */
 
 test('the CLI: shop init and check; the build refuses a shop that breaks the rules; a kids studio sells nothing', () => {
@@ -750,20 +918,45 @@ test('the CLI: shop init and check; the build refuses a shop that breaks the rul
   assert.ok(existsSync(join(dir, 'site', 'migrations', SHOP_MIGRATION_FILE)), 'a new studio has the shop migration');
 });
 
-test('shop connect: the owner pastes the key on this computer; it goes to the Worker secret and is never printed', async () => {
-  const dir = studio('connect');
+/** A studio for `shop connect`, live at owls.example, with a stand-in Wrangler that records each command and how long
+ * the secret on its standard input was (never the secret). */
+function connectStudio(name) {
+  const dir = studio(name);
   const bin = join(dir, 'node_modules', '.bin');
   const state = join(dir, '.fake-cf');
   mkdirSync(bin, { recursive: true });
   mkdirSync(state, { recursive: true });
-  // A stand-in Wrangler: it records the command and how long the secret on its standard input was (never the secret).
   writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
 echo "$*" >> ${state}/calls
 if [ "$1" = secret ]; then wc -c | tr -d ' ' >> ${state}/stdin-bytes; echo "Success! Uploaded secret $3"; fi
 `);
   chmodSync(join(bin, 'wrangler'), 0o755);
-  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
+  const sj = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
+  writeFileSync(join(dir, 'studio.json'), JSON.stringify({ ...sj, cloudflare: { ...sj.cloudflare, domain: 'owls.example' } }, null, 2));
+  return { dir, state };
+}
+
+async function openConnect(dir, opts = {}) {
   const { shopConnect } = await import('../lib/shop.mjs');
+  const said = [];
+  const done = shopConnect(dir, { log: (line) => said.push(line), wait: 20_000, ...opts });
+  for (let i = 0; i < 50 && !said.length; i += 1) await new Promise((r) => setTimeout(r, 50));
+  const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}/.exec(said.join(' '))?.[0];
+  assert.ok(link, said.join(' '));
+  const page = await (await fetch(link)).text();
+  const n = /name="n" value="([a-f0-9]{32})"/.exec(page)[1];
+  const origin = new URL(link).origin;
+  const postKey = (body) => fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams({ n, ...body }) });
+  return { done, said, page, n, postKey };
+}
+
+test('shop connect: the owner pastes the key on this computer; it goes to the Worker secret and is never printed', async () => {
+  const { shopConnect } = await import('../lib/shop.mjs');
+  const bare = studio('connect-undeployed');
+  const none = await shopConnect(bare, { wait: 1000 });
+  assert.equal(none.needs, 'deploy', 'no live address yet: Stripe has nowhere to send payments');
+  const { dir, state } = connectStudio('connect');
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
   const said = [];
   const done = shopConnect(dir, { log: (line) => said.push(line), wait: 20_000, verify: false });
   for (let i = 0; i < 50 && !said.length; i += 1) await new Promise((r) => setTimeout(r, 50));
@@ -771,6 +964,9 @@ if [ "$1" = secret ]; then wc -c | tr -d ' ' >> ${state}/stdin-bytes; echo "Succ
   assert.ok(link, said.join(' '));
   const page = await (await fetch(link)).text();
   assert.match(page, /type="password"/g);
+  assert.match(page, /https:\/\/owls\.example\/api\/shop\/hook/);
+  assert.match(page, /Webhook Endpoints<\/b>: Write/);
+  assert.match(page, /not<\/b> "Authorizing agent access"/, 'the shop\'s key is a plain restricted key, never an Agent key');
   assert.match(page, /Checkout Sessions<\/b>: Write/);
   assert.match(page, /\/api\/shop\/hook/);
   assert.match(page, /3\.5% more/, 'Managed Payments offered, with what it costs');
@@ -794,6 +990,81 @@ if [ "$1" = secret ]; then wc -c | tr -d ' ' >> ${state}/stdin-bytes; echo "Succ
   assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number), [TEST_KEY.length + 1, HOOK_SECRET.length + 1], 'both on Wrangler\'s standard input');
   assert.doesNotMatch(JSON.stringify(r) + said.join(' ') + calls, /rk_test_A1b2|whsec_test/, 'never printed, returned or put in an argument');
   assert.equal(JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8')).till, 'stripe-managed', 'the seller the owner picked');
+  assert.equal(r.webhook.made, false, 'the owner made the webhook and pasted its secret');
+});
+
+test('shop connect: with the key alone the page makes the webhook; its secret goes straight to the Worker, an older one is turned off', async () => {
+  const { dir, state } = connectStudio('connect-auto');
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
+  const stripe = await fakeStripe();
+  stripe.behave.endpoints = [
+    { id: 'we_test_older', object: 'webhook_endpoint', url: 'https://owls.example/api/shop/hook', metadata: { homie: 'shop-v1' }, status: 'enabled' },
+    { id: 'we_test_theirs', object: 'webhook_endpoint', url: 'https://owls.example/api/shop/hook', metadata: {}, status: 'enabled' },
+  ];
+  const before = process.env.STRIPE_API_BASE;
+  process.env.STRIPE_API_BASE = stripe.base;
+  try {
+    const c = await openConnect(dir);
+    const ok = await c.postKey({ key: TEST_KEY, till: 'stripe-managed' });
+    const words = await ok.text();
+    assert.equal(ok.status, 200, words);
+    assert.match(words, /Stripe made the webhook/);
+    assert.match(words, /Managed Payments: it is on/);
+    assert.match(words, /Webhook Endpoints back to None/);
+    const r = await c.done;
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.webhook.made, true);
+    assert.equal(r.webhook.id, stripe.behave.made[0].id);
+    assert.equal(r.webhook.turnedOff, 1);
+    assert.equal(r.managedPayments.ok, true);
+    const made = stripe.behave.made[0];
+    assert.equal(made.url, 'https://owls.example/api/shop/hook');
+    assert.deepEqual(made.enabled_events, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'charge.dispute.created', 'charge.dispute.closed']);
+    assert.equal(made.api_version, '2025-03-31.basil', 'events rendered in the version the kit reads');
+    assert.equal(made.metadata.homie, 'shop-v1');
+    assert.deepEqual(stripe.behave.updated, [{ id: 'we_test_older', disabled: 'true' }], 'only the kit\'s own older endpoint, turned off, never deleted');
+    assert.ok(!stripe.calls.some((c2) => c2.method === 'DELETE'));
+    // Managed Payments tried once in test mode: a test checkout with it, expired at once.
+    const probe = stripe.calls.find((c2) => c2.path === '/v1/checkout/sessions' && c2.method === 'POST');
+    assert.equal(probe.form.get('managed_payments[enabled]'), 'true');
+    assert.ok(stripe.calls.some((c2) => /\/expire$/.test(c2.path)));
+    const calls = readFileSync(join(state, 'calls'), 'utf8');
+    assert.match(calls, /^secret put STRIPE_KEY$/m);
+    assert.match(calls, /^secret put STRIPE_WEBHOOK_SECRET$/m);
+    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number), [TEST_KEY.length + 1, made.secret.length + 1], 'Stripe\'s secret went to Wrangler\'s standard input');
+    assert.doesNotMatch(JSON.stringify(r) + c.said.join(' ') + calls + words, /Q7Q7|rk_test_A1b2/, 'the webhook\'s secret and the key are never printed or returned');
+  } finally {
+    if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
+    stripe.close();
+  }
+});
+
+test('shop connect: a key without Webhook Endpoints says how to fix it; the page then takes the owner\'s own webhook secret', async () => {
+  const { dir, state } = connectStudio('connect-denied');
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
+  const stripe = await fakeStripe();
+  stripe.behave.webhookDenied = true;
+  stripe.behave.managedRefused = true;
+  const before = process.env.STRIPE_API_BASE;
+  process.env.STRIPE_API_BASE = stripe.base;
+  try {
+    const c = await openConnect(dir);
+    const no = await c.postKey({ key: TEST_KEY });
+    assert.equal(no.status, 400);
+    assert.match(await no.text(), /needs Webhook Endpoints: Write/);
+    assert.equal(existsSync(join(state, 'calls')), false, 'nothing saved');
+    const yes = await c.postKey({ key: TEST_KEY, hook: HOOK_SECRET, till: 'stripe-managed' });
+    const words = await yes.text();
+    assert.equal(yes.status, 200, words);
+    assert.match(words, /refused a test checkout with Managed Payments/);
+    const r = await c.done;
+    assert.equal(r.webhook.made, false);
+    assert.equal(r.managedPayments.ok, false);
+    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number), [TEST_KEY.length + 1, HOOK_SECRET.length + 1]);
+  } finally {
+    if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
+    stripe.close();
+  }
 });
 
 /* ------------------------------------------------------------------ in a game */

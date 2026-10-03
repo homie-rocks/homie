@@ -74,6 +74,22 @@ referral share you published in `shop.json` (10% if you kept the suggestion; 0 i
 shows what you owe and to whom, and signs a monthly statement for each. **They invoice you, and you pay them
 yourself.** Nothing moves through Homie.
 
+## What you do, and what your AI does
+
+Your AI sets the shop up with Stripe's own tools for AI (Stripe's agent plugin: its MCP server and skills). It
+makes your products in Stripe, checks your tax settings, makes the webhook, and answers "how are sales?" by reading
+your Stripe. What stays yours, in Stripe's own pages:
+
+- making the Stripe account, and later activating it (your business details, bank account and identity checks);
+- one sign-in page that lets your AI use Stripe's tools: give it your **sandbox** (test) first;
+- one restricted key you make in Stripe and paste into a page on your own computer (never into a chat);
+- approving anything Stripe asks you to confirm (a refund your AI asked Stripe for, for example), and every refund
+  in your office.
+
+If your AI's app cannot use Stripe's sign-in page, Stripe offers an "Agent" key for it instead. From 31 October 2026
+Stripe's tools for AI accept only those (or the sign-in page). The shop's own key is a different, ordinary
+restricted key; never make that one an Agent key, or Stripe will hold every refund for a second approval.
+
 ## Before the first real sale
 
 1. Make (or pick) your Stripe account, verify it, and add a bank account.

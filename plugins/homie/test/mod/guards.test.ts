@@ -283,6 +283,30 @@ describe('Cloudflare changes outside the studio\'s deploy', () => {
   })
 })
 
+describe('Stripe\'s MCP (the shop)', () => {
+  const WRITE = 'mcp__plugin_stripe_stripe__stripe_api_write'
+
+  test('a write whose answer would carry a webhook\'s signing secret is refused, and never runs', async ($, on) => {
+    const w = world(on, { feed: null })
+    await start($)
+    const r = await $.tool.call({ tool: WRITE, method: 'POST', path: '/v1/webhook_endpoints', params: { url: `${LIVE}/api/shop/hook`, enabled_events: ['checkout.session.completed'] } })
+    expect(r.deny).toContain('homie-studio shop connect')
+    expect(w.log.tools).toEqual([])
+    const d = await $.tool.call({ tool: 'mcp__stripe__stripe_api_write', path: '/v2/core/event_destinations', body: { include: ['webhook_endpoint.signing_secret'] } })
+    expect(d.deny).toContain('signing secret')
+  })
+
+  test('the catalog\'s writes, turning an endpoint off and every read go through, unasked', async ($, on) => {
+    const w = world(on, { feed: null })
+    await start($)
+    await $.tool.call({ tool: WRITE, method: 'POST', path: '/v1/products', params: { id: 'homie_night_owls_supporter', name: 'Supporter' } })
+    await $.tool.call({ tool: WRITE, method: 'POST', path: '/v1/webhook_endpoints/we_1AbCdEfGh', params: { disabled: true } })
+    await $.tool.call({ tool: 'mcp__plugin_stripe_stripe__stripe_api_read', method: 'GET', path: '/v1/webhook_endpoints' })
+    expect(w.log.tools).toEqual([WRITE, WRITE, 'mcp__plugin_stripe_stripe__stripe_api_read'])
+    expect(w.log.asked).toEqual([])
+  })
+})
+
 describe('secrets in tool output', () => {
   const KEY = `hsk_${'0123456789abcdef'.repeat(3)}`
   const PASS = `hap_0123456789_${'A'.repeat(40)}`

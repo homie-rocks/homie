@@ -125,8 +125,12 @@
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against the kit's rules (real money, nothing random, the kids rules)
  *   homie-studio shop connect [--managed] [--live]   a page on THIS computer where the owner pastes the studio's
- *                                         restricted Stripe key and webhook secret: straight to the Worker secrets,
- *                                         never a chat or a file (test keys only unless --live)
+ *                                         restricted Stripe key; with it this makes the webhook (0.24.3), and the key
+ *                                         and the webhook's secret go straight to the Worker secrets, never a chat or a
+ *                                         file (test keys only unless --live)
+ *   homie-studio shop catalog [--have <file>|-] [--mode test|live]   the items as Products in the studio's Stripe,
+ *                                         made by the AI through Stripe's own MCP: the read first, then (with what it
+ *                                         answered) the exact writes; in sync, shop.json "catalog" records the mode
  *   homie-studio shop disconnect          both secrets gone: the shop closes
  *   homie-studio shop orders              the latest orders (never a card or an email)
  *   homie-studio shop refund <order> [--reason …] [--note "<why>"]   ASKS the owner (a one-tap link)
@@ -162,6 +166,13 @@
  *                                          the build so the chat's card follows it, and print the steps; HANDOFF.md)
  *   homie-studio setup attach <hs_…>      (this repository is the studio the Claude app's setup card is making: say so, once,
  *                                          learn its live address, and give a template copy its real name)
+ *   homie-studio setup --via stripe-projects [--with elevenlabs] [--accept-tos] [--dry-run]
+ *                                         (a prototype, 0.24.3: Cloudflare, and ElevenLabs with --with, made or linked
+ *                                          through Stripe Projects on their free plans; the person accepts the providers'
+ *                                          terms (then --accept-tos) and signs in on Stripe's and the provider's own
+ *                                          pages; the account id goes into studio.json, the token stays in Projects'
+ *                                          vault and its git-ignored .env, and Wrangler runs with it here. The usual
+ *                                          way, npx wrangler login, stays the default. lib/projects.mjs)
  *   homie-studio setup status [--connector yes|no]   (also: homie-studio doctor)
  *                                         what this computer and the person's accounts have for a studio: Node, the Homie
  *                                         connector, Cloudflare (signed in, email verified), Chrome, ffmpeg, GitHub,
@@ -237,6 +248,9 @@ import { chatBudget, chatLines, chatRemove, chatRulesSet, chatShow, chatWords } 
 import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
 import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatements, shopStatus } from '../lib/shop.mjs';
+import { catalogLines, catalogPlan } from '../lib/shop-catalog.mjs';
+import { projectsLines, setupViaProjects } from '../lib/projects.mjs';
+import { projectsCloudflareEnv } from '../lib/projects-env.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -249,7 +263,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'supporter', 'managed', 'live', 'send'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'supporter', 'managed', 'live', 'send', 'accept-tos'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -461,6 +475,12 @@ function print(result) {
     case 'shop disconnect':
       lines.push(...shopLines(result));
       break;
+    case 'shop catalog':
+      lines.push(...catalogLines(result));
+      break;
+    case 'setup':
+      lines.push(...projectsLines(result));
+      break;
     case 'chat rules':
     case 'chat budget':
     case 'shop refund':
@@ -662,6 +682,12 @@ async function main() {
   if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);
   if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie') });
+  if (cmd === 'setup' && flags.has('via')) {
+    if (flags.get('via') !== 'stripe-projects') return { ok: false, command: 'setup', why: '--via stripe-projects is the one other way this version knows (the default is npx wrangler login)' };
+    const extra = String(flags.get('with') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (extra.some((x) => x !== 'elevenlabs')) return { ok: false, command: 'setup', why: '--with takes elevenlabs (Cloudflare is always set up)' };
+    return setupViaProjects(root, { withElevenlabs: extra.includes('elevenlabs'), acceptTos: flags.has('accept-tos'), dryRun: flags.has('dry-run'), log });
+  }
   if (cmd === 'handoff') return handoff(root, sub, { homie: flags.get('homie') });
   if (cmd === 'port' && sub === 'import') return importPort(root, positional[2], flags.get('id'), { name: flags.get('name'), mode: flags.get('mode') });
   if (cmd === 'port' && sub === 'check') {
@@ -775,10 +801,22 @@ async function main() {
     if (sub === 'check') return shopCheck(root);
     if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), log });
     if (sub === 'disconnect') return shopDisconnect(root);
+    if (sub === 'catalog') {
+      const from = flags.get('have');
+      let have = null;
+      if (from === '-' || from === true) have = readFileSync(0, 'utf8');
+      else if (typeof from === 'string') {
+        if (!existsSync(from)) return { ok: false, command: 'shop catalog', why: `no such file: ${from}` };
+        have = readFileSync(from, 'utf8');
+      }
+      const mode = flags.get('mode');
+      if (mode !== undefined && mode !== 'test' && mode !== 'live') return { ok: false, command: 'shop catalog', why: '--mode is test or live' };
+      return catalogPlan(root, { have, mode: mode ?? null });
+    }
     if (sub === 'orders') return shopOrders(root, { url });
     if (sub === 'refund') return shopRefund(root, positional[2], { url, reason: flags.get('reason'), note: flags.get('note') });
     if (sub === 'statements') return shopStatements(root, { url, period: flags.get('period'), send: flags.has('send') });
-    return { ok: false, command: 'shop', why: `unknown: shop ${sub} (init, check, connect, disconnect, orders, refund, statements)` };
+    return { ok: false, command: 'shop', why: `unknown: shop ${sub} (init, check, connect, disconnect, catalog, orders, refund, statements)` };
   }
   if (cmd === 'agents') {
     const url = flags.get('url');
@@ -983,7 +1021,7 @@ async function dev(root) {
   const bin = wranglerBin(root);
   if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
   const studio = readStudio(root);
-  const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' };
+  const env = { ...process.env, ...projectsCloudflareEnv(root), WRANGLER_SEND_METRICS: 'false', CI: '1' };
   for (const added of ensureMigrations(root)) log(`added ${added} (${migrationWord(added)})`);
   await new Promise((done) => {
     const m = spawn(bin, ['d1', 'migrations', 'apply', 'DB', '--local'], { cwd: workerDir(root), env, stdio: ['ignore', 'ignore', 'inherit'] });
@@ -1065,7 +1103,7 @@ function mediaPut(root, file, as) {
   const key = as ?? (/^(music|videos)\//.test(rel) && !rel.includes('..') ? rel : `${folder}/${basename(file)}`);
   const bin = wranglerBin(root);
   return new Promise((done) => {
-    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: workerDir(root), env: { ...process.env, CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
+    const p = spawn(bin, ['r2', 'object', 'put', `${r2}/${key}`, '--file', resolve(file), '--content-type', typeOf(file), '--remote'], { cwd: workerDir(root), env: { ...process.env, ...projectsCloudflareEnv(root), CI: '1' }, stdio: ['ignore', 'ignore', 'inherit'] });
     p.on('close', (code) => {
       if (code !== 0) return done({ ok: false, command: 'media put', why: 'wrangler r2 object put failed' });
       // The manifest is committed: it names the file by its path on the site, never the workers.dev address.

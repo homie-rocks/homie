@@ -5,13 +5,16 @@
  *        its own browser sign-in (`elevenlabs auth login`); the sign-in stays in the
  *        OS keychain and nothing here ever sees it;
  *   key  ELEVENLABS_API_KEY in the environment (the person's own key; never
- *        written into the studio, never printed).
+ *        written into the studio, never printed), or, for a studio set up through
+ *        Stripe Projects (`homie-studio setup --via stripe-projects --with elevenlabs`;
+ *        studio.json providers.elevenlabs), the key Projects synced to the studio's
+ *        git-ignored .env: read here, in this process only, never printed or passed on.
  *
  * ELEVENLABS_BASE_URL points either road at another address (a test double).
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, normalize, sep } from 'node:path';
 
 const BASE = () => (process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io').replace(/\/+$/, '');
 const CLI = () => process.env.ELEVENLABS_CLI || 'elevenlabs';
@@ -34,6 +37,36 @@ function cli(args, { input, timeout = 15 * 60_000 } = {}) {
 
 const parse = (buf) => { try { return JSON.parse(buf.toString('utf8')); } catch { return null; } };
 
+/**
+ * The ElevenLabs key Stripe Projects keeps for this studio, or null: studio.json (found from the working folder up)
+ * says `providers.elevenlabs.via: "stripe-projects"` and which variable of which output file holds it.
+ */
+export function projectsKey(from = process.cwd()) {
+  let dir = from;
+  for (let i = 0; i < 12; i += 1) {
+    if (existsSync(join(dir, 'studio.json'))) break;
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+  let p = null;
+  try { p = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'))?.providers?.elevenlabs ?? null; } catch { return null; }
+  if (p?.via !== 'stripe-projects') return null;
+  const name = /^[A-Z][A-Z0-9_]{2,}$/.test(String(p.envKey ?? '')) ? p.envKey : 'ELEVENLABS_API_KEY';
+  const file = normalize(String(p.envFile || '.env'));
+  if (isAbsolute(file) || file === '..' || file.startsWith(`..${sep}`)) return null;
+  let text = '';
+  try { text = readFileSync(join(dir, file), 'utf8'); } catch { return null; }
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!m || m[1] !== name) continue;
+    const v = m[2].trim().replace(/^(["'])(.*)\1$/, '$2');
+    return v || null;
+  }
+  return null;
+}
+const keyOf = () => process.env.ELEVENLABS_API_KEY || projectsKey();
+
 /** Which road is open, without spending anything and without printing a secret. */
 export function road() {
   const probe = cli(['--version']);
@@ -43,9 +76,9 @@ export function road() {
     const s = parse(cli(['auth', 'status', '--format', 'json']).stdout);
     signedIn = Boolean(s?.schemes?.some((x) => x.logged_in));
   }
-  const hasKey = Boolean(process.env.ELEVENLABS_API_KEY);
+  const hasKey = Boolean(keyOf());
   if (hasCli && signedIn) return { road: 'cli', cli: probe.stdout.toString('utf8').trim() };
-  if (hasKey) return { road: 'key', cli: hasCli ? probe.stdout.toString('utf8').trim() : null, cliSignedIn: false };
+  if (hasKey) return { road: 'key', via: process.env.ELEVENLABS_API_KEY ? 'environment' : 'stripe-projects', cli: hasCli ? probe.stdout.toString('utf8').trim() : null, cliSignedIn: false };
   return {
     road: null, cli: hasCli ? probe.stdout.toString('utf8').trim() : null, cliSignedIn: false,
     why: hasCli
@@ -55,8 +88,8 @@ export function road() {
 }
 
 async function api(path, { method = 'GET', json, form, query } = {}) {
-  const key = process.env.ELEVENLABS_API_KEY;
-  if (!key) throw new Error('ELEVENLABS_API_KEY is not set');
+  const key = keyOf();
+  if (!key) throw new Error('ELEVENLABS_API_KEY is not set (and no Stripe Projects key for this studio)');
   const url = new URL(`${BASE()}${path}`);
   for (const [k, v] of Object.entries(query ?? {})) if (v != null) url.searchParams.set(k, String(v));
   const headers = { 'xi-api-key': key };
