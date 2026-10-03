@@ -17,9 +17,40 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.24.0] - 2026-10-03
+
+**Plugin 0.25.0** · [#34](https://github.com/homie-rocks/homie/pull/34)
+
+Sell things in your games with your own Stripe account: a supporter pack, cosmetics, a pass, an unlock or a tip, in real money, with refunds from your office and the kids rules built in; Homie never sees the money.
+
+### Added
+
+- The shop: `shop.json` at your studio's root lists what you sell (`cosmetic`, `supporter`, `pass`, `unlock`, `tip`), each in real money with the entitlement keys your game reads. `homie-studio shop init --supporter` writes a US$5 Supporter pack (a badge on the player's profile and beside their name in rooms, for a year) and `SELLING.md`, plain words on what selling makes you responsible for (refunds, disputes, tax, kids; not legal advice).
+- Checkout is Stripe's own hosted page, opened by your studio's Worker with your own restricted key, one item at a time. Stripe Tax is on by default; Stripe Managed Payments (Stripe as the seller of record: it registers, files and pays the tax and answers disputes, for 3.5% more) is one switch, `"till": "stripe-managed"`. Stripe's receipt email is the receipt.
+- A signed webhook (`/api/shop/hook`: Stripe's signature, within five minutes, each event once) is the only thing that marks an order paid, refunded or disputed. What a player owns is tied to their passkey account and follows them to every device.
+- `homie-studio shop connect`: a page on your own computer where you paste the restricted key and the webhook secret. It says exactly what to make in Stripe, offers Managed Payments in plain words, and puts both straight into your Worker's secrets: never the chat, a file or a log. Test keys only unless `--live`.
+- In a game: `createShop()` from `@homie-rocks/studio/shop` gives `shop.has('skin:ember')`, `shop.entitlements()`, `shop.on('change')`, `shop.open(item)` and `shop.used(key)`. The play page has a store sheet (from the game, or Shop in the room sheet) that opens Stripe in a new tab while the game keeps running; on a television it shows only a code to buy on a phone.
+- A supporter's badge rides on their seat in every room (`peer.badge`, set by your Worker from what the account owns; a hello can never claim one), and their account page lists their purchases and badges.
+- Refunds: one tap in your office (`/_studio/office/shop`), and a player's own refund of an unused item within your refund window (at least 14 days). Your AI can only ask for a refund (`homie-studio shop refund <order>`), and you confirm it with one tap.
+- The office's shop page: the last 30 days, every order with its Stripe page, disputes, and payouts, balance and tax as links to your own Stripe Dashboard, plus a CSV for your accountant with no names in it.
+- Referrals: a `?via=` link from another site (another studio, or homie.rocks on the same terms) is remembered on a new player's first visit; a kept sale owes that referrer the rate in `shop.json`. `homie-studio shop statements` signs each referrer's monthly statement with your studio's key; the referrer checks it against your manifest and invoices you. Nothing moves through Homie.
+- New D1 migration `0008_studio_shop.sql`: orders, entitlements, the age band, parent links, webhook events and referral books. No card, no address, no email.
+- The kids and fairness rules are built in, not settings. No shop on a kids server, and none at all in a studio whose `studio.json` says `"audience": "kids"`.
+- Spending is off on every account until one neutral question (the year you were born, no default) says adult; the answer is kept only as adult, teen or child. Under 13: nothing, ever. 13 to 17: a one-time link a parent opens on their own phone and pays in their own name.
+- Nothing random for money, no gems or coins, no countdown offers, and nothing that changes play on a beginner server (`"advantage": true` items are not sold or counted there). `shop check` and every build refuse a `shop.json` that breaks these. A monthly cap per player (US$50 at most).
+- A card dispute never locks or deletes an account: nothing changes while it is open, and a lost one takes back only that item.
+
+### Changed
+
+- Deleting a player account that owns things asks first, and keeps the orders without the player. A player's export includes their orders.
+- The directory manifest says whether the shop is open and its till, and how this studio takes referral statements (with the public half of its statement key). Never a key or a sale.
+
+### Upgrade notes
+
+- `homie-studio upgrade --apply`, then `npm run deploy` applies migration 0008. Nothing is sold until you add `shop.json` and connect a key.
 ## [0.23.0] - 2026-10-03
 
-**Plugin 0.24.0** · [#33](https://github.com/homie-rocks/homie/pull/33)
+**Plugin 0.24.0** · [#33](https://github.com/homie-rocks/homie/pull/33) · [release-2026-10-03-studio-0.23.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.23.0)
 
 Room chat in every game: reactions that float up every screen, quick lines, typing where the rules allow, speech bubbles over characters, rules per game and server, moderation in your own Worker, and the owner's tools.
 

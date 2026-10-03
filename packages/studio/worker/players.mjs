@@ -30,6 +30,7 @@ import { cookieValue } from './stats.mjs';
 import { adoptStatements, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';
 import { bytesToB64url, randomToken, sha256Hex, verifyAssertion, verifyRegistration } from './webauthn.mjs';
 import { ACCOUNT_JS, accountPage } from './account-page.mjs';
+import { forgetPlayerShop, livePurchases, shopDataOf } from './shop-store.mjs';
 
 export const PLAYERS_MIGRATION_FILE = '0004_players.sql';
 export const PLAYERS_MIGRATION = `-- Players and cloud saves (@homie-rocks/studio 0.12.0): accounts on this studio only (saves/SAVES.md).
@@ -323,6 +324,8 @@ async function removePlayer(env, id) {
   ]);
   // Their servers' memberships too (0.16.0); a studio before migration 0006 has none to delete.
   try { await env.DB.prepare('DELETE FROM server_members WHERE player = ?1').bind(id).run(); } catch { /* not migrated */ }
+  // What they bought goes with them; the orders stay, without the player (0.24.0; none before migration 0008).
+  try { await env.DB.batch(forgetPlayerShop(env, id)); } catch { /* not migrated */ }
   await data.after();
 }
 
@@ -508,6 +511,8 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
       player: me,
       passkeys: keys.map((k) => ({ label: k.label, synced: Number(k.synced) === 1, createdAt: new Date(Number(k.created_at)).toISOString(), lastUsedAt: new Date(Number(k.used_at)).toISOString() })),
       games: await playerData(env, s.player.id),
+      // The shop (0.24.0): their orders, what they own and the age band they gave; never a card or an email.
+      ...(await shopDataOf(env, s.player.id).then((x) => (x ? { shop: x } : {}))),
       note: 'Everything this studio keeps about this player. A passkey\'s private key never left your device; this site keeps only its public key.',
     };
     return json(body, 200, { 'content-disposition': `attachment; filename="${s.player.id}.json"` });
@@ -770,6 +775,9 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
 
   if (head === 'delete' && parts.length === 1) {
     if (body.confirm !== 'delete') return fail(400, 'confirm', 'send { "confirm": "delete" } to delete this player and everything they kept');
+    // Things they bought go with the account: say so first (the shop, 0.24.0).
+    const owned = await livePurchases(env, s.player.id).catch(() => 0);
+    if (owned && body.purchases !== 'forfeit') return fail(409, 'purchases', `This account owns ${owned} thing${owned === 1 ? '' : 's'} bought here; deleting it gives ${owned === 1 ? 'it' : 'them'} up for good (an unused item can be refunded first, from this page). Send { "confirm": "delete", "purchases": "forfeit" } to delete anyway.`, { owned });
     await removePlayer(env, s.player.id);
     return withCookies(json({ ok: true, deleted: s.player.id }), [clearCookie(url)]);
   }

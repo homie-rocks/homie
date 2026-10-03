@@ -8,6 +8,7 @@ import { SKILLS } from './agents.mjs';
 import { KIDS_LINE, POLICY_WORDS } from './servers.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
 import { CHAT_CSS, CHAT_JS, CHAT_OWNER_JS, chatBoot } from './chat-page.mjs';
+import { SHOP_SHELL_CSS, SHOP_SHELL_JS } from './shop-page.mjs';
 
 export { homePage, mediaIndexPage, notFoundPage, songPage, videoPage } from './site.mjs';
 
@@ -85,7 +86,7 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false } = {}) {
+export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
   const places = sharePlaces(g.screen?.share);
@@ -160,14 +161,14 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .notice .acts a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; text-decoration: none; font-weight: 700; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
 .notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
 [hidden] { display: none !important; }
-${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${pillUi}`;
+${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHOP_SHELL_CSS : ''}${pillUi}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
   // The server this page plays on (0.16.0): its pool (the Lobby), its badge and line for the chip, its ceiling.
   const srv = server ? { id: server.id, name: server.name, badge: server.badge, line: server.line, policy: server.policy, kids: Boolean(server.kids), mentor: Boolean(server.mentor), levelMax: server.levelMax } : null;
   // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
   const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
-  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE };
+  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
@@ -190,7 +191,7 @@ ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${pillUi}`;
       <a data-bigscreen target="_blank" rel="noopener" href="/${esc(g.id)}/tv"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg><span>Big screen</span></a>
     </div>
     <span class="link" data-room-link></span>
-    <div class="foot"><a href="/${esc(g.id)}/">← ${esc(g.name)}</a><button type="button" data-copy-link>Copy link</button></div>${g.saves ? `
+    <div class="foot"><a href="/${esc(g.id)}/">← ${esc(g.name)}</a>${shop ? '<button type="button" data-shop-open>Shop</button>' : ''}<button type="button" data-copy-link>Copy link</button></div>${g.saves ? `
     <div class="who-row" data-who hidden><span data-who-name></span><button type="button" data-who-act></button></div>` : ''}
   </div>
 </div>
@@ -206,7 +207,8 @@ ${joinCard}${share}
 <script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: screen ? 'tv' : 'play', owner, acct, member })).replace(/</g, '\\u003c')};</script>
 <script>${CHAT_JS}</script>
 <script>${SHELL_JS}</script>${g.saves && !screen ? `
-<script>${SAVES_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script><script>${CHAT_OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
+<script>${SAVES_SHELL_JS}</script>` : ''}${shop ? `
+<script>${SHOP_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script><script>${CHAT_OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
 }
 
 /*

@@ -10,7 +10,7 @@ import { SKILLS } from './agents.mjs';
 import { KIDS_LINE, POLICY_WORDS, SERVER_LIMITS } from './servers.mjs';
 import { esc } from './site.mjs';
 
-const PRIVATE = {
+export const PRIVATE = {
   'content-type': 'text/html; charset=utf-8',
   'cache-control': 'no-store, private',
   'x-robots-tag': 'noindex, nofollow',
@@ -832,7 +832,7 @@ async function officeScriptHash() {
   return scriptHash;
 }
 
-function shell(cat, title, body, { status = 200, script = null, extra = {} } = {}) {
+export function shell(cat, title, body, { status = 200, script = null, extra = {} } = {}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>${esc(title)}</title><style>:root{--accent:${accentOf(cat)}}${CSS}</style></head><body><div class="wrap">${body}</div>${script ? `<script>${script}</script>` : ''}</body></html>`;
 }
@@ -842,7 +842,7 @@ export async function officePage(cat, headers = {}) {
   const name = cat.studio?.name ?? 'Studio';
   const options = (cat.games ?? []).map((g) => `<option value="${esc(g.id)}">every room of ${esc(g.name)}</option>`).join('');
   const body = `<header class="top"><h1>${esc(name)} <small>Office</small></h1>
-<div class="links"><span class="live"><i class="dot" id="livedot"></i><span id="live">…</span></span><a href="/_studio/stats">Stats</a>
+<div class="links"><span class="live"><i class="dot" id="livedot"></i><span id="live">…</span></span><a href="/_studio/stats">Stats</a>${cat.shop ? '<a href="/_studio/office/shop">Shop</a>' : ''}
 <form method="post" action="/_studio/signout" style="display:inline"><button class="ghost small" type="submit">Sign out</button></form></div></header>
 <form class="bar" id="announce-all"><label for="announce-text">Announce</label><input type="text" id="announce-text" maxlength="280" placeholder="A line every player sees, in the game" autocomplete="off">
 <select id="announce-scope" aria-label="Who sees it"><option value="">every room of every game</option>${options}</select><button type="submit">Send</button>
@@ -871,7 +871,7 @@ export function lockedPage(cat, { what = 'office', ask = null } = {}) {
   return new Response(shell(cat, `${what === 'confirm' ? 'Confirm' : 'Office'} · private`, body), { status: 401, headers: { ...PRIVATE, 'content-security-policy': NO_SCRIPT_CSP } });
 }
 
-const VERB = { kick: 'Kick', mute: 'Mute', close: 'Close the room', announce: 'Announce', game: 'Change it', 'server-set': 'Change it', 'server-close': 'Close it', member: 'Remove', 'agents-brain': 'Let them talk' };
+const VERB = { refund: 'Refund it', 'shop-settle': 'Mark it paid', kick: 'Kick', mute: 'Mute', close: 'Close the room', announce: 'Announce', game: 'Change it', 'server-set': 'Change it', 'server-close': 'Close it', member: 'Remove', 'agents-brain': 'Let them talk' };
 
 /** The owner's one tap for what their AI asked, and what came of it. */
 export function confirmPage(cat, ask, { missing = false } = {}) {
@@ -883,7 +883,7 @@ export function confirmPage(cat, ask, { missing = false } = {}) {
     const verb = ask.action?.op === 'mute' && ask.action.off ? 'Unmute' : ask.action?.op === 'close' && ask.action.reopen ? 'Open it again' : VERB[ask.action?.op] ?? 'Yes';
     body = `<h1>${esc(name)} <small>Your AI asks</small></h1>
 <p style="font-size:19px;line-height:1.45;max-width:46ch">${esc(ask.what)}</p>
-<form method="post" class="bar" style="background:transparent;border:0;padding:0"><button type="submit" name="do" value="yes" class="${['kick', 'close', 'server-close', 'member'].includes(ask.action?.op) && !ask.action?.reopen ? 'armed' : ''}">${esc(verb)}</button><button type="submit" name="do" value="no" class="ghost">No</button></form>
+<form method="post" class="bar" style="background:transparent;border:0;padding:0"><button type="submit" name="do" value="yes" class="${['kick', 'close', 'server-close', 'member', 'refund'].includes(ask.action?.op) && !ask.action?.reopen ? 'armed' : ''}">${esc(verb)}</button><button type="submit" name="do" value="no" class="ghost">No</button></form>
 <p class="note">Only you can confirm this: your AI asked through the studio's office key, which cannot say yes. It lasts until ${esc(new Date(ask.expiresAt).toISOString().slice(11, 16))} UTC.</p>`;
   } else {
     const said = { done: 'Done.', failed: 'That did not work.', cancelled: 'Not done: you said no.', expired: 'This ask ran out (15 minutes). Your AI can ask again.', working: 'Working on it…' }[ask.state] ?? ask.state;

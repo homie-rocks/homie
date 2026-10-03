@@ -5,7 +5,7 @@ music and video, and publishes them from a studio that runs on your own Cloudfla
 on the free plan.
 
 - **Skills** (`skills/`): `studio-setup`, `plan`, `parallel`, `game`, `port`, `publish`,
-  `office`, `servers`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf` and `lab`.
+  `office`, `servers`, `shop`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf` and `lab`.
 - **MCP server** (`.mcp.json`): the Homie MCP server at `https://homie.rocks/mcp`, which has
   creator tools only. Nothing in this folder runs a command on install.
 - **The Homie mod** (`hooks/`, `mod/`): a Claude Code mod (Claude Code 2.1.287 or later, the CLI and

@@ -121,6 +121,16 @@
  *                                          time AI guides may talk are ASKED for, like office kick; --budget is
  *                                          Workers AI neurons a day, or dollars a day for the owner's key)
  *   homie-studio agents brain key [--remove]   (the owner's AI key, typed into a page on this computer only)
+ *   homie-studio shop                     is the studio's shop selling (its own Stripe), and if not, what is missing
+ *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]   shop.json and SELLING.md
+ *   homie-studio shop check               shop.json against the kit's rules (real money, nothing random, the kids rules)
+ *   homie-studio shop connect [--managed] [--live]   a page on THIS computer where the owner pastes the studio's
+ *                                         restricted Stripe key and webhook secret: straight to the Worker secrets,
+ *                                         never a chat or a file (test keys only unless --live)
+ *   homie-studio shop disconnect          both secrets gone: the shop closes
+ *   homie-studio shop orders              the latest orders (never a card or an email)
+ *   homie-studio shop refund <order> [--reason …] [--note "<why>"]   ASKS the owner (a one-tap link)
+ *   homie-studio shop statements [--period YYYY-MM] [--send]   signed referral statements this studio owes
  *   homie-studio agents sit <game> [--server <id>] [--pass hap_…] [--label Claude]
  *                                         (an AI guide's seat from this terminal: then lines of `do <goal> {args}`,
  *                                          `say <line> {args}`, `look`, `stand`)
@@ -226,6 +236,7 @@ import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, offic
 import { chatBudget, chatLines, chatRemove, chatRulesSet, chatShow, chatWords } from '../lib/chat-cli.mjs';
 import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
+import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatements, shopStatus } from '../lib/shop.mjs';
 import { Feed, currentFeed, currentId, flushProgress, publicFeed, readFeed, recordChange, startProgress } from '../lib/progress.mjs';
 import { formatStatus, setupStatus } from '../lib/doctor.mjs';
 import { codexTarget, newCodex, writeCodexPage } from '../lib/codex.mjs';
@@ -238,7 +249,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'supporter', 'managed', 'live', 'send'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -441,8 +452,18 @@ function print(result) {
     case 'chat remove':
       lines.push(result.message);
       break;
+    case 'shop':
+    case 'shop orders':
+    case 'shop check':
+    case 'shop init':
+    case 'shop statements':
+    case 'shop connect':
+    case 'shop disconnect':
+      lines.push(...shopLines(result));
+      break;
     case 'chat rules':
     case 'chat budget':
+    case 'shop refund':
       lines.push(result.asked ? `Asked: ${result.what}` : result.message, ...(result.asked ? [`Owner's one-tap link (until the ask ends, 15 min): ${result.link}`, result.use] : []));
       break;
     case 'servers new':
@@ -746,6 +767,18 @@ async function main() {
     if (sub === 'level') return serversLevel(root, positional[2], positional[3], positional[4], { url });
     if (sub === 'member') return serversMember(root, positional[2], positional[3], positional[4], { url, role: flags.get('role'), remove: flags.has('remove') });
     return { ok: false, command: 'servers', why: `unknown: servers ${sub} (list, new, set, close, level, member)` };
+  }
+  if (cmd === 'shop') {
+    const url = flags.get('url');
+    if (!sub) return shopStatus(root, { url });
+    if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), currency: flags.get('currency') ?? 'usd', price: flags.get('price') ?? 500, managed: flags.has('managed') });
+    if (sub === 'check') return shopCheck(root);
+    if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), log });
+    if (sub === 'disconnect') return shopDisconnect(root);
+    if (sub === 'orders') return shopOrders(root, { url });
+    if (sub === 'refund') return shopRefund(root, positional[2], { url, reason: flags.get('reason'), note: flags.get('note') });
+    if (sub === 'statements') return shopStatements(root, { url, period: flags.get('period'), send: flags.has('send') });
+    return { ok: false, command: 'shop', why: `unknown: shop ${sub} (init, check, connect, disconnect, orders, refund, statements)` };
   }
   if (cmd === 'agents') {
     const url = flags.get('url');

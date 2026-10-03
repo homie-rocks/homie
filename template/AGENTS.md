@@ -248,6 +248,37 @@ studio's pinned copy, never a registry lookup of the bare name.
   budget, or between decisions, the game's `decide` plays. `agent_sit` (the local MCP) puts the owner's own
   Claude in a guide's seat.
 
+## Selling things (the shop)
+
+- **The studio sells with its OWN Stripe account.** The studio is the seller: its prices, its refunds, its tax, its
+  disputes. Money goes from players to the studio's Stripe; homie.rocks never sees it and Homie takes no cut.
+  `SELLING.md` says what that means for the owner in plain words (not legal advice).
+- **`shop.json`** (at the studio's root, reviewed in git): `till` (`stripe`, the studio is the seller with Stripe
+  Tax on; `stripe-managed`, Stripe Managed Payments is the seller of record and files the tax for 3.5% more; or
+  `off`), `currency`, `refundDays` (at least 14), `capPerPlayerMonth` (cents, at most 5000) and `items`:
+  `{ "id", "kind": "cosmetic"|"supporter"|"pass"|"unlock"|"tip", "name", "price": <cents>, "gives": ["skin:ember"],
+  "days"?, "game"?, "advantage"? }`. Real money only: no gems, coins or points. `npx --no-install homie-studio shop
+  init --supporter` writes a US$5 Supporter pack; `shop check` and every build refuse what the kit refuses.
+- **The kids rules are the kit's, not the studio's to switch off:** nothing random for money (an item that names
+  chance, odds, a crate, a box or a mystery is refused), no countdown offers, no shop on a kids server or in a studio
+  with `"audience": "kids"` in studio.json, spending off on every account until a neutral age question says adult,
+  nothing ever for under-13s, 13-17 only through a parent's own checkout (a one-time link), nothing with
+  `"advantage": true` on a beginner server, one hosted Stripe checkout per purchase, a monthly cap. The television
+  never sells: its store sheet is a code to buy on a phone.
+- **In a game:** `import { createShop } from '@homie-rocks/studio/shop'`; `shop.has('skin:ember')`,
+  `shop.entitlements()`, `shop.on('change', …)`, `shop.open(item)` from a button the player pressed (never the
+  play button, never on a timer), `shop.used(key)` when it is equipped. A supporter's badge rides on their seat
+  (`peer.badge`, set by the Worker, never by a hello). The guide is `node_modules/@homie-rocks/studio/shop/SHOP.md`.
+- **The key** goes in only from a page on the owner's own computer: `npx --no-install homie-studio shop connect`
+  prints a 127.0.0.1 link; the owner pastes a restricted key and the webhook secret there, and they go straight to
+  the Worker secrets. Test keys only unless `--live`. Never ask for a key in the chat; never write one anywhere.
+- **Refunds:** the owner's one tap in the office (`/_studio/office/shop`). You may only ASK:
+  `homie-studio shop refund <order>` gives the owner a one-tap link. A card dispute never touches the player's
+  account. `shop` says what is missing; `shop orders` lists orders (never a card or an email).
+- **Referrals:** a `?via=<host>` link from another site (homie.rocks is one more referrer) is remembered on a new
+  player's first visit; a kept sale owes that referrer the rate in `shop.json` `referrals`. `shop statements`
+  signs them; the referrer invoices the studio. Nothing moves through Homie.
+
 ## Continuing a build from the Claude app
 
 A Claude Code session started from the Claude app's card gets one short line, like

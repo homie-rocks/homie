@@ -49,6 +49,10 @@
  * reports players made (each the one message it is about) with Dismiss, and the review's day (Workers AI neurons).
  * From an office key, a change that opens chat up (more allowed, fewer checks) is an ASK; one that tightens it, or
  * taking a message down, happens at once.
+ *
+ * THE SHOP (0.24.0, worker/shop.mjs): /_studio/office/shop and /_studio/api/shop (sales, refunds, disputes, payouts as
+ * links to the studio's own Stripe, a CSV, the referral books and signed statements). A refund is the owner's one tap;
+ * from an office key it is ALWAYS an ask (the AI may only propose one), and so is marking a referrer paid.
  */
 import { SEAT_MAX, seatsOf } from './seats.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
@@ -60,6 +64,8 @@ import { confirmPage, lockedPage, officePage } from './office-page.mjs';
 import { licenseOf } from './license.mjs';
 import { CHAT_MODES, CHAT_WHO, checkChatRules, publicChat } from './chat.mjs';
 import { chatDay, chatOf, chatRowsOf, clearChatRules, dismissReport, reportsOf, writeChatRules } from './chat-store.mjs';
+import { checkRefund, checkSettle, describeRefund, officeShopPage, ordersCsv, performRefund, settleReferrer, shopOffice, statementsOut, statementsSend } from './shop.mjs';
+import { orderById } from './shop-store.mjs';
 
 export { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from './office-schema.mjs';
 
@@ -673,6 +679,8 @@ function checkAction(cat, op, body) {
       if (!(level >= 1 && level <= 5)) return bad('level is 1 to 5 (Rookie, Steady, Fair, Strong, Maxed)');
       return { ok: true, action: { op, game: meta.id, room, level } };
     }
+    case 'refund': return checkRefund(body);
+    case 'shop-settle': return checkSettle(body);
     case 'agents-brain': {
       if (!meta) return bad('game is one of this studio\'s game ids');
       if (typeof body.server !== 'string' || !(body.server === 'public' || /^[a-z0-9][a-z0-9-]{1,19}$/.test(body.server))) return bad('server is the server\'s id');
@@ -770,6 +778,8 @@ export function describe(cat, a) {
     case 'member': return a.remove ? `Remove ${a.name ?? 'that player'} from ${gname}'s server ${a.server} (they can join again unless its door keeps them out).` : `Make ${a.name ?? 'that player'} a ${a.role} of ${gname}'s server ${a.server}.`;
     case 'pass': return a.action === 'revoke' ? `Revoke the agent pass ${a.id}: that AI leaves every room and cannot sit again.` : `Issue an agent pass for an AI called "${a.label} · AI".`;
     case 'room-level': return `Set the AI in ${where} to ${levelName(a.level)} (level ${a.level}).`;
+    case 'refund': return describeRefund(cat, a, a.item ? { item: a.item, amount: a.amount, currency: a.currency } : null);
+    case 'shop-settle': return `Mark what this studio owes ${a.via} for referrals as paid${a.ref ? ` (${a.ref})` : ''}: its owed lines are settled in the books.`;
     case 'agents-brain': return ['workers-ai', 'owner-key'].includes(a.mode)
       ? `Let the AI guides on ${gname}'s server ${a.server} talk: they speak only the lines the game's own agents.json gives them (never free text), at most one line every 8 seconds, never about a person, and a player can quiet them. Their brain runs on ${a.mode === 'workers-ai' ? `this studio's own Workers AI (free allowance${a.budget !== undefined ? `; at most ${Math.round(a.budget).toLocaleString('en-US')} neurons a day` : ''})` : `your own AI provider key (claude-haiku-4-5, your money${a.budget !== undefined ? `, at most $${Number(a.budget).toFixed(2)} a day` : ', capped daily'})`}.`
       : `Set the AI guides' brain on ${gname}'s server ${a.server} to ${a.mode}.`;
@@ -800,6 +810,8 @@ export function describe(cat, a) {
 /** Whether an office key (the owner's AI) only ASKS for this (DESIGN D13): what takes something away, or consent. */
 export async function needsAsk(env, cat, a) {
   if (DESTRUCTIVE.has(a.op)) return true;
+  // Money: the owner's AI may only propose a refund or a settlement; the owner says yes.
+  if (a.op === 'refund' || a.op === 'shop-settle') return true;
   if (a.op === 'server-close') return !a.reopen;
   if (a.op === 'member') return a.remove === true;
   if (a.op === 'server-set') {
@@ -1020,6 +1032,8 @@ export async function perform(env, cat, a) {
       if (a.mode === 'off') notes.push('The guides are the game\'s plain bots.');
       return { ok: true, op: a.op, game: meta.id, server: sv.id, brain: sv.brain, budget: day.budget, note: `Saved. ${notes.join(' ')}`.trim() };
     }
+    case 'refund': return performRefund(env, cat, a);
+    case 'shop-settle': return settleReferrer(env, a);
     default: return { ok: false, error: 'op' };
   }
 }
@@ -1155,11 +1169,21 @@ async function api(request, env, url, cat) {
     const view = await officeView(env, { ...cat, games: metas }, url.origin);
     return json({ ok: true, day: view.chat, games: view.games.map((g) => ({ id: g.id, name: g.name, chat: g.chat, rooms: g.rooms.map((r) => ({ room: r.room, label: r.label, players: r.players, chat: r.chat })) })) });
   }
+  // The shop (0.24.0): the owner's view, the accountant's CSV, the referral statements.
+  if (path === '/_studio/api/shop' && request.method === 'GET') return json(await shopOffice(env, cat, url.origin));
+  if (path === '/_studio/api/shop/orders.csv' && request.method === 'GET') {
+    try {
+      return new Response(await ordersCsv(env), { headers: { 'content-type': 'text/csv; charset=utf-8', 'cache-control': 'no-store, private', 'content-disposition': `attachment; filename="orders-${today()}.csv"` } });
+    } catch { return json({ ok: false, error: 'not-migrated', message: 'The shop needs migration 0008_studio_shop.sql (npm run deploy).' }, 503); }
+  }
+  if (path === '/_studio/api/shop/statements' && request.method === 'GET') return json(await statementsOut(env, cat, url.origin, url.searchParams.get('period')));
+  if (path === '/_studio/api/shop/statements/send' && request.method === 'POST') return json(await statementsSend(env, cat, url.origin, body.period));
   const OPS = {
     '/_studio/api/chat/rules': 'chat-rules', '/_studio/api/chat/remove': 'chat-remove', '/_studio/api/chat/report': 'chat-report', '/_studio/api/chat/budget': 'chat-budget',
     '/_studio/api/kick': 'kick', '/_studio/api/mute': 'mute', '/_studio/api/close': 'close', '/_studio/api/announce': 'announce', '/_studio/api/game': 'game',
     '/_studio/api/servers': 'server-create', '/_studio/api/servers/set': 'server-set', '/_studio/api/servers/close': 'server-close', '/_studio/api/servers/member': 'member',
     '/_studio/api/agents/pass': 'pass', '/_studio/api/room-level': 'room-level', '/_studio/api/agents/brain': 'agents-brain',
+    '/_studio/api/shop/refund': 'refund', '/_studio/api/shop/settle': 'shop-settle',
   };
   const op = OPS[path];
   if (!op || request.method !== 'POST') return json({ ok: false, error: 'not-found' }, 404);
@@ -1167,6 +1191,12 @@ async function api(request, env, url, cat) {
   if (!checked.ok) return json(checked, 400);
   const action = checked.action;
   if (op === 'server-create' || op === 'pass') action.origin = url.origin;
+  if (op === 'refund') {
+    // The ask and the confirm page say what the order is (its item and price), read from the books now.
+    const o = await orderById(env, action.order);
+    if (!o) return json({ ok: false, error: 'order', message: 'No such order (homie-studio shop orders lists them).' }, 404);
+    Object.assign(action, { item: o.item, amount: Number(o.amount), currency: o.currency });
+  }
   // An office key (the owner's AI) only ASKS for what takes something away; the owner confirms with one tap.
   if (who === 'office' && await needsAsk(env, cat, action)) {
     if (op === 'kick' || op === 'mute') {
@@ -1198,6 +1228,12 @@ export async function officeRoutes(request, env, url, { catalogueOf }) {
     const session = await ownerSession(request, env);
     const secure = url.protocol === 'https:' ? '; Secure' : '';
     return officePage(cat, session ? { 'set-cookie': `${OWNER_COOKIE}=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secure}` } : {});
+  }
+  if (path === '/_studio/office/shop' || path === '/_studio/office/shop/') {
+    const cat = await catalogueOf();
+    if (request.method !== 'GET') return new Response('method', { status: 405 });
+    if (!(await isOwner(request, env))) return lockedPage(cat, { what: 'office' });
+    return officeShopPage(cat);
   }
   const confirm = /^\/_studio\/confirm\/(ask_[a-f0-9]{16})\/?$/.exec(path);
   if (confirm) {

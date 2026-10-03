@@ -319,6 +319,8 @@ export class NetRoom {
       watch: conn.watch === true, policy: WATCH_POLICIES.includes(conn.watchPolicy) ? conn.watchPolicy : 'follow', follow: null, followWhy: null,
       // An agent (section 17): only the Worker's word, from a verified pass, makes one; its hello cannot.
       agentWord: conn.agent && typeof conn.agent === 'object' ? conn.agent : null, agent: null, caps: new Set(), speechAt: [],
+      // A badge the studio's Worker verified (the shop: a supporter's); a hello cannot set one.
+      badge: typeof conn.badge === 'string' && conn.badge.length <= 16 ? conn.badge : null,
       // Revision 7: the latest view the host showed this AI (what its arguments are checked against), and its pace.
       lastView: null, viewAt: 0, doAt: 0,
     };
@@ -375,7 +377,7 @@ export class NetRoom {
   host() { return this.hostId ? this.clients.get(this.hostId) ?? null : null; }
   hostRef() { const h = this.host(); return h ? { id: h.id, seat: h.seat } : null; }
   roleOf(c) { return c.id === this.hostId ? 'host' : c.seat === null ? 'screen' : 'replica'; }
-  peer(c) { return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: { ...c.agent } } : {}), ...(this.muteOf(c) ? { muted: true } : {}) }; }
+  peer(c) { return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: { ...c.agent } } : {}), ...(this.muteOf(c) ? { muted: true } : {}), ...(c.badge && !c.agent ? { badge: c.badge } : {}) }; }
   /** A hands-`host` agent (section 17): no game client of its own, so no snapshots, checkpoints or state. */
   lite(c) { return Boolean(c.agent && c.agent.hands === 'host'); }
   seatedHumans() { return this.live().filter((c) => c.seat !== null && !c.agent); }

@@ -266,6 +266,17 @@ everything. The play page of such a game carries the saves bridge and a "who is 
 and shows a passkey sheet over the game when the game asks (`saves.signIn()`); its landing links the account page.
 `/account/` belongs to the site: `site/pages/account/` and `site/public/account/` are refused.
 
+## The shop: `/shop/` (0.24.0)
+
+A studio with a `shop.json` ([../shop/SHOP.md](../shop/SHOP.md)) has `/shop/` (its items in real money, sign in, the
+one neutral age question, Buy on Stripe's own page, or a link for a parent), `/shop/thanks`, `/shop/refunds/` (the
+refund policy every seller publishes) and `/shop/parent/<link>` (what a parent opens). The account page lists the
+player's purchases and badges, with the self-serve refund of an unused item. A play page whose game the studio
+sells something for carries the store sheet (the game's `shop.open()`, and Shop in the room sheet); on a kids server
+there is none, and the big screen's sheet is a code to buy on a phone. With a `shop.json`, `/shop/` belongs to the
+shop (a `site/pages/shop/` is not served); without one it is the studio's own. The directory manifest says only
+whether the shop is open and its till.
+
 ## The arcade knock
 
 A game made with Homie's arcade controls asks its page's origin for a Homie box (`GET /__homie/call`), and a score

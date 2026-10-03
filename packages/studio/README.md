@@ -323,6 +323,28 @@ npx homie-studio chat words                                             # the bu
   [chat/CHAT.md](chat/CHAT.md) is the short version and why Clef; [chat/OWNERS.md](chat/OWNERS.md) a plain note for
   studio owners on chat and children's data; NETPLAY.md section 19 the wire.
 
+## Selling things: the shop
+
+A studio sells items for its games (0.24.0) with **its own Stripe account**: the studio is the seller, money goes
+straight from players to its Stripe, and homie.rocks never sees, holds or moves it (Homie takes no cut; no shared
+currency; not a Connect platform). Real-money prices only, nothing random, the kids rules built in (no shop on a kids
+server, spending off until a neutral age question says adult, nothing for under-13s, 13-17 through a parent's own
+checkout, a monthly cap), and the television only shows a code to buy on a phone.
+
+```sh
+npx homie-studio shop init --supporter        # shop.json with a US$5 Supporter pack, and SELLING.md (the owner's plain words)
+npx homie-studio shop check                   # the kit's rules; every build checks them too
+npx homie-studio shop connect                 # a page on THIS computer: the owner pastes a restricted key and the webhook secret
+npx homie-studio shop                         # open (test or live) or what is missing
+npx homie-studio shop refund ord_…            # an ASK: the owner taps once (or Refund in /_studio/office/shop)
+```
+
+In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`); a
+supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), Stripe Tax on, or Stripe Managed
+Payments (Stripe as seller of record, 3.5% more) as one switch; a signed, idempotent webhook; refunds from the
+office; a dispute never touches the account; referral statements signed per referrer (homie.rocks is one more
+referrer). The guide: `shop/SHOP.md`.
+
 ## Setup status
 
 ```sh

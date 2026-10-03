@@ -9,9 +9,10 @@
  *                                          (games/<id>/assets/manifest.json; lib/asset-manifest.mjs servedAssets)
  *   site/dist/games/<id>/agents.json       the AI guides' vocabulary (games/<id>/agents.json, checked; NETPLAY.md
  *                                          section 18): the only goals and lines an AI in its rooms has
- *   site/dist/games.json                   { studio, games[], songs[], videos[], posts[], site } from studio.json,
+ *   site/dist/games.json                   { studio, games[], songs[], videos[], posts[], site, shop } from studio.json,
  *                                          game.json files, the music/ and videos/ manifests (media/MEDIA.md),
- *                                          posts/*.md and the studio's site/ folder (site/SITE.md)
+ *                                          posts/*.md, the studio's site/ folder (site/SITE.md) and shop.json (checked
+ *                                          against the kit's rules: a shop that breaks them stops the build)
  *   site/dist/games/<id>/_landing/...      what the game's landing shows (hero footage, its cover, licence texts)
  *   site/dist/_site/                       posts.json (the posts' HTML), the studio's own pages (site/pages)
  *   site/dist/_studio/codex/<id>/          each game's Game Codex (games/<id>/CODEX.md, lib/codex.mjs): served only to
@@ -47,6 +48,8 @@ import { licenseOf, remixRow } from '../worker/license.mjs';
 import { SERVER_LIMITS, serverOf } from '../worker/servers.mjs';
 import { chatProblems } from '../worker/chat.mjs';
 import { vocabularyOf } from '../worker/brain.mjs';
+import { shopForBuild } from './shop.mjs';
+import { audienceOf } from '../worker/shop-rules.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
@@ -300,6 +303,8 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
 export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
+  // The shop first (shop/SHOP.md): a shop.json that breaks the kit's rules stops the build before anything is built.
+  const shop = shopForBuild(root, { log });
   const dist = join(root, 'site', 'dist');
   const games = listGames(root).filter((g) => !only || g.id === only);
   if (only && !games.length) throw new Error(`no game "${only}" in games/`);
@@ -402,6 +407,10 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
         : studio.homie?.directory === false || studio.homie?.directory === null ? null : String(studio.homie?.directory ?? 'https://homie.rocks'),
       // A copy of the public template that nobody has named yet shows the name typed in Cloudflare's form.
       ...(studio.template === true ? { template: true } : {}),
+      // studio.json "audience": "kids" (a studio made for children: no shop at all) or "teens"; and "referrals": false
+      // (this studio takes no referral statements as a referrer).
+      ...(audienceOf(studio) !== 'general' ? { audience: audienceOf(studio) } : {}),
+      ...(studio.referrals === false ? { referrals: false } : {}),
       build: buildInfo(root),
     },
     games: rows,
@@ -410,6 +419,8 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     // Summaries only; each post's HTML is in _site/posts.json.
     posts: posts.map(({ html, record, ...p }) => p),
     site: { pages: site.pages, partials: site.partials, ...(site.css ? { css: site.css } : {}) },
+    // shop.json, checked (nothing secret is ever in it): the Worker sells from this and checks it again.
+    ...(shop ? { shop } : {}),
   };
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
   return {

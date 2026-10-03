@@ -269,6 +269,12 @@ export interface Peer {
   watch?: boolean;
   /** Revision 6: an AI in a seat (always named "<label> · AI"). */
   agent?: AgentFacts;
+  /**
+   * A badge the player's account owns on this studio (a supporter's, from the shop: @homie-rocks/studio 0.24.0), as
+   * a word to show beside their name. Only the studio's Worker sets it, from what the account bought; a hello cannot.
+   * Never on a kids server, never for an AI.
+   */
+  badge?: string;
 }
 
 /** One seat's entry in the body-control table: [seat, rs, own (1|0), ack]. */

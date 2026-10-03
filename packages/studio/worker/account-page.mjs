@@ -160,6 +160,10 @@ export function accountPage(cat, { origin = '', next = '/account/', owner = null
     <label for="acct-email">Email</label><input id="acct-email" data-email type="email" autocomplete="email">
     <div class="row"><button class="ghost" type="button" data-email-save>Send a confirmation</button><button class="ghost" type="button" data-email-remove hidden>Remove it</button></div>
   </div>` : ''}
+  <div class="card shop-card" data-shop-card hidden>
+    <h2>Your purchases</h2>
+    <div data-shop-body></div>
+  </div>
   <div class="card" data-servers-card hidden>
     <h2>Your servers</h2>
     <p>The servers you belong to in this studio's games. Your home server is where Play takes you.</p>
@@ -193,8 +197,9 @@ ${back}
 </details>
 </section>
 <script type="application/json" id="account-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
-<script src="/_homie/account.js" defer></script>`;
-  return layout(cat, { title: `Your account · ${studio}`, description: `Your player account on ${studio}.`, origin, path: '/account/', page: 'account', head: `<style>${ACCOUNT_CSS}</style><meta name="robots" content="noindex">`, main });
+<script src="/_homie/account.js" defer></script>
+<script src="/_homie/shop.js" defer></script>`;
+  return layout(cat, { title: `Your account · ${studio}`, description: `Your player account on ${studio}.`, origin, path: '/account/', page: 'account', head: `<style>${ACCOUNT_CSS}.shop-card .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--hot,#ffcf5a);color:var(--hot-ink,#0b0b10);font:800 12px/1.3 ui-sans-serif,system-ui,sans-serif;margin-right:6px}.shop-card ul{margin:8px 0 0;padding-left:18px}.shop-card li{margin:4px 0}</style><meta name="robots" content="noindex">`, main });
 }
 
 /** /_homie/account.js */
@@ -343,6 +348,13 @@ export const ACCOUNT_JS = `${PASSKEY_JS}
     var typed = prompt('This deletes your account and everything it kept on ' + boot.studio + ', in every game. It cannot be undone. Type DELETE to go ahead.');
     if (!typed || typed.trim().toUpperCase() !== 'DELETE') { say('Nothing was deleted.'); return; }
     P.api('POST', '/api/player/delete', { confirm: 'delete' }).then(function (r) {
+      if (!r.ok && r.error === 'purchases') {
+        var again = prompt(r.message + ' Type DELETE again to give them up and delete the account.');
+        if (!again || again.trim().toUpperCase() !== 'DELETE') return { ok: false, message: 'Nothing was deleted.' };
+        return P.api('POST', '/api/player/delete', { confirm: 'delete', purchases: 'forfeit' });
+      }
+      return r;
+    }).then(function (r) {
       if (!r.ok) throw new Error(r.message);
       me = null; P.remember(null); render();
       say('Your account and everything it kept are deleted. You can also remove the passkey from your device\\'s passwords.', 'good');

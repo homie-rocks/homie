@@ -349,7 +349,9 @@ A socket that is kicked for silence is closed with code 4000, and the helper rec
 Record types:
 
 ```ts
-Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true, watch?: true, agent?: AgentFacts }
+Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true, watch?: true, agent?: AgentFacts, badge?: string }
+              (badge: a word the studio's Worker verified from what the player's account owns, such as a supporter's
+              "Supporter"; a hello can never set it; never on a kids server, never for an AI. @homie-rocks/studio 0.24.0)
 RoundInfo   = { n, phase: 'live'|'over', startedAt, endsAt, results?: RoundResult[] }   // server ms
 RoundResult = { slot, seat: number|null, name, score, bot, place, agent?: true }
 Slot        = { slot, seat: number|null, name, bot, agent?: { seat: number|null, role, hands } }

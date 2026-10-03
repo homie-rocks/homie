@@ -54,6 +54,10 @@
  *   /<game>/api/chat/report    a player reports one chat line (POST, this site's pages): the room's own copy of it is kept
  *                              for the owner, 30 days (worker/chat-store.mjs); room chat itself rides the sockets above
  *                              (NETPLAY.md section 19) and is never stored
+ *   /shop/, /api/shop/...      the studio's shop (worker/shop.mjs, shop/SHOP.md): its items in real money, the studio's
+ *                              OWN Stripe Checkout, the signed webhook, what a player owns (/api/player/owns), refunds;
+ *                              closed until the owner's restricted key is in; never on a kids server or a television
+ *   /api/referrals/statement   another studio's signed referral statement to this one (worker/referrals.mjs)
  *
  * A page in the studio's site/pages wins over the generated one at the same address. Every HTML answer is
  * `no-transform` (an edge in front of a custom domain injects nothing) and is never framed by another site.
@@ -104,6 +108,8 @@ import {
 // every device, and the owner's own account (`homie-studio players owner`) counts as the owner.
 usePlayers(playerAccounts);
 import { STUDIO_VERSION_TAG } from './version.mjs';
+import { roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs';
+import { arrivalCookie, manifestReferrals } from './referrals.mjs';
 import { licenseOf, remixAllowed, remixRow } from './license.mjs';
 
 export { SEAT_MAX } from './seats.mjs';
@@ -461,6 +467,9 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     ...(meta?.movement ? { movement: meta.movement } : {}),
     // game.json "saves": the play shell around this frame answers @homie-rocks/studio/saves (saves/SAVES.md).
     ...(meta?.saves && want === 'play' ? { saves: true } : {}),
+    // The studio sells something in this game (shop/SHOP.md): the play shell answers @homie-rocks/studio/shop. A
+    // watcher has no shop; the shell itself says "kids" on a kids server and shows only a code on a television.
+    ...(!agent && !watching && shellShop(cat, game) ? { shop: true } : {}),
   };
   let html = await res.text();
   const head = `<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
@@ -539,7 +548,18 @@ function finish(res, path) {
 
 export default {
   async fetch(request, env, ctx) {
-    return finish(await route(request, env, ctx), new URL(request.url).pathname);
+    const url = new URL(request.url);
+    const res = finish(await route(request, env, ctx), url.pathname);
+    // A referral's arrival (worker/referrals.mjs): only a person's page load with ?via= of another site, on a studio
+    // that pays referrals. The page is answered first; a cookie is added to it only then.
+    if (url.searchParams.has('via') && res && res.status === 200 && /text\/html/i.test(res.headers.get('content-type') ?? '')) {
+      try {
+        const cat = await catalogue(env, url.origin);
+        const cookie = await arrivalCookie(request, env, url, shopOf(cat));
+        if (cookie) { const out = new Response(res.body, res); out.headers.append('set-cookie', cookie); return out; }
+      } catch { /* an arrival is never worth a failed page */ }
+    }
+    return res;
   },
 };
 
@@ -562,6 +582,11 @@ async function route(request, env, ctx) {
   }
   if (path.startsWith('/_studio/')) return (await officeRoutes(request, env, url, { catalogueOf: getAll })) ?? ownerRoutes(request, env, url, { catalogueOf: getAll });
   if (path === '/__homie' || path.startsWith('/__homie/')) return notAHomie(request);
+  // The shop (0.24.0) before player accounts: /api/player/owns is the shop's.
+  {
+    const shopped = await shopRoutes(request, env, ctx, url, { catalogueOf: getAll });
+    if (shopped) return shopped;
+  }
   if (path.startsWith('/api/player/') || path === '/account' || path === '/account/' || path === '/_homie/account.js') return playerRoutes(request, env, ctx, url, { catalogueOf: getCat });
   if (path === '/_homie/site.js') return new Response(SITE_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': url.searchParams.get('v') === STUDIO_VERSION_TAG ? 'public, max-age=31536000, immutable' : 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   if (path === '/api/stats/beat' && request.method === 'POST') return mediaBeat(request, env, ctx, url);
@@ -622,6 +647,10 @@ async function route(request, env, ctx) {
       ...(shareRooms ? { rooms: `${url.origin}/api/rooms` } : {}),
       // Shared only when studio.json says `stats.share`: two numbers for the whole studio, for the hub.
       ...(played ? { played } : {}),
+      // The shop (0.24.0): whether it sells and its till, never a key or a sale; and referrals: this studio takes
+      // signed statements as a referrer, with the public half of its statement key and, if it sells, its terms.
+      ...(shopOf(cat)?.open ? { shop: { open: true, till: shopOf(cat).till, currency: shopOf(cat).currency, page: `${url.origin}/shop/` } } : {}),
+      ...(await manifestReferrals(env, url.origin, shopOf(cat), cat.studio).then((r) => (r ? { referrals: r } : {})).catch(() => ({}))),
     }, 200, { 'access-control-allow-origin': '*' });
   }
   if (path === '/api/games') {
@@ -885,11 +914,15 @@ async function route(request, env, ctx) {
         const local = isLocalOrigin(url.origin);
         let qr = null;
         if (!local) try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
-        return playPage(cat, meta, { screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server });
+        // The shop on a television is a code to buy on a phone (the TV never sells; never on a kids server).
+        const sh = shellShop(cat, game, { kids: pol.kids });
+        let shopQr = null;
+        if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
+        return playPage(cat, meta, { screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      return playPage(cat, meta, { ticket, owner: d.owner, launch, server, ...(await chatWho(env, game, srv, d.acct)) });
+      return playPage(cat, meta, { ticket, owner: d.owner, launch, server, ...(await chatWho(env, game, srv, d.acct)), shop: shellShop(cat, game, { kids: pol.kids }) });
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
@@ -1005,8 +1038,12 @@ async function route(request, env, ctx) {
       const origin = request.headers.get('origin');
       const hub = sub === '__watch' && Boolean(origin) && origin !== 'null' && origin !== url.origin;
       const lean = { ...chat, emoji: chat.emoji.filter((e) => !REACTIONS.some((r) => r.k === e.k)) };
+      // A supporter's badge (the shop, 0.24.0): what the player's account owns, looked up here, so a hello can never claim
+      // one; none on a kids server, none for an AI or a watcher.
+      const pid = !ag && !w && sub === '__net' ? parts.find((x) => x.startsWith('p-'))?.slice(2) : null;
+      const badge = pid ? await roomBadge(env, cat, pid, { kids: pol.kids }) : null;
       const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}`;
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}`;
       return stub.fetch(new Request(target, request));
     }
     // The same knock, relative to the game's own page: the same answer (see notAHomie).
@@ -1320,6 +1357,8 @@ export class Table {
       watch: url.searchParams.get('w') === '1',
       // An AI with a pass the Worker verified (section 17): its pass, role, hands and name. Only the Worker sets it.
       ...(agent && typeof agent === 'object' && url.pathname === '/__net' ? { agent } : {}),
+      // A badge the player's account owns (the shop): the Worker looked it up; a hello cannot set one.
+      ...(url.pathname === '/__net' && /^[\p{L}\p{N} .'&+-]{1,16}$/u.test(url.searchParams.get('bd') ?? '') ? { badge: url.searchParams.get('bd') } : {}),
       watchPolicy: WATCH_POLICIES.includes(url.searchParams.get('wp')) ? url.searchParams.get('wp') : 'follow',
       // House QA and `homie-studio check` mark their browsers; their rooms, rounds and peaks are not the studio's numbers.
       qa: isQa(request),

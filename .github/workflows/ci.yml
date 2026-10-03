@@ -37,6 +37,16 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - name: stripe-mock (the shop's tests send their Checkout Sessions and refunds to Stripe's own open-source API mock)
+        # Pinned and checked by SHA-256. It is stateless, checks every parameter against Stripe's API description,
+        # and never reaches Stripe: no key, no account, no money.
+        run: |
+          curl -fsSL -o stripe-mock.tgz https://github.com/stripe/stripe-mock/releases/download/v0.206.0/stripe-mock_0.206.0_linux_amd64.tar.gz
+          echo "b6fe5a8f02aaeb5a5001710b304fc93a222f1983a9a6050a38f55cfdc48b8d19  stripe-mock.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/stripe-mock" && tar xzf stripe-mock.tgz -C "$RUNNER_TEMP/stripe-mock" && rm stripe-mock.tgz
+          "$RUNNER_TEMP/stripe-mock/stripe-mock" -http-port 12111 -https-port 12112 > "$RUNNER_TEMP/stripe-mock.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fs -u sk_test_ci: http://127.0.0.1:12111/v1/checkout/sessions?limit=1 > /dev/null && break; sleep 1; done
+          echo "STRIPE_MOCK_URL=http://127.0.0.1:12111" >> "$GITHUB_ENV"
       - name: Build every package and run every package's tests
         run: npm test
       - name: What a release would publish (and the rules it checks)
