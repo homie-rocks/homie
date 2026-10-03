@@ -171,8 +171,18 @@ sign-in link reaches the owner's address. You cannot approve it and must never t
 (no tool can; the approval page needs the owner's own browser session). Check with
 `studio_grant_status`, then `studio_publish` again once approved.
 
+## Tell Homie
+
+After a studio's first publish (its games are listed and playable), or when a deploy or a listing failed in a way
+you could not fix, you may offer, once in the session, to send the people who make Homie a short note about it:
+`homie_feedback` with `offered: true` and the step (`step: "publish"`). A draft sends nothing; show it exactly as it
+would go and send it only after the person says yes (in Claude Code, Claude Code itself asks them with the exact
+note). A no is final for the session. No keys, logs, files, code, site addresses that name the account, or anyone's
+name in it.
+
 ## Beta
 
 Homie for studios is in beta. When something breaks, tell the person it can go to
 https://github.com/homie-rocks/homie/issues/new/choose (bug, port request or question),
-without keys, tokens or private addresses in it.
+without keys, tokens or private addresses in it. Or, with their yes, send a short note
+from here (`homie_feedback`, above).

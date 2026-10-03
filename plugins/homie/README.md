@@ -13,6 +13,8 @@ on the free plan.
 - **Homie's hooks for Codex** (`hooks/codex.json`, `hooks/codex.mjs`): the mod's holds, refusals and
   secret redaction as Codex lifecycle hooks, decided by the same module (`hooks/lib/holds.mjs`). See
   "Homie's holds in Codex" below for what Codex can and cannot do.
+- **Tell Homie** (the Homie MCP's `homie_feedback`, the mod's `/feedback`): a short note to the people who make
+  Homie, which the person sees word for word and sends only with their yes. See "Tell Homie" below.
 - **The providers' own tools** (`providers.json`): see below.
 - **Manifests:** `.claude-plugin/plugin.json` (Claude Code), `.codex-plugin/plugin.json`
   (Codex), and `plugin.json` (the agent-plugins standard). They say the same thing, and
@@ -113,7 +115,16 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   `/cast [game]` (the characters: skeleton, bones, source, clips, and what skinning a full room costs on a
   phone), `/clips [game]` (each character's clips against the verbs the game needs, and the command that adds
   what is missing), `/lineup [game]` (the last lineup's flags and where its pictures are; it never renders one) and
-  `/rights [game]` (licence problems with their fixes, and the game's `RIGHTS.md`).
+  `/rights [game]` (licence problems with their fixes, and the game's `RIGHTS.md`), and `/feedback [your words |
+  send | cancel]` (Tell Homie, below).
+- **Tell Homie** (`/feedback`, or **Tell Homie** in the Studio pane's header, `t`): a pane with a note to the
+  people who make Homie, exactly as it would go: its kind, the words (your own, after keys, paths, emails and
+  code are taken out), and what goes with it (the step, the studio's and the plugin's versions, the app).
+  Change the kind, the words or add a reply address, then **Send** (`s`) or **Don't send** (`n`). `/feedback`
+  alone opens it to write one, or **Ask Claude to draft it from this session** puts that ask in the prompt box
+  for you to send. Where no pane draws, `/feedback <words>` prints the note and `/feedback send` (typed by you;
+  never by Claude) sends it. It posts only to `homie.rocks/api/feedback/tell` (or the studio's own directory),
+  and only on your Send.
 - **Guards:** a call is held in Claude Code's own question dialog (Proceed or Cancel), with what
   would change drawn above it and in full in the Hold pane:
   - an edit (Edit, Write, MultiEdit, NotebookEdit) to a file `studio.json` `"protect"` lists, with
@@ -147,6 +158,11 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     downloads a model by itself. `ollama run` of a Clef model is held only when Ollama's own list on
     this computer (`/api/tags`) does not have it yet. Other models and Ollama's other commands are not
     held.
+  - a note to Homie from Claude (the Homie MCP's `homie_feedback` with `action: "send"`, local or remote): asked
+    with **Send** / **Don't send** and the note's exact words (all of them in the Hold pane). A draft is not
+    held (it sends nothing); the mod fills in the studio's and the plugin's versions and the app, and tells
+    Claude that Claude Code asks. Once you have sent or declined a note in a session, another offer from Claude is
+    refused (you can still ask for one). This hold has no switch.
   Cancel, a dismissed question, and a run with nobody to ask (`claude -p`) all refuse the call,
   with a reason Claude can act on. The guards hold even in bypass-permissions mode. What each guard
   holds or refuses, and its words, are decided in `hooks/lib/holds.mjs`, which Homie's hooks for Codex
@@ -177,7 +193,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   the Studio pane (Rooms, "Links for you"); Claude reads that it is there.
 - **Homie's results, drawn:** the setup status as a checklist with what to do now, a check's and
   a port check's rows, a playtest's verdicts with the weakest first, a deploy with its live link
-  and each game's Play, and the Homie MCP's cards; each Homie command's row says what it is in
+  and each game's Play, a note to Homie in its frame, and the Homie MCP's cards; each Homie command's row says what it is in
   words, with the command beside it.
 
 ### Studio settings it reads
@@ -227,13 +243,15 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   command.run{command=rooms}, command.run{command=play}, command.run{command=watch}, command.run{command=codex},
   command.run{command=deploy-status}, command.run{command=perf-numbers}, command.run{command=parts},
   command.run{command=arcade}, command.run{command=look}, command.run{command=lock}, command.run{command=assets},
-  command.run{command=cast}, command.run{command=clips}, command.run{command=lineup}, command.run{command=rights}, tool.call, tool.call{tool=Edit|Write|MultiEdit|NotebookEdit}, tool.call{tool=Bash},
-  tool.call{tool=/"^mcp__.+__studio_deploy$"/}, tool.call{tool=/"^mcp__.*(?:fal|eleven|tripo).*__"/i},
+  command.run{command=cast}, command.run{command=clips}, command.run{command=lineup}, command.run{command=rights},
+  command.run{command=feedback}, tool.call, tool.call{tool=Edit|Write|MultiEdit|NotebookEdit}, tool.call{tool=Bash},
+  tool.call{tool=/"^mcp__.+__studio_deploy$"/}, tool.call{tool=/"^mcp__.*homie.*__homie_feedback$"/},
+  tool.call{tool=/"^mcp__.*stripe.*__stripe_api_write$"/i}, tool.call{tool=/"^mcp__.*(?:fal|eleven|tripo).*__"/i},
   tool.call{tool=/"^mcp__.*cloudflare.*__"/i}, turn.complete,
   ui.render{component=AbovePrompt}, ui.render{component=Pane}, ui.render{component=AskUserQuestion},
   ui.render{component=ToolUse}, ui.render{component=ToolResult}, ui.render{component=ToolGroup}, ui.message, ui.close
 ❯ ./homie.mjs calls: $.agent.list, $.clock.every, $.command.register, $.fs.exists, $.fs.list, $.fs.read, $.fs.stat,
-  $.http.fetch, $.process.run, $.process.spawn, $.session.cwd, $.session.surfaces, $.store.get, $.store.set,
+  $.http.fetch, $.process.run, $.process.spawn, $.prompt.fill, $.session.cwd, $.session.surfaces, $.store.get, $.store.set,
   $.ui.ask, $.ui.blit, $.ui.close, $.ui.invalidate, $.ui.log, $.ui.open, $.ui.panes, $.ui.resolve, $.ui.toast
 ❯ ./homie.mjs surface modules: hooks/lib/arcade-pad.mjs
 ```
@@ -242,15 +260,16 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 
 - `session.start` / `session.end`: find the studio, register the commands, start a 2-second
   timer that rereads the studio's files; end any game bridge.
-- `command.run` (its seventeen commands only).
+- `command.run` (its eighteen commands only).
 - `tool.call` (every tool): after the tool ran, take secrets out of its result; note which Homie
   command ran (for drawing it) and which agent ran what (for the parts). It never changes a tool's
   input.
 - `tool.call` on Edit, Write, MultiEdit, NotebookEdit (protected files, locked art decisions); on
   Bash (big files into git, deploys and their licences, Cloudflare changes, paid calls, Clef model
   downloads); on
-  `studio_deploy` (a deploy and its licences); on fal, ElevenLabs and Tripo MCP tools (paid calls);
-  on Cloudflare MCP tools (account changes): the guards. They hold or
+  `studio_deploy` (a deploy and its licences); on the Homie MCP's `homie_feedback` (a note's send waits for your
+  Send; a draft gets the studio's facts); on Stripe's `stripe_api_write` (a webhook secret); on fal, ElevenLabs and
+  Tripo MCP tools (paid calls); on Cloudflare MCP tools (account changes): the guards. They hold or
   refuse; they never approve. The mod has no `tool.check` hook, so it cannot approve a call a
   permission rule would ask about or deny.
 - `turn.complete`: a part (a subagent) ended; reread the build after a turn.
@@ -263,7 +282,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 | Call | What for | What it reaches |
 | --- | --- | --- |
 | `$.fs.exists`, `$.fs.list`, `$.fs.read`, `$.fs.stat` | The studio's own files | `studio.json`, `.studio/` (the build feed, `local.json`, the Game Lab's `server.json` and last checks, art direction's `art/<game>/latest.json`), `games/*/game.json`, `CODEX.md`, `codex/decisions.json` (an edit to it), `assets/manifest.json` (before a deploy) and whether `assets/RIGHTS.md` exists, media jobs' `budget.json`, `.perf/`, `.wrangler/homie-dev.json`, the file a held edit names, and the size of a file a `git add` or `git commit` would stage. Never a key file, the keychain or the environment. It writes no file (no `$.fs.write`) |
-| `$.http.fetch` | Live rooms, games and the arcade's list; whether the Game Lab answers; the game bridge; whether Ollama already has a Clef model, before a download is held | Only the studio's own live site, this computer's dev site and Game Lab (`127.0.0.1`), Ollama's model list on this computer (`127.0.0.1:11434/api/tags`, or a loopback `OLLAMA_HOST` the command sets), `*.homie.rocks`, and the bridge's private Unix socket. Any other address is refused in the code |
+| `$.http.fetch` | Live rooms, games and the arcade's list; whether the Game Lab answers; the game bridge; whether Ollama already has a Clef model, before a download is held; a note you pressed Send on | Only the studio's own live site, this computer's dev site and Game Lab (`127.0.0.1`), Ollama's model list on this computer (`127.0.0.1:11434/api/tags`, or a loopback `OLLAMA_HOST` the command sets), `*.homie.rocks` (a note: one POST to `homie.rocks/api/feedback/tell`, only on your Send), and the bridge's private Unix socket. Any other address is refused in the code |
 | `$.process.run` | The back office, stats and codex links; Lock and Unlock (and Unlock's blast radius); deploy summaries; what a commit would stage; prices | Only `node` with the studio's own pinned `homie-studio` (`--json`), `git -C <studio or a folder in it>` (read-only: `rev-parse`, `log`, `status`, `diff`, `diff --cached`), and a media skill's own `--dry-run` (free; it asks the provider's price list). No shell |
 | `$.process.spawn` | The game bridge (`mod/bridge.mjs`), only while the arcade or a live Watch is open | One headless Chrome on this computer (below) |
 | `$.store.get`, `$.store.set` | The commit of the last deploy, per studio | Claude Code's own store for this plugin, nothing else |
@@ -271,8 +290,9 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 | `$.session.cwd`, `$.session.surfaces` | Which studio; whether anything draws | |
 | `$.ui.*` | Its band, panes, toasts, dim transcript lines, holds | |
 | `$.clock.every`, `$.command.register` | Its timer and commands | |
+| `$.prompt.fill` | Tell Homie's **Ask Claude to draft it**: the ask goes into the prompt box | Your prompt box only; you send it (or not) with Enter |
 
-It never calls a model (`$.model`), submits a prompt, messages another session, reads settings or
+It never calls a model (`$.model`), submits a prompt (Tell Homie's ask only fills the box), messages another session, reads settings or
 environment variables (`$.settings`, `$.env`), or approves a permission. A test
 (`test/mod-lib.test.mjs`) fails if the hooks module calls anything this README does not name.
 
@@ -357,6 +377,7 @@ Codex's own approval prompts, sandbox and rules still apply on top.
 | A Clef model download (Ollama) | Held, with its size | Held, with its size |
 | A file over 5 MB under `games/` into git | Refused | Refused |
 | A Stripe MCP write that would hand back a webhook's signing secret | Refused | Refused |
+| A note to Homie (`homie_feedback` send) | Held with the note's exact words: **Send** / **Don't send**; a draft is not held | Held with the note's exact words; `proceed <code>` sends exactly that note, once |
 | Secrets in a tool's result | Taken out before Claude reads it. The transcript keeps the redacted copy. A one-time owner link goes to the Studio pane | Taken out before the model reads it. Codex's own screen and its session file keep the raw output, and a one-time owner link stays there for the person |
 | Asking | Claude Code's question dialog (Proceed / Cancel) and the Hold pane | The person's own `proceed <code>` / `cancel <code>` |
 | Nobody to ask (`claude -p`, `codex exec`) | Refused | Refused, and `codex exec resume` can answer it |
@@ -395,5 +416,34 @@ sign-in:
 `test/codex-hooks.test.mjs` runs the hook script on a real studio folder with the JSON Codex sends, and
 checks every answer against the fields Codex accepts. Codex refuses an answer with a field it does not
 know, and then runs the call.
+
+## Tell Homie
+
+The people who make Homie read every note, and someone who is stuck rarely writes to a forum. So when a person is
+stuck, confused or frustrated, after an error Claude could not fix, or at the end of a first studio setup or first
+publish, Claude may offer, once in a session, to send a short note about it. It never sends one without their yes:
+
+- **The tool** is `homie_feedback`, the same on the Homie MCP at homie.rocks (claude.ai, and this plugin in Claude
+  Code and Codex) and on the local Homie MCP (`homie-studio mcp`, Homie for Claude Desktop). `action: "draft"` (the
+  default) sends nothing: it answers with the note exactly as it would go, a card where the app shows cards (Send,
+  Edit, Don't send), and the same text for the chat. `action: "send"` sends only that draft (its `draft` id, with the
+  same fields; any change is refused), and `action: "decline"` records a no.
+- **The yes** is the person's own: the card's Send; in Claude Code, Send in Claude Code's own question (the mod
+  holds every send); in Codex, `proceed <code>` (Homie's hooks hold every send); elsewhere, their yes in the chat.
+  A no is final for the session. The skills (`studio-setup`, `publish`) and the studio's `AGENTS.md` say when to
+  offer, and that help never depends on it.
+- **What a note is:** its kind (stuck, confusing, idea, praise, bug), the words, the step or skill it is about, the
+  studio's and the plugin's versions, the app, whether Claude offered it or the person asked, how they said yes,
+  and a reply address only if they typed one. Before anyone sees it, the mod's own redaction (keys, tokens,
+  private keys, owner links) and a note's own (code, home folders, email addresses, a workers.dev address's account
+  name, network addresses, long opaque strings) take things out, and the note says what was taken. homie.rocks
+  takes them out again when it arrives. No file, log, screenshot or studio content is ever attached.
+- **Where it goes:** homie.rocks's private feedback store, with the website's Feedback & help reports, read only by
+  the people who make Homie. A studio.json can name only Homie's own directory (or this computer, for tests), so a
+  studio borrowed from somebody else cannot send notes anywhere else. [homie.rocks/privacy](https://homie.rocks/privacy/)
+  says what is kept.
+- **Once, and no nagging:** an offer that was sent or declined ends offers for the session; an offer nobody
+  answered may be reworded three times and no more. The person asking to tell Homie something is never refused.
+  "Offered" and how the yes was given are the tool's own word, kept as a label for reading the notes.
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

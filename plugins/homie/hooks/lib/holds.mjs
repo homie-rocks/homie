@@ -21,6 +21,7 @@ import { decisionsFileOf, GAME_ID, licenceIssues, lockedChanges, publicSource } 
 import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, modelPullOf, paidMcpOf, paidOf, protectedBy, stripeSecretWriteOf } from './commands.mjs';
 import { applyEdit, unifiedDiff } from './diff.mjs';
 import { ago, summarize } from './feed.mjs';
+import { KIND_LABEL, cleanNote, withLine } from './feedback.mjs';
 
 /** Which holds are on: the mod's settings of the same names (Codex: all on unless HOMIE_GUARD_* turns one off). */
 export const GUARDS = Object.freeze({ guardFiles: true, guardDeploys: true, guardSpend: true });
@@ -613,7 +614,39 @@ export const MCP_TOOLS = Object.freeze({
   stripe: /^mcp__.*stripe.*__stripe_api_write$/i,
   paid: /^mcp__.*(?:fal|eleven|tripo).*__/i,
   cloudflare: /^mcp__.*cloudflare.*__/i,
+  feedback: /^mcp__.*homie.*__homie_feedback$/,
 });
+
+/**
+ * Tell Homie (lib/feedback.mjs): a homie_feedback send leaves only on the person's own yes, given with the note's exact
+ * words in front of them: Claude Code's question (Send / Don't send), Codex's "proceed <code>". The words are the
+ * call's own, cleaned as the server will clean them, or, for a send that names only its draft, the draft the app saw
+ * (`seen`). A draft or a decline sends nothing and is not held. No switch turns this off.
+ */
+export function feedbackDecision(tool, input, { seen = null } = {}) {
+  if (!MCP_TOOLS.feedback.test(String(tool ?? '')) || input?.action !== 'send') return null;
+  const c = input.text
+    ? cleanNote({ kind: input.kind, text: input.text, step: input.step, email: input.email, offered: input.offered === true, studioVersion: input.studioVersion, pluginVersion: input.pluginVersion, app: input.app })
+    : seen?.note ? { ok: true, note: seen.note } : null;
+  if (!c?.ok) return { deny: c ? `Not sent: ${c.why}.` : 'Not sent: send the note with its kind and text (as drafted), so the person sees exactly what would go.' };
+  // The same words as the draft the app saw: its own facts (the server's versions and app) are what goes with them.
+  if (seen?.note && seen.note.text === c.note.text && seen.note.kind === c.note.kind) c.note = seen.note;
+  const words = c.note.text.split('\n');
+  return {
+    hold: {
+      kind: 'feedback',
+      question: 'Send this note to Homie?',
+      title: 'Tell Homie: send this note?',
+      options: ['Send', 'Don\u2019t send'],
+      yes: 'Send',
+      lines: [{ k: 'Kind', v: KIND_LABEL[c.note.kind] ?? c.note.kind }, ...words.slice(0, 6).map((l, i) => ({ k: i ? ' ' : 'Note', v: l || ' ' }))],
+      more: 'the whole note, and what goes with it, in the Hold pane',
+      detail: { lines: [{ k: 'Kind', v: KIND_LABEL[c.note.kind] ?? c.note.kind }, ...words.map((l) => `  ${l}`), { k: 'With it', v: withLine(c.note) }, 'Only the person\'s yes sends it: privately, to the people who make Homie.'] },
+      no: 'The person chose not to send it. Nothing was sent. Tell them so in a few words, and do not offer to send a note again in this session.',
+      nobody: 'Nothing is sent to Homie without the person\'s own yes, and nobody could be asked here. Nothing was sent.',
+    },
+  };
+}
 
 /** The Homie MCP's studio_deploy: a production deploy of the session's studio. */
 export async function mcpDeployDecision(io, ctx, known = {}) {
@@ -640,9 +673,9 @@ export async function cloudflareMcpDecision(io, ctx, tool, input) {
 }
 
 /**
- * An MCP tool call, checked as the mod checks one: the Homie MCP's studio_deploy, a write through Stripe's MCP that
- * would hand back a webhook's signing secret (refused), a paid call at fal, ElevenLabs or Tripo, and a change through a
- * Cloudflare MCP server inside a studio. { decision, deploy: { root } | null }; the first that decides wins.
+ * An MCP tool call, checked as the mod checks one: the Homie MCP's studio_deploy, a note to Homie (homie_feedback send,
+ * held for the person's own yes), a write through Stripe's MCP that would hand back a webhook's signing secret
+ * (refused), a paid call at fal, ElevenLabs or Tripo, and a change through a Cloudflare MCP server inside a studio. { decision, deploy: { root } | null }; the first that decides wins.
  */
 export async function mcpDecision(io, ctx, tool, input, known = {}) {
   const t = String(tool ?? '');
@@ -651,6 +684,7 @@ export async function mcpDecision(io, ctx, tool, input, known = {}) {
     return { decision: d, deploy: d && ctx.root ? { root: ctx.root } : null };
   }
   const checks = [
+    [MCP_TOOLS.feedback, () => feedbackDecision(t, input)],
     [MCP_TOOLS.stripe, () => stripeDecision(t, input)],
     [MCP_TOOLS.paid, () => paidMcpDecision(io, ctx, t, input)],
     [MCP_TOOLS.cloudflare, () => cloudflareMcpDecision(io, ctx, t, input)],

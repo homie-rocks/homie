@@ -49,6 +49,14 @@ feed; MCP Apps cards (setup, build progress, studio, codex) are served as `ui://
 answers in plain text. Homie for Claude Desktop (`desktop/` in this repository) is this server as a Desktop
 Extension: the plain Claude app gets it with one install, and no terminal.
 
+**Tell Homie** (0.28.0): `homie_feedback` drafts a short note to the people who make Homie (stuck, confusing, idea,
+praise or bug) from what happened, and sends it only after the person has seen it word for word and said yes: its
+card (`ui://homie-studio/feedback`) has Send, Edit and Don't send, and a send must name the draft the person saw,
+with the same words. Keys, home folders, email addresses, code and a workers.dev account name are taken out before
+it is shown (`lib/feedback.mjs`, with the Homie mod's own redaction). Claude offers one at most once a session, and a
+no is final for it. It goes to homie.rocks (`/api/feedback/tell`): a studio.json can name only Homie's own directory or
+this computer, so a borrowed studio cannot send notes elsewhere.
+
 ## From a phone: a one-line hand-off
 
 The Claude app on a phone hands a build to a Claude Code cloud session with one line, `Continue building <Studio>:
@@ -785,7 +793,8 @@ pinned a tarball at `https://homie.rocks/npm/homie-studio-<version>.tgz`, which 
 ## Beta
 
 This is a beta. Bugs, port requests and questions go to
-<https://github.com/homie-rocks/homie/issues/new/choose>.
+<https://github.com/homie-rocks/homie/issues/new/choose>, or, from inside Claude or Codex, to the people who make
+Homie as a short note you see and send yourself (`homie_feedback`, above).
 
 ## License
 

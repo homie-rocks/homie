@@ -273,12 +273,37 @@ test('through stdin and stdout as Codex runs it; a check that fails refuses the 
   } finally { s.done(); }
 });
 
+test('Tell Homie in Codex: a note is sent only after the person\'s own "proceed <code>", with its words in the hold; a draft is never held', async () => {
+  const s = studio();
+  try {
+    const note = { kind: 'confusing', text: 'The deploy asked for a workers.dev subdomain and I did not know what that was.', step: 'studio-setup: put it online', offered: true, app: 'codex' };
+    const tool = 'mcp__homie__homie_feedback';
+    assert.equal(await pre(payload(s, tool, note), { dir: s.data }), null, 'a draft sends nothing, so nothing holds it');
+    assert.equal(await pre(payload(s, tool, { action: 'decline', draft: 'fd_0123456789abcdef01234567' }), { dir: s.data }), null);
+    const p = payload(s, tool, { ...note, action: 'send', draft: 'fd_0123456789abcdef01234567' });
+    const held = await pre(p, { dir: s.data });
+    codexTakes('PreToolUse', held);
+    const reason = held.hookSpecificOutput.permissionDecisionReason;
+    assert.match(reason, /Held by Homie for the person's Proceed \(hold [A-Z0-9]{4}\): Send this note to Homie\?/);
+    assert.ok(reason.includes(note.text), 'the hold carries the note\'s exact words');
+    assert.match(reason, /With it: the step \(studio-setup: put it online\) · Codex · that Claude offered it\. No reply address\./);
+    const code = codeOf(held);
+    await prompt({ session_id: 'session-1', prompt: `proceed ${code}` }, { dir: s.data });
+    // Other words are not the note the person said yes to.
+    assert.equal((await pre(payload(s, tool, { ...note, text: `${note.text} And more.`, action: 'send', draft: 'fd_0123456789abcdef01234567' }), { dir: s.data })).hookSpecificOutput.permissionDecision, 'deny');
+    assert.equal(await pre(p, { dir: s.data }), null, 'the exact note goes, once');
+    // A note with nothing to show is refused, never sent blind.
+    const blind = await pre(payload(s, tool, { action: 'send', draft: 'fd_0123456789abcdef01234567' }), { dir: s.data });
+    assert.match(blind.hookSpecificOutput.permissionDecisionReason, /Refused by Homie: Not sent: send the note with its kind and text/);
+  } finally { s.done(); }
+});
+
 test('one module decides for both apps: the mod\'s tool filters are lib/holds.mjs\'s, and the mod asks lib/holds.mjs', async () => {
   const src = readFileSync(join(PLUGIN, 'hooks', 'homie.mjs'), 'utf8');
   for (const [name, re] of Object.entries(MCP_TOOLS)) {
     assert.ok(src.includes(`on('tool.call', { tool: ${re.toString()} }`), `the mod's ${name} filter is ${re}`);
   }
-  for (const fn of ['editDecision', 'shellDecision', 'mcpDeployDecision', 'stripeDecision', 'paidMcpDecision', 'cloudflareMcpDecision']) {
+  for (const fn of ['editDecision', 'shellDecision', 'mcpDeployDecision', 'stripeDecision', 'paidMcpDecision', 'cloudflareMcpDecision', 'feedbackDecision']) {
     assert.ok(src.includes(`${fn}(`), `the mod decides with lib/holds.mjs ${fn}`);
   }
   assert.ok(!/\b(protectedBy|paidOf|deployOf|cloudflareChangeOf|modelPullOf|gitStagesOf)\(/.test(src), 'the mod reads no command or edit itself');

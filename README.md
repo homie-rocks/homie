@@ -274,6 +274,10 @@ repository:
   has a Report link, and only the directory's owner (never an AI) can unlist or take down
   a listing.
 - **The Homie MCP server** the plugin connects to.
+- **Notes to Homie** (`homie_feedback`, the mod's `/feedback`): a short note a person saw word for word and said
+  yes to, kept privately with the website's feedback. It holds the note's kind, words, step, the studio's and
+  plugin's versions and the app, and a reply address only when typed; never files, logs or keys
+  ([privacy](https://homie.rocks/privacy/)).
 - **Protected names.** Homie's own games' names are protected: a studio that wants one
   asks with `studio_request_grant`, and only the name's owner can approve it.
 - **Release tarballs.** homie.rocks serves every published `@homie-rocks/studio` version
@@ -314,7 +318,8 @@ The friends beta, as of this version:
   ("… Remix") are refused in the directory unless their owner grants them.
 
 Something else? [Open an issue](https://github.com/homie-rocks/homie/issues/new/choose):
-a bug, a port request or a question.
+a bug, a port request or a question. Or tell Claude: it can send the people who make Homie a short note,
+which you see word for word and send only with your yes.
 
 ## This repository
 

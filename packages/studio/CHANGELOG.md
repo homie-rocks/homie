@@ -17,9 +17,38 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.28.0] - 2026-10-03
+
+**Plugin 0.29.0** · [#43](https://github.com/homie-rocks/homie/pull/43)
+
+Tell Homie: when something confuses you or gets in your way, Claude can offer to send the people who make Homie a short note about it. You see the note word for word first, and nothing is sent without your yes.
+
+### Added
+
+- `homie_feedback`, a new tool on both Homie MCP servers (the remote one at homie.rocks, and the local `homie-studio mcp` in Homie for Claude Desktop), with the same name and inputs on each:
+  - `draft` (the default) sends nothing. It answers with the note exactly as it would go: its kind (stuck, confusing, idea, praise or bug), the words, and what goes with them (the step or skill, the studio's and the plugin's versions, the app, and whether Claude offered it or you asked). Keys, tokens, private links, code, home folders, email addresses, network addresses and your Cloudflare account's name are taken out first, and the note says what was taken out.
+  - `send` sends only the note you were shown. It names the draft, and a note whose words or details changed since then is refused.
+  - `decline` records your no.
+  - A note goes only to homie.rocks: a studio.json can name Homie's own directory or this computer, nothing else.
+- A Tell Homie card in Claude Desktop and Claude on the web or a phone: the note as it would go, with **Send**, **Edit** (your own words, your kind, an optional reply address) and **Don't send**.
+- In Claude Code, the Homie mod:
+  - `/feedback <your words>` shows your note in a Tell Homie pane with Send and Don't send. `/feedback` alone opens the pane to write one, or puts an ask for Claude to draft one in your prompt box. The Studio pane has a **Tell Homie** button (`t`).
+  - Every send from Claude waits for **Send** in Claude Code's own question, with the note's exact words. Once you have sent or declined a note in a session, Claude cannot offer another.
+  - A note is drawn in the transcript as a framed note.
+- In Codex, Homie's hooks hold every send until your own `proceed <code>`, with the note's exact words in the hold.
+- Skills and the studio's `AGENTS.md` (a new "Telling Homie" section) tell Claude when to offer: after an error it could not fix, when you sound confused or frustrated, and at the end of your first studio setup or first publish. It offers at most once a session, never makes help wait on it, and takes no for an answer.
+
+### Changed
+
+- The studio-setup and publish skills, the plugin's README and both MCP servers' instructions describe Tell Homie.
+
+### Upgrade notes
+
+- Nothing to do. `homie-studio upgrade` adds the "Telling Homie" section to the studio's `AGENTS.md`. The tool is on the Homie MCP for every app; in Claude Code, update the plugin for `/feedback` and the send hold. Notes are private; homie.rocks/privacy says what is kept.
+
 ## [0.27.0] - 2026-10-03
 
-**Plugin 0.28.0** · [#42](https://github.com/homie-rocks/homie/pull/42)
+**Plugin 0.28.0** · [#42](https://github.com/homie-rocks/homie/pull/42) · [release-2026-10-03-studio-0.27.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.27.0)
 
 Search engines and AI agents read a studio's site correctly: schema.org data on every page, a full VideoGame on every landing, and a sitemap, robots.txt and llms.txt made from what is public.
 
