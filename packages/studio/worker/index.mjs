@@ -86,7 +86,7 @@ import {
   setMembership,
 } from './servers.mjs';
 import { BRAIN_BUDGET, HouseAgents, agentFacts, aiName, decodeFacts, encodeFacts, passById, passRefusal, sitRoute } from './agents.mjs';
-import { talks } from './brain.mjs';
+import { CLEF, DECIDE, clefRun, costOf, localAiOf, picksOf, talks } from './brain.mjs';
 import { REACTIONS, reviewChat } from './chat.mjs';
 import { REPORT_REASONS, chatDay, chatOf, chatRowsOf, fileReport } from './chat-store.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
@@ -1163,7 +1163,58 @@ export class Table {
     this.vocabRead = this.readVocab(game).catch(() => false);
     // Room chat (section 19): typed text the floor let through waits for the studio's own Workers AI.
     this.room.review = (text, opts) => this.reviewChat(text, opts);
+    // A game's own decisions (section 20): the host's typed questions, for a game whose game.json opts in.
+    this.room.decider = (state, questions, opts) => this.decide(state, questions, opts);
     return this.room;
+  }
+
+  /** Whether this game asked for decisions (game.json "decide": true, in the built catalogue), read once a minute. */
+  async decideOn() {
+    if (this.decideRead && Date.now() - this.decideRead.at < 60_000) return this.decideRead.on;
+    let on = false;
+    try {
+      const res = this.env.ASSETS ? await this.env.ASSETS.fetch(new Request('https://assets.local/games.json')) : null;
+      const cat = res?.ok ? await res.json() : null;
+      const g = (cat?.games ?? []).find((x) => x.id === this.game);
+      on = Boolean(g && (g.decide === true || (g.decide && typeof g.decide === 'object' && g.decide.on !== false)));
+    } catch { on = false; }
+    this.decideRead = { at: Date.now(), on };
+    return on;
+  }
+
+  /**
+   * One of a game's own decisions (worker/brain.mjs checkDecide, picksOf): Clef on the studio's Workers AI (model
+   * HOMIE_DECIDE_MODEL, else clef-flash), or the person's own Ollama under `homie-studio dev`, within the AI brains' day
+   * (the same budget the guides spend: decisions and guides are one day of neurons). Not opted in, no AI, over budget, too
+   * slow or failed: `{ ok: false, why }`, and the host's floor answers.
+   */
+  async decide(state, questions) {
+    if (!(await this.decideOn())) return { ok: false, why: 'off' };
+    const local = this.env.AI ? null : localAiOf(this.env);
+    if (!this.env.AI && !local) return { ok: false, why: 'no-ai' };
+    if (this.env.AI) {
+      if (!this.brainDay || Date.now() - this.brainReadAt > 60_000) await this.readBrainDay().catch(() => {});
+      if (this.brainCap.neurons - this.brainUsed.neurons <= 0) return { ok: false, why: 'budget' };
+    }
+    const model = CLEF.models[this.env.HOMIE_DECIDE_MODEL] ? this.env.HOMIE_DECIDE_MODEL : '@cf/cloudflare/clef-flash';
+    const t0 = Date.now();
+    try {
+      const r = await clefRun(this.env, { state, questions, model, ms: DECIDE.ms, local });
+      const ms = Date.now() - t0;
+      const usage = r.usage ?? { input_tokens: Math.ceil(JSON.stringify({ state, questions }).length / 4) + 400, output_tokens: 0 };
+      const cost = costOf({ provider: r.engine === 'local' ? 'local' : 'workers-ai', model: r.model, usage });
+      this.brainSpend({ neurons: cost.neurons, micros: 0, provider: r.engine === 'local' ? 'decide-local' : 'decide' });
+      this.flushSoon();
+      const { picks, p } = picksOf(r.answers, questions);
+      return { ok: true, by: r.engine === 'local' ? 'local' : 'ai', picks, p, ms, neurons: cost.neurons };
+    } catch (error) {
+      return { ok: false, why: /took over/.test(String(error?.message ?? error)) ? 'slow' : 'error' };
+    }
+  }
+
+  /** The day's counters go to D1 on an alarm: set one a minute out when none is set (a house guide's alarm also flushes). */
+  flushSoon() {
+    this.ctx.waitUntil((async () => { if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000); })().catch(() => {}));
   }
 
   /**
@@ -1172,7 +1223,11 @@ export class Table {
    * floor alone has decided (`by` says which), and the message goes out.
    */
   async reviewChat(text, { links = 'block' } = {}) {
-    if (!this.env.AI) return { ok: true, by: 'none' };
+    // Under `homie-studio dev` with no binding, the person's own Ollama reviews (free, so no budget).
+    if (!this.env.AI) {
+      if (!localAiOf(this.env)) return { ok: true, by: 'none' };
+      try { const v = await reviewChat(this.env, text, { links }); return { ok: v.ok, by: 'local', why: v.why, ms: v.ms, p: v.p }; } catch { return { ok: true, by: 'error' }; }
+    }
     if (this.chatCap === null || Date.now() - this.chatReadAt > 60_000) await this.readChatDay().catch(() => {});
     if (this.chatUsed >= (this.chatCap ?? 0)) return { ok: true, by: 'budget' };
     try {

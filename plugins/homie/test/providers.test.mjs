@@ -13,7 +13,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { cloudflareMcpChangeOf, paidMcpOf, paidOf } from '../hooks/lib/commands.mjs';
+import { cloudflareMcpChangeOf, modelPullOf, paidMcpOf, paidOf } from '../hooks/lib/commands.mjs';
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
 const json = (p) => JSON.parse(readFileSync(p, 'utf8'));
@@ -71,7 +71,7 @@ test('plugin.json points at providers.json, a dated list loaded on use', () => {
   assert.equal(r.v, 1);
   assert.match(r.checked, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(r.load, 'on-use', 'nothing installs by itself');
-  assert.deepEqual(Object.keys(r.providers).sort(), ['cloudflare', 'elevenlabs', 'fal', 'github', 'stripe', 'tripo']);
+  assert.deepEqual(Object.keys(r.providers).sort(), ['cloudflare', 'elevenlabs', 'fal', 'github', 'ollama', 'stripe', 'tripo']);
 });
 
 test('every provider names its account, its skills, its own tools on https, and what stays Homie\'s', () => {
@@ -145,6 +145,12 @@ test('the Homie mod\'s guards know every provider\'s paid and account-changing t
       assert.equal(paidMcpOf(`mcp__${m.name}__get_pricing`, {}), null, `${m.name}: reading a price is free`);
     }
   }
+  // Ollama costs nothing, but a model is gigabytes on the person's disk: a pull of Clef is held with its size, and the
+  // size the hold names is the one providers.json says.
+  const pull = modelPullOf('ollama pull clef-flash');
+  assert.equal(pull?.size, 'about 11 GB', 'ollama pull clef-flash is held, with its size');
+  assert.ok(r.ollama.cli.homieUses.includes(`ollama pull clef-flash\` only after the person's yes (${pull.size})`), 'providers.json names the same size');
+  for (const free of [r.ollama.cli.signIn, 'ollama list', 'ollama show clef-flash']) assert.equal(modelPullOf(free), null, `ollama: ${free} is free`);
   for (const m of r.cloudflare.mcp) {
     const del = cloudflareMcpChangeOf(`mcp__plugin_cloudflare_${m.name}__d1_database_delete`, { database_id: 'x' });
     assert.equal(del?.kind, 'delete', `${m.name}: a delete is held`);

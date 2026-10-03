@@ -40,10 +40,15 @@ person approves every install and signs in on the provider's own page.
 | Tripo | Tripo's models on fal (`tripo3d/...`) | none: Tripo's own CLI and MCP server bill a separate account |
 | GitHub | the GitHub CLI (`gh auth login --web`, `gh pr create`) | GitHub's MCP server (`github@claude-plugins-official`) |
 | Stripe | Stripe's MCP server (the shop's catalog, tax settings and sales, as the owner signed it in, a sandbox first); the shop's key only through `homie-studio shop connect` | Stripe's agent plugin (`stripe agent setup`: its MCP server and skills) once a studio sells; Stripe Projects (`setup --via stripe-projects`) as an option for Cloudflare and ElevenLabs |
+| Ollama | Clef on the person's own computer, when Ollama already has `clef-flash`: `dev`'s AI guides, chat review and game decisions, and `agents sit --brain local`, free (detection reads `/api/version` and `/api/tags`, loopback only) | `ollama pull clef-flash` (about 11 GB), only after the person's yes to that size |
 
 Stripe is the `shop` skill's, with its own rules for Stripe's tools: never a webhook or an API key through the MCP
 (the mod refuses a write that would hand a signing secret back), Stripe's own confirmation link for a refund it
 holds, and live mode only when the owner says so.
+
+The AI guides think with Cloudflare's Clef decision model on the studio's own Workers AI (the `servers` skill), and a
+game may ask it for its own decisions (`net.decide`, the `game` skill). Under `dev`, Clef can run on the person's own
+computer through Ollama instead; nothing downloads it by itself, and the mod holds a pull until the person says yes.
 
 ## The Homie mod
 
@@ -127,7 +132,12 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     writes). The studio's deploy records what it creates in `studio.json` and never touches what it
     did not create; these go around that record. The hold names the studio's own Worker, database
     or bucket when the change does. Creating something new and reading anything are not held, and
-    `--local` never is.
+    `--local` never is;
+  - a Clef model downloaded through Ollama (`ollama pull clef-flash`, about 11 GB; `clef`, the 27B,
+    about 18 GB; a request at Ollama's `/api/pull` naming one), with its size, anywhere: Homie never
+    downloads a model by itself. `ollama run` of a Clef model is held only when Ollama's own list on
+    this computer (`/api/tags`) does not have it yet. Other models and Ollama's other commands are not
+    held.
   Cancel, a dismissed question, and a run with nobody to ask (`claude -p`) all refuse the call,
   with a reason Claude can act on. The guards hold even in bypass-permissions mode.
 - **Refused outright** (nobody is asked; the reason says what to do instead):
@@ -182,7 +192,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 | `band` | on | The band above the prompt |
 | `guardFiles` | on | Holding edits to protected files; refusing changes to locked art decisions and files over 5 MB under `games/` into git |
 | `guardDeploys` | on | Holding production deploys, and changes to the studio's Cloudflare account outside its deploy (deletes, secrets, hand rollouts, writes to the live database, by Wrangler or Cloudflare's MCP); refusing a deploy that ships an asset with no allowed licence |
-| `guardSpend` | on | Holding paid media calls past the budget (the models skill's too), and the ones whose cost cannot be read first (a provider's own CLI, MCP server or API) |
+| `guardSpend` | on | Holding paid media calls past the budget (the models skill's too), and the ones whose cost cannot be read first (a provider's own CLI, MCP server or API); and holding a Clef model download through Ollama (about 11 GB) |
 | `redactSecrets` | on | Taking secrets out of tool output |
 | `renderResults` | on | Homie's results and command rows drawn natively |
 | `arcade` | on | `/arcade` and the live Watch views |
@@ -226,7 +236,8 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
   command ran (for drawing it) and which agent ran what (for the parts). It never changes a tool's
   input.
 - `tool.call` on Edit, Write, MultiEdit, NotebookEdit (protected files, locked art decisions); on
-  Bash (big files into git, deploys and their licences, Cloudflare changes, paid calls); on
+  Bash (big files into git, deploys and their licences, Cloudflare changes, paid calls, Clef model
+  downloads); on
   `studio_deploy` (a deploy and its licences); on fal, ElevenLabs and Tripo MCP tools (paid calls);
   on Cloudflare MCP tools (account changes): the guards. They hold or
   refuse; they never approve. The mod has no `tool.check` hook, so it cannot approve a call a
@@ -241,7 +252,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
 | Call | What for | What it reaches |
 | --- | --- | --- |
 | `$.fs.exists`, `$.fs.list`, `$.fs.read`, `$.fs.stat` | The studio's own files | `studio.json`, `.studio/` (the build feed, `local.json`, the Game Lab's `server.json` and last checks, art direction's `art/<game>/latest.json`), `games/*/game.json`, `CODEX.md`, `codex/decisions.json` (an edit to it), `assets/manifest.json` (before a deploy) and whether `assets/RIGHTS.md` exists, media jobs' `budget.json`, `.perf/`, `.wrangler/homie-dev.json`, the file a held edit names, and the size of a file a `git add` or `git commit` would stage. Never a key file, the keychain or the environment. It writes no file (no `$.fs.write`) |
-| `$.http.fetch` | Live rooms, games and the arcade's list; whether the Game Lab answers; the game bridge | Only the studio's own live site, this computer's dev site and Game Lab (`127.0.0.1`), `*.homie.rocks`, and the bridge's private Unix socket. Any other address is refused in the code |
+| `$.http.fetch` | Live rooms, games and the arcade's list; whether the Game Lab answers; the game bridge; whether Ollama already has a Clef model, before a download is held | Only the studio's own live site, this computer's dev site and Game Lab (`127.0.0.1`), Ollama's model list on this computer (`127.0.0.1:11434/api/tags`, or a loopback `OLLAMA_HOST` the command sets), `*.homie.rocks`, and the bridge's private Unix socket. Any other address is refused in the code |
 | `$.process.run` | The back office, stats and codex links; Lock and Unlock (and Unlock's blast radius); deploy summaries; what a commit would stage; prices | Only `node` with the studio's own pinned `homie-studio` (`--json`), `git -C <studio or a folder in it>` (read-only: `rev-parse`, `log`, `status`, `diff`, `diff --cached`), and a media skill's own `--dry-run` (free; it asks the provider's price list). No shell |
 | `$.process.spawn` | The game bridge (`mod/bridge.mjs`), only while the arcade or a live Watch is open | One headless Chrome on this computer (below) |
 | `$.store.get`, `$.store.set` | The commit of the last deploy, per studio | Claude Code's own store for this plugin, nothing else |

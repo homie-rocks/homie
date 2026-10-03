@@ -33,6 +33,7 @@ import { STUDIO_VERSION } from './version.mjs';
 import { compareVersions, whatsNew, whatsNewLines } from './changelog.mjs';
 import { pinnedVersion } from './upgrade.mjs';
 import { AgentSeat } from './agent-seat.mjs';
+import { detectLocalAi } from './local-ai.mjs';
 import { LAB_PORT, runningLab } from './lab.mjs';
 import { pictureFor } from './pictures.mjs';
 import { ART_UI, artToolDefs } from './art-tools.mjs';
@@ -1050,17 +1051,24 @@ export function toolDefs(ctx, avail = {}) {
     {
       name: 'agent_sit', title: 'Sit in a game as an AI guide',
       description: 'Take a guide\'s seat in a live room of one of the studio\'s games as an AI ("Claude · AI": always marked AI, never on a humans-only server, only in a room with people in it). The game\'s own bot code moves the body every frame; you choose its goal and, when the server lets its AI talk, one of the game\'s own lines (agents.json; never free text). Returns your seat, what you see (view), the asks players made of you and your choices. Then agent_look and agent_do every 20 to 40 seconds, and agent_stand when done. Uses the site running here (preview_run) or the live site; with no pass, makes a one-day guide pass with the owner\'s office key and revokes it when you stand.',
-      inputSchema: { type: 'object', properties: { game: str('The game\'s id'), server: str('Optional: a server id (default: the pass\'s, else Quick play)'), pass: str('Optional: an agent pass (hap_…) the owner gave; never shown back'), label: str('Optional: the name you play under (default "Claude"; " · AI" is added)'), url: str('Optional: the site (default: this computer\'s preview, else the live site)'), ...STUDIO_ARG }, required: ['game'] },
+      inputSchema: { type: 'object', properties: { game: str('The game\'s id'), server: str('Optional: a server id (default: the pass\'s, else Quick play)'), pass: str('Optional: an agent pass (hap_…) the owner gave; never shown back'), label: str('Optional: the name you play under (default "Claude"; " · AI" is added)'), url: str('Optional: the site (default: this computer\'s preview, else the live site)'), brain: { type: 'string', enum: ['local'], description: 'Optional: "local" lets Cloudflare\'s Clef decision model on this computer (Ollama with clef-flash) choose every few seconds instead of you, free; agent_look shows what it chose and agent_do still overrides it. Never downloads a model: if Ollama has no clef-flash this says what the download costs, and the person decides.' }, ...STUDIO_ARG }, required: ['game'] },
       annotations: { title: 'Sit in a game as an AI guide', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio);
         if (ctx.seat && !ctx.seat.closed) await ctx.seat.stand();
         const site = a.url ? String(a.url) : devOf(root)?.url ?? siteUrl(root);
         if (!site) return fail('the studio is not running here and has no live site: preview_run first, or studio_deploy');
-        const seat = new AgentSeat({ site, game: String(a.game ?? ''), server: a.server ?? null, pass: a.pass ?? null, label: a.label ? String(a.label).slice(0, 16) : 'Claude', root });
+        let local = null;
+        if (a.brain === 'local') {
+          const found = await detectLocalAi();
+          if (!found.ok) return fail(`No local brain: ${found.say}`, { kind: 'agent', ok: false, error: found.why });
+          local = found;
+        }
+        const seat = new AgentSeat({ site, game: String(a.game ?? ''), server: a.server ?? null, pass: a.pass ?? null, label: a.label ? String(a.label).slice(0, 16) : local ? 'Clef' : 'Claude', root, brain: local ? 'local' : null, local });
         const r = await seat.sit();
         if (!r.ok) return fail(`No seat: ${r.why}`, { kind: 'agent', ok: false, error: r.error ?? null });
         ctx.seat = seat;
+        if (local) return ok(`Seated as ${r.name} in ${r.room} (seat ${r.seat}), thinking with ${local.model} on this computer every few seconds (free; nothing sent to Cloudflare). agent_look shows its last decisions; agent_do overrides; agent_stand ends it.`, { kind: 'agent', ...r });
         return ok(`Seated as ${r.name} in ${r.room} (seat ${r.seat}). ${r.talking ? 'This server lets its AI talk: lines from look.choices.lines, at most one every 8 s.' : 'This server\'s AI does not talk: choose goals only (say null).'} Look again with agent_look; act with agent_do { goal, args, say?, sayArgs? }.\n${JSON.stringify({ view: r.view, asks: r.asks, choices: r.choices }, null, 1).slice(0, 6000)}`, { kind: 'agent', ...r });
       },
     },

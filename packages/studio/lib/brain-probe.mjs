@@ -6,14 +6,14 @@
  * doctor asks once.
  *
  * The check is ONE tiny call to the model through Cloudflare's REST API (`POST /accounts/:id/ai/run/:model`, a
- * one-word prompt, max_tokens 1: about 0.1 of the 10,000 free neurons a day), with the studio's own Wrangler login
+ * one-word prompt, max_tokens 1, or for a Clef decision model one yes/no question: a few of the 10,000 free neurons a day), with the studio's own Wrangler login
  * (`wrangler auth token`, held in this process only) or CLOUDFLARE_API_TOKEN. It never prints the token, the account's
  * id or its name. A call that cannot be made (not signed in, several accounts and none named) says so and spends
  * nothing.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_MODEL } from '../worker/brain.mjs';
+import { CLEF, DEFAULT_MODEL } from '../worker/brain.mjs';
 import { configPath, workerDir } from './studio.mjs';
 
 const MODELS = 'https://developers.cloudflare.com/workers-ai/models/';
@@ -96,7 +96,8 @@ export async function probeModel({ model, accountId, headers, fetchFn = globalTh
     const res = await fetchFn(`${String(base).replace(/\/+$/, '')}/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json', accept: 'application/json', 'user-agent': 'homie-studio-doctor' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: 'Say OK.' }], max_tokens: 1 }),
+      // A decision model (Clef) takes a state and a question, not a chat message: one yes/no, a few hundred tokens.
+      body: JSON.stringify(CLEF.models[model] ? { model: CLEF.models[model], state: 'OK', questions: { ok: { type: 'noul', instructions: 'Does the state say OK?' } } } : { messages: [{ role: 'user', content: 'Say OK.' }], max_tokens: 1 }),
       signal: AbortSignal.timeout(ms),
     });
     return { status: res.status, body: await res.json().catch(() => null) };
@@ -122,7 +123,7 @@ export async function workersAiRow({ root, studio, env = process.env, exec, fetc
   const where = set ? 'HOMIE_BRAIN_MODEL in wrangler.jsonc' : 'the toolkit\'s default';
   const pick = (lead) => ({
     who: 'ai', open: MODELS,
-    say: `${lead}Pick a model the account can run: set HOMIE_BRAIN_MODEL in wrangler.jsonc "vars" to a text-generation model from ${MODELS} that is not marked Workers Paid${set && model !== DEFAULT_MODEL ? ` (or remove it for the default, ${DEFAULT_MODEL})` : ''}, run \`${cli} doctor\` again, then \`npm run deploy\`. Until then the guides answer from the game's script.`,
+    say: `${lead}Pick a model the account can run: set HOMIE_BRAIN_MODEL in wrangler.jsonc "vars" to a model from ${MODELS} that is not marked Workers Paid (Clef, @cf/cloudflare/clef-flash, or a text-generation model)${set && model !== DEFAULT_MODEL ? ` (or remove it for the default, ${DEFAULT_MODEL})` : ''}, run \`${cli} doctor\` again, then \`npm run deploy\`. Until then the guides answer from the game's script.`,
   });
   const money = ' Moving the account to Workers Paid ($5 a month) also works, but that is the person\'s money: ask them, never decide it.';
   if (!MODEL_ID.test(model)) return { ...row, state: 'act', detail: `${where} is "${model.slice(0, 80)}", which is not a Workers AI model id (@cf/<maker>/<model>)`, fix: pick('') };
@@ -145,7 +146,7 @@ export async function workersAiRow({ root, studio, env = process.env, exec, fetc
     case 'missing': return { ...row, state: 'act', detail: `Cloudflare has no model ${model} (renamed or retired)${said}`, fix: pick('') };
     case 'not-allowed': return { ...row, state: 'act', detail: `this account may not use ${model} (a private model)${said}`, fix: pick('') };
     case 'agreement': return { ...row, state: 'act', detail: `${model} asks for its maker's licence to be agreed once before it is used${said}`, fix: pick('Agreeing to a licence is the person\'s to do, never yours; or simply: ') };
-    case 'input': return { ...row, state: 'act', detail: `${model} did not take a chat message: the guides need a text-generation model${said}`, fix: pick('') };
+    case 'input': return { ...row, state: 'act', detail: `${model} did not take a chat message: the guides need Clef or a text-generation model${said}`, fix: pick('') };
     case 'allowance': return { ...row, state: 'later', detail: `today's free Workers AI allowance (10,000 neurons for the account) is used up, so ${model} could not be checked; the guides answer from the script until 00:00 UTC`, fix: { who: 'person', say: `Nothing to do now: run doctor again after 00:00 UTC. The studio's daily budget (\`${cli} agents brain <game> <server> workers-ai --budget <neurons>\`) keeps the guides under the allowance.` } };
     case 'busy': return { ...row, state: 'unknown', detail: `Workers AI was busy just now (status ${answer.status})${said}; run doctor again in a minute`, fix: null };
     case 'auth': return { ...row, state: 'unknown', detail: `Cloudflare did not let this sign-in run Workers AI (status ${answer.status})${said}`, fix: { who: 'ai', run: 'npx wrangler login', say: 'Sign in to Cloudflare again (the login includes Workers AI), then run doctor again.' } };

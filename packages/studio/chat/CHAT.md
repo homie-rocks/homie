@@ -90,6 +90,8 @@ accuracy numbers for it, and the message it reads is a player's, so a player can
 (less of a risk than with a model that writes, since it only scores fixed answers). That is why
 **the word list always runs first and decides alone** whenever the review cannot (no binding, the
 day's budget used, an error, a slow answer). `HOMIE_CHAT_MODEL` switches to Clef or Llama Guard.
+Under `homie-studio dev` with no Workers AI binding, the same question goes to Clef on the person's
+own computer when Ollama has `clef-flash` (0.24.4): free, nothing sent to Cloudflare.
 Firewall for AI (now "AI Security for Apps") was ruled out: it reads HTTP requests at the zone, not
 messages inside a Durable Object, and its detections are an Enterprise add-on.
 

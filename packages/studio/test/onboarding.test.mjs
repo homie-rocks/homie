@@ -164,17 +164,18 @@ test('setup status: a server whose AI guides use Workers AI gets ONE tiny call t
   const rowOf = (r) => r.rows.find((x) => x.id === 'workers-ai');
   const status = (exec, fetchFn, env = {}) => setupStatus({ cwd: dir, env, platform: 'darwin', exec, fetchFn, chrome: () => '/x/chrome', connector: 'yes' });
 
-  // The default model answers: one call, a one-word prompt, max_tokens 1, the studio's own sign-in; nothing printed.
-  let cf = cloudflare(200, { success: true, result: { response: 'OK', usage: { prompt_tokens: 12, completion_tokens: 1 } }, errors: [] });
+  // The default model (Clef, a decision model) answers: one call, one yes/no question, the studio's own sign-in; nothing printed.
+  let cf = cloudflare(200, { success: true, result: { model: 'clef-flash', answers: { ok: { type: 'noul', noul: 0.97 } }, usage: { input_tokens: 300, output_tokens: 0 } }, errors: [] });
   let ex = answers();
   let r = await status(ex.exec, cf.fetchFn);
   let row = rowOf(r);
   assert.equal(row.state, 'ok', row.detail);
-  assert.match(row.detail, /@cf\/meta\/llama-3\.1-8b-instruct-fp8-fast answers on this studio's Cloudflare account/);
+  assert.match(row.detail, /@cf\/cloudflare\/clef-flash answers on this studio's Cloudflare account/);
   assert.equal(cf.calls.length, 1, 'exactly one call');
-  assert.match(cf.calls[0].url, /^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/acc1\/ai\/run\/@cf\/meta\/llama-3\.1-8b-instruct-fp8-fast$/);
+  assert.match(cf.calls[0].url, /^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/acc1\/ai\/run\/@cf\/cloudflare\/clef-flash$/);
   assert.equal(cf.calls[0].auth, `Bearer ${token}`);
-  assert.equal(cf.calls[0].body.max_tokens, 1, 'one token out: about 0.1 of the 10,000 free neurons');
+  assert.equal(cf.calls[0].body.model, 'clef-flash', 'a decision model is asked a question, not sent a chat message');
+  assert.equal(cf.calls[0].body.questions.ok.type, 'noul', 'one yes/no: a few hundred tokens, a few of the 10,000 free neurons');
   assert.ok(ex.calls.some((c) => c.startsWith('wrangler d1 execute DB --remote --json')), 'the live database says a server uses Workers AI');
   assert.ok(r.features.some((f) => f.feature === 'AI guides that think (Workers AI)' && f.state === 'ready'));
   let printed = JSON.stringify(r) + formatStatus(r);
@@ -189,7 +190,7 @@ test('setup status: a server whose AI guides use Workers AI gets ONE tiny call t
   assert.equal(row.state, 'act');
   assert.match(row.detail, /@cf\/moonshotai\/kimi-k2\.6 needs the Workers Paid plan, and this account is on Workers Free: every guide on a workers-ai server answers from the game's script/);
   assert.match(row.fix.say, /set HOMIE_BRAIN_MODEL in wrangler\.jsonc "vars"/);
-  assert.match(row.fix.say, /or remove it for the default, @cf\/meta\/llama-3\.1-8b-instruct-fp8-fast/);
+  assert.match(row.fix.say, /or remove it for the default, @cf\/cloudflare\/clef-flash/);
   assert.match(row.fix.say, /that is the person's money: ask them/);
   assert.equal(row.fix.open, 'https://developers.cloudflare.com/workers-ai/models/');
   assert.ok(r.next.some((n) => n.id === 'workers-ai'), 'a "do this now"');

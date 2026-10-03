@@ -16,7 +16,7 @@
  * Nothing here imports the rest of the Worker (only brain.mjs, which is pure), so the relay (room.mjs) can use the
  * dial and the names as they are.
  */
-import { GUIDE_RULES, costOf, decisionSchema, ownerKey, parseDecision, promptFor, scripted, talks, workersAi } from './brain.mjs';
+import { GUIDE_RULES, costOf, decisionSchema, localAiOf, localClef, ownerKey, parseDecision, promptFor, scripted, talks, workersAi } from './brain.mjs';
 
 /** The skill dial (DESIGN D8; NETPLAY.md section 17). Level 3, Fair, is what the port kit's bots always were. */
 export const SKILLS = Object.freeze([
@@ -271,6 +271,78 @@ export const BRAIN_BUDGET = Object.freeze({ neurons: 8000, usd: 1 });
 export const HOUSE_PASS = 'house-';
 const LOG_MAX = 50;
 
+/**
+ * The brain a server asked for, if it can run now (`{ run, engine }`), or why not (`{ why }`): its Workers AI binding
+ * or the owner's key is there and today's budget is not spent. With neither (`homie-studio dev`, or a key not set yet),
+ * the person's own Ollama runs it when dev found clef-flash there (`engine: 'local'`, free). `providers` stand in for
+ * the network in tests.
+ */
+export function brainFor(mode, env, { budget = null, providers = {} } = {}) {
+  const left = (k) => (budget ? budget.left(k) : Infinity);
+  const p = { 'workers-ai': workersAi, 'owner-key': ownerKey, local: localClef, ...providers };
+  const local = () => (localAiOf(env) ? { run: (args) => p.local(env, args), engine: 'local' } : null);
+  if (mode === 'workers-ai') {
+    if (!env?.AI) return local() ?? { why: 'no Workers AI binding (deploy once more to add it)' };
+    if (left('neurons') <= 0) return { why: 'today\'s Workers AI budget is spent (scripted until 00:00 UTC)' };
+    return { run: (args) => p['workers-ai'](env, args), engine: 'workers-ai' };
+  }
+  if (mode === 'owner-key') {
+    if (!env?.HOMIE_BRAIN_KEY) return local() ?? { why: 'no key yet (homie-studio agents brain key)' };
+    if (left('micros') <= 0) return { why: 'today\'s dollar cap is reached (scripted until 00:00 UTC)' };
+    return { run: (args) => p['owner-key'](env, args), engine: 'owner-key' };
+  }
+  return { why: 'scripted' };
+}
+
+/**
+ * ONE DECISION, the way every brain makes it (the house guides on their alarm, the office's `agents try`): the brain
+ * asked (Clef's questions or a chat model's prompt), its answer checked by parseDecision, the fixed rule applied (a
+ * person's ask is answered the way agents.json says; a model that chose another goal is overruled), and the floor when
+ * nothing else decided.
+ *
+ * ctx: { view, me, goal, asks, party, speech, quiet, players, avoid, kids }. Returns { decision, provider, why, ms,
+ * cost, own (the brain's own pick, before any rule), p (Clef's probabilities), engine, model }.
+ */
+export async function think(vocab, { mode, brain, ctx, ms = BRAIN_CADENCE.timeoutMs, now = Date.now }) {
+  const { asks = [], view = null, players = null, avoid = [], quiet = false } = ctx;
+  const out = { decision: null, provider: 'script', why: brain?.why ?? null, ms: 0, cost: { neurons: 0, micros: 0 }, own: null, p: null, answers: null, usage: null, engine: null, model: null };
+  if (brain?.run) {
+    const t0 = now();
+    const prompt = promptFor(vocab, ctx);
+    const label = brain.engine === 'local' ? 'local' : mode;
+    try {
+      const r = await brain.run({ ...prompt, schema: decisionSchema(vocab), ms, vocab, ctx });
+      out.ms = now() - t0;
+      out.engine = r.engine ?? brain.engine ?? mode;
+      out.model = r.model ?? null;
+      out.p = r.p ?? null;
+      out.answers = r.answers ?? null;
+      out.usage = r.usage ?? null;
+      out.cost = costOf({ provider: out.engine === 'local' ? 'local' : mode, model: r.model, usage: r.usage, system: r.jsonMode === 'clef' ? '' : prompt.system, user: r.jsonMode === 'clef' ? '' : prompt.user, text: typeof r.out === 'string' ? r.out : JSON.stringify(r.out ?? '') });
+      out.cost.provider = label;
+      const parsed = r.out === null || r.out === undefined ? { ok: false, why: r.why ?? 'no answer' } : parseDecision(r.out, vocab, { view, players, avoid });
+      if (parsed.ok) { out.decision = parsed.decision; out.own = parsed.decision; out.provider = label; out.why = null; } else out.why = parsed.why;
+      // A fixed rule: a person's ask is answered the way agents.json says (its goal, with the values the person asked
+      // for). A model that chose another goal, or the asked goal with another value ("Help me with King Slime" answered
+      // with a slime hunt), is overruled by the floor's answer.
+      const ask = asks.at(-1);
+      const want = ask ? vocab.asks[ask.k]?.goal : undefined;
+      const other = out.decision && want && out.decision.goal === want
+        ? Object.entries(ask.args ?? {}).find(([k, v]) => vocab.goals[want].args[k] && vocab.goals[want].args[k].kind !== 'player' && out.decision.args?.[k] !== v) : null;
+      if (out.decision && want && (out.decision.goal !== want || other)) {
+        const floor = scripted(vocab, { asks, view, players, avoid, quiet });
+        if (floor?.goal) { out.why = other ? `the model chose ${want} with ${other[0]} ${String(out.decision.args?.[other[0]]).slice(0, 24)}; the ask was answered as agents.json says` : `the model chose ${out.decision.goal}; the ask was answered as agents.json says`; out.decision = { ...floor, say: floor.say ?? null, sayArgs: floor.sayArgs ?? {} }; out.provider = `${label}+floor`; }
+      }
+    } catch (error) {
+      out.ms = now() - t0;
+      out.why = String(error?.message ?? error).slice(0, 120);
+    }
+  }
+  // The floor: no AI, an AI that failed, or an answer that was not a decision.
+  if (!out.decision) { out.decision = scripted(vocab, { asks, view, players, avoid, quiet }); out.provider = out.decision ? 'script' : 'none'; }
+  return out;
+}
+
 export class HouseAgents {
   /**
    * @param {object} o
@@ -286,7 +358,7 @@ export class HouseAgents {
     this.now = now;
     this.setAlarm = setAlarm;
     this.budget = budget ?? { left: () => Infinity, spend: () => {} };
-    this.providers = { 'workers-ai': workersAi, 'owner-key': ownerKey, ...providers };
+    this.providers = { 'workers-ai': workersAi, 'owner-key': ownerKey, local: localClef, ...providers };
     this.log = log;
     this.agents = [];
     this.decisions = [];
@@ -340,7 +412,7 @@ export class HouseAgents {
     const label = names.length > n ? names[n] : `${names[n % names.length]} ${Math.floor(n / names.length) + 1}`;
     const a = {
       n, pass, name: aiName(label), seat: null, closed: false, view: null, viewAt: 0, zone: undefined, danger: undefined, goalState: null,
-      asks: [], answered: new Map(), carry: null, party: [], avoid: new Map(), calls: [], lastCallAt: -Infinity, dueAt: Infinity, dueWhy: null, sayAt: -Infinity, inFlight: false, provider: null,
+      asks: [], answered: new Map(), carry: null, party: [], said: [], seen: new Map(), avoid: new Map(), calls: [], lastCallAt: -Infinity, dueAt: Infinity, dueWhy: null, sayAt: -Infinity, inFlight: false, provider: null,
     };
     a.conn = {
       loopback: true, ip: null, browser: null, via: null, player: null, qa: false, watch: false,
@@ -405,6 +477,8 @@ export class HouseAgents {
       if (before && (JSON.stringify(d.zone ?? null) !== JSON.stringify(a.zone ?? null) || JSON.stringify(d.danger ?? null) !== JSON.stringify(a.danger ?? null))) this.due(a, now, d.danger ? 'danger' : 'zone');
       a.zone = d.zone ?? null;
       a.danger = d.danger ?? null;
+      // Who is new to this guide (first in its view, for 20 s): a reason to greet them once.
+      for (const p of Array.isArray(d.party) ? d.party.slice(0, 16) : []) if (Number.isInteger(p?.seat) && !a.seen.has(p.seat)) a.seen.set(p.seat, now);
       // Asks the game lists in the view (the host's own player's asks reach a guide this way).
       for (const x of Array.isArray(d.asks) ? d.asks.slice(0, 4) : []) if (x && typeof x.k === 'string' && Number.isInteger(x.from)) this.ask(a, { k: x.k, args: x.args ?? {}, from: x.from, at: Number(x.at) || now }, now);
       if (a.dueAt === Infinity && this.near(a)) this.due(a, Math.max(now, (a.lastCallAt === -Infinity ? now : a.lastCallAt + BRAIN_CADENCE.everyMs)), 'every 12 s');
@@ -474,19 +548,9 @@ export class HouseAgents {
     return due.length;
   }
 
-  /** The brain this server asked for, if it can run now: its binding or key is there, and today's budget is not spent. */
+  /** The brain this server asked for, if it can run now (brainFor above). */
   providerFor(mode) {
-    if (mode === 'workers-ai') {
-      if (!this.env?.AI) return { why: 'no Workers AI binding (deploy once more to add it)' };
-      if (this.budget.left('neurons') <= 0) return { why: 'today\'s Workers AI budget is spent (scripted until 00:00 UTC)' };
-      return { run: (args) => this.providers['workers-ai'](this.env, args) };
-    }
-    if (mode === 'owner-key') {
-      if (!this.env?.HOMIE_BRAIN_KEY) return { why: 'no key yet (homie-studio agents brain key)' };
-      if (this.budget.left('micros') <= 0) return { why: 'today\'s dollar cap is reached (scripted until 00:00 UTC)' };
-      return { run: (args) => this.providers['owner-key'](this.env, args) };
-    }
-    return { why: 'scripted' };
+    return brainFor(mode, this.env, { budget: this.budget, providers: this.providers });
   }
 
   async decide(a) {
@@ -513,41 +577,20 @@ export class HouseAgents {
     const mode = this.room.policy.brain;
     const p = this.providerFor(mode);
     this.why = p.why ?? null;
-    let decision = null;
-    let provider = 'script';
-    let why = p.why ?? null;
-    let ms = 0;
-    let cost = { neurons: 0, micros: 0 };
     // Every decision keeps the 3 s pace (the relay takes one goal every 3 s); AI calls also count to 10 a minute.
     a.lastCallAt = now;
-    if (p.run) {
-      const prompt = promptFor(vocab, { view: a.view, me: { seat: a.seat }, goal: a.view?.goal ?? null, asks, party: a.party, speech: this.room.policy.speech, quiet });
-      a.calls = [...a.calls.filter((t) => t > now - 60_000), now];
-      try {
-        const r = await p.run({ ...prompt, schema: decisionSchema(vocab), ms: BRAIN_CADENCE.timeoutMs });
-        ms = this.now() - now;
-        cost = costOf({ provider: mode, model: r.model, usage: r.usage, system: prompt.system, user: prompt.user, text: typeof r.out === 'string' ? r.out : JSON.stringify(r.out ?? '') });
-        this.calls += 1;
-        this.spent.neurons += cost.neurons;
-        this.spent.micros += cost.micros;
-        this.budget.spend({ ...cost, provider: mode });
-        const parsed = parseDecision(r.out, vocab, { view: a.view, players, avoid });
-        if (parsed.ok) { decision = parsed.decision; provider = mode; why = null; } else why = parsed.why;
-        // A fixed rule: a person's ask is answered the way agents.json says (its goal). A model that chose something
-        // else is overruled by the floor's answer; its line stays when it is one of the ask's.
-        const ask = asks.at(-1);
-        const want = ask ? vocab.asks[ask.k]?.goal : undefined;
-        if (decision && want && decision.goal !== want) {
-          const floor = scripted(vocab, { asks, view: a.view, players, avoid, quiet });
-          if (floor?.goal) { why = `the model chose ${decision.goal}; the ask was answered as agents.json says`; decision = { ...floor, say: floor.say ?? null, sayArgs: floor.sayArgs ?? {} }; provider = `${mode}+floor`; }
-        }
-      } catch (error) {
-        ms = this.now() - now;
-        why = String(error?.message ?? error).slice(0, 120);
-      }
+    if (p.run) a.calls = [...a.calls.filter((t) => t > now - 60_000), now];
+    const said = a.said.filter((x) => now - x.at < 5 * 60_000).map((x) => ({ line: x.line, args: x.args, ago: now - x.at }));
+    const newHere = [...a.seen].filter(([seat, at]) => now - at < 20_000 && players.includes(seat)).map(([seat]) => seat);
+    const ctx = { view: a.view, me: { seat: a.seat }, goal: a.view?.goal ?? null, asks, party: a.party, speech: this.room.policy.speech, kids: this.room.policy.kids, quiet, players, avoid, said, newHere };
+    const t = await think(vocab, { mode, brain: p, ctx, ms: BRAIN_CADENCE.timeoutMs, now: this.now });
+    const { decision, provider, why, ms, cost } = t;
+    if (t.engine) {
+      this.calls += 1;
+      this.spent.neurons += cost.neurons;
+      this.spent.micros += cost.micros;
+      this.budget.spend({ neurons: cost.neurons, micros: cost.micros, provider: cost.provider ?? mode });
     }
-    // The floor: no AI, an AI that failed, or an answer that was not a decision.
-    if (!decision) decision = scripted(vocab, { asks, view: a.view, players, avoid, quiet });
     const did = decision ? this.act(a, decision, quiet) : { goal: null, say: null };
     if (asks.length && decision) {
       for (const x of asks) a.answered.set(`${x.k}|${x.from}|${JSON.stringify(x.args ?? {})}`, now + 6000);
@@ -559,6 +602,8 @@ export class HouseAgents {
       at: now, seat: a.seat, guide: a.pass, provider: decision ? provider : 'none', ms, on: dueWhy,
       goal: did.goal, args: did.goal ? decision.args : null, say: did.say, sayArgs: did.say ? decision.sayArgs : null,
       ...(why ? { why } : {}), ...(cost.neurons ? { neurons: Math.round(cost.neurons * 100) / 100 } : {}), ...(cost.micros ? { micros: cost.micros } : {}),
+      // What the brain itself chose when a rule overruled it (ids only), and how sure a decision model was.
+      ...(t.own && /\+floor$/.test(provider) ? { own: { goal: t.own.goal, args: t.own.args } } : {}), ...(t.p ? { p: t.p } : {}), ...(t.model ? { model: t.model } : {}),
     }].slice(-LOG_MAX);
     a.inFlight = false;
     if (this.near(a) && !a.closed) this.due(a, now + BRAIN_CADENCE.everyMs, 'every 12 s');
@@ -576,6 +621,7 @@ export class HouseAgents {
     if (decision.say && !quiet) {
       a.h.onMessage(JSON.stringify({ t: 'ev', k: `say:${decision.say}`, d: { args: decision.sayArgs ?? {} } }));
       a.sayAt = this.now();
+      a.said = [...a.said, { line: decision.say, args: decision.sayArgs ?? {}, at: a.sayAt }].slice(-4);
       out.say = decision.say;
     }
     return out;

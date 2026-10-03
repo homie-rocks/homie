@@ -309,6 +309,7 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 | `roster` | host | `slots` | Labels it (section 17: a host cannot hide an AI), stores it, forwards it, and tells the shell's watchers. |
 | `caps` | host (revision 6) | `caps: ('skill'\|'agents')[]` | What the host's game does with servers: its bots read the dial, and it moves AI bodies. Stored as the room's (the play page offers the vote; a lite agent may sit) and in the watch feed. |
 | `vote` | a seated person, or the host (revision 6) | `of: 'skill'`, `n?: 1..levelMax`, `open?: true`, `reason?` | `open` starts the party's vote on the dial (a player may open one every 2 minutes); `n` casts or changes this seat's vote. Agents and watchers never vote. The shell's watch socket may send it too, counted as the seat of the client with the same browser key. |
+| `decide` | host (0.24.4) | `n`, `state`, `questions` | A game's own decision (section 20): checked, paced (one every 3 s and 20 a minute per room), handed to the Table's decision model; answered with `decided` to that socket only. |
 | `ping` | everyone | `c`, `hid` | Replies `pong`. A host whose `hid` turns true yields. |
 | `yield` / `bye` | host / anyone | — | `yield` elects another host if one is available. `bye` is a close. |
 
@@ -328,6 +329,7 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 | `round` / `roster` | everyone but the host | `round` / `slots` |
 | `pong` | the pinger | `c`, `st` |
 | `error` | the offender | `code`, `message`, `of?`, `until?` |
+| `decided` | the host that asked (0.24.4) | `n`, `ok`, and `by`, `picks`, `p`, `ms`; or `why` (`off`, `no-ai`, `budget`, `pace` and `retryMs`, `busy`, `bad`, `slow`, `error`, `not-host`) |
 | `announce` | everyone (and in `welcome.announce`) | `id`, `text` (`null`: taken down), `at`, `until`, `from: 'studio'` (section 15) |
 | `mute` | everyone | `id`, `seat`, `until` (`0`: unmuted) (section 15) |
 | `watch` | one watcher | `follow`, `why?` (`overview`, `seated-here`): whether it may follow one player now (section 16) |
@@ -396,6 +398,7 @@ so `ev.origin` is `"null"`.
 | `ckpt` | < 32 KB | 64 KB (128 KB for 17–32 seats) | 1 Hz | 4 |
 | `round` / `roster` | < 2 KB / < 1 KB | 8 KB / 4 KB (16 / 8 KB for 17–32 seats) | on change | 4 / 8 |
 | `ping` | — | 256 B | every 2 s | 8 |
+| `decide` | < 2 KB | 6 KB (state 2 KB) | per beat (section 20) | 2; and per room one every 3 s, 20 a minute |
 
 **Sockets.**
 - At most `maxPlayers + 16` per room, and per client address per room **12, or every seat
@@ -1057,12 +1060,29 @@ brain never runs in the frame loop, and it can only choose: goals and lines are 
 game's own vocabulary, never free text.
 
 **Where a brain runs.** In the room's own Table, on the studio owner's Worker (a *house
-guide*): Workers AI through the `AI` binding (model var `HOMIE_BRAIN_MODEL`, default
-`@cf/meta/llama-3.1-8b-instruct-fp8-fast`), or the owner's own key (Worker secret
-`HOMIE_BRAIN_KEY`, `claude-haiku-4-5` through the official `@anthropic-ai/sdk`). Or in the
-owner's own AI through the local MCP (`agent_sit`, about 30 s a decision). With none of them,
-over the day's budget, or between decisions: the game's scripted floor (`decide`). homie.rocks
-runs nothing and stores nothing.
+guide*): Workers AI through the `AI` binding (model var `HOMIE_BRAIN_MODEL`, default since
+0.24.4 `@cf/cloudflare/clef-flash`, Cloudflare's **Clef** decision model; `@cf/cloudflare/clef`,
+the 27B, or a chat model such as `@cf/meta/llama-3.1-8b-instruct-fp8-fast` also work), or the
+owner's own key (Worker secret `HOMIE_BRAIN_KEY`, `claude-haiku-4-5` through the official
+`@anthropic-ai/sdk`). Under `homie-studio dev` with no binding: Clef on the person's own computer
+(Ollama with `clef-flash`, which dev finds; free). Or in the owner's own AI through the local MCP
+(`agent_sit`, about 30 s a decision), or a seat that thinks with Clef on the owner's computer
+(`agent_sit { brain: "local" }`). With none of them, over the day's budget, or between decisions:
+the game's scripted floor (`decide`). homie.rocks runs nothing and stores nothing.
+
+**Clef asks the decision as the questions it is.** A decision model never writes text: it takes a
+state and typed questions and returns a probability for every allowed answer, in one pass. A guide's
+decision is a Choice of goal (only goals whose every argument has a value to take), a Choice per set
+of argument values (one question for a goal's quest and a line's quest, so what the guide does and
+says agree; a seat that said "no thanks" and the guide's own seat are never options), a Choice of
+line or none (only when the guide may speak), and, with no ask open, a yes/no "anything to say at
+all?" that a line also needs. The newest ask is in the goal question itself, with the answer
+agents.json gives it. The state is the sanitized view, the open asks, who said no thanks, the
+guide's own last lines and who is new to it. The answers are composed back into one decision, which
+parseDecision and every fixed rule still check. Measured 2026-10-03 on 64 recorded Ember Vale
+moments (`homie-studio agents try`, a throwaway studio): Clef answered 36 of 40 open asks itself
+(Llama 3.1 8B: 0 of 40), blind judges preferred its decisions in 51 of 64 (Llama in none), model time
+p50 259 ms, p90 433 ms (Llama 303 / 364 ms).
 
 ### The vocabulary: `games/<id>/agents.json`
 
@@ -1161,14 +1181,16 @@ with a pass (the owner's own Claude) takes a guide's seat from a house guide (`a
 | Pace | At least 3 s between AI calls per guide, at most 10 a minute; one alarm per room at a time, at most one every 3 s. Never `setInterval`. |
 | Prompt | System: the persona, the goals, the lines, the asks (about 400 tokens, stable). User: the view (sanitized: no key that names a person, an account, a ticket, an address or an age; nothing that looks like a secret; seats, never names), the asks, and the last three party lines as ids and arguments (free text only on a `speech: game` server: quoted, 120 characters, labelled as data). |
 | Output | One JSON object `{ goal, args, say, sayArgs }` (a JSON schema where the provider takes one). Anything else (prose, a code fence, an unknown id, a wrong or extra argument, a player who said no thanks) is no decision: the scripted floor answers instead. |
-| Fixed rules | A person's ask is answered the way agents.json says (its `goal`): a model's other choice is overruled, and the asked-for goal is carried through until it is done (or 60 s) with no model call meanwhile but for a new ask. A line at most every 8 s. "No thanks" holds the guide off that player for 10 minutes. No goal aims at a player. |
+| Fixed rules | A person's ask is answered the way agents.json says (its `goal`, with the values the person asked for): a model's other goal, or the asked goal with another value, is overruled, and the asked-for goal is carried through until it is done (or 60 s) with no model call meanwhile but for a new ask. A line at most every 8 s. "No thanks" holds the guide off that player for 10 minutes. No goal aims at a player. |
 | Budget | A day, for the whole studio (meta `brain_budget`): 8,000 Workers AI neurons (the free allocation is 10,000 an account), $1 of the owner's key. Counted in `stats_daily` (`brain-calls`, `brain-neurons`, `brain-microdollars`), written at most once a minute. Over it: the scripted floor until 00:00 UTC. |
-| Log | The last 50 decisions per room (seat, goal, line, provider, time, why), in memory, in the office. |
+| Log | The last 50 decisions per room (seat, goal, line, provider, time, why; the model, Clef's probability for the goal and line, and the brain's own pick when a rule overruled it), in memory, in the office. |
+| Try | `homie-studio agents try <game> --view <file> [--ask …] [--model …]` (office API `/_studio/api/agents/try`): the same brain and rules on one moment, no seat taken, spent from the same day. |
 
 **Cost.** A house guide costs no request of its own beyond the alarm: one per room per due
-decision, at most one every 3 s. A decision is about 4.3 Workers AI neurons
-(`@cf/meta/llama-3.1-8b-instruct-fp8-fast`: 700 tokens in, 40 out), or $0.0009 of the owner's
-key.
+decision, at most one every 3 s. A Clef decision is about 9 Workers AI neurons (clef-flash: about
+1,000 tokens in at $0.09 a million, nothing for output), so the default day of 8,000 is about 900
+decisions; a Llama decision is about 4.1 (700 tokens in, 40 out); the owner's key about $0.0009.
+Under dev, Clef on the person's own computer costs nothing.
 
 **Kids and safety.** The AI never types: it picks ids, the game renders the creator's text.
 A beginner server's chat is quick lines only; on a kids server names are handles and no free
@@ -1270,7 +1292,7 @@ and reach every screen at once.
 | Review | |
 |---|---|
 | Budget | A day, for the whole studio (meta `chat_budget`): 2,000 neurons by default. With the AI guides' 8,000 that is the 10,000 Workers AI gives an account free a day. A short message measured about 2.3 neurons (clef-flash: $0.09 per million input tokens, no output charge; the question and its answers are most of the input), so about 850 reviewed messages a day. Counted in `stats_daily` (`chat-reviews`, `chat-neurons`). |
-| No review | No `AI` binding (`homie-studio dev` without `--remote-ai`), the day's budget used, the model failing or slower than 1.5 s, more than 8 messages waiting: the floor alone decides, the message goes out, and the office counts it. |
+| No review | No `AI` binding (`homie-studio dev` without `--remote-ai`, unless Clef is on the person's own computer: then it reviews there, free), the day's budget used, the model failing or slower than 1.5 s, more than 8 messages waiting: the floor alone decides, the message goes out, and the office counts it. |
 | The owner | The studio's owner is never reviewed or held by slow mode (their lines are marked `owner`). |
 
 ### The owner's tools
@@ -1344,3 +1366,55 @@ about 2.3 neurons a typed line, inside the free allocation by default.
 **Old games and old relays.** A game built before revision 8 has the panel, the float, the ticker
 and the TV corner; it draws no bubbles and its own UI cannot send. A revision-8 helper on an older
 relay never hears a `line` and has `chatRules` null.
+
+---
+
+## 20. A game's own decisions (0.24.4)
+
+Clef answers in about a tenth of a second and never writes text, so a game can ask it what to do
+next about its own state: a tactic for its opponents, an NPC's reaction from a fixed set, a
+director's call (a wave now? push harder?), a turn-based move. The host asks; the room's own
+Durable Object asks the studio's Workers AI (or Clef on the person's own computer under `dev`);
+the answer comes back as option ids, yes or no, and numbers. Nothing a player reads comes from a
+model.
+
+```ts
+const d = await net.decide(
+  { heroes: [{ hp: 40 }, { hp: 90 }], slimes: { count: 9 } },           // the game's state (sanitized; seats, never names)
+  {
+    tactic: { type: 'choice', instructions: 'How should the slimes hunt?', criteria: { chase: 'Rush the nearest hero', surround: 'Close in from every side' } },
+    wave: { type: 'noul', instructions: 'Should a wave come now?' },
+    pressure: { type: 'score', instructions: 'How hard should the vale push?', criteria: ['A breather', 'Steady', 'Fierce'] },
+  },
+  { floor: () => ({ tactic: 'chase', wave: false, pressure: 1 }) },  // the game's own answer, synchronous
+);
+// d.by: 'ai' | 'local' | 'floor'; d.picks: { tactic: 'surround', wave: false, pressure: 1.4 }; d.p: probabilities
+```
+
+| | |
+|---|---|
+| Opt-in | game.json `"decide": true` (the build carries it into games.json; deploy binds Workers AI for it). Without it the room answers `off` and the floor plays. |
+| Questions | 1 to 8: Choice (2 to 26 option ids), yes/no (`noul`), Score (2 to 10 levels, lowest first; the pick is the probability-weighted level). Instructions and descriptions at most 160 characters. The state at most 2 KB after the same sanitizing as a guide's view. |
+| Frames | Host to relay `{ t: 'decide', n, state, questions }`; relay to that host only `{ t: 'decided', n, ok, by, picks, p, ms }` or `{ t: 'decided', n, ok: false, why }` (`off`, `no-ai`, `budget`, `pace` with `retryMs`, `busy`, `bad`, `slow`, `error`, `not-host`). |
+| Pace | One ask every 3 s and 20 a minute per room, two at a time; the helper waits 2.5 s (at most 5) and then answers from the floor. After `off`, `no-ai` or `budget` it asks again only after a minute. |
+| Budget | The AI brains' day (meta `brain_budget`, 8,000 neurons by default): decisions and guides share it, counted as `brain-calls` source `decide`. About 4 neurons for three short questions. |
+| Office | Each room's decisions: how many, who answered, the model's median time, the neurons. Never a state. |
+
+**What rate is real.** Measured 2026-10-03 on a throwaway studio (Ember Vale's slimes' director,
+three questions every 6 s): the host's round trip p50 160 to 253 ms, p90 347 to 497 ms; the model's
+time in the room p50 115 ms; about 4.1 neurons a decision. So never per frame; per second is fast
+enough but one room asking every second would spend about 15,000 neurons an hour, more than the free
+allocation's whole day; **per beat (every 5 to 10 s), per turn, or on an event** is the rate that fits
+the free plan (a room asking every 6 s: about 2,500 neurons an hour). Clef on the person's own
+computer costs nothing; its time depends on the computer.
+
+**Kids and the dial.** A decision moves the game's own world (its opponents, its director), never a
+person, and never the party's skill dial: the bots' level stays the room's. On a kids server the game
+keeps its decisions gentle (Ember Vale's slimes never gang up on the most hurt hero there, and the vale
+never pushes past steady). The state follows a view's rules: game state and seats, never a name, an
+account or typed text.
+
+**Ember Vale** (the starter, opt-in: its game.json ships `"decide": false`): every 6 s of a live night
+the host asks how the slimes hunt (chase, surround, gang up on the most hurt, regroup at the King),
+whether a wave comes, and how hard to push; every screen shows what the slimes are up to when a model
+chose it. The floor is the vale as it always played.

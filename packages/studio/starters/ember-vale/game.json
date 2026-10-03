@@ -7,6 +7,7 @@
   "entry": "src/main.ts",
   "netplay": { "v": 1, "public": true, "movement": "owner" },
   "saves": true,
+  "decide": false,
   "landing": {
     "pitch": "Your hero keeps every level. The night does not.",
     "howToPlay": [

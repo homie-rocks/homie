@@ -18,8 +18,14 @@
  *   homie-studio agents brain key [--remove]          the owner's own AI key (owner-key brains), from a page on this
  *                                                     computer only: it goes straight to the Worker secret
  *                                                     HOMIE_BRAIN_KEY, never through a chat, a file or a log
- *   homie-studio agents sit <game> [--server <id>] [--pass hap_…] [--label Claude]
- *                                                     sit in a guide's seat from this terminal (the local MCP's agent_sit)
+ *   homie-studio agents sit <game> [--server <id>] [--pass hap_…] [--label Claude] [--brain local]
+ *                                                     sit in a guide's seat from this terminal (the local MCP's agent_sit);
+ *                                                     --brain local: Clef on this computer (Ollama) decides, free
+ *   homie-studio agents try <game> --view <file.json> [--ask <ask>[:<arg>=<value>,…] --from <seat>] [--model <id>]
+ *                       [--mode workers-ai|owner-key|script] [--quiet] [--avoid <seat>,…]
+ *                                                     what the studio's guide brain would decide in that moment, with
+ *                                                     no seat taken: the decision, the brain's own pick, how sure, how
+ *                                                     long and what it cost (spent from the guides' day)
  *
  * The proof of ownership is the studio's own Cloudflare login, as for the office: a ten-minute office key is minted
  * and dropped around each call. Making a server, a widening change, a pass and a room's level happen at once. A
@@ -126,6 +132,29 @@ export async function agentsBrain(root, game, server, mode, { url, budget } = {}
   if (b !== undefined && !(b >= 0)) return { ok: false, command: 'agents brain', why: '--budget is a number: Workers AI neurons a day (workers-ai; the free allocation is 10,000 an account), or dollars a day (owner-key)' };
   const r = await withKey(root, url, (call) => call('/_studio/api/agents/brain', { game, server, mode, ...(b !== undefined ? { budget: b } : {}) }));
   return askedFor(root, url, r, 'agents brain');
+}
+
+/**
+ * `homie-studio agents try`: the studio's guide brain on one moment (a view file, asks), from its live Worker (or
+ * `homie-studio dev`). The answer is the office's (worker/office.mjs agentsTry).
+ */
+export async function agentsTry(root, game, { url, view, ask, from, model, mode, quiet, avoid, players, readFile } = {}) {
+  const usage = 'usage: homie-studio agents try <game> --view <file.json> [--ask <ask>[:<arg>=<value>,…] --from <seat>] [--model <id>] [--mode workers-ai|owner-key|script] [--quiet] [--avoid <seat>,…]';
+  if (!GAME.test(String(game ?? '')) || typeof view !== 'string') return { ok: false, command: 'agents try', why: usage };
+  let v;
+  try { v = JSON.parse(readFile(view)); } catch (error) { return { ok: false, command: 'agents try', why: `--view is a JSON file of the game state a guide sees (${String(error?.message ?? error).slice(0, 80)})` }; }
+  const seats = (x) => (x === undefined || x === true ? undefined : String(x).split(',').map(Number).filter((n) => Number.isInteger(n) && n >= 0));
+  const asks = [];
+  if (typeof ask === 'string') {
+    const [k, rest = ''] = ask.split(':');
+    const args = Object.fromEntries(rest.split(',').filter(Boolean).map((kv) => { const [a, val = ''] = kv.split('='); return [a, /^\d+$/.test(val) ? Number(val) : val]; }));
+    asks.push({ k, args, from: Number.isInteger(Number(from)) ? Number(from) : 0 });
+  }
+  const r = await withKey(root, url, (call) => call('/_studio/api/agents/try', {
+    game, view: v, asks, ...(typeof model === 'string' ? { model } : {}), ...(typeof mode === 'string' ? { mode } : {}),
+    ...(quiet ? { quiet: true } : {}), ...(seats(avoid) ? { avoid: seats(avoid) } : {}), ...(seats(players) ? { players: seats(players) } : {}),
+  }));
+  return r.ok ? { ok: true, command: 'agents try', ...r } : { ok: false, command: 'agents try', why: r.message ?? r.why };
 }
 
 /**

@@ -33,7 +33,7 @@
         "the studio's own Worker, D1 database, R2 bucket and secrets are created, changed and deleted only by npm run deploy and homie-studio, which record what they create in studio.json and never touch what they did not create",
         "the free plan: no payment method, R2 only when the person adds storage",
         "secrets go from a page on this computer straight to wrangler secret put, never through the chat",
-        "the Workers AI model probe and the AI guides' daily budget"
+        "the Workers AI model probe and the AI brains' daily budget, which the guides' decisions and a game's own (net.decide) share: Clef (@cf/cloudflare/clef-flash) by default, its questions checked by the fixed rules, the game's script or floor whenever it cannot answer"
       ]
     },
     "elevenlabs": {
@@ -160,6 +160,24 @@
         "one restricted key the owner makes in Stripe's Dashboard and pastes on a page on their own computer, straight to the Worker secret; the webhook made there with it, its signing secret never in the chat",
         "refunds are the owner's one tap; Stripe's own confirmation link for anything Stripe holds",
         "Stripe Projects on free plans only: no payment method, no paid tier, never a credential's value in output"
+      ]
+    },
+    "ollama": {
+      "name": "Ollama",
+      "account": "none: the person's own computer (Cloudflare's Clef decision model runs there, free, nothing sent anywhere)",
+      "skills": ["servers", "game", "studio-setup"],
+      "cli": {
+        "name": "ollama",
+        "install": "https://ollama.com/download (0.35.1 or later, the first with Clef)",
+        "signIn": "none",
+        "homieUses": "GET /api/version and /api/tags (detection); POST /v1/systemone (Clef's questions); `ollama pull clef-flash` only after the person's yes (about 11 GB)",
+        "docs": "https://ollama.com/library/clef-flash"
+      },
+      "mcp": [],
+      "homieKeeps": [
+        "never downloads a model without the person's yes, with the size said first (clef-flash about 11 GB; clef, the 27B, about 18 GB); the Homie mod holds a pull until they say Proceed",
+        "only a loopback address (Ollama's own port on this computer, or the loopback port HOMIE_OLLAMA names): a game's state never goes to another machine",
+        "the same questions and fixed rules as Workers AI: the vocabulary's ids only, an ask answered the way agents.json says, the game's floor whenever it cannot answer"
       ]
     }
   }

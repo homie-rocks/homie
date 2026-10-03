@@ -342,6 +342,13 @@ studio's pinned copy, never a registry lookup of the bare name.
   it only ASKS. The AI never types: it picks a goal and a line id; the relay drops anything else. With no AI, over
   budget, or between decisions, the game's \`decide\` plays. \`agent_sit\` (the local MCP) puts the owner's own
   Claude in a guide's seat.
+- **Clef (0.24.4):** Workers AI's guides think with Cloudflare's decision model \`@cf/cloudflare/clef-flash\` (it
+  picks among the vocabulary's goals, values and lines; it never writes text; about 9 neurons a decision).
+  \`agents try <id> --view <file> [--ask …] [--model …]\` shows what the brain would decide in one moment. Under
+  \`npm run dev\`, Clef on this computer (Ollama with \`clef-flash\`) runs the guides, chat review and game
+  decisions for free when it is here; **never download it without the person's yes** (\`ollama pull clef-flash\` is
+  about 11 GB). A game whose game.json says \`"decide": true\` may ask \`net.decide(state, questions, { floor })\`
+  on the host (\`NETPLAY.md\` section 20): per beat or per turn, never per frame.
 
 ## Selling things (the shop)
 

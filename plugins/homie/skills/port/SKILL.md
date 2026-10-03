@@ -104,7 +104,10 @@ Non-negotiable, every port:
    the party's vote) and use `jitter`, `engages` and `standoff` for the rest of a
    bot's choices. `createRoom` keeps a hybrid server's AI seats and labels them AI.
    For guides that talk (a beginner server), give the game a vocabulary and `useAgents`
-   (the game skill's "Write the guide vocabulary"; NETPLAY.md section 18).
+   (the game skill's "Write the guide vocabulary"; NETPLAY.md section 18). For AI that
+   picks the bots' tactics or a director's call, `room.net.decide` per beat, never per
+   frame, opt-in and with the game's own floor (the game skill's "Let the game decide
+   with AI"; NETPLAY.md section 20).
    Room chat needs nothing from a port (the play page has it); draw speech bubbles over
    characters with `createBubbles` / `paintBubbles` from `net.on('say')` (NETPLAY.md section 19).
 4. **Host handoff.** Everything the rules need is in the checkpoint; a promoted

@@ -280,6 +280,10 @@ Pick the multiplayer shape that keeps the game's feel:
   (`P.rubberBand`). A stranger knocked about before they have found the controls
   leaves; so does one who never scores.
 - A body a person leaves keeps playing as a bot where it stands.
+- Tactics that change with the fight (rush, flank, regroup, a wave now) can come from the
+  studio's AI: `room.net.decide(state, questions, { floor })` on the host every few
+  seconds (NETPLAY.md section 20; game.json `"decide": true`). The hands stay
+  BotBrain's, at the party's dial; the floor is the tactic the game always played.
 
 ## 8. The big screen
 

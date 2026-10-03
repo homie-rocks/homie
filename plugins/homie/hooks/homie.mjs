@@ -14,8 +14,9 @@
  * - Homie's tool results as checklists, check rows, verdicts and live links (and the commands' rows in words).
  * Instant commands, no Claude turn: /studio /play /watch /rooms /build /codex /deploy-status /perf-numbers /parts
  * /arcade /look /lock /assets /lineup /rights.
- * Guards on tool calls: an edit to a file studio.json "protect" lists, a production deploy, and a paid media call
- * past the studio's budget are held with what would change and Proceed / Cancel. Refused outright: a change to a
+ * Guards on tool calls: an edit to a file studio.json "protect" lists, a production deploy, a paid media call past
+ * the studio's budget, and a Clef model download through Ollama (about 11 GB) are held with what would change and
+ * Proceed / Cancel. Refused outright: a change to a
  * decision the person locked (games/<id>/codex/decisions.json), a deploy that ships an asset with no allowed licence
  * in a public game, a `git add` or `git commit` that would put a file over 5 MB under games/ into git, and a write
  * through Stripe's MCP whose answer would carry a webhook's signing secret into the conversation. Secrets are taken
@@ -23,8 +24,9 @@
  *
  * WHAT IT REACHES. Files: the studio's own (studio.json, .studio/, games/*, budgets, CODEX.md, .perf/), the file a
  * held edit names, and the size of a file a `git add` or `git commit` would stage. Network ($.http.fetch): only the
- * studio's own site (its live address or this computer's dev site), *.homie.rocks (the Homie Arcade game list), and
- * its own game bridge over a private Unix socket. Processes: `git` (read-only), the studio's own pinned
+ * studio's own site (its live address or this computer's dev site), *.homie.rocks (the Homie Arcade game list), its
+ * own game bridge over a private Unix socket, and Ollama's list of models on this computer (loopback, before a Clef
+ * model would be downloaded). Processes: `git` (read-only), the studio's own pinned
  * `homie-studio` (office, stats, codex link, progress stop, style lock / unlock / blast; each with --json), a media
  * skill's own `--dry-run` price, and the plugin's game bridge (mod/bridge.mjs: a headless Chrome seat, only while the
  * arcade or a live Watch is open). It never reads a key file, the keychain or the environment, never approves a
@@ -36,7 +38,7 @@
 import { applyEdit, unifiedDiff } from './lib/diff.mjs';
 import { GAME_ID, artFor, artSummaryOf, castText, decisionsFileOf, licenceIssues, lineupText, lockedChanges, lookText, publicSource, rightsText, usd } from './lib/art.mjs';
 import { summarizeCodex } from './lib/codex.mjs';
-import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, paidMcpOf, paidOf, protectedBy, stripeSecretWriteOf, studioCalls } from './lib/commands.mjs';
+import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, modelPullOf, paidMcpOf, paidOf, protectedBy, stripeSecretWriteOf, studioCalls } from './lib/commands.mjs';
 import { ago, feedOf, summarize } from './lib/feed.mjs';
 import { redact } from './lib/redact.mjs';
 import { readResult } from './lib/results.mjs';
@@ -301,8 +303,13 @@ export function register(on, options) {
       const held = await guardSpend($, e, paid);
       if (held) return held;
     }
+    const pull = OPT.guardSpend ? modelPullOf(e.command) : null;
+    if (pull) {
+      const held = await guardModelPull($, pull);
+      if (held) return held;
+    }
     return next(e);
-  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this command ran.' } : { deny: 'The Homie mod could not check this command (a deploy, a Cloudflare change, a paid media call, or big files into git), so it was not run. Ask the person, or try again.' }));
+  }).catch(async ($, e, next) => (next.called ? { deny: 'The Homie mod failed after this command ran.' } : { deny: 'The Homie mod could not check this command (a deploy, a Cloudflare change, a paid media call, a model download, or big files into git), so it was not run. Ask the person, or try again.' }));
 
   on('tool.call', { tool: /^mcp__.+__studio_deploy$/ }, async ($, e, next) => {
     if (!OPT.guardDeploys || !S.root) return next(e);
@@ -1486,6 +1493,50 @@ async function guardSpend($, e, paid) {
   });
   if (answer === 'Proceed') return null;
   return { deny: answer === null ? `This ${paid.provider} call would pass the studio's budget, or its cost is unknown, and nobody could be asked here, so it was not made. Ask the person first.` : `The person said no to this ${paid.provider} call (${unknown ? 'its cost could not be read first' : `about ${money(est)}, past the budget`}). Do not retry it unless they raise the budget or ask for it.` };
+}
+
+/**
+ * A Clef model downloaded through Ollama (lib/commands.mjs says which): held until the person says Proceed, with its
+ * size. Homie never downloads a model by itself. `ollama run` downloads only a model Ollama does not have, so it goes
+ * through when Ollama's own list on this computer (GET /api/tags, loopback only) already has that model; a pull is
+ * always held (it fetches a newer copy when there is one).
+ */
+async function guardModelPull($, pull) {
+  const base = ollamaBase(pull.host);
+  const tags = base ? await fetchJson($, `${base}/api/tags`) : null;
+  const names = Array.isArray(tags?.models) ? tags.models.map((m) => String(m?.name ?? m?.model ?? '')) : null;
+  const want = `${pull.model}:${pull.tag ?? 'latest'}`;
+  const have = names ? names.includes(want) || (!pull.tag && names.includes(pull.model)) : false;
+  if (pull.verb === 'run' && have) return null;
+  const here = have ? 'already on this computer: a pull fetches a newer copy when there is one' : names ? 'not on this computer yet' : 'Ollama did not say (not running, or not on its usual port)';
+  const answer = await ask($, {
+    question: `Download ${pull.model} (${pull.size}) to this computer with Ollama?`,
+    title: `Download ${pull.model}, ${pull.size.replace(/^about /, '~')}`,
+    lines: [
+      { k: 'Size', v: `${pull.size} on this computer's disk`, style: { color: 'yellow', bold: true } },
+      { k: 'Model', v: `${pull.ref} (Clef, ${pull.params})` },
+      { k: 'Here', v: here },
+    ],
+    detail: {
+      lines: [
+        { k: 'Size', v: `${pull.size}, downloaded to this computer's disk`, style: { color: 'yellow', bold: true } },
+        { k: 'Model', v: `${pull.ref}: Cloudflare's Clef decision model, the ${pull.params}, through Ollama` },
+        { k: 'Here', v: here },
+        { k: 'Call', v: String(pull.text ?? '').slice(0, 300) },
+        'Homie never downloads a model by itself: the person says yes to the size first. Without it, AI guides and game decisions under dev play from the game\'s script, and the deployed studio still thinks with its own Workers AI.',
+        'Proceed lets this one download through. Cancel stops it here.',
+      ],
+    },
+  });
+  if (answer === 'Proceed') return null;
+  return { deny: answer === null ? `This downloads ${pull.model} (${pull.size}) to this computer and nobody could be asked here, so it did not run. Ask the person first, and say the size.` : `The person said no to downloading ${pull.model} (${pull.size}). Do not retry it unless they ask for it; under dev the guides and game decisions play from the game's script without it.` };
+}
+
+/** Ollama's address on this computer: the default port, or a loopback OLLAMA_HOST the command sets; null for any other host. */
+function ollamaBase(host) {
+  if (!host) return 'http://127.0.0.1:11434';
+  const m = /^(?:http:\/\/)?(127\.0\.0\.1|localhost)(?::(\d{2,5}))?\/?$/.exec(String(host).trim());
+  return m ? `http://${m[1]}:${m[2] ?? '11434'}` : null;
 }
 
 /** Everything this studio's media jobs have spent in one unit (each job's budget.json `spent`). */

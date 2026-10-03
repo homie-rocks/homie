@@ -10,8 +10,8 @@ Vale (`homie-studio game new <id> --from ember-vale`) is the worked example.
 - A beginner server whose AI guide seats (always marked "· AI") follow new heroes, lead them to places, take on a
   quest with them, and pull back when asked.
 - **Hands** are your game's own bot code, every frame, at the party's skill dial. **The brain** picks a goal every
-  few seconds: the studio's own Workers AI, the owner's own key, or the owner's Claude in a seat. With none of them
-  (or over the day's budget) your scripted `decide` plays.
+  few seconds: the studio's own Workers AI (Clef), the owner's own key, or the owner's Claude in a seat. With none
+  of them (or over the day's budget) your scripted `decide` plays.
 - The AI never types. It chooses ids from your `agents.json`; your game draws your own words.
 
 ## 1. Upgrade
@@ -86,10 +86,17 @@ const agents = useAgents(room.net, vocab as unknown as Vocabulary, {
 
 1. `homie-studio servers new <id> "First Steps" --policy beginner --guides 2` (add `--kids` for children).
 2. `homie-studio agents brain <id> first-steps workers-ai`: the first time is an ASK the owner taps; then
-   `npm run deploy` once (it binds Workers AI). The free allocation (10,000 neurons a day) gives about six busy
-   guide-hours; the default budget is 8,000. Or `owner-key` with `agents brain key` on the owner's own computer.
-3. Try it: two browsers on the server's page, walk up to a guide, tap "Help me with ...". In a terminal or the
-   local MCP, `agent_sit { game: "<id>", server: "first-steps" }` puts your own Claude in a guide's seat.
+   `npm run deploy` once (it binds Workers AI). The guides think with Cloudflare's Clef decision model
+   (`@cf/cloudflare/clef-flash`, the default since 0.24.4): it answers each decision as typed Choices of your
+   goals, values and lines, so it does what an ask asks far more often than a chat model did. About 9 neurons a
+   decision: the default budget of 8,000 a day is about 900 decisions (the free allocation is 10,000). Or
+   `owner-key` with `agents brain key` on the owner's own computer.
+3. Try it: `homie-studio agents try <id> --view view.json --ask ask_help:quest=<quest> --from 0` shows what the
+   brain would decide in that moment (with `--model` to compare one). Then two browsers on the server's page, walk
+   up to a guide, tap "Help me with ...". In a terminal or the local MCP, `agent_sit { game: "<id>", server:
+   "first-steps" }` puts your own Claude in a guide's seat; `brain: "local"` lets Clef on your computer decide.
+   Under `npm run dev` the guides think with Clef on your own computer when Ollama has `clef-flash` (free; it is
+   about 11 GB and only ever downloaded when you say so: `ollama pull clef-flash`).
 
 ## 5. Do not
 

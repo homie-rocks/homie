@@ -43,7 +43,7 @@
  * The take "strike" (lab.json) stands a big training slime in front of the hero (lab.stage "dummy"). Outside the lab
  * every lab call is a no-op.
  */
-import { AI_MARK, BUBBLE_FONT, createBubbles, createControls, createLabels, createRoom, paintBubbles, type BubbleIn, type BubbleOut, createSaves, easeView, exposePort, fitView, jitter, q, standoff, stripAi, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
+import { AI_MARK, BUBBLE_FONT, createBubbles, createControls, createLabels, createRoom, paintBubbles, type BubbleIn, type BubbleOut, createSaves, easeView, exposePort, fitView, jitter, q, standoff, stripAi, type BodyBase, type DecidePicks, type Fit, type LabelIn, type LabelOut, type NetEvent, type Skill } from '@homie-rocks/studio/port';
 import { useAgents, type Goal, type Vocabulary } from '@homie-rocks/studio/agents';
 import vocabulary from '../agents.json';
 // The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
@@ -376,10 +376,64 @@ function stepHost(dt: number): void {
     b.flags = now - b.strikeAt < T.flashMs ? STRIKING : 0;
     if (wants && live && now - b.atkAt > T.strikeMs) strike(b, now);
   }
-  if (live) stepSlimes(dt, now);
+  if (live) { stepDirector(now); stepSlimes(dt, now); }
   // Every browser's ask buttons offer the quests open now (slow keyed state: sent only when it changes).
   net.state('quests', openQuests());
   room.update();
+}
+
+/* ------------------------------------------------------------------ the slimes' director (section 20, opt-in) */
+/**
+ * Every 6 s of a live night the host asks the studio's decision model how the slimes should hunt (`net.decide`: Clef,
+ * three typed questions, never text): a tactic, whether a wave comes now, how hard to push. It runs only when game.json
+ * says "decide": true (the room answers "off" otherwise, and asks are spent from the studio's AI brains' day); without it,
+ * over budget or slow, the floor answers: chase, no wave, steady, which is how the vale always played. On a kids server
+ * the slimes never gang up on the most hurt hero and the vale never pushes past steady. The heroes' dial is untouched:
+ * this is the slimes' mind, not the bots'.
+ */
+type Tactic = 'chase' | 'surround' | 'weakest' | 'regroup';
+const TACTICS: Record<Tactic, string> = {
+  chase: 'Rush the nearest hero',
+  surround: 'Spread out and close in on a hero from every side',
+  weakest: 'Gang up on the most hurt hero',
+  regroup: 'Fall back to the King Slime and gather before the next push',
+};
+/** How often a slime comes, by pressure (0 a breather .. 4 fierce). 1100 ms at 2 is the vale as it always was. */
+const SPAWN_MS = [1900, 1450, 1100, 850, 700];
+const DIRECTOR_MS = 6000;
+const director = { tactic: 'chase' as Tactic, pressure: 2, waveLeft: 0, by: 'floor', at: 0, asking: false, log: [] as Record<string, unknown>[] };
+const directorFloor = (): DecidePicks => ({ tactic: 'chase', wave: false, pressure: 2 });
+function stepDirector(now: number): void {
+  if (!room.hosting || director.asking || now < director.at) return;
+  director.at = now + DIRECTOR_MS;
+  director.asking = true;
+  const kidsRoom = kids();
+  const king = slimes.find((o) => o.size === 3);
+  const heroes = [...room.bodies.values()].filter((b) => !b.bot && b.seat !== null);
+  const state = {
+    heroes: heroes.map((b) => ({ hp: Math.round((100 * b.hp) / Math.max(1, b.maxHp)), down: Boolean(b.flags & DOWN), level: b.level, nearKing: king ? Math.round(Math.hypot(king.x - b.x, king.y - b.y)) : null })),
+    slimes: { count: slimes.length, big: slimes.filter((o) => o.size === 2).length, king: king ? Math.round((100 * king.hp) / king.maxHp) : null },
+    night: { secondsLeft: room.clock().secondsLeft }, now: { tactic: director.tactic, pressure: director.pressure },
+    ...(kidsRoom ? { note: 'Young players: keep it gentle' } : {}),
+  };
+  const tactics = Object.fromEntries(Object.entries(TACTICS).filter(([k]) => !(kidsRoom && k === 'weakest')));
+  const asked = performance.now();
+  void net.decide(state, {
+    tactic: { type: 'choice', instructions: 'How should the slimes hunt the heroes for the next few seconds? A fun fight, not a massacre: hurt heroes deserve a breather.', criteria: tactics },
+    wave: { type: 'noul', instructions: 'Should a wave of extra slimes come now?', criteria: { true: 'The heroes are healthy and it has gone quiet', false: 'The heroes are hurt, down or few' } },
+    pressure: { type: 'score', instructions: 'How hard should the vale push the heroes right now?', criteria: ['A breather', 'Easy', 'Steady', 'Hard', 'Fierce'] },
+  }, { floor: directorFloor }).then((d) => {
+    director.asking = false;
+    const t = String(d.picks['tactic'] ?? 'chase') as Tactic;
+    director.tactic = t in tactics ? t : 'chase';
+    director.pressure = clamp(Math.round(Number(d.picks['pressure'] ?? 2)), 0, kidsRoom ? 2 : 4);
+    if (d.picks['wave'] === true && director.waveLeft === 0) director.waveLeft = 3;
+    director.by = d.by;
+    director.log.push({ at: Date.now(), by: d.by, why: d.why ?? null, ms: Math.round(performance.now() - asked), tactic: director.tactic, pressure: director.pressure, wave: d.picks['wave'] === true });
+    if (director.log.length > 40) director.log.shift();
+    // Every screen sees what the slimes are up to (only when a model decided; the floor is the vale as always).
+    net.state('slimes', d.by === 'floor' ? null : { tactic: director.tactic, pressure: director.pressure });
+  });
 }
 
 /* ------------------------------------------------------------------ the guides' hands */
@@ -498,8 +552,11 @@ function stepSlimes(dt: number, now: number): void {
   if (lab.stage === 'dummy') return; // the lab's training slime stands still and never bites
   const bodies = [...room.bodies.values()].filter((b) => !(b.flags & DOWN));
   const people = bodies.filter((b) => !b.bot).length;
-  if (now >= spawnAt && slimes.length < 6 + people * 2) {
-    spawnAt = now + 1100;
+  // The director's pressure (0 a breather .. 4 fierce; 2 is how the vale always played) sets how fast and how many.
+  const cap = Math.max(4, 6 + people * 2 + (director.pressure - 2) * 2) + (director.waveLeft > 0 ? 3 : 0);
+  if ((now >= spawnAt || director.waveLeft > 0) && slimes.length < cap) {
+    spawnAt = now + SPAWN_MS[director.pressure]!;
+    if (director.waveLeft > 0) director.waveLeft -= 1;
     const edge = Math.floor(Math.random() * 4);
     const x = edge === 0 ? 30 : edge === 1 ? W - 30 : Math.random() * W;
     const y = edge === 2 ? 30 : edge === 3 ? H - 30 : Math.random() * H;
@@ -517,10 +574,18 @@ function stepSlimes(dt: number, now: number): void {
     if (struck.has(s.id)) continue;
     let target: Body | null = null; let bd = Infinity;
     for (const b of prey) { const d = Math.hypot(b.x - s.x, b.y - s.y); if (d < bd) { bd = d; target = b; } }
+    // The director's tactic (section 20; chase is how the vale always played): the most hurt hero, a ring round the
+    // nearest, or back to the King to gather (a hero close by is still bitten).
+    if (director.tactic === 'weakest' && prey.length > 1) target = prey.reduce((a, b) => (b.hp / b.maxHp < a.hp / a.maxHp ? b : a));
     const speed = s.size === 3 ? 70 : 95 - s.size * 10;
     if (target) {
-      const dx = target.x - s.x; const dy = target.y - s.y; const dist = Math.hypot(dx, dy) || 1;
-      s.x += (dx / dist) * speed * dt; s.y += (dy / dist) * speed * dt;
+      let gx = target.x; let gy = target.y;
+      const king = slimes.find((o) => o.size === 3);
+      if (director.tactic === 'surround' && bd > 90) { const a = s.id * 2.39996; gx += Math.cos(a) * 80; gy += Math.sin(a) * 80; }
+      if (director.tactic === 'regroup' && king && s !== king && bd > 140) { gx = king.x + Math.cos(s.id) * 70; gy = king.y + Math.sin(s.id) * 70; }
+      const dx = gx - s.x; const dy = gy - s.y; const dist = Math.hypot(target.x - s.x, target.y - s.y) || 1;
+      const step = Math.hypot(dx, dy) || 1;
+      if (step > 4) { s.x += (dx / step) * speed * dt; s.y += (dy / step) * speed * dt; }
       if (dist < R + 10 + s.size * 10 && now - s.hitAt > 800) {
         s.hitAt = now;
         target.hp -= 5 * s.size + (s.size === 3 ? 10 : 0);
@@ -919,6 +984,13 @@ function hud(t: number): void {
   // Top centre; on a narrow screen where that would touch the panel, just under it.
   if (x0 + pw + 10 > cw / 2 - ctx.measureText(clock).width / 2) { ctx.textAlign = 'left'; ctx.fillText(clock, x0 + 10, y0 + 62 + 20); }
   else { ctx.textAlign = 'center'; ctx.fillText(clock, cw / 2, 30); }
+  // What the slimes are up to, when the studio's decision model chose it (section 20; nothing shows on the floor).
+  const mind = c.phase === 'live' ? net.stateOf<{ tactic: string; pressure: number }>('slimes') : null;
+  if (mind) {
+    const words: Record<string, string> = { chase: 'rushing you', surround: 'closing in from every side', weakest: 'hunting the hurt', regroup: 'gathering round the King' };
+    ctx.font = SMALL; ctx.fillStyle = '#e7a86b'; ctx.textAlign = 'center';
+    ctx.fillText(`Slimes: ${words[mind.tactic] ?? mind.tactic}`, cw / 2, x0 + pw + 10 > cw / 2 - 80 ? y0 + 62 + 40 : 50);
+  }
   ctx.textAlign = 'center';
   if (c.phase === 'over') {
     const rows = room.results().slice(0, 5);
@@ -1144,6 +1216,8 @@ net.expose({
     me: me.has ? { x: Math.round(me.x), y: me.y | 0 } : null,
     log: guideLog.slice(),
   }),
+  // The slimes' director (section 20): its tactic now, and each decision (who answered, how long it took).
+  director: () => ({ tactic: director.tactic, pressure: director.pressure, by: director.by, log: director.log.slice(), net: net.stats().decides ?? null }),
   // Where the camera looks, and the names as drawn (the e2e probe counts overlaps, checks your own, and reads them).
   camera: () => (cam ? { x: cam.x, y: cam.y, scale: cam.scale, follow: cam.follow } : null),
   labels: () => shownLabels.map((l) => ({ text: l.text, self: Boolean(l.self), alpha: l.alpha, moved: l.moved, left: Math.round(l.left), top: Math.round(l.top), right: Math.round(l.right), bottom: Math.round(l.bottom) })),

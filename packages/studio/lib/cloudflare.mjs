@@ -282,6 +282,8 @@ export function needsWorkersAi(root, w, db) {
     // Room chat (0.23.0): a game whose players may type has its messages reviewed by the studio's own Workers AI
     // (Cloudflare's Clef decision model, within a day's budget of the free allocation) unless its game.json says no.
     if ((cat.games ?? []).some((g) => g.chat !== false && (g.chat?.mode ?? 'text') === 'text' && g.chat?.ai !== false)) return true;
+    // A game's own decisions (0.24.4): a game whose game.json says "decide": true asks the same decision model.
+    if ((cat.games ?? []).some((g) => g.decide === true)) return true;
   } catch { /* not built */ }
   const r = w(['d1', 'execute', db, '--remote', '--json', '--command', "SELECT COUNT(*) AS n FROM servers WHERE brain = 'workers-ai' AND state = 'open'"]);
   if (r.code !== 0) return false;

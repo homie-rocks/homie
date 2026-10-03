@@ -20,7 +20,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 import { artFor, artSummaryOf, budgetWords, decisionsFileOf, licenceIssues, lockedChanges, lookText, phaseStrip, publicSource } from '../hooks/lib/art.mjs';
-import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, globMatch, paidMcpOf, paidOf, programOf, protectedBy, readOnlySql, studioCalls } from '../hooks/lib/commands.mjs';
+import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, globMatch, modelPullOf, paidMcpOf, paidOf, programOf, protectedBy, readOnlySql, studioCalls } from '../hooks/lib/commands.mjs';
 import { applyEdit, unifiedDiff } from '../hooks/lib/diff.mjs';
 import { summarize } from '../hooks/lib/feed.mjs';
 import { redact, redactText } from '../hooks/lib/redact.mjs';
@@ -170,6 +170,31 @@ test('commands: changes to the Cloudflare account outside the studio\'s deploy, 
     ['mcp__cloudflare-bindings__set_active_account', { activeAccountId: 'x' }], ['mcp__cloudflare-bindings__workers_list', {}], ['mcp__cloudflare-docs__search_cloudflare_documentation', { query: 'd1 limits' }],
     ['mcp__github__delete_file', {}]]) {
     assert.equal(cloudflareMcpChangeOf(tool, input), null, tool);
+  }
+});
+
+test('commands: a Clef model downloaded by Ollama, with its size; other models and other commands are not read', () => {
+  const held = {
+    'ollama pull clef-flash': ['pull', 'clef-flash', null, 'about 11 GB'],
+    'ollama pull clef': ['pull', 'clef', null, 'about 18 GB'],
+    'ollama pull --insecure clef-flash:9b': ['pull', 'clef-flash', '9b', 'about 11 GB'],
+    'ollama pull registry.ollama.ai/library/clef-flash:latest': ['pull', 'clef-flash', 'latest', 'about 11 GB'],
+    'cd night-owls && ollama run --verbose clef-flash "hello"': ['run', 'clef-flash', null, 'about 11 GB'],
+    'ollama run clef:27b --format json': ['run', 'clef', '27b', 'about 18 GB'],
+    'OLLAMA_HOST=127.0.0.1:11500 ollama pull clef-flash': ['pull', 'clef-flash', null, 'about 11 GB'],
+    'curl -s http://127.0.0.1:11434/api/pull -d \'{"model": "clef-flash"}\'': ['api', 'clef-flash', null, 'about 11 GB'],
+    'curl http://localhost:11434/api/pull -d "{\\"name\\":\\"clef\\"}"': ['api', 'clef', null, 'about 18 GB'],
+  };
+  for (const [c, [verb, model, tag, size]] of Object.entries(held)) {
+    const r = modelPullOf(c);
+    assert.deepEqual([r?.verb, r?.model, r?.tag, r?.size], [verb, model, tag, size], c);
+  }
+  assert.equal(modelPullOf('OLLAMA_HOST=127.0.0.1:11500 ollama pull clef-flash').host, '127.0.0.1:11500');
+  assert.equal(modelPullOf('cd night-owls && ollama run clef-flash').dir, 'night-owls');
+  for (const free of ['ollama list', 'ollama ps', 'ollama show clef-flash', 'ollama rm clef-flash', 'ollama cp clef-flash mine', 'ollama serve', 'ollama --version',
+    'ollama pull llama3.2', 'ollama run clefable', 'ollama pull clef-flash --help', 'ollama pull -h clef', 'curl -s http://127.0.0.1:11434/api/tags', 'curl -s http://127.0.0.1:11434/api/pull -d \'{"model":"llama3.2"}\'',
+    'brew install ollama', 'none']) {
+    assert.equal(modelPullOf(free), null, free);
   }
 });
 

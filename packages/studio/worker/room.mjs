@@ -44,7 +44,7 @@
  * =============================================================================
  */
 import { aiName, skillPreset, stripAi } from './agents.mjs';
-import { checkArgs, talks, vocabularyOf } from './brain.mjs';
+import { DECIDE, checkArgs, checkDecide, talks, vocabularyOf } from './brain.mjs';
 import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normalizeChat, publicChat } from './chat.mjs';
 
 export const NET_VERSION = 1;
@@ -103,6 +103,8 @@ export const LIMITS = Object.freeze({
   hello: 2048, snap: 16384, in: 2048, ev: 4096, ckpt: 65536, state: 8192, round: 8192, roster: 4096, ping: 256, other: 512,
   // Room chat (revision 8): a typed line (280 characters, emoji count double), a reaction.
   say: 1536, react: 256,
+  // A game's own decision (section 20): a few typed questions about its state.
+  decide: DECIDE.bytes,
 });
 /**
  * What grows with the seats (every body, every result, every slot): the checkpoint, round and roster caps double
@@ -112,7 +114,7 @@ export const LIMITS = Object.freeze({
 export const GROWS = Object.freeze(['ckpt', 'round', 'roster']);
 export const capOf = (t, seats) => (LIMITS[t] ?? LIMITS.other) * (GROWS.includes(t) && seats > 16 ? 2 : 1);
 /** Rate caps (messages per rolling second, per client). Over the cap a message is dropped, counted and reported. */
-export const RATES = Object.freeze({ snap: 30, in: 60, ev: 30, ckpt: 4, state: 64, round: 4, roster: 8, ping: 8, other: 8, say: 4, react: 10 });
+export const RATES = Object.freeze({ snap: 30, in: 60, ev: 30, ckpt: 4, state: 64, round: 4, roster: 8, ping: 8, other: 8, say: 4, react: 10, decide: 2 });
 /** `ev` per second by the sender's role: a screen is a spectator, and the host is somebody's phone. */
 export const EV_RATES = Object.freeze({ host: 30, replica: 10, screen: 2 });
 /** The keyed state channel: at most this many keys and bytes per room. */
@@ -274,7 +276,7 @@ export class NetRoom {
     this.stats = {
       snaps: 0, ins: 0, evs: 0, ckpts: 0, states: 0, rounds: 0, drops: 0, oversize: 0, stFixed: 0, reclaimed: 0, seated: 0,
       kicked: 0, refused: 0, persists: 0, restoredFrom: null, bytesIn: 0, bytesOut: 0, elections: [], promotions: 0,
-      speechDrops: 0, agentDrops: 0, labelled: 0, votes: 0,
+      speechDrops: 0, agentDrops: 0, labelled: 0, votes: 0, decides: 0, decided: {}, decideMs: [],
     };
     this.snapTimes = [];
     /** The owner's controls (section 15): who is held out of this room until when, who is muted, the banner, a closed door. */
@@ -299,6 +301,13 @@ export class NetRoom {
     this.chatReacts = [];
     this.chatPending = 0;
     this.review = null;
+    /**
+     * A game's own decisions (section 20): the host's typed questions, answered by the studio's decision model (the Table
+     * sets `decider`; null: the host's floor answers), at most one every 3 s and 20 a minute a room, two at a time.
+     */
+    this.decider = null;
+    this.decideTimes = [];
+    this.decidePending = 0;
     this.watchIds = new WeakMap();
     this.defaultChat = null;
   }
@@ -402,6 +411,39 @@ export class NetRoom {
   }
   peers() { return this.live().map((c) => this.peer(c)); }
   stateObject() { const o = {}; for (const [k, v] of this.state) o[k] = v.d; return o; }
+
+  /**
+   * A game's own decision (section 20): the host's typed questions about its state, answered by the studio's decision
+   * model through the Table (`decider`). Only the host asks; the answer (`decided`, option ids and numbers only) goes
+   * back to that socket alone. Off, paced, over budget, too slow or wrong: `ok: false` with why, and the host's own floor
+   * answers. `n` is the host's own id for the request.
+   */
+  onDecide(c, m, isHost) {
+    const n = typeof m.n === 'string' || Number.isInteger(m.n) ? String(m.n).slice(0, 16) : '';
+    const reply = (o) => this.send(c, { t: 'decided', n, ...o });
+    if (!isHost || this.lite(c)) return reply({ ok: false, why: 'not-host' });
+    if (typeof this.decider !== 'function') return reply({ ok: false, why: 'off' });
+    const now = this.now();
+    while (this.decideTimes.length && this.decideTimes[0] <= now - 60_000) this.decideTimes.shift();
+    const last = this.decideTimes.at(-1) ?? -Infinity;
+    if (now - last < DECIDE.gapMs - 100 || this.decideTimes.length >= DECIDE.perMinute) return reply({ ok: false, why: 'pace', retryMs: Math.max(DECIDE.gapMs - (now - last), this.decideTimes.length >= DECIDE.perMinute ? this.decideTimes[0] + 60_000 - now : 0) });
+    if (this.decidePending >= DECIDE.inFlight) return reply({ ok: false, why: 'busy' });
+    const q = checkDecide(m.state, m.questions);
+    if (!q.ok) return reply({ ok: false, why: 'bad', message: q.why });
+    this.decideTimes.push(now);
+    this.decidePending += 1;
+    this.stats.decides += 1;
+    Promise.resolve()
+      .then(() => this.decider(q.state, q.questions, { room: this.code, kids: this.policy.kids }))
+      .then((r) => {
+        const by = r?.ok ? r.by ?? 'ai' : r?.why ?? 'error';
+        this.stats.decided[by] = (this.stats.decided[by] ?? 0) + 1;
+        if (r?.ok) { this.stats.decideMs.push(r.ms ?? 0); if (this.stats.decideMs.length > 40) this.stats.decideMs.shift(); this.stats.decideNeurons = (this.stats.decideNeurons ?? 0) + (Number(r.neurons) || 0); }
+        reply(r?.ok ? { ok: true, by: r.by ?? 'ai', picks: r.picks ?? {}, p: r.p ?? {}, ms: r.ms ?? null } : { ok: false, why: r?.why ?? 'error' });
+      })
+      .catch(() => { this.stats.decided.error = (this.stats.decided.error ?? 0) + 1; reply({ ok: false, why: 'error' }); })
+      .finally(() => { this.decidePending -= 1; });
+  }
 
   /** Drop the socket from the room and close it. */
   kick(c, why, code = 1008) {
@@ -515,6 +557,7 @@ export class NetRoom {
         }
         return;
       }
+      case 'decide': return this.onDecide(c, m, isHost);
       case 'ckpt': {
         if (!isHost) return;
         this.lastCkpt = { k: Number(m.k) || 0, st: this.stamp(m.st), d: m.d ?? null, ...(Array.isArray(m.c) ? { c: m.c.slice(0, 64) } : {}) };
@@ -1821,6 +1864,8 @@ export class NetRoom {
           pending: this.chatPending,
           lines: this.recentChat(now).map((r) => ({ ...this.wireLine(r), kind: r.kind, client: r.from?.client ?? null, player: r.from?.player ?? null, browser: browserTag(r.from?.browser), ...(r.review ? { review: r.review } : {}) })),
         },
+        // A game's own decisions (section 20): how many, who answered, the model's time and neurons (never a state).
+        ...(this.stats.decides ? { decides: { n: this.stats.decides, by: { ...this.stats.decided }, msP50: [...this.stats.decideMs].sort((x, y) => x - y)[Math.floor(this.stats.decideMs.length / 2)] ?? null, neurons: Math.round((this.stats.decideNeurons ?? 0) * 100) / 100 } } : {}),
       },
     };
   }

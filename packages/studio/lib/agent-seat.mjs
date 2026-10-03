@@ -8,8 +8,13 @@
  *
  * The pass: one the owner gave (`hap_…`), or, from a studio folder, a one-day guide pass minted with the owner's office
  * key and revoked when the AI stands. The secret stays in this process; it is never printed or returned.
+ *
+ * BRAIN 'local' (0.24.4): instead of an AI's turns, Cloudflare's Clef decision model on this computer (Ollama with
+ * clef-flash, lib/local-ai.mjs) decides every few seconds, the way a house guide does (worker/agents.mjs think: the same
+ * questions, the same fixed rules), for free and with nothing sent to Cloudflare. agent_do still overrides it.
  */
-import { parseDecision, renderLine, vocabularyOf } from '../worker/brain.mjs';
+import { clefDecide, parseDecision, renderLine, vocabularyOf } from '../worker/brain.mjs';
+import { think } from '../worker/agents.mjs';
 import { withKey } from './office.mjs';
 
 const GAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -26,7 +31,7 @@ export class AgentSeat {
    * @param {string} [o.pass]   an agent pass (hap_…); else one is minted from `root` with the office key
    * @param {string} [o.root]   the studio folder (for a pass of its own)
    */
-  constructor({ site, game, server = null, pass = null, label = 'Claude', root = null, WebSocketImpl = globalThis.WebSocket, fetchImpl = globalThis.fetch }) {
+  constructor({ site, game, server = null, pass = null, label = 'Claude', root = null, WebSocketImpl = globalThis.WebSocket, fetchImpl = globalThis.fetch, brain = null, local = null }) {
     this.site = String(site ?? '').replace(/\/+$/, '');
     this.game = game;
     this.server = server;
@@ -52,6 +57,10 @@ export class AgentSeat {
     this.errors = [];
     this.vocab = null;
     this.ping = null;
+    /** brain 'local': Clef on this computer ({ base, model }) decides; its last decisions, and who said no thanks. */
+    this.brain = brain === 'local' && local ? 'local' : null;
+    this.local = local;
+    this.auto = { timer: null, busy: false, at: 0, decisions: [], avoid: new Map(), said: [], goalState: null };
   }
 
   async sit() {
@@ -101,8 +110,55 @@ export class AgentSeat {
     this.ping = setInterval(() => { try { ws.send(JSON.stringify({ t: 'ping', c: Date.now() })); } catch { /* closed */ } }, 2000);
     // The host shows a guide the game every 2 s: wait for the first look (up to 6 s).
     for (let i = 0; i < 30 && !this.view && !this.closed; i += 1) await wait(200);
+    if (this.brain === 'local') this.autopilot();
     return { ok: true, seat: this.seat, name: this.name, room: this.room, server: this.server, ...this.look() };
   }
+
+  /**
+   * BRAIN 'local': a decision on a new ask (at once), when the goal in force ends, else every 12 s while the room has a
+   * view; never more than one at a time, and do() keeps the 3 s pace and the 8 s quiet. No thanks holds that player off
+   * for 10 minutes.
+   */
+  autopilot() {
+    const tick = async () => {
+      if (this.closed) { this.stopAuto(); return; }
+      const now = Date.now();
+      const a = this.auto;
+      const asks = this.asks.filter((x) => now - x.at < 30_000);
+      const state = this.view?.goal && typeof this.view.goal === 'object' ? this.view.goal.state ?? null : null;
+      const ended = (state === 'done' || state === 'failed') && a.goalState !== state;
+      a.goalState = state;
+      if (a.busy || !this.view || !(asks.length || ended || now - a.at >= 12_000)) return;
+      a.busy = true;
+      a.at = now;
+      for (const [s, until] of a.avoid) if (until <= now) a.avoid.delete(s);
+      for (const x of asks) if (this.vocab?.asks?.[x.k]?.leave) a.avoid.set(x.from, now + 10 * 60_000);
+      try {
+        const party = Array.isArray(this.view.party) ? this.view.party.map((p) => p?.seat).filter(Number.isInteger) : [];
+        const ctx = {
+          view: this.view, me: { seat: this.seat }, goal: this.view.goal ?? null, asks, party: this.party.filter((p) => now - p.at < 60_000),
+          speech: this.policy?.speech ?? 'lines', kids: this.policy?.kids === true, quiet: !this.talking() || now - this.sayAt < 8000,
+          players: party, avoid: [...a.avoid.keys()], said: a.said.map((x) => ({ ...x, ago: now - x.at })),
+        };
+        const local = this.local;
+        const t = await think(this.vocab, { mode: 'local', brain: { engine: 'local', run: (args) => clefDecide({}, { vocab: args.vocab, ctx: args.ctx, model: local.model, ms: 8000, local, fetch: this.fetch }) }, ctx });
+        const d = t.decision;
+        let sent = null;
+        if (d?.goal && !this.closed) {
+          const say = d.say && this.talking() && Date.now() - this.sayAt >= 8000 ? d.say : null;
+          sent = await this.do({ goal: d.goal, args: d.args, say, sayArgs: say ? d.sayArgs : {} });
+          if (sent.ok && say) a.said = [...a.said, { line: say, args: d.sayArgs, at: Date.now() }].slice(-4);
+        }
+        a.decisions = [...a.decisions, { at: new Date(now).toISOString(), provider: t.provider, goal: d?.goal ?? null, args: d?.args ?? null, say: d?.say ?? null, ms: t.ms, ...(t.why ? { why: t.why } : {}), ...(sent && !sent.ok ? { refused: sent.why } : {}) }].slice(-20);
+      } catch (error) {
+        a.decisions = [...a.decisions, { at: new Date(now).toISOString(), provider: 'none', why: String(error?.message ?? error).slice(0, 120) }].slice(-20);
+      } finally { a.busy = false; }
+    };
+    this.auto.timer = setInterval(() => { void tick(); }, 1000);
+    void tick();
+  }
+
+  stopAuto() { if (this.auto.timer) clearInterval(this.auto.timer); this.auto.timer = null; }
 
   onFrame(m) {
     switch (m.t) {
@@ -135,6 +191,7 @@ export class AgentSeat {
       asks: this.asks.filter((a) => now - a.at < 60_000).map((a) => ({ ask: a.k, args: a.args, seat: a.from, text: v ? renderLine(v, a.k, a.args, { kind: 'asks', nameOf: (s) => `seat ${s}` }) : null, secondsAgo: Math.round((now - a.at) / 1000) })),
       party: this.party.filter((p) => now - p.at < 60_000).map((p) => ({ seat: p.seat, line: p.line, args: p.args })),
       lastDo: this.lastDo,
+      ...(this.brain === 'local' ? { brain: { local: this.local.model, decisions: this.auto.decisions.slice(-5) } } : {}),
       choices: v ? { goals: describe(v.goals), lines: describe(v.lines) } : null,
       errors: this.errors.slice(-3),
     };
@@ -162,6 +219,7 @@ export class AgentSeat {
   talking() { return Boolean(this.policy && ['workers-ai', 'owner-key'].includes(this.policy.brain) && this.policy.speech !== 'off'); }
 
   close() {
+    this.stopAuto();
     if (this.ping) clearInterval(this.ping);
     this.ping = null;
     if (this.ws) { try { this.ws.send(JSON.stringify({ t: 'bye' })); } catch { /* closed */ } try { this.ws.close(1000, 'bye'); } catch { /* closed */ } }

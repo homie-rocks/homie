@@ -1,9 +1,9 @@
 ---
 name: studio-setup
 description: "Set up a Homie studio (one repository with games/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare, free plan, no payment method) by a built-in checklist that never jumps ahead: setup status first (accounts and tools, what each unlocks, the exact fix), name the studio, see a working game, make one small change, plan the game into its Game Codex, build it (alone or with parallel agents) with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says \"set up a game studio called X\" (with or without \"and make a multiplayer game\")."
-compatibility: Node 22. Reads, and offers only when a feature needs them, each provider's own tools (Wrangler (Cloudflare, pinned in the studio), the GitHub CLI, the ElevenLabs CLI, a fal key, and as an option the stripe CLI's Stripe Projects). The plugin's providers.json lists them.
+compatibility: Node 22. Reads, and offers only when a feature needs them, each provider's own tools (Wrangler (Cloudflare, pinned in the studio), the GitHub CLI, the ElevenLabs CLI, a fal key, Ollama for Clef on this computer, and as an option the stripe CLI's Stripe Projects). The plugin's providers.json lists them.
 metadata:
-  providers: cloudflare github elevenlabs fal stripe
+  providers: cloudflare github elevenlabs fal stripe ollama
 ---
 
 # Set up a studio
@@ -74,13 +74,15 @@ few seconds, and never prints a key:
      ○ GitHub (optional): a private backup and publishing by pull request
      ○ ElevenLabs (optional): songs and game scores, on your own plan
      ○ fal (optional): painted art and generated video, on your own account, under a budget
+     ○ Clef on this computer (optional, inside a studio): AI guides and game decisions under dev, free
    ```
 
 4. **Never block on an optional row.** Say what it unlocks and that it can wait until that feature is
    wanted; the skill that needs it (`music`, `art`, `video`) offers it then. A "do this now" row you can
    do (`fix.run`, like `npx wrangler login` or `brew install ffmpeg`): offer it, and run it when they
    agree. A row the person does on their own (`fix.open`) can be done any time, even while they wait
-   for something else: give them the link.
+   for something else: give them the link. The "Clef on this computer" row is the person's download:
+   say its size first (`ollama pull clef-flash`, about 11 GB) and run it only after their yes.
 5. Run it again whenever they say they did something, and tick the row.
 
 **Each provider's own tools, lazily.** Homie works through each provider's own CLI, plugin or MCP

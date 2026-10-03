@@ -1,4 +1,4 @@
 {
-  "description": "The Homie Studio mod (Claude Code 2.1.287 or later): the band above the prompt, the Studio, parts and arcade panes, instant /commands, guards on protected files, deploys and paid media calls, secrets taken out of tool output, and Homie's results drawn natively. The plugin README's \"What the Homie mod does\" lists every event it handles and every call it makes.",
+  "description": "The Homie Studio mod (Claude Code 2.1.287 or later): the band above the prompt, the Studio, parts and arcade panes, instant /commands, guards on protected files, deploys, paid media calls and Clef model downloads, secrets taken out of tool output, and Homie's results drawn natively. The plugin README's \"What the Homie mod does\" lists every event it handles and every call it makes.",
   "modules": ["./homie.mjs"]
 }

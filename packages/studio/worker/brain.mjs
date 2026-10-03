@@ -12,8 +12,13 @@
  *   parseDecision(out, vocab)   one JSON object { goal, args, say, sayArgs }, every id and argument checked; anything
  *                               else (prose, an unknown id, a wrong or extra argument) is nothing at all
  *   scripted(vocab, ctx)        the floor: a player's ask answered the way agents.json says (its `goal` and `say`)
- *   workersAi / ownerKey        the providers: the studio's own Workers AI (env.AI, model HOMIE_BRAIN_MODEL) and the
- *                               owner's own key (the official @anthropic-ai/sdk, claude-haiku-4-5, a JSON schema output)
+ *   clefQuestions / clefDecision (0.24.4) a decision asked as Clef's typed questions (Choices of goal, argument and line)
+ *                               and the answers composed back into one decision: Cloudflare's decision model never
+ *                               writes text, it only ever picks among the options the vocabulary and the view offer
+ *   workersAi / ownerKey        the providers: the studio's own Workers AI (env.AI, model HOMIE_BRAIN_MODEL: Clef is
+ *                               asked questions, a chat model a prompt) and the owner's own key (the official
+ *                               @anthropic-ai/sdk, claude-haiku-4-5, a JSON schema output)
+ *   localClef                   the person's own computer: clef-flash on Ollama (`homie-studio dev` finds it)
  *   costOf                      what one call cost: neurons (Workers AI) or microdollars (the owner's key)
  *
  * SAFETY (DESIGN section 9): the model never types. It picks ids; the game renders the creator's text. A prompt
@@ -341,12 +346,23 @@ export function scripted(vocab, { asks = [], view = null, players = null, avoid 
 
 /* ------------------------------------------------------------------ providers and what they cost */
 
-/** The default Workers AI model (var HOMIE_BRAIN_MODEL changes it) and the owner-key model. Checked 2026-10-01. */
-export const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct-fp8-fast';
+/**
+ * The default Workers AI model (var HOMIE_BRAIN_MODEL changes it) and the owner-key model. Since 0.24.4 the default is
+ * Cloudflare's Clef decision model: on 64 recorded Ember Vale moments it answered 36 of 40 open asks itself (Llama 3.1 8B:
+ * 0 of 40), and three blind judges preferred its decisions in 51 of 64 (none for Llama; mean 4.4 against 1.9 out of 5),
+ * at a model time of p50 259 ms, p90 433 ms, for about 8.6 neurons a decision (Llama: 4.1). Measured 2026-10-03.
+ */
+export const DEFAULT_MODEL = '@cf/cloudflare/clef-flash';
+/** The chat model the guides thought with until 0.24.4 (HOMIE_BRAIN_MODEL picks it, or any text-generation model). */
+export const LLAMA_MODEL = '@cf/meta/llama-3.1-8b-instruct-fp8-fast';
 export const OWNER_MODEL = 'claude-haiku-4-5';
 /** Neurons per million input and output tokens (Cloudflare's Workers AI pricing, 2026-10-01). An unknown model is
  *  counted at the dearest of these, so a budget never runs over by a cheaper guess. */
 export const NEURONS_PER_M = Object.freeze({
+  // Clef: Cloudflare's decision models (2026-10-01): $0.09 and $0.24 per million input tokens, nothing for output
+  // ($0.011 per 1,000 neurons).
+  '@cf/cloudflare/clef-flash': [8182, 0],
+  '@cf/cloudflare/clef': [21818, 0],
   '@cf/meta/llama-3.1-8b-instruct-fp8-fast': [4119, 34868],
   '@cf/meta/llama-3.1-8b-instruct-fp8': [13778, 26128],
   '@cf/meta/llama-3.1-8b-instruct': [25608, 75147],
@@ -372,10 +388,340 @@ export function costOf({ provider, model, usage = null, system = '', user = '', 
     const [i, o] = MICROS_PER_TOKEN[model] ?? [5, 25];
     return { neurons: 0, micros: input * i + output * o, input, output };
   }
+  // The person's own computer (Ollama): free, but its tokens are still counted.
+  if (provider === 'local') return { neurons: 0, micros: 0, input, output };
   return { neurons: 0, micros: 0, input: 0, output: 0 };
 }
 
 const timeout = (p, ms, what) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what} took over ${ms} ms`)), ms))]);
+
+/* ------------------------------------------------------------------ Clef: decisions, not text (0.24.4) */
+
+/**
+ * CLEF (Cloudflare's decision models, Apache 2.0, launched 2026-10-01): a state and a schema of typed questions in, a
+ * probability for every allowed answer out, in one pass. It never writes text, so a guide's decision is asked as the
+ * Choices it already is: which goal (only goals whose arguments the view can fill), which value for each argument
+ * (only values the view, the list or the room offers; a seat that said "no thanks" is not offered), which line or none
+ * (only when the guide may speak). The answer is composed back into `{ goal, args, say, sayArgs }` and still goes
+ * through parseDecision and every fixed rule.
+ *
+ *   @cf/cloudflare/clef-flash   9B, the studio's Workers AI ($0.09 per million input tokens, no output charge)
+ *   @cf/cloudflare/clef         27B, the same, $0.24
+ *   clef-flash on Ollama        the person's own computer (`ollama pull clef-flash`, about 11 GB; Ollama 0.35.1 or later):
+ *                               /v1/systemone, the same questions and answers, free
+ */
+export const CLEF = Object.freeze({
+  models: Object.freeze({ '@cf/cloudflare/clef-flash': 'clef-flash', '@cf/cloudflare/clef': 'clef' }),
+  /** Workers AI takes 2 to 255 options and Ollama 2 to 26; a guide's questions keep to 26. Scores: 2 to 10 levels. */
+  options: 26, levels: 10, questions: 64,
+  local: 'clef-flash',
+  none: '_none',
+});
+/** Whether a model id is a Clef decision model (Workers AI's id, or an Ollama tag such as clef-flash:9b). */
+export const isClef = (model) => Boolean(CLEF.models[model]) || /^clef(?:-flash)?(?::[A-Za-z0-9._-]+)?$/.test(String(model ?? ''));
+
+/**
+ * The person's own Ollama, when this Worker may use it: `HOMIE_LOCAL_AI` is a loopback address (only `homie-studio
+ * dev` sets it, after it found clef-flash there). A deployed Worker never reaches a loopback address, and any other
+ * value is ignored.
+ */
+export function localAiOf(env) {
+  const raw = String(env?.HOMIE_LOCAL_AI ?? '').trim().replace(/\/+$/, '');
+  if (!/^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d{2,5}$/.test(raw)) return null;
+  const model = String(env?.HOMIE_LOCAL_AI_MODEL ?? CLEF.local).trim();
+  return { base: raw, model: isClef(model) ? model : CLEF.local };
+}
+
+const optionText = (v, max = 100) => oneLine(v, max);
+
+/** The values one argument may take now, as Clef options: `[{ key, value, about }]` (at most 26). */
+function optionsOf(vocab, spec, { view, players, avoid, self }) {
+  const out = [];
+  const add = (value, about) => {
+    if (out.length >= CLEF.options) return;
+    const key = typeof value === 'number' ? `seat_${value}` : String(value);
+    if (!key || out.some((o) => o.key === key)) return;
+    out.push({ key, value, about });
+  };
+  if (spec.kind === 'player') {
+    const party = Array.isArray(view?.party) ? view.party : [];
+    const seats = (players ?? party.map((p) => p?.seat)).filter((s) => Number.isInteger(s) && s >= 0 && s < 64 && s !== self && !avoid.includes(s));
+    for (const s of seats) {
+      const row = party.find((p) => p?.seat === s);
+      const facts = row ? Object.entries(sanitizeView(row) ?? {}).filter(([k]) => k !== 'seat').map(([k, v]) => `${k} ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ') : '';
+      add(s, `seat ${s}${facts ? `: ${facts}` : ''}`);
+    }
+  } else if (spec.kind === 'list') {
+    for (const v of spec.values) add(v, labelOf(vocab, v));
+  } else if (spec.kind === 'view') {
+    const offered = view?.[spec.key];
+    const list = Array.isArray(offered) ? offered : offered !== null && offered !== undefined && typeof offered !== 'object' ? [offered] : [];
+    for (const o of list) {
+      const v = o && typeof o === 'object' ? o.id : o;
+      if ((typeof v === 'string' && VALUE.test(v)) || Number.isFinite(v)) add(v, labelOf(vocab, v));
+    }
+  }
+  return out;
+}
+
+/**
+ * One guide decision as Clef questions: `{ state, questions, plan }`, or null when no goal can be chosen (the floor
+ * decides). ctx: { view, me: { seat }, goal, asks, party, speech, quiet, players, avoid, speak }.
+ *   goal                       Choice of goal: only goals whose every argument has a value to take
+ *   say                        Choice of line, or none (only when the guide may speak now)
+ *   arg.<name>                 Choice of an argument's value, one question per set of values (a goal's quest and a
+ *                              line's quest are one question, so what the guide does and says agree); only when there
+ *                              is more than one value to take
+ *   speak                      yes/no, when no ask is open: is there anything to say at all (a line needs both;
+ *                              `speak: false` skips it)
+ */
+export function clefQuestions(vocab, ctx = {}) {
+  if (!vocab) return null;
+  const view = sanitizeView(ctx.view ?? {});
+  const avoid = Array.isArray(ctx.avoid) ? ctx.avoid : [];
+  const self = Number.isInteger(ctx.me?.seat) ? ctx.me.seat : null;
+  const opt = { view: ctx.view ?? {}, players: Array.isArray(ctx.players) ? ctx.players : null, avoid, self };
+  const asks = (Array.isArray(ctx.asks) ? ctx.asks : []).slice(-3);
+  // What each goal answers: the asks of agents.json that it is how a player's ask is answered.
+  const answers = {};
+  for (const a of Object.values(vocab.asks ?? {})) if (a.goal) (answers[a.goal] ??= []).push(`"${a.text.replace(SLOT_IN_TEXT, (m, n) => `<${n}>`)}"`);
+  const questions = {};
+  const plan = { goals: {}, lines: {}, args: {} };
+  // One question per set of values (a goal's quest and a line's quest are the same question, so they agree).
+  const sig = (spec) => (spec.kind === 'player' ? 'player' : spec.kind === 'list' ? `list:${spec.values.join('|')}` : `view:${spec.key}`);
+  const groups = new Map();
+  const argsFor = (specs) => {
+    const out = {};
+    for (const [name, spec] of Object.entries(specs)) {
+      const s = sig(spec);
+      let g = groups.get(s);
+      if (!g) { g = { id: null, names: new Set(), opts: optionsOf(vocab, spec, opt), kind: spec.kind }; groups.set(s, g); }
+      if (!g.opts.length) return null;
+      g.names.add(name);
+      out[name] = s;
+    }
+    return out;
+  };
+  for (const [id, g] of Object.entries(vocab.goals)) { const a = argsFor(g.args); if (a) plan.goals[id] = a; }
+  const goalIds = Object.keys(plan.goals);
+  if (!goalIds.length) return null;
+  const last = asks.at(-1);
+  const newest = last ? { from: last.from, says: renderLine(vocab, last.k, last.args ?? {}, { kind: 'asks', nameOf: (x) => `seat ${x}`, view: ctx.view ?? null }) ?? last.k, wants: vocab.asks?.[last.k]?.goal ?? null } : null;
+  if (goalIds.length > 1) {
+    questions.goal = {
+      type: 'choice',
+      // The newest open ask, in the question itself: the one thing a guide must not miss.
+      instructions: newest ? optionText(`Seat ${newest.from} just asked the guide: "${newest.says}".${newest.wants ? ` The game's answer to that is ${newest.wants} (${vocab.goals[newest.wants]?.about ?? ''}).` : ''} What should the guide do next?`, 280) : 'What should the guide do next?',
+      criteria: Object.fromEntries(goalIds.slice(0, CLEF.options).map((id) => [id, optionText(`${vocab.goals[id].about}${answers[id] ? ` (answers ${answers[id].join(', ')})` : ''}`, 160)])),
+    };
+  }
+  let lineIds = [];
+  if (ctx.mayTalk !== false && !ctx.quiet) {
+    for (const [id, l] of Object.entries(vocab.lines ?? {})) { const a = argsFor(l.args); if (a) plan.lines[id] = a; }
+    lineIds = Object.keys(plan.lines).slice(0, CLEF.options - 1);
+    if (lineIds.length) {
+      questions.say = {
+        type: 'choice',
+        instructions: 'Which line should the guide say now, if any? Most moments need none: answer an open ask with the line it wants, greet a player it has not greeted, warn of new danger.',
+        criteria: { [CLEF.none]: 'say nothing now', ...Object.fromEntries(lineIds.map((id) => [id, optionText(`"${vocab.lines[id].text}"`, 160)])) },
+      };
+      // An open ask always gets its line; with none, a line also needs a yes to "anything to say at all?".
+      if (ctx.speak !== false && !asks.length) questions.speak = { type: 'noul', instructions: 'Should the guide say anything at all right now?', criteria: { true: 'A player is new here (newHere), new danger came, or something changed for the party', false: 'Nothing new: the guide already said its piece, so talking would be noise' } };
+    }
+  }
+  // The argument questions, for the sets of values that more than one option could fill.
+  const used = new Set();
+  for (const [s, g] of groups) {
+    const names = [...g.names];
+    let id = `arg.${names[0]}`;
+    for (let n = 2; used.has(id); n += 1) id = `arg.${names[0]}${n}`;
+    used.add(id);
+    g.id = id;
+    plan.args[s] = { id, opts: g.opts };
+    if (g.opts.length < 2) continue;
+    const hint = g.kind === 'player' ? ' The player who asked; else one new here (to greet); else who needs the guide most.' : ' The one an open ask names, else what fits the game.';
+    questions[id] = { type: 'choice', instructions: optionText(`Which ${names.join(' / ')}?${hint}`, 200), criteria: Object.fromEntries(g.opts.map((o) => [o.key, optionText(o.about)])) };
+  }
+  // At most 64 questions (a vocabulary at its limits could ask for more): the goal's own come first.
+  const keys = Object.keys(questions);
+  if (keys.length > CLEF.questions) for (const k of keys.slice(CLEF.questions)) delete questions[k];
+  const { asks: _a, goal: _g, ...game } = view && typeof view === 'object' && !Array.isArray(view) ? view : {};
+  const state = {
+    guide: oneLine(`An AI guide in a multiplayer game.${vocab.persona ? ` ${vocab.persona}` : ''}`, 500),
+    ...(self !== null ? { you: { seat: self } } : {}),
+    game,
+    ...(ctx.goal?.goal ? { yourGoal: sanitizeView({ goal: ctx.goal.goal, args: ctx.goal.args ?? {}, state: ctx.goal.state ?? 'active' }) } : {}),
+    // An open ask, and how agents.json says it is answered (the same words a chat model's prompt gets).
+    ...(asks.length ? { openAsks: asks.map((a) => ({ fromSeat: a.from, says: renderLine(vocab, a.k, a.args ?? {}, { kind: 'asks', nameOf: (s) => `seat ${s}`, view: ctx.view ?? null }) ?? a.k, ...(vocab.asks[a.k]?.goal ? { wantsGoal: vocab.asks[a.k].goal } : {}), ...(vocab.asks[a.k]?.say ? { wantsLine: vocab.asks[a.k].say } : {}), args: sanitizeView(a.args ?? {}) })) } : {}),
+    ...(avoid.length ? { leaveAlone: avoid.map((s) => `seat ${s} said no thanks`) } : {}),
+    // Players new to this guide (it first saw them in the last 20 s): someone to greet, once.
+    ...(Array.isArray(ctx.newHere) && ctx.newHere.length ? { newHere: ctx.newHere.slice(0, 8).map((s) => `seat ${s}`) } : {}),
+    // What this guide said lately (its own lines, so it does not greet the same player twice).
+    ...(Array.isArray(ctx.said) && ctx.said.length ? { youSaid: ctx.said.slice(-4).map((x) => ({ said: renderLine(vocab, x.line, x.args ?? {}, { nameOf: (s) => `seat ${s}`, me: 'the guide', view: ctx.view ?? null }) ?? x.line, secondsAgo: Math.max(0, Math.round(Number(x.ago) / 1000) || 0) })) } : {}),
+  };
+  const party = (Array.isArray(ctx.party) ? ctx.party : []).slice(-3).map((p) => {
+    if (p.line) return { seat: p.seat, said: renderLine(vocab, p.line, p.args ?? {}, { nameOf: (s) => `seat ${s}`, me: 'a guide' }) ?? p.line };
+    // Free text only when the server's speech is "game" (never on a kids or beginner server): quoted, short, data.
+    if (p.chat && ctx.speech === 'game' && !ctx.kids) return { seat: p.seat, typed: oneLine(p.chat, 120).replace(SECRET_VALUE, '[redacted]') };
+    return null;
+  }).filter(Boolean);
+  if (party.length) state.recentLines = party;
+  return { state, questions, plan };
+}
+
+/** The chosen option of a Choice answer (its highest probability), as one of `opts`; else the first. */
+function picked(answer, opts) {
+  if (!opts?.length) return null;
+  const probs = answer?.probabilities && typeof answer.probabilities === 'object' ? answer.probabilities : null;
+  let key = typeof answer?.choice === 'string' ? answer.choice : null;
+  if (probs) { const best = Object.entries(probs).filter(([k]) => opts.some((o) => o.key === k)).sort((a, b) => Number(b[1]) - Number(a[1]))[0]; if (best) key = best[0]; }
+  return opts.find((o) => o.key === key) ?? null;
+}
+
+/**
+ * Clef's answers as one decision `{ goal, args, say, sayArgs }` (null when the goal was not answered), and how sure it
+ * was (`p`: the goal's and the line's probabilities).
+ */
+export function clefDecision(answers, plan) {
+  if (!answers || typeof answers !== 'object' || !plan) return null;
+  const goalIds = Object.keys(plan.goals);
+  const goalOpts = goalIds.map((id) => ({ key: id }));
+  const g = goalIds.length === 1 ? goalOpts[0] : picked(answers.goal, goalOpts);
+  if (!g) return null;
+  const fill = (specs) => Object.fromEntries(Object.entries(specs).map(([name, s]) => { const { id, opts } = plan.args[s]; return [name, (opts.length === 1 ? opts[0] : picked(answers[id], opts) ?? opts[0]).value]; }));
+  const out = { goal: g.key, args: fill(plan.goals[g.key]), say: null, sayArgs: {} };
+  const lineIds = Object.keys(plan.lines);
+  const s = lineIds.length && answers.say ? picked(answers.say, [{ key: CLEF.none }, ...lineIds.map((id) => ({ key: id }))]) : null;
+  const gate = answers.speak && Number.isFinite(Number(answers.speak.noul)) ? Number(answers.speak.noul) >= 0.5 : true;
+  if (s && s.key !== CLEF.none && plan.lines[s.key] && gate) { out.say = s.key; out.sayArgs = fill(plan.lines[s.key]); }
+  const p = (a, k) => (a?.probabilities && Number.isFinite(Number(a.probabilities[k])) ? Math.round(Number(a.probabilities[k]) * 1000) / 1000 : null);
+  return { decision: out, p: { goal: goalIds.length === 1 ? 1 : p(answers.goal, g.key), say: s ? p(answers.say, s.key) : null } };
+}
+
+/**
+ * One Clef call: `{ answers, usage, model, engine }`. On Workers AI (`env.AI`) with the model's id, or on the person's
+ * own Ollama (`local`: { base, model }) at /v1/systemone. Questions and answers are the same on both.
+ */
+export async function clefRun(env, { state, questions, model = '@cf/cloudflare/clef-flash', ms = 8000, local = null, fetch: fetchImpl = null } = {}) {
+  if (local) {
+    const f = fetchImpl ?? globalThis.fetch;
+    const res = await timeout(f(`${local.base}/v1/systemone`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: local.model, state, questions }) }), ms, 'Ollama');
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.answers) throw new Error(`Ollama answered ${res.status}${body?.error ? `: ${String(body.error).slice(0, 120)}` : ''}`);
+    return { answers: body.answers, usage: body.usage ?? null, model: local.model, engine: 'local' };
+  }
+  if (!env?.AI || typeof env.AI.run !== 'function') throw new Error('this Worker has no Workers AI binding (AI)');
+  const name = CLEF.models[model];
+  if (!name) throw new Error(`${String(model).slice(0, 60)} is not a Clef model`);
+  const r = await timeout(env.AI.run(model, { model: name, state, questions }), ms, 'Workers AI');
+  if (!r?.answers || typeof r.answers !== 'object') throw new Error('Clef answered nothing it could use');
+  return { answers: r.answers, usage: r.usage ?? null, model, engine: 'workers-ai' };
+}
+
+/**
+ * A guide's decision from Clef: `{ out, usage, model, answers, p, jsonMode: 'clef' }`. `out` is the composed decision
+ * (an object, which parseDecision checks like any provider's), or null when no goal could be asked (the floor decides).
+ */
+export async function clefDecide(env, { vocab, ctx = {}, model, ms = 8000, local = null, fetch: fetchImpl = null } = {}) {
+  const q = clefQuestions(vocab, ctx);
+  if (!q) return { out: null, usage: null, model, answers: null, jsonMode: 'clef', why: 'no goal fits the view' };
+  if (!Object.keys(q.questions).length) {
+    // One goal, every argument already decided, nothing to say: nothing to ask a model.
+    const d = clefDecision({}, q.plan);
+    return { out: d?.decision ?? null, usage: { input_tokens: 0, output_tokens: 0 }, model, answers: {}, p: d?.p ?? null, jsonMode: 'clef', asked: 0 };
+  }
+  const r = await clefRun(env, { state: q.state, questions: q.questions, model, ms, local, fetch: fetchImpl });
+  const d = clefDecision(r.answers, q.plan);
+  return { out: d?.decision ?? null, usage: r.usage, model: r.model, answers: r.answers, p: d?.p ?? null, jsonMode: 'clef', engine: r.engine, asked: Object.keys(q.questions).length, chars: JSON.stringify(q.state).length + JSON.stringify(q.questions).length };
+}
+
+/* ------------------------------------------------------------------ decisions at play speed (0.24.4) */
+
+/**
+ * A GAME'S OWN DECISIONS (NETPLAY.md section 20): the host asks the room a few typed questions about its own state
+ * (`net.decide`): which tactic the slimes take, whether a wave comes now, how hard to push. The room asks Clef on the
+ * studio's Workers AI (or the person's own Ollama under dev) within the AI brains' day budget, at most one question set
+ * every 3 s a room, and the host's own floor answers whenever it cannot (no AI, over budget, slow, off). The answers
+ * are option ids, yes/no and a number: nothing a player reads comes from a model.
+ *
+ *   checkDecide(state, questions)   the request as the relay passes it on: game state only (sanitizeView), at most
+ *                                   8 questions; Choice 2 to 26 options, Score 2 to 10 levels, a yes/no; short words
+ *   picksOf(answers, questions)     the answers as the game uses them: { tactic: 'surround', wave: false, pressure: 2.6 }
+ */
+export const DECIDE = Object.freeze({ questions: 8, options: 26, levels: 10, words: 160, option: 40, stateBytes: 2048, bytes: 6144, gapMs: 3000, perMinute: 20, inFlight: 2, ms: 2500 });
+const QID = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;
+const OPT = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/;
+
+/** `{ ok, state, questions }`, or `{ ok: false, why }`: what the relay sends the decision model, every field checked. */
+export function checkDecide(state, questions) {
+  const no = (why) => ({ ok: false, why });
+  if (!questions || typeof questions !== 'object' || Array.isArray(questions)) return no('questions is an object of id: question');
+  const ids = Object.keys(questions);
+  if (!ids.length || ids.length > DECIDE.questions) return no(`1 to ${DECIDE.questions} questions`);
+  const out = {};
+  for (const id of ids) {
+    if (!QID.test(id)) return no(`question id "${oneLine(id, 20)}" (letters, digits, _ . -)`);
+    const q = questions[id];
+    if (!q || typeof q !== 'object') return no(`${id}: a question is { type, instructions, criteria }`);
+    const instructions = oneLine(q.instructions, DECIDE.words);
+    if (!instructions) return no(`${id}: instructions say what to decide`);
+    if (q.type === 'choice') {
+      const c = q.criteria;
+      const keys = c && typeof c === 'object' && !Array.isArray(c) ? Object.keys(c) : Array.isArray(c) ? c : [];
+      if (keys.length < 2 || keys.length > DECIDE.options) return no(`${id}: a choice has 2 to ${DECIDE.options} options`);
+      const criteria = {};
+      for (const k of keys) {
+        if (!OPT.test(String(k))) return no(`${id}: option "${oneLine(k, 20)}" (letters, digits, _ . -)`);
+        const about = Array.isArray(c) ? null : c[k];
+        criteria[k] = about === null || about === undefined ? null : oneLine(about, DECIDE.words) || null;
+      }
+      out[id] = { type: 'choice', instructions, criteria };
+    } else if (q.type === 'noul' || q.type === 'yes-no') {
+      const c = q.criteria && typeof q.criteria === 'object' ? q.criteria : {};
+      out[id] = { type: 'noul', instructions, ...(c.true || c.false ? { criteria: { ...(c.true ? { true: oneLine(c.true, DECIDE.words) } : {}), ...(c.false ? { false: oneLine(c.false, DECIDE.words) } : {}) } } : {}) };
+    } else if (q.type === 'score') {
+      const levels = Array.isArray(q.criteria) ? q.criteria.map((x) => oneLine(x, DECIDE.option * 2)) : [];
+      if (levels.length < 2 || levels.length > DECIDE.levels || levels.some((x) => !x)) return no(`${id}: a score has 2 to ${DECIDE.levels} levels, lowest first`);
+      out[id] = { type: 'score', instructions, criteria: levels };
+    } else return no(`${id}: type is choice, noul (yes/no) or score`);
+  }
+  const s = sanitizeView(state && typeof state === 'object' ? state : { state: String(state ?? '') });
+  if (JSON.stringify(s).length > DECIDE.stateBytes) return no(`the state is over ${DECIDE.stateBytes} bytes`);
+  return { ok: true, state: s, questions: out };
+}
+
+/** Answers as picks: a choice's option id, a yes/no as true or false, a score's probability-weighted level. */
+export function picksOf(answers, questions) {
+  const picks = {};
+  const p = {};
+  for (const [id, q] of Object.entries(questions ?? {})) {
+    const a = answers?.[id];
+    if (!a) continue;
+    if (q.type === 'choice') {
+      const keys = Object.keys(q.criteria);
+      const probs = a.probabilities && typeof a.probabilities === 'object' ? a.probabilities : {};
+      const best = Object.entries(probs).filter(([k]) => keys.includes(k)).sort((x, y) => Number(y[1]) - Number(x[1]))[0]?.[0] ?? (keys.includes(a.choice) ? a.choice : null);
+      if (best) { picks[id] = best; p[id] = Object.fromEntries(keys.map((k) => [k, Math.round((Number(probs[k]) || 0) * 1000) / 1000])); }
+    } else if (q.type === 'noul') {
+      const v = Number(a.noul);
+      if (Number.isFinite(v)) { picks[id] = v >= 0.5; p[id] = { yes: Math.round(v * 1000) / 1000 }; }
+    } else if (q.type === 'score') {
+      const v = Number(a.score);
+      if (Number.isFinite(v)) { picks[id] = Math.round(Math.max(0, Math.min(q.criteria.length - 1, v)) * 100) / 100; if (a.probabilities) p[id] = Object.fromEntries(Object.entries(a.probabilities).map(([k, x]) => [k, Math.round((Number(x) || 0) * 1000) / 1000])); }
+    }
+  }
+  return { picks, p };
+}
+
+/**
+ * The person's own computer as a guide's brain: Clef on Ollama (`HOMIE_LOCAL_AI`, set by `homie-studio dev` when it
+ * found clef-flash there). Throws when there is none; the caller falls back to the floor.
+ */
+export async function localClef(env, { vocab, ctx, ms = 8000, fetch: fetchImpl = null } = {}) {
+  const local = localAiOf(env);
+  if (!local) throw new Error('no local Clef (Ollama with clef-flash on this computer)');
+  return clefDecide(env, { vocab, ctx, model: local.model, ms, local, fetch: fetchImpl });
+}
 /** Models seen to refuse JSON mode in this isolate: asked without it from then on. */
 const NO_JSON_MODE = new Set();
 
@@ -383,8 +729,13 @@ const NO_JSON_MODE = new Set();
  * Workers AI (the AI binding): one decision. `{ out, usage, model, jsonMode }`; `out` is text or (JSON mode) an object.
  * A model that does not do JSON mode is asked again without it, and from then on.
  */
-export async function workersAi(env, { system, user, schema, model = env?.HOMIE_BRAIN_MODEL || DEFAULT_MODEL, ms = 8000 }) {
+export async function workersAi(env, { system, user, schema, model = env?.HOMIE_BRAIN_MODEL || DEFAULT_MODEL, ms = 8000, vocab = null, ctx = null }) {
   if (!env?.AI || typeof env.AI.run !== 'function') throw new Error('this Worker has no Workers AI binding (AI)');
+  // A decision model is asked the decision's own questions, not a prompt (Clef, above).
+  if (CLEF.models[model]) {
+    if (!vocab) throw new Error('a Clef brain needs the vocabulary');
+    return clefDecide(env, { vocab, ctx: ctx ?? {}, model, ms });
+  }
   const base = { messages: [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens: 120, temperature: 0.2 };
   const ask = (json) => timeout(env.AI.run(model, json ? { ...base, response_format: { type: 'json_schema', json_schema: schema } } : base), ms, 'Workers AI');
   let json = !NO_JSON_MODE.has(model);

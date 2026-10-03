@@ -284,8 +284,21 @@ npx homie-studio agents pass night-rush --label Claude                          
   day); with none, the game's scripted floor. The local MCP's `agent_sit` puts the owner's own Claude in a guide's
   seat. The AI never types: it picks ids; the room drops anything else.
   [agents/GUIDES.md](agents/GUIDES.md) is the short path for an existing RPG.
+- **Clef thinks for the guides** (0.24.4): Workers AI's default for them is Cloudflare's decision model
+  (`@cf/cloudflare/clef-flash`), which answers a decision as typed Choices (goal, values, line or none) and never
+  writes text. On 64 recorded Ember Vale moments it answered 36 of 40 open asks itself (Llama 3.1 8B: none) and blind
+  judges preferred it in 51 of 64, at about 9 neurons a decision (Llama: 4). `HOMIE_BRAIN_MODEL` still picks Llama or
+  the 27B Clef; `agents try <game> --view <file> [--ask …] [--model …]` shows what the brain would decide in a moment.
+- **Clef on your own computer** (0.24.4): with Ollama and `clef-flash` here, `dev` runs the guides, chat review and
+  game decisions on it, free and with no Cloudflare, and `agents sit --brain local` (the MCP's `agent_sit { brain:
+  "local" }`) seats a guide that thinks here. Nothing downloads it: `ollama pull clef-flash` is about 11 GB, the
+  person's choice (doctor's "Clef on this computer" row says what is there).
+- **A game's own decisions** (0.24.4, NETPLAY.md section 20): `net.decide(state, questions, { floor })` on the host,
+  for a game whose game.json says `"decide": true`: tactics for its opponents, an NPC's reaction, a director's call,
+  a turn's move, answered by Clef in the room in about a quarter of a second, per beat (never per frame), within the
+  AI brains' day; the floor answers whenever it cannot. Ember Vale's slimes pick their tactics this way (opt-in).
 - Everything is in the studio's own Worker and D1 (migration `0006_studio_servers.sql`). The site's side is in
-  [site/SITE.md](site/SITE.md); the room's in [netplay/NETPLAY.md](netplay/NETPLAY.md) sections 17 and 18.
+  [site/SITE.md](site/SITE.md); the room's in [netplay/NETPLAY.md](netplay/NETPLAY.md) sections 17, 18 and 20.
 
 ## Room chat
 
@@ -314,7 +327,8 @@ npx homie-studio chat words                                             # the bu
 - **Moderation, in the studio's own Worker, before anyone sees a typed line:** a built-in word list and patterns
   (slurs, sexual words, self-harm, personal questions and contact details, links, swears, your own words), then
   Cloudflare's **Clef** decision model on the studio's own Workers AI (`@cf/cloudflare/clef-flash`, about 2.3
-  neurons a message measured, 2,000 a day by default: inside the free allocation). Emoji and quick lines are never reviewed.
+  neurons a message measured, 2,000 a day by default: inside the free allocation; under `dev`, Clef on this computer
+  when Ollama has it, free). Emoji and quick lines are never reviewed.
 - **The owner:** every live room's last minutes in the office with Remove, Mute and Kick (from a line, with their
   lines taken down), the same in the owner's own game, the reports players make, and Announce (a studio line).
 - **Speech bubbles:** `net.on('say')` and the port kit's `createBubbles` / `paintBubbles`; Gem Rush, Ember Vale and
@@ -366,7 +380,8 @@ connector (the AI says whether its Homie tools are there; the directory is reach
 with the studio's own Wrangler, and the account's email verified: a deploy that went through proves it, a
 deploy refused for it is remembered), Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and
 fal (and, in Claude Code, the status line); in a studio that sells (shop.json), a Stripe row: whether Stripe's own
-agent plugin (its MCP server) is set up for this AI, with `stripe agent setup` as the fix (0.24.3). Each row is green, missing or "do this now", says what it
+agent plugin (its MCP server) is set up for this AI, with `stripe agent setup` as the fix (0.24.3); and in a studio, whether Clef is on this
+computer (Ollama with `clef-flash`, optional, never downloaded without the person's yes) (0.24.4). Each row is green, missing or "do this now", says what it
 unlocks, and gives the exact fix: a command the AI runs or a page the person taps. It only reads, answers in
 seconds, and never prints a key, a token or an account's name or id. A studio the Claude app's setup card made
 (`setup attach`) counts as connected to Cloudflare and GitHub there. `--json` gives the rows.

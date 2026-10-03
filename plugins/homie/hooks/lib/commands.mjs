@@ -217,6 +217,50 @@ export function providerCliOf(words) {
   return TRIPO_FREE.has(pos[0]) ? null : { provider: 'Tripo', unit: 'usd', tool };
 }
 
+/*
+ * A CLEF MODEL DOWNLOADED BY OLLAMA. @homie-rocks/studio 0.24.4 runs Cloudflare's Clef decision model on the person's
+ * own computer when Ollama has it, and nothing in Homie downloads one by itself: `ollama pull clef-flash` is about
+ * 11 GB (`clef`, the 27B, about 18 GB), so the person says yes to the size first. What is read here:
+ *   ollama pull <clef model>       always a download (or a check for a newer copy)
+ *   ollama run <clef model>        a download when Ollama does not have that model yet (the mod asks Ollama's own list)
+ *   a request at Ollama's /api/pull naming a Clef model (curl, wget and the like)
+ * Listing, showing, copying or removing a model, `ollama serve`, `--help`, and any other model are not read.
+ */
+const CLEF_MODELS = { 'clef-flash': { size: 'about 11 GB', params: '9B' }, clef: { size: 'about 18 GB', params: '27B' } };
+const OLLAMA_BOOLS = ['help', 'insecure', 'verbose', 'nowordwrap', 'hidethinking', 'think'];
+
+/** A model reference (`clef-flash`, `clef:27b`, `registry.ollama.ai/library/clef-flash:latest`) → { model, tag } or null. */
+function clefRef(ref) {
+  const m = /^(clef(?:-flash)?)(?::([A-Za-z0-9._-]+))?$/.exec(String(ref ?? '').split('/').pop());
+  return m ? { model: m[1], tag: m[2] ?? null } : null;
+}
+
+/**
+ * A Clef model download in this command line, or null:
+ *   { verb: 'pull'|'run'|'api', model: 'clef-flash'|'clef', tag, ref, size: 'about 11 GB', params, host, dir, text }
+ * `host` is an OLLAMA_HOST the command sets, as written (the mod asks only a loopback one).
+ */
+export function modelPullOf(command) {
+  for (const seg of segments(command)) {
+    const host = /(?:^|\s)OLLAMA_HOST=("[^"]*"|'[^']*'|\S+)/.exec(seg.text)?.[1]?.replace(/^["']|["']$/g, '') ?? null;
+    const w = seg.words;
+    if (['curl', 'wget', 'http', 'xh'].includes(w[0].split('/').pop())) {
+      if (!/\/api\/pull\b/.test(seg.text)) continue;
+      const named = /\b(?:model|name)\\?["']?\s*[:=]\s*\\?["']?([A-Za-z0-9._:/-]+)/.exec(seg.text);
+      const r = named ? clefRef(named[1]) : null;
+      if (r) return { verb: 'api', ...r, ref: named[1], ...CLEF_MODELS[r.model], host, dir: seg.dir, text: seg.text };
+      continue;
+    }
+    const p = programOf(w);
+    if (!p || p.prog !== 'ollama' || p.args.includes('-h')) continue;
+    const { flags, pos } = flagsOf(p.args, OLLAMA_BOOLS);
+    if (flags.has('help') || !['pull', 'run'].includes(pos[0])) continue;
+    const r = clefRef(pos[1]);
+    if (r) return { verb: pos[0], ...r, ref: pos[1], ...CLEF_MODELS[r.model], host, dir: seg.dir, text: seg.text };
+  }
+  return null;
+}
+
 /**
  * An MCP tool that spends money at a media provider (a fal, ElevenLabs or Tripo connector's generating tool), or null.
  * Their own servers' listing, schema, pricing and job-status tools are free, and so is ElevenLabs' `estimate_only`

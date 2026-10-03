@@ -14,12 +14,15 @@
  *               links, swears, and the studio's own words. It always runs, and it needs nothing.
  *   review      typed text the floor let through, on the studio's own Workers AI: Cloudflare's Clef decision model
  *               (`@cf/cloudflare/clef-flash`, launched 2026-10-01: a probability for each answer, about 40 ms), within a
- *               day's budget of neurons. No binding, no budget left or an error: the floor alone decides.
+ *               day's budget of neurons. Under `homie-studio dev` with no binding, the same questions go to the person's
+ *               own Ollama (clef-flash) when dev found it there: free. No model, no budget left or an error: the floor
+ *               alone decides.
  *
  * Emoji and quick lines are the studio's own words: they never need a review, so they reach every screen at once.
  * NOTHING is stored here: the relay keeps a short window in memory (section 19), and a report keeps only the message.
  */
 import { WORDS_B64 } from './chat-words.mjs';
+import { clefRun, localAiOf } from './brain.mjs';
 
 export const CHAT_MODES = Object.freeze(['off', 'emoji', 'lines', 'text']);
 export const CHAT_WHO = Object.freeze(['anyone', 'signed-in', 'members']);
@@ -387,9 +390,11 @@ const timeout = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(()
  * (`why` is the most likely other answer). Throws when there is no binding, the model fails or it takes too long:
  * the caller lets the floor decide.
  */
-export async function reviewChat(env, text, { model = env?.HOMIE_CHAT_MODEL || CHAT_MODEL, ms = CHAT_LIMITS.reviewMs, threshold = REVIEW_THRESHOLD, links = 'block', now = () => Date.now() } = {}) {
-  if (!env?.AI || typeof env.AI.run !== 'function') throw new Error('this Worker has no Workers AI binding (AI)');
-  const spec = CHAT_MODELS[model] ?? CHAT_MODELS[CHAT_MODEL];
+export async function reviewChat(env, text, { model = env?.HOMIE_CHAT_MODEL || CHAT_MODEL, ms = CHAT_LIMITS.reviewMs, threshold = REVIEW_THRESHOLD, links = 'block', now = () => Date.now(), fetch: fetchImpl = null } = {}) {
+  // No binding: the person's own Ollama (`homie-studio dev` found clef-flash there), with the same question. Free.
+  const local = env?.AI && typeof env.AI.run === 'function' ? null : localAiOf(env);
+  if (!local && (!env?.AI || typeof env.AI.run !== 'function')) throw new Error('this Worker has no Workers AI binding (AI)');
+  const spec = local ? { kind: 'clef', name: local.model, input: 0, output: 0 } : CHAT_MODELS[model] ?? CHAT_MODELS[CHAT_MODEL];
   const at = now();
   if (spec.kind === 'guard') {
     const r = await timeout(env.AI.run(model, { messages: [{ role: 'user', content: text }], temperature: 0, max_tokens: 16, response_format: { type: 'json_object' } }), ms);
@@ -402,7 +407,9 @@ export async function reviewChat(env, text, { model = env?.HOMIE_CHAT_MODEL || C
   }
   // A room that allows links says so, so a plain link is not read as spam.
   const verdict = links === 'allow' ? { ...VERDICT, criteria: { ...VERDICT.criteria, spam: 'Ads, scams or spam (a plain link is fine here)' } } : VERDICT;
-  const r = await timeout(env.AI.run(model, { model: spec.name, state: text, questions: { verdict } }), ms);
+  const r = local
+    ? await clefRun(env, { state: text, questions: { verdict }, ms: Math.max(ms, 4000), local, fetch: fetchImpl })
+    : await timeout(env.AI.run(model, { model: spec.name, state: text, questions: { verdict } }), ms);
   const a = r?.answers?.verdict;
   if (!a || typeof a !== 'object') throw new Error('the review answered nothing it could use');
   const probs = a.probabilities && typeof a.probabilities === 'object' ? a.probabilities : null;
@@ -415,5 +422,5 @@ export async function reviewChat(env, text, { model = env?.HOMIE_CHAT_MODEL || C
     why = why ?? 'held';
   }
   const input = Number(r?.usage?.input_tokens ?? r?.usage?.prompt_tokens) || Math.ceil((text.length + VERDICT_CHARS) / 4);
-  return { ok: pOk >= threshold, why, p: Math.round(pOk * 1000) / 1000, neurons: (input * spec.input) / 1e6, ms: now() - at, model };
+  return { ok: pOk >= threshold, why, p: Math.round(pOk * 1000) / 1000, neurons: (input * spec.input) / 1e6, ms: now() - at, model: local ? local.model : model, ...(local ? { local: true } : {}) };
 }

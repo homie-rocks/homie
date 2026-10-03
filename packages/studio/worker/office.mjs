@@ -56,9 +56,9 @@
  */
 import { SEAT_MAX, seatsOf } from './seats.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
-import { BRAIN_BUDGET, aiName, fillSpot, passById, passCreate, passList, passRevoke } from './agents.mjs';
-import { DEFAULT_MODEL, OWNER_MODEL } from './brain.mjs';
-import { OWNER_COOKIE, cookieValues, ownerAllowed, ownerSession, today } from './stats.mjs';
+import { BRAIN_BUDGET, aiName, brainFor, fillSpot, passById, passCreate, passList, passRevoke, think } from './agents.mjs';
+import { DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, vocabularyOf } from './brain.mjs';
+import { OWNER_COOKIE, cookieValues, counter, ownerAllowed, ownerSession, today } from './stats.mjs';
 import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
 import { licenseOf } from './license.mjs';
@@ -473,12 +473,70 @@ async function roomRow(env, meta, room, max) {
     clients, bans: office.bans ?? [], mutes: office.mutes ?? [],
     // Room chat (0.23.0): the room's last minutes, with who sent each line (a client id and account; never an address).
     chat: office.chat ? { mode: office.chat.rules?.mode ?? null, pending: office.chat.pending ?? 0, lines: (office.chat.lines ?? []).slice(-50).map((l) => ({ id: l.id, at: l.at, t: l.t, kind: l.kind, name: oneLine(l.name, 40), seat: l.seat ?? null, by: l.by, text: l.text ?? null, glyph: l.glyph ?? null, react: l.react ?? null, say: l.say ?? null, acct: Boolean(l.acct), owner: Boolean(l.owner), client: l.client ?? null, player: l.player ?? null, browser: l.browser ?? null, ...(l.review ? { review: l.review } : {}) })) } : null,
+    // A game's own decisions (0.24.4, net.decide): how many, who answered, the model's median time, the neurons.
+    ...(office.decides && typeof office.decides === 'object' ? { decides: { n: Number(office.decides.n) || 0, by: office.decides.by ?? {}, msP50: office.decides.msP50 ?? null, neurons: Number(office.decides.neurons) || 0 } } : {}),
     // The house guides' brains (0.17.0): which brain, why not when it is not, and the last decisions (seats and ids).
     ...(f.brains && typeof f.brains === 'object' ? { brains: {
       brain: String(f.brains.brain ?? ''), why: f.brains.why ? oneLine(f.brains.why, 120) : null, calls: Number(f.brains.calls) || 0,
       guides: (Array.isArray(f.brains.guides) ? f.brains.guides : []).slice(0, 8).map((g) => ({ name: oneLine(g.name, 40), seat: g.seat ?? null, provider: g.provider ?? null })),
       decisions: (Array.isArray(f.brains.decisions) ? f.brains.decisions : []).slice(-50),
     } } : {}),
+  };
+}
+
+/**
+ * `agents try` (0.24.4): a guide's brain on one moment the owner gives, with no seat taken and nobody in a room: the
+ * game's own vocabulary, the view, the asks and the party's lines in; the decision out, with the brain's own pick
+ * before the fixed rules, Clef's probabilities, the model's time and the neurons. It runs exactly what a house guide
+ * runs (agents.mjs think) and spends from the same day's budget, so a creator can test an agents.json, and compare a
+ * model (`model`: one of the models this toolkit prices) before setting it.
+ */
+export async function agentsTry(env, cat, body) {
+  const bad = (message) => ({ ok: false, error: 'bad-request', message });
+  const meta = (cat.games ?? []).find((g) => g.id === body.game);
+  if (!meta) return bad('game is one of this studio\'s game ids');
+  const mode = body.mode ?? 'workers-ai';
+  if (!['workers-ai', 'owner-key', 'script'].includes(mode)) return bad('mode is workers-ai, owner-key or script');
+  if (body.model !== undefined && !(typeof body.model === 'string' && NEURONS_PER_M[body.model])) return bad(`model is one of ${Object.keys(NEURONS_PER_M).join(', ')}`);
+  const view = body.view && typeof body.view === 'object' && !Array.isArray(body.view) ? body.view : null;
+  if (!view || JSON.stringify(view).length > 2048) return bad('view is the game state a guide sees (an object, under 2 KB)');
+  const int = (v) => Number.isInteger(v) && v >= 0 && v < 64;
+  const asks = (Array.isArray(body.asks) ? body.asks : []).slice(0, 3).filter((a) => a && typeof a.k === 'string' && int(a.from)).map((a, i) => ({ k: a.k, args: a.args && typeof a.args === 'object' ? a.args : {}, from: a.from, at: Date.now() - i }));
+  const party = (Array.isArray(body.party) ? body.party : []).slice(-3).filter((p) => p && int(p.seat) && typeof p.line === 'string').map((p) => ({ seat: p.seat, line: p.line, args: p.args ?? {} }));
+  const seats = (list) => (Array.isArray(list) ? list.filter(int).slice(0, 32) : []);
+  let vocab = null;
+  try {
+    const res = env.ASSETS ? await env.ASSETS.fetch(new Request(`https://assets.local/games/${meta.id}/agents.json`)) : null;
+    if (res?.ok) vocab = vocabularyOf(await res.json()).vocab;
+  } catch { vocab = null; }
+  if (!vocab) return { ok: false, error: 'no-vocabulary', message: `${meta.name} has no agents.json in this build: its guides have nothing to choose from.` };
+  const day = await brainDay(env);
+  const budget = { left: (k) => (k === 'neurons' ? day.budget.neurons - day.used.neurons : day.budget.usd * 1e6 - day.used.usd * 1e6) };
+  const e = body.model ? { ...env, HOMIE_BRAIN_MODEL: body.model } : env;
+  const brain = brainFor(mode, e, { budget });
+  const ctx = {
+    view, me: { seat: int(body.seat) ? body.seat : 7 }, goal: view.goal ?? null, asks, party, speech: ['game', 'lines', 'off'].includes(body.speech) ? body.speech : 'lines',
+    kids: body.kids === true, quiet: body.quiet === true, players: seats(body.players ?? (Array.isArray(view.party) ? view.party.map((p) => p?.seat) : [])), avoid: seats(body.avoid),
+    // What a house guide remembers: who is new to it, and its own last lines (ids, arguments, how long ago).
+    newHere: seats(body.newHere),
+    said: (Array.isArray(body.said) ? body.said : []).slice(-4).filter((x) => x && typeof x.line === 'string' && vocab.lines[x.line]).map((x) => ({ line: x.line, args: x.args && typeof x.args === 'object' ? x.args : {}, ago: Math.max(0, Number(x.agoMs) || 0) })),
+  };
+  const t = await think(vocab, { mode, brain, ctx });
+  if (t.engine && env.DB) {
+    const rows = [counter(env, { metric: 'brain-calls', subject: meta.id, source: 'try' })];
+    const n = Math.round(t.cost.neurons);
+    if (n > 0) rows.push(counter(env, { metric: 'brain-neurons', subject: meta.id, n }));
+    if (t.cost.micros >= 1) rows.push(counter(env, { metric: 'brain-microdollars', subject: meta.id, n: Math.round(t.cost.micros) }));
+    await env.DB.batch(rows.filter(Boolean)).catch(() => {});
+  }
+  return {
+    ok: true, game: meta.id, mode, model: t.model ?? (mode === 'workers-ai' ? e.HOMIE_BRAIN_MODEL || DEFAULT_MODEL : null), engine: t.engine, provider: t.provider,
+    decision: t.decision, own: t.own, overruled: /\+floor$/.test(t.provider), why: t.why, p: t.p, ms: t.ms,
+    // A decision model's whole answer: every option's probability, per question (ids and numbers only).
+    ...(t.answers ? { answers: Object.fromEntries(Object.entries(t.answers).map(([k, a]) => [k, a?.probabilities ? Object.fromEntries(Object.entries(a.probabilities).map(([o, v]) => [o, Math.round(Number(v) * 100) / 100])) : a?.noul ?? a?.score ?? null])) } : {}),
+    ...(t.usage ? { tokens: { input: Number(t.usage.input_tokens ?? t.usage.prompt_tokens) || null, output: Number(t.usage.output_tokens ?? t.usage.completion_tokens) || 0 } } : {}),
+    neurons: Math.round(t.cost.neurons * 1000) / 1000, micros: Math.round(t.cost.micros),
+    budget: { neurons: day.budget.neurons, usedBefore: Math.round(day.used.neurons) },
   };
 }
 
@@ -1163,6 +1221,8 @@ async function api(request, env, url, cat) {
       return json({ ok: true, game, server, members });
     } catch (error) { return json({ ok: false, error: 'not-migrated', message: `Servers need migration 0006_studio_servers.sql (npm run deploy). (${String(error?.message ?? error).slice(0, 120)})` }, 503); }
   }
+  // A guide's brain on a moment the owner gives (0.24.4): what it would decide, why, how sure, how long and what it cost.
+  if (path === '/_studio/api/agents/try' && request.method === 'POST') return json(await agentsTry(env, cat, body));
   // Room chat (0.23.0): every game's rules, every live room's last minutes, the reports, the review's day.
   if (path === '/_studio/api/chat' && request.method === 'GET') {
     const metas = (cat.games ?? []).filter((g) => !url.searchParams.get('game') || g.id === url.searchParams.get('game'));

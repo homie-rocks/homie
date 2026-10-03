@@ -1,9 +1,9 @@
 ---
 name: game
-description: Make or remix a multiplayer web game inside a Homie studio — every browser renders the game, strangers meet in public rooms, bots fill empty seats, rounds end and restart — prove it with two browsers finishing a round, and give it an epic landing page (a full-bleed hero from its own footage or art, the pitch, Play, phone / computer / TV, live rooms, how to play, credits). Use when someone in a Homie studio (a folder with studio.json) asks for a new game, a change to a game, a remix of a game from the Homie directory, or a better page for a game ("make my game's landing page epic").
-compatibility: Node 22 and Chrome. The studio's pinned Wrangler runs the dev site; the GitHub CLI (gh) opens a pull request when the studio publishes that way.
+description: Make or remix a multiplayer web game inside a Homie studio — every browser renders the game, strangers meet in public rooms, bots fill empty seats, rounds end and restart — prove it with two browsers finishing a round, and give it an epic landing page (a full-bleed hero from its own footage or art, the pitch, Play, phone / computer / TV, live rooms, how to play, credits). Use when someone in a Homie studio (a folder with studio.json) asks for a new game, a change to a game, a remix of a game from the Homie directory, a game whose own AI decides (opponents picking tactics, an NPC's reaction, a director's call, a turn's move), or a better page for a game ("make my game's landing page epic").
+compatibility: Node 22 and Chrome. The studio's pinned Wrangler runs the dev site; the GitHub CLI (gh) opens a pull request when the studio publishes that way; Ollama with clef-flash, optional, answers a game's AI decisions on this computer under dev (downloaded only after the person's yes).
 metadata:
-  providers: cloudflare github
+  providers: cloudflare github ollama
 ---
 
 # Make or remix a game
@@ -94,7 +94,30 @@ Make it the game the person asked for, in small steps:
   `useAgents(room.net, vocab, { view, decide })` from `@homie-rocks/studio/agents`: `view(slot)` is game state
   only (seats, never names; under 2 KB), `decide(view)` is the scripted floor, the hands read
   `agents.goalOf(slot)` and call `agents.done(slot)`, and lines are bubbles from `agents.on('say')`. Ember Vale
-  (`--from ember-vale`) is the worked example. The brain itself is the owner's switch (the `servers` skill).
+  (`--from ember-vale`) is the worked example. The brain itself is the owner's switch (the `servers` skill);
+  `homie-studio agents try <id> --view view.json --ask <ask>` shows what it would decide in one moment.
+- **Let the game decide with AI** (NETPLAY.md section 20), when its opponents pick a tactic, an NPC reacts from a
+  fixed set, a director calls a wave or the pressure, or a turn needs a move: `"decide": true` in game.json (opt-in;
+  the deploy binds Workers AI), then on the host `net.decide(state, questions, { floor })` (from
+  `@homie-rocks/studio/netplay`, or `room.net` with the port kit). Cloudflare's Clef answers in the room with option
+  ids, yes or no, and levels, never text: Choice (2 to 26 ids), yes/no (`noul`), Score (2 to 10 levels). It always
+  resolves: the game's synchronous `floor` answers whenever the model cannot (no AI, not opted in, over the day's
+  budget, paced, slow, not the host), so the floor must play well by itself.
+
+  ```ts
+  const d = await net.decide({ heroes: heroes.map((h) => ({ hp: h.hp, down: h.down })) }, {   // game state and seats, never names; < 2 KB
+    tactic: { type: 'choice', instructions: 'How should the slimes hunt?', criteria: { chase: 'Rush the nearest hero', regroup: 'Gather round the King' } },
+    wave: { type: 'noul', instructions: 'Should a wave come now?' },
+  }, { floor: () => ({ tactic: 'chase', wave: false }) });
+  apply(d.picks);                                          // d.by: 'ai' | 'local' (Clef on this computer, dev) | 'floor'
+  ```
+  Ask per beat (every 5 to 10 s), per turn or on an event, never per frame: about a quarter of a second a round
+  trip and about 4 neurons for three questions, from the AI brains' day the guides share (8,000 by default; one room
+  asking every second would spend about 15,000 an hour). The room allows one ask every 3 s and 20 a minute. On a
+  kids server (`net.policy.kids`) keep it gentle: offer no cruel option and cap the pressure. A decision moves the
+  game's own world, never a person and never the party's skill dial. Ember Vale's slimes' director is the worked
+  example (it ships `"decide": false`). Under `npm run dev` it answers with Clef on this computer when Ollama has
+  `clef-flash`, else from the floor; downloading `clef-flash` (about 11 GB) is the person's yes, never yours.
 - **Room chat and speech bubbles** (NETPLAY.md section 19; `chat/CHAT.md`). Every game has room chat on its
   play page with no code: reactions that float up every screen, quick lines, and typing where the rules allow.
   Give it the game's own voice in `game.json` `"chat"`: `"lines"` (up to 12 quick lines, short and kind:

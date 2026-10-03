@@ -18,8 +18,10 @@
  *   homie-studio games
  *   homie-studio build [<id>] [--maps]   (--maps: also keep each bundle's source map and module sizes in .studio/maps/<id>/,
  *                                          never in site/dist: what `perf` reads a CPU profile through)
- *   homie-studio dev [--port 8787] [--remote-ai]   (--stop: stop exactly this studio's dev server, nothing else;
- *                                         AI guides think scripted here unless --remote-ai: real Workers AI, billed)
+ *   homie-studio dev [--port 8787] [--remote-ai] [--no-local-ai]   (--stop: stop exactly this studio's dev server, nothing else;
+ *                                         AI guides, chat review and game decisions think with Clef on this computer
+ *                                         when Ollama has clef-flash (free; dev never downloads it), else scripted;
+ *                                         --remote-ai: the real Workers AI, billed)
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
  *   homie-studio perf <id> [--url <site>] [--device computer,phone] [--runs 1] [--seconds 15] [--warm 3] [--profile]
  *                     [--cpu 4] [--out <dir>] [--max-load 0.8] [--pair <label>]
@@ -121,6 +123,11 @@
  *                                          time AI guides may talk are ASKED for, like office kick; --budget is
  *                                          Workers AI neurons a day, or dollars a day for the owner's key)
  *   homie-studio agents brain key [--remove]   (the owner's AI key, typed into a page on this computer only)
+ *   homie-studio agents sit <game> [--server <id>] [--brain local]   (a guide's seat from this terminal; --brain local:
+ *                                          Clef on this computer decides every few seconds, free; never downloads it)
+ *   homie-studio agents try <game> --view <file.json> [--ask <ask>[:<arg>=<value>] --from <seat>] [--model <id>]
+ *                                         (what the guides' brain would decide in that moment, with no seat taken;
+ *                                          spent from the guides' day; --model compares a model before setting it)
  *   homie-studio shop                     is the studio's shop selling (its own Stripe), and if not, what is missing
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against the kit's rules (real money, nothing random, the kids rules)
@@ -245,7 +252,8 @@ import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/
 import { playersOwner, playersShow } from '../lib/players.mjs';
 import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeMute, officeRevoke, officeShow } from '../lib/office.mjs';
 import { chatBudget, chatLines, chatRemove, chatRulesSet, chatShow, chatWords } from '../lib/chat-cli.mjs';
-import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
+import { detectLocalAi, localAiVars } from '../lib/local-ai.mjs';
+import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, agentsTry, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
 import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatements, shopStatus } from '../lib/shop.mjs';
 import { catalogLines, catalogPlan } from '../lib/shop-catalog.mjs';
@@ -263,7 +271,7 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'supporter', 'managed', 'live', 'send', 'accept-tos'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -825,8 +833,9 @@ async function main() {
     if (sub === 'revoke') return agentsRevoke(root, positional[2], { url });
     if (sub === 'brain' && positional[2] === 'key') return agentsBrainKey(root, { remove: flags.has('remove'), log });
     if (sub === 'brain') return agentsBrain(root, positional[2], positional[3], positional[4], { url, budget: flags.get('budget') });
-    if (sub === 'sit') return agentsSit(root, positional[2], { url, server: flags.get('server'), pass: flags.get('pass'), label: flags.get('label') });
-    return { ok: false, command: 'agents', why: `unknown: agents ${sub ?? ''} (pass, passes, revoke, brain, brain key, sit)` };
+    if (sub === 'sit') return agentsSit(root, positional[2], { url, server: flags.get('server'), pass: flags.get('pass'), label: flags.get('label'), brain: flags.get('brain') });
+    if (sub === 'try') return agentsTry(root, positional[2], { url, view: flags.get('view'), ask: flags.get('ask'), from: flags.get('from'), model: flags.get('model'), mode: flags.get('mode'), quiet: flags.has('quiet'), avoid: flags.get('avoid'), players: flags.get('players'), readFile: (f) => readFileSync(resolve(f), 'utf8') });
+    return { ok: false, command: 'agents', why: `unknown: agents ${sub ?? ''} (pass, passes, revoke, brain, brain key, sit, try)` };
   }
   if (cmd === 'media' && sub === 'put') return mediaPut(root, positional[2], flags.get('as'));
   if (cmd === 'media' && sub === 'move') return mediaMove(root, { paths: positional.slice(2), dryRun: flags.has('dry-run') || flags.has('plan'), verify: flags.has('verify'), log });
@@ -1030,9 +1039,17 @@ async function dev(root) {
   log(`Local site: http://127.0.0.1:${port}/  (each game: http://127.0.0.1:${port}/<id>/play — open it in two browsers)`);
   const ai = devConfig(root, flags.has('remote-ai'));
   if (ai.note) log(ai.note);
+  // The person's own Clef (0.24.4, lib/local-ai.mjs): with Ollama and clef-flash on this computer, the local Worker's
+  // guides, chat review and game decisions think here, free. Never a download: dev only says what one would cost.
+  let localVars = [];
+  if (!flags.has('remote-ai') && !flags.has('no-local-ai')) {
+    const found = await detectLocalAi();
+    localVars = localAiVars(found);
+    log(found.ok ? `AI guides, chat review and game decisions think with ${found.model} on this computer (Ollama ${found.version}): free, nothing sent to Cloudflare.` : found.say);
+  }
   // --remote-ai: Wrangler's --local turns every remote binding off ("not supported"), so a dev with the real Workers AI
   // (the guides' brains, room chat's review) runs without it; everything else stays local all the same.
-  const child = spawn(bin, ['dev', ...(flags.has('remote-ai') ? [] : ['--local']), '--ip', '127.0.0.1', '--port', port, ...ai.args], { cwd: workerDir(root), env, stdio: 'inherit' });
+  const child = spawn(bin, ['dev', ...(flags.has('remote-ai') ? [] : ['--local']), '--ip', '127.0.0.1', '--port', port, ...ai.args, ...localVars], { cwd: workerDir(root), env, stdio: 'inherit' });
   mkdirSync(dirname(devFile(root)), { recursive: true });
   writeFileSync(devFile(root), `${JSON.stringify({ pid: process.pid, child: child.pid, port: Number(port), at: new Date().toISOString() })}\n`);
   log(`Stop it with: npx --no-install homie-studio dev --stop   (this studio's dev server only)`);
@@ -1063,13 +1080,20 @@ function devConfig(root, remoteAi) {
   const copy = join(base, '.wrangler', 'homie-dev.wrangler.json');
   mkdirSync(dirname(copy), { recursive: true });
   writeFileSync(copy, `${JSON.stringify(json, null, 2)}\n`);
-  return { args: ['--config', copy, '--persist-to', join(base, '.wrangler', 'state')], note: remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : 'AI guides think scripted here (no Workers AI under dev; --remote-ai for the real one).' };
+  return { args: ['--config', copy, '--persist-to', join(base, '.wrangler', 'state')], note: remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : 'No Workers AI under dev (--remote-ai for the real one, billed): AI guides think with Clef on this computer when Ollama has it, else scripted.' };
 }
 
 /** `agents sit`: an AI guide's seat from this terminal, for a demo or a test of a vocabulary. Lines on stdin act. */
-async function agentsSit(root, game, { url, server, pass, label }) {
+async function agentsSit(root, game, { url, server, pass, label, brain }) {
   const site = url ?? siteUrl(root);
-  const seat = new AgentSeat({ site, game, server: server ?? null, pass: pass ?? null, label: label ?? 'Claude', root });
+  // --brain local: Clef on this computer decides (lib/local-ai.mjs); never a download, only what one would cost.
+  let local = null;
+  if (brain === 'local') {
+    local = await detectLocalAi();
+    if (!local.ok) return { ok: false, command: 'agents sit', why: local.say };
+    log(`This seat thinks with ${local.model} on this computer (Ollama ${local.version}) every few seconds. Type stand to leave.`);
+  } else if (brain !== undefined) return { ok: false, command: 'agents sit', why: '--brain is local (Clef on this computer), or leave it out to choose yourself' };
+  const seat = new AgentSeat({ site, game, server: server ?? null, pass: pass ?? null, label: label ?? (local ? 'Clef' : 'Claude'), root, brain: local ? 'local' : null, local });
   const r = await seat.sit();
   if (!r.ok) return { ok: false, command: 'agents sit', why: r.why };
   log(`Seated as ${r.name} in ${r.room} (seat ${r.seat}). Type: look | do <goal> {"arg":…} | say <line> {"arg":…} with a goal | stand`);

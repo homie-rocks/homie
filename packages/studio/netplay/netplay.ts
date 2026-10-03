@@ -402,6 +402,8 @@ export interface NetStats {
   reconnects: number;
   promotions: number;
   round: number | null;
+  /** Section 20: the host's decisions: asked, answered by the studio's model ('ai'), the person's own Ollama ('local'), or the floor; median ms. */
+  decides?: { asked: number; ai: number; local: number; floor: number; msP50: number | null };
 }
 
 export interface Vec { x: number; y: number; z?: number }
@@ -495,6 +497,29 @@ export interface NetHandlers<S, A, C> {
   unchat: (e: { ids: string[] }) => void;
   /** Revision 8: a message of mine was not sent (slow mode, sign in to type, a word, the studio's filter…). */
   held: (h: ChatHeld) => void;
+}
+
+/**
+ * A GAME'S OWN DECISIONS (section 20): typed questions about the game's state that the studio's decision model (Clef)
+ * answers with a probability for every option, never with text. A Choice picks one option id (2 to 26), a yes/no
+ * (`noul`) is true or false, a Score is a level (2 to 10, lowest first; the answer is the probability-weighted level).
+ */
+export type DecideQuestion =
+  | { type: 'choice'; instructions: string; criteria: Record<string, string | null> }
+  | { type: 'noul'; instructions: string; criteria?: { true?: string; false?: string } }
+  | { type: 'score'; instructions: string; criteria: string[] };
+export type DecidePicks = Record<string, string | boolean | number>;
+/**
+ * What `decide` resolves to, always: `by` 'ai' (the studio's Workers AI) or 'local' (the person's own Ollama under dev),
+ * or 'floor' (the game's own answer: no AI, not opted in, over budget, paced, slow, not the host); `why` says which.
+ * `p`: the model's probability for each option (a choice), `{ yes }` (a yes/no), or each level (a score).
+ */
+export interface Decided { by: 'ai' | 'local' | 'floor'; picks: DecidePicks; p?: Record<string, Record<string, number>>; ms: number; why?: string }
+export interface DecideOptions {
+  /** The game's own answer, synchronous: used whenever the model's is not there in time. Missing picks fall back to it one by one. */
+  floor?: (state: unknown) => DecidePicks;
+  /** How long to wait for the model (default 2500 ms; at most 5000). */
+  ms?: number;
 }
 
 export interface Netplay<S = unknown, A = unknown, C = unknown> {
@@ -640,6 +665,13 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   /** Interpolation pair for rendering remote entities. */
   sample(delayMs?: number): Sample<S> | null;
   latest(): Snapshot<S> | null;
+  /**
+   * Host: ask the studio's decision model (Clef) a few typed questions about the game's state, for a game whose
+   * game.json says "decide": true. Always resolves: with the model's picks, or the floor's when it cannot answer in
+   * time (no AI, over the day's budget, at most one ask every 3 s a room, a replica, offline). Never per frame: per
+   * beat (every few seconds), and the game keeps playing while it waits.
+   */
+  decide(state: unknown, questions: Record<string, DecideQuestion>, opts?: DecideOptions): Promise<Decided>;
   stats(): NetStats;
   expose(probes: Probes): void;
   close(): void;
@@ -1069,6 +1101,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   /** Wall times of the input frames sent in the last second, and until when the slow cap holds. */
   const inSent: number[] = [];
   let inSlowUntil = 0;
+  /** Section 20: decisions waiting for the room's answer (by request id), and how long the room said it is off. */
+  const deciding = new Map<string, { done: (d: Decided) => void; timer: ReturnType<typeof setTimeout>; at: number; floor: () => Decided }>();
+  let decideSeq = 0;
+  let decideOffUntil = 0;
+  let decideNextAt = 0;
+  const decideStats = { asked: 0, ai: 0, local: 0, floor: 0, ms: [] as number[] };
   let idleSkipped = 0;
   /** Why this client stopped for good (a FINAL_ERRORS refusal), or null while it plays or reconnects. */
   let closedWhy: string | null = null;
@@ -1460,6 +1498,29 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         resolveView('policy');
         return;
       }
+      case 'decided': {
+        const n = String(m['n'] ?? '');
+        const w = deciding.get(n);
+        if (!w) return;
+        deciding.delete(n);
+        clearTimeout(w.timer);
+        const ms = Math.round(wall() - w.at);
+        if (m['ok'] === true && m['picks'] && typeof m['picks'] === 'object') {
+          const base = w.floor();
+          const by = m['by'] === 'local' ? 'local' : 'ai';
+          decideStats[by] += 1;
+          decideStats.ms.push(ms); if (decideStats.ms.length > 40) decideStats.ms.shift();
+          w.done({ by, picks: { ...base.picks, ...(m['picks'] as DecidePicks) }, p: (m['p'] as Decided['p']) ?? {}, ms });
+          return;
+        }
+        const why = String(m['why'] ?? 'error');
+        // Not opted in, no AI or out of budget: ask again only after a minute. Paced: at the room's next slot.
+        if (why === 'off' || why === 'no-ai' || why === 'budget') decideOffUntil = wall() + 60_000;
+        if (why === 'pace' && Number.isFinite(Number(m['retryMs']))) decideNextAt = wall() + Number(m['retryMs']);
+        decideStats.floor += 1;
+        w.done({ ...w.floor(), why, ms });
+        return;
+      }
       case 'error': {
         const code = String(m['code'] ?? '');
         // Inputs over the relay's cap were dropped: send fewer for a while (the newest frame still goes out).
@@ -1748,6 +1809,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       interpDelay: Math.round(interpDelay()), snapAgeP90: Math.round(ageP90), starvedPct: +starvedPct.toFixed(3), rejectedSnaps,
       owned: api.owned, pending: sentHist.length, stateKeys: stateMap.size,
       peers: peers.size, reconnects, promotions, round: roundInfo ? roundInfo.n : null,
+      decides: { asked: decideStats.asked, ai: decideStats.ai, local: decideStats.local, floor: decideStats.floor, msP50: [...decideStats.ms].sort((x, y) => x - y)[Math.floor(decideStats.ms.length / 2)] ?? null },
     };
   }
   function notifyStats(force: boolean): void {
@@ -2185,6 +2247,26 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       return { a: newest, b: newest, alpha: 1, renderT, starved: 0 };
     },
     latest() { return buf.length ? buf[buf.length - 1] as Snapshot<S> : null; },
+    decide(state, questions, o = {}) {
+      const t0 = wall();
+      const floor = (): Decided => {
+        let picks: DecidePicks = {};
+        try { picks = o.floor ? o.floor(state) ?? {} : {}; } catch { picks = {}; }
+        return { by: 'floor', picks, ms: Math.round(wall() - t0) };
+      };
+      decideStats.asked += 1;
+      const now0 = wall();
+      const why = role !== 'host' ? 'not-host' : offline || !connected ? 'offline' : now0 < decideOffUntil ? 'off' : now0 < decideNextAt ? 'pace' : null;
+      if (why) { decideStats.floor += 1; return Promise.resolve({ ...floor(), why }); }
+      decideNextAt = now0 + 3000;
+      const n = `d${(decideSeq += 1).toString(36)}`;
+      return new Promise<Decided>((done) => {
+        const ms = Math.max(200, Math.min(5000, Number(o.ms) || 2500));
+        const timer = setTimeout(() => { if (deciding.delete(n)) { decideStats.floor += 1; done({ ...floor(), why: 'slow' }); } }, ms);
+        deciding.set(n, { done, timer, at: t0, floor });
+        if (!raw({ t: 'decide', n, state, questions })) { deciding.delete(n); clearTimeout(timer); decideStats.floor += 1; done({ ...floor(), why: 'offline' }); }
+      });
+    },
     stats: statsNow,
     expose(p) { probes = { ...probes, ...p }; },
     close() {

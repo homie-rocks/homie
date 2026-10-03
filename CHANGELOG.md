@@ -17,9 +17,36 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.24.4] - 2026-10-03
+
+**Plugin 0.25.4** · [#37](https://github.com/homie-rocks/homie/pull/37)
+
+Your AI guides think with Cloudflare's Clef decision model, which does what a player asks; Clef runs on your own computer while you build; and your games can ask it for their own decisions (tactics, a director's call, a turn) in about a quarter of a second.
+
+### Added
+
+- **Clef thinks for your AI guides.** On a server whose guides use Workers AI, the default model is now `@cf/cloudflare/clef-flash`, Cloudflare's open-source decision model (Apache 2.0). It never writes text: each decision is asked as typed Choices of your `agents.json` (which goal, which quest or place or player, which line or none), and its answer is checked by the same rules as before. On 64 recorded Ember Vale moments it did what an open ask asked 36 times out of 40 by itself (the old Llama 3.1 8B: 0 of 40), and blind judges preferred its decisions in 51 of 64 (Llama's in none). In a live room it answered all 9 asks itself.
+- `homie-studio agents try <game> --view <file.json> [--ask ask_help:quest=king-slime --from 0] [--model <id>]`: what your guides' brain would decide in one moment, with no seat taken: the decision, the brain's own pick before the fixed rules, how sure it was, how long it took and what it cost. Use it to test an `agents.json` or to compare a model before setting it.
+- **Clef on your own computer.** With [Ollama](https://ollama.com) 0.35.1 or later and `clef-flash` on this computer, `homie-studio dev` runs the guides, chat review and your game's decisions on it: free, nothing sent to Cloudflare (`--no-local-ai` turns it off). `homie-studio agents sit <game> --brain local` (the MCP's `agent_sit { brain: "local" }`) seats a guide that thinks on your computer every few seconds. `setup status` has a "Clef on this computer" row. Nothing ever downloads the model by itself: `ollama pull clef-flash` is about 11 GB, and it is your call.
+- **Your game's own decisions** (NETPLAY.md section 20): `net.decide(state, questions, { floor })` on the host, for a game whose `game.json` says `"decide": true`. Ask a Choice (2 to 26 options), a yes/no or a Score about your game's state; the room asks Clef and answers with option ids and numbers, within the same daily budget as the guides, at most one ask every 3 s per room. It always answers: with your own floor when there is no AI, no budget, or no answer in time. Measured: about a quarter of a second there and back, about 4 neurons for three questions. Ask per beat or per turn, never per frame.
+- Ember Vale's slimes can think (opt-in: set `"decide": true` in its `game.json`): every 6 s the slimes' director picks how they hunt (rush, surround, gang up on the most hurt, regroup at the King), whether a wave comes and how hard to push, and every screen shows what the slimes are up to. On a kids server they never gang up on the most hurt and never push past steady.
+- The office shows each room's game decisions (how many, who answered, the model's time, the neurons), and each guide decision's model, how sure it was and, when a rule overruled it, what the brain itself chose.
+
+### Changed
+
+- A player's ask is now answered with the values they asked for: a brain that picks the asked goal with another quest or place is overruled, like one that picks another goal.
+- House guides remember the lines they said and who is new to them: they greet a newcomer once and otherwise stay quiet unless asked or something changes.
+- Clef costs more neurons a decision than Llama (about 9 against 4: it reads its questions and answers, and writes nothing), so the default 8,000 a day is about 900 guide decisions. Set `HOMIE_BRAIN_MODEL` to `@cf/meta/llama-3.1-8b-instruct-fp8-fast` in `wrangler.jsonc` to keep the old model.
+- The doctor's Workers AI check asks Clef one yes/no question (it does not take a chat message).
+
+### Upgrade notes
+
+- `npm run deploy` after upgrading: guides on Workers AI switch to Clef at their next decision. Nothing else to do.
+- To try local Clef, install Ollama (0.35.1 or later), say yes to the download, and run `ollama pull clef-flash`; then `npm run dev`.
+
 ## [0.24.3] - 2026-10-03
 
-**Plugin 0.25.3** · [#36](https://github.com/homie-rocks/homie/pull/36)
+**Plugin 0.25.3** · [#36](https://github.com/homie-rocks/homie/pull/36) · [release-2026-10-03-studio-0.24.3](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.24.3)
 
 Set up your shop with Stripe's own tools for AI: your AI makes the products, checks tax, makes the webhook and answers "how are sales?"; you make the account, approve Stripe's pages and paste one key.
 

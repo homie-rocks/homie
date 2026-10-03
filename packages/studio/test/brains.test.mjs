@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { mock, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, costOf, decisionSchema, ownerKey, parseDecision, promptFor, renderLine, sanitizeView, scripted, systemPrompt,
+  DEFAULT_MODEL, LLAMA_MODEL, NEURONS_PER_M, OWNER_MODEL, costOf, decisionSchema, ownerKey, parseDecision, promptFor, renderLine, sanitizeView, scripted, systemPrompt,
   talks, vocabularyOf, workersAi,
 } from '../worker/brain.mjs';
 import { BRAIN_CADENCE, HouseAgents } from '../worker/agents.mjs';
@@ -144,10 +144,15 @@ test('a prompt carries game state and seats only: no ticket, account, address, n
 });
 
 test('what a call costs: neurons from Workers AI\'s rates, microdollars from the owner\'s key', () => {
-  const c = costOf({ provider: 'workers-ai', model: DEFAULT_MODEL, usage: { prompt_tokens: 700, completion_tokens: 40 } });
+  const c = costOf({ provider: 'workers-ai', model: LLAMA_MODEL, usage: { prompt_tokens: 700, completion_tokens: 40 } });
   assert.ok(Math.abs(c.neurons - (700 * 4119 + 40 * 34868) / 1e6) < 1e-9, `${c.neurons}`);
   assert.ok(c.neurons > 4 && c.neurons < 4.5, 'about 4.3 neurons a decision (DESIGN section 5)');
-  assert.deepEqual(NEURONS_PER_M[DEFAULT_MODEL], [4119, 34868]);
+  assert.deepEqual(NEURONS_PER_M[LLAMA_MODEL], [4119, 34868]);
+  // Clef (the default since 0.24.4): input tokens only, $0.09 a million (8,182 neurons); about 1,000 tokens a decision.
+  assert.equal(DEFAULT_MODEL, '@cf/cloudflare/clef-flash');
+  const clef = costOf({ provider: 'workers-ai', model: DEFAULT_MODEL, usage: { input_tokens: 1050, output_tokens: 0 } });
+  assert.ok(Math.abs(clef.neurons - (1050 * 8182) / 1e6) < 1e-9 && clef.micros === 0, `${clef.neurons}`);
+  assert.equal(costOf({ provider: 'local', model: 'clef-flash', usage: { input_tokens: 1050, output_tokens: 0 } }).neurons, 0, 'the person\'s own computer is free');
   const unknown = costOf({ provider: 'workers-ai', model: '@cf/some/new-model', usage: { prompt_tokens: 700, completion_tokens: 40 } });
   assert.ok(unknown.neurons > c.neurons, 'an unknown model is counted dear, never cheap');
   const k = costOf({ provider: 'owner-key', model: OWNER_MODEL, usage: { input_tokens: 700, output_tokens: 40 } });
@@ -189,8 +194,8 @@ test('Workers AI: JSON mode with the decision\'s schema; a model without JSON mo
   const calls = [];
   const env = { AI: { run: async (model, input) => { calls.push({ model, input }); return { response: { goal: 'guard', args: {}, say: null, sayArgs: {} }, usage: { prompt_tokens: 650, completion_tokens: 30 } }; } } };
   const prompt = promptFor(VOCAB, { view: VIEW });
-  const r = await workersAi(env, { ...prompt, schema: decisionSchema(VOCAB) });
-  assert.equal(calls[0].model, DEFAULT_MODEL);
+  const r = await workersAi({ ...env, HOMIE_BRAIN_MODEL: LLAMA_MODEL }, { ...prompt, schema: decisionSchema(VOCAB) });
+  assert.equal(calls[0].model, LLAMA_MODEL);
   assert.equal(calls[0].input.response_format.type, 'json_schema');
   assert.equal(calls[0].input.messages[0].role, 'system');
   assert.equal(parseDecision(r.out, VOCAB, { view: VIEW }).ok, true);
@@ -374,7 +379,7 @@ test('house agents: two guides sit on a beginner server whose AI may talk, named
 
 test('house agents decide on DO alarms within the cadence caps: 0.8 s after an ask, 3 s apart, 10 a minute, one alarm every 3 s', async () => {
   const calls = [];
-  const x = house(undefined, { providers: { 'workers-ai': async (env, args) => { calls.push(args); return { out: { goal: 'quest', args: { quest: 'king-slime' }, say: 'quest_help', sayArgs: { quest: 'king-slime' } }, usage: { prompt_tokens: 700, completion_tokens: 40 }, model: DEFAULT_MODEL }; } } });
+  const x = house(undefined, { providers: { 'workers-ai': async (env, args) => { calls.push(args); return { out: { goal: 'quest', args: { quest: 'king-slime' }, say: 'quest_help', sayArgs: { quest: 'king-slime' } }, usage: { prompt_tokens: 700, completion_tokens: 40 }, model: LLAMA_MODEL }; } } });
   const [g1] = x.seats();
   x.view(g1);
   // The first view of a party schedules a decision; an ask comes in before it fires.

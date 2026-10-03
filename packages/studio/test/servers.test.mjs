@@ -506,7 +506,15 @@ test('AI guides at the Table: consent, house guides, a Workers AI decision on th
   t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const { env, DB, fetchSite, seat, owner, post, waits } = await site();
   const calls = [];
-  env.AI = { run: async (model, input) => { calls.push({ model, input }); return { response: { goal: 'quest', args: { quest: 'slime-hunt' }, say: 'quest_help', sayArgs: { quest: 'slime-hunt' } }, usage: { prompt_tokens: 700, completion_tokens: 40 } }; } };
+  // Workers AI, stood in: Clef (the default since 0.24.4) answers typed questions with a probability for each option.
+  const lean = { goal: 'quest', 'arg.quest': 'slime-hunt', say: 'quest_help' };
+  const answer = (questions) => Object.fromEntries(Object.entries(questions).map(([id, q]) => {
+    if (q.type === 'noul') return [id, { type: 'noul', noul: 0.3 }];
+    const keys = Object.keys(q.criteria);
+    const pick = keys.includes(lean[id]) ? lean[id] : keys[0];
+    return [id, { type: 'choice', choice: pick, probabilities: Object.fromEntries(keys.map((k) => [k, k === pick ? 0.9 : 0.1 / (keys.length - 1)])), confidence: 0.8 }];
+  }));
+  env.AI = { run: async (model, input) => { calls.push({ model, input }); return input.questions ? { model: input.model, answers: answer(input.questions), usage: { input_tokens: 1000, output_tokens: 0 } } : { response: { goal: 'quest', args: { quest: 'slime-hunt' }, say: 'quest_help', sayArgs: { quest: 'slime-hunt' } }, usage: { prompt_tokens: 700, completion_tokens: 40 } }; } };
   let r = await post('/_studio/api/servers', { game: 'vale', name: 'First Steps', policy: 'beginner', guides: 2 });
   assert.equal(r.status, 200);
   assert.match((await r.json()).notes.join(' '), /agents brain vale first-steps workers-ai/, 'making the server says how its guides talk');
@@ -535,7 +543,8 @@ test('AI guides at the Table: consent, house guides, a Workers AI decision on th
   assert.ok(Number.isFinite(table.ctx.storage ? 1 : 0));
   await table.alarm();
   assert.equal(calls.length >= 1, true, 'Workers AI was asked');
-  assert.equal(calls[0].model, '@cf/meta/llama-3.1-8b-instruct-fp8-fast');
+  assert.equal(calls[0].model, '@cf/cloudflare/clef-flash');
+  assert.equal(calls[0].input.model, 'clef-flash', 'the decision model is asked questions, not sent a prompt');
   assert.doesNotMatch(JSON.stringify(calls[0].input), /owls\.example|hsk_|pl_|studio_/, 'nothing about a person or the studio\'s keys in the prompt');
   const said = host.conn.sent.filter((m) => m.t === 'ev' && m.from === g).map((m) => m.k);
   assert.deepEqual(said, ['agent:do', 'say:quest_help'], 'the decision reached the host as a goal and a line');

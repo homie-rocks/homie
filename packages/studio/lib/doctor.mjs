@@ -19,6 +19,7 @@
  *   Stripe             for selling only in a studio with shop.json (0.24.3): Stripe's own agent plugin (its MCP server
  *                                  and skills) for this AI, set up when the studio starts selling; the shop's key itself
  *                                  goes in through `homie-studio shop connect`, never here
+ *   Clef locally       optional    Ollama with clef-flash: AI under dev for free (never downloaded without a yes)
  *   status line        optional    (Claude Code only) the build's progress under the prompt
  *
  * It is safe at any time, inside a studio or before one exists: it only reads (local files, `--version` of a few
@@ -31,6 +32,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { workersAiRow } from './brain-probe.mjs';
+import { detectLocalAi } from './local-ai.mjs';
 import { findChrome } from './chrome.mjs';
 import { whyFailed } from './net.mjs';
 import { isOurs } from './statusline.mjs';
@@ -225,6 +227,18 @@ export async function setupStatus({
       fix: ok ? null : mac ? { who: 'ai', run: 'brew install ffmpeg', say: 'about a minute with Homebrew; you approve the install.' }
         : win ? { who: 'ai', run: 'winget install --id Gyan.FFmpeg -e', say: 'you approve the install.' }
           : { who: 'person', say: 'Install your system\'s ffmpeg package (for example: sudo apt-get install -y ffmpeg).' },
+    });
+  }
+
+  // Clef on this computer (0.24.4, lib/local-ai.mjs): Ollama with clef-flash. Optional, and never downloaded here: the
+  // person says yes to the size first. In a studio only (it serves `dev`).
+  if (root) {
+    const found = await detectLocalAi({ env, fetchFn });
+    rows.push({
+      id: 'local-ai', label: 'Clef on this computer', need: 'optional', state: found.ok ? 'ok' : 'optional',
+      detail: found.ok ? `${found.model} on Ollama ${found.version}` : found.why === 'no-model' ? `Ollama ${found.version} is here, without clef-flash` : found.why === 'old-ollama' ? `Ollama ${found.version} is too old for Clef (0.35.1 or later)` : 'no Ollama running here',
+      unlocks: 'AI guides, chat review and a game\'s own decisions under `dev` with no Cloudflare and no cost, and a guide seat that thinks on this computer (agents sit --brain local)',
+      fix: found.ok ? null : { who: 'person', say: found.say, ...(found.why === 'no-ollama' ? { open: 'https://ollama.com/download' } : {}) },
     });
   }
 
