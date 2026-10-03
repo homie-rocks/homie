@@ -17,9 +17,41 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.26.1] - 2026-10-03
+
+**Plugin 0.27.1** · [#41](https://github.com/homie-rocks/homie/pull/41)
+
+In Codex, Homie now holds what the Claude Code mod holds: protected files, deploys, Cloudflare changes, spending past the budget and model downloads wait for your own "proceed", and secrets come out of what Codex reads.
+
+### Added
+
+- Homie's hooks for Codex (`hooks/codex.json`, `hooks/codex.mjs`). They hold and refuse the same calls as the Claude Code mod, with the same words:
+  - Held: an edit to a file `studio.json` `"protect"` lists (an `apply_patch`, with its diff), a production deploy, a change to the studio's Cloudflare account outside its deploy (Wrangler or Cloudflare's MCP servers), a paid fal, ElevenLabs or Tripo call past the budget or whose cost cannot be read first, and a Clef model download.
+  - Refused: a change to a locked art decision, an unlicensed asset in a public game's deploy, a file over 5 MB under `games/` into git, and a Stripe write that would hand back a webhook's signing secret.
+  - Secrets come out of every tool result before the model reads it.
+- How you answer a hold in Codex. A Codex hook cannot ask you, so a held call is refused with a short code, and Codex shows you what it holds. Then:
+  - Reply `proceed H7K2` to let exactly that call through once, or `cancel H7K2` to refuse it.
+  - Only your own message counts; the model cannot answer for you.
+  - In `codex exec`, `codex exec resume <session> "proceed H7K2"` answers a hold.
+- `node hooks/codex.mjs check -- <command>` says what Homie would do with a command, and runs nothing.
+
+### Changed
+
+- The decisions behind every hold live in one module, `hooks/lib/holds.mjs`. The Claude Code mod and the Codex hooks both ask it, so the two cannot drift. The mod holds exactly what it held before, with the same words.
+- The plugin's root `plugin.json` no longer declares the Agent Plugins `$schema`. Codex 0.156.1 to 0.160.0 read a root manifest only when it declares that schema, and then run none of the plugin's hooks. Codex now reads `.codex-plugin/plugin.json`, which names the hooks, the skills and the Homie MCP server.
+- The studio-setup, publish, art, video, models, music, servers and shop skills say what Homie's hooks hold in Codex, and how a hold is answered there.
+
+### Upgrade notes
+
+- Codex runs a plugin's hooks only once you trust them. After updating the Homie plugin in Codex, open `/hooks` and trust Homie's three hooks. Until then nothing is held in Codex, and `codex exec` skips untrusted hooks without a word.
+- The plugin README's "Homie's holds in Codex" compares what Claude Code and Codex cover. Not in Codex:
+  - a question dialog;
+  - redaction of the output on your own screen and in Codex's session file;
+  - the mod's panes and commands.
+
 ## [0.26.0] - 2026-10-03
 
-**Plugin 0.27.0** · [#40](https://github.com/homie-rocks/homie/pull/40)
+**Plugin 0.27.0** · [#40](https://github.com/homie-rocks/homie/pull/40) · [release-2026-10-03-studio-0.26.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.26.0)
 
 A game's first minute: Play never opens on a blank screen, a bright game gets a bright landing in its own palette, and in Hero Rush 3D a new player's first round is a race they are in.
 

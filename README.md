@@ -51,7 +51,10 @@ codex plugin add homie@homie
 ```
 
 Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a new
-session afterwards so the skills and tools load.
+session afterwards so the skills and tools load, and open `/hooks` to trust Homie's three hooks. They
+hold an edit to a protected file, a deploy, a Cloudflare change, spending past the budget and a model
+download until you answer `proceed <code>`, and they take secrets out of what Codex reads. Codex runs no
+plugin's hooks until you trust them (the plugin README's "Homie's holds in Codex" says what they cover).
 
 Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
 `port`, `publish`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
