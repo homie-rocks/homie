@@ -13,6 +13,7 @@ and every game gets a landing page. Anything the studio puts in `site/` wins.
 | `/music/`, `/videos/` | Songs and videos (`media/MEDIA.md`) | the studio has one published |
 | `/rooms/` | Every public room playing now across the studio's games, each with Join (`/api/rooms` is the same as JSON, cacheable for 15 s) | the studio has a game |
 | `/posts/` | The studio's posts, newest first, with `/posts/feed.xml` (Atom) and `/posts/feed.json` (JSON Feed) | the studio has a post |
+| `/lounge/` | The Lounge (0.29.0): the studio's community room, with play nights, live rooms and "show what you made" (`chat/LOUNGE.md`) | studio.json has `"lounge"` |
 
 A section with nothing in it has no tab, and its address answers 404. Every page ends with a
 "Made with Homie" link to https://homie.rocks/studio/. studio.json may add `"tagline"` (one line, on Home and in
@@ -34,6 +35,18 @@ the hub offers Watch beside Join. From 0.23.0 a room whose chat is on and whose 
 (`hub`, on by default) also says `chat: true`: the hub's room card then has Chat, which opens the room's own watch
 socket from the visitor's browser and shows its lines and reactions live (NETPLAY.md section 19). A visitor there
 sends what a watcher may send (reactions and quick lines when the room's `react` is `anyone`), never types.
+
+## The Lounge: `/lounge/` (0.29.0)
+
+With studio.json `"lounge": true` (or `{ "name", "tab", "blurb", "featured", "kids", "chat" }`), `/lounge/` is the
+studio's community room (worker/lounge.mjs, lounge-page.mjs; chat/LOUNGE.md): room chat in a room of its own, in the
+studio's look, one column on a phone ("Chat" and "What's on") and the talk beside a sidebar on a computer. Its script
+is `/_homie/lounge.js`; its socket is `/lounge/__watch` (a page of this site carries its signed-in account; a page of
+another site is a watcher that reacts, never types). `/lounge/api/now` is its public facts as JSON (rules, play
+nights, live rooms; CORS open, cacheable for 30 s), and the manifest names it (`lounge: { name, page, now }`).
+`/lounge/api/history`, `show`, `report`, `delete` and `mod` are this site's pages' only. The owner's tools are
+`/_studio/api/lounge` and `/_studio/api/lounge/rules`, `night`, `mod`, `remove` and `hold`. A game called `lounge`
+keeps its page, and the build says the Lounge is off.
 
 ## Room chat on the play, watch and TV pages
 

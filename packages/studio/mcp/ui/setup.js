@@ -60,6 +60,8 @@
     acts.appendChild(C.btn('Check again', 'ghost small', function () {
       C.call('setup_status', { fresh: true }).then(function (r) { C.take(r); }).catch(function () {});
     }));
+    // Homie's own updates by email: the person signs up on homie.rocks (double opt-in); the card asks for nothing.
+    if (sc.updates) acts.appendChild(C.btn('Get Homie updates', 'ghost small', function () { C.open(sc.updates); }));
     foot.appendChild(acts);
     card.appendChild(foot);
     if (install && install.state === 'done') C.tell('install-' + install.job, (cur ? cur.name : 'The studio') + '\'s toolkit finished installing; the studio is ready to build.');

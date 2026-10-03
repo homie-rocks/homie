@@ -100,6 +100,10 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     assert.equal(before.structuredContent.kind, 'setup');
     assert.equal(before.structuredContent.current, null);
     assert.equal(before.structuredContent.checklist.find((x) => x.state === 'now').n, 1, 'step 1 is next');
+    // 0.29.0: the first-run card offers Homie's updates as a link to homie.rocks's own sign-up, never a field here.
+    assert.equal(before.structuredContent.updates, 'https://homie.rocks/updates/?from=plugin');
+    assert.match(before.content[0].text, /Homie updates by email \(optional\): https:\/\/homie\.rocks\/updates\/\?from=plugin \(the person signs up there themselves/);
+    assert.match(readFileSync(join(PKG, 'mcp', 'ui', 'setup.js'), 'utf8'), /Get Homie updates/);
 
     const made = await s.call('studio_scaffold', { name: 'Paper Comets' });
     assert.ok(!made.isError, made.content[0].text);

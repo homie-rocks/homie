@@ -27,6 +27,7 @@ npx homie-studio stats                                 # the studio's own number
 npx homie-studio office                                 # who is playing now, in every live room (the back office)
 npx homie-studio servers                                # each game's servers: humans-only, hybrid AI seats, beginner guides
 npx homie-studio chat                                   # room chat: each game's rules, the rooms' last minutes, reports
+npx homie-studio lounge                                 # the studio's Lounge: play nights, moderators, kept chat
 npx homie-studio upgrade                               # what a newer template adds to this studio (--apply to take it)
 ```
 
@@ -345,9 +346,37 @@ npx homie-studio chat words                                             # the bu
   lines taken down), the same in the owner's own game, the reports players make, and Announce (a studio line).
 - **Speech bubbles:** `net.on('say')` and the port kit's `createBubbles` / `paintBubbles`; Gem Rush, Ember Vale and
   Gem Rush 3D draw them over the speaker.
-- **Nothing is stored** but a report (the one message, 30 days): the room keeps 15 minutes in memory.
+- **Nothing is stored** but a report (the one message, 30 days): the room keeps 15 minutes in memory. An owner may
+  turn a room's `history` on (0.29.0, a number of days; off for every game, never on a kids server): then what was
+  said (never a reaction) is kept in the studio's own D1 for that long, and people take their own lines down.
   [chat/CHAT.md](chat/CHAT.md) is the short version and why Clef; [chat/OWNERS.md](chat/OWNERS.md) a plain note for
   studio owners on chat and children's data; NETPLAY.md section 19 the wire.
+
+## The Lounge: a room for the studio's community
+
+`"lounge": true` in studio.json gives the studio a community room at `/lounge/` (0.29.0): room chat in a lasting room
+of its own, on the studio's own Cloudflare like everything else. Reactions and quick lines for anyone, typing for
+players signed in with a passkey (signing in is on the page), every typed line through the word list and the Clef
+review first.
+
+```sh
+npx homie-studio lounge                                                 # its rules, play nights, moderators, lines, reports
+npx homie-studio lounge night "Night Rush night" --at 2026-10-09T19:00:00-07:00 --game night-rush
+npx homie-studio lounge history 14                                      # keep what is said for 14 days (asked: the owner confirms)
+npx homie-studio lounge mod <player id>                                 # a moderator (asked)
+```
+
+- **Play nights** the owner sets in the office: everyone sees the time in their own zone, a countdown and Add to
+  calendar. **Live rooms** with Watch and Join: the studio's, and with a directory the busiest across it.
+- **Show what you made:** a signed-in person pastes a link to a Homie studio's game and it becomes a card with the
+  game's own title, pitch and picture (read from that studio's manifest; its words pass the word list and the
+  review). Typed links stay held.
+- **Keeping it kind:** anyone reports a line or takes their own down; moderators the owner names Remove, Mute and
+  Kick (an hour at most) and set slow mode from the page; the owner has all of it and the office. A kids Lounge
+  keeps to emoji and quick lines and keeps nothing.
+- **History is off** until the owner turns it on (1 to 90 days), and the page says what is kept.
+- **homie.rocks** can show a Lounge live when its rules allow (`hub`): the visitor's browser opens the Lounge's own
+  socket, as for a room's card; they react there and type here. [chat/LOUNGE.md](chat/LOUNGE.md) has the whole of it.
 
 ## Selling things: the shop
 

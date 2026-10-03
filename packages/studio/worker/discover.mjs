@@ -67,6 +67,8 @@ export function robotsTxt(cat, origin, { preview = false } = {}) {
     'Disallow: /shop/thanks',
     'Disallow: /shop/parent/',
     'Disallow: /__homie',
+    // The Lounge's socket and APIs (0.29.0); its page may be crawled.
+    ...(cat.studio?.lounge ? ['Disallow: /lounge/api/', 'Disallow: /lounge/__'] : []),
     ...games.flatMap((id) => [`Disallow: /${id}/play`, `Disallow: /${id}/tv`, `Disallow: /${id}/watch`, `Disallow: /${id}/live`, `Disallow: /${id}/invite`, `Disallow: /${id}/api/`, `Disallow: /${id}/__`, `Disallow: /${id}/s/*/play`, `Disallow: /${id}/s/*/tv`, `Disallow: /${id}/s/*/home`]),
     '',
     `Sitemap: ${origin}/sitemap.xml`,
@@ -96,6 +98,8 @@ export function sitemapEntries(cat, { all = null } = {}) {
   if (songs.length) { add('/music/', newest(songs.map(mediaDate))); for (const e of songs) add(`/music/${e.slug}/`, mediaDate(e)); }
   if (videos.length) { add('/videos/', newest(videos.map(mediaDate))); for (const e of videos) add(`/videos/${e.slug}/`, mediaDate(e)); }
   if (posts.length) { add('/posts/', newest(posts.map(postDate))); for (const p of posts) add(`/posts/${p.slug}/`, postDate(p)); }
+  // The Lounge (0.29.0), when studio.json turns it on: its page (what is said there is not in the page).
+  if (cat.studio?.lounge) add('/lounge/');
   for (const p of ownPages(cat, all)) add(p);
   return out;
 }
@@ -210,6 +214,7 @@ export function llmsTxt(cat, origin, { remixable = () => false, directory = 'htt
   }
   out.push('', '## Optional', '');
   if (games.length) out.push(`- [Rooms](${origin}/rooms/): every public room playing now (${origin}/api/rooms is the same as JSON)`);
+  if (cat.studio?.lounge) out.push(`- [${label(cat.studio.lounge.name ?? 'The Lounge')}](${origin}/lounge/): the studio's community room: play nights, live rooms and chat (${origin}/lounge/api/now is its play nights and rules as JSON; what people say there is not published)`);
   out.push(`- [Studio manifest](${origin}/.well-known/homie-studio.json): the games, songs, videos and posts as JSON`);
   out.push(`- [Sitemap](${origin}/sitemap.xml): every public page`);
   if (!full) out.push(`- [Everything, in full](${origin}/llms-full.txt): each game's whole description, how to play and credits, and every post's text`);

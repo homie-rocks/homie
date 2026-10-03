@@ -41,7 +41,9 @@ What that means in practice:
 
 | What | Where | How long |
 |---|---|---|
-| The chat itself (every message and reaction) | Only in the room's memory, on your Cloudflare account | The last 50 messages of the last 15 minutes, for someone who just opened the room. **Never written to storage.** An empty room forgets them a minute after the last person leaves. |
+| The chat itself (every message and reaction) | Only in the room's memory, on your Cloudflare account | The last 50 messages of the last 15 minutes, for someone who just opened the room. **Never written to storage** unless you turn history on (below). An empty room forgets them a minute after the last person leaves. |
+| **Kept chat**, only where you turn `history` on (off for every game and for the Lounge until you choose; never on a kids server) | Your D1 (`chat_history`) | Typed lines, quick lines, cards and your own lines (never a reaction, an address or a browser key): the words, the name shown, when, and for a signed-in sender their account id. For the number of days you chose (1 to 90), then deleted; choosing fewer days deletes the rest at once. A person takes their own lines down, downloads them at `/account/`, and deleting their account deletes them. |
+| The Lounge's play nights and moderators | Your D1 (`lounge_nights`, `lounge_mods`) | A night until a day after it ends; a moderator (their account id) until you remove them. |
 | Who said what | The same memory, for your office's Mute and Kick | As long as the message is in that memory. Never an IP address. |
 | A **report** | Your D1 (`chat_reports`) | The one message reported (its words, its sender's name and account id if they had one, the room, when, the reason picked), for **30 days** or until you dismiss it. Never who reported it. |
 | Your chat rules and your words | Your D1 (`chat_rules`) | Until you change them. |
@@ -63,7 +65,9 @@ or that are directed at children. A typed message can contain personal informati
   child types anything, and there is nothing personal in your chat to keep or lose.
 - **Typing for signed-in players only** (the default) means a person behind each typed line has an
   account you can act on.
-- **Little is stored**, and only briefly (see above). Reports are the exception, kept 30 days.
+- **Little is stored**, and only briefly (see above). Reports are the exception, kept 30 days, and kept chat when
+  you turn history on (never on a kids server or a kids Lounge). If you keep chat, say so where people talk (the
+  Lounge does, on its page) and keep it as short as is useful.
 - **You can delete**: a report with Dismiss, a message with Remove, a player's whole account in
   their own account page (or `players` in the office).
 
