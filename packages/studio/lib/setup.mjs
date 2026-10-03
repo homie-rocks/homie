@@ -1,20 +1,23 @@
 /**
- * `homie-studio setup attach <hs_…>` — this repository is the studio the Claude app's setup card (the Homie MCP
- * tool studio_setup) is making, said once from the Claude Code session that works in it:
+ * `homie-studio setup attach <hs_…> [--client claude|codex|grok]` — this repository is the studio the chat's
+ * setup card (the Homie MCP tool studio_setup) is making, said once from the session that works in it:
  *
- *   - the directory records that Claude works in this repository (the card's "Let Claude work in it" goes green),
+ *   - the directory records that this chat works in this repository (the card's GitHub step goes green),
  *     and answers with the studio's live address once its site is connected (the card's Cloudflare step);
  *   - a copy of the public template (studio.json `template: true`) gets the name the person chose in the chat:
  *     studio.json, the Worker's STUDIO_NAME, and AGENTS.md and README.md while they are untouched; its first-run
- *     "Connect to Claude" band goes; studio.json takes the Worker and database names Cloudflare's form chose;
+ *     connect band goes; studio.json takes the Worker and database names Cloudflare's form chose;
  *   - the live address goes into .studio/local.json (git-ignored), so `check --url` and the card know it.
  *
- * It sends the repository's owner/name and the studio's name and slug, nothing else: no key, no path, no code.
+ * It sends the repository's owner/name, the studio's name and slug, the toolkit version, and which chat
+ * (`client`: claude, codex, grok, or chat). Nothing else: no key, no path, no code.
  * A setup id is single use per repository: a second attach from the same repository answers the same; another
- * repository is refused.
+ * repository is refused. `--client grok` (or HOMIE_CLIENT=grok) is how a Grok Bot checks in. Grok has no
+ * Cloudflare connector: the person still approves Cloudflare in the browser.
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { studioClient } from './client.mjs';
 import { configNames } from './cloudflare.mjs';
 import { request } from './net.mjs';
 import { ENGINE_REPO, repoOf } from './repo.mjs';
@@ -24,17 +27,18 @@ import { STUDIO_VERSION } from './version.mjs';
 
 const SETUP_ID = /^hs_[a-f0-9]{32}$/;
 
-export async function setupAttach(root, id, { homie } = {}) {
-  if (!SETUP_ID.test(String(id ?? ''))) return { ok: false, command: 'setup attach', why: 'attach to the setup id the Claude app\'s setup card showed: hs_ and 32 hex digits' };
+export async function setupAttach(root, id, { homie, client } = {}) {
+  if (!SETUP_ID.test(String(id ?? ''))) return { ok: false, command: 'setup attach', why: 'attach to the setup id the chat\'s setup card showed: hs_ and 32 hex digits' };
   const studio = readStudio(root);
   const directory = String(homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
   const repo = repoOf(root);
   if (!repo) {
     return { ok: false, command: 'setup attach', needs: 'repository', why: `this checkout names no GitHub repository of its own (its git remote is missing, or is ${ENGINE_REPO}, Homie's engine and template, which a studio never is). Run this in the studio's own repository, the one Cloudflare's Deploy to Cloudflare made, or name it in studio.json as "github": "<owner>/<name>"` };
   }
+  const who = studioClient(client);
   const sent = await request(`${directory}/api/studio/setup/${id}/attach`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': `homie-studio/${STUDIO_VERSION}` },
-    body: JSON.stringify({ repo, studio: { name: studio.name, slug: studio.slug, template: studio.template === true }, version: STUDIO_VERSION }),
+    body: JSON.stringify({ repo, studio: { name: studio.name, slug: studio.slug, template: studio.template === true }, version: STUDIO_VERSION, client: who.id }),
   });
   // What went wrong, as it is: the directory's own answer, or the connection's error. Never a guess at the network.
   if (!sent.ok) return { ok: false, command: 'setup attach', repo, ...(sent.status ? { status: sent.status } : {}), ...(sent.code ? { code: sent.code } : {}), ...(sent.needs ? { needs: sent.needs } : {}), why: sent.why };
@@ -71,12 +75,14 @@ export async function setupAttach(root, id, { homie } = {}) {
   const now = readStudio(root);
   if (now.github !== repo) { writeStudio(root, { ...now, github: repo }); if (!renamed.includes('studio.json')) renamed.push('studio.json'); }
   if (body.site) writeLocal(root, { url: body.site, connectedAt: new Date().toISOString() });
+  const card = who.card.charAt(0).toUpperCase() + who.card.slice(1);
   return {
-    ok: true, command: 'setup attach', setup: id, repo, site: body.site ?? null, name: name ?? studio.name, renamed,
-    message: body.site ? `This repository is ${name ?? studio.name}, live at ${body.site}. The Claude app's card shows it.` : `This repository is ${name ?? studio.name}. Its site is not connected yet: ${body.connect ?? 'open the site and tap Connect to Claude'}.`,
+    ok: true, command: 'setup attach', setup: id, repo, site: body.site ?? null, name: name ?? studio.name, client: who.id, renamed,
+    message: body.site ? `This repository is ${name ?? studio.name}, live at ${body.site}. ${card} shows it.` : `This repository is ${name ?? studio.name}. Its site is not connected yet: ${body.connect ?? `open the site and tap ${who.connect}`}.`,
     next: [
       ...(renamed.length ? ['commit the renamed files on a branch and open a pull request (merging it names the live site)'] : []),
       'npm install, then npx --no-install homie-studio progress attach <hb_…> when the chat opened a build',
+      ...(who.id === 'grok' ? ['there is no second Code session: keep building in this chat, or in the Grok Bot that has this folder'] : []),
     ],
   };
 }
