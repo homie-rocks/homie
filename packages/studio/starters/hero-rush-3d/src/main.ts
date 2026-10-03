@@ -10,9 +10,25 @@
  *          the snapshot, so every screen draws the jump, and the host decides what a swing hits by it.
  *   SWING  (F, a click, or the Swing button): every screen plays the swing at once; the host lands it T.windupMs later
  *          (the anticipation), knocking every body in front of the swinger and within reach that is on the ground.
- * The hot zone (keyed state) scores double; a watcher follows any player (`net.viewSeat`, `net.spotlight`); bots play at
- * the room's skill dial (and jump a swing they see coming); the swing and the jump are tuned in the Game Lab
- * (tunables.json, lab.json). The world is in metres, a 26 x 16 m clearing, x across and y deep (y is three.js's z).
+ * The hot zone (keyed state) scores double; a watcher follows any player (`net.viewSeat`, `net.spotlight`); the swing
+ * and the jump are tuned in the Game Lab (tunables.json, lab.json). The world is in metres, a 26 x 16 m clearing, x
+ * across and y deep (y is three.js's z).
+ *
+ * THE BOTS never swamp a new player. They play at the room's skill dial (NETPLAY.md section 17; they jump a swing they
+ * see coming), with two things on top (THE BOTS, below, says exactly how):
+ *   - In somebody's first round in the room, when nobody set the dial (no vote, no owner), they play a level easier.
+ *   - A RUBBER BAND: a bot ahead of the best person in the room by more than its dial allows eases off (it walks,
+ *     reacts later, swings less) and comes to race near the people, so a rival is on their screen; otherwise it plays
+ *     at its dial. The lead it may hold grows with the dial; at Maxed there is no rubber band (a party that voted
+ *     Maxed asked for it).
+ * Scores stay honest: nobody's score is ever changed, no coin is given, taken or faked; the bots just play softer.
+ * And a bot is always labelled a bot (an AI agent "· AI") wherever its name or score shows, the phone's board too.
+ *
+ * THE ARRIVAL: the play page shows the game's arrival card (its title, art and a progress line this game feeds with
+ * `net.loading`) until the game says `net.playable()`: the round's state is in and your own hero is drawn in its real
+ * model (THE ARRIVAL, by the HUD). So the round opens on your hero, with no title card over it. On a phone held
+ * upright the camera follows low and close (30 degrees, about 5.5 m across: the camera's comment says why), so every
+ * hero reads as a character, a mage too, and your name chip says which you are ("You · Mage").
  *
  * THE CHARACTERS are KayKit's CC0 adventurers and skeletons from the Homie starter library, made phone-sized by `game new`
  * (lib/characters.mjs): each one skinned mesh, one draw call, its joints named by the skeleton standard, and every clip
@@ -54,7 +70,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { createModels, instancedCopies, placeCopy, repaint, stylize, type Copies } from '@homie-rocks/studio/assets';
 // Characters that move well: clips from the skeleton's clip library, blended, layered and tuned (Game Lab tunables).
 import { crowd, loadCharacter, type Character } from '@homie-rocks/studio/animate';
-import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
+import { createNetplay, Roster, q, lerp, capMove, skillPreset, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` and `perf` read, and sandbox + audio shims), and name
 // labels that never pile up (port/view.ts).
 import { createBubbles, createLabels, exposePort, paintBubbles, type BubbleIn, type BubbleOut, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
@@ -136,7 +152,8 @@ interface Body extends Knock { slot: number; seat: number | null; name: string; 
 interface Gem { id: number; x: number; y: number }
 /** Slow state, on the keyed state channel (net.state('zone', ...)), not in the 20 Hz snapshot. */
 interface Zone { n: number; x: number; y: number; r: number; until: number }
-interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; tick: number; gemSeq: number }
+/** `firstRound`: each person's first whole round here (seat, round), so a promoted host eases the same round. */
+interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; tick: number; gemSeq: number; firstRound?: [number, number][] }
 
 /* --------------------------------------------------------------- the net */
 /**
@@ -146,7 +163,8 @@ interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; 
  */
 const MOVEMENT: 'owner' | 'host' = (() => { try { return new URLSearchParams(location.search).get('movement') === 'host' ? 'host' : 'owner'; } catch { return 'owner'; } })();
 // caps: its bots read the dial ('skill'), and its Roster takes an AI's slot for it ('agents': the join passes p.agent).
-const net = createNetplay<Snap, Avatar, Ckpt>({ game: 'hero-rush-3d', maxPlayers: MAX_SLOTS, movement: MOVEMENT, snapshotHz: 20, inputHz: 20, checkpointMs: 1000, caps: ['skill', 'agents'], checkpoint: () => checkpoint() });
+// arrival 'game': the play page's arrival card stays until this game says it is playable (THE ARRIVAL, by the HUD).
+const net = createNetplay<Snap, Avatar, Ckpt>({ game: 'hero-rush-3d', maxPlayers: MAX_SLOTS, movement: MOVEMENT, snapshotHz: 20, inputHz: 20, checkpointMs: 1000, caps: ['skill', 'agents'], arrival: 'game', checkpoint: () => checkpoint() });
 /** The Roster keeps the server's AI seats (revision 6): the policy is read whenever it fills. */
 const policy = () => net.policy;
 
@@ -267,12 +285,15 @@ function becomeHost(e: RoleChange<Snap, Ckpt>): void {
     const seat = mySeat();
     if (seat !== null) roster.claim(seat, net.offline ? 'You' : net.name);
     syncBodiesFromRoster();
+    firstRound = new Map();
     startRound((e.round?.n ?? 0) + 1);
+    welcome(seat);
   }
   // Whoever is connected now is who plays: seats that left during the gap become bots.
   const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null }));
   const { claimed } = roster.reconcile(peers);
   syncBodiesFromRoster();
+  for (const s of claimed) welcome(s.seat);
   for (const s of claimed) { const b = bodies.get(s.slot); if (b && b.seat !== mySeat()) hostMoved(b); }
   // My own body is wherever my local avatar is: it was client-owned a moment ago and still is.
   const mine = mySeat() !== null ? [...bodies.values()].find((b) => b.seat === mySeat()) : undefined;
@@ -293,6 +314,7 @@ function restore(e: RoleChange<Snap, Ckpt>): void {
     gemSeq = ck.gemSeq;
     round = ck.round;
     tick = ck.tick;
+    firstRound = new Map(Array.isArray(ck.firstRound) ? ck.firstRound : []);
   } else {
     roster = Roster.from(e.roster ?? [], { min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
     bodies = new Map();
@@ -318,6 +340,8 @@ function restore(e: RoleChange<Snap, Ckpt>): void {
   }
   // A round message the relay kept is at least as authoritative as the checkpoint's copy.
   if (e.round && (!round || e.round.n > round.n || (e.round.n === round.n && e.round.phase === 'over' && round.phase === 'live'))) round = e.round;
+  // Anyone already playing whose first round the checkpoint does not say is no newcomer: the dial stays exact for them.
+  for (const r of roster.slots) if (!r.bot && r.seat !== null && !firstRound.has(r.seat)) firstRound.set(r.seat, 0);
   if (!round) { startRound(1); return; }
   net.round(round);
 }
@@ -330,6 +354,7 @@ function checkpoint(): Ckpt {
     roster: roster.toJSON(),
     tick,
     gemSeq,
+    firstRound: [...firstRound],
   };
 }
 
@@ -342,6 +367,7 @@ net.on('join', (p) => {
   // An AI takes a seat kept for AI, a person never does (revision 6: the Roster needs p.agent for that).
   const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null);
   if (!c) return; // full: they watch
+  welcome(p.seat);
   syncBodiesFromRoster();
   const b = bodies.get(c.slot.slot);
   // The arriving human takes over the bot's body where it stands, score and all (reset = "adopt this position").
@@ -352,6 +378,7 @@ net.on('join', (p) => {
 net.on('leave', (p) => {
   if (!hosting || p.seat === null) return;
   roster.release(p.seat); // their body stays, driven by a bot
+  firstRound.delete(p.seat); // whoever sits in this seat next is new here
   syncBodiesFromRoster();
   publishRoster();
 });
@@ -594,16 +621,104 @@ function predictMe(dt: number): void {
 function stepKnocked(b: Body, dt: number): void { slide(b, net.now(), dt); }
 
 /**
- * THE BOTS, AT THE ROOM'S DIAL (NETPLAY.md section 17). A bot re-reads the world only every `reactionMs` (what it
- * last noticed is where it heads, and a miss costs it that long again), aims up to 4 m off at aimNoise 1, leaves
- * the hot zone to the people at positioning 0 and fights for it at 1, and waves at a rival in reach about
- * `aggression x 0.8` times a second. Rookie is beatable by anyone, Maxed by few.
+ * THE BOTS, AT THE ROOM'S DIAL (NETPLAY.md section 17), AND NEVER RUNNING AWAY WITH A NEW PLAYER'S ROUND.
+ *
+ * The dial: a bot re-reads the world only every `reactionMs` (what it last noticed is where it heads, and a miss costs
+ * it that long again), aims up to 4 m off at aimNoise 1, leaves the hot zone to the people at positioning 0 and fights
+ * for it at 1, and swings at a rival in reach about `aggression x 0.8` times a second. Rookie is beatable by anyone,
+ * Maxed by few.
+ *
+ * On top of the dial, in plain words:
+ *   A PLAYER'S FIRST ROUND. While somebody plays their first round in this room and nobody has set the dial (no vote,
+ *     no owner: `net.policy.by` is absent), every bot plays one level easier for that round (Fair plays as Steady). A
+ *     dial somebody set is always kept exactly.
+ *   THE RUBBER BAND. Each bot compares its score with the best person's in the room (people only: never a bot, never
+ *     an AI). Up to LEAD[level] points ahead of them it plays at its dial (2 at Fair, 5 at Strong; a Rookie eases off
+ *     even a point behind them). Further ahead it eases off, the more the further (LEAD_BAND points more and it is all
+ *     the way soft): it slows to a walk, notices things later, swings less, and races for the coins near the nearest
+ *     person rather than the far ones. All the way soft it goes for no coin at all: it keeps near that person, a step
+ *     up their screen, where a rival is seen (jogging after them when they run off), and goes round the coins on its
+ *     way. The lead allowed grows with the dial; Maxed has no rubber band (a party that voted Maxed asked for the real
+ *     thing). Within its lead, a bot always plays at its dial.
+ *   HONEST. No score is ever changed: no coin is given, taken or faked, and a soft bot still picks up any coin it is
+ *     knocked or walks onto, like anyone. Bots only play softer. Every bot is labelled where its name or score shows
+ *     ("· bot"; an AI agent's name ends in "· AI"), on the phone's compact board too.
  */
-const sight = new Map<number, { at: number; tx: number; ty: number; arrived?: boolean }>();
+const sight = new Map<number, { at: number; tx: number; ty: number; arrived?: boolean; near?: number }>();
+/**
+ * The lead (points over the best person) a bot may hold before it eases off, by level: Rookie (it eases off a point
+ * BEHIND them: beatable by anyone), Steady, Fair, Strong, Maxed (no rubber band at all).
+ */
+const LEAD = [-1, 1, 2, 5, Infinity] as const;
+/** Points past that lead over which a bot goes from its dial to all the way soft. */
+const LEAD_BAND = 2;
+/**
+ * Each seated person and the first round they play whole in this room (the round they sat down in, or the next when
+ * less than half of it was left). While one of them is in it, nobody set the dial and the bots play a level easier.
+ * Kept in the checkpoint, so a promoted host goes on easing the same round.
+ */
+let firstRound = new Map<number, number>();
+/** How each bot plays now (its level this round, and how soft the rubber band has it): the `pickups` probe. */
+const botPlay = new Map<number, { level: number; soft: number }>();
+
+/** A person sat down: their first whole round here is this one, or the next if less than half of this one is left. */
+function welcome(seat: number | null): void {
+  if (seat === null || firstRound.has(seat)) return;
+  const live = round?.phase === 'live';
+  firstRound.set(seat, !round ? 1 : live && round.endsAt - net.now() > ROUND_MS / 2 ? round.n : round.n + 1);
+}
+/** The people in the room: seated, not a bot, not an AI (an agent that plays its own seat is labelled · AI). */
+function people(): Body[] {
+  return [...bodies.values()].filter((b) => !b.bot && b.seat !== null && !b.name.endsWith(AI_MARK) && !roster.slots.find((x) => x.slot === b.slot)?.agent);
+}
+/** Somebody is playing their first round in this room now. */
+function newcomerRound(folk: Body[]): boolean {
+  return Boolean(round) && folk.some((b) => (firstRound.get(b.seat as number) ?? 0) >= (round as RoundInfo).n);
+}
+/** The dial a bot plays at this round: the room's, or a level easier in a newcomer's first round when nobody set it. */
+function dialOf(slot: number, easy: boolean): Skill {
+  const s: Skill = net.skillOf(slot); // Fair when nobody set a dial
+  return easy && !net.policy.by && s.level > 1 ? skillPreset(s.level - 1, net.policy.kids) : s;
+}
+/** The rubber band: 0 plays at the dial, 1 all the way soft, from how far this bot leads the best person. */
+function softness(b: Body, s: Skill, best: number | null): number {
+  const allowed = LEAD[Math.max(1, Math.min(5, s.level)) - 1] as number;
+  if (best === null || !Number.isFinite(allowed)) return 0;
+  return Math.max(0, Math.min(1, (b.score - best - allowed) / LEAD_BAND));
+}
+/** The nearest of `list` to `b`, or null. */
+function nearestOf(list: Body[], b: Body): Body | null {
+  let best: Body | null = null; let bd = Infinity;
+  for (const o of list) { const d = Math.hypot(o.x - b.x, o.y - b.y); if (d < bd) { bd = d; best = o; } }
+  return best;
+}
+/**
+ * All the way soft: a spot near person `p`, 2.2 to 3 m off (just past a swing's reach) and a step up their screen
+ * (where even a phone held upright shows a rival), turned a little each time it looks, so it keeps round them like a
+ * rival waiting for a chance. It leaves the coins to them: of a few such spots, the first it can walk to without
+ * running over a coin.
+ */
+function beside(b: Body, p: Body): { x: number; y: number } {
+  const clear = R_AV + R_GEM + 0.15;
+  let spot = { x: b.x, y: b.y };
+  for (let i = 0; i < 6; i += 1) {
+    let a = Math.atan2(Math.min(b.y - p.y, -0.6), b.x - p.x) + (Math.random() - 0.5) * (1.2 + i * 0.5);
+    a = Math.max(-Math.PI + 0.7, Math.min(-0.7, a));
+    const r = 2.2 + Math.random() * 0.8;
+    spot = bound(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
+    const dx = spot.x - b.x; const dy = spot.y - b.y; const len2 = dx * dx + dy * dy || 1;
+    // The nearest point of the walk to each coin: none closer than a pickup.
+    if (!gems.some((g) => { const u = Math.max(0, Math.min(1, ((g.x - b.x) * dx + (g.y - b.y) * dy) / len2)); return Math.hypot(b.x + dx * u - g.x, b.y + dy * u - g.y) < clear; })) break;
+  }
+  return spot;
+}
 
 function stepBots(dt: number): void {
   const taken = new Set<number>();
   const now = net.now();
+  const folk = people();
+  const best = folk.length ? Math.max(...folk.map((p) => p.score)) : null;
+  const easy = newcomerRound(folk);
   for (const b of bodies.values()) {
     if (!b.bot) continue;
     fall(b, dt);
@@ -612,52 +727,89 @@ function stepBots(dt: number): void {
     if (b.knockUntil > now) { stepKnocked(b, dt); continue; }
     landed(b);
     if (lab.stage === 'dummy' || lab.stage === 'jump') { standStill(b, dt); continue; }
-    const s: Skill = net.skillOf(b.slot); // Fair when nobody set a dial
+    const s = dialOf(b.slot, easy);
+    const soft = softness(b, s, best); // THE RUBBER BAND
+    botPlay.set(b.slot, { level: s.level, soft });
     let eye = sight.get(b.slot);
-    if (!eye || now - eye.at >= s.reactionMs) { // REACTION TIME
-      const g = pickGem(b, taken, s); // POSITIONING
-      const miss = 4 * s.aimNoise; // AIM NOISE: up to 4 m off at 1
-      eye = { at: now, tx: g ? g.x + (Math.random() - 0.5) * miss : b.tx, ty: g ? g.y + (Math.random() - 0.5) * miss : b.ty };
+    // REACTION TIME: later when soft (it notices coins late); all the way soft it only keeps up with its person.
+    if (!eye || now - eye.at >= s.reactionMs * (soft >= 1 ? 1 : 1 + 2.5 * soft)) {
+      const near = soft > 0 ? nearestOf(folk, b) : null;
+      let g: Gem | null = null;
+      let tx = b.tx; let ty = b.ty;
+      if (near && soft >= 1) { const at = beside(b, near); tx = at.x; ty = at.y; } // all the way soft: no coin, near them
+      else {
+        g = pickGem(b, taken, s, near, soft); // POSITIONING (soft: the coins near the nearest person)
+        const miss = 4 * s.aimNoise; // AIM NOISE: up to 4 m off at 1
+        if (g) { tx = g.x + (Math.random() - 0.5) * miss; ty = g.y + (Math.random() - 0.5) * miss; }
+      }
+      eye = { at: now, tx, ty, ...(near && soft >= 1 ? { near: near.slot } : {}) };
       sight.set(b.slot, eye);
       if (g) taken.add(g.id);
     }
     b.tx = eye.tx; b.ty = eye.ty;
-    const rival = nearestBody(b, T.knockRange * 0.9); // AGGRESSION: swings at a rival in reach, turning to it
-    if (rival && round?.phase === 'live' && Math.random() < s.aggression * 0.8 * dt) { b.fa = Math.atan2(rival.x - b.x, rival.y - b.y); startSwing(b); }
+    const rival = nearestBody(b, T.knockRange * 0.9); // AGGRESSION: swings at a rival in reach, turning to it (less when soft)
+    if (rival && round?.phase === 'live' && Math.random() < s.aggression * (1 - 0.75 * soft) * 0.8 * dt) { b.fa = Math.atan2(rival.x - b.x, rival.y - b.y); startSwing(b); }
     const dx = b.tx - b.x; const dy = b.ty - b.y; const dist = Math.hypot(dx, dy);
     const len = dist || 1;
     // Arrived where it aimed: it stands there, and notices what it missed only a reaction later.
     if (dist < 0.12 && !eye.arrived) { eye.arrived = true; eye.at = now; }
-    const speed = dist < 0.12 ? 0 : BOT_SPEED;
+    // Soft: down to a walk; all the way soft it jogs back to its person when they have run off (a rival in view).
+    const kept = eye.near !== undefined ? bodies.get(eye.near) : undefined;
+    const far = kept ? Math.hypot(kept.x - b.x, kept.y - b.y) > 3.5 : false;
+    const speed = dist < 0.12 ? 0 : BOT_SPEED * (far ? 1 : 1 - 0.5 * soft);
     const k = Math.min(1, dt * 5);
     b.vx += ((dx / len) * speed - b.vx) * k;
     b.vy += ((dy / len) * speed - b.vy) * k;
+    // All the way soft it steps round a coin in its way (turning a little, or a lot, or it waits): it leaves them to
+    // the people. It still takes one it is knocked onto, or one that lands under it: the rules' pickups are anyone's.
+    if (kept) sidestep(b, dt);
     const p = bound(b.x + b.vx * dt, b.y + b.vy * dt);
     b.x = p.x; b.y = p.y;
     faceOf(b, now);
   }
 }
+/** A soft bot's step that would touch a coin turns aside (60, then 120 degrees, either way), or it stands this frame. */
+function sidestep(b: Body, dt: number): void {
+  const reach = R_AV + R_GEM + 0.06;
+  const look = Math.max(0.25, Math.hypot(b.vx, b.vy) * dt * 4); // a few frames ahead
+  const touches = (vx: number, vy: number): boolean => {
+    const sp = Math.hypot(vx, vy) || 1; const x = b.x + (vx / sp) * look; const y = b.y + (vy / sp) * look;
+    return gems.some((g) => Math.hypot(g.x - x, g.y - y) < reach && Math.hypot(g.x - x, g.y - y) < Math.hypot(g.x - b.x, g.y - b.y));
+  };
+  if (Math.hypot(b.vx, b.vy) < 0.05 || !touches(b.vx, b.vy)) return;
+  for (const a of [1.05, -1.05, 2.1, -2.1]) {
+    const c = Math.cos(a); const sn = Math.sin(a);
+    const vx = b.vx * c - b.vy * sn; const vy = b.vx * sn + b.vy * c;
+    if (!touches(vx, vy)) { b.vx = vx; b.vy = vy; return; }
+  }
+  b.vx = 0; b.vy = 0;
+}
 /**
  * A bot sees a swing start near it: it may JUMP it, after its reaction time (half of it: a swing is loud), the more
- * likely the better its aim at the dial (a Rookie is caught, a Maxed bot hops most of them).
+ * likely the better its aim at the dial (a Rookie is caught, a Maxed bot hops most of them; a soft one less often).
  */
 const dodgeAt = new Map<number, number>();
 function botsSee(from: Body): void {
+  const easy = newcomerRound(people());
   for (const b of bodies.values()) {
     if (!b.bot || b === from || lab.stage === 'dummy' || lab.stage === 'jump') continue;
     if (Math.hypot(b.x - from.x, b.y - from.y) > T.knockRange + 0.6) continue;
-    const s: Skill = net.skillOf(b.slot);
-    if (Math.random() < 0.15 + 0.6 * (1 - s.aimNoise)) dodgeAt.set(b.slot, net.now() + Math.max(40, s.reactionMs * 0.5 - 60));
+    const s = dialOf(b.slot, easy);
+    const soft = botPlay.get(b.slot)?.soft ?? 0;
+    if (Math.random() < (0.15 + 0.6 * (1 - s.aimNoise)) * (1 - 0.5 * soft)) dodgeAt.set(b.slot, net.now() + Math.max(40, s.reactionMs * 0.5 - 60));
   }
 }
 
-/** Positioning: 0 leaves the hot zone to the people, 1 fights for it. */
-function pickGem(b: Body, taken: Set<number>, s: Skill): Gem | null {
+/**
+ * Positioning: 0 leaves the hot zone to the people, 1 fights for it. A soft bot (`pull` 0 to 1) weighs how far each
+ * coin is from the person `near` it too, so it races for theirs, where they can see it and beat it to them.
+ */
+function pickGem(b: Body, taken: Set<number>, s: Skill, near: Body | null = null, pull = 0): Gem | null {
   let best: Gem | null = null; let bd = Infinity;
   for (const g of gems) {
     if (taken.has(g.id)) continue;
     const hot = zone !== null && Math.hypot(g.x - zone.x, g.y - zone.y) < zone.r;
-    const d = Math.hypot(g.x - b.x, g.y - b.y) * (hot ? 1.5 - s.positioning : 1);
+    const d = Math.hypot(g.x - b.x, g.y - b.y) * (hot ? 1.5 - s.positioning : 1) + (near ? 2 * pull * Math.hypot(g.x - near.x, g.y - near.y) : 0);
     if (d < bd) { bd = d; best = g; }
   }
   return best;
@@ -1011,6 +1163,74 @@ function loadFonts(): void {
 }
 loadFonts();
 
+/* ------------------------------------------------------------------ the characters, asked for first */
+/*
+ * THE CHARACTERS, your own first: the play page's arrival card waits for your own hero's real model (THE ARRIVAL,
+ * below), and your seat (so your hero's kind) is known at the welcome, so the moment it comes your own hero is asked for
+ * alone, followed by its skeleton's clip library; then the other heroes. The bots' skeletons (drawn as stand-ins until
+ * they are in) come after the heroes, or after 4 s at most, so on a slow phone they never share the line with your own
+ * hero. A watcher asks for every hero at once. About 0.67 MB for the heroes and their clips, 0.47 MB for the skeletons
+ * and theirs, 0.15 MB for the meadow's props: the same files as ever, in this order.
+ */
+const models = createModels();
+/**
+ * The heroes people play (one a seat, in turn) and the skeletons bots play (one a slot): KayKit's adventurers and
+ * skeletons, one rig family, so one clip library each and one look. Each is drawn HERO_M tall (`game new` made them so).
+ */
+const HEROES = ['knight', 'barbarian', 'mage', 'rogue', 'rogue-hooded'] as const;
+const SKELETONS = ['skeleton-minion', 'skeleton-warrior', 'skeleton-rogue', 'skeleton-mage'] as const;
+const HERO_BUDGET = { triangles: 8000, texturePx: 1024, materials: 2, bytes: 1536 * 1024 };
+const heroUrl = (kind: string): string => `./models/${kind}.glb`;
+/** Models that are not there (refused or missing): drawn as stand-ins. */
+const standIns = new Set<string>();
+/** THE ARRIVAL's progress line: the files asked for while the game loads, and how many have come (or failed). */
+const loads = { all: 0, done: 0, heroes: 0, heroesDone: 0, said: 0 };
+function sayLoading(): void {
+  loads.said = Math.max(loads.said, loads.all ? loads.done / loads.all : 0);
+  net.loading(loads.said, loads.heroesDone < loads.heroes ? 'the heroes' : 'the clearing');
+}
+/** One more file on the line (`hero`: a character or its clips); the function it returns says it came or failed. */
+function expect(hero: boolean): () => void {
+  loads.all += 1; if (hero) loads.heroes += 1;
+  let settled = false;
+  return () => { if (settled) return; settled = true; loads.done += 1; if (hero) loads.heroesDone += 1; sayLoading(); };
+}
+function track<T>(p: Promise<T>, hero: boolean): Promise<T> { const done = expect(hero); p.then(done, done); return p; }
+/** Each kind's model and its clip library, loaded once (loadCharacter finds both in hand); copies are made per body. */
+const heroLoads = new Map<string, Promise<boolean>>();
+const clipLoads = new Map<string, Promise<unknown>>();
+let heroesIn = (): void => {};
+const afterHeroes = new Promise<void>((done) => { heroesIn = done; setTimeout(done, 4000); });
+function loadHero(kind: string): Promise<boolean> {
+  let p = heroLoads.get(kind);
+  if (!p) {
+    const url = heroUrl(kind);
+    const came = expect(true);
+    const go = (): Promise<boolean> => models.load(url, { budget: HERO_BUDGET }).then((m) => {
+      came();
+      // Its skeleton's clip library at once (the model names it), at loadCharacter's own address and budget.
+      const named = (m.scene.userData?.homie as { anims?: string } | undefined)?.anims;
+      if (!named) return true;
+      const href = new URL(named, new URL(url, location.href)).href;
+      let clips = clipLoads.get(href);
+      if (!clips) { clips = track(models.load(href, { budget: { triangles: 0, bytes: 3 * 1024 * 1024 } }), true).catch(() => null); clipLoads.set(href, clips); }
+      return clips.then(() => true);
+    }, () => { came(); standIns.add(url); return false; });
+    p = (SKELETONS as readonly string[]).includes(kind) ? afterHeroes.then(go) : go();
+    heroLoads.set(kind, p);
+  }
+  return p;
+}
+/** Every hero in (your own first, at the welcome): the skeletons wait for it, and so does the Game Lab. */
+const allHeroes: Promise<boolean[]> = net.ready.then(() => {
+  const seat = mySeat();
+  const own = seat !== null && !net.watching ? (HEROES[seat % HEROES.length] as string) : null;
+  return (own ? loadHero(own) : Promise.resolve(true)).then(() => Promise.all(HEROES.map(loadHero)));
+});
+void allHeroes.then(() => heroesIn());
+sayLoading();
+for (const k of SKELETONS) void loadHero(k);
+
 /* ------------------------------------------------------------------ renderer, scene, light */
 const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 // Flat low-poly colours read true without a film curve (the style board renders the same way).
@@ -1143,18 +1363,14 @@ function facets(tris: number[][], colours: string[]): BufferGeometry {
  * refused file) is drawn as a stand-in made here in the same colours, or left out when it is only a flower or a tuft of
  * grass: a round never waits on, or breaks for, a model.
  */
-const models = createModels();
-/**
- * The heroes people play (one a seat, in turn) and the skeletons bots play (one a slot): KayKit's adventurers and
- * skeletons, one rig family, so one clip library each and one look. Each is drawn HERO_M tall (`game new` made them so).
- */
-const HEROES = ['knight', 'barbarian', 'mage', 'rogue', 'rogue-hooded'] as const;
-const SKELETONS = ['skeleton-minion', 'skeleton-warrior', 'skeleton-rogue', 'skeleton-mage'] as const;
+// `models`, HEROES and SKELETONS are above (the characters, asked for first).
 /** The verb a hero's swing plays: a mage casts; everyone else strikes. */
 const HERO_ACTION: Record<string, string> = { mage: 'cast', 'skeleton-mage': 'cast' };
+/** What your own name chip says you are ("You · Mage"): which hero is yours reads at a glance, even from above. */
+const HERO_NAME: Record<string, string> = { knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rogue: 'Rogue', 'rogue-hooded': 'Rogue' };
+const heroName = (kind: string): string => HERO_NAME[kind] ?? kind.replace(/[-_]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const HERO_M = 1.45;
 const heroKind = (slot: number, seat: number | null, bot: boolean): string => (bot ? SKELETONS[slot % SKELETONS.length] : HEROES[(seat ?? slot) % HEROES.length]) as string;
-const heroUrl = (kind: string): string => `./models/${kind}.glb`;
 
 type RGB = [number, number, number];
 const PAINT = {
@@ -1222,11 +1438,10 @@ const DRESSING: (Spec & { count: number; where: Where; foot: number; shadow: num
 /** A model loaded once, repainted and measured: `fit` scales it to its height, `size` is its box at that height. */
 interface Ready { scene: Object3D; fit: number; size: Vector3 }
 const ready = new Map<string, Promise<Ready | null>>();
-const standIns = new Set<string>();
 function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap' | 'tint' | 'px' | 'wide'>): Promise<Ready | null> {
   let p = ready.get(spec.url);
   if (!p) {
-    p = models.load(spec.url).then((m) => {
+    p = track(models.load(spec.url), false).then((m) => {
       if (spec.swap) repaint(m.scene, spec.swap, spec.px ? { maxPx: spec.px } : undefined);
       const size = new Box3().setFromObject(m.scene).getSize(new Vector3());
       const along = spec.wide ? Math.max(size.x, size.z) : size.y;
@@ -1561,13 +1776,6 @@ interface Hero {
   px: number; py: number; ph: number; speed: number; seen: number; yaw: number; held: string | null;
 }
 const heroes = new Map<number, Hero>();
-/** Each kind's character, loaded once (its model, its clips); copies are made per body. */
-const heroLoads = new Map<string, Promise<boolean>>();
-function loadHero(kind: string): Promise<boolean> {
-  let p = heroLoads.get(kind);
-  if (!p) { p = models.load(heroUrl(kind), { budget: { triangles: 8000, texturePx: 1024, materials: 2, bytes: 1536 * 1024 } }).then(() => true, () => { standIns.add(heroUrl(kind)); return false; }); heroLoads.set(kind, p); }
-  return p;
-}
 function heroFor(slot: number, kind: string, colour: string): Hero {
   let h = heroes.get(slot);
   if (h && h.kind === kind) return h;
@@ -1643,7 +1851,8 @@ function poseHero(h: Hero, at: { x: number; y: number; h: number }, t: number, d
   c.update(dt);
 }
 
-void Promise.all([...[...HEROES, ...SKELETONS].map((k) => loadHero(k)), prepare(GEM), ...(FENCED ? [prepare(FENCE)] : []), prepare(CHEST), prepare(TORCH), prepare(BARREL), prepare(CRATE), ...DRESSING.map(prepare)]).then(() => lab.ready());
+// The Game Lab starts its take once everything is in (the heroes in their order above: never all at once at boot).
+void Promise.all([allHeroes, ...SKELETONS.map((k) => loadHero(k)), prepare(GEM), ...(FENCED ? [prepare(FENCE)] : []), prepare(CHEST), prepare(TORCH), prepare(BARREL), prepare(CRATE), ...DRESSING.map(prepare)]).then(() => lab.ready());
 
 /* ------------------------------------------------------------------ the Game Lab's overlays, as lines on the meadow */
 const pen = (() => {
@@ -1703,12 +1912,14 @@ const HALF = (CAM.fov * Math.PI) / 360;
 /*
  * A phone held upright sees the ground through a slit: its width is the short side. Followed from style.json's pitch
  * and distance it shows a long strip of mostly empty grass with a small hero in it. So, like the port kit's fitView
- * (fill a phone held upright and follow the player), it frames the action instead: closer (about 7 m across at the
- * player, a hero a fifth of the screen's width) at 38 to 44 degrees (any steeper and a hero is the top of its hat),
- * the player in the lower half and what is around and ahead of it filling the rest, the woods' edge at the top. No
- * tall dressing stands on the camera's side, so nothing comes between the camera and its hero.
+ * (fill a phone held upright and follow the player), it frames the action instead: closer (about 5.5 m across at the
+ * player, a hero a quarter of the screen's width) and LOWER, 28 to 32 degrees (8 under style.json's pitch): from the
+ * 40 it once was, a hero is the top of its hat (a mage's brim hides the whole mage), and its legs, so its run, never
+ * show. At 30 the face, the body and the legs read on every kind, and the far side of the clearing and the woods fill
+ * the top of the screen, where the rivals ahead are. The player stands in the lower half. No tall dressing stands on
+ * the camera's side, so nothing comes between the camera and its hero.
  */
-const UPRIGHT_PITCH = Math.max((38 * Math.PI) / 180, Math.min((44 * Math.PI) / 180, PITCH0 + (2 * Math.PI) / 180));
+const UPRIGHT_PITCH = Math.max((28 * Math.PI) / 180, Math.min((32 * Math.PI) / 180, PITCH0 - (8 * Math.PI) / 180));
 let PITCH = PITCH0;
 const MARGIN = EDGE + 3; // how far past the arena's near side and ends the camera may look: the path, the fence, the flowers
 // Past its far side it may look into the woods (the trees stand 3 to 18 m out): the clearing reads as a place.
@@ -1726,10 +1937,10 @@ function setPitch(p: number): void {
 }
 setPitch(PITCH0);
 function followDistance(cw: number, ch: number, phone: boolean, upright = false): number {
-  // style.json's distance scales the view (22 is these spans); an upright phone's stays near 5.5 m whatever it says,
-  // or a close camera would show one hero and nothing round it.
+  // style.json's distance scales the view (22 is these spans); an upright phone's stays between 5.5 and 8 m whatever
+  // it says, or a close camera would show one hero and nothing round it.
   const k = (CAM.distance ?? 22) / 22;
-  const span = upright ? 7 * Math.max(0.9, Math.min(1.3, k)) : (phone ? 9.5 : 13.5) * k;
+  const span = upright ? 6.1 * Math.max(0.9, Math.min(1.3, k)) : (phone ? 9.5 : 13.5) * k;
   return span / (2 * Math.tan(HALF) * Math.min(1, cw / ch));
 }
 /** How far away the whole arena fits; `turned`: seen from its side, its 32 m running up the screen (a tall screen). */
@@ -1763,7 +1974,7 @@ function aimAt(focus: { x: number; y: number } | null, d: number, cw: number, ch
   if (turned) return { x: W - middleOf(W, d), y: H / 2 };
   // An upright phone follows its player everywhere (past the edge it sees the fence and the woods), looking a little
   // ahead so the player stands in the lower half and what is coming fills the top.
-  if (upright && focus) return { x: focus.x, y: focus.y - d * 0.18 };
+  if (upright && focus) return { x: focus.x, y: focus.y - d * 0.27 };
   const loY = FAR_K * d - MARGIN_FAR; const hiY = H + MARGIN - NEAR_K * d;
   let y: number;
   if (whole || loY > hiY) y = middleOf(H, d);
@@ -1835,7 +2046,6 @@ const INTRO_MS = 2600;
 const INTRO_CLOSE = 0.38;
 const INTRO_PITCH = (24 * Math.PI) / 180;
 let introAt = 0;
-let focusAt = 0;
 const v3 = new Vector3();
 /** A point on the meadow (rules x, y, h metres up) on the screen, CSS px. */
 function onScreen(x: number, y: number, h: number, cw: number, ch: number): { x: number; y: number; ok: boolean } {
@@ -1870,21 +2080,20 @@ function draw(t: number, dt: number): void {
   let want: { x: number; y: number; dist: number; lift?: number } = { ...aim, dist };
   if (focus && !net.watching && !lab.on) {
     // It starts with a live round (a seat taken during the results waits for the next one, under the results card)
-    // and the hero's own model (never its stand-in, unless the model is still not in after three seconds).
-    if (!focusAt) focusAt = t;
-    const dressed = [...heroes.values()].some((h) => h.mine && h.char) || t - focusAt > 3000;
-    if (!introAt && round?.phase === 'live' && dressed) introAt = t;
+    // the moment the game is playable: the arrival card lifts on the hero's own model (its stand-in only when the model
+    // is still not in after about five seconds), so the close-up is the first thing the player sees.
+    if (!introAt && round?.phase === 'live' && playableAt) introAt = t;
     const u = introAt ? Math.min(1, (t - introAt) / INTRO_MS) : 1;
     if (u < 1) {
       const e = u < 0.35 ? 0 : (u - 0.35) / 0.65; const k = e * e * (3 - 2 * e);
-      // Looking at the hero's chest, so its face is under the title card, never behind it.
+      // Looking at the hero's chest: the whole hero, head to feet, in the middle of the screen.
       const fy = focus.y - 0.2;
       want = { x: focus.x + (aim.x - focus.x) * k, y: fy + (aim.y - fy) * k, dist: dist * (INTRO_CLOSE + (1 - INTRO_CLOSE) * k), lift: HERO_M * 0.55 * (1 - k) };
       // Lower too, at first: its face, not the top of its hat.
       setPitch(PITCH + (INTRO_PITCH - PITCH) * (1 - k));
       if (u === 0 || !view3.dist) Object.assign(view3, want, { yaw: 0 });
     }
-  } else if (!focus) { introAt = 0; focusAt = 0; }
+  } else if (!focus) introAt = 0;
   placeCamera({ ...want, yaw: turned ? -Math.PI / 2 : 0 }, dt, kick);
   flames.forEach((f, i) => { const k = 1 + 0.14 * Math.sin(t / 95 + i * 2) + 0.06 * Math.sin(t / 37 + i); f.children[0]?.scale.set(1, k, 1); f.children[1]?.scale.set(1, 2 - k, 1); });
 
@@ -2013,15 +2222,25 @@ function draw(t: number, dt: number): void {
 
   if (lab.on) { pen.begin(); lab.draw(pen); pen.end(); }
   renderer.render(scene, camera);
+  arrival(t);
 
   // ---- the HUD, over the world
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cw, ch);
-  // the hot zone's "×2", on the screen over its middle
+  // the hot zone's "×2", on the screen over its middle; over its far or near edge instead when the hero whose view
+  // this is stands under its middle (the mark never covers your own hero)
   zoneMark = null;
   if (zone) {
-    const z = onScreen(zone.x, zone.y, 0, cw, ch);
     const size = phone ? 20 : 24;
+    const own = list.find((a) => a.mine);
+    const covers = (p: { x: number; y: number }): boolean => {
+      if (!own) return false;
+      const head = onScreen(own.x, own.y, HERO_M + own.h, cw, ch); const foot = onScreen(own.x, own.y, 0, cw, ch);
+      const r = Math.max(14, Math.abs(onScreen(own.x + 0.5, own.y, 0, cw, ch).x - foot.x));
+      return Math.abs(p.x - foot.x) < r + size && p.y > head.y - size && p.y < foot.y + size;
+    };
+    let z = onScreen(zone.x, zone.y, 0, cw, ch);
+    for (const dy of [-0.72, 0.72]) { if (!covers(z)) break; z = onScreen(zone.x, zone.y + dy * zone.r, 0, cw, ch); }
     if (z.ok) {
       ctx.font = `700 ${size}px ${FONT_DISPLAY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.strokeText('×2', z.x, z.y); ctx.fillStyle = PAL.accent; ctx.fillText('×2', z.x, z.y);
@@ -2036,7 +2255,7 @@ function draw(t: number, dt: number): void {
   const heads = new Map<number, { x: number; y: number; seat: number; mine: boolean }>();
   const viewAt = list.find((a) => a.mine) ?? null;
   for (const a of list) {
-    const text = a.mine && !net.watching ? 'You' : label(a.name, a.bot);
+    const text = a.mine && !net.watching ? `You · ${heroName(heroKind(a.slot, a.seat, a.bot))}` : label(a.name, a.bot);
     const head = onScreen(a.x, a.y, HERO_M + 0.12 + a.h, cw, ch);
     const mid = onScreen(a.x, a.y, HERO_M * 0.45 + a.h, cw, ch);
     const side = onScreen(a.x + R_AV, a.y, HERO_M * 0.45 + a.h, cw, ch);
@@ -2134,45 +2353,29 @@ function chip(x: number, y: number, w: number, h: number, alpha = 0.88): void {
 }
 
 /**
- * The game's own first screen: its name and one line, on a card in the palette, for the first few seconds (it never
- * waits for a press and never takes one: the round is already on underneath). game.json's name and the first sentence
- * of its blurb.
+ * THE ARRIVAL (NETPLAY.md section 21; createNetplay's `arrival: 'game'`). Until this game says it is playable, the play
+ * page shows its arrival card: the game's title and art, and a progress line this game feeds (`net.loading`: the
+ * characters first, "the heroes", then "the clearing"). It is playable once the round's state is in (a host has its
+ * round; anyone else has drawn a snapshot) and the hero whose view this is stands there in its real model, drawn this
+ * frame; or, when its model is still not in after about five seconds, with its stand-in. A watcher's overview waits for
+ * every hero in view instead. Then `net.playable()`, once, and the hero intro starts under the lifting card.
+ * The game drew its own title card at a round's start before the page had one: the arrival card is that title now, so
+ * the round opens on the hero, with nothing over it. performance marks `hero:model` (your hero's real model first drawn)
+ * and `hero:playable` say when, for a harness.
  */
 const BOOT_AT = performance.now();
-const TITLE = String((gameFile as { name?: string }).name ?? document.title).slice(0, 40);
-const TAGLINE = String((gameFile as { blurb?: string }).blurb ?? '').split(/(?<=[.!?])\s/)[0]?.slice(0, 90) ?? '';
-function titleCard(cw: number, ch: number, phone: boolean): void {
-  // From the moment the round is on screen (the hero intro's start), short, high up: the heroes stay in view under it.
-  const from = introAt || (net.watching ? BOOT_AT + 1500 : 0);
-  if (!from) return;
-  const since = performance.now() - from;
-  // Never in the Game Lab: a take is the first seconds of a round, and the card would cover the move it plays.
-  if (since > 3200 || lab.on || round?.phase === 'over') return;
-  const a = since < 2400 ? Math.min(1, since / 250) : 1 - (since - 2400) / 800;
-  const w = Math.min(cw - 32, phone ? 320 : 440);
-  ctx.save();
-  ctx.globalAlpha = Math.max(0, a);
-  ctx.font = `700 ${phone ? 14 : 17}px ${FONT_BODY}`;
-  // A phone's card is the title alone: the close-up hero under it keeps the screen.
-  const words = phone ? [] : TAGLINE.split(' '); const lines: string[] = []; let line = '';
-  for (const word of words) { const next = line ? `${line} ${word}` : word; if (ctx.measureText(next).width > w - 40 && line) { lines.push(line); line = word; } else line = next; }
-  if (line) lines.push(line);
-  const titleSize = phone ? 30 : 44; const lineH = phone ? 19 : 24;
-  const h = (phone ? 22 : 34) + titleSize + (lines.length ? 14 + lines.length * lineH : 0) + (phone ? 14 : 26);
-  const x = (cw - w) / 2; const y = phone ? 64 : Math.max(64, ch * 0.08);
-  ctx.fillStyle = mixHex(PAPER, '#ffffff', 0.35);
-  ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
-  ctx.beginPath();
-  const rr = (ctx as CanvasRenderingContext2D & { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect;
-  if (rr) rr.call(ctx, x, y, w, h, 18); else ctx.rect(x, y, w, h);
-  ctx.fill();
-  ctx.shadowColor = 'transparent';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = HOT; ctx.font = `700 ${titleSize}px ${FONT_DISPLAY}`;
-  ctx.fillText(TITLE, cw / 2, y + (phone ? 20 : 30) + titleSize / 2);
-  ctx.fillStyle = TEXT; ctx.font = `600 ${phone ? 14 : 17}px ${FONT_BODY}`;
-  lines.forEach((l, i) => ctx.fillText(l, cw / 2, y + 30 + titleSize + 14 + lineH * i + lineH / 2));
-  ctx.restore();
+let playableAt = 0;
+let modelAt = 0;
+function arrival(t: number): void {
+  const view = [...heroes.values()].find((h) => h.mine) ?? null;
+  if (!modelAt && view?.char && !net.watching) { modelAt = t; try { performance.mark('hero:model'); } catch { /* old browser */ } }
+  if (playableAt) return;
+  const stateIn = Boolean(round) && (hosting || drawn.size > 0);
+  const dressed = view ? Boolean(view.char) : heroes.size > 0 && [...heroes.values()].every((h) => h.char);
+  if (!stateIn || (!dressed && performance.now() - BOOT_AT < 5000)) return;
+  playableAt = t;
+  try { performance.mark('hero:playable'); } catch { /* old browser */ }
+  net.playable();
 }
 
 function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat: number | null; name: string; bot: boolean; mine: boolean }[]): void {
@@ -2197,14 +2400,18 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
   const scores = new Map<number, number>();
   if (hosting) for (const b of bodies.values()) scores.set(b.slot, b.score);
   else for (const d of drawn.values()) scores.set(d.slot, d.score);
-  // A phone's board is compact (the top three, names without " · bot": a bot's dot is hollow), so a game's own HUD at
-  // the top left (a basket, a timer) has room beside it.
+  // A phone's board is compact (the top three, a short name and a small "bot" or "AI" tag after it; a bot's dot is
+  // hollow), so a game's own HUD at the top left (a basket, a timer) has room beside it. Every bot and AI says so.
   const rows = [...list].sort((a, b) => (scores.get(b.slot) ?? 0) - (scores.get(a.slot) ?? 0)).slice(0, phone ? 3 : 6);
+  const TAG_FONT = `800 10px ${FONT_BODY}`;
+  ctx.font = TAG_FONT;
+  const marks = rows.map((a) => (!phone || (a.mine && !net.watching) ? '' : a.name.endsWith(AI_MARK) ? 'AI' : a.bot ? 'bot' : ''));
+  const markW = marks.map((m) => (m ? ctx.measureText(m).width + 10 : 0));
   ctx.font = `700 ${phone ? 13 : 16}px ${FONT_BODY}`;
   const rowH = phone ? 20 : 25;
   const fit = (t: string, max: number): string => { let x = t; while (x.length > 3 && ctx.measureText(x).width > max) x = `${x.slice(0, -2)}…`; return x; };
-  const texts = rows.map((a) => (a.mine && !net.watching ? 'You' : phone ? fit(a.name.replace(AI_MARK, '').trim(), 104) : label(a.name, a.bot)));
-  const nameW = Math.max(0, ...texts.map((x) => ctx.measureText(x).width));
+  const texts = rows.map((a, i) => (a.mine && !net.watching ? 'You' : phone ? fit(a.name.replace(AI_MARK, '').trim(), 104 - (markW[i] ? (markW[i] as number) + 5 : 0)) : label(a.name, a.bot)));
+  const nameW = Math.max(0, ...texts.map((x, i) => ctx.measureText(x).width + (markW[i] ? (markW[i] as number) + 5 : 0)));
   const boardW = nameW + (phone ? 56 : 74);
   // Together: the room's total heads the board, which moves down by a row so it stays under the room buttons.
   const board = top + 18 + 44 - rowH / 2 + (TOGETHER ? rowH + 6 : 0);
@@ -2228,6 +2435,14 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
     ctx.textAlign = 'left';
     ctx.fillStyle = a.mine ? TEXT : mixHex(TEXT, PAPER, a.bot ? 0.42 : 0.15);
     ctx.fillText(texts[i] as string, cw - pad - boardW + 26, y + 1);
+    const mark = marks[i];
+    if (mark) {
+      // The tag: a small pill after the name, the HUD's ink on its paper.
+      const mx = cw - pad - boardW + 26 + ctx.measureText(texts[i] as string).width + 5; const mw = markW[i] as number;
+      ctx.fillStyle = mixHex(TEXT, PAPER, 0.8); ctx.beginPath(); ctx.roundRect(mx, y - 7, mw, 14, 7); ctx.fill();
+      ctx.font = TAG_FONT; ctx.fillStyle = mixHex(TEXT, PAPER, 0.15); ctx.fillText(mark, mx + 5, y + 1);
+      ctx.font = `700 ${phone ? 13 : 16}px ${FONT_BODY}`;
+    }
     ctx.textAlign = 'right';
     ctx.fillStyle = a.mine ? HOT : TEXT;
     ctx.fillText(String(scores.get(a.slot) ?? 0), cw - pad - 12, y + 1);
@@ -2266,13 +2481,15 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
     chip(cw / 2 - tw / 2 - 12, ch - pad - 24, tw + 24, 26);
     ctx.fillStyle = HOT; ctx.fillText(text, cw / 2, ch - pad - 10);
   }
-  titleCard(cw, ch, phone);
-  if (frames < 480 && mySeat() !== null) {
+  // The controls, for the first eight seconds of play (from the moment the arrival card lifts), above the touch
+  // buttons when there are some, never under them.
+  if (playableAt && performance.now() - playableAt < 8000 && mySeat() !== null && !net.watching) {
     ctx.textAlign = 'center'; ctx.font = `700 ${phone ? 14 : 16}px ${FONT_BODY}`;
     const text = phone ? 'Drag to move · Jump and Swing on the right' : 'WASD to move · Space jumps · F or click swings';
     const tw = ctx.measureText(text).width;
-    chip(cw / 2 - tw / 2 - 12, ch - pad - 56, tw + 24, 26, 0.6);
-    ctx.fillStyle = TEXT; ctx.fillText(text, cw / 2, ch - pad - 42);
+    const y = ch - pad - 56 - (touched ? (phone ? 96 : 110) : 0);
+    chip(cw / 2 - tw / 2 - 12, y, tw + 24, 26, 0.6);
+    ctx.fillStyle = TEXT; ctx.fillText(text, cw / 2, y + 14);
   }
   ctx.textBaseline = 'alphabetic';
 }
@@ -2303,8 +2520,18 @@ net.expose({
   },
   frames: () => frames,
   scores: () => (hosting ? [...bodies.values()].map((b) => ({ slot: b.slot, seat: b.seat, bot: b.bot, score: b.score })) : [...drawn.values()].map((d) => ({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, bot: d.seat < 0, score: d.score }))),
-  /** Host: gems each slot picked up this round, the round's age, and the dial each bot plays at (the dial's numbers). */
-  pickups: () => (hosting ? { round: round ? { n: round.n, phase: round.phase, ageMs: net.now() - round.startedAt } : null, slots: [...bodies.values()].map((b) => ({ slot: b.slot, bot: b.bot, gems: pickups.get(b.slot) ?? 0, level: b.bot ? net.skillOf(b.slot).level : null })) } : null),
+  /**
+   * Host: gems each slot picked up this round, the round's age, and how each bot plays: the room's dial (`dial`), the
+   * level it plays at this round (`level`: a level easier in a newcomer's first round) and the rubber band (`soft`, 0
+   * at its dial to 1 all the way soft). `newcomer`: somebody is in their first round here.
+   */
+  pickups: () => (hosting ? {
+    round: round ? { n: round.n, phase: round.phase, ageMs: net.now() - round.startedAt } : null,
+    newcomer: newcomerRound(people()),
+    slots: [...bodies.values()].map((b) => ({ slot: b.slot, bot: b.bot, gems: pickups.get(b.slot) ?? 0, dial: b.bot ? net.skillOf(b.slot).level : null, level: b.bot ? (botPlay.get(b.slot)?.level ?? net.skillOf(b.slot).level) : null, soft: b.bot ? +(botPlay.get(b.slot)?.soft ?? 0).toFixed(2) : null })),
+  } : null),
+  /** Where the coins are now (rules metres): what a harness's coin-chasing player steers by. */
+  gems: () => (hosting ? gems.map((g) => ({ id: g.id, x: g.x, y: g.y })) : (net.latest()?.d.g ?? []).map(([id, x, y]) => ({ id, x, y }))),
   /** Host: when each bot last looked (its reaction clock). */
   sight: () => (hosting ? [...sight.entries()].map(([slot, e]) => ({ slot, at: e.at })) : null),
   waves: () => wavesSeen,

@@ -15,9 +15,11 @@
  * Each browser plays (the same seeded presses every run) through a warm-up and then a measured window, and the run
  * writes, per browser (host and replica):
  *
- *   load     ms from opening the page to the game's first animation frame, to a seat, and to playable (seated with a
- *            body that the game's port probe reports, or seated and drawing when it has none); what the game's own
- *            files weighed on the wire, the biggest first
+ *   load     ms from opening the page to the first meaningful frame (`look`: the play page's arrival card on the
+ *            screen, the game's title and art; a page without one, the game's first animation frame), to the game's
+ *            first animation frame, to a seat, and to playable (seated with a body that the game's port probe reports,
+ *            or seated and drawing when it has none, and the arrival card lifted); what the game's own files weighed on
+ *            the wire, the biggest first
  *   frames   the time between animation frames: median, 95th and 99th percentile, the worst, and the share of frames
  *            over 33 ms (a dropped frame at 60 Hz, twice) and over 50 ms (a hitch anyone sees)
  *   work     the game's JavaScript inside each animation frame (every requestAnimationFrame callback, timed)
@@ -197,7 +199,7 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
     let seatedAt = null; let playableAt = null; let shell = null; let body = null;
     const deadline = Date.now() + 90_000;
     while (Date.now() < deadline && playableAt === null) {
-      shell = await T(page.evaluate(() => { const s = window.__shell; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null } : null; }), 5000);
+      shell = await T(page.evaluate(() => { const s = window.__shell; const a = s?.arrival; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, arrival: a ? { phase: a.phase, lookMs: a.lookMs, liftedMs: a.liftedMs, by: a.by } : null } : null; }), 5000);
       const now = Date.now();
       if (seatedAt === null && shell?.room && Number.isInteger(shell.seat) && shell.role) seatedAt = now;
       const g = await inGame(h, () => {
@@ -206,7 +208,9 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
         if (p && p.view !== 'board') { const r = p.rows(p.now() - 400); const last = r[r.length - 1]; self = last ? Number.isFinite(last[1]) : false; }
         return { first: window.__perf?.first?.() ?? null, port: Boolean(p), view: p?.view ?? null, self };
       });
-      if (seatedAt !== null && g?.first !== null && g?.first !== undefined) {
+      // The play page's arrival card (0.26.0) covers the game until the game says it is playable: not playable before.
+      const lifted = !shell?.arrival || shell.arrival.phase === 'done';
+      if (seatedAt !== null && g?.first !== null && g?.first !== undefined && lifted) {
         // A body the game reports (its port probe), or no body to wait for (a board, or a game with no probe).
         if (!g.port || g.view === 'board' || g.self) { playableAt = now; body = g.port && g.view !== 'board' ? 'reported' : 'none to report'; }
         else if (now - seatedAt > 10_000) { playableAt = null; body = 'never reported by the port probe in 10 s'; break; }
@@ -223,7 +227,11 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
     const at = (epoch) => (epoch && origin ? Math.round(epoch - origin) : null);
     const files = [...h.requests.values()].filter((r) => r.done);
     const gameFiles = files.filter((r) => /\/__game\//.test(r.url));
+    // The first meaningful frame: the arrival card's first frame (the page's own clock), else the game's first frame.
+    const look = Number.isFinite(shell?.arrival?.lookMs) ? shell.arrival.lookMs : at(g?.first);
     h.loadInfo = {
+      lookMs: look,
+      arrival: shell?.arrival ? { by: shell.arrival.by ?? null, liftedMs: shell.arrival.liftedMs ?? null } : null,
       firstFrameMs: at(g?.first),
       seatedMs: at(seatedAt),
       playableMs: at(playableAt),
@@ -518,7 +526,7 @@ export function metricsOfRun(run) {
     put('work.p50', b.work?.p50); put('work.p95', b.work?.p95); put('work.mean', b.work?.mean);
     put('busy', b.main?.busyPerFrame); put('script', b.main?.scriptMsPerS);
     put('heap', b.heap?.afterGcMb); put('heap.growth', b.heap?.gcGrowthMbPerMin);
-    put('load.firstFrame', b.load?.firstFrameMs); put('load.seated', b.load?.seatedMs); put('load.playable', b.load?.playableMs); put('load.gameKb', b.load?.gameKb);
+    put('load.look', b.load?.lookMs); put('load.firstFrame', b.load?.firstFrameMs); put('load.seated', b.load?.seatedMs); put('load.playable', b.load?.playableMs); put('load.gameKb', b.load?.gameKb);
     put('net.msgsOut', b.net?.msgsOut); put('net.msgsIn', b.net?.msgsIn); put('net.kbOut', b.net?.kbOut); put('net.kbIn', b.net?.kbIn);
   }
   return out;
@@ -541,7 +549,7 @@ function headlineOf(summary) {
     for (const role of ['host', 'replica']) {
       const m = (k) => summary.metrics[`${device}.${role}.${k}`]?.median;
       if (m('frame.p50') === undefined) continue;
-      out.push(`${device} ${role}: frames ${m('frame.p50')} ms median, ${m('frame.p95')} ms p95, ${m('frame.over50') ?? 0}% over 50 ms; game JS ${m('work.p50')} ms a frame (p95 ${m('work.p95')}); main thread ${m('busy')} ms a frame; playable at ${m('load.playable') ?? '?'} ms; netplay ${m('net.msgsOut')} out / ${m('net.msgsIn')} in a second; heap ${m('heap')} MB`);
+      out.push(`${device} ${role}: frames ${m('frame.p50')} ms median, ${m('frame.p95')} ms p95, ${m('frame.over50') ?? 0}% over 50 ms; game JS ${m('work.p50')} ms a frame (p95 ${m('work.p95')}); main thread ${m('busy')} ms a frame; first look at ${m('load.look') ?? '?'} ms, playable at ${m('load.playable') ?? '?'} ms; netplay ${m('net.msgsOut')} out / ${m('net.msgsIn')} in a second; heap ${m('heap')} MB`);
     }
   }
   return out;

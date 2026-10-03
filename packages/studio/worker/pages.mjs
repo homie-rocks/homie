@@ -9,6 +9,7 @@ import { KIDS_LINE, POLICY_WORDS } from './servers.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
 import { CHAT_CSS, CHAT_JS, CHAT_OWNER_JS, chatBoot } from './chat-page.mjs';
 import { SHOP_SHELL_CSS, SHOP_SHELL_JS } from './shop-page.mjs';
+import { ARRIVAL_JS, arrivalCard } from './arrival.mjs';
 
 export { homePage, mediaIndexPage, notFoundPage, songPage, videoPage } from './site.mjs';
 
@@ -96,6 +97,8 @@ export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, lo
   const okHex = (v) => /^#[0-9a-f]{6}$/i.test(String(v ?? ''));
   const ui = okHex(g.ui?.paper) && okHex(g.ui?.text) ? g.ui : null;
   const pillUi = ui ? `\n.pill, .chip, .pill.dim { background: ${ui.paper}e6; color: ${ui.text}; border-color: ${ui.text}22; }\n.pill svg { color: ${ui.text}; }` : '';
+  // The arrival card (worker/arrival.mjs): the game's own look until the game says it is playable, never a blank screen.
+  const arrive = arrivalCard(cat, g, { screen });
   const css = `:root{--hot:${/^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a'}}
 html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #04060c; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; touch-action: none; }
@@ -161,7 +164,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .notice .acts a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; text-decoration: none; font-weight: 700; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
 .notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
 [hidden] { display: none !important; }
-${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHOP_SHELL_CSS : ''}${pillUi}`;
+${arrive.css}${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHOP_SHELL_CSS : ''}${pillUi}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
   // The server this page plays on (0.16.0): its pool (the Lobby), its badge and line for the chip, its ceiling.
@@ -198,7 +201,8 @@ ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHO
 <div class="toast" data-toast role="status" hidden></div>`;
   return layoutless(`${g.name} · play`, `
 <iframe class="game" title="${esc(g.name)}" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen *; autoplay *; gamepad *"></iframe>
-<div class="chip" data-chip><span data-status>finding a room…</span></div>
+${arrive.html}
+<div class="chip${arrive.html ? ' held' : ''}" data-chip><span data-status>finding a room…</span></div>
 <div class="vote" data-vote role="dialog" aria-label="How strong should the AI be?" data-keep-focus hidden></div>
 <div class="card" data-results hidden></div>
 <div class="card" data-screen hidden></div>
@@ -206,6 +210,7 @@ ${joinCard}${share}
 <script>window.__HOMIE_PLAY=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
 <script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: screen ? 'tv' : 'play', owner, acct, member })).replace(/</g, '\\u003c')};</script>
 <script>${CHAT_JS}</script>
+<script>${ARRIVAL_JS}</script>
 <script>${SHELL_JS}</script>${g.saves && !screen ? `
 <script>${SAVES_SHELL_JS}</script>` : ''}${shop ? `
 <script>${SHOP_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script><script>${CHAT_OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
@@ -289,6 +294,9 @@ const SHELL_JS = String.raw`(function () {
   var screenCard = document.querySelector('[data-screen]');
   var state = { game: boot.game, room: null, device: device, want: want, attached: false, stats: null, round: null, roster: null, facts: null, seat: null, results: [], closed: null, link: null, notice: null, banner: null, muted: null, server: boot.server || null, vote: null, myVote: {}, quietAi: false, full: false };
   window.__shell = state;
+  // The arrival card (worker/arrival.mjs): the game's look while the room connects and the game loads.
+  var A = window.__homieArrival || { done: true, room: function () {}, facts: function () {}, full: function () {}, message: function () {}, lift: function () {}, frameLoaded: function () {} };
+  state.arrival = A.state || null;
   // This browser's room key: random, kept in this site's own storage, and sent only to this site's rooms. It is what
   // an owner's kick holds out of a room for a while (section 15); it says nothing about who the player is.
   function rnd() {
@@ -302,8 +310,11 @@ const SHELL_JS = String.raw`(function () {
   var chip = document.querySelector('[data-chip]');
   var quietTimer = null;
   function say(text) {
-    if (statusEl.textContent === text) return;
+    // While the arrival card is up it says this itself; the chip waits for the game to have the screen.
+    if (!A.done) { statusEl.textContent = text; return; }
+    if (statusEl.textContent === text && !chip.classList.contains('held')) return;
     statusEl.textContent = text;
+    chip.classList.remove('held');
     chip.classList.remove('quiet');
     clearTimeout(quietTimer);
     quietTimer = setTimeout(function () { chip.classList.add('quiet'); }, 5000);
@@ -409,12 +420,14 @@ const SHELL_JS = String.raw`(function () {
     // The frame cannot read this page's address (it is an opaque origin): hand it the game's own switches.
     ['touchdebug', 'cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
     frame.src = '/' + boot.game + '/__game/?' + q.toString();
-    frame.addEventListener('load', function () { try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
+    A.room(labelOf(room));
+    frame.addEventListener('load', function () { A.frameLoaded(); try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
     window.addEventListener('pointerdown', function (e) { if ((ui && ui.contains(e.target)) || (e.target.closest && e.target.closest('[data-keep-focus]'))) return; try { frame.focus(); } catch (e2) {} }, { passive: true });
     window.addEventListener('message', function (ev) {
       if (ev.source !== frame.contentWindow) return;
       var m = ev.data;
       if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
+      A.message(m);
       if (m.what === 'attached') state.attached = true;
       if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
       if (m.what === 'stats') state.stats = m.stats;
@@ -517,6 +530,7 @@ const SHELL_JS = String.raw`(function () {
   // again), and the page says what happened, when they can come back, and where to play now.
   function notice(kind, m) {
     if (state.notice) return;
+    A.lift('notice');
     state.notice = { kind: kind, until: m && m.until ? m.until : null, message: m && m.message ? String(m.message) : '' };
     try { frame.src = 'about:blank'; } catch (e) {}
     if (state.watchSocket) { try { state.watchSocket.close(); } catch (e) {} }
@@ -552,6 +566,8 @@ const SHELL_JS = String.raw`(function () {
     if (f && f.counts && f.counts.watchers) bits.push(f.counts.watchers + ' watching');
     if (state.full) bits.push('waiting for a seat');
     if (state.closed) bits.push(state.closed === 'replaced' ? 'opened in another tab' : 'reconnecting');
+    // The arrival card's line: the room and who is in it ("Room 2 · 3 playing · 2 AI").
+    if (!A.done && state.room) A.facts([labelOf(state.room), n ? n + ' playing' : '', aiN ? aiN + ' AI' : ''].filter(Boolean).join(' · '));
     say(bits.join(' · ') || 'joining…');
     var count = ui && ui.querySelector('[data-room-count]');
     if (count && n !== null) count.textContent = n + (n === 1 ? ' player here' : ' players here') + (aiN ? ' · ' + aiN + ' AI' : '');
@@ -669,6 +685,8 @@ const SHELL_JS = String.raw`(function () {
   var lobbyQ = [];
   if (state.server) lobbyQ.push('server=' + encodeURIComponent(state.server.id));
   if (/^[A-Za-z0-9_,-]{1,140}$/.test(params.get('not') || '')) lobbyQ.push('not=' + encodeURIComponent(params.get('not')));
+  // Once the game has the screen, the chip says the room's facts for a few seconds, then gets out of the way.
+  window.addEventListener('homie-arrived', function () { paint(); });
   if (boot.room) start(boot.room);
   else if (askedRoom !== null && /^[A-Za-z0-9_-]{1,32}$/.test(askedRoom)) start(askedRoom);
   else if (askedRoom !== null) { say('that room link does not work'); }
@@ -676,7 +694,7 @@ const SHELL_JS = String.raw`(function () {
     .then(function (r) { return r.json(); })
     .then(function (j) {
       // Every room this server may have is full: the fullest one, watched until a seat frees (the relay seats it).
-      if (j.full) { state.full = true; flash((state.server ? state.server.name : 'This server') + ' is full. You\u2019re next for a seat.'); }
+      if (j.full) { state.full = true; flash((state.server ? state.server.name : 'This server') + ' is full. You\u2019re next for a seat.'); A.full((state.server ? state.server.name : 'This server') + ' is full: you\u2019re next for a seat…'); }
       start(j.room || 'main');
     })
     .catch(function () { start('main'); });

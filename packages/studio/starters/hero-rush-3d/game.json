@@ -7,5 +7,6 @@
   "entry": "src/main.ts",
   "netplay": { "v": 1, "public": true, "movement": "owner" },
   "needs": { "three": "0.185.1" },
-  "assets": "library"
+  "assets": "library",
+  "landing": { "pitch": "Grab the coins. Jump their swings. Knock the loot loose.", "controls": { "phone": "Drag anywhere to run; Jump and Swing at the bottom right.", "computer": "WASD or arrows to run, Space to jump, F or a click to swing." } }
 }

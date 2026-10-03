@@ -1,6 +1,6 @@
 ---
 name: perf
-description: Make a studio's game run faster with a measured loop, and keep only what really helped. Measure a baseline on a computer and an emulated phone in real Chrome on the GPU (frame times p50/p95/long frames, the game's JavaScript and the main thread per frame, time to first frame and to playable, what it downloads, the heap, netplay messages a second, the host against a replica), profile it to name the hot functions and the biggest files, then try one small change at a time, each measured against the build to beat in alternating runs and kept only when it is better beyond the noise, nothing guarded got worse and the two-browser check still passes; anything else is reverted. Ends with a report in the studio's perf/ folder. Use when someone asks to make a game faster, smoother or lighter, to find out why it stutters, lags, loads slowly or drains a phone, to tune particles, shadows, lighting or bots for frame rate, or to run a performance or optimisation pass overnight.
+description: Make a studio's game run faster with a measured loop, and keep only what really helped. Measure a baseline on a computer and an emulated phone in real Chrome on the GPU (frame times p50/p95/long frames, the game's JavaScript and the main thread per frame, time to the first meaningful frame, to the game's first frame and to playable, what it downloads, the heap, netplay messages a second, the host against a replica), profile it to name the hot functions and the biggest files, then try one small change at a time, each measured against the build to beat in alternating runs and kept only when it is better beyond the noise, nothing guarded got worse and the two-browser check still passes; anything else is reverted. Ends with a report in the studio's perf/ folder. Use when someone asks to make a game faster, smoother or lighter, to find out why it stutters, lags, loads slowly or drains a phone, to tune particles, shadows, lighting or bots for frame rate, or to run a performance or optimisation pass overnight.
 ---
 
 # Make a game faster, honestly
@@ -50,6 +50,7 @@ each hint naming the number it read. Ten to fifteen minutes; poll its output, ne
 | "it stutters on my phone", "make it smoother" | `phone.host.frame.p95` (and `frame.over50`: hitches) |
 | "it runs fine but my phone gets hot", frames already at 16.7 ms | `phone.host.busy` (main thread per frame) |
 | "it takes ages to load" | `phone.host.load.playable` (4G, slow CPU) or `bytes.jsGzip` |
+| "it opens on a blank screen" | `phone.host.load.look` (the first meaningful frame: the play page's arrival card, 0.26.0) |
 | "it lags when lots of people play" | `phone.host.busy` (the host runs the rules) or `phone.host.net.kbOut` (its upload) |
 
 Read BASELINE.md before choosing. **If frames already keep pace with the display (p95 about 16.7 ms), a faster frame

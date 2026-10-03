@@ -22,9 +22,10 @@ Night Owls and make a multiplayer game"* and it:
    Cloudflare once in your browser (a free account, no payment method: it says what it
    will create and what it costs before it does). The site has the same sections as
    homie.rocks in your studio's own look (Home, Games, Music, Videos, Rooms, Posts), and
-   every game gets a landing page of its own: a full-bleed hero from its footage or art,
-   a big Play button into a public room, phone / computer / TV, live rooms, credits, and
-   "Make a game like this";
+   every game gets a landing page of its own, in the game's own palette: a full-bleed hero
+   from its footage or art, a big Play button into a public room, phone / computer / TV,
+   live rooms, credits, and "Make a game like this". Play never opens on a blank screen:
+   the game's title, art and a progress line show while its room connects and it loads;
 5. **lists** the games in the [homie.rocks](https://homie.rocks/studios/) directory, so
    people can find them.
 
@@ -95,7 +96,7 @@ Three skills need no account and cost nothing:
 - **`perf`** (*"make my game run faster on phones"*, *"find out why it stutters"*): a measured loop on real
   Chrome on your computer's GPU, a computer and an emulated phone, two browsers in a room (the host and a
   replica): frame times (median, p95, long frames), the game's JavaScript and the main thread per frame, time
-  to first frame and to playable, what it downloads, the heap and netplay messages a second, then a CPU
+  to the first meaningful frame and to playable, what it downloads, the heap and netplay messages a second, then a CPU
   profile that names the hot functions through the game's source map. It tries one small change at a time,
   measures it against the build to beat in alternating runs, and keeps it only when it is better beyond the
   noise, nothing guarded got worse and two browsers still finish a round; anything else is reverted. The

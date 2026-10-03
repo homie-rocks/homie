@@ -583,13 +583,16 @@ Measured, with Gem Rush's bump (owner movement, 30–50 ms one way):
    overrides). `?screen=1` makes a spectator that shows a QR code to the game URL.
    `/<game>/watch?room=` makes a watcher, with a strip of the players (section 16).
 8. **Show room facts** from the watch feed or the frame's messages: the lobby line,
-   results, and with `?debug=1` the debug strip.
+   results, and with `?debug=1` the debug strip. Until the game is playable, show them on
+   the arrival card, in the game's own look (section 21), never a blank screen.
 9. **One matcher:** every Play door for a game lands in the same rooms (the `Lobby`).
 
 ### The game (a vendored `netplay.ts`)
 
 1. **Call `createNetplay({ game, maxPlayers, movement, checkpoint })` once** and render
-   from the first frame. Never wait for `ready`.
+   from the first frame. Never wait for `ready`. A game that loads for seconds after its
+   first state passes `arrival: 'game'` and calls `net.playable()` once its world and the
+   player's own body are drawn (section 21): the play page's arrival card covers the wait.
 2. **Handle `role` at any time.**
    - Promoted: restore (section 9).
    - Host but not promoted: start a fresh round.
@@ -1422,3 +1425,36 @@ account or typed text.
 the host asks how the slimes hunt (chase, surround, gang up on the most hurt, regroup at the King),
 whether a wave comes, and how hard to push; every screen shows what the slimes are up to when a model
 chose it. The floor is the vale as it always played.
+
+## 21. The arrival (0.26.0)
+
+The play page and the big screen never open on a blank screen. From the page's first paint until
+the game says it is playable, an **arrival card** covers the game's frame in the game's own look:
+its title and pitch, its key art (the landing's hero still, a trailer's poster or its cover,
+drifting slowly), a progress line that says what is happening ("Finding a room…", "Room 4 · 3
+playing · 2 AI", "Loading the game…", "Joining Room 4…", the game's own "Loading the heroes…
+60%") and the controls for this device (game.json `landing.controls`). Then it fades and the
+game has the screen. Its colours are the game's palette (style.json), else its landing's, else
+the studio's (`worker/arrival.mjs`). Nothing here crosses the relay: it is between the game's frame
+and its page, so the wire stays revision 8.
+
+| From the helper to its page | When |
+|---|---|
+| `{ what: 'attached', …, arrival: 'auto' \| 'game' }` | the helper starts (a helper older than 0.26.0 sends no `arrival`) |
+| `{ what: 'loading', p, label? }` | the game's `net.loading(p, label)`: 0 to 1, at most ten a second, never after `playable` |
+| `{ what: 'playable', by: 'game' \| 'auto' }` | once: the game's `net.playable()`, or (`arrival: 'auto'`) the helper's own |
+
+- **`arrival: 'auto'`** (the default, so every game gets the card with no code): the helper says
+  `playable` once this browser has its role and the room's state (a host at once, anyone else at
+  its first snapshot), two animation frames later, so the game has drawn with it.
+- **`arrival: 'game'`**: the game says when, with `net.playable()` once its world and the player's
+  own body are drawn (Hero Rush 3D: its own hero with its real model, not the stand-in), and
+  `net.loading(p, 'the heroes')` while it loads. A game whose own loading takes seconds after the
+  first state (models, textures, a baked terrain) uses this, so the player never sees stand-ins.
+- **The page's fallbacks**, so a game is never hidden behind the card: a helper older than 0.26.0
+  lifts it 0.6 s after the browser has a seat; a frame with no helper, 8 s after it loaded; any game,
+  15 s after its helper attached; and 30 s after the page opened, whatever happens. A kick or a
+  closed room lifts it for its notice. `?arrive=0` leaves it out.
+- **Measured** by `homie-studio perf` (`load.look`: the card's first frame, the first meaningful
+  frame; `load.playable`: seated, the body drawn and the card lifted), from the page's own marks
+  `homie:look` and `homie:playable` and `window.__shell.arrival`.

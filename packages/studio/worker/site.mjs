@@ -143,6 +143,19 @@ img,video{display:block;max-width:100%}
 .also:hover{color:var(--fg)}
 .also+.also{margin-left:18px}
 @media (min-aspect-ratio:3/4){.hero-media picture.tall-only{display:none}}
+/* A landing in its game's own palette (0.26.0): the footage keeps its colour (a third of the tint), and the words sit
+   on a soft panel of the game's paper instead of a page-wide wash. */
+[data-look="game"] .hero-media::before{background:color-mix(in srgb,var(--bg) calc(var(--tint,16%) * .3),transparent)}
+[data-look="game"] .hero-media.drift::before{background:color-mix(in srgb,var(--bg) calc(var(--tint,40%) * .3),transparent)}
+[data-look="game"] .hero-shade{background:linear-gradient(to top,var(--bg) 0%,color-mix(in srgb,var(--bg) 70%,transparent) 14%,transparent 34%),
+  linear-gradient(to bottom,color-mix(in srgb,var(--bg) 94%,transparent) 0%,color-mix(in srgb,var(--bg) 70%,transparent) 9%,transparent 22%)}
+[data-look="game"] .hero-copy>*{position:relative}
+/* Footage captured from play carries the game's own HUD at its edges (a clock, a scoreboard): a little closer in. */
+[data-look="game"] .hero-media video,[data-look="game"] .hero-media:not(.drift) img{transform:scale(1.1);transform-origin:var(--focus,50% 50%)}
+[data-look="game"] .hero-copy::before{content:"";position:absolute;z-index:-1;left:0;right:0;bottom:0;height:min(64%,520px);pointer-events:none;
+  background:linear-gradient(to top,color-mix(in srgb,var(--bg) 96%,transparent) 0%,color-mix(in srgb,var(--bg) 86%,transparent) 55%,transparent 100%)}
+[data-look="game"] .title{text-shadow:0 2px 0 color-mix(in srgb,var(--bg) 70%,transparent),0 0 30px color-mix(in srgb,var(--bg) 90%,transparent)}
+[data-look="game"] .line,[data-look="game"] .live,[data-look="game"] .also{color:color-mix(in srgb,var(--fg) 86%,transparent)}
 @media (min-width:760px){
   .hero-shade{background:
     linear-gradient(to top,var(--bg) 0%,color-mix(in srgb,var(--bg) 70%,transparent) 18%,transparent 52%),
@@ -158,6 +171,10 @@ img,video{display:block;max-width:100%}
   .row{display:flex;align-items:center;flex-wrap:wrap;gap:12px 26px}
   .row .live{margin:0}
   .also{margin-top:18px}
+  [data-look="game"] .hero-shade{background:linear-gradient(to top,var(--bg) 0%,color-mix(in srgb,var(--bg) 60%,transparent) 12%,transparent 30%),
+    linear-gradient(to bottom,color-mix(in srgb,var(--bg) 94%,transparent) 0%,color-mix(in srgb,var(--bg) 70%,transparent) 9%,transparent 20%)}
+  [data-look="game"] .hero-copy::before{left:0;right:auto;width:min(1000px,72vw);height:100%;
+    background:radial-gradient(110% 85% at 0% 100%,color-mix(in srgb,var(--bg) 92%,transparent) 0%,color-mix(in srgb,var(--bg) 72%,transparent) 36%,transparent 66%)}
 }
 @media (max-height:540px) and (min-aspect-ratio:4/3){
   .hero{padding-top:calc(env(safe-area-inset-top,0px) + 62px)}
@@ -514,12 +531,17 @@ function tokensCss(theme = {}, over = null) {
 @media (max-width:719px){:root{--top-h:112px}}`;
 }
 
-/** A landing's `over` tokens: its scheme's (light or dark, when it differs from the studio's), then its own colours. */
+/**
+ * A landing's `over` tokens: its scheme's (light or dark, when it differs from the studio's), then its own colours.
+ * A landing drawn in its game's own palette (0.26.0: style.json, when game.json sets no landing colours or scheme)
+ * says so (`look: 'game'`): its footage keeps its colour, and the words get a soft panel of the game's paper instead.
+ */
 function landingTokens(cat, L) {
   const studio = cat.studio?.theme?.scheme === 'light' ? 'light' : 'dark';
   const want = L.scheme === 'light' || L.scheme === 'dark' ? L.scheme : null;
-  if (!want || want === studio) return L.theme ?? null;
-  return { ...SCHEME_TOKENS[want], ...(L.theme ?? {}), scheme: want };
+  const look = L.schemeFrom === 'style' ? { look: 'game' } : null;
+  if (!want || want === studio) return L.theme || look ? { ...(L.theme ?? {}), ...(look ?? {}) } : null;
+  return { ...SCHEME_TOKENS[want], ...(L.theme ?? {}), scheme: want, ...(look ?? {}) };
 }
 
 const studioName = (cat) => cat.studio?.name ?? 'Studio';
@@ -596,7 +618,7 @@ ${icon}${feeds}${head}
 <style>${tokensCss(theme, over)}${BASE_CSS}${cat.site?.css ?? ''}</style>
 ${partial(cat, 'head') ?? ''}
 </head>
-<body class="${hero ? 'has-hero' : ''}" data-page="${esc(page)}" data-scheme="${(over?.scheme ?? theme.scheme) === 'light' ? 'light' : 'dark'}">
+<body class="${hero ? 'has-hero' : ''}" data-page="${esc(page)}" data-scheme="${(over?.scheme ?? theme.scheme) === 'light' ? 'light' : 'dark'}"${over?.look === 'game' ? ' data-look="game"' : ''}>
 <a class="skip" href="#main">Skip to content</a>
 ${header(cat, active)}
 <main id="main">

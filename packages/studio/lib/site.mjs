@@ -419,8 +419,19 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
   // The landing's own colours (landing.theme): only colours, and the ink on its own accent worked out like the studio's.
   // Else the game's own palette (games/<id>/style.json, its art-direction decisions): one look from the game to its page.
   const style = !L.theme ? readJson(join(g.dir, 'style.json'))?.palette : null;
-  // Its accents only: the page keeps the studio's light or dark scheme, so its text always reads.
-  const fromStyle = style && typeof style === 'object' ? { accent: style.accent, glow: style.accent2 } : null;
+  // 0.26.0: the whole landing in that palette (its paper as the page, its ink as the words, its accents) when the game
+  // sets no landing colours or scheme of its own and its ink reads on its paper (4.5:1): a bright game is no longer
+  // shown on the studio's dark page. The scheme follows the paper. Anything less readable: its accents only, on the
+  // studio's scheme, as before.
+  let fromStyle = style && typeof style === 'object' ? { accent: style.accent, glow: style.accent2 } : null;
+  let ownScheme = null;
+  if (fromStyle && L.scheme === undefined) {
+    const paper = luminance(style.bg); const ink = luminance(style.ink);
+    if (paper !== null && ink !== null && (Math.max(paper, ink) + 0.05) / (Math.min(paper, ink) + 0.05) >= 4.5) {
+      fromStyle = { ...fromStyle, bg: style.bg, fg: style.ink };
+      ownScheme = paper > ink ? 'light' : 'dark';
+    }
+  }
   const raw = L.theme && typeof L.theme === 'object' ? L.theme : fromStyle;
   const theme = raw ? Object.fromEntries(['accent', 'glow', 'bg', 'fg'].filter((k) => COLOR.test(String(raw[k] ?? ''))).map((k) => [k, raw[k]])) : null;
   if (theme?.accent) { const l = luminance(theme.accent); if (l !== null) theme.accentInk = l > 0.4 ? '#0b0b10' : '#ffffff'; }
@@ -443,7 +454,7 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
     source: g.share?.source !== false,
     tv: g.screen?.tv !== false && L.tv !== false,
     theme: theme && Object.keys(theme).length ? theme : null,
-    ...(L.scheme === 'light' || L.scheme === 'dark' ? { scheme: L.scheme } : {}),
+    ...(L.scheme === 'light' || L.scheme === 'dark' ? { scheme: L.scheme } : ownScheme ? { scheme: ownScheme, schemeFrom: 'style' } : {}),
   };
 }
 

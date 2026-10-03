@@ -377,7 +377,7 @@ function summaryFromRuns(folder) {
       const put = (k, v) => { if (Number.isFinite(v)) (by[`${p}.${k}`] ??= []).push(v); };
       put('frame.p50', b.frames?.p50); put('frame.p95', b.frames?.p95); put('frame.p99', b.frames?.p99); put('frame.over33', b.frames?.over33); put('frame.over50', b.frames?.over50);
       put('work.mean', b.work?.mean); put('work.p95', b.work?.p95); put('busy', b.main?.busyPerFrame); put('heap', b.heap?.afterGcMb); put('heap.growth', b.heap?.gcGrowthMbPerMin);
-      put('load.firstFrame', b.load?.firstFrameMs); put('load.playable', b.load?.playableMs); put('load.gameKb', b.load?.gameKb);
+      put('load.look', b.load?.lookMs); put('load.firstFrame', b.load?.firstFrameMs); put('load.playable', b.load?.playableMs); put('load.gameKb', b.load?.gameKb);
       put('net.msgsOut', b.net?.msgsOut); put('net.msgsIn', b.net?.msgsIn); put('net.kbOut', b.net?.kbOut); put('net.kbIn', b.net?.kbIn);
     }
   }
@@ -399,7 +399,7 @@ function headline(s, summary) {
   for (const d of s.devices) for (const role of ['host', 'replica']) {
     const m = (k) => summary.metrics?.[`${d}.${role}.${k}`]?.median;
     if (m('frame.p50') === undefined) continue;
-    out.push(`${d} ${role}: frames ${fmt(m('frame.p50'))}/${fmt(m('frame.p95'))} ms (median/p95), ${fmt(m('frame.over50'), '%')} over 50 ms; game JS ${fmt(m('work.mean'))} ms a frame; main thread ${fmt(m('busy'))} ms a frame; playable ${fmt(m('load.playable'))} ms; heap ${fmt(m('heap'))} MB; netplay ${fmt(m('net.msgsOut'))} out, ${fmt(m('net.msgsIn'))} in a second`);
+    out.push(`${d} ${role}: frames ${fmt(m('frame.p50'))}/${fmt(m('frame.p95'))} ms (median/p95), ${fmt(m('frame.over50'), '%')} over 50 ms; game JS ${fmt(m('work.mean'))} ms a frame; main thread ${fmt(m('busy'))} ms a frame; first look ${fmt(m('load.look'))} ms, playable ${fmt(m('load.playable'))} ms; heap ${fmt(m('heap'))} MB; netplay ${fmt(m('net.msgsOut'))} out, ${fmt(m('net.msgsIn'))} in a second`);
   }
   return out;
 }
@@ -446,7 +446,7 @@ function baselineMd(s, summary, profs, sizes, fetched = []) {
   if (summary.cpuMeasured) L.push(`- The phone's throttle measured **${summary.cpuMeasured}x** here (the median run): its work is that much slower than this computer's, not ${s.cpu}x.`);
   if (s.pageAdded) L.push(`- The game page as the site serves it is the build's page plus ${addedSaid(s.pageAdded)}: the site's, not the build's, and the same for every build this loop measures. Before every run the page is checked against the build's (every script and the markup) and every other file by SHA-256.`);
   L.push('', '## The numbers (median of the runs; the spread is the middle half as a share of the median)', '', '| metric | median | spread |', '| --- | --- | --- |');
-  const keep = /\.(frame\.(p50|p95|p99|over50)|work\.(mean|p95)|busy|heap|heap\.growth|load\.(firstFrame|playable|gameKb)|net\.(msgsOut|msgsIn|kbOut|kbIn))$/;
+  const keep = /\.(frame\.(p50|p95|p99|over50)|work\.(mean|p95)|busy|heap|heap\.growth|load\.(look|firstFrame|playable|gameKb)|net\.(msgsOut|msgsIn|kbOut|kbIn))$/;
   for (const [k, v] of Object.entries(summary.metrics ?? {})) if (keep.test(k)) L.push(`| \`${k}\` | ${v.median} | ${v.spread === null ? '–' : `${Math.round(v.spread * 100)}%`} |`);
   L.push('', 'A change has to beat the spread to count: `try` measures both builds in turns and only keeps a change that is better beyond the noise.', '');
   L.push('## Load during the runs', '', ...summary.load.map((x, i) => `- run ${i + 1} (${x.device}): load ${x.before} → ${x.after}, cores ${x.busyPct}% busy${x.loaded ? ' — **started on a busy computer, left out**' : ''}${x.blocked ? ` — **blocked: ${x.blocked}**` : ''}`), '');
@@ -633,11 +633,11 @@ function goals() {
       'busy: ms of the page\'s main thread per frame (scripts, style, layout, socket messages): CPU per frame, battery',
       'script: ms of script a second',
       'heap / heap.growth: MB of JavaScript heap after a garbage collection / its growth in MB a minute',
-      'load.firstFrame / load.seated / load.playable: ms from opening the page; load.gameKb: KB of the game\'s files on the wire',
+      'load.look / load.firstFrame / load.seated / load.playable: ms from opening the page (look: the first meaningful frame, the play page\'s arrival card with the game\'s title and art; playable: seated, the body drawn, the card lifted); load.gameKb: KB of the game\'s files on the wire',
       'net.msgsOut / net.msgsIn / net.kbOut / net.kbIn: netplay messages and KB a second on the room\'s socket',
       'bytes.total / bytes.gzip / bytes.js / bytes.jsGzip: the built game on disk (no device, no role; the same every run)',
     ],
-    examples: ['phone.host.frame.p95 (stutter on a phone)', 'phone.host.busy (CPU per frame when frames already keep up)', 'phone.host.load.playable (time to play on 4G)', 'computer.host.net.kbOut (the host\'s upload)', 'bytes.jsGzip (the download)'],
+    examples: ['phone.host.frame.p95 (stutter on a phone)', 'phone.host.busy (CPU per frame when frames already keep up)', 'phone.host.load.playable (time to play on 4G)', 'phone.host.load.look (time to the first meaningful frame)', 'computer.host.net.kbOut (the host\'s upload)', 'bytes.jsGzip (the download)'],
   };
 }
 

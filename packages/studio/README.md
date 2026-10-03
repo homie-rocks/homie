@@ -96,11 +96,14 @@ licence its owner picked in game.json `"license"`: `"remix-with-credit"` (the de
 `"no-remix"`, which `game remix` refuses. Every page ends with "Made with Homie". Anything the studio puts in `site/` wins: a whole page, a partial, its tokens, its CSS, its
 files. `site/SITE.md` says all of it.
 
-The play page writes its room into the address, and a small room button at the edge shares it: Invite, Big
-screen and the room code. game.json's `screen.share` puts it where each game has room, per device (a corner or
+The play page never opens blank (0.26.0): from its first paint an arrival card shows the game's own look (its title,
+pitch and key art in its palette, a progress line that says what is happening, and the controls for the device) until
+the game says it is playable (`NETPLAY.md` section 21; `worker/arrival.mjs`). It writes its room into the address, and
+a small room button at the edge shares it: Invite, Big screen and the room code. game.json's `screen.share` puts it where each game has room, per device (a corner or
 the top's middle, moved in by `x` / `y`, or kept a small icon), so it never covers a scoreboard. A game whose
 picture is white or cream gets a light landing (`landing.scheme: "light"`). Every card and the directory show a
-game's landing still. Every HTML answer is `no-transform`, and the site's pages are never framed by another
+game's landing still. A game with its own palette (style.json) and no landing colours of its own gets its landing
+in that palette, light or dark as its paper is (0.26.0). Every HTML answer is `no-transform`, and the site's pages are never framed by another
 site. A game made with Homie's arcade controls that knocks for a Homie box (`/__homie/call`) is told
 `not-a-homie`, at the site's root as under the game.
 
@@ -519,7 +522,8 @@ rules, the bots, the snapshots) and a replica, both a computer (1280x800 at 2x) 
 on a fast computer is less than its rate). They play the same seeded presses through a warm-up and a measured
 window, and each run's JSON says, per browser: the time between animation frames (median, p95, p99, the share over 33
 and 50 ms), the game's JavaScript per frame (every requestAnimationFrame callback timed), the main thread per frame
-(Chrome's TaskDuration), time to the first frame, to a seat and to playable, the game's files on the wire, the heap
+(Chrome's TaskDuration), time to the first meaningful frame (`load.look`: the play page's arrival card), to the
+game's first frame, to a seat and to playable, the game's files on the wire, the heap
 after a garbage collection, and netplay messages and kilobytes a second each way. `--profile` adds a CPU profile per
 browser in a window of its own (a `.cpuprofile` for Chrome DevTools) and its hottest functions, read through the
 game's source map when the build kept one (`homie-studio build --maps` keeps it in `.studio/maps/<id>/`, never in
@@ -758,7 +762,7 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 | `lib/port-check.mjs` | `port check`: held and alternating directions on keys, Android Chrome and iPhone WebKit touch, UI cover, two browsers finishing a round, a killed host, a late joiner, the big screen. |
 | `port/` | The port toolkit (`@homie-rocks/studio/port`, or `window.HomiePort` from `homie-port.js` in a static game): `createRoom`, the touch kit, keys, camera rules, bots, a HUD, sandbox shims, first-touch audio, `exposePort`; `fitView` and `createLabels` (`port/view.ts`): a flat world on every screen (the whole of it where it reads, else filling a phone held upright and following the player) and names that never pile up when bodies crowd (yours placed first, the rest moved or faded). |
 | `worker/index.mjs` | The site Worker and the `Table` (netplay relay, `room.mjs`) and `Lobby` Durable Objects; `/<game>/tv` is the big screen with a join QR (`qr.mjs`); `/<game>/watch` watches a live room from any player's view (NETPLAY.md section 16); `/music/<slug>/` and `/videos/<slug>/` are song and video pages (their files served with byte ranges, from the site's files or, once moved, from the studio's R2 at the same address; a loose file from `media put` at `/media/<key>`). `seats.mjs`: room sizes (up to 32). |
-| `worker/site.mjs`, `lib/site.mjs`, `lib/markdown.mjs`, `site/SITE.md` | The site: its sections, each game's landing, posts and their feeds, the look (theme tokens) and what the studio's `site/` folder overrides; the safe markdown posts are written in. `worker/pages.mjs`: the play page. |
+| `worker/site.mjs`, `lib/site.mjs`, `lib/markdown.mjs`, `site/SITE.md` | The site: its sections, each game's landing, posts and their feeds, the look (theme tokens) and what the studio's `site/` folder overrides; the safe markdown posts are written in. `worker/pages.mjs`: the play page; `worker/arrival.mjs`: its arrival card. |
 | `worker/stats.mjs`, `worker/stats-page.mjs`, `lib/stats.mjs` | The studio's own stats: what is counted and how, the owner-only `/api/stats` and `/_studio/stats`, and `homie-studio stats`. |
 | `lib/media.mjs`, `media/MEDIA.md` | The `music/` and `videos/` manifests: which entries get a page, and where each file's bytes come from (the site itself up to 25 MiB a file, the studio's R2, or a link). `media list` shows it; `media move` puts the big ones in R2 and records each one's SHA-256; `media put` uploads a loose file to `/media/<key>`. |
 | `netplay/` | The netplay contract (`NETPLAY.md`) and its game helper (`@homie-rocks/studio/netplay`). |

@@ -7,5 +7,6 @@
   "entry": "src/main.ts",
   "netplay": { "v": 1, "public": true, "movement": "owner" },
   "needs": { "three": "0.185.1" },
-  "assets": "library"
+  "assets": "library",
+  "landing": { "pitch": "Grab the gems. Bump your rivals away.", "controls": { "phone": "Drag to move; a second finger bumps.", "computer": "WASD or arrows to move, Space to bump." } }
 }

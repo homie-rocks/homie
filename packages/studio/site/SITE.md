@@ -47,7 +47,13 @@ site's pages only); the owner's tools are `/_studio/api/chat`, `/_studio/api/cha
 Made from the game's own files, nothing invented:
 
 - **The hero**, full-bleed: the game's footage when it has some, else its cover (or key art) moving slowly, tinted
-  with the studio's colour so the words read. A game whose picture is white or cream (a light arena) takes
+  with the studio's colour so the words read. **In the game's own palette (0.26.0):** a game with a style.json (its
+  art direction) and no `landing.scheme` or `landing.theme` of its own gets its whole landing in that palette, its
+  paper as the page, its ink as the words, its accents, light or dark as its paper is, when the ink reads on the paper
+  (4.5:1); its footage then keeps its colour (a third of the tint) and the words sit on a soft panel of its paper. A
+  bright game is no longer shown on the studio's dark page. `landing.scheme`, `landing.theme`, a `site/pages/<id>/`
+  page and `site/theme.css` are the owner's and always win; a palette whose ink does not read keeps its accents only,
+  on the studio's scheme, as before. A game whose picture is white or cream (a light arena) takes
   `"scheme": "light"` in its `landing` block: its landing is drawn light, the hero tinted and shaded with a light
   background and the words dark, where a dark studio's tint would turn it grey (`"dark"` is the other way round,
   for a dark game in a light studio). `landing.theme` colours still win, and the rest of the site keeps its look. Footage is looked for in this order: `landing.hero` in game.json;
@@ -142,6 +148,18 @@ atproto later. `/.well-known/homie-studio.json` lists the latest posts for the h
 A studio with its own landing in `site/` keeps it: the template never replaces what the studio made.
 
 ## The play page
+
+**The arrival (0.26.0).** The play page and the big screen never open blank. From the first paint, an arrival
+card covers the game's frame in the game's own look (worker/arrival.mjs): its title, its pitch (`landing.pitch`, else
+the blurb's first sentence), its key art (the landing's hero still, a trailer's poster or its cover, drifting slowly;
+`landing.hero.tallImage` on an upright phone when there is one), a progress line that says what is happening
+("Finding a room…", "Room 4 · 3 playing · 2 AI", "Loading the game…", "Joining Room 4…", and the game's own
+"Loading the heroes… 60%"), and the controls for this device (`landing.controls.phone`, `.computer`, `.tv`). Its
+colours are the game's palette (style.json), else the landing's (`landing.theme`, `landing.scheme`), else the
+studio's. It lifts when the game says it is playable (NETPLAY.md section 21): by itself once seated with the room's
+state, or at the game's own `net.playable()`; a game built before 0.26.0 lifts it once it has a seat, and nothing
+keeps a game behind it longer than 15 s after the game started (30 s after the page opened). `?arrive=0` leaves it
+out. `homie-studio perf` reads its first frame as the time to the first meaningful frame (`load.look`).
 
 `/<id>/play` puts the visitor in a public room at once and writes the room into the address, so a reload comes
 back to it and a copied address brings a friend into it. A small room button at the edge (top right by default)

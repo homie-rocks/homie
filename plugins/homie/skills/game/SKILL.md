@@ -291,9 +291,12 @@ page epic" means all of this, in this order:
    (and `tv` if it differs), `players` (what a player is called: `{ "one": "pilot", "many": "pilots" }`),
    `hero.alt` (what the footage shows, for a screen reader), `hero.focus` (`"50% 35%"` keeps the action
    in frame on a phone), `hero.tint` (0 to 80: more when the art is bright and the title hard to read).
-   A game whose picture is white or cream (a light arena) takes `"scheme": "light"`: its landing is drawn
-   light, where the studio's dark tint would turn the picture grey. `hero/wide.jpg` is also the game's
-   picture on every card and in the directory, so pick a frame that reads small.
+   A game with a `style.json` gets its landing in that palette by itself (its paper, ink and accents,
+   light or dark as its paper is), so a bright game is not shown on the studio's dark page; leave
+   `scheme` and `theme` out unless the person wants something else. A game without one whose picture is
+   white or cream (a light arena) takes `"scheme": "light"`: its landing is drawn light, where the studio's
+   dark tint would turn the picture grey. `hero/wide.jpg` is also the game's picture on every card and in
+   the directory, and the play page's arrival card while the game loads, so pick a frame that reads small.
 3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "..." }]`). A port
    keeps its `credits.json` (the original, its author and licence, every part inside); a remix keeps
    game.json `remixOf`; never drop either.
@@ -302,6 +305,15 @@ page epic" means all of this, in this order:
 5. **A band of its own**, when the game has something to say that the template does not (a soundtrack, a
    mode, a season): `site/partials/game-<id>.html`, a short section in the page's own classes
    (`<p class="kicker">`, `<h2>`, `<p class="lead">`, `<a class="ghost">`).
+
+**The play page's first seconds**: from the first paint it shows the game's arrival card (its title, pitch,
+hero still, a progress line and `landing.controls` for the device) until the game says it is playable, never a
+blank screen (`SITE.md`, "The play page"). Its words and picture are the landing's, so give the landing its
+`pitch`, `controls` and a hero still. A game that keeps loading after the room's first state (models,
+textures, a baked world) passes `arrival: 'game'` to `createNetplay`, calls `net.loading(p, 'the heroes')`
+while it loads and `net.playable()` once its world and the player's own body are drawn, so nobody sees
+stand-ins (NETPLAY.md section 21); the starters do. `perf` measures it: `load.look` (the first meaningful
+frame) and `load.playable`.
 
 **The play page's room button** (Invite, Big screen, the room code) sits top right, with the Chat pill
 beside it. If the game draws a score, a timer or a bar there, move them in game.json: `"screen": { "share":

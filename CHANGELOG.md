@@ -17,9 +17,31 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.26.0] - 2026-10-03
+
+**Plugin 0.27.0** · [#40](https://github.com/homie-rocks/homie/pull/40)
+
+A game's first minute: Play never opens on a blank screen, a bright game gets a bright landing in its own palette, and in Hero Rush 3D a new player's first round is a race they are in.
+
+### Added
+
+- The arrival card. From the play page's first paint (and the big screen's), the game's own look covers its frame while the room connects and the game loads: its title and pitch, its key art (the landing's hero still, a trailer's poster or its cover, drifting slowly), a progress line that says what is happening ("Finding a room…", "Room 4 · 3 playing · 2 AI", "Loading the game…", "Joining Room 4…", the game's own "Loading the heroes… 60%"), and the controls for this device from `landing.controls`. It is drawn in the game's palette (style.json), else its landing's colours, else the studio's, and it fades the moment the game is playable. `?arrive=0` leaves it out.
+- The netplay helper tells the play page when the game is playable (NETPLAY.md section 21): by itself once the browser is seated and has the room's state, or, for a game that keeps loading after that (models, textures, a baked world), at the game's own `net.playable()` (`createNetplay({ arrival: 'game' })`), with `net.loading(fraction, 'the heroes')` for the progress line. Nothing crosses the relay; the wire stays revision 8.
+- `homie-studio perf` measures the time to the first meaningful frame (`load.look`: the arrival card on the screen), and its time to playable waits for the card to lift. The perf skill's goals include it ("it opens on a blank screen").
+
+### Changed
+
+- A game with its own palette (style.json) and no `landing.scheme` or `landing.theme` of its own gets its landing in that palette: its paper as the page, its ink as the words, its accents, light or dark as its paper is, when the ink reads on the paper (4.5:1). Its footage keeps its colour, and the words sit on a soft panel of its paper. A bright game is no longer shown on the studio's dark page. A scheme or colours the owner set, a page of the studio's own and `site/theme.css` still win; a game without a style.json keeps the studio's look.
+- Hero Rush 3D: the bots never swamp a new player. In somebody's first round in the room, when nobody set the AI dial, the bots play a level easier. A bot far ahead of the best person in the room eases off (it walks, reacts later, swings less, then races for the coins near that person, or keeps near them, up their screen, without taking coins) and plays at its dial again once it is within its lead: Rookie −1, Steady 1, Fair 2, Strong 5, Maxed none. Scores stay honest (no score is ever changed, no coin given, taken or faked), and every bot is labelled, the phone's compact board too ("bot" or "AI" after the name). A casual player's first round at the default dial ended 61 coins behind the best bot before, and about 4 behind now; a player who chases the coins still wins clearly, and Maxed bots still beat a casual player.
+- Hero Rush 3D on a phone held upright: the camera follows lower and closer (30 degrees, about 5.5 m across), so every hero reads as a character (a mage was the top of its hat), and your name chip says what you are ("You · Mage"). The game passes `arrival: 'game'`: the card lifts on your own hero in its real model, never a stand-in. Your own hero is asked for first, the moment your seat is known, then the other heroes, then the skeletons (on an emulated slow phone your real hero is drawn at about 1.4 s instead of 2.1 s, the same bytes), the in-game title card is gone (the arrival card has the title), the "×2" mark moves off your hero and the controls hint sits above the touch buttons.
+
+### Upgrade notes
+
+- Nothing to do: `homie-studio upgrade` brings the arrival card to every game, and a game built before 0.26.0 lifts it once it has a seat. A game whose world keeps loading after its first state can say when it is ready: `createNetplay({ …, arrival: 'game' })`, `net.loading(p, 'what')` while it loads, and `net.playable()` once its world and the player's own body are drawn. A game made from Hero Rush 3D before 0.26.0 keeps its own code: tell Claude "bring the starter's first-round bots and phone camera into my game" if you want them.
+
 ## [0.25.0] - 2026-10-03
 
-**Plugin 0.26.0** · [#38](https://github.com/homie-rocks/homie/pull/38)
+**Plugin 0.26.0** · [#38](https://github.com/homie-rocks/homie/pull/38) · [release-2026-10-03-studio-0.25.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.25.0)
 
 Animated characters for 3D games: free CC0 heroes or one generated and auto-rigged on your fal account, on one skeleton standard with the library's clips retargeted onto it, and a shared player that runs, jumps and swings with IK feet and springs.
 

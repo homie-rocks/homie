@@ -50,6 +50,11 @@
  *     them), messages taken down (`on('unchat')`), and the game's own chat UI
  *     (`net.say(text)`, `net.sayLine(id)`, `net.react(kind)`); the room's rules
  *     are `net.chatRules`. The play page's chat panel needs none of it.
+ *   - The arrival (0.26.0, NETPLAY.md section 21): tells its page when the game
+ *     is playable, so the play page's arrival card (the game's title, art and a
+ *     progress line) gives it the screen: by itself once seated with the room's
+ *     state, or the game's own `net.playable()` (`arrival: 'game'`), with
+ *     `net.loading(p, what)` while it loads. Nothing crosses the relay.
  *
  * WHAT IT DOES NOT DO: rendering, physics, input devices, bots. `Roster` below
  * is the bot-yield bookkeeping a host needs; the bots themselves are the game's.
@@ -451,6 +456,14 @@ export interface NetplayOptions<C = unknown> {
    * moves an AI's body with its own bot code (a Roster that passes `p.agent`). Reading the dial declares 'skill' too.
    */
   caps?: ('skill' | 'agents')[];
+  /**
+   * THE ARRIVAL (NETPLAY.md section 21): who says when the play page's arrival card (the game's title, art and a
+   * progress line while the room connects and the game loads) gives the screen to the game. 'auto' (the default): this
+   * helper, once this browser has its role and the room's state (a host at once, anyone else at its first snapshot),
+   * two animation frames later. 'game': the game itself, with `net.playable()` once its world and the player's own body
+   * are drawn (the page lifts the card anyway 12 s after the helper attached, so a game that never says is never hidden).
+   */
+  arrival?: 'auto' | 'game';
 }
 
 type WebSocketCtor = new (url: string) => WebSocketLike;
@@ -609,6 +622,17 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   hushed: boolean;
   /** This browser plays as an AI (the frame of an agent pass). */
   readonly asAgent: boolean;
+  /**
+   * THE ARRIVAL (section 21): the world and the player's own body are drawn, so the play page's arrival card gives the
+   * screen to the game. Once; later calls do nothing. Needed only with `arrival: 'game'` (an 'auto' game may call it
+   * earlier than the helper would).
+   */
+  playable(): void;
+  /**
+   * While it loads: how far along the game is (0 to 1) and what it is loading ("the heroes"), for the arrival card's
+   * progress line. At most ten a second reach the page; nothing after `playable()`.
+   */
+  loading(fraction: number, what?: string): void;
   /** Resolves with the first role (welcome, or offline fallback). */
   readonly ready: Promise<RoleChange<S, C>>;
   on<K extends keyof NetHandlers<S, A, C>>(kind: K, fn: NetHandlers<S, A, C>[K]): () => void;
@@ -1110,6 +1134,26 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let idleSkipped = 0;
   /** Why this client stopped for good (a FINAL_ERRORS refusal), or null while it plays or reconnects. */
   let closedWhy: string | null = null;
+  // The arrival (section 21): the play page's card lifts at `playable` (the game's word, or this helper's).
+  const arrival: 'auto' | 'game' = opts.arrival === 'game' ? 'game' : 'auto';
+  let playableSent = false;
+  let autoArmed = false;
+  let snapSeen = false;
+  let loadingAt = 0;
+  function sayPlayable(by: 'game' | 'auto'): void {
+    if (playableSent) return;
+    playableSent = true;
+    post?.({ what: 'playable', by });
+  }
+  /** 'auto': a host at once, anyone else at its first snapshot, then two animation frames (the game drew with it). */
+  function autoPlayable(): void {
+    if (arrival !== 'auto' || playableSent || autoArmed || !roleKnown) return;
+    if (role !== 'host' && !snapSeen) return;
+    autoArmed = true;
+    const raf = (globalThis as { requestAnimationFrame?: (cb: () => void) => number }).requestAnimationFrame;
+    const later = (fn: () => void): void => { if (typeof raf === 'function') raf(fn); else setTimeout(fn, 16); };
+    later(() => later(() => sayPlayable('auto')));
+  }
   /** The studio's announcement now showing, and the seats the studio muted (until when, server ms). */
   let announcement: Announcement | null = null;
   const muted = new Map<number, number>();
@@ -1354,6 +1398,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     emit('role', e);
     resolveView('seat');
     notifyStats(true);
+    autoPlayable();
   }
 
   /** The newest snapshot this browser holds, if recent: a promoted host's restore when the relay has none. */
@@ -1584,7 +1629,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       replaceState(m['state']);
     }
     rebase = true;
-    if (snap && next !== 'host') acceptSnap(snap, JSON.stringify(snap).length, false);
+    // The relay's last snapshot comes with the welcome: the room's state is in (the arrival, section 21).
+    if (snap && next !== 'host' && acceptSnap(snap, JSON.stringify(snap).length, false)) snapSeen = true;
     if (next === 'host' && !snap && !continuing) snap = localSnap();
     offline = false;
     connected = true;
@@ -1685,7 +1731,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (role === 'host') return; // a stale frame from a previous host
     const s: Snapshot<S> = { k: Number(m['k']) || 0, st: Number(m['st']), d: m['d'] as S, from: typeof m['from'] === 'number' ? m['from'] : null };
     if (Array.isArray(m['c'])) s.c = m['c'] as ControlWire[];
-    if (acceptSnap(s, bytes, true)) emit('snapshot', s);
+    if (acceptSnap(s, bytes, true)) { emit('snapshot', s); if (!snapSeen) { snapSeen = true; autoPlayable(); } }
   }
 
   function onInput(m: Record<string, unknown>): void {
@@ -1877,7 +1923,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // No shell (a plain file, a dev server): the game is its own host, offline.
     queueMicrotask(() => goOfflineHost('offline'));
   } else {
-    post?.({ what: 'attached', v: NETPLAY_VERSION, rev: NETPLAY_REVISION, mark: NETPLAY_MARK });
+    post?.({ what: 'attached', v: NETPLAY_VERSION, rev: NETPLAY_REVISION, mark: NETPLAY_MARK, arrival });
     open();
     // A relay that never answers must not leave a game on a black screen. But the wait is counted only while
     // this page is able to listen: a phone compiling shaders under load is blocked for seconds at a time, and
@@ -2050,6 +2096,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get announcement() { return announcement && (announcement.until === undefined || announcement.until > now()) ? announcement : null; },
     isMuted(s: number | null): boolean { return s !== null && (muted.get(s) ?? 0) > now(); },
     pickPlayer(s: number | null): void { post?.({ what: 'pick', seat: typeof s === 'number' ? s : null }); },
+    playable(): void { sayPlayable('game'); },
+    loading(fraction: number, what?: string): void {
+      if (playableSent) return;
+      const t = wall();
+      const p = Math.max(0, Math.min(1, Number(fraction) || 0));
+      if (t - loadingAt < 100 && p < 1) return;
+      loadingAt = t;
+      post?.({ what: 'loading', p: Math.round(p * 100) / 100, ...(typeof what === 'string' && what ? { label: what.slice(0, 40) } : {}) });
+    },
     get watching() { return watching; },
     get viewSeat() { markFollows(); return watching ? viewNow : (offline ? null : seat); },
     get following() { return watching ? following : seat; },
