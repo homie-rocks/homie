@@ -1,7 +1,8 @@
 /**
  * ROOM CHAT IN THE STUDIO'S OWN D1 (@homie-rocks/studio 0.23.0, NETPLAY.md section 19): the owner's chat rules per game
  * and per server, and the reports players make. Never the chat itself: what people say lives a few minutes in the
- * room's memory and nowhere else (worker/room.mjs). A report keeps the one message it is about, for 30 days.
+ * room's memory and nowhere else (worker/room.mjs), unless an owner turns a room's `history` on (0.29.0: then
+ * worker/lounge-store.mjs keeps it for that many days). A report keeps the one message it is about, for 30 days.
  *
  *   chat_rules    (game, server, rules JSON, updated_at): server '' is the whole game; a server's row wins over it
  *   chat_reports  one reported message: its words, its sender's room name and (when signed in) account id, the room,

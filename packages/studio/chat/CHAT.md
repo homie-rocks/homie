@@ -48,11 +48,15 @@ studio's owner is responsible for, read [OWNERS.md](OWNERS.md).
 | `links`, `swears` | `block` or `allow` (a link is never clickable; slurs, sexual words, threats and contact details are always held) | `block` |
 | `ai` | review typed messages with the studio's own Workers AI | `true` |
 | `bubbles`, `watchers`, `hub` | over the speaker's character; watchers may send; homie.rocks may show it | `true` |
+| `history` | days to keep what is said (typed lines, quick lines, cards; never a reaction) in the studio's own D1, 0 to 90 (0.29.0; never on a kids server) | `0`: nothing past the room's few minutes |
 | `emoji`, `lines` | up to 3 more reactions; up to 12 quick lines (each passes the chat floor at build) | the five; 8 friendly lines |
 | `block`, `allow` | the studio's own words to hold (`word*` inside words) or to let through | none |
 
 `"chat": false` turns it off. A kids server, and every beginner server, keeps chat to emoji and
-quick lines whatever the game says.
+quick lines whatever the game says, and keeps nothing.
+
+**A room for the studio's community** is the Lounge (0.29.0): room chat at `/lounge/` with play nights, moderators,
+live rooms, "show what you made" cards and history the owner can turn on. Read [LOUNGE.md](LOUNGE.md).
 
 **Where it sits on the screen, in game.json `"screen"`**, so a game with a busy HUD keeps typed
 chat without anything covering its clock, its title or its controls. The Chat pill sits in the

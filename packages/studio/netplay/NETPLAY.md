@@ -1230,6 +1230,7 @@ every watching shell. homie.rocks runs nothing: its room page opens the room's o
 | `swears` | `block`, `allow` (`block`) | Slurs, sexual words, threats and contact details are held whatever this says. |
 | `ai` | `true`, `false` (`true`) | The studio's review of typed text. |
 | `bubbles`, `watchers`, `hub` | `true` | A line may show over its sender's character; watchers may send (not only read); homie.rocks's page for the room may show it. |
+| `history` | 0–90 days (0) | 0.29.0: keep what is said (never a reaction) in the studio's D1 for that many days, and give it back as the window when a page opens; 0 keeps nothing past the window. A kids server, a capped room or chat `off` keeps 0. |
 | `emoji` | the five, then up to 3 of the game's own | `{ k, e }`: a kind and its glyph. |
 | `lines` | 8 default lines, or up to 12 of the game's own | `{ id, text }`: the game's words; each passes the floor at build. |
 | `capped` | `kids`, `server-lines`, `server-off` | Why the mode is lower than the game asks. |
@@ -1261,6 +1262,12 @@ stays in the room; clients get the rest in `welcome.policy.chat` and every `poli
 | `lines` | down, a watching shell as it opens | `lines` | The window: the last 50 lines of the last 15 minutes. Never to a page the room holds out. |
 | `unline` | down, everyone | `ids` | The owner took them down: hide them, and their bubbles. |
 | `held` / `slow` | down, the sender | `why`, `message`, `n?`, `until?` | Not sent. `why`: `off`, `emoji`, `lines`, `sign-in`, `sign-in-react`, `members`, `members-react`, `watchers`, `hub`, `muted`, `slow`, `repeat`, `words`, `harm`, `contact`, `link`, `swears`, `ai`, `busy`, `unknown`, `empty`, `ai_seat`. |
+| `unsay` | up, a watching shell | `id` | 0.29.0: take my own line down (a line of this browser, or of this signed-in account). Everyone gets `unline`. |
+
+0.29.0 adds to `line`: `card` (`{ url, title, studio, pitch, image }`, a "show what you made" card the Worker read
+from a Homie studio's manifest; `text` stays a plain fallback such as "Made: <title> by <studio>"), `mod` (a moderator
+the owner named), `kept` (it came from the room's history) and, on a page's own copy of the window only, `mine` (this
+browser's or account's own line). A page that knows none of these shows the line's `text`.
 
 A line's sender is the socket's own client, or for a watch socket the client of the same browser
 (its room key) or account in the room: its seat, name and colour. A page with no client in the
@@ -1361,7 +1368,10 @@ ticker.
 
 **Privacy.** Nothing a person says is stored: the room keeps the last 50 lines of the last 15
 minutes in its memory (never in Durable Object storage), and an empty room forgets them with
-everything else a minute after its last person leaves. The counts (lines, reactions, held by why,
+everything else a minute after its last person leaves. Only where the owner turns `history` on (0.29.0; off by
+default for every game and the Lounge, never on a kids server) does the Table keep what was said in D1
+(`chat_history`: the words, the name shown, when, a signed-in sender's account id; never a reaction, an address or a
+browser key) for that many days; what is taken down there is deleted there, and a deleted account takes its lines. The counts (lines, reactions, held by why,
 reviews and neurons) are daily numbers in the studio's own D1, never a message or a sender. A
 report keeps one message for 30 days. The review sends the message's words (and nothing about who
 said it) to the studio's own Workers AI; Cloudflare says it does not keep or train on them.

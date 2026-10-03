@@ -45,7 +45,7 @@
  */
 import { aiName, skillPreset, stripAi } from './agents.mjs';
 import { DECIDE, checkArgs, checkDecide, talks, vocabularyOf } from './brain.mjs';
-import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normalizeChat, publicChat } from './chat.mjs';
+import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normalizeChat, publicChat, windowMsOf } from './chat.mjs';
 
 export const NET_VERSION = 1;
 /** The contract revision this relay speaks (NETPLAY.md): optional fields, frames and refusals; the wire stays `v: 1`. */
@@ -198,6 +198,13 @@ function clampPresses(p) {
   return n ? out : null;
 }
 
+/** A kept line the Worker read from the room's history (its id, name and sender's account), for a mute or a kick. */
+function keptRef(a) {
+  const k = a.kept && typeof a.kept === 'object' ? a.kept : null;
+  if (!k || k.id !== a.line || !k.from || typeof k.from.player !== 'string') return null;
+  return { id: k.id, name: oneLine(k.name, CHAT_LIMITS.name) || 'Someone', seat: null, from: { client: null, token: null, browser: null, player: k.from.player } };
+}
+
 export class NetRoom {
   /**
    * @param {object} o
@@ -302,6 +309,13 @@ export class NetRoom {
     this.chatPending = 0;
     this.review = null;
     /**
+     * Kept chat (0.29.0): when the room's rules keep `history` days, the Table writes what is published (`onPublished`)
+     * and forgets what is taken down (`onUnsaid`), and puts the kept lines back in the window (`hydrate`) when it opens.
+     */
+    this.onPublished = null;
+    this.onUnsaid = null;
+    this.hydrated = false;
+    /**
      * A game's own decisions (section 20): the host's typed questions, answered by the studio's decision model (the Table
      * sets `decider`; null: the host's floor answers), at most one every 3 s and 20 a minute a room, two at a time.
      */
@@ -353,7 +367,8 @@ export class NetRoom {
     if (held) this.sendText(conn, JSON.stringify(held));
     // Room chat (section 19): the last few minutes, so a page that just opened has the conversation (never to a page the
     // studio holds out of the room, or a room it closed).
-    if ((!held || held.t === 'muted') && (!conn.hub || this.chatRules().hub)) this.sendText(conn, JSON.stringify({ t: 'lines', lines: this.recentChat().map((r) => this.wireLine(r)) }));
+    // A line of this browser's or this account's own says so (`mine`), on this page's copy only: it may take it down.
+    if ((!held || held.t === 'muted') && (!conn.hub || this.chatRules().hub)) this.sendText(conn, JSON.stringify({ t: 'lines', lines: this.recentChat().map((r) => (this.ownLine(r, conn) ? { ...this.wireLine(r), mine: true } : this.wireLine(r))) }));
     const rate = [];
     return {
       onClose: () => this.watchers.delete(conn),
@@ -366,6 +381,8 @@ export class NetRoom {
         try { m = JSON.parse(String(text)); } catch { return; }
         // Room chat from the shell (the play page, the big screen's page, the watch page, a homie.rocks room page).
         if (m && (m.t === 'say' || m.t === 'react')) { this.onChat({ conn }, m); return; }
+        // Their own message, taken down by its sender (0.29.0).
+        if (m && m.t === 'unsay') { const r = this.unsayOwn(conn, m.id); if (!r.ok) this.sendText(conn, JSON.stringify({ t: 'held', why: 'unknown', message: r.error === 'not-yours' ? 'Only its sender (or the studio) can take a message down.' : 'That message is gone already.' })); return; }
         if (!m || m.t !== 'vote' || !conn.browser) return;
         const c = this.live().find((o) => o.browser === conn.browser && o.seat !== null && !o.agent && !o.watch);
         if (c) this.onVote(c, m, conn);
@@ -962,14 +979,28 @@ export class NetRoom {
 
   /** The window a page that just opened gets: the last `keep` messages of the last `keepMs`. */
   recentChat(now = this.now()) {
-    return this.chatLog.filter((r) => now - r.at <= CHAT_LIMITS.keepMs).slice(-CHAT_LIMITS.keep);
+    const keep = windowMsOf(this.chatRules());
+    return this.chatLog.filter((r) => now - r.at <= keep).slice(-CHAT_LIMITS.keep);
+  }
+
+  /**
+   * The lines a room kept (its `history`, read back by the Table): into the window under what was said since, oldest
+   * first, never twice. A line taken down meanwhile is not in what the Table read.
+   */
+  hydrate(recs) {
+    const have = new Set(this.chatLog.map((r) => r.id));
+    const old = (Array.isArray(recs) ? recs : []).filter((r) => r && typeof r.id === 'string' && !have.has(r.id));
+    this.chatLog = [...old, ...this.chatLog].sort((a, b) => a.at - b.at).slice(-CHAT_LIMITS.keep);
+    this.hydrated = true;
+    return old.length;
   }
 
   /** A line or a reaction as every screen gets it (homie.rocks's room chat shapes: `line` and `react`). */
   wireLine(r) {
-    const base = { id: r.id, at: r.at, name: r.name, seat: r.seat, colour: r.colour, by: r.by, ...(r.bubble ? { bubble: true } : {}), ...(r.acct ? { acct: true } : {}), ...(r.owner ? { owner: true } : {}) };
+    const base = { id: r.id, at: r.at, name: r.name, seat: r.seat, colour: r.colour, by: r.by, ...(r.bubble ? { bubble: true } : {}), ...(r.acct ? { acct: true } : {}), ...(r.owner ? { owner: true } : {}), ...(r.mod ? { mod: true } : {}), ...(r.kept ? { kept: true } : {}) };
     if (r.kind === 'react') return { t: 'react', ...base, react: r.react, glyph: r.glyph };
-    return { t: 'line', ...base, text: r.text, ...(r.say ? { say: r.say } : {}) };
+    // A show-what-you-made card (0.29.0): a page that knows cards draws one; any other shows its words.
+    return { t: 'line', ...base, text: r.text, ...(r.say ? { say: r.say } : {}), ...(r.kind === 'card' && r.card ? { card: r.card } : {}) };
   }
 
   watchIdOf(conn) {
@@ -993,10 +1024,13 @@ export class NetRoom {
     const owner = via.split('~').includes('o');
     const seat = g ? g.seat : null;
     const handle = handleFor(g?.token || g?.browser || conn?.browser || `w-${this.watchIdOf(conn ?? g?.conn ?? {})}`);
-    const name = seat !== null ? g.name : oneLine(g?.typed, CHAT_LIMITS.name) || handle;
+    // A watcher's name: its game's, else the account name the Worker vouched for (the Lounge), else a handle.
+    const name = seat !== null ? g.name : oneLine(g?.typed, CHAT_LIMITS.name) || oneLine(conn?.name, CHAT_LIMITS.name) || handle;
     return {
       key: g ? `c:${g.id}` : `w:${this.watchIdOf(conn)}`, client: g, seat, name, colour: seat !== null ? g.colour : null,
       player: g?.player ?? conn?.player ?? null, acct: Boolean(g?.acct || conn?.acct), member: Boolean(g?.member || conn?.member) || owner,
+      // A moderator the owner named (the Lounge): only the Worker's word, shown on their lines.
+      mod: Boolean(conn?.mod) && !owner,
       owner, browser: g?.browser ?? conn?.browser ?? null, token: g?.token ?? null, ip: g?.ip ?? conn?.ip ?? null,
       watch: seat === null, hub: Boolean(conn?.hub) && !g, agent: Boolean(g?.agent), conn: conn ?? g?.conn ?? null,
     };
@@ -1075,7 +1109,7 @@ export class NetRoom {
     if (kind !== 'react') b.lastSayAt = now;
     Object.assign(rec, {
       name: who.name, seat: who.seat, colour: who.colour, by: who.hub ? 'hub' : who.watch ? 'watcher' : 'player',
-      bubble: m.bubble !== false && rules.bubbles && who.seat !== null, acct: who.acct, owner: who.owner,
+      bubble: m.bubble !== false && rules.bubbles && who.seat !== null, acct: who.acct, owner: who.owner, ...(who.mod ? { mod: true } : {}),
       // Only the office sees these: who sent it, so a mute or a kick from the line reaches them (never an address).
       from: { client: who.client?.id ?? null, token: who.token, browser: who.browser, player: who.player },
     });
@@ -1114,7 +1148,8 @@ export class NetRoom {
     rec.id = randomId(6);
     rec.at = now;
     this.chatLog.push(rec);
-    while (this.chatLog.length > CHAT_LIMITS.keep || (this.chatLog.length && now - this.chatLog[0].at > CHAT_LIMITS.keepMs)) this.chatLog.shift();
+    const keep = windowMsOf(this.chatRules());
+    while (this.chatLog.length > CHAT_LIMITS.keep || (this.chatLog.length && now - this.chatLog[0].at > keep)) this.chatLog.shift();
     const msg = this.wireLine(rec);
     const text = JSON.stringify(msg);
     const mine = n ? JSON.stringify({ ...msg, n }) : text;
@@ -1123,6 +1158,8 @@ export class NetRoom {
     for (const w of this.watchers) if (!w.hub || hub) this.sendText(w, w === senderConn ? mine : text);
     if (rec.kind === 'react') this.stats.chatReacts = (this.stats.chatReacts ?? 0) + 1;
     else this.stats.chatLines = (this.stats.chatLines ?? 0) + 1;
+    // Kept chat (0.29.0): a room whose rules keep history hands what was said to the Table (never a reaction).
+    if (rec.kind !== 'react' && this.chatRules().history > 0 && typeof this.onPublished === 'function') { try { this.onPublished(rec); } catch { /* kept next time */ } }
     return { ok: true, id: rec.id };
   }
 
@@ -1134,7 +1171,30 @@ export class NetRoom {
     const text = JSON.stringify({ t: 'unline', ids: [...gone] });
     for (const o of this.live()) if (!this.lite(o)) this.sendText(o.conn, text);
     for (const w of this.watchers) this.sendText(w, text);
+    // Kept chat: what is taken down here is deleted where it was kept, older lines than the window too.
+    if (typeof this.onUnsaid === 'function' && gone.size) { try { this.onUnsaid([...gone]); } catch { /* best effort */ } }
     return before - this.chatLog.length;
+  }
+
+  /**
+   * A person takes their own message down (0.29.0): a watching shell of the browser or the signed-in account that sent
+   * it. Kept lines carry only the account, so a guest's own line comes down only while it is in this window.
+   */
+  /** Whether a line is this socket's own: its account's, or (a guest's) its browser's. */
+  ownLine(r, conn) {
+    const f = r?.from ?? {};
+    if (!conn || r?.kind === 'studio') return false;
+    return Boolean((conn.player && f.player && f.player === conn.player) || (conn.browser && f.browser && f.browser === conn.browser && !f.player));
+  }
+
+  unsayOwn(conn, id) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,16}$/.test(id)) return { ok: false, error: 'no-line' };
+    const r = this.chatLog.find((x) => x.id === id);
+    if (!r || r.kind === 'studio') return { ok: false, error: 'no-line' };
+    if (!this.ownLine(r, conn)) return { ok: false, error: 'not-yours' };
+    this.unsay([id]);
+    this.stats.chatOwnRemoved = (this.stats.chatOwnRemoved ?? 0) + 1;
+    return { ok: true, removed: 1 };
   }
 
   /**
@@ -1303,7 +1363,8 @@ export class NetRoom {
     this.reapSeats(now);
     this.seatWaiting();
     // The chat window is minutes long; buckets of senders who went quiet are dropped.
-    while (this.chatLog.length && now - this.chatLog[0].at > CHAT_LIMITS.keepMs) this.chatLog.shift();
+    const keepMs = windowMsOf(this.chatRules());
+    while (this.chatLog.length && now - this.chatLog[0].at > keepMs) this.chatLog.shift();
     if (this.chatBuckets.size > 512) this.chatBuckets.clear();
     if (this.chatAddress.size > 512) this.chatAddress.clear();
     if (!this.live().some((c) => !c.agent) && this.emptySince && now - this.emptySince > this.forgetMs) {
@@ -1315,6 +1376,8 @@ export class NetRoom {
       this.level = null; this.levelBy = null; this.vote = null; this.agentsOut = null;
       // Room chat (section 19): an empty room forgets what was said, as it forgets everything else.
       this.chatLog = []; this.chatBuckets.clear(); this.chatAddress.clear(); this.chatReacts = [];
+      // A room that keeps history reads it back when somebody comes again (it is in D1, not here).
+      this.hydrated = false;
       this.seatsDirty = false; this.persistDirty = false;
       try { this.store?.clear?.(); } catch { /* best effort */ }
     }
@@ -1633,8 +1696,9 @@ export class NetRoom {
     this.mutes = this.mutes.filter((m) => m.until > now);
     switch (op) {
       case 'kick': {
-        // From a chat line (section 19): its sender, in this room now or not (a watcher with no seat is held too).
-        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) : null;
+        // From a chat line (section 19): its sender, in this room now or not (a watcher with no seat is held too). A line
+        // older than the window comes from the room's kept history (the Worker read it: its sender's account only).
+        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) ?? keptRef(a) : null;
         const target = this.findClient(a) ?? (line?.from?.client ? this.clients.get(line.from.client) ?? null : null);
         if (!target && line) return this.holdSender(line, minutes, now, { kick: true, message: oneLine(a.message, CONTROL_LIMITS.message) || 'The studio removed you from this room.', purge: a.purge === true });
         if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
@@ -1664,7 +1728,7 @@ export class NetRoom {
         return { ok: true, op, name: ban.name, seat: ban.seat, sockets: out.length, until, ...(purged ? { removed: purged } : {}) };
       }
       case 'mute': {
-        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) : null;
+        const line = typeof a.line === 'string' ? this.chatLog.find((r) => r.id === a.line) ?? keptRef(a) : null;
         const target = this.findClient(a) ?? (line?.from?.client ? this.clients.get(line.from.client) ?? null : null);
         if (!target && line && a.off !== true) return this.holdSender(line, minutes, now, { kick: false, purge: a.purge === true });
         if (!target) return { ok: false, error: 'no-player', message: 'nobody is in that seat now' };
@@ -1679,6 +1743,43 @@ export class NetRoom {
         this.tellBrowser(target, { t: 'muted', room: this.code, until });
         this.tellWatchers();
         return { ok: true, op, name: line?.name ?? target.name, seat: target.seat, until, ...(purged ? { removed: purged } : {}) };
+      }
+      case 'card': {
+        // Show what you made (0.29.0): a link card to a studio's game, which the Worker read from that studio's own
+        // manifest and checked (its words passed the floor and the review there). Its sender's name and account are the
+        // Worker's word; a mute holds a card as it holds a line.
+        const c = a.card && typeof a.card === 'object' ? a.card : null;
+        if (!c || typeof c.url !== 'string' || !/^https?:\/\//.test(c.url)) return { ok: false, error: 'card', message: 'no card' };
+        const who = { token: null, browser: typeof a.browser === 'string' ? a.browser : null, player: typeof a.player === 'string' ? a.player : null, ip: null };
+        if (a.owner !== true && this.banOf(who, null)) return { ok: false, error: 'kicked', message: 'The studio has held you out of this room for now.' };
+        if (a.owner !== true && this.muteOf(who)) return { ok: false, error: 'muted', message: HELD_WORDS.muted };
+        const card = { url: c.url.slice(0, 300), title: oneLine(c.title, 80), studio: oneLine(c.studio, 60), pitch: oneLine(c.pitch, 160), image: typeof c.image === 'string' && /^https:\/\//.test(c.image) ? c.image.slice(0, 400) : null, ...(typeof c.game === 'string' ? { game: c.game.slice(0, 40) } : {}) };
+        const note = oneLine(a.note, CHAT_LIMITS.text);
+        const rules = this.chatRules();
+        if (rules.mode !== 'text' && a.owner !== true) return { ok: false, error: 'held', why: rules.mode === 'off' ? 'off' : 'lines', message: 'The Lounge isn\'t taking cards right now.' };
+        // The card's words (the person's note, the game's own title and pitch) pass the floor like any typed line.
+        const words = [note, card.title, card.pitch].filter(Boolean).join(' · ');
+        const f = floor(words, { ...rules, links: 'block' });
+        if (!f.ok && a.owner !== true) return { ok: false, error: 'held', why: f.why, message: HELD_WORDS[f.why] ?? HELD_WORDS.unknown };
+        const rec = {
+          kind: 'card', card, text: note || `Made: ${card.title}${card.studio ? ` by ${card.studio}` : ''}`,
+          name: oneLine(a.name, CHAT_LIMITS.name) || 'Someone', seat: null, colour: null, by: 'watcher', bubble: false,
+          acct: a.acct === true, owner: a.owner === true, ...(a.mod === true ? { mod: true } : {}),
+          from: { client: null, token: null, browser: who.browser, player: who.player },
+        };
+        // And the studio's review, as a typed line gets it (the owner's own card is never reviewed).
+        if (rules.ai && typeof this.review === 'function' && a.owner !== true) {
+          return Promise.resolve()
+            .then(() => this.review(words, { room: this.code, links: 'block' }))
+            .then((v) => v, () => ({ ok: true, by: 'error' }))
+            .then((v) => {
+              if (v && v.ok === false) { this.stats.chatAiHeld = (this.stats.chatAiHeld ?? 0) + 1; return { ok: false, error: 'held', why: 'ai', message: HELD_WORDS.ai }; }
+              rec.review = { by: v?.by ?? 'ai' };
+              if (this.muteOf(who)) return { ok: false, error: 'muted', message: HELD_WORDS.muted };
+              return { ...this.publishChat(rec), op };
+            });
+        }
+        return { ...this.publishChat(rec), op };
       }
       case 'unsay': {
         // Room chat (section 19): the owner takes a message down (or every message: `all`), on every screen at once.
@@ -1863,6 +1964,7 @@ export class NetRoom {
           rules: this.chatRules(),
           pending: this.chatPending,
           lines: this.recentChat(now).map((r) => ({ ...this.wireLine(r), kind: r.kind, client: r.from?.client ?? null, player: r.from?.player ?? null, browser: browserTag(r.from?.browser), ...(r.review ? { review: r.review } : {}) })),
+          history: this.chatRules().history ?? 0,
         },
         // A game's own decisions (section 20): how many, who answered, the model's time and neurons (never a state).
         ...(this.stats.decides ? { decides: { n: this.stats.decides, by: { ...this.stats.decided }, msP50: [...this.stats.decideMs].sort((x, y) => x - y)[Math.floor(this.stats.decideMs.length / 2)] ?? null, neurons: Math.round((this.stats.decideNeurons ?? 0) * 100) / 100 } } : {}),
@@ -1895,6 +1997,8 @@ export class NetRoom {
         screens: live.filter((c) => c.seat === null).length,
         waiting: live.filter((c) => c.waiting).length,
         watchers: live.filter((c) => c.watch).length,
+        // Watching shells (pages with no game socket: the watch page, homie.rocks, the Lounge), 0.29.0.
+        shells: this.watchers.size,
         humans: slots.filter((s) => s && !s.bot && !s.agent).length,
         bots: slots.filter((s) => s && s.bot && !s.agent).length,
         // Every AI body: a slot marked AI (an agent, or a seat kept for one), else the agents seated.

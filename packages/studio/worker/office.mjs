@@ -66,6 +66,7 @@ import { CHAT_MODES, CHAT_WHO, checkChatRules, publicChat } from './chat.mjs';
 import { chatDay, chatOf, chatRowsOf, clearChatRules, dismissReport, reportsOf, writeChatRules } from './chat-store.mjs';
 import { checkRefund, checkSettle, describeRefund, officeShopPage, ordersCsv, performRefund, settleReferrer, shopOffice, statementsOut, statementsSend } from './shop.mjs';
 import { orderById } from './shop-store.mjs';
+import { checkLoungeAction, describeLounge, loungeNeedsAsk, loungeOffice, performLounge } from './lounge.mjs';
 
 export { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from './office-schema.mjs';
 
@@ -630,6 +631,8 @@ export async function officeView(env, cat, origin) {
     agentsTalk: await talkConsented(env),
     brain: await brainDay(env),
     chat: await chatDay(env, today()),
+    // The Lounge (0.29.0): null when the studio has none.
+    lounge: await loungeOffice(env, cat, origin).catch(() => null),
   };
 }
 async function memberCountsOf(env, game) {
@@ -653,6 +656,9 @@ const DESTRUCTIVE = new Set(['kick', 'mute', 'close', 'game']);
 
 /** An action, checked against the catalogue: `{ ok, action }` or `{ ok: false, error, message }`. */
 function checkAction(cat, op, body) {
+  // The Lounge's controls (0.29.0, worker/lounge.mjs): its rules, play nights, moderators, its lines and their senders.
+  const lounge = checkLoungeAction(cat, op, body);
+  if (lounge) return lounge;
   const meta = (cat.games ?? []).find((g) => g.id === body.game);
   const room = typeof body.room === 'string' && ROOM_ID.test(body.room) ? body.room : null;
   const minutes = Math.max(1, Math.min(24 * 60, Math.floor(Number(body.minutes) || 10)));
@@ -788,6 +794,8 @@ export function chatOpensUp(before, f) {
   for (const k of ['who', 'react']) if (f[k] !== undefined && who[f[k]] > who[before[k]]) return true;
   if (f.slow !== undefined && f.slow < before.slow) return true;
   if (f.max !== undefined && f.max > before.max) return true;
+  // Keeping what people say for longer (history, 0.29.0) is the owner's to confirm; keeping it for less is not.
+  if (f.history !== undefined && f.history > (before.history ?? 0)) return true;
   if (f.links === 'allow' && before.links !== 'allow') return true;
   if (f.swears === 'allow' && before.swears !== 'allow') return true;
   for (const k of ['watchers', 'hub']) if (f[k] === true && !before[k]) return true;
@@ -800,6 +808,7 @@ export function chatOpensUp(before, f) {
 
 /** The action in plain words, for the owner's confirm page and the AI's card. */
 export function describe(cat, a) {
+  if (String(a.op).startsWith('lounge-')) return describeLounge(cat, a);
   const g = (cat.games ?? []).find((x) => x.id === a.game);
   const gname = g?.name ?? a.game;
   const where = a.room ? `${roomLabel(a.room)} of ${gname}` : gname;
@@ -867,6 +876,7 @@ export function describe(cat, a) {
 
 /** Whether an office key (the owner's AI) only ASKS for this (DESIGN D13): what takes something away, or consent. */
 export async function needsAsk(env, cat, a) {
+  if (String(a.op).startsWith('lounge-')) return loungeNeedsAsk(env, cat, a, chatOpensUp);
   if (DESTRUCTIVE.has(a.op)) return true;
   // Money: the owner's AI may only propose a refund or a settlement; the owner says yes.
   if (a.op === 'refund' || a.op === 'shop-settle') return true;
@@ -910,6 +920,7 @@ async function pushPolicy(env, meta, settings, server) {
 
 /** Do it: the owner's own session did, or the owner confirmed what the AI asked. */
 export async function perform(env, cat, a) {
+  if (String(a.op).startsWith('lounge-')) return performLounge(env, cat, a, a.origin ?? '');
   const settings = await settingsOf(env, { fresh: true });
   const meta = (cat.games ?? []).find((g) => g.id === a.game) ?? null;
   switch (a.op) {
@@ -1229,6 +1240,11 @@ async function api(request, env, url, cat) {
     const view = await officeView(env, { ...cat, games: metas }, url.origin);
     return json({ ok: true, day: view.chat, games: view.games.map((g) => ({ id: g.id, name: g.name, chat: g.chat, rooms: g.rooms.map((r) => ({ room: r.room, label: r.label, players: r.players, chat: r.chat })) })) });
   }
+  // The Lounge (0.29.0): its rules, play nights, moderators, last lines and reports.
+  if (path === '/_studio/api/lounge' && request.method === 'GET') {
+    const lounge = await loungeOffice(env, cat, url.origin);
+    return lounge ? json({ ok: true, lounge }) : json({ ok: false, error: 'no-lounge', message: 'This studio has no Lounge: add "lounge": true to studio.json and deploy.' }, 404);
+  }
   // The shop (0.24.0): the owner's view, the accountant's CSV, the referral statements.
   if (path === '/_studio/api/shop' && request.method === 'GET') return json(await shopOffice(env, cat, url.origin));
   if (path === '/_studio/api/shop/orders.csv' && request.method === 'GET') {
@@ -1244,13 +1260,15 @@ async function api(request, env, url, cat) {
     '/_studio/api/servers': 'server-create', '/_studio/api/servers/set': 'server-set', '/_studio/api/servers/close': 'server-close', '/_studio/api/servers/member': 'member',
     '/_studio/api/agents/pass': 'pass', '/_studio/api/room-level': 'room-level', '/_studio/api/agents/brain': 'agents-brain',
     '/_studio/api/shop/refund': 'refund', '/_studio/api/shop/settle': 'shop-settle',
+    '/_studio/api/lounge/rules': 'lounge-rules', '/_studio/api/lounge/night': 'lounge-night', '/_studio/api/lounge/mod': 'lounge-mod',
+    '/_studio/api/lounge/remove': 'lounge-remove', '/_studio/api/lounge/hold': 'lounge-hold',
   };
   const op = OPS[path];
   if (!op || request.method !== 'POST') return json({ ok: false, error: 'not-found' }, 404);
   const checked = checkAction(cat, op, body);
   if (!checked.ok) return json(checked, 400);
   const action = checked.action;
-  if (op === 'server-create' || op === 'pass') action.origin = url.origin;
+  if (op === 'server-create' || op === 'pass' || op === 'lounge-night') action.origin = url.origin;
   if (op === 'refund') {
     // The ask and the confirm page say what the order is (its item and price), read from the books now.
     const o = await orderById(env, action.order);

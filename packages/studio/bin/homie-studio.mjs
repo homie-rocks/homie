@@ -106,6 +106,11 @@
  *                                          minutes, players' reports, the review's day; chat rules <game> [--server <id>]
  *                                          --mode off|emoji|lines|text --who anyone|signed-in|members … | --reset;
  *                                          chat remove <game> <room> <line id>; chat budget <neurons>; chat words
+ *   homie-studio lounge                   the studio's Lounge (studio.json "lounge", chat/LOUNGE.md): its rules, play
+ *                                          nights, moderators, last lines and reports; lounge night "<title>" --at <time>
+ *                                          [--minutes 120] [--game <id>]; lounge night remove <id>; lounge history <days>;
+ *                                          lounge rules [--slow <s>] [--who …] | --reset; lounge mod <player> [--remove];
+ *                                          lounge remove <line id> | --all
  *   homie-studio servers [--game <id>]    every server of every game (worker/servers.mjs): its policy, door, the AI's
  *                                          level, live rooms and AI, members, and builds that predate servers
  *   homie-studio servers new <game> "<Name>" --policy open|humans-only|hybrid|beginner [--ai <n>] [--guides <n>]
@@ -258,6 +263,7 @@ import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/
 import { playersOwner, playersShow } from '../lib/players.mjs';
 import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeMute, officeRevoke, officeShow } from '../lib/office.mjs';
 import { chatBudget, chatLines, chatRemove, chatRulesSet, chatShow, chatWords } from '../lib/chat-cli.mjs';
+import { loungeLines, loungeMod, loungeNight, loungeRemove, loungeRulesSet, loungeShow } from '../lib/lounge-cli.mjs';
 import { detectLocalAi, localAiVars } from '../lib/local-ai.mjs';
 import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, agentsTry, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
@@ -479,7 +485,12 @@ function print(result) {
       lines.push(result.note);
       break;
     case 'chat remove':
+    case 'lounge night':
+    case 'lounge remove':
       lines.push(result.message);
+      break;
+    case 'lounge':
+      lines.push(...loungeLines(result));
       break;
     case 'shop':
     case 'shop orders':
@@ -498,6 +509,8 @@ function print(result) {
       break;
     case 'chat rules':
     case 'chat budget':
+    case 'lounge rules':
+    case 'lounge mod':
     case 'shop refund':
       lines.push(result.asked ? `Asked: ${result.what}` : result.message, ...(result.asked ? [`Owner's one-tap link (until the ask ends, 15 min): ${result.link}`, result.use] : []));
       break;
@@ -790,6 +803,17 @@ async function main() {
     if (sub === 'mute') return officeMute(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes'), off: flags.has('off') });
     if (sub === 'close') return officeClose(root, positional[2], positional[3], { url, minutes: flags.get('minutes'), reopen: flags.has('reopen') });
     if (sub === 'revoke') return officeRevoke(root, { url });
+  }
+  if (cmd === 'lounge') {
+    // The Lounge (0.29.0, chat/LOUNGE.md): its rules and history, play nights, moderators, lines.
+    const url = flags.get('url');
+    if (!sub) return loungeShow(root, { url });
+    if (sub === 'night') return loungeNight(root, positional.slice(2), flags, { url });
+    if (sub === 'history') return loungeRulesSet(root, flags, { url, history: positional[2] });
+    if (sub === 'rules') return loungeRulesSet(root, flags, { url });
+    if (sub === 'mod') return loungeMod(root, positional[2], { url, remove: flags.has('remove') });
+    if (sub === 'remove') return loungeRemove(root, positional[2], { url, all: flags.has('all') });
+    return { ok: false, command: 'lounge', why: `unknown: lounge ${sub} (night, history, rules, mod, remove)` };
   }
   if (cmd === 'chat') {
     // Room chat (0.23.0, NETPLAY.md section 19): rules, the room's last minutes, reports, the review's budget.

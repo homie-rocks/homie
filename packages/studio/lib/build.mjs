@@ -53,6 +53,7 @@ import { screenChatProblems } from '../worker/chat-page.mjs';
 import { vocabularyOf } from '../worker/brain.mjs';
 import { shopForBuild } from './shop.mjs';
 import { audienceOf } from '../worker/shop-rules.mjs';
+import { loungeConfig, loungeProblems } from '../worker/lounge-store.mjs';
 
 const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
@@ -456,6 +457,9 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   writeFileSync(join(dist, '_site', 'posts.json'), `${JSON.stringify({ v: 1, posts })}\n`);
   const s = studio.site && typeof studio.site === 'object' ? studio.site : {};
   const studioExtras = schemaExtras(s.schema, { where: 'studio.json site', types: 'Organization', log });
+  // The Lounge (0.29.0): studio.json "lounge", checked; off when a game already has /lounge/.
+  for (const p of loungeProblems(studio, rows, chatProblems)) log(`warning: studio.json: ${p}`);
+  const lounge = loungeConfig(studio, rows, { audience: audienceOf(studio) });
   const catalogue = {
     studio: {
       name: studio.name, slug: studio.slug, version: STUDIO_VERSION,
@@ -481,6 +485,7 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
       // (this studio takes no referral statements as a referrer).
       ...(audienceOf(studio) !== 'general' ? { audience: audienceOf(studio) } : {}),
       ...(studio.referrals === false ? { referrals: false } : {}),
+      ...(lounge ? { lounge } : {}),
       build: buildInfo(root),
     },
     games: rows,

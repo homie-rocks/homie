@@ -30,6 +30,7 @@ import { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from '../worker/office-schema
 import { SERVERS_MIGRATION, SERVERS_MIGRATION_FILE } from '../worker/servers.mjs';
 import { CHAT_MIGRATION, CHAT_MIGRATION_FILE } from '../worker/chat-store.mjs';
 import { SHOP_MIGRATION, SHOP_MIGRATION_FILE } from '../worker/shop-store.mjs';
+import { LOUNGE_MIGRATION, LOUNGE_MIGRATION_FILE } from '../worker/lounge-store.mjs';
 import { themeFile } from './site.mjs';
 
 export const COMPAT_DATE = '2026-06-01';
@@ -652,6 +653,7 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
     [`site/migrations/${SERVERS_MIGRATION_FILE}`]: SERVERS_MIGRATION,
     [`site/migrations/${CHAT_MIGRATION_FILE}`]: CHAT_MIGRATION,
     [`site/migrations/${SHOP_MIGRATION_FILE}`]: SHOP_MIGRATION,
+    [`site/migrations/${LOUNGE_MIGRATION_FILE}`]: LOUNGE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
   };
@@ -766,13 +768,22 @@ function ensureChatMigration(root) {
   return `site/migrations/${CHAT_MIGRATION_FILE}`;
 }
 
+/** A studio made before 0.29.0 has no Lounge tables: kept chat (only when an owner turns history on), play nights, moderators. */
+function ensureLoungeMigration(root) {
+  const file = join(root, 'site', 'migrations', LOUNGE_MIGRATION_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, LOUNGE_MIGRATION);
+  return `site/migrations/${LOUNGE_MIGRATION_FILE}`;
+}
+
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
 export function migrationWord(file) {
-  return /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (it sells nothing until shop.json and the owner\'s Stripe key are in)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
+  return /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (it sells nothing until shop.json and the owner\'s Stripe key are in)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
 }
 
 /**

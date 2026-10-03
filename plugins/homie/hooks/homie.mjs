@@ -1550,7 +1550,7 @@ function resultCard(t, tool, call, output, viewport) {
 function setupFromCard(t, d, columns) {
   const rows = (d.status?.rows ?? []).map((r) => ({ state: r.state, label: r.label, need: r.need ?? 'required', detail: r.detail ?? '', fix: r.fix?.run ?? r.fix?.open ?? '' }));
   const steps = (d.checklist ?? []).map((s) => ({ state: s.state === 'done' ? 'ok' : s.state === 'now' ? 'act' : 'optional', label: s.label, need: 'required', detail: '', fix: '' }));
-  return setupCard(t, { title: d.current ? `Setting up ${d.current.name}` : 'Setup status', rows: [...steps, ...rows], ready: (d.status?.features ?? []).map((f) => ({ feature: f.feature, state: f.state })), next: (d.status?.next ?? []).map((n) => n.run ?? n.open ?? n.say).filter(Boolean) }, columns);
+  return setupCard(t, { title: d.current ? `Setting up ${d.current.name}` : 'Setup status', rows: [...steps, ...rows], ready: (d.status?.features ?? []).map((f) => ({ feature: f.feature, state: f.state })), next: (d.status?.next ?? []).map((n) => n.run ?? n.open ?? n.say).filter(Boolean), updates: typeof d.updates === 'string' ? d.updates : null }, columns);
 }
 
 /* ------------------------------------------------------------------ text, for commands (and where nothing draws) */
