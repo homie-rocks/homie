@@ -1,0 +1,15 @@
+{
+  "name": "homie",
+  "version": "0.28.0",
+  "description": "A studio in a box on your own Cloudflare: games, music and video, with public multiplayer rooms on the free Workers plan. In Grok, the Homie connector (https://homie.rocks/mcp) sets the studio up; a Grok Bot with the studio folder runs the checklist. Grok has no Cloudflare connector: the person approves Cloudflare in the browser.",
+  "author": {
+    "name": "Homie",
+    "url": "https://homie.rocks"
+  },
+  "homepage": "https://homie.rocks/studios/",
+  "repository": "https://github.com/homie-rocks/homie",
+  "license": "Apache-2.0",
+  "keywords": ["games", "multiplayer", "cloudflare", "studio", "grok"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}
