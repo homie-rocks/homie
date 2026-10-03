@@ -110,7 +110,7 @@ test('the template: Deploy to Cloudflare and Workers Builds ready, and the repos
   const studioJson = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
   assert.equal(studioJson.template, true);
   assert.ok(!existsSync(join(dir, 'games/gem-rush')), 'no starter game: the site goes live with its own home page ("First game coming soon")');
-  assert.match(readFileSync(join(dir, 'HANDOFF.md'), 'utf8'), /homie-studio handoff hb_/, 'HANDOFF.md says what a one-line hand-off means');
+  assert.match(readFileSync(join(dir, 'HANDOFF.md'), 'utf8'), /homie-studio handoff hb_/);
   assert.match(readFileSync(join(dir, 'site/partials/home.html'), 'utf8'), /href="\/_studio\/connect"/);
   assert.match(readFileSync(join(dir, 'README.md'), 'utf8'), /deploy\.workers\.cloudflare\.com\/\?url=https:\/\/github\.com\/homie-rocks\/homie\/tree\/main\/template/);
   // The public template is generated, never hand-edited: `node scripts/template.mjs` writes it.
@@ -315,13 +315,20 @@ test('setup attach: this repository is the chat\'s studio; a template copy takes
   const dir = studio('setup', ['--template']);
   spawnSync('git', ['remote', 'add', 'origin', 'https://github.com/octo-studios/night-owls.git'], { cwd: dir });
   const hs = `hs_${'e'.repeat(32)}`;
-  const dirx = await directory({ [`/api/studio/setup/${hs}/attach`]: () => [200, { ok: true, name: 'Night Owls', site: 'https://test-studio.acct.workers.dev' }] });
+  const hsG = `hs_${'f'.repeat(32)}`;
+  const dirx = await directory({
+    [`/api/studio/setup/${hs}/attach`]: () => [200, { ok: true, name: 'Night Owls', site: 'https://test-studio.acct.workers.dev' }],
+    [`/api/studio/setup/${hsG}/attach`]: () => [200, { ok: true, name: 'Rain City Games', site: 'https://rain-city.acct.workers.dev' }],
+  });
   try {
-    const r = out(await runAsync(['setup', 'attach', hs, '--homie', dirx.url], dir));
+    const r = out(await runAsync(['setup', 'attach', hs, '--homie', dirx.url], dir, { HOMIE_CLIENT: '' }));
     assert.equal(r.ok, true, JSON.stringify(r));
     const sent = JSON.parse(dirx.seen[0].body);
     assert.equal(sent.repo, 'octo-studios/night-owls');
-    assert.deepEqual(Object.keys(sent).sort(), ['repo', 'studio', 'version'], 'the repository, the studio\'s name and slug, and the version: nothing else');
+    assert.equal(sent.client, 'chat', 'no --client and no HOMIE_CLIENT: the chat, never a guess that it is Claude');
+    assert.deepEqual(Object.keys(sent).sort(), ['client', 'repo', 'studio', 'version'], 'the repository, the studio, the version, and which chat: nothing else');
+    assert.match(r.message, /The setup card shows it/);
+    assert.doesNotMatch(r.message, /Claude/);
     const s = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
     assert.deepEqual([s.name, s.slug, s.template], ['Night Owls', 'night-owls', undefined]);
     assert.match(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8'), /"STUDIO_NAME": "Night Owls"/);
@@ -329,6 +336,16 @@ test('setup attach: this repository is the chat\'s studio; a template copy takes
     assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /^# Night Owls$/m);
     assert.equal(JSON.parse(readFileSync(join(dir, '.studio/local.json'), 'utf8')).url, 'https://test-studio.acct.workers.dev');
     assert.ok(r.renamed.includes('studio.json') && r.renamed.includes('wrangler.jsonc'));
+    const grok = studio('setup-grok', ['--template']);
+    spawnSync('git', ['remote', 'add', 'origin', 'https://github.com/octo-studios/rain-city.git'], { cwd: grok });
+    const g = out(await runAsync(['setup', 'attach', hsG, '--client', 'grok', '--homie', dirx.url], grok, { HOMIE_CLIENT: '' }));
+    assert.equal(g.ok, true, JSON.stringify(g));
+    assert.equal(g.client, 'grok');
+    const gsent = JSON.parse(dirx.seen.find((x) => x.path === `/api/studio/setup/${hsG}/attach`).body);
+    assert.equal(gsent.client, 'grok');
+    assert.equal(gsent.repo, 'octo-studios/rain-city');
+    assert.match(g.message, /Grok's card shows it/);
+    assert.ok(g.next.some((n) => /Grok Bot/.test(n)));
   } finally { dirx.close(); }
 });
 
