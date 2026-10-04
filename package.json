@@ -1,7 +1,7 @@
 {
   "name": "homie-rocks",
   "private": true,
-  "description": "Homie's open core: the Homie plugin for Claude Code and Codex, @homie-rocks/studio, and the @homie-rocks game engine packages.",
+  "description": "Homie's open core: the Homie plugin for Claude Code, Codex and Grok, @homie-rocks/studio, and the @homie-rocks game engine packages.",
   "license": "Apache-2.0",
   "workspaces": [
     "packages/studio",

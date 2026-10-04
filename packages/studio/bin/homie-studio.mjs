@@ -187,11 +187,15 @@
  *                                          pages; the account id goes into studio.json, the token stays in Projects'
  *                                          vault and its git-ignored .env, and Wrangler runs with it here. The usual
  *                                          way, npx wrangler login, stays the default. lib/projects.mjs)
- *   homie-studio setup status [--connector yes|no]   (also: homie-studio doctor)
+ *   homie-studio setup status [--connector yes|no] [--client claude|codex|grok]   (also: homie-studio doctor)
  *                                         what this computer and the person's accounts have for a studio: Node, the Homie
  *                                         connector, Cloudflare (signed in, email verified), Chrome, ffmpeg, GitHub,
  *                                         ElevenLabs, fal; green, missing or "do this now", what each unlocks and its
  *                                         exact fix. Read-only and safe any time, inside a studio or before one exists.
+ *                                         A missing connector never blocks: a session with a shell makes a studio with
+ *                                         `new`. In Codex and Grok Build (--client, or the app's own environment) it
+ *                                         also says whether Homie's holds are on (the plugin's hooks ran just now), and
+ *                                         when another MCP server named homie has taken the connector's name there.
  *
  *   homie-studio codex new <id> [--name "<Name>"]
  *                                         games/<id>/CODEX.md: the Game Codex, every section, in the game's colours (a game
@@ -692,7 +696,7 @@ async function main() {
   if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
   if (cmd === 'chrome' && sub === 'install') return installChrome({ log, fresh: flags.has('fresh') });
   if (cmd === 'chrome') { const chrome = findChrome(); return chrome ? { ok: true, command: 'chrome', chrome, args: chromeArgs() } : { ok: false, command: 'chrome', why: noChrome() }; }
-  if ((cmd === 'setup' && sub === 'status') || cmd === 'doctor') return setupStatus({ connector: flags.get('connector') ?? null, homie: flags.get('homie') ?? null });
+  if ((cmd === 'setup' && sub === 'status') || cmd === 'doctor') return setupStatus({ connector: flags.get('connector') ?? null, homie: flags.get('homie') ?? null, client: flags.get('client') ?? null });
   if (cmd === 'statusline' && !flags.has('install') && !flags.has('remove')) {
     const line = statusLine({ columns: Number(process.env.COLUMNS) || 100, color: !process.env.NO_COLOR && !asJson && process.stdout.isTTY });
     if (asJson) return { ok: true, command: 'statusline', line };

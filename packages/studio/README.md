@@ -6,7 +6,7 @@ contract (every browser renders, strangers meet in public rooms, bots fill seats
 restart), and a site Worker with Table/Lobby Durable Objects and D1 that the studio deploys
 to its own Cloudflare account with Wrangler. The homie.rocks directory lists the games.
 
-Most people never run this by hand: the Homie plugin for Claude Code and Codex does,
+Most people never run this by hand: the Homie plugin for Claude Code, Codex and Grok does,
 and the person approves Cloudflare once in their browser.
 
 ```sh
@@ -441,6 +441,23 @@ studio's account: one tiny call through Cloudflare's API with the studio's own W
 one token out: about 0.1 of the 10,000 free neurons a day; `lib/brain-probe.mjs`). A model Cloudflare moved to
 Workers Paid (error 5035) or retired (5007) is named, with what to do: pick another model, or, the person's money,
 Workers Paid. A spent daily allowance (3036) is said as that, not as a broken model.
+
+A missing connector never blocks (0.30.2): a session that can run commands makes, deploys and lists a studio with
+this toolkit alone (`new`, `deploy`, `publish`), and the connector row says so. With `--client codex` or
+`--client grok` (in Codex the toolkit also reads the app from its environment) two things more:
+
+- **The connector's name.** The Homie plugin's connector is the MCP server `homie`. When the app's own
+  configuration (`config.toml` in its home folder, or `.codex/` or `.grok/` in this folder) already has another
+  server of that name, the plugin's does not load. The row says so and gives the command that adds Homie's connector
+  under its own name (`codex mcp add homie-rocks --url https://homie.rocks/mcp`). It reads only whether that entry is
+  an address or a command; the command itself is never read out.
+- **Homie's holds**: whether the plugin's hooks ran in this app in the last ten minutes, from the dated mark
+  they leave in `.cache/homie-studio/holds/` of the home folder. Off means nothing is held: Codex runs no plugin's hooks
+  until the person trusts them in `/hooks`, and the row says so; Grok Build 1.0.41 runs no plugin's hooks at all, so
+  there the row is off until a Grok that does.
+
+`homie-studio demo` answers without a network too (0.30.2): where it cannot reach the arcade it names the arcade's
+standing first pick, with `reached: false`.
 
 ## The Game Codex
 

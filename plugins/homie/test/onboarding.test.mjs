@@ -42,6 +42,49 @@ test('studio-setup: setup status first, then a checklist in order that never jum
   assert.match(s, /Asked for everything at once/, 'a one-prompt studio still goes all the way');
 });
 
+test('a first run in Codex and Grok: no connector is no dead end, the holds are said when off, and a neighbouring studio is left alone', () => {
+  const s = skill('studio-setup');
+  // The stop that ended a first run in 66 seconds with nothing made is gone, in both places it was written.
+  assert.doesNotMatch(s, /not connected and stop/);
+  assert.doesNotMatch(s, /without the connector there is no pinned toolkit/);
+  assert.match(s, /Without the connector, with a shell: go on\./);
+  at(s, 'npx -y @homie-rocks/studio@latest new <folder> --name "<Name>"');
+  at(s, 'npx -y @homie-rocks/studio@latest setup status --connector no --json');
+  assert.match(s, /Stop only when there is neither/);
+  assert.match(s, /Never invent the package\s+address: it is `@homie-rocks\/studio`/, 'the one address is still written down here');
+  for (const how of [/codex plugin add homie@homie/, /grok plugin install\s+homie-rocks\/homie#plugins\/homie/, /a custom connector at `https:\/\/homie\.rocks\/mcp`/]) assert.match(s, how);
+  assert.match(s, /Never stop for a missing connector while you can run a command/);
+  // The app is named to the status, which then says whether Homie's holds are on; off is said in the first reply.
+  at(s, '--client codex');
+  at(s, '--client grok');
+  assert.match(s, /When it is off, say so in one sentence in this first reply/);
+  assert.match(s, /When it is on, say nothing about it and\s+change nothing/);
+  // The demo's link is given whether or not this session could read the arcade.
+  at(s, 'https://arcade.homie.rocks/asteroids-arena/play');
+  assert.match(s, /say nothing about the lookup/);
+  // Another studio in the same folder is somebody else's.
+  assert.match(s, /Never read or copy from another studio in the same folder unless the person asks/);
+  assert.match(skill('game'), /\*\*Other studios\*\* beside this one .* are other people's\s+work: never read their games or copy from them/);
+  // Nothing promises Codex or Grok what only Claude draws.
+  assert.match(s, /In Codex and Grok Build Homie\s+draws no status line, pane or card/);
+  // Grok Build 1.0.41 runs no plugin's hooks: no skill says Homie's hooks hold anything in Grok, and the setup skill
+  // tells Grok to ask the person itself.
+  assert.match(s, /\*\*Homie's holds in Grok: off, so you ask\.\*\*/);
+  assert.match(s, /Grok Build 1\.0\.41 runs no plugin's\s+hooks/);
+  assert.match(s, /say what it would do in one sentence and wait for the person's yes/);
+  for (const name of readdirSync(join(PLUGIN, 'skills'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)) {
+    assert.doesNotMatch(skill(name), /hooks \(Codex, Grok Build\)|hooks in Codex and Grok Build|Claude or Codex runs/, `${name}: no hold is claimed in Grok`);
+  }
+  for (const m of ['plugin.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', '.grok-plugin/plugin.json']) {
+    const text = readFileSync(join(PLUGIN, m), 'utf8');
+    assert.doesNotMatch(text, /In Grok, Homie's hooks|In Grok, the same holds/, `${m}: no hold is claimed in Grok`);
+    assert.match(text, /Grok Build 1\.0\.41 runs no plugin's hooks/, m);
+  }
+  // Asked for everything at once: a Play link the moment two browsers finish a round, before any polish.
+  assert.match(s, /\*\*A Play link first\.\*\*/);
+  assert.ok(at(s, 'A Play link first') < at(s, '## 0. Setup status'), 'said with the one-sentence flow');
+});
+
 test('plan: the interview covers every topic, naturally, and ends in the Game Codex', () => {
   const s = skill('plan');
   for (const topic of ['Game type and genre', 'Style and art direction', 'Devices', 'Players and rooms', 'Art and film', 'Music and sound', 'Scope']) assert.match(s, new RegExp(`\\*\\*${topic}\\*\\*`), topic);

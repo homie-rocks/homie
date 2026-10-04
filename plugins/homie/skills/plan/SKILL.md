@@ -123,7 +123,8 @@ npx --no-install homie-studio progress stage plan done --note "<the plan in one 
 **Build status** tab shows it: a percentage, each step and check going green, a "Ready to try" box (the
 address and the codex's `try:` line), and what was spent. In Claude Code the status line shows one line
 of it (offered in the setup step: `homie-studio statusline --install`). Codex CLI has no command status
-line (its `tui.status_line` takes only built-in items), so there the codex page is the progress view.
+line (its `tui.status_line` takes only built-in items), and Homie installs none in Grok Build, so in both the
+codex page is the progress view.
 
 ## 6. The look, before the first model
 

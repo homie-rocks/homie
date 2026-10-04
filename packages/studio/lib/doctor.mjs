@@ -4,8 +4,16 @@
  * unlocks, and the exact fix: one command the AI runs, or one page the person taps.
  *
  *   Node.js            required    the toolkit runs on it
- *   Homie connector    required    the directory, cards and the pinned toolkit's address (the AI says whether its
- *                                  Homie tools are there: --connector yes|no)
+ *   Homie connector    recommended the directory's search and remixes, the cards and notes to Homie (the AI says
+ *                                  whether its Homie tools are there: --connector yes|no). A session with a shell makes,
+ *                                  deploys and lists a studio without it, so a missing connector never blocks. When
+ *                                  the tools are missing and the app in use (Codex, Grok) has another MCP server named
+ *                                  homie in its own config, the row says so: that name is the plugin's connector's
+ *   Homie's holds      in Codex and Grok Build only: whether the plugin's hooks ran just now (they leave a dated
+ *                                  mark, hooks/codex.mjs), so a session where nothing is held says so, and how to turn
+ *                                  them on (Codex: trust them in /hooks; Grok Build 1.0.41 runs no plugin's hooks, so
+ *                                  there the row is off until a Grok that runs them). The app is the one the AI names
+ *                                  (--client codex|grok) or its environment shows
  *   Cloudflare         to go online: signed in, and the account's email verified (Cloudflare checks that at the
  *                                  first deploy; a deploy that went through proves it)
  *   Workers AI         for AI guides  only when a server's guides think with Workers AI: the model they use
@@ -25,13 +33,16 @@
  * It is safe at any time, inside a studio or before one exists: it only reads (local files, `--version` of a few
  * tools, `wrangler whoami`, `gh auth status`, `elevenlabs auth status`, one GET to the directory and, when a fal key
  * is set, fal's free pricing API; when a server's AI guides use Workers AI, one read of the live database and one
- * one-word call to the model), never changes anything, and never prints a key, a token or an account's name or id.
+ * one-word call to the model; in Codex or Grok, the `[mcp_servers.homie]` table of that app's config.toml, of which
+ * it keeps only whether it is an address or a command, and the hooks' mark in this user's cache), never changes
+ * anything, and never prints a key, a token, a command line or an account's name or id.
  * Every check has a time limit, so it answers in seconds even with no network.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { workersAiRow } from './brain-probe.mjs';
+import { studioClient } from './client.mjs';
 import { detectLocalAi } from './local-ai.mjs';
 import { findChrome } from './chrome.mjs';
 import { whyFailed } from './net.mjs';
@@ -72,14 +83,95 @@ async function reach(url, fetchFn, ms = 5000) {
   }
 }
 
+/** The apps whose own configuration this status reads: where it is, and that app's own words for a fix. */
+const APPS = {
+  codex: { name: 'Codex', home: (env, home) => env.CODEX_HOME || (home && join(home, '.codex')) || null, project: '.codex', add: (name, url) => `codex mcp add ${name} --url ${url}` },
+  grok: { name: 'Grok', home: (env, home) => env.GROK_HOME || (home && join(home, '.grok')) || null, project: '.grok', add: (name, url) => `grok mcp add ${name} ${url}` },
+};
+/** The name Homie's connector takes when another MCP server already has `homie`. No underscore: Grok's hooks match on it. */
+export const CONNECTOR_NAME = 'homie-rocks';
+
+/**
+ * Which app this session runs in, for the rows that differ by app: the one the AI named (`--client`, or HOMIE_CLIENT),
+ * else what the app's own environment shows (Claude Code and Codex set variables of their own on the commands they
+ * run). Null when neither says: never a guess.
+ */
+export function sessionApp(client, env = process.env) {
+  const said = studioClient(client, env).id;
+  if (said !== 'chat') return said;
+  if (env.CLAUDECODE === '1') return 'claude';
+  if (env.CODEX_THREAD_ID || env.CODEX_SANDBOX || env.CODEX_SANDBOX_NETWORK_DISABLED || env.CODEX_CI) return 'codex';
+  return null;
+}
+
+/**
+ * Another MCP server under the name the Homie plugin's connector uses (`homie`), in the configuration of the app in
+ * use: its config.toml in the app's home folder, or the one in this folder (`.codex/`, `.grok/`). The person's own
+ * entry wins over a plugin's of the same name, so the plugin's tools never load. It reads only the
+ * `[mcp_servers.homie]` table's `url` and `command` keys, and returns only what kind of server it is and where it
+ * was found, never the command, its arguments, its environment or a header. Null when there is none, or it is
+ * Homie's own address.
+ */
+export function connectorClash({ app, env = process.env, cwd = process.cwd(), root = null, directory = 'https://homie.rocks' } = {}) {
+  const a = APPS[app];
+  if (!a) return null;
+  const home = env.HOME || env.USERPROFILE || '';
+  const ours = new Set(['https://homie.rocks/mcp', `${String(directory).replace(/\/+$/, '')}/mcp`]);
+  const places = [
+    ...[...new Set([root, cwd].filter(Boolean))].map((dir) => ({ file: join(dir, a.project, 'config.toml'), where: `this folder's ${a.project}/config.toml` })),
+    { file: a.home(env, home) ? join(a.home(env, home), 'config.toml') : null, where: `config.toml in ${a.name}'s home folder` },
+  ];
+  for (const { file, where } of places) {
+    let text;
+    try { if (!file || !existsSync(file)) continue; text = readFileSync(file, 'utf8'); } catch { continue; }
+    if (text.length > 16 * 1024 * 1024) continue;
+    const lines = text.split(/\r?\n/);
+    const at = lines.findIndex((l) => /^\s*\[\s*mcp_servers\s*\.\s*(?:"homie"|'homie'|homie)\s*\]\s*(?:#.*)?$/.test(l));
+    if (at < 0) continue;
+    let url = null; let command = false;
+    for (let i = at + 1; i < lines.length && !/^\s*\[/.test(lines[i]); i += 1) {
+      const m = /^\s*(url|command)\s*=\s*(.*?)\s*$/.exec(lines[i]);
+      if (!m) continue;
+      if (m[1] === 'command') command = true;
+      else url = (/^(["'])(.*?)\1/.exec(m[2])?.[2] ?? m[2]).replace(/\/+$/, '');
+    }
+    if (url && !command && ours.has(url)) return null;
+    return { app, name: a.name, where, kind: command ? 'a local command' : url ? 'another address' : 'another server' };
+  }
+  return null;
+}
+
+/** How long a mark of Homie's hooks counts as "ran just now": they stamp it at every message and every tool call. */
+export const HOLDS_FRESH_MS = 10 * 60_000;
+
+/**
+ * The mark Homie's hooks leave each time they run in Codex or Grok Build (the plugin's hooks/codex.mjs `mark`): a
+ * small dated file in this user's cache, <app>.json, { v, app, at, event }. { at, event, ageMs } or null. HOMIE_HOLDS_MARKS
+ * names another folder (the tests use it).
+ */
+export function holdsMark(app, { env = process.env, now = Date.now() } = {}) {
+  const home = env.HOME || env.USERPROFILE || '';
+  const dir = env.HOMIE_HOLDS_MARKS || (home && join(home, '.cache', 'homie-studio', 'holds'));
+  if (!dir || !/^[a-z]+$/.test(String(app ?? ''))) return null;
+  try {
+    const m = JSON.parse(readFileSync(join(dir, `${app}.json`), 'utf8'));
+    const at = Number(m?.at);
+    if (!Number.isFinite(at) || at <= 0) return null;
+    return { at, event: typeof m.event === 'string' ? m.event.slice(0, 20) : null, ageMs: Math.max(0, now - at) };
+  } catch { return null; }
+}
+
+const ago = (ms) => (ms < 90_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : ms < 90 * 60_000 ? `${Math.round(ms / 60_000)} min` : ms < 36 * 3_600_000 ? `${Math.round(ms / 3_600_000)} h` : `${Math.round(ms / 86_400_000)} days`);
+
 /**
  * The checklist. `connector`: what the AI knows about its own tools ('yes' when the Homie MCP tools such as
- * studio_scaffold are in its tool list, 'no' when they are not, null when unsaid). `exec` and `fetchFn` are
+ * studio_scaffold are in its tool list, 'no' when they are not, null when unsaid). `client`: the app the AI says it
+ * is ('claude', 'codex', 'grok'; sessionApp reads the environment when it is unsaid). `exec`, `fetchFn` and `nowMs` are
  * replaceable for tests.
  */
 export async function setupStatus({
-  cwd = process.cwd(), env = process.env, platform = process.platform, connector = null, homie = null,
-  exec = defaultExec, fetchFn = globalThis.fetch, chrome = findChrome, node = process.versions.node,
+  cwd = process.cwd(), env = process.env, platform = process.platform, connector = null, homie = null, client = null,
+  exec = defaultExec, fetchFn = globalThis.fetch, chrome = findChrome, node = process.versions.node, nowMs = Date.now(),
 } = {}) {
   const root = findStudio(cwd);
   let studio = null;
@@ -148,24 +240,58 @@ export async function setupStatus({
     })(),
   ]);
 
-  // The Homie connector.
+  // The Homie connector. A session with a shell makes, deploys and lists a studio without it, so it never blocks.
+  const app = sessionApp(client, env);
   {
+    const host = new URL(directory).host;
     const fixConnector = {
       who: 'person',
-      say: 'Turn the Homie connector on. Claude Code: run /plugin, install or enable "homie" (marketplace homie-rocks/homie), then /mcp shows homie connected. Codex: install the Homie plugin from the same marketplace. Grok Build: the same plugin (.grok-plugin/plugin.json). The Claude app, or Grok: add the connector https://homie.rocks/mcp; its setup card (studio_setup) makes the studio on your own Cloudflare. Grok has no Cloudflare connector: you still approve Cloudflare in the browser. A Grok Bot on this computer runs the checklist and checks in with setup attach <hs_…> --client grok.',
+      say: `Turn the Homie connector on. Claude Code: run /plugin, install or enable "homie" (marketplace homie-rocks/homie), then /mcp shows homie connected. Codex: install the Homie plugin from the same marketplace (codex plugin marketplace add homie-rocks/homie, then codex plugin add homie@homie) and start a new session. Grok Build: grok plugin install homie-rocks/homie#plugins/homie (Grok asks whether to trust it), then a new session. The Claude app, or Grok chat: add the connector https://homie.rocks/mcp; its setup card (studio_setup) makes the studio on your own Cloudflare. Grok has no Cloudflare connector: you still approve Cloudflare in the browser. A Grok Bot on this computer runs the checklist and checks in with setup attach <hs_…> --client grok. Meanwhile a session with a shell goes on without it: ${cli} ${root ? '<command>' : 'new <folder> --name "<Name>"'} makes ${root ? 'everything in the studio' : 'the studio'}.`,
     };
+    // Another MCP server already called `homie` in this app's own config: the plugin's connector cannot load under it.
+    const clash = said !== 'yes' ? connectorClash({ app, env, cwd, root, directory }) : null;
+    const fixClash = clash ? {
+      who: 'ai', run: APPS[clash.app].add(CONNECTOR_NAME, `${directory}/mcp`),
+      say: `Another MCP server named homie is set up in ${clash.name} (${clash.where}). The Homie plugin's connector has the same name, and an app loads one server under a name, so the plugin's tools are missing while that one is there. This adds Homie's connector under its own name, ${CONNECTOR_NAME}, and leaves the other server as it is; you approve it, then start a new session. Until then your AI goes on with the studio's own commands.`,
+    } : null;
     let state; let detail;
-    if (net.blocked) { state = 'act'; detail = `the network proxy of this machine refused ${new URL(directory).host}`; }
+    if (net.blocked) { state = 'act'; detail = `the network proxy of this machine refused ${host}`; }
     else if (said === 'yes') { state = 'ok'; detail = net.ok ? 'the Homie tools are here, and the directory answers' : `the Homie tools are here; this computer's request to the directory failed just now: ${net.why}`; }
-    else if (said === 'no') { state = 'act'; detail = 'the Homie tools are not in this session'; }
+    else if (clash) { state = 'act'; detail = `${said === 'no' ? 'the Homie tools are not in this session' : 'your AI knows whether its Homie tools (studio_scaffold) are here'}; another MCP server named homie (${clash.kind}) is set up in ${clash.name}, in ${clash.where}, and it takes the name the Homie plugin's connector uses`; }
+    else if (said === 'no') { state = 'act'; detail = 'the Homie tools are not in this session; a studio is still made, checked, deployed and listed with the studio\'s own commands'; }
     // The directory not answering this computer says nothing about the connector: say what failed, as it is.
-    else { state = 'unknown'; detail = net.ok ? `${new URL(directory).host} answers; your AI knows whether its Homie tools (studio_scaffold) are here` : `this computer's request to the directory failed: ${net.why}`; }
+    else { state = 'unknown'; detail = net.ok ? `${host} answers; your AI knows whether its Homie tools (studio_scaffold) are here` : `this computer's request to the directory failed: ${net.why}`; }
     rows.push({
-      id: 'connector', label: 'Homie connector', need: 'required', state, detail,
-      unlocks: 'making the studio with the right toolkit version, listing games in the homie.rocks directory, and the setup cards',
+      id: 'connector', label: 'Homie connector', need: 'recommended', state, detail,
+      unlocks: 'searching the homie.rocks directory and remixing a game from it, the cards where your app draws them, and notes to Homie; a session with a shell makes, deploys and lists a studio without it',
       fix: state === 'ok' ? null : net.blocked
-        ? { who: 'person', say: `In claude.ai/code, open this environment's settings, set Network access to Custom, add ${new URL(directory).host} (keep the default package managers), and start a new session.` }
-        : said === 'no' || net.ok ? fixConnector : null,
+        ? { who: 'person', say: `In claude.ai/code, open this environment's settings, set Network access to Custom, add ${host} (keep the default package managers), and start a new session.` }
+        : fixClash ?? (said === 'no' || net.ok ? fixConnector : null),
+      ...(clash && !net.blocked ? { clash: { app: clash.app, server: 'homie', kind: clash.kind, where: clash.where, as: CONNECTOR_NAME } } : {}),
+    });
+  }
+
+  // Homie's holds, in Codex and Grok Build: Codex runs the plugin's hooks only once the person has trusted them, Grok
+  // Build 1.0.41 was seen to run no plugin's hooks at all, and neither app says so. The hooks leave a dated mark at
+  // every message and tool call; a fresh one means they are on. Off in Grok is Grok's doing, so it is said as that.
+  if (app === 'codex' || app === 'grok') {
+    const name = APPS[app].name;
+    const seen = holdsMark(app, { env, now: nowMs });
+    const on = Boolean(seen && seen.ageMs <= HOLDS_FRESH_MS);
+    rows.push({
+      // Off in Codex is the person's to fix now (trust the hooks); off in Grok is nothing they can fix.
+      id: 'holds', label: 'Homie\'s holds', need: 'recommended', state: on ? 'ok' : app === 'codex' ? 'act' : 'optional', on, app,
+      detail: on ? `on: Homie's hooks ran in ${name} ${ago(seen.ageMs)} ago`
+        : seen ? `off: Homie's hooks last ran in ${name} ${ago(seen.ageMs)} ago, and not for this session's calls`
+          : app === 'grok' ? 'off: Grok Build runs no plugin\'s hooks yet (1.0.41), so nothing is held in Grok' : `off: Homie's hooks have not run in ${name} on this computer`,
+      ...(seen ? { seen: { at: new Date(seen.at).toISOString(), event: seen.event } } : {}),
+      unlocks: 'a wait for your own "proceed <code>" before a production deploy, an edit to a file the studio protects, a Cloudflare change outside the deploy, a paid call past the budget and a model download; and secrets taken out of what your AI reads',
+      fix: on ? null : {
+        who: 'person',
+        say: app === 'codex'
+          ? 'In Codex, open /hooks and trust Homie\'s three hooks: Codex runs no plugin\'s hooks until you do. Then run this again. Until then nothing is held, so your AI asks you before each of those itself.'
+          : 'Nothing to do on your side: Grok Build 1.0.41 runs no plugin\'s hooks (none are registered in its headless and agent sessions, from any plugin; checked 2026-10-04), so Homie\'s holds are off in Grok. Nothing is held and no secret is taken out of what your AI reads, so your AI asks you before each of those itself. This row turns on by itself when a Grok that runs them leaves the hooks\' mark.',
+      },
     });
   }
 
@@ -306,7 +432,8 @@ export async function setupStatus({
     { feature: 'Two-browser checks and playtests', state: ready(by.chrome.state), needs: ['chrome'] },
     { feature: 'Sound effects and a theme (free)', state: ready(by.ffmpeg.state), needs: ['ffmpeg'] },
     { feature: 'Put the studio online', state: ready(by.cloudflare.parts[0].state === 'ok' ? by.cloudflare.parts[1].state : by.cloudflare.parts[0].state), needs: ['cloudflare'] },
-    { feature: 'List games in the homie.rocks directory', state: ready(by.connector.state), needs: ['connector'] },
+    // Listing needs the directory, not the connector: `homie-studio publish` reaches it from this computer.
+    { feature: 'List games in the homie.rocks directory', state: by.connector.state === 'ok' || net.ok ? 'ready' : 'not yet', needs: ['connector'] },
     { feature: 'Backup and pull requests', state: ready(by.github.state), needs: ['github'] },
     { feature: 'Songs and game scores', state: ready(by.elevenlabs.state), needs: ['elevenlabs'] },
     { feature: 'Painted art and generated video', state: ready(by.fal.state), needs: ['fal'] },

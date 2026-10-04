@@ -6,13 +6,16 @@
  * Run: node --test plugins/homie/test/grok-hooks.test.mjs
  */
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { decide } from '../hooks/codex.mjs';
 import { asCodex, grokPost, grokPre, grokPrompt } from '../hooks/grok.mjs';
+
+const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'hooks', 'grok.mjs');
 
 const WHO = { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: '' };
 
@@ -88,5 +91,26 @@ test('the person\'s own proceed answers the hold, and a secret does not reach th
     assert.equal(redacted.decision, 'block');
     assert.doesNotMatch(redacted.reason, /sk_test_/);
     assert.match(redacted.reason, /hidden by Homie/);
+  } finally { s.done(); }
+});
+
+test('through stdin and stdout as Grok Build runs it: the answer is Grok\'s, and every run leaves the mark the setup status reads', () => {
+  const s = studio();
+  try {
+    // The mark goes to a folder of this test's, never to the cache of whoever runs the tests.
+    const marks = join(s.data, 'marks');
+    const env = { ...process.env, GROK_PLUGIN_DATA: s.data, HOMIE_HOLDS_MARKS: marks };
+    const run = (mode, input) => spawnSync(process.execPath, [SCRIPT, mode], { input: JSON.stringify(input), env, encoding: 'utf8' });
+    const read = run('pre', { toolName: 'run_terminal_command', toolInput: { command: 'ls' }, cwd: s.root, sessionId: 's3' });
+    assert.equal(read.status, 0);
+    assert.deepEqual(JSON.parse(read.stdout), { decision: 'allow' });
+    const left = JSON.parse(readFileSync(join(marks, 'grok.json'), 'utf8'));
+    assert.deepEqual(Object.keys(left).sort(), ['app', 'at', 'event', 'v']);
+    assert.deepEqual({ v: left.v, app: left.app, event: left.event }, { v: 1, app: 'grok', event: 'pre' });
+    const held = JSON.parse(run('pre', { toolName: 'run_terminal_command', toolInput: { command: 'npm run deploy' }, cwd: s.root, sessionId: 's3' }).stdout);
+    assert.equal(held.decision, 'deny');
+    assert.match(held.reason, /proceed [A-HJKMNP-Z2-9]{4}/);
+    run('prompt', { sessionId: 's3', prompt: 'hello' });
+    assert.equal(JSON.parse(readFileSync(join(marks, 'grok.json'), 'utf8')).event, 'prompt');
   } finally { s.done(); }
 });

@@ -19,8 +19,12 @@ is none, use the `studio-setup` skill first.
 - **A game with a Game Codex** (`games/<id>/CODEX.md`): read it first; it is the plan. Every decision that
   changes it goes into it in the same change, with a dated line under Latest, and the page is redrawn
   (`npx --no-install homie-studio codex <id>`). A big change to a game without one: plan it first.
+- **Other studios** beside this one (a neighbouring folder with its own `studio.json`) are other people's
+  work: never read their games or copy from them, not even as a model for this one, unless the person asks.
+  What you may read is this studio and the toolkit in its `node_modules/@homie-rocks/studio/`.
 - **New game:** call the Homie MCP tool `game_make` (id, name) for the exact command
-  and rules, then run `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`
+  and rules (without the connector, go on: the command is here and the rules are this skill's), then run
+  `npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"`
   (`--from gem-rush-3d` for a 3D game: three.js with free library models; `--from hero-rush-3d` for a 3D game with
   animated characters that run, jump and swing). The id becomes the game's
   address (`/<id>/`); lowercase, digits, hyphens.
@@ -171,7 +175,8 @@ forgets everything 60 s after its last player leaves.
 ## Prove it
 
 Open a progress feed for every build, titled with what it does (the codex's milestone); the codex
-page's Build status tab and Claude Code's status line follow it by themselves. When the person is
+page's Build status tab and Claude Code's status line follow it by themselves (in Codex and Grok Build
+the codex page is the view: `npx --no-install homie-studio codex <id> --open`). When the person is
 following along in the Claude app (or anywhere they cannot see your terminal), share it and show it:
 
 ```sh
@@ -179,9 +184,9 @@ npx --no-install homie-studio progress start <id> --share --title "<what this bu
 npx --no-install homie-studio progress stage plan done --note "<the plan in one line>"
 ```
 
-It prints a build id: call the Homie MCP tool `build_progress` with it once, and the card
-follows the build by itself (stages, each check going green, a preview, spend, Stop). The
-commands below report into it. If a command answers `stopped`, the person pressed Stop:
+It prints a build id: call the Homie MCP tool `build_progress` with it once, and where the app
+draws cards (the Claude app) the card follows the build by itself (stages, each check going green, a
+preview, spend, Stop). The commands below report into it. If a command answers `stopped`, the person pressed Stop:
 end there and ask before starting again.
 
 **Started from the Claude app** (a Claude Code session whose prompt came from a "Build it"

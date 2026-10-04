@@ -44,23 +44,32 @@ what goes into the studio), write the codex from them with what you chose
 listed under Open questions, and go on through step 6. Offer the plan interview at the end, as the
 way to change the game.
 
+**A Play link first.** Build the game to the point where it plays, run the two-browser `check`, and the moment
+it passes tell the person, with the link they can open now (`http://127.0.0.1:8787/<id>/play`, two tabs for two
+players): a first run should have someone playing in minutes, not after an hour of polish. Only then go on
+to sound, art, the playtest's fixes and the landing page, saying in a line what you are doing next.
+
 ## 0. Setup status, first
 
 Before anything is made, and whenever the person asks what they need, whether they are set up, or
 is waiting (a usage limit resetting is a good time), run the setup status. It only reads, takes a
 few seconds, and never prints a key:
 
-1. Call the Homie MCP tool `studio_scaffold` with the studio's name (if they have not named it yet,
-   use "My Studio" for now; it only reads). It returns the exact pinned command, like
+1. With the Homie connector (the Homie MCP tool `studio_scaffold` is in your tool list), call it with the
+   studio's name (if they have not named it yet, use "My Studio" for now; it only reads). It returns the
+   exact pinned command, like
    `npx -y @homie-rocks/studio@<version> new "<folder>" --name "<Name>" --homie https://homie.rocks`,
-   and a numbered list of next steps: this checklist decides the order, not that list.
+   and a numbered list of next steps: this checklist decides the order, not that list. **Without the
+   connector, go on** ("Without the connector" below): the toolkit is `@homie-rocks/studio` on npm, and
+   `@latest` is its version here.
 2. Run that same package with `setup status` instead of `new ...`:
    `npx -y @homie-rocks/studio@<version> setup status --connector yes --json` (inside a studio:
    `npx --no-install homie-studio setup status --connector yes --json`). If it does not know
    `setup status` (a toolkit older than 0.11.0 calls it unknown, or asks for a studio first), run `npx -y @homie-rocks/studio@latest setup status
    --connector yes --json` for the status only (it only reads). `--connector yes` because
-   the Homie tools are in your tool list; if `studio_scaffold` is not there, say `--connector no`,
-   show the result, and stop: without the connector there is no pinned toolkit to use.
+   the Homie tools are in your tool list; if `studio_scaffold` is not there, say `--connector no`
+   and run it from `@latest`. In Codex add `--client codex`, in Grok Build `--client grok`: the status then
+   says whether Homie's holds are on (item 6), and when another MCP server has taken the connector's name.
 3. Show it as one short checklist, a line per row: ✓ ready, → do this now, ○ optional, ... later.
    Each line says what the row **unlocks** (its `unlocks`) and, when it is not ready, the exact fix
    (`fix.run`: a command you run; `fix.open`: a page the person taps; `fix.say`: the words):
@@ -68,7 +77,7 @@ few seconds, and never prints a key:
    ```
    Setup status
      ✓ Node.js, Chrome, ffmpeg: you can make, check and sound games here
-     ✓ Homie connector: the directory and the cards
+     ✓ Homie connector: the directory, and the cards where your app draws them
      ... Cloudflare: needed to go online (step 6). No account yet? Make a free one now:
        https://dash.cloudflare.com/sign-up (no payment method), and click the email it sends.
      ○ GitHub (optional): a private backup and publishing by pull request
@@ -84,6 +93,39 @@ few seconds, and never prints a key:
    for something else: give them the link. The "Clef on this computer" row is the person's download:
    say its size first (`ollama pull clef-flash`, about 11 GB) and run it only after their yes.
 5. Run it again whenever they say they did something, and tick the row.
+6. **Homie's holds (Codex, Grok Build).** With `--client` the status has a `holds` row: whether Homie's
+   hooks ran just now in this app (`"on": true`). When it is off, say so in one sentence in this first reply,
+   with the row's fix. In Codex: "Homie's holds are off in this session: open `/hooks` and trust Homie's
+   three hooks. Until then I'll ask you before a deploy, a Cloudflare change, a paid call or a model
+   download." In Grok Build they are off as of 1.0.41, which runs no plugin's hooks: "Nothing holds a deploy
+   in Grok yet, so I'll ask you before a deploy, a Cloudflare change, a paid call or a model download." Then
+   do ask, every time, also when the app approves commands for you. When it is on, say nothing about it and
+   change nothing: the hooks hold what they hold. A status with no `holds` row in Codex or Grok (a toolkit
+   before 0.30.2) cannot tell: say the sentence anyway.
+
+**Without the connector, with a shell: go on.** A studio is made, checked, put online and listed with the
+studio's own commands; the connector is not needed for any of it. When the Homie tools are not in your tool
+list and you can run commands:
+
+- Say it once, in one line: "The Homie connector is not connected in this app, so I'm making the studio with
+  its own commands. Connected, it adds the homie.rocks directory search (remixing a game from it), the cards
+  where an app draws them, and notes to Homie."
+- The status is `npx -y @homie-rocks/studio@latest setup status --connector no --json`. Its connector row
+  says why when it can tell: another MCP server named `homie` is set up in this app and has taken the name
+  the plugin's connector uses. Its `fix.run` adds Homie's connector under its own name: offer it, run it only
+  with the person's yes, and never wait for it.
+- The studio is `npx -y @homie-rocks/studio@latest new <folder> --name "<Name>"` (step 1), and from then on
+  `npx --no-install homie-studio …` inside it.
+- Where a step names a Homie MCP tool, run the command the same step names beside it (`game new`,
+  `deploy`, `publish`, `stats`). Tell Homie is the connector's `homie_feedback` (in Claude Code also
+  `/feedback`): where neither is here, make no offer.
+
+**Stop only when there is neither** the Homie tools nor a way to run a command. Then say exactly how to add
+the connector in that app, and stop: Claude Code, `/plugin`, install or enable "homie" (marketplace
+`homie-rocks/homie`), and `/mcp` shows it connected; Codex, `codex plugin marketplace add homie-rocks/homie`
+then `codex plugin add homie@homie` and a new session; Grok Build, `grok plugin install
+homie-rocks/homie#plugins/homie` and a new session; the Claude app, Grok chat or another app with connectors,
+a custom connector at `https://homie.rocks/mcp`.
 
 **Each provider's own tools, lazily.** Homie works through each provider's own CLI, plugin or MCP
 server (Wrangler for Cloudflare, the GitHub CLI, ElevenLabs' CLI, fal's MCP server), never a copy of
@@ -106,27 +148,33 @@ file `studio.json` `"protect"` lists, a production deploy, a change to the studi
 outside its deploy, a paid call past the budget or whose cost cannot be read first, and a Clef model
 download; they refuse what the mod refuses, and take secrets out of what you read. Codex runs a plugin's
 hooks only after the person trusts them once: after installing Homie, tell them to open `/hooks` and
-trust Homie's three (until then nothing is held, so ask before each of those yourself). A held call comes
+trust Homie's three (until then nothing is held, so ask before each of those yourself). Never assume they
+are on: the setup status says which it is (item 6 above). A held call comes
 back refused with a code, and the person sees what it holds: say in a sentence what it would do and ask.
 They answer in their own message, `proceed <code>` (that exact call goes through once) or `cancel
 <code>`; then run exactly the same call again, or not at all. Never write that answer yourself, in a
 command or a file: only the person's own message counts. `node <this plugin's folder>/hooks/codex.mjs check
 -- <command>` (the folder above `skills/`) says what Homie would do with a command, and runs nothing.
 
-**Homie's holds in Grok.** In Grok Build, Homie's hooks (`hooks/grok.json`) ask the same module as the mod and
-the Codex hooks (`hooks/lib/holds.mjs`), so the three cannot drift. They hold the same calls and refuse the same
-calls, and they take secrets out of what you read. A held call comes back denied with a code: say in a sentence
-what it would do and ask. The person answers in their own message, `proceed <code>` (that exact call goes through
-once) or `cancel <code>`; then run exactly the same call again, or not at all. Never write that answer yourself.
-`node <this plugin's folder>/hooks/grok.mjs check -- <command>` says what Homie would do, and runs nothing. Grok
-chat (the connector, without the plugin's hooks) has no such hold: before a production deploy, a Cloudflare change
-outside that deploy, or a paid call, say what it would do in one sentence and wait for a yes.
+**Homie's holds in Grok: off, so you ask.** Homie ships the same hooks for Grok Build (`hooks/grok.json`, deciding
+with the module the mod and the Codex hooks ask, `hooks/lib/holds.mjs`), but Grok Build 1.0.41 runs no plugin's
+hooks: in its headless and agent sessions none are registered, from any plugin (checked 2026-10-04), and a deploy
+went through unasked. So in Grok, Build or chat, nothing is held and nothing is taken out of what you read: before
+a production deploy, a Cloudflare change outside that deploy, a paid call, a model download or an edit to a file
+`studio.json` `"protect"` lists, say what it would do in one sentence and wait for the person's yes, also when
+Grok approves commands by itself; and never repeat a key or a token you read. The setup status with `--client grok`
+says "Homie's holds: off" (item 6 above). If a later Grok runs the hooks, that row turns on by itself: then a held
+call comes back denied with a code, and the person answers `proceed <code>` or `cancel <code>` in their own
+message, as in Codex. `node <this plugin's folder>/hooks/grok.mjs check -- <command>` says what Homie would hold,
+and runs nothing: use it to know what to ask about.
 
 ## Grok and Grok Bot
 
-Grok chat already has the Homie connector (`https://homie.rocks/mcp`). Use it. Do not send the person to
-Claude's GitHub app, to claude.ai/code, or to a button that only says "Connect to Claude". The studio's
-first-run band says **Connect this chat**.
+In Grok Build the Homie plugin brings the connector (its tools read `homie__studio_scaffold` and the like);
+its hooks do not run there yet (above). Say `--client grok` to the setup status. In Grok chat the connector is
+`https://homie.rocks/mcp`, once the person has added it. Use the one that is here; with neither, and a shell,
+go on without it (step 0). Do not send the person to Claude's GitHub app, to claude.ai/code, or to a button
+that only says "Connect to Claude". The studio's first-run band says **Connect this chat**.
 
 - **Cloudflare** stays one tap on Cloudflare's own page. Grok has no Cloudflare connector and must never
   ask for a token. On a phone, the setup card's "Make the studio on Cloudflare" is that tap. On a computer,
@@ -148,11 +196,15 @@ account, **no payment method**); on their account you will create one Worker, on
 Durable Objects, all free on the Workers Free plan; the homie.rocks directory lists the games (only the
 site's address, the studio's name, each game's name, blurb and Play link).
 
-1. Call `studio_scaffold` with the name (and a folder if the person named one). Run the command it
-   returns. It lists every file it writes and installs the pinned toolkit and `wrangler` (about 20 s).
+1. Call `studio_scaffold` with the name (and a folder if the person named one) and run the command it
+   returns; without the connector, run `npx -y @homie-rocks/studio@latest new <folder> --name "<Name>"`.
+   Either lists every file it writes and installs the pinned toolkit and `wrangler` (about 20 s).
 2. Folder: the one the person named; otherwise a NEW folder named after the studio's slug inside the
    current directory (e.g. `./night-owls`). Never in a folder that already holds other files, never in
    the home folder, never outside the current directory.
+   **Other studios in the same folder** (a folder beside this one with its own `studio.json`) are other
+   people's work: never read them or copy from them, not even as a model for this studio or its game,
+   unless the person asks.
    **An earlier attempt:** if a folder of this name already exists and is not a studio (notes, a plan, a
    charter from before), say so and ASK whether to fold its premise in: with a yes, copy its notes into the
    studio's `notes/earlier/<folder>/` and use them in the plan; remove the old folder only with a second yes
@@ -161,8 +213,9 @@ site's address, the studio's name, each game's name, blurb and Play link).
    (`--no-install` never fetches a package by that bare name).
 4. In Claude Code, offer the status line in one line (above), then ask about step 2.
 
-If the MCP tool is unavailable, tell the person the Homie connector is not connected and stop; never
-invent the package address.
+A missing connector is no reason to stop: with a shell, make the studio with the command above and say in
+one line that the connector is not connected ("Without the connector", step 0). Never invent the package
+address: it is `@homie-rocks/studio`, and this skill is where it is written down.
 
 ## 2. See a working game
 
@@ -172,6 +225,12 @@ toolkit) with its Play link: give them the link and say to open it in two browse
 a computer, and they are two players in the same public room, with bots in the empty seats. Then ask:
 "Want a copy of a working starter in your own studio to change, or shall we go straight to planning your
 game?"
+
+It always names one. Where your commands have no network (Codex runs them that way by default), it cannot
+read the arcade and answers `"reached": false` with the arcade's standing first pick, Asteroids Arena:
+https://arcade.homie.rocks/asteroids-arena/play. That link opens in the person's own browser, not in your
+session, so give it as the live game it is and say nothing about the lookup. The same address serves when
+the command cannot be run at all.
 
 **Only when they ask for a copy** (now, or in their first message): the Gem Rush starter (grab gems, knock
 rivals away; bots fill the empty seats), or Ember Vale (`--from ember-vale`: a hero who lasts for days, with
@@ -211,7 +270,8 @@ the plan from here on: you keep it true as decisions change.
 
 After the codex, offer the choice in the `parallel` skill (when your app runs subagents): one agent step
 by step, or several agents at once (art, sound, game logic, levels, landing page) with a merge and a
-playtest, faster but using more of their plan's usage. Then build with the `game` skill. Open a
+playtest, faster but using more of their plan's usage. Then build with the `game` skill, a playable game
+first: when `check` passes, give the Play link before any polish ("A Play link first", above). Open a
 progress feed for every build so they can watch it:
 
 ```sh
@@ -223,8 +283,8 @@ npx --no-install homie-studio progress stage plan done --note "<the plan in one 
 percentage, each step and check going green, how to try it, what was spent) and redraws itself; the
 status line shows one line of it in Claude Code, and the Homie mod's Studio pane (Claude Code 2.1.287 or
 later) shows all of it with the latest check frame and opens by itself. In the Claude app, add `--share` and call
-`build_progress` with the build id it prints: the card follows the build. Codex CLI has no command
-status line, so there the codex page is the progress view (`npx --no-install homie-studio codex <id> --open`).
+`build_progress` with the build id it prints: the card follows the build. In Codex and Grok Build Homie
+draws no status line, pane or card, so there the codex page is the progress view (`npx --no-install homie-studio codex <id> --open`).
 
 ## 6. Playtest it, then put it online
 
@@ -269,7 +329,8 @@ the session, to send the people who make Homie a short note about how it went: "
 subdomain step was confusing? This is what I'd send:". Draft it with `homie_feedback` (`offered: true`; a draft
 sends nothing), in plain words from what happened, with the step it was about (`step: "studio-setup: put it
 online"`). Show it exactly as it would go (in the Claude app its card has Send, Edit and Don't send) and send it
-only after they say yes; in Claude Code, Claude Code itself asks them with the exact note. A no is final for the
+only after they say yes; in Claude Code, Claude Code itself asks them with the exact note, and in Codex
+Homie's hooks hold the send for their `proceed <code>`. A no is final for the
 session: say nothing was sent and carry on. Never make help wait on it, never offer twice, never put a key, a log,
 a file, code or anyone's name in it, and a reply address only if they typed it. When they ask to tell Homie
 something themselves, draft it with `offered: false`.
@@ -305,7 +366,8 @@ The live address `deploy` prints is on `workers.dev`, which names the person's C
 `deploy` keeps it in `.studio/local.json` (git-ignored). Never write it into a committed file. A custom
 domain goes in `studio.json` as `cloudflare.domain`.
 
-**The directory:** call the Homie MCP tool `studio_publish` with the live site address. It lists the
+**The directory:** call the Homie MCP tool `studio_publish` with the live site address (without the
+connector, `npx --no-install homie-studio publish`). It lists the
 games with their Play links (at most 12 per studio in the beta; its owner can unlist a listing that
 breaks its rules).
 
@@ -349,6 +411,10 @@ there (checked by SHA-256, at the same addresses); `homie-studio media move --dr
 
 - Never jump ahead of the checklist, and never copy a starter or another studio's game into the studio
   unless the person asked for it.
+- Never read or copy from another studio in the same folder unless the person asks: it is somebody else's
+  work.
+- Never stop for a missing connector while you can run a command, and never tell the person the connector
+  is needed to make a studio.
 - Never put a key, token or password in the studio or in chat.
 - Never touch Cloudflare resources the studio did not create.
 - Never add a payment method, buy anything or turn on a paid plan for the person (in Stripe Projects too: no

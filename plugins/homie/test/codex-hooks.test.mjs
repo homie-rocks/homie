@@ -13,7 +13,7 @@
  */
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -253,10 +253,21 @@ test('a deploy that went live is remembered, so the next deploy\'s hold says wha
 test('through stdin and stdout as Codex runs it; a check that fails refuses the call (Codex would run it)', () => {
   const s = studio();
   try {
-    const env = { ...process.env, PLUGIN_DATA: s.data };
+    // The mark that the hooks ran goes to a folder of this test's, never to the cache of whoever runs the tests.
+    const marks = join(s.data, 'marks');
+    const env = { ...process.env, PLUGIN_DATA: s.data, HOMIE_HOLDS_MARKS: marks };
     const run = (mode, input) => spawnSync(process.execPath, [SCRIPT, mode], { input, env, encoding: 'utf8' });
+    const before = Date.now();
     const held = run('pre', JSON.stringify(payload(s, 'apply_patch', { command: PATCH })));
     assert.equal(held.status, 0);
+    // Every run leaves the dated mark `homie-studio setup status` reads: the app, the time and the hook, nothing else.
+    const left = json(join(marks, 'codex.json'));
+    assert.deepEqual(Object.keys(left).sort(), ['app', 'at', 'event', 'v']);
+    assert.deepEqual({ v: left.v, app: left.app, event: left.event }, { v: 1, app: 'codex', event: 'pre' });
+    assert.ok(left.at >= before && left.at <= Date.now(), 'dated now');
+    assert.ok(!JSON.stringify(left).includes(s.root), 'no folder in it');
+    run('prompt', JSON.stringify({ session_id: 'session-1', prompt: 'hello' }));
+    assert.equal(json(join(marks, 'codex.json')).event, 'prompt', 'a message marks it too');
     const out = JSON.parse(held.stdout);
     codexTakes('PreToolUse', out);
     assert.equal(out.hookSpecificOutput.permissionDecision, 'deny');
@@ -268,8 +279,14 @@ test('through stdin and stdout as Codex runs it; a check that fails refuses the 
     const unchecked = JSON.parse(run('post', '{').stdout);
     codexTakes('PostToolUse', unchecked);
     assert.match(unchecked.reason, /withheld/);
+    // `check` is a person or a skill asking, not Codex running the hooks: it leaves no mark.
+    rmSync(marks, { recursive: true, force: true });
     const words = spawnSync(process.execPath, [SCRIPT, 'check', '--', 'npm', 'run', 'deploy'], { cwd: s.root, env, encoding: 'utf8' }).stdout;
     assert.match(words, /^Held for the person's Proceed:\n⚠ Deploy Night Owls/);
+    assert.equal(existsSync(join(marks, 'codex.json')), false);
+    // A mark that cannot be written (its folder's place is a file) stops nothing: the call is still checked.
+    writeFileSync(marks, 'a file where the folder would go');
+    assert.equal(JSON.parse(run('pre', JSON.stringify(payload(s, 'apply_patch', { command: PATCH }))).stdout).hookSpecificOutput.permissionDecision, 'deny');
   } finally { s.done(); }
 });
 

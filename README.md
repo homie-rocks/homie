@@ -7,7 +7,7 @@ that runs on your own Cloudflare, on the free plan.
 > to [Issues](https://github.com/homie-rocks/homie/issues/new/choose); read
 > [Known issues](#known-issues) first.
 
-Homie is a plugin for Claude Code and Codex. Ask it to *"set up a game studio called
+Homie is a plugin for Claude Code, Codex and Grok. Ask it to *"set up a game studio called
 Night Owls and make a multiplayer game"* and it:
 
 1. makes a **studio**: one folder you can see and open, a git repository with `games/`,
@@ -38,12 +38,15 @@ Your AI runs the commands. You approve what matters.
 **Claude Code**
 
 ```
-/plugin marketplace add homie-rocks/homie
-/plugin install homie@homie
+/plugin install homie --marketplace homie-rocks/homie
 ```
 
-From a terminal, the same is `claude plugin marketplace add homie-rocks/homie`, then
-`claude plugin install homie@homie`.
+One line, inside a session (Claude Code 2.1.275 or later): it asks you to confirm the marketplace, then opens
+the plugin's details, where you pick a scope. From a terminal it is two commands,
+`claude plugin marketplace add homie-rocks/homie`, then `claude plugin install homie@homie` (the terminal's
+`install` takes no `--marketplace`). Claude Code then says "9 userConfig options not yet set": those
+are the Homie mod's nine switches, every one optional and already at its default, so nothing is left
+to do (`/plugin configure homie@homie` changes one).
 
 **Codex**
 
@@ -56,21 +59,40 @@ Or run `/plugins` in Codex and install Homie from the Homie marketplace. Start a
 session afterwards so the skills and tools load, and open `/hooks` to trust Homie's three hooks. They
 hold an edit to a protected file, a deploy, a Cloudflare change, spending past the budget and a model
 download until you answer `proceed <code>`, and they take secrets out of what Codex reads. Codex runs no
-plugin's hooks until you trust them (the plugin README's "Homie's holds in Codex" says what they cover).
+plugin's hooks until you trust them, and says nothing when it skips them: the setup status has a row,
+"Homie's holds: on" or "off", and a first reply says so when they are off (the plugin README's "Homie's
+holds in Codex" says what they cover).
+
+If Codex already has another MCP server named `homie` (`codex mcp list`), that one keeps the name and the
+plugin's connector does not load. The setup status says so, and `codex mcp add homie-rocks --url
+https://homie.rocks/mcp` adds Homie's connector under its own name. A session makes a studio without the
+connector either way, with the studio's own commands.
 
 **Grok**
 
-Grok chat uses the same Homie connector, `https://homie.rocks/mcp`. There is no Cloudflare connector in
-Grok: approving Cloudflare in the browser (the setup card's Deploy to Cloudflare, or `npx wrangler login`
-on a computer) is still your step. A Grok Bot that has the studio folder runs the checklist. It checks
-the repository in with `npx --no-install homie-studio setup attach <hs_…> --client grok`. That does not
-need Claude's GitHub app.
+```
+grok plugin install homie-rocks/homie#plugins/homie
+```
 
-The plugin for Grok Build is `plugins/homie` (`.grok-plugin/plugin.json`, the same skills and MCP server).
-Its hooks (`hooks/grok.json`) ask the same module as the Claude Code mod and the Codex hooks
-(`hooks/lib/holds.mjs`), so a deploy, a protected edit or a paid call waits for your `proceed <code>`,
-and secrets are taken out of what Grok reads. To list it in the [xAI plugin marketplace](https://github.com/xai-org/plugin-marketplace), point a remote
-source at this repository with `"path": "plugins/homie"`.
+Grok shows where the plugin comes from and asks whether to trust it (`--trust` on the same command says yes
+ahead of time): its skills, its MCP server and its hooks load only once you do. Then start a new session and
+ask for a studio. Checked on Grok Build 1.0.41, where `grok plugin validate` reads the manifest as valid
+(the skills, the hooks and the MCP server). Homie is not in xAI's own plugin list, so it does not show up in
+a search there: install it from this repository, as above.
+
+The plugin is `plugins/homie` (`.grok-plugin/plugin.json`, the same skills and MCP server). **Homie's holds
+do not run in Grok yet.** The plugin ships the same hooks for Grok (`hooks/grok.json`) as for Codex, but Grok
+Build 1.0.41 runs no plugin's hooks: none are registered in its headless and agent sessions, from any plugin
+(checked 2026-10-04). So nothing holds a deploy, a protected edit or a paid call there, and no secret is taken
+out of what Grok reads. Homie's skill tells Grok to ask you before each of those itself, and the setup status
+says "Homie's holds: off"; it turns on by itself with a Grok that runs them. There is no Cloudflare connector
+in Grok: approving Cloudflare in the browser (`npx wrangler login` on a computer) is still your step.
+
+Grok Bot (the desktop app) does not list Homie: tell it to read https://homie.rocks/install.md and install
+Homie, then ask for a studio. In Grok chat the Homie connector is the same address, `https://homie.rocks/mcp`,
+and a Grok Bot that has the studio folder checks the repository in with `npx --no-install homie-studio setup
+attach <hs_…> --client grok`, which does not need Claude's GitHub app. We have not run these two end to end
+ourselves.
 
 Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
 `port`, `publish`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
@@ -82,8 +104,10 @@ A new studio follows one checklist, and never jumps ahead:
 
 0. **Setup status** (*"what do I need for my studio?"*): Node, the Homie connector, Cloudflare (signed in,
    email verified), Chrome, ffmpeg, and the optional GitHub, ElevenLabs and fal, each green, missing or
-   "do this now", with what it unlocks and the exact fix. Optional ones never block, and the person's own
-   steps (making a free Cloudflare account) can be done any time, even while waiting for something else.
+   "do this now", with what it unlocks and the exact fix; in Codex and Grok, whether Homie's holds are on.
+   Optional ones never block, and neither does a missing connector: a session that can run commands makes
+   the studio with the studio's own. The person's own steps (making a free Cloudflare account) can be done
+   any time, even while waiting for something else.
 1. **The studio**, by name.
 2. **A working game**: a live one to try at once on Homie Arcade (`homie-studio demo`), with nothing copied
    into the studio. A new studio has no game (its home page says "First game coming soon"); a copy of a
@@ -181,8 +205,10 @@ Underneath it is `homie-studio mcp`, the toolkit as a local MCP server, which an
 
 ## From the Claude app on a phone, with no terminal
 
-In the Claude app (claude.ai, the desktop app or the phone), add Homie as a connector
-(Settings → Connectors → Add custom connector → `https://homie.rocks/mcp`) and ask for a
+In the Claude app (claude.ai, the desktop app or the phone),
+[add Homie as a connector](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Homie&connectorUrl=https%3A%2F%2Fhomie.rocks%2Fmcp):
+the link opens "Add custom connector" with Homie filled in, and you confirm. By hand it is Settings →
+Connectors → Add custom connector → `https://homie.rocks/mcp`. Then ask for a
 studio. Its cards do the rest, and every approval is one tap on the provider's own page:
 
 1. **The setup card** has three buttons: *Make the studio on Cloudflare* (the Deploy to
@@ -324,9 +350,12 @@ The friends beta, as of this version:
 - **The checks need Chrome.** `homie-studio check` and `port check` drive two headless
   Chrome browsers (set `CHROME_PATH` if it is not in the usual place, and on Windows); the iPhone row of
   `port check` needs Playwright's WebKit and is skipped without it.
-- **Start a new session after installing** the plugin in Codex, so its skills and tools
+- **Start a new session after installing** the plugin in Codex or Grok, so its skills and tools
   load. The approval and publish cards (MCP Apps) show only in apps that support them;
   elsewhere the same answer comes as text with a link.
+- **Another MCP server named `homie`** in Codex's or Grok's own configuration keeps that name, and the
+  plugin's connector then does not load. `homie-studio setup status --client codex` (or `grok`) says so
+  and gives the command that adds Homie's connector under its own name; a studio is made without it meanwhile.
 - **The Homie MCP server allows about 60 requests a minute per address**, and the
   directory about 10 writes a minute per address and per studio. An agent that loops
   gets "too many requests" and should wait a minute.

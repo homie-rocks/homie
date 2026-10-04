@@ -53,7 +53,7 @@ input) so the painting keeps the game's layout.
 ## 2. Paid images: price, budget, one call at a time
 
 Generated images come from fal through the person's own account: they create a key at
-https://fal.ai/dashboard/keys and set `FAL_KEY` in the environment Claude or Codex runs in (never
+https://fal.ai/dashboard/keys and set `FAL_KEY` in the environment your AI runs in (never
 pasted into the chat, never written into the studio). **fal's own MCP server** is how you find a
 model and read its input schema and price (`search_models`, `recommend_model`, `get_model_schema`,
 `get_pricing`): use it rather than memory, because endpoints retire and reprice. Not connected? Offer

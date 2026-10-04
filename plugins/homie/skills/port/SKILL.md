@@ -34,7 +34,9 @@ half-ported game is left behind.
 - **The toolkit.** In the studio, `npx --no-install homie-studio port plan <game>`
   must work. If it says unknown command, the studio's `@homie-rocks/studio` is older than
   the port toolkit: call the Homie MCP tool `game_port` for the pinned package and
-  install it exactly as it says, then run `npm install`.
+  install it exactly as it says, then run `npm install`. Without the connector,
+  `npx -y @homie-rocks/studio@latest upgrade` says what to change (the `studio-setup` skill, "An existing
+  studio that is behind").
 
 ## 1. Read it and grade it (before changing anything)
 
@@ -201,7 +203,8 @@ if Wrangler is not signed in), then run the full check against the live site:
 npx --no-install homie-studio port check <id> --url <the live site> > .port-check-live.log 2>&1   # background task
 ```
 
-Then list it with the Homie MCP tool `studio_publish` { site }. Commit the studio
+Then list it with the Homie MCP tool `studio_publish` { site } (without the connector,
+`npx --no-install homie-studio publish`). Commit the studio
 (`git add -A && git commit -m "Port <Name> to multiplayer"` inside the studio).
 
 ## 6. Tell the person

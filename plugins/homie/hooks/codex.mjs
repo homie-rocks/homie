@@ -21,14 +21,21 @@
  *
  * It reads the studio's own files, `git -C <studio>` (read-only), a media skill's own `--dry-run` price (free), the
  * studio's own live site (its games and rooms, before a deploy) and Ollama's model list on this computer (loopback,
- * before a Clef download). It writes only its own holds and deploy record, in the plugin's data folder (PLUGIN_DATA).
- * It never reads a key file or the keychain. Settings: HOMIE_GUARD_FILES, HOMIE_GUARD_DEPLOYS, HOMIE_GUARD_SPEND and
- * HOMIE_REDACT_SECRETS set to "off" (or 0, false, no) turn that part off, like the mod's settings of the same names.
+ * before a Clef download). It writes only its own holds and deploy record, in the plugin's data folder (PLUGIN_DATA),
+ * and a dated mark that the hooks ran (`mark` below), in this user's cache. It never reads a key file or the keychain.
+ * Settings: HOMIE_GUARD_FILES, HOMIE_GUARD_DEPLOYS, HOMIE_GUARD_SPEND and HOMIE_REDACT_SECRETS set to "off" (or 0,
+ * false, no) turn that part off, like the mod's settings of the same names.
+ *
+ * THE MARK. Codex skips an untrusted plugin's hooks without a word, so a session where nothing is held looks the same
+ * as one where everything is. Each time a hook runs it leaves `codex.json` ({ v, app, at, event }: no folder, no
+ * session, no command) in `.cache/homie-studio/holds/` of the home folder, next to the toolkit's other caches
+ * (HOMIE_HOLDS_MARKS names another folder). `homie-studio setup status` reads it: a mark from the last few minutes is
+ * "Homie's holds: on", none is "off", with how to turn them on. A mark that cannot be written changes nothing else.
  */
 import { execFile } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
 import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises';
-import { tmpdir, userInfo } from 'node:os';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deployOf } from './lib/commands.mjs';
@@ -75,6 +82,23 @@ export function nodeIo({ live = null, who = 'homie-codex-hooks' } = {}) {
       } catch { return null; }
     },
   };
+}
+
+/* ------------------------------------------------------------------ the mark that the hooks ran */
+
+export function marksDir(env = process.env) {
+  return env.HOMIE_HOLDS_MARKS || join(homedir(), '.cache', 'homie-studio', 'holds');
+}
+
+/** Leave the dated mark `homie-studio setup status` reads (lib/doctor.mjs holdsMark). Never throws: a mark is not a hold. */
+export async function mark(app, event, { dir = marksDir(), now = Date.now() } = {}) {
+  try {
+    await mkdir(dir, { recursive: true });
+    const tmp = join(dir, `${app}.${process.pid}.tmp`);
+    await writeFile(tmp, JSON.stringify({ v: 1, app, at: now, event }));
+    await rename(tmp, join(dir, `${app}.json`));
+    return true;
+  } catch { return false; }
 }
 
 /* ------------------------------------------------------------------ the holds waiting for the person */
@@ -302,6 +326,7 @@ async function main(mode) {
     return;
   }
   let out = null;
+  if (['pre', 'prompt', 'post'].includes(mode)) await mark('codex', mode);
   try {
     const p = await stdinJson();
     if (mode === 'pre') out = await pre(p);

@@ -8,8 +8,12 @@
  * studio only when the person asks for one: `homie-studio game new <id> --from gem-rush`.
  *
  * It reads the arcade's own public manifest (/.well-known/homie-studio.json) and its live rooms (/api/rooms), so the
- * links are the ones live right now; when the arcade does not answer, it names its usual first pick. Read-only.
+ * links are the ones live right now. When this session cannot reach the arcade (a sandbox with no network, as Codex
+ * runs commands by default; a proxy; the arcade slow), it still answers, with the arcade's standing first pick
+ * (DEMO_FALLBACK, built in) and `reached: false`: the person's own browser opens that link, not this session, so it
+ * is still a live game to try. Read-only.
  */
+import { whyFailed } from './net.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
 export const DEMO_STUDIO = 'https://arcade.homie.rocks';
@@ -34,13 +38,17 @@ async function getJson(fetchFn, url, ms) {
 
 export async function demoGames({ fetchFn = globalThis.fetch, studio = DEMO_STUDIO, timeoutMs = 6000 } = {}) {
   const site = String(studio).replace(/\/+$/, '');
-  let manifest = null; let rooms = null; let why = null;
+  let manifest = null; let rooms = null; let why = null; let refused = false;
   try {
     [manifest, rooms] = await Promise.all([
       getJson(fetchFn, `${site}/.well-known/homie-studio.json`, timeoutMs),
       getJson(fetchFn, `${site}/api/rooms`, timeoutMs).catch(() => null),
     ]);
-  } catch (error) { why = error?.message ?? String(error); }
+  } catch (error) {
+    // The arcade answered with an error, or this session never got to it (no network here, a proxy, a timeout).
+    refused = /answered \d{3}$/.test(String(error?.message));
+    why = refused ? error.message : whyFailed(error, site).why;
+  }
   const live = new Map();
   for (const r of Array.isArray(rooms?.rooms) ? rooms.rooms : []) {
     const id = text(r?.game, 40);
@@ -63,7 +71,11 @@ export async function demoGames({ fetchFn = globalThis.fetch, studio = DEMO_STUD
     ok: true, command: 'demo',
     studio: { name: text(manifest?.name, 60) || 'Homie Arcade', site },
     pick, games: games.length ? games : [pick],
-    ...(why ? { note: `the arcade did not answer just now (${why}); this is its usual first pick` } : {}),
+    // Whether this session read the arcade just now. Not reached: the pick is the built-in one, and its link is as good.
+    reached: !why,
+    ...(why ? { note: refused
+      ? `the arcade did not give its list just now (${why}), so this is its standing first pick`
+      : `this session could not reach the arcade just now (${why}), so this is its standing first pick; the Play link opens in the person's own browser all the same` } : {}),
     how: HOW, copy: COPY,
   };
 }

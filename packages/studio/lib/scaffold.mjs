@@ -422,11 +422,16 @@ chat's card follows the work from then on) and, for a studio still being set up,
   studio.json as \`cloudflare.domain\`.
 - A game's room size is its netplay manifest's \`maxPlayers\` (game.json \`netplay\`, or netplay.json), up to 32.
 - Nothing in this studio needs \`~/.homie\` or a Homie box.
+- This studio is this folder. A studio in a folder beside it (another folder with its own \`studio.json\`) is
+  somebody else's work: never read it or copy from it unless the person asks.
 - Optional in studio.json: \`"protect"\` (globs of files the owner wants to look at before any change, such as
   \`"games/*/game.json"\`) and \`"budget"\` (\`{ "usd": <n>, "credits": <n> }\`: the most the studio's media jobs spend
   in all). In Claude Code, the Homie plugin's mod holds an edit to a protected file, a deploy, and a paid call past
-  the budget until the person says Proceed, and takes keys out of command output. When it refuses a call, say what
-  you meant to do and why; do not retry it unless the person asks.
+  the budget until the person says Proceed, and takes keys out of command output. In Codex the plugin's hooks hold
+  the same calls until the person's own \`proceed <code>\`, once the person has trusted them; in Grok Build nothing
+  holds them yet. \`npx --no-install homie-studio setup status --client codex\` (or \`grok\`) says whether Homie's
+  holds are on, and while they are off, ask before each of those yourself. When a call is refused, say what you
+  meant to do and why; do not retry it unless the person asks.
 
 ## Telling Homie
 

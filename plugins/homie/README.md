@@ -16,6 +16,16 @@ on the free plan.
 - **Homie's hooks for Grok** (`hooks/grok.json`, `hooks/grok.mjs`): the same holds, decided by the same
   module (`hooks/lib/holds.mjs`, through `hooks/codex.mjs`), so Claude Code, Codex and Grok cannot drift.
   Grok Build answers allow or deny; a hold denies the call until the person says `proceed <code>`.
+  **They do not run yet.** Grok Build 1.0.41 registers no plugin's hooks: its own log says `hooks: discovery
+  complete total_hooks=0` in headless (`grok -p`) and agent (`grok agent stdio`) sessions with five plugins
+  that ship hooks installed, and the same for a plugin loaded with `--plugin-dir` that holds nothing but a
+  standard `hooks/hooks.json`; a deploy ran unheld (2026-10-04). It is not this plugin's layout. Until a Grok
+  that runs them, nothing is held in Grok and no secret is taken out of what it reads: the `studio-setup`
+  skill tells Grok to ask the person itself, and `homie-studio setup status --client grok` says "Homie's
+  holds: off" (it reads the hooks' own mark, so it turns on by itself).
+  In Grok Build the plugin installs with `grok plugin install homie-rocks/homie#plugins/homie` (checked on
+  1.0.41; Grok asks whether to trust it, or takes `--trust`, and loads its skills, MCP server and hooks only
+  once you do). Grok chat and a Grok Bot without the plugin are not tested by us.
 - **Tell Homie** (the Homie MCP's `homie_feedback`, the mod's `/feedback`): a short note to the people who make
   Homie, which the person sees word for word and sends only with their yes. See "Tell Homie" below.
 - **The providers' own tools** (`providers.json`): see below.
@@ -28,8 +38,21 @@ on the free plan.
   Plugins schema, and then runs none of the plugin's hooks.
 
 Install it, and read what a studio is and what it costs, in the
-[repository's README](https://github.com/homie-rocks/homie#readme). Report a vulnerability
-as [SECURITY.md](SECURITY.md) says.
+[repository's README](https://github.com/homie-rocks/homie#readme). In short:
+
+- **Claude Code**, inside a session (2.1.275 or later): `/plugin install homie --marketplace homie-rocks/homie`.
+  It asks you to confirm the marketplace, then opens the plugin's details, where you pick a scope. From a
+  terminal: `claude plugin marketplace add homie-rocks/homie`, then `claude plugin install homie@homie` (the
+  terminal's `install` takes no `--marketplace`).
+- **Codex**: `codex plugin marketplace add homie-rocks/homie`, then `codex plugin add homie@homie`, a new session,
+  and `/hooks` to trust Homie's three hooks.
+- **Grok Build**: `grok plugin install homie-rocks/homie#plugins/homie`, then a new session.
+- **The Claude app** (web, desktop, phone), the connector alone:
+  [add Homie as a connector](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Homie&connectorUrl=https%3A%2F%2Fhomie.rocks%2Fmcp)
+  (the link opens "Add custom connector" with Homie filled in, and you confirm), or by hand Settings →
+  Connectors → Add custom connector → `https://homie.rocks/mcp`.
+
+Report a vulnerability as [SECURITY.md](SECURITY.md) says.
 
 ## The providers' own tools
 
@@ -355,6 +378,17 @@ two apps hold the same calls with the same words:
 open `/hooks` and trust Homie's three. Until then Codex skips them without a word, and so does `codex exec`.
 They need Node 22 (`node` on the path of a login shell), which a studio needs anyway.
 
+**Knowing whether they are on.** Because Codex says nothing when it skips them, the hooks say it themselves:
+each time one runs (a message, a tool call) it leaves a dated mark, `codex.json` (`grok.json` in Grok Build),
+in `.cache/homie-studio/holds/` of the home folder: the app, the time and which hook, nothing about the
+folder, the session or the call. `homie-studio setup status --client codex` (or `grok`; in Codex the
+toolkit also reads the app from its environment) reads it as a row, **Homie's holds**: on when the mark is
+from the last ten minutes, off otherwise, with how to turn them on (in Grok Build 1.0.41 it is off, and
+nothing the person does turns it on: that Grok runs no plugin's hooks). The `studio-setup` skill passes it on: one
+sentence in the first reply when they are off, and from then on the AI asks before a deploy, a Cloudflare
+change, a paid call or a model download itself. When they are on nothing changes. The row is a report, not
+a lock: a mark can be forged like any file, and nothing reads it to let a call through.
+
 **How a hold is answered.** A Codex hook can refuse a call or let it through, but it cannot ask the
 person: Codex refuses `permissionDecision: "ask"` as unsupported, and then runs the call. So a held call is
 refused with a short code, and the person sees in Codex what it holds (the same lines as the mod's Hold
@@ -401,6 +435,11 @@ Codex's own approval prompts, sandbox and rules still apply on top.
 - A shell command that writes a protected file is not held.
 - A hold's answer lives in the plugin's data folder (`PLUGIN_DATA`). Codex's sandbox keeps the model out of
   that folder, but under full access a model could forge an answer there.
+- **Another MCP server named `homie`** in Codex's own configuration (`config.toml`) keeps the name, and the
+  plugin's connector (`.mcp.json`, also `homie`) then does not load. The hooks still run. `homie-studio setup
+  status --client codex` says so (it reads only whether that entry is an address or a command, never the
+  command), and `codex mcp add homie-rocks --url https://homie.rocks/mcp` adds Homie's connector under its
+  own name; the holds match a Homie tool under either name.
 
 For a hard block, use Codex's own rules (`prefix_rule(..., decision="forbidden")` in the `rules/` folder of
 Codex's home, `$CODEX_HOME`); a plugin cannot ship those.
@@ -428,12 +467,12 @@ stuck, confused or frustrated, after an error Claude could not fix, or at the en
 publish, Claude may offer, once in a session, to send a short note about it. It never sends one without their yes:
 
 - **The tool** is `homie_feedback`, the same on the Homie MCP at homie.rocks (claude.ai, and this plugin in Claude
-  Code and Codex) and on the local Homie MCP (`homie-studio mcp`, Homie for Claude Desktop). `action: "draft"` (the
+  Code, Codex and Grok Build) and on the local Homie MCP (`homie-studio mcp`, Homie for Claude Desktop). `action: "draft"` (the
   default) sends nothing: it answers with the note exactly as it would go, a card where the app shows cards (Send,
   Edit, Don't send), and the same text for the chat. `action: "send"` sends only that draft (its `draft` id, with the
   same fields; any change is refused), and `action: "decline"` records a no.
 - **The yes** is the person's own: the card's Send; in Claude Code, Send in Claude Code's own question (the mod
-  holds every send); in Codex, `proceed <code>` (Homie's hooks hold every send); elsewhere, their yes in the chat.
+  holds every send); in Codex, `proceed <code>` (Homie's hooks hold every send); elsewhere, Grok included, their yes in the chat.
   A no is final for the session. The skills (`studio-setup`, `publish`) and the studio's `AGENTS.md` say when to
   offer, and that help never depends on it.
 - **What a note is:** its kind (stuck, confusing, idea, praise, bug), the words, the step or skill it is about, the

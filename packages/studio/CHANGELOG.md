@@ -17,9 +17,43 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.30.2] - 2026-10-04
+
+**Plugin 0.31.2** · [#48](https://github.com/homie-rocks/homie/pull/48)
+
+Fixes from first runs in Codex and Grok: a missing connector no longer stops a new studio, you are told when Homie's holds are off (in Grok they are), Grok has an install command, and a one-sentence studio gives you a Play link before it polishes.
+
+### Added
+
+- `homie-studio setup status --client codex` (or `--client grok`) has a row, **Homie's holds**: on when the plugin's hooks ran in that app in the last ten minutes, off otherwise, with how to turn them on. Codex runs no plugin's hooks until you trust them in `/hooks`, and says nothing when it skips them, so a session where nothing was held looked the same as one where everything was. The hooks now leave a small dated mark each time they run (in `.cache/homie-studio/holds/` of your home folder: the app, the time and which hook, nothing else), and the status reads it. When the holds are off, your AI says so in its first reply and asks you itself before a deploy, a Cloudflare change, a paid call or a model download. When they are on, nothing changes. In Grok the row is off (see Fixed).
+- The setup status says when another MCP server has taken the connector's name. The plugin's connector is the MCP server `homie`. If your Codex or Grok configuration already has a server of that name, that one keeps the name and the plugin's tools do not load. The connector row says so and gives the command that adds Homie's connector under its own name (`codex mcp add homie-rocks --url https://homie.rocks/mcp`), which your AI runs only with your yes. It reads only whether your entry is an address or a command, never the command itself.
+- Grok Build has an install command in the README: `grok plugin install homie-rocks/homie#plugins/homie` (checked on Grok Build 1.0.41). Grok asks whether to trust the plugin, and loads its skills, its MCP server and its hooks once you do.
+- A note you send to Homie from Grok says it came from Grok, not from "another app".
+
+### Changed
+
+- **A missing connector no longer stops a new studio.** In Codex, "set up a game studio called X and make a multiplayer game" stopped after a minute with nothing made: the `studio-setup` skill said to stop when the Homie connector was not connected. A session that can run commands does not need it. Your AI now says in one line that the connector is not connected and what it would add, and makes the studio with the toolkit's own command (`npx -y @homie-rocks/studio@latest new <folder> --name "<Name>"`). It stops only when it has neither the connector nor a way to run a command, and then it says how to add the connector in that app. The setup status no longer calls the connector required.
+- Other studios in the same folder are left alone. A new studio's `AGENTS.md` and the `studio-setup` and `game` skills say that a studio in a folder beside yours is somebody else's work: your AI does not read it or copy from it unless you ask. In a test, an AI read the game next door as a model for its own.
+- **A Play link first.** Asked for everything at once, your AI now tells you the moment two browsers finish a round, with the link to play, and only then goes on to sound, art, the playtest's fixes and the landing page, saying what it is doing. The same sentence took 55 to 80 minutes to its first word in Claude Code, Codex and Grok, polishing all the way.
+- The skills no longer suggest a status line, a pane or a card in Codex or Grok, where Homie draws none.
+- The README says what Claude Code means by "9 userConfig options not yet set" after an install: the Homie mod's nine switches, all optional and already at their defaults. Nothing is left to do.
+- Shorter ways in, in the README. Claude Code: one line inside a session, `/plugin install homie --marketplace homie-rocks/homie` (2.1.275 or later). The Claude app: a link that opens "Add custom connector" with Homie filled in, so nobody types the address.
+
+### Fixed
+
+- **Homie's holds do not run in Grok, and Homie no longer says they do.** 0.30.0 said Grok held the same calls as Claude Code and Codex. In a real run Grok deployed without asking. Grok Build 1.0.41 runs no plugin's hooks: its own log shows none registered in headless and agent sessions, for every installed plugin that ships hooks and for a test plugin holding nothing but a standard hooks file, so it is not Homie's layout. The README, the plugin's description and the skills now say that nothing is held in Grok and no secret is taken out of what Grok reads; the setup status says "Homie's holds: off"; and the `studio-setup` skill tells Grok to ask you before a deploy, a Cloudflare change, a paid call, a model download or an edit to a protected file. The hooks still ship, and the status turns on by itself with a Grok that runs them.
+- "See a working game" where commands have no network (Codex runs them that way by default). `homie-studio demo` answered with the arcade's standing first pick, and your AI passed on that "the lookup couldn't reach the arcade". It now gives you the link as the live game it is: your browser opens it, not the session. The answer says `reached: false` and no longer blames the arcade for a network the session did not have.
+- The setup status showed "List games in the homie.rocks directory" as not ready without the connector. Listing needs the directory, which `homie-studio publish` reaches by itself.
+
+### Upgrade notes
+
+- Codex: if you have not yet, open `/hooks` and trust Homie's three hooks. `setup status --client codex` says whether they are on.
+- Grok: nothing to install or switch on. Nothing holds a deploy or a paid call in Grok yet, so read what Grok is about to do when it asks; if it does not ask, tell it to.
+- An existing studio: `upgrade --apply` brings the new lines into the Rules section of its `AGENTS.md` when you have not changed that section. Nothing else in a studio changes.
+
 ## [0.30.1] - 2026-10-04
 
-**Plugin 0.31.1** · [#47](https://github.com/homie-rocks/homie/pull/47)
+**Plugin 0.31.1** · [#47](https://github.com/homie-rocks/homie/pull/47) · [release-2026-10-04-studio-0.30.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-04-studio-0.30.1)
 
 Fixes from a filmed first run in the Claude desktop app: Claude tells you once to choose Always allow and what to do when a step sits on a spinner, the deploy plan's card fills in, and a starter is changed in a few large edits instead of twenty small ones.
 

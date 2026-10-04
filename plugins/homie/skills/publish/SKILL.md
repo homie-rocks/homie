@@ -61,7 +61,9 @@ delete, rename or redeploy anything the studio did not create. When it answers w
 `needs` step (a new account verifies its email address; an account with no workers.dev
 address picks one), say that step to the person and wait. The deploy itself is held for the
 person's Proceed, with where it goes and what changed since the last one: by the Homie mod in
-Claude Code, and by Homie's hooks in Codex (`studio-setup` says how a hold is answered there).
+Claude Code, and by Homie's hooks in Codex (`studio-setup` says how a hold is answered there). Where nothing
+holds it (Codex before its hooks are trusted, and Grok Build, which runs no plugin's hooks yet: the setup
+status says "Homie's holds: off"), say what the deploy would do in a sentence and wait for the person's yes.
 
 Storage for songs and videos (`npx --no-install homie-studio storage add`, an R2 bucket) is
 separate and optional: Cloudflare asks for a payment method before R2 works, so only
@@ -177,7 +179,7 @@ After a studio's first publish (its games are listed and playable), or when a de
 you could not fix, you may offer, once in the session, to send the people who make Homie a short note about it:
 `homie_feedback` with `offered: true` and the step (`step: "publish"`). A draft sends nothing; show it exactly as it
 would go and send it only after the person says yes (in Claude Code, Claude Code itself asks them with the exact
-note). A no is final for the session. No keys, logs, files, code, site addresses that name the account, or anyone's
+note; in Codex, Homie's hooks hold the send for their `proceed <code>`). A no is final for the session. No keys, logs, files, code, site addresses that name the account, or anyone's
 name in it.
 
 ## Beta

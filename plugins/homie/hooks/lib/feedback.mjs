@@ -20,10 +20,10 @@
 import { redactText } from './redact.mjs';
 
 export const FEEDBACK_KINDS = Object.freeze(['stuck', 'confusing', 'idea', 'praise', 'bug']);
-export const FEEDBACK_APPS = Object.freeze(['claude-code', 'codex', 'claude-desktop', 'claude-ai', 'other']);
+export const FEEDBACK_APPS = Object.freeze(['claude-code', 'codex', 'grok', 'claude-desktop', 'claude-ai', 'other']);
 export const FEEDBACK_LIMITS = Object.freeze({ text: 1500, raw: 6000, lines: 30, step: 80, email: 254, version: 32, perSession: 5, offers: 3 });
 export const KIND_LABEL = Object.freeze({ stuck: 'Stuck', confusing: 'Confusing', idea: 'Idea', praise: 'Praise', bug: 'Bug' });
-export const APP_LABEL = Object.freeze({ 'claude-code': 'Claude Code', codex: 'Codex', 'claude-desktop': 'the Claude desktop app', 'claude-ai': 'Claude on the web or a phone', other: 'another app' });
+export const APP_LABEL = Object.freeze({ 'claude-code': 'Claude Code', codex: 'Codex', grok: 'Grok', 'claude-desktop': 'the Claude desktop app', 'claude-ai': 'Claude on the web or a phone', other: 'another app' });
 
 /** Where a note goes on a Homie directory (homie.rocks, or a local one for tests). */
 export const feedbackUrl = (directory = 'https://homie.rocks') => `${String(directory || 'https://homie.rocks').replace(/\/+$/, '')}/api/feedback/tell`;
@@ -175,6 +175,7 @@ export async function sendNote(note, { directory, source = 'plugin', consent = '
 export function appOf(clientInfo) {
   const name = String(clientInfo?.name ?? '').toLowerCase();
   if (/codex/.test(name)) return 'codex';
+  if (/grok/.test(name)) return 'grok';
   if (/claude[-_ ]?code/.test(name)) return 'claude-code';
   if (/claude/.test(name)) return 'claude-desktop';
   return 'other';

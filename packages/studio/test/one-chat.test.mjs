@@ -107,7 +107,8 @@ test('demo: a live game on the arcade from its own manifest, people playing firs
   assert.match(r.copy, /only when you ask/i);
   const down = await demoGames({ fetchFn: async () => { throw new Error('offline'); }, studio: site });
   assert.equal(down.pick.play, DEMO_FALLBACK.play);
-  assert.match(down.note, /did not answer/);
+  assert.equal(down.reached, false);
+  assert.match(down.note, /could not reach the arcade just now/);
 });
 
 test('handoff: one line in, the brief fetched by the build id, a setup checked in, the build taken, the steps out', async () => {

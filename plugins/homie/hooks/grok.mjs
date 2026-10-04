@@ -10,14 +10,24 @@
  * "proceed H7K2" or "cancel H7K2"; UserPromptSubmit records it, and the same call then goes through once. Grok's own
  * approval prompts still apply. PostToolUse takes secrets out of what the model reads (lib/redact.mjs).
  *
+ * SEEN IN GROK BUILD 1.0.41 (2026-10-04): Grok registers no plugin's hooks. In headless (`grok -p`) and agent
+ * (`grok agent stdio`) sessions its own log says "hooks: discovery complete total_hooks=0" with five plugins that
+ * ship hooks installed, and the same for a plugin loaded with --plugin-dir whose only content is a standard
+ * hooks/hooks.json; a deploy ran unheld. So these hooks do not run there yet, whatever file they are in: this
+ * script answers correctly when fed a payload by hand, the skills tell Grok to ask the person itself, and the setup
+ * status says "Homie's holds: off" until the mark below appears. Nothing here needs to change for a Grok that runs
+ * them.
+ *
  *   node hooks/grok.mjs check -- <command line>     what Homie would do with a command, in words (nothing runs)
  *
- * It writes only its own holds, in GROK_PLUGIN_DATA (or HOMIE_HOLDS_DATA). It never reads a key file.
+ * It writes only its own holds, in GROK_PLUGIN_DATA (or HOMIE_HOLDS_DATA), and the dated mark that the hooks ran
+ * (hooks/codex.mjs `mark`: `grok.json` in this user's cache), which `homie-studio setup status --client grok` reads to
+ * say whether Homie's holds are on. It never reads a key file.
  */
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decide, post, pre, prompt } from './codex.mjs';
+import { decide, mark, post, pre, prompt } from './codex.mjs';
 import { holdText } from './lib/holds.mjs';
 
 const SHELL = new Set(['bash', 'run_terminal_cmd', 'run_terminal_command', 'exec_command', 'shell', 'local_shell']);
@@ -127,6 +137,7 @@ async function main(mode) {
     return;
   }
   let out = null;
+  if (['pre', 'prompt', 'post'].includes(mode)) await mark('grok', mode);
   try {
     const p = await stdinJson();
     if (mode === 'pre') out = await grokPre(p);

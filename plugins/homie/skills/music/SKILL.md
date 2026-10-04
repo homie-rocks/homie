@@ -43,7 +43,7 @@ Not connected? Offer ElevenLabs' own tools, never a copy of anyone's key or code
   The person approves the install. An older CLI works; `brew upgrade elevenlabs` keeps it current
   (1.4.0 on 2026-09-25).
 - **Or their own API key** from https://elevenlabs.io/app/developers/api-keys, set as
-  `ELEVENLABS_API_KEY` in the environment Claude or Codex runs in. Never ask them to paste it
+  `ELEVENLABS_API_KEY` in the environment your AI runs in. Never ask them to paste it
   into the chat and never write it into the studio.
 - **ElevenLabs' plugin** for Claude Code (`/plugin marketplace add elevenlabs/plugin`, then
   `/plugin install elevenlabs@elevenlabs`; in Codex `codex plugin marketplace add elevenlabs/plugin`)

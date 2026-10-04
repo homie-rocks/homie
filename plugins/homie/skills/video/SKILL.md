@@ -89,7 +89,7 @@ node <video.mjs> sheet <slug> --in videos/<slug>/<slug>.mp4
 ## B. Generated footage: a music video, a cutscene
 
 **The provider, only now.** fal through the person's own account: they create a key at
-https://fal.ai/dashboard/keys and set `FAL_KEY` in the environment Claude or Codex runs in
+https://fal.ai/dashboard/keys and set `FAL_KEY` in the environment your AI runs in
 (never pasted into the chat, never written into the studio). `check` tests it for free.
 **fal's own MCP server** is the way to find models and read their input schemas and prices
 (`search_models`, `recommend_model`, `get_model_schema`, `get_pricing`): use it rather than memory,
