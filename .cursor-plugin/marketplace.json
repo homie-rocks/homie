@@ -1,7 +1,8 @@
 {
   "name": "homie-rocks",
   "owner": {
-    "name": "Homie"
+    "name": "Homie",
+    "email": "hello@homie.rocks"
   },
   "metadata": {
     "description": "Studio in a box on your own Cloudflare"
