@@ -72,8 +72,8 @@ const HOUSE_TERMS = () => parseTerms(JSON.stringify({ v: 1, terms: [
 ] }));
 const withTerms = (extra = {}) => ({ terms: HOUSE_TERMS(), termsGiven: true, ...extra });
 
-test('clean content passes; the security contact and a made-up test host are INFO', () => {
-  const r = repo({ 'packages/a/README.md': '# a\nReport problems to security@homie.rocks.\n', 'packages/a/test/x.mjs': "const host = 'test-studio.acct.workers.dev';\n" });
+test('clean content passes; project contacts, the security contact and a made-up test host are INFO', () => {
+  const r = repo({ 'packages/a/README.md': '# a\nReport problems to security@homie.rocks.\nContact: hello@homie.rocks\n', 'packages/a/test/x.mjs': "const host = 'test-studio.acct.workers.dev';\n" });
   try {
     const out = auditRepo(r.dir);
     assert.deepEqual(fails(out), []);

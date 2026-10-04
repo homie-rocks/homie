@@ -21,8 +21,8 @@
  * It FAILS on, in any file or commit message:
  *   - home and machine paths (/Users/…, /home/…, C:\Users, /private/tmp, /var/folders)
  *     and home-relative paths (~/…);
- *   - email addresses, except the security contact (and, in a commit message, a person's
- *     trailer: see "People" below);
+ *   - email addresses, except @homie.rocks addresses (project contacts) and, in a commit
+ *     message, a person's trailer (see "People" below);
  *   - secret shapes: keys, tokens, JWTs, bearer values, 32-hex ids, UUIDs and workers.dev
  *     hosts (a test's made-up values are listed below);
  *   - the old npm scope @homie/ (the npm org "homie" is someone else's), a path to a
@@ -187,6 +187,7 @@ export function auditText(path, text, ctx) {
   each(EMAIL, (i, line, m) => {
     if (m.toLowerCase() === SECURITY_CONTACT) hit('email', 'info', i, `${m} (the security contact)`);
     else if (trailers[i]) hit('email', 'info', i, `a ${trailers[i]} trailer, the person's own (${mask(m)})`);
+    else if (m.toLowerCase().endsWith('@homie.rocks')) hit('email', 'info', i, `${m} (project contact)`);
     else hit('email', 'fail', i, `an email address (${mask(m)})`);
   });
 
@@ -362,7 +363,7 @@ export function auditRepo(repo, { ref = 'HEAD', history = null, workingTree = fa
 const TITLES = {
   files: 'Files: no symlinks, submodules, binaries or secret-bearing files',
   paths: 'Home, machine and private paths; package folders this repository does not have; private commit ids',
-  email: `Email addresses (only ${SECURITY_CONTACT}; in a commit message, a person's trailer)`,
+  email: `Email addresses (project contacts @homie.rocks; in a commit message, a person's trailer)`,
   secrets: 'Tokens, keys, account ids, UUIDs, workers.dev hosts',
   scope: 'npm scope: @homie-rocks/ only, never @homie/',
   process: 'Words of a private build process',
