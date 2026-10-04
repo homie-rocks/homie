@@ -88,11 +88,13 @@ out of what Grok reads. Homie's skill tells Grok to ask you before each of those
 says "Homie's holds: off"; it turns on by itself with a Grok that runs them. There is no Cloudflare connector
 in Grok: approving Cloudflare in the browser (`npx wrangler login` on a computer) is still your step.
 
-Grok Bot (the desktop app) does not list Homie: tell it to read https://homie.rocks/install.md and install
-Homie, then ask for a studio. In Grok chat the Homie connector is the same address, `https://homie.rocks/mcp`,
-and a Grok Bot that has the studio folder checks the repository in with `npx --no-install homie-studio setup
-attach <hs_…> --client grok`, which does not need Claude's GitHub app. We have not run these two end to end
-ourselves.
+Grok Bot (the desktop app) does not show Homie in its plugin list: tell it to read
+https://homie.rocks/install.md and install Homie, then ask for a studio. Checked 2026-10-04: from that one
+message it installed Homie on its own computer, made a studio, built a game and passed the two-browser check,
+then asked for the Cloudflare approval. In Grok chat the Homie connector is the same address,
+`https://homie.rocks/mcp` (grok.com/connectors, New Connector, Custom). A Grok Bot that has the studio folder
+checks the repository in with `npx --no-install homie-studio setup attach <hs_…> --client grok`, which does
+not need Claude's GitHub app; that hand-off we have not run end to end ourselves.
 
 Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
 `port`, `publish`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
@@ -327,7 +329,7 @@ repository:
   registry's. Studios made before 0.10.0 pin those; a new studio pins the registry's
   exact version, which Workers Builds and Claude Code cloud sessions reach by default.
 
-homie.rocks itself, the Homie app for TVs, phones and places, and Homie's own games (their
+homie.rocks itself and Homie's own games (their
 code, art, music and names) are not open source; the engine they are built on is.
 
 ## Known issues

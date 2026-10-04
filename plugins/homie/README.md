@@ -25,7 +25,8 @@ on the free plan.
   holds: off" (it reads the hooks' own mark, so it turns on by itself).
   In Grok Build the plugin installs with `grok plugin install homie-rocks/homie#plugins/homie` (checked on
   1.0.41; Grok asks whether to trust it, or takes `--trust`, and loads its skills, MCP server and hooks only
-  once you do). Grok chat and a Grok Bot without the plugin are not tested by us.
+  once you do). Grok Bot installs Homie itself when told to read https://homie.rocks/install.md (checked
+  2026-10-04, as far as the Cloudflare approval); Grok chat with only the connector is not tested by us.
 - **Tell Homie** (the Homie MCP's `homie_feedback`, the mod's `/feedback`): a short note to the people who make
   Homie, which the person sees word for word and sends only with their yes. See "Tell Homie" below.
 - **The providers' own tools** (`providers.json`): see below.
