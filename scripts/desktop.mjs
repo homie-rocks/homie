@@ -142,6 +142,9 @@ if (check) {
     const s = talk('node', args, { cwd: work, env: { ...m.server.mcp_config.env } });
     const init = await s.request('initialize', { protocolVersion: '2025-11-25', capabilities: { extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } } }, clientInfo: { name: 'claude-ai', version: 'check' } });
     if (init.result?.serverInfo?.version !== version) throw new Error(`the packed server says ${init.result?.serverInfo?.version}, not ${version}`);
+    // The manifest's environment is how the server knows it runs in the desktop app, which asks the person before every
+    // tool call: started with it, the server tells the model to say so once (packages/studio/lib/mcp-tools.mjs).
+    if (m.server.mcp_config.env?.HOMIE_STUDIO_EXTENSION !== '1' || !/Always allow/.test(init.result?.instructions ?? '')) throw new Error('the packed server, started with the manifest\'s environment, does not tell the model what the desktop app asks the person (HOMIE_STUDIO_EXTENSION=1)');
     const tools = (await s.request('tools/list')).result.tools.map((t) => t.name);
     for (const t of m.tools) if (!tools.includes(t.name)) throw new Error(`the manifest lists ${t.name}, which the packed server does not have`);
     for (const uri of ['ui://homie-studio/setup', 'ui://homie-studio/build', 'ui://homie-studio/studio', 'ui://homie-studio/codex', 'ui://homie-studio/lab']) {
@@ -171,6 +174,6 @@ if (check) {
       await s3.close();
       if (st.structuredContent?.studiosDir !== join(work, 'Studios')) throw new Error(`with ${what} for the folder, the server used ${st.structuredContent?.studiosDir}, not the default`);
     }
-    say(`the packed server answers: ${tools.length} tools, 5 cards, setup status, the guides, and a new studio with no game (${init.result.protocolVersion}); the folder setting is optional, and an unfilled one means the default`);
+    say(`the packed server answers: ${tools.length} tools, 5 cards, setup status, the guides, what the desktop app asks the person, and a new studio with no game (${init.result.protocolVersion}); the folder setting is optional, and an unfilled one means the default`);
   } finally { rmSync(work, { recursive: true, force: true }); }
 }

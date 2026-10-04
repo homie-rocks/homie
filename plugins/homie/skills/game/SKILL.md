@@ -44,7 +44,10 @@ The game is `games/<id>/`: `game.json` (name, blurb, players, round length),
 `index.html`, `src/main.ts`. The starter (Gem Rush) is a complete netplay game in one
 readable file: rules, bots, snapshots, rendering on a canvas, keys and touch.
 
-Make it the game the person asked for, in small steps:
+Make it the game the person asked for, one milestone at a time. Within a milestone, work in few, large
+edits: read a file once, decide every change it needs, and make them together (one edit that carries several
+replacements, or one write of a new or short file), never a tool call per change. Twenty single edits to one
+file use up a turn before the game is built and checked, and the person has to say "keep going". As you go:
 
 - Keep `createNetplay` from `@homie-rocks/studio/netplay` and its shape (host runs the rules
   and bots; replicas move their own body and render snapshots; checkpoint everything a

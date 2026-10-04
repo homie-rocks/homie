@@ -20,6 +20,7 @@ h2{margin:16px 0 8px;font:600 13px/1.2 var(--f-sans);color:var(--c-fg2);text-tra
 .sub{margin:0 0 12px;color:var(--c-fg2);overflow-wrap:anywhere}
 .note{margin:10px 0 0;padding:10px 12px;border-radius:var(--r-md);background:var(--c-bg2);color:var(--c-fg2)}
 .note.bad{background:var(--c-badbg);color:var(--c-bad)}.note.ok{background:var(--c-okbg);color:var(--c-ok);font-weight:600}
+.note.words{margin-top:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .fine{margin:10px 0 0;font-size:12px;color:var(--c-fg3)}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--r-full);font:600 12px/1.2 var(--f-sans);background:var(--c-bg2);color:var(--c-fg2);white-space:nowrap}
 .pill.ok{background:var(--c-okbg);color:var(--c-ok)}.pill.bad{background:var(--c-badbg);color:var(--c-bad)}.pill.warn{background:var(--c-warnbg);color:var(--c-warn)}

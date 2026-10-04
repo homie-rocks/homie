@@ -54,6 +54,20 @@ export const HOMIE_UPDATES = 'https://homie.rocks/updates/?from=plugin';
 const inside = (base, p) => p === base || p.startsWith(base.endsWith(sep) ? base : `${base}${sep}`);
 const realOr = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
 
+/** In Homie for Claude Desktop: the extension's manifest starts the server with HOMIE_STUDIO_EXTENSION=1 (desktop/manifest.json). */
+export const inDesktopApp = (env = process.env) => env.HOMIE_STUDIO_EXTENSION === '1';
+
+/*
+ * A FIRST RUN IN THE CLAUDE DESKTOP APP (0.30.1). The app asks the person before every tool call of an extension:
+ * about fifty requests in one filmed first build, each a click, and nothing told the person that "Always allow"
+ * exists. Twice the app raised a request it did not draw (it came straight after a card, with no text between):
+ * the chat showed a spinner until the request timed out four minutes later, while the request's own key still
+ * answered it. That is the app's to fix; Homie's part is that the person is told, once, by the model, in its first
+ * reply. Only the desktop extension says this (inDesktopApp): in Claude Code, Codex, Grok or any other MCP client
+ * it would not be true.
+ */
+export const DESKTOP_APPROVALS = 'This is the Claude desktop app: it asks the person before each Homie Studio tool call. ONCE in a chat, in your first words to the person (skip it if you already said it in this chat), tell them in two short sentences of your own: (1) Claude will ask before it uses each Homie Studio tool, and choosing "Always allow" lets the build run without a click at every step; (2) if a step ever sits on a spinner for more than a few seconds with nothing to click, a request is waiting out of sight: Cmd+Return on a Mac (Ctrl+Enter on Windows) allows it once, and scrolling the chat can bring it into view (a request shows its keys beside its buttons). Do not repeat it later. And after a tool that shows a card (setup_status, studio_scaffold, game_codex, build_open, check, playtest, studio_deploy, …), write one short line of text before your next tool call: a request that came straight after a card, with no text between, is the one the app has failed to draw.';
+
 /** A folder as the Claude desktop app's settings give it: `${HOME}/Studios` arrives as written, so expand it here. */
 export function expandHome(value, home = homedir()) {
   const v = String(value ?? '').trim();
@@ -65,8 +79,10 @@ export function expandHome(value, home = homedir()) {
 /* ------------------------------------------------------------------ which studio */
 
 export class StudioContext {
-  constructor({ studiosDir = null, cwd = process.cwd(), skillsDir = null, waitMs = 40_000, directory = null, install = true } = {}) {
+  constructor({ studiosDir = null, cwd = process.cwd(), skillsDir = null, waitMs = 40_000, directory = null, install = true, desktop = inDesktopApp() } = {}) {
     this.install = install;
+    // Homie for Claude Desktop (the .mcpb): the one host these tools know asks the person before every call.
+    this.desktop = desktop === true;
     this.studiosDir = studiosDir ? expandHome(studiosDir) : null;
     this.cwdStudio = findStudio(cwd);
     this.current = this.cwdStudio;
@@ -110,13 +126,24 @@ export class StudioContext {
     return Boolean((this.studiosDir && inside(realOr(this.studiosDir), real)) || (this.cwdStudio && inside(realOr(this.cwdStudio), real)));
   }
 
+  /** Where `a` (a folder name, a studio's name, or a path inside the studios folder) would be a studio, or null. */
+  pathOf(a, list = this.studios()) {
+    const byName = list.find((s) => s.folder === a || s.name.toLowerCase() === a.toLowerCase() || slugify(s.name) === slugify(a));
+    return byName?.root ?? (isAbsolute(expandHome(a) ?? '') && (a.includes('/') || a.includes('\\') || a.startsWith('~')) ? expandHome(a) : this.studiosDir ? join(this.studiosDir, a) : null);
+  }
+
+  /** Whether `arg` names a studio that exists (as root() would find it). */
+  knows(arg) {
+    const path = this.pathOf(String(arg ?? '').trim());
+    return Boolean(path && existsSync(join(path, 'studio.json')));
+  }
+
   /** The studio a tool works in: `arg` (a folder name, a studio's name, or a path inside the studios folder). */
   root(arg, { need = true } = {}) {
     if (arg !== undefined && arg !== null && String(arg).trim()) {
       const a = String(arg).trim();
       const list = this.studios();
-      const byName = list.find((s) => s.folder === a || s.name.toLowerCase() === a.toLowerCase() || slugify(s.name) === slugify(a));
-      const path = byName?.root ?? (isAbsolute(expandHome(a) ?? '') && (a.includes('/') || a.includes('\\') || a.startsWith('~')) ? expandHome(a) : this.studiosDir ? join(this.studiosDir, a) : null);
+      const path = this.pathOf(a, list);
       if (!path || !existsSync(join(path, 'studio.json'))) throw new Error(`no studio "${a}"${list.length ? ` (studios here: ${list.map((s) => s.folder).join(', ')})` : ''}`);
       if (!this.allowed(path)) throw new Error(`${path} is outside the studios folder (${this.studiosDir ?? 'none is set'}); these tools only work in it`);
       this.current = realOr(path);
@@ -203,7 +230,7 @@ function checklist(ctx, root) {
   return steps.map((label, n) => ({ n, label, state: done[n] ? 'done' : n === now ? 'now' : 'todo' }));
 }
 
-async function setupCard(ctx, root, { fresh = false, made = null, install = null } = {}) {
+async function setupCard(ctx, root, { fresh = false, made = null, install = null, wanted = null } = {}) {
   const status = await statusOf(ctx, root, { fresh });
   const studios = ctx.studios().map(({ root: r, ...s }) => s);
   const current = root ? ctx.describe(root) : null;
@@ -212,6 +239,8 @@ async function setupCard(ctx, root, { fresh = false, made = null, install = null
   const steps = checklist(ctx, root);
   const data = {
     kind: 'setup', version: STUDIO_VERSION, studiosDir: ctx.studiosDir,
+    // The name of a studio that is not made yet (setup_status asked for it by name): the card is that new studio's.
+    wanted: current ? null : wanted,
     current: current ? { folder: current.folder, name: current.name, games: current.games, installed: current.installed, site: siteUrl(root) } : null,
     studios, checklist: steps,
     status: { rows: status.rows.map(({ parts, ...r }) => r), features: status.features, next: status.next, meanwhile: status.meanwhile, blocking: status.blocking },
@@ -220,16 +249,22 @@ async function setupCard(ctx, root, { fresh = false, made = null, install = null
     // homie.rocks). The card never asks for an address, and an agent never types one in for the person.
     updates: HOMIE_UPDATES,
   };
+  const others = studios.map((s) => s.name);
+  const first = (steps.find((s) => s.state === 'now')?.n ?? steps.length) <= 2;
   const text = [
-    current ? `Studio: ${current.name} (${root})${current.installed ? '' : job ? ' (installing its toolkit)' : ''}` : `No studio yet${ctx.studiosDir ? ` in ${ctx.studiosDir}` : ''}.`,
+    current ? `Studio: ${current.name} (${root})${current.installed ? '' : job ? ' (installing its toolkit)' : ''}`
+      : wanted ? `No studio called "${wanted}" yet${ctx.studiosDir ? ` in ${ctx.studiosDir}` : ''}${others.length ? ` (the studios here: ${others.join(', ')}; this checklist is the new studio's, not theirs)` : ''}: studio_scaffold makes it.`
+        : `No studio yet${ctx.studiosDir ? ` in ${ctx.studiosDir}` : ''}.`,
     '',
-    `New studio${current ? `: ${current.name}` : ''}`,
+    `New studio${current ? `: ${current.name}` : wanted ? `: ${wanted}` : ''}`,
     ...steps.map((s) => `  ${s.state === 'done' ? '✓' : s.state === 'now' ? '→' : ' '} ${s.n}. ${s.label}`),
     '',
     formatStatus(status),
     '',
     `Homie updates by email (optional): ${HOMIE_UPDATES} (the person signs up there themselves; never type an address in for them).`,
     'The card on screen shows this; it follows the install by itself.',
+    // The first minutes of a new studio in the Claude desktop app: what the person is told once (DESKTOP_APPROVALS).
+    ...(ctx.desktop && first ? ['', DESKTOP_APPROVALS] : []),
   ].join('\n');
   return ok(text, data);
 }
@@ -703,7 +738,7 @@ function guideTopics(ctx) {
   try { return readdirSync(ctx.skillsDir, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(join(ctx.skillsDir, d.name, 'SKILL.md'))).map((d) => d.name).sort(); } catch { return []; }
 }
 
-const DESKTOP_NOTE = 'In this app, where a guide says to run `npx --no-install homie-studio <command>`, call the tool of the same job (build, check, preview_run, studio_deploy, …) or studio_run with that command\'s words; where it says to edit a file, use file_read, file_edit and file_write; a guide\'s own script (music, sound, art, video) is the tool of that name.';
+const DESKTOP_NOTE = 'In this app, where a guide says to run `npx --no-install homie-studio <command>`, call the tool of the same job (build, check, preview_run, studio_deploy, …) or studio_run with that command\'s words; where it says to edit a file, use file_read, file_edit and file_write, in few, large calls: read a file once, then make every change it needs in ONE file_edit (its edits list takes many replacements) or one file_write of a new or short file, never a call per change (every call is a step the person waits on, and a turn has only so many); a guide\'s own script (music, sound, art, video) is the tool of that name.';
 
 /* ------------------------------------------------------------------ the tools */
 
@@ -717,10 +752,15 @@ export function toolDefs(ctx, avail = {}) {
   const tools = [
     {
       name: 'setup_status', title: 'Setup status',
-      description: 'Step 0 of a new studio, and any time the person asks what they need or whether they are set up: what this computer and their accounts have (Node, Cloudflare signed in and email verified, Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and fal), what each unlocks, and the exact fix; the studios in the studios folder; and the new-studio checklist with where they are on it. Read-only, a few seconds. Optional rows never block anything.',
-      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, fresh: { type: 'boolean', description: 'Check again now instead of the last 20 s' } } },
+      description: 'Step 0 of a new studio, and any time the person asks what they need or whether they are set up: what this computer and their accounts have (Node, Cloudflare signed in and email verified, Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and fal), what each unlocks, and the exact fix; the studios in the studios folder; and the new-studio checklist with where they are on it. For a studio that is not made yet, pass its name as studio: the checklist is then the new studio\'s, never another studio\'s that happens to be in the folder. Read-only, a few seconds. Optional rows never block anything.',
+      inputSchema: { type: 'object', properties: { studio: str('Optional: which studio (its folder name or name), or the name of a new studio that is not made yet; else the one in use'), fresh: { type: 'boolean', description: 'Check again now instead of the last 20 s' } } },
       annotations: { title: 'Setup status', ...RO }, _meta: ui(UI.setup),
-      run: async (a) => setupCard(ctx, ctx.root(a.studio, { need: false }), { fresh: a.fresh === true }),
+      run: async (a) => {
+        // A name with no studio of it yet is the studio about to be made: its own checklist, from step 1.
+        const named = String(a.studio ?? '').trim().slice(0, 60);
+        if (named && !ctx.knows(named)) return setupCard(ctx, null, { fresh: a.fresh === true, wanted: named });
+        return setupCard(ctx, ctx.root(a.studio, { need: false }), { fresh: a.fresh === true });
+      },
     },
     {
       name: 'studio_scaffold', title: 'Make a studio',
@@ -840,7 +880,7 @@ export function toolDefs(ctx, avail = {}) {
         }
         const m = r.result?.models;
         const got = m ? ` Its models: ${m.fetched} from the starter library${m.missing.length ? `; ${m.missing.length} could not be fetched (${m.why ?? m.missing[0].why}), and it draws stand-ins for those` : ''}.` : '';
-        return ok(`games/${a.id} is ${a.name}, from the ${a.from ?? 'gem-rush'} starter (${(r.result?.files ?? []).length} files).${got}${install} Change it in games/${a.id}/src/main.ts (file_read, file_edit), then build and preview_run; check proves two browsers finish a round.`, { kind: 'game', ...r.result });
+        return ok(`games/${a.id} is ${a.name}, from the ${a.from ?? 'gem-rush'} starter (${(r.result?.files ?? []).length} files).${got}${install} Change it in games/${a.id}/src/main.ts: file_read it once (a long file in two or three reads), decide every change, and make them in ONE file_edit with an edits list (never a call per change: twenty single edits use up a turn before the game is checked); then build and preview_run; check proves two browsers finish a round.`, { kind: 'game', ...r.result });
       },
     },
     {
@@ -888,7 +928,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_plan', title: 'Plan a game (its Game Codex)',
-      description: 'Step 4: start the game\'s Game Codex (games/<id>/CODEX.md, every section) and get the plan interview to run with the person: two or three questions a message, each with options and your pick, about game type and genre, style, devices, players and rooms, art and film, music and sound, and scope. A game is planned before it is made: with no game <id> yet, this starts its folder with only the codex. Fill CODEX.md from their answers with file_edit, then game_codex shows it.',
+      description: 'Step 4: start the game\'s Game Codex (games/<id>/CODEX.md, every section) and get the plan interview to run with the person: two or three questions a message, each with options and your pick, about game type and genre, style, devices, players and rooms, art and film, music and sound, and scope. A game is planned before it is made: with no game <id> yet, this starts its folder with only the codex. Fill CODEX.md from their answers in one call (file_write of the whole file, or one file_edit with an edits list), then game_codex shows it.',
       inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens)'), name: str('Its name, when the game is not made yet'), ...STUDIO_ARG }, required: ['id'] },
       annotations: { title: 'Plan a game', ...RW },
       run: async (a) => {
@@ -902,7 +942,7 @@ export function toolDefs(ctx, avail = {}) {
         const guide = ctx.skillsDir && existsSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md')) ? readFileSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md'), 'utf8') : null;
         return ok([
           made ? `Wrote games/${a.id}/CODEX.md (every section${made.planned ? '; the game is planned here before it is made' : ''}).` : `games/${a.id}/CODEX.md is there already: change it, never replace it.`,
-          'Now the interview: two or three questions a message, each with concrete options and your pick, so "yes" is an answer. Say back what you heard in one line before the next. Stop after three or four rounds; "just build it" means fill the rest with your own choices and list them under Open questions. Then fill CODEX.md (file_read it, file_edit each section) and show it with game_codex.',
+          'Now the interview: two or three questions a message, each with concrete options and your pick, so "yes" is an answer. Say back what you heard in one line before the next. Stop after three or four rounds; "just build it" means fill the rest with your own choices and list them under Open questions. Then fill CODEX.md in one call (file_read it once; then file_write the whole file, or one file_edit whose edits list has every section) and show it with game_codex.',
           ...(guide ? ['', guide] : []),
         ].join('\n'), { kind: 'plan', id: a.id, file: `games/${a.id}/CODEX.md`, created: Boolean(made) });
       },
@@ -1062,7 +1102,7 @@ export function toolDefs(ctx, avail = {}) {
           if (!r.ended) return stillRunning(r.job, 'The deploy plan');
           if (r.job.code !== 0) return fail(whyOf(r.job));
           const p = r.result;
-          return ok([`What going online does for ${p.studio}:`, ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`].join('\n'), { kind: 'deploy-plan', ...p });
+          return ok([`What going online does for ${p.studio}:`, ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`, 'The card on screen shows this plan (nothing is made yet): tell the person its gist in two or three lines, then go on.'].join('\n'), { kind: 'deploy-plan', ...p });
         }
         const studio = readStudio(root);
         return startRun(ctx, root, { kind: 'deploy', game: null, title: `${studio.name}: online`, steps: [{ label: 'deploy', args: ['deploy'] }] });
@@ -1294,14 +1334,18 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'file_edit', title: 'Edit a studio file',
-      description: 'Replace exact text in a studio file: old must match exactly once (spaces and line breaks too), or all: true for every match. Read the file first.',
-      inputSchema: { type: 'object', properties: { path: str('The file, relative to the studio'), old: str('The exact text to replace'), new: str('What replaces it'), all: { type: 'boolean' }, ...STUDIO_ARG }, required: ['path', 'old', 'new'] },
+      description: 'Replace exact text in a studio file: old must match exactly once (spaces and line breaks too), or all: true for every match. Read the file first. Several changes to one file go in ONE call: edits is a list of { old, new, all? } applied in order, all of them or none (a miss says which one, and the file is left as it was). Prefer one call with every change over a call per change.',
+      inputSchema: { type: 'object', properties: { path: str('The file, relative to the studio'), old: str('The exact text to replace (one change)'), new: str('What replaces it'), all: { type: 'boolean' }, edits: { type: 'array', description: 'Several changes to this file in one call, applied in order, all or none', items: { type: 'object', properties: { old: str('The exact text to replace'), new: str('What replaces it'), all: { type: 'boolean' } }, required: ['old', 'new'] } }, ...STUDIO_ARG }, required: ['path'] },
       annotations: { title: 'Edit a file', readOnlyHint: false, destructiveHint: true, openWorldHint: false },
       run: async (a) => {
         const root = ctx.root(a.studio);
-        const r = editStudioFile(root, a.path, a.old, a.new, { all: a.all === true });
+        const list = Array.isArray(a.edits) && a.edits.length ? a.edits : null;
+        if (!list && (a.old === undefined || a.new === undefined)) return fail('give old and new (one change), or edits: [{ "old": "…", "new": "…" }, …] for several changes to this file in one call');
+        const r = list
+          ? editStudioFile(root, a.path, null, null, { edits: [...(a.old !== undefined && a.new !== undefined ? [{ old: a.old, new: a.new, all: a.all === true }] : []), ...list] })
+          : editStudioFile(root, a.path, a.old, a.new, { all: a.all === true });
         ctx.note(root).changed = true;
-        return ok(`Changed ${r.rel} (${r.replaced} place${r.replaced === 1 ? '' : 's'}).`);
+        return ok(`Changed ${r.rel} (${r.replaced} place${r.replaced === 1 ? '' : 's'}${r.edits > 1 ? `, ${r.edits} edits in one call` : ''}).`);
       },
     },
     {
@@ -1333,7 +1377,7 @@ export function toolDefs(ctx, avail = {}) {
           return ok(readFileSync(f, 'utf8'));
         }
         const refs = (() => { try { return readdirSync(join(dir, 'references')); } catch { return []; } })();
-        return ok(`${DESKTOP_NOTE}\n\n${readFileSync(join(dir, 'SKILL.md'), 'utf8')}${refs.length ? `\n\nReferences (file): ${refs.join(', ')}` : ''}`);
+        return ok(`${DESKTOP_NOTE}${ctx.desktop ? `\n\n${DESKTOP_APPROVALS}` : ''}\n\n${readFileSync(join(dir, 'SKILL.md'), 'utf8')}${refs.length ? `\n\nReferences (file): ${refs.join(', ')}` : ''}`);
       },
     });
   }

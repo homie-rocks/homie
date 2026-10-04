@@ -10,7 +10,7 @@ import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { PICTURE_MAX, PICTURE_TYPES, pictureFor } from './pictures.mjs';
 
 // A picture is at most PICTURE_MAX raw in an answer (lib/pictures.mjs): a bigger one goes as a smaller JPEG copy.
-export const FILE_LIMITS = Object.freeze({ write: 2 * 1024 * 1024, read: 400 * 1024, image: PICTURE_MAX, lines: 2000, list: 600, matches: 200 });
+export const FILE_LIMITS = Object.freeze({ write: 2 * 1024 * 1024, read: 400 * 1024, image: PICTURE_MAX, lines: 2000, list: 600, matches: 200, edits: 100 });
 const IMAGES = PICTURE_TYPES;
 const SKIP_DIRS = new Set(['node_modules', '.git', '.wrangler', '.studio', 'dist']);
 
@@ -112,19 +112,33 @@ export function writeStudioFile(root, path, content) {
   return { rel, bytes: Buffer.byteLength(text), created: !existed };
 }
 
-export function editStudioFile(root, path, oldText, newText, { all = false } = {}) {
+/**
+ * Replace exact text in a file. One change (`oldText`, `newText`, `all`), or several in one call (`edits`: a list of
+ * { old, new, all? }), applied in order to the text in memory and written once: all of them, or none. A change that
+ * does not match says which one it was, and the file is left as it was.
+ */
+export function editStudioFile(root, path, oldText, newText, { all = false, edits = null } = {}) {
   const { abs, rel } = studioPath(root, path, { write: true });
   if (!existsSync(abs)) throw new Error(`${rel} does not exist (file_write makes a new file)`);
-  const was = readFileSync(abs, 'utf8');
-  const from = String(oldText ?? '');
-  if (!from) throw new Error('old is the exact text to replace (it cannot be empty)');
-  const count = was.split(from).length - 1;
-  if (!count) throw new Error(`the text to replace is not in ${rel} (it must match exactly, spaces and line breaks too)`);
-  if (count > 1 && !all) throw new Error(`the text to replace is in ${rel} ${count} times: give more of it so it is unique, or all: true`);
-  const next = all ? was.split(from).join(String(newText ?? '')) : was.replace(from, () => String(newText ?? ''));
+  const list = Array.isArray(edits) && edits.length ? edits : [{ old: oldText, new: newText, all }];
+  if (list.length > FILE_LIMITS.edits) throw new Error(`at most ${FILE_LIMITS.edits} edits in one call`);
+  const many = list.length > 1;
+  let next = readFileSync(abs, 'utf8');
+  let replaced = 0;
+  list.forEach((e, i) => {
+    const from = String(e?.old ?? '');
+    const which = many ? `edit ${i + 1} of ${list.length} (${JSON.stringify(from.slice(0, 60))}${from.length > 60 ? '…' : ''}): ` : '';
+    const none = many ? '; nothing was changed' : '';
+    if (!from) throw new Error(`${which}old is the exact text to replace (it cannot be empty)${none}`);
+    const count = next.split(from).length - 1;
+    if (!count) throw new Error(`${which}the text to replace is not in ${rel} (it must match exactly, spaces and line breaks too${many ? '; an earlier edit in this call may have changed it' : ''})${none}`);
+    if (count > 1 && e.all !== true) throw new Error(`${which}the text to replace is in ${rel} ${count} times: give more of it so it is unique, or all: true${none}`);
+    next = e.all === true ? next.split(from).join(String(e.new ?? '')) : next.replace(from, () => String(e.new ?? ''));
+    replaced += e.all === true ? count : 1;
+  });
   if (Buffer.byteLength(next) > FILE_LIMITS.write) throw new Error(`at most ${FILE_LIMITS.write / 1024 / 1024} MB a file`);
   writeFileSync(abs, next);
-  return { rel, replaced: all ? count : 1 };
+  return { rel, replaced, edits: list.length };
 }
 
 /** Lines matching a regular expression, in the studio's text files (never node_modules, git, builds or .studio). */

@@ -12,6 +12,9 @@
  *     --no-install never run npm install in a studio (tests, and a studio whose node_modules are linked by hand)
  *     --homie     the directory a new studio names (default https://homie.rocks)
  *
+ * HOMIE_STUDIO_EXTENSION=1 (the desktop extension's manifest sets it) says the server runs in the Claude desktop app,
+ * which asks the person before every tool call: only there, the model is told to say so once (DESKTOP_APPROVALS).
+ *
  * The transport is the MCP stdio transport: one JSON-RPC 2.0 message per line on stdin and stdout; logs go to
  * stderr. No SDK. MCP Apps cards (spec 2026-01-26, `text/html;profile=mcp-app`) are served as ui:// resources from
  * mcp/ui/ (real files, read as they are: a card's script is never built from a function's source), and every tool
@@ -20,7 +23,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PACKAGE_ROOT } from './studio.mjs';
-import { StudioContext, UI, availability, toolDefs } from './mcp-tools.mjs';
+import { DESKTOP_APPROVALS, StudioContext, UI, availability, inDesktopApp, toolDefs } from './mcp-tools.mjs';
 import { stopAllJobs, toolPath } from './jobs.mjs';
 import { shrinkPictureData } from './pictures.mjs';
 import { STUDIO_VERSION } from './version.mjs';
@@ -31,12 +34,12 @@ export const MCP_APP_MIME = 'text/html;profile=mcp-app';
 export const INSTRUCTIONS = `Homie Studio, on this computer: make game studios and their multiplayer web games, music and videos, run them here, and put them online on the studio's own Cloudflare. (It is not the Homie house app: that app's own server, with its room and TV tools, is a different one.) These tools do the work in this chat; the person never types a command and never needs a terminal. A studio is a folder in the studios folder; the file tools (file_list, file_read, file_edit, file_write, file_search) work inside it.
 
 A new studio follows one checklist, in order and never ahead. Show it in your first reply and again, ticked, as each step ends:
-0. Setup status (setup_status): what this computer and their accounts have; optional rows never block.
+0. Setup status (setup_status; for a studio that is not made yet, pass its name as studio, so the checklist is the new studio's and never another's): what this computer and their accounts have; optional rows never block.
 1. The studio (studio_scaffold): it has NO game; its home page says "First game coming soon".
 2. See a working game (game_demo): a live game on Homie Arcade with its Play link, nothing copied in. Copy a starter in (game_make) only if they ask.
 3. One small change from one sentence of theirs: to the copied game, or to the studio's home (site/theme.json colours, a tagline in studio.json, a first post in posts/). Then build and preview_run, and they reload.
 4. Plan their game (game_plan): a short interview, two or three questions a message with options and your pick; then fill games/<id>/CODEX.md and show it (game_codex).
-5. Build it: build_open, then game_make under the planned id (the codex stays), file edits, build, preview_run, check. The card follows every build.
+5. Build it: build_open, then game_make under the planned id (the codex stays), file edits (few and large: one file_edit carries every change to a file in its edits list, never a call per change), build, preview_run, check. The card follows every build.
 6. Playtest it (playtest), then put it online: studio_deploy with plan: true first (say what it creates and costs, free), cloudflare_login when not signed in (they approve once in their browser), studio_deploy, then studio_publish.
 If they ask for everything at once, show the list, make your own choices for steps 2 to 4 in one line each, and go on.
 
@@ -53,6 +56,9 @@ A game's look is a set of decisions (render style, palette, light, camera, fonts
 Telling Homie (homie_feedback): when the person is stuck, confused or frustrated, after an error you could not fix, or at the end of their first studio setup or first publish, you may OFFER, once a session, to send the people who make Homie a short note about it. Draft it in plain words from what happened (it sends nothing), show it exactly as it would go (its card has Send, Edit and Don't send), and send only after they say yes. Never nag: a no is final for the session. When they ask to tell Homie something, draft it with offered: false.
 
 Long work (npm install, check, playtest, deploy, renders) runs in the background: the tool answers at once with a card that follows it, and build_progress or studio_job reads where it is. studio_guide has Homie's full guide for each job (game, plan, port, playtest, publish, music, sound, art, video). Never put a key or password in a file or the chat. If Homie's homie.rocks connector is connected too, its tools of the same names say what to run; these run it.`;
+
+/** What the server tells the model as it connects: the checklist, and in the Claude desktop app what it asks the person. */
+export const instructionsFor = ({ desktop = false } = {}) => (desktop ? `${INSTRUCTIONS}\n\n${DESKTOP_APPROVALS}` : INSTRUCTIONS);
 
 const CARD_FILES = { [UI.setup]: 'setup.js', [UI.build]: 'build.js', [UI.studio]: 'studio.js', [UI.codex]: 'codex.js', [UI.lab]: 'lab.js', [UI.style]: 'style.js', [UI.decision]: 'decision.js', [UI.cast]: 'cast.js', [UI.lineup]: 'lineup.js', [UI.rights]: 'rights.js', [UI.animation]: 'animation.js', [UI.feedback]: 'feedback.js' };
 const CARD_TITLES = { [UI.setup]: 'Studio setup', [UI.build]: 'Build progress', [UI.studio]: 'Studio', [UI.codex]: 'Game Codex', [UI.lab]: 'Game Lab', [UI.style]: 'Style board', [UI.decision]: 'Look decision', [UI.cast]: 'Cast', [UI.lineup]: 'Lineup', [UI.rights]: 'Rights', [UI.animation]: 'Clips', [UI.feedback]: 'Tell Homie' };
@@ -136,11 +142,11 @@ function promptText(name, args = {}) {
 /**
  * The server. `input`/`output` are streams (stdin/stdout by default). Returns a promise that ends with the input.
  */
-export async function serveMcp({ studios = null, skills = null, cwd = process.cwd(), input = process.stdin, output = process.stdout, waitMs, directory = null, install = true, log = (line) => process.stderr.write(`[homie-studio mcp] ${line}\n`) } = {}) {
+export async function serveMcp({ studios = null, skills = null, cwd = process.cwd(), input = process.stdin, output = process.stdout, waitMs, directory = null, install = true, desktop = inDesktopApp(), log = (line) => process.stderr.write(`[homie-studio mcp] ${line}\n`) } = {}) {
   // A GUI app starts this with a short PATH: everything it runs sees the usual places Node, npm and ffmpeg live.
   process.env.PATH = toolPath();
   const skillsDir = skills ?? [join(PACKAGE_ROOT, '..', '..', 'plugins', 'homie', 'skills'), join(PACKAGE_ROOT, '..', 'skills')].find((d) => existsSync(join(d, 'studio-setup', 'SKILL.md'))) ?? null;
-  const ctx = new StudioContext({ studiosDir: studios, cwd, skillsDir, waitMs: waitMs ?? Number(process.env.HOMIE_MCP_WAIT_MS || 40_000), directory, install });
+  const ctx = new StudioContext({ studiosDir: studios, cwd, skillsDir, waitMs: waitMs ?? Number(process.env.HOMIE_MCP_WAIT_MS || 40_000), directory, install, desktop });
   let avail = availability();
   let names = '';
   const send = (message) => output.write(`${JSON.stringify(message)}\n`);
@@ -168,7 +174,7 @@ export async function serveMcp({ studios = null, skills = null, cwd = process.cw
             protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
             capabilities: { tools: { listChanged: true }, resources: { listChanged: false }, prompts: { listChanged: false } },
             serverInfo: { name: 'homie-studio', title: 'Homie Studio', version: STUDIO_VERSION },
-            instructions: INSTRUCTIONS,
+            instructions: instructionsFor({ desktop: ctx.desktop }),
           });
         }
         case 'ping': return reply({});

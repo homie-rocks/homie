@@ -21,8 +21,8 @@
     var install = sc.install;
     var head = install && install.state === 'running' ? C.pill('Installing · ' + install.seconds + ' s', 'live', true)
       : cur ? C.pill(cur.games.length ? cur.games.length + (cur.games.length === 1 ? ' game' : ' games') : 'No game yet', cur.games.length ? 'ok' : '') : C.pill('New studio', '');
-    C.add(card, C.top('Studio setup', head), C.el('h1', '', cur ? cur.name : 'Set up a studio'),
-      C.el('p', 'sub', cur ? (cur.games.length ? 'On this computer, in ' + cur.folder : 'On this computer, in ' + cur.folder + '. Its home page says "First game coming soon".') : 'Studios live in ' + (sc.studiosDir || 'the folder set in the Homie extension') + '.'));
+    C.add(card, C.top('Studio setup', head), C.el('h1', '', cur ? cur.name : sc.wanted || 'Set up a studio'),
+      C.el('p', 'sub', cur ? (cur.games.length ? 'On this computer, in ' + cur.folder : 'On this computer, in ' + cur.folder + '. Its home page says "First game coming soon".') : (sc.wanted ? 'Not made yet. ' : '') + 'Studios live in ' + (sc.studiosDir || 'the folder set in the Homie extension') + '.'));
     var ol = C.el('ol', 'list');
     (sc.checklist || []).forEach(function (s) { ol.appendChild(step(s)); });
     card.appendChild(ol);

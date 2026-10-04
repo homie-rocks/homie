@@ -1,5 +1,6 @@
 /* The build card: one build's stages, each check going green, a picture and where to play it, money against the
- * budget, and Stop. It follows the build every 2 s while it runs and tells the model once when it ends. */
+ * budget, and Stop. It follows the build every 2 s while it runs and tells the model once when it ends. A deploy's
+ * plan (studio_deploy with plan: true) is drawn here too: what going online makes and costs, before it is made. */
 (function () {
   var C = Card;
   var ICON = { pass: '✓', done: '✓', fail: '✕', failed: '✕', running: '●', pending: '·', skip: '–', skipped: '–', stopped: '■' };
@@ -56,8 +57,28 @@
     }
     return card;
   }
+  // The deploy plan (studio_deploy with plan: true): what going online makes on the person's own Cloudflare and what
+  // it costs, before anything is made. It is the same tool as the deploy, so the app draws this card for it too.
+  function plan(p) {
+    var card = C.el('main', 'card');
+    C.add(card, C.top('Build', C.pill('Plan', '')), C.el('h1', '', (p.studio || 'The studio') + ': going online'),
+      C.el('p', 'sub', 'On your own Cloudflare account. Nothing has been made or changed yet.'));
+    var ul = C.el('ul', 'list');
+    (p.cloudflare || []).filter(function (x) { return x && x.name; }).forEach(function (x) {
+      var made = /^exists/.test(x.state || '');
+      ul.appendChild(C.add(C.el('li', made ? 'state-ok' : ''), C.el('span', 'cn', made ? '✓' : '+'),
+        C.add(C.el('div', 'cb'), C.el('b', '', x.kind + ' ' + x.name), C.el('span', '', x.state + (x.plan ? ' · ' + x.plan : '')))));
+    });
+    card.appendChild(ul);
+    if (p.cost) card.appendChild(C.el('p', 'note', p.cost));
+    card.appendChild(C.el('p', 'fine', 'Cloudflare asks you to approve once in your browser if this computer is not signed in (a free account works).'));
+    if (p.directory && p.directory.stores) card.appendChild(C.el('p', 'fine', 'The Homie directory stores ' + p.directory.stores));
+    if (p.never) card.appendChild(C.el('p', 'fine', p.never));
+    return card;
+  }
   C.start({
     kind: 'build', label: 'Build', fullscreen: true, render: render,
+    other: function (sc) { return sc && sc.kind === 'deploy-plan' ? plan(sc) : null; },
     poll: function (sc) { return sc.feed && sc.feed.state === 'running' ? { tool: 'build_progress', args: { build: sc.build }, every: 2000 } : null; },
   });
 })();

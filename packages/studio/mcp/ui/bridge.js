@@ -75,13 +75,26 @@ var Card = (function () {
     });
   }
   function textOf(r) { return (r && r.content && r.content[0] && r.content[0].text) || ''; }
+  // An answer's own words, for a card that has nothing of its own to draw from it: short enough to stay a card.
+  function words(r) {
+    var j = r && r.structuredContent;
+    if (j && j.kind === 'job' && j.label) return j.label + (j.state === 'running' ? ' is still running (' + (j.seconds || 0) + ' s so far). Ask again in a moment.' : ': ' + (j.state || 'done') + '.');
+    var t = textOf(r).trim(); return t.length > 1500 ? t.slice(0, 1500).replace(/\s+\S*$/, '') + ' …' : t;
+  }
   function render() {
     if (!spec) return;
-    var card;
+    var card = null;
     if (!S.data) {
-      card = el('main', 'card');
-      if (S.result && S.result.isError) add(card, top(spec.label, pill('Not done', 'bad')), el('p', 'note bad', textOf(S.result) || 'That did not work.'));
-      else add(card, top(spec.label, pill('Loading', 'live', true)), el('div', 'skel'), el('div', 'skel'));
+      // The tool answered, but not with this card's own data (a plan, a job still running, plain words). The card
+      // may draw that answer itself (spec.other); else it shows the answer's words. "Loading" is only for a tool
+      // that has not answered yet: an answered card never stays on the skeleton.
+      if (S.result && !S.result.isError && spec.other) { try { card = spec.other(S.result.structuredContent || {}, S.result) || null; } catch (e) { card = null; } }
+      if (!card) {
+        card = el('main', 'card');
+        if (S.result && S.result.isError) add(card, top(spec.label, pill('Not done', 'bad')), el('p', 'note bad', textOf(S.result) || 'That did not work.'));
+        else if (S.result) add(card, top(spec.label), el('p', 'note words', words(S.result) || 'Done.'));
+        else add(card, top(spec.label, pill('Loading', 'live', true)), el('div', 'skel'), el('div', 'skel'));
+      }
     } else {
       try { card = spec.render(S.data, S.result); } catch (e) { card = add(el('main', 'card'), top(spec.label), el('p', 'note bad', String(e && e.message || e))); }
       if (S.result && S.result.isError && S.data) card.appendChild(el('p', 'note bad', textOf(S.result)));
@@ -131,7 +144,10 @@ var Card = (function () {
     size: size, render: render, take: take, fullscreenButton: fullscreenButton, textOf: textOf,
     ctx: function () { return ctx; },
     state: S,
-    /** spec: { kind, label, render(data, result) -> element, poll(data) -> { tool, args, every } | null } */
+    /**
+     * spec: { kind, label, render(data, result) -> element, poll(data) -> { tool, args, every } | null,
+     *         other(structured, result) -> element | null: an answer of another kind this card draws itself }
+     */
     start: function (s) {
       spec = s;
       rpc('ui/initialize', {

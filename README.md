@@ -174,8 +174,10 @@ app Homie's tools and cards in the same chat: no terminal, no second session. In
 folder your studios live in, and ask:
 *"set up a game studio called Night Owls"*. The chat makes the studio on your computer, plans your game with you,
 builds it, runs the two-browser check, and puts it online on your own Cloudflare, with the setup, build progress,
-studio and Game Codex cards in the conversation. Underneath it is `homie-studio mcp`, the toolkit as a local MCP
-server, which any MCP client can run.
+studio and Game Codex cards in the conversation. Claude asks before it uses each Homie Studio tool: choose
+**Always allow**, so a build runs without a click at every step, and if a step ever sits on a spinner with nothing
+to click, a request is waiting out of sight (press ⌘ Return, or Ctrl+Enter on Windows, or scroll the chat).
+Underneath it is `homie-studio mcp`, the toolkit as a local MCP server, which any MCP client can run.
 
 ## From the Claude app on a phone, with no terminal
 

@@ -17,9 +17,36 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.30.1] - 2026-10-04
+
+**Plugin 0.31.1** · [#47](https://github.com/homie-rocks/homie/pull/47)
+
+Fixes from a filmed first run in the Claude desktop app: Claude tells you once to choose Always allow and what to do when a step sits on a spinner, the deploy plan's card fills in, and a starter is changed in a few large edits instead of twenty small ones.
+
+### Added
+
+- `file_edit` (Homie for Claude Desktop, and any client of `homie-studio mcp`) takes every change to a file in one call: `edits`, a list of `{ old, new }` applied in order, all of them or none. A miss says which edit it was and leaves the file as it was. One change with `old` and `new` works as before.
+- The build card draws a deploy plan: what going online creates on your own Cloudflare, what is there already and what it costs, before anything is made.
+
+### Changed
+
+- In the Claude desktop app, Claude says once, in its first words to you: the app asks before each Homie Studio tool, **Always allow** lets a build run without a click at every step (the filmed first build made about fifty tool calls), and if a step sits on a spinner with nothing to click, a request is waiting out of sight: ⌘ Return (Ctrl+Enter on Windows) allows it, and scrolling the chat can bring it into view. Claude also writes a line of text between a card and its next tool call, because a request that came straight after a card is the one the app has failed to draw. Only the desktop extension says any of this (its manifest starts the server with `HOMIE_STUDIO_EXTENSION=1`): in Claude Code, Codex, Grok and other MCP clients it is not true, and nothing is said.
+- The README's desktop section, `desktop/README.md` and the extension's install screen say the same in a sentence.
+- Fewer, larger edits. The `game` skill, the note above every guide in `homie-studio mcp`, `game_make` and `game_plan` ask the AI to read a file once and make every change to it in one call. A first build spent about twenty single edits on one starter file and ran into the app's limit of tool calls in a turn, so the person had to say "keep going".
+- `setup_status` takes the name of a studio that is not made yet as `studio`: the card and the checklist are then the new studio's.
+
+### Fixed
+
+- The deploy plan's card stayed on a grey "Loading" skeleton for good. `studio_deploy` with `plan: true` answers with a plan, not a build, and the build card knew only builds. A card whose tool answered with something else (a plan, a job still running, plain words) now shows that answer; "Loading" is only for a tool that has not answered yet.
+- With one studio already in the Studios folder, the setup card for a second studio led with the first one's name and checklist.
+
+### Upgrade notes
+
+- Homie for Claude Desktop: install this version's `homie-studio.mcpb` over the one you have. A studio needs no change.
+
 ## [0.30.0] - 2026-10-03
 
-**Plugin 0.31.0** · [#45](https://github.com/homie-rocks/homie/pull/45)
+**Plugin 0.31.0** · [#45](https://github.com/homie-rocks/homie/pull/45) · [release-2026-10-03-studio-0.30.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-03-studio-0.30.0)
 
 Grok can set up a studio and run it with the same holds as Claude Code and Codex.
 

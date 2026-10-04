@@ -4,7 +4,7 @@
   "display_name": "Homie Studio",
   "version": "0.0.0",
   "description": "Make multiplayer web games, music and video in this chat, check them in real browsers, and put them online on your own Cloudflare.",
-  "long_description": "Homie turns this chat into a game studio. Ask it to set up a studio and it makes one on this computer: a folder with your games, music, videos and posts, and a site with public multiplayer rooms that goes online on your own Cloudflare account (free plan, no payment method). It plans each game with you into a Game Codex, builds it, proves two browsers finish a round, and shows every step as a card in this chat: setup, build progress, the studio and the codex. No terminal and no second session. Beta: bugs and questions go to https://github.com/homie-rocks/homie/issues.",
+  "long_description": "Homie turns this chat into a game studio. Ask it to set up a studio and it makes one on this computer: a folder with your games, music, videos and posts, and a site with public multiplayer rooms that goes online on your own Cloudflare account (free plan, no payment method). It plans each game with you into a Game Codex, builds it, proves two browsers finish a round, and shows every step as a card in this chat: setup, build progress, the studio and the codex. No terminal and no second session. Claude asks before it uses each Homie tool: choose Always allow, so a build runs without a click at every step. Beta: bugs and questions go to https://github.com/homie-rocks/homie/issues.",
   "author": { "name": "Homie", "url": "https://homie.rocks" },
   "homepage": "https://homie.rocks/studio/",
   "documentation": "https://github.com/homie-rocks/homie/tree/main/desktop",

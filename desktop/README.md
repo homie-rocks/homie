@@ -20,6 +20,10 @@ skills), packed with Anthropic's own tool, [`@anthropic-ai/mcpb`](https://github
    later in Settings → Extensions → Homie Studio.
 4. It turns itself on as it installs. If Settings → Extensions shows **Homie Studio** switched off, switch it on.
 5. In a new chat, ask: *"Set up a game studio called Night Owls."*
+6. Claude asks before it uses each Homie Studio tool. Choose **Always allow**, so a build runs without a click at
+   every step (a first build makes dozens of tool calls). If a step ever sits on a spinner for more than a few
+   seconds with nothing to click, a request is waiting out of sight: press ⌘ Return (Ctrl+Enter on Windows; a
+   request shows its keys beside its buttons) to allow it, or scroll the chat to find it.
 
 The studio needs Node.js 22 or newer on the computer (it installs its own pinned toolkit and Cloudflare's Wrangler
 with npm). The setup card says so if it is missing, with the download page. Chrome is needed for the two-browser
