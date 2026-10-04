@@ -1,0 +1,15 @@
+{
+  "name": "homie-rocks",
+  "owner": {
+    "name": "Homie"
+  },
+  "metadata": {
+    "description": "Studio in a box on your own Cloudflare"
+  },
+  "plugins": [
+    {
+      "name": "homie",
+      "source": "plugins/homie"
+    }
+  ]
+}
