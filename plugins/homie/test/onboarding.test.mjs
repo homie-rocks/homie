@@ -80,6 +80,9 @@ test('a first run in Codex and Grok: no connector is no dead end, the holds are 
     assert.doesNotMatch(text, /In Grok, Homie's hooks|In Grok, the same holds/, `${m}: no hold is claimed in Grok`);
     assert.match(text, /Grok Build 1\.0\.41 runs no plugin's hooks/, m);
   }
+  // Going online never lists: the directory is a separate step the person asks for.
+  assert.match(s, /\*\*The directory, only when asked\.\*\* Going online never lists a studio/);
+  assert.match(skill('publish'), /Going online never lists a studio\. Listing is this separate step/);
   // Asked for everything at once: a Play link the moment two browsers finish a round, before any polish.
   assert.match(s, /\*\*A Play link first\.\*\*/);
   assert.ok(at(s, 'A Play link first') < at(s, '## 0. Setup status'), 'said with the one-sentence flow');

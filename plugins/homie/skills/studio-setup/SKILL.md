@@ -366,13 +366,15 @@ The live address `deploy` prints is on `workers.dev`, which names the person's C
 `deploy` keeps it in `.studio/local.json` (git-ignored). Never write it into a committed file. A custom
 domain goes in `studio.json` as `cloudflare.domain`.
 
-**The directory:** call the Homie MCP tool `studio_publish` with the live site address (without the
-connector, `npx --no-install homie-studio publish`). It lists the
+**The directory, only when asked.** Going online never lists a studio: listing in the homie.rocks directory
+is its own step, it is public, and it is the person's to ask for. When they asked to be listed (in their first
+message or now), or say yes when you offer it once the site is live, call the Homie MCP tool `studio_publish`
+with the live site address (without the connector, `npx --no-install homie-studio publish`). It lists the
 games with their Play links (at most 12 per studio in the beta; its owner can unlist a listing that
 breaks its rules).
 
 **Tell the person**, three to five lines: the studio folder, the live site, each game's landing
-(`/<id>/`) and Play link, the directory link, that two browsers finished a round on the live site, what
+(`/<id>/`) and Play link, the directory link when it was listed (and that it is not, when it was not), that two browsers finished a round on the live site, what
 runs on their Cloudflare and what it costs (free). The codex is on the site for them alone:
 `npx --no-install homie-studio codex link <id>` gives a one-time link for their own browser (a phone
 works). The studio keeps its own stats for them (`npx --no-install homie-studio stats`, or `stats link`).

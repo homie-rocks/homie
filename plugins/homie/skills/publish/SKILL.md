@@ -119,6 +119,9 @@ landing page" makes one epic). Every page ends with "Made with Homie"; restyle i
 
 ## List in the directory
 
+Going online never lists a studio. Listing is this separate step, public, and the person's to ask for: do it when
+they asked to be listed or said yes to your offer, never as part of a deploy.
+
 Licences first: `publish` refuses to list a studio while a public game ships an asset with no licence record, a
 licence that forbids a web game, or a credit it owes but does not show (`npx --no-install homie-studio assets check
 <id>` names each one and its fix; the `models` skill has the rules). Fix them, deploy, then publish.
