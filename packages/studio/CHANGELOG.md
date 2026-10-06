@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.31.1] - 2026-10-06
 
-**Plugin 0.32.1**
+**Plugin 0.32.1** · [#53](https://github.com/homie-rocks/homie/pull/53)
 
 Fixes from two creators' notes on 0.31.0: Homie's holds run in Grok, `publish --before` publishes nothing, a page that loses its room is never stuck, a missing setting is never a silent zero, and a part's preview fits a phone.
 
