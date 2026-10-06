@@ -5,7 +5,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { httpsPage, licenseOf, pageOfSource, remixAllowed, remixCredit, remixRow } from '../worker/license.mjs';
 
 export const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -267,68 +266,3 @@ export function addNeeds(root, needs) {
   return { needs: Object.fromEntries(want), needsAdded: added, needsHeld: held, installNeeded: added.length > 0 };
 }
 
-/**
- * `homie-studio game remix <source.json url> --id <new id>`: a shared game brought in as this studio's own. Its
- * game.json `remixOf` credits the original ("Remix of <game> by <studio>", with a link back to its page), and its
- * landing and credits show it. A game whose owner's licence says no remix is refused (worker/license.mjs).
- */
-export async function remixGame(root, source, id, { name } = {}) {
-  if (!GAME_ID.test(String(id ?? '')) || RESERVED_IDS.has(id)) throw new Error('give the new game an id: --id <lowercase-id>');
-  const dest = join(root, 'games', id);
-  if (existsSync(dest)) throw new Error(`games/${id} already exists`);
-  let url;
-  try { url = new URL(source); } catch { throw new Error('usage: homie-studio game remix <https://studio.site/games/<id>/source.json> --id <new id>'); }
-  if (url.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(url.hostname)) throw new Error('a remix source is an https:// address');
-  const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
-  const body = await res.json();
-  if (body?.kind !== 'homie-game-source' || !body.files || typeof body.files !== 'object') throw new Error('that address is not a shared Homie game source');
-  // Who made it and what they allow: the source's credit and licence (a studio before 0.14.4 sends neither, so the
-  // default licence, and the page from the address).
-  const credit = body.credit && typeof body.credit === 'object' ? body.credit : {};
-  const license = licenseOf(body.license);
-  if (!remixAllowed(license)) {
-    const who = remixRow({ name: credit.game ?? body.id, studio: credit.studio });
-    throw new Error(`${who?.name ?? 'That game'}${who?.studio ? ` by ${who.studio}` : ''} is not open to remixing: its owner's licence says no remix. Make a game of your own like it instead.`);
-  }
-  const wrote = [];
-  for (const [rel, text] of Object.entries(body.files)) {
-    if (typeof text !== 'string' || rel.includes('..') || rel.startsWith('/') || !/^[A-Za-z0-9._/-]+$/.test(rel)) continue;
-    const path = join(dest, rel);
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, text);
-    wrote.push(rel);
-  }
-  if (!existsSync(join(dest, 'game.json'))) throw new Error('the shared source has no game.json');
-  const meta = JSON.parse(readFileSync(join(dest, 'game.json'), 'utf8'));
-  const from = meta.id;
-  // The credit, in the remix's own game.json: the original's name, studio, page and licence, the line its landing and
-  // credits show, and, when the original was itself a remix, what that was a remix of.
-  const row = remixRow({ name: credit.game ?? meta.name ?? from, studio: credit.studio, page: httpsPage(credit.page) ?? pageOfSource(url) });
-  const before = remixRow(meta.remixOf);
-  meta.remixOf = {
-    credit: remixCredit(row), name: row?.name ?? null, studio: row?.studio ?? null, page: row?.page ?? null,
-    source: String(url), id: from, license, ...(before ? { of: before } : {}),
-  };
-  meta.id = id;
-  if (name) meta.name = String(name).slice(0, 60);
-  writeFileSync(join(dest, 'game.json'), `${JSON.stringify(meta, null, 2)}\n`);
-  const main = join(dest, meta.entry ?? 'src/main.ts');
-  if (existsSync(main) && from) writeFileSync(main, readFileSync(main, 'utf8').replace(new RegExp(`game: '${from}'`, 'g'), `game: '${id}'`));
-  if (from) renameTakeSaves(dest, from, id);
-  // Its models and pictures (0.22.0): fetched from the original site and checked by SHA-256 where their licence lets a
-  // remix carry them; a grey placeholder of the same size where it does not (lib/remix-assets.mjs).
-  let assets = null;
-  if (existsSync(join(dest, 'assets', 'manifest.json'))) {
-    const { fetchRemixAssets } = await import('./remix-assets.mjs');
-    assets = await fetchRemixAssets(root, id, url, { credit: { studio: credit.studio ?? null, game: credit.game ?? meta.name ?? from } });
-  }
-  // What its code imports beyond the toolkit (a 3D game: three.js). A remix source is someone else's text, so only the
-  // libraries the toolkit's own starters use are added; anything else is named for the person to decide.
-  const asked = meta.needs && typeof meta.needs === 'object' && !Array.isArray(meta.needs) ? meta.needs : {};
-  const refusedNeeds = Object.keys(asked).filter((n) => !REMIX_NEEDS.has(n));
-  const needs = addNeeds(root, Object.fromEntries(Object.entries(asked).filter(([n]) => REMIX_NEEDS.has(n))));
-  return { ok: true, command: 'game remix', id, from: String(url), credit: meta.remixOf.credit, page: meta.remixOf.page, license, files: wrote, ...(assets ? { assets } : {}), ...needs, ...(refusedNeeds.length ? { needsNotAdded: refusedNeeds } : {}) };
-}
-/** The libraries a remix may add to a studio's package.json by itself (the ones the toolkit's starters use). */
-const REMIX_NEEDS = new Set(['three']);

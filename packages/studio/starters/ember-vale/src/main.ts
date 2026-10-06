@@ -1229,7 +1229,9 @@ exposePort(net, {
   size: R,
   score: () => { const s = room.mySeat(); return room.view().find((b) => b.seat === s && !b.bot)?.score ?? null; },
   busy: () => !ui.idle(),
-  extra: { level: () => hero?.level ?? 0, frames: () => frames, saves: () => saves.status().mode },
+  // `alive` is read by name by the playtest (port/probe.ts PortExtra): a downed hero is waiting to stand up again, and a
+  // press that moves nothing then is not a broken control.
+  extra: { alive: () => !((myViewBody()?.flags ?? 0) & DOWN), level: () => hero?.level ?? 0, frames: () => frames, saves: () => saves.status().mode },
 });
 
 void net.ready.then(() => { const b = room.mine(); if (b) { me.x = b.x; me.y = b.y; me.has = true; } });

@@ -225,6 +225,72 @@ test('createRoom (the port kit): a body that arrives mid-round never gets a spaw
   for (const r of [host, ...rooms]) r.net.close?.();
 });
 
+test('the state the playtest and perf read is on the game side: createRoom gives the round, the typed extras carry the rest, the 3D starters say their renderer\'s counters', async (t) => {
+  // ACROSS THE SEAM: the real port kit (createRoom + exposePort over the real helper and relay) on one side, the
+  // playtest skill's own reader and judge and perf's renderer-cost reader on the other.
+  const playtest = await import('../../../plugins/homie/skills/playtest/scripts/lib/judge.mjs');
+  const { renderCostOf } = await import('../lib/perf.mjs');
+  const esbuild = (await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'))).default;
+  const file = join(scratch, 'port-kit.mjs');
+  await esbuild.build({ stdin: { contents: "export { createRoom } from './room'; export { exposePort, PORT_EXTRA_NAMES } from './probe';", resolveDir: join(PKG, 'port'), loader: 'ts' }, bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent' });
+  const { createRoom, exposePort, PORT_EXTRA_NAMES } = await import(file);
+  // One list of names: what the game's author is told to set is what the instruments read.
+  assert.deepEqual([...PORT_EXTRA_NAMES], playtest.EXTRA_NAMES);
+  const src = readFileSync(join(PKG, 'port', 'probe.ts'), 'utf8');
+  for (const name of playtest.EXTRA_NAMES) assert.match(src, new RegExp(`\\b${name}\\?: \\(\\) => (boolean|string|number);`), `PortExtra types ${name}`);
+
+  const clock = virtualTime(t);
+  const relay = new NetRoom({ code: 'r', maxPlayers: 4 });
+  class MemorySocket {
+    constructor() {
+      this.readyState = 0; this.bufferedAmount = 0;
+      this.h = relay.attach({ send: (x) => setTimeout(() => this.onmessage?.({ data: x }), 0), close: () => {}, buffered: () => 0 });
+      setTimeout(() => { this.readyState = 1; this.onopen?.({}); }, 0);
+    }
+    send(x) { this.h.onMessage(x); }
+    close() { this.readyState = 3; this.h.onClose(); }
+  }
+  const room = createRoom({
+    game: 'x', maxPlayers: 4, minBodies: 2, roundSeconds: 90,
+    spawn: (slot, i) => ({ slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, score: 0, x: 10 + i, y: 20 }),
+    pack: (b) => [b.x, b.y], unpack: (f, b) => { b.x = f[0]; b.y = f[1]; },
+    netplay: { config: { v: 1, url: 'ws://relay/x/__net?room=r', room: 'r', device: 'desk', want: 'play', name: 'host' }, WebSocketImpl: MemorySocket, canHost: true, post: null },
+  });
+  await clock.wait(100);
+  assert.equal(room.hosting, true);
+  // The game's frame, as far as a probe needs one. The game says only what it has: alive, a mode, its renderer.
+  const had = globalThis.window;
+  globalThis.window = { addEventListener() {} };
+  t.after(() => { if (had === undefined) delete globalThis.window; else globalThis.window = had; });
+  let hp = 3;
+  const probe = exposePort(room.net, { view: 'top', self: () => ({ x: 11, y: 20 }), extra: { alive: () => hp > 0, mode: () => 'manual fire', drawCalls: () => 42, triangles: () => 9000, level: () => 7 } });
+  assert.equal(globalThis.window.__homiePort, probe);
+  // The round needs no hook: createRoom told the helper, and the probe reads the helper.
+  const info = probe.info();
+  assert.deepEqual([info.round.n, info.round.phase], [1, 'live']);
+  assert.ok(info.round.leftMs > 80_000 && info.round.leftMs <= 90_000, `about 90 s left: ${info.round.leftMs}`);
+  assert.deepEqual([info.link, info.reconnects], ['online', 0], 'and where the browser stands with its room');
+  // The playtest's own reader (the function it runs inside the game's frame), then its judge.
+  const read = playtest.readPort(playtest.EXTRA_NAMES);
+  assert.deepEqual(read.extra, { alive: true, mode: 'manual fire', drawCalls: 42, triangles: 9000 }, 'the named ones, and only those');
+  const st = playtest.stateOf({ at: Date.now(), port: { ...read, busy: 0, x: 11, y: 20 }, shell: null, net: { link: info.link } });
+  assert.deepEqual([st.phase, st.round, st.alive, st.mode, st.source, st.link], ['live', 1, true, 'manual fire', 'probe', 'online']);
+  assert.equal(playtest.contextOf(st).kind, 'live');
+  hp = 0;
+  assert.equal(playtest.contextOf(playtest.stateOf({ port: { ...playtest.readPort(playtest.EXTRA_NAMES), busy: 0 }, shell: null })).kind, 'spectating', 'a dead body is not a broken control');
+  // perf reads the renderer's counters from the same `extra`, and the playtest's look row does too.
+  const x = probe.info().extra;
+  assert.deepEqual(renderCostOf([{ drawCalls: Number(x.drawCalls), triangles: Number(x.triangles) }]).drawCalls.median, 42);
+  assert.equal(playtest.renderCost([read.extra]).triangles.median, 9000);
+  room.net.close?.();
+
+  // The starters set what they can. The 3D ones have a renderer: its counters, on the port probe (they were only on
+  // the netplay probe, where neither perf nor the playtest looks). The one with a way to go down says `alive`.
+  const port = (starter) => { const text = readFileSync(join(PKG, 'starters', starter, 'src', 'main.ts'), 'utf8'); const at = text.indexOf('exposePort(net, {'); return text.slice(at, text.indexOf('\n});', at)); };
+  for (const starter of ['gem-rush-3d', 'hero-rush-3d']) assert.match(port(starter), /extra: \{ drawCalls: \(\) => renderer\.info\.render\.calls, triangles: \(\) => renderer\.info\.render\.triangles \}/, starter);
+  assert.match(port('ember-vale'), /extra: \{ alive: \(\) => /);
+});
+
 test('stats: what counts as a visit, where it came from, and what a referrer is', () => {
   const req = (headers, method = 'GET') => new Request('https://owls.example/', { method, headers });
   assert.equal(isVisit(req({ 'user-agent': BROWSER, 'sec-fetch-dest': 'document' })), true);

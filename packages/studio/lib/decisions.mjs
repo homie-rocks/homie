@@ -12,7 +12,7 @@
  * Each change bumps the decision's `rev`; every asset records the revisions it was made under (assets/manifest.json
  * `made.under`), so a changed decision makes exactly those assets stale: listed and priced, never remade by itself.
  *
- * The file is private like CODEX.md: the remix source and a static game's served copy skip the whole codex/ folder.
+ * The file is private like CODEX.md: a static game's served copy skips the whole codex/ folder.
  * games/<id>/style.json (public, tiny) carries the palette and fonts a game, its landing and its title cards draw with.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -207,7 +207,7 @@ export const CATALOGUE = Object.freeze([
   ['cast.tiers', 'cast', 'What may each asset cost on a phone?', ['style.camera', 'game.devices'], (ctx) => {
     const big = ctx.players > 8;
     const v = { hero: { triangles: big ? 5000 : 8000, texturePx: 1024, kb: 1536, bones: 48 }, npc: { triangles: 3000, texturePx: 512, kb: 600, bones: 32 }, prop: { triangles: 1500, texturePx: 512, kb: 300 }, signature: { triangles: 5000, texturePx: 1024, kb: 800 }, kit: { triangles: 1000, texturePx: 512, kb: 200 }, scene: { drawCalls: 100, triangles: 150_000, textureMB: 48, firstPlayMB: 5 } };
-    return { value: v, label: `hero ${v.hero.triangles.toLocaleString('en-US')} · prop 1,500 · scene 150k triangles, 100 draws, 48 MB textures, 5 MB first play`, why: `phone first${big ? `; rooms of ${ctx.players} make heroes lighter` : ''}`, options: [] };
+    return { value: v, label: `hero ${v.hero.triangles.toLocaleString('en-US')} · prop 1,500 · scene 150k triangles, 100 draws, 48 MB textures, 5 MB shipped payload`, why: `phone first${big ? `; rooms of ${ctx.players} make heroes lighter` : ''}`, options: [] };
   }],
   ['cast.variation', 'cast', 'How many looks per character from one model?', [], (ctx) => ({ value: { paletteSwaps: Math.min(4, Math.max(2, ctx.players)), partSwaps: false, decals: false }, label: '4 palette swaps of the hero', why: 'team colours without another model', options: [] })],
 

@@ -77,11 +77,15 @@ test('game new + build: the starter becomes this studio\'s game, bundled with ne
   const dist = join(dir, 'site/dist');
   const cat = JSON.parse(readFileSync(join(dist, 'games.json'), 'utf8'));
   assert.deepEqual(cat.games.map((x) => x.id), ['crown-thief']);
-  const js = readFileSync(join(dist, 'games/crown-thief/assets/main.js'), 'utf8');
+  // The bundle is named by its content (bundle.json says which file); assets/main.js still loads it.
+  const { bundle } = JSON.parse(readFileSync(join(dist, 'games/crown-thief/bundle.json'), 'utf8'));
+  assert.match(bundle, /^assets\/main-[A-Z0-9]{8}\.js$/);
+  const js = readFileSync(join(dist, 'games/crown-thief', bundle), 'utf8');
   assert.match(js, /homie-net/, 'the netplay helper is in the bundle');
-  const src = JSON.parse(readFileSync(join(dist, 'games/crown-thief/source.json'), 'utf8'));
-  assert.equal(src.kind, 'homie-game-source');
-  assert.ok(src.files['game.json'] && src.files['src/main.ts']);
+  assert.equal(readFileSync(join(dist, 'games/crown-thief/assets/main.js'), 'utf8'), `import"./${bundle.slice('assets/'.length)}";\n`);
+  // No game is handed over whole: its source is not in the build, and neither are its assets' addresses.
+  assert.ok(!existsSync(join(dist, 'games/crown-thief/source.json')));
+  assert.ok(!existsSync(join(dist, 'games/crown-thief/assets.json')));
 });
 
 test('the Lobby: two strangers pressing Play together land in the same room; a full room opens the next', async () => {

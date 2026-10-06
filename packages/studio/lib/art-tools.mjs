@@ -11,7 +11,9 @@
  *   asset_add       a library item, or a file with its licence, into the game (checked, optimised, recorded)
  *   asset_make      one generated prop on the person's own fal account: a priced dry run unless approve; the
  *                   concept first, then (after looking) the mesh                                                  lineup card
- *   asset_check     phone budgets, the validator, licences, staleness
+ *   asset_check     phone budgets, the validator, licences, staleness: an inventory estimate, never a measured frame
+ *   collision_bake  a model's walkable surface as a height grid beside it, with a checksum and a true-scale plan
+ *   collision_check every collision file: stale against its model, its proxies, its routes walked by a bot
  *   asset_lineup    true scale, silhouettes, palette drift, flags                                                 lineup card
  *   asset_rights    RIGHTS.md and every asset's licence                                                           rights card
  *   cast_plan       the characters: proportions, silhouette, palette, skeleton family, source, clips, cost         cast card
@@ -346,7 +348,7 @@ export function artToolDefs(ctx, h) {
     },
     {
       name: 'asset_check', title: 'Check the assets',
-      description: 'Every asset of a game against the phone budgets (triangles, draw calls, picture memory, download), the Khronos glTF-Validator, its licence record, and whether a decision it was made under has changed; scene totals; big files in git. Free, a few seconds.',
+      description: 'Every asset of a game against the phone budgets, the Khronos glTF-Validator, its licence record, and whether a decision it was made under has changed; standalone textures and skies measured (size, hash, decode, mipmapped memory); big files in git. Its scene numbers are an INVENTORY ESTIMATE (the recorded files\' own triangles, draw calls and pictures times their declared placements): it never ran the game, so procedural geometry, repeated instances, effects and shadow passes are not in it, and a pass is not a measured frame (playtest and perf measure the running game). "Shipped payload" is every built file gzipped, not a measured first-play download. Free, a few seconds.',
       inputSchema: { type: 'object', properties: { ...GAME } },
       annotations: { title: 'Check the assets', ...RO },
       run: async (a) => {
@@ -358,32 +360,73 @@ export function artToolDefs(ctx, h) {
         const x = r.result;
         if (!x?.rows) return fail(`The check did not run: ${whyOf(r.job)}`);
         const { checkLines } = await import('./asset-check.mjs');
-        return ok(checkLines(x).join('\n'), { kind: 'check', ...x });
+        return ok(checkLines(x).join('\n'), { kind: 'check', ...x, about: { scope: 'An inventory estimate from the recorded files. Not a measurement of the running game.', totals: { drawCalls: 'draw calls of the recorded models times their declared placements (estimate)', triangles: 'triangles of the recorded models times their declared placements (estimate)', textureMB: 'mipmapped RGBA memory of every recorded picture, each unique picture once (estimate; maps declared unused are left out)', standaloneTextureMB: 'the part of textureMB that is standalone texture and sky records', unusedMapMB: 'normal and roughness maps left out because the manifest declares base colour only', shippedPayloadMB: 'every file of the last build, gzipped: what ships, not what a browser fetched before the first round', firstPlayMB: 'the old name of shippedPayloadMB (the same number); it never was a measured first-play download' } } });
+      },
+    },
+    // A model that can be drawn is not yet one that can be stood on. The two collision commands, for a creator who
+    // works in chat and never types one (lib/collision.mjs: the same code, through the studio's own CLI).
+    {
+      name: 'collision_bake', title: 'Make a model walkable',
+      description: 'Bake a model\'s walkable surface: a height grid read off its triangles, written beside it as <model>.collision.json with a checksum of the mesh and a true-scale plan (<model>.collision.svg, 40 px to the metre). Use it after asset_add or asset_make for anything figures stand or walk on (a landmark, a bridge, a deck): without it they fall through. Authored "proxies" (boxes, cylinders, ramps to walk around), "mover" (the body that must fit) and "routes" (ways a bot should be able to walk) in the JSON are kept by a re-bake; edit them with file_edit, then collision_check. Free, local. The game loads the file with @homie-rocks/heightfield (unpackBake, bakeField).',
+      inputSchema: { type: 'object', properties: { ...GAME, model: str('The model, as a path inside the game, e.g. assets/models/pier.glb'), cell: { type: 'number', description: 'Metres between grid posts (default 0.25, which suits a walkway)' }, side: str('top (default: the upper surface) or under', { enum: ['top', 'under'] }), maxY: { type: 'number', description: 'Optional: ignore triangles above this height in metres (a roof over a floor)' } }, required: ['model'] },
+      annotations: { title: 'Make a model walkable', ...RW },
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const need = needsInstall(ctx, root); if (need) return need;
+        const game = gameOf(root, a.game);
+        if (!a.model) return fail('model: the .glb to bake, as a path inside the game');
+        const r = await cli(ctx, root, `collision bake ${game}`, ['collision', 'bake', game, String(a.model), ...(a.cell ? ['--cell', String(a.cell)] : []), ...(a.side ? ['--side', String(a.side)] : []), ...(a.maxY !== undefined ? ['--max-y', String(a.maxY)] : [])]);
+        if (!r.ended) return stillRunning(r.job, 'The bake');
+        const x = r.result;
+        if (!x?.ok) return fail(`Not baked: ${x?.why ?? whyOf(r.job)}${x?.instead ? ` (${x.instead})` : ''}`);
+        return ok(x.lines.join('\n'), { kind: 'collision', ...x });
+      },
+    },
+    {
+      name: 'collision_check', title: 'Check where figures can walk',
+      description: 'The gate for a game\'s collision files (every <model>.collision.json, or one model\'s): the model is still the one that was baked (a changed surface is "stale: bake it again", by name; a re-export with the same triangles is not), the authored proxies are well formed, and a body of the mover\'s size passes every authored route and walks it to its end. Each failure names the place. Redraws each plan (.collision.svg) with a mark where a route fails. Run it after a model changes and before a deploy. Free, local.',
+      inputSchema: { type: 'object', properties: { ...GAME, model: str('Optional: only this model\'s collision file') } },
+      annotations: { title: 'Check where figures can walk', ...RW },
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const need = needsInstall(ctx, root); if (need) return need;
+        const game = gameOf(root, a.game);
+        const r = await cli(ctx, root, `collision check ${game}`, ['collision', 'check', game, ...(a.model ? [String(a.model)] : [])]);
+        if (!r.ended) return stillRunning(r.job, 'The collision check');
+        const x = r.result;
+        if (!x?.models) return fail(`The check did not run: ${x?.why ?? whyOf(r.job)}${x?.instead ? ` (${x.instead})` : ''}`);
+        const text = x.lines.join('\n');
+        return x.ok ? ok(text, { kind: 'collision', ...x }) : fail(`${text}\n${x.models.filter((m) => !m.ok).length} of ${x.models.length} collision file(s) need attention.`);
       },
     },
     {
       name: 'asset_lineup', title: 'Lineup',
-      description: 'The made assets of a game side by side at true scale on a 1 m grid under the game\'s light (front and three-quarter), their silhouettes at phone size, and flags: over budget, palette drift from the locked palette, an unreadable silhouette, another library family, stale. Free. Look at it, then have a fresh reviewer score "does it look like one game?" (the playtest guide\'s blind review).',
-      inputSchema: { type: 'object', properties: { ...GAME } },
+      description: 'The made assets of a game side by side at true scale on a 1 m grid under the game\'s light (front and three-quarter), their silhouettes at phone size, and flags: over budget, palette drift from the locked palette, an unreadable silhouette, another library family, stale. THREE lineups, never one: the inventory (every recorded model, including any the game no longer draws), the cast (what is in play: characters, creatures, props) and the environment (scenery). A reviewer judging "does it look like one game?" looks at the cast and environment lineups; the inventory is the folder. use marks what the game does with an asset now ({ "old-tree": "unused" }: it leaves the cast and environment lineups and the scene estimate). Free.',
+      inputSchema: { type: 'object', properties: { ...GAME, scope: str('Optional: draw only the cast or the environment lineup beside the inventory', { enum: ['inventory', 'cast', 'environment'] }), use: { type: 'object', description: 'Optional, before drawing: what the game does with an asset now, { "<asset id>": "cast" | "prop" | "environment" | "unused" | "auto" } (only when the person or the game\'s code says so)' } } },
       annotations: { title: 'Lineup', ...RO }, _meta: ui(ART_UI.lineup),
       run: async (a) => {
         const root = ctx.root(a.studio);
         const need = needsInstall(ctx, root); if (need) return need;
         const game = gameOf(root, a.game);
-        const r = await cli(ctx, root, `assets lineup ${game}`, ['assets', 'lineup', game]);
+        if (a.use && typeof a.use === 'object') {
+          const { setUsage } = await import('./asset-manifest.mjs');
+          try { for (const [asset, usage] of Object.entries(a.use)) setUsage(root, game, String(asset), String(usage)); } catch (error) { return fail(error.message); }
+        }
+        const r = await cli(ctx, root, `assets lineup ${game}`, ['assets', 'lineup', game, ...(a.scope ? ['--scope', String(a.scope)] : [])]);
         if (!r.ended) return stillRunning(r.job, 'The lineup');
         const x = r.result;
         if (!x?.rows) return fail(x?.why ?? `The lineup was not drawn: ${whyOf(r.job)}`);
         writeArtSummary(root, game);
         let check = null;
         try { check = JSON.parse(readFileSync(join(root, '.studio', 'art', game, 'check.json'), 'utf8')); } catch { check = null; }
-        const data = { kind: 'lineup', mode: 'lineup', game, rows: x.rows, flagged: x.flagged, palette: x.palette, family: x.family, images: { front: picture(h, join(root, x.images.front), 220 * 1024), quarter: picture(h, join(root, x.images.quarter), 220 * 1024), silhouettes: picture(h, join(root, x.images.silhouettes), 80 * 1024) }, files: x.images, totals: check?.totals ?? null, budgets: check?.budgets ?? null, spend: artSpend(root, game) };
-        return ok([`Lineup of ${x.rows.length} asset(s), ${x.flagged} flagged. Pictures: ${x.images.front}, ${x.images.quarter} (file_read shows them).`, ...x.rows.map((row) => `  ${row.flags.length ? 'FLAG' : 'ok'} ${row.id}${row.size ? ` ${row.size[1]} m` : ''}${row.flags.length ? `: ${row.flags.join('; ')}` : ''}`)].join('\n'), data);
+        const data = { kind: 'lineup', mode: 'lineup', game, rows: x.rows, lineups: x.lineups ?? null, unused: x.unused ?? [], flagged: x.flagged, palette: x.palette, family: x.family, images: { front: picture(h, join(root, x.images.front), 220 * 1024), quarter: picture(h, join(root, x.images.quarter), 220 * 1024), silhouettes: picture(h, join(root, x.images.silhouettes), 80 * 1024) }, files: x.images, totals: check?.totals ?? null, budgets: check?.budgets ?? null, spend: artSpend(root, game) };
+        const scoped = ['cast', 'environment'].map((n) => (x.lineups?.[n]?.images ? `${n} lineup (${x.lineups[n].ids.length}): ${x.lineups[n].images.front}, ${x.lineups[n].images.quarter}` : x.lineups?.[n]?.same ? `${n} lineup: the same models as the inventory` : null)).filter(Boolean);
+        return ok([`Inventory lineup of ${x.rows.length} asset(s): every recorded model, ${x.flagged} flagged${x.unused?.length ? `, ${x.unused.length} marked unused (not drawn by the game: ${x.unused.join(', ')})` : ''}. Pictures: ${x.images.front}, ${x.images.quarter} (file_read shows them).`, ...scoped, 'A review of how the GAME looks reads the cast and environment lineups; the inventory is the folder.', ...x.rows.map((row) => `  ${row.flags.length ? 'FLAG' : 'ok'} ${row.id} [${row.usage ?? '?'}]${row.size ? ` ${row.size[1]} m` : ''}${row.flags.length ? `: ${row.flags.join('; ')}` : ''}`)].join('\n'), data);
       },
     },
     {
       name: 'asset_rights', title: 'Rights',
-      description: 'Every asset\'s licence in plain words (what it is, where it came from, what the licence allows, any credit owed, what a remixer gets) and what the providers\' terms say; writes RIGHTS.md and the credits. Anything that would stop a public game from publishing is named with its fix.',
+      description: 'Every asset\'s licence in plain words (what it is, where it came from, what the licence allows, any credit owed) and what the providers\' terms say; writes RIGHTS.md and the credits. Anything that would stop a public game from publishing is named with its fix.',
       inputSchema: { type: 'object', properties: { ...GAME } },
       annotations: { title: 'Rights', ...RW }, _meta: ui(ART_UI.rights),
       run: async (a) => {
@@ -395,7 +438,7 @@ export function artToolDefs(ctx, h) {
         const x = r.result;
         if (!x?.text) return fail(`Not written: ${whyOf(r.job)}`);
         const m = readManifest(root, game);
-        const rows = m.assets.map((e) => ({ id: e.id, kind: e.kind, route: e.route, license: e.license?.kind ?? null, remix: e.license?.remix ?? null, attribution: e.license?.attribution ?? null, from: e.from?.pack ?? e.from?.item ?? null, placeholder: Boolean(e.placeholder) }));
+        const rows = m.assets.map((e) => ({ id: e.id, kind: e.kind, route: e.route, license: e.license?.kind ?? null, attribution: e.license?.attribution ?? null, from: e.from?.pack ?? e.from?.item ?? null, placeholder: Boolean(e.placeholder) }));
         return ok(`${x.file}:\n\n${x.text.slice(0, 6000)}`, { kind: 'rights', game, file: x.file, rows, problems: x.licence, text: x.text.slice(0, 20_000) });
       },
     },

@@ -49,7 +49,49 @@ import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normaliz
 
 export const NET_VERSION = 1;
 /** The contract revision this relay speaks (NETPLAY.md): optional fields, frames and refusals; the wire stays `v: 1`. */
-export const NET_REVISION = 8;
+export const NET_REVISION = 9;
+/**
+ * Revision 9 (NETPLAY.md sections 22 and 23). STALL: how long a host may send no snapshot, while others are present,
+ * before the room is handed on: 1.5 s unless the game names its own (game.json `netplay.stallMs`), never under
+ * 1.5 s (a shorter one swaps hosts on a single slow frame) and never over 10 s (a frozen host must still be replaced
+ * while its players are watching a still picture).
+ */
+export const STALL = Object.freeze({ ms: 1500, min: 1500, max: 10_000 });
+/** A game's own stall time, held to STALL's bounds; null when it names none (or not a number). */
+export function stallOf(v) {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 0 ? Math.max(STALL.min, Math.min(STALL.max, n)) : null;
+}
+const VERSION_TEXT = /^[A-Za-z0-9._-]{1,32}$/;
+/** A game revision (game.json `netplay.version`): 1 to 32 of A-Z a-z 0-9 . _ -, a number as its digits; else null. */
+export function versionOf(v) {
+  const t = typeof v === 'number' && Number.isFinite(v) ? String(v) : typeof v === 'string' ? v.trim() : '';
+  return VERSION_TEXT.test(t) ? t : null;
+}
+const FEATURE_TEXT = /^[a-z0-9][a-z0-9-]{0,23}$/;
+/** What a build says it can do (`hello.feat`): up to 8 short lowercase words. */
+export function featuresOf(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const x of list) { const k = String(x ?? '').toLowerCase(); if (FEATURE_TEXT.test(k) && !out.includes(k)) out.push(k); if (out.length >= 8) break; }
+  return out;
+}
+/**
+ * A SOCKET THAT WENT AWAY IS NOT A FAILED ROOM. A browser that closes its tab, loses its network or is replaced by a
+ * new host ends its socket without a goodbye, and the runtime reports that as an error ("Network connection lost",
+ * "WebSocket peer disconnected"…). Those are departures: the room has already handled them (the seat is held, the
+ * host is replaced). Anything else thrown while the room was doing something IS a failure, and is logged with the
+ * room and what it was doing. `departure(error)` says which; the transport (the Table) asks it at its boundary.
+ */
+const DEPARTURE = /network connection lost|connection (?:was )?(?:closed|reset|aborted|lost)|peer disconnected|websocket (?:is )?(?:closed|closing|not open|already closed)|socket (?:is )?closed|client disconnected|disconnected|broken pipe|econnreset|epipe|aborted|cancell?ed|the script will never generate a response|durable object reset/i;
+export function departure(error) {
+  const text = typeof error === 'string' ? error : `${error?.name ?? ''} ${error?.message ?? ''} ${error?.code ?? ''}`;
+  return DEPARTURE.test(text);
+}
+/** An error as a log line carries it: its name and message, cut short. Never the frame it was thrown for. */
+export function errorLine(error) {
+  return String(error?.stack && typeof error.stack === 'string' ? error.stack.split('\n').slice(0, 4).join(' | ') : error?.message ?? error).slice(0, 400);
+}
 const POLICY_KINDS = ['open', 'humans-only', 'hybrid', 'beginner'];
 /**
  * A room's policy before the Worker says anything (and the public server's with nothing set): today's behaviour.
@@ -220,7 +262,8 @@ export class NetRoom {
    * @param {number} [o.persistMs]  the checkpoint/round/state are saved at most this often
    * @param {{save: (o: object) => void, clear?: () => void} | null} [o.store]
    * @param {() => number} [o.now]
-   * @param {(line: object) => void} [o.log]
+   * @param {(line: object) => void} [o.log]  one line per lifecycle event (hello, leave, elect, a failed operation),
+   *   each stamped `at` (ISO time) with its room; never a token, a ticket, a browser key or a frame's contents
    */
   constructor({
     code, maxPlayers = 8, maxScreens = 16, perIp = 12, stallMs = 1500, silentMs = 2500, idleMs = 10_000,
@@ -257,7 +300,16 @@ export class NetRoom {
     this.persistMs = persistMs;
     this.store = store;
     this.now = now;
-    this.log = log;
+    // Every line says when: a departure and a failure seconds apart are told apart by their times.
+    const stamp = () => { try { return new Date(now()).toISOString(); } catch { return new Date().toISOString(); } };
+    this.log = (line) => { try { log({ at: stamp(), ...line }); } catch { /* a log that throws never takes the room with it */ } };
+    /**
+     * Revision 9, section 23: the build this room runs (undefined: nobody has come yet), the build that is live now
+     * (the Worker's word with every socket; undefined: nobody says), and the count of stays in a seat (`peer.occ`).
+     */
+    this.gameVer = undefined;
+    this.currentVer = undefined;
+    this.occSeq = 0;
     /** id → client (including sockets that have not said hello yet) */
     this.clients = new Map();
     /** seat → { token, name, since, present } */
@@ -346,13 +398,33 @@ export class NetRoom {
       badge: typeof conn.badge === 'string' && conn.badge.length <= 16 ? conn.badge : null,
       // Revision 7: the latest view the host showed this AI (what its arguments are checked against), and its pace.
       lastView: null, viewAt: 0, doAt: 0,
+      // Revision 9: the game revision this socket's page was served with. The Worker's word (it is in the socket's
+      // address, so a helper from before revisions carries it too) when the transport gives one, else the hello's.
+      verWord: 'ver' in conn ? versionOf(conn.ver) : undefined, ver: null, feat: [], staleTold: false,
     };
     this.clients.set(c.id, c);
     return {
       id: c.id,
-      onMessage: (text) => this.onMessage(c, text),
-      onClose: () => this.onClose(c, 'closed'),
+      onMessage: (text) => this.guard(c, 'message', () => this.onMessage(c, text), text),
+      /** `via`: how the transport learned it (`close`, or `error`: the socket failed, which is how a lost network arrives). */
+      onClose: (via = 'close') => this.guard(c, 'close', () => this.onClose(c, 'closed', via)),
     };
+  }
+
+  /**
+   * The boundary every socket callback crosses. A room operation that throws is logged with what the room was doing
+   * (the frame's type, never its contents: a hello carries a seat token) and never reaches the transport, where the
+   * runtime would print it as an uncaught error with no room and no time on it. The socket's client stays as it is:
+   * one bad frame does not end a seat.
+   */
+  guard(c, op, fn, text = null) {
+    try { return fn(); } catch (error) {
+      let frame = null;
+      if (typeof text === 'string') { const m = /^\s*\{\s*"t"\s*:\s*"([a-z-]{1,16})"/.exec(text.slice(0, 64)); frame = m ? m[1] : null; }
+      this.stats.failed = (this.stats.failed ?? 0) + 1;
+      this.log({ ev: 'failed', room: this.code, op, ...(frame ? { frame } : {}), id: c?.id ?? null, seat: c?.seat ?? null, role: c && c.helloed ? this.roleOf(c) : null, clients: this.clients.size, error: errorLine(error) });
+      return undefined;
+    }
   }
 
   /**
@@ -403,7 +475,11 @@ export class NetRoom {
   host() { return this.hostId ? this.clients.get(this.hostId) ?? null : null; }
   hostRef() { const h = this.host(); return h ? { id: h.id, seat: h.seat } : null; }
   roleOf(c) { return c.id === this.hostId ? 'host' : c.seat === null ? 'screen' : 'replica'; }
-  peer(c) { return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: { ...c.agent } } : {}), ...(this.muteOf(c) ? { muted: true } : {}), ...(c.badge && !c.agent ? { badge: c.badge } : {}) }; }
+  peer(c) {
+    // Revision 9: which stay in the seat this is (`occ`), the peer's game revision and what its build can do.
+    const occ = c.seat !== null ? this.seats.get(c.seat)?.occ : undefined;
+    return { id: c.id, seat: c.seat, name: c.name, colour: c.colour, device: c.device, want: c.want, role: this.roleOf(c), ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: { ...c.agent } } : {}), ...(this.muteOf(c) ? { muted: true } : {}), ...(c.badge && !c.agent ? { badge: c.badge } : {}), ...(Number.isInteger(occ) ? { occ } : {}), ...(c.ver ? { ver: c.ver } : {}), ...(c.feat.length ? { feat: [...c.feat] } : {}) };
+  }
   /** A hands-`host` agent (section 17): no game client of its own, so no snapshots, checkpoints or state. */
   lite(c) { return Boolean(c.agent && c.agent.hands === 'host'); }
   seatedHumans() { return this.live().filter((c) => c.seat !== null && !c.agent); }
@@ -513,7 +589,10 @@ export class NetRoom {
         this.stats.snaps += 1;
         this.snapTimes.push(now);
         while (this.snapTimes.length && this.snapTimes[0] < now - 1000) this.snapTimes.shift();
-        const out = JSON.stringify({ t: 'snap', from: c.seat, ...snap });
+        // A heartbeat (revision 9): the host's last state again while its frames hitch. It counts as a snapshot here
+        // (the host is alive), and replicas are told which it is.
+        const out = JSON.stringify({ t: 'snap', from: c.seat, ...snap, ...(m.hb === 1 ? { hb: 1 } : {}) });
+        if (m.hb === 1) this.stats.heartbeats = (this.stats.heartbeats ?? 0) + 1;
         this.lastSnapText = out;
         for (const o of this.others(c)) {
           if (this.lite(o)) continue; // an agent with no game client draws nothing
@@ -720,6 +799,33 @@ export class NetRoom {
       c.agent = { pass: String(a.pass ?? '').slice(0, 16), role: ['party', 'guide', 'player'].includes(a.role) ? a.role : 'party', hands: a.hands === 'host' ? 'host' : 'self', by: ['studio', 'guest', 'service'].includes(a.by) ? a.by : 'studio' };
       c.agentName = aiName(a.name ?? a.label ?? 'Agent');
     }
+    // REVISIONS (section 23): a room runs one build of its game at a time. A client with no game code of its own (an
+    // AI the host moves) has no build.
+    c.ver = c.verWord !== undefined ? c.verWord : versionOf(m.ver);
+    c.feat = featuresOf(m.feat);
+    const lite = Boolean(c.agentWord && c.agentWord.hands === 'host');
+    if (!lite) {
+      const here = live.filter((o) => !this.lite(o));
+      const cur = this.currentVer;
+      if (here.length && (this.gameVer ?? null) !== c.ver) {
+        if (cur !== undefined && c.ver !== cur) {
+          // The newcomer is the old one (a tab open since before a deploy): it is told to reload, for good.
+          this.log({ ev: 'stale', room: this.code, id: c.id, ver: c.ver, room_ver: this.gameVer ?? null, current: cur });
+          return refuse('stale', 'This game was updated. Reload to play the new version.', { ver: cur });
+        }
+        // The room is the old one: its players are told a new build is live (once each), and the newcomer waits for
+        // it (not final: its helper knocks again, and is let in once nobody on the old build is left).
+        for (const o of here) if (cur !== undefined && o.ver !== cur && !o.staleTold) { o.staleTold = true; this.send(o, { t: 'stale', ver: cur }); }
+        this.log({ ev: 'room-stale', room: this.code, id: c.id, ver: c.ver, room_ver: this.gameVer ?? null, current: cur ?? null });
+        return refuse('room-stale', 'This room is still running another version of the game. It opens to this one when its players reload.', { ver: this.gameVer ?? null });
+      }
+      if (!here.length) {
+        // Nobody on the other build is left: the room is this build's now, and starts fresh. A checkpoint, a snapshot
+        // and keyed state written by other code are exactly what a new build must not read.
+        if (this.gameVer !== undefined && this.gameVer !== c.ver) this.forgetWorld(c.ver);
+        this.gameVer = c.ver;
+      }
+    }
     if (this.perIp && c.ip && live.filter((o) => o.ip === c.ip).length >= this.perIp) return refuse('too-many', `at most ${this.perIp} sockets per address in one room`);
     if (live.length >= this.maxPlayers + this.maxScreens) return refuse('room-full', 'this room is full; try another');
     c.device = m.device === 'phone' || m.device === 'tv' ? m.device : 'desk';
@@ -792,9 +898,12 @@ export class NetRoom {
       this.stats.elections.push({ at: now, id: c.id, seat: c.seat, why });
       if (this.stats.elections.length > 32) this.stats.elections.shift();
     }
-    const lite = this.lite(c);
+    // An older build let in to its own room (it was here first, or the room was empty): it plays, and is told.
+    const behind = !lite && this.currentVer !== undefined && c.ver !== this.currentVer;
+    if (behind) c.staleTold = true;
     this.send(c, {
       t: 'welcome', v: NET_VERSION, rev: NET_REVISION, id: c.id, room: this.code, seat: c.seat, token: c.token, name: c.name, colour: c.colour,
+      ...(this.gameVer ? { ver: this.gameVer } : {}), ...(behind ? { stale: { ver: this.currentVer } } : {}), stall: this.stallMs,
       role, why, host: this.hostRef(), peers: this.peers(), st: now, max: this.maxPlayers,
       round: this.lastRound, roster: this.lastRoster, snap: lite ? null : this.lastSnap, state: lite ? {} : this.stateObject(),
       ...(role === 'host' ? { ckpt: this.lastCkpt } : {}),
@@ -814,7 +923,7 @@ export class NetRoom {
     }
     // A roster from before an agent sat is labelled again now (its seat is an AI's).
     if (c.agent && Array.isArray(this.lastRoster)) this.lastRoster = this.labelRoster(this.lastRoster);
-    this.log({ ev: 'hello', room: this.code, id: c.id, seat: c.seat, device: c.device, want: c.want, role, why, full, resumed: typeof m.token === 'string' && m.token === c.token, ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: c.agent.hands } : {}) });
+    this.log({ ev: 'hello', room: this.code, id: c.id, seat: c.seat, device: c.device, want: c.want, role, why, full, resumed: typeof m.token === 'string' && m.token === c.token, clients: this.live().length, ...(c.watch ? { watch: true } : {}), ...(c.agent ? { agent: c.agent.hands } : {}), ...(c.ver ? { ver: c.ver } : {}) });
     this.persist(now); // a new seat (or a new host) is written now, not on the next tick: a deploy can come any moment
     this.tellWatchers();
   }
@@ -853,7 +962,8 @@ export class NetRoom {
    */
   seatFor(token, kind = 'human') {
     if (token) for (const [seat, s] of this.seats) if (s.token === token && Boolean(s.agent) === (kind === 'agent')) return seat;
-    const fresh = () => ({ token: randomId(18), name: '', since: this.now(), present: true, agent: null });
+    // Every new holder of a seat is a new stay in it (`peer.occ`): a host tells "they came back" from "somebody new".
+    const fresh = () => ({ token: randomId(18), name: '', since: this.now(), present: true, agent: null, occ: (this.occSeq += 1) });
     const reserve = this.reserve();
     const order = [];
     if (kind === 'agent') {
@@ -1247,17 +1357,20 @@ export class NetRoom {
     }
   }
 
-  onClose(c, why) {
+  onClose(c, why, via = null) {
     if (this.clients.get(c.id) !== c) return;
     this.clients.delete(c.id);
     if (!c.helloed) return;
+    const wasHost = c.id === this.hostId;
     const now = this.now();
     if (c.seat !== null) {
       const s = this.seats.get(c.seat);
       if (s && s.token === c.token) { s.present = false; s.since = now; }
     }
     for (const o of this.others(c)) this.send(o, { t: 'leave', id: c.id, seat: c.seat, why });
-    this.log({ ev: 'leave', room: this.code, id: c.id, seat: c.seat, why });
+    // One line per departure, with what the room looked like. A `leave` is a departure (a closed tab, a lost network
+    // arriving as the socket's error, a host that was replaced); a `failed` line (guard) is a room operation that threw.
+    this.log({ ev: 'leave', room: this.code, id: c.id, seat: c.seat, why, ...(via ? { via } : {}), role: wasHost ? 'host' : c.seat === null ? 'screen' : 'replica', left: this.live().length });
     if (c.id === this.hostId) {
       this.hostId = null;
       this.elect(null, why === 'replaced' ? 'host-replaced' : why === 'silent' ? 'host-stalled' : 'host-left');
@@ -1372,6 +1485,8 @@ export class NetRoom {
       this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
       this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null;
       this.emptySince = 0; this.openedAt = 0; this.askedMax = null;
+      // The room is nobody's build again (section 23): the next visitor's is its build.
+      this.gameVer = undefined;
       // The party's dial and vote are the room's: a new party starts from the server's level.
       this.level = null; this.levelBy = null; this.vote = null; this.agentsOut = null;
       // Room chat (section 19): an empty room forgets what was said, as it forgets everything else.
@@ -1602,7 +1717,8 @@ export class NetRoom {
   saved(now = this.now()) {
     return {
       v: NET_VERSION, room: this.code, savedAt: now, maxPlayers: this.maxPlayers, hostSeat: this.host()?.seat ?? null, openedAt: this.openedAt || null,
-      seats: [...this.seats].map(([seat, s]) => (s.agent ? [seat, s.token, s.name, s.agent] : [seat, s.token, s.name])),
+      seats: [...this.seats].map(([seat, s]) => [seat, s.token, s.name, s.agent ?? null, s.occ ?? null]),
+      occSeq: this.occSeq, ...(this.gameVer !== undefined ? { gameVer: this.gameVer } : {}),
       ckpt: this.lastCkpt, round: this.lastRound, roster: this.lastRoster, state: this.stateObject(),
       // Section 17: a deploy keeps the room's policy, the party's dial and what its game reads.
       policy: this.policy, level: this.level, levelBy: this.levelBy, caps: [...this.caps],
@@ -1619,7 +1735,10 @@ export class NetRoom {
     if (!saved || saved.v !== NET_VERSION || !(now - Number(saved.savedAt) < 120_000)) return false;
     if (Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
     if (Number.isFinite(saved.openedAt) && saved.openedAt > 0) this.openedAt = saved.openedAt;
-    for (const [seat, token, name, agent] of saved.seats ?? []) this.seats.set(seat, { token, name, since: now, present: false, agent: agent && typeof agent === 'object' ? agent : null });
+    for (const [seat, token, name, agent, occ] of saved.seats ?? []) this.seats.set(seat, { token, name, since: now, present: false, agent: agent && typeof agent === 'object' ? agent : null, ...(Number.isInteger(occ) ? { occ } : {}) });
+    // A stay's number is never given twice while a checkpoint may still name it.
+    this.occSeq = Math.max(this.occSeq, Number.isInteger(saved.occSeq) ? saved.occSeq : 0, ...[...this.seats.values()].map((x) => x.occ ?? 0));
+    if ('gameVer' in saved) this.gameVer = versionOf(saved.gameVer);
     const pol = normalizePolicy(saved.policy);
     if (pol) this.policy = pol;
     if (Number.isInteger(saved.level)) { this.level = Math.max(1, Math.min(this.policy.levelMax, saved.level)); this.levelBy = saved.levelBy === 'owner' ? 'owner' : 'vote'; }
@@ -1911,6 +2030,28 @@ export class NetRoom {
    * The room's seats, changed while it runs (the owner's "max players per room"). Players already seated above the
    * new number keep their seat until they leave; nobody new is seated there. Never above the room's own cap.
    */
+  /** The game's own stall time (game.json `netplay.stallMs`), held to STALL's bounds; anything else: the default. */
+  setStall(ms) {
+    this.stallMs = stallOf(ms) ?? STALL.ms;
+    return this.stallMs;
+  }
+
+  /** The build that is live now (the Worker's word, from the catalogue): a string, or null when the game names none. */
+  setCurrent(ver) {
+    this.currentVer = ver === undefined ? undefined : versionOf(ver);
+  }
+
+  /**
+   * The room changes build (section 23): everything the old build's rules wrote is dropped, so the new build's first
+   * host starts a fresh round. Seats keep their tokens and names (a player who reloads comes back to their seat).
+   */
+  forgetWorld(next) {
+    this.log({ ev: 'build-changed', room: this.code, from: this.gameVer ?? null, to: next ?? null });
+    this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
+    this.state.clear(); this.stateBytes = 0; this.preferHost = null;
+    this.persistDirty = true;
+  }
+
   setSeats(n, perIp = null) {
     this.seatCap = Math.max(1, Math.floor(n));
     this.maxPlayers = Math.max(1, Math.min(this.seatCap, this.askedMax ?? this.seatCap));
@@ -2009,6 +2150,8 @@ export class NetRoom {
       policy: this.policyOut(),
       ...(this.vote ? { vote: this.voteView() } : {}),
       caps: [...this.caps],
+      // Revision 9: the build this room runs (null: the game names none, or nobody is here) and its stall time.
+      ver: this.gameVer ?? null, stallMs: this.stallMs,
       // Revision 7: whether this room's game has a vocabulary its AI may speak (agents.json).
       vocab: Boolean(this.vocab),
       memory: {

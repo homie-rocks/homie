@@ -6,8 +6,8 @@
  *   Home                 Organization (the studio: name, url, logo, image, description, the owner's sameAs) and WebSite
  *   /games/, /rooms/     ItemList of the public games' landings (the Rooms list never carries a live count)
  *   /<game>/             VideoGame (co-typed WebApplication: it runs in a browser) with its pictures and screenshots,
- *                        genre, players, play modes, platforms, the studio as author and publisher, the source's
- *                        licence, isBasedOn (a remix's original, a port's original), a trailer (VideoObject), dates,
+ *                        genre, players, play modes, platforms, the studio as author and publisher, the licence
+ *                        it names (when it names one), isBasedOn (a port's original), a trailer (VideoObject), dates,
  *                        and one free-to-play Offer whose addOn lists what the studio's shop really sells in it
  *   /music/, /music/<s>/ MusicAlbum (when the manifest names one) or ItemList; MusicRecording (byArtist: the studio)
  *   /videos/, /<v>/      ItemList; VideoObject (thumbnailUrl, uploadDate, duration, contentUrl)
@@ -22,7 +22,7 @@
  * win, and `aggregateRating`, `review` and `offers` are refused (lib/build.mjs warns). A page of the studio's own
  * (site/pages) takes `<!-- homie:schema -->` where it wants these blocks.
  */
-import { licenseOf, LICENSE_KINDS, remixRow } from './license.mjs';
+import { licenseOf } from './license.mjs';
 
 const CONTEXT = 'https://schema.org';
 
@@ -123,10 +123,10 @@ export function itemList(origin, id, name, items) {
 
 /* ------------------------------------------------------------------ a game */
 
-/** "Remix with credit (MIT)" as a licence: a CreativeWork, linked to the SPDX page when the owner named one. */
+/** The licence a game names for itself ("MIT") as a CreativeWork linked to its SPDX page; null when it names none. */
 export function licenseNode(value) {
   const l = licenseOf(value);
-  return { '@type': 'CreativeWork', name: `${LICENSE_KINDS[l.kind]}${l.spdx ? ` (${l.spdx})` : ''}`, ...(l.spdx ? { url: `https://spdx.org/licenses/${encodeURIComponent(l.spdx)}.html` } : {}) };
+  return l ? { '@type': 'CreativeWork', name: l.spdx, url: `https://spdx.org/licenses/${encodeURIComponent(l.spdx)}.html` } : null;
 }
 
 const PLAY_MODE = (mode) => `https://schema.org/${mode}`;
@@ -170,10 +170,8 @@ export function gameNode(cat, g, origin, { listed = true, shop = null } = {}) {
   const images = uniq([absUrl(origin, h.wideImage), absUrl(origin, h.tallImage), absUrl(origin, L.cover)]);
   const shots = uniq((L.screenshots ?? []).map((u) => absUrl(origin, u)));
   const trailer = L.trailer ? (cat.videos ?? []).find((v) => v.slug === L.trailer) : null;
-  const lineage = remixRow(g.remixOf);
   const o = L.credits?.original;
   const based = [
-    lineage ? { '@type': 'VideoGame', name: lineage.name, ...(lineage.page ? { url: lineage.page } : {}), ...(lineage.studio ? { creditText: `${lineage.name} by ${lineage.studio}` } : {}) } : null,
     o && !o.house && o.title ? { '@type': 'VideoGame', name: o.title, ...(o.url ? { url: o.url } : {}), ...(o.author ? { creditText: `${o.title} by ${o.author}${o.year ? ` (${o.year})` : ''}${o.licence ? `, ${o.licence} licence` : ''}` } : {}) } : null,
   ].filter(Boolean);
   // The studio by name and address, not only its @id: a page is read on its own, and Home is where it is in full.
@@ -199,7 +197,7 @@ export function gameNode(cat, g, origin, { listed = true, shop = null } = {}) {
     isAccessibleForFree: true,
     author: studio,
     publisher: studio,
-    license: licenseNode(g.license),
+    ...(licenseNode(g.license) ? { license: licenseNode(g.license) } : {}),
     ...(based.length ? { isBasedOn: based.length === 1 ? based[0] : based } : {}),
     ...(trailer ? { trailer: videoNode(cat, trailer, origin, { nested: true }) } : {}),
     ...(when(g.dates?.published) ? { datePublished: g.dates.published } : {}),

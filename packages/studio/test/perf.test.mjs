@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { bootstrapChange, judge, judgePaired, quantile, rankTest, signedRankTest, summarize } from '../lib/perf-stats.mjs';
 import { decodeMappings, sourceMapLookup, summarizeProfile } from '../lib/perf-profile.mjs';
-import { DEFAULT_GOAL, defaultGuards, deviceLabel, metricsOfRun, perfCompare, perfSizes, summaryOf } from '../lib/perf.mjs';
+import { DEFAULT_GOAL, defaultGuards, deviceLabel, metricsOfRun, perfCompare, perfRun, perfSizes, prePlayTransfer, renderCostOf, summaryOf } from '../lib/perf.mjs';
 import { readCode } from '../lib/perf-code.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -243,12 +243,17 @@ test('build --maps: the map and module sizes go to .studio/maps/<id>/, never int
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
   assert.equal(run(['game', 'new', 'gem-rush', '--from', 'gem-rush'], dir).status, 0);
   assert.equal(run(['build', 'gem-rush'], dir).status, 0);
-  const main = join(dir, 'site', 'dist', 'games', 'gem-rush', 'assets', 'main.js');
+  // The bundle is named by its content: bundle.json beside the page says which file it is.
+  const gameDir = join(dir, 'site', 'dist', 'games', 'gem-rush');
+  const bundle = JSON.parse(readFileSync(join(gameDir, 'bundle.json'), 'utf8')).bundle;
+  const main = join(gameDir, bundle);
   const plain = readFileSync(main);
   assert.ok(!existsSync(join(dir, '.studio', 'maps', 'gem-rush')), 'a plain build keeps no map');
   const built = JSON.parse(run(['build', 'gem-rush', '--maps'], dir).stdout);
   assert.equal(built.ok, true);
+  assert.equal(JSON.parse(readFileSync(join(gameDir, 'bundle.json'), 'utf8')).bundle, bundle, 'the same name: a map changes no byte of it');
   assert.equal(sha(readFileSync(main)), sha(plain), 'the bundle is byte for byte the plain build\'s');
+  assert.deepEqual(readdirSync(join(gameDir, 'assets')).filter((f) => f.endsWith('.map')), [], 'no map of any name in site/dist');
   assert.ok(!existsSync(`${main}.map`), 'no map in site/dist: a deploy never ships it');
   assert.doesNotMatch(readFileSync(main, 'utf8'), /sourceMappingURL/);
   const maps = join(dir, '.studio', 'maps', 'gem-rush');
@@ -257,11 +262,11 @@ test('build --maps: the map and module sizes go to .studio/maps/<id>/, never int
   const sizes = perfSizes(dir, 'gem-rush');
   assert.equal(sizes.ok, true);
   assert.ok(sizes.js.bytes > 20_000 && sizes.js.gzip < sizes.js.bytes);
-  assert.equal(sizes.biggest[0].path, 'assets/main.js');
+  assert.equal(sizes.biggest[0].path, bundle);
   assert.equal(sizes.biggest[0].code.minified, true, 'a studio build is minified, and perf sizes reads it so');
   assert.ok(sizes.modules.top.some((m) => /netplay\/netplay\.ts$/.test(m.module)), 'the netplay helper is in the bundle');
   assert.ok(sizes.modules.top.some((m) => /games\/gem-rush\/src\/main\.ts$/.test(m.module)));
-  assert.match(sizes.apart.note, /never loaded by the game/, 'source.json is listed apart');
+  assert.match(sizes.apart.note, /never loaded by the game/, 'what the game never loads is listed apart');
   // The CLI says the same, as paths and numbers.
   const cli = JSON.parse(run(['perf', 'sizes', 'gem-rush'], dir).stdout);
   assert.equal(cli.total.bytes, sizes.total.bytes);
@@ -380,4 +385,37 @@ test('perf sizes says which big scripts are minified (code), from the files them
   const text = spawnSync(process.execPath, [CLI, 'perf', 'sizes', 'sky-race'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } }).stdout;
   assert.match(text, /assets\/index-a1b2\.js .*minified, \d+(\.\d)?% GLSL shader source in strings/);
   assert.match(text, /vendor\.js .*NOT minified/);
+});
+
+test('measured pre-play transfer: what was really fetched up to playable, in-flight bytes included, absent when never playable', () => {
+  // The fault this guards: a total of the built folder (unused models, streamed music) read as "downloaded before the
+  // first round". Here only what the browser asked for by then counts, and a file still arriving counts what arrived.
+  const requests = [
+    { url: 'http://127.0.0.1:8787/gem/play', bytes: 4096, got: 4096, done: true },
+    { url: 'http://127.0.0.1:8787/gem/__game/assets/main.js', bytes: 204_800, got: 204_800, done: true },
+    { url: 'http://127.0.0.1:8787/gem/__game/assets/hero.glb', bytes: 0, got: 51_200, done: false },
+  ];
+  assert.deepEqual(prePlayTransfer(requests), { requests: 3, finished: 2, inFlight: 1, kb: 254, gameRequests: 2, gameKb: 250 });
+  assert.equal(prePlayTransfer(requests, { playable: false }), null, 'never playable: no "before play" to measure');
+  const run = { device: 'phone', browsers: [{ role: 'host', load: { playableMs: 1700, gameKb: 200, prePlay: prePlayTransfer(requests) }, render: renderCostOf([{ drawCalls: 212, triangles: 105_442 }]) }, { role: 'replica', load: { playableMs: null, prePlay: null }, render: { samples: 0, drawCalls: null, triangles: null } }] };
+  const m = metricsOfRun(run);
+  assert.equal(m['phone.host.load.prePlayKb'], 254);
+  assert.equal(m['phone.host.render.calls'], 212);
+  assert.equal(m['phone.host.render.triangles'], 105_442);
+  assert.ok(!('phone.replica.load.prePlayKb' in m) && !('phone.replica.render.calls' in m), 'not measured is absent, never 0');
+});
+
+test('measured renderer cost: medians of what the game exposes; a game that exposes nothing has none', () => {
+  assert.deepEqual(renderCostOf([{ drawCalls: 212, triangles: 105_442 }, { drawCalls: 213, triangles: 119_148 }, { drawCalls: 25, triangles: 9000 }]), { samples: 3, drawCalls: { median: 212, max: 213 }, triangles: { median: 105_442, max: 119_148 } });
+  assert.equal(renderCostOf([null, { drawCalls: NaN, triangles: NaN }]), null);
+});
+
+test('perf: a name this process cannot resolve is a blocked preflight, not "the site is down"', async (t) => {
+  // The fault: Node's resolver fails for the public address (.invalid never resolves; no network is needed to fail).
+  const r = await perfRun({ url: 'http://homie-perf.invalid', game: 'gem' });
+  if (/no Chrome|puppeteer-core/.test(r.why ?? '')) { t.skip('no Chrome on this machine: the preflight is never reached'); return; }
+  assert.equal(r.ok, false);
+  assert.equal(r.verdict, 'BLOCKED');
+  assert.match(r.why, /^BLOCKED network preflight failed, before any page or game was opened: this computer's Node\.js could not look up homie-perf\.invalid/);
+  assert.match(r.why, /127\.0\.0\.1:8787/);
 });

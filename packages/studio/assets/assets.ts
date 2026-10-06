@@ -18,7 +18,8 @@
  * runtime (homie.rocks's starter library is copied into the game, never hot-linked). `allowOrigins` opens one on
  * purpose.
  *
- * In development (localhost, or ?debug=1) a model over its budget says so in the console, and `stats()` (also
+ * In development (localhost, or ?debug=1) a model over its budget says so in the console (the budget is a small
+ * prop's unless the game sets its own: game.json `"assets": { "budgets": { "triangles", "bytes" } }`), and `stats()` (also
  * `window.__homieModels`) has the totals the perf skill reads: models, triangles, texture memory and refusals.
  *
  * KTX2 pictures (KHR_texture_basisu) need a transcoder (about 580 KB): pass your own KTX2Loader as `ktx2` when a
@@ -70,7 +71,7 @@ export interface LoadedModel {
 export interface ModelsOptions {
   /** Narrow or widen the file checks (LIMITS.game by default). */
   limits?: Partial<ModelLimits>;
-  /** A per-model budget for the development warnings (the prop tier by default). */
+  /** A per-model budget for the development warnings (over game.json's `assets.budgets`, over the prop tier). */
   budget?: ModelBudget;
   /** A KTX2Loader the game set up (transcoder path, renderer support): only for models with KTX2 pictures. */
   ktx2?: { load?: unknown } | null;
@@ -98,6 +99,16 @@ export interface Models {
 }
 
 const PROP_BUDGET: Required<ModelBudget> = { triangles: 1500, texturePx: 512, materials: 1, bytes: 300 * 1024 };
+/**
+ * The game's own budgets: game.json `"assets": { "budgets": { "triangles": 8000, "bytes": 1500000 } }`, which
+ * `homie-studio build` writes into the bundle as this constant (lib/build.mjs modelBudgetsOf). The defaults above are
+ * a small prop's; a 3D game whose every model is a character or a piece of level sets its own once, there, instead
+ * of reading a warning per model. Any other bundler leaves the name undefined, and the defaults stand.
+ */
+declare const __HOMIE_MODEL_BUDGETS__: ModelBudget | undefined;
+const gameBudget = (): ModelBudget => {
+  try { return typeof __HOMIE_MODEL_BUDGETS__ === 'object' && __HOMIE_MODEL_BUDGETS__ ? __HOMIE_MODEL_BUDGETS__ : {}; } catch { return {}; }
+};
 const devHost = (): boolean => {
   try { return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || new URLSearchParams(location.search).get('debug') === '1'; } catch { return false; }
 };
@@ -461,7 +472,7 @@ export function createModels(opts: ModelsOptions = {}): Models {
       const key = url;
       let p = cache.get(key);
       if (!p) {
-        p = loadOnce(url, { ...limits, ...(o.limits ?? {}) } as ModelLimits, { ...PROP_BUDGET, ...(opts.budget ?? {}), ...(o.budget ?? {}) });
+        p = loadOnce(url, { ...limits, ...(o.limits ?? {}) } as ModelLimits, { ...PROP_BUDGET, ...gameBudget(), ...(opts.budget ?? {}), ...(o.budget ?? {}) });
         cache.set(key, p);
         p.catch(() => cache.delete(key));
       }

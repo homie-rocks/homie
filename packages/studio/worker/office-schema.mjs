@@ -1,5 +1,11 @@
 /** The back office's D1 tables (worker/office.mjs), as the template's migration 0003 and `homie-studio upgrade` write them. */
 export const OFFICE_MIGRATION_FILE = '0005_studio_office.sql';
+/*
+ * This text is a migration that has run in studios in the field: it is never edited, not even its first comment.
+ * `office_games.remix` (the owner's switch for handing a game over whole) is still made here and still in every
+ * studio's table, though remix was retired: worker/office.mjs neither reads nor writes it, and no later migration
+ * drops it.
+ */
 export const OFFICE_MIGRATION = `-- The studio's back office (@homie-rocks/studio 0.13.0): each game's launch state, remix switch and room size,
 -- its invites and the passes they gave, and the controls the owner's AI asked the owner to confirm.
 CREATE TABLE IF NOT EXISTS office_games (

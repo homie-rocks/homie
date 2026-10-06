@@ -62,8 +62,37 @@ There is no barrel file: import the module you need.
 | `Curve.js` | `auditTransfer`, `fitShoulderExponent`, `lerpFields`: check a tone curve for folds and collapsed highlights |
 | `Bisect.js` | `installChainBisect`: a `?shot=1` handle for switching individual passes off |
 | `Instrument.js` | `InstrumentedRenderPass`: a scene pass that reports its own draw calls and triangles |
+| `Finish.js` | `FinishEffect`: a last pass after the tone map with a contrast-adaptive sharpen, grade, speed lines, vignette and a flash that decays; `casSharpen`, `flashDecay` |
+| `Stack.js` | `buildPostStack`, `postStackEffects`, `POST_TIERS`, `POST_LOOK`: one assembled stack (half-float scene, scrubbed bloom, ACES, finish), tuned per tier |
 
 And one more in `src/`: `ViewHistory.js`.
+
+## One assembled stack
+
+`Stack.js` puts the pieces in the one order that works: a half-float scene
+buffer (MSAA by tier), bloom with the non-finite scrub, an ACES tone map, then
+`FinishEffect` (sharpen, grade, speed lines, vignette, flash). `POST_TIERS`
+says what each tier pays for and `POST_LOOK` what it looks like; copy either
+and pass your own. It turns the renderer's own tone mapping off, because a
+renderer that tone-maps into the scene buffer leaves bloom nothing to find.
+
+```ts
+import { POST_LOOK, POST_TIERS, buildPostStack } from '@homie-rocks/postfx/Stack.js';
+
+const post = buildPostStack({ renderer, scene, camera, tier: POST_TIERS.medium, look: { ...POST_LOOK, vignette: 0.2 } });
+post.setSize(bufferWidth, bufferHeight); // again whenever the drawing buffer changes
+
+function frame(dt: number): void {
+  post.finish.speed = boosting ? 0.4 : 0;      // speed lines
+  if (justHit) post.finish.flash(1, 1, 1, 0.6); // decays by itself
+  post.render(dt); // the game's dt: a pause holds the flash and the lines
+}
+```
+
+Nothing requires the stack: `postStackEffects` returns the three effects for a
+composer you built yourself, and `FinishEffect` works in any `EffectPass`.
+`bloomLevels`, which keeps the glow the same size on screen as the buffer
+changes, is exported from `Bloom.js` (and still from `Chain.js`).
 
 ## License
 

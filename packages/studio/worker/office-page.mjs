@@ -226,16 +226,12 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       b.setAttribute('data-v', p[0]); b.setAttribute('aria-pressed', g.launch === p[0] ? 'true' : 'false');
       st.appendChild(b);
     });
-    var remix = el('input', 'switch'); remix.type = 'checkbox'; remix.checked = g.remix; remix.disabled = !g.remixBuilt;
-    remix.setAttribute('aria-label', 'Remixable');
-    remix.onchange = function () { act('/_studio/api/game', { game: g.id, remix: remix.checked }, remix.checked ? g.name + '\'s source is open for remixing.' : g.name + '\'s source is withdrawn.'); };
     var max = el('input'); max.type = 'number'; max.min = '1'; max.max = String(g.seats); max.value = String(g.maxPlayers); max.setAttribute('aria-label', 'Players per room');
     var setMax = btn('Set', 'ghost small', function () {
       var n = Math.floor(Number(max.value));
       act('/_studio/api/game', { game: g.id, maxPlayers: n >= g.seats ? null : n }, 'Rooms of ' + g.name + ' now hold ' + Math.min(n, g.seats) + '.');
     });
     add(box, st,
-      add(el('label'), remix, el('span', '', !g.remixBuilt ? 'Remixable (not in the build)' : g.license === 'no-remix' ? 'Source shared (its licence: not for remixing)' : 'Remixable')),
       add(el('label'), el('span', 'dim', 'Players per room'), max, el('span', 'faint', 'of ' + g.seats), setMax),
       add(el('span', 'faint'), document.createTextNode(g.launchFrom === 'game.json' ? 'state from game.json' : '')));
     return box;

@@ -87,12 +87,18 @@ export function readGlb(bytes, { maxJson = LIMITS.import.json } = {}) {
  *   { ok, problems: [plain words], warnings: [plain words], info: { bytes, triangles, vertices, meshes, nodes,
  *     materials, images, textures, animations, skins, joints, extensions: { used, required } } }
  * Never throws: a file it cannot read is `ok: false` with the reason.
+ *
+ * The JSDoc types say what the code always took: any limits (numbers, a part of them is enough), and extension names
+ * as strings. Without them a strict TypeScript caller read the frozen defaults as literal types and the empty lists
+ * as never[].
+ * @param {Uint8Array} bytes
+ * @param {Partial<Record<keyof typeof LIMITS.game, number>>} [limits]
  */
 export function checkGlb(bytes, limits = LIMITS.game) {
   const L = { ...LIMITS.game, ...limits };
   const problems = [];
   const warnings = [];
-  const info = { bytes: bytes?.byteLength ?? 0, triangles: 0, vertices: 0, meshes: 0, nodes: 0, materials: 0, images: 0, textures: 0, animations: 0, skins: 0, joints: 0, extensions: { used: [], required: [] } };
+  const info = { bytes: bytes?.byteLength ?? 0, triangles: 0, vertices: 0, meshes: 0, nodes: 0, materials: 0, images: 0, textures: 0, animations: 0, skins: 0, joints: 0, extensions: { used: /** @type {string[]} */ ([]), required: /** @type {string[]} */ ([]) } };
   if (info.bytes > L.bytes) problems.push(`the file is ${size(info.bytes)}, over the ${size(L.bytes)} a model may be here`);
   let glb;
   try { glb = readGlb(bytes, { maxJson: L.json }); } catch (error) { problems.push(error.message); return { ok: false, problems, warnings, info }; }

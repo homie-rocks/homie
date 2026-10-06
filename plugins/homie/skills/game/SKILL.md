@@ -1,18 +1,27 @@
 ---
 name: game
-description: Make or remix a multiplayer web game inside a Homie studio — every browser renders the game, strangers meet in public rooms, bots fill empty seats, rounds end and restart — prove it with two browsers finishing a round, and give it an epic landing page (a full-bleed hero from its own footage or art, the pitch, Play, phone / computer / TV, live rooms, how to play, credits). Use when someone in a Homie studio (a folder with studio.json) asks for a new game, a change to a game, a remix of a game from the Homie directory, a game whose own AI decides (opponents picking tactics, an NPC's reaction, a director's call, a turn's move), or a better page for a game ("make my game's landing page epic").
+description: Make a multiplayer web game inside a Homie studio — every browser renders the game, strangers meet in public rooms, bots fill empty seats, rounds end and restart — prove it with two browsers finishing a round, and give it an epic landing page (a full-bleed hero from its own footage or art, the pitch, Play, phone / computer / TV, live rooms, how to play, credits). Use when someone in a Homie studio (a folder with studio.json) asks for a new game, a change to a game, a game whose own AI decides (opponents picking tactics, an NPC's reaction, a director's call, a turn's move), or a better page for a game ("make my game's landing page epic").
 compatibility: Node 22 and Chrome. The studio's pinned Wrangler runs the dev site; the GitHub CLI (gh) opens a pull request when the studio publishes that way; Ollama with clef-flash, optional, answers a game's AI decisions on this computer under dev (downloaded only after the person's yes).
 metadata:
   providers: cloudflare github ollama
 ---
 
-# Make or remix a game
+# Make a game
 
 You are in a Homie studio when the folder (or one above it) has `studio.json`. If there
 is none, use the `studio-setup` skill first.
 
 ## Start it
 
+- **Look for pieces before writing them.** Games build on each other by sharing parts: a creature from one game,
+  a level from another, a bot brain from a third. For each system the game needs (camera, movement, bots, pickups,
+  effects, sound, UI, environment), before writing it from scratch:
+  - check the `@homie-rocks/*` packages (npm) for the general mechanism: camera, input, audio, effects;
+  - run `parts_find` for pieces other studios shared, and bring one in with `part_add`.
+
+  Record both in the game's CODEX (Built from) and its credits: what came from where, and what you wrote here and
+  why. After building a piece another game could use, offer to make it a part (`part_new`) and, only if the person
+  asks, to share it (`part_share`). The `parts` skill has the method.
 - **A new studio's first game** follows the `studio-setup` checklist: a live game to try first
   (`npx --no-install homie-studio demo`; a starter is copied into the studio only when the person asks),
   one small change, then the plan (the `plan` skill) before anything big. Never jump ahead of it.
@@ -30,14 +39,16 @@ is none, use the `studio-setup` skill first.
   address (`/<id>/`); lowercase, digits, hyphens.
 - **Make an existing single-player web game multiplayer:** use the `port` skill (it
   grades the port, brings the game in, and proves it with the owner tests).
-- **Remix a directory game:** `directory_search`, then `game_remix` returns
-  `npx --no-install homie-studio game remix <source.json> --id <new id>`. The new game's
-  game.json gets `remixOf`: "Remix of <game> by <studio>" with a link back to the original's
-  page, shown under its name on its landing and in its credits. Keep it, whatever else
-  changes. A source whose licence says `no-remix` is refused: say so, and offer to make a
-  game of their own like it instead. A game's own licence is game.json `"license"`:
-  `"remix-with-credit"` (the default), `"remix-freely"` or `"no-remix"` (or
-  `{ "kind": "…", "spdx": "MIT" }`), the owner's pick.
+- **Build on another studio's game:** through parts, never the whole game (remix was
+  retired; `game remix` answers with a sentence that says so). `parts_find` searches the pieces
+  other studios shared (a creature, a level, a bot brain) and `part_add` brings one in with its
+  licence and credit: the `parts` skill has the method. When someone asks to copy or remix a
+  whole game, say that plainly and offer to make a game of their own like it, with parts where
+  some fit.
+- **A game's own licence** is game.json `"license"`: an SPDX identifier (`"MIT"`), said on its
+  page; a game that names none says nothing. A game.json with `"remixOf"` was made from another
+  studio's game: keep the key, whatever else changes (its landing says "Based on <game> by
+  <studio>").
 - Some names are protected (the homie.rocks house games): `game_make` and
   `studio_publish` refuse them. Pick your own name, or ask the name's owner
   with `studio_request_grant` (only the owner can approve, in their browser).
@@ -220,10 +231,18 @@ names; then go on, since the build works with its local feed. On Linux without a
 say so rather than calling the game slow.
 
 ```sh
-npm run build                                          # fix every error it names
+npm run build                                          # fix every error it names (a game that does not build fails it)
+npx --no-install homie-studio build --types            # the same, with the TypeScript checked first: run it before a deploy
 npm run dev                                            # in the background: http://127.0.0.1:8787/<id>/play
 npx --no-install homie-studio check <id> --url http://127.0.0.1:8787 --shots ./.checks
+npx --no-install homie-studio shoot <id> --preview     # pictures of the built game on a stepped clock, no site needed (a 3D game where there is no GPU)
+npx --no-install homie-studio preview <id>             # only that game's built files at an address (alone, offline): for a capture script
 ```
+
+`npx --no-install homie-studio dev --timestamps` puts a time on every line the site prints (room
+sockets and errors always have one): use it to lay a connection loss beside a check's report.
+`shoot <id> --url http://127.0.0.1:8787` adds a two-client seat smoke check in a private room.
+Where there is no terminal, the same commands go through the `studio_run` tool, by their words.
 
 `check` passes only when two fresh browsers (a computer and a phone) press Play, land
 in the same room, and both see a round finish with both of them in the results. Look
@@ -249,7 +268,10 @@ Then make it good, not just working:
   and phone frames before you call it done.
 - **Models in code**: a three.js game loads every model through `@homie-rocks/studio/assets` (`createModels()`,
   `instance(url)`, `placeholder(size)`): it refuses unsafe or oversized files and decodes the phone-sized format
-  `assets add` writes. Read colours and fonts from the game's `style.json` instead of hard-coding them, so the
+  `assets add` writes. Its development warnings use a small prop's budget (1,500 triangles, 300 KB a model); a game
+  whose models are bigger on purpose sets its own once in game.json, `"assets": { "budgets": { "triangles": 8000,
+  "bytes": 1500000 } }`, instead of living with a warning per model. Code a round does not need at once
+  (a later level, an editor) can load later: `await import('./level-2')` becomes a file of its own in the build. Read colours and fonts from the game's `style.json` instead of hard-coding them, so the
   locked palette reaches the world and the HUD. `games/<id>/assets/manifest.json` records every model's origin and
   licence; keep it true (`assets add` and `assets remove`, never a hand-copied .glb), and `assets check <id>`
   before a deploy. The `gem-rush-3d` starter (`game new <id> --from gem-rush-3d`) is Gem Rush in 3D with library
@@ -275,8 +297,7 @@ check again on the live site.
 Every game gets a landing page from the studio template, made from the game's own files
 (`node_modules/@homie-rocks/studio/site/SITE.md` has every field): a full-bleed hero, the pitch, a big
 Play button that drops a visitor into a public room, how to play on a phone, a computer and a TV (with
-the join code), the live rooms, how to play, credits and "Make a game like this" (the viral road: it
-tells a stranger how to make their own with Homie). It is as good as what you give it. "Make the landing
+the join code), the live rooms, how to play and credits. It is as good as what you give it. "Make the landing
 page epic" means all of this, in this order:
 
 1. **Footage in the hero.** The biggest single difference. Capture the game running with the `video`
@@ -309,8 +330,8 @@ page epic" means all of this, in this order:
    `games/<id>/screenshots/` (at most eight) go on the landing and into its structured data for search
    engines; say what the game is, never invent a rating or a review.
 3. **Credits**: `landing.credits` names who made what (`[{ "role": "Music", "name": "..." }]`). A port
-   keeps its `credits.json` (the original, its author and licence, every part inside); a remix keeps
-   game.json `remixOf`; never drop either.
+   keeps its `credits.json` (the original, its author and licence, every part inside); a game that has
+   game.json `remixOf` keeps it; never drop either.
 4. **The look**: the studio's `site/theme.json` colours; `landing.theme` gives this game its own
    `accent` and `glow` on its page, when two games of one studio should not look alike.
 5. **A band of its own**, when the game has something to say that the template does not (a soundtrack, a
@@ -324,7 +345,9 @@ blank screen (`SITE.md`, "The play page"). Its words and picture are the landing
 textures, a baked world) passes `arrival: 'game'` to `createNetplay`, calls `net.loading(p, 'the heroes')`
 while it loads and `net.playable()` once its world and the player's own body are drawn, so nobody sees
 stand-ins (NETPLAY.md section 21); the starters do. `perf` measures it: `load.look` (the first meaningful
-frame) and `load.playable`.
+frame), `load.playable` (control-ready: seated, a body, the card gone) and `load.ready` (the game's own
+`net.playable()`), with the arrival mode beside them. `check` says seated, ready (the card lifted) and connected
+apart: a seat is not ready, and a finished round is not an uninterrupted one.
 
 **The play page's room button** (Invite, Big screen, the room code) sits top right, with the Chat pill
 beside it. If the game draws a score, a timer or a bar there, move them in game.json: `"screen": { "share":

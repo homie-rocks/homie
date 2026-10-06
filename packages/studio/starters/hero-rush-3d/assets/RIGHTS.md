@@ -15,7 +15,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** character (Players/Barbarian): `public/models/barbarian.glb`
 - **From:** from the Homie starter library: KayKit Adventurers, barbarian (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### barrel
@@ -23,7 +22,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Barrel): `public/models/barrel.glb`
 - **From:** from the Homie starter library: KayKit Medieval Hexagon, barrel (https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models.
 
 ### chest
@@ -31,7 +29,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Treasure Chest): `public/models/chest.glb`
 - **From:** from the Homie starter library: KayKit Dungeon Remastered, chest-gold (https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-dungeon); the pack's own licence text: licenses/kaykit-dungeon.txt. `game new` fetches the file; the repository holds no models.
 
 ### coin
@@ -39,7 +36,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Items/Coin): `public/models/coin.glb`
 - **From:** from the Homie starter library: KayKit Dungeon Remastered, coin (https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-dungeon); the pack's own licence text: licenses/kaykit-dungeon.txt. `game new` fetches the file; the repository holds no models.
 
 ### crate
@@ -47,7 +43,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Crate): `public/models/crate.glb`
 - **From:** from the Homie starter library: KayKit Medieval Hexagon, crate-a-big (https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models.
 
 ### grove
@@ -55,7 +50,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Grove): `public/models/grove.glb`
 - **From:** from the Homie starter library: KayKit Medieval Hexagon, trees-a-medium (https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models.
 
 ### knight
@@ -63,7 +57,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** character (Players/Knight): `public/models/knight.glb`
 - **From:** from the Homie starter library: KayKit Adventurers, knight (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### mage
@@ -71,7 +64,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** character (Players/Mage): `public/models/mage.glb`
 - **From:** from the Homie starter library: KayKit Adventurers, mage (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### pine
@@ -79,7 +71,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Pine): `public/models/pine.glb`
 - **From:** from the Homie starter library: KayKit Medieval Hexagon, tree-single-a (https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models.
 
 ### pine-round
@@ -87,7 +78,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Round Pine): `public/models/pine-round.glb`
 - **From:** from the Homie starter library: KayKit Medieval Hexagon, tree-single-b (https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models.
 
 ### rock
@@ -95,7 +85,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Rock): `public/models/rock.glb`
 - **From:** from the Homie starter library: KayKit Medieval Hexagon, rock-single-e (https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models.
 
 ### rocks
@@ -103,7 +92,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Rocks): `public/models/rocks.glb`
 - **From:** from the Homie starter library: KayKit Medieval Hexagon, rock-single-c (https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-medieval-hexagon); the pack's own licence text: licenses/kaykit-medieval-hexagon.txt. `game new` fetches the file; the repository holds no models.
 
 ### rogue
@@ -111,7 +99,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** character (Players/Rogue): `public/models/rogue.glb`
 - **From:** from the Homie starter library: KayKit Adventurers, rogue (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### rogue-hooded
@@ -119,7 +106,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** character (Players/Hooded Rogue): `public/models/rogue-hooded.glb`
 - **From:** from the Homie starter library: KayKit Adventurers, rogue-hooded (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-adventurers); the pack's own licence text: licenses/kaykit-adventurers.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### skeleton-mage
@@ -127,7 +113,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** creature (Creatures/Skeleton Mage): `public/models/skeleton-mage.glb`
 - **From:** from the Homie starter library: KayKit Skeletons, skeleton-mage (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### skeleton-minion
@@ -135,7 +120,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** creature (Creatures/Skeleton Minion): `public/models/skeleton-minion.glb`
 - **From:** from the Homie starter library: KayKit Skeletons, skeleton-minion (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### skeleton-rogue
@@ -143,7 +127,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** creature (Creatures/Skeleton Rogue): `public/models/skeleton-rogue.glb`
 - **From:** from the Homie starter library: KayKit Skeletons, skeleton-rogue (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### skeleton-warrior
@@ -151,7 +134,6 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** creature (Creatures/Skeleton Warrior): `public/models/skeleton-warrior.glb`
 - **From:** from the Homie starter library: KayKit Skeletons, skeleton-warrior (https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-skeletons); the pack's own licence text: licenses/kaykit-skeletons.txt. `game new` fetches the file, makes the character phone-sized and bakes its clips; the repository holds no models.
 
 ### torch
@@ -159,5 +141,4 @@ Read on the dates shown. Terms change: read the live page again before publishin
 - **What:** prop (Places/Torch): `public/models/torch.glb`
 - **From:** from the Homie starter library: KayKit Dungeon Remastered, torch-lit (https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0); library
 - **Licence:** CC0 1.0 (public domain) (https://creativecommons.org/publicdomain/zero/1.0/); owner: KayKit
-- **A remix:** a remix gets this file (fetched from this studio's site, checked by SHA-256)
 - **Notes:** From the Homie starter library (kaykit-dungeon); the pack's own licence text: licenses/kaykit-dungeon.txt. `game new` fetches the file; the repository holds no models.

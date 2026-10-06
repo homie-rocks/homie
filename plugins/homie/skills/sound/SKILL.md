@@ -65,7 +65,10 @@ node <sound.mjs> score <slug> --spec music/<slug>/score.json --loops main,chase
   mp3, a 24-bit master kept off the site, one stem per instrument plus the room (they sum to the
   mix), and **seamless loops** of the sections you name: each is rendered three times in a row and
   the middle copy kept, so reverb and echoes that ring over the loop point are already in its head.
-  The report gives each loop's seam (1 or less is seamless) and its exact bar length.
+  The report gives each loop's seam (1 or less is seamless) and its exact bar length. A loop over 1
+  is in `warnings` and the summary says NOT SEAMLESS (`loopsSeamless: false`): an empty warnings
+  list means the loops were checked and pass. The master's limiter is applied across the three
+  copies, so a loud loop keeps its seam; nothing is faded at the loop point and no bar is shortened.
 - `plan.json` holds the bar grid, so the `video` skill cuts a trailer on this music's bar lines.
 - Look at `<slug>.png` and read the numbers: loudness, true peak, and what it measures through a phone
   speaker. Say them in your report, not adjectives.
@@ -112,6 +115,11 @@ sound.duck(0.4, 0.5);                           // music down for a big hit
   host's rules, or only the host hears the game.
 - Loops go out as Ogg with a WAV fallback (older Safari cannot decode Ogg): the player takes the first
   one the browser decodes. `wire` prints the real download size; keep a game's sound under about 3 MB.
+- Each variant of an effect, and each loop, is a list of files tried in order (`["jump.ogg", "jump.wav"]`);
+  a list of one file is fine.
+- A trailer filmed frame by frame gets its sound from this player's own log of what it scheduled
+  (off unless a recorder asks; `references/GAME-SOUND.md`, "A log for a recorder"): sound that goes
+  through `sound.play` and `sound.music` is in the trailer, sound made any other way is not.
 - Rules for game sound (every action answers, what repeats, music under effects, intensity changes on
   bar lines, the live-loop traps): `references/GAME-SOUND.md`.
 - For sound made live in the browser (a synth voice per player, pitch that follows speed, a beat

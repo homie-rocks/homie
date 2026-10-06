@@ -11,7 +11,7 @@
  *                                   skeleton shares it
  *
  * Both are recorded in assets/manifest.json (the character, kind character or creature; the library, kind clip) with
- * where every clip came from and its licence, so RIGHTS.md, the remix carry-over and `assets check` see them. The model
+ * where every clip came from and its licence, so RIGHTS.md and `assets check` see them. The model
  * names its clip library in its scene's extras (homie.anims), so the game's `loadCharacter(models, url)` finds it.
  *
  *   addCharacter(root, game, { item | file, ... })   in, optimised, clips baked, recorded
@@ -24,8 +24,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { LIMITS, checkGlb } from '../assets/safety.mjs';
-import { readManifest, recordAsset } from './asset-manifest.mjs';
-import { VERBS, VERB_IDS, bakeLibrary, findClip, rigOf, writeLibrary } from './clips.mjs';
+import { readManifest, recordAsset, writeManifest } from './asset-manifest.mjs';
+import { VERBS, VERB_IDS, bakeLibrary, findClip, gaitOf, rigOf, writeLibrary } from './clips.mjs';
 import { readDecisions } from './decisions.mjs';
 import { FAMILIES, normaliseRig, skeletonOf, socketBone } from './rig.mjs';
 import { GAME_ID } from './studio.mjs';
@@ -65,7 +65,7 @@ async function docOf(input) {
 /** A clip source (a library item id, or a file): its Document renamed to the standard, and its clip names. */
 async function clipSource(from, { lib = null, cache = new Map() } = {}) {
   if (cache.has(from)) return cache.get(from);
-  let bytes;
+  let bytes; let pack = null;
   if (existsSync(resolve(String(from)))) bytes = readFileSync(resolve(String(from)));
   else {
     const { fetchItemFile, libraryBase, loadIndex } = await import('./library.mjs');
@@ -75,10 +75,14 @@ async function clipSource(from, { lib = null, cache = new Map() } = {}) {
     if (!item) throw new Error(`no library item "${from}" to take clips from`);
     if (item.license !== 'cc0') throw new Error(`${from} is not CC0`);
     ({ bytes } = await fetchItemFile(L, item));
+    // Whose clips these are, kept with the clip library: the credit for them must not depend on a model of the same
+    // pack being in the game (a generated hero borrows the knight's clips and never has a knight).
+    const p = index.packs?.find((x) => x.id === item.pack);
+    pack = { id: item.pack, label: p?.label ?? item.pack, author: item.author ?? null, url: p?.url ?? item.origin ?? null };
   }
   const { doc } = await docOf(bytes);
   normaliseRig(doc, { merge: false, helpers: false, takeClips: false });
-  const src = { from: String(from), doc, rig: rigOf(doc), names: doc.getRoot().listAnimations().map((a) => a.getName()) };
+  const src = { from: String(from), pack, doc, rig: rigOf(doc), names: doc.getRoot().listAnimations().map((a) => a.getName()) };
   cache.set(from, src);
   return src;
 }
@@ -98,7 +102,7 @@ async function pickSources(own, verbs, fallback, opts) {
     if (theirs) sources.push({ rig: fb.rig, anim: fb.doc.getRoot().listAnimations().find((a) => a.getName() === theirs), verb, from: fb.from });
     else missing.push(verb);
   }
-  return { sources, missing, fallbackError: fb?.error ?? null };
+  return { sources, missing, fallbackError: fb?.error ?? null, packs: [own?.pack, fb?.pack].filter(Boolean) };
 }
 
 /** A clip library file's path in a game, for a skeleton. */
@@ -147,7 +151,7 @@ async function bakeFor(root, game, rig, own, verbs, { from = null, lib = null, c
   const fallback = from ?? CLIP_SOURCES[skel.family] ?? null;
   const existing = await existingLibrary(gdir, skel.id);
   const todo = verbs.filter((v) => !existing?.verbs.includes(v));
-  const { sources, missing, fallbackError } = await pickSources(own, todo, fallback, { lib, cache });
+  const { sources, missing, fallbackError, packs: sourcePacks } = await pickSources(own, todo, fallback, { lib, cache });
   const t = await tools();
   const rel = animsPath(skel.id);
   const manifest = readManifest(root, game);
@@ -164,12 +168,16 @@ async function bakeFor(root, game, rig, own, verbs, { from = null, lib = null, c
   writeFileSync(join(gdir, rel), out.bytes);
   const allClips = [...(prev?.clips ?? []).filter((c) => !clips.some((n) => n.verb === c.verb)), ...clips].sort((a, b) => VERB_IDS.indexOf(a.verb) - VERB_IDS.indexOf(b.verb));
   const froms = [...new Set(allClips.map((c) => c.from).filter(Boolean))];
+  const knownPacks = { ...(prev?.from?.packs ?? {}) };
+  for (const p of sourcePacks ?? []) if (froms.some((f) => String(f).startsWith(`${p.id}/`))) knownPacks[p.id] = { label: p.label, author: p.author, url: p.url };
   // Clips taken from CC0 sources (KayKit, Kenney) stay CC0 when retargeted; a character's own clips carry its licence.
-  const lic = license && license.kind !== 'cc0' && allClips.some((c) => c.from && !String(c.from).includes('/')) ? license : { kind: 'cc0', spdx: 'CC0-1.0', owner: null, attribution: null, remix: 'include', notes: `Clips from ${froms.join(', ') || 'the character itself'} (CC0), ${allClips.some((c) => c.retargeted) ? 'retargeted onto this skeleton at build time' : 'as they came'}.` };
+  const lic = license && license.kind !== 'cc0' && allClips.some((c) => c.from && !String(c.from).includes('/')) ? license : { kind: 'cc0', spdx: 'CC0-1.0', owner: null, attribution: null, notes: `Clips from ${froms.join(', ') || 'the character itself'} (CC0), ${allClips.some((c) => c.retargeted) ? 'retargeted onto this skeleton at build time' : 'as they came'}.` };
   const entry = {
     id: entryId, kind: 'clip', tier: 'clip', route: allClips.every((c) => !c.from || String(c.from).includes('/')) ? 'library' : 'imported',
     card: null,
-    from: froms.length ? { library: 'homie-starter', items: froms } : null,
+    // `packs`: each source pack's name, author and page, kept across every later bake (and written by `assets remove`
+    // when a pack's last model leaves), so credits.json can credit the animation for as long as the clips stay.
+    from: froms.length ? { library: 'homie-starter', items: froms, ...(Object.keys(knownPacks).length ? { packs: knownPacks } : {}) } : null,
     files: [{ role: 'clip', path: rel, bytes: out.bytes.length, sha256: sha256(out.bytes) }],
     rig: { family: skel.family, skeleton: skel.id, fingerprint: skel.fingerprint },
     clips: allClips,
@@ -226,7 +234,8 @@ export async function addCharacter(root, game, opts = {}) {
   const raw = skeletonOf(ownDoc);
   if (raw.family === 'none') throw new Error(`${item?.id ?? opts.file} has no skeleton and no moving parts: add it as a prop (assets add without a rig), or rig it first (the animate guide)`);
   normaliseRig(ownDoc, { merge: false, helpers: false, takeClips: false });
-  const own = ownDoc.getRoot().listAnimations().length ? { from: item?.id ?? 'own', doc: ownDoc, rig: rigOf(ownDoc), names: ownDoc.getRoot().listAnimations().map((a) => a.getName()) } : null;
+  const ownPack = item ? { id: item.pack, label: idx?.packs?.find((p) => p.id === item.pack)?.label ?? item.pack, author: item.author ?? null, url: idx?.packs?.find((p) => p.id === item.pack)?.url ?? item.origin ?? null } : null;
+  const own = ownDoc.getRoot().listAnimations().length ? { from: item?.id ?? 'own', pack: ownPack, doc: ownDoc, rig: rigOf(ownDoc), names: ownDoc.getRoot().listAnimations().map((a) => a.getName()) } : null;
 
   // The character as shipped: renamed, helpers out, merged, clips out.
   const { doc } = await docOf(bytes);
@@ -258,7 +267,7 @@ export async function addCharacter(root, game, opts = {}) {
     { what: 'optimise', tool: r.tool, ops: r.ops },
   ];
   const license = item
-    ? { kind: 'cc0', spdx: 'CC0-1.0', owner: item.author ?? null, attribution: null, remix: 'include', notes: `From the Homie starter library (${item.pack}); the pack's own licence text: ${idx?.packs?.find((p) => p.id === item.pack)?.licenseFile ?? 'licenses/'}` }
+    ? { kind: 'cc0', spdx: 'CC0-1.0', owner: item.author ?? null, attribution: null, notes: `From the Homie starter library (${item.pack}); the pack's own licence text: ${idx?.packs?.find((p) => p.id === item.pack)?.licenseFile ?? 'licenses/'}` }
     : { kind: String(opts.license ?? ''), owner: opts.owner ?? (opts.license === 'generated' || opts.license === 'own' ? 'studio' : null), attribution: opts.attribution ?? null, notes: opts.notes ?? (opts.license === 'generated' ? 'Made through fal on the studio\'s own account (a concept image, then Meshy image-to-3D with its auto-rig); its clips are the starter library\'s CC0 clips retargeted onto its skeleton. fal\'s terms do not assign output ownership expressly (RIGHTS.md).' : null) };
   const entry = {
     id, kind, tier: kind === 'creature' ? 'npc' : 'hero', card: opts.card ?? null, route: item ? 'library' : (opts.route === 'generated' ? 'generated' : 'imported'),
@@ -271,7 +280,8 @@ export async function addCharacter(root, game, opts = {}) {
     review: { state: 'auto' },
   };
   const { entry: e, pinned } = recordAsset(root, game, entry);
-  return { ok: true, command: 'assets add', game, asset: e.id, item: item?.id ?? null, route: e.route, raw: opts.rawPath ?? null, license: e.license.kind, model: rel, anims: anims.path, skeleton: rig.skeleton.id, family: rig.skeleton.family, verbs: anims.verbs, missing: anims.missing, clipsFrom: anims.clips.filter((c) => c.retargeted).map((c) => c.from).filter((v, i, a) => a.indexOf(v) === i), merged: rigged.merged, dropped: rigged.dropped, removedHelpers: rigged.removedHelpers.length, before: { tris: r.before.triangles, kb: kb(r.rawBytes), drawCalls: r.before.drawCalls }, after: { tris: after.triangles, kb: kb(r.bytes), heightM: after.heightM, drawCalls: after.drawCalls, bones: after.bones, animsKB: anims.bytes ? kb(anims.bytes) : null }, pinned, warnings: r.warnings, fallbackError: anims.fallbackError };
+  const gait = await recordGait(root, game, e.id).catch(() => null);
+  return { ok: true, command: 'assets add', game, asset: e.id, gait, item: item?.id ?? null, route: e.route, raw: opts.rawPath ?? null, license: e.license.kind, model: rel, anims: anims.path, skeleton: rig.skeleton.id, family: rig.skeleton.family, verbs: anims.verbs, missing: anims.missing, clipsFrom: anims.clips.filter((c) => c.retargeted).map((c) => c.from).filter((v, i, a) => a.indexOf(v) === i), merged: rigged.merged, dropped: rigged.dropped, removedHelpers: rigged.removedHelpers.length, before: { tris: r.before.triangles, kb: kb(r.rawBytes), drawCalls: r.before.drawCalls }, after: { tris: after.triangles, kb: kb(r.bytes), heightM: after.heightM, drawCalls: after.drawCalls, bones: after.bones, animsKB: anims.bytes ? kb(anims.bytes) : null }, pinned, warnings: r.warnings, fallbackError: anims.fallbackError };
 }
 
 /** Whether a library item is a character with a rig or moving parts (assets add sends those here). */
@@ -299,8 +309,91 @@ export async function bakeClips(root, game, asset, { verbs = [], from = null, li
   // The character's own record learns its verbs.
   const fresh = readManifest(root, game);
   const me = fresh.assets.find((x) => x.id === asset);
-  if (me?.rig) { me.rig.verbs = r.verbs; me.measured = { ...(me.measured ?? {}), clips: r.verbs.length }; const { writeManifest } = await import('./asset-manifest.mjs'); writeManifest(root, game, fresh); }
-  return { ok: true, command: 'anim add', game, asset, skeleton: r.skeleton, anims: r.path, verbs: r.verbs, added: want.filter((v) => r.verbs.includes(v)), missing: r.missing, kb: r.bytes ? kb(r.bytes) : null, why: r.fallbackError };
+  if (me?.rig) { me.rig.verbs = r.verbs; me.measured = { ...(me.measured ?? {}), clips: r.verbs.length }; writeManifest(root, game, fresh); }
+  const gait = await recordGait(root, game, asset).catch(() => null);
+  return { ok: true, command: 'anim add', game, asset, gait, skeleton: r.skeleton, anims: r.path, verbs: r.verbs, added: want.filter((v) => r.verbs.includes(v)), missing: r.missing, kb: r.bytes ? kb(r.bytes) : null, why: r.fallbackError };
+}
+
+const clipFile = (x) => (x?.files ?? []).find((f) => f.role === 'clip')?.path ?? null;
+const clipVerbs = (x) => x?.clips?.map((c) => c.verb) ?? x?.measured?.verbs ?? [];
+
+/**
+ * A character's clip libraries, from the manifest: { primary, supplemental, verbs, files, clips }.
+ *
+ *   primary        the clip record whose file the MODEL names (rig.anims), which is what the game loads. Only when no
+ *                  record has that file: the first library of its skeleton that is not declared supplemental.
+ *   supplemental   libraries of the same skeleton that say so ("rig": { "supplemental": true }): more verbs beside the
+ *                  base, which the game loads itself (loadCharacter(models, url, { anims: [base, extra] })).
+ *
+ * It used to be "the last clip record read for that skeleton": a second library of three verbs then stood in for the
+ * first, every original verb read as missing and the previews drew nothing. A second library that is neither named by
+ * the model nor declared is not in anyone's coverage (duplicateLibraries names it).
+ */
+export function librariesFor(manifest, a) {
+  const all = manifest.assets.filter((x) => x.kind === 'clip' && x.rig?.skeleton && x.rig.skeleton === a?.rig?.skeleton);
+  const primary = all.find((x) => a.rig?.anims && clipFile(x) === a.rig.anims) ?? all.find((x) => x.rig?.supplemental !== true) ?? null;
+  const supplemental = all.filter((x) => x !== primary && x.rig?.supplemental === true);
+  const clips = [...(primary?.clips ?? []), ...supplemental.flatMap((x) => (x.clips ?? []).filter((c) => !(primary?.clips ?? []).some((p) => p.verb === c.verb)))];
+  const verbs = [...new Set([...(primary?.clips ? clipVerbs(primary) : a?.rig?.verbs ?? clipVerbs(primary)), ...supplemental.flatMap(clipVerbs)])];
+  return { primary, supplemental, verbs, clips, files: [a?.rig?.anims ?? clipFile(primary), ...supplemental.map(clipFile)].filter(Boolean) };
+}
+
+/**
+ * Clip records that are a SECOND library of a skeleton without saying what they are: Map(asset id -> what to do).
+ * `recordAsset` refuses one at registration; a manifest edited by hand can still hold one, and the check says so.
+ */
+export function duplicateLibraries(manifest) {
+  const out = new Map();
+  const named = new Set(manifest.assets.map((a) => a.rig?.anims).filter(Boolean));
+  const bySkeleton = new Map();
+  for (const x of manifest.assets) if (x.kind === 'clip' && x.rig?.skeleton && x.rig.supplemental !== true) bySkeleton.set(x.rig.skeleton, [...(bySkeleton.get(x.rig.skeleton) ?? []), x]);
+  for (const [skeleton, list] of bySkeleton) {
+    if (list.length < 2) continue;
+    const keep = list.find((x) => named.has(clipFile(x))) ?? list.find((x) => clipFile(x) === animsPath(skeleton)) ?? list[0];
+    for (const x of list) if (x !== keep) out.set(x.id, `a second clip library for the skeleton ${skeleton} (its characters name ${keep.id}'s file): these verbs are in no character's coverage and no preview. Merge them into ${keep.id} (homie-studio anim add <game> <character> --verbs ${clipVerbs(x).join(',') || '…'} --from <this file>), or declare it ("rig": { "supplemental": true }) and load it in the game: loadCharacter(models, url, { anims: [<base>, <this>] })`);
+  }
+  return out;
+}
+
+/** A looping locomotion verb's default ground speed in animate (assets/animate.ts ANIM_TUNING), to compare a rig's against. */
+const DEFAULT_SPEED = { walk: 1.5, run: 4.2 };
+
+/**
+ * How fast a character's walk and run clips move its feet over the ground, measured on ITS rig (the shipped model,
+ * so in metres) from its clip libraries: { walk, run: { mps, seconds, default, feet }, method, note } or null when
+ * neither could be read. A heuristic (lib/clips.mjs gaitOf), cheap enough to run on every bake.
+ */
+export async function measureGait(root, game, assetId) {
+  const m = readManifest(root, game);
+  const a = m.assets.find((x) => x.id === assetId);
+  const model = (a?.files ?? []).find((f) => f.role === 'model');
+  if (!a?.rig || !model) return null;
+  const gdir = join(root, 'games', game);
+  const t = await tools();
+  const read = async (rel) => { const d = await t.io.readBinary(readFileSync(join(gdir, rel))); d.setLogger(t.logger); return d; };
+  const rig = rigOf(await read(model.path));
+  const anims = [];
+  for (const f of librariesFor(m, a).files) if (existsSync(join(gdir, f))) for (const x of (await read(f)).getRoot().listAnimations()) if (!anims.some((y) => y.getName() === x.getName())) anims.push(x);
+  const out = {};
+  for (const verb of ['walk', 'run']) {
+    const anim = anims.find((x) => x.getName() === verb);
+    const g = anim ? gaitOf(rig, anim) : null;
+    if (g) out[verb] = { mps: g.mps, seconds: g.seconds, feet: g.feet, default: DEFAULT_SPEED[verb] };
+  }
+  if (!Object.keys(out).length) return null;
+  return { ...out, method: 'foot bones while down (lowest quarter of each foot\'s height), horizontal speed, averaged', note: 'a guide to start tuning walkSpeed and runSpeed from on this rig; not a verified foot contact' };
+}
+
+/** measureGait, kept on the character's own record (`rig.gait`): the same clips move a taller rig's feet further. */
+export async function recordGait(root, game, assetId) {
+  const gait = await measureGait(root, game, assetId);
+  const m = readManifest(root, game);
+  const a = m.assets.find((x) => x.id === assetId);
+  if (!a?.rig) return gait;
+  if (JSON.stringify(a.rig.gait ?? null) === JSON.stringify(gait)) return gait;
+  if (gait) a.rig.gait = gait; else delete a.rig.gait;
+  writeManifest(root, game, m);
+  return gait;
 }
 
 /** Each character, its skeleton and its clips against the verbs the game needs. */
@@ -308,16 +401,18 @@ export function animPlan(root, game) {
   const m = readManifest(root, game);
   const doc = readDecisions(root, game);
   const need = verbsFor(doc);
-  const libs = new Map(m.assets.filter((a) => a.kind === 'clip').map((a) => [a.rig?.skeleton, a]));
   const rows = m.assets.filter((a) => (a.kind === 'character' || a.kind === 'creature') && a.rig).map((a) => {
-    const L = libs.get(a.rig.skeleton);
-    const have = L?.clips?.map((c) => c.verb) ?? a.rig.verbs ?? [];
+    const libs = librariesFor(m, a);
+    const L = libs.primary ? { ...libs.primary, clips: libs.clips } : null;
+    const have = libs.verbs;
     return {
       id: a.id, kind: a.kind, route: a.route, family: a.rig.family, familyLabel: FAMILIES[a.rig.family]?.label ?? a.rig.family, skeleton: a.rig.skeleton, bones: a.rig.bones, anims: a.rig.anims,
+      // Every library file its clips are in (its own first, then any declared supplemental), and its measured gait.
+      libraries: libs.files, supplemental: libs.supplemental.map((x) => x.id), gait: a.rig.gait ?? null,
       clips: need.map((v) => { const c = L?.clips?.find((x) => x.verb === v); return { verb: v, note: VERBS[v]?.note ?? '', loop: Boolean(VERBS[v]?.loop), have: have.includes(v), source: c?.source ?? null, from: c?.from ?? null, retargeted: Boolean(c?.retargeted), seconds: c?.duration ?? null }; }),
       extra: have.filter((v) => !need.includes(v)),
       missing: need.filter((v) => !have.includes(v)),
-      animsKB: L?.measured?.kb ?? null,
+      animsKB: libs.primary?.measured?.kb ?? null,
     };
   });
   const unrigged = m.assets.filter((a) => (a.kind === 'character' || a.kind === 'creature') && !a.rig).map((a) => a.id);
@@ -356,7 +451,9 @@ export async function animPreview(root, game, { asset = null, verbs = null, size
       const animsFile = join(gdir, row.anims);
       if (!existsSync(animsFile)) { out.push({ id: row.id, verbs: [], why: `${row.anims} is missing` }); continue; }
       const want = verbs ?? row.clips.filter((c) => c.have).map((c) => c.verb).concat(row.extra);
-      const res = await r.frames(modelIn(row.id, model, { anims: readFileSync(animsFile).toString('base64') }), tokens, { verbs: want, count, size, sheet: true, loops: want.filter((v) => VERBS[v]?.loop) });
+      // Its own library, then every declared supplemental one that is on disk: all of them are in the preview.
+      const libraries = [row.anims, ...(row.libraries ?? []).filter((f) => f !== row.anims)].filter((f) => existsSync(join(gdir, f)));
+      const res = await r.frames(modelIn(row.id, model, { anims: libraries.map((f) => readFileSync(join(gdir, f)).toString('base64')) }), tokens, { verbs: want, count, size, sheet: true, loops: want.filter((v) => VERBS[v]?.loop) });
       const files = [];
       for (const v of res.verbs) {
         const file = join(dir, `${row.id}-${v.verb}.webp`);
@@ -370,7 +467,9 @@ export async function animPreview(root, game, { asset = null, verbs = null, size
       }
       let sheet = null;
       if (res.sheet) { sheet = join(dir, `${row.id}-sheet.jpg`); writeFileSync(sheet, dataUrlBytes(res.sheet).bytes); sheet = sheet.slice(root.length + 1); }
-      out.push({ id: row.id, verbs: files, sheet, missing: res.missing });
+      // The ground speed its walk and run cover on this rig, measured again here and kept on its record.
+      const gait = await recordGait(root, game, row.id).catch(() => null);
+      out.push({ id: row.id, verbs: files, sheet, missing: res.missing, libraries, gait });
       log(`${row.id}: ${files.length} preview(s)`);
     }
   }, { log });

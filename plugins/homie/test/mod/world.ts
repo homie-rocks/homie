@@ -46,7 +46,7 @@ export const ROOMS = {
 
 export const OFFICE = {
   ok: true, command: 'office', studio: 'Night Owls', site: LIVE, playing: 3,
-  games: [{ id: 'owl-rush', name: 'Owl Rush', launch: 'public', remix: true, maxPlayers: 8, rooms: [{ room: 'pub-3', label: 'Room 3', public: true, players: 3, max: 8, bots: 4, clients: [
+  games: [{ id: 'owl-rush', name: 'Owl Rush', launch: 'public', maxPlayers: 8, rooms: [{ room: 'pub-3', label: 'Room 3', public: true, players: 3, max: 8, bots: 4, clients: [
     { id: 'c1', seat: 0, name: 'Mika', device: 'phone', role: 'host', as: 'guest', muted: false, joinedAt: 0 },
     { id: 'c2', seat: 1, name: 'Owlbert', device: 'computer', role: 'replica', as: 'guest', muted: false, joinedAt: 0 },
   ] }] }],

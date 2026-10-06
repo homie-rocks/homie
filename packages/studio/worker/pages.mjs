@@ -4,6 +4,7 @@
  */
 import { esc, layout } from './site.mjs';
 import { NET_PALETTE } from './room.mjs';
+import { PARAM_VALUE, PREFS_LIMITS, playParams } from './seats.mjs';
 import { SKILLS } from './agents.mjs';
 import { KIDS_LINE, POLICY_WORDS } from './servers.mjs';
 import { SAVES_SHELL_CSS, SAVES_SHELL_JS } from './saves-shell.mjs';
@@ -101,7 +102,7 @@ export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, lo
   const arrive = arrivalCard(cat, g, { screen });
   const css = `:root{--hot:${/^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a'}}
 html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #04060c; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
-iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; touch-action: none; }
+iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .chip { position: fixed; left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); z-index: 5; padding: 6px 10px; border-radius: 999px; background: rgba(0,0,0,.55); color: #dfe6f5; font: 12px/1.2 ui-sans-serif, system-ui, sans-serif; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: opacity .6s; }
 .chip.quiet { opacity: 0; }
 .card { position: fixed; right: 12px; bottom: 12px; z-index: 4; max-width: 300px; padding: 10px 12px; border-radius: 12px; background: rgba(8,12,22,.82); border: 1px solid rgba(255,255,255,.14); color: #e8ecf5; font: 13px/1.35 ui-sans-serif, system-ui, sans-serif; }
@@ -171,7 +172,8 @@ ${arrive.css}${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''
   const srv = server ? { id: server.id, name: server.name, badge: server.badge, line: server.line, policy: server.policy, kids: Boolean(server.kids), mentor: Boolean(server.mentor), levelMax: server.levelMax } : null;
   // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
   const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
-  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
+  // The address's switches the game's frame is handed (NETPLAY.md section 24): the defaults and the game's own names.
+  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
@@ -401,25 +403,47 @@ const SHELL_JS = String.raw`(function () {
       }
     } catch (e) {}
     var KEY = 'homie-net.' + boot.game + '.' + room + '.' + want;
-    var token = null;
-    try { token = sessionStorage.getItem(KEY); } catch (e) {}
-    var q = new URLSearchParams({ room: room, device: device, want: want });
-    if (token) q.set('k', token);
-    q.set('b', roomKey);
-    if (boot.t) q.set('t', boot.t);
-    if (params.get('name')) q.set('name', params.get('name'));
-    else {
-      // A player with an account (or a named guest) on this studio plays under their own name in every room.
-      try { var who = JSON.parse(localStorage.getItem('homie.player') || 'null'); if (who && typeof who.name === 'string' && who.name) q.set('name', who.name.slice(0, 24)); } catch (e) {}
+    // The frame's address, made again for a reload of the game (a newer build, section 23): the seat's token as it is now.
+    function frameUrl() {
+      var token = null;
+      try { token = sessionStorage.getItem(KEY); } catch (e) {}
+      var q = new URLSearchParams({ room: room, device: device, want: want });
+      if (token) q.set('k', token);
+      q.set('b', roomKey);
+      if (boot.t) q.set('t', boot.t);
+      if (params.get('name')) q.set('name', params.get('name'));
+      else {
+        // A player with an account (or a named guest) on this studio plays under their own name in every room.
+        try { var who = JSON.parse(localStorage.getItem('homie.player') || 'null'); if (who && typeof who.name === 'string' && who.name) q.set('name', who.name.slice(0, 24)); } catch (e) {}
+      }
+      // Quiet AI (this browser hides AI speech): the helper starts hushed, and hears a change by message.
+      if (state.quietAi) q.set('hush', '1');
+      // Room chat (section 19): this browser's "Show chat" and "Show my messages over my character", for the game's bubbles.
+      try { if (localStorage.getItem('homie-chat-show') === '0') q.set('chat', '0'); if (localStorage.getItem('homie-chat-bubble') === '0') q.set('bub', '0'); } catch (e) {}
+      // The frame cannot read this page's address (it is an opaque origin): hand it the game's own switches (section 24).
+      // An allow-list: ?debug and ?q always, the port kit's three, and the names game.json "netplay.params" declares;
+      // never one this page uses itself (the room, the token, the ticket). The game reads them as net.params.
+      var okValue = new RegExp(boot.paramValue || '^[A-Za-z0-9_.~-]{0,48}$');
+      (boot.params || ['debug', 'q', 'touchdebug', 'cam', 'view']).forEach(function (k) { var v = params.get(k); if (v !== null && okValue.test(v)) q.set(k, v); });
+      // This page keeps net.prefs for the frame (section 24).
+      q.set('pf', '1');
+      return '/' + boot.game + '/__game/?' + q.toString();
     }
-    if (params.get('debug') === '1') q.set('debug', '1');
-    // Quiet AI (this browser hides AI speech): the helper starts hushed, and hears a change by message.
-    if (state.quietAi) q.set('hush', '1');
-    // Room chat (section 19): this browser's "Show chat" and "Show my messages over my character", for the game's bubbles.
-    try { if (localStorage.getItem('homie-chat-show') === '0') q.set('chat', '0'); if (localStorage.getItem('homie-chat-bubble') === '0') q.set('bub', '0'); } catch (e) {}
-    // The frame cannot read this page's address (it is an opaque origin): hand it the game's own switches.
-    ['touchdebug', 'cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
-    frame.src = '/' + boot.game + '/__game/?' + q.toString();
+    state.params = {};
+    (boot.params || []).forEach(function (k) { var v = params.get(k); if (v !== null && new RegExp(boot.paramValue || '^$').test(v)) state.params[k] = v; });
+    // A newer build of the game is live (section 23): load the frame again, at most twice a minute (a build whose
+    // files are still the old ones at the edge would otherwise reload for ever).
+    var reloads = [];
+    function reloadGame() {
+      var t = Date.now();
+      reloads = reloads.filter(function (x) { return t - x < 60000; });
+      if (reloads.length >= 2) { flash('This game was updated. Reload the page to play the new version.'); return false; }
+      reloads.push(t);
+      state.stale = null; state.closed = null; state.reloaded = (state.reloaded || 0) + 1;
+      try { frame.src = frameUrl(); } catch (e) {}
+      return true;
+    }
+    frame.src = frameUrl();
     A.room(labelOf(room));
     frame.addEventListener('load', function () { A.frameLoaded(); try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
     window.addEventListener('pointerdown', function (e) { if ((ui && ui.contains(e.target)) || (e.target.closest && e.target.closest('[data-keep-focus]'))) return; try { frame.focus(); } catch (e2) {} }, { passive: true });
@@ -428,10 +452,26 @@ const SHELL_JS = String.raw`(function () {
       var m = ev.data;
       if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
       A.message(m);
-      if (m.what === 'attached') state.attached = true;
+      if (m.what === 'attached') { state.attached = true; lastRects = ''; tellRects(); }
+      // The link (section 22): in the room, knocking again, or playing alone because the room never answered.
+      if (m.what === 'link' && typeof m.state === 'string') state.link = { state: m.state, why: String(m.why || ''), hosting: m.hosting === true, at: Date.now() };
+      // The game's own word that it was playable (section 21), beside who lifted the card: a late one is a game whose
+      // arrival should be 'game'. A performance probe reads both here.
+      if (m.what === 'ready') {
+        state.ready = { mode: m.mode === 'game' ? 'game' : 'auto', ms: Number(m.ms) || 0, lateMs: typeof m.lateMs === 'number' ? m.lateMs : null, atMs: Math.round(typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) };
+        if (A.state) { A.state.explicitMs = state.ready.atMs; A.state.lateMs = state.ready.lateMs; }
+      }
+      if (m.what === 'prefs') answerPrefs(m);
+      // A newer build of the game is live. Kept out of a room for it (final): the game loads again now. Still
+      // playing in its own room: it loads again at the round's break, or at once on a big screen (nothing to lose).
+      if (m.what === 'stale') {
+        state.stale = { ver: typeof m.ver === 'string' ? m.ver : null, final: m.final === true };
+        if (m.final === true || screenMode) reloadGame();
+        else flash('A new version of ' + boot.name + ' is ready: it loads after this round.');
+      }
       if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
       if (m.what === 'stats') state.stats = m.stats;
-      if (m.what === 'round') onRound(m.round);
+      if (m.what === 'round') { onRound(m.round); if (state.stale && m.round && m.round.phase === 'over') reloadGame(); }
       if (m.what === 'roster') state.roster = m.slots;
       if (m.what === 'closed') { state.closed = m.why; if (m.why === 'kicked' || m.why === 'room-closed' || m.why === 'agents-off') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); }
       // A game's net.pickPlayer(seat): only an owner's page listens (its overlay opens that player's card).
@@ -440,11 +480,86 @@ const SHELL_JS = String.raw`(function () {
     });
     watch(room);
     shareReady(room);
+    addEventListener('resize', tellRects);
+    if (typeof setInterval === 'function') setInterval(tellRects, 1000);
     if (screenMode && !document.querySelector('[data-join]') && !LOCAL) {
       var h2 = document.createElement('h2'); h2.textContent = 'Join on your phone';
       var div = document.createElement('div'); div.textContent = location.origin + '/' + boot.game + '/play?room=' + encodeURIComponent(room);
       screenCard.append(h2, div); screenCard.hidden = false;
     }
+  }
+
+  /*
+   * NET.PREFS (NETPLAY.md section 24). The game's frame is an opaque origin (no allow-same-origin: a stranger's game
+   * must never read this site's storage, cookies or the owner's session), so its own localStorage throws. This page
+   * keeps a few settings for it instead: one JSON object per game under this site's storage, 16 KB and 32 keys at
+   * most, read and written only for this page's own game. With no storage (a private window): for the visit.
+   */
+  var PREFS_KEY = 'homie-prefs.' + boot.game;
+  var PREFS = boot.prefs || { bytes: 16384, keys: 32, key: 64 };
+  var prefsMem = null;
+  function prefsRead() {
+    if (prefsMem) return prefsMem;
+    try { var o = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { prefsMem = {}; return prefsMem; }
+  }
+  function prefsWrite(o) {
+    var text = JSON.stringify(o);
+    if (typeof text !== 'string' || text.length > PREFS.bytes || Object.keys(o).length > PREFS.keys) return 'too-large';
+    if (prefsMem) { prefsMem = o; return 'memory'; }
+    try { localStorage.setItem(PREFS_KEY, text); return 'kept'; } catch (e) { prefsMem = o; return 'memory'; }
+  }
+  function answerPrefs(m) {
+    var out = { t: 'homie-prefs', n: m.n, ok: false };
+    try {
+      var all = prefsRead();
+      var k = m.k;
+      var okKey = typeof k === 'string' && k.length > 0 && k.length <= PREFS.key && k !== '__proto__';
+      if (m.op === 'all') { out.ok = true; out.all = all; }
+      else if (!okKey) out.why = 'key';
+      else if (m.op === 'set' || m.op === 'del') {
+        var next = {};
+        Object.keys(all).forEach(function (x) { if (x !== k) next[x] = all[x]; });
+        if (m.op === 'set' && m.v !== null && m.v !== undefined) next[k] = m.v;
+        var how = prefsWrite(next);
+        if (how === 'too-large') out.why = how; else { out.ok = true; out.kept = how; }
+      } else out.why = 'op';
+    } catch (e) { out.why = 'error'; }
+    state.prefs = { op: m.op, ok: out.ok, why: out.why || null };
+    try { frame.contentWindow.postMessage(out, '*'); } catch (e2) {}
+  }
+
+  /*
+   * WHERE THIS PAGE'S OWN CONTROLS SIT OVER THE GAME (section 24). The frame fills the page, so these rectangles are
+   * in the game's own CSS pixels. A game's HUD check that only measures inside the frame cannot see them: the room
+   * button, the server pill, the chat pill, the "3 playing" chip (it fades, and comes back), the big screen's join
+   * card, the studio's banner. Said to the helper when it attaches, on a resize or a turn, and when one moves.
+   */
+  var RECTS = [['room', '[data-share-toggle]'], ['server', '[data-server-toggle]'], ['chat', '[data-chat-toggle]'], ['chip', '[data-chip]', true], ['join', '[data-join]'], ['banner', '[data-banner]'], ['ticker', '.ctick', true], ['results', '[data-results]'], ['screen', '[data-screen]'], ['sheet', '[data-share-sheet]'], ['server-sheet', '[data-server-sheet]'], ['vote', '[data-vote]']];
+  var lastRects = '';
+  function shellRects() {
+    var out = [];
+    RECTS.forEach(function (r) {
+      var el = null;
+      try { el = document.querySelector(r[1]); } catch (e) { el = null; }
+      if (!el || el.hidden || typeof el.getBoundingClientRect !== 'function') return;
+      var b = el.getBoundingClientRect();
+      if (!b || !(b.width > 0) || !(b.height > 0)) return;
+      var o = { id: r[0], x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) };
+      if (r[2]) o.fades = true;
+      out.push(o);
+    });
+    return out;
+  }
+  function tellRects() {
+    if (!state.attached) return;
+    var w = typeof innerWidth === 'number' ? innerWidth : 0;
+    var h = typeof innerHeight === 'number' ? innerHeight : 0;
+    var msg = { t: 'homie-shell', device: device, orientation: w > h ? 'landscape' : 'portrait', width: w, height: h, rects: shellRects() };
+    var sig = JSON.stringify(msg);
+    if (sig === lastRects) return;
+    lastRects = sig;
+    state.rects = msg;
+    try { frame.contentWindow.postMessage(msg, '*'); } catch (e) {}
   }
 
   function onRound(r) {
@@ -566,6 +681,9 @@ const SHELL_JS = String.raw`(function () {
     if (f && f.counts && f.counts.watchers) bits.push(f.counts.watchers + ' watching');
     if (state.full) bits.push('waiting for a seat');
     if (state.closed) bits.push(state.closed === 'replaced' ? 'opened in another tab' : 'reconnecting');
+    // The link (section 22): cut off from the room and knocking again, or playing alone because it never answered.
+    else if (state.link && state.link.state === 'reconnecting') bits.push('reconnecting');
+    else if (state.link && state.link.state === 'alone') bits.push('offline, reconnecting');
     // The arrival card's line: the room and who is in it ("Room 2 · 3 playing · 2 AI").
     if (!A.done && state.room) A.facts([labelOf(state.room), n ? n + ' playing' : '', aiN ? aiN + ' AI' : ''].filter(Boolean).join(' · '));
     say(bits.join(' · ') || 'joining…');
@@ -899,7 +1017,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: non
 body { --u: clamp(12px, calc(0.8vmin + 7px), 22px); --band: #080b14; --line: rgba(255,255,255,.08); display: flex; flex-direction: column; font: 600 var(--u)/1.25 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
 body.big { --u: clamp(16px, calc(1vmin + 6px), 32px); }
 .stage { position: relative; flex: 1; min-height: 0; background: #04060c; }
-iframe.game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; }
+iframe.game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #04060c; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .wtop { flex: none; display: flex; align-items: center; gap: calc(var(--u) * .7); padding: max(calc(var(--u) * .5), env(safe-area-inset-top)) max(calc(var(--u) * .9), env(safe-area-inset-right)) calc(var(--u) * .5) max(calc(var(--u) * .9), env(safe-area-inset-left)); background: linear-gradient(#0b0f1a, var(--band)); border-bottom: 1px solid var(--line); min-width: 0; }
 .grow { flex: 1; }
 .live { flex: none; display: inline-flex; align-items: center; gap: .45em; padding: .3em .7em .3em .6em; border-radius: 999px; background: rgba(255,59,92,.16); border: 1px solid rgba(255,90,120,.5); font-weight: 800; font-size: .74em; letter-spacing: .14em; text-transform: uppercase; color: #ffd9e0; }

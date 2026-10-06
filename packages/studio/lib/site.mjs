@@ -304,7 +304,7 @@ const HERO_NAMES = { wide: ['wide.mp4', 'wide.webm'], tall: ['tall.mp4', 'tall.w
 
 /**
  * Everything a game's landing shows, from the game's own files: game.json (`landing` block, name, blurb, players,
- * round length, cover, share), credits.json, hero/ footage, and the studio's trailer and music for it. Files the
+ * round length, cover), credits.json, hero/ footage, and the studio's trailer and music for it. Files the
  * landing shows are copied into the game's built folder under _landing/ (the cover beside the build when the
  * build left it out), so the site serves them. Nothing is invented: a landing without footage uses the cover.
  */
@@ -466,7 +466,6 @@ export function landingOf(g, out, { videos = [], songs = [], log = () => {} } = 
     trailer: trailer ? trailer.slug : null,
     videos: trailers.map((e) => e.slug),
     music: forGame(songs).map((e) => e.slug),
-    source: g.share?.source !== false,
     tv: g.screen?.tv !== false && L.tv !== false,
     theme: theme && Object.keys(theme).length ? theme : null,
     ...(L.scheme === 'light' || L.scheme === 'dark' ? { scheme: L.scheme } : ownScheme ? { scheme: ownScheme, schemeFrom: 'style' } : {}),

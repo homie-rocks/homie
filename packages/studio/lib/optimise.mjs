@@ -6,6 +6,10 @@
  *       bottom centre, scaled to its size in metres, welded and simplified to its triangle budget (meshoptimizer),
  *       pictures resized and re-encoded as WebP (sharp), meshopt geometry, nothing unused. Raw files are never
  *       changed; the result says what each step did, before and after.
+ *       `lo: { ratio }` also writes `<name>_lo.glb` beside it: the same model through the same steps (the same
+ *       height, pivot, palette and pictures, so the two line up) with `ratio` of the shipped triangles, for the far
+ *       band of @homie-rocks/render's LodProps. A rigged model is skipped (its skin is one mesh with its bones).
+ *       The result's `lo` is { path, triangles, bytes, sha256 }, or null with the reason in `warnings`.
  *   inspectModel(input)                       triangles, vertices, draw calls, materials, pictures and their GPU memory,
  *       bones and clips, the bounding box in metres, the Khronos glTF-Validator's errors, and the file's own safety
  *       check (assets/safety.mjs).
@@ -312,7 +316,10 @@ const linearToSrgb255 = (v) => { const c = Math.max(0, Math.min(1, v)); return M
  *              usually says metallic 1 and leaves the rest to its texture)
  * Returns { ok, glb (the bytes), bytes (their count), sha256, out, before, after, ops, warnings }.
  */
-export async function optimiseModel(input, { out = null, triangles = 1500, texture = 512, height = null, quality = 82, rigged = false, metal = false, log = () => {} } = {}) {
+/** Where a model's low copy goes: `<name>_lo.glb` beside it. */
+export const loPathOf = (out) => String(out).replace(/(\.glb)?$/i, '_lo.glb');
+
+export async function optimiseModel(input, { out = null, triangles = 1500, texture = 512, height = null, quality = 82, rigged = false, metal = false, lo = null, log = () => {} } = {}) {
   const t = await modelTools();
   const { fn, mo, sharp, io } = t;
   const raw = await selfContained(input, LIMITS.import);
@@ -410,7 +417,35 @@ export async function optimiseModel(input, { out = null, triangles = 1500, textu
   if (!safe.ok) warnings.push(...safe.problems.map((p) => `the result: ${p}`));
   if (out) { mkdirSync(dirname(out), { recursive: true }); writeFileSync(out, bytes); }
   log(`optimised: ${before.triangles} -> ${after.triangles} triangles, ${Math.round(raw.byteLength / 1024)} -> ${Math.round(bytes.byteLength / 1024)} KB`);
-  return { ok: safe.ok, out, glb: bytes, bytes: bytes.byteLength, sha256: sha256(bytes), rawBytes: raw.byteLength, rawSha256: sha256(raw), before, after, ops, warnings, tool: `@gltf-transform/functions ${await toolVersion()}` };
+
+  /*
+   * THE LOW COPY (`lo: { ratio }`), for the far band of a prop drawn at two levels of detail (@homie-rocks/render
+   * LodProps: the full model near, this one far). It is the SAME raw file through the SAME steps with a smaller
+   * triangle budget, never a second recipe: the same scale to the card's height, the same pivot, the same palette
+   * and pictures, so the two models sit on each other exactly and share a material. A rigged model has none: its
+   * skin is one mesh bound to its bones, and a character is not scattered by the hundred.
+   */
+  let low = null;
+  if (lo) {
+    const ratio = Number(lo.ratio);
+    if (!(ratio > 0 && ratio < 1)) warnings.push(`no low copy: lo.ratio is the share of the shipped triangles to keep, between 0 and 1 (0.2 keeps a fifth), not ${JSON.stringify(lo.ratio)}`);
+    else if (hasRig) warnings.push('no low copy: a rigged model is one skinned mesh with its bones, and is not drawn at two levels of detail');
+    else {
+      const want = Math.max(4, Math.round(after.triangles * ratio));
+      const loOut = out ? loPathOf(out) : null;
+      const r = await optimiseModel(raw, { out: null, triangles: want, texture, height, quality, rigged: false, metal });
+      if (r.after.triangles >= after.triangles) warnings.push(`no low copy: the shape would not simplify below its ${after.triangles} triangles`);
+      else if (!r.ok) warnings.push(`no low copy: ${r.warnings.join('; ')}`);
+      else {
+        if (loOut) writeFileSync(loOut, r.glb);
+        low = { path: loOut, triangles: r.after.triangles, bytes: r.bytes, sha256: r.sha256, ratio, glb: r.glb };
+        ops.push(`low copy at ${ratio} (${after.triangles} to ${r.after.triangles} triangles)`);
+        if (r.after.triangles > want * 1.25) warnings.push(`the low copy has ${r.after.triangles} triangles, not the ${want} asked (ratio ${ratio}): the shape resists`);
+        log(`low copy: ${r.after.triangles} triangles, ${Math.round(r.bytes / 1024)} KB`);
+      }
+    }
+  }
+  return { ok: safe.ok, out, glb: bytes, bytes: bytes.byteLength, sha256: sha256(bytes), rawBytes: raw.byteLength, rawSha256: sha256(raw), before, after, ops, warnings, ...(lo ? { lo: low } : {}), tool: `@gltf-transform/functions ${await toolVersion()}` };
 }
 
 let version = null;
@@ -427,8 +462,8 @@ async function toolVersion() {
 }
 
 /**
- * A grey box .glb of `size` metres (x, y, z), its pivot at the bottom centre: what a remix gets in place of an asset
- * it may not carry, and what a refused model is drawn as.
+ * A grey box .glb of `size` metres (x, y, z), its pivot at the bottom centre: what a refused model is drawn as,
+ * and a stand-in for one that is not there yet.
  */
 export async function placeholderGlb(size = [0.5, 0.5, 0.5], { name = 'placeholder', colour = [0.54, 0.56, 0.6, 1] } = {}) {
   const { core, io } = await modelTools();

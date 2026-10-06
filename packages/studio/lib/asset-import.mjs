@@ -14,7 +14,7 @@ import { basename, join, relative, resolve } from 'node:path';
 import { LIMITS, checkGlb } from '../assets/safety.mjs';
 import { ASSET_ID, KINDS, licenseInfo, readManifest, recordAsset } from './asset-manifest.mjs';
 import { readDecisions } from './decisions.mjs';
-import { budgetsFor } from './asset-check.mjs';
+import { budgetsFor, gameJson } from './asset-check.mjs';
 
 const TIER_OF_KIND = { character: 'hero', creature: 'npc', prop: 'prop', kit: 'kit', environment: 'kit' };
 
@@ -68,7 +68,9 @@ export async function importModel(root, id, file, opts = {}) {
   if (!ASSET_ID.test(asId)) throw new Error('give it an id: --as <lowercase-id>');
   const tier = opts.tier ?? TIER_OF_KIND[kind] ?? 'prop';
   const doc = readDecisions(root, id);
-  const budgets = budgetsFor(doc);
+  // The game's own per-model budget (game.json assets.budgets) counts here too: a file is made as small as the game
+  // asks, not smaller.
+  const budgets = budgetsFor(doc, gameJson(root, id));
   const b = budgets[tier] ?? budgets.prop;
   // The raw file stays on this computer, beside its art job (git-ignored), unless it is there already.
   const slug = String(opts.slug ?? asId);
@@ -81,7 +83,7 @@ export async function importModel(root, id, file, opts = {}) {
   }
   const { optimiseModel, inspectModel } = await import('./optimise.mjs');
   const out = join(gdir, 'public', 'models', `${asId}.glb`);
-  const r = await optimiseModel(path, { out, triangles: Number(opts.triangles ?? b.triangles), texture: Number(opts.texture ?? b.texturePx), height: opts.height ? Number(opts.height) : null, rigged: Boolean(opts.rigged), metal: doc?.decisions?.['style.render']?.value === 'pbr' });
+  const r = await optimiseModel(path, { out, triangles: Number(opts.triangles ?? b.triangles), texture: Number(opts.texture ?? b.texturePx), height: opts.height ? Number(opts.height) : null, rigged: Boolean(opts.rigged), metal: doc?.decisions?.['style.render']?.value === 'pbr', ...(opts.lo ? { lo: { ratio: Number(opts.lo) } } : {}) });
   if (!r.ok) throw new Error(`the optimised file is still refused: ${r.warnings.join('; ')}`);
   const ins = await inspectModel(out);
   const rel = relative(gdir, out).split('\\').join('/');
@@ -91,16 +93,19 @@ export async function importModel(root, id, file, opts = {}) {
     ...(opts.height ? { heightM: Number(opts.height) } : {}),
     files: [
       { role: 'model', path: rel, bytes: r.bytes, sha256: r.sha256 },
+      // The low copy for the far band (`--lo <ratio>`; lib/optimise.mjs): recorded beside the model with the ratio it
+      // was made at, so `assets redo` makes it again and a check knows the file is this asset's.
+      ...(r.lo ? [{ role: 'model-lo', path: relative(gdir, r.lo.path).split('\\').join('/'), bytes: r.lo.bytes, sha256: r.lo.sha256, tris: r.lo.triangles, ratio: r.lo.ratio }] : []),
       ...(opts.concept ? [{ role: 'concept', path: relative(gdir, resolve(root, opts.concept)).split('\\').join('/'), public: false }] : []),
       { role: 'raw', path: relative(gdir, rawPath).split('\\').join('/'), public: false, bytes: r.rawBytes, sha256: r.rawSha256 },
     ],
     made: { steps, ...(opts.under ? { under: opts.under } : {}) },
-    license: { kind: info.kind, spdx: info.spdx, owner: opts.owner ?? (route === 'generated' || licKind === 'own' ? 'studio' : null), attribution: opts.attribution ?? null, remix: info.remix, ...(route === 'generated' ? { terms: [{ who: 'fal', url: 'https://fal.ai/terms', read: '2026-10-02', label: 'Commercial use' }], notes: 'Made through fal on the studio\'s own account; fal\'s terms do not assign output ownership expressly (RIGHTS.md).' } : opts.notes ? { notes: opts.notes } : {}) },
+    license: { kind: info.kind, spdx: info.spdx, owner: opts.owner ?? (route === 'generated' || licKind === 'own' ? 'studio' : null), attribution: opts.attribution ?? null, ...(route === 'generated' ? { terms: [{ who: 'fal', url: 'https://fal.ai/terms', read: '2026-10-02', label: 'Commercial use' }], notes: 'Made through fal on the studio\'s own account; fal\'s terms do not assign output ownership expressly (RIGHTS.md).' } : opts.notes ? { notes: opts.notes } : {}) },
     measured: { tris: r.after.triangles, materials: r.after.materials, drawCalls: r.after.drawCalls, textures: r.after.textures.map((t) => ({ px: t.px, format: t.mimeType, gpuKB: Math.round(t.gpuBytes / 1024) })), bones: r.after.bones, clips: r.after.clips.length, heightM: r.after.heightM, box: r.after.box, glbKB: Math.round(r.bytes / 1024), flat: r.ops.some((o) => o.startsWith('palette')) && !r.after.textures.some((t) => t.slots?.includes('normalTexture')) },
     review: { state: 'auto' },
   };
   const { entry: e, pinned } = recordAsset(root, id, entry);
-  return { ok: true, command: 'assets add', game: id, asset: e.id, route, file: rel, raw: relative(root, rawPath), before: { tris: r.before.triangles, kb: Math.round(r.rawBytes / 1024) }, after: { tris: r.after.triangles, kb: Math.round(r.bytes / 1024), heightM: r.after.heightM }, ops: r.ops, warnings: [...r.warnings, ...(ins.validator?.errors ? [`validator: ${ins.validator.messages[0]}`] : [])], pinned, license: info.label };
+  return { ok: true, command: 'assets add', game: id, asset: e.id, route, file: rel, ...(opts.lo ? { lo: r.lo ? { path: relative(gdir, r.lo.path).split('\\').join('/'), triangles: r.lo.triangles, bytes: r.lo.bytes, sha256: r.lo.sha256 } : null } : {}), raw: relative(root, rawPath), before: { tris: r.before.triangles, kb: Math.round(r.rawBytes / 1024) }, after: { tris: r.after.triangles, kb: Math.round(r.bytes / 1024), heightM: r.after.heightM }, ops: r.ops, warnings: [...r.warnings, ...(ins.validator?.errors ? [`validator: ${ins.validator.messages[0]}`] : [])], pinned, license: info.label };
 }
 
 
@@ -131,6 +136,7 @@ export async function redoModel(root, id, assetId) {
     license: e.license?.kind, attribution: e.license?.attribution ?? undefined, owner: e.license?.owner ?? undefined, notes: e.license?.notes,
     steps: (e.made?.steps ?? []).filter((s) => s.what !== 'optimise'), concept: concept ? relative(root, resolve(gdir, concept.path)) : undefined,
     slug, rigged: Number(e.measured?.bones) > 0 || Number(e.measured?.clips) > 0, under,
+    lo: (e.files ?? []).find((f) => f.role === 'model-lo')?.ratio ?? null,
   });
   return { ...r, command: 'assets redo' };
 }

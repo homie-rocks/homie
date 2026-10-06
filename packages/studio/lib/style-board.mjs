@@ -10,11 +10,14 @@
  *   assetsLineup(root, id)    every made asset at true scale on a 1 m grid under the game's light (front and
  *                             three-quarter), silhouettes black on white at 64 px tall, and flags: over budget, palette
  *                             drift (CIEDE2000 from the locked palette), an unreadable silhouette, another library family,
- *                             stale. .studio/art/<id>/lineup-*.jpg and lineup.json.
+ *                             stale. .studio/art/<id>/lineup-*.jpg and lineup.json. Three lineups, because they
+ *                             answer different questions: the INVENTORY (every recorded model, the folder), the CAST
+ *                             (what is in play: characters, creatures, props) and the ENVIRONMENT (the scenery). An
+ *                             asset marked `usage: "unused"` is in the inventory only (lineupScopes).
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
-import { readManifest } from './asset-manifest.mjs';
+import { readManifest, usageOf } from './asset-manifest.mjs';
 import { assetsCheck } from './asset-check.mjs';
 import { mix, nearest } from './colour.mjs';
 import { directionsFor, initDecisions, labelOf, lightColours, readDecisions, staleAssets, styleTokens, writeDecisions, addLatestLine } from './decisions.mjs';
@@ -157,7 +160,22 @@ export async function addGolden(root, id, image, { from = null } = {}) {
 
 const DRIFT = 18; // mean CIEDE2000 (area-weighted) from the palette above which an asset is flagged
 
-export async function assetsLineup(root, id, { log = () => {} } = {}) {
+export const LINEUP_SCOPES = Object.freeze(['inventory', 'cast', 'environment']);
+
+/**
+ * Which recorded models stand in which lineup: { inventory, cast, environment, unused } (asset ids), with each
+ * asset's usage and whether its record says it or its kind does. A manifest with no `usage` anywhere sorts by kind
+ * (characters, creatures and props are the cast; kits and environment pieces the scenery) and marks nothing unused, so
+ * an older game's lineup is what it was, plus the two narrower pictures.
+ */
+export function lineupScopes(manifest) {
+  const rows = manifest.assets.filter((a) => (a.files ?? []).some((f) => f.role === 'model')).map((a) => ({ id: a.id, usage: usageOf(a), explicit: Boolean(a.usage) }));
+  const ids = (keep) => rows.filter((r) => keep(r.usage)).map((r) => r.id);
+  return { rows, inventory: rows.map((r) => r.id), cast: ids((u) => u === 'cast' || u === 'prop'), environment: ids((u) => u === 'environment'), unused: ids((u) => u === 'unused') };
+}
+
+export async function assetsLineup(root, id, { log = () => {}, scope = null } = {}) {
+  if (scope !== null && !LINEUP_SCOPES.includes(scope)) return { ok: false, command: 'assets lineup', id, why: `--scope is one of ${LINEUP_SCOPES.join(', ')} (none: all three)` };
   const manifest = readManifest(root, id);
   const doc = readDecisions(root, id);
   const tokens = styleTokens(doc) ?? { palette: { bg: '#20242c', ink: '#f2f2f2', accent: '#ffcf5a', accent2: '#7dffb0', danger: '#ff5d5d', good: '#5fdc8b', gold: '#f2c14e', ramp: [] } };
@@ -177,9 +195,31 @@ export async function assetsLineup(root, id, { log = () => {} } = {}) {
   if (!models.length) return { ok: false, command: 'assets lineup', id, why: `games/${id} has no recorded models yet (assets add, or the models skill)` };
   const dir = join(root, '.studio', 'art', id);
   mkdirSync(dir, { recursive: true });
-  const shot = await withRenderer(async (r) => ({ renderer: r.renderer, ...(await r.lineup(models.map((m) => m.input), tokens)) }), { log });
+  const scopes = lineupScopes(manifest);
+  const present = new Set(models.map((m) => m.a.id));
+  // The inventory is always drawn (its rows carry every model's size and silhouette). The cast and the environment
+  // get a picture of their own when they are a different, non-empty set: the same models twice is one picture.
+  const narrower = {};
+  const shot = await withRenderer(async (r) => {
+    const all = await r.lineup(models.map((m) => m.input), tokens);
+    for (const name of ['cast', 'environment']) {
+      if (scope && scope !== name) continue;
+      const ids = scopes[name].filter((x) => present.has(x));
+      if (!ids.length) { narrower[name] = { ids, images: null }; continue; }
+      if (ids.length === models.length) { narrower[name] = { ids, images: null, same: true }; continue; }
+      narrower[name] = { ids, shot: await r.lineup(models.filter((m) => ids.includes(m.a.id)).map((m) => m.input), tokens) };
+    }
+    return { renderer: r.renderer, ...all };
+  }, { log });
   const images = { front: join(dir, 'lineup-front.jpg'), quarter: join(dir, 'lineup-quarter.jpg'), silhouettes: join(dir, 'lineup-silhouettes.png') };
   saveDataUrl(shot.front, images.front); saveDataUrl(shot.quarter, images.quarter); saveDataUrl(shot.silhouettes, images.silhouettes);
+  const lineups = { inventory: { ids: models.map((m) => m.a.id), images: Object.fromEntries(Object.entries(images).map(([k, v]) => [k, relative(root, v)])) } };
+  for (const [name, l] of Object.entries(narrower)) {
+    if (!l.shot) { lineups[name] = { ids: l.ids, images: null, ...(l.same ? { same: true } : {}) }; continue; }
+    const files = { front: join(dir, `lineup-${name}-front.jpg`), quarter: join(dir, `lineup-${name}-quarter.jpg`), silhouettes: join(dir, `lineup-${name}-silhouettes.png`) };
+    saveDataUrl(l.shot.front, files.front); saveDataUrl(l.shot.quarter, files.quarter); saveDataUrl(l.shot.silhouettes, files.silhouettes);
+    lineups[name] = { ids: l.ids, images: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, relative(root, v)])) };
+  }
   const palette = [...PALETTE_KEYS.map((k) => tokens.palette[k]), ...(tokens.palette.ramp ?? [])].filter(Boolean);
   const family = doc?.decisions?.['cast.family']?.value ?? null;
   const check = await assetsCheck(root, id, { validate: false, write: true }).catch(() => null);
@@ -206,9 +246,12 @@ export async function assetsLineup(root, id, { log = () => {} } = {}) {
     if (c && !c.ok) flags.push(`over budget: ${c.problems[0]}`);
     if (family && m.a.route === 'library' && m.a.from?.pack && !String(m.a.from.pack).startsWith(family)) flags.push(`another library family (${m.a.from.pack}; the game's is ${family}): mixing families shows`);
     if (stale.some((s) => s.id === m.a.id)) flags.push('stale: made under an older decision');
-    rows.push({ id: m.a.id, label: m.input.label, kind: m.a.kind, route: m.a.route, size: row?.size ?? null, silhouette: row?.silhouette ?? null, drift, flags });
+    const use = scopes.rows.find((x) => x.id === m.a.id);
+    rows.push({ id: m.a.id, label: m.input.label, kind: m.a.kind, route: m.a.route, usage: use?.usage ?? null, usageExplicit: Boolean(use?.explicit), size: row?.size ?? null, silhouette: row?.silhouette ?? null, drift, flags });
   }
-  const result = { ok: true, command: 'assets lineup', id, renderer: shot.renderer, images: Object.fromEntries(Object.entries(images).map(([k, v]) => [k, relative(root, v)])), rows, palette: palette.slice(0, 7), family, at: new Date().toISOString(), flagged: rows.filter((r) => r.flags.length).length };
+  // `flagged` counts what the game draws: a flag on a file marked unused is about the folder, said apart.
+  const inPlay = rows.filter((r) => r.usage !== 'unused');
+  const result = { ok: true, command: 'assets lineup', id, renderer: shot.renderer, images: lineups.inventory.images, lineups, unused: rows.filter((r) => r.usage === 'unused').map((r) => r.id), rows, palette: palette.slice(0, 7), family, at: new Date().toISOString(), flagged: inPlay.filter((r) => r.flags.length).length, flaggedUnused: rows.filter((r) => r.usage === 'unused' && r.flags.length).length };
   writeFileSync(join(dir, 'lineup.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }

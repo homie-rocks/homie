@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/film",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Film production as data: a declarative shot timeline you can query at any time, a seek/reset contract, set volumes with continuity checks, dialogue and captions, and resumable capture plans. No renderer.",
   "license": "Apache-2.0",
   "type": "module",
@@ -32,6 +32,6 @@
     "prepack": "tsc --build"
   },
   "dependencies": {
-    "@homie-rocks/camera": "0.1.0"
+    "@homie-rocks/camera": "0.2.0"
   }
 }

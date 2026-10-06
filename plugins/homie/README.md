@@ -105,7 +105,7 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     (`homie-studio office`). A kick or a mute is only *asked for*: the office answers with a
     one-time link, the pane shows it under "Waiting for your tap", and nothing happens until you
     confirm in your own browser. The mod cannot confirm an ask; no key or command can.
-  - **Games:** each game's launch state (private, invite-only beta, public) and remix switch,
+  - **Games:** each game's launch state (private, invite-only beta, public),
     changed the same asked-for way.
   - **Stats:** the studio's own counts (visits, plays, rounds, peak players, where people came
     from), read on request.
@@ -120,8 +120,8 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     strip (`Style ✓ → Cast 3/7 → Rigs → Animations → In game`), the look line, the style
     decisions with their state (`·` auto, `~` steered, `●` pinned by use, `■` locked) and who set
     them, a palette's colours, the cast (route, licence, state, cost, **STALE** when made under an
-    older decision), the scene budgets as bars (draw calls, triangles, picture memory, first-play
-    download; red when over), the spend against the art budget, and licence problems with their
+    older decision), the scene budgets as bars (draw calls, triangles, picture memory, shipped
+    payload: the asset check's inventory estimate; red when over), the spend against the art budget, and licence problems with their
     fix. **Lock** on a decision is your word (`homie-studio style lock`); **Unlock** first asks,
     with what goes stale and what remaking it costs (`style blast`), and unlocks only on Proceed.
     Its Characters section lists each rigged character with its skeleton family, bones and clips (how many
@@ -200,11 +200,9 @@ Inside a studio (a folder with `studio.json` at or above where Claude Code runs)
     state of a decision the person locked, or leaves the file unreadable while one is locked: a
     locked decision changes only through `homie-studio style set … --unlock --reason`, after the
     person saw what goes stale (`style blast`);
-  - a production deploy while a public game (not private or invite-only, its source not closed)
+  - a production deploy while a public game (not private or invite-only)
     ships an asset whose `assets/manifest.json` entry has no licence, a kind the studio does not
-    know, TurboSquid's licence, CC BY without an attribution line, or a licence that forbids
-    handing the file on (Quaternius, Mixamo, a EULA, a bought asset, "other") with a remix other
-    than `none` or `reference`. When every asset is licensed, the deploy's hold says so;
+    know, TurboSquid's licence, or CC BY without an attribution line. When every asset is licensed, the deploy's hold says so;
   - a `git add` or `git commit` that would put a file over 5 MB under `games/` into git (what is
     staged is read from git itself), naming each file and its size: big files go to the studio's
     R2, raw models stay in `art/<slug>/raw/`;

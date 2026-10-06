@@ -4,7 +4,7 @@
  *
  *   /_studio/office              the owner's live view: every live room of every game (players, bots, round,
  *                                uptime) and who is in it, refreshing by itself; kick, mute, announce, close a room;
- *                                each game's launch state, remix switch, room size and invites
+ *                                each game's launch state, room size and invites
  *   /_studio/confirm/<ask>       a control the owner's AI asked for, waiting for the owner's one tap
  *   /_studio/api/...             the same, as JSON, for the page, the in-game owner overlay, the CLI and the MCP
  *   /<game>/invite               an invite code, spent for this browser's pass to an invite-only game
@@ -14,8 +14,8 @@
  * office key (`homie-studio office key`, also minted with that login; D1 keeps only its SHA-256). A player can
  * never be the owner: the session is an HttpOnly cookie no page or game can read, and the games run in a sandboxed,
  * opaque-origin frame that can send no request as this site. With an office key, the AI can look, announce and
- * make invites; a control that takes something away (kick, mute, closing a room, a game's launch state, remix
- * switch or room size) only becomes an ASK, which the owner confirms with one tap in their signed-in browser.
+ * make invites; a control that takes something away (kick, mute, closing a room, a game's launch state
+ * or room size) only becomes an ASK, which the owner confirms with one tap in their signed-in browser.
  * No key can confirm an ask.
  *
  * CONTROLS ARE SIGNED. The Worker hands a room a control as a `ctl` message signed with the studio's own office
@@ -28,8 +28,12 @@
  * is left out of the studio's pages, /api/games, /api/rooms and the directory manifest, so the directory drops it
  * the next time it reads the studio; its own pages, rooms and play frame refuse anyone without access (the play
  * frame and its sockets carry a signed ticket the play page mints). A Preview (no D1, an unlisted address of a
- * branch under review) enforces no launch state. The remix switch publishes or withdraws the game's
- * /games/<id>/source.json (a game.json `"share": { "source": false }` builds none to publish).
+ * branch under review) enforces no launch state.
+ *
+ * `office_games` also has a `remix` column: the owner's switch for handing a game over whole, from when that existed
+ * (remix was retired). A migration that ran in the field is never edited and the column is never dropped, so it
+ * stays in the table with whatever it held; nothing here reads it and nothing writes it (settingsOf, the `game`
+ * action below).
  *
  * PLAYER ACCOUNTS (worker/players.mjs, handed over in worker/index.mjs with `usePlayers()`): `of(request, env)` names
  * the signed-in player in their play page's ticket, so their seat carries their account and a kick holds it on every
@@ -61,7 +65,6 @@ import { DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, vocabularyOf } from './brain
 import { OWNER_COOKIE, cookieValues, counter, ownerAllowed, ownerSession, today } from './stats.mjs';
 import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
-import { licenseOf } from './license.mjs';
 import { CHAT_MODES, CHAT_WHO, checkChatRules, publicChat } from './chat.mjs';
 import { chatDay, chatOf, chatRowsOf, clearChatRules, dismissReport, reportsOf, writeChatRules } from './chat-store.mjs';
 import { checkRefund, checkSettle, describeRefund, officeShopPage, ordersCsv, performRefund, settleReferrer, shopOffice, statementsOut, statementsSend } from './shop.mjs';
@@ -178,7 +181,7 @@ export async function settingsOf(env, { fresh = false } = {}) {
   if (!fresh && hit && Date.now() - hit.at < 5000) return hit.map;
   let map = new Map();
   try {
-    const { results } = await env.DB.prepare('SELECT game, launch, remix, max_players, updated_at FROM office_games LIMIT 500').all();
+    const { results } = await env.DB.prepare('SELECT game, launch, max_players, updated_at FROM office_games LIMIT 500').all();
     map = new Map((results ?? []).map((r) => [r.game, r]));
   } catch { map = new Map(); }
   settingsCache.set(env.DB, { at: Date.now(), map });
@@ -191,11 +194,6 @@ export function launchOf(meta, settings, env) {
   if (env?.HOMIE_PREVIEW === '1') return 'public';
   const v = settings?.get(meta?.id)?.launch ?? meta?.launch ?? 'public';
   return LAUNCH_STATES.includes(v) ? v : 'public';
-}
-/** Whether the game's source is offered for remix: built (game.json share.source) and not withdrawn by the owner. */
-export function remixOf(meta, settings) {
-  if (meta?.landing?.source === false) return false;
-  return settings?.get(meta?.id)?.remix !== 0;
 }
 /** A room's seats: the game's own (its netplay manifest), lowered by the owner's room size. */
 export function seatsFor(meta, settings) {
@@ -616,7 +614,6 @@ export async function officeView(env, cat, origin) {
       // 0.17.0: the game's AI guides have words of their own (agents.json): without it they play but never talk.
       vocab: g.vocab === true,
       passes: (await passList(env, { game: g.id })).filter((x) => x.live || Date.now() - x.createdAt < 7 * 86_400_000),
-      remix: remixOf(g, settings), remixBuilt: g.landing?.source !== false, license: licenseOf(g.license).kind,
       seats: seatsOf(g), maxPlayers: max, maxSet: Number(row?.max_players) >= 1 ? Number(row.max_players) : null,
       play: `${origin}/${g.id}/play`, page: `${origin}/${g.id}/`,
       invites: launch === 'invite' || (await hasInvites(env, g.id)) ? await invitesOf(env, g.id, origin) : [],
@@ -691,7 +688,6 @@ function checkAction(cat, op, body) {
       if (!meta) return bad('game is one of this studio\'s game ids');
       const launch = body.launch === undefined || body.launch === null ? undefined : String(body.launch);
       if (launch !== undefined && !LAUNCH_STATES.includes(launch)) return bad('launch is private, invite or public');
-      const remix = body.remix === undefined || body.remix === null ? undefined : body.remix === true || body.remix === 'on';
       let maxPlayers;
       if (body.maxPlayers === null || body.maxPlayers === 'game') maxPlayers = null;
       else if (body.maxPlayers !== undefined) {
@@ -699,9 +695,10 @@ function checkAction(cat, op, body) {
         if (!(maxPlayers >= 1)) return bad('maxPlayers is a number from 1 to the game\'s own seats, or null for the game\'s own');
         maxPlayers = Math.min(maxPlayers, seatsOf(meta));
       }
-      if (launch === undefined && remix === undefined && maxPlayers === undefined) return bad('say what to change: launch, remix or maxPlayers');
-      if (remix === true && meta.landing?.source === false) return bad(`${meta.name}'s source is not in its build (game.json "share": { "source": false }); set it to true and deploy first`);
-      return { ok: true, action: { op, game: meta.id, ...(launch !== undefined ? { launch } : {}), ...(remix !== undefined ? { remix } : {}), ...(maxPlayers !== undefined ? { maxPlayers } : {}) } };
+      // An older plugin or CLI may still send `remix` (the switch that offered a game whole). It is not a setting
+      // any more: alone it is refused in a sentence, and beside a launch state or a room size it is left out.
+      if (launch === undefined && maxPlayers === undefined) return bad(body.remix !== undefined && body.remix !== null ? 'remix was retired: a game is no longer handed over whole, so there is no switch to set. A studio shares pieces of its games as parts (/parts/)' : 'say what to change: launch or maxPlayers');
+      return { ok: true, action: { op, game: meta.id, ...(launch !== undefined ? { launch } : {}), ...(maxPlayers !== undefined ? { maxPlayers } : {}) } };
     }
     case 'server-create': {
       if (!meta) return bad('game is one of this studio\'s game ids');
@@ -822,7 +819,6 @@ export function describe(cat, a) {
     case 'game': {
       const bits = [];
       if (a.launch) bits.push({ private: `make ${gname} private (only you can open it; after the current round everyone else leaves its rooms with a thank-you, and it leaves the directory on the next read)`, invite: `make ${gname} an invite-only beta (invited players only; after the current round everyone else leaves its rooms with a thank-you, and it leaves the directory on the next read)`, public: `make ${gname} public (anyone can play; listed in the directory on the next read)` }[a.launch]);
-      if (a.remix !== undefined) bits.push(a.remix ? `publish ${gname}'s source for remixing` : `withdraw ${gname}'s source from remixing`);
       if (a.maxPlayers !== undefined) bits.push(a.maxPlayers === null ? `give ${gname}'s rooms the game's own number of seats` : `set ${gname}'s rooms to at most ${a.maxPlayers} players`);
       const s = bits.join('; ');
       return `${s.charAt(0).toUpperCase()}${s.slice(1)}.`;
@@ -950,16 +946,16 @@ export async function perform(env, cat, a) {
       const row = settings.get(meta.id) ?? {};
       const next = {
         launch: a.launch ?? row.launch ?? null,
-        remix: a.remix === undefined ? (row.remix ?? null) : (a.remix ? 1 : 0),
         max: a.maxPlayers === undefined ? (row.max_players ?? null) : a.maxPlayers,
       };
-      await env.DB.prepare(`INSERT INTO office_games (game, launch, remix, max_players, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
-        ON CONFLICT(game) DO UPDATE SET launch = excluded.launch, remix = excluded.remix, max_players = excluded.max_players, updated_at = excluded.updated_at`)
-        .bind(meta.id, next.launch, next.remix, next.max, Date.now()).run();
+      // The table's `remix` column is not named: a new row leaves it NULL and an old row keeps what it had (above).
+      await env.DB.prepare(`INSERT INTO office_games (game, launch, max_players, updated_at) VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(game) DO UPDATE SET launch = excluded.launch, max_players = excluded.max_players, updated_at = excluded.updated_at`)
+        .bind(meta.id, next.launch, next.max, Date.now()).run();
       forgetSettings(env);
       const fresh = await settingsOf(env, { fresh: true });
       const launch = launchOf(meta, fresh, env);
-      const done = { ok: true, op: 'game', game: meta.id, launch, remix: remixOf(meta, fresh), maxPlayers: seatsFor(meta, fresh), regating: 0 };
+      const done = { ok: true, op: 'game', game: meta.id, launch, maxPlayers: seatsFor(meta, fresh), regating: 0 };
       const rooms = await liveRooms(env, meta.id);
       // Who may play changed: every live room finishes its current round, with a notice, and then whoever the new
       // state leaves out is sent out of it (the owner, and in an invite-only beta the invited, play on). Back to a

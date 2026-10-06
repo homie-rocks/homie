@@ -430,7 +430,7 @@ describe('the lock guard (a decision the person locked)', () => {
 describe('the licence guard (a deploy of a public game)', () => {
   const live = { result: { stdout: 'Live: https://night-owls.example\n', stderr: '', interrupted: false } }
   const manifest = (assets: unknown[]) => JSON.stringify({ v: 1, assets })
-  const cc0 = { id: 'owl', kind: 'character', route: 'library', license: { kind: 'cc0', remix: 'include', attribution: null } }
+  const cc0 = { id: 'owl', kind: 'character', route: 'library', license: { kind: 'cc0', attribution: null } }
 
   test('an asset with no licence refuses the deploy, before anyone is asked, with the list and the fix', async ($, on) => {
     const w = world(on, { feed: null, tool: () => live, files: { [MANIFEST]: manifest([cc0, { id: 'moonstone', kind: 'prop', route: 'imported', license: { kind: null } }]) } })
@@ -442,24 +442,25 @@ describe('the licence guard (a deploy of a public game)', () => {
     expect(w.log.tools).toEqual([])
   })
 
-  test('TurboSquid, CC BY without credit, an unknown kind, and a closed licence handed to remixers are refused', async ($, on) => {
+  test('TurboSquid, CC BY without credit and an unknown kind are refused; a licence that only forbids handing the file on is not', async ($, on) => {
     const assets = [
-      { id: 'a-ts', license: { kind: 'eula:turbosquid', remix: 'none' } },
-      { id: 'b-by', license: { kind: 'cc-by-4.0', remix: 'include', attribution: '' } },
-      { id: 'c-what', license: { kind: 'wtfpl', remix: 'include' } },
-      { id: 'd-qal', license: { kind: 'qal', remix: 'include' } },
-      { id: 'e-market', license: { kind: 'market:fab-123', remix: 'none' } },
-      { id: 'f-by', license: { kind: 'cc-by-3.0', remix: 'include', attribution: 'Owl by a friend (example.org)' } },
+      { id: 'a-ts', license: { kind: 'eula:turbosquid' } },
+      { id: 'b-by', license: { kind: 'cc-by-4.0', attribution: '' } },
+      { id: 'c-what', license: { kind: 'wtfpl' } },
+      // The game serves these to its players and to nobody else (no game is handed over whole).
+      { id: 'd-qal', license: { kind: 'qal' } },
+      { id: 'e-market', license: { kind: 'market:fab-123' } },
+      { id: 'f-by', license: { kind: 'cc-by-3.0', attribution: 'Owl by a friend (example.org)' } },
     ]
     world(on, { feed: null, files: { [MANIFEST]: manifest(assets) } })
     await start($)
     const r = await $.tool.call({ tool: 'mcp__plugin_homie_homie__studio_deploy', studio: 'night-owls' })
-    expect(r.deny).toContain('4 assets in a public game have no allowed licence')
-    for (const id of ['a-ts', 'b-by', 'c-what', 'd-qal']) expect(r.deny).toContain(`owl-rush/${id}:`)
-    for (const id of ['e-market', 'f-by']) expect(r.deny).not.toContain(`owl-rush/${id}:`)
+    expect(r.deny).toContain('3 assets in a public game have no allowed licence')
+    for (const id of ['a-ts', 'b-by', 'c-what']) expect(r.deny).toContain(`owl-rush/${id}:`)
+    for (const id of ['d-qal', 'e-market', 'f-by']) expect(r.deny).not.toContain(`owl-rush/${id}:`)
   })
 
-  test('a private game, or one whose source is closed, is not read; a public one all licensed adds a Licences line to the hold', async ($, on) => {
+  test('a private or invite-only game is not read; a public one all licensed adds a Licences line to the hold', async ($, on) => {
     let release: (v: unknown) => void = () => {}
     const asked: string[] = []
     on('tool.call', { tool: 'AskUserQuestion' }, ($: any, e: any) => new Promise((resolve) => { asked.push(e.questions[0].question); release = () => resolve({ result: { answers: { [e.questions[0].question]: 'Proceed' } } }) }))
@@ -469,7 +470,7 @@ describe('the licence guard (a deploy of a public game)', () => {
         [MANIFEST]: manifest([cc0, { ...cc0, id: 'moon' }]),
         [`${ROOT}/games/bat-blitz/game.json`]: JSON.stringify({ id: 'bat-blitz', name: 'Bat Blitz', launch: 'private' }),
         [`${ROOT}/games/bat-blitz/assets/manifest.json`]: manifest([{ id: 'bat', license: {} }]),
-        [`${ROOT}/games/moth-mania/game.json`]: JSON.stringify({ id: 'moth-mania', name: 'Moth Mania', share: { source: false } }),
+        [`${ROOT}/games/moth-mania/game.json`]: JSON.stringify({ id: 'moth-mania', name: 'Moth Mania', launch: 'invite' }),
         [`${ROOT}/games/moth-mania/assets/manifest.json`]: manifest([{ id: 'moth', license: {} }]),
       },
     })

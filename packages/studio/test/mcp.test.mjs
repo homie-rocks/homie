@@ -61,11 +61,15 @@ test('handshake, tools with the remote\'s names, prompts, and the cards as MCP A
     assert.match(init.result.instructions, /NO game/);
     const { tools } = (await s.request('tools/list')).result;
     const names = tools.map((t) => t.name);
-    for (const n of ['setup_status', 'studio_scaffold', 'studio_card', 'game_demo', 'game_make', 'game_remix', 'game_port', 'game_plan', 'game_codex', 'build', 'preview_run', 'check', 'playtest', 'studio_deploy', 'studio_publish', 'build_open', 'build_progress', 'build_stop', 'game_lab', 'file_read', 'file_write', 'file_edit', 'studio_guide']) assert.ok(names.includes(n), `tool ${n}`);
+    for (const n of ['setup_status', 'studio_scaffold', 'studio_card', 'game_demo', 'game_make', 'game_port', 'game_plan', 'game_codex', 'build', 'preview_run', 'check', 'playtest', 'studio_deploy', 'studio_publish', 'build_open', 'build_progress', 'build_stop', 'game_lab', 'file_read', 'file_write', 'file_edit', 'studio_guide']) assert.ok(names.includes(n), `tool ${n}`);
     // The same names and input shapes as the remote Homie MCP where they overlap.
     const by = Object.fromEntries(tools.map((t) => [t.name, t]));
     assert.deepEqual(by.game_make.inputSchema.required, ['id', 'name']);
-    assert.deepEqual(by.game_remix.inputSchema.required, ['game', 'id']);
+    // Remix was retired: no tool hands a whole game over, under that name or any other (games build on parts).
+    assert.ok(!names.includes('game_remix'), 'the registry has no game_remix');
+    assert.deepEqual(names.filter((n) => /remix/i.test(n)), []);
+    for (const t of tools) assert.doesNotMatch(`${t.title ?? ''} ${t.description ?? ''}`, /remix/i, `${t.name} says nothing about remixing`);
+    for (const n of ['parts_find', 'part_add', 'part_new', 'part_share']) assert.ok(names.includes(n), `tool ${n}`);
     assert.ok(by.studio_scaffold.inputSchema.properties.name && by.studio_scaffold.inputSchema.properties.folder);
     assert.ok(by.build_progress.inputSchema.properties.build);
     for (const t of tools) {

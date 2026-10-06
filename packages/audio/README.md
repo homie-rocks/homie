@@ -62,8 +62,32 @@ There is no barrel file: import the module you need.
 | `Latency.js` | `outputLatency`, `latencyLine`: the device's reported output latency, or null, never a guess |
 | `ClockWatch.js` | `ClockWatch`, `CueGate`: notices an AudioContext clock that has stopped advancing |
 | `Arrangement.js`, `Sampler.js` | `compileArrangement`, `planSamples`: offline render plans from caller-authored tempo maps, patterns and sample regions |
+| `SoundLimiter.js` | `SoundLimiter`: a minimum gap per sound, a voice cap per sound and one overall, so forty pickups in a frame are one chime |
 
 and 5 more in src/: `ChargeTone.js`, `Tier.js`, `Cast.js`, `VoicePool.js`, `RacerAudio.js`.
+
+## Limiting repeated sounds
+
+`SoundLimiter.js` answers one question before a sound is played: may this one
+start now? Each sound has a minimum gap between starts and a cap on copies
+playing at once, and there is one cap across all of them. It refuses rather
+than cutting a sound already playing. It touches no Web Audio, so it limits
+whatever plays the sound, on whatever clock you hand it.
+
+```ts
+import { SoundLimiter } from '@homie-rocks/audio/SoundLimiter.js';
+
+const limiter = new SoundLimiter({
+  maxVoices: 12,
+  fallback: { minGap: 0.05, voices: 3, seconds: 0.4 },
+  sounds: { pickup: { minGap: 0.06, voices: 4, seconds: 0.25 } },
+});
+
+function play(id: string): void {
+  if (!limiter.allow(id, audioContext.currentTime)) return; // dropped, not queued
+  sounds[id].start();
+}
+```
 
 ## License
 

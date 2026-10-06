@@ -54,6 +54,18 @@ How to ask:
   say "just build it", fill the rest with your own choices and list them under Open questions.
 - `references/INTERVIEW.md` has questions with options for each topic and genre.
 
+### While planning: what already exists
+
+Before the scope is fixed, look for what the game can be built from, two different things, and tell the person in a
+line each:
+
+- the `@homie-rocks/*` packages (npm) for the general mechanism: camera, input, audio, effects;
+- `parts_find` for pieces other studios shared: a creature, a level generator, a bot brain. (With a shell and no
+  chat tools: `npx --no-install homie-studio parts find "<words>"`.)
+
+Both go in the codex under **Built from**, with the game and studio each part came from and what will be written
+from scratch (the `parts` skill).
+
 ## 2. Write the codex
 
 ```sh

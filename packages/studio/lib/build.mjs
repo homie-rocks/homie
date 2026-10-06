@@ -3,10 +3,16 @@
  * catalogue the Worker serves (games.json).
  *
  *   site/dist/games/<id>/index.html        the game's page (the Worker adds HOMIE_NET)
- *   site/dist/games/<id>/assets/main.js    its bundle (esbuild; @homie-rocks/studio/netplay inlined)
+ *   site/dist/games/<id>/assets/main-<HASH>.js   its bundle (esbuild; @homie-rocks/studio/netplay inlined), named by
+ *                                          its content, so a browser or an edge that kept the last build's bundle is
+ *                                          never asked for this one under the same name; the built index.html names it
+ *   site/dist/games/<id>/assets/chunk-<HASH>.js  whatever the game loads later with `await import('./x')`: one file
+ *                                          each, fetched when asked for, from beside the bundle
+ *   site/dist/games/<id>/assets/main.js    the address tools knew before bundles had hashes: one line that imports
+ *                                          the hashed bundle (bundleOf() says the real file)
+ *   site/dist/_site/build.json             what this build made: per game its content hash, its bundle and chunks,
+ *                                          and whether it changed since the build before (what a deploy reads)
  *   site/dist/games/<id>/...               everything in games/<id>/public/
- *   site/dist/games/<id>/assets.json       its assets' licences and, for those a remix may carry, their address and SHA-256
- *                                          (games/<id>/assets/manifest.json; lib/asset-manifest.mjs servedAssets)
  *   site/dist/games/<id>/agents.json       the AI guides' vocabulary (games/<id>/agents.json, checked; NETPLAY.md
  *                                          section 18): the only goals and lines an AI in its rooms has
  *   site/dist/games.json                   { studio, games[], songs[], videos[], posts[], site, shop } from studio.json,
@@ -36,17 +42,19 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { buildCodexPages } from './codex.mjs';
-import { servedAssets } from './asset-manifest.mjs';
+import { BUDGET_FIELDS, BUDGET_TIERS, loaderBudget } from './asset-check.mjs';
 import { buildMedia } from './media.mjs';
 import { buildSiteFiles, isoDate, landingOf, readPosts, readTheme } from './site.mjs';
 import { checkJsonLd } from './schema-check.mjs';
 import { SCHEMA_REFUSED } from '../worker/schema.mjs';
 import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
-import { SEAT_MAX } from '../worker/seats.mjs';
+import { SEAT_MAX, netplayRow } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
-import { licenseOf, remixRow } from '../worker/license.mjs';
+import { basedOnRow, licenseOf, retiredKeys } from '../worker/license.mjs';
+import { openStage, swapIn } from './stage.mjs';
+import { typecheck } from './typecheck.mjs';
 import { SERVER_LIMITS, serverOf } from '../worker/servers.mjs';
 import { chatProblems } from '../worker/chat.mjs';
 import { screenChatProblems } from '../worker/chat-page.mjs';
@@ -54,8 +62,9 @@ import { vocabularyOf } from '../worker/brain.mjs';
 import { shopForBuild } from './shop.mjs';
 import { audienceOf } from '../worker/shop-rules.mjs';
 import { loungeConfig, loungeProblems } from '../worker/lounge-store.mjs';
+// GAME PARTS (parts/PARTS.md): the three call-outs below are all the build knows of them.
+import { buildParts, partsPlugin } from './parts-build.mjs';
 
-const SOURCE_SKIP = new Set(['node_modules', 'dist', '.git', '.wrangler', '.port']);
 /** Never copied into a static game's served folder. */
 const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);
 const LOADERS = { '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file', '.webp': 'file', '.mp3': 'file', '.ogg': 'file', '.wav': 'file', '.m4a': 'file', '.glb': 'file', '.gltf': 'file', '.bin': 'file', '.hdr': 'file', '.svg': 'file', '.json': 'json', '.woff2': 'file', '.ttf': 'file' };
@@ -84,12 +93,6 @@ function dirBytes(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) n += e.isDirectory() ? dirBytes(join(dir, e.name)) : statSync(join(dir, e.name)).size;
   return n;
 }
-const TEXT = /\.(ts|tsx|js|mjs|jsx|json|html|css|md|txt|svg|glsl|wgsl|frag|vert)$/i;
-/**
- * Text files of a game folder, capped (2 MB total, 512 KB each): what `homie-studio game remix` takes; with who made
- * it (`credit`: the studio and the game; the live site adds the page, worker/index.mjs) and its licence (game.json
- * "license", worker/license.mjs).
- */
 /** From games/<id>/style.json: the light colour as paper, the dark as text, and the accent; null without one. */
 function uiOf(g) {
   let pal = null;
@@ -100,27 +103,6 @@ function uiOf(g) {
   const lum = (h) => (0.2126 * parseInt(h.slice(1, 3), 16) + 0.7152 * parseInt(h.slice(3, 5), 16) + 0.0722 * parseInt(h.slice(5, 7), 16)) / 255;
   const light = lum(ink) >= lum(bg);
   return { paper: light ? ink : bg, text: light ? bg : ink, ...(hex(pal?.accent) ? { hot: hex(pal.accent) } : {}) };
-}
-
-export function sourceOf(dir, id, { studio = null, game = null, license } = {}) {
-  const files = {};
-  let total = 0;
-  const walk = (rel) => {
-    for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
-      // The codex (CODEX.md, and codex/: the art-direction decisions and the style board) is the owner's, never shared.
-      if (entry.name.startsWith('.') || SOURCE_SKIP.has(entry.name) || (!rel && (entry.name === 'CODEX.md' || entry.name === 'codex'))) continue;
-      const path = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) walk(path);
-      else if (TEXT.test(entry.name)) {
-        const text = readFileSync(join(dir, path), 'utf8');
-        if (text.length > 512 * 1024 || total + text.length > 2 * 1024 * 1024) continue;
-        files[path] = text;
-        total += text.length;
-      }
-    }
-  };
-  walk('');
-  return { v: 1, kind: 'homie-game-source', id, credit: { studio, game: game ?? id }, license: licenseOf(license), files };
 }
 
 /*
@@ -287,14 +269,75 @@ export function seatsFor(g, net = netplayOf(g)) {
  * bundle itself is byte for byte the one a plain build makes (an external map adds no comment to it); main.js.sha256
  * says which bundle the map belongs to, so a map left over from an older build is never used.
  */
-function keepMap(root, id, out, metafile) {
+function keepMap(root, id, out, metafile, bundle, maps) {
   const dir = join(root, '.studio', 'maps', id);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  const map = join(out, 'assets', 'main.js.map');
-  if (existsSync(map)) { cpSync(map, join(dir, 'main.js.map')); rmSync(map, { force: true }); }
+  // The bundle's map keeps the name the perf tools know (main.js.map) whatever hash the bundle has.
+  for (const m of maps) writeFileSync(join(dir, m.entry ? 'main.js.map' : m.name), m.text);
   writeFileSync(join(dir, 'meta.json'), JSON.stringify(metafile ?? {}));
-  writeFileSync(join(dir, 'main.js.sha256'), `${createHash('sha256').update(readFileSync(join(out, 'assets', 'main.js'))).digest('hex')}\n`);
+  writeFileSync(join(dir, 'main.js.sha256'), `${createHash('sha256').update(readFileSync(join(out, bundle))).digest('hex')}\n`);
+}
+
+/**
+ * A built game's real bundle, as a path in its folder (`assets/main-K3J2H1AB.js`): what its index.html loads. The
+ * build writes it to bundle.json beside the page; a game built before bundles had hashes (or by its own build) has
+ * assets/main.js itself. Null when the folder has neither.
+ */
+export function bundleOf(dir) {
+  const named = readJson(join(dir, 'bundle.json'))?.bundle;
+  if (typeof named === 'string' && /^assets\/[A-Za-z0-9._-]+\.js$/.test(named) && existsSync(join(dir, named))) return named;
+  return existsSync(join(dir, 'assets', 'main.js')) ? 'assets/main.js' : null;
+}
+
+/**
+ * One digest of a built game's files (everything in its folder but _landing/, the landing page's own pictures): the
+ * same sixteen characters `homie-studio perf` names a build by. Two builds with the same digest serve the same game.
+ */
+export function gameDigest(dir) {
+  if (!existsSync(dir)) return null;
+  const files = [];
+  const walk = (rel) => {
+    for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (r !== '_landing') walk(r); } else files.push(r);
+    }
+  };
+  walk('');
+  const h = createHash('sha256');
+  for (const f of files.sort()) h.update(`${f}\0${createHash('sha256').update(readFileSync(join(dir, f))).digest('hex')}\n`);
+  return h.digest('hex').slice(0, 16);
+}
+
+/**
+ * game.json `"assets": { "budgets": { "triangles": 8000, "bytes": 1500000 } }`: what ONE model may cost before
+ * `createModels()` says so in the console during development (assets/assets.ts; the defaults, 1,500 triangles and
+ * 300 KB, are a small prop's, and a 3D game's hero or its level is neither). `texturePx` and `materials` are taken
+ * the same way. Null when the game sets none; a field that is not a positive number is left out, with a warning.
+ *
+ * The key has ONE reader (lib/asset-check.mjs gameBudgets, which `assets check` and `assets add` hold a model to):
+ * this is that reading, as the loader can use it. The loader knows no tiers, so a game that sets a budget a tier
+ * ({ "hero": { "triangles": 12000 } }) gets the loosest one, and a number past a hard cap is held to the cap here
+ * as it is there, said in the build's log. What the loader warns about is then never something the check passes.
+ */
+export function modelBudgetsOf(g, log = () => {}) {
+  const raw = g.assets && typeof g.assets === 'object' ? g.assets.budgets : undefined;
+  if (raw === undefined) return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { log(`warning: games/${g.id}/game.json assets.budgets is an object ({ "triangles": 8000, "bytes": 1500000 }); left out`); return null; }
+  const whole = (v) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 1 ? n : null; };
+  const said = (where, o) => { for (const k of [...BUDGET_FIELDS, 'materials']) if (o[k] !== undefined && whole(o[k]) === null) log(`warning: games/${g.id}/game.json assets.budgets.${where}${k} is a whole number above zero; left out`); };
+  said('', raw);
+  for (const k of Object.keys(raw)) {
+    if (BUDGET_FIELDS.includes(k) || k === 'materials') continue;
+    // A budget for one tier (hero, npc, prop, signature, kit), as `assets check` reads it.
+    if (BUDGET_TIERS.includes(k) && raw[k] && typeof raw[k] === 'object' && !Array.isArray(raw[k])) said(`${k}.`, raw[k]);
+    else log(`warning: games/${g.id}/game.json assets.budgets.${k} is not one of triangles, bytes, texturePx, materials${BUDGET_TIERS.includes(k) ? ' (a tier is an object: { "triangles": … })' : `, or a tier (${BUDGET_TIERS.join(', ')})`}; left out`);
+  }
+  const read = loaderBudget(g);
+  for (const c of read?.capped ?? []) log(`warning: games/${g.id}/game.json assets.budgets asks ${c.asked} ${c.field} for a model; ${c.cap} is the most any model may have (assets check holds the same), so ${c.cap} it is`);
+  const out = { ...(read?.budget ?? {}) };
+  if (whole(raw.materials) !== null) out.materials = whole(raw.materials);
+  return Object.keys(out).length ? out : null;
 }
 
 /** esbuild, as the studio has it installed (the version its package.json pins). */
@@ -303,32 +346,72 @@ export async function studioEsbuild(root) {
   try { return require('esbuild'); } catch { return import('esbuild'); }
 }
 
+/** In a built page, the bundle's old address (./assets/main.js, in a src or an href) becomes its hashed one. */
+function pointAtBundle(html, bundle) {
+  return html.replace(/((?:src|href)\s*=\s*)(["'])((?:\.\/|\/)?)assets\/main\.js((?:[?#][^"']*)?)\2/gi, (m, attr, q, lead, tail) => `${attr}${q}${lead}${bundle}${tail}${q}`);
+}
+
 /**
  * One game's own files into `out` (emptied first): its bundle, static copy or own build's output, its index.html and
  * its public/ folder. What `build` serves at /games/<id>/, and what the Game Lab (lib/lab.mjs) builds New and Today
  * with. `sourcemap` is esbuild's (the lab keeps a linked map beside its builds); `maps` keeps the site build's map in
- * .studio/maps/<id>/. Returns { mode, warnings, metafile } (metafile: the bundle's inputs, null for other modes).
+ * .studio/maps/<id>/. Returns { mode, warnings, metafile, bundle, chunks } (metafile: the bundle's inputs, null for
+ * other modes; bundle: its path in `out`, null when the game has none; chunks: what it loads later).
+ *
+ * The bundle is ES modules with code splitting: every `await import('./later')` in the game becomes a chunk of its
+ * own (assets/chunk-<HASH>.js) that the browser fetches when the game asks, from beside the bundle, wherever the
+ * game is served (/games/<id>/ on the site, /<id>/__game/ in its frame, the lab). A game with no dynamic import is
+ * one file, as before. `hashed` (the site's build) names the bundle by its content too: see the top of this file.
  */
-export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {} } = {}) {
+export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {}, hashed = false } = {}) {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, 'assets'), { recursive: true });
   const mode = g.build?.mode ?? 'bundle';
   let warnings = 0;
   let metafile = null;
+  let bundled = null;
+  let chunks = [];
+  const budgets = modelBudgetsOf(g, log);
   const bundle = async (entryRel) => {
     const entry = join(g.dir, entryRel);
     if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
-    const result = await esbuild.build({
-      entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: sourcemap ?? (maps ? 'external' : false),
-      outfile: join(out, 'assets', 'main.js'), absWorkingDir: root, logLevel: 'silent', metafile: true,
+    const options = {
+      entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: sourcemap ?? false,
+      outdir: join(out, 'assets'), splitting: true, entryNames: hashed ? 'main-[hash]' : 'main', chunkNames: 'chunk-[hash]',
+      absWorkingDir: root, logLevel: 'silent', metafile: true,
       loader: LOADERS, assetNames: '[name]-[hash]',
-    }).catch((error) => {
+      // game.json assets.budgets, read by createModels() (assets/assets.ts): a constant in the bundle, never a fetch.
+      define: { __HOMIE_MODEL_BUDGETS__: JSON.stringify(budgets ?? {}) },
+      // GAME PARTS: `@parts/<host>/<id>` and `@parts/<id>` resolve to the part's entry, and the game is credited.
+      plugins: [partsPlugin(root, g.id)],
+    };
+    const failed = (error) => {
       const first = error.errors?.[0];
       throw new Error(`games/${g.id} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
-    });
+    };
+    const result = await esbuild.build(options).catch(failed);
     warnings += result.warnings.length;
     metafile = result.metafile;
-    if (maps) keepMap(root, g.id, out, result.metafile);
+    const outputs = Object.entries(result.metafile.outputs).filter(([k]) => k.endsWith('.js'));
+    const main = outputs.find(([, v]) => v.entryPoint)?.[0];
+    if (!main) throw new Error(`games/${g.id} did not build: esbuild wrote no bundle for ${entryRel}`);
+    bundled = `assets/${basename(main)}`;
+    chunks = outputs.filter(([k]) => k !== main).map(([k]) => `assets/${basename(k)}`).sort();
+    if (maps) {
+      // The map comes from a second pass that writes nothing. esbuild's name hash covers a file's map as well as its
+      // code, so a build made WITH maps would name the bundle (and its chunks) differently from a plain build of the
+      // same source, and `build --maps` would no longer be the build a deploy ships. The second pass's code differs
+      // from the first's only in those names, which are all the same length, so its map fits the shipped bundle
+      // position for position.
+      const mapped = await esbuild.build({ ...options, sourcemap: 'external', write: false, metafile: true }).catch(failed);
+      const entryOut = Object.entries(mapped.metafile.outputs).find(([k, v]) => k.endsWith('.js') && v.entryPoint)?.[0];
+      keepMap(root, g.id, out, result.metafile, bundled, mapped.outputFiles.filter((f) => f.path.endsWith('.js.map')).map((f) => ({ name: basename(f.path), text: f.text, entry: Boolean(entryOut) && basename(f.path) === `${basename(entryOut)}.map` })));
+    }
+    if (hashed) {
+      // The address tools and older pages knew: it imports the real bundle, so both are one module, run once.
+      writeFileSync(join(out, 'assets', 'main.js'), `import"./${basename(main)}";\n`);
+      writeFileSync(join(out, 'bundle.json'), `${JSON.stringify({ v: 1, bundle: bundled, chunks })}\n`);
+    }
   };
   if (mode === 'static') {
     copyStatic(g.dir, out);
@@ -336,6 +419,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     if (g.entry) await bundle(g.entry);
     const html = readFileSync(join(out, 'index.html'), 'utf8');
     if (!/homie-port\.js/.test(html)) log(`warning: games/${g.id}/index.html does not load ./homie-port.js (the port toolkit); add <script src="./homie-port.js"></script> first in <head>`);
+    if (hashed && bundled) writeFileSync(join(out, 'index.html'), pointAtBundle(html, bundled));
   } else if (mode === 'command') {
     const command = String(g.build.command ?? 'npm run build');
     const res = spawnSync(command, { cwd: g.dir, shell: true, encoding: 'utf8', timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
@@ -348,29 +432,61 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     await bundle(g.entry ?? 'src/main.ts');
     const html = join(g.dir, 'index.html');
     if (!existsSync(html)) throw new Error(`games/${g.id}/index.html is missing`);
-    writeFileSync(join(out, 'index.html'), readFileSync(html, 'utf8'));
+    const text = readFileSync(html, 'utf8');
+    writeFileSync(join(out, 'index.html'), hashed ? pointAtBundle(text, bundled) : text);
   }
   if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
   if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
-  return { mode, warnings, metafile };
+  return { mode, warnings, metafile, bundle: bundled, chunks };
 }
 
-export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false } = {}) {
+/**
+ * studio.json `"site": { "order": ["<id>", …] }`: the order every list of games is in (Home, the Games page, the
+ * cards, the feeds for crawlers and /.well-known/homie-studio.json, which all read the catalogue's order). The games
+ * it names come first, as it names them; every other game follows by id, as all of them did before.
+ */
+export function orderGames(games, order, log = () => {}) {
+  if (order === undefined) return games;
+  if (!Array.isArray(order) || order.some((x) => typeof x !== 'string')) { log('warning: studio.json site.order is a list of game ids (["newest-game", "older-game"]); left out'); return games; }
+  const ids = new Set(games.map((g) => g.id));
+  const want = [...new Set(order)];
+  for (const id of want) if (!ids.has(id)) log(`warning: studio.json site.order names "${String(id).slice(0, 40)}", which is not one of this studio's games; skipped`);
+  const at = new Map(want.filter((id) => ids.has(id)).map((id, i) => [id, i]));
+  return [...games].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity) || a.id.localeCompare(b.id));
+}
+
+export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
   // The shop first (shop/SHOP.md): a shop.json that breaks the kit's rules stops the build before anything is built.
   const shop = shopForBuild(root, { log });
-  const dist = join(root, 'site', 'dist');
+  const live = join(root, 'site', 'dist');
   const games = listGames(root).filter((g) => !only || g.id === only);
   if (only && !games.length) throw new Error(`no game "${only}" in games/`);
-  if (!only) rmSync(dist, { recursive: true, force: true });
-  mkdirSync(dist, { recursive: true });
+  // `--types`: the games' TypeScript is checked first (esbuild only strips types, it never reads them), and a type
+  // error stops the build before anything is built.
+  const typed = types ? typecheck(root, games, { log }) : null;
+  // What the build before this one made, to say which games changed.
+  const before = readJson(join(live, '_site', 'build.json'))?.games ?? {};
+  // Everything is built in a folder of its own and put in place only when all of it is there (lib/stage.mjs): a
+  // game that does not build leaves site/dist as it was, never a site without that game. A one-game build starts
+  // from the site as it is.
+  const dist = openStage(root, { from: only ? live : null });
+  try {
+    return await buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps });
+  } finally {
+    rmSync(dist, { recursive: true, force: true });
+  }
+}
+
+async function buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps }) {
   const built = [];
+  const retired = [];
   const cache = {};
   for (const g of games) {
     const out = join(dist, 'games', g.id);
     const started = Date.now();
-    const { mode, warnings } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log });
+    const { mode, warnings, bundle, chunks } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log, hashed: true });
     // The guides' vocabulary (NETPLAY.md section 18): checked here, so a room never meets a line it cannot say.
     vocabFor(g, out);
     // Room chat (NETPLAY.md section 19): game.json "chat", checked here (its quick lines pass the chat floor too).
@@ -380,19 +496,31 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     if (g.decide !== undefined && typeof g.decide !== 'boolean') throw new Error(`games/${g.id}/game.json: "decide" is true (the host may ask the studio's decision model, within the AI brains' day) or false`);
     // Where chat sits on the screen (game.json "screen": { "chat" }, 0.24.5): a wrong field is the default on the page.
     for (const p of screenChatProblems(g.screen?.chat)) log(`warning: games/${g.id}/game.json: ${p}; the play page uses the default there`);
-    // The game's own source, for other studios to remix (game.json "share": { "source": false } keeps it private).
-    if (g.share?.source !== false) writeFileSync(join(out, 'source.json'), `${JSON.stringify(sourceOf(g.dir, g.id, { studio: studio.name ?? null, game: g.name ?? g.id, license: g.license }))}\n`);
-    // Its assets' licences, and the address and SHA-256 of each one a remix may carry (`game remix` fetches them).
-    if (g.share?.source !== false && existsSync(join(g.dir, 'assets', 'manifest.json'))) writeFileSync(join(out, 'assets.json'), `${JSON.stringify(servedAssets(root, g.id, out))}\n`);
-    else rmSync(join(out, 'assets.json'), { force: true });
-    const main = join(out, 'assets', 'main.js');
-    const bytes = existsSync(main) ? statSync(main).size : dirBytes(out);
+    // A game.json written for an older toolkit may still carry the retired settings. They are ignored, never an
+    // error (a studio that upgrades must still build); what they were is said once, after the games (below).
+    const old = retiredKeys(g);
+    if (old.length) retired.push(`games/${g.id}/game.json ${old.join(', ')}`);
+    const bytes = bundle ? statSync(join(out, bundle)).size : dirBytes(out);
+    const later = chunks.reduce((n, c) => n + statSync(join(out, c)).size, 0);
     const seats = seatsFor(g, netplayOf(g, out));
     if (seats.asked > SEAT_MAX) log(`warning: games/${g.id} asks for ${seats.asked} players; a room holds at most ${SEAT_MAX}, so its rooms have ${SEAT_MAX} seats`);
-    built.push({ id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max });
-    log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB)`);
+    built.push({
+      id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max,
+      ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
+    });
+    log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} ${chunks.length === 1 ? 'chunk' : 'chunks'} loaded later, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
   }
   const all = listGames(root);
+  // No game is handed over whole any more (remix was retired; worker/license.mjs). A one-game build starts from the
+  // site as it is, which an older toolkit may have built: what that wrote for remixers (a game's whole source, and
+  // its assets' addresses) is taken out of every game's folder here. Only those two files as that toolkit wrote them,
+  // told by their own `kind`: a game's own public/assets.json is the game's, and stays.
+  for (const g of all) {
+    for (const [f, kind] of [['source.json', 'homie-game-source'], ['assets.json', 'homie-game-assets']]) {
+      const file = join(dist, 'games', g.id, f);
+      if (existsSync(file) && statSync(file).size <= 8 * 1024 * 1024 && readJson(file)?.kind === kind) rmSync(file, { force: true });
+    }
+  }
   // Songs and videos (music/ and videos/ manifests): rebuilt with every full build; a one-game build keeps them.
   const r2 = Boolean(studio.cloudflare?.r2 && (studio.cloudflare?.created ?? []).includes(`r2:${studio.cloudflare.r2}`));
   let media = null;
@@ -402,11 +530,17 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   }
   // The site around the games (site/SITE.md): the look, each game's landing, posts, and what site/ overrides.
   const theme = readTheme(root, { log });
-  const shown = all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html')));
+  const s = studio.site && typeof studio.site === 'object' ? studio.site : {};
+  // studio.json site.order: the catalogue's order is every listing's order.
+  const shown = orderGames(all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))), s.order, log);
+  // What each game's build is (its landing's own pictures are not part of it): the digest the manifest names.
+  const builds = {};
   const rows = shown.map((g) => {
     // The seats come from the game's netplay manifest (NETPLAY.md §3): what the Worker gives every room of it.
     const net = netplayOf(g, join(dist, 'games', g.id));
     const { min, max } = seatsFor(g, net);
+    const netRow = netplayRow(net);
+    for (const p of netRow.problems) log(`warning: games/${g.id}/game.json: ${p}`);
     const seeds = serverSeeds(g, log);
     // The game's own palette (style.json, its art direction): the play page's buttons wear its paper and ink, so the
     // page's pills and the game's own HUD are one UI.
@@ -416,10 +550,18 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     const genre = genreOf(g, log);
     const dates = gameDates(root, g, log);
     const extras = schemaExtras(g.schema, { where: `games/${g.id}/game.json`, types: ['VideoGame', 'WebApplication'], log });
+    // The landing first: it may put the game's cover into the build, which is part of what the digest names.
+    const landing = landingOf(g, join(dist, 'games', g.id), { videos: media.videos, songs: media.songs, log });
+    const dir = join(dist, 'games', g.id);
+    const bundle = bundleOf(dir);
+    builds[g.id] = { hash: gameDigest(dir), ...(bundle ? { bundle } : {}) };
     return {
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
       ...(ui ? { ui } : {}),
       roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
+      // game.json "netplay": { "version", "stallMs", "params" } (NETPLAY.md sections 22 to 24): the game's revision (a
+      // room runs one build at a time), its own host stall time, and the address's switches its frame is handed.
+      ...(netRow.row ? { netplay: netRow.row } : {}),
       ...(g.screen ? { screen: g.screen } : {}),
       // game.json "saves": true — player accounts and cloud saves (saves/SAVES.md): the play shell answers the game's
       // saves calls, and the site's nav and the game's landing offer a player account.
@@ -440,22 +582,28 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
       // 0.17.0: the game has a vocabulary for its AI guides (agents.json), so they can talk once the owner says so.
       ...(existsSync(join(dist, 'games', g.id, 'agents.json')) ? { vocab: true } : {}),
       ...(g.agents && typeof g.agents === 'object' && (g.agents.vote === 'game' || g.agents.vote === false) ? { agents: { vote: g.agents.vote } } : {}),
-      // Its source licence (worker/license.mjs), and, for a remix, what it is a remix of (shown on its landing).
-      license: licenseOf(g.license),
-      ...(remixRow(g.remixOf) ? { remixOf: remixRow(g.remixOf) } : {}),
+      // The licence the game names for itself (an SPDX id, worker/license.mjs), when it names one; and, for a game
+      // that was made from another studio's while that was possible (game.json `remixOf`), the credit it owes the
+      // original, which its landing and credits keep showing.
+      ...(licenseOf(g.license) ? { license: licenseOf(g.license) } : {}),
+      ...(basedOnRow(g.remixOf) ? { basedOn: basedOnRow(g.remixOf) } : {}),
       ...(genre ? { genre } : {}),
       ...(dates ? { dates } : {}),
       ...(extras ? { schema: extras } : {}),
-      landing: landingOf(g, join(dist, 'games', g.id), { videos: media.videos, songs: media.songs, log }),
+      landing,
+      // What is built: its digest (the same one `perf` names a build by) and the bundle its page loads. The live
+      // site says them in /.well-known/homie-studio.json, so "is the live game this build?" is one comparison.
+      built: builds[g.id],
     };
   });
   const { posts, skipped: postsSkipped } = readPosts(root, { games: rows, songs: media.songs, videos: media.videos, log });
   const site = buildSiteFiles(root, dist, { gameIds: rows.map((g) => g.id), log });
   // Each game's Game Codex (games/<id>/CODEX.md), as the owner's private page at /_studio/codex/<id>/ (never listed).
   const codexes = buildCodexPages(root, dist, games.map((g) => g.id), { log });
+  // GAME PARTS: every packed version of every SHARED part into dist/parts/, and its index; a private part is never copied.
+  const partsBuilt = buildParts(root, dist, { studio, log });
   mkdirSync(join(dist, '_site'), { recursive: true });
   writeFileSync(join(dist, '_site', 'posts.json'), `${JSON.stringify({ v: 1, posts })}\n`);
-  const s = studio.site && typeof studio.site === 'object' ? studio.site : {};
   const studioExtras = schemaExtras(s.schema, { where: 'studio.json site', types: 'Organization', log });
   // The Lounge (0.29.0): studio.json "lounge", checked; off when a game already has /lounge/.
   for (const p of loungeProblems(studio, rows, chatProblems)) log(`warning: studio.json: ${p}`);
@@ -498,10 +646,29 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
     ...(shop ? { shop } : {}),
   };
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
+  // What this build made, for whatever runs next (a deploy says which games it changes; a script checks the live
+  // site against it): per game its digest, its bundle and chunks, and whether it differs from the build before.
+  const changedOf = (id) => (!before[id]?.hash ? 'new' : before[id].hash === builds[id].hash ? 'unchanged' : 'changed');
+  const report = {};
+  for (const g of rows) {
+    const dir = join(dist, 'games', g.id);
+    const named = readJson(join(dir, 'bundle.json'));
+    report[g.id] = { ...builds[g.id], ...(Array.isArray(named?.chunks) && named.chunks.length ? { chunks: named.chunks } : {}), changed: changedOf(g.id) };
+  }
+  writeFileSync(join(dist, '_site', 'build.json'), `${JSON.stringify({ v: 1, at: catalogue.studio.build.at, commit: catalogue.studio.build.commit, games: report }, null, 2)}\n`);
+  for (const b of built) Object.assign(b, { hash: builds[b.id]?.hash ?? null, changed: report[b.id]?.changed ?? 'new' });
+  // A deploy builds first and prints its own result, not the build's: so the build a deploy is about to ship says
+  // here which games it changes and which build each is (`homie-studio build` prints the same from its result).
+  if (deploy) for (const b of built) log(`  ${b.id}: ${b.changed}${b.changed === 'new' ? '' : ' since the last build here'}, build ${b.hash}`);
+  // All of it is there: now, and only now, it becomes site/dist (lib/stage.mjs).
+  const swapped = swapIn(dist, live);
   return {
-    ok: true, command: 'build', dist, games: built, catalogue: catalogue.games.map((g) => g.id),
+    ok: true, command: 'build', dist: live, games: built, catalogue: catalogue.games.map((g) => g.id),
+    builds: report, swapped, ...(typed ? { types: typed } : {}),
+    // One plain note for the whole build, however many games and keys it is about (never one a key).
+    ...(retired.length ? { retired: `Remix was retired, and games now build on each other through parts (pieces a studio shares; ask for a part, or see parts/PARTS.md). These settings no longer do anything and can be deleted: ${retired.join('; ')}. No game's source is served whole; a game made from another keeps its credit.` } : {}),
     songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped, mediaNotes: media.notes ?? [],
-    posts: posts.map((p) => p.slug), postsSkipped, codexes, pages: site.pages, partials: Object.keys(site.partials), public: site.public.length, siteSkipped: site.skipped,
-    landings: rows.map((g) => ({ id: g.id, hero: g.landing.hero.wide || g.landing.hero.tall ? 'footage' : g.landing.hero.wideImage ? 'art' : 'colours', credits: Boolean(g.landing.credits.original || g.landing.credits.people.length), source: g.landing.source })),
+    posts: posts.map((p) => p.slug), postsSkipped, codexes, parts: partsBuilt, pages: site.pages, partials: Object.keys(site.partials), public: site.public.length, siteSkipped: site.skipped,
+    landings: rows.map((g) => ({ id: g.id, hero: g.landing.hero.wide || g.landing.hero.tall ? 'footage' : g.landing.hero.wideImage ? 'art' : 'colours', credits: Boolean(g.landing.credits.original || g.landing.credits.people.length) })),
   };
 }

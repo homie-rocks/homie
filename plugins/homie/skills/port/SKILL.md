@@ -137,7 +137,11 @@ Non-negotiable, every port:
    own local body when it is your seat) and the HUD at its numbers, and fall back to
    the overview when it is null (the recipe's section 8).
 8. **The probe.** Call `exposePort` (see the recipe): the checks cannot judge a
-   game that does not report where its player is.
+   game that does not report where its player is. In its `extra`, set the state hooks the
+   playtest and `perf` read by name, whichever the game has (`PortExtra` in the port
+   kit types them): `alive`, `mode`, `loadout`, `touchHeld`, and in a 3D game
+   `drawCalls` and `triangles` from `renderer.info.render`. The round needs no hook
+   (`createRoom` gives it).
 9. Randomness that changes the world happens on the host only. Names people type
    are drawn as text, never as HTML.
 10. It is still their game: keep its look, its renderer, its feel and its name

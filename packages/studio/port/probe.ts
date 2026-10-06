@@ -37,8 +37,13 @@ export interface PortProbeOptions {
   /** True while my body is not mine to steer (knocked back, stunned, dead, respawning): the owner tests skip
    *  those frames, and the recipe's newcomer rule says it should rarely happen in a person's first seconds. */
   busy?: () => boolean;
-  /** Anything else worth a look in a receipt (numbers or short strings). */
-  extra?: Record<string, () => unknown>;
+  /**
+   * Anything else worth a look in a receipt (numbers or short strings), each a function read when asked. The names
+   * in `PortExtra` are read BY NAME by the instruments (the playtest skill, `homie-studio perf`, `shoot`): set the
+   * ones this game has, and its rows say what state each press and picture was taken in. Any other name is kept
+   * in the receipt as it is.
+   */
+  extra?: PortExtra & Record<string, () => unknown>;
   /** The keys that move you (KeyboardEvent.code). Default: the arrows (WASD for first-person). */
   keys?: { up: string; down: string; left: string; right: string };
   /** Where the check puts a thumb for the stick, as screen fractions (default [0.24, 0.74]). */
@@ -47,6 +52,35 @@ export interface PortProbeOptions {
    *  the world, not as UI covering the screen. A canvas game needs nothing here. */
   world?: string;
 }
+
+/**
+ * THE STATE HOOKS THE INSTRUMENTS READ BY NAME (all optional). A playtest that cannot tell a dead body from a broken
+ * control, or a perf run that cannot see the renderer's own counters, says "unknown" or "not exposed" where one of
+ * these lines would have given it the answer.
+ *
+ *   exposePort(net, { view: 'top', self, busy,
+ *     extra: { alive: () => me.hp > 0, mode: () => hud.mode, loadout: () => me.weapon,
+ *              drawCalls: () => renderer.info.render.calls, triangles: () => renderer.info.render.triangles } });
+ *
+ * The round (`info().round`: { n, phase: 'live' | 'over', endsAt, leftMs }) needs no hook: it is the room's own, from
+ * `net.round(...)`, which `createRoom` calls for every round it runs. So are `info().link` and `info().reconnects`
+ * (where this browser stands with its room, and how often that was interrupted).
+ */
+export interface PortExtra {
+  /** The local body is alive. false: spectating until the next round (a press that moves nothing is then not a broken control). */
+  alive?: () => boolean;
+  /** The control mode on screen, in a word or two ("manual fire", "auto", "driving"): it changes what a press does. */
+  mode?: () => string;
+  /** What the player holds (a weapon, a tool), when it changes which controls show. */
+  loadout?: () => string;
+  /** A thumb is down on the game's own stick right now. */
+  touchHeld?: () => boolean;
+  /** The renderer's last frame, for measured scene cost (three.js: `renderer.info.render.calls` / `.triangles`). */
+  drawCalls?: () => number;
+  triangles?: () => number;
+}
+/** The names above, for a test and for anything that lists what a probe may say. */
+export const PORT_EXTRA_NAMES = ['alive', 'mode', 'loadout', 'touchHeld', 'drawCalls', 'triangles'] as const;
 
 interface PortProbe {
   v: 1;
@@ -113,6 +147,8 @@ export function exposePort(net: Netplay<unknown, unknown, unknown> | null, opts:
         role: net?.role ?? null, seat: net?.seat ?? null, offline: net?.offline ?? null, owned: net?.owned ?? null,
         round: net?.roundInfo ? { n: net.roundInfo.n, phase: net.roundInfo.phase, endsAt: net.roundInfo.endsAt, leftMs: Math.round(net.roundInfo.endsAt - net.now()) } : null,
         slots: net?.slots?.map((s) => ({ slot: s.slot, seat: s.seat, bot: s.bot })) ?? null,
+        // Where this browser stands with its room (netplay revision 9): a reading taken while cut off is not play.
+        link: net?.link ?? null, reconnects: net?.reconnects ?? null,
         lastMove, moves: opts.moves ? opts.moves() : null, score,
         audio: audioReport(), sandbox: sandboxReport(), errors: errors.slice(-10), extra,
       };

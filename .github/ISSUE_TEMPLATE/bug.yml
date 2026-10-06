@@ -16,7 +16,7 @@ body:
       options:
         - Installing the plugin
         - Setting up a studio
-        - Making or remixing a game
+        - Making a game
         - Porting an existing game (the port skill)
         - Previewing or checking a game locally
         - Deploying to Cloudflare

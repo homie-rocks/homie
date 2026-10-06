@@ -33,7 +33,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromeArgs, findChrome, noChrome } from './chrome.mjs';
+import { chromeArgs, findChrome, isLoopbackUrl, noChrome } from './chrome.mjs';
+import { reachSite, siteRefusal } from './net.mjs';
 
 const GPU = [
   ...chromeArgs(), '--autoplay-policy=no-user-gesture-required',
@@ -181,10 +182,36 @@ export function judgePresses(rows, presses, size, view) {
   return { presses: out.length, blocked, passed, ok: movedRows.length >= Math.ceil(out.length * 0.7) && passed >= Math.ceil(movedRows.length * 0.9) && out.every((x) => x.yawDeg === undefined || x.yawDeg < 10), wrongWay: movedRows.filter((x) => !x.ok).map((x) => x.dir), rows: out };
 }
 
+/**
+ * THE BIG SCREEN'S ROW, from what was read off it. `f`: { probe (the game's probe answered), seat, hasBody, qr (a
+ * join QR is on the page), framesBefore, framesAfter, luma, loopback (the site is this computer's own address) }.
+ *
+ * The join QR is judged only where it can exist. The play page leaves the join card out on a loopback preview on
+ * purpose (a code for 127.0.0.1 brings no other phone in), so there its absence is `qr: 'not applicable'`, said in
+ * the row, and never a failure; on an address another phone can reach it is required. A local pass therefore says
+ * nothing about the live QR: that is checked against the deployed site.
+ */
+export function judgeTv(f) {
+  const qrRequired = !f.loopback;
+  const drawing = (f.framesAfter ?? 0) > (f.framesBefore ?? 0);
+  const why = !f.probe ? 'no game probe on the big screen'
+    : f.seat !== null && f.seat !== undefined ? 'the big screen took a seat'
+    : f.hasBody ? 'the big screen reports a body of its own'
+    : qrRequired && !f.qr ? 'no join QR on the big screen'
+    : !drawing ? 'the big screen is not drawing (its frame counter did not move)'
+    : f.luma !== null && f.luma !== undefined && f.luma <= 6 ? 'the big screen picture is black'
+    : undefined;
+  return {
+    ok: !why, why,
+    qr: qrRequired ? Boolean(f.qr) : 'not applicable',
+    ...(qrRequired ? {} : { qrNote: `the join QR was not checked: this is a loopback preview, where the page hides the join card on purpose${f.qr ? ' (one was on the page all the same)' : ''}. Check the big screen on the deployed address before release: there the QR is required` }),
+  };
+}
+
 /* ------------------------------------------------------------------ browsers */
 
 function descendants(pid) {
-  const kids = (spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' }).stdout ?? '').split('\n').filter(Boolean).map(Number);
+  const kids = (spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).stdout ?? '').split('\n').filter(Boolean).map(Number);
   return kids.flatMap((k) => [k, ...descendants(k)]);
 }
 
@@ -428,11 +455,18 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
     if (report?.stopped?.()) { row(name, null, { why: 'stopped by the person' }); stoppedAt ??= name; return false; }
     tell(name, 'running');
     if (await alive()) return true;
-    row(name, false, { why: `${base} stopped answering: is the dev server still running? (restart it as a background task that outlives this command, then rerun the check)` });
+    // Why, from this process's own preflight (lib/net.mjs): a public address this computer's Node cannot look up is
+    // the network, with local testing offered; only this computer's own address is "is the dev server running?".
+    const reach = await reachSite(base, { path: `/${game}/play`, timeout: 8000 });
+    row(name, false, { why: !reach.ok && reach.preflight !== 'local' && reach.preflight !== 'site' ? `${reach.why} ${reach.instead ?? ''}`.trim() : `${base} stopped answering: is the dev server still running? (restart it as a background task that outlives this command, then rerun the check)` });
     return false;
   };
   if (!(await alive())) {
-    const result = { ok: false, command: 'port check', game, url: base, why: `${base}/${game}/play does not answer: start the site first (npm run dev, kept running in the background) or check the address` };
+    // The same classification and sentence as check, perf and shoot (lib/net.mjs siteRefusal): a name this computer
+    // cannot look up is BLOCKED with local testing offered, never "does not answer: start the site".
+    const reach = await reachSite(base, { path: `/${game}/play`, timeout: 8000 });
+    const refusal = siteRefusal(reach, { command: 'port check', play: `${base}/${game}/play` }) ?? { ok: false, command: 'port check', why: `${base}/${game}/play does not answer: start the site first (npm run dev, kept running in the background) or check the address` };
+    const result = { ...refusal, game, url: base };
     writeFileSync(join(out, 'receipt.json'), `${JSON.stringify(result, null, 1)}\n`);
     return result;
   }
@@ -633,8 +667,8 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
         const png = await T(h.page.screenshot({ path: join(out, 'tv.png') }), 15_000);
         const lum = png ? await lumaOf(h) : null;
         const me = (await rowsSince(h, 0)).some(finite);
-        const ok = Boolean(i2 && s && s.seat === null && !me && qr && (i2.frames ?? 0) > (i?.frames ?? 0) && (lum === null || lum > 6));
-        row('tv', ok, { role: i2?.role, seat: s?.seat ?? null, hasBody: me, qr, frames: i2?.frames ?? null, luma: lum, why: !i2 ? 'no game probe on the big screen' : s?.seat !== null ? 'the big screen took a seat' : me ? 'the big screen reports a body of its own' : !qr ? 'no join QR on the big screen' : lum !== null && lum <= 6 ? 'the big screen picture is black' : undefined });
+        const tv = judgeTv({ probe: Boolean(i2 && s), seat: s?.seat ?? null, hasBody: me, qr, framesBefore: i?.frames ?? 0, framesAfter: i2?.frames ?? 0, luma: lum, loopback: isLoopbackUrl(base) });
+        row('tv', tv.ok, { role: i2?.role, seat: s?.seat ?? null, hasBody: me, qr: tv.qr, ...(tv.qrNote ? { qrNote: tv.qrNote } : {}), frames: i2?.frames ?? null, luma: lum, why: tv.why });
         collect(h); await close(h);
       } catch (e) {
         row('tv', false, { why: `the check itself hit an error: ${String(e?.message ?? e).split('\n')[0]}` });

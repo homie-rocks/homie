@@ -39,7 +39,7 @@
  *   /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt   for search engines and AI agents, made from the public
  *                              catalogue (worker/discover.mjs); every generated page also carries schema.org JSON-LD
  *                              (worker/schema.mjs)
- *   /games/<id>/source.json    a public game's source for remixing, with its credit and licence (worker/license.mjs)
+ *   /games/<id>/source.json    410, for a client that still asks: remix was retired, no game's source is served whole
  *   /media/<key>               a loose file in the studio's R2 (`media put`), with byte ranges
  *   /music/<slug>/<file>, /videos/<slug>/<file>   a song's or video's files: from the site's own files, or, for a
  *                              file `media move` put in the studio's R2 (the catalogue names its key), from R2 at the
@@ -47,7 +47,7 @@
  *   /api/stats                 the studio's numbers, for its owner only (a read key, or the owner's page session)
  *   /_studio/stats             the owner's private stats page (one-time sign-in link from `homie-studio stats link`)
  *   /_studio/office            the owner's back office: live rooms and who is in them, kick, mute, announce, close,
- *                              each game's launch state (private, invite-only beta, public), remix switch, room size
+ *                              each game's launch state (private, invite-only beta, public), room size
  *                              and invites (worker/office.mjs); /_studio/api/* is the same as JSON
  *   /<game>/invite             an invite code spent for this browser's pass to an invite-only game
  *   /_homie/site.js            the pages' one script
@@ -82,7 +82,7 @@
  * on the Table's alarm: Workers AI through the optional AI binding (deploy adds
  * it when a server uses it), or the owner's own key (secret HOMIE_BRAIN_KEY).
  */
-import { NetRoom, WATCH_POLICIES } from './room.mjs';
+import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
 import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
 import {
   PUBLIC_SERVER, SERVER_ID, homeOf, memberCounts, memberOf, noteMember, policyOf, pooledRoom, roomCode, roomServer, serverAccess, serverPassOf, serverView, serversOf,
@@ -96,7 +96,7 @@ import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs'
 import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
-import { SEAT_MAX, perAddress, seatsOf } from './seats.mjs';
+import { SEAT_MAX, paramsFrom, perAddress, seatsOf } from './seats.mjs';
 import {
   SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homeLd, homePage, jsonFeed, landingLd, mediaArt, mediaIndexPage,
   notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage, watchOf,
@@ -105,7 +105,7 @@ import { cookieValues, count, countVisit, counter, isQa, onlyOf, ownerAllowed, p
 import { ownerRoutes } from './stats-page.mjs';
 import { playerRoutes, players as playerAccounts } from './players.mjs';
 import {
-  accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, remixOf, sameOrigin, seatsFor, settingsOf, ticketAllows,
+  accessOf, accountSub, gatePage, holders, isOwner, joinHolders, launchOf, regateArgs, officeRoutes, publicCatalogue, redeemInvite, sameOrigin, seatsFor, settingsOf, ticketAllows,
   ticketFor, ticketSub, usePlayers, verifyControl,
 } from './office.mjs';
 
@@ -117,7 +117,9 @@ import { readiness, roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs'
 import { DISCOVERY_FILES, discoveryResponse, llmsTxt, robotsTxt, sitemapXml } from './discover.mjs';
 import { ldScript, studioNode } from './schema.mjs';
 import { arrivalCookie, manifestReferrals } from './referrals.mjs';
-import { licenseOf, remixAllowed, remixRow } from './license.mjs';
+import { licenseOf } from './license.mjs';
+// GAME PARTS (parts/PARTS.md section 4): three call-outs below, everything else is worker/parts.mjs.
+import { PART_FILES, isPartsPath, partsRoutes, withPartsBand } from './parts.mjs';
 
 export { SEAT_MAX } from './seats.mjs';
 /** For a studio whose Worker has player accounts: hand their server API to the back office once (worker/office.mjs). */
@@ -462,10 +464,19 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   // in the socket's address, which every netplay helper opens as it is given.
   const b = BROWSER_KEY.test(url.searchParams.get('b') ?? '') ? url.searchParams.get('b') : null;
   const t = TICKET_TEXT.test(url.searchParams.get('t') ?? '') ? url.searchParams.get('t') : null;
+  // The game's revision (game.json `netplay.version`, NETPLAY.md section 23) as this page is served: it rides in the
+  // socket's address (`gv`), so a build whose helper predates revisions is still known for the build it is.
+  const ver = versionOf(meta?.netplay?.version);
+  // The play page's switches for the game (section 24): the allowed names only, checked again here.
+  const params = paramsFrom(url.searchParams, meta);
   const cfg = {
     v: 1,
-    url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}`,
+    url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}${ver ? `&gv=${encodeURIComponent(ver)}` : ''}`,
     room,
+    ...(ver ? { ver } : {}),
+    ...(Object.keys(params).length ? { params } : {}),
+    // The page around this frame keeps net.prefs (the play page says so; a watch page or an older page does not).
+    ...(url.searchParams.get('pf') === '1' ? { prefs: true } : {}),
     ...(url.searchParams.get('k') ? { token: url.searchParams.get('k').slice(0, 128) } : {}),
     ...(agent ? { name: agent.name } : url.searchParams.get('name') ? { name: url.searchParams.get('name').slice(0, 24) } : {}),
     // An AI that runs the game itself (hands `self`): its hello says so; the relay knows it from its ticket anyway.
@@ -553,7 +564,8 @@ function finish(res, path) {
   if (!/text\/html/i.test(res.headers.get('content-type') ?? '')) return res;
   const cache = res.headers.get('cache-control') ?? '';
   const addNt = !/no-transform/i.test(cache);
-  const addXfo = !res.headers.has('x-frame-options') && !GAME_FILES.test(path);
+  // GAME PARTS: a shared part's preview page is framed by the part's page and the hub, sandboxed (worker/parts.mjs).
+  const addXfo = !res.headers.has('x-frame-options') && !GAME_FILES.test(path) && !PART_FILES.test(path);
   if (!addNt && !addXfo) return res;
   const headers = new Headers(res.headers);
   if (addNt) headers.set('cache-control', cache ? `${cache}, no-transform` : 'no-transform');
@@ -623,6 +635,11 @@ async function route(request, env, ctx) {
       return json({ ok: false, error: 'no-stats', message: `The counters are not in this studio's D1 yet: \`npm run deploy\` applies migration 0002_studio_stats.sql. (${String(error?.message ?? error).slice(0, 120)})` }, 503);
     }
   }
+  // GAME PARTS: /.well-known/homie-parts.json, /parts/<id>/<version>/… and the studio's own parts pages.
+  if (isPartsPath(path)) {
+    const shared = await partsRoutes(request, env, url, { catalogueOf: getCat });
+    if (shared) return shared;
+  }
   if (path === '/.well-known/homie-studio.json') {
     const cat = await getCat();
     const sharing = Boolean(cat.studio?.stats?.share);
@@ -645,17 +662,17 @@ async function route(request, env, ctx) {
       games: await Promise.all((cat.games ?? []).map(async (g) => {
         // The card picture is the landing's hero still (what the landing leads with), else the game's cover.
         const cover = gameCover(g);
-        // Open to remix: the owner's switch is on and the licence the owner picked allows it (worker/license.mjs).
+        // The licence the game names for itself (an SPDX id), when it names one (worker/license.mjs). Nothing here
+        // offers the game to be taken whole: `remix`, `source` and `remixOf` left this manifest with remix.
         const license = licenseOf(g.license);
-        const remix = remixOf(g, await settingsOf(env)) && remixAllowed(license);
-        const lineage = remixRow(g.remixOf);
         return {
           id: g.id, name: g.name, blurb: g.blurb ?? '', players: g.players ?? null, roundSeconds: g.roundSeconds ?? null,
           page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play`, cover: cover ? (cover.startsWith('/') ? `${url.origin}${cover}` : cover) : null,
-          // The owner's remix switch (0.13.0): whether the source is open for other studios to remix, and where.
-          remix, ...(remix ? { source: `${url.origin}/games/${g.id}/source.json` } : {}), license,
-          // A remix names what it is a remix of (its game.json `remixOf`): "Remix of <name> by <studio>", linked.
-          ...(lineage ? { remixOf: lineage } : {}),
+          ...(license ? { license } : {}),
+          // Which build of the game is live: its digest (what `homie-studio build` printed for it, and what
+          // site/dist/_site/build.json says) and the bundle its page loads. "Is the live game the one I built?" is
+          // this against that, with no file to fetch and no edge cache to wait out.
+          ...(g.built?.hash ? { build: { hash: g.built.hash, ...(g.built.bundle ? { bundle: `${url.origin}/games/${g.id}/${g.built.bundle}` } : {}) } } : {}),
           // Shared only with `stats.share`: this game's own Play presses and rounds with people, this week.
           ...(byGame ? { played: byGame[g.id] ?? { days: 7, plays: 0, rounds: 0 } } : {}),
         };
@@ -700,28 +717,12 @@ async function route(request, env, ctx) {
     return path.endsWith('.xml') ? atomFeed(cat, posts, url.origin) : jsonFeed(cat, posts, url.origin);
   }
 
-  // A game's remix source is served while the game is public and its owner has not withdrawn it (the remix switch),
-  // with who made it as this site says it (the studio's name, the game's name and page here) and the owner's licence
-  // (worker/license.mjs): the remix flow credits the first and refuses a game whose licence says no remix.
-  const src = /^\/games\/([a-z0-9][a-z0-9-]{0,39})\/source\.json$/.exec(path);
-  if (src) {
-    const all = await getAll();
-    const meta = (all.games ?? []).find((g) => g.id === src[1]);
-    if (meta) {
-      const settings = await settingsOf(env, { fresh: true });
-      if (launchOf(meta, settings, env) !== 'public' || !remixOf(meta, settings)) return json({ ok: false, error: 'not-shared', message: 'This game\'s source is not shared for remixing.' }, 404);
-      if (request.method === 'GET') {
-        const res = await env.ASSETS.fetch(new Request(`${url.origin}${path}`));
-        let body = null;
-        if (res.ok) { try { body = await res.json(); } catch { body = null; } }
-        if (body?.kind === 'homie-game-source' && body.files && typeof body.files === 'object') {
-          const credit = { studio: all.studio?.name ?? body.credit?.studio ?? null, game: meta.name ?? body.credit?.game ?? meta.id, page: `${url.origin}/${meta.id}/` };
-          const { files, ...head } = body;
-          return json({ ...head, credit, license: licenseOf(body.license ?? meta.license), files }, 200, { 'access-control-allow-origin': '*' });
-        }
-      }
-    }
-  }
+  // REMIX WAS RETIRED: no game's source is served whole. An older toolkit's `game remix`, the directory's copy of a
+  // studio, or a link somebody kept may still ask for one, so the address answers 410 (gone, on purpose, for good)
+  // with where to go instead: /parts/, the pieces of games this studio chose to share. The same answer for every
+  // id, whether or not such a game exists, and before the site's files are looked at: a source.json an older build
+  // left in the deployed folder is never reachable.
+  if (/^\/games\/[a-z0-9][a-z0-9-]{0,39}\/source\.json$/.test(path)) return json({ retired: 'remix', see: '/parts/' }, 410, { 'access-control-allow-origin': '*' });
 
   // Search engines and AI agents (0.27.0, worker/discover.mjs): robots.txt, sitemap.xml, llms.txt and llms-full.txt,
   // made from the public catalogue (a private or invite-only game is in none of them); a file of the studio's own in
@@ -734,10 +735,8 @@ async function route(request, env, ctx) {
     if (path === '/robots.txt') return discoveryResponse(robotsTxt(cat, url.origin, { preview: env.HOMIE_PREVIEW === '1' }), 'text/plain', { method });
     const all = await getAll();
     if (path === '/sitemap.xml') return discoveryResponse(sitemapXml(cat, url.origin, { all }), 'application/xml', { method });
-    const settings = await settingsOf(env);
-    const remixable = (g) => g.landing?.source !== false && remixOf(g, settings) && remixAllowed(g.license);
     const full = path === '/llms-full.txt';
-    return discoveryResponse(llmsTxt(cat, url.origin, { remixable, directory: directoryOf(cat), full, posts: full ? await postsOf(env, url.origin) : null, all }), 'text/plain', { method });
+    return discoveryResponse(llmsTxt(cat, url.origin, { directory: directoryOf(cat), full, posts: full ? await postsOf(env, url.origin) : null, all }), 'text/plain', { method });
   }
 
   // A page the studio made itself (site/pages) wins at its address.
@@ -871,7 +870,8 @@ async function route(request, env, ctx) {
       const { rooms, live } = await roomsOf(env, [meta], { servers: { [game]: servers } });
       const week = cat.studio?.stats?.share ? await weekOf(env, game) : null;
       const band = servers.some((x) => x.id !== 'public' && x.listed && x.state === 'open') ? await serverLive(env, meta, servers, url.origin, lobby) : null;
-      return gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, remix: launch === 'public' && remixOf(meta, settings), servers: band, listed: launch === 'public', shop: launch === 'public' ? await sellingShop(env, cat) : null });
+      // GAME PARTS: the landing's "Parts from this game" band (shared parts only).
+      return withPartsBand(gameLanding(cat, meta, { origin: url.origin, rooms, playing: live[game] ?? 0, week, servers: band, listed: launch === 'public', shop: launch === 'public' ? await sellingShop(env, cat) : null }), env, url, meta);
     }
     if (sub === 'live') {
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
@@ -953,7 +953,7 @@ async function route(request, env, ctx) {
         // The big screen picks its room now, so the QR it shows puts every phone in that same room.
         let room = asked;
         if (!room) {
-          try { room = (await (await lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
+          try { room = (await (await lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${versionOf(meta?.netplay?.version) ? `&ver=${encodeURIComponent(versionOf(meta.netplay.version))}` : ''}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
         }
         const joinUrl = `${url.origin}/${game}/play${room ? `?room=${encodeURIComponent(room)}` : ''}`;
         // Local development: no phone can open this computer's own address, so no code for it; the card says to deploy.
@@ -993,7 +993,8 @@ async function route(request, env, ctx) {
       const not = String(url.searchParams.get('not') ?? '').split(',').filter((r) => ROOM_ID.test(r)).slice(0, 4).join(',');
       const pools = servers.filter((x) => x.state === 'open' && x.door === 'open').map((x) => x.id).join(',');
       let best = null;
-      try { best = await (await lobby().fetch(`https://lobby/busiest?pools=${encodeURIComponent(pools)}${not ? `&not=${encodeURIComponent(not)}` : ''}`)).json(); } catch { best = null; }
+      const wver = versionOf(meta?.netplay?.version);
+      try { best = await (await lobby().fetch(`https://lobby/busiest?pools=${encodeURIComponent(pools)}${not ? `&not=${encodeURIComponent(not)}` : ''}${wver ? `&ver=${encodeURIComponent(wver)}` : ''}`)).json(); } catch { best = null; }
       return json({ ok: true, game, room: best?.room ?? null, players: best?.players ?? 0, max }, 200, { 'cache-control': 'no-store' });
     }
     if (sub === 'api/lobby') {
@@ -1008,7 +1009,9 @@ async function route(request, env, ctx) {
       // A browser held out of a room asks for any other (`not`), so the Lobby never sends it back there.
       const not = String(url.searchParams.get('not') ?? '').split(',').filter((r) => ROOM_ID.test(r)).slice(0, 4).join(',');
       const pol = policyFor(srv);
-      return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}`, { method: 'POST' });
+      // Strangers on different builds of the game never meet (section 23): the Lobby matches within the live build.
+      const ver = versionOf(meta?.netplay?.version);
+      return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}${ver ? `&ver=${encodeURIComponent(ver)}` : ''}`, { method: 'POST' });
     }
     if (sub === 'api/agent') {
       // An AI's seat (worker/agents.mjs): its pass, the server's policy, a room with people in it, a ticket.
@@ -1020,7 +1023,7 @@ async function route(request, env, ctx) {
         join: async (srv, pol) => {
           try {
             const reserve = pol.aiSeats + pol.guides;
-            const r = await (await lobby().fetch(`https://lobby/join?max=${max}&server=${srv.id}&agent=1&ai=${reserve}`, { method: 'POST' })).json();
+            const r = await (await lobby().fetch(`https://lobby/join?max=${max}&server=${srv.id}&agent=1&ai=${reserve}${versionOf(meta?.netplay?.version) ? `&ver=${encodeURIComponent(versionOf(meta.netplay.version))}` : ''}`, { method: 'POST' })).json();
             return r.room ?? null;
           } catch { return null; }
         },
@@ -1089,8 +1092,21 @@ async function route(request, env, ctx) {
       const pid = !ag && !w && sub === '__net' ? parts.find((x) => x.startsWith('p-'))?.slice(2) : null;
       const badge = pid ? await roomBadge(env, cat, pid, { kids: pol.kids }) : null;
       const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}`;
-      return stub.fetch(new Request(target, request));
+      // Revision 9 (NETPLAY.md sections 22 and 23): the build that is live now (`cur`, always said, empty when the game
+      // names none), the build this socket's page was served with (`gv`, from the socket's own address), and the game's
+      // own stall time.
+      const cur = versionOf(meta?.netplay?.version) ?? '';
+      const gv = versionOf(url.searchParams.get('gv')) ?? '';
+      const stall = Number(meta?.netplay?.stallMs) || 0;
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}&cur=${encodeURIComponent(cur)}${gv ? `&gv=${encodeURIComponent(gv)}` : ''}${stall ? `&stall=${stall}` : ''}`;
+      // The room's own failure to answer is told apart from the browser going away while it was connecting (a closed
+      // tab, a reload racing its own socket): the second is a departure, said in one line with its room, never an
+      // uncaught error with nothing on it.
+      try { return await stub.fetch(new Request(target, request)); } catch (error) {
+        const gone = departure(error);
+        try { console[gone ? 'log' : 'error'](JSON.stringify({ at: new Date().toISOString(), ev: gone ? 'socket-gone' : 'room-unreachable', game, room, sub, error: errorLine(error) })); } catch { /* no console */ }
+        return new Response(gone ? 'gone' : 'the room did not answer; try again', { status: gone ? 499 : 503 });
+      }
     }
     // The same knock, relative to the game's own page: the same answer (see notAHomie).
     if (sub === '__homie' || sub.startsWith('__homie/')) return notAHomie(request);
@@ -1203,6 +1219,10 @@ export class Table {
         save: (o) => { storage.put('net', o).catch(() => {}); },
         clear: () => { storage.delete('net').catch(() => {}); },
       },
+      // The room's lifecycle, one line each with its time and room (worker/room.mjs `log`): a hello, a leave, an
+      // election, a build change, and `failed` (a room operation that threw). A departure and a failure seconds apart
+      // are told apart by these. HOMIE_ROOM_LOG=0 keeps only the failures.
+      log: (line) => this.say(line),
     });
     if (this.saved) this.room.restore(this.saved);
     if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
@@ -1216,6 +1236,27 @@ export class Table {
     // A game's own decisions (section 20): the host's typed questions, for a game whose game.json opts in.
     this.room.decider = (state, questions, opts) => this.decide(state, questions, opts);
     return this.room;
+  }
+
+  /**
+   * One log line of this room: `{ at, ev, game, room, … }`. Never a seat token, a ticket, a browser key or an address;
+   * a failure goes to the error stream, everything else to the log (and not at all with HOMIE_ROOM_LOG=0).
+   */
+  say(line) {
+    const bad = line?.ev === 'failed' || line?.ev === 'socket-error' || line?.ev === 'tick-failed' || line?.ev === 'persist-failed';
+    if (!bad && this.env.HOMIE_ROOM_LOG === '0') return;
+    try { console[bad ? 'error' : 'log'](JSON.stringify({ at: new Date().toISOString(), ...line, game: this.game ?? null, room: line?.room ?? this.code ?? null })); } catch { /* no console */ }
+  }
+
+  /**
+   * A socket's `error` event. The runtime raises one when the other end simply went away ("Network connection lost":
+   * a closed tab, a phone that slept, a browser the test harness shut): that is a departure, and the room handles it
+   * as one. Anything else is a failed socket, logged as such. Both lines carry the room, the client and its role.
+   */
+  socketError(kind, event, facts = {}) {
+    const error = event?.error ?? event?.message ?? event;
+    const gone = departure(error) || !error || typeof error === 'object' && !error.message;
+    this.say({ ev: gone ? 'socket-gone' : 'socket-error', kind, ...facts, error: errorLine(error) });
   }
 
   /** Kept chat's writes, in order, each finished before the next (D1 calls from one room never pass each other). */
@@ -1458,6 +1499,9 @@ export class Table {
     }
     // The owner's room size: a room already open takes it from the next visitor on.
     if (room.seatCap !== max) room.setSeats(max, perAddress(max));
+    // Revision 9: the game's own stall time and the build that is live now, the Worker's word with every socket.
+    const said = url.searchParams.has('cur');
+    if (said) { room.setStall(url.searchParams.get('stall')); room.setCurrent(url.searchParams.get('cur') || null); }
     // The room's policy (section 17), composed by the Worker for every socket: a newer one than the room's applies.
     const pol = decodeFacts(url.searchParams.get('pol'));
     // The room's chat rules ride beside it (they may be longer than a policy): section 19.
@@ -1486,6 +1530,9 @@ export class Table {
       watchPolicy: WATCH_POLICIES.includes(url.searchParams.get('wp')) ? url.searchParams.get('wp') : 'follow',
       // House QA and `homie-studio check` mark their browsers; their rooms, rounds and peaks are not the studio's numbers.
       qa: isQa(request),
+      // The build this socket's page was served with (section 23), from the socket's own address: only when the
+      // Worker speaks of builds at all (`cur`), so a relay behind an older Worker reads the hello's own.
+      ...(said && url.pathname === '/__net' ? { ver: url.searchParams.get('gv') || null } : {}),
       // Room chat (section 19), the Worker's word: a signed-in account (a passkey), a member of this server, a page of
       // another site (homie.rocks's room page) watching from elsewhere.
       acct: url.searchParams.get('acct') === '1',
@@ -1505,9 +1552,12 @@ export class Table {
       if (room.watchers.size >= 256 || same >= 24) { try { server.close(1013, 'too many watching'); } catch { /* gone */ } return new Response(null, { status: 101, webSocket: client }); }
       const w = room.watch(conn);
       // The play page's vote card speaks on this socket (section 17); nothing else it says is read.
-      server.addEventListener('message', (e) => { if (typeof e.data === 'string') w.onMessage(e.data); });
+      server.addEventListener('message', (e) => {
+        if (typeof e.data !== 'string') return;
+        try { w.onMessage(e.data); } catch (error) { this.say({ ev: 'failed', op: 'watch-message', error: errorLine(error) }); }
+      });
       server.addEventListener('close', () => w.onClose());
-      server.addEventListener('error', () => w.onClose());
+      server.addEventListener('error', (e) => { this.socketError('watch', e); w.onClose(); });
     } else {
       const h = room.attach(conn);
       // A room is OPENED when the first seat is taken in an empty one (a room restored after a deploy keeps its
@@ -1524,17 +1574,24 @@ export class Table {
         }
       });
       // An AI's time in a seat, counted once as it leaves (stats `agent-minutes`; never for house QA).
-      const left = () => {
+      const left = (via) => {
         const c = room.clients.get(h.id);
         if (c?.agent && c.helloed && c.seat !== null && !conn.qa) {
           const minutes = Math.round((Date.now() - c.joinedAt) / 60_000);
           if (minutes > 0) this.ctx.waitUntil(count(this.env, null, { metric: 'agent-minutes', subject: this.game ?? '', source: c.agent.role, n: minutes }).catch(() => {}));
         }
-        h.onClose();
-        this.report();
+        // The room says the departure itself (its `leave` line: who, which seat, host or not, how many are left).
+        h.onClose(via);
+        try { this.report(); } catch (error) { this.say({ ev: 'failed', op: 'report', error: errorLine(error) }); }
       };
-      server.addEventListener('close', left);
-      server.addEventListener('error', left);
+      server.addEventListener('close', () => left('close'));
+      // A lost network arrives here, not as a close: said as what it is, with the client it was, then handled as the
+      // departure it is. (An error with a listener is never the runtime's "Uncaught".)
+      server.addEventListener('error', (e) => {
+        const c = room.clients.get(h.id);
+        this.socketError('net', e, { id: h.id, seat: c?.seat ?? null, role: c && c.helloed ? room.roleOf(c) : null });
+        left('error');
+      });
     }
     this.start();
     return new Response(null, { status: 101, webSocket: client });
@@ -1546,7 +1603,8 @@ export class Table {
     this.timer = setInterval(() => {
       const room = this.room;
       if (!room) return;
-      room.tick();
+      // A beat that throws is one failed beat, said with its room; the next one still runs.
+      try { room.tick(); } catch (error) { this.say({ ev: 'tick-failed', clients: room.clients.size, error: errorLine(error) }); }
       // A room that just opened reads its game's launch state once: a change made in the moment it opened (before the
       // Lobby knew of it) still reaches it, after the current round as always.
       if (room.openedAt && this.launchReadFor !== room.openedAt) { this.launchReadFor = room.openedAt; this.ctx.waitUntil(this.rereadLaunch().catch(() => {})); }
@@ -1607,7 +1665,9 @@ export class Table {
     this.lastAi = ai;
     this.lastReportAt = Date.now();
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
-    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai }) }).catch(() => {}));
+    // The build this room runs (section 23): the Lobby sends a visitor only to a room of the live build.
+    const ver = room.gameVer === undefined ? undefined : room.gameVer ?? '';
+    this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players, people, agents, ai, ...(ver !== undefined ? { ver } : {}) }) }).catch(() => {}));
   }
 
   /** A round the host called over becomes one D1 row (once per round number). */
@@ -1657,7 +1717,7 @@ export class Lobby {
       const saved = await ctx.storage.get('lobby');
       if (saved) {
         this.next = typeof saved.next === 'number' ? { public: saved.next } : saved.next && typeof saved.next === 'object' ? { public: 1, ...saved.next } : { public: 1 };
-        for (const r of saved.rooms ?? []) this.rooms.set(r.name, { ...r, server: r.server ?? roomServer(r.name), agents: r.agents ?? 0, ai: r.ai ?? 0, pending: [], agentPending: [] });
+        for (const r of saved.rooms ?? []) this.rooms.set(r.name, { ...r, server: r.server ?? roomServer(r.name), agents: r.agents ?? 0, ai: r.ai ?? 0, ver: typeof r.ver === 'string' ? r.ver : '', pending: [], agentPending: [] });
         for (const [name, until] of saved.closed ?? []) if (until > Date.now()) this.closed.set(name, until);
       }
     });
@@ -1683,7 +1743,7 @@ export class Lobby {
     if (list.length) this.ctx.waitUntil(this.env.DB.batch(list).catch(() => {}));
   }
 
-  save() { this.ctx.storage.put('lobby', { next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at }) => ({ name, players, agents, ai, server, at })), closed: [...this.closed] }).catch(() => {}); }
+  save() { this.ctx.storage.put('lobby', { next: this.next, rooms: [...this.rooms.values()].map(({ name, players, agents, ai, server, at, ver }) => ({ name, players, agents, ai, server, at, ...(ver ? { ver } : {}) })), closed: [...this.closed] }).catch(() => {}); }
 
   prune(now) {
     for (const [name, r] of this.rooms) {
@@ -1693,10 +1753,23 @@ export class Lobby {
     }
   }
 
+  /** A request that throws is said with what it was (never its body) and answered as a failure, not left uncaught. */
   async fetch(request) {
+    try { return await this.answer(request); } catch (error) {
+      let path = '';
+      try { path = new URL(request.url).pathname; } catch { /* not an address */ }
+      try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-failed', game: this.game ?? null, path, error: errorLine(error) })); } catch { /* no console */ }
+      return json({ ok: false, error: 'lobby' }, 500);
+    }
+  }
+
+  async answer(request) {
     const url = new URL(request.url);
     const now = Date.now();
     this.prune(now);
+    // REVISIONS (section 23): rooms are matched within one build of the game. A room that never said its build is
+    // the build of a game that names none ('').
+    const ver = versionOf(url.searchParams.get('ver')) ?? '';
     if (url.pathname === '/join') {
       const max = Math.max(1, Math.min(SEAT_MAX, Math.floor(Number(url.searchParams.get('max'))) || 8));
       const sid = url.searchParams.get('server') ?? 'public';
@@ -1705,7 +1778,9 @@ export class Lobby {
       // A room the owner closed, or one this visitor is held out of (`not`), is never the answer.
       const not = new Set(String(url.searchParams.get('not') ?? '').split(',').filter(Boolean));
       for (const [name, until] of this.closed) if (until <= now) this.closed.delete(name);
-      const pool = [...this.rooms.values()].filter((r) => (r.server ?? 'public') === server && !not.has(r.name) && !this.closed.has(r.name));
+      // Every room of the server counts toward its `rooms_max` and its numbering; only this build's rooms are matched.
+      const ofServer = [...this.rooms.values()].filter((r) => (r.server ?? 'public') === server && !not.has(r.name) && !this.closed.has(r.name));
+      const pool = ofServer.filter((r) => (r.ver ?? '') === ver);
       if (url.searchParams.get('agent') === '1') {
         // An AI: a room of this pool with people in it and an AI seat free (the most people first). Never a new room.
         const reserve = Math.max(0, Math.floor(Number(url.searchParams.get('ai'))) || 0);
@@ -1735,7 +1810,7 @@ export class Lobby {
       if (!room) {
         let n = this.next[server] ?? 1;
         while (not.has(roomCode(server, n)) || this.closed.has(roomCode(server, n)) || this.rooms.has(roomCode(server, n))) n += 1;
-        room = { name: roomCode(server, n), server, players: 0, agents: 0, ai: 0, at: now, pending: [], agentPending: [] };
+        room = { name: roomCode(server, n), server, players: 0, agents: 0, ai: 0, at: now, ver, pending: [], agentPending: [] };
         this.next[server] = n + 1;
         this.rooms.set(room.name, room);
       }
@@ -1762,9 +1837,12 @@ export class Lobby {
       this.notePeak(body.room, Math.max(0, Math.floor(Number(body.people ?? body.players) || 0)), url.searchParams.get('game'));
       // Only rooms of a pool are matched with strangers (pub-N, s-<id>-<n>); a named room (?room=) stays private.
       if (!this.rooms.has(body.room) && !pooledRoom(body.room)) return json({ ok: true, private: true });
-      const r = this.rooms.get(body.room) ?? { name: body.room, server: roomServer(body.room), players: 0, agents: 0, ai: 0, at: now, pending: [], agentPending: [] };
+      const r = this.rooms.get(body.room) ?? { name: body.room, server: roomServer(body.room), players: 0, agents: 0, ai: 0, at: now, ver: '', pending: [], agentPending: [] };
       const grew = Math.max(0, seated - r.players);
-      const changed = !this.rooms.has(r.name) || r.players !== seated || (r.agents ?? 0) !== agents || (r.ai ?? 0) !== ai;
+      // The room says which build it runs (it changes only when nobody on the old one is left).
+      const rver = typeof body.ver === 'string' ? versionOf(body.ver) ?? '' : r.ver ?? '';
+      const changed = !this.rooms.has(r.name) || r.players !== seated || (r.agents ?? 0) !== agents || (r.ai ?? 0) !== ai || (r.ver ?? '') !== rver;
+      r.ver = rver;
       r.pending.splice(0, grew);
       if ((r.agents ?? 0) < agents) (r.agentPending ?? []).splice(0, agents - (r.agents ?? 0));
       r.players = seated;
@@ -1784,6 +1862,8 @@ export class Lobby {
       let best = null;
       for (const r of this.rooms.values()) {
         if (r.players <= 0 || not.has(r.name) || (this.closed.get(r.name) ?? 0) > now || (pools && !pools.has(r.server ?? 'public'))) continue;
+        // A watcher's page runs the live build: a room still on an older one would turn it away.
+        if (url.searchParams.has('ver') && (r.ver ?? '') !== ver) continue;
         if (!best || r.players > best.players || (r.players === best.players && r.name < best.name)) best = r;
       }
       return json({ room: best?.name ?? null, players: best?.players ?? 0 });

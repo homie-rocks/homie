@@ -231,7 +231,6 @@ export function gamesTab(t, { s, rooms, office, columns, on }) {
   return col(t, s.games.map((g) => {
     const o = office?.data?.games?.find((x) => x.id === g.id) ?? null;
     const launch = o?.launch ?? g.launch ?? 'public';
-    const remix = o ? o.remix : g.remix !== false;
     const base = s.live ?? s.dev;
     const playing = (rooms.live?.rooms ?? []).filter((r) => r.game === g.id).reduce((n, r) => n + r.players, 0);
     return col(t, [
@@ -239,7 +238,6 @@ export function gamesTab(t, { s, rooms, office, columns, on }) {
         span(t, fit(g.name ?? g.id, Math.max(10, columns - 40)), { bold: true }),
         span(t, g.id, DIM),
         span(t, launch, { color: launch === 'public' ? 'green' : launch === 'invite' ? 'yellow' : 'magenta' }),
-        span(t, remix ? 'remixable' : 'source closed', DIM),
         s.live ? span(t, live.has(g.id) || playing ? 'live' : 'not live yet', live.has(g.id) || playing ? { color: 'green' } : DIM) : null,
         playing ? span(t, `${playing} playing`, { color: 'green' }) : null,
       ]),
@@ -248,10 +246,9 @@ export function gamesTab(t, { s, rooms, office, columns, on }) {
         base ? link(t, linkable(`${base}/${g.id}/play`), '▶ Play') : null,
         base ? link(t, linkable(`${base}/${g.id}/`), 'Page') : null,
         s.toolkit && (s.live || s.dev) ? t.Select({ key: `launch-${g.id}`, label: 'Launch', value: launch, options: [{ value: 'private', label: 'private' }, { value: 'invite', label: 'invite-only beta' }, { value: 'public', label: 'public' }], onSelect: (v) => on.launch(g, v) }) : null,
-        s.toolkit && (s.live || s.dev) ? t.Button({ key: `remix-${g.id}`, label: remix ? 'Remix: on' : 'Remix: off', onPress: () => on.remix(g, !remix) }) : null,
       ], { columnGap: 3, paddingLeft: 2 }),
     ], { marginBottom: 1 });
-  }).concat([s.toolkit && (s.live || s.dev) ? span(t, `Launch and remix changes are asked for: you confirm each with one tap in your own browser (Rooms shows the link)${s.live ? '' : '. Not online yet: this computer\'s dev site keeps its own settings'}.`, DIM) : span(t, 'Launch states and the remix switch need the studio\'s site (live, or its dev site here) and its toolkit (npm install).', DIM)]));
+  }).concat([s.toolkit && (s.live || s.dev) ? span(t, `A launch change is asked for: you confirm it with one tap in your own browser (Rooms shows the link)${s.live ? '' : '. Not online yet: this computer\'s dev site keeps its own settings'}.`, DIM) : span(t, 'Launch states need the studio\'s site (live, or its dev site here) and its toolkit (npm install).', DIM)]));
 }
 
 /* ------------------------------------------------------------------ Stats */
@@ -413,7 +410,7 @@ function skinRow(t, k, columns) {
   ], { paddingLeft: 2 });
 }
 
-/** The scene's budgets as bars (draw calls, triangles, picture memory, first-play download), red when over. */
+/** The scene's budgets as bars (draw calls, triangles, picture memory, shipped payload: the asset check's inventory estimate), red when over. */
 function budgetBars(t, check, columns, now) {
   const width = Math.max(8, Math.min(20, Math.floor(columns / 6)));
   const n = (v) => (v === null ? '?' : Number.isInteger(v) ? v.toLocaleString('en-US') : String(+v.toFixed(1)));

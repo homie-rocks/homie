@@ -652,3 +652,43 @@ export class TintedBloomEffect extends BloomEffect {
     if (spec.stretchAt !== null) stretchMipChain(this, spec.stretchAt);
   }
 }
+
+// ---------------------------------------------------------------------------
+//  BLOOM REACH, IN SCREEN TERMS RATHER THAN IN LEVELS
+// ---------------------------------------------------------------------------
+
+/**
+ * The rows the TOP mip is held at, which is the invariant a level count is only
+ * a proxy for. Adopted from a space racer's post-processing module, the only
+ * one of the five post chains that had worked this out.
+ *
+ * The art bible states the clause as a REACH IN PIXELS: "a seventh level
+ * reaches ~128 px at the top mip and smears the star and the gantry floods into
+ * a formless veil across the vanishing point", and it states it AT 1080p. A
+ * level count is not that number. `renderScale`, the adaptive ladder and every
+ * handheld rung move the buffer under a fixed count, and a chain of N levels
+ * over a buffer at 0.62 reaches the same ABSOLUTE fraction of the buffer as a
+ * chain of N levels at 1.0 — but the FRAME is what a person sees, so the veil
+ * arrives a level early in screen terms and nothing in the tier check notices.
+ *
+ * Six levels over 1080 rows puts the top mip at 1080 / 2^6 = 17 rows. Holding
+ * that as the invariant reproduces 6 at 1080p EXACTLY, which is why this
+ * changes nothing about the frame anybody has ever reviewed.
+ */
+export const BLOOM_TOP_MIP_ROWS = 17;
+
+/**
+ * The level count for a buffer this tall, never above the tier's own cap.
+ *
+ * Exported because it is a good thing and the next chain to want it should
+ * import it rather than write it again. The space racer still carries its own
+ * copy: its post chain is a different file and has not adopted this package,
+ * and reaching into a game whose chain was deliberately left alone (its
+ * overlap with the kart racer is 141 lines in 48 fragments, longest 12) to save
+ * five lines is how an extraction acquires a merge conflict it did not need.
+ */
+export function bloomLevels(bufferHeight: number, tierMax: number): number {
+  const rows = Math.max(1, bufferHeight);
+  const fit = Math.round(Math.log2(rows / BLOOM_TOP_MIP_ROWS));
+  return Math.max(1, Math.min(tierMax, fit));
+}

@@ -105,3 +105,9 @@ particles or physics steps, shorter view distance, softer or smaller shadows, a 
 - **A profile is not a measurement.** It names where time goes; only the alternating runs say whether a change helped.
 - **The first frame is not playable.** `load.playable` waits for a seat and a body; a game that draws early and
   connects late has moved the wait.
+- **Control-ready is not the game's own "ready".** `load.playable` is what the probe can see (a seat, a body, the
+  loading cover gone). `load.ready` is when the game itself called `net.playable()`. Each run records the arrival
+  mode (`load.arrival.mode`: `auto`, `game`, or `seat` for an older helper) and, under `auto`, how long after the
+  cover lifted the game's word came (`lateMs`). A run whose browser ended its window cut off from the room (the
+  helper's link: `reconnecting`, `alone`, `offline`, `closed`) is BLOCKED and left out: it was not two browsers
+  playing together.

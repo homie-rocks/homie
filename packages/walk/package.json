@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/walk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "On-foot movement for three.js games: a walker with ground-contact hysteresis, coyote time, jump buffering, slope limits and step height, plus a gait clock, foot planting and a GPU-posed biped.",
   "license": "Apache-2.0",
   "type": "module",
@@ -32,7 +32,7 @@
     "prepack": "tsc --build"
   },
   "dependencies": {
-    "@homie-rocks/camera": "0.1.0"
+    "@homie-rocks/camera": "0.2.0"
   },
   "peerDependencies": {
     "three": "0.185.1"

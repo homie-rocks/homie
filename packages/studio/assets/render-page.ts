@@ -35,7 +35,7 @@ interface Tokens {
   shape?: { language?: string; bevel?: number };
   proportions?: { heads?: number; heightM?: number };
 }
-interface ModelIn { id: string; glb: string; label?: string; place?: 'hero' | 'prop' | 'dressing'; scale?: number; retint?: boolean; tint?: string; pull?: number; anims?: string; pose?: string; poseAt?: number }
+interface ModelIn { id: string; glb: string; label?: string; place?: 'hero' | 'prop' | 'dressing'; scale?: number; retint?: boolean; tint?: string; pull?: number; anims?: string | string[]; pose?: string; poseAt?: number }
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
@@ -51,7 +51,15 @@ async function parse(m: ModelIn): Promise<Group> {
   const gltf = await new Promise<{ scene: Group; animations: AnimationClip[] }>((res, rej) => loader.parse(b64(m.glb), '', res as never, rej));
   gltf.scene.name = m.id;
   // A character with a clip library stands in a pose (idle, a little way in), not in its bind pose.
-  const clips = m.anims ? (await new Promise<{ animations: AnimationClip[] }>((res, rej) => loader.parse(b64(m.anims as string), '', res as never, rej))).animations : gltf.animations;
+  // One clip library, or several (its skeleton's own, then any declared supplemental): a verb's first clip is kept.
+  let clips = gltf.animations;
+  if (m.anims) {
+    clips = [];
+    for (const lib of Array.isArray(m.anims) ? m.anims : [m.anims]) {
+      const more = (await new Promise<{ animations: AnimationClip[] }>((res, rej) => loader.parse(b64(lib), '', res as never, rej))).animations;
+      for (const c of more) if (!clips.some((x) => x.name === c.name)) clips.push(c);
+    }
+  }
   gltf.scene.userData.clips = clips;
   if (clips?.length && (m.anims || m.pose)) {
     const clip = clips.find((c) => c.name === (m.pose ?? 'idle')) ?? clips.find((c) => c.name === 'idle') ?? clips[0];

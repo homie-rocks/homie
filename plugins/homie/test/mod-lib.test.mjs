@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
-import { artFor, artSummaryOf, budgetWords, charactersText, clipsText, decisionsFileOf, licenceIssues, lockedChanges, lookText, phaseStrip, publicSource } from '../hooks/lib/art.mjs';
+import { artFor, artSummaryOf, budgetWords, charactersText, clipsText, decisionsFileOf, licenceIssues, lockedChanges, lookText, phaseStrip, publicGame } from '../hooks/lib/art.mjs';
 import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, globMatch, modelPullOf, paidMcpOf, paidOf, programOf, protectedBy, readOnlySql, studioCalls } from '../hooks/lib/commands.mjs';
 import { applyEdit, unifiedDiff } from '../hooks/lib/diff.mjs';
 import { summarize } from '../hooks/lib/feed.mjs';
@@ -454,7 +454,7 @@ test('art: a latest.json that is not one is ignored, and what it carries is clea
   assert.deepEqual(a.spend, { used: 0, cap: null, items: [{ what: 'w', usd: 1 }] });
   assert.equal(a.check, null);
   assert.deepEqual(a.lineup.images, { front: null, quarter: 'a/b.jpg', silhouettes: null });
-  assert.equal(budgetWords({ ok: false, totals: { drawCalls: 120, triangles: 900, textureMB: 2.66, firstPlayMB: null }, budgets: { drawCalls: 100, triangles: 150000, textureMB: 48, firstPlayMB: 5 } }), '120/100 draw calls (OVER), 900/150,000 triangles, 2.7/48 MB picture memory, ?/5 MB first play');
+  assert.equal(budgetWords({ ok: false, totals: { drawCalls: 120, triangles: 900, textureMB: 2.66, firstPlayMB: null }, budgets: { drawCalls: 100, triangles: 150000, textureMB: 48, firstPlayMB: 5 } }), '120/100 draw calls (OVER), 900/150,000 triangles, 2.7/48 MB picture memory, ?/5 MB shipped payload');
   assert.match(artFor([], '').why, /^No art direction yet/);
   assert.match(artFor([a], 'h').why, /^h has no art direction yet \(games with one: g\)/);
 });
@@ -482,13 +482,15 @@ test('art: the lock guard, on the toolkit\'s own decisions.json', async () => {
 test('art: the licence guard knows every licence kind the toolkit knows (lib/asset-manifest.mjs)', async () => {
   const { LICENSES, licenseInfo } = await import(join(STUDIO, 'lib', 'asset-manifest.mjs'));
   for (const [kind, info] of Object.entries(LICENSES)) {
-    const ok = licenceIssues({ assets: [{ id: 'a', license: { kind, remix: info.remix, attribution: info.attribution ? 'A friend, example.org' : null } }] });
-    assert.deepEqual(ok, { count: 1, problems: [] }, `${kind} with its own remix and credit`);
+    const ok = licenceIssues({ assets: [{ id: 'a', license: { kind, attribution: info.attribution ? 'A friend, example.org' : null } }] });
+    assert.deepEqual(ok, { count: 1, problems: [] }, `${kind} with its credit`);
+    assert.ok(!('remix' in info), `${kind}: the toolkit's licence table has no word about remixing`);
   }
   for (const kind of ['eula:unity', 'market:fab-1234']) {
     assert.equal(licenseInfo(kind).redistribute, false);
-    assert.equal(licenceIssues({ assets: [{ id: 'a', license: { kind, remix: 'none' } }] }).problems.length, 0, kind);
-    assert.equal(licenceIssues({ assets: [{ id: 'a', license: { kind, remix: 'include' } }] }).problems.length, 1, `${kind} handed to remixers`);
+    // A game serves its files to its players only, so a licence that forbids handing the file on is no problem for
+    // a deploy; a record an older toolkit wrote (`remix`, whatever it says) reads the same.
+    for (const license of [{ kind }, { kind, remix: 'none' }, { kind, remix: 'include' }]) assert.equal(licenceIssues({ assets: [{ id: 'a', license }] }).problems.length, 0, JSON.stringify(license));
   }
   assert.equal(licenseInfo('eula:turbosquid').web, false);
   const refused = licenceIssues({ assets: [
@@ -496,12 +498,13 @@ test('art: the licence guard knows every licence kind the toolkit knows (lib/ass
     { id: 'by', license: { kind: 'cc-by-4.0', remix: 'include', attribution: '  ' } }, { id: 'odd', license: { kind: 'CC0' } },
     { id: 'mixamo', license: { kind: 'mixamo', remix: 'include' } }, { id: 'qal', license: { kind: 'qal' } },
   ] });
-  assert.deepEqual(refused.problems.map((p) => p.asset), ['none', 'null-licence', 'ts', 'by', 'odd', 'mixamo', 'qal']);
+  assert.deepEqual(refused.problems.map((p) => p.asset), ['none', 'null-licence', 'ts', 'by', 'odd']);
   assert.equal(licenceIssues({ v: 1 }).problems.length, 1, 'a manifest with no assets list is not one the toolkit wrote');
   assert.equal(licenceIssues(null).problems.length, 1);
-  assert.ok(publicSource({ id: 'g' }));
-  assert.ok(publicSource({ launch: 'public', share: { source: true } }));
-  for (const not of [null, { launch: 'private' }, { launch: 'invite' }, { share: { source: false } }]) assert.equal(publicSource(not), false, JSON.stringify(not));
+  assert.ok(publicGame({ id: 'g' }));
+  assert.ok(publicGame({ launch: 'public' }));
+  assert.ok(publicGame({ share: { source: false } }), 'the retired key changes nothing: the game is public, and its players are served its files');
+  for (const not of [null, { launch: 'private' }, { launch: 'invite' }]) assert.equal(publicGame(not), false, JSON.stringify(not));
 });
 
 test('the mod\'s hooks module calls only what the README lists', () => {

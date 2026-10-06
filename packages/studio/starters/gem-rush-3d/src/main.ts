@@ -42,7 +42,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 // The one model loader every studio game uses: checks each file, decodes meshopt and WebP, copies for placing.
 import { createModels, instancedCopies, placeCopy, repaint, stylize, type Copies } from '@homie-rocks/studio/assets';
-import { createNetplay, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
+import { createNetplay, guardGestures, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` and `perf` read, and sandbox + audio shims), and name
 // labels that never pile up (port/view.ts).
 import { createBubbles, createLabels, exposePort, paintBubbles, type BubbleIn, type BubbleOut, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
@@ -110,7 +110,7 @@ interface Body extends Knock { slot: number; seat: number | null; name: string; 
 interface Gem { id: number; x: number; y: number }
 /** Slow state, on the keyed state channel (net.state('zone', ...)), not in the 20 Hz snapshot. */
 interface Zone { n: number; x: number; y: number; r: number; until: number }
-interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; tick: number; gemSeq: number }
+interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; tick: number; gemSeq: number; occ?: [number, number][] }
 
 /* --------------------------------------------------------------- the net */
 /**
@@ -121,6 +121,9 @@ interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; 
 const MOVEMENT: 'owner' | 'host' = (() => { try { return new URLSearchParams(location.search).get('movement') === 'host' ? 'host' : 'owner'; } catch { return 'owner'; } })();
 // caps: its bots read the dial ('skill'), and its Roster takes an AI's slot for it ('agents': the join passes p.agent).
 const net = createNetplay<Snap, Avatar, Ckpt>({ game: 'gem-rush-3d', maxPlayers: MAX_SLOTS, movement: MOVEMENT, snapshotHz: 20, inputHz: 20, checkpointMs: 1000, caps: ['skill', 'agents'], checkpoint: () => checkpoint() });
+// A touch game guards its own page (NETPLAY.md section 24): a long press on the canvas never selects text or raises
+// the copy/paste callout on a phone, and a touch on it never pans or zooms the page.
+guardGestures({ touch: 'canvas' });
 /** The Roster keeps the server's AI seats (revision 6): the policy is read whenever it fills. */
 const policy = () => net.policy;
 
@@ -240,7 +243,9 @@ function becomeHost(e: RoleChange<Snap, Ckpt>): void {
     startRound((e.round?.n ?? 0) + 1);
   }
   // Whoever is connected now is who plays: seats that left during the gap become bots.
-  const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null }));
+  const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null, occ: p.occ ?? null }));
+  // `occ` (NETPLAY.md section 25): which stay in its seat each peer's is, so a seat number that changed hands while
+  // nobody was hosting is claimed afresh instead of inheriting the last player's body in silence.
   const { claimed } = roster.reconcile(peers);
   syncBodiesFromRoster();
   for (const s of claimed) { const b = bodies.get(s.slot); if (b && b.seat !== mySeat()) hostMoved(b); }
@@ -257,7 +262,7 @@ function becomeHost(e: RoleChange<Snap, Ckpt>): void {
 function restore(e: RoleChange<Snap, Ckpt>): void {
   const ck = e.ckpt?.d ?? null;
   if (ck) {
-    roster = Roster.from(ck.roster, { min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
+    roster = Roster.from(ck.roster, { min: MIN_SLOTS, max: MAX_SLOTS, botName, policy }, ck.occ ?? null);
     bodies = new Map(ck.bodies.map((b) => [b.slot, { ...b }]));
     gems = ck.gems.map((g) => ({ ...g }));
     gemSeq = ck.gemSeq;
@@ -298,6 +303,8 @@ function checkpoint(): Ckpt {
     bodies: [...bodies.values()].map((b) => ({ ...b })),
     gems: gems.map((g) => ({ ...g })),
     roster: roster.toJSON(),
+    // Whose stay each body is, beside the roster: how the next host tells a player who came back from a new one.
+    occ: roster.occupants(),
     tick,
     gemSeq,
   };
@@ -310,7 +317,7 @@ net.on('role', (e) => {
 net.on('join', (p) => {
   if (!hosting || p.seat === null) return;
   // An AI takes a seat kept for AI, a person never does (revision 6: the Roster needs p.agent for that).
-  const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null);
+  const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null, p.occ ?? null);
   if (!c) return; // full: they watch
   syncBodiesFromRoster();
   const b = bodies.get(c.slot.slot);
@@ -2095,6 +2102,9 @@ exposePort(net, {
   self: () => (me.has && mySeat() !== null ? { x: me.x, y: me.y } : null),
   size: R_AV,
   score: () => { const seat = mySeat(); const b = hosting ? [...bodies.values()].find((x) => x.seat === seat) : [...drawn.values()].find((x) => x.seat === seat); return b ? b.score : null; },
+  // The renderer's own counters, by the names `homie-studio perf` and the playtest read on the port probe (measured
+  // scene cost while playing; port/probe.ts PortExtra). Nobody dies in this game, so there is no `alive` to say.
+  extra: { drawCalls: () => renderer.info.render.calls, triangles: () => renderer.info.render.triangles },
 });
 
 void net.ready.then(() => {

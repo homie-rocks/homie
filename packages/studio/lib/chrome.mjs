@@ -49,6 +49,17 @@ export function findChrome() {
     ?? newestIn(join(home, '.cache', 'ms-playwright'), [['chrome-linux', 'chrome'], ['chrome-linux64', 'chrome']]);
 }
 
+/**
+ * Is this address this computer's own (a local preview)? The play page's shell asks the same of its own hostname
+ * (worker/pages.mjs LOCAL) and leaves the join QR off the big screen there: a code that points at a loopback address
+ * cannot bring another phone in. A check that reads the big screen has to know which kind of site it is looking at.
+ */
+export function isLoopbackUrl(url) {
+  let host;
+  try { host = new URL(String(url)).hostname; } catch { return false; }
+  return /^(localhost|.*\.localhost|127\..*|\[::1\]|0\.0\.0\.0)$/.test(host);
+}
+
 /** Linux without a GPU renders with SwiftShader: say so with every number measured there. */
 export const SOFTWARE_GL = /swiftshader|llvmpipe|softpipe|software/i;
 

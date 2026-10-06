@@ -51,6 +51,9 @@ const room = P.createRoom({
   fastWorld() { return /* projectiles, pickups: small arrays */; },
   saveWorld() { return /* everything else the rules need */; },
   loadWorld(world, fast) { /* a promoted host puts it back */ },
+  onTakeover(b, info) { b.score = 0; /* a person took this bot's body: a join, a restored room, a new host (info.why); info.back: they held it before */ },
+  admit(bots, who) { return bots.find((b) => b.alive); /* optional: WHICH bot a new arrival takes (default: the lowest) */ },
+  ties: 'shared',                           // optional: equal scores share a place (default 'order': people before bots, then the lower slot)
   adopt(b) { /* the host placed MY body (round start, takeover): stand there */ },
   local() { return /* my body as I see it now (owner movement) */; },
 });

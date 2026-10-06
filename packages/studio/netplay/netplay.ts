@@ -55,6 +55,20 @@
  *     progress line) gives it the screen: by itself once seated with the room's
  *     state, or the game's own `net.playable()` (`arrival: 'game'`), with
  *     `net.loading(p, what)` while it loads. Nothing crosses the relay.
+ *   - The link, said out loud (revision 9, NETPLAY.md section 22): `net.link` and
+ *     `on('link')` say whether this browser is in its room (`online`), trying to
+ *     get back (`reconnecting`), playing by itself because the room never
+ *     answered (`alone`), or stopped (`closed`); a small "Reconnecting…" line is
+ *     drawn over the game meanwhile (restyle it, or `linkOverlay: false`). A host
+ *     whose frames hitch keeps its role with a heartbeat snapshot from a timer.
+ *   - Game revisions (section 23): game.json `netplay.version` rides in the hello;
+ *     a room runs one build at a time and an older tab is told to reload
+ *     (`on('stale')`). `features` are per-peer capability flags the relay keeps,
+ *     so a new host knows them without asking again.
+ *   - The page around the frame (section 24): `net.prefs` (a few settings kept by
+ *     the play page, because the frame has no storage of its own), `net.params`
+ *     (the address's switches the page passed in), `net.shell` (where the page's
+ *     own buttons sit over the game), and `guardGestures()` for a touch game.
  *
  * WHAT IT DOES NOT DO: rendering, physics, input devices, bots. `Roster` below
  * is the bot-yield bookkeeping a host needs; the bots themselves are the game's.
@@ -63,9 +77,9 @@
 
 export const NETPLAY_VERSION = 1;
 /** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
-export const NETPLAY_REVISION = 8;
+export const NETPLAY_REVISION = 9;
 /** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
-export const NETPLAY_MARK = 'homie-netplay-rev:8';
+export const NETPLAY_MARK = 'homie-netplay-rev:9';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -115,6 +129,82 @@ export interface NetConfig {
   chatOff?: boolean;
   /** Revision 8: this player does not want their own messages over their character (the play page's toggle). */
   bubbleOff?: boolean;
+  /** Revision 9: the game's revision this page was served with (game.json `netplay.version`); the hello says it. */
+  ver?: string;
+  /** Revision 9: the switches the play page passed in from its own address (`?q=low&debug`), by name. */
+  params?: Record<string, string>;
+  /** Revision 9: the page around the frame keeps `net.prefs` (a play page from before it does not say so). */
+  prefs?: boolean;
+}
+
+/* ------------------------------------------------- the link, revisions and the page (revision 9, sections 22-24) */
+
+/**
+ * Where this browser stands with its room. `connecting`: no welcome yet. `online`: in the room. `reconnecting`: it
+ * was in the room and its socket went; it is knocking again (its seat token keeps its body). `alone`: the room never
+ * answered in time, so this browser plays by itself as an offline host (it still knocks, and joins when answered).
+ * `offline`: there is no room at all (a plain file, a dev server with no shell). `closed`: stopped for good
+ * (`net.closedWhy` says why: another tab took the seat, the room is full, the game was updated…).
+ */
+export type LinkState = 'connecting' | 'online' | 'reconnecting' | 'alone' | 'offline' | 'closed';
+export interface LinkChange {
+  state: LinkState;
+  prev: LinkState;
+  /** Why it changed: `welcome`, `lost` (the socket closed), `stale` (it went silent), `relay-timeout`, `no-shell`, or a refusal's code. */
+  why: string;
+  /** This browser is running the rules right now (alone, or as the room's host): two browsers can both say so while one is cut off. */
+  hosting: boolean;
+  /** How long the socket has been down (ms; 0 when it is not). */
+  downMs: number;
+}
+/** A newer build of the game is live (`on('stale')`): this tab still runs `mine`; `final`: it was kept out of a room for it. */
+export interface StaleNotice { ver: string | null; mine: string | null; final: boolean }
+/** One of the play page's own controls drawn over the game, in CSS pixels of the game's own viewport. */
+export interface ShellRect {
+  /** `room` (the room button), `server` (the server pill), `chip` (the "3 playing" line), `chat`, `join` (the big screen's QR card), `banner`, `results`. */
+  id: string;
+  x: number; y: number; w: number; h: number;
+  /** It fades by itself after a few seconds (the chip, a toast): still worth keeping important text out of. */
+  fades?: boolean;
+}
+/** Where the page's controls sit over the game on this device, held this way (`on('shell')`; null before the page says). */
+export interface ShellLayout {
+  device: Device;
+  orientation: 'portrait' | 'landscape';
+  /** The game frame's size in CSS pixels, as the page sees it. */
+  width: number; height: number;
+  rects: ShellRect[];
+}
+/**
+ * A few settings the play page keeps for this game on this browser (quality, a personal best, the last name typed):
+ * the game's frame has no storage of its own. Strings, numbers, booleans and small JSON; 16 KB a game in all, 64
+ * characters a key, 32 keys. Never a secret, never progress that must not be lost (that is cloud saves).
+ */
+export interface Prefs {
+  /** The value kept under `key`, or `fallback`. Always resolves (with the fallback when the page cannot answer). */
+  get<T = unknown>(key: string, fallback?: T): Promise<T>;
+  /** Keep a value (`null` or `undefined` removes it). Resolves false when it was not kept (too big, no page). */
+  set(key: string, value: unknown): Promise<boolean>;
+  remove(key: string): Promise<boolean>;
+  /** Everything kept for this game. */
+  all(): Promise<Record<string, unknown>>;
+  /** What this page has read so far, without waiting (after `all()` or `ready` resolved: everything). */
+  peek<T = unknown>(key: string, fallback?: T): T;
+  /** Resolves once everything kept was read (so `peek` is complete). */
+  readonly ready: Promise<void>;
+  /** Where the values live: `page` (the play page's storage), `local` (this document's own), `memory` (this visit only). */
+  readonly where: 'page' | 'local' | 'memory';
+}
+/** The arrival, for a performance probe (`window.__homieNet.arrival`). Times are ms since the helper was created. */
+export interface ArrivalInfo {
+  mode: 'auto' | 'game';
+  /** Who gave the game the screen (null: not yet). */
+  by: 'auto' | 'game' | null;
+  playableMs: number | null;
+  /** When the game itself called `net.playable()` (null: it never did). */
+  explicitMs: number | null;
+  /** The game's own word came this long after an automatic arrival had already lifted the card (null: it did not). */
+  lateMs: number | null;
 }
 
 /* ------------------------------------------------- room chat (revision 8, section 19) */
@@ -280,11 +370,21 @@ export interface Peer {
    * Never on a kids server, never for an AI.
    */
   badge?: string;
+  /**
+   * Revision 9: which stay in the seat this is. The relay gives a seat a new number every time it changes hands
+   * and keeps it across that browser's reconnects, so a host can tell "the same player came back" from "somebody
+   * new has this seat number now". Undefined from an older relay.
+   */
+  occ?: number;
+  /** Revision 9: the game revision this peer's page was served with (game.json `netplay.version`). */
+  ver?: string;
+  /** Revision 9: what this peer's build says it can do (`createNetplay({ features })`); the relay keeps it. */
+  feat?: string[];
 }
 
 /** One seat's entry in the body-control table: [seat, rs, own (1|0), ack]. */
 export type ControlWire = [seat: number, rs: number, own: number, ack: number];
-export interface Snapshot<D = unknown> { k: number; st: number; d: D; from?: number | null; c?: ControlWire[] }
+export interface Snapshot<D = unknown> { k: number; st: number; d: D; from?: number | null; c?: ControlWire[]; /** Revision 9: a heartbeat: the host's last state again, while its frames hitch. */ hb?: 1 }
 export interface Checkpoint<D = unknown> { k: number; st: number; d: D; c?: ControlWire[] }
 export interface InputFrame<A = unknown> {
   /** Sequence number per sender. */
@@ -405,6 +505,12 @@ export interface NetStats {
   stateKeys: number;
   peers: number;
   reconnects: number;
+  /** Revision 9: times a link that was up went down (a reconnect that worked on the first knock counts once). */
+  drops?: number;
+  /** Revision 9: where this browser stands with its room. */
+  link?: LinkState;
+  /** Revision 9: heartbeat snapshots sent from the timer while the game's own frames hitched. */
+  heartbeats?: number;
   promotions: number;
   round: number | null;
   /** Section 20: the host's decisions: asked, answered by the studio's model ('ai'), the person's own Ollama ('local'), or the floor; median ms. */
@@ -443,8 +549,43 @@ export interface NetplayOptions<C = unknown> {
   interpDelayMs?: number;
   /** Host: return the full rules state. Called every `checkpointMs`, before yielding, and on pagehide. */
   checkpoint?: () => C;
-  /** ms to wait for a welcome before falling back to offline host. Default 4000. */
+  /** ms to wait for a welcome before falling back to offline host, when the socket could not even open. Default 4000. */
   connectTimeoutMs?: number;
+  /**
+   * How long a page whose socket is open (or opening) listens for the room's welcome before it plays alone, counted
+   * only while the page can listen. Default 10000; 2000 to 120000. A heavy 3D boot under load that takes longer
+   * plays a private round for a few seconds first: raise it, or use `connectClock: 'game'`.
+   */
+  connectOpenMaxMs?: number;
+  /**
+   * When that wait starts. 'auto' (the default): when the helper is created. 'game': when the game calls
+   * `net.start()`, once it has finished booting (or 60 s after the helper was created, so a game that never says is
+   * never left without a role). The socket opens at once either way; a welcome that arrives first is used at once.
+   */
+  connectClock?: 'auto' | 'game';
+  /**
+   * A host's heartbeat: when the game has not sent a snapshot for this long while others are present (its frames
+   * hitched: a long load, a shader compile, a throttled tab), the helper sends the last one again from a timer, so
+   * the relay does not hand the room to somebody else for a pause. Default 500 ms; 0 turns it off. It stops after
+   * 4 s without a real snapshot: a game that is really frozen is still replaced.
+   */
+  heartbeatMs?: number;
+  /**
+   * The game's revision (game.json `netplay.version`; the play page passes it, so a game rarely sets this itself).
+   * A room runs one revision at a time: see NETPLAY.md section 23.
+   */
+  version?: string;
+  /**
+   * What this build can do, as short words (`['powerups', 'rhythm2']`: up to 8, each a-z, 0-9 and -, 24 characters).
+   * The relay keeps them with the peer, so every host (and the next one) reads `net.featuresOf(seat)` instead of
+   * running its own handshake. An older build says none.
+   */
+  features?: string[];
+  /**
+   * The line drawn over the game while the link is down ("Reconnecting…"). Default true in a room; false turns it
+   * off (listen to `link` and draw your own). Restyle it with CSS on `[data-homie-link]`.
+   */
+  linkOverlay?: boolean;
   /** A socket that delivered nothing for this long is dropped and reopened (pongs come every 2 s). Default 6000. */
   staleMs?: number;
   /** Tests: a WebSocket constructor. */
@@ -510,6 +651,12 @@ export interface NetHandlers<S, A, C> {
   unchat: (e: { ids: string[] }) => void;
   /** Revision 8: a message of mine was not sent (slow mode, sign in to type, a word, the studio's filter…). */
   held: (h: ChatHeld) => void;
+  /** Revision 9: where this browser stands with its room changed (online, reconnecting, alone, closed). */
+  link: (e: LinkChange) => void;
+  /** Revision 9: a newer build of the game is live; this tab should reload (section 23). */
+  stale: (e: StaleNotice) => void;
+  /** Revision 9: the play page's own controls over the game moved (a turn of the phone, a sheet opened). */
+  shell: (e: ShellLayout) => void;
 }
 
 /**
@@ -547,6 +694,37 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   readonly closedWhy: string | null;
   /** How long the socket has been down while it reconnects (ms; 0 while connected). */
   readonly downMs: number;
+  /**
+   * THE LINK (revision 9, NETPLAY.md section 22). `offline` is true when this browser is NOT in a room: there is no
+   * shell at all, or the room never answered and it plays alone (`link === 'alone'`). `connected` is true only while
+   * the socket is up and welcomed. Between the two (`!offline && !connected`) the browser was in a room and is
+   * knocking again: `link === 'reconnecting'`. `link` says which in one word, and `on('link')` when it changes.
+   */
+  readonly link: LinkState;
+  /** Times the helper has scheduled another knock at the relay (the same number as `stats().reconnects`). 0: never interrupted. */
+  readonly reconnects: number;
+  /** My welcome gave me back the seat my token named: I am the player who was here, not a new one in the same seat number. */
+  readonly resumed: boolean;
+  /** `connectClock: 'game'`: the game has finished booting; the wait for the room's welcome starts now. Once. */
+  start(): void;
+  /** REVISIONS (section 23): this page's game revision (null: the game names none). */
+  readonly version: string | null;
+  /** A newer revision is live and this tab should reload: its name (or '' when the relay named none); null otherwise. */
+  readonly stale: string | null;
+  /** What a seat's build says it can do (its `features`); [] for an older build, an empty seat or a bot. */
+  featuresOf(seat: number | null): string[];
+  /** Every seated player's build has this feature (bots and AI bodies the host moves are the host's own). */
+  allHave(feature: string): boolean;
+  /** THE PAGE (section 24): a few settings the play page keeps for this game. */
+  readonly prefs: Prefs;
+  /** The switches the play page passed in from its address (`/play?q=low&debug`), by name. Offline: this document's own. */
+  readonly params: Readonly<Record<string, string>>;
+  /** One switch, or `fallback` (a bare `?debug` is `''`). */
+  param(name: string, fallback?: string | null): string | null;
+  /** Where the play page's own controls sit over the game (null before the page says, or with no page). */
+  readonly shell: ShellLayout | null;
+  /** The arrival's facts (mode, who lifted the card, when the game itself said it was playable). */
+  readonly arrivalInfo: ArrivalInfo;
   /**
    * Host: hand the room to another browser — a checkpoint, then the protocol's `yield` (the same road a hidden
    * tab takes). The relay elects the best other candidate, or keeps me host when nobody else can host.
@@ -760,7 +938,18 @@ export interface RosterOptions {
    * `aiSeats + guides` slots for AI (marked `agent`, never given to a person); `bots: 'off'` adds no other filler.
    */
   policy?: () => Policy | null;
+  /**
+   * ADMISSION (revision 9, NETPLAY.md section 25): which bot's body a NEW arrival takes. Called with the bot slots
+   * it may take (never one kept for AI when a person arrives, never another person's), in slot order; return the
+   * `slot` to give, `undefined` for the default (the lowest), or `null` when none of them will do (a new body is
+   * added when the room has space; when it has none, the default applies: a seated person always gets a body).
+   * It must be deterministic from the game's state (a new host asks it again). It is NOT asked for somebody who
+   * comes back to the body they held (a reload, a reconnect): returning players keep their body, alive or not.
+   */
+  admit?: (candidates: Slot[], who: { seat: number; name: string; agent: boolean }) => number | null | undefined;
 }
+/** What `Roster.claim` did. `back`: the seat got the body it already had, or the one it held last (nobody new). */
+export interface Claim { slot: Slot; yielded: boolean; added: boolean; back: boolean }
 
 const copySlot = (s: Slot): Slot => ({ slot: s.slot, seat: s.seat, name: s.name, bot: s.bot, ...(s.agent ? { agent: { seat: s.agent.seat, role: s.agent.role, hands: s.agent.hands } } : {}) });
 
@@ -785,22 +974,50 @@ export class Roster {
   readonly max: number;
   readonly botName: (slot: number) => string;
   private readonly policyFn: (() => Policy | null) | null;
-  /** seat → the slot it held when it last left */
-  private readonly lastSlot = new Map<number, number>();
+  private readonly admitFn: RosterOptions['admit'] | null;
+  /** seat → the slot it held when it last left, and which stay in the seat that was (`Peer.occ`) */
+  private readonly lastSlot = new Map<number, { slot: number; occ: number | undefined }>();
+  /** seat → which stay in the seat holds its slot now (`Peer.occ`; nothing from a relay that does not say) */
+  private readonly occ = new Map<number, number>();
 
   constructor(opts: RosterOptions) {
     this.min = Math.max(0, opts.min | 0);
     this.max = Math.max(this.min, opts.max | 0);
     this.botName = opts.botName ?? ((slot: number) => `Bot ${slot + 1}`);
     this.policyFn = opts.policy ?? null;
+    this.admitFn = opts.admit ?? null;
     this.fill();
   }
 
-  static from(slots: readonly Slot[], opts: RosterOptions): Roster {
+  /** `occupants`: what `occupants()` returned when the slots were saved (a checkpoint), so a new host can tell who came back. */
+  static from(slots: readonly Slot[], opts: RosterOptions, occupants?: readonly (readonly [seat: number, occ: number])[] | null): Roster {
     const r = new Roster(opts);
     r.slots = slots.map(copySlot);
+    if (Array.isArray(occupants)) for (const row of occupants) if (Array.isArray(row) && Number.isInteger(row[0]) && Number.isInteger(row[1]) && r.bySeat(row[0] as number)) r.occ.set(row[0] as number, row[1] as number);
     r.fill();
     return r;
+  }
+
+  /** Which stay in its seat holds each slot ([seat, occ]): keep it in the checkpoint, beside `toJSON()`. */
+  occupants(): [seat: number, occ: number][] {
+    return [...this.occ].filter(([seat]) => Boolean(this.bySeat(seat)));
+  }
+
+  /**
+   * The seat has a slot here, but the relay says somebody else holds that seat number now (it changed hands while
+   * this host was not told: a checkpoint of a room that emptied, a host that was cut off). False when either side
+   * does not know (an older relay, an older checkpoint): then the seat is taken to be the same player's.
+   */
+  changedHands(seat: number, occ: number | undefined | null): boolean {
+    const known = this.occ.get(seat);
+    return typeof occ === 'number' && known !== undefined && known !== occ;
+  }
+
+  /** The seat's player is gone for good and a stranger may get the number: its body is a bot's, and nobody "returns" to it. */
+  vacate(seat: number): Slot | null {
+    const s = this.release(seat);
+    this.lastSlot.delete(seat);
+    return s;
   }
 
   private policy(): Policy | null {
@@ -855,18 +1072,41 @@ export class Roster {
   /**
    * A human (or, revision 6, an agent) takes a slot. Returns the slot, whether it yielded a bot, or null (full:
    * spectate). A person never takes a slot kept for AI; an agent takes one first.
+   *
+   * `occ` (revision 9): which stay in the seat this is (`peer.occ`). The same stay keeps its body (`back`); a seat
+   * that changed hands gives its old body back to a bot first, and the newcomer is admitted like any other arrival.
+   * A NEW arrival's body is the `admit` callback's choice among the bots it may take, else the lowest.
    */
-  claim(seat: number, name: string, agent?: { role?: AgentRole; hands?: 'self' | 'host' } | null): { slot: Slot; yielded: boolean; added: boolean } | null {
+  claim(seat: number, name: string, agent?: { role?: AgentRole; hands?: 'self' | 'host' } | null, occ?: number | null): Claim | null {
+    const stay = typeof occ === 'number' ? occ : undefined;
     const mine = this.bySeat(seat);
-    if (mine) { mine.name = name || mine.name; return { slot: mine, yielded: false, added: false }; }
-    const last = this.lastSlot.get(seat);
+    if (mine && !this.changedHands(seat, stay)) {
+      if (stay !== undefined) this.occ.set(seat, stay);
+      mine.name = name || mine.name;
+      return { slot: mine, yielded: false, added: false, back: true };
+    }
+    // Somebody new holds this seat number: the body its last holder left goes back to a bot, and is not "theirs".
+    if (mine) this.vacate(seat);
+    const held = this.lastSlot.get(seat);
+    const last = held && (stay === undefined || held.occ === undefined || held.occ === stay) ? held.slot : undefined;
     const kept = (s: Slot): boolean => Boolean(s.agent && s.agent.seat === null);
     const plainBot = (s: Slot): boolean => s.bot && !s.agent;
+    const settle = (slot: Slot, yielded: boolean, added: boolean, back: boolean): Claim => {
+      if (stay !== undefined) this.occ.set(seat, stay); else this.occ.delete(seat);
+      this.lastSlot.delete(seat);
+      return { slot, yielded, added, back };
+    };
+    /** The game's choice among `cands` (undefined: the default; null: none of them will do). */
+    const chosen = (cands: Slot[]): Slot | null | undefined => {
+      if (!this.admitFn || !cands.length) return undefined;
+      let r: number | null | undefined;
+      try { r = this.admitFn(cands.map(copySlot), { seat, name, agent: Boolean(agent) }); } catch (err) { console.warn('[netplay] admit()', err); return undefined; }
+      if (r === null) return null;
+      return cands.find((s) => s.slot === r);
+    };
     if (agent) {
       const role: AgentRole = agent.role === 'guide' || agent.role === 'player' ? agent.role : 'party';
       const hands = agent.hands === 'host' ? 'host' : 'self';
-      const slot = (last !== undefined ? this.slots.find((s) => s.slot === last && (kept(s) || plainBot(s))) : undefined)
-        ?? this.slots.find(kept) ?? this.slots.find(plainBot);
       const take = (s: Slot): Slot => {
         s.agent = { seat, role: s.agent?.role ?? role, hands };
         s.name = name || aiName(this.botName(s.slot));
@@ -874,31 +1114,41 @@ export class Roster {
         if (hands === 'host') { s.bot = true; s.seat = null; } else { s.bot = false; s.seat = seat; }
         return s;
       };
-      if (slot) return { slot: take(slot), yielded: true, added: false };
+      const back = last !== undefined ? this.slots.find((s) => s.slot === last && (kept(s) || plainBot(s))) : undefined;
+      if (back) return settle(take(back), true, false, true);
+      // A seat kept for AI first (the reservation), then a plain bot: the game chooses within whichever it is.
+      const pool = this.slots.some(kept) ? this.slots.filter(kept) : this.slots.filter(plainBot);
+      const pick = chosen(pool);
+      const slot = pick ?? (pick === null && this.slots.length < this.max ? undefined : pool[0]);
+      if (slot) return settle(take(slot), true, false, false);
       if (this.slots.length >= this.max) return null;
       const s = take({ slot: this.nextSlotId(), seat: null, name: '', bot: true });
       this.slots.push(s);
       this.slots.sort((a, b) => a.slot - b.slot);
-      return { slot: s, yielded: false, added: true };
+      return settle(s, false, true, false);
     }
-    const bot = (last !== undefined ? this.slots.find((s) => s.slot === last && plainBot(s)) : undefined) ?? this.slots.find(plainBot);
-    if (bot) {
-      bot.bot = false; bot.seat = seat; bot.name = name || `Player ${seat + 1}`;
-      return { slot: bot, yielded: true, added: false };
-    }
+    const give = (bot: Slot): Slot => { bot.bot = false; bot.seat = seat; bot.name = name || `Player ${seat + 1}`; return bot; };
+    const back = last !== undefined ? this.slots.find((s) => s.slot === last && plainBot(s)) : undefined;
+    if (back) return settle(give(back), true, false, true);
+    const pool = this.slots.filter(plainBot);
+    const pick = chosen(pool);
+    // "None of these" adds a body while the room has space; a full room still seats the person in the default one.
+    const bot = pick ?? (pick === null && this.slots.length < this.max ? undefined : pool[0]);
+    if (bot) return settle(give(bot), true, false, false);
     if (this.slots.length >= this.max) return null;
     const slot = this.nextSlotId();
     const s: Slot = { slot, seat, name: name || `Player ${seat + 1}`, bot: false };
     this.slots.push(s);
     this.slots.sort((a, b) => a.slot - b.slot);
-    return { slot: s, yielded: false, added: true };
+    return settle(s, false, true, false);
   }
 
   /** A human leaves: their slot becomes a bot where it stands. An agent's goes back to a seat kept for AI. */
   release(seat: number): Slot | null {
     const s = this.bySeat(seat);
     if (!s) return null;
-    this.lastSlot.set(seat, s.slot);
+    this.lastSlot.set(seat, { slot: s.slot, occ: this.occ.get(seat) });
+    this.occ.delete(seat);
     s.bot = true; s.seat = null;
     if (s.agent) {
       const keep = this.slots.filter((x) => x.agent && x !== s).length < this.reserved();
@@ -927,23 +1177,32 @@ export class Roster {
     return removed;
   }
 
-  /** After a promotion: make the roster agree with who is actually connected (an agent with its facts). */
-  reconcile(peers: Iterable<{ seat: number | null; name: string; agent?: AgentFacts | null }>): { claimed: Slot[]; released: Slot[] } {
-    const here = new Map<number, { name: string; agent?: AgentFacts | null }>();
-    for (const p of peers) if (p.seat !== null && p.seat !== undefined) here.set(p.seat, { name: p.name, agent: p.agent ?? null });
+  /**
+   * After a promotion (or a host's own reconnect): make the roster agree with who is actually connected (an agent
+   * with its facts). `claimed`: every body a present seat took just now, through the same `claim` (and `admit`) as
+   * a fresh join (reset each one); a seat whose number somebody else holds now (`occ` differs) is one of them.
+   * `back`: those of `claimed` whose player got the body they held last (nobody new). Players whose slot never left
+   * are in neither.
+   */
+  reconcile(peers: Iterable<{ seat: number | null; name: string; agent?: AgentFacts | null; occ?: number | null }>): { claimed: Slot[]; released: Slot[]; back: Slot[] } {
+    const here = new Map<number, { name: string; agent?: AgentFacts | null; occ?: number | null }>();
+    for (const p of peers) if (p.seat !== null && p.seat !== undefined) here.set(p.seat, { name: p.name, agent: p.agent ?? null, occ: p.occ ?? null });
     const released: Slot[] = [];
     const claimed: Slot[] = [];
+    const back: Slot[] = [];
     for (const s of this.slots.filter((x) => !x.bot || (x.agent && x.agent.seat !== null))) {
       const seat = s.agent && s.agent.seat !== null ? s.agent.seat : s.seat;
       if (seat !== null && !here.has(seat)) { const r = this.release(seat); if (r) released.push(r); }
     }
     for (const [seat, p] of here) {
-      if (this.bySeat(seat)) continue;
-      const c = this.claim(seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null);
-      if (c) claimed.push(c.slot);
+      const had = this.bySeat(seat);
+      if (had && !this.changedHands(seat, p.occ)) { if (typeof p.occ === 'number') this.occ.set(seat, p.occ); continue; }
+      if (had) released.push(had);
+      const c = this.claim(seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null, p.occ);
+      if (c) { claimed.push(c.slot); if (c.back) back.push(c.slot); }
     }
     this.fill();
-    return { claimed, released };
+    return { claimed, released, back };
   }
 
   toJSON(): Slot[] { return this.slots.map(copySlot); }
@@ -958,7 +1217,7 @@ const LADDER = [250, 500, 1000, 2000, 4000];
  * second of frames at once), and a kick that ended the page's play for good left a phone frozen with no word.
  * After one it comes back (its seat token keeps its body), sending at the slow rate below.
  */
-const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed', 'watch-off', 'agent-pass', 'agents-off', 'agents-unsupported']);
+const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed', 'watch-off', 'agent-pass', 'agents-off', 'agents-unsupported', 'stale']);
 /** An AI closed for being alone in a room (`agents-alone`, section 17) waits this long before it knocks again. */
 const AGENTS_ALONE_WAIT_MS = 30_000;
 /**
@@ -967,8 +1226,119 @@ const AGENTS_ALONE_WAIT_MS = 30_000;
  * stall anywhere between) still fit under the cap.
  */
 const IN_CAP_PER_S = 32;
-/** Longest a page with a live socket listens for the relay's welcome before it plays alone (ms of time it could listen). */
+/** Longest a page with a live socket listens for the relay's welcome before it plays alone (ms of time it could listen): the default of `connectOpenMaxMs`. */
 const CONNECT_OPEN_MAX_MS = 10_000;
+/** `connectClock: 'game'`: the wait starts by itself this long after the helper was created, if the game never calls `net.start()`. */
+const CONNECT_CLOCK_MAX_MS = 60_000;
+/** A host's heartbeat (section 22): the default gap without a snapshot before the timer sends one, and how long it keeps a silent game its role. */
+const HEARTBEAT_MS = 500;
+const HEARTBEAT_MAX_MS = 4000;
+/** The link overlay: a reconnect shorter than this is never drawn. */
+const LINK_OVERLAY_MS = 700;
+/** `net.prefs` (section 24): what the play page keeps for one game on one browser. worker/pages.mjs has the same numbers. */
+export const PREFS_LIMITS = Object.freeze({ bytes: 16_384, keys: 32, key: 64 });
+const PREFS_WAIT_MS = 2000;
+const FEATURE = /^[a-z0-9][a-z0-9-]{0,23}$/;
+const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
+/** A game revision as the contract carries it: 1 to 32 of A-Z a-z 0-9 . _ - (a number is its digits), else null. */
+export function cleanVersion(v: unknown): string | null {
+  const t = typeof v === 'number' && Number.isFinite(v) ? String(v) : typeof v === 'string' ? v.trim() : '';
+  return VERSION.test(t) ? t : null;
+}
+/** A build's features as the contract carries them: up to 8 short lowercase words. */
+export function cleanFeatures(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  const out: string[] = [];
+  for (const x of list) { const k = String(x ?? '').toLowerCase(); if (FEATURE.test(k) && !out.includes(k)) out.push(k); if (out.length >= 8) break; }
+  return out;
+}
+
+/**
+ * PLACES (NETPLAY.md section 26): rows ranked by score, with a tie policy said out loud. `rows` must already be in the
+ * order to show them (the tiebreak is the caller's: createRoom puts people before bots, then the lower slot).
+ * `'order'` (the default, what results always were): places 1, 2, 3… in that order, so two equal scores get different
+ * places. `'shared'`: standard competition places, equal scores share one and the next is skipped (1, 1, 3).
+ * `'dense'`: equal scores share one and none is skipped (1, 1, 2).
+ */
+export type TiePolicy = 'order' | 'shared' | 'dense';
+export function placesOf(scores: readonly number[], ties: TiePolicy = 'order'): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < scores.length; i += 1) {
+    if (ties === 'order' || i === 0 || scores[i] !== scores[i - 1]) out.push(ties === 'dense' && i > 0 ? (out[i - 1] as number) + 1 : i + 1);
+    else out.push(out[i - 1] as number);
+  }
+  return out;
+}
+
+/**
+ * A TOUCH GAME'S GESTURE GUARD (NETPLAY.md section 24), for the game's own page. The play page around the frame
+ * already refuses selection, the callout and page gestures on itself, but a long press INSIDE the game's document
+ * (a HUD label, a button's text, the canvas) is the game's: on a phone it raises the copy/paste callout or selects
+ * text, and the thumb's touch is cancelled. Call it once, early:
+ *
+ *   const off = guardGestures({ touch: 'canvas, [data-action]' });
+ *
+ * It makes the page's text unselectable and suppresses the callout and the context menu, and it stops the browser's
+ * default for touches that start on the elements `touch` names (pan, pinch, double-tap zoom: `touch-action: none`
+ * plus a non-passive `preventDefault`). Text fields, selects, links, ordinary buttons and anything inside
+ * `[data-selectable]` keep their native behaviour. Returns the function that takes it all off again.
+ */
+export interface GestureGuardOptions {
+  /** Where gameplay touches land: a selector (default 'canvas'). Touches that start there never pan, zoom or select. */
+  touch?: string;
+  /** The document to guard (default: this one). */
+  document?: Document;
+  /** false: add no stylesheet (the listeners only). */
+  css?: boolean;
+}
+const NATIVE_TOUCH = 'input, textarea, select, option, a[href], label, [contenteditable]:not([contenteditable="false"]), [data-selectable]';
+export function guardGestures(o: GestureGuardOptions = {}): () => void {
+  const doc = o.document ?? (globalThis as { document?: Document }).document;
+  if (!doc || typeof doc.addEventListener !== 'function') return () => {};
+  const touch = typeof o.touch === 'string' && o.touch.trim() ? o.touch : 'canvas';
+  const within = (t: EventTarget | null, sel: string): boolean => {
+    const el = t as { closest?: (s: string) => unknown; parentElement?: { closest?: (s: string) => unknown } } | null;
+    try { return Boolean(el && (typeof el.closest === 'function' ? el.closest(sel) : el.parentElement?.closest?.(sel))); } catch { return false; }
+  };
+  /** A field, a link, a select, a marked region: the browser's own behaviour is the right one there. */
+  const native = (t: EventTarget | null): boolean => within(t, NATIVE_TOUCH);
+  /** A touch the game owns: it started on a gameplay surface. An ordinary button outside one keeps its click. */
+  const gameplay = (t: EventTarget | null): boolean => !native(t) && within(t, touch);
+  let style: { remove?: () => void } | null = null;
+  if (o.css !== false && typeof doc.createElement === 'function') {
+    try {
+      const el = doc.createElement('style');
+      el.setAttribute('data-homie-gestures', '');
+      el.textContent = `html,body{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+${touch}{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+input,textarea,select,[contenteditable]:not([contenteditable="false"]),[data-selectable],[data-selectable] *{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;touch-action:auto}`;
+      (doc.head ?? doc.documentElement)?.appendChild(el);
+      style = el;
+    } catch { /* a document that takes no styles keeps the listeners */ }
+  }
+  const stop = (e: Event): void => { if (e.cancelable) e.preventDefault(); };
+  const onSelect = (e: Event): void => { if (!native(e.target)) stop(e); };
+  const onMenu = (e: Event): void => { if (!native(e.target)) stop(e); };
+  const onTouch = (e: Event): void => { if (gameplay(e.target)) stop(e); };
+  // iOS's pinch on the page (it has no touch-action for it before 13, and ignores user-scalable).
+  const onGesture = (e: Event): void => { if (!native(e.target)) stop(e); };
+  const active = { passive: false, capture: true } as AddEventListenerOptions;
+  doc.addEventListener('selectstart', onSelect, true);
+  doc.addEventListener('contextmenu', onMenu, true);
+  doc.addEventListener('touchstart', onTouch, active);
+  doc.addEventListener('touchmove', onTouch, active);
+  doc.addEventListener('gesturestart', onGesture, active);
+  doc.addEventListener('dblclick', onTouch, true);
+  return () => {
+    doc.removeEventListener('selectstart', onSelect, true);
+    doc.removeEventListener('contextmenu', onMenu, true);
+    doc.removeEventListener('touchstart', onTouch, active);
+    doc.removeEventListener('touchmove', onTouch, active);
+    doc.removeEventListener('gesturestart', onGesture, active);
+    doc.removeEventListener('dblclick', onTouch, true);
+    try { style?.remove?.(); } catch { /* gone */ }
+  };
+}
 /** After the relay reports dropped inputs (or kicked this browser for them): the cap for the next while. */
 const IN_SLOW_CAP_PER_S = 15;
 const IN_SLOW_MS = 8000;
@@ -1018,7 +1388,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const inputMs = 1000 / Math.max(1, Math.min(30, opts.inputHz ?? 20));
   const checkpointMs = Math.max(250, opts.checkpointMs ?? 1000);
   const connectTimeoutMs = opts.connectTimeoutMs ?? 4000;
+  const connectOpenMaxMs = Math.max(2000, Math.min(120_000, Number(opts.connectOpenMaxMs) || CONNECT_OPEN_MAX_MS));
+  const heartbeatMs = opts.heartbeatMs === 0 ? 0 : Math.max(200, Math.min(2000, Number(opts.heartbeatMs) || HEARTBEAT_MS));
   const staleMs = Math.max(2500, opts.staleMs ?? 6000);
+  // Revisions (section 23): the game's revision (the page's word, or the game's own) and what this build can do.
+  const version = cleanVersion(opts.version ?? cfg?.ver);
+  const features = cleanFeatures(opts.features);
   const device: Device = cfg?.device ?? guessDevice();
   // A watcher (section 16) is a screen that never takes a seat, whatever else it is told.
   const watching = Boolean(opts.watch ?? cfg?.watch);
@@ -1042,6 +1417,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     role: new Set(), join: new Set(), leave: new Set(), input: new Set(), event: new Set(),
     snapshot: new Set(), control: new Set(), state: new Set(), round: new Set(), roster: new Set(), status: new Set(), announce: new Set(), mute: new Set(), view: new Set(),
     policy: new Set(), vote: new Set(), chat: new Set(), say: new Set(), unchat: new Set(), held: new Set(),
+    link: new Set(), stale: new Set(), shell: new Set(),
   };
   const emit = <K extends keyof NetHandlers<S, A, C>>(kind: K, arg: Parameters<NetHandlers<S, A, C>[K]>[0]): void => {
     for (const fn of [...handlers[kind]]) {
@@ -1064,6 +1440,11 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let ws: WebSocketLike | null = null;
   let attempt = 0;
   let reconnects = 0;
+  let drops = 0;
+  let heartbeats = 0;
+  /** My welcome gave me back the seat my token named (the same player), and a newer build is live (section 23). */
+  let resumed = false;
+  let staleVer: string | null = null;
   let promotions = 0;
   let lastMsgAt = 0;
   let waitingVisible = false;
@@ -1140,10 +1521,30 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let autoArmed = false;
   let snapSeen = false;
   let loadingAt = 0;
+  const createdAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const arrived: ArrivalInfo = { mode: arrival, by: null, playableMs: null, explicitMs: null, lateMs: null };
   function sayPlayable(by: 'game' | 'auto'): void {
     if (playableSent) return;
     playableSent = true;
+    arrived.by = by;
+    arrived.playableMs = Math.round(wall() - createdAt);
     post?.({ what: 'playable', by });
+  }
+  /**
+   * The game's own `net.playable()`. With `arrival: 'auto'` the helper may already have given the game the screen
+   * (seated, the room's state in): a later call then changes nothing, and a performance probe has measured an empty
+   * world as playable. Say so once, and tell the page when the game itself was ready, so a report can show both.
+   */
+  function explicitPlayable(): void {
+    if (arrived.explicitMs !== null) return;
+    arrived.explicitMs = Math.round(wall() - createdAt);
+    const late = playableSent && arrived.by === 'auto' && arrived.playableMs !== null ? arrived.explicitMs - arrived.playableMs : null;
+    if (late !== null && late >= 250) {
+      arrived.lateMs = late;
+      console.warn(`[netplay] net.playable() came ${late} ms after the arrival card had already lifted: this game uses the automatic arrival (seated, with the room's state), so its own word changed nothing and the card left before the game was ready. Pass createNetplay({ arrival: 'game' }) (createRoom: netplay: { arrival: 'game' }) so the card waits for net.playable().`);
+    }
+    post?.({ what: 'ready', by: 'game', mode: arrival, ms: arrived.explicitMs, ...(arrived.lateMs !== null ? { lateMs: arrived.lateMs } : {}) });
+    sayPlayable('game');
   }
   /** 'auto': a host at once, anyone else at its first snapshot, then two animation frames (the game drew with it). */
   function autoPlayable(): void {
@@ -1224,6 +1625,176 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     countBytes(bytesOut, text.length);
     return true;
   }
+
+  /* ------------------------------------------------------------ the link (revision 9, section 22) */
+  let link: LinkState = offline ? 'offline' : 'connecting';
+  /** The line over the game while the link is down: made on first need, in this document, so a game's CSS reaches it. */
+  const overlayOn = opts.linkOverlay !== false && !offline;
+  let overlay: HTMLElement | null = null;
+  let overlayTimer: ReturnType<typeof setTimeout> | null = null;
+  let overlayHide: ReturnType<typeof setTimeout> | null = null;
+  function overlayEl(): HTMLElement | null {
+    const doc = g.document;
+    if (!overlayOn || !doc || typeof doc.createElement !== 'function' || !doc.body) return null;
+    if (overlay) return overlay;
+    try {
+      // :where() has no specificity: any rule a game writes for [data-homie-link] wins.
+      const st = doc.createElement('style');
+      st.setAttribute('data-homie-link-style', '');
+      st.textContent = ':where([data-homie-link]){position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);z-index:2147483000;max-width:calc(100vw - 24px);padding:8px 14px;border-radius:999px;background:rgba(8,12,22,.9);color:#fff;font:600 13px/1.25 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:center;pointer-events:none;-webkit-user-select:none;user-select:none}:where([data-homie-link][hidden]){display:none}:where([data-homie-link="stale"]){pointer-events:auto;cursor:pointer}';
+      (doc.head ?? doc.documentElement).appendChild(st);
+      const el = doc.createElement('div');
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      el.hidden = true;
+      el.addEventListener('click', () => { if (el.getAttribute('data-homie-link') === 'stale') { try { (globalThis as { location?: Location }).location?.reload(); } catch { /* not a page */ } } });
+      doc.body.appendChild(el);
+      overlay = el;
+    } catch { overlay = null; }
+    return overlay;
+  }
+  function showOverlay(kind: 'reconnecting' | 'alone' | 'stale', text: string, forMs = 0): void {
+    const el = overlayEl();
+    if (!el) return;
+    if (overlayHide) { clearTimeout(overlayHide); overlayHide = null; }
+    el.setAttribute('data-homie-link', kind);
+    el.textContent = text;
+    el.hidden = false;
+    if (forMs > 0) overlayHide = setTimeout(() => { overlayHide = null; if (el.getAttribute('data-homie-link') === kind) el.hidden = true; }, forMs);
+  }
+  function paintLink(): void {
+    if (!overlayOn) return;
+    if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
+    if (link === 'reconnecting') {
+      // A blip shorter than a blink is never drawn.
+      overlayTimer = setTimeout(() => { overlayTimer = null; if (link === 'reconnecting') showOverlay('reconnecting', 'Reconnecting…'); }, LINK_OVERLAY_MS);
+    } else if (link === 'alone') showOverlay('alone', 'Playing offline · reconnecting…');
+    else if (link === 'closed' && closedWhy === 'stale') showOverlay('stale', 'This game was updated. Tap to reload.');
+    else if (overlay && overlay.getAttribute('data-homie-link') !== 'stale') overlay.hidden = true;
+  }
+  function setLink(next: LinkState, why: string): void {
+    if (next === link) return;
+    const prev = link;
+    link = next;
+    const e: LinkChange = { state: next, prev, why, hosting: roleKnown && role === 'host', downMs: connected || !downSince ? 0 : Math.round(wall() - downSince) };
+    post?.({ what: 'link', state: next, prev, why, hosting: e.hosting });
+    paintLink();
+    emit('link', e);
+  }
+  /** A newer build is live (section 23): the relay's `stale` frame (still playing) or its `stale` refusal (kept out). */
+  function noteStale(ver: unknown, final: boolean): void {
+    const next = cleanVersion(ver) ?? '';
+    const first = staleVer === null;
+    staleVer = next;
+    if (!first && !final) return;
+    post?.({ what: 'stale', ver: next || null, mine: version, final });
+    if (!final) showOverlay('stale', 'A new version is ready. Tap to reload.', 10_000);
+    emit('stale', { ver: next || null, mine: version, final });
+  }
+
+  /* ------------------------------------------------------------ the page around the frame (revision 9, section 24) */
+  // The address's switches: the play page's allow-listed ones (HOMIE_NET.params), or, with no page, this document's own.
+  const params: Readonly<Record<string, string>> = Object.freeze((() => {
+    const out: Record<string, string> = {};
+    const given = cfg?.params;
+    if (given && typeof given === 'object') {
+      for (const [k, v] of Object.entries(given).slice(0, 32)) if (typeof v === 'string') out[k] = v;
+      return out;
+    }
+    try {
+      const search = (globalThis as { location?: { search?: string } }).location?.search ?? '';
+      // With no page at all, the document's own address. In a frame whose page predates `params`, only the
+      // switches that page always passed on (its own words, the seat's token among them, are in the address too).
+      const always = ['debug', 'q', 'touchdebug', 'cam', 'view'];
+      // forEach, not iteration: a game checked with lib "DOM" alone (no DOM.Iterable) has no iterator on URLSearchParams.
+      let seen = 0;
+      if (search) new URLSearchParams(search).forEach((v, k) => { if (seen++ < 32 && (!cfg || always.includes(k))) out[k] = v; });
+    } catch { /* not a page */ }
+    return out;
+  })());
+  let shellLayout: ShellLayout | null = null;
+  function readShell(m: Record<string, unknown>): void {
+    if (!Array.isArray(m['rects'])) return;
+    const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : 0);
+    const rects: ShellRect[] = [];
+    for (const r of (m['rects'] as Record<string, unknown>[]).slice(0, 16)) {
+      if (!r || typeof r !== 'object' || typeof r['id'] !== 'string') continue;
+      const rect: ShellRect = { id: String(r['id']).slice(0, 24), x: num(r['x']), y: num(r['y']), w: Math.max(0, num(r['w'])), h: Math.max(0, num(r['h'])) };
+      if (r['fades'] === true) rect.fades = true;
+      if (rect.w && rect.h) rects.push(rect);
+    }
+    const dev = m['device'] === 'phone' || m['device'] === 'tv' ? m['device'] : 'desk';
+    shellLayout = { device: dev, orientation: m['orientation'] === 'portrait' ? 'portrait' : 'landscape', width: num(m['width']), height: num(m['height']), rects };
+    emit('shell', shellLayout);
+  }
+
+  // net.prefs: the play page keeps them (it says so in HOMIE_NET.prefs); with no page, this document's own storage
+  // when it has one (a plain file, a dev server), else memory for the visit.
+  const prefsKey = `homie-prefs.${String(opts.game ?? 'game').slice(0, 64)}`;
+  const prefsCache = new Map<string, unknown>();
+  const prefsAsks = new Map<number, (m: Record<string, unknown>) => void>();
+  let prefsSeq = 0;
+  let prefsReady: Promise<void> | null = null;
+  const localStore = (): Storage | null => {
+    try { const st = (globalThis as { localStorage?: Storage }).localStorage; if (!st) return null; st.getItem(prefsKey); return st; } catch { return null; }
+  };
+  const prefsWhere: Prefs['where'] = cfg?.prefs === true && post ? 'page' : !cfg && localStore() ? 'local' : 'memory';
+  const prefsKeyOk = (k: unknown): k is string => typeof k === 'string' && k.length > 0 && k.length <= PREFS_LIMITS.key;
+  function prefsAsk(msg: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return new Promise((done) => {
+      const n = (prefsSeq += 1);
+      const timer = setTimeout(() => { if (prefsAsks.delete(n)) done({ ok: false, why: 'no-answer' }); }, PREFS_WAIT_MS);
+      prefsAsks.set(n, (m) => { clearTimeout(timer); done(m); });
+      post?.({ what: 'prefs', n, ...msg });
+    });
+  }
+  function prefsLoad(): Promise<void> {
+    if (prefsReady) return prefsReady;
+    const take = (all: unknown): void => {
+      if (!all || typeof all !== 'object') return;
+      // What this visit already set wins over what was read (a set that raced the first read).
+      for (const [k, v] of Object.entries(all as Record<string, unknown>)) if (!prefsCache.has(k)) prefsCache.set(k, v);
+    };
+    if (prefsWhere === 'page') prefsReady = prefsAsk({ op: 'all' }).then((m) => take(m['all']));
+    else {
+      if (prefsWhere === 'local') { try { take(JSON.parse(localStore()?.getItem(prefsKey) ?? '{}')); } catch { /* nothing kept */ } }
+      prefsReady = Promise.resolve();
+    }
+    return prefsReady;
+  }
+  /** Whether the whole set still fits (16 KB, 32 keys): the page checks again; this keeps the three places alike. */
+  function prefsFits(key: string, value: unknown): boolean {
+    const next = Object.fromEntries(prefsCache);
+    next[key] = value;
+    let text: string;
+    try { text = JSON.stringify(next); } catch { return false; }
+    return typeof text === 'string' && text.length <= PREFS_LIMITS.bytes && Object.keys(next).length <= PREFS_LIMITS.keys;
+  }
+  const prefs: Prefs = {
+    get: <T,>(key: string, fallback?: T): Promise<T> => prefsLoad().then(() => (prefsCache.has(key) ? prefsCache.get(key) as T : fallback as T)),
+    peek: <T,>(key: string, fallback?: T): T => (prefsCache.has(key) ? prefsCache.get(key) as T : fallback as T),
+    all: () => prefsLoad().then(() => Object.fromEntries(prefsCache)),
+    remove: (key: string) => prefs.set(key, null),
+    async set(key: string, value: unknown): Promise<boolean> {
+      if (!prefsKeyOk(key)) return false;
+      await prefsLoad();
+      const del = value === null || value === undefined;
+      if (!del && !prefsFits(key, value)) { warnOnce('prefs-size', `net.prefs: '${key}' was not kept (a game's prefs are ${PREFS_LIMITS.bytes / 1024} KB and ${PREFS_LIMITS.keys} keys in all)`); return false; }
+      const had = prefsCache.has(key);
+      const before = prefsCache.get(key);
+      if (del) prefsCache.delete(key); else prefsCache.set(key, JSON.parse(JSON.stringify(value)));
+      if (prefsWhere === 'page') {
+        const m = await prefsAsk(del ? { op: 'del', k: key } : { op: 'set', k: key, v: value });
+        // Refused by the page (over its cap): what was kept before stands.
+        if (m['ok'] !== true && m['why'] !== 'no-answer') { if (had) prefsCache.set(key, before); else prefsCache.delete(key); return false; }
+        return m['ok'] === true;
+      }
+      if (prefsWhere === 'local') { try { localStore()?.setItem(prefsKey, JSON.stringify(Object.fromEntries(prefsCache))); } catch { return false; } }
+      return true;
+    },
+    get ready() { return prefsLoad(); },
+    get where() { return prefsWhere; },
+  };
 
   /* ------------------------------------------------------------ body control (host) */
   function ctlOf(s: number): { rs: number; own: boolean; taken: boolean; ack: number; giveAt: number } {
@@ -1536,6 +2107,11 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (next === 'host') { lastSnapSentAt = -Infinity; if (snap) tick = Math.max(tick, snap.k); }
         return;
       }
+      case 'stale': {
+        // A newer build of the game is live (section 23): this tab keeps playing in its own room, and is told.
+        noteStale(m['ver'], false);
+        return;
+      }
       case 'watch': {
         // The relay's word on following (section 16): a seat this browser took in another tab, or taken back.
         relayFollow = m['follow'] !== false;
@@ -1574,6 +2150,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (code === 'agents-alone') aloneUntil = wall() + AGENTS_ALONE_WAIT_MS;
         if (code === 'vote') { warnOnce('vote', m['message']); return; }
         if (code === 'rate' || code === 'state-full') { warnOnce(`${code}:${String(m['of'] ?? '')}`, m['message']); return; }
+        // The room still runs another build of the game (section 23): not final. Its players were told to reload; this
+        // browser keeps knocking and is let in when they have. Said once, not at every knock.
+        if (code === 'room-stale') { warnOnce('room-stale', m['message']); return; }
         console.warn('[netplay] relay refused:', code, m['message']);
         // The same seat opened in another tab, a full room, a version the relay does not speak: reconnecting
         // would repeat the refusal (or, for 'replaced', make the two tabs evict each other for ever).
@@ -1581,6 +2160,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
           closed = true;
           closedWhy = code;
           post?.({ what: 'closed', why: code, ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}), ...(typeof m['message'] === 'string' ? { message: String(m['message']).slice(0, 200) } : {}) });
+          // Kept out of a room for running an older build (section 23): the page reloads the game; the game may too.
+          if (code === 'stale') noteStale(m['ver'], true);
+          setLink('closed', code);
         }
         return;
       }
@@ -1601,9 +2183,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const wasOffline = offline;
     // Reconnected (a network blip, or a relay restart) and still the host: my rules state is the live one.
     const continuing = roleKnown && role === 'host' && next === 'host' && !wasOffline;
+    // Who this host had in its room before its socket went: what it missed is worked out below.
+    const had = continuing ? [...peers.values()] : [];
+    const hadSeat = seat;
+    const offered = token;
     id = String(m['id']);
     seat = typeof m['seat'] === 'number' ? m['seat'] : null;
     token = typeof m['token'] === 'string' ? m['token'] : token;
+    // The relay gave back the seat my token named: I am the player who was here, not a new one in that seat number.
+    resumed = seat !== null && typeof offered === 'string' && offered !== '' && offered === token;
     name = typeof m['name'] === 'string' ? m['name'] : name;
     colour = typeof m['colour'] === 'number' ? m['colour'] : colour;
     host = (m['host'] as HostRef | null) ?? null;
@@ -1644,9 +2232,43 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       setRole(next, wasOffline && roleKnown ? 'reconnected' : String(m['why'] ?? 'welcome'), { ckpt, snap, round: roundInfo, roster: slots });
       if (next === 'host' && snap) tick = Math.max(tick, snap.k);
     }
-    if (continuing) reannounce();
+    if (continuing) { reannounce(); catchUp(had, hadSeat); }
+    setLink('online', 'welcome');
+    // A build older than the live one, let in to its own room (section 23).
+    if (m['stale'] && typeof m['stale'] === 'object') noteStale((m['stale'] as { ver?: unknown }).ver, false);
     resolveView('seat');
     ping(); setTimeout(ping, 120); setTimeout(ping, 260);
+  }
+
+  /**
+   * A host that reconnected and is still the host hears no `role` (nothing changed for it), and the relay never told
+   * it who came or went while its socket was down: the welcome only replaced the peer list. Without this, a player
+   * who joined meanwhile had no body for the rest of the visit (no `join` ever reached the host's roster), and one
+   * who left kept a frozen one. So the difference is said as the `leave` and `join` events it would have been:
+   * by seat (a socket id changes on every reconnect), and a seat whose number changed hands (`occ`) is both.
+   */
+  function catchUp(had: Peer[], hadSeat: number | null): void {
+    const seatedOf = (list: Iterable<Peer>): Map<number, Peer> => {
+      const out = new Map<number, Peer>();
+      for (const p of list) if (typeof p.seat === 'number' && p.seat !== seat && p.seat !== hadSeat) out.set(p.seat, p);
+      return out;
+    };
+    const before = seatedOf(had);
+    const after = seatedOf(peers.values());
+    const swapped = (a: Peer, b: Peer): boolean => typeof a.occ === 'number' && typeof b.occ === 'number' && a.occ !== b.occ;
+    for (const [s, old] of before) {
+      const cur = after.get(s);
+      if (cur && !swapped(old, cur)) continue;
+      inputs.delete(s); presses.delete(s);
+      emit('leave', { id: old.id, seat: s, why: 'gone' });
+    }
+    for (const [s, cur] of after) {
+      const old = before.get(s);
+      if (old && !swapped(old, cur)) continue;
+      ctlOf(s);
+      emit('join', cur);
+    }
+    if (watching) resolveView('auto');
   }
 
   /** A host that reconnected (the relay may have restarted): hand the relay the round, roster, state and a checkpoint. */
@@ -1731,6 +2353,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (role === 'host') return; // a stale frame from a previous host
     const s: Snapshot<S> = { k: Number(m['k']) || 0, st: Number(m['st']), d: m['d'] as S, from: typeof m['from'] === 'number' ? m['from'] : null };
     if (Array.isArray(m['c'])) s.c = m['c'] as ControlWire[];
+    if (m['hb'] === 1) s.hb = 1;
     if (acceptSnap(s, bytes, true)) { emit('snapshot', s); if (!snapSeen) { snapSeen = true; autoPlayable(); } }
   }
 
@@ -1782,11 +2405,47 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let ckptTimer: ReturnType<typeof setInterval> | null = null;
   let statsTimer: ReturnType<typeof setInterval> | null = null;
   let connectTimer: ReturnType<typeof setTimeout> | undefined;
+  let hbTimer: ReturnType<typeof setInterval> | null = null;
+  /** `connectClock: 'game'`: the wait for the welcome is not counted until the game says it has booted. */
+  let clockRunning = opts.connectClock !== 'game';
   let lastStatsPost = 0;
+  /** The last snapshot's state as text, and when the GAME last sent one (a heartbeat is not the game's). */
+  let lastSnapData: string | null = null;
+  let lastRealSnapAt = -Infinity;
+  /** A snapshot's time stamp is always later than the one before it: a replica drops one that is not, and a real
+   *  snapshot sent in the same millisecond as a heartbeat must not be the one dropped. */
+  let lastSnapSt = 0;
+  const snapStamp = (): number => (lastSnapSt = Math.max(now(), lastSnapSt + 1));
+
+  /**
+   * A host's heartbeat (section 22). The relay replaces a host that sent no snapshot for its stall time, which is
+   * right for a frozen tab and wrong for a game whose frames hitched for a second (a level loading, shaders
+   * compiling, a throttled window): the room changed hands again and again. So when the game has sent nothing for
+   * `heartbeatMs`, this timer sends its last state again with a fresh time stamp, marked `hb`. Replicas hold the
+   * picture, which is what the host is showing too. Only for HEARTBEAT_MAX_MS: after that the game is taken to be
+   * frozen, the heartbeat stops, and the relay hands the room on as before.
+   */
+  function heartbeat(): void {
+    if (role !== 'host' || offline || !connected || closed || peers.size < 2 || lastSnapData === null || hidden()) return;
+    const t = wall();
+    if (t - lastSnapSentAt < heartbeatMs || t - lastRealSnapAt > HEARTBEAT_MAX_MS) return;
+    if (!ws || ws.readyState !== 1 || (ws.bufferedAmount ?? 0) > 3 * 1024) return;
+    const c = ctlWire();
+    const text = `{"t":"snap","k":${tick},"st":${snapStamp()},"d":${lastSnapData}${c.length ? `,"c":${JSON.stringify(c)}` : ''},"hb":1}`;
+    try { ws.send(text); } catch { return; }
+    countBytes(bytesOut, text.length);
+    lastSnapSentAt = t;
+    heartbeats += 1;
+  }
 
   function hidden(): boolean { try { return Boolean(g.document?.hidden); } catch { return false; } }
   function ping(): void {
-    if (!connected) return;
+    if (!connected) {
+      // A socket that opened and was never welcomed (a room that is not answering) is as dead as a silent one: drop
+      // it and knock again, so a page that gave up and plays alone still finds its room when the room is back.
+      if (ws && ws.readyState === 1 && lastMsgAt && wall() - lastMsgAt > Math.max(staleMs, connectOpenMaxMs)) lost(ws, 'stale');
+      return;
+    }
     // A socket that delivered nothing (not even a pong) for staleMs is half-open: drop it and reconnect.
     if (ws && lastMsgAt && wall() - lastMsgAt > staleMs) { lost(ws, 'stale'); return; }
     const c = Date.now();
@@ -1854,7 +2513,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       lastSnapBytes, maxSnapBytes, bytesInPerS: perSecond(bytesIn), bytesOutPerS: perSecond(bytesOut),
       interpDelay: Math.round(interpDelay()), snapAgeP90: Math.round(ageP90), starvedPct: +starvedPct.toFixed(3), rejectedSnaps,
       owned: api.owned, pending: sentHist.length, stateKeys: stateMap.size,
-      peers: peers.size, reconnects, promotions, round: roundInfo ? roundInfo.n : null,
+      peers: peers.size, reconnects, drops, link, heartbeats, promotions, round: roundInfo ? roundInfo.n : null,
       decides: { asked: decideStats.asked, ai: decideStats.ai, local: decideStats.local, floor: decideStats.floor, msP50: [...decideStats.ms].sort((x, y) => x - y)[Math.floor(decideStats.ms.length / 2)] ?? null },
     };
   }
@@ -1877,6 +2536,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     connected = false;
     seat = null;
     if (!roleKnown || role !== 'host') setRole('host', why);
+    // No shell at all is `offline` from the start; a room that never answered is `alone` (and still knocked at).
+    if (why !== 'offline') setLink('alone', why);
   }
 
   function lost(sock: WebSocketLike, why: string): void {
@@ -1886,8 +2547,11 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (why !== 'closed') { try { sock.close(4000, why); } catch { /* gone */ } }
     const was = connected;
     connected = false;
-    if (was) downSince = wall();
+    if (was) { downSince = wall(); drops += 1; }
     if (was) emit('status', false);
+    // It was in its room and the socket went: it knocks again with its token. (Never welcomed yet: still `connecting`,
+    // or `alone` once it gave up waiting; stopped for good: `closed`.)
+    if (was && !closed) setLink('reconnecting', why === 'stale' ? 'stale' : 'lost');
     notifyStats(true);
     retry();
   }
@@ -1902,6 +2566,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       raw({
         t: 'hello', v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
         ...(watching ? { watch: true } : {}), ...(caps.size ? { caps: [...caps] } : {}), ...(asAgent ? { agent: asAgent } : {}),
+        // Revision 9 (an older relay ignores both): the game's revision and what this build can do.
+        ...(version ? { ver: version } : {}), ...(features.length ? { feat: features } : {}),
       });
     };
     sock.onmessage = (ev) => onMessage(ev.data);
@@ -1931,18 +2597,23 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // started a private fight 1 at every loaded boot and swapped it for the room's a moment later. A socket
     // that is connecting or open gets CONNECT_OPEN_MAX_MS of that listening time; one that failed outright
     // (ws is null between retries) gets connectTimeoutMs.
+    // `connectOpenMaxMs` sizes that wait; with `connectClock: 'game'` it starts only at `net.start()`, once the game
+    // has finished booting (or CONNECT_CLOCK_MAX_MS after the helper was made: a game that never says still gets a role).
     let listenedMs = 0;
     let lastCheckAt = wall();
+    const bornAt = wall();
     const connectCheck = (): void => {
       if (roleKnown) return;
       const t = wall();
-      listenedMs += Math.min(t - lastCheckAt, 600);
+      if (!clockRunning && t - bornAt >= CONNECT_CLOCK_MAX_MS) clockRunning = true;
+      if (clockRunning) listenedMs += Math.min(t - lastCheckAt, 600);
       lastCheckAt = t;
       const live = Boolean(ws && (ws.readyState === 0 || ws.readyState === 1));
-      if (listenedMs < (live ? CONNECT_OPEN_MAX_MS : connectTimeoutMs)) { connectTimer = setTimeout(connectCheck, 250); return; }
+      if (listenedMs < (live ? connectOpenMaxMs : connectTimeoutMs)) { connectTimer = setTimeout(connectCheck, 250); return; }
       goOfflineHost('relay-timeout');
     };
     connectTimer = setTimeout(connectCheck, 250);
+    if (heartbeatMs) hbTimer = setInterval(heartbeat, 250);
     pingTimer = setInterval(ping, 2000);
     ckptTimer = setInterval(sendCheckpoint, checkpointMs);
     statsTimer = setInterval(() => notifyStats(true), 500);
@@ -2012,6 +2683,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (ev.source !== g.parent || !ev.data || typeof ev.data !== 'object') return;
       const d = ev.data as { t?: unknown; on?: unknown };
       if (d.t === 'homie-hush') hushed = d.on === true;
+      // The page's answer to a net.prefs call, and where its own controls sit over the game (section 24).
+      if (d.t === 'homie-prefs') { const m = d as Record<string, unknown>; const w = prefsAsks.get(Number(m['n'])); if (w) { prefsAsks.delete(Number(m['n'])); w(m); } }
+      if (d.t === 'homie-shell') readShell(d as Record<string, unknown>);
       // Room chat (section 19): the play page's "Show chat" and "Show my messages over my character".
       if (d.t === 'homie-chat') {
         const c = d as { show?: unknown; bubble?: unknown };
@@ -2084,6 +2758,30 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get connected() { return connected; },
     get closedWhy() { return closedWhy; },
     get downMs() { return connected || !downSince ? 0 : wall() - downSince; },
+    get link() { return link; },
+    get reconnects() { return reconnects; },
+    get resumed() { return resumed; },
+    start(): void { clockRunning = true; },
+    get version() { return version; },
+    get stale() { return staleVer; },
+    featuresOf(s: number | null): string[] {
+      if (s === null || s === undefined) return [];
+      if (s === seat && !offline) return [...features];
+      for (const p of peers.values()) if (p.seat === s) return Array.isArray(p.feat) ? p.feat.filter((x) => typeof x === 'string') : [];
+      return [];
+    },
+    allHave(feature: string): boolean {
+      const k = String(feature ?? '').toLowerCase();
+      if (!features.includes(k)) return false;
+      // A lite agent (hands `host`) has no game client: its body is the host's own bot code.
+      for (const p of peers.values()) if (typeof p.seat === 'number' && !p.watch && !(p.agent && p.agent.hands === 'host') && !(Array.isArray(p.feat) && p.feat.includes(k))) return false;
+      return true;
+    },
+    get prefs() { return prefs; },
+    get params() { return params; },
+    param(n: string, fallback: string | null = null): string | null { return Object.prototype.hasOwnProperty.call(params, n) ? params[n] as string : fallback; },
+    get shell() { return shellLayout; },
+    get arrivalInfo() { return { ...arrived }; },
     get owned() { return role === 'host' || offline || seat === null ? true : mine.own; },
     get id() { return id; },
     get name() { return name; },
@@ -2096,7 +2794,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get announcement() { return announcement && (announcement.until === undefined || announcement.until > now()) ? announcement : null; },
     isMuted(s: number | null): boolean { return s !== null && (muted.get(s) ?? 0) > now(); },
     pickPlayer(s: number | null): void { post?.({ what: 'pick', seat: typeof s === 'number' ? s : null }); },
-    playable(): void { sayPlayable('game'); },
+    playable(): void { explicitPlayable(); },
     loading(fraction: number, what?: string): void {
       if (playableSent) return;
       const t = wall();
@@ -2181,9 +2879,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (role !== 'host' || offline || !connected) return false;
       if (!force && wall() - lastSnapSentAt < (peers.size > 1 ? snapshotMs : 1000) - 2) return false;
       tick = k ?? tick + 1;
-      const st = now();
+      const st = snapStamp();
       const c = ctlWire();
-      const text = JSON.stringify(c.length ? { t: 'snap', k: tick, st, d, c } : { t: 'snap', k: tick, st, d });
+      // The state as text once: the heartbeat sends the same text again while the game's frames hitch.
+      const data = JSON.stringify(d ?? null);
+      const text = `{"t":"snap","k":${JSON.stringify(tick)},"st":${st},"d":${data}${c.length ? `,"c":${JSON.stringify(c)}` : ''}}`;
+      lastSnapData = data;
+      lastRealSnapAt = wall();
       if (!ws || ws.readyState !== 1) return false;
       // A congested socket drops a snapshot rather than queueing a stale one. At 3 KB (about six
       // snapshots), not 256 KB. A starved network thread on a loaded phone held a second of snapshots and then
@@ -2330,9 +3032,14 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (ckptTimer) clearInterval(ckptTimer);
       if (statsTimer) clearInterval(statsTimer);
       if (watchTimer) clearInterval(watchTimer);
+      if (hbTimer) clearInterval(hbTimer);
       if (spotTimer) clearTimeout(spotTimer);
+      if (overlayTimer) clearTimeout(overlayTimer);
+      if (overlayHide) clearTimeout(overlayHide);
       clearTimeout(connectTimer);
       try { raw({ t: 'bye' }); ws?.close(1000, 'bye'); } catch { /* gone */ }
+      if (!offline || link === 'alone') setLink('closed', 'close');
+      if (overlay) overlay.hidden = true;
     },
   };
 
@@ -2353,6 +3060,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       get policy() { return policy; },
       get vote() { return voteState; },
       get revision() { return NETPLAY_REVISION; },
+      /** Revision 9: the link, how often it was interrupted, the game's revision, and the arrival's facts (for a probe). */
+      get link() { return link; },
+      get reconnects() { return reconnects; },
+      get drops() { return drops; },
+      get version() { return version; },
+      get stale() { return staleVer; },
+      get arrival() { return { ...arrived }; },
+      get shell() { return shellLayout; },
+      get params() { return params; },
       get agent() { return asAgent; },
       get following() { return following; },
       get state() { return Object.fromEntries(stateMap); },

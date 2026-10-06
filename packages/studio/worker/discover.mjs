@@ -8,17 +8,17 @@
  *   /sitemap.xml     every public page (Home, Games and each landing, Music, Videos, Rooms, Posts, the studio's own
  *                    pages), with lastmod only where a real date says when it changed
  *   /llms.txt        the llms.txt convention (an H1, a > summary, then ## sections of links): what the studio is, each
- *                    public game with its pitch, players, Play, Watch, the big screen and whether and how it can be
- *                    remixed (the licence, the source, the words to say to Claude Code or Codex with Homie), songs,
+ *                    public game with its pitch, players, Play, Watch, the big screen, the licence it names and the
+ *                    game it was based on (when it has either), songs,
  *                    videos, posts with their feeds, the studio's own pages, and a link to homie.rocks's llms.txt
  *   /llms-full.txt   the same, with each game's whole description, how to play, controls and credits, and every
  *                    post's text
  *
- * Only public games are ever named (a private or invite-only game is in none of them), and a game is offered for
- * remixing only when its owner's remix switch is on, its source is shared and its licence allows it. A file of the
+ * Only public games are ever named (a private or invite-only game is in none of them), and no game is offered to
+ * be taken whole (the pieces a studio shares are its parts, at /parts/, worker/parts.mjs). A file of the
  * studio's own in site/public (robots.txt, sitemap.xml, llms.txt, llms-full.txt) wins over the made one.
  */
-import { licenseOf, LICENSE_KINDS, remixRow } from './license.mjs';
+import { basedOnRow, licenseLabel } from './license.mjs';
 
 export const DISCOVERY_FILES = ['/robots.txt', '/sitemap.xml', '/llms.txt', '/llms-full.txt'];
 
@@ -111,15 +111,6 @@ export function sitemapXml(cat, origin, opts = {}) {
 
 /* ------------------------------------------------------------------ llms.txt */
 
-const HOMIE_INSTALL = 'in Claude Code, `/plugin marketplace add homie-rocks/homie` and then `/plugin install homie@homie` (Codex takes the same marketplace)';
-
-function licenceWords(g) {
-  const l = licenseOf(g.license);
-  const name = `${LICENSE_KINDS[l.kind]}${l.spdx ? `, ${l.spdx}` : ''}`;
-  if (l.kind === 'remix-freely') return `${name}: a credit is welcome, not asked for`;
-  return `${name}: a remix says "Remix of ${one(g.name, 80)} by ${one(g.studio, 80)}" with a link back`;
-}
-
 function summaryOf(cat, origin) {
   const name = studioName(cat);
   const tag = one(cat.studio?.tagline, 140);
@@ -137,8 +128,8 @@ function summaryOf(cat, origin) {
   ];
 }
 
-/** /llms.txt. `remixable(g)`: the owner's remix switch is on, the source is shared, and the licence allows it. */
-export function llmsTxt(cat, origin, { remixable = () => false, directory = 'https://homie.rocks', full = false, posts = null, all = null } = {}) {
+/** /llms.txt (and, with `full`, /llms-full.txt). */
+export function llmsTxt(cat, origin, { directory = 'https://homie.rocks', full = false, posts = null, all = null } = {}) {
   const name = studioName(cat);
   const games = (cat.games ?? []).map((g) => ({ ...g, studio: name }));
   const songs = cat.songs ?? [];
@@ -154,9 +145,10 @@ export function llmsTxt(cat, origin, { remixable = () => false, directory = 'htt
       const L = g.landing ?? {};
       const doors = [`Play: ${origin}/${g.id}/play`, ...(watchable(g) ? [`Watch a live room: ${origin}/${g.id}/watch`] : []), ...(tv(g) ? [`On a TV: ${origin}/${g.id}/tv`] : [])];
       const facts = [players(g), rounds(g.roundSeconds), ...(Array.isArray(g.genre) ? g.genre : g.genre ? [g.genre] : [])].filter(Boolean).join(', ');
-      const lineage = remixRow(g.remixOf);
-      const open = remixable(g);
-      out.push(`- [${label(g.name)}](${origin}/${g.id}/): ${one(L.pitch || g.blurb, 240)}${/[.!?]$/.test(one(L.pitch || g.blurb)) ? '' : '.'} ${facts}.${lineage ? ` A remix of ${one(lineage.name, 80)}${lineage.studio ? ` by ${one(lineage.studio, 80)}` : ''}.` : ''} ${doors.join('. ')}. ${open ? `Open to remix (${LICENSE_KINDS[licenseOf(g.license).kind]}${licenseOf(g.license).spdx ? `, ${licenseOf(g.license).spdx}` : ''}): see Remix below.` : 'Not open to remix.'}`);
+      // The credit a game owes the one it was made from, and the licence it names for itself: facts, when it has them.
+      const lineage = basedOnRow(g.basedOn ?? g.remixOf);
+      const licence = licenseLabel(g.license);
+      out.push(`- [${label(g.name)}](${origin}/${g.id}/): ${one(L.pitch || g.blurb, 240)}${/[.!?]$/.test(one(L.pitch || g.blurb)) ? '' : '.'} ${facts}.${lineage ? ` Based on ${one(lineage.name, 80)}${lineage.studio ? ` by ${one(lineage.studio, 80)}` : ''}.` : ''} ${doors.join('. ')}.${licence ? ` Licence: ${licence}.` : ''}`);
       if (full) {
         const C = L.credits ?? {};
         const lines = [];
@@ -172,12 +164,6 @@ export function llmsTxt(cat, origin, { remixable = () => false, directory = 'htt
         if (C.texts) lines.push(`Licence texts: ${origin}/${g.id}/credits`);
         for (const l of lines) out.push(`  ${l}`);
       }
-    }
-    const open = games.filter((g) => remixable(g));
-    if (open.length) {
-      out.push('', '## Remix', '');
-      out.push(`Homie is a plugin for Claude Code and Codex that makes multiplayer games in a studio of your own, on your own free Cloudflare account. To remix one of these games, ${HOMIE_INSTALL}, then say "Remix <game> from <its source address> into a game of my own in my Homie studio". The plugin's \`game_remix\` tool (or \`npx --no-install homie-studio game remix <source address> --id <new-id>\` in a studio's folder) copies it in and writes the credit its licence asks for.`, '');
-      for (const g of open) out.push(`- [${label(g.name)} source](${origin}/games/${g.id}/source.json): ${licenceWords(g)}. Say: "Remix ${one(g.name, 80)} from ${origin}/games/${g.id}/source.json into a game of my own in my Homie studio".`);
     }
   }
   if (songs.length) {

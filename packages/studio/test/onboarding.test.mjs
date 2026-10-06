@@ -428,8 +428,8 @@ test('the site: the codex is the owner\'s private page, and CODEX.md never ships
   assert.deepEqual(b.codexes, ['ember-run']);
   const dist = join(dir, 'site', 'dist');
   assert.ok(existsSync(join(dist, '_studio', 'codex', 'ember-run', 'index.html')));
-  const source = JSON.parse(readFileSync(join(dist, 'games', 'ember-run', 'source.json'), 'utf8'));
-  assert.equal(source.files['CODEX.md'], undefined, 'the remix source leaves the codex out');
+  assert.ok(!existsSync(join(dist, 'games', 'ember-run', 'source.json')), 'no game\'s source is built, so the codex cannot be in one');
+  assert.ok(!existsSync(join(dist, 'games', 'ember-run', 'CODEX.md')), 'and it is not among the game\'s served files');
   assert.doesNotMatch(readFileSync(join(dist, 'games.json'), 'utf8'), /codex|secret plan/i, 'the catalogue never names it');
 
   const { default: worker } = await import('../worker/index.mjs');

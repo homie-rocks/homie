@@ -10,7 +10,7 @@
  *   - the owner's own properties (game.json "schema", studio.json site.schema) add to Homie's and never replace them,
  *     and a page of the studio's own takes <!-- homie:schema -->;
  *   - /robots.txt, /sitemap.xml, /llms.txt and /llms-full.txt from the public catalogue: a private game is in none of
- *     them, a game is offered for remixing only when it can be, and a file of the studio's own wins.
+ *     them, no game is offered to be taken whole (remix was retired), and a file of the studio's own wins.
  * Run: node --test packages/studio/test/schema.test.mjs
  */
 import assert from 'node:assert/strict';
@@ -33,7 +33,7 @@ const out = (r) => JSON.parse(r.stdout);
 const write = (dir, rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursive: true }); writeFileSync(join(dir, rel), text); };
 const ORIGIN = 'https://owls.example';
 
-/** A studio with everything a page can say: games (a remix, a port, a private one, a closed one), music, videos, posts, a page of its own. */
+/** A studio with everything a page can say: games (one made from another studio's, a port, a private one, one with the old licence word), music, videos, posts, a page of its own. */
 function fullStudio(name) {
   const dir = join(scratch, name);
   const r = run(['new', dir, '--name', 'Night Owls', '--homie', 'https://homie.test', '--no-install'], scratch);
@@ -185,7 +185,7 @@ test('a landing\'s VideoGame: everything the game\'s files say, the owner\'s ext
   assert.match(html, /<li>Arcade<\/li><li>Shooter<\/li>/, 'and its genre');
   assert.deepEqual(g.author, { '@type': 'Organization', '@id': `${ORIGIN}/#studio`, name: 'Night Owls', url: `${ORIGIN}/` }, 'the studio, by name: a page is read on its own');
   assert.deepEqual(g.publisher, g.author);
-  assert.deepEqual(g.license, { '@type': 'CreativeWork', name: 'Remix with credit (MIT)', url: 'https://spdx.org/licenses/MIT.html' });
+  assert.deepEqual(g.license, { '@type': 'CreativeWork', name: 'MIT', url: 'https://spdx.org/licenses/MIT.html' }, 'the licence the game names, and none of the old remix word beside it');
   assert.deepEqual(g.isBasedOn, { '@type': 'VideoGame', name: 'Rocks', url: 'https://example.com/rocks', creditText: 'Rocks by An Author (2010), MIT licence' }, 'a port names its original');
   assert.equal(g.trailer['@type'], 'VideoObject');
   assert.equal(g.trailer.contentUrl, `${ORIGIN}/videos/trailer/trailer.mp4`);
@@ -201,18 +201,19 @@ test('a landing\'s VideoGame: everything the game\'s files say, the owner\'s ext
   assert.deepEqual(g.potentialAction, { '@type': 'PlayAction', target: `${ORIGIN}/rock-race/play` });
   const crumbs = nodeOf(html, 'BreadcrumbList').itemListElement.map((li) => [li.position, li.name, li.item]);
   assert.deepEqual(crumbs, [[1, 'Home', `${ORIGIN}/`], [2, 'Games', `${ORIGIN}/games/`], [3, 'Rock <Race>', `${ORIGIN}/rock-race/`]]);
-  // A remix (its landing the owner's own page, with the marker): its original, by its address; a two-player game is
-  // not single player; dates from git alone.
+  // A game that was made from another studio's (its landing the owner's own page, with the marker): the credit is on
+  // its page, not in its structured data, and the old licence word is no licence; a two-player game is not single
+  // player; dates from git alone.
   const own = await (await site('/gem-thief/')).text();
   assert.match(own, /<h1>Our own landing<\/h1>/, 'the owner\'s landing is served as it is');
-  const remix = nodeOf(own, 'VideoGame');
-  assert.deepEqual(remix.isBasedOn, { '@type': 'VideoGame', name: 'Gem Rush', url: 'https://other.example/gem-rush/', creditText: 'Gem Rush by Other Studio' });
-  assert.deepEqual(remix.playMode, ['https://schema.org/MultiPlayer']);
-  assert.deepEqual(remix.license, { '@type': 'CreativeWork', name: 'Remix freely' });
-  assert.equal(Date.parse(remix.datePublished), Date.parse('2026-09-19T08:00:00Z'), 'the commit that added its game.json');
-  assert.equal(Date.parse(remix.dateModified), Date.parse('2026-09-27T09:30:00Z'));
+  const thief = nodeOf(own, 'VideoGame');
+  assert.equal(thief.isBasedOn, undefined);
+  assert.deepEqual(thief.playMode, ['https://schema.org/MultiPlayer']);
+  assert.equal(thief.license, undefined);
+  assert.equal(Date.parse(thief.datePublished), Date.parse('2026-09-19T08:00:00Z'), 'the commit that added its game.json');
+  assert.equal(Date.parse(thief.dateModified), Date.parse('2026-09-27T09:30:00Z'));
   // A game nobody may watch has no watch door, but its VideoGame is the same shape.
-  assert.deepEqual(nodeOf(await (await site('/closed-door/')).text(), 'VideoGame').license, { '@type': 'CreativeWork', name: 'Not for remixing' });
+  assert.equal(nodeOf(await (await site('/closed-door/')).text(), 'VideoGame').license, undefined, 'the old word "no-remix" is not a licence');
 
   // The shop's items, only while it sells: the free offer's add-ons, in real money, this game's and the studio's own.
   const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
@@ -320,14 +321,11 @@ test('robots.txt, sitemap.xml, llms.txt and llms-full.txt: every public page, re
   const lines = llms.split('\n');
   assert.equal(lines[0], '# Night Owls', 'an H1 first');
   assert.match(lines[2], /^> Night Owls is a studio made with Homie \(Games for night owls\)\. It makes free multiplayer games/, 'then the > summary');
-  assert.deepEqual(lines.filter((l) => l.startsWith('## ')), ['## Games', '## Remix', '## Music', '## Videos', '## Posts', '## Pages', '## Optional']);
-  assert.match(llms, /^- \[Rock <Race>\]\(https:\/\/owls\.example\/rock-race\/\): Blast rocks, not friends\. 1–6 players, 2-minute rounds, Arcade, Shooter\. Play: https:\/\/owls\.example\/rock-race\/play\. Watch a live room: https:\/\/owls\.example\/rock-race\/watch\. On a TV: https:\/\/owls\.example\/rock-race\/tv\. Open to remix \(Remix with credit, MIT\)/m);
-  assert.match(llms, /^- \[Gem Thief\]\(https:\/\/owls\.example\/gem-thief\/\): gem-thief for everyone\. 2 players, 2-minute rounds\. A remix of Gem Rush by Other Studio\./m);
-  assert.match(llms, /^- \[Closed Door\]\(https:\/\/owls\.example\/closed-door\/\): .* Play: https:\/\/owls\.example\/closed-door\/play\. On a TV: https:\/\/owls\.example\/closed-door\/tv\. Not open to remix\.$/m, 'no watch door, and its licence says no remix');
-  assert.match(llms, /^- \[Rock <Race> source\]\(https:\/\/owls\.example\/games\/rock-race\/source\.json\): Remix with credit, MIT: a remix says "Remix of Rock <Race> by Night Owls" with a link back\. Say: "Remix Rock <Race> from https:\/\/owls\.example\/games\/rock-race\/source\.json into a game of my own in my Homie studio"\.$/m);
-  assert.match(llms, /`game_remix` tool/);
-  assert.match(llms, /homie-studio game remix <source address> --id <new-id>/);
-  assert.doesNotMatch(llms, /closed-door\/source\.json/);
+  assert.deepEqual(lines.filter((l) => l.startsWith('## ')), ['## Games', '## Music', '## Videos', '## Posts', '## Pages', '## Optional']);
+  assert.match(llms, /^- \[Rock <Race>\]\(https:\/\/owls\.example\/rock-race\/\): Blast rocks, not friends\. 1–6 players, 2-minute rounds, Arcade, Shooter\. Play: https:\/\/owls\.example\/rock-race\/play\. Watch a live room: https:\/\/owls\.example\/rock-race\/watch\. On a TV: https:\/\/owls\.example\/rock-race\/tv\. Licence: MIT\.$/m);
+  assert.match(llms, /^- \[Gem Thief\]\(https:\/\/owls\.example\/gem-thief\/\): gem-thief for everyone\. 2 players, 2-minute rounds\. Based on Gem Rush by Other Studio\. Play: https:\/\/owls\.example\/gem-thief\/play\./m, 'the credit it owes, as a fact');
+  assert.match(llms, /^- \[Closed Door\]\(https:\/\/owls\.example\/closed-door\/\): .* Play: https:\/\/owls\.example\/closed-door\/play\. On a TV: https:\/\/owls\.example\/closed-door\/tv\.$/m, 'no watch door, and no word about its licence: it names none');
+  assert.doesNotMatch(llms, /remix|source\.json/i, 'no Remix section, no source address, no offer');
   assert.doesNotMatch(llms, /secret-plan|Secret Plan/, 'a private game is never named');
   assert.match(llms, /^- \[Theme\]\(https:\/\/owls\.example\/music\/theme\/\): Song, 1:35, 120 BPM, A minor, from Night Route\. The studio theme\.$/m);
   assert.match(llms, /^- \[Rock Race trailer\]\(https:\/\/owls\.example\/videos\/trailer\/\): Trailer, 1:05\. Six ships, one rock field\.$/m);
@@ -349,11 +347,8 @@ test('robots.txt, sitemap.xml, llms.txt and llms-full.txt: every public page, re
   assert.match(full, /^Faster rocks\.$/m, 'every post\'s text');
   assert.doesNotMatch(full, /secret-plan/);
 
-  // The owner withdraws a game's source (the office's remix switch): it is no longer offered for remixing.
   const { llmsTxt } = await import('../worker/discover.mjs');
   const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
-  const withdrawn = llmsTxt({ ...cat, games: cat.games.filter((g) => !g.launch) }, ORIGIN, { remixable: () => false });
-  assert.doesNotMatch(withdrawn, /## Remix|source\.json|Open to remix/);
   // A studio says what it has, never what it might: a music studio makes no game, and a new one says its first is coming.
   assert.match(llmsTxt({ ...cat, games: [], posts: [] }, ORIGIN).split('\n')[2], /\. It publishes songs and videos\. Its site is/);
   assert.match(llmsTxt({ studio: { name: 'Fresh' }, games: [], songs: [], videos: [], posts: [] }, ORIGIN), /^> Fresh is a studio made with Homie\. Its first game is coming soon\. Its site is https:\/\/owls\.example\/\.$/m);

@@ -136,7 +136,10 @@ export const ARRIVAL_JS = String.raw`(function () {
   var stepEl = el.querySelector('[data-arrive-step]');
   var roomEl = el.querySelector('[data-arrive-room]');
   var bar = el.querySelector('[data-arrive-bar]');
-  var a = { phase: 'room', step: stepEl.textContent, p: 0.06, lookMs: null, liftedMs: null, by: null, mode: null };
+  // mode: who was to say when the game is playable ('auto': the helper, 'game': the game, 'seat': an older helper);
+  // explicitMs: when the game itself said so (the page's clock; null: it never did); lateMs: how long after an
+  // automatic arrival had already lifted the card that was (null: it was not late). The shell's script fills both.
+  var a = { phase: 'room', step: stepEl.textContent, p: 0.06, lookMs: null, liftedMs: null, by: null, mode: null, explicitMs: null, lateMs: null };
   api.state = a;
   // The card's first frame on the screen: what perf reads as the time to the first meaningful frame.
   frame(function () { frame(function () { a.lookMs = Math.round(now()); mark('homie:look'); }); });

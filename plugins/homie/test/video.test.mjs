@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { frameSegments } from '../skills/video/scripts/lib/frames.mjs';
 import { startFakeFal } from './fixtures/fake-fal.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -137,4 +138,62 @@ test('video: priced, capped and receipted fal calls; a resume never pays twice; 
     assert.deepEqual(pub.built, ['owl-trailer']);
     assert.ok(existsSync(join(dir, 'site/dist/videos/owl-trailer/owl-trailer.mp4')));
   } finally { await fal.close(); }
+});
+
+const HAVE_FFMPEG = spawnSync('ffmpeg', ['-version']).status === 0 && spawnSync('ffprobe', ['-version']).status === 0;
+
+test('video: an edit\'s cuts are counted in frames, each on the frame nearest its beat', () => {
+  // 1.875 s (a bar at 128 bpm) is 56.25 frames at 30 fps. Nine of them, each trimmed by its duration, are nine
+  // segments of 56 frames: the last cut two frames early and the film a quarter of a second short of its music.
+  const segs = frameSegments(Array.from({ length: 9 }, () => ({ dur: 1.875 })), 30);
+  assert.deepEqual(segs.map((s) => s.startFrame), [0, 56, 113, 169, 225, 281, 338, 394, 450]);
+  assert.deepEqual(segs.map((s) => s.frames), [56, 57, 56, 56, 56, 57, 56, 56, 56]);
+  assert.equal(segs.reduce((a, s) => a + s.frames, 0), 506, 'the whole edit is the nearest frame to 16.875 s');
+  for (const s of segs) assert.ok(Math.abs(s.startFrame - s.at * 30) <= 0.5, 'no cut is more than half a frame from where it was asked for');
+  // Durations already rounded to milliseconds (what an edl holds) land on the same frames.
+  assert.deepEqual(frameSegments([{ dur: 1.5 }, { dur: 0.469 }, { dur: 0.469 }, { dur: 0.469 }, { dur: 2.5 }], 30).map((s) => s.frames), [45, 14, 14, 14, 75]);
+});
+
+test('video: a cut from a full-range capture is limited-range BT.709 yuv420p, tagged, with every cut on its frame', { skip: HAVE_FFMPEG ? false : 'ffmpeg and ffprobe are not installed on this machine: the cut was NOT checked' }, () => {
+  const dir = studio('frames');
+  const job = join(dir, 'videos', 'beat');
+  mkdirSync(join(job, 'work'), { recursive: true });
+  // A stand-in capture as the recorder used to write them: full range (what a JPEG frame is), ffprobe says yuvj420p.
+  // Its grey level steps every four seconds, so the picture says which part of the source a frame came from.
+  const cap = join(job, 'work', 'cap.mp4');
+  ffmpeg('-f', 'lavfi', '-i', "nullsrc=s=320x180:r=30:d=37,geq=lum='40+20*floor(T/4)':cb=128:cr=128,format=yuv420p,setparams=range=pc", '-f', 'lavfi', '-i', 'sine=f=440:d=37:r=48000', '-ac', '2',
+    '-color_range', 'pc', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '12', '-c:a', 'aac', cap);
+  const probeV = (file, entries) => JSON.parse(spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', `stream=${entries}`, '-of', 'json', file], { encoding: 'utf8' }).stdout).streams[0];
+  assert.equal(probeV(cap, 'pix_fmt').pix_fmt, 'yuvj420p', 'the stand-in is full range, like a capture made of JPEG frames');
+  // Nine shots of one bar at 128 bpm, each from the middle of its own grey step; no cards (no browser needed).
+  const edl = { fps: 30, length: 16.875, bed: null, gameAudio: { gainDb: 0 }, segments: Array.from({ length: 9 }, (_, k) => ({ type: 'clip', src: 'work/cap.mp4', in: 4 * k + 0.5, dur: 1.875 })) };
+  writeFileSync(join(job, 'work', 'edl.json'), JSON.stringify(edl));
+  const r = spawnSync(process.execPath, [VIDEO, 'cut', 'beat', '--json'], { cwd: dir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(out.frames, 506);
+  assert.deepEqual(out.cuts.map((c) => c.frame), [56, 113, 169, 225, 281, 338, 394, 450]);
+  assert.ok(out.cuts.every((c) => Math.abs(c.offFrames) <= 0.5));
+  for (const name of ['beat.mp4', 'beat-vertical.mp4']) {
+    const file = join(job, name);
+    const v = probeV(file, 'nb_read_packets,pix_fmt,color_range,color_primaries,color_transfer,color_space,r_frame_rate');
+    assert.deepEqual([v.pix_fmt, v.color_range, v.color_primaries, v.color_transfer, v.color_space, v.r_frame_rate], ['yuv420p', 'tv', 'bt709', 'bt709', 'bt709', '30/1'], name);
+    assert.equal(Number(v.nb_read_packets), 506, `${name}: every frame of the edit, no more`);
+    // Every frame's timestamp is its number over 30: nothing inherited from the source.
+    const pts = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', file], { encoding: 'utf8' }).stdout.trim().split('\n').map(Number).sort((a, b) => a - b);
+    assert.ok(pts.every((t, k) => Math.abs(t - k / 30) < 1e-3), `${name}: frame k is at k/30 s`);
+  }
+  // The picture itself: the luma of the middle of each frame of the 16:9 file, straight from the file (no range change).
+  const raw = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', join(job, 'beat.mp4'), '-vf', 'crop=iw/4:ih/4,scale=8:8', '-pix_fmt', 'yuv420p', '-f', 'rawvideo', '-'], { maxBuffer: 64 * 1024 * 1024 }).stdout;
+  const per = 8 * 8 * 1.5;
+  const luma = Array.from({ length: raw.length / per }, (_, k) => { let s = 0; for (let i = 0; i < 64; i++) s += raw[k * per + i]; return s / 64; });
+  assert.equal(luma.length, 506);
+  const changes = []; for (let k = 1; k < luma.length; k++) if (Math.abs(luma[k] - luma[k - 1]) > 6) changes.push(k);
+  assert.deepEqual(changes, [56, 113, 169, 225, 281, 338, 394, 450], 'the picture changes on exactly the frames the edit names');
+  // Full-range 40 is limited-range 50 (16 + 40 * 219 / 255): the levels were converted, not just relabelled.
+  assert.ok(Math.abs(luma[10] - 50.4) < 2.5, `the first shot's grey is ${luma[10].toFixed(1)}, limited range`);
+  assert.ok(Math.abs(luma[500] - (16 + 200 * 219 / 255)) < 2.5, `the last shot's grey is ${luma[500].toFixed(1)}`);
+  // The game's own sound is as long as the picture, to the frame.
+  const a = JSON.parse(spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=duration', '-of', 'json', join(job, 'beat.mp4')], { encoding: 'utf8' }).stdout).streams[0];
+  assert.ok(Math.abs(Number(a.duration) - 506 / 30) < 0.05, `sound ${a.duration} s for ${(506 / 30).toFixed(3)} s of picture`);
 });

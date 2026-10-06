@@ -2,7 +2,7 @@
  * The studio site's pages, in the studio's own look (site/SITE.md): the same sections as homie.rocks
  * (Home, Games, Music, Videos, Rooms, Posts, each shown only when the studio has something in it), an epic
  * landing for every game (a full-bleed hero from the game's own footage or art, the pitch, a big Play button
- * into a public room, phone / computer / TV, live rooms, how to play, credits, and "Make a game like this"),
+ * into a public room, phone / computer / TV, live rooms, how to play and credits),
  * posts with Atom and JSON feeds, and a "Made with Homie" footer. Plain HTML from the Worker; every word a
  * studio or a player wrote is escaped; the one script is /_homie/site.js.
  *
@@ -11,7 +11,7 @@
  */
 import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
-import { licenseLabel, licenseOf, remixRow } from './license.mjs';
+import { basedOnRow, licenseLabel } from './license.mjs';
 import { POLICY_WORDS, policyWords } from './servers.mjs';
 import { blogNode, breadcrumbs, gameNode, itemList, ldScript, musicIndexNode, postNode, songNode, studioNode, videoNode, websiteNode } from './schema.mjs';
 
@@ -128,8 +128,8 @@ img,video{display:block;max-width:100%}
   text-shadow:0 0 38px color-mix(in srgb,var(--hot) 50%,transparent),0 2px 0 color-mix(in srgb,var(--bg) 60%,transparent)}
 .title.t-long{font-size:clamp(44px,12vw,64px)}
 .title.t-xlong{font-size:clamp(38px,10vw,54px)}
-.remix-of{margin:12px 0 0;font:600 14px/1.4 var(--text);color:var(--soft)}
-.remix-of a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.based-on{margin:12px 0 0;font:600 14px/1.4 var(--text);color:var(--soft)}
+.based-on a{color:inherit;text-decoration:underline;text-underline-offset:3px}
 .line{margin:14px 0 22px;max-width:36ch;font:500 17px/1.45 var(--text);color:var(--soft);text-wrap:pretty}
 .play{display:flex;width:100%;align-items:center;justify-content:center;gap:12px;min-height:62px;padding:0 30px;border-radius:18px;
   background:var(--hot);color:var(--hot-ink);text-decoration:none;font:800 20px/1 var(--display);letter-spacing:-.01em;
@@ -295,11 +295,7 @@ img,video{display:block;max-width:100%}
 .shots a{display:block;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:var(--panel)}
 .shots img{width:100%;aspect-ratio:16/9;object-fit:cover}
 
-/* make a game like this */
-.make{position:relative;overflow:hidden;border-radius:calc(var(--r) + 8px);padding:clamp(26px,4vw,48px);border:1px solid color-mix(in srgb,var(--hot) 55%,transparent);
-  background:radial-gradient(70% 90% at 100% 0%,color-mix(in srgb,var(--hot) 20%,transparent),transparent 60%),radial-gradient(60% 80% at 0% 100%,color-mix(in srgb,var(--glow) 14%,transparent),transparent 60%),var(--panel);
-  box-shadow:0 20px 70px color-mix(in srgb,var(--hot) 16%,transparent)}
-.make h2{max-width:16ch}
+/* a line to say to an AI, with its Copy button (the parts band, worker/parts.mjs) */
 .say{display:grid;gap:10px;margin:24px 0 0;padding:0;list-style:none;counter-reset:say}
 .say li{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 10px 10px 16px;border-radius:12px;background:color-mix(in srgb,var(--bg) 70%,transparent);border:1px solid var(--line)}
 .say code{font:500 14px/1.45 var(--mono);color:var(--fg);overflow-wrap:anywhere}
@@ -640,14 +636,20 @@ ${footer(cat)}
 }
 
 /**
- * A whole page from site/pages, served as it is, in the site's frame rules (never framed, no-transform). Five
+ * A whole page from site/pages, served as it is, in the site's frame rules (never framed, no-transform). Six
  * markers let it borrow the generated parts: <!-- homie:style --> (the tokens and the stylesheet),
- * <!-- homie:header -->, <!-- homie:footer --> ("Made with Homie"), <!-- homie:script --> and, in its <head>,
- * <!-- homie:schema --> (the structured data the generated page at that address would carry: worker/schema.mjs).
+ * <!-- homie:header -->, <!-- homie:footer --> ("Made with Homie"), <!-- homie:script -->, in its <head>
+ * <!-- homie:schema --> (the structured data the generated page at that address would carry: worker/schema.mjs),
+ * and <!-- homie:home-hero --> or <!-- homie:home-hero <id> --> (Home's hero for the featured game, or for the
+ * public game it names: homeHero, below; a game that is not public, or not this studio's, leaves nothing there).
  */
 export function customPage(cat, html, { active = null, schema = '' } = {}) {
   const out = String(html)
     .replace(/<!--\s*homie:schema\s*-->/g, () => schema)
+    .replace(/<!--\s*homie:home-hero(?:\s+([a-z0-9][a-z0-9-]{0,39}))?\s*-->/g, (m, id) => {
+      const g = id ? (cat.games ?? []).find((x) => x.id === id) : featuredOf(cat);
+      return g ? homeHero(cat, g) : '';
+    })
     .replace(/<!--\s*homie:style\s*-->/g, () => `<style>${tokensCss(cat.studio?.theme ?? {})}${BASE_CSS}${cat.site?.css ?? ''}</style>`)
     .replace(/<!--\s*homie:header\s*-->/g, () => header(cat, active))
     .replace(/<!--\s*homie:footer\s*-->/g, () => footer(cat))
@@ -789,6 +791,29 @@ export const landingLd = (cat, g, origin, opts = {}) => [breadcrumbs(origin, [['
 /** The public games as a list of their landings (Games, Rooms). */
 const gamesList = (cat, origin, id, name) => itemList(origin, id, name, (cat.games ?? []).map((g) => ({ name: g.name, path: `/${g.id}/` })));
 
+/**
+ * Home's hero for one game: its footage or art full-bleed, the studio's name, the game's title and pitch, Play, the
+ * live line and the links on. The generated Home leads with it (for the featured game), and a Home of the studio's
+ * own (site/pages/index.html) takes the same markup with <!-- homie:home-hero --> (the featured game) or
+ * <!-- homie:home-hero <id> --> (the game it names), so replacing Home never means writing a game's hero by hand
+ * from the addresses of its pictures.
+ */
+export function homeHero(cat, f, { playing = 0 } = {}) {
+  const name = studioName(cat);
+  const games = cat.games ?? [];
+  const tagline = cat.studio?.tagline ?? '';
+  return `<section class="hero home" aria-labelledby="hero-title">
+  ${heroMedia(f.landing?.hero, { alt: f.landing?.hero?.alt })}
+  <div class="hero-copy">
+    <p class="kicker">${esc(name)}<span class="k-opt"> · ${esc(tagline || 'featured game')}</span></p>
+    <h1 class="title ${titleClass(f.name)}" id="hero-title">${esc(f.name)}</h1>
+    <p class="line">${esc(f.landing?.pitch ?? f.blurb)}</p>
+    <div class="row"><a class="play" href="/${esc(f.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>${liveLine(f, playing, { idle: 'Bots hold every empty seat · press Play and you are in a round' })}</div>
+    <a class="also" href="/${esc(f.id)}/">${icon('arrow')}<span>About ${esc(f.name)}</span></a>${games.length > 1 ? `<a class="also" href="/games/">${icon('games')}<span>All ${games.length} games</span></a>` : ''}
+  </div>
+</section>`;
+}
+
 export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   const name = studioName(cat);
   const games = cat.games ?? [];
@@ -800,17 +825,7 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   let hero;
   let soon = '';
   if (f) {
-    const playing = live[f.id] ?? 0;
-    hero = `<section class="hero home" aria-labelledby="hero-title">
-  ${heroMedia(f.landing?.hero, { alt: f.landing?.hero?.alt })}
-  <div class="hero-copy">
-    <p class="kicker">${esc(name)}<span class="k-opt"> · ${esc(tagline || 'featured game')}</span></p>
-    <h1 class="title ${titleClass(f.name)}" id="hero-title">${esc(f.name)}</h1>
-    <p class="line">${esc(f.landing?.pitch ?? f.blurb)}</p>
-    <div class="row"><a class="play" href="/${esc(f.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>${liveLine(f, playing, { idle: 'Bots hold every empty seat · press Play and you are in a round' })}</div>
-    <a class="also" href="/${esc(f.id)}/">${icon('arrow')}<span>About ${esc(f.name)}</span></a>${games.length > 1 ? `<a class="also" href="/games/">${icon('games')}<span>All ${games.length} games</span></a>` : ''}
-  </div>
-</section>`;
+    hero = homeHero(cat, f, { playing: live[f.id] ?? 0 });
   } else if (!videos.length && !songs.length) {
     // A new studio with nothing published yet: its own Home, its name, "First game coming soon", and what is on the
     // way (a studio is never given a starter game it did not ask for). Its posts show below as soon as it has any.
@@ -1115,18 +1130,18 @@ export function jsonFeed(cat, posts, origin) {
 
 /**
  * The landing every game gets: a full-bleed hero from its own footage or art, the pitch, a big Play button into a
- * public room, phone / computer / TV (with the join code), live rooms, how to play, credits, and "Make a game like
- * this". A studio's site/pages/<id>/index.html replaces it; site/partials/game.html and game-<id>.html add a band.
+ * public room, phone / computer / TV (with the join code), live rooms, how to play and credits. A studio's site/pages/<id>/index.html replaces it; site/partials/game.html and game-<id>.html add a band.
  */
-export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, remix = true, servers = null, listed = true, shop = null } = {}) {
+export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week = null, servers = null, listed = true, shop = null } = {}) {
   const name = studioName(cat);
   const L = g.landing ?? {};
-  // A remix says what it is a remix of, linked, under its name and in its credits (game.json `remixOf`).
-  const lineage = remixRow(g.remixOf);
+  // A game made from another studio's game, while a game could be handed over whole (remix, retired), still owes
+  // that game its credit: its name, linked, under this one's and in its credits. A credit and nothing more: no
+  // page offers this game, or that one, to be taken. (`basedOn` is the built row; lib/build.mjs reads `remixOf`.)
+  const lineage = basedOnRow(g.basedOn ?? g.remixOf);
   const ofWhat = lineage ? `${lineage.page ? `<a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.name)}</a>` : `<strong>${esc(lineage.name)}</strong>`}${lineage.studio ? ` by ${esc(lineage.studio)}` : ''}` : '';
-  // Open to remix: the source is in the build, the owner's switch is on, and the licence they picked allows it.
-  const license = licenseOf(g.license);
-  const remixable = Boolean(L.source) && remix !== false && license.kind !== 'no-remix';
+  // The licence the game names for itself (an SPDX id), said in its credits; a game that names none says nothing.
+  const license = licenseLabel(g.license);
   const h = L.hero ?? {};
   const host = origin.replace(/^https?:\/\//, '');
   const playUrl = `${origin}/${g.id}/play`;
@@ -1147,7 +1162,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   <div class="hero-copy">
     <p class="kicker">${kickerHtml}</p>
     <h1 class="title ${titleClass(g.name)}" id="game-title">${esc(g.name)}</h1>
-    ${lineage ? `<p class="remix-of">Remix of ${ofWhat}</p>` : ''}
+    ${lineage ? `<p class="based-on">Based on ${ofWhat}</p>` : ''}
     <p class="line">${esc(L.pitch ?? g.blurb)}</p>
     <div class="row">
       <a class="play" href="/${esc(g.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>
@@ -1204,29 +1219,12 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   const o = C.original;
   const creditCards = [
     `<div class="credit"><h3>Made by</h3><p><strong><a href="/">${esc(name)}</a></strong>${cat.studio?.tagline ? ` · ${esc(cat.studio.tagline)}` : ''}</p>${(C.people ?? []).length ? `<ul>${C.people.map((c) => `<li>${c.role ? `${esc(c.role)}: ` : ''}${c.url ? `<a href="${esc(c.url)}" rel="noopener">${esc(c.name)}</a>` : `<strong>${esc(c.name)}</strong>`}</li>`).join('')}</ul>` : ''}</div>`,
-    lineage ? `<div class="credit"><h3>Remix of</h3><p>${ofWhat}.</p>${lineage.page ? `<p><a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.page.replace(/^https:\/\//, ''))}</a></p>` : ''}</div>` : '',
+    lineage ? `<div class="credit"><h3>Based on</h3><p>${ofWhat}.</p>${lineage.page ? `<p><a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.page.replace(/^https:\/\//, ''))}</a></p>` : ''}</div>` : '',
     o && !o.house ? `<div class="credit"><h3>Based on</h3><p><strong>${esc(o.title)}</strong>${o.author ? ` by <strong>${esc(o.author)}</strong>` : ''}${o.year ? ` (${esc(o.year)})` : ''}${o.licence ? `, ${esc(o.licence)} licence` : ''}.</p>${o.url ? `<p><a href="${esc(o.url)}" rel="noopener">${esc(o.url.replace(/^https:\/\//, ''))}</a></p>` : ''}<p>Made multiplayer with Homie: public rooms, bots, join-in-progress, a new host when one leaves, touch controls and the big screen.</p></div>` : '',
     (C.parts ?? []).length ? `<div class="credit"><h3>Also inside</h3><ul>${C.parts.map((p) => `<li>${esc(p.what)}${p.author ? `: ${esc(p.author)}` : ''}${p.url ? ` (<a href="${esc(p.url)}" rel="noopener">source</a>)` : ''}${p.licence ? `, ${p.licenceUrl ? `<a href="${esc(p.licenceUrl)}" rel="noopener">${esc(p.licence)}</a>` : esc(p.licence)}` : ''}</li>`).join('')}</ul></div>` : '',
-    `<div class="credit"><h3>Built with</h3><p>Homie’s open engine: <a href="https://github.com/homie-rocks/homie" rel="noopener">@homie-rocks/studio</a> (rooms, netplay, the big screen), Apache-2.0.</p>${L.source ? `<p>Its source: ${esc(licenseLabel(license))}.</p>` : ''}${C.texts ? `<p><a href="/${esc(g.id)}/credits">Licences and full credits</a></p>` : ''}</div>`,
+    `<div class="credit"><h3>Built with</h3><p>Homie’s open engine: <a href="https://github.com/homie-rocks/homie" rel="noopener">@homie-rocks/studio</a> (rooms, netplay, the big screen), Apache-2.0.</p>${license ? `<p>Licence: ${esc(license)}.</p>` : ''}${C.texts ? `<p><a href="/${esc(g.id)}/credits">Licences and full credits</a></p>` : ''}</div>`,
   ].filter(Boolean).join('');
   const creditsBand = `<section class="band tight" aria-labelledby="credits-title"><div class="band-in"><p class="kicker reveal">Credits</p><h2 class="small-h reveal" id="credits-title">Who made ${esc(g.name)}</h2><div class="credits reveal">${creditCards}</div></div></section>`;
-
-  const source = `${origin}/games/${g.id}/source.json`;
-  const say = remixable
-    ? `Remix ${g.name} from ${source} into a game of my own in my Homie studio`
-    : `Make a multiplayer game like ${g.name} in my Homie studio`;
-  const makeHref = remixable ? `https://homie.rocks/studio/?remix=${encodeURIComponent(source)}` : 'https://homie.rocks/studio/';
-  const makeBand = `<section class="band" aria-labelledby="make-title"><div class="band-in"><div class="make reveal">
-  <p class="kicker">${remixable ? 'Open to remix' : 'Your turn'}</p>
-  <h2 id="make-title">Make a game like this</h2>
-  <p class="lead">${remixable ? `${esc(g.name)}’s source is shared. Homie is a plugin for Claude Code and Codex: your AI copies this game into a studio of your own, makes it yours, and puts it online with public rooms like these, on your own free Cloudflare account.` : `Homie is a plugin for Claude Code and Codex: your AI sets up a studio of your own and makes a multiplayer game like ${esc(g.name)}, with public rooms like these, on your own free Cloudflare account.`}</p>
-  <ol class="say">
-    <li><div><span class="label">1 · In Claude Code</span><code>/plugin marketplace add homie-rocks/homie</code></div><button class="copy" type="button" data-copy="/plugin marketplace add homie-rocks/homie">${icon('copy')}<span data-copy-word>Copy</span></button></li>
-    <li><div><span class="label">2</span><code>/plugin install homie@homie</code></div><button class="copy" type="button" data-copy="/plugin install homie@homie">${icon('copy')}<span data-copy-word>Copy</span></button></li>
-    <li><div><span class="label">3 · Then say</span><code>${esc(say)}</code></div><button class="copy" type="button" data-copy="${esc(say)}">${icon('copy')}<span data-copy-word>Copy</span></button></li>
-  </ol>
-  <div class="keys"><a class="btn" href="${esc(makeHref)}">${icon('spark')}<span>Make a game like this</span></a>${remixable ? `<a class="ghost" href="/games/${esc(g.id)}/source.json">See the source</a>` : ''}</div>
-</div></div></section>`;
 
   // A partial that is its own <section> stands as it is; anything else sits in one of the page's bands.
   const band = (html) => (!html ? '' : /^\s*<section\b/i.test(html) ? html : `<section class="band tight"><div class="band-in">${html}</div></section>`);
@@ -1238,15 +1236,15 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}`,
     // A game that is not public yet (private, or an invite-only beta) is never indexed, and offers nothing.
     ld: landingLd(cat, g, origin, { listed, shop }), ...(listed ? {} : { extraHeaders: { 'x-robots-tag': 'noindex' } }),
-    main: `${hero}${ways}${liveBand}${servers ? serversBand(g, servers) : ''}${howBand}${shotsBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}${makeBand}`,
+    main: `${hero}${ways}${liveBand}${servers ? serversBand(g, servers) : ''}${howBand}${shotsBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}`,
   });
 }
 
 /** /<game>/credits: the licence texts the game ships with (CREDITS.md and every licence file credits.json names). */
 export function creditsPage(cat, g, texts, { origin = '' } = {}) {
   const name = studioName(cat);
-  const lineage = remixRow(g.remixOf);
-  const of = lineage ? `<p class="sec">Remix of</p><p>${lineage.page ? `<a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.name)}</a>` : esc(lineage.name)}${lineage.studio ? ` by ${esc(lineage.studio)}` : ''}</p>` : '';
+  const lineage = basedOnRow(g.basedOn ?? g.remixOf);
+  const of = lineage ? `<p class="sec">Based on</p><p>${lineage.page ? `<a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.name)}</a>` : esc(lineage.name)}${lineage.studio ? ` by ${esc(lineage.studio)}` : ''}</p>` : '';
   return layout(cat, {
     title: `Credits · ${g.name} · ${name}`, description: `Credits and licences for ${g.name}.`, origin, path: `/${g.id}/credits`, page: 'credits', active: 'games',
     ld: [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`], ['Credits', `/${g.id}/credits`]])],
