@@ -9,6 +9,7 @@
  * Run: node --test packages/studio/test/characters.test.mjs
  */
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,9 +19,12 @@ import { fileURLToPath } from 'node:url';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { modelTools, placeholderGlb, skinnedBounds } from '../lib/optimise.mjs';
 import { mapSkeleton, normaliseRig, skeletonOf } from '../lib/rig.mjs';
-import { VERB_IDS, bakeLibrary, findClip, rigOf, writeLibrary as writeClips } from '../lib/clips.mjs';
-import { addCharacter, animPlan, bakeClips, verbsFor } from '../lib/characters.mjs';
-import { readManifest } from '../lib/asset-manifest.mjs';
+import { VERB_IDS, bakeLibrary, findClip, gaitOf, rigOf, writeLibrary as writeClips } from '../lib/clips.mjs';
+import { addCharacter, animPlan, animPreview, bakeClips, duplicateLibraries, librariesFor, measureGait, verbsFor } from '../lib/characters.mjs';
+import { readManifest, recordAsset, removeAsset, writeManifest } from '../lib/asset-manifest.mjs';
+import { assetsCheck } from '../lib/asset-check.mjs';
+import { gaitLines } from '../lib/art-cli.mjs';
+import { findChrome } from '../lib/chrome.mjs';
 import { blockyGlb, humanoidGlb, writeLibrary } from './rig-fixtures.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -389,4 +393,140 @@ test('MCP: cast_plan, anim_plan, anim_add, anim_preview and character_make are l
     const card = await s.request('resources/read', { uri: 'ui://homie-studio/animation' });
     assert.match(card.result.contents[0].text, /anim_add/);
   } finally { await s.close(); }
+});
+
+/** A two-footed rig whose `run` clip slides each foot back along the ground at `speed`, then lifts it forward again. */
+async function stridingDoc({ speed = 3, scale = 1 } = {}) {
+  const { core } = await modelTools();
+  const doc = new core.Document();
+  const buffer = doc.createBuffer();
+  const top = doc.createNode('rig').setScale([scale, scale, scale]);
+  doc.createScene('scene').addChild(top);
+  const hips = doc.createNode('hips').setTranslation([0, 1, 0]);
+  top.addChild(hips);
+  const anim = doc.createAnimation('run');
+  const n = 31; const half = speed * 0.25;
+  ['leftFoot', 'rightFoot'].forEach((name, k) => {
+    const foot = doc.createNode(name).setTranslation([0, -1, 0]);
+    hips.addChild(foot);
+    const times = new Float32Array(n); const values = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1); times[i] = t;
+      const u = (t + k * 0.5) % 1;
+      // Down and moving back for half the cycle, up and coming forward for the other half.
+      const z = u < 0.5 ? half - speed * u : -half + speed * (u - 0.5);
+      values.set([0, -1 + (u < 0.5 ? 0 : 0.3 * Math.sin(Math.PI * (u - 0.5) / 0.5)), z], i * 3);
+    }
+    const sampler = doc.createAnimationSampler().setInput(doc.createAccessor().setType('SCALAR').setArray(times).setBuffer(buffer)).setOutput(doc.createAccessor().setType('VEC3').setArray(values).setBuffer(buffer)).setInterpolation('LINEAR');
+    anim.addSampler(sampler).addChannel(doc.createAnimationChannel().setTargetNode(foot).setTargetPath('translation').setSampler(sampler));
+  });
+  return doc;
+}
+
+test('a run clip\'s ground speed is read from its feet, per rig: the same clip covers half the ground on a rig half the size', async () => {
+  const full = await stridingDoc({ speed: 3 });
+  const g = gaitOf(rigOf(full), full.getRoot().listAnimations()[0]);
+  assert.ok(Math.abs(g.mps - 3) < 0.15, `about 3 m/s, measured ${g.mps}`);
+  assert.equal(g.feet, 2);
+  assert.equal(g.seconds, 1);
+  // The clip of one Document on the rig of another (a clip library on a shipped model), matched by bone name.
+  const small = await stridingDoc({ speed: 3, scale: 0.5 });
+  const onSmall = gaitOf(rigOf(small), full.getRoot().listAnimations()[0]);
+  assert.ok(Math.abs(onSmall.mps - 1.5) < 0.1, `half the rig, half the ground: ${onSmall.mps}`);
+  // No feet, or a foot that never lifts: not measured, never a made-up number.
+  const none = await stridingDoc();
+  for (const node of none.getRoot().listNodes()) if (/Foot$/.test(node.getName())) node.setName(`${node.getName()}-renamed`);
+  assert.equal(gaitOf(rigOf(none), none.getRoot().listAnimations()[0]), null);
+  // In words: a speed far from animate's default says what to pass; nothing measured says the default is unverified.
+  assert.match(gaitLines({ run: { mps: 6.5, default: 4.2 } }).join('\n'), /run: its feet cover about 6\.5 m\/s on this rig \(animate's default runSpeed is 4\.2\).*tune: \{ runSpeed: 6\.5 \}/);
+  assert.doesNotMatch(gaitLines({ run: { mps: 4.3, default: 4.2 } })[0], /slide/);
+  assert.match(gaitLines(null)[0], /not measured on this rig.*unverified/);
+});
+
+test('a second clip library on one skeleton: refused at registration, never shadows the first, and a declared supplemental one joins coverage and previews; removing the starter models keeps the clips\' credit', async (t) => {
+  const lib = await library();
+  const root = studio('supplemental');
+  const L = { kind: 'dir', base: lib };
+  const g = join(root, 'games', 'heroes');
+  const verbs = ['idle', 'run', 'jump', 'attack', 'hit', 'die'];
+  await addCharacter(root, 'heroes', { item: 'kaykit-adventurers/knight', as: 'knight', height: 1.45, keep: [], verbs, lib: L });
+  const hero = await addCharacter(root, 'heroes', { item: 'test-heroes/hero', as: 'hero', height: 1.45, verbs, lib: L });
+  const base = readManifest(root, 'heroes').assets.find((a) => a.id === `anims-${hero.skeleton}`);
+  const before = animPlan(root, 'heroes').rows.find((r) => r.id === 'hero');
+  assert.deepEqual(before.missing, []);
+  // Its measured stride is on its own record and in the plan (the run clip on THIS rig, in metres).
+  const gait = await measureGait(root, 'heroes', 'hero');
+  assert.deepEqual(before.gait ?? null, gait, 'what the plan shows is what the record holds');
+  t.diagnostic(`the hero's measured gait: ${JSON.stringify(gait)}`);
+
+  // A supplemental file: the base library's skeleton with one more verb in it.
+  const extra = await docOf(readFileSync(join(g, hero.anims)));
+  for (const a of extra.getRoot().listAnimations()) { if (a.getName() === 'idle') a.setName('dodge'); else a.dispose(); }
+  const { io } = await modelTools();
+  const extraBytes = Buffer.from(await io.writeBinary(extra));
+  const extraPath = `public/anims/${hero.skeleton}-moves.glb`;
+  writeFileSync(join(g, extraPath), extraBytes);
+  const second = { id: 'anims-moves', kind: 'clip', tier: 'clip', route: 'imported', files: [{ role: 'clip', path: extraPath, bytes: extraBytes.byteLength, sha256: createHash('sha256').update(extraBytes).digest('hex') }], rig: { family: 'humanoid', skeleton: hero.skeleton }, clips: [{ verb: 'dodge', source: 'dodge', from: null, retargeted: false }], license: { kind: 'own' } };
+
+  // Registered as it stands, it would be a second library of the same skeleton: refused, loudly, with both ways on.
+  assert.throws(() => recordAsset(root, 'heroes', second), /second clip library for the skeleton .*anim add.*"supplemental": true/s);
+  assert.equal(readManifest(root, 'heroes').assets.some((a) => a.id === 'anims-moves'), false);
+
+  // A manifest edited by hand can still hold one. It must not stand in for the library the model names.
+  const hand = readManifest(root, 'heroes');
+  hand.assets.push({ ...second, id: 'anims-a-stray' });
+  writeManifest(root, 'heroes', hand);
+  assert.ok(readManifest(root, 'heroes').assets.findIndex((a) => a.id === 'anims-a-stray') < readManifest(root, 'heroes').assets.findIndex((a) => a.id === base.id), 'the stray sorts first, as the worst case does');
+  assert.equal(librariesFor(readManifest(root, 'heroes'), readManifest(root, 'heroes').assets.find((a) => a.id === 'hero')).primary.id, base.id, 'the library is the one the model names');
+  assert.deepEqual(animPlan(root, 'heroes').rows.find((r) => r.id === 'hero').missing, [], 'the original verbs are not reported missing');
+  assert.ok(!animPlan(root, 'heroes').rows.find((r) => r.id === 'hero').extra.includes('dodge'), 'an undeclared library adds nothing to coverage');
+  let chk = await assetsCheck(root, 'heroes', { validate: false, write: false });
+  assert.deepEqual(chk.rows.find((r) => r.id === 'hero').warnings.filter((w) => /clip library has not/.test(w)), []);
+  assert.match(chk.rows.find((r) => r.id === 'anims-a-stray').warnings.join('\n'), /a second clip library for the skeleton/);
+  assert.equal(chk.totals.unused, 0, 'a clip library is never counted as an unused asset');
+  assert.doesNotMatch(chk.notes.join('\n'), /marked unused/);
+  assert.ok(duplicateLibraries(readManifest(root, 'heroes')).has('anims-a-stray'));
+
+  // Declared supplemental: recorded, and its verb is in the character's coverage beside every original one.
+  const clean = readManifest(root, 'heroes');
+  clean.assets = clean.assets.filter((a) => a.id !== 'anims-a-stray');
+  writeManifest(root, 'heroes', clean);
+  recordAsset(root, 'heroes', { ...second, rig: { ...second.rig, supplemental: true } });
+  const row = animPlan(root, 'heroes').rows.find((r) => r.id === 'hero');
+  assert.deepEqual(row.missing, []);
+  assert.ok(row.extra.includes('dodge'));
+  assert.deepEqual(row.libraries, [hero.anims, extraPath]);
+  assert.deepEqual(row.supplemental, ['anims-moves']);
+  chk = await assetsCheck(root, 'heroes', { validate: false, write: false });
+  assert.deepEqual(chk.rows.filter((r) => r.kind === 'clip').flatMap((r) => r.warnings).filter((w) => /second clip library/.test(w)), []);
+  assert.equal(duplicateLibraries(readManifest(root, 'heroes')).size, 0);
+
+  // The preview draws the base library's verbs AND the supplemental one's (it used to draw none).
+  if (findChrome()) {
+    const p = await animPreview(root, 'heroes', { asset: 'hero', count: 2, size: 48 });
+    assert.equal(p.ok, true, JSON.stringify(p).slice(0, 400));
+    const drawn = p.rows[0].verbs.map((v) => v.verb);
+    for (const v of ['idle', 'run', 'jump', 'dodge']) assert.ok(drawn.includes(v), `${v} is in the preview (${drawn.join(', ')})`);
+    assert.deepEqual(p.rows[0].libraries, [hero.anims, extraPath]);
+  } else t.diagnostic('no Chrome on this machine: the preview half was not run');
+
+  // The starter knight leaves. The hero's hit and die are still the knight's clips, retargeted: the credit stays.
+  const credited = () => JSON.parse(readFileSync(join(g, 'credits.json'), 'utf8')).parts.filter((x) => /kaykit-adventurers/.test(`${x.what} ${x.url}`));
+  assert.equal(credited().length, 1, 'one line for the pack while its model is here');
+  assert.equal(removeAsset(root, 'heroes', 'knight').removed, true);
+  const after = credited();
+  assert.equal(after.length, 1, 'the pack is still credited after its last model left');
+  assert.match(after[0].what, /animation clips/);
+  assert.equal(after[0].url, 'https://example.test/kaykit-adventurers');
+  assert.equal(after[0].licence, 'CC0-1.0');
+  // And it survives the next bake and the next sync, which rewrite the clip record and the credits.
+  await bakeClips(root, 'heroes', 'hero', { verbs: ['emote'], lib: L }).catch(() => null);
+  assert.equal(credited().length, 1);
+  // Once no clip from the pack remains, the line goes too.
+  const none = readManifest(root, 'heroes');
+  for (const a of none.assets) if (a.kind === 'clip') { a.clips = (a.clips ?? []).filter((c) => !String(c.from ?? '').startsWith('kaykit-adventurers/')); if (a.from?.items) a.from.items = a.from.items.filter((x) => !x.startsWith('kaykit-adventurers/')); }
+  writeManifest(root, 'heroes', none);
+  const { syncCredits } = await import('../lib/asset-manifest.mjs');
+  syncCredits(root, 'heroes');
+  assert.equal(credited().length, 0);
 });

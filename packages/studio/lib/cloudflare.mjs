@@ -26,8 +26,12 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from './build.mjs';
+import { builtGames, compareDeploy, deployWords, lastDeploy, lastDeployRecord, lockDeploy, recordDeploy } from './deploy-state.mjs';
+import { listedHere, publish } from './directory.mjs';
 import { MAX_ASSET_BYTES, R2_COST, mediaPlan, r2OverOf, recordMove, sha256File, sizeOf } from './media.mjs';
+import { whyFailed } from './net.mjs';
 import { repoOf } from './repo.mjs';
+import { keptRoutes, readConfig, shadowedDomain, wideRouteRefusal } from './routes.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
 import { LOCAL_STATE, configPath, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 import { projectsCloudflareEnv } from './projects-env.mjs';
@@ -90,6 +94,12 @@ export function explainCloudflare(out, accountId = null) {
   if (/maximum number of (D1 )?databases|database limit|too many databases/i.test(text)) {
     return { needs: 'd1-limit', why: 'This Cloudflare account has used all the D1 databases its plan allows (10 on the free plan). Nothing was deployed. Ask the person which unused database of theirs to remove, or use another account; never delete one yourself.' };
   }
+  // A route in wrangler.jsonc that another Worker of the zone already holds. Wrangler refuses, and so does the
+  // studio: that route is not the studio's to take (lib/routes.mjs).
+  if (/assigned to another worker|already assigned to routes/i.test(text)) {
+    const routes = [...text.matchAll(/^\s*-\s+(\S+)\s*$/gm)].map((m) => m[1]);
+    return { needs: 'cloudflare-routes', ...(routes.length ? { routes } : {}), why: `A route in wrangler.jsonc${routes.length ? ` (${routes.join(', ')})` : ''} already belongs to another Worker on this Cloudflare zone, so Cloudflare refused the deploy and the live site is unchanged. The studio never takes a route from another Worker. If the route is wider than the studio's own hostname (a wildcard, a catch-all), take it out of wrangler.jsonc and give the studio its own: { "pattern": "<its hostname>/*", "zone_name": "<the domain>" }. If it IS the studio's own hostname, ask the person: only they can unassign it from the other Worker, in the zone's Workers Routes in the Cloudflare dashboard.` };
+  }
   if (/\b1027\b|exceeded .*daily request limit/i.test(text)) {
     return { needs: 'free-plan-daily-limit', why: 'This account used its free plan\'s 100,000 Worker requests for today (it resets at 00:00 UTC). Nothing is broken; try again after the reset.' };
   }
@@ -127,10 +137,29 @@ export function deployPlan(root) {
   };
 }
 
-export async function deploy(root, { log = () => {}, homie } = {}) {
+/**
+ * `homie-studio deploy`. One at a time for a studio: it holds the studio's deploy lock (lib/deploy-state.mjs) from
+ * before it reads anything until it ends, however it ends. `fetchFn` is the toolkit's own tests' stand-in network.
+ */
+export async function deploy(root, opts = {}) {
+  const lock = lockDeploy(root);
+  if (!lock.ok) return { ok: false, command: 'deploy', needs: lock.needs, why: lock.why };
+  // A deploy that is killed still lets go (a kill -9 cannot; the next deploy sees its process is gone).
+  const onExit = () => lock.release();
+  process.once('exit', onExit);
+  try { return await deployLocked(root, opts); } finally { process.off('exit', onExit); lock.release(); }
+}
+
+async function deployLocked(root, { log = () => {}, homie, fetchFn = null } = {}) {
   const studio = readStudio(root);
   const cf = { r2: null, created: [], ...studio.cloudflare };
   const created = new Set(cf.created ?? []);
+  // A wildcard or catch-all route in the studio's own config would hand other hostnames of the zone to this Worker:
+  // refused before Cloudflare is asked anything (lib/routes.mjs). Read once here; every rewrite below keeps the
+  // studio's own routes exactly as its owner wrote them.
+  const wide = wideRouteRefusal(readConfig(root), studio);
+  if (wide) return { ok: false, command: 'deploy', ...wide };
+  const routes = keptRoutes(root, studio);
   const who = whoami(root);
   if (!who) {
     if (cf.auth === 'stripe-projects') {
@@ -187,6 +216,14 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   // A new studio goes live with its own Home ("First game coming soon") before it has a game.
   step(b.catalogue.length || b.songs.length || b.videos.length ? `built ${b.catalogue.length} game(s), ${b.songs.length} song(s), ${b.videos.length} video(s)` : 'built the home page (no game yet: "First game coming soon")');
   for (const n of b.mediaNotes ?? []) step(`note: ${n.file}: ${n.why}`);
+  if (b.retired) step(`note: ${b.retired}`);
+  // Which games this deploy changes, against what the last deploy from this computer put live, each with the
+  // build's own hash for it (lib/deploy-state.mjs: one hash vocabulary). The record is written only once Wrangler has deployed.
+  const builtNow = builtGames(root, b.catalogue);
+  const delta = compareDeploy(builtNow, lastDeploy(root), lastDeployRecord(root));
+  for (const g of delta.games) step(`${g.id}: ${deployWords(delta.first ? { hash: g.hash } : g)}`, { game: g.id, hash: g.hash, change: g.change });
+  if (delta.first && delta.games.length) step('no earlier deploy from this computer to compare with: the next one says changed or unchanged for each game');
+  for (const id of delta.removed) step(`${id}: no longer in the build; it leaves the site with this deploy`);
 
   // The Worker: never one this studio did not make.
   if (!created.has(`worker:${cf.worker}`)) {
@@ -218,14 +255,15 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   const r2 = storage;
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
-  writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root) }));
+  writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes }));
+  if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
   if (migrate.code !== 0) return refuse(`D1 migrations failed: ${migrate.out.trim().split('\n').slice(-4).join(' ')}`, migrate.out);
   step('D1 migrations applied');
   // Workers AI (0.17.0): bound only when a server's AI guides think with it.
   if (needsWorkersAi(root, w, cf.d1)) {
-    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true }));
+    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes }));
     step('Workers AI bound (AI): a server\'s AI guides think with it and typed room chat is reviewed with it, each within its day\'s budget (free allocation: 10,000 neurons a day)');
   }
 
@@ -250,11 +288,46 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   // The homie.rocks directory claim: the live site claims itself the first time its manifest is read (0.10.0), so
   // reading it once now is all it takes; nothing is stored by hand.
   const directory = homie || studio.homie?.directory || 'https://homie.rocks';
+  recordDeploy(root, builtNow);
   let claim = null;
+  const notes = [];
   if (url) {
-    claim = await warmClaim(url);
+    const read = await readLiveSite(url, fetchFn ? { fetchFn } : {});
+    claim = read.claim;
     if (claim) step('the site claimed itself in the directory');
-    else step('the directory claim is not there yet (the site claims itself when the directory first reads it)');
+    else if (read.state === 'other' && !isWorkersDev(url)) {
+      // The studio's own domain answered as something else: say which route is needed (lib/routes.mjs). The deploy
+      // itself went through; the zone's other routes are never touched.
+      const s = shadowedDomain(readConfig(root), new URL(url).hostname, read);
+      notes.push(s.why);
+      step(s.why, s.route ? { needs: 'cloudflare-routes', route: s.route } : {});
+    } else if (read.state === 'unreachable') {
+      // This computer could not ask (its own name lookup, no connection): a network preflight failure, never a
+      // verdict on the site that was just deployed.
+      const said = `deployed, but this computer could not read ${url} back to check it: ${read.why}. ${read.preflight === 'dns' ? 'That is this computer\'s name lookup (a browser here may still open the site), not the deploy.' : 'That is this computer\'s connection, not the deploy.'} The site claims itself when the directory first reads it.`;
+      notes.push(said);
+      step(said, { preflight: read.preflight ?? 'network' });
+    } else step('the directory claim is not there yet (the site claims itself when the directory first reads it)');
+  }
+
+  // The deploy before this one came from a toolkit that still had remix, and left games open to be taken whole. No
+  // game's source is served any more, but the directory keeps its old copy of the studio (and its offer of those
+  // games) until it reads the site again, so ask it to, now. ONLY for a studio this computer listed (publish records
+  // it): going online never lists a studio, and a deploy never lists one either. Once: see compareDeploy.
+  let reread = null;
+  if (url && delta.withdrawn.length) {
+    const which = delta.withdrawn.join(', ');
+    const dir = String(directory).replace(/\/+$/, '');
+    if (listedHere(root, { site: url, directory: dir })) {
+      const again = await publish(root, { homie: dir, site: url, ...(fetchFn ? { fetchFn } : {}) });
+      reread = { ok: again.ok, games: delta.withdrawn, ...(again.ok ? {} : { why: again.why }), ...(again.publishes ? { publishes: again.publishes } : {}) };
+      step(again.ok
+        ? `asked the directory to read the studio again: it still offered the source of ${which}, and no game's source is served whole any more${again.publishes?.line ? ` (${again.publishes.line})` : ''}`
+        : `the directory still offers the source of ${which}, which is no longer served, and it did not take the re-read (${String(again.why ?? 'no answer').split('\n')[0]}): it keeps its old copy until the next publish`);
+      if (!again.ok) notes.push(`The directory still offers the source of ${which}, which this site no longer serves: publish again later (homie-studio publish).`);
+    } else {
+      step(`the source of ${which} is no longer served (games build on each other through parts now); this computer has no record of listing the studio in the directory, so the directory was not asked anything (a deploy never lists a studio). If it is listed, publish again and the directory reads the site as it is.`);
+    }
   }
 
   // studio.json keeps what is safe to commit: names, ids, the custom domain; never the workers.dev address.
@@ -264,7 +337,11 @@ export async function deploy(root, { log = () => {}, homie } = {}) {
   return {
     ok: true, command: 'deploy', url, ...(workersDev ? { workersDev, local: LOCAL_STATE } : {}), worker: cf.worker, d1: cf.d1, r2, account: accountId, announced, steps,
     ...(media ? { media: { moved: media.moved ?? [], failed: media.failed ?? [], inR2: media.inR2 ?? null } } : {}),
-    games: b.catalogue.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null })),
+    games: b.catalogue.map((id) => { const g = delta.games.find((x) => x.id === id); return { id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null, hash: g?.hash ?? null, change: delta.first ? 'first deploy from this computer' : g?.change ?? null }; }),
+    ...(delta.removed.length ? { removed: delta.removed } : {}),
+    ...(routes ? { routes: routes.map((r) => r.pattern) } : {}),
+    ...(notes.length ? { notes } : {}),
+    ...(reread ? { reread } : {}),
     songs: b.songs.map((slug) => ({ slug, page: url ? `${url}/music/${slug}/` : null })),
     videos: b.videos.map((slug) => ({ slug, page: url ? `${url}/videos/${slug}/` : null })),
     claim: Boolean(claim), directory,
@@ -299,6 +376,44 @@ export function needsWorkersAi(root, w, db) {
 export function repoVar(root) {
   const repo = repoOf(root);
   return repo ? ['--var', `HOMIE_REPO:${repo}`] : [];
+}
+
+/**
+ * The live site's manifest, read back after a deploy, and what the answer was:
+ *   state 'studio'       it answered as a studio; `claim` is its directory claim (null until it has one)
+ *   state 'other'        the address answered, and not as a studio (another Worker's page, a 404 that is not ours):
+ *                        `status`, and `said`, the first words of what it said
+ *   state 'unreachable'  this computer could not ask: `why`, and `preflight` ('dns' for a name it could not look up)
+ *   state 'skipped'      the toolkit's own tests (HOMIE_STUDIO_WARM=0) with no stand-in network
+ * Reading it is also what makes a 0.10.0 site claim itself. A fresh deploy can take a few seconds to answer
+ * everywhere, so a site that does not yet answer as a studio is asked three times.
+ */
+export async function readLiveSite(site, { tries = 3, wait = 2500, fetchFn = null } = {}) {
+  if (!fetchFn && process.env.HOMIE_STUDIO_WARM === '0') return { state: 'skipped', claim: null };
+  const ask = fetchFn ?? globalThis.fetch;
+  const base = String(site).replace(/\/+$/, '');
+  let last = { state: 'unreachable', claim: null, why: 'no answer' };
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await ask(`${base}/.well-known/homie-studio.json`, { headers: { accept: 'application/json', 'user-agent': 'homie-studio-deploy' }, signal: AbortSignal.timeout(15_000) });
+      const text = await res.text();
+      let body = null;
+      try { body = JSON.parse(text); } catch { body = null; }
+      const studio = res.ok && body && typeof body === 'object' && ('claim' in body || Array.isArray(body.games));
+      if (studio) {
+        const claim = /^[a-f0-9]{16,128}$/.test(body.claim ?? '') ? body.claim : null;
+        if (claim) return { state: 'studio', claim };
+        last = { state: 'studio', claim: null };
+      } else last = { state: 'other', claim: null, status: res.status, said: String(body?.error ?? body?.message ?? text ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) };
+    } catch (error) {
+      const w = whyFailed(error, base);
+      last = { state: 'unreachable', claim: null, why: w.why, code: w.code ?? null, ...(w.preflight ? { preflight: w.preflight } : {}) };
+      // A name this computer cannot look up does not start resolving in five seconds: say so now.
+      if (w.preflight === 'dns') return last;
+    }
+    if (i < tries - 1) await new Promise((r) => setTimeout(r, wait));
+  }
+  return last;
 }
 
 /**
@@ -378,10 +493,13 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
   step(claim ? 'the site claimed itself in the directory' : 'no directory claim yet (the site claims itself when the directory first reads it)');
   let games = [];
   try { games = JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8')).games.map((g) => g.id); } catch { games = []; }
+  const hashes = builtGames(root, games);
+  for (const id of games) if (hashes[id]?.hash) step(`${id}: ${deployWords(hashes[id])}`);
   return {
     ok: true, command: 'deploy', ci: true, url, worker: names.worker, d1: names.d1, r2: null, steps, announced: [],
     commit: process.env.WORKERS_CI_COMMIT_SHA ?? null, branch: process.env.WORKERS_CI_BRANCH ?? null,
-    games: games.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null })), songs: [], videos: [],
+    // A CI checkout has no earlier deploy to compare with: each game's content hash only (lib/deploy-state.mjs).
+    games: games.map((id) => ({ id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null, hash: hashes[id]?.hash ?? null })), songs: [], videos: [],
     claim: Boolean(claim),
   };
 }
@@ -429,7 +547,8 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   const next = { ...readStudio(root), cloudflare: { ...readStudio(root).cloudflare, accountId, r2: bucket, created: [...created].sort() } };
   writeStudio(root, next);
   if (next.cloudflare.d1Id) {
-    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root) }));
+    // The studio's own routes stay through this rewrite too (lib/routes.mjs).
+    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root), routes: keptRoutes(root, studio) }));
   }
   log(`created R2 ${bucket}`);
   return { ok: true, command: 'storage add', bucket, account: accountId, cost: R2_COST, next: ['npx --no-install homie-studio media move --dry-run   (which songs and videos go to R2: over 1 MiB, or left out of git)', 'npm run deploy   (binds the bucket as MEDIA, moves them, checks each by SHA-256, and serves them from R2 at the same addresses; the files stay in this folder)'] };

@@ -6,7 +6,7 @@
  * - the Studio pane (/studio): Build (the progress feed, stages going green, the latest check frame, a live Watch),
  *   Rooms (live rooms with players and AI, Watch/Join links, Announce, Kick and Mute through the studio's own back
  *   office, which only ASKS for a kick or a mute: the owner confirms each with one tap in their own browser),
- *   Games (launch state and the remix switch, asked for the same way), Stats, Codex, Lab, Parts (the parallel skill's
+ *   Games (launch state, asked for the same way), Stats, Codex, Lab, Parts (the parallel skill's
  *   agents) and Art (art direction: the phase strip, the look, each decision with Lock and Unlock, the cast, the scene
  *   budgets, the spend and the licences); it opens by itself when a build starts, where the terminal is wide enough
  *   for a pane nobody asked for;
@@ -76,7 +76,7 @@ const LABELS = {
   'office announce': 'Announce', 'office kick': 'Kick (asks the owner)', 'office mute': 'Mute (asks the owner)', 'office close': 'Close a room (asks the owner)',
   'office launch': 'Launch state (asks the owner)', 'office invite': 'Invites', 'office link': 'Owner link', stats: 'Stats', codex: 'Game Codex',
   'codex new': 'New Game Codex', 'codex link': 'Codex link', perf: 'Performance run', 'perf compare': 'Performance compare', 'perf sizes': 'Download sizes',
-  'game new': 'New game', 'game remix': 'Remix a game', games: 'Games', status: 'Studio status', upgrade: 'Upgrade the studio', look: 'Look at the site',
+  'game new': 'New game', games: 'Games', status: 'Studio status', upgrade: 'Upgrade the studio', look: 'Look at the site',
   servers: 'Servers', 'servers new': 'New server', 'agents pass': 'Agent pass', demo: 'A working game', new: 'New studio',
   style: 'Art direction', assets: 'Game assets',
 };
@@ -473,7 +473,7 @@ export function register(on, options) {
           announce: (r, text) => announce($, r, text),
         },
       }),
-      games: () => gamesTab(t, { s, rooms: S.rooms, office: S.office, columns, on: { launch: (g, v) => launchState($, g, v, null), remix: (g, v) => launchState($, g, null, v) } }),
+      games: () => gamesTab(t, { s, rooms: S.rooms, office: S.office, columns, on: { launch: (g, v) => launchState($, g, v) } }),
       stats: () => statsTab(t, { s, stats: S.stats, columns, now, busy: S.busy.stats, why: S.why.stats, on: { refresh: () => loadStats($) } }),
       codex: () => codexTab(t, { s, codexes: S.codexes, links: S.codexLinks, columns, busy: S.busy.codex, on: { link: (c) => codexLink($, c) } }),
       lab: () => labTab(t, { lab: S.lab, games: S.games, columns, now }),
@@ -630,7 +630,7 @@ async function readStudio($) {
     for (const d of await $.fs.list(`${root}/games`)) {
       if (d.kind !== 'directory' && d.kind !== 'dir' && !(d.kind === 'other' && d.isLink)) continue;
       const meta = await readJsonFile($, `${root}/games/${d.name}/game.json`);
-      if (meta) games.push({ id: meta.id ?? d.name, name: meta.name ?? d.name, blurb: meta.blurb ?? '', launch: meta.launch ?? null, remix: meta.share?.source !== false, hasCodex: await $.fs.exists(`${root}/games/${d.name}/CODEX.md`) });
+      if (meta) games.push({ id: meta.id ?? d.name, name: meta.name ?? d.name, blurb: meta.blurb ?? '', launch: meta.launch ?? null, hasCodex: await $.fs.exists(`${root}/games/${d.name}/CODEX.md`) });
       else if (await $.fs.exists(`${root}/games/${d.name}/CODEX.md`)) games.push({ id: d.name, name: d.name, blurb: '(planned: its Game Codex, no game yet)', planned: true, hasCodex: true });
     }
   } catch { /* no games folder */ }
@@ -862,12 +862,12 @@ async function announce($, room, text) {
   redraw($);
 }
 
-async function launchState($, game, launch, remix) {
+async function launchState($, game, launch) {
   S.busy.rooms = 'asking the office';
   redraw($);
-  const r = await studioCli($, ['office', 'launch', game.id, ...(launch ? [launch] : []), ...(remix === null ? [] : ['--remixable', remix ? 'on' : 'off'])]);
+  const r = await studioCli($, ['office', 'launch', game.id, launch]);
   S.busy.rooms = null;
-  noteAsk($, r, `${game.name}: ${launch ? `launch ${launch}` : `remix ${remix ? 'on' : 'off'}`}`);
+  noteAsk($, r, `${game.name}: launch ${launch}`);
 }
 
 async function loadStats($) {

@@ -1,46 +1,49 @@
 /**
- * A GAME'S SOURCE LICENCE AND LINEAGE, shared by the site Worker (worker/index.mjs, worker/site.mjs) and the CLI
- * (lib/build.mjs, lib/studio.mjs).
+ * A GAME'S OWN LICENCE AND THE CREDIT IT OWES, shared by the site Worker (worker/site.mjs, worker/schema.mjs,
+ * worker/discover.mjs) and the CLI (lib/build.mjs).
  *
- * The licence is the owner's pick (game.json `"license"`), carried in the game's source.json beside who made it
- * (`credit`: studio, game, page), so a remix knows what it may do and whom to credit:
+ * The licence is a statement of rights the owner may make about the game: game.json `"license"` names an SPDX
+ * identifier ("MIT", "CC-BY-4.0"), as the word or as { "spdx": "<id>" }. The game's page, its structured data and
+ * /llms.txt say it. A game that names none says nothing: no licence is granted, and no page pretends otherwise.
  *
- *   "remix-with-credit"  the default: remix it, and the remix says "Remix of <game> by <studio>" with a link back
- *   "remix-freely"       remix it; the credit is welcome, not asked for (the remix flow still writes it)
- *   "no-remix"           the source can be read, not remixed: the remix flow refuses
+ * REMIX WAS RETIRED. A game used to be handed over whole (its source at /games/<id>/source.json, brought in with
+ * `game remix`), and `"license"` also took three words about that: "remix-with-credit", "remix-freely" and
+ * "no-remix". Games now build on each other through parts, pieces a studio chooses to share (parts/PARTS.md), each
+ * under its own SPDX licence. Nothing here grants or refuses a remix any more:
  *
- * Either the word, or { "kind": "<word>", "spdx": "<SPDX id>" } to name a licence too (e.g. "MIT", "CC-BY-4.0"); a
- * bare SPDX id ("MIT") is the default kind with that id. Anything else is the default.
- *
- * A remix's game.json `remixOf` (written by `homie-studio game remix`) is its lineage: the original's name, studio
- * and page, shown on the remix's landing ("Remix of <game> by <studio>") and in its credits.
+ *   - the three words, and `"kind"` in the object form, are read as no licence named (an SPDX id beside them stays);
+ *   - game.json `"remix"`, `"share"` and `landing.make` are ignored; retiredKeys() names the ones a game still
+ *     carries, so the build can say so once;
+ *   - `"remixOf"`, which `game remix` wrote into a game it made, is still read: it is a credit that game owes its
+ *     original, and its landing and credits keep showing it ("Based on <game> by <studio>", basedOnRow()).
  */
-export const LICENSE_KINDS = Object.freeze({
-  'remix-with-credit': 'Remix with credit',
-  'remix-freely': 'Remix freely',
-  'no-remix': 'Not for remixing',
-});
-export const DEFAULT_LICENSE = 'remix-with-credit';
 const SPDX = /^[A-Za-z0-9][A-Za-z0-9.+-]{0,63}$/;
+/** The three words `"license"` took while a game could be handed over whole: none of them is a licence. */
+const RETIRED_KINDS = new Set(['remix-with-credit', 'remix-freely', 'no-remix']);
 
-/** { kind, spdx } from what game.json (or a source.json) says. */
+/** { spdx } from what game.json (or a built catalogue row) says, or null when it names no licence. */
 export function licenseOf(value) {
-  const v = typeof value === 'string'
-    ? (Object.hasOwn(LICENSE_KINDS, value.trim()) ? { kind: value.trim() } : { spdx: value })
-    : value && typeof value === 'object' ? value : {};
-  const kind = Object.hasOwn(LICENSE_KINDS, v.kind) ? v.kind : DEFAULT_LICENSE;
-  const spdx = typeof v.spdx === 'string' && SPDX.test(v.spdx.trim()) ? v.spdx.trim() : null;
-  return { kind, spdx };
+  const v = typeof value === 'string' ? value : value && typeof value === 'object' ? value.spdx : null;
+  const spdx = typeof v === 'string' && SPDX.test(v.trim()) && !RETIRED_KINDS.has(v.trim()) ? v.trim() : null;
+  return spdx ? { spdx } : null;
 }
 
-/** "Remix with credit (MIT)". */
-export function licenseLabel(value) {
-  const l = licenseOf(value);
-  return `${LICENSE_KINDS[l.kind]}${l.spdx ? ` (${l.spdx})` : ''}`;
-}
+/** "MIT", or null for a game that names no licence. */
+export const licenseLabel = (value) => licenseOf(value)?.spdx ?? null;
 
-/** Whether the owner lets the game be remixed. */
-export const remixAllowed = (value) => licenseOf(value).kind !== 'no-remix';
+/**
+ * The retired settings a game.json still carries, as the words to print: `"remix"`, `"share"`, `landing.make`, and
+ * a `"license"` that is one of the three old words (or has a `"kind"`). `"remixOf"` is not one: it is still read.
+ */
+export function retiredKeys(g) {
+  const out = [];
+  if (g?.remix !== undefined) out.push('"remix"');
+  if (g?.share !== undefined) out.push('"share"');
+  const lic = g?.license;
+  if ((typeof lic === 'string' && RETIRED_KINDS.has(lic.trim())) || (lic && typeof lic === 'object' && lic.kind !== undefined)) out.push(`"license": ${JSON.stringify(typeof lic === 'string' ? lic.trim() : String(lic.kind)).slice(0, 40)}`);
+  if (g?.landing && typeof g.landing === 'object' && g.landing.make !== undefined) out.push('landing.make');
+  return out;
+}
 
 const line = (v, max) => (typeof v === 'string' && v.trim() ? v.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, max) : null);
 /** An https address, else null. */
@@ -48,8 +51,8 @@ export function httpsPage(v) {
   try { const u = new URL(String(v ?? '')); return u.protocol === 'https:' ? u.href : null; } catch { return null; }
 }
 
-/** A game's page from its source address: https://<site>/games/<id>/source.json is https://<site>/<id>/. */
-export function pageOfSource(source) {
+/** A game's page from the address its source once had: https://<site>/games/<id>/source.json is https://<site>/<id>/. */
+function pageOfSource(source) {
   try {
     const u = new URL(String(source ?? ''));
     const m = /^\/games\/([a-z0-9][a-z0-9-]{0,39})\/source\.json$/.exec(u.pathname);
@@ -58,17 +61,18 @@ export function pageOfSource(source) {
 }
 
 /**
- * What a game.json `remixOf` may show: the original's name, studio and page (an https link; a remix made before
- * 0.14.4 has only its source address, which names the page too), plain text only.
+ * The credit a game owes the game it was made from, as it may be shown: the original's name, studio and page (an
+ * https link), plain text only. Read from game.json `"remixOf"` (what `game remix` wrote; one made before 0.14.4
+ * has only the original's source address, which names its page too) or from a built catalogue row's `basedOn`.
  */
-export function remixRow(r) {
+export function basedOnRow(r) {
   if (!r || typeof r !== 'object') return null;
   const name = line(r.name, 80);
   return name ? { name, studio: line(r.studio, 80), page: httpsPage(r.page) ?? pageOfSource(r.source) } : null;
 }
 
-/** "Remix of Gem Rush by Night Owl Games" (the studio left out when the source named none). */
-export function remixCredit(r) {
-  const row = remixRow(r);
-  return row ? `Remix of ${row.name}${row.studio ? ` by ${row.studio}` : ''}` : null;
+/** "Based on Gem Rush by Night Owl Games" (the studio left out when the record named none). */
+export function basedOnCredit(r) {
+  const row = basedOnRow(r);
+  return row ? `Based on ${row.name}${row.studio ? ` by ${row.studio}` : ''}` : null;
 }

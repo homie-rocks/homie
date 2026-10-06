@@ -61,8 +61,44 @@ nothing at all, so it also runs in Node or on a page with no renderer.
 | `shake.js` | `shakeOffset`, `shakeFalloff`: a jolt from a source that falls off with distance |
 | `subject.js` | `localBounds`, `surveyTraffic`, `sightSkyBody`, `nearestKeylitIndex`: measuring the subject and what else is in frame |
 | `sightline.js`, `nearband.js`, `staging.js` | lift a shot clear of terrain, find the foreground ground a lens can see, stand where a crowd does not merge |
+| `follow.js` | `stepFollow`, `followState`, `cutFollow`, `fieldFromBlocked`: a third-person follow camera with a collision guard (swing, pull in, climb), numbers only |
 
 and 4 more in src/: `focuspick.js`, `pickscene.js`, `frame.js`, `scratch.js`.
+
+## A third-person follow camera
+
+`follow.js` is a whole follow camera in one function, for a game that is not a
+racer: a target pose and a collision question in, an eye and a look point out.
+The yaw catches up faster the further behind it is, speed pulls the lens back,
+and a guard keeps the lens out of geometry and out of the subject's head by
+swinging around it, then pulling in, then climbing. It imports no three and
+reads no clock, so the same inputs give the same camera on every machine.
+
+```ts
+import { followState, stepFollow, type FollowTuning } from '@homie-rocks/camera/follow.js';
+
+const tuning: FollowTuning = { // every number is yours; none has a default
+  dist: 6, distSpeed: 3, speedFull: 12, distTau: 0.4, height: 1.6, lookUp: 1.0,
+  yawTau: 0.5, yawTauHard: 0.12, hardTurn: 1.2,
+  lensRadius: 0.4, headRadius: 1.2, probeStep: 0.2,
+  swingStep: Math.PI / 12, swingMax: Math.PI / 3, climbMax: 4, guardIn: 0.05, guardOut: 0.6,
+};
+const rig = followState();
+// Clearance in metres at a ground point, negative inside solid: a signed distance
+// field is this already; wrap a yes/no query with fieldFromBlocked().
+const field = (x: number, z: number) => level.distanceToWall(x, z);
+
+function lateUpdate(dt: number): void {
+  stepFollow(rig, tuning, { x: p.x, y: p.y, z: p.z, yaw: p.yaw, speed: p.speed }, field, dt);
+  camera.position.set(rig.eyeX, rig.eyeY, rig.eyeZ);
+  camera.lookAt(rig.lookX, rig.lookY, rig.lookZ);
+}
+```
+
+`rig.guard` says which of `clear`, `swing`, `pull` or `climb` it is using. Call
+`cutFollow(rig)` on a respawn so the next frame snaps instead of easing across
+the level. The guard holds as long as the subject itself has `lensRadius` of
+room; with none at all the lens ends directly overhead.
 
 ## License
 

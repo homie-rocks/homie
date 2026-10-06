@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/fx",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pooled particles and effects for three.js games: particle pools and shaders, trails and ribbons, shockwave rings, flame plumes, heat shimmer, decals, haze, light shafts and a pool of claimable point lights.",
   "license": "Apache-2.0",
   "type": "module",

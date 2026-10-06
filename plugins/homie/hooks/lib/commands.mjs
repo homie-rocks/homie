@@ -54,7 +54,7 @@ const NPM_SCRIPTS = { dev: 'dev', build: 'build', deploy: 'deploy', check: 'chec
 /** The two-word commands of homie-studio (bin/homie-studio.mjs). */
 const TWO = {
   port: ['plan', 'import', 'check'], setup: ['status', 'attach'], office: ['link', 'key', 'announce', 'invite', 'launch', 'kick', 'mute', 'close', 'revoke'],
-  stats: ['key', 'link', 'revoke', 'share'], game: ['new', 'remix'], codex: ['new', 'link'], perf: ['sizes', 'compare'],
+  stats: ['key', 'link', 'revoke', 'share'], game: ['new'], codex: ['new', 'link'], perf: ['sizes', 'compare'],
   progress: ['start', 'stage', 'check', 'preview', 'spend', 'shot', 'song', 'log', 'stop', 'end', 'attach', 'change', 'pr', 'show'],
   agents: ['pass', 'passes', 'revoke', 'brain', 'sit'], servers: ['new', 'set', 'close', 'level', 'member'], media: ['list', 'move', 'put'],
   players: ['owner'], storage: ['add'], statusline: [], chrome: ['install'],

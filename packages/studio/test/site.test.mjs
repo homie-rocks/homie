@@ -4,7 +4,7 @@
  *   - the sections (Home, Games, Music, Videos, Rooms, Posts), each only when the studio has something in it:
  *     an empty one has no tab and its page answers 404;
  *   - every game's landing from its own files (footage or its cover, the pitch, Play, phone / computer / TV with
- *     the join code, live rooms, how to play, credits, "Make a game like this");
+ *     the join code, live rooms, how to play, credits);
  *   - posts from posts/*.md (safe markdown), with Atom and JSON feeds and a record for atproto later;
  *   - what a studio puts in site/ wins: a whole page, a partial, its tokens and CSS, its files;
  *   - every HTML answer is no-transform and never framed by another site; "Made with Homie" is on every page.
@@ -142,7 +142,7 @@ test('build: the landing facts come from each game\'s own files; posts are dated
   assert.equal(b.ok, true, JSON.stringify(b));
   assert.deepEqual(b.posts, ['crown-thief', 'we-are-live'], 'newest first');
   assert.deepEqual(b.postsSkipped.map((p) => p.post).sort(), ['2026-09-28-draft.md', 'undated.md']);
-  assert.deepEqual(b.landings.find((l) => l.id === 'rock-race'), { id: 'rock-race', hero: 'footage', credits: true, source: true });
+  assert.deepEqual(b.landings.find((l) => l.id === 'rock-race'), { id: 'rock-race', hero: 'footage', credits: true });
   assert.equal(b.landings.find((l) => l.id === 'crown-thief').hero, 'colours', 'a starter with no art gets the studio\'s colours');
   const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
   const rock = cat.games.find((g) => g.id === 'rock-race');
@@ -225,7 +225,7 @@ test('the sections: Home, Games, Rooms and Posts are there; Music and Videos are
   assert.equal(wk.tagline, 'Games for night owls');
 });
 
-test('a game\'s landing: its footage, the pitch, Play into a public room, phone / computer / TV, live rooms, how to play, credits, and "Make a game like this"', async () => {
+test('a game\'s landing: its footage, the pitch, Play into a public room, phone / computer / TV, live rooms, how to play and credits', async () => {
   const dir = arcadeLike('landing');
   assert.equal(out(run(['build'], dir)).ok, true);
   const site = await siteOf(dir, { 'rock-race': [{ name: 'pub-2', players: 2, at: 1 }] });
@@ -251,22 +251,14 @@ test('a game\'s landing: its footage, the pitch, Play into a public room, phone 
   assert.match(html, /laser\.wav: Someone/);
   assert.match(html, /Port: <strong>Night Owls<\/strong>/);
   assert.match(html, /href="\/rock-race\/credits">Licences and full credits/);
-  assert.match(html, /<h2 id="make-title">Make a game like this<\/h2>/);
-  assert.match(html, /href="https:\/\/homie\.rocks\/studio\/\?remix=https%3A%2F%2Fowls\.example%2Fgames%2Frock-race%2Fsource\.json"/);
-  assert.match(html, /data-copy="\/plugin marketplace add homie-rocks\/homie"/);
-  assert.match(html, /data-copy="Remix Rock &lt;Race&gt; from https:\/\/owls\.example\/games\/rock-race\/source\.json into a game of my own in my Homie studio"/);
+  // No landing offers the game to be taken whole, or asks for "a game like this" (remix was retired).
+  assert.doesNotMatch(html, /Make a game like this|make-title|\?remix=|source\.json|Remix /);
   assert.match(html, /<script type="application\/ld\+json">\{"@context":"https:\/\/schema\.org","@graph":\[\{"@type":"BreadcrumbList"/);
   assert.match(html, /\{"@type":\["VideoGame","WebApplication"\],"@id":"https:\/\/owls\.example\/rock-race\/#game","name":"Rock \\u003cRace>"/, 'the name escaped: no value can end the block');
   assert.match(html, /data-made-with-homie/);
   // A game with no art of its own: the studio's colours and its name, drawn big.
   const bare = await (await site('/crown-thief/')).text();
   assert.match(bare, /<div class="hero-media bare" data-hero-media>/);
-  // A closed game: no source link, the "make your own" road.
-  const cat = JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8'));
-  const { gameLanding } = await import('../worker/site.mjs');
-  const closed = await gameLanding(cat, { ...cat.games[1], landing: { ...cat.games[1].landing, source: false } }, { origin: 'https://owls.example' }).text();
-  assert.doesNotMatch(closed, /source\.json/);
-  assert.match(closed, /Make a multiplayer game like Rock &lt;Race&gt; in my Homie studio/);
   const live = await (await site('/rock-race/live')).json();
   assert.deepEqual([live.ok, live.counted, live.playing, live.max, live.rooms.length, live.road.room], [true, true, 2, 6, 1, 'public']);
   const credits = await site('/rock-race/credits');

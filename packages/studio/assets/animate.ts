@@ -49,7 +49,9 @@ const HERO_BUDGET = { triangles: 8000, texturePx: 1024, materials: 2, bytes: 153
 export const ANIM_TUNING = Object.freeze({
   fade: { value: 0.14, min: 0, max: 0.6, step: 0.01, unit: 's', group: 'Motion', note: 'How long one clip takes to blend into the next' },
   walkSpeed: { value: 1.5, min: 0.3, max: 6, step: 0.05, unit: 'm/s', group: 'Motion', note: 'The ground speed the walk clip\'s feet move at (feet slide when this is wrong)' },
-  runSpeed: { value: 4.2, min: 1, max: 12, step: 0.05, unit: 'm/s', group: 'Motion', note: 'The ground speed the run clip\'s feet move at' },
+  // 4.2 m/s suits the starter library's chibi rigs. It is a default, NOT a reading of your rig: a clip retargeted onto
+  // a taller character covers more ground a cycle (`homie-studio anim plan` shows the speed measured on each rig).
+  runSpeed: { value: 4.2, min: 1, max: 12, step: 0.05, unit: 'm/s', group: 'Motion', note: 'The ground speed the run clip\'s feet move at (a default, not measured on your rig: anim plan shows the measured speed)' },
   runFrom: { value: 2.4, min: 0.5, max: 8, step: 0.05, unit: 'm/s', group: 'Motion', note: 'From this speed up, the walk becomes a run' },
   actSpeed: { value: 1.25, min: 0.5, max: 3, step: 0.05, group: 'Motion', note: 'How fast actions (attacks, casts) play: higher is snappier' },
   jumpStretch: { value: 0.16, min: 0, max: 0.5, step: 0.01, group: 'Motion', note: 'How tall and thin the body goes as it leaves the ground' },
@@ -64,8 +66,11 @@ export const ANIM_TUNING = Object.freeze({
 export type AnimTuning = { -readonly [K in keyof typeof ANIM_TUNING]?: number };
 
 export interface CharacterOptions {
-  /** The clip library's address (default: the one the model names, beside it in ./anims/). */
-  anims?: string | null;
+  /**
+   * The clip library's address (default: the one the model names, beside it in ./anims/); null for none; or a list of
+   * addresses when its skeleton has a supplemental library too (the base first).
+   */
+  anims?: string | string[] | null;
   /** Live numbers (lab.tunables(tuning)): any ANIM_TUNING key, read every frame. */
   tune?: AnimTuning;
   /** Bones that swing on springs (default: names with tail, ear, cape, hair, antenna). */
@@ -157,10 +162,15 @@ export async function loadCharacter(models: ModelSource, url: string, opts: Char
   const loaded = await models.load(url, { budget: HERO_BUDGET });
   const info = (loaded.scene.userData?.homie ?? {}) as { anims?: string; family?: string; sockets?: Record<string, string> };
   let clips = loaded.animations ?? [];
-  const animsUrl = opts.anims === null ? null : (opts.anims ?? (info.anims ? new URL(info.anims, new URL(url, typeof location !== 'undefined' ? location.href : 'http://localhost/')).href : null));
-  if (animsUrl) {
-    try { clips = [...(await models.load(animsUrl, { budget: { triangles: 0, bytes: 3 * 1024 * 1024 } })).animations, ...clips]; } catch (error) { if (!clips.length) console.warn(`[animate] ${url}: its clips did not load (${(error as Error).message})`); }
+  // `anims`: the clip library to use instead of the one the model names; null for none; or a LIST, for a skeleton
+  // with a supplemental library beside its own (the base first: where two hold a verb, the earlier one's clip plays).
+  const own = info.anims ? new URL(info.anims, new URL(url, typeof location !== 'undefined' ? location.href : 'http://localhost/')).href : null;
+  const animsUrls = opts.anims === null ? [] : Array.isArray(opts.anims) ? opts.anims : [opts.anims ?? own].filter((u): u is string => Boolean(u));
+  const fromLibraries: AnimationClip[] = [];
+  for (const animsUrl of animsUrls) {
+    try { for (const c of (await models.load(animsUrl, { budget: { triangles: 0, bytes: 3 * 1024 * 1024 } })).animations) if (!fromLibraries.some((x) => x.name === c.name)) fromLibraries.push(c); } catch (error) { if (!clips.length && !fromLibraries.length) console.warn(`[animate] ${url}: its clips did not load (${(error as Error).message})`); }
   }
+  clips = [...fromLibraries, ...clips];
   const model = await models.instance(url, { budget: HERO_BUDGET });
   return createCharacter(model, clips, { ...opts, family: info.family ?? null, sockets: info.sockets ?? {} });
 }

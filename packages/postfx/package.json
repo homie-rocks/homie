@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/postfx",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Post-processing for three.js games: a chain with grade, bloom, depth of field and temporal resolve, plus a capture protocol that makes two screenshots of a held frame identical. No default look.",
   "license": "Apache-2.0",
   "type": "module",
@@ -32,7 +32,7 @@
     "prepack": "tsc --build"
   },
   "dependencies": {
-    "@homie-rocks/render": "0.1.0"
+    "@homie-rocks/render": "0.2.0"
   },
   "peerDependencies": {
     "three": "0.185.1",

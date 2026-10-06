@@ -1551,6 +1551,67 @@
      }
     }
    }
+  },
+  "0.31.0": {
+   "files": {
+    "CLAUDE.md": "ddf2b2a0376202f6",
+    "README.md": "684b3cca8001673c",
+    "HANDOFF.md": [
+     "29337e2ace95b2e7",
+     "ce7a8fd91c6bbee2"
+    ],
+    "games/README.md": "5ad32fe80c61f117",
+    "music/README.md": "a3dc042dadd39df8",
+    "videos/README.md": "16babc3437d5545b",
+    "posts/README.md": "37841aae476bd540",
+    "site/README.md": "732894273a32dc3f",
+    "site/src/worker.mjs": "ca3f1630f2420ad3"
+   },
+   "sections": {
+    "AGENTS.md": {
+     "(intro)": "214aa46eb3a895d5",
+     "## Layout": "8baf49e4291e7e88",
+     "## Commands (all through the pinned CLI in node_modules)": [
+      "29a04ed3d956610a",
+      "f25ef8c7dde1f5c2"
+     ],
+     "## The site": [
+      "0cb8dd9a6f8a0096",
+      "71bec10e44e5062f"
+     ],
+     "## Making games": [
+      "b0b921cb81b0cfbd",
+      "f52aa1c3566c0c19"
+     ],
+     "## The Game Codex and progress": "0738ef719cef3a4c",
+     "## Art direction and models": [
+      "a48fff7bf0a5f2fc",
+      "aaea65236db52126"
+     ],
+     "## Running live games (the back office)": [
+      "4aa5f513a7cd2c3b",
+      "51ebf2ab756f6e4d"
+     ],
+     "## Servers and AI seats": "98d08705087a33ec",
+     "## Selling things (the shop)": "b04b0a2b25f524f2",
+     "## Continuing a build from the Claude app": "0d68081e924ca419",
+     "## Rules": "13617a3dd1a66be6",
+     "## Telling Homie": "80b46fdd9e578db8",
+     "## Beta": "9d02638207a26e73"
+    }
+   },
+   "named": {
+    "Homie Arcade": {
+     "sections": {
+      "AGENTS.md": {
+       "## Commands (all through the pinned CLI in node_modules)": [
+        "5d1c068adda1116b",
+        "a44e5bdd5425d5b6"
+       ]
+      }
+     }
+    }
+   }
   }
  }
 }

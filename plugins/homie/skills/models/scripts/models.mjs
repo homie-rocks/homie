@@ -4,7 +4,8 @@
  * with a receipt for every call. The free parts (the starter library, optimising, checking, the lineup)
  * are `npx --no-install homie-studio assets …`; this script is only the paid route and its registry.
  *
- *   check                                  the fal key (a free check), the studio, the registry's endpoints
+ *   check                                  the LOCAL fal key (a free check), the studio, the registry's endpoints; a fal
+ *                                          connector signed in from the app is a separate sign-in this script cannot see
  *   registry [--write]                     every registry endpoint's live price again (free), and what moved or retired
  *   budget <game> --cap <usd>              what the person agreed to spend on this game's generated models
  *   quote <game> [--count <n>]             what one prop costs today (concept + mesh), and n of them, against the cap
@@ -21,6 +22,13 @@
  *        step 2 (`character … --mesh --yes`): Meshy 7.1 image-to-3D with a humanoid auto-rig (textured, about US$1.40),
  *          then `homie-studio assets add --rigged` makes it phone-sized for free, maps its skeleton to the standard and
  *          retargets the library's clips onto it (KayKit's CC0 humanoid set by default; --clips-from another).
+ *   import <game> <asset> --receipt <job.json> --file <completed.glb> [--kind prop|character] [--card "…"] [--height <m>]
+ *                                          [--concept <image> --concept-receipt <job.json>] [--usd <n>] [--dry-run]
+ *        a job ALREADY RUN through a fal connector (its MCP server, signed in from the app, with no key in this shell),
+ *        brought in under the same budget, receipts and provenance as one made here: the receipt's request id and cost
+ *        go to art/receipts.jsonl and the game's budget (refused with no budget, or past the cap), the file is kept in
+ *        art/<asset>/raw/, then `homie-studio assets add` makes it phone-sized and records every step. No network; the
+ *        same receipt imported twice is counted once.
  *   mood <game> <a|b|c|all> [--yes]        a painted mood image per style-board direction (a target, never shipped)
  *   receipts <game>                        what this game's models cost so far, from art/receipts.jsonl
  *
@@ -30,8 +38,8 @@
  * FAL_QUEUE_URL, FAL_API_URL and FAL_STORAGE_URL point it at a test double. Every command takes --json.
  */
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SLUG, checkBudget, findStudio, readBudget, readJson, setBudget, writeJson } from '../../music/scripts/lib/studio.mjs';
 import { checkKey, falKey, priceOf, run as falRun, unitPrice } from '../../video/scripts/lib/fal.mjs';
@@ -129,11 +137,24 @@ async function paid(root, game, { model, input, out, base, credits = null, addon
 
 /* ---------------------------------------------------------------- commands */
 
+/**
+ * Two different sign-ins, which this check used to report as one. FAL_KEY is what THIS script pays with. A fal
+ * connector (fal's MCP server, signed in from the app) is signed in somewhere this script cannot see: it can be ready
+ * while there is no key here, and neither says anything about the other.
+ */
+const NO_LOCAL_KEY = 'no local FAL_KEY in this shell, so this script cannot make a paid call itself. That says nothing about a fal connector: one signed in from the app is a separate sign-in this script cannot see or use, and it may well be ready. Two ways on: set FAL_KEY and generate here (prop, character), or generate through the connector and bring the finished job in with `models.mjs import <game> <asset> --receipt <job.json> --file <model.glb>` (the same budget, receipts and provenance). The starter library, optimising and the checks need neither';
+
 async function check() {
   const root = findStudio();
   const reg = registry();
-  const key = falKey() ? await checkKey() : { ok: false, why: 'FAL_KEY is not set (only generated models and mood images need it; the starter library, optimising and checks are free)' };
-  return { ok: true, command: 'check', studio: root, fal: key.ok ? 'the key works (checked free)' : key.why, registry: { checked: reg.checked, concept: reg.concept.noRefs.endpoint, conceptWithRefs: reg.concept.withRefs.endpoint, mesh: reg.mesh.prop.endpoint, mood: reg.mood.endpoint } };
+  const local = Boolean(falKey());
+  const key = local ? await checkKey() : { ok: false, why: NO_LOCAL_KEY };
+  const auth = {
+    localKey: key.ok ? 'works (checked free)' : local ? `set, but not accepted: ${key.why}` : 'not set',
+    connector: 'not checked here: a fal connector signs in from the app, apart from this script. Ask it for its own account status; if it is ready, generate there and `import` the finished job',
+    paidRoutes: [...(key.ok ? ['prop, character and mood here (FAL_KEY)'] : []), 'import: a job a fal connector already ran, with its receipt and its file'],
+  };
+  return { ok: true, command: 'check', studio: root, fal: key.ok ? 'the key works (checked free)' : key.why, auth, registry: { checked: reg.checked, concept: reg.concept.noRefs.endpoint, conceptWithRefs: reg.concept.withRefs.endpoint, mesh: reg.mesh.prop.endpoint, mood: reg.mood.endpoint } };
 }
 
 async function registryCheck() {
@@ -307,6 +328,89 @@ async function character(root) {
   return { ok: true, command: 'character', step: 'mesh', game, asset, model: added.model ?? added.file, anims: added.anims ?? null, skeleton: added.skeleton ?? null, verbs: added.verbs ?? [], before: added.before, after: added.after, usd: r.usd, spent: readBudget(budgetDir(root, game))?.spent ?? null, receipts: steps.map((s) => s.receipt), next: `homie-studio anim preview ${game} --asset ${asset} (its clips, looping) and homie-studio assets lineup ${game}; look at both` };
 }
 
+/**
+ * A connector's job receipt, read tolerantly (what was saved when the connector accepted the job): its request id, its
+ * endpoint, what it cost or was estimated to cost, and when. A receipt that says the job is not finished is refused.
+ */
+function jobReceipt(file, { usd = null } = {}) {
+  if (!file) return null;
+  const abs = resolve(String(file));
+  if (!existsSync(abs)) throw new Error(`no receipt at ${file}`);
+  let j;
+  try { j = JSON.parse(readFileSync(abs, 'utf8')); } catch { throw new Error(`${file} is not JSON (a connector job receipt: its request id, endpoint and cost)`); }
+  const requestId = [j.requestId, j.request_id, j.id, j.job?.request_id, j.job?.id].find((x) => typeof x === 'string' && x.trim());
+  const endpoint = [j.endpoint, j.model, j.app, j.endpoint_id, j.job?.endpoint].find((x) => typeof x === 'string' && x.trim());
+  if (!requestId) throw new Error(`${file} names no request id (requestId): without it a job cannot be told from the one before, so it is not recorded`);
+  if (!endpoint) throw new Error(`${file} names no endpoint (endpoint or model): the provenance of the file would be a guess`);
+  const status = String(j.status ?? j.state ?? '').toLowerCase();
+  if (status && !/^(completed?|succe(ss|eded)|ok|done|finished)$/.test(status)) throw new Error(`${file} says the job is "${status}", not finished: import it when the connector has the result`);
+  const pick = [usd, j.usd, j.cost, j.price?.usd, j.estimate?.usd, j.estimatedCost, j.estimated_cost, j.price].map((x) => (x === null || x === undefined || x === '' || typeof x === 'object' ? NaN : Number(x))).find((n) => Number.isFinite(n) && n >= 0);
+  // No cost on the receipt: the registry's recorded price for that endpoint, said as such. Never zero by default.
+  let price = Number.isFinite(pick) ? { usd: pick, basis: usd !== null && Number(usd) === pick ? 'the price given with --usd' : 'the connector receipt\'s own cost' } : null;
+  if (!price) {
+    const reg = registry();
+    const known = [reg.concept.withRefs, reg.concept.noRefs, reg.mesh.prop, reg.mood, reg.character?.mesh, ...(reg.mesh.fallbacks ?? [])].find((e) => e?.endpoint === endpoint);
+    if (known && Number.isFinite(Number(known.price?.usd))) price = { usd: Number(known.price.usd), basis: `the registry's recorded price for ${endpoint} (read ${known.price.read ?? reg.checked}); the receipt names none` };
+  }
+  if (!price) throw new Error(`${file} names no cost and ${endpoint} is not in the registry: say what it cost with --usd <US dollars> (an unknown cost is never recorded as nothing)`);
+  return { file: abs, requestId: requestId.trim(), endpoint: endpoint.trim(), price, at: typeof (j.at ?? j.createdAt ?? j.created_at) === 'string' ? (j.at ?? j.createdAt ?? j.created_at) : null };
+}
+
+/** Request ids this studio has a receipt line for already: importing the same connector job twice counts it once. */
+function receipted(root) {
+  try { return new Set(readFileSync(join(root, 'art', 'receipts.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l).requestId ?? null; } catch { return null; } }).filter(Boolean)); } catch { return new Set(); }
+}
+
+/**
+ * `import`: a job a fal connector already ran, into the game as if this script had run it. The money was spent on the
+ * connector's sign-in, so nothing here can stop it; what this does is keep the books and the provenance true: the cap
+ * the person agreed to is still checked (a job past it is refused until they raise it), every request id gets one
+ * receipt line, the raw file is kept beside its job, and the asset is recorded with each step's endpoint and receipt.
+ */
+async function importJob(root) {
+  const [, game, asset] = pos;
+  gameDir(root, game);
+  if (!SLUG.test(String(asset ?? ''))) throw new Error('name the asset: models.mjs import <game> <asset id> --receipt <job.json> --file <model.glb>');
+  if (!flags.get('file') || !flags.get('receipt')) throw new Error('models.mjs import <game> <asset> --receipt <the connector\'s job receipt, JSON> --file <the completed .glb> [--kind prop|character] [--concept <image> --concept-receipt <job.json>]');
+  const src = resolve(String(flags.get('file')));
+  if (!existsSync(src)) throw new Error(`no completed file at ${flags.get('file')}`);
+  if (!/\.glb$/i.test(src)) throw new Error('the completed file must be a .glb (ask the connector for the GLB output)');
+  const kind = flags.get('kind') === 'character' ? 'character' : 'prop';
+  const mesh = jobReceipt(flags.get('receipt'), { usd: flags.has('usd') ? Number(flags.get('usd')) : null });
+  const conceptSrc = flags.get('concept') ? resolve(String(flags.get('concept'))) : null;
+  if (conceptSrc && !existsSync(conceptSrc)) throw new Error(`no concept image at ${flags.get('concept')}`);
+  const concept = conceptSrc && flags.get('concept-receipt') ? jobReceipt(flags.get('concept-receipt')) : null;
+  const seen = receipted(root);
+  const jobs = [...(concept ? [{ ...concept, what: `the concept image for ${asset}` }] : []), { ...mesh, what: kind === 'character' ? `the rigged 3D character for ${asset}` : `the 3D model for ${asset}` }];
+  const fresh = jobs.filter((j) => !seen.has(j.requestId));
+  const owed = +fresh.reduce((n, j) => n + j.price.usd, 0).toFixed(6);
+  const dir = join(root, 'art', asset);
+  if (flags.has('dry-run')) return { ok: true, command: 'import', dryRun: true, game, asset, kind, jobs: jobs.map((j) => ({ what: j.what, endpoint: j.endpoint, requestId: j.requestId, usd: j.price.usd, basis: j.price.basis, counted: seen.has(j.requestId) ? 'already receipted: not counted again' : 'would be counted' })), usd: owed, budget: readBudget(budgetDir(root, game)) ? { cap: readBudget(budgetDir(root, game)).cap, spent: readBudget(budgetDir(root, game)).spent } : null };
+  // The same cap as a call made here. It is checked before anything is written, so a refused import leaves no trace.
+  if (fresh.length) {
+    try { checkBudget(budgetDir(root, game), owed, { provider: 'fal', unit: 'usd' }); } catch (error) { throw new Error(`${error.message} (this job already ran on the fal connector; importing it only records it, and it is recorded once the budget allows it)`); }
+  }
+  mkdirSync(join(dir, 'raw'), { recursive: true });
+  const keep = (from, to) => { if (resolve(from) !== resolve(to)) copyFileSync(from, to); return to; };
+  const rawFile = keep(src, join(dir, 'raw', kind === 'character' ? 'rigged.glb' : 'mesh.glb'));
+  const conceptFile = conceptSrc ? keep(conceptSrc, join(dir, `concept${extname(conceptSrc).toLowerCase() || '.png'}`)) : null;
+  // Beside each file, what `paid` leaves beside one it made: a later `prop --mesh` then finds the job done and never pays for it again.
+  const answer = (file, j) => writeJson(`${file}.json`, { model: j.endpoint, requestId: j.requestId, price: { usd: j.price.usd, basis: j.price.basis }, at: j.at ?? new Date().toISOString(), via: 'connector', receipt: rel(root, j.file).startsWith('..') ? null : rel(root, j.file) });
+  answer(rawFile, mesh);
+  if (conceptFile && concept) answer(conceptFile, concept);
+  for (const j of fresh) receipt(root, game, { provider: 'fal', via: 'connector', model: j.endpoint, requestId: j.requestId, cost: j.price.usd, unit: 'usd', basis: j.price.basis, artifact: rel(root, j === mesh || j.requestId === mesh.requestId ? rawFile : conceptFile), asset, what: j.what });
+  const steps = [
+    ...(concept ? [{ what: 'concept', provider: 'fal', via: 'connector', endpoint: concept.endpoint, usd: concept.price.usd, receipt: rel(root, `${conceptFile}.json`), requestId: concept.requestId, at: concept.at }] : []),
+    { what: kind === 'character' ? 'mesh and rig' : 'mesh', provider: 'fal', via: 'connector', endpoint: mesh.endpoint, usd: mesh.price.usd, receipt: rel(root, `${rawFile}.json`), requestId: mesh.requestId, at: mesh.at },
+  ];
+  const stepsFile = join(dir, 'steps.json');
+  writeJson(stepsFile, steps);
+  const card = String(flags.get('card') ?? `${kind === 'character' ? 'Players' : 'Items'}/${asset}`);
+  const added = studio(root, ['assets', 'add', game, '--file', rel(root, rawFile), '--route', 'generated', '--license', 'generated', '--as', asset, '--kind', kind, ...(kind === 'character' ? ['--rigged'] : []), '--card', card, '--steps', rel(root, stepsFile), ...(conceptFile ? ['--concept', rel(root, conceptFile)] : []), '--slug', asset, ...(flags.get('clips-from') ? ['--clips-from', String(flags.get('clips-from'))] : []), ...(flags.has('height') ? ['--height', String(Number(flags.get('height')))] : [])]);
+  const b = readBudget(budgetDir(root, game));
+  return { ok: true, command: 'import', game, asset, kind, via: 'connector', model: added.model ?? added.file, before: added.before, after: added.after, usd: owed, counted: fresh.map((j) => j.requestId), alreadyCounted: jobs.filter((j) => seen.has(j.requestId)).map((j) => j.requestId), spent: b?.spent ?? null, cap: b?.cap ?? null, receipts: steps.map((s) => s.receipt), next: `homie-studio assets lineup ${game} (true scale, silhouettes, palette drift); look at it` };
+}
+
 async function quote(root) {
   const game = pos[1];
   gameDir(root, game);
@@ -358,6 +462,7 @@ async function main() {
   if (cmd === 'quote') return quote(root);
   if (cmd === 'prop') return prop(root);
   if (cmd === 'character') return character(root);
+  if (cmd === 'import') return importJob(root);
   if (cmd === 'mood') return mood(root);
   if (cmd === 'receipts') return receiptsOf(root);
   return { ok: false, command: cmd, why: `unknown command "${cmd}" (models.mjs help)` };

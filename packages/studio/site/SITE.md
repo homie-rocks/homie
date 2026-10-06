@@ -17,14 +17,21 @@ and every game gets a landing page. Anything the studio puts in `site/` wins.
 
 A section with nothing in it has no tab, and its address answers 404. Every page ends with a
 "Made with Homie" link to https://homie.rocks/studio/. studio.json may add `"tagline"` (one line, on Home and in
-the feeds) and `"site": { "featured": "<game id>" }` (the game on Home; otherwise the first with its own footage).
+the feeds), `"site": { "featured": "<game id>" }` (the game on Home; otherwise the first with its own footage) and
+`"site": { "order": ["<game id>", "<game id>"] }`: **the order of the games** in every list (Home's cards, the
+Games page, `/api/games`, `/sitemap.xml`, `/llms.txt` and `/.well-known/homie-studio.json`). The
+games it names come first, as it names them; every other game follows by id, which is the order all of them had
+before. An id that is not one of the studio's games is skipped, and the build says so. Without `featured`, Home's
+hero is still the first game with footage, now looked for in that order.
 
 Every card (Home, Games, Rooms, a post's), every live room's row and the directory's manifest show a game's
 **landing still**: `hero/wide.jpg` (or `landing.hero.image`), else a trailer's poster, else game.json's `cover`.
 
 ## What the homie.rocks hub reads
 
-`/.well-known/homie-studio.json` is the studio's manifest: its games (each with its landing still as `cover`),
+`/.well-known/homie-studio.json` is the studio's manifest: its games (in the site's order, each with its landing still
+as `cover`, and `build`: `{ "hash", "bundle" }`, the digest `homie-studio build` printed for the game that is live
+and the address of the bundle its page loads; [The build](#the-build)),
 songs (each with a `cover`), videos (each with a `poster`), the latest posts, and `rooms`, the address of
 `/api/rooms`, so the hub's Rooms page lists this studio's public rooms. With studio.json `"stats": { "share": true }`
 (`homie-studio stats share on`) it also says "played this week": `played` for the whole studio and each game's own
@@ -73,26 +80,41 @@ Made from the game's own files, nothing invented:
   `games/<id>/hero/` by the house brands' names (`wide.mp4` and `tall.mp4`, their AV1 cuts `wide.av1.mp4` and
   `tall.av1.mp4`, stills `wide.jpg` and `tall.jpg`); a trailer in `videos/manifest.json` whose `for.game` is the
   game (its 16:9 `video`, 9:16 `vertical` and `poster`). A loop of 8 to 15 s under 3 MB each, muted, plays best.
+
+  **The files, exactly** (all in `games/<id>/hero/`, every one optional; `homie-studio build` names the first two
+  when a landing has neither picture nor footage):
+
+  | File | Shape | What it is |
+  | --- | --- | --- |
+  | `wide.jpg` | 16:9, 1280×720 or larger | The still a computer, a TV and every card show (also `.webp`, `.png`, `.avif`) |
+  | `tall.jpg` | 9:16, 720×1280 | The still an upright phone shows; without it the wide one is cropped |
+  | `wide.mp4` | 16:9, 1280×720 to 1600×900 | Footage over the still: silent, 8 to 15 s, under 3 MB (also `.webm`) |
+  | `tall.mp4` | 9:16, 720×1280 | The same for an upright phone |
+  | `wide.av1.mp4`, `tall.av1.mp4` | as above | AV1 cuts, offered first to a browser that plays them |
+
+  The shapes are what fills the screen without waste, not a rule: any size is shown, cropped to fill
+  (`landing.hero.focus` says which part to keep). One file is 25 MiB at most. In the built site they are served
+  at `/games/<id>/_landing/<file>` (a static game's, which copies its whole folder, at `/games/<id>/hero/<file>`);
+  `/api/games` says each exactly, as `games[].landing.hero` (`wide`, `tall`, `wideImage`, `tallImage`).
 - **The pitch** (`landing.pitch`, else the blurb), a big **Play** button that drops into a public room at once,
   and the live line ("3 players playing right now", refreshed every 15 s from `/<id>/live`).
 - **Phone, computer, TV**: the controls for each (`landing.controls`, else `credits.json` `controls`), a code a
   phone scans to play, and how to put the game on a TV (`/<id>/tv` shows the room with its own join code).
 - **Live rooms**, each with Join. When studio.json shares its stats (`stats.share`), also "played this week".
 - **How to play**: `landing.about`, `landing.howToPlay` (a few lines), the controls, the room facts.
-- **Credits**: the studio and `landing.credits` (`[{ "role", "name", "url" }]`); for a remix, "Remix of
-  <game> by <studio>" linked to the original's page (game.json `remixOf`, which `game remix` writes; it is also
+- **Credits**: the studio and `landing.credits` (`[{ "role", "name", "url" }]`); for a game that was made from another
+  studio's, "Based on <game> by <studio>" linked to the original's page (game.json `remixOf`; it is also
   under the game's name in the hero); for a port, the original, its author and licence and every part inside it
   (`credits.json`, as the port skill writes it), with the full licence texts on `/<id>/credits`; Homie's open
-  engine; and the source's licence.
-- **Make a game like this**: the two commands that install the Homie plugin and the words to say. When the game
-  shares its source (the default; `"share": { "source": false }` keeps it closed, and the owner's Remixable
-  switch withdraws it) and its licence allows remixing, the words remix it from `/games/<id>/source.json`, and
-  the button goes to `https://homie.rocks/studio/?remix=<that address>`.
+  engine; and the licence the game names for itself, when it names one.
 
-A game's licence is game.json `"license"`, the owner's pick: `"remix-with-credit"` (the default: a remix says
-"Remix of <game> by <studio>" with a link back), `"remix-freely"` (the credit is welcome, not asked for) or
-`"no-remix"` (the source can be read; `game remix` refuses it), and `{ "kind": "<one of those>", "spdx": "MIT" }`
-names a licence too. The source.json carries it, with `credit`: the studio's name, the game's name and its page.
+A game's licence is game.json `"license"`: an SPDX identifier (`"MIT"`, `"CC-BY-4.0"`), as the word or as
+`{ "spdx": "MIT" }`. It is a statement about the game, said in its credits, its structured data and `/llms.txt`; a
+game that names none says nothing. It offers nobody the game's source: no game is handed over whole. Games build on
+each other through parts, the pieces a studio chooses to share (`parts/PARTS.md`; a game with shared parts gets a
+"Parts from this game" band, and the studio a `/parts/` page). Remix was retired: the settings it had (`"remix"`,
+`"share"`, `landing.make`, the licence words `"remix-with-credit"`, `"remix-freely"` and `"no-remix"`) are ignored
+with one build note, and `/games/<id>/source.json` answers 410.
 
 game.json's `landing` block, every key optional:
 
@@ -161,11 +183,73 @@ atproto later. `/.well-known/homie-studio.json` lists the latest posts for the h
 | `site/theme.json` | The tokens every page uses: `bg`, `fg`, `accent`, `glow`, `panel`, `accentInk` (colours: `#hex`, `rgb()`, `hsl()`, `oklch()`), `display`, `text`, `mono` (font lists), `fonts` (`[{ "family", "src": "/fonts/x.woff2", "weight": "400 800" }]`, files in `site/public`), `radius` (0 to 40), `mark` (a logo), `icon`, `social` (the share picture), `wordmark`, `uppercase: false`, `scheme: "light"`. Or `palette`: neon, dock, gold, acid, ember, orchid, tide, candy. A value that is not what it should be is dropped, with a warning. |
 | `site/theme.css` | CSS after the site's own, on every generated page: restyle anything. |
 | `site/partials/<name>.html` | A piece of every generated page: `head` (in `<head>`), `header` (the top line and its tabs), `footer` (the "Made with Homie" footer), `home` (a band on Home), `game` (a band on every landing), `game-<id>` (a band on one), `post` (after a post). `{{studio.name}}`, `{{game.name}}`, `{{game.id}}`, `{{game.play}}`, `{{year}}` are filled in. A band partial sits in one of the page's bands, unless it is its own `<section class="band">`. |
-| `site/pages/<path>/index.html` (or `site/pages/<path>.html`) | A whole page at `/<path>/`, served as it is, instead of the generated one (`site/pages/index.html` is Home, `site/pages/<id>/index.html` a game's landing) or beside them (`/about/`). It may borrow the site's parts: `<!-- homie:style -->`, `<!-- homie:header -->`, `<!-- homie:footer -->`, `<!-- homie:script -->`, and in its `<head>` `<!-- homie:schema -->` (the structured data the generated page there would carry: Home's, a landing's, else the studio's Organization). The rooms, the game files, the API and the owner's pages are never a page's. |
+| `site/pages/<path>/index.html` (or `site/pages/<path>.html`) | A whole page at `/<path>/`, served as it is, instead of the generated one (`site/pages/index.html` is Home, `site/pages/<id>/index.html` a game's landing) or beside them (`/about/`). It may borrow the site's parts: `<!-- homie:style -->`, `<!-- homie:header -->`, `<!-- homie:footer -->`, `<!-- homie:script -->`, in its `<head>` `<!-- homie:schema -->` (the structured data the generated page there would carry: Home's, a landing's, else the studio's Organization), and `<!-- homie:home-hero -->` (Home's generated hero for the featured game: its footage or art, title, pitch, Play and the live line) or `<!-- homie:home-hero <id> -->` (the same for the game it names), so a Home of the studio's own never writes a hero by hand. The rooms, the game files, the API and the owner's pages are never a page's. |
 | `site/public/` | Files served as they are at the same path: fonts, a logo, hero footage, a page's pictures. A `robots.txt`, `sitemap.xml`, `llms.txt` or `llms-full.txt` here replaces the one the site makes. |
 | `site/src/worker.mjs` | The Worker. A studio that keeps a whole brand site of its own (with its own routes) wraps the template's Worker here, as the house brands do; everything it does not answer goes to the template. |
 
 A studio with its own landing in `site/` keeps it: the template never replaces what the studio made.
+
+**A Home of your own, with the generated hero.** `site/pages/index.html` replaces Home. To keep the hero the site
+makes and change only what is under it (or only which game it shows), borrow it:
+
+```html
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Owls</title><!-- homie:style --><!-- homie:schema --></head>
+<body><!-- homie:header -->
+<main><!-- homie:home-hero crown-thief -->
+<section class="band"><div class="band-in"><h2>Whatever this studio wants here</h2></div></section></main>
+<!-- homie:footer --><!-- homie:script --></body></html>
+```
+
+The marker needs `<!-- homie:style -->` (the hero's CSS) and `<!-- homie:script -->` (its live line refreshes).
+A game that is private, invite-only or not this studio's leaves nothing there. A page that does want a game's
+hero files by address reads them from `/api/games` (`games[].landing.hero`); for a bundled game they are
+`/games/<id>/_landing/wide.jpg`, `tall.jpg`, `wide.mp4` and `tall.mp4`, as the table under
+[A game's landing](#a-games-landing-id) says. On the generated Home, `"site": { "featured": "<id>" }` already
+picks the hero's game.
+
+## The build
+
+`homie-studio build` (`npm run build`) makes `site/dist`, and `homie-studio build <id>` rebuilds one game in it.
+
+- **All or nothing.** The site is built in a folder of its own (`.studio/build/`, git-ignored) and put in place
+  only when all of it is there. A game that does not build fails the command (exit 1) and leaves `site/dist`
+  exactly as it was: never a site without that game for the next deploy to ship. When it is put in place,
+  `site/dist` and its folders are not removed and made again: a file that did not change is not touched, a file
+  that did is renamed into place in one step, and what the new build no longer has is taken away last. A server
+  or a script running from `site/dist` keeps its files across a build.
+- **A bundle named by its content.** A game's code is `games/<id>/assets/main-<HASH>.js`, and the built
+  `index.html` names it (write `./assets/main.js` in the game's own `index.html`, as always: the build points it at
+  the hashed file). A browser or an edge that kept the last build's bundle is never asked for the new one under the
+  old name. `assets/main.js` is still there, one line that imports the hashed bundle, for anything that knew the
+  old address; `bundle.json` beside the page says the real file and its chunks.
+- **Code that loads later.** The bundle is ES modules with code splitting: `const scene = await import('./level-2')`
+  in a game becomes `assets/chunk-<HASH>.js`, fetched when the game asks for it, from beside the bundle, wherever
+  the game is served (the site, its frame at `/<id>/__game/`, `dev`, `preview`, the Game Lab). A 3D game can draw
+  its first screen before the rest of its code and three.js add-ons arrive. A game with no `import()` is one file.
+- **What changed.** Each game's line says `new`, `changed` or `unchanged` against the build before, its **build
+  hash** (sixteen characters over every file of the game, the same digest `homie-studio perf` names a build by).
+  `site/dist/_site/build.json` keeps it for whatever runs next (`{ "v":
+  1, "at", "commit", "games": { "<id>": { "hash", "bundle", "chunks", "changed" } } }`), and
+  the live site says each game's `build.hash` in `/.well-known/homie-studio.json`: "is the live game the one I
+  built?" is that against this, with no file to fetch and no edge cache to wait out.
+- **`build --types`** checks the games' TypeScript first (the build itself only strips types, so a type error
+  ships otherwise). It uses the studio's own `typescript` (a new studio's `package.json` asks for it;
+  `npm install --save-dev typescript` in an older one; the toolkit does not depend on it), reads a game's own
+  `tsconfig.json` when it has one, else checks its entry and what that imports the way the build reads them
+  (ES2022, a browser, strict). A type error in a game's own files stops the build before anything is built;
+  errors in a package the game imports as source are counted and said, never fatal.
+- **`homie-studio preview <id> [--port 8788]`** serves one built game's files and nothing else (no Wrangler, no
+  rooms, no database), on this computer only, for a capture, a screenshot or a perf script. It is the page as the
+  build made it, with no room to join: the game plays offline with its bots. It prints its address first (one
+  line of JSON with `--json`), reads each file when asked, so the next build is what the next reload gets, and
+  stops with Ctrl-C.
+- **A 3D game's model budgets.** `createModels()` (`@homie-rocks/studio/assets`) warns in development about any
+  model over 1,500 triangles or 300 KB: a small prop's budget. A game whose models are bigger on purpose says so
+  once, in game.json: `"assets": { "budgets": { "triangles": 8000, "bytes": 1500000 } }` (per model; `texturePx`
+  and `materials` are taken too, and `createModels({ budget })` or a single `load(url, { budget })` still wins).
+  The build writes it into the bundle. A game copied from a 3D starter has `"assets": "library"` there, a note that
+  only mattered when it was copied: replace it with the object.
 
 ## The play page
 
@@ -338,7 +422,7 @@ schema.org `@graph`:
 | --- | --- |
 | Home | `Organization` (the studio: name, address, `site/theme.json` `mark` as its logo, `social` as its image, the tagline) and `WebSite` |
 | `/games/`, `/rooms/` | `BreadcrumbList`, `ItemList` of the public games' landings (the Rooms page's data never carries a live count) |
-| `/<id>/` | `BreadcrumbList`, `VideoGame` co-typed `WebApplication`: name, description, the pitch as `abstract`, its pictures and screenshots, `genre`, `numberOfPlayers` (min and max), `playMode`, `gamePlatform`, the studio as author and publisher, `license` (the source's licence, linked to its SPDX page), `isBasedOn` (a remix's original page, a port's original), `trailer` (a `VideoObject`), `datePublished` and `dateModified`, a `PlayAction`, and one free-to-play `Offer` (price 0) |
+| `/<id>/` | `BreadcrumbList`, `VideoGame` co-typed `WebApplication`: name, description, the pitch as `abstract`, its pictures and screenshots, `genre`, `numberOfPlayers` (min and max), `playMode`, `gamePlatform`, the studio as author and publisher, `license` (the licence the game names, linked to its SPDX page; left out when it names none), `isBasedOn` (a port's original), `trailer` (a `VideoObject`), `datePublished` and `dateModified`, a `PlayAction`, and one free-to-play `Offer` (price 0) |
 | `/<id>/credits`, `/<id>/servers/`, a server's page | `BreadcrumbList` |
 | `/music/`, `/music/<slug>/` | `MusicAlbum` (every song names one album) or an `ItemList`; `MusicRecording` (`byArtist` the studio, its duration, its `AudioObject`, its cover, `inAlbum`, `musicalKey`, its date) |
 | `/videos/`, `/videos/<slug>/` | `ItemList`; `VideoObject` (`thumbnailUrl`, `uploadDate`, `duration`, `contentUrl`: the file at its own address, from R2 or the site) |
@@ -374,15 +458,13 @@ any property schema.org does not put on that type. A whole block of the owner's 
 - `/sitemap.xml`: Home, Games and each landing (and its credits), Rooms, Music, Videos, Posts and every page in
   `site/pages`, with `lastmod` only where a real date says when it changed.
 - `/llms.txt`, following the llms.txt convention (an H1, a `>` summary, then `##` sections of links): what the
-  studio is; each game with its pitch, players, rounds, Play, Watch and the big screen; which games are open to remix,
-  with their licence, their `source.json` and the words to say to Claude Code or Codex with Homie (the plugin's
-  `game_remix` tool, or `homie-studio game remix <source> --id <new-id>`); songs; videos; posts with their Atom and
+  studio is; each game with its pitch, players, rounds, Play, Watch and the big screen, the licence it names and
+  the game it was based on (when it has either); songs; videos; posts with their Atom and
   JSON feeds; the studio's own pages (a changelog among them); and homie.rocks's own llms.txt.
 - `/llms-full.txt`: the same, with each game's whole description, how to play, controls and credits, and every
   post's text.
 
-A game is offered for remixing only when its source is shared, its owner's Remixable switch is on and its licence
-allows it, as for the directory. They are cached for five minutes. A file of the studio's own in `site/public` wins.
+They are cached for five minutes. A file of the studio's own in `site/public` wins.
 
 ## Headers
 

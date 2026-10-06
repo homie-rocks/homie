@@ -116,6 +116,14 @@ pointer handlers listen for).
   every QR in a public video. The recorder's visits are tagged as the studio's own QA, so the studio's
   stats never count them as visitors.
 
+## Frame by frame instead of real time
+
+`record-fixed.mjs` (what `trailer` films with) takes the same steps file but steps the page's clock
+1/fps a frame instead of filming it live: no held frames on a slow page, and waits and holds are in
+film time. It has wait, waitFor, click, tap, key, keys, type, focus and caption only, draws no cursor,
+films a computer's page only, and its sound comes from the game's sound log, not from the speaker.
+`references/TRAILER.md` section 0 says what its clock does and does not reach.
+
 ## Disk and size
 
 A take keeps every painted frame as a JPEG until it is encoded (about 150 KB each at 1080p, up to 60

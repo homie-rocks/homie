@@ -12,6 +12,8 @@
  *   bakeLibrary(to, sources, verbs)      a skeleton's clip library: the target's joints (no mesh) and one clip per verb,
  *                             sampled at 30 fps, constant tracks dropped, quaternions kept continuous
  *   writeLibrary(doc)         resampled and meshopt-compressed bytes, with its measurements
+ *   gaitOf(rig, anim)         how fast a looping walk or run moves its feet over the ground on ONE rig (a heuristic
+ *                             from the foot bones while they are down): the ground speed at which they do not slide
  *
  * Retargeting is plain matrix and quaternion math (three.js's math classes, no renderer), so it runs in Node, in a
  * cloud session and in CI. A clip baked onto a skeleton plays on every character with that skeleton's fingerprint
@@ -161,6 +163,58 @@ function poseAt(rig, channels, t) {
     world.set(rec, { m: w, q, p });
   }
   return world;
+}
+
+/**
+ * How fast a looping, in-place locomotion clip moves its feet over the ground on `rig`, in the rig's world units a
+ * second (metres on a shipped character: its rig carries its scale). While a foot is down it travels backwards under
+ * a body that stays put; the speed it travels at is the ground speed at which that foot does not slide, which is what
+ * animate's `walkSpeed` and `runSpeed` should be for THIS rig. The same clip retargeted onto a taller rig gives a
+ * larger number, so a default tuned on one family is not right for another.
+ *
+ * Deliberately small: each foot counts as down in the lowest quarter of its own height range, and its horizontal
+ * speed is averaged over those frames. No contact solver, no slope, no toe roll: a guide to start tuning from, not a
+ * verified foot contact. `anim` may come from another Document (a clip library): its channels are matched by node
+ * name. Returns { mps, seconds, feet, contact } or null (no foot bones, a foot that never lifts, a clip with no length).
+ */
+export function gaitOf(rig, anim, { fps = 30, feet = ['leftFoot', 'rightFoot'] } = {}) {
+  needThree();
+  const duration = durationOf(anim);
+  if (!(duration > 0)) return null;
+  const ch = new Map();
+  for (const c of anim.listChannels()) {
+    const rec = rig.byName.get(c.getTargetNode()?.getName());
+    if (!rec) continue;
+    if (!ch.has(rec.node)) ch.set(rec.node, {});
+    ch.get(rec.node)[c.getTargetPath()] = c.getSampler();
+  }
+  const recs = feet.map((n) => rig.byName.get(n)).filter(Boolean);
+  if (!recs.length || !ch.size) return null;
+  const frames = Math.max(8, Math.round(duration * fps));
+  const dt = duration / frames;
+  const track = recs.map(() => []);
+  for (let f = 0; f <= frames; f++) {
+    const pose = poseAt(rig, ch, f * dt);
+    recs.forEach((r, i) => { const p = pose.get(r).p; track[i].push([p.x, p.y, p.z]); });
+  }
+  const speeds = []; let down = 0; let all = 0;
+  for (const pts of track) {
+    let lo = Infinity; let hi = -Infinity;
+    for (const p of pts) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
+    // A foot that never leaves the ground has no stance to tell from its swing.
+    if (!(hi - lo > 1e-5)) continue;
+    const line = lo + (hi - lo) * 0.25;
+    let sum = 0; let n = 0;
+    for (let f = 0; f < frames; f++) {
+      all += 1;
+      if (pts[f][1] > line || pts[f + 1][1] > line) continue;
+      sum += Math.hypot(pts[f + 1][0] - pts[f][0], pts[f + 1][2] - pts[f][2]) / dt; n += 1;
+    }
+    down += n;
+    if (n >= 2) speeds.push(sum / n);
+  }
+  if (!speeds.length) return null;
+  return { mps: +(speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(2), seconds: +duration.toFixed(3), feet: speeds.length, contact: +(down / Math.max(1, all)).toFixed(2) };
 }
 
 /** A clip's channels by node: Map(node -> { rotation, translation, scale } samplers). */

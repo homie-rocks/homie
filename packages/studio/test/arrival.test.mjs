@@ -172,6 +172,30 @@ test('a game whose helper is older lifts the card once seated; one that never sa
   assert.equal(off.shell.arrival, null);
 });
 
+test('a late explicit ready under the automatic arrival is on the page for a probe: the mode, who lifted the card, and when the game itself said so', async () => {
+  // The integration mistake: the game calls net.playable() once its character has loaded, but never said arrival: 'game'.
+  const { post, shell } = await page(bright);
+  const a = shell.arrival;
+  assert.deepEqual([a.mode, a.explicitMs, a.lateMs], [null, null, null]);
+  post({ what: 'attached', v: 1, rev: 9, arrival: 'auto' });
+  post({ what: 'token', token: 'k', seat: 0 });
+  post({ what: 'playable', by: 'auto' });
+  assert.deepEqual([a.mode, a.by, a.phase], ['auto', 'auto', 'done'], 'the helper lifted the card: seated, the room\'s state in');
+  // 1.7 s later the game's own word arrives. The card is long gone; the page still records it.
+  post({ what: 'ready', by: 'game', mode: 'auto', ms: 1740, lateMs: 1700 });
+  assert.equal(a.by, 'auto', 'who lifted the card does not change');
+  assert.ok(Number.isFinite(a.explicitMs), 'when the game itself was ready (the page\'s clock)');
+  assert.equal(a.lateMs, 1700, 'and how late that was');
+  assert.deepEqual([shell.ready.mode, shell.ready.ms, shell.ready.lateMs], ['auto', 1740, 1700]);
+  // Done right (arrival: 'game'): the same fields, and nothing late.
+  const ok = await page(bright);
+  ok.post({ what: 'attached', v: 1, rev: 9, arrival: 'game' });
+  ok.post({ what: 'ready', by: 'game', mode: 'game', ms: 900 });
+  ok.post({ what: 'playable', by: 'game' });
+  assert.deepEqual([ok.shell.arrival.mode, ok.shell.arrival.by, ok.shell.arrival.lateMs], ['game', 'game', null]);
+  assert.ok(Number.isFinite(ok.shell.arrival.explicitMs));
+});
+
 test('netplay: the helper says when the game is playable (the game\'s word, or its own) and passes loading on', async (t) => {
   const esbuild = (await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'))).default;
   const file = join(scratch, 'netplay.mjs');

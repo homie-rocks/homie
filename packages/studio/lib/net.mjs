@@ -76,6 +76,14 @@ export function restartWithProxy({ argv = process.argv, env = process.env, execA
   });
 }
 
+/**
+ * The error codes that mean "this computer could not look the name up" (the resolver's, never the site's). ONE list:
+ * every command that works against a site reads it through `whyFailed`, and the plugin's own preflight
+ * (skills/playtest/scripts/lib/preflight.mjs, which cannot import this file: it runs against whatever studio is
+ * installed) keeps the same list, held equal by a test that feeds both the same errors.
+ */
+export const DNS_CODES = ['ENOTFOUND', 'EAI_AGAIN', 'EAI_NODATA', 'EAI_NONAME', 'ESERVFAIL'];
+
 const hostOf = (url) => { try { return new URL(String(url)).host; } catch { return String(url); } };
 const oneLine = (text, max = 200) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -104,7 +112,9 @@ export function whyFailed(error, url, { env = process.env, execArgv = process.ex
   if (refused) return { why: `the network proxy (${proxy?.variable ?? 'HTTPS_PROXY'}) answered ${refused[1]} when asked to connect to ${host}`, code: `PROXY_${refused[1]}` };
   const via = proxy ? (used ? ` (through the proxy in ${proxy.variable})` : ` (directly: this machine's proxy in ${proxy.variable} was not used${canUseProxy() ? '' : `, because Node.js ${process.versions.node} cannot use it; Node.js 22.21 or newer can`})`) : '';
   if (code === 'TIMEOUT' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'ETIMEDOUT') return { why: `no answer from ${host} in time${via}`, code: code ?? 'TIMEOUT' };
-  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return { why: `could not look up ${host} (${code})${via}`, code };
+  // A name this process could not look up is this computer's network, never the site's fault: `preflight` says so
+  // to callers that would otherwise read "did not answer" as a broken site or game (see `reachSite`).
+  if (DNS_CODES.includes(code)) return { why: `could not look up ${host} (${code})${via}`, code, preflight: 'dns' };
   if (code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH') return { why: `could not connect to ${host} (${code})${via}`, code };
   if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER/i.test(code ?? '') || /certificate/i.test(words)) {
     return { why: `the TLS certificate ${host} presented is not trusted here (${code ?? words})${via}; when a proxy inspects traffic, its CA belongs in NODE_EXTRA_CA_CERTS`, code: code ?? 'CERT' };
@@ -132,6 +142,75 @@ export async function request(url, init = {}, { timeout = 10_000, fetchFn = glob
   } catch (error) { return { ok: false, ...whyFailed(error, url) }; }
   let body = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = null; }
-  if (!res.ok || body?.ok === false) return { ok: false, body, ...whyRefused(res, body, text, url) };
+  if (!res.ok || body?.ok === false) return { ok: false, body, headers: res.headers, ...whyRefused(res, body, text, url) };
   return { ok: true, status: res.status, body, headers: res.headers };
+}
+
+/** Whether an address is this computer's own (a dev site): never a network question. */
+export function isLoopback(url) {
+  try { const h = new URL(String(url)).hostname.toLowerCase(); return LOOPBACK.includes(h) || h.endsWith('.localhost'); } catch { return false; }
+}
+
+/*
+ * NODE'S DNS IS NOT THE BROWSER'S. On one computer the public studio opened in Chrome while Node's fetch() could
+ * not look its hostname up at all (a browser may use its own secure DNS, a VPN's or a cached answer; Node asks the
+ * system resolver and nothing else). A check against the public address stopped before it opened a game, and what
+ * it printed read as the site, or the game, being down.
+ *
+ * `reachSite` is the one preflight for a command that is about to work against a site: it asks once, and a failure
+ * says what kind it is.
+ *   { ok: true, status }                                   the site answered (any status is an answer)
+ *   { ok: false, preflight: 'dns', why, instead, ... }     THIS COMPUTER could not look the name up: a network
+ *                                                          preflight failure, with local testing offered instead
+ *   { ok: false, preflight: 'network', why, instead, ... } no connection, a timeout, a certificate, a proxy refusal
+ *   { ok: false, preflight: 'site', status, why }          it answered, and the answer is an error (5xx)
+ * It never says a game is broken: it has not opened one.
+ */
+export const LOCAL_INSTEAD = 'To test without this computer\'s network in the way: run the site here (`npx --no-install homie-studio dev`, as a background task) and give the command --url http://127.0.0.1:8787 (or leave --url out where the command finds the dev site itself).';
+
+export async function reachSite(url, { fetchFn = globalThis.fetch, timeout = 10_000, path = '/', env = process.env, execArgv = process.execArgv } = {}) {
+  const base = String(url ?? '').replace(/\/+$/, '');
+  const host = hostOf(base);
+  let res;
+  try { res = await fetchFn(`${base}${path}`, { method: 'GET', redirect: 'manual', headers: { accept: '*/*' }, signal: AbortSignal.timeout(timeout) }); } catch (error) {
+    const w = whyFailed(error, base, { env, execArgv });
+    if (isLoopback(base)) return { ok: false, preflight: 'local', code: w.code ?? null, why: `${base} does not answer (${w.code ?? 'no connection'}): the site is not running here. Start it (npx --no-install homie-studio dev, as a background task) or check the port.` };
+    if (w.preflight === 'dns') {
+      return {
+        ok: false, preflight: 'dns', code: w.code, needs: 'network-preflight',
+        why: `network preflight failed, before any page or game was opened: this computer's Node.js ${w.why}. A browser on the same computer may still open ${host} (browsers can use their own DNS), so this says nothing about the site or the game: it is this computer's name lookup.`,
+        instead: LOCAL_INSTEAD,
+      };
+    }
+    return { ok: false, preflight: 'network', code: w.code ?? null, needs: w.needs ?? 'network-preflight', why: `network preflight failed, before any page or game was opened: ${w.why}. That is the connection from this computer to ${host}, not a result about the game.`, instead: LOCAL_INSTEAD };
+  }
+  try { await res.body?.cancel?.(); } catch { /* nothing to drop */ }
+  if (res.status >= 500) return { ok: false, preflight: 'site', status: res.status, why: `${host} answered ${res.status}: the site itself is failing (not this computer's network).` };
+  return { ok: true, status: res.status };
+}
+
+/**
+ * WHAT A COMMAND SAYS WHEN `reachSite` DID NOT FIND THE PLAY PAGE: one classification and one sentence for `check`,
+ * `perf`, `shoot` and `port check` (and, word for word in its DNS case, the playtest and perf skills' scripts), so
+ * the same failure is never "the site does not answer" from one command and "network preflight" from the next.
+ *
+ *   null                                the page answered: go on
+ *   preflight 'local'                   this computer's own address has nothing listening: start the site
+ *   preflight 'site'                    it answered, with an error (a 5xx, or a 4xx: a wrong address or game id)
+ *   preflight 'dns' | 'network'         BLOCKED: this computer could not ask. Nothing was measured, nothing is said
+ *                                       about the site or the game, and local testing is offered instead.
+ *
+ * A command that only drives a browser (check, shoot) may still try on a BLOCKED one, because a browser can open a
+ * site this process cannot look up; if the browser then fails too, this is what it reports.
+ */
+export function siteRefusal(reach, { command, play }) {
+  if (reach?.ok) {
+    return reach.status >= 400 ? { ok: false, command, preflight: 'site', status: reach.status, why: `${play} answered ${reach.status}: start the site (npm run dev, as a background task) or check the address and the game's id` } : null;
+  }
+  if (reach?.preflight === 'local') return { ok: false, command, preflight: 'local', why: `${play} does not answer: start the site (npm run dev, as a background task that outlives this command) or check the address` };
+  if (reach?.preflight === 'site') return { ok: false, command, preflight: 'site', status: reach.status ?? null, why: reach.why };
+  return {
+    ok: false, command, blocked: true, verdict: 'BLOCKED', preflight: reach?.preflight ?? 'network', ...(reach?.code ? { code: reach.code } : {}), needs: reach?.needs ?? 'network-preflight', instead: reach?.instead ?? LOCAL_INSTEAD,
+    why: `BLOCKED ${reach?.why ?? 'network preflight failed, before any page or game was opened.'} Nothing was measured. ${reach?.instead ?? LOCAL_INSTEAD}`,
+  };
 }

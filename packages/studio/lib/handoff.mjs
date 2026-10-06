@@ -54,10 +54,6 @@ export function stepsFor(h, { games = [], client = 'chat' } = {}) {
     port: [
       `npx --no-install homie-studio port plan ${h.folder ? q(line(h.folder, 200)) : '<the game\'s folder>'}, then port import${id ? ` --id ${id}` : ''} (the plugin's port skill has the whole job).`,
     ],
-    remix: [
-      h.source && id ? `npx --no-install homie-studio game remix ${line(h.source, 300)} --id ${id}` : 'npx --no-install homie-studio game remix <source.json> --id <new id>',
-      'Then make it the brief\'s own.',
-    ],
     change: ['Make the change the brief asks for, in small steps.'],
   }[h.kind] ?? ['Do what the brief asks.'];
   return [
@@ -91,11 +87,11 @@ export async function handoff(root, build, { homie, client, fetchFn = globalThis
   const here = want ? (repoOf(root) ?? null)?.toLowerCase() ?? null : null;
   if (want && here && here !== want) return { ok: false, command: 'handoff', build, why: `this build is for ${body.repo}, but this session is in ${here}: open it in ${body.repo} (the card's Build it does), and change nothing here` };
   const h = {
-    kind: ['make', 'port', 'remix', 'change', 'setup'].includes(body.kind) ? body.kind : 'change',
+    kind: ['make', 'port', 'change', 'setup'].includes(body.kind) ? body.kind : 'change',
     what: ['game', 'song', 'video'].includes(body.what) ? body.what : 'game',
     title: line(body.title, 120), studio: line(body.studio, 60) || studio.name, brief: lines(body.brief, 1200),
     id: ID.test(String(body.id ?? '')) ? body.id : null, name: line(body.name, 60) || null, from: ID.test(String(body.from ?? '')) ? body.from : null,
-    source: /^https:\/\/\S{8,300}$/.test(String(body.source ?? '')) ? body.source : null, folder: line(body.folder, 200) || null,
+    folder: line(body.folder, 200) || null,
     setup: /^hs_[a-f0-9]{32}$/.test(String(body.setup ?? '')) ? body.setup : null,
   };
   let setup = null;

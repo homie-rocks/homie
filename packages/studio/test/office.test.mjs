@@ -8,8 +8,8 @@
  *   - a control is signed by the studio's Worker and checked by the room: a forged, changed, late, replayed or
  *     misaddressed one is refused;
  *   - launch states: a private game is the owner's alone, an invite-only beta lets in browsers holding a pass from
- *     an invite code, and neither is in any list, /api/rooms or the directory manifest; the remix switch publishes
- *     or withdraws the source; the owner's room size reaches the Lobby and the live rooms;
+ *     an invite code, and neither is in any list, /api/rooms or the directory manifest; no game's source is served (remix
+ *     was retired: its old switch is refused, its D1 column is left alone); the owner's room size reaches the Lobby and the live rooms;
  *   - the office API is the owner's: an office key looks, announces and invites, and only ASKS for a kick, a
  *     closed room or a launch change, which the owner's signed-in browser confirms with one tap; a stats read
  *     key gets nothing; a cross-site POST with the owner's cookie is refused;
@@ -400,15 +400,19 @@ test('a private game is the owner\'s alone: out of every list, the rooms and the
   assert.deepEqual(games.games.map((g) => g.id), ['owl-run']);
   const manifest = await (await fetchSite('/.well-known/homie-studio.json')).json();
   assert.deepEqual(manifest.games.map((g) => g.id), ['owl-run'], 'the directory never sees it');
-  assert.equal(manifest.games[0].remix, true);
-  assert.equal(manifest.games[0].source, 'https://owls.example/games/owl-run/source.json');
+  for (const k of ['remix', 'source', 'remixOf']) assert.ok(!(k in manifest.games[0]), `the manifest has no ${k}: no game is offered whole`);
   assert.doesNotMatch(await (await fetchSite('/games/')).text(), /Night Vault/);
   for (const p of ['/night-vault/', '/night-vault/play', '/night-vault/tv', '/night-vault/credits']) assert.equal((await fetchSite(p)).status, 404, p);
   assert.equal((await fetchSite('/night-vault/live')).status, 404);
   assert.equal((await fetchSite('/night-vault/api/lobby', { method: 'POST' })).status, 404);
   assert.equal((await fetchSite('/night-vault/__game/')).status, 403);
   assert.equal((await fetchSite('/night-vault/__net?room=pub-1', { headers: { upgrade: 'websocket' } })).status, 403);
-  assert.equal((await fetchSite('/games/night-vault/source.json')).status, 404, 'nor is its source shared');
+  // No game's source is served, public or not: the old address says so the same way for both (it tells nobody which exist).
+  for (const id of ['night-vault', 'owl-run']) {
+    const gone = await fetchSite(`/games/${id}/source.json`);
+    assert.equal(gone.status, 410, id);
+    assert.deepEqual(await gone.json(), { retired: 'remix', see: '/parts/' });
+  }
   // The owner, signed in: the game, a ticket for its frame and sockets, and the owner's overlay.
   const play = await fetchSite('/night-vault/play', { headers: owner });
   assert.equal(play.status, 200);
@@ -553,15 +557,23 @@ test('invite-only: an invite code lets a browser in with a pass for that game; a
   await fetchSite('/_studio/api/invites/revoke', { method: 'POST', headers: { ...owner, ...same }, body: JSON.stringify({ game: 'owl-run', id: inv.id }) });
   assert.match(await (await fetchSite('/owl-run/play', { headers: pass })).text(), /invite-only beta/i);
   assert.equal((await fetchSite(`/owl-run/__game/?t=${encodeURIComponent(boot.t)}`)).status, 403);
-  // Back to public; the remix switch withdraws and republishes the source; the owner's room size reaches the Lobby.
-  await fetchSite('/_studio/api/game', { method: 'POST', headers: { ...owner, ...same }, body: JSON.stringify({ game: 'owl-run', launch: 'public', remix: false, maxPlayers: 2 }) });
-  assert.equal((await fetchSite('/games/owl-run/source.json')).status, 404);
+  // Back to public; the owner's room size reaches the Lobby. A studio from the field has the old switch's value in
+  // D1 (`office_games.remix`, here 0: its owner had withdrawn the source): an older plugin may still send `remix`
+  // beside a launch state, which is left out; the column is neither read nor written, and keeps what it held.
+  DB.sql.prepare('UPDATE office_games SET remix = 0 WHERE game = ?').run('owl-run');
+  const back = await (await fetchSite('/_studio/api/game', { method: 'POST', headers: { ...owner, ...same }, body: JSON.stringify({ game: 'owl-run', launch: 'public', remix: true, maxPlayers: 2 }) })).json();
+  assert.deepEqual([back.ok, back.launch, back.maxPlayers, 'remix' in back], [true, 'public', 2, false]);
+  assert.equal(DB.sql.prepare('SELECT remix FROM office_games WHERE game = ?').get('owl-run').remix, 0, 'the column keeps what it held');
   const m = await (await fetchSite('/.well-known/homie-studio.json')).json();
-  assert.equal(m.games[0].remix, false);
-  assert.equal(m.games[0].source, undefined);
+  assert.ok(!('remix' in m.games[0]) && !('source' in m.games[0]));
   assert.equal((await (await fetchSite('/owl-run/api/lobby', { method: 'POST' })).json()).max, 2);
-  await fetchSite('/_studio/api/game', { method: 'POST', headers: { ...owner, ...same }, body: JSON.stringify({ game: 'owl-run', remix: true, maxPlayers: null }) });
-  assert.equal((await fetchSite('/games/owl-run/source.json')).status, 200);
+  // The switch alone is refused in a sentence that says where to go.
+  const sw = await fetchSite('/_studio/api/game', { method: 'POST', headers: { ...owner, ...same }, body: JSON.stringify({ game: 'owl-run', remix: true }) });
+  assert.equal(sw.status, 400);
+  assert.match((await sw.json()).message, /remix was retired: a game is no longer handed over whole.*parts \(\/parts\/\)/);
+  const office = await (await fetchSite('/_studio/api/office', { headers: owner })).json();
+  for (const k of ['remix', 'remixBuilt', 'remixOff', 'license']) assert.ok(!(k in office.games.find((g) => g.id === 'owl-run')), `the office has no ${k}`);
+  assert.equal((await fetchSite('/games/owl-run/source.json')).status, 410);
 });
 
 test('a room that opens just as its game narrows reads the launch state on its first heartbeat and re-gates', async () => {

@@ -18,8 +18,9 @@
  *   load     ms from opening the page to the first meaningful frame (`look`: the play page's arrival card on the
  *            screen, the game's title and art; a page without one, the game's first animation frame), to the game's
  *            first animation frame, to a seat, and to playable (seated with a body that the game's port probe reports,
- *            or seated and drawing when it has none, and the arrival card lifted); what the game's own files weighed on
- *            the wire, the biggest first
+ *            or seated and drawing when it has none, and the arrival card lifted: control-ready), and beside it
+ *            `ready`: when the game itself said it was ready (net.playable()), with the arrival mode; what the
+ *            game's own files weighed on the wire, the biggest first
  *   frames   the time between animation frames: median, 95th and 99th percentile, the worst, and the share of frames
  *            over 33 ms (a dropped frame at 60 Hz, twice) and over 50 ms (a hitch anyone sees)
  *   work     the game's JavaScript inside each animation frame (every requestAnimationFrame callback, timed)
@@ -44,10 +45,12 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cpus, loadavg, tmpdir, totalmem } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { bundleOf, gameDigest } from './build.mjs';
 import { SOFTWARE_GL, chromeArgs, findChrome, noChrome } from './chrome.mjs';
-import { LAUNCH_TIMEOUT_MS } from './check.mjs';
+import { CUT_OFF, LAUNCH_TIMEOUT_MS, arrivalFacts, linkOf } from './check.mjs';
+import { reachSite, siteRefusal } from './net.mjs';
 import { judge, judgePaired, round, summarize } from './perf-stats.mjs';
 import { readCode } from './perf-code.mjs';
 import { sourceMapLookup, summarizeProfile } from './perf-profile.mjs';
@@ -154,6 +157,42 @@ function busyBetween(a, b) {
   return total ? round((1 - idle / total) * 100, 1) : null;
 }
 
+/**
+ * MEASURED PRE-PLAY TRANSFER: what this browser really fetched, on the wire, up to the moment the game was playable.
+ * `requests` is the Network domain's map at that moment ({ url, bytes (final, once finished), got (so far), done }).
+ * A request still in flight counts the bytes that had arrived. This is traffic, measured in one run on one device;
+ * it is not the size of the built game on disk (perf sizes, the asset inventory's shipped payload), which also
+ * holds files the game never asks for and music it streams later. null when the game never became playable: then
+ * there is no "before play" to measure, and the number is absent rather than a total of something else.
+ */
+export function prePlayTransfer(requests, { playable = true } = {}) {
+  if (!playable) return null;
+  const rows = [...requests];
+  const wire = (r) => (r.done ? r.bytes : r.got ?? 0) || 0;
+  const game = rows.filter((r) => /\/__game\//.test(r.url));
+  return {
+    requests: rows.length, finished: rows.filter((r) => r.done).length, inFlight: rows.filter((r) => !r.done).length,
+    kb: round(rows.reduce((s, r) => s + wire(r), 0) / 1024, 1),
+    gameRequests: game.length, gameKb: round(game.reduce((s, r) => s + wire(r), 0) / 1024, 1),
+  };
+}
+
+/**
+ * MEASURED RUNTIME SCENE COST: the renderer's own counters while the game is played, when the game exposes them on
+ * its port probe (`exposePort(net, { extra: { drawCalls: () => renderer.info.render.calls, triangles: () =>
+ * renderer.info.render.triangles } })`, as the 3D starters do). `samples`: [{ drawCalls, triangles }]. Returns
+ * { samples, drawCalls: { median, max }, triangles: { median, max } }, or null when the game exposes neither: the
+ * run then says the cost was not measured, never zero. The asset inventory's draw-call figure is an estimate from
+ * the manifest; this one includes procedural geometry, repeated characters, effects and shadow passes.
+ */
+export function renderCostOf(samples) {
+  const pick = (k) => samples.map((s) => s?.[k]).filter((v) => Number.isFinite(v) && v >= 0);
+  const calls = pick('drawCalls'); const tris = pick('triangles');
+  if (!calls.length && !tris.length) return null;
+  const sum = (xs) => { if (!xs.length) return null; const o = [...xs].sort((a, b) => a - b); return { median: o[Math.floor((o.length - 1) / 2)], max: o[o.length - 1] }; };
+  return { samples: Math.max(calls.length, tris.length), drawCalls: sum(calls), triangles: sum(tris) };
+}
+
 /** Open one browser of a run on the play page, instrumented, and wait until it is playable. */
 async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
   const dev = PERF_DEVICES[device];
@@ -187,7 +226,8 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
       h.cpuMeasured = fast && slow ? round(slow / fast, 2) : null;
     }
     if (dev.network) await cdp.send('Network.emulateNetworkConditions', dev.network);
-    cdp.on('Network.requestWillBeSent', (e) => { if (!h.requests.has(e.requestId)) h.requests.set(e.requestId, { url: e.request.url, type: e.type ?? null, bytes: 0, done: false }); });
+    cdp.on('Network.requestWillBeSent', (e) => { if (!h.requests.has(e.requestId)) h.requests.set(e.requestId, { url: e.request.url, type: e.type ?? null, bytes: 0, got: 0, done: false }); });
+    cdp.on('Network.dataReceived', (e) => { const r = h.requests.get(e.requestId); if (r) r.got += e.encodedDataLength || 0; });
     cdp.on('Network.loadingFinished', (e) => { const r = h.requests.get(e.requestId); if (r) { r.bytes = e.encodedDataLength; r.done = true; } });
     cdp.on('Network.webSocketCreated', (e) => h.sockets.set(e.requestId, /\/__net(?:\?|$)/.test(e.url) ? 'net' : 'other'));
     const wsBytes = (r) => (r.opcode === 2 ? Math.floor((String(r.payloadData).length * 3) / 4) : Buffer.byteLength(String(r.payloadData)));
@@ -196,10 +236,10 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
     await page.evaluateOnNewDocument(INSTRUMENT);
     await page.goto(playUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
     const origin = await T(page.evaluate(() => performance.timeOrigin), 8000);
-    let seatedAt = null; let playableAt = null; let shell = null; let body = null;
+    let seatedAt = null; let playableAt = null; let shell = null; let body = null; let prePlay = null;
     const deadline = Date.now() + 90_000;
     while (Date.now() < deadline && playableAt === null) {
-      shell = await T(page.evaluate(() => { const s = window.__shell; const a = s?.arrival; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, arrival: a ? { phase: a.phase, lookMs: a.lookMs, liftedMs: a.liftedMs, by: a.by } : null } : null; }), 5000);
+      shell = await T(page.evaluate(() => { const s = window.__shell; const a = s?.arrival; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, arrival: a ? { phase: a.phase, lookMs: a.lookMs, liftedMs: a.liftedMs, by: a.by, mode: a.mode, explicitMs: a.explicitMs, lateMs: a.lateMs } : null } : null; }), 5000);
       const now = Date.now();
       if (seatedAt === null && shell?.room && Number.isInteger(shell.seat) && shell.role) seatedAt = now;
       const g = await inGame(h, () => {
@@ -212,7 +252,7 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
       const lifted = !shell?.arrival || shell.arrival.phase === 'done';
       if (seatedAt !== null && g?.first !== null && g?.first !== undefined && lifted) {
         // A body the game reports (its port probe), or no body to wait for (a board, or a game with no probe).
-        if (!g.port || g.view === 'board' || g.self) { playableAt = now; body = g.port && g.view !== 'board' ? 'reported' : 'none to report'; }
+        if (!g.port || g.view === 'board' || g.self) { playableAt = now; prePlay = prePlayTransfer(h.requests.values()); body = g.port && g.view !== 'board' ? 'reported' : 'none to report'; }
         else if (now - seatedAt > 10_000) { playableAt = null; body = 'never reported by the port probe in 10 s'; break; }
       }
       await sleep(50);
@@ -231,10 +271,18 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
     const look = Number.isFinite(shell?.arrival?.lookMs) ? shell.arrival.lookMs : at(g?.first);
     h.loadInfo = {
       lookMs: look,
-      arrival: shell?.arrival ? { by: shell.arrival.by ?? null, liftedMs: shell.arrival.liftedMs ?? null } : null,
+      // Who was to say "playable" and who did (lib/check.mjs arrivalFacts, from the page's __shell.arrival), and
+      // `readyMs`: when the GAME ITSELF said it was ready (net.playable(): its character loaded, its world built).
+      // `playableMs` below is control-ready as this probe sees it (seated, a body reported, the cover gone); a game
+      // under the automatic arrival can be control-ready well before it calls itself ready, and `lateMs` is by how
+      // much. Read again after the measured window (readyAfter), since the game's word may come after playable.
+      arrival: arrivalFacts(shell?.arrival),
+      readyMs: arrivalFacts(shell?.arrival)?.explicitMs ?? null,
       firstFrameMs: at(g?.first),
       seatedMs: at(seatedAt),
       playableMs: at(playableAt),
+      // Measured traffic up to playable (prePlayTransfer); null when this browser never got there.
+      prePlay,
       body,
       gameDomReadyMs: g?.dcl !== null && g?.dcl !== undefined && g?.origin ? at(g.origin + g.dcl) : null,
       gameFirstPaintMs: g?.fcp !== null && g?.fcp !== undefined && g?.origin ? at(g.origin + g.fcp) : null,
@@ -351,25 +399,28 @@ function mapsFor(root, game) {
   if (!root) return [];
   const dir = join(root, '.studio', 'maps', game);
   const mapFile = join(dir, 'main.js.map');
-  const built = join(root, 'site', 'dist', 'games', game, 'assets', 'main.js');
+  // The bundle the page really loads: named by its content since bundles got hashes (assets/main-<HASH>.js).
+  const rel = bundleOf(join(root, 'site', 'dist', 'games', game)) ?? 'assets/main.js';
+  const built = join(root, 'site', 'dist', 'games', game, rel);
   if (!existsSync(mapFile) || !existsSync(built)) return [];
   try {
     const want = readFileSync(join(dir, 'main.js.sha256'), 'utf8').trim();
     if (sha256(readFileSync(built)) !== want) return [];
     const lookup = sourceMapLookup(JSON.parse(readFileSync(mapFile, 'utf8')));
-    return [{ match: (url) => new RegExp(`/${game}/__game/assets/main\\.js(?:\\?|$)`).test(url), lookup }];
+    const esc = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return [{ match: (url) => new RegExp(`/${game}/__game/${esc}(?:\\?|$)`).test(url), lookup }];
   } catch { return []; }
 }
 
 export const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
-/** One digest of a built game's files (site/dist/games/<id>), so a run says exactly which build it measured. */
+/**
+ * One digest of a built game's files (site/dist/games/<id>), so a run says exactly which build it measured. It is the
+ * build's own digest (lib/build.mjs gameDigest): the hash `build` prints, a deploy reports and the live site's
+ * manifest answers with, so a perf run, a build line and a deploy line that name the same build say the same hash.
+ */
 export function buildDigest(root, game) {
-  const dir = root ? join(root, 'site', 'dist', 'games', game) : null;
-  if (!dir || !existsSync(dir)) return null;
-  const h = createHash('sha256');
-  for (const f of listFiles(dir).filter((f) => !f.startsWith('_landing/')).sort()) h.update(`${f}\0${sha256(readFileSync(join(dir, f)))}\n`);
-  return h.digest('hex').slice(0, 16);
+  return root ? gameDigest(join(root, 'site', 'dist', 'games', game)) : null;
 }
 
 function listFiles(dir, rel = '') {
@@ -412,17 +463,34 @@ async function oneRun({ puppeteer, chrome, root, url, game, device, k, seconds, 
     const b = await Promise.all(hs.map((h) => reading(h)));
     const after = await Promise.all(hs.map((h) => reading(h, { gc: true })));
     run.load.busyPct = busyBetween(cpu0, cpu1);
+    // The renderer's counters, read AFTER the measured window (reading them costs a little, and the window is not
+    // to carry it), still playing: three samples a few frames apart.
+    const cost = hs.map(() => []);
+    for (let n = 0; n < 3; n++) {
+      for (const [i, h] of hs.entries()) cost[i].push(await inGame(h, () => { try { const x = window.__homiePort?.info?.().extra; return x ? { drawCalls: Number(x.drawCalls), triangles: Number(x.triangles) } : null; } catch { return null; } }));
+      await sleep(120);
+    }
     for (const [i, h] of hs.entries()) {
+      // The game's own "ready" may have come after this browser was control-ready: read the arrival once more.
+      const late = arrivalFacts(await T(h.page.evaluate(() => { const a = window.__shell?.arrival; return a ? { mode: a.mode, by: a.by, liftedMs: a.liftedMs, explicitMs: a.explicitMs, lateMs: a.lateMs } : null; }), 5000));
+      if (late && h.loadInfo) { h.loadInfo.arrival = late; h.loadInfo.readyMs = late.explicitMs; }
       const win = await windowOf(h, a[i], b[i], seconds);
       win.heap.afterGcMb = round((after[i].m.JSHeapUsedSize ?? NaN) / 1048576, 2);
       win.heap.gcGrowthMbPerMin = round((((after[i].m.JSHeapUsedSize ?? NaN) - (a[i].m.JSHeapUsedSize ?? NaN)) / 1048576) / (win.seconds / 60), 2);
-      const shell = await T(h.page.evaluate(() => { const s = window.__shell; if (!s) return null; const t = s.stats ?? {}; return { role: t.role ?? null, seat: s.seat ?? null, peers: t.peers ?? null, snapHzOut: t.snapHzOut ?? null, snapHzIn: t.snapHzIn ?? null, inputHzOut: t.inputHzOut ?? null, inputHzIn: t.inputHzIn ?? null, lastSnapBytes: t.lastSnapBytes ?? null, maxSnapBytes: t.maxSnapBytes ?? null, bytesOutPerS: t.bytesOutPerS ?? null, bytesInPerS: t.bytesInPerS ?? null, rtt: t.rtt ?? null, interpDelay: t.interpDelay ?? null, starvedPct: t.starvedPct ?? null, reconnects: t.reconnects ?? null }; }), 5000);
+      const shell = await T(h.page.evaluate(() => { const s = window.__shell; if (!s) return null; const t = s.stats ?? {}; return { role: t.role ?? null, seat: s.seat ?? null, peers: t.peers ?? null, snapHzOut: t.snapHzOut ?? null, snapHzIn: t.snapHzIn ?? null, inputHzOut: t.inputHzOut ?? null, inputHzIn: t.inputHzIn ?? null, lastSnapBytes: t.lastSnapBytes ?? null, maxSnapBytes: t.maxSnapBytes ?? null, bytesOutPerS: t.bytesOutPerS ?? null, bytesInPerS: t.bytesInPerS ?? null, rtt: t.rtt ?? null, interpDelay: t.interpDelay ?? null, starvedPct: t.starvedPct ?? null, reconnects: t.reconnects ?? null, link: s.link && typeof s.link === 'object' ? s.link.state ?? null : null, stale: s.stale ? s.stale.ver ?? true : null, reloaded: s.reloaded ?? 0 }; }), 5000);
       const role = shell?.role === 'host' ? 'host' : 'replica';
+      // A browser that ended the window cut off from its room (the helper's link: reconnecting, alone, offline,
+      // closed) was not measured playing with the other one: the run is labelled and left out, never judged.
+      if (shell) shell.link = linkOf(shell.link);
+      // A newer build of the game went live while this ran (the helper said `stale`, or the page loaded the game
+      // again for it): the window is of the older build, or spans a reload. Labelled and left out, never judged.
+      if (shell?.stale || shell?.reloaded > 0) run.blocked ??= `a newer build of the game went live during this run (the ${role}'s page ${shell.reloaded > 0 ? 'loaded the game again for it' : `says its build is stale${typeof shell.stale === 'string' ? `: ${shell.stale} is live` : ''}`}): this run did not measure one build and is left out`;
+      if (CUT_OFF.includes(shell?.link)) run.blocked ??= `the ${role} was cut off from its room when the measured window ended (link: ${shell.link}, ${shell.reconnects ?? '?'} reconnects): this run is not two browsers playing together and is left out`;
       const shot = join(out, `${name}-${role}.png`);
       const vp = PERF_DEVICES[device].viewport;
       const scale = Math.min(1, 640 / (vp.width * vp.deviceScaleFactor));
       await T(h.page.screenshot({ path: shot, type: 'png', clip: { x: 0, y: 0, width: vp.width, height: vp.height, scale } }), 15_000);
-      run.browsers.push({ role, seat: shell?.seat ?? null, load: h.loadInfo, ...win, netplay: shell, errors: h.errors.slice(0, 10), screenshot: existsSync(shot) ? relative(out, shot) : null });
+      run.browsers.push({ role, seat: shell?.seat ?? null, load: h.loadInfo, ...win, render: renderCostOf(cost[i]) ?? { samples: 0, drawCalls: null, triangles: null, note: 'not exposed by the game (exposePort extra: drawCalls, triangles): runtime scene cost was not measured' }, netplay: shell, errors: h.errors.slice(0, 10), screenshot: existsSync(shot) ? relative(out, shot) : null });
     }
     if (!run.browsers.some((x) => x.role === 'host')) run.blocked ??= 'neither browser became the room\'s host';
     if (profile) {
@@ -471,8 +539,12 @@ export async function perfRun({ root = null, url, game, devices = ['computer', '
   if (!chrome) return { ok: false, command: 'perf', why: noChrome() };
   let puppeteer;
   try { puppeteer = (await import('puppeteer-core')).default; } catch { return { ok: false, command: 'perf', why: 'puppeteer-core is not installed (it comes with @homie-rocks/studio; run npm install)' }; }
-  const alive = await fetch(`${base}/${game}/play`, { signal: AbortSignal.timeout(15_000) }).then((r) => r.ok).catch(() => false);
-  if (!alive) return { ok: false, command: 'perf', why: `${base}/${game}/play does not answer: start the site (npm run dev, as a background task) or check the address` };
+  // One preflight from this process (lib/net.mjs `reachSite`): a name Node cannot look up, or no connection, is said as
+  // this computer's network (BLOCKED, nothing measured), with local testing offered, never as a site or a game that
+  // does not answer. `siteRefusal` is the one sentence every command gives for it.
+  const reach = await reachSite(base, { path: `/${game}/play`, timeout: 15_000 });
+  const refusal = siteRefusal(reach, { command: 'perf', play: `${base}/${game}/play` });
+  if (refusal) return refusal;
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '');
   const dir = resolve(out ?? join(root ?? process.cwd(), '.perf', game, stamp));
   mkdirSync(dir, { recursive: true });
@@ -526,10 +598,25 @@ export function metricsOfRun(run) {
     put('work.p50', b.work?.p50); put('work.p95', b.work?.p95); put('work.mean', b.work?.mean);
     put('busy', b.main?.busyPerFrame); put('script', b.main?.scriptMsPerS);
     put('heap', b.heap?.afterGcMb); put('heap.growth', b.heap?.gcGrowthMbPerMin);
-    put('load.look', b.load?.lookMs); put('load.firstFrame', b.load?.firstFrameMs); put('load.seated', b.load?.seatedMs); put('load.playable', b.load?.playableMs); put('load.gameKb', b.load?.gameKb);
+    put('load.look', b.load?.lookMs); put('load.firstFrame', b.load?.firstFrameMs); put('load.seated', b.load?.seatedMs); put('load.playable', b.load?.playableMs); put('load.ready', b.load?.readyMs); put('load.gameKb', b.load?.gameKb); put('load.prePlayKb', b.load?.prePlay?.kb);
+    put('render.calls', b.render?.drawCalls?.median); put('render.triangles', b.render?.triangles?.median);
     put('net.msgsOut', b.net?.msgsOut); put('net.msgsIn', b.net?.msgsIn); put('net.kbOut', b.net?.kbOut); put('net.kbIn', b.net?.kbIn);
   }
   return out;
+}
+
+/** Per device and role, the arrival mode the runs reported and the worst lateness of the game's own "ready". */
+function arrivalOfRuns(runs) {
+  const by = new Map();
+  for (const r of runs) for (const b of r.browsers ?? []) {
+    const a = b.load?.arrival; if (!a) continue;
+    const k = `${r.device}.${b.role}`;
+    const row = by.get(k) ?? { device: r.device, role: b.role, mode: null, by: null, lateMs: null };
+    row.mode ??= a.mode; row.by ??= a.by;
+    if (Number.isFinite(a.lateMs)) row.lateMs = Math.max(row.lateMs ?? 0, a.lateMs);
+    by.set(k, row);
+  }
+  return [...by.values()];
 }
 
 /** Medians of every metric over the runs that count (not blocked, not loaded), per metric. */
@@ -539,7 +626,19 @@ export function summaryOf(runs) {
   for (const r of counted) for (const [k, v] of Object.entries(metricsOfRun(r))) (by[k] ??= []).push(v);
   const metrics = Object.fromEntries(Object.entries(by).sort(([a], [b]) => a.localeCompare(b)).map(([k, xs]) => [k, summarize(xs)]));
   const renderers = [...new Set(runs.map((r) => r.renderer).filter(Boolean))];
-  return { v: 1, kind: 'homie-perf-summary', runs: runs.length, counted: counted.length, devices: [...new Set(runs.map((r) => r.device))], renderers, load: runs.map((r) => ({ device: r.device, before: r.load?.before?.load1 ?? null, after: r.load?.after?.load1 ?? null, busyPct: r.load?.busyPct ?? null, loaded: Boolean(r.loaded) })), metrics };
+  return { v: 1, kind: 'homie-perf-summary', runs: runs.length, counted: counted.length, devices: [...new Set(runs.map((r) => r.device))], renderers, arrival: arrivalOfRuns(counted), load: runs.map((r) => ({ device: r.device, before: r.load?.before?.load1 ?? null, after: r.load?.after?.load1 ?? null, busyPct: r.load?.busyPct ?? null, loaded: Boolean(r.loaded) })), metrics };
+}
+
+/**
+ * Beside control-ready, in the headline: the arrival mode and the game's own "ready". "the game said ready at 2400 ms
+ * (arrival auto: 1700 ms after the cover had lifted)" is the integration mistake NETPLAY.md section 21 names: a game
+ * that calls net.playable() and never said `arrival: 'game'`, so players see it before it is ready.
+ */
+function arrivalWords(summary, device, role, readyMs) {
+  const a = (summary.arrival ?? []).find((x) => x.device === device && x.role === role);
+  if (!a?.mode && readyMs === undefined) return '';
+  const said = readyMs !== undefined ? `the game said ready at ${readyMs} ms` : 'the game never said ready itself';
+  return `, ${said} (arrival ${a?.mode ?? 'unknown'}${Number.isFinite(a?.lateMs) ? `: ${a.lateMs} ms after the cover had lifted` : ''})`;
 }
 
 /** A few medians for a person: frame time, the game's work per frame and time to playable, per device and role. */
@@ -549,7 +648,7 @@ function headlineOf(summary) {
     for (const role of ['host', 'replica']) {
       const m = (k) => summary.metrics[`${device}.${role}.${k}`]?.median;
       if (m('frame.p50') === undefined) continue;
-      out.push(`${device} ${role}: frames ${m('frame.p50')} ms median, ${m('frame.p95')} ms p95, ${m('frame.over50') ?? 0}% over 50 ms; game JS ${m('work.p50')} ms a frame (p95 ${m('work.p95')}); main thread ${m('busy')} ms a frame; first look at ${m('load.look') ?? '?'} ms, playable at ${m('load.playable') ?? '?'} ms; netplay ${m('net.msgsOut')} out / ${m('net.msgsIn')} in a second; heap ${m('heap')} MB`);
+      out.push(`${device} ${role}: frames ${m('frame.p50')} ms median, ${m('frame.p95')} ms p95, ${m('frame.over50') ?? 0}% over 50 ms; game JS ${m('work.p50')} ms a frame (p95 ${m('work.p95')}); main thread ${m('busy')} ms a frame; first look at ${m('load.look') ?? '?'} ms, playable (control-ready) at ${m('load.playable') ?? '?'} ms${arrivalWords(summary, device, role, m('load.ready'))}; netplay ${m('net.msgsOut')} out / ${m('net.msgsIn')} in a second; heap ${m('heap')} MB; fetched before playable (measured) ${m('load.prePlayKb') ?? '?'} KB; renderer ${m('render.calls') !== undefined ? `${m('render.calls')} draw calls, ${m('render.triangles') ?? '?'} triangles (measured while playing)` : 'cost not exposed by the game (not measured)'}`);
     }
   }
   return out;
@@ -564,7 +663,7 @@ const COMPRESSIBLE = new Set(['js', 'css', 'html', 'data', 'model']);
 /**
  * `homie-studio perf sizes <game>`: what a player downloads, from the built game (site/dist/games/<id>): every file,
  * raw and gzipped (what a server sends when the browser accepts it), the biggest first, and with a build that kept its
- * map (`build --maps`) which source modules make up the bundle. `source.json` (for remixers), `_landing/`, `hero/` and
+ * map (`build --maps`) which source modules make up the bundle. `_landing/`, `hero/` and
  * the cover (the landing page's) are listed apart: the game itself never loads them. What a browser really fetched is
  * in each run (`load`).
  *
@@ -581,8 +680,8 @@ export function perfSizes(root, game) {
   const files = listFiles(dir).map((f) => {
     const buf = readFileSync(join(dir, f));
     const kind = kindOf(f);
-    // Never loaded by the game itself: the remix source, and the landing page's art (hero footage, the cover).
-    return { path: f, kind, bytes: buf.length, gzip: COMPRESSIBLE.has(kind) ? gzipSync(buf, { level: 6 }).length : buf.length, apart: f === 'source.json' || f.startsWith('_landing/') || f.startsWith('hero/') || f === cover };
+    // Never loaded by the game itself: the landing page's art (hero footage, the cover).
+    return { path: f, kind, bytes: buf.length, gzip: COMPRESSIBLE.has(kind) ? gzipSync(buf, { level: 6 }).length : buf.length, apart: f === 'bundle.json' || f.startsWith('_landing/') || f.startsWith('hero/') || f === cover };
   });
   const game_ = files.filter((f) => !f.apart);
   const sum = (xs, k) => xs.reduce((s, x) => s + x[k], 0);
@@ -590,13 +689,14 @@ export function perfSizes(root, game) {
   for (const f of game_) { const k = (byKind[f.kind] ??= { files: 0, bytes: 0, gzip: 0 }); k.files++; k.bytes += f.bytes; k.gzip += f.gzip; }
   let modules = null;
   const mapDir = join(root, '.studio', 'maps', game);
-  const main = join(dir, 'assets', 'main.js');
+  const bundle = bundleOf(dir) ?? 'assets/main.js';
+  const main = join(dir, bundle);
   if (existsSync(join(mapDir, 'meta.json')) && existsSync(main)) {
     try {
       const want = readFileSync(join(mapDir, 'main.js.sha256'), 'utf8').trim();
       if (want === sha256(readFileSync(main))) {
         const meta = JSON.parse(readFileSync(join(mapDir, 'meta.json'), 'utf8'));
-        const outKey = Object.keys(meta.outputs ?? {}).find((k) => k.endsWith('main.js'));
+        const outKey = Object.keys(meta.outputs ?? {}).find((k) => k.endsWith(`/${basename(bundle)}`)) ?? Object.keys(meta.outputs ?? {}).find((k) => k.endsWith('main.js'));
         const inputs = Object.entries(meta.outputs?.[outKey]?.inputs ?? {}).map(([p, v]) => ({ module: p.replace(/^(\.\.\/)+/, '').replace(/^.*node_modules\//, 'node_modules/'), bytes: v.bytesInOutput })).sort((a, b) => b.bytes - a.bytes);
         modules = { total: inputs.reduce((s, x) => s + x.bytes, 0), top: inputs.slice(0, 12) };
       }
@@ -610,7 +710,7 @@ export function perfSizes(root, game) {
     js: { bytes: byKind.js?.bytes ?? 0, gzip: byKind.js?.gzip ?? 0 },
     byKind,
     biggest: [...game_].sort((a, b) => b.bytes - a.bytes).slice(0, 12).map(({ apart, ...f }) => (f.kind === 'js' && f.bytes >= 20 * 1024 ? { ...f, code: codeOf(join(dir, f.path)) } : f)),
-    apart: files.filter((f) => f.apart).length ? { files: files.filter((f) => f.apart).length, bytes: sum(files.filter((f) => f.apart), 'bytes'), note: 'the remix source and the landing page\'s art (hero/, the cover): never loaded by the game' } : null,
+    apart: files.filter((f) => f.apart).length ? { files: files.filter((f) => f.apart).length, bytes: sum(files.filter((f) => f.apart), 'bytes'), note: 'the landing page\'s art (hero/, the cover): never loaded by the game' } : null,
     modules,
   };
 }
@@ -679,7 +779,7 @@ export function perfCompare(beforeDir, afterDir, { goal = DEFAULT_GOAL, guards =
     return [xs, ys];
   };
   const devices = [...new Set([...A.runs, ...B.runs].map((r) => r.device))];
-  const unit = (k) => (k.startsWith('bytes.') ? ' B' : /\.load\.gameKb$/.test(k) ? ' KB' : /\.(frame|work)\.(p\d+|max|mean)$|\.busy$|\.load\./.test(k) ? ' ms' : /\.frame\.over\d+$/.test(k) ? '%' : /heap$/.test(k) ? ' MB' : /heap\.growth$/.test(k) ? ' MB/min' : /\.net\.kb/.test(k) ? ' KB/s' : /\.net\.msgs/.test(k) ? '/s' : /\.script$/.test(k) ? ' ms/s' : '');
+  const unit = (k) => (k.startsWith('bytes.') ? ' B' : /\.load\.(gameKb|prePlayKb)$/.test(k) ? ' KB' : /\.render\./.test(k) ? '' : /\.(frame|work)\.(p\d+|max|mean)$|\.busy$|\.load\./.test(k) ? ' ms' : /\.frame\.over\d+$/.test(k) ? '%' : /heap$/.test(k) ? ' MB' : /heap\.growth$/.test(k) ? ' MB/min' : /\.net\.kb/.test(k) ? ' KB/s' : /\.net\.msgs/.test(k) ? '/s' : /\.script$/.test(k) ? ' ms/s' : '');
   const one = (k, opts = {}) => {
     if (paired && !k.startsWith('bytes.')) { const [xs, ys] = pairedOf(k); if (xs.length >= 3) return { metric: k, ...judgePaired(xs, ys, { min, unit: unit(k), ...opts }) }; }
     return { metric: k, ...judge(a[k] ?? [], b[k] ?? [], { min, unit: unit(k), ...opts }) };

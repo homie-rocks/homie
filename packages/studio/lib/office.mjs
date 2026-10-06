@@ -8,7 +8,7 @@
  *                                                      room_kick, room_announce, room_close, game_launch_state)
  *   homie-studio office announce "<text>" [--game <id>] [--room <code>] [--seconds 30]
  *   homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--days <n>]
- *   homie-studio office launch <game> private|invite|public [--remixable on|off] [--max <n>|game]
+ *   homie-studio office launch <game> private|invite|public [--max <n>|game]
  *   homie-studio office kick <game> <room> <seat number | name> [--minutes 10]
  *   homie-studio office mute <game> <room> <seat number | name> [--minutes 10] [--off]
  *   homie-studio office close <game> <room> [--minutes 10] [--reopen]
@@ -16,7 +16,7 @@
  *
  * THE PROOF OF OWNERSHIP IS THE STUDIO'S OWN CLOUDFLARE LOGIN, as for the stats: a key is minted here and only its
  * SHA-256 goes into the studio's D1. Looking, announcing and inviting happen at once. Kick, mute, closing a room and
- * a game's launch state, remix switch or room size are only ASKED for here: the answer is a one-time sign-in link
+ * a game's launch state or room size are only ASKED for here: the answer is a one-time sign-in link
  * that opens the ask in the owner's own browser, where one tap does it (the AI that ran this cannot).
  */
 import { readStudio } from './studio.mjs';
@@ -113,11 +113,11 @@ export async function officeInvite(root, game, { url, label, uses, count, days, 
   return { ok: true, command: 'office invite', game, launch: r.launch, invites: r.invites, note: server || r.launch === 'invite' ? null : `${game} is ${r.launch} now: invites let people in once it is an invite-only beta (homie-studio office launch ${game} invite).` };
 }
 
-export async function officeLaunch(root, game, state, { url, remixable, max } = {}) {
+export async function officeLaunch(root, game, state, { url, max } = {}) {
   if (!GAME.test(String(game ?? '')) || (state !== undefined && state !== null && !['private', 'invite', 'public'].includes(state))) {
-    return { ok: false, command: 'office launch', why: 'usage: homie-studio office launch <game> private|invite|public [--remixable on|off] [--max <n>|game]' };
+    return { ok: false, command: 'office launch', why: 'usage: homie-studio office launch <game> private|invite|public [--max <n>|game]' };
   }
-  const body = { game, ...(state ? { launch: state } : {}), ...(remixable !== undefined ? { remix: remixable === 'on' || remixable === true } : {}), ...(max !== undefined ? { maxPlayers: max === 'game' ? null : Number(max) } : {}) };
+  const body = { game, ...(state ? { launch: state } : {}), ...(max !== undefined ? { maxPlayers: max === 'game' ? null : Number(max) } : {}) };
   const r = await withKey(root, url, (call) => call('/_studio/api/game', body));
   return askedFor(root, url, r, 'office launch');
 }
@@ -181,7 +181,7 @@ export function officeLines(r) {
   const now = r.now ?? Date.now();
   const mins = (ms) => `${Math.max(0, Math.round(ms / 60000))} min`;
   for (const g of r.games ?? []) {
-    lines.push(`  ${g.name} (${g.id}): ${g.launch}${g.launch === 'public' ? '' : ' (not listed)'}, ${g.remix ? 'remixable' : 'source closed'}, rooms of ${g.maxPlayers}${g.maxSet ? ` (the game's own: ${g.seats})` : ''}`);
+    lines.push(`  ${g.name} (${g.id}): ${g.launch}${g.launch === 'public' ? '' : ' (not listed)'}, rooms of ${g.maxPlayers}${g.maxSet ? ` (the game's own: ${g.seats})` : ''}`);
     for (const i of (g.invites ?? []).filter((x) => x.open)) lines.push(`    invite ${i.code}${i.label ? ` (${i.label})` : ''}: ${i.uses}${i.maxUses ? ` of ${i.maxUses}` : ''} used · ${i.link}`);
     if (!g.rooms.length) lines.push('    no live rooms');
     for (const rm of g.rooms) {

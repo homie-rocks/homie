@@ -1,8 +1,7 @@
 /* The rights card: every asset's licence in plain words (asset_rights): where it came from, its licence, the credit it
- * owes, what a remixer gets; what would stop a public game from publishing, with its fix; and RIGHTS.md itself. */
+ * owes; what would stop a public game from publishing, with its fix; and RIGHTS.md itself. */
 (function () {
   var C = Card;
-  var REMIX = { include: 'A remix gets it', reference: 'A remix fetches it from its origin', none: 'A remix gets a placeholder' };
   var LICENCE = { cc0: 'CC0 (public domain)', 'cc-by-4.0': 'CC BY 4.0', 'cc-by-3.0': 'CC BY 3.0', own: 'Your own work', generated: 'Generated on your account', qal: 'Quaternius licence', mixamo: 'Mixamo', other: 'Other' };
   function render(sc) {
     var card = C.el('main', 'card');
@@ -12,7 +11,6 @@
     (sc.rows || []).forEach(function (r) {
       var li = C.el('li', r.license ? 'done' : 'now');
       li.appendChild(C.add(C.el('div', 'cb'), C.el('b', '', r.id + ' · ' + r.kind), C.el('span', '', (LICENCE[r.license] || r.license || 'NO LICENCE RECORDED') + ' · ' + r.route + (r.from ? ' (' + r.from + ')' : '') + (r.placeholder ? ' · a placeholder' : '')), r.attribution ? C.el('span', 'fix', 'Credit: ' + r.attribution) : null));
-      li.appendChild(C.pill(REMIX[r.remix] || 'No remix rule', r.remix === 'include' ? 'ok' : 'warn'));
       list.appendChild(li);
     });
     card.appendChild(list);

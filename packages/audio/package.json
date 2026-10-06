@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/audio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Web Audio building blocks for games: an output chain that cannot clip, seeded noise and reverb, envelopes, voice management, a beat clock and an offline sampler planner. It ships no notes, tempos or patches.",
   "license": "Apache-2.0",
   "type": "module",

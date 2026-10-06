@@ -14,15 +14,34 @@
  *                                          extension, Claude Code or any MCP client builds in the same chat that shows
  *                                          the cards (lib/mcp.mjs); --studios: the folder the studios live in
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
- *   homie-studio game remix <source.json url> --id <new id>
  *   homie-studio games
- *   homie-studio build [<id>] [--maps]   (--maps: also keep each bundle's source map and module sizes in .studio/maps/<id>/,
- *                                          never in site/dist: what `perf` reads a CPU profile through)
- *   homie-studio dev [--port 8787] [--remote-ai] [--no-local-ai]   (--stop: stop exactly this studio's dev server, nothing else;
+ *   homie-studio build [<id>] [--maps] [--types]   (--maps: also keep each bundle's source map and module sizes in
+ *                                          .studio/maps/<id>/, never in site/dist: what `perf` reads a CPU profile through;
+ *                                          --types: check the games' TypeScript first, with the studio's own
+ *                                          `typescript`; a type error stops the build. The site is built in a folder of
+ *                                          its own and put in place only when all of it is there: a game that does not
+ *                                          build fails the command and leaves site/dist as it was. Each game's line says
+ *                                          changed or unchanged, its build hash, and whether its source is shared)
+ *   homie-studio preview <id> [--port 8788]   (one built game's files at an address on this computer, nothing else: no
+ *                                          Wrangler, no rooms, no database; for a capture, a screenshot or a perf script.
+ *                                          The game plays offline with its bots. Stop it with Ctrl-C)
+ *   homie-studio dev [--port 8787] [--remote-ai] [--no-local-ai] [--timestamps]   (--stop: stop exactly this studio's dev server,
+ *                                         nothing else, and clear a stale record; rooms here are always local: production
+ *                                         routes in wrangler.jsonc are left out; a game built while it runs is picked up;
+ *                                         --timestamps: a time on every line of Wrangler's, not only the room and error ones;
  *                                         AI guides, chat review and game decisions think with Clef on this computer
  *                                         when Ollama has clef-flash (free; dev never downloads it), else scripted;
  *                                         --remote-ai: the real Workers AI, billed)
  *   homie-studio check <id> [--url <site>] [--shots <dir>]
+ *   homie-studio shoot <id> [--url <site> | --preview] [--frames 60] [--fps 30] [--device computer|phone]
+ *                      [--out <dir>] [--hold <key code>] [--no-smoke] [--timeout 180]
+ *                                         pictures of the game on a clock this command steps (one frame = 1/fps s
+ *                                         of the game's own time, however slow the renderer: for a 3D game on a
+ *                                         machine with no GPU), after a two-client seat smoke check in a private
+ *                                         room. Frames and shoot.json go to --out (default .studio/shoot/<id>/).
+ *                                         --preview: no site needed; it serves the built game itself (as
+ *                                         `preview` does: alone, offline) and shoots that, with no smoke check,
+ *                                         and says which build (its hash and bundle) the frames are of.
  *   homie-studio perf <id> [--url <site>] [--device computer,phone] [--runs 1] [--seconds 15] [--warm 3] [--profile]
  *                     [--cpu 4] [--out <dir>] [--max-load 0.8] [--pair <label>]
  *                                         (how fast it runs: per device, two browsers in a fresh room, the host and a replica,
@@ -32,6 +51,10 @@
  *                                          each browser and its hottest functions. Files under .perf/<id>/<time>/; the phone is
  *                                          emulated (a --cpu times slower CPU, 4G) on this computer's GPU. The plugin's perf
  *                                          skill runs the whole measure, change, compare, keep-or-revert loop)
+ *   homie-studio trailer <id> [--url <site>] [--seconds 40] [--length 20] [--title "…"] [--end "…"] [--skills <folder>]
+ *                                         (a trailer in one command, by the plugin's video skill: the game rendered frame by
+ *                                          frame on a virtual clock, its sound rebuilt from its own files and what it played,
+ *                                          the highlights picked, an end card, 16:9, 1:1 and 9:16 in videos/<id>-trailer/)
  *   homie-studio perf sizes <id>          (what a player downloads: every built file, raw and gzipped, the biggest first; with
  *                                          build --maps, which modules make up the bundle; each big script read for whether it
  *                                          is minified, from its code, and how much of it is GLSL shader source in strings)
@@ -61,9 +84,12 @@
  *   homie-studio port import <game folder> --id <id> [--name "<Name>"] [--mode static|bundle|command]
  *   homie-studio port check <id> [--url <site>] [--only owner-desk,owner-phone,owner-iphone,round,life,tv] [--shots <dir>]
  *   homie-studio deploy [--plan]          (--plan: what it will create on Cloudflare and what it costs; changes nothing)
+ *                                         One deploy of a studio at a time (a lock in .studio/); it says which games changed
+ *                                         with each one's content hash, keeps the studio's own custom-domain and exact-host
+ *                                         routes in wrangler.jsonc, and never deploys a wildcard or catch-all route.
  *                                         In Cloudflare's Workers Builds (WORKERS_CI=1, or --ci) it only applies the D1
  *                                         migrations and deploys: the Worker and database are the Deploy button's.
- *   homie-studio publish
+ *   homie-studio publish                  (the directory's beta has a daily cap: it says how many publishes are left)
  *   homie-studio storage add              (large media only: an R2 bucket; needs R2 turned on for the account)
  *   homie-studio media list               (every song and video page, where each file is served from, what moves to R2)
  *   homie-studio media move [<file>...] [--dry-run] [--verify]
@@ -94,7 +120,7 @@
  *   homie-studio office key [--hours 1]   a key for the Homie MCP's owner tools (studio_office, room_kick, ...)
  *   homie-studio office announce "<text>" [--game <id>] [--room <code>] [--seconds 30]
  *   homie-studio office invite <game> [--label "<who>"] [--uses 1|<n>|any] [--count 1] [--days <n>] [--server <id>]
- *   homie-studio office launch <game> private|invite|public [--remixable on|off] [--max <n>|game]
+ *   homie-studio office launch <game> private|invite|public [--max <n>|game]
  *   homie-studio office kick <game> <room> <seat number | name> [--minutes 10]
  *   homie-studio office mute <game> <room> <seat number | name> [--minutes 10] [--off]
  *   homie-studio office close <game> <room> [--minutes 10] [--reopen]
@@ -236,6 +262,14 @@
  *   homie-studio anim add <id> <asset> --verbs jump,attack [--from <library item>]   more verbs, retargeted onto its
  *                                          skeleton at build time into its clip library (public/anims/<skeleton>.glb)
  *   homie-studio anim preview <id> [--asset <asset>]   looping previews of every clip (animated WebP) and a sheet
+ *   homie-studio collision bake <id> <model.glb> [--cell 0.25]   a height grid off a model's triangles, beside it, with
+ *                                          a checksum of the mesh and a true-scale plan (lib/collision.mjs)
+ *   homie-studio collision check <id>     every collision file: stale against its model, its proxies, its routes walked
+ *
+ *   homie-studio parts find|new|add|share|unshare|check …
+ *                                         game parts (parts/PARTS.md): pieces of games a studio shares, and brings into
+ *                                          its own games from other studios. The plumbing behind the chat tools
+ *                                          parts_find, part_add, part_new and part_share; nobody is asked to type it
  *
  *   homie-studio statusline               the current build in one line (what Claude Code's status line shows)
  *   homie-studio statusline --install [--project <folder>]
@@ -245,14 +279,18 @@
  *
  * Every command prints a few lines for a person; --json prints the result.
  */
+// FIRST, before any other file of the toolkit is evaluated: a Node.js that is too old ends here, with the reason.
+import '../lib/node-version.mjs';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { basename, join, relative, resolve } from 'node:path';
 import { build } from '../lib/build.mjs';
+import { PREVIEW_PORT, previewServer } from '../lib/preview.mjs';
 import { check } from '../lib/check.mjs';
 import { ciDeploy, deploy, deployPlan, mediaMove, storageAdd, whoami, wranglerBin } from '../lib/cloudflare.mjs';
 import { setupAttach } from '../lib/setup.mjs';
 import { chromeArgs, findChrome, installChrome, noChrome } from '../lib/chrome.mjs';
+import { deployWords } from '../lib/deploy-state.mjs';
 import { publish } from '../lib/directory.mjs';
 import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
@@ -260,17 +298,18 @@ import { portCheck } from '../lib/port-check.mjs';
 import { DEFAULT_GOAL, perfCompare, perfRun, perfSizes } from '../lib/perf.mjs';
 import { LAB_PORT, labServe, labSet, labStop } from '../lib/lab.mjs';
 import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeOf, typeOf } from '../lib/media.mjs';
-import { ensureMigrations, migrationWord, newStudio } from '../lib/scaffold.mjs';
+import { newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { whatsNewLines } from '../lib/changelog.mjs';
-import { listGames, newGame, readStudio, remixGame, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
+import { listGames, newGame, readStudio, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
 import { officeAnnounce, officeClose, officeInvite, officeKey, officeKick, officeLaunch, officeLines, officeLink, officeMute, officeRevoke, officeShow } from '../lib/office.mjs';
 import { chatBudget, chatLines, chatRemove, chatRulesSet, chatShow, chatWords } from '../lib/chat-cli.mjs';
 import { loungeLines, loungeMod, loungeNight, loungeRemove, loungeRulesSet, loungeShow } from '../lib/lounge-cli.mjs';
-import { detectLocalAi, localAiVars } from '../lib/local-ai.mjs';
+import { detectLocalAi } from '../lib/local-ai.mjs';
+import { dev, stopDev } from '../lib/dev.mjs';
 import { agentsBrain, agentsBrainKey, agentsPass, agentsPasses, agentsRevoke, agentsTry, serversClose, serversLevel, serversLines, serversList, serversMember, serversNew, serversSet } from '../lib/servers.mjs';
 import { AgentSeat } from '../lib/agent-seat.mjs';
 import { shopCheck, shopConnect, shopDisconnect, shopInit, shopLines, shopOrders, shopRefund, shopStatements, shopStatus } from '../lib/shop.mjs';
@@ -285,11 +324,16 @@ import { restartWithProxy } from '../lib/net.mjs';
 import { demoGames, formatDemo } from '../lib/demo.mjs';
 import { serveMcp } from '../lib/mcp.mjs';
 import { animCommand, artLines, assetsCommand, castView, styleCommand } from '../lib/art-cli.mjs';
+import { collisionCommand } from '../lib/collision.mjs';
 import { formatHandoff, handoff } from '../lib/handoff.mjs';
+// GAME PARTS (parts/PARTS.md): `parts …` is lib/parts-cli.mjs; the deploy plan shows brought-in parts' licences.
+import { partsCommand, partsLines } from '../lib/parts-cli.mjs';
+import { partsPlanLines, partsPublishReport } from '../lib/parts-build.mjs';
+import { trailerCommand, trailerLines } from '../lib/trailer.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -306,20 +350,15 @@ const log = asJson ? () => {} : (line) => process.stderr.write(`${line}\n`);
 function print(result) {
   if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
   // A check that found problems still prints them (its rows say what to fix), never a bare "failed".
-  if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows) && !(result.command === 'assets check' && result.rows)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
+  if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows) && !(result.command === 'assets check' && result.rows) && !(result.command === 'parts check' && result.rows) && !(result.command === 'shoot' && result.frames !== undefined)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
   if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
   const lines = [];
+  if (/^parts /.test(String(result.command ?? ''))) { process.stdout.write(`${partsLines(result).join('\n')}\n`); return; }
   if (/^(style|assets|cast|anim)( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${artLines(result).join('\n')}\n`); return; }
+  if (/^collision /.test(String(result.command ?? '')) && result.lines) { process.stdout.write(`${result.lines.join('\n')}\n`); return; }
   switch (result.command) {
     case 'new':
       lines.push(`${result.name} is a studio now: ${result.dir}`, '', 'Wrote:', ...result.wrote.map((f) => `  ${f}`), '', `Dependencies: ${result.installed}`, '', 'Next:', ...result.next.map((n) => `  ${n}`), '', result.online);
-      break;
-    case 'game remix':
-      lines.push(`games/${result.id} is a remix of ${result.from} (${result.files.length} files). Its game.json credits the original: "${result.credit}"${result.page ? ` (${result.page})` : ''}, on its landing and in its credits. Make it yours in games/${result.id}/src/, then: npx homie-studio dev`);
-      if (result.assets?.carried) lines.push(`  assets: ${result.assets.fetched.length} carried from the original (checked by SHA-256)${result.assets.placeholders.length ? `, ${result.assets.placeholders.length} grey placeholder(s) where the licence does not let a remix carry them (${result.assets.placeholders.map((p) => p.asset).join(', ')}): see games/${result.id}/assets/RIGHTS.md` : ''}`);
-      if (result.installNeeded) lines.push(`It needs ${result.needsAdded.map((n) => `${n.name} ${n.version}`).join(', ')}, now in the studio's package.json: run npm install first.`);
-      for (const h of result.needsHeld ?? []) lines.push(`It was written against ${h.name} ${h.want}; this studio pins ${h.have}, which stays.`);
-      if (result.needsNotAdded?.length) lines.push(`Its game.json also asks for ${result.needsNotAdded.join(', ')}: not added (a remix adds only what the toolkit's starters use). Read the code before adding any.`);
       break;
     case 'game new':
       lines.push(`games/${result.id} is a new game from the ${result.from} starter. Change it in games/${result.id}/src/, then: npx homie-studio dev`);
@@ -332,12 +371,22 @@ function print(result) {
       }
       break;
     case 'dev stop':
-      lines.push(result.stopped.length ? `Stopped this studio's dev server (${result.stopped.join(', ')}).` : `Nothing to stop: ${result.why ?? 'no dev server of this studio is running'}.`);
+      lines.push(result.stopped.length ? `Stopped this studio's dev server (${result.stopped.join(', ')}).${result.why ? ` Note: ${result.why}.` : ''}` : `Nothing to stop: ${result.why ?? 'no dev server of this studio is running'}.`);
       break;
     case 'build':
       lines.push(`Built ${result.games.map((g) => `${g.id} (${Math.round(g.bytes / 1024)} KB)`).join(', ') || 'no games'} into ${relative(process.cwd(), result.dist) || result.dist}`);
+      // Per game: did it change since the build before, which build it is (the hash the live site's manifest says once
+      // deployed), and what loads later.
+      for (const g of result.games) lines.push(`  ${g.id}: ${g.changed ?? 'new'}, build ${g.hash ?? '?'}${g.bundle ? ` (${g.bundle}${g.chunks ? ` + ${g.chunks} ${g.chunks === 1 ? 'chunk' : 'chunks'} loaded later` : ''})` : ''}`);
+      if (result.retired) lines.push(`Note: ${result.retired}`);
+      if (result.types) lines.push(`Types: ${result.types.games.filter((g) => g.checked).map((g) => g.id).join(', ') || 'no game has TypeScript to check'}${result.types.games.some((g) => g.checked) ? ` checked with TypeScript ${result.types.typescript ?? '?'}, no errors` : ''}`);
       if (result.songs?.length || result.videos?.length) lines.push(`Media pages: ${[...result.songs.map((x) => `/music/${x}/`), ...result.videos.map((x) => `/videos/${x}/`)].join(', ')}`);
-      for (const l of result.landings ?? []) lines.push(`Landing /${l.id}/: hero from ${l.hero === 'footage' ? 'its footage' : l.hero === 'art' ? 'its art (moving)' : 'the studio\'s colours (add a cover or hero/ footage)'}${l.credits ? ', credits' : ''}${l.source ? ', "Make a game like this" with its source' : ''}`);
+      for (const l of result.landings ?? []) {
+        lines.push(`Landing /${l.id}/: hero from ${l.hero === 'footage' ? 'its footage' : l.hero === 'art' ? 'its art (moving)' : 'the studio\'s colours (it has no picture or footage yet)'}${l.credits ? ', credits' : ''}`);
+        // Which files, and what shape: the names the landing looks for (lib/site.mjs HERO_NAMES). Any size is shown,
+        // cropped to fill; these are the sizes that fill a computer and an upright phone without waste.
+        if (l.hero === 'colours') lines.push(`  give it one: games/${l.id}/hero/wide.jpg (16:9, 1280×720 or larger) and games/${l.id}/hero/tall.jpg (9:16, 720×1280, for an upright phone); footage beside them as hero/wide.mp4 and hero/tall.mp4 (the same shapes, a silent loop of 8 to 15 s, under 3 MB each); or "cover" in its game.json`);
+      }
       if (result.posts?.length) lines.push(`Posts: ${result.posts.map((x) => `/posts/${x}/`).join(', ')} (feeds: /posts/feed.xml, /posts/feed.json)`);
       if (result.pages?.length || result.partials?.length) lines.push(`The studio's own: ${[...(result.pages ?? []).map((x) => `page ${x}`), ...(result.partials ?? []).map((x) => `partial ${x}`)].join(', ')}`);
       for (const m of result.mediaSkipped ?? []) lines.push(`  left out: ${m.kind}/${m.item}${m.file ? ` ${m.file}` : ''}: ${m.why}`);
@@ -394,12 +443,14 @@ function print(result) {
     }
     case 'deploy':
       if (result.ci) {
-        lines.push(`Live: ${result.url ?? '(Wrangler printed no address)'}${result.commit ? ` (commit ${result.commit.slice(0, 7)}${result.branch ? ` on ${result.branch}` : ''})` : ''}`, ...result.steps.map((x) => `  ${x.what}`), ...result.games.map((g) => `  ${g.id}: ${g.play}`));
+        lines.push(`Live: ${result.url ?? '(Wrangler printed no address)'}${result.commit ? ` (commit ${result.commit.slice(0, 7)}${result.branch ? ` on ${result.branch}` : ''})` : ''}`, ...result.steps.map((x) => `  ${x.what}`), ...result.games.map((g) => `  ${g.id}: ${g.play}${g.hash ? `  [${deployWords(g)}]` : ''}`));
         break;
       }
       lines.push(`Live: ${result.url}`, ...(result.workersDev && result.workersDev !== result.url ? [`  also at ${result.workersDev}`] : []),
         ...(result.local ? [`  (the workers.dev address names your Cloudflare account, so it is kept in ${result.local} on this computer, never in studio.json)`] : []),
-        ...result.games.map((g) => `  ${g.id}: ${g.play}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`),
+        // Which games this deploy changed since the last deploy from here, and each one's build hash
+        // (lib/deploy-state.mjs): the hash `build` printed and the one the live site's manifest answers with.
+        ...result.games.map((g) => `  ${g.id}: ${g.play}${g.hash ? `  [${deployWords(g)}]` : ''}`), ...(result.removed?.length ? [`  no longer on the site: ${result.removed.join(', ')}`] : []), ...(result.notes ?? []).map((n) => `  Note: ${n}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`),
         ...(result.media?.moved ?? []).map((m) => `  moved to R2 (checked by SHA-256): ${m.path}, still at ${m.url}`), ...(result.media?.failed ?? []).map((m) => `  not moved to R2: ${m.path}: ${m.why}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}. All on the free Workers plan${result.r2 ? ' plus R2' : ''}.`,
         result.claim ? 'The site claimed itself in the directory: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim yet (the site claims itself when the directory first reads it; publish does).');
       break;
@@ -407,13 +458,16 @@ function print(result) {
       lines.push(`What \`npm run deploy\` does for ${result.studio}, on the Cloudflare account the person approves:`, '',
         ...result.cloudflare.map((r) => `  ${r.kind}${r.name ? ` ${r.name}` : ''}: ${r.what} [${r.state}${r.plan ? `; ${r.plan}` : ''}]`), '',
         `Cost: ${result.cost}`, `Sign-in: ${result.login}`, `Address: ${result.address}`,
-        `The directory (${result.directory.site}) stores: ${result.directory.stores}`, result.never);
+        `The directory (${result.directory.site}) stores: ${result.directory.stores}`, result.never,
+        ...(result.parts && partsPlanLines(result.parts).length ? ['', ...partsPlanLines(result.parts)] : []));
       break;
     case 'storage add':
       lines.push(result.already ? `Storage is already added: R2 bucket ${result.bucket}.` : `Storage added: R2 bucket ${result.bucket}.`, 'Next:', ...result.next.map((n) => `  ${n}`));
       break;
     case 'publish':
-      lines.push(`Listed in the directory: ${result.studioPage ?? result.directory}`, ...(result.games ?? []).map((g) => `  ${g.name}: ${g.play}`));
+      lines.push(`Listed in the directory: ${result.studioPage ?? result.directory}`, ...(result.games ?? []).map((g) => `  ${g.name}: ${g.play}`), ...(result.publishes?.line ? [result.publishes.line] : []),
+        // The parts in what was listed, in the deploy plan's own lines (lib/parts-build.mjs).
+        ...(result.parts && partsPlanLines(result.parts, { at: 'publish' }).length ? ['', ...partsPlanLines(result.parts, { at: 'publish' })] : []));
       break;
     case 'port plan': {
       const f = result.facts;
@@ -666,7 +720,22 @@ function print(result) {
       lines.push(`PASS: two fresh browsers in room ${result.room} finished round ${result.round.n} (${result.round.humans} humans, ${result.round.bots} bots) in ${Math.round(result.totalMs / 1000)} s.`,
         ...result.seats.map((s) => `  ${s.browser}: seat ${s.seat} (${s.role}), seated in ${(s.seatedMs / 1000).toFixed(1)} s`),
         ...(result.frames ?? []).map((f) => `  ${f.browser} drew ${f.fps ?? '?'} fps${f.renderer ? ` on ${f.renderer}` : ''}`),
+        // Seated, ready and connected are three things: each gets its own line beside the verdict.
+        ...(result.readiness ?? []).map((r) => `  ${r.browser} ${r.ready === true ? `ready: the loading cover lifted${r.liftedMs !== null ? ` at ${(r.liftedMs / 1000).toFixed(1)} s` : ''}${r.by ? ` (by the ${r.by})` : ''}` : r.ready === false ? `NOT READY: ${r.why}` : `readiness unknown: ${r.why}`}`),
+        `  Connection: ${result.uninterrupted === true ? 'uninterrupted' : result.uninterrupted === false ? 'INTERRUPTED' : 'unknown'} (${result.note ?? 'not reported'})`,
         ...(result.software ? [`  ${result.software}`] : []));
+      break;
+    case 'shoot':
+      lines.push(`Shot ${result.frames} of ${result.asked} frames of ${result.game} at ${result.fps} a second of the game's own clock (${result.virtualSeconds} s of game time in ${result.realSeconds} s) into ${result.out}`,
+        `  Smoke (two clients, one private room): ${result.smoke.verdict}${result.smoke.why ? `: ${result.smoke.why}` : ''}${result.smoke.note ? ` (${result.smoke.note})` : ''}`,
+        ...(result.build ? [`  Build: ${result.build.hash} (${result.build.bundle}${result.build.loaded === true ? ', loaded by the page' : result.build.loaded === false ? ', NOT loaded by the page' : ''})`] : []),
+        `  Ready: ${result.ready.ready === true ? 'the loading cover had lifted' : result.ready.ready === false ? `NO: ${result.ready.why}` : `unknown: ${result.ready.why}`}`,
+        `  Renderer: ${result.renderer ?? 'unknown'}${result.software ? ' (software: these frames are still one step of the clock each, but slow to make)' : ''}`,
+        ...(result.partial ? [`  PARTIAL: ${result.partial}`] : []), ...(result.note ? [`  ${result.note}`] : []),
+        `  ${result.limits}`, `  Every frame's time, round and position: ${result.out}/shoot.json`);
+      break;
+    case 'trailer':
+      lines.push(...trailerLines(result));
       break;
     default:
       lines.push(JSON.stringify(result, null, 2));
@@ -710,9 +779,13 @@ async function main() {
   // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
   if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
   const root = requireStudio();
+  // A trailer is the plugin's video skill; this hands the words after the id over to it (lib/trailer.mjs).
+  if (cmd === 'trailer') return trailerCommand(root, sub, argv.slice(argv.indexOf(sub) + 1), { skills: flags.get('skills') ?? null, slug: flags.get('slug') ?? null });
   if (cmd === 'style') return styleCommand(root, sub, positional, flags, { log });
   if (cmd === 'assets') return assetsCommand(root, sub, positional, flags, { log });
   if (cmd === 'anim') return animCommand(root, sub, positional, flags, { log });
+  if (cmd === 'collision') return collisionCommand(root, sub, positional, flags);
+  if (cmd === 'parts') return partsCommand(root, sub, positional, flags, { log });
   if (cmd === 'cast') { const games = listGames(root); const id = sub ?? (games.length === 1 ? games[0].id : null); if (!id) return { ok: false, command: 'cast', why: `name the game: homie-studio cast <id>${games.length ? ` (${games.map((g) => g.id).join(', ')})` : ''}` }; return castView(root, id); }
   if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
@@ -733,9 +806,12 @@ async function main() {
     return tracked(root, 'checks', (report) => portCheck({ url, game, root, only: flags.get('only') ?? null, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'port check');
   }
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });
-  if (cmd === 'game' && sub === 'remix') return remixGame(root, positional[2], flags.get('id'), { name: flags.get('name') });
+  // Remix was retired (a game is never handed over whole): the command is refused in a sentence that says where to
+  // go, so an old note, an old card or an agent's memory of the toolkit does not end at "unknown command".
+  if (cmd === 'game' && sub === 'remix') return { ok: false, command: 'game remix', why: 'remix was retired: a game is no longer handed over whole, and no studio serves one. Games build on each other through parts, the pieces of a game its studio chose to share: find one with `homie-studio parts find <words>` and bring it in with `homie-studio parts add` (in chat: parts_find, part_add; parts/PARTS.md)' };
   if (cmd === 'games') return { ok: true, command: 'games', games: listGames(root).map(({ dir, ...g }) => ({ ...g, dir: relative(root, dir) })) };
-  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps') }), 'build');
+  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps'), types: flags.has('types') }), 'build');
+  if (cmd === 'preview') return preview(root, positional[1] ?? (listGames(root).length === 1 ? listGames(root)[0].id : null));
   if (cmd === 'perf' && sub === 'sizes') return perfSizes(root, positional[2] ?? listGames(root)[0]?.id);
   if (cmd === 'lab') return labCommand(root, sub);
   if (cmd === 'perf') {
@@ -754,8 +830,9 @@ async function main() {
     const plan = upgradePlan(root);
     return flags.has('apply') || flags.has('yes') ? upgradeApply(root, plan) : plan;
   }
+  // lib/dev.mjs: the dev server, its registration file, and what `--stop` will and will not signal.
   if (cmd === 'dev' && flags.has('stop')) return stopDev(root);
-  if (cmd === 'dev') return dev(root);
+  if (cmd === 'dev') return dev(root, { port: flags.get('port') ?? 8787, remoteAi: flags.has('remote-ai'), localAi: !flags.has('no-local-ai'), timestamps: flags.has('timestamps'), log });
   if (cmd === 'check') {
     const game = positional[1] ?? listGames(root)[0]?.id;
     const url = flags.get('url') ?? siteUrl(root);
@@ -765,6 +842,20 @@ async function main() {
     const big = bigCommittedFiles(root).filter((f) => f.path.startsWith(`games/${game}/`));
     if (big.length) return { ok: false, command: 'check', why: `committed files over 5 MB under games/${game}: ${big.map((f) => `${f.path} (${(f.bytes / 1024 / 1024).toFixed(1)} MB)`).join(', ')}. Big media goes to the studio's R2 (homie-studio storage add, then media move); raw models stay in art/<slug>/raw/ (git-ignored); a shipped model is made phone-sized with homie-studio assets optimise. Take it out of git (git rm --cached), then check again.` };
     return tracked(root, 'checks', (report) => check({ url, game, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'check');
+  }
+  if (cmd === 'shoot') {
+    const game = positional[1] ?? listGames(root)[0]?.id;
+    // --preview: the frames half from the light preview server this command starts itself (no Wrangler, no rooms).
+    const preview = flags.has('preview');
+    const url = preview ? null : flags.get('url') ?? siteUrl(root);
+    if (!url && !preview) return { ok: false, command: 'shoot', why: 'give --url (the local dev address or the live site), or --preview to shoot the built game by itself with no site running' };
+    const { shoot } = await import('../lib/shoot.mjs');
+    const num = (k, d) => (flags.get(k) === undefined || flags.get(k) === true ? d : Number(flags.get(k)));
+    return shoot({
+      url, preview, root, game, frames: num('frames', 60), fps: num('fps', 30), device: String(flags.get('device') ?? 'computer'),
+      out: flags.get('out') && flags.get('out') !== true ? resolve(flags.get('out')) : join(root, '.studio', 'shoot', String(game)),
+      smoke: !flags.has('no-smoke'), hold: typeof flags.get('hold') === 'string' ? flags.get('hold') : null, timeoutMs: Math.max(20, num('timeout', 180)) * 1000, log,
+    });
   }
   if (cmd === 'look') {
     const url = flags.get('url') ?? siteUrl(root);
@@ -779,7 +870,7 @@ async function main() {
     const only = flags.get('only') ? String(flags.get('only')).split(',').filter((d) => ['computer', 'phone', 'sideways'].includes(d)) : undefined;
     return look({ url, paths, shots: flags.get('shots') ? resolve(flags.get('shots')) : join(root, '.studio', 'look'), devices: only, log });
   }
-  if (cmd === 'deploy' && flags.has('plan')) return deployPlan(root);
+  if (cmd === 'deploy' && flags.has('plan')) return { ...deployPlan(root), parts: partsPublishReport(root) };
   // Cloudflare's Workers Builds runs `npm run deploy` with WORKERS_CI=1 (and its own token for this one account).
   if (cmd === 'deploy' && (process.env.WORKERS_CI === '1' || flags.has('ci'))) return tracked(root, 'deploy', () => ciDeploy(root, { log }), 'deploy');
   if (cmd === 'deploy') return tracked(root, 'deploy', () => deploy(root, { log, homie: flags.get('homie') }), 'deploy');
@@ -789,7 +880,7 @@ async function main() {
     const has = Boolean(cf.r2 && (cf.created ?? []).includes(`r2:${cf.r2}`));
     return { ok: true, command: 'storage', storage: has ? { kind: 'r2', bucket: cf.r2 } : null, why: has ? undefined : 'no storage yet: the studio runs without it; `homie-studio storage add` adds an R2 bucket for large media (Cloudflare asks for a payment method before R2 works)' };
   }
-  if (cmd === 'publish') return publish(root, { homie: flags.get('homie'), site: flags.get('site') });
+  if (cmd === 'publish') return publish(root, { homie: flags.get('homie'), site: flags.get('site'), log });
   if (cmd === 'players' && sub === 'owner') return playersOwner(root, { url: flags.get('url'), revoke: flags.has('revoke') });
   if (cmd === 'players' && !sub) return playersShow(root, { url: flags.get('url') });
   if (cmd === 'stats' && sub === 'key') return statsKey(root, { url: flags.get('url'), hours: flags.get('hours') });
@@ -804,7 +895,7 @@ async function main() {
     if (sub === 'key') return officeKey(root, { url, hours: flags.get('hours') });
     if (sub === 'announce') return officeAnnounce(root, positional.slice(2).join(' '), { url, game: flags.get('game'), room: flags.get('room'), seconds: flags.get('seconds') });
     if (sub === 'invite') return officeInvite(root, positional[2], { url, label: flags.get('label'), uses: flags.get('uses'), count: flags.get('count'), days: flags.get('days'), server: flags.get('server') });
-    if (sub === 'launch') return officeLaunch(root, positional[2], positional[3], { url, remixable: flags.get('remixable'), max: flags.get('max') });
+    if (sub === 'launch') return officeLaunch(root, positional[2], positional[3], { url, max: flags.get('max') });
     if (sub === 'kick') return officeKick(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes') });
     if (sub === 'mute') return officeMute(root, positional[2], positional[3], positional.slice(4).join(' ') || undefined, { url, minutes: flags.get('minutes'), off: flags.has('off') });
     if (sub === 'close') return officeClose(root, positional[2], positional[3], { url, minutes: flags.get('minutes'), reopen: flags.has('reopen') });
@@ -1029,97 +1120,21 @@ async function progressCommand(root, sub) {
   } catch (error) { return { ok: false, command: 'progress', why: error instanceof Error ? error.message : String(error) }; }
 }
 
-/*
- * WHICH DEV SERVER IS THIS STUDIO'S. `dev` writes its own PID and Wrangler's to site/.wrangler/homie-dev.json,
- * and `dev --stop` stops exactly those two (each checked to still be a process of this studio's folder), so an AI
- * never has to reach for `pkill -f "wrangler dev"`, which stops every project's dev server on the machine.
- */
-const devFile = (root) => join(workerDir(root), '.wrangler', 'homie-dev.json');
-function processOfStudio(pid, root, kind) {
-  if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return false;
-  try { process.kill(pid, 0); } catch { return false; }
-  const ps = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
-  if (ps.status !== 0) return process.platform === 'win32'; // no ps: the PID file is all there is
-  let real = root;
-  try { real = realpathSync(root); } catch { /* keep */ }
-  // A PID the file names is still ours when it runs from this studio, or is still the kind of process it was
-  // (a recycled PID is neither), so nothing else on the machine is ever stopped.
-  return ps.stdout.includes(root) || ps.stdout.includes(real) || (kind === 'dev' ? /homie-studio/.test(ps.stdout) : /wrangler|workerd/.test(ps.stdout));
-}
-async function stopDev(root) {
-  const file = devFile(root);
-  if (!existsSync(file)) return { ok: true, command: 'dev stop', stopped: [], why: 'no dev server of this studio is running' };
-  let rec = {};
-  try { rec = JSON.parse(readFileSync(file, 'utf8')); } catch { /* a torn file */ }
-  const pids = [[rec.child, 'wrangler'], [rec.pid, 'dev']].filter(([p, kind]) => processOfStudio(p, root, kind)).map(([p]) => p);
-  for (const pid of pids) { try { process.kill(pid, 'SIGTERM'); } catch { /* gone */ } }
-  const deadline = Date.now() + 8000;
-  const alive = () => pids.filter((p) => { try { process.kill(p, 0); return true; } catch { return false; } });
-  while (alive().length && Date.now() < deadline) await new Promise((r) => setTimeout(r, 200));
-  for (const pid of alive()) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
-  rmSync(file, { force: true });
-  return { ok: true, command: 'dev stop', stopped: pids };
-}
-
-/** The whole site locally: pages, rooms (room.mjs in a local Durable Object), D1. */
-async function dev(root) {
-  const port = String(flags.get('port') ?? 8787);
-  const b = await build(root, { log });
-  if (!b.catalogue.length && !b.songs.length && !b.videos.length) log('No game yet: the home page says "First game coming soon" until the first one is made.');
-  const bin = wranglerBin(root);
-  if (!bin) return { ok: false, command: 'dev', why: 'run npm install in the studio first' };
-  const studio = readStudio(root);
-  const env = { ...process.env, ...projectsCloudflareEnv(root), WRANGLER_SEND_METRICS: 'false', CI: '1' };
-  for (const added of ensureMigrations(root)) log(`added ${added} (${migrationWord(added)})`);
-  await new Promise((done) => {
-    const m = spawn(bin, ['d1', 'migrations', 'apply', 'DB', '--local'], { cwd: workerDir(root), env, stdio: ['ignore', 'ignore', 'inherit'] });
-    m.on('close', done);
-  });
-  log(`Local site: http://127.0.0.1:${port}/  (each game: http://127.0.0.1:${port}/<id>/play — open it in two browsers)`);
-  const ai = devConfig(root, flags.has('remote-ai'));
-  if (ai.note) log(ai.note);
-  // The person's own Clef (0.24.4, lib/local-ai.mjs): with Ollama and clef-flash on this computer, the local Worker's
-  // guides, chat review and game decisions think here, free. Never a download: dev only says what one would cost.
-  let localVars = [];
-  if (!flags.has('remote-ai') && !flags.has('no-local-ai')) {
-    const found = await detectLocalAi();
-    localVars = localAiVars(found);
-    log(found.ok ? `AI guides, chat review and game decisions think with ${found.model} on this computer (Ollama ${found.version}): free, nothing sent to Cloudflare.` : found.say);
-  }
-  // --remote-ai: Wrangler's --local turns every remote binding off ("not supported"), so a dev with the real Workers AI
-  // (the guides' brains, room chat's review) runs without it; everything else stays local all the same.
-  const child = spawn(bin, ['dev', ...(flags.has('remote-ai') ? [] : ['--local']), '--ip', '127.0.0.1', '--port', port, ...ai.args, ...localVars], { cwd: workerDir(root), env, stdio: 'inherit' });
-  mkdirSync(dirname(devFile(root)), { recursive: true });
-  writeFileSync(devFile(root), `${JSON.stringify({ pid: process.pid, child: child.pid, port: Number(port), at: new Date().toISOString() })}\n`);
-  log(`Stop it with: npx --no-install homie-studio dev --stop   (this studio's dev server only)`);
-  // Stopping this process stops Wrangler with it, so no dev server is left running on its own.
-  for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => { try { child.kill(signal); } catch { /* gone */ } });
-  await new Promise((done) => child.on('close', done));
-  rmSync(devFile(root), { force: true });
-  return { ok: true, command: 'dev', stopped: true };
-}
-
 /**
- * AI guides under `dev` (0.17.0): they think scripted, for free, unless --remote-ai (real Workers AI on the signed-in
- * account, billed like the live site). A config whose AI binding is not what was asked for runs from a copy in
- * .wrangler/ (absolute paths, the same local state), so wrangler.jsonc itself is never changed by dev.
+ * One built game's files at an address on this computer (lib/preview.mjs), until the process is stopped. Its address
+ * is the first thing on stdout (a line of JSON with --json), so a script that starts it reads where to go.
  */
-function devConfig(root, remoteAi) {
-  const file = join(workerDir(root), 'wrangler.jsonc');
-  let json;
-  try { json = JSON.parse(readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '')); } catch { return { args: [] }; }
-  if (Boolean(json.ai) === remoteAi) return { args: [], note: remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : null };
-  const base = workerDir(root);
-  const abs = (p) => (p && !p.startsWith('/') ? join(base, p) : p);
-  delete json.$schema;
-  json.main = abs(json.main);
-  if (json.assets?.directory) json.assets.directory = abs(json.assets.directory);
-  json.d1_databases = (json.d1_databases ?? []).map((d) => ({ ...d, ...(d.migrations_dir ? { migrations_dir: abs(d.migrations_dir) } : {}) }));
-  if (remoteAi) json.ai = { binding: 'AI', remote: true }; else delete json.ai;
-  const copy = join(base, '.wrangler', 'homie-dev.wrangler.json');
-  mkdirSync(dirname(copy), { recursive: true });
-  writeFileSync(copy, `${JSON.stringify(json, null, 2)}\n`);
-  return { args: ['--config', copy, '--persist-to', join(base, '.wrangler', 'state')], note: remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : 'No Workers AI under dev (--remote-ai for the real one, billed): AI guides think with Clef on this computer when Ollama has it, else scripted.' };
+async function preview(root, id) {
+  const p = await previewServer(root, id, { port: flags.get('port') ?? PREVIEW_PORT, strict: flags.has('port') });
+  if (!p.ok) return p;
+  const { server, dir, ...said } = p;
+  process.stdout.write(asJson ? `${JSON.stringify({ ...said, dir: relative(root, dir) })}\n` : `Preview of ${id}: ${p.url}   (its built files only, from ${relative(process.cwd(), dir) || dir}: no rooms, it plays offline with its bots; a new build shows on the next reload. Ctrl-C stops it)\n`);
+  await new Promise((done) => {
+    for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => server.close(done));
+    server.on('close', done);
+  });
+  server.closeAllConnections?.();
+  return { ok: true, command: 'help' };
 }
 
 /** `agents sit`: an AI guide's seat from this terminal, for a demo or a test of a vocabulary. Lines on stdin act. */
@@ -1191,7 +1206,7 @@ try {
   if (result && result.command !== 'help') print(result);
   if (result?.ok === false) process.exitCode = 1;
   // Chrome's pipes can outlive browser.close(); a finished check must not hang its caller.
-  if (['check', 'port check', 'look', 'perf'].includes(result?.command)) process.exit(process.exitCode ?? 0);
+  if (['check', 'port check', 'look', 'perf', 'shoot'].includes(result?.command)) process.exit(process.exitCode ?? 0);
 } catch (error) {
   await flushProgress().catch(() => {});
   print({ ok: false, why: error instanceof Error ? error.message : String(error) });

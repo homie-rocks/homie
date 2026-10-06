@@ -702,6 +702,12 @@ ${game.blurb ?? ''}
 
 <!-- The theme's mood and tempo, the sounds that matter (pick-up, hit, win), and whether songs come from the free synth or ElevenLabs. -->
 
+## Built from
+
+<!-- What this game is made of, looked for BEFORE writing (the plan tool says how: \`parts find\` for each system, and the @homie-rocks/* packages). One line each:
+     packages (camera, input, audio, effects… from npm); parts from other games (which part, the game and studio it came from, its licence);
+     and what was written here from scratch, and why nothing that exists fitted. -->
+
 ## Milestones
 
 ${game.planned ? `- [ ] The plan (this codex)

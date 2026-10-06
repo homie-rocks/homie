@@ -46,6 +46,41 @@ Both start with `node <video.mjs> check` (ffmpeg, Chrome, the studio; fal only i
 
 ## A. A gameplay trailer
 
+**One command** films the game, rebuilds its sound, picks the shots and delivers three shapes:
+
+```sh
+npm run dev                                                    # background task; the site at http://127.0.0.1:8787
+node <video.mjs> trailer <slug> --game <id> --url http://127.0.0.1:8787 --seconds 45 --length 20 --title "<GAME NAME>" --end "Play free"
+```
+
+(`npx --no-install homie-studio trailer <id> …` is the same command, into `videos/<id>-trailer/`.)
+
+- It renders the game **frame by frame on a virtual clock**: in each frame the page's
+  `requestAnimationFrame`, `performance.now`, `Date`, `setTimeout`, `setInterval` and its CSS and Web
+  animations all move on by exactly 1/30 s, then the frame is copied. No frame is ever held, however
+  heavy the game or slow the computer (`heldFrames` is 0; `speed` says how it compared with real time).
+- **The sound is rebuilt, not recorded.** The `sound` skill's player (`sound.js`) logs every sound it
+  schedules when a recorder asks; the files it names are fetched from the game's own address and mixed
+  again on the film's clock (`work/capture/sound.wav`, and `sfx.wav` and `music.wav` apart). A game
+  whose sound does not go through `sound.js` (and does not push the same events) comes out silent,
+  and the result says so: use `capture` below for those, which records the speaker in real time.
+- **The shots are picked from what the game played**: a rare sound (a win, an explosion) counts for
+  more than a common one (a step), with the picture's motion as the smaller part. When the game
+  played music, a shot is a bar of it and the music runs on under the cuts; `shotsPlayed` says what
+  is in each shot. `work/edl.json` is the edit: change it and run `cut <slug> --square`.
+- Out: `<slug>.mp4` (16:9), `<slug>-square.mp4` (1:1), `<slug>-vertical.mp4` (9:16), a poster, an end
+  card (and a title card with `--title`) in the game's look. `--keep-capture` edits the film already
+  made (another `--length`, another `--end`) without filming again. `--steps <file>` presses things
+  while it films (`references/RECORD.md`; only wait, waitFor, click, tap, key, keys, type, focus).
+- **What the virtual clock does not reach**: the audio clock, `<video>`/`<audio>` elements, Web
+  Workers, and the network. The default page is the big screen of a live room: a relay keeps real
+  time, so when frames render slower than real time (`speed` well under 1) the room runs fast in the
+  film, and the result warns. Then render smaller (`--scale 0.5`) or film in real time with `capture`.
+  `--page <path>` films another page of the site (one whose game runs in the page itself is exact).
+- Then look (`sheet`), check (`qa.mjs` on each file), and `add`. Detail: `references/TRAILER.md`.
+
+**By hand**, in real time, with the studio's own song as the bed:
+
 ```sh
 npm run dev                                                    # background task; the site at http://127.0.0.1:8787
 node <video.mjs> capture <slug> --game <id> --url http://127.0.0.1:8787 --seconds 60
@@ -77,8 +112,11 @@ node <video.mjs> sheet <slug> --in videos/<slug>/<slug>.mp4
   (`games/<id>/style.json`, the `style` skill's decisions). Every cut lands on a bar line. Read it and change it: order, which moments, where the
   song starts (`--bed-from-bar`).
 - `cut` renders both deliveries: 16:9 (1920x1080) and 9:16 (1080x1920, the whole game frame over a
-  blurred fill, never a crop that hides the action), 30 fps, the song and the game's sound mixed,
-  -14 LUFS, BT.709 tags, faststart, and a poster frame.
+  blurred fill, never a crop that hides the action), and 1:1 (1080x1080) with `--square`; 30 fps, the
+  song and the game's sound mixed, -14 LUFS, faststart, and a poster frame. Every cut is on the frame
+  nearest its beat (segments are counted in frames, so cuts never drift from the music: `cuts` lists
+  each one's frame), and the picture is yuv420p, limited range, converted and tagged BT.709 (a
+  capture's frames are full range; `cut` fails if the file does not read back that way).
 - `sync` checks every cut: the picture must change within one frame of the sound's onset.
   `sheet` makes a contact sheet: **open it and look** before anyone else sees the video.
 - `node <skill folder>/scripts/qa.mjs videos/<slug>/<slug>.mp4` checks the delivered file itself: every

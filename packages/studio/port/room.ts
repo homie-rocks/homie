@@ -26,15 +26,27 @@
  * brains, the drawing, and the camera. See the port skill's recipe.
  */
 import {
-  capMove, createNetplay, lerp, lerpAngle, Roster,
-  type Movement, type Netplay, type NetplayOptions, type Policy, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot,
+  capMove, createNetplay, lerp, lerpAngle, placesOf, Roster,
+  type Movement, type Netplay, type NetplayOptions, type Policy, type RoleChange, type RosterOptions, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot, type TiePolicy,
 } from '../netplay/netplay';
 
 /** A body. `agent` (revision 6): this body is an AI's (a seat kept for AI, or an agent's), always marked AI. */
 export interface BodyBase { slot: number; seat: number | null; name: string; bot: boolean; score: number; agent?: Slot['agent'] }
 
 export interface RoomSnap<F = unknown> { r: [n: number, phase: number, startedAt: number, endsAt: number]; b: number[][]; w?: F }
-export interface RoomCkpt<B, S> { round: RoundInfo | null; roster: Slot[]; bodies: B[]; world: S | null; tick: number; spawns?: [slot: number, index: number][] }
+export interface RoomCkpt<B, S> {
+  round: RoundInfo | null; roster: Slot[]; bodies: B[]; world: S | null; tick: number; spawns?: [slot: number, index: number][];
+  /** Which stay in its seat held each body ([seat, occ], from the relay's `peer.occ`): how a new host tells a player who came back from a new one in the same seat number. */
+  occ?: [seat: number, occ: number][];
+}
+/**
+ * Why a body changed hands (`onTakeover`'s second argument). `join`: a person arrived in a running round. `restore`:
+ * this browser became host of a room that had emptied and still had its checkpoint, and the body was claimed as the
+ * round came back. `migrate`: this browser was promoted in a live room and the body's player had arrived since the
+ * last checkpoint. `own`: it is this browser's own body. `back`: its player held it before (a reload, a reconnect),
+ * so a game that keeps a returning player's score reads this.
+ */
+export interface TakeoverInfo { why: 'join' | 'restore' | 'migrate'; own: boolean; back: boolean }
 
 export interface RoomOptions<B extends BodyBase, F = unknown, S = unknown> {
   /** The game id (the relay's logs). */
@@ -67,8 +79,30 @@ export interface RoomOptions<B extends BodyBase, F = unknown, S = unknown> {
   /** Host: round n starts; every body was just respawned. Reset the world here. */
   onRoundStart?: (n: number) => void;
   onRoundEnd?: (results: RoundResult[]) => void;
-  /** Host: a person took over `body` (it was a bot). Default: keep where it stands, score 0. */
-  onTakeover?: (body: B) => void;
+  /**
+   * Host: a person took over `body` (it was a bot). Default: keep where it stands, score 0. Called for every such
+   * claim, however it came about (NETPLAY.md section 25): a join in a running round, and the claims made when a
+   * room that had emptied is revived from its checkpoint or a host is replaced, the new host's own body included.
+   * `info` says which. Not called for a player whose body never left them.
+   */
+  onTakeover?: (body: B, info: TakeoverInfo) => void;
+  /**
+   * ADMISSION (section 25): which bot's body a NEW arrival takes, for a game where not every body will do (an
+   * elimination round: a newcomer should not be handed a dead body while a living bot stands by). Called with the
+   * bots' bodies the arrival may take, in slot order; return the one to give, `undefined` for the default (the
+   * lowest slot), or `null` when none will do (a new body is spawned while the room has space; with none, the
+   * default applies). Decide from the bodies' own state, so a new host makes the same choice. It is asked for fresh
+   * joins and for the claims of a restored room or a new host alike; never for a player coming back to their own
+   * body, never with a seat kept for AI when a person arrives. The host resets the body and checkpoints as always.
+   */
+  admit?: (candidates: B[], who: { seat: number; name: string; agent: boolean }) => B | null | undefined;
+  /**
+   * How results place equal scores (section 26). 'order' (the default, what results always were): 1, 2, 3… in the
+   * order below, so two equal scores get different places. 'shared': equal scores share a place and the next is
+   * skipped (1, 1, 3). 'dense': they share one and none is skipped (1, 1, 2). The order of the rows is always:
+   * higher score first, then people before bots, then the lower slot.
+   */
+  ties?: TiePolicy;
   /** Host: the fast world beyond bodies (projectiles, pickups), sent with every snapshot. Keep it under ~1.5 KB. */
   fastWorld?: () => F;
   /** Host: everything else the rules need to continue (for checkpoints). */
@@ -125,7 +159,7 @@ export interface Room<B extends BodyBase, F = unknown, S = unknown> {
   fast(): F | undefined;
   /** Seconds left in this phase, and the phase. */
   clock(): { n: number; phase: 'live' | 'over' | 'none'; secondsLeft: number };
-  /** Rank bodies by score (ties: people first). */
+  /** Rank bodies by score (equal scores: people before bots, then the lower slot; their places as `ties` says). */
   results(): RoundResult[];
   /** One-shot events to everyone (sounds, hits, effects). */
   send(kind: string, data?: unknown): void;
@@ -145,7 +179,20 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
 
   // The roster keeps the server's AI seats (section 17); the policy is the room's, read when it fills.
   const policy = (): Policy => net.policy;
-  let roster = new Roster({ min, max, botName, policy });
+  // The game's admission choice (section 25), in bodies: the roster asks it for every new arrival's claim.
+  const rosterOpts = (): RosterOptions => ({
+    min, max, botName, policy,
+    ...(opts.admit ? {
+      admit: (cands, who) => {
+        const list = cands.map((c) => bodies.get(c.slot)).filter((b): b is B => Boolean(b));
+        // A round that has not spawned its bodies yet has nothing to choose between.
+        if (!list.length) return undefined;
+        const pick = (opts.admit as NonNullable<RoomOptions<B, F, S>['admit']>)(list, who);
+        return pick === null ? null : pick ? pick.slot : undefined;
+      },
+    } : {}),
+  });
+  let roster = new Roster(rosterOpts());
   let bodies = new Map<number, B>();
   /** The index each body was spawned with (slot → index), so a body that arrives mid-round never gets one in use. */
   let spawned = new Map<number, number>();
@@ -156,7 +203,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   const net = createNetplay<RoomSnap<F>, unknown[], RoomCkpt<B, S>>({
     game: opts.game, maxPlayers: max, movement: opts.movement ?? 'owner',
     snapshotHz: 20, inputHz: 20, checkpointMs: 1000,
-    checkpoint: () => ({ round, roster: roster.toJSON(), bodies: [...bodies.values()].map((b) => ({ ...b })), world: opts.saveWorld ? opts.saveWorld() : null, tick, spawns: [...spawned].filter(([slot]) => bodies.has(slot)) }),
+    checkpoint: () => ({ round, roster: roster.toJSON(), bodies: [...bodies.values()].map((b) => ({ ...b })), world: opts.saveWorld ? opts.saveWorld() : null, tick, spawns: [...spawned].filter(([slot]) => bodies.has(slot)), occ: roster.occupants() }),
     ...(opts.netplay ?? {}),
     // createRoom claims an AI's slot for it (its join passes `p.agent`), so its host can move an AI's body.
     caps: [...new Set([...(opts.netplay?.caps ?? []), 'agents' as const])],
@@ -232,8 +279,16 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   }
 
   function rank(): RoundResult[] {
+    // The order of the rows is fixed: score, then people before bots, then the lower slot. What place two equal
+    // scores get is the game's to say (`ties`): by default the order itself, as results always were.
     const ranked = [...bodies.values()].sort((a, b) => b.score - a.score || Number(a.bot) - Number(b.bot) || a.slot - b.slot);
-    return ranked.map((b, i) => ({ slot: b.slot, seat: b.seat, name: b.name, score: b.score, bot: b.bot, place: i + 1, ...(b.agent ? { agent: true as const } : {}) }));
+    const places = placesOf(ranked.map((b) => b.score), opts.ties ?? 'order');
+    return ranked.map((b, i) => ({ slot: b.slot, seat: b.seat, name: b.name, score: b.score, bot: b.bot, place: places[i] as number, ...(b.agent ? { agent: true as const } : {}) }));
+  }
+
+  /** A body changed hands: the game's word on it (default: the newcomer starts from 0). */
+  function takeover(b: B, info: TakeoverInfo): void {
+    if (opts.onTakeover) opts.onTakeover(b, info); else b.score = 0;
   }
 
   function endRound(): void {
@@ -248,14 +303,14 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   function restore(e: RoleChange<RoomSnap<F>, RoomCkpt<B, S>>): void {
     const ck = e.ckpt?.d ?? null;
     if (ck) {
-      roster = Roster.from(ck.roster, { min, max, botName, policy });
       bodies = new Map(ck.bodies.map((b) => [b.slot, { ...b }]));
+      roster = Roster.from(ck.roster, rosterOpts(), ck.occ ?? null);
       // A checkpoint from before spawns were kept: the round start's order (slot order) is the best guess.
       spawned = new Map(ck.spawns ?? [...bodies.keys()].sort((a, c) => a - c).map((slot, i) => [slot, i]));
       round = ck.round;
       tick = ck.tick;
     } else {
-      roster = Roster.from(e.roster ?? [], { min, max, botName, policy });
+      roster = Roster.from(e.roster ?? [], rosterOpts());
       bodies = new Map();
       spawned = new Map();
       syncBodies();
@@ -287,26 +342,53 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   }
 
   function becomeHost(e: RoleChange<RoomSnap<F>, RoomCkpt<B, S>>): void {
+    // A browser that was in the room a moment ago (a replica being promoted) sees its own body somewhere real; one
+    // that just arrived (its first role) does not: what it shows locally is a place it has never been.
+    const arriving = e.prev === null;
     // My own body was mine a moment ago: keep it exactly where I see it.
-    const before = !hosting && mySeat() !== null && opts.local ? opts.local() : null;
+    const before = !hosting && mySeat() !== null && opts.local && !(e.promoted && arriving) ? opts.local() : null;
     hosting = true;
     if (e.promoted) restore(e);
     else {
-      roster = new Roster({ min, max, botName, policy });
+      roster = new Roster(rosterOpts());
       bodies = new Map();
       spawned = new Map();
       const seat = mySeat();
-      if (seat !== null) roster.claim(seat, net.offline ? 'You' : net.name);
+      if (seat !== null) roster.claim(seat, net.offline ? 'You' : net.name, null, net.offline ? null : myOcc());
       syncBodies();
       startRound((e.round?.n ?? 0) + 1);
     }
-    const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null }));
-    const { claimed } = roster.reconcile(peers);
+    const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null, occ: p.occ ?? null }));
+    // THE RESTORED ROOM (section 25). Everyone left, the relay kept the checkpoint, and this browser arrives before it
+    // is forgotten: it is the host of a round whose roster still names the players who left. The reconcile below hands
+    // their bodies back to bots and claims one for everybody who is here now, through the same claim (and the game's
+    // `admit`) as a fresh join. A seat NUMBER can be the same as a departed player's: the relay's `occ` says whose stay
+    // it is; with a relay that does not, this browser at least knows its own (its welcome did not give it back a seat
+    // its token named), and gives up the body it would otherwise have inherited without a word.
+    const me = mySeat();
+    if (e.promoted && arriving && !net.offline && me !== null && !net.resumed && roster.bySeat(me) && typeof myOcc() !== 'number') roster.vacate(me);
+    const { claimed, back } = roster.reconcile(peers);
     syncBodies();
-    for (const s of claimed) { const b = bodies.get(s.slot); if (b && b.seat !== mySeat()) moved(b); }
+    for (const s of claimed) {
+      const b = bodies.get(s.slot);
+      if (!b) continue;
+      const own = !b.bot && b.seat === mySeat();
+      // A claim made as a round comes back is a takeover like any other: the same callback, and it says which.
+      if (e.promoted) takeover(b, { why: arriving ? 'restore' : 'migrate', own, back: back.includes(s) });
+      if (!own) moved(b);
+    }
     const mine = bodyOfSeat(mySeat());
     if (mine && before) opts.unpack(opts.pack(before), mine);
+    // A browser that arrived as the host of a restored round stands where its body stands (its own old one, or the
+    // one it just took over): without this the game's local pose and the host's body disagreed until the next round.
+    else if (mine && e.promoted && arriving) opts.adopt?.(mine);
     net.roster(roster.toJSON());
+  }
+
+  /** Which stay in its seat this browser's is (`peer.occ`), when the relay says. */
+  function myOcc(): number | null {
+    for (const p of net.peers.values()) if (p.id === net.id) return typeof p.occ === 'number' ? p.occ : null;
+    return null;
   }
 
   net.on('role', (e) => {
@@ -316,12 +398,14 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   net.on('join', (p) => {
     if (!hosting || p.seat === null) return;
     // An AI takes a seat kept for AI (its hands say who moves the body); a person never does (section 17).
-    const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null);
+    const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null, p.occ ?? null);
     if (!c) return; // full: they watch
     syncBodies();
     const b = bodies.get(c.slot.slot);
     if (b) {
-      if (opts.onTakeover) opts.onTakeover(b); else b.score = 0;
+      // A player whose body never left them (this host only missed that their socket changed) takes nothing over:
+      // resetting their score here cost a returning player their round.
+      if (c.yielded || c.added) takeover(b, { why: 'join', own: false, back: c.back });
       moved(b);
     }
     net.roster(roster.toJSON());

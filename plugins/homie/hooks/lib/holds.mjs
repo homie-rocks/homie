@@ -19,7 +19,7 @@
  * `io.run` is asked only for `git -C <studio>` (read-only) and a media skill's own `--dry-run` (free). Nothing here
  * writes a file, reads a key, the keychain or the environment, or approves anything.
  */
-import { decisionsFileOf, GAME_ID, licenceIssues, lockedChanges, publicSource } from './art.mjs';
+import { decisionsFileOf, GAME_ID, licenceIssues, lockedChanges, publicGame } from './art.mjs';
 import { cloudflareChangeOf, cloudflareMcpChangeOf, deployOf, gitStagesOf, inside, modelPullOf, paidMcpOf, paidOf, protectedBy, stripeSecretWriteOf } from './commands.mjs';
 import { applyEdit, unifiedDiff } from './diff.mjs';
 import { ago, summarize } from './feed.mjs';
@@ -282,8 +282,8 @@ export async function bigFilesDecision(io, ctx, stages) {
 /* ------------------------------------------------------------------ deploys */
 
 /**
- * The licences a deploy ships: every public game's assets/manifest.json (game.json `launch` not private or invite,
- * `share.source` not false). { count, games, problems: [{ game, asset, problem }] }.
+ * The licences a deploy ships: every public game's assets/manifest.json (game.json `launch` not private or invite).
+ * { count, games, problems: [{ game, asset, problem }] }.
  */
 export async function licenceFacts(io, root) {
   const out = { count: 0, games: 0, problems: [] };
@@ -291,7 +291,7 @@ export async function licenceFacts(io, root) {
   try { dirs = await io.list(`${root}/games`); } catch { dirs = []; }
   for (const d of dirs.slice(0, 200)) {
     if (d.kind === 'file' || !GAME_ID.test(d.name)) continue;
-    if (!publicSource(await readJson(io, `${root}/games/${d.name}/game.json`))) continue;
+    if (!publicGame(await readJson(io, `${root}/games/${d.name}/game.json`))) continue;
     const path = `${root}/games/${d.name}/assets/manifest.json`;
     if (!(await io.exists(path))) continue;
     const r = licenceIssues(await readJson(io, path));

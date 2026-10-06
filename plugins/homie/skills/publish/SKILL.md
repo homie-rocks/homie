@@ -133,6 +133,12 @@ is in beta: at most 12 games per studio are listed, names and blurbs are checked
 text, no links), and its owner can unlist a listing. Anyone can report a listing; only
 the directory's owner acts on reports, never an AI.
 
+The beta also caps how many times a studio may publish in a day. `publish` (and `studio_publish`) says how many are
+left when the directory gives the number, and before it sends, how many this computer has sent today; the local
+tool's `before: true` says that without publishing. A refusal for the cap is not a broken studio: say when it ends
+and stop, never retry in a loop. A deploy that closes or opens a game's source asks the directory to read an
+already-listed studio again by itself (that uses one of the day's publishes); it never lists an unlisted one.
+
 ## The site's address
 
 `deploy` prints the live address. A `workers.dev` address names the person's Cloudflare
@@ -140,6 +146,16 @@ account (often after them), so `deploy` keeps it in `.studio/local.json`, which 
 never copy it into a committed file (README, posts, manifests). When the studio has its own
 domain, it goes in `studio.json` as `cloudflare.domain` (e.g. `"night-owls.example"`); deploy
 never replaces it, and the directory claim, `publish`, `check` and `stats` use it.
+
+A studio's domain usually shares its Cloudflare zone with other things. `deploy` keeps the studio's own routes in
+`wrangler.jsonc` (its custom domain, an exact-host route) and never lists, changes or removes any other route. If the
+domain answers as something else after a deploy, another Worker's wildcard route on the zone is answering first: the
+deploy prints the one exact-host route to add (`{ "pattern": "<host>/*", "zone_name": "<domain>" }`); add exactly
+that, never a wildcard or a catch-all (`*/*`), which `deploy` refuses because it would take over the zone's other
+sites. Only one deploy of a studio runs at a time; each prints which games changed since the last
+deploy from this computer with the game's build hash (the one `build` printed, and the one the live site says in
+`/.well-known/homie-studio.json` as `games[].build.hash`), so "is my build live" is a comparison of two hashes. "Network preflight failed" means this computer could not look the
+site's name up (a browser may still open it): test against the local dev site, and do not report the game as broken.
 
 ## Stats (the owner's, and only the owner's)
 

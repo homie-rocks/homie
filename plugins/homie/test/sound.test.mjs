@@ -14,7 +14,11 @@ import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { fft } from '../skills/music/scripts/lib/audio.mjs';
+import { measure, steadyTone, warnings } from '../skills/sound/scripts/lib/measure.mjs';
+import { INSTRUMENTS, loop, render, seamWarning } from '../skills/sound/scripts/lib/score.mjs';
 import { LEVELS } from '../skills/sound/scripts/lib/sfx.mjs';
+import { RATE, drum, hzOf, hzOfMidi, mixMono, pluck, voice, wavBytes } from '../skills/sound/scripts/lib/synth.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN = join(HERE, '..');
@@ -203,4 +207,116 @@ test('sound: wired into a game, listed in the manifest, and the player starts on
     server.close();
     rmSync(profile, { recursive: true, force: true });
   }
+});
+
+/** The frequency of the strongest partial in a mono buffer between `from` and `to` seconds (a 32768-point Hann FFT: bins 1.46 Hz apart, the peak refined between bins). */
+function peakHz(buf, from = 0.1, to = null) {
+  const N = 32768;
+  const a = Math.round(from * RATE);
+  const b = Math.min(buf.length, to === null ? a + N : Math.round(to * RATE));
+  const re = new Float64Array(N); const im = new Float64Array(N);
+  for (let i = 0; i < N && a + i < b; i++) re[i] = buf[a + i] * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (b - a - 1)));
+  fft(re, im);
+  let best = 1; let bp = 0;
+  const p = (k) => re[k] * re[k] + im[k] * im[k];
+  for (let k = 2; k < N / 2 - 1; k++) if (p(k) > bp) { bp = p(k); best = k; }
+  const l = Math.log(p(best - 1) + 1e-30); const c = Math.log(bp + 1e-30); const r = Math.log(p(best + 1) + 1e-30);
+  return (best + 0.5 * (l - r) / (l - 2 * c + r)) * RATE / N;
+}
+
+test('sound: a number is hertz, a MIDI note is said out loud, and a bass note sounds where it was written', () => {
+  // The defect: a preset turned its MIDI note into hertz, and the voice read a number of 127 or less as MIDI again.
+  // A2 (110 Hz) came out as MIDI 110 = 4698.6 Hz; B2 (123.47 Hz) as 10.2 kHz. Every bass note is under 127 Hz.
+  assert.equal(hzOf(110), 110, 'a number is hertz');
+  assert.equal(hzOf(60), 60, 'and stays hertz under 127');
+  assert.ok(Math.abs(hzOf('A2') - 110) < 1e-9 && Math.abs(hzOfMidi(45) - 110) < 1e-9);
+  assert.throws(() => hzOf(0), /not a frequency/);
+  assert.throws(() => voice({ freq: 110, midi: 45 }), /not both/);
+  assert.throws(() => voice({ midi: 'A2' }), /not a MIDI note/);
+
+  const near = (hz, want, what) => assert.ok(Math.abs(hz - want) < 1.5, `${what}: the peak is at ${hz.toFixed(2)} Hz, wanted ${want}`);
+  const held = { gate: 1.2, env: { a: 0.005, d: 0.1, s: 0.9, r: 0.05 } };
+  near(peakHz(voice({ wave: 'sine', freq: 110, ...held })), 110, 'freq: 110');
+  near(peakHz(voice({ wave: 'sine', freq: 'A2', ...held })), 110, 'freq: "A2"');
+  near(peakHz(voice({ wave: 'sine', midi: 45, ...held })), 110, 'midi: 45');
+  near(peakHz(voice({ wave: 'sine', freq: 123.47, ...held })), 123.47, 'freq: 123.47 (B2)');
+  near(peakHz(voice({ wave: 'sine', midi: 110, ...held })), 4698.64, 'midi: 110 is the high note, when it is asked for');
+  // A plucked string's loudest partial is one of its harmonics: it has to be a whole multiple of 110 (4698.6 is not).
+  const pl = peakHz(pluck({ freq: 110, gate: 1.2 })) / (RATE / Math.round(RATE / 110));
+  assert.ok(Math.abs(pl - Math.round(pl)) < 0.03 && pl < 30, `a plucked 110 rings on a harmonic of 110 (x${pl.toFixed(3)})`);
+  // A slide target follows the same rule: 220 Hz down to 110 Hz ends at 110, and a MIDI target is toMidi.
+  near(peakHz(voice({ wave: 'sine', freq: 220, slide: { to: 110, time: 0.2 }, ...held }), 0.4), 110, 'slide to 110');
+  near(peakHz(voice({ wave: 'sine', freq: 220, slide: { toMidi: 47, time: 0.2 }, ...held }), 0.4), 123.47, 'slide toMidi 47');
+  assert.throws(() => voice({ freq: 220, slide: { to: 110, toMidi: 45 } }), /not both/);
+  // The synthesized tom falls to 110 Hz (its slide target was read as MIDI 110 and it rose to 4.7 kHz instead).
+  assert.ok(peakHz(drum('tom'), 0.2, 0.34) < 200, `the tom ends low (${peakHz(drum('tom'), 0.2, 0.34).toFixed(0)} Hz)`);
+
+  // Every bass preset, from the note the score hands it: A2 and B2.
+  for (const [name, def] of Object.entries(INSTRUMENTS)) {
+    if (def.role !== 'bass') continue;
+    near(peakHz(def.play(45, 1.2, 1)), 110, `${name} A2`);
+    near(peakHz(def.play(47, 1.2, 1)), 123.47, `${name} B2`);
+  }
+  // And through a whole score: a bass line on the roots of Am and Bm is A2 then B2, with nothing up at 4.7 or 10.2 kHz.
+  const r = render({ bpm: 120, instruments: { bass: { preset: 'triangle-bass', db: -6, reverb: 0 } }, sections: [{ name: 'a', bars: 2, chords: 'Am Bm', play: { bass: 'root' } }] }, { tail: 0 });
+  near(peakHz(r.stems.bass.L, 0.2, 0.85), 110, 'score, bar 1 (Am)');
+  near(peakHz(r.stems.bass.L, 2.2, 2.85), 123.47, 'score, bar 2 (Bm)');
+});
+
+test('sound: a steady hum is called one, with its level and how much of the time it is there; a melody\'s brief high partial is not', () => {
+  const dir = join(scratch, 'hum'); mkdirSync(dir, { recursive: true });
+  // (a) a hum: a 1 kHz tone under eight seconds of quiet noise, there the whole time.
+  const hum = join(dir, 'hum.wav');
+  const made = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'anoisesrc=d=8:c=pink:a=0.05:r=48000:seed=4', '-f', 'lavfi', '-i', 'sine=f=1000:d=8:r=48000', '-filter_complex', '[1:a]volume=1.6[t];[0:a][t]amix=inputs=2:normalize=0', '-ac', '2', hum]);
+  assert.equal(made.status, 0, String(made.stderr));
+  const a = measure(hum);
+  const tone = steadyTone(a);
+  assert.ok(tone && Math.abs(tone.hz - 1000) < 15, `the hum is found: ${JSON.stringify(a.narrowTones)}`);
+  assert.ok(tone.presentShare > 0.95 && tone.levelDb > -30 && tone.levelDb < -10 && tone.energyShare > 0.3, JSON.stringify(tone));
+  const wa = warnings(a, 'capture').find((w) => /steady tone/.test(w));
+  assert.match(wa, /steady tone at \d+(\.\d+)? Hz: there \d+% of the time at -?[\d.]+ dBFS \([\d.]+% of the energy\)/, 'the warning carries the level, the share and the persistence');
+
+  // (b) a melody, sixteen seconds, whose top carries a narrow partial near 10.2 kHz for two short stretches.
+  const notes = ['A4', 'C5', 'E5', 'D5', 'C5', 'B4', 'G4', 'A4', 'E5', 'D5', 'B4', 'C5', 'A4', 'G4', 'B4', 'A4'];
+  const parts = notes.map((n, i) => ({ at: i, buf: voice({ wave: 'triangle', freq: n, gate: 0.9, env: { a: 0.01, d: 0.1, s: 0.8, r: 0.08 }, gain: 0.4 }) }));
+  for (const at of [3, 11]) parts.push({ at, buf: voice({ wave: 'sine', freq: 10230.54, gate: 0.9, env: { a: 0.01, d: 0.1, s: 0.9, r: 0.05 }, gain: 0.15 }) });
+  const tune = join(dir, 'tune.wav');
+  writeFileSync(tune, wavBytes(mixMono(parts)));
+  const b = measure(tune);
+  const partial = b.narrowTones.find((t) => Math.abs(t.hz - 10230) < 20);
+  assert.ok(partial && partial.prominenceDb > 25, `the partial is narrow and prominent, as before: ${JSON.stringify(b.narrowTones)}`);
+  assert.ok(partial.presentShare > 0.05 && partial.presentShare < 0.2, `and it is there about an eighth of the time (${partial.presentShare})`);
+  assert.equal(steadyTone(b), null, `nothing in a melody is a steady tone: ${JSON.stringify(b.narrowTones)}`);
+  assert.equal(warnings(b, 'capture').some((w) => /steady tone/.test(w)), false);
+  // A tone nobody can hear is prominent too (nothing else is near it): the level floor keeps it out.
+  assert.equal(steadyTone({ narrowTones: [{ hz: 9000, prominenceDb: 40, levelDb: -75, energyShare: 0, presentShare: 1 }] }), null);
+});
+
+test('sound: a loop stays seamless through the master\'s limiter, and one that does not repeat is a warning, never an empty list', () => {
+  // Limited after the cut, these loops had a step of gain at the wrap (seams of 5 to 15); a plucked string on the
+  // bar line was called a seam when it is the music; at 140 bpm a bar is not a whole number of samples.
+  const one = (preset, pat, bpm, extra = {}) => ({ bpm, instruments: { a: { preset, db: -6, ...extra } }, sections: [{ name: 'main', bars: 2, chords: 'Am Bm', play: { a: pat } }] });
+  for (const [preset, pat, bpm, extra] of [['soft-lead', 'root8', 128, { legato: 1.5 }], ['square-bass', 'chords', 96, { legato: 1.5 }], ['pluck', 'chords', 140, {}], ['saw-lead', 'octaves', 128, {}]]) {
+    const lp = loop(one(preset, pat, bpm, extra), 'main', { gain: 3, ceilingDb: -1.2 });
+    assert.ok(lp.seam <= 1, `${preset} ${pat} at ${bpm}: seam ${lp.seam}`);
+    assert.equal(lp.mix.L.length, Math.round(2 * (240 / bpm) * RATE), 'and the loop is still exactly its bars');
+    let peak = 0; for (const v of lp.mix.L) peak = Math.max(peak, Math.abs(v));
+    assert.ok(peak <= 10 ** (-1.2 / 20) + 1e-3, `held under the ceiling (${peak})`);
+  }
+  assert.equal(seamWarning('main', 0.4), null);
+  assert.match(seamWarning('main', 2.57), /loop "main": seam 2\.57 is over 1/);
+
+  // A pad held three times as long as its one-bar section cannot repeat: the report has to say so in its warnings.
+  const dir = studio('seam');
+  mkdirSync(join(dir, 'music'), { recursive: true });
+  writeFileSync(join(dir, 'music', 'long.json'), JSON.stringify({ bpm: 240, room: 0.95, instruments: { pad: { preset: 'pad', db: -6, reverb: 0.9, legato: 3 } }, sections: [{ name: 'main', bars: 1, chords: 'Am', play: { pad: 'chords' } }], loops: ['main'] }));
+  const r = sound(['score', 'long', '--spec', 'music/long.json'], dir);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.loopsSeamless, false);
+  assert.ok(r.warnings.some((w) => /loop "main": seam [\d.]+ is over 1/.test(w)), `the seam is in the warnings: ${JSON.stringify(r.warnings)}`);
+  assert.match(r.loops[0], /OVER 1: NOT SEAMLESS/);
+  const saved = JSON.parse(readFileSync(join(dir, 'music', 'long', 'render.json'), 'utf8'));
+  assert.ok(saved.warnings.some((w) => /seam/.test(w)), 'and in the saved render report');
+  const plain = spawnSync(process.execPath, [SOUND, 'score', 'long', '--spec', 'music/long.json'], { cwd: dir, encoding: 'utf8' });
+  assert.match(plain.stdout, /NOT SEAMLESS/, 'the terminal summary says it too');
 });

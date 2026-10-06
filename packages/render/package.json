@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/render",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Rendering building blocks for three.js games: GPU capability probing and quality tiers, texture budget and shader pre-warm, cascaded shadows, draw-call and light budgets, and procedural texture bakers.",
   "license": "Apache-2.0",
   "type": "module",
@@ -44,7 +44,7 @@
     "three": "0.185.1",
     "postprocessing": "6.39.3",
     "simplex-noise": "^4.0.3",
-    "@homie-rocks/geom": "0.1.0",
+    "@homie-rocks/geom": "0.1.1",
     "@homie-rocks/noise": "0.1.0"
   }
 }

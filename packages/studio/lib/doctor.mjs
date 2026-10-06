@@ -4,7 +4,7 @@
  * unlocks, and the exact fix: one command the AI runs, or one page the person taps.
  *
  *   Node.js            required    the toolkit runs on it
- *   Homie connector    recommended the directory's search and remixes, the cards and notes to Homie (the AI says
+ *   Homie connector    recommended the directory's search, the cards and notes to Homie (the AI says
  *                                  whether its Homie tools are there: --connector yes|no). A session with a shell makes,
  *                                  deploys and lists a studio without it, so a missing connector never blocks. When
  *                                  the tools are missing and the app in use (Codex, Grok) has another MCP server named
@@ -263,7 +263,7 @@ export async function setupStatus({
     else { state = 'unknown'; detail = net.ok ? `${host} answers; your AI knows whether its Homie tools (studio_scaffold) are here` : `this computer's request to the directory failed: ${net.why}`; }
     rows.push({
       id: 'connector', label: 'Homie connector', need: 'recommended', state, detail,
-      unlocks: 'searching the homie.rocks directory and remixing a game from it, the cards where your app draws them, and notes to Homie; a session with a shell makes, deploys and lists a studio without it',
+      unlocks: 'searching the homie.rocks directory, the cards where your app draws them, and notes to Homie; a session with a shell makes, deploys and lists a studio without it',
       fix: state === 'ok' ? null : net.blocked
         ? { who: 'person', say: `In claude.ai/code, open this environment's settings, set Network access to Custom, add ${host} (keep the default package managers), and start a new session.` }
         : fixClash ?? (said === 'no' || net.ok ? fixConnector : null),

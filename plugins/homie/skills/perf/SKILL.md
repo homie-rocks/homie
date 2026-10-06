@@ -49,7 +49,9 @@ each hint naming the number it read. Ten to fifteen minutes; poll its output, ne
 | --- | --- |
 | "it stutters on my phone", "make it smoother" | `phone.host.frame.p95` (and `frame.over50`: hitches) |
 | "it runs fine but my phone gets hot", frames already at 16.7 ms | `phone.host.busy` (main thread per frame) |
-| "it takes ages to load" | `phone.host.load.playable` (4G, slow CPU) or `bytes.jsGzip` |
+| "it takes ages to load" | `phone.host.load.playable` (4G, slow CPU), `phone.host.load.prePlayKb` (what was really fetched before play) or `bytes.jsGzip` |
+| "is the scene too heavy for a phone" | `phone.host.render.calls` / `render.triangles` (the renderer's own counters while playing, when the game exposes them) |
+| "I can move before my character has loaded", "it shows too early" | `phone.host.load.ready` (the game's own `net.playable()`) against `load.playable` (control-ready); the headline says the arrival mode, and "ready … after the cover had lifted" means the game should declare `arrival: 'game'` |
 | "it opens on a blank screen" | `phone.host.load.look` (the first meaningful frame: the play page's arrival card, 0.26.0) |
 | "it lags when lots of people play" | `phone.host.busy` (the host runs the rules) or `phone.host.net.kbOut` (its upload) |
 
@@ -138,3 +140,22 @@ plainly when nothing was kept: "nothing I tried was faster beyond the noise" is 
   phone's frame rate, try one (or the iOS Simulator).
 - Never run more browsers beside a loop, and never trust numbers taken while the computer was busy: rerun them.
 - Never leave a room open on a live site: measure against `npm run dev`; each run opens a fresh room of its own.
+
+## Measured, not estimated
+
+Two numbers here are easy to confuse with ones that come from the game's files, and they are not the same thing:
+
+- **First-play traffic** (`load.prePlayKb`, and "Fetched before playable" in the reports): every request the browser
+  made up to the moment the game was playable, on the wire, one run on one device. The shipped payload (`bytes.*`,
+  `perf sizes`, the asset check's download figure) totals the built folder, which also holds files the game never
+  asks for and music it streams later. A run that never became playable has no pre-play number at all.
+- **Runtime scene cost** (`render.calls`, `render.triangles`): the renderer's counters while the game is played, read
+  from the port probe when the game exposes them: `exposePort(net, { extra: { drawCalls: () =>
+  renderer.info.render.calls, triangles: () => renderer.info.render.triangles } })`. They include procedural geometry,
+  repeated characters, effects and shadow passes, which an inventory estimate from the asset manifest does not. A
+  game that exposes neither has no such metric: "not measured", never zero.
+
+An address this computer's Node.js cannot look up (a browser on the same computer may still open it) stops the loop
+as BLOCKED, "network preflight failed, before any page or game was opened": measure against the local site
+instead. It is never reported as the game or the site failing. `check`, `perf`, `shoot`, `port check`, the
+playtest and a deploy's read-back all say it in these words.

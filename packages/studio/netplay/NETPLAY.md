@@ -1,9 +1,31 @@
-# Homie netplay contract, v1 (revision 8)
+# Homie netplay contract, v1 (revision 9)
 
-Status: **v1, revision 8** (2026-10-03, `@homie-rocks/studio` 0.23.0). The wire version is
-`v: 1`. Everything revisions 2 to 8 added is either an optional field, a new message type,
+Status: **v1, revision 9** (2026-10-06, `@homie-rocks/studio` 0.31.0). The wire
+version is `v: 1`. Everything revisions 2 to 9 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
 not know. A change to the contract bumps `v` and keeps v1 working.
+
+**What revision 9 added** (a game that knows none of it plays as before; a revision-8 helper and a
+revision-8 relay ignore every new field and frame):
+- **The link, said out loud** (section 22): `net.link` and `on('link')` (`online`, `reconnecting`,
+  `alone`, `closed`), a "Reconnecting…" line over the game, `net.reconnects`. A page that gave up
+  waiting for its room no longer plays alone in silence. `connectOpenMaxMs`, and `connectClock: 'game'`
+  with `net.start()` for a game that boots for seconds.
+- **A host that hitches keeps its room** (section 22): a heartbeat snapshot from a timer (`snap.hb`),
+  for four seconds; game.json `netplay.stallMs` (1500 to 10000) sets the relay's stall time.
+- **Game revisions** (section 23): game.json `netplay.version`. A room runs one build at a time,
+  the Lobby matches within the live build, an older tab is told to reload (`stale`). `features`:
+  per-peer capability words the relay keeps (`peer.feat`).
+- **The page around the frame** (section 24): `net.prefs` (a few settings the play page keeps,
+  because the frame has no storage), `net.params` (the address's switches), `net.shell` (where the
+  page's own controls sit over the game), `guardGestures()` for a touch game.
+- **Whose body** (section 25): `peer.occ` (which stay in a seat), `Roster.claim(…, occ)`,
+  the `admit` callback, and createRoom's takeover and adopt callbacks for a room revived from its
+  checkpoint and for a host that reconnects as host.
+- **Places** (section 26): a tie policy for results. **The relay's log** (section 27).
+- New optional fields `hello.ver`, `hello.feat`, `welcome.ver`, `welcome.stale`, `welcome.stall`,
+  `peer.occ`, `peer.ver`, `peer.feat`, `snap.hb`; a relay → client `stale` frame; the final refusal
+  `stale` and the reported `room-stale`; `NETPLAY_REVISION` 9 and the build mark `homie-netplay-rev:9`.
 
 **What revision 8 added** (a game that knows none of it has room chat anyway: the play page's
 panel, the float and the big screen's corner need no game code):
@@ -174,7 +196,8 @@ code.
   it takes the next free seat.
 - **Offline is not a fourth role.** With no shell (a plain file, a Vite dev server),
   the helper reports `role: 'host'`, `seat: null` and `offline: true`, and every send
-  is a no-op.
+  is a no-op. A page whose room never answered does the same, and says so: `net.link` is
+  `'alone'` (section 22).
 - **Roles change at any time.** A game must handle all three cases:
   - its first role;
   - promotion (a replica becomes host);
@@ -247,7 +270,7 @@ it.
 |---|---|
 | No host | The first `canHost` hello becomes host. |
 | The host closes or says `bye` | Sends `leave`, then elects a replacement. |
-| **Stall:** the host has sent no snapshot for **1.5 s** while others are present | Demotes it (`role replica, why host-stalled`) and elects another. |
+| **Stall:** the host has sent no snapshot for **1.5 s** (the game's own `netplay.stallMs`, 1.5 to 10 s; section 22) while others are present | Demotes it (`role replica, why host-stalled`) and elects another. A host whose frames hitch sends a heartbeat meanwhile, for 4 s. |
 | **Frozen host at a newcomer's hello:** the host is hidden, or has sent nothing for 2.5 s | Makes the newcomer host at once. The old host gets `role replica`. |
 | **Hidden tab** | The helper sends a checkpoint, then `yield`. `ping {hid: true}` has the same effect. |
 | **Silent socket:** nothing received for **10 s** | Closes it (a slept phone, a half-open link). The seat's body turns into a bot. The helper pings every 2 s. |
@@ -271,7 +294,9 @@ it.
 - A hidden tab reconnects when it becomes visible again.
 
 **Empty rooms and deploys.**
-- An empty room forgets everything after 60 s, and clears its storage.
+- An empty room forgets everything after 60 s, and clears its storage. A visitor who arrives
+  before that is the host of the SAME round, restored from the checkpoint (section 25: the
+  departed players' bodies go back to bots, and the newcomer takes one over).
 - If the relay restarts with sockets connected, as a Worker deploy does, every browser
   reconnects with its token and gets the **same seat**. The seat that was host gets 3 s
   to reclaim the role.
@@ -299,8 +324,8 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 
 | `t` | Sent by | Fields | What the relay does |
 |---|---|---|---|
-| `hello` | everyone, once | `v: 1`, `token?`, `name?`, `device`, `want: 'play'\|'screen'`, `canHost`, `game?`, `max?`, `watch?` (revision 5), `rev?: 6`, `caps?: ('skill'\|'agents')[]`, `agent?: { hands, role }` (revision 6) | Seats the client (or queues it), picks a role, replies `welcome`, and sends `join` to the others. Refuses with `version`, `room-full`, `too-many` or `watch-off`. A `watch: true` hello is a watcher (section 16). An agent's (section 17) is seated in a seat kept for AI and named `<label> · AI`, or refused with `agent-pass`, `agents-off`, `agents-unsupported` or `agents-alone`. |
-| `snap` | host | `k`, `st`, `d`, `c?` (control table) | Clamps `st` to [now − 2 s, now + 250 ms] (a snapshot stamped in the future would freeze replicas). Stores the snapshot and fans it out with `from`. Skips a socket with more than 256 KB buffered. |
+| `hello` | everyone, once | `v: 1`, `token?`, `name?`, `device`, `want: 'play'\|'screen'`, `canHost`, `game?`, `max?`, `watch?` (revision 5), `rev?: 6`, `caps?: ('skill'\|'agents')[]`, `agent?: { hands, role }` (revision 6), `ver?` (the game's revision) and `feat?: string[]` (revision 9, sections 23) | Seats the client (or queues it), picks a role, replies `welcome`, and sends `join` to the others. Refuses with `version`, `room-full`, `too-many` or `watch-off`. A `watch: true` hello is a watcher (section 16). An agent's (section 17) is seated in a seat kept for AI and named `<label> · AI`, or refused with `agent-pass`, `agents-off`, `agents-unsupported` or `agents-alone`. |
+| `snap` | host | `k`, `st`, `d`, `c?` (control table), `hb?: 1` (revision 9: a heartbeat, the last state again) | Clamps `st` to [now − 2 s, now + 250 ms] (a snapshot stamped in the future would freeze replicas). Stores the snapshot and fans it out with `from`. Skips a socket with more than 256 KB buffered. |
 | `in` | seated non-host | `q`, `a`, `h`, `p?`, `r` (the reset epoch the sender has adopted) | Forwards to the host only, stamped `from: <seat>`. Presses are clamped to integers 0–8, at most 16 keys. |
 | `ev` | anyone | `k`, `d`, `to?` | **Speech** (section 17): with the room's speech `lines`, every `chat…` is dropped (anyone's, a host relaying one too); with `off`, every speech kind; from an agent, one line every 4 s and 8 a minute. **From a muted player** (section 15): a speech kind (`say…`, `chat…`, `emote…`) is dropped. **From the host:** to everyone else, to one seat (`to`: number) or to one peer (`to`: id string, such as a screen). **From anyone else:** to the host, with `from` and the sender's `id`. **Best-effort:** a drop over a cap is reported with `error rate`. |
 | `state` | host | `k` (≤ 64 characters), `d` (`null` deletes) | Stores the key in memory, forwards it to all others, and includes the whole map in every `welcome` and in `role` to a new host. |
@@ -317,12 +342,13 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 
 | `t` | To | Fields |
 |---|---|---|
-| `welcome` | the new client | `v`, `rev`, `id`, `room`, `seat`, `token`, `name`, `colour`, `role`, `why: 'first'\|'resumed'\|'joined'\|'host-stalled'\|'host-hidden'\|'host-person'`, `host`, `peers`, `st`, `max`, `round`, `roster`, `snap`, **`state`**, `ckpt` (host only), `full?`, `watch?: { follow, why? }` (a watcher only), `policy` (with `skill`), `vote?`, `agent?` (an agent's own; a hands-`host` agent's carries no `snap` or `ckpt`, and an empty `state`) |
+| `welcome` | the new client | `v`, `rev`, `id`, `room`, `seat`, `token`, `name`, `colour`, `role`, `why: 'first'\|'resumed'\|'joined'\|'host-stalled'\|'host-hidden'\|'host-person'`, `host`, `peers`, `st`, `max`, `round`, `roster`, `snap`, **`state`**, `ckpt` (host only), `full?`, `watch?: { follow, why? }` (a watcher only), `policy` (with `skill`), `vote?`, `agent?` (an agent's own; a hands-`host` agent's carries no `snap` or `ckpt`, and an empty `state`), `ver?` (the build the room runs), `stale?: { ver }` (a newer build is live) and `stall` (the room's stall time, ms) (revision 9) |
 | `role` | a client whose role changed | `role`, `why`, `host`, `peers`. For a new host, also `ckpt`, `snap`, `round`, `roster`, `state`. |
 | `seat` | a waiting spectator that just got a seat | `seat`, `token`, `name`, `colour`, `role` |
 | `host` | everyone else, on a change | `host`, `why` |
 | `join` / `leave` | everyone else | `peer` / `id`, `seat`, `why: 'closed'\|'bye'\|'replaced'\|'silent'\|'flood'` |
-| `snap` | everyone but the host | `from`, `k`, `st`, `d`, `c?` |
+| `snap` | everyone but the host | `from`, `k`, `st`, `d`, `c?`, `hb?: 1` |
+| `stale` | a client on an older build than the live one (revision 9) | `ver` (the live build): reload when it suits (section 23) |
 | `in` | the host | `from`, `q`, `a`, `h`, `p?`, `r?` |
 | `ev` | as routed | `from`, `k`, `d`, and `id` on events to the host |
 | `state` | everyone but the host | `k`, `d` |
@@ -340,10 +366,13 @@ browser (an `ev` to its seat); only that browser changes and saves the player's 
 - Final (the helper stops reconnecting): `version`, `replaced`, `room-full`,
   `too-many`, `kicked`, `room-closed` (the last two with `until`, server ms; section 15),
   `watch-off` (a watcher of a game that cannot be watched; section 16), `agent-pass`,
-  `agents-off` and `agents-unsupported` (section 17).
+  `agents-off` and `agents-unsupported` (section 17), `stale` (revision 9, with `ver`: this
+  tab runs an older build than the room; a helper before revision 9 keeps knocking and is
+  refused each time, section 23).
   The helper before revision 4 does not know `kicked` and `room-closed` and keeps knocking;
   every knock is refused at `hello`, and the shell stops the frame (section 15).
-- Reported only: `too-large`, `rate`, `state-full`, `vote`. (`flood` closes the socket; the helper
+- Reported only: `too-large`, `rate`, `state-full`, `vote`, `room-stale` (revision 9: the room still
+  runs another build; the socket is closed and the helper knocks again until it is let in). (`flood` closes the socket; the helper
   comes back slowly. `agents-alone` closes an agent's socket; it knocks again after 30 s.)
 
 A socket that is kicked for silence is closed with code 4000, and the helper reconnects.
@@ -351,7 +380,10 @@ A socket that is kicked for silence is closed with code 4000, and the helper rec
 Record types:
 
 ```ts
-Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true, watch?: true, agent?: AgentFacts, badge?: string }
+Peer        = { id, seat: number|null, name, colour, device, want, role, muted?: true, watch?: true, agent?: AgentFacts, badge?: string,
+                occ?: number, ver?: string, feat?: string[] }
+              (revision 9. occ: which stay in the seat this is: a new number whenever the seat changes hands, the same
+              across that browser's reconnects (section 25). ver: the peer's game revision. feat: what its build can do.)
               (badge: a word the studio's Worker verified from what the player's account owns, such as a supporter's
               "Supporter"; a hello can never set it; never on a kids server, never for an AI. @homie-rocks/studio 0.24.0)
 RoundInfo   = { n, phase: 'live'|'over', startedAt, endsAt, results?: RoundResult[] }   // server ms
@@ -379,10 +411,15 @@ held out of it, hears so at once.
 - `view` (a watcher; section 16): `seat`, `following`, `follows` (the game draws the followed
   player), `canFollow`, `whyNot`; and `scores` (`[{ seat, score }]`, once a second, from the
   game's `scores` probe).
+- Revision 9: `link` (`state`, `prev`, `why`, `hosting`; section 22), `stale` (`ver`, `mine`,
+  `final`; section 23), `prefs` (`op: 'all'|'set'|'del'`, `n`, `k?`, `v?`; section 24) and `ready`
+  (`mode`, `ms`, `lateMs?`: the game's own `net.playable()`; section 21).
 
 **Parent page → game frame** (revision 5): `postMessage { t: 'homie-watch', follow: seat | 'auto' | null }`.
 The helper takes it only from its own parent window, and only as a watcher. Revision 6 adds
 `{ t: 'homie-hush', on }` (the play page's Quiet AI) and the frame's `policy` and `vote`.
+Revision 9 adds `{ t: 'homie-prefs', n, ok, all?, kept?, why? }` (the answer to a `prefs` call) and
+`{ t: 'homie-shell', device, orientation, width, height, rects }` (section 24).
 
 The shell must check `ev.source === frame.contentWindow`. The frame is an opaque origin,
 so `ev.origin` is `"null"`.
@@ -541,7 +578,8 @@ Measured, with Gem Rush's bump (owner movement, 30–50 ms one way):
   2. Overlay the snapshot.
   3. Read keyed state with `net.stateOf()`.
   4. Take `round` if it is newer.
-  5. Call `roster.reconcile(peers)`, then `reset()` every claimed seat.
+  5. Call `roster.reconcile(peers)` (pass each peer's `occ`), then `reset()` every claimed seat
+     (section 25: a claim made here is a takeover like a fresh join's).
   6. Set your own body to your local one.
   7. Call `net.roster()` and continue.
 
@@ -557,7 +595,9 @@ Measured, with Gem Rush's bump (owner movement, 30–50 ms one way):
 1. **Seat every visitor at once**, phone and desktop, with no `gather`.
 2. **Boot the game frame immediately.** Use the sandboxed, opaque-origin frame, and
    inject `window.HOMIE_NET = { v: 1, url, room, token?, name?, device, want }` ahead of
-   every module.
+   every module (revision 9: `ver`, `params` and `prefs` too, sections 23 and 24). The page and
+   the frame refuse text selection, the long-press callout and page gestures
+   (`user-select: none`, `-webkit-touch-callout: none`, `touch-action: none`).
 3. **Serve the game's own files** beside the shell (`/<game>/__game/`), with `HOMIE_NET`
    in its `index.html`.
 4. **Answer the arcade knock.** A game made with Homie's arcade controls asks
@@ -1446,7 +1486,7 @@ playing · 2 AI", "Loading the game…", "Joining Room 4…", the game's own "Lo
 60%") and the controls for this device (game.json `landing.controls`). Then it fades and the
 game has the screen. Its colours are the game's palette (style.json), else its landing's, else
 the studio's (`worker/arrival.mjs`). Nothing here crosses the relay: it is between the game's frame
-and its page, so the wire stays revision 8.
+and its page, so the wire did not change for it.
 
 | From the helper to its page | When |
 |---|---|
@@ -1468,3 +1508,371 @@ and its page, so the wire stays revision 8.
 - **Measured** by `homie-studio perf` (`load.look`: the card's first frame, the first meaningful
   frame; `load.playable`: seated, the body drawn and the card lifted), from the page's own marks
   `homie:look` and `homie:playable` and `window.__shell.arrival`.
+- **A late `net.playable()` under `arrival: 'auto'` is a mistake, and is said** (revision 9). A game
+  that calls `net.playable()` when its character has loaded, but never said `arrival: 'game'`, has
+  already had its card lifted by the helper (seated, the room's state in): the card left before the
+  game was ready, and a probe measured a stand-in as playable. The helper warns once in the
+  console when the call comes 250 ms or more after the automatic arrival, and says both times:
+  inside the frame `window.__homieNet.arrival` (and `net.arrivalInfo`) is
+  `{ mode, by, playableMs, explicitMs, lateMs }` (ms since the helper was made; `explicitMs`: the
+  game's own word, null when it never gave one; `lateMs`: how long after the automatic arrival
+  that was, null when it was not late); on the play page `window.__shell.arrival` has `mode`,
+  `by`, `explicitMs` (the page's clock) and `lateMs`, and `window.__shell.ready` the message
+  itself. The fix is one option: `createNetplay({ arrival: 'game' })`, or in a port
+  `createRoom({ netplay: { arrival: 'game' } })`.
+
+## 22. The link, said out loud (revision 9)
+
+A page stands in one of six places with its room, and the helper says which:
+
+| `net.link` | What it means | `net.offline` | `net.connected` |
+|---|---|---|---|
+| `connecting` | No welcome yet. | false | false |
+| `online` | In the room. | false | true |
+| `reconnecting` | It was in the room and its socket went. It knocks again with its token (250 ms, 500 ms, 1 s, 2 s, then every 4 s); its seat is held 60 s and a bot drives its body meanwhile. | false | false |
+| `alone` | The room never answered in time, so this page plays by itself as an offline host: no seat, its own bots, nobody else. It still knocks, and joins when it is answered (a `role` with `why: 'reconnected'`). | **true** | false |
+| `offline` | There is no room at all: a plain file, a dev server with no shell. | true | false |
+| `closed` | Stopped for good; `net.closedWhy` says why (`replaced`, `room-full`, `kicked`, `stale`…). | as it was | false |
+
+- **`net.offline` means "not in a room"**, not "no network": it is true for `alone` and `offline`.
+  **`net.connected`** is true only while the socket is up and welcomed. The state between them
+  (`!net.offline && !net.connected`) is `reconnecting`.
+- **`on('link', (e) => …)`** fires on every change with `{ state, prev, why, hosting, downMs }`.
+  `hosting` says this page is running the rules right now. Two pages can both say so for a
+  moment: a host that was cut off keeps simulating until its welcome tells it the room moved on,
+  and a page that is `alone` hosts its own private round. Before revision 9 neither said
+  anything, which is how two browsers of one room came to report `hosting: true` with different
+  rosters. A game that must not score, save or award anything while it is cut off checks
+  `net.link === 'online'`.
+- **The line over the game.** While the link is `reconnecting` (for more than 0.7 s) or `alone`,
+  the helper draws one line at the top of the game's own document: "Reconnecting…" or "Playing
+  offline · reconnecting…". It is an element `[data-homie-link="reconnecting" | "alone" |
+  "stale"]` whose default style has no specificity (`:where(…)`), so any rule the game writes for
+  `[data-homie-link]` restyles it. `createNetplay({ linkOverlay: false })` turns it off: listen
+  to `link` and draw your own. The play page's chip says "reconnecting" too.
+- **`net.reconnects`** is how many times the helper has scheduled another knock (the same number
+  as `stats().reconnects`, which was always there; `net.reconnects` and
+  `window.__homieNet.reconnects` are new). 0 means the connection was never interrupted, which is
+  a different fact from "the round finished". `stats().drops` counts interruptions of a link that
+  was up.
+
+**The wait for the welcome.** A page with a live socket listens for the room's welcome for
+`connectOpenMaxMs` (default 10000, 2000 to 120000) of time it could actually listen, then plays
+`alone`. A heavy 3D game that boots under load for longer than that used to play a private round
+for a few seconds first. Two ways out, neither changes the default:
+
+```ts
+createNetplay({ connectOpenMaxMs: 30_000 });            // wait longer
+const net = createNetplay({ connectClock: 'game' });     // or: the wait starts when the game says
+await loadEverything();
+net.start();                                             // booted: the clock runs from here
+```
+
+With `connectClock: 'game'` the socket still opens at once and a welcome that arrives early is
+used at once; only the giving-up waits for `net.start()` (or for 60 s, so a game that never says
+is not left without a role).
+
+**A host that hitches.** The relay hands the room on when its host has sent no snapshot for the
+stall time while others are present. That is right for a frozen tab and wrong for a game whose
+frames stopped for a second (a level loading, shaders compiling): a pair of slow 3D clients swapped
+the host four to seven times in thirty seconds.
+
+- **The heartbeat (helper).** When the game has called `net.snapshot()` at least once and then
+  sends nothing for `heartbeatMs` (default 500, 0 turns it off) while others are present, a timer
+  sends the last state again with a fresh time stamp and `hb: 1`. Replicas hold the picture,
+  which is what the host is showing too. It stops 4 s after the game's last real snapshot, so a
+  game that is really frozen is still replaced (4 s plus the stall time later). A hidden tab
+  never beats: it yields at once, as before. A JavaScript frame that blocks the whole page for
+  seconds blocks the timer too; that case is what `stallMs` is for.
+- **The stall time (game.json).** `"netplay": { "stallMs": 4000 }` sets it for every room of the
+  game, held to 1500 to 10000 ms (`STALL`); `homie-studio build` writes it to the catalogue and
+  says when it had to hold a value to the bounds. The welcome carries the room's (`stall`).
+
+## 23. Game revisions (revision 9)
+
+A deploy that changes what the snapshot means (a new field, a smaller arena, a new rule) meets
+tabs that were open before it. Without a revision, an old tab and a new one share a room and one
+reads the other's snapshot with the wrong code.
+
+**`"netplay": { "version": "7" }`** in game.json names the game's revision: 1 to 32 of A-Z a-z 0-9
+`.` `_` `-` (a number works). Bump it with every change an already-open tab cannot play with.
+`homie-studio build` writes it to the catalogue; the Worker stamps every page it serves with it
+(`HOMIE_NET.ver`, and `gv=` in the socket's address) and tells every room which revision is live.
+
+- **A room runs one build at a time.** Its build is its first visitor's, until nobody on that
+  build is connected.
+- **Strangers on different builds never meet**: the Lobby matches a visitor only with rooms of
+  the live build (`/join?ver=`), and opens a new room otherwise. Tabs of the old build keep
+  playing together in the room they have.
+- **An old tab is told.** An old tab in its own room gets `stale { ver }` (in its welcome, or
+  as a frame when a visitor on the live build knocks at its room): `on('stale', …)`, `net.stale`,
+  and a line "A new version is ready. Tap to reload." for ten seconds. The play page loads the
+  game's frame again at the round's break (at once on a big screen). A game that would rather
+  choose the moment calls `location.reload()` in its `stale` handler; the frame reloads to the
+  live build and its seat token brings its seat back.
+- **An old tab that knocks at the live build's room is refused**: `error stale` (final; the helper
+  shows "This game was updated. Tap to reload." and the play page reloads the frame, at most twice
+  a minute).
+- **A tab of the live build that knocks at a room still on the old build waits**: `error
+  room-stale` (not final). The room's players are told to reload; when the last of them has left,
+  the next knock is let in, and the room **starts fresh**: its checkpoint, snapshot, round, roster
+  and keyed state are dropped, because the new build must not read what the old one wrote. Seats
+  keep their tokens and names.
+- **It is ignorable.** A helper from before revision 9 sends no `ver`; the socket's address
+  carries its page's build anyway, so it is held to the same rule (it does not know `stale` is
+  final and keeps knocking; every knock is refused, and after its wait it plays alone). A relay
+  from before revision 9 ignores `ver`, and the helper then plays as it always did. A game that
+  names no version is one pool, as before. A relay nobody tells which build is live (no Worker in
+  front) uses the hello's `ver`: two builds still never share a room, and nobody is called stale.
+
+**What a revision cannot see.** Until a game's bundle has a content-hashed
+name, the edge may serve the previous `main.js` for up to a minute after a deploy while the page
+around it is already stamped with the new version. A tab loaded in that minute says it is the new
+build and runs the old code. Revisions keep builds apart by what the page was served with, not by
+what the browser cached.
+
+### Rolling out a change to gameplay
+
+1. **Is an open tab still able to play with a new one?** A new snapshot field old code ignores, a
+   new sound, a tuning number the host owns: yes. A changed meaning (arena bounds, a body's packed
+   fields, a rule both sides simulate, a reordered `pack()`): no.
+2. **No: bump `netplay.version`.** Nothing else is needed. Old rooms finish among themselves, new
+   visitors get new rooms, old tabs reload at their round's break. Test it the way it happens:
+   leave a tab open on the old build, deploy, open a second tab by the room's link, and watch the
+   first be told and the second wait and then get a fresh round. A host-migration test between two
+   tabs of the same build proves nothing about this.
+3. **Yes, but only when everyone has the new build: use `features`.** Do not bump the version.
+
+```ts
+const net = createNetplay({ features: ['powerups'] });
+// host, whenever it matters (cheap: it reads the peers the relay gave it)
+const on = net.allHave('powerups');          // every seated player's build says so
+net.state('rules', { powerups: on });        // keyed state: every replica and the next host read it
+```
+
+   `features` are short words (up to 8, each a-z 0-9 `-`, 24 characters) in the hello. The relay
+   keeps them with the peer and hands them to everyone in `peers`, in a welcome and in the `role`
+   that promotes a new host. That answers the three things a hand-rolled acknowledgement gets
+   wrong:
+   - **Host migration.** A new host never held the acknowledgements the old one collected. With
+     `features` there is nothing to hand over: `net.featuresOf(seat)` and `net.allHave(word)` read
+     the peers the relay just gave it.
+   - **Connection-id reuse.** A socket id changes on every reconnect and a seat number is reused
+     by the next visitor. `peer.feat` belongs to the socket that is in the seat now; nothing is
+     keyed by an id you stored earlier.
+   - **Late legacy arrivals.** A build that says nothing has no features, so `allHave` turns false
+     the moment an old tab is seated; the host turns the feature off (or leaves it on for the
+     players who have it, if the rule is the host's alone) and says so in keyed state.
+4. **If you keep your own capability state anyway** (a per-player choice, a handshake with data):
+   key it by seat **and** `peer.occ` (section 25), never by connection id; put it in the checkpoint
+   and in keyed state so a new host and a late joiner both have it; treat "unknown" as "legacy";
+   and when you are promoted, drop every entry whose `occ` is not in `net.peers` any more.
+
+## 24. The page around the frame (revision 9)
+
+The game runs in a sandboxed frame **without `allow-same-origin`**: an opaque origin. That is
+deliberate and stays. A studio's site also holds its owner's session, its players' accounts and
+its shop; a game is code a stranger may have written (a port, a part from another studio), and with
+`allow-same-origin` it could read all of that. The price is that the frame has no storage of its
+own (`localStorage`, `sessionStorage`, cookies and IndexedDB throw a `SecurityError`), cannot read
+the page's address, and cannot see what the page draws over it. Revision 9 gives the game each of
+those through the helper.
+
+**`net.prefs`: a few settings that last.** Quality, volume, a personal best, the last name typed.
+
+```ts
+const q = await net.prefs.get('quality', 'high');   // always resolves, with the fallback if nothing is kept
+net.prefs.set('quality', 'low');                    // resolves true when kept
+await net.prefs.ready; net.prefs.peek('best', 0);   // after ready: read without waiting
+```
+
+- The play page keeps them in its own storage, one JSON object per game on this browser
+  (`homie-prefs.<game>`): **16 KB a game, 32 keys, 64 characters a key**; a `set` over the cap is
+  refused (false) and what was kept stands. Values are JSON.
+- `net.prefs.where` says where they are: `'page'` (the play page), `'local'` (this document's own
+  storage: a plain file or a dev server, where it works) or `'memory'` (this visit only: a watch
+  page, a play page from before revision 9, a private window).
+- They are a convenience, per browser, readable by the player. Never a secret, never progress that
+  must not be lost: that is cloud saves (`../saves/SAVES.md`).
+- A single-player game ported with `localStorage` everywhere keeps working through the port kit's
+  in-memory shim (`@homie-rocks/studio/port/early`), which forgets at the end of the visit; move
+  what should last to `net.prefs`.
+
+**`net.params`: the address's switches.** `/<id>/play?q=low&debug` reaches the game as
+`net.params` (`{ q: 'low', debug: '' }`) and `net.param('q', 'high')`.
+
+- Passed always: `debug`, `q`, and the port kit's `touchdebug`, `cam`, `view`.
+- game.json `"netplay": { "params": ["seed", "lod"] }` adds up to 12 names of the game's own
+  (lowercase a-z 0-9 `-` `_`).
+- Never passed, whatever a game declares: the page's own (`room`, `name`, `k`, `t`, `b`, `hand`,
+  `screen`, `watch`…). A value is up to 48 of A-Z a-z 0-9 `_` `.` `~` `-`; anything else is not
+  passed at all. A bare `?debug` is the empty string.
+- With no page (a plain file, a dev server) `net.params` is the document's own query.
+
+**`net.shell`: where the page's own controls sit.** The room button, the server pill, the chat
+pill, the "3 playing" chip and the big screen's join card are drawn by the page, over the game. A
+HUD check that only measures inside the frame cannot see them, and a help line ended up under the
+chip. The page tells the frame, in the game's own CSS pixels:
+
+```ts
+net.on('shell', (s) => layoutHud(s));   // and net.shell, null before the page says
+// { device: 'phone', orientation: 'portrait', width: 390, height: 844,
+//   rects: [{ id: 'room', x: 348, y: 8, w: 34, h: 34 }, { id: 'chip', x: 10, y: 800, w: 132, h: 26, fades: true }] }
+```
+
+- `id`: `room`, `server`, `chat`, `chip`, `join`, `banner`, `ticker`, `results`, `screen`, and the
+  open sheets (`sheet`, `server-sheet`, `vote`). `fades`: it goes by itself after a few seconds and
+  comes back when the room's facts change; keep text that must be read out of it anyway.
+- Said when the helper attaches, on a resize or a turn of the phone, and when a control moves
+  (the room button shrinks to a dot after six seconds). Per device and orientation because the
+  room button's place is (`screen.share`).
+- A test reads the same from `window.__homieNet.shell` inside the frame and `window.__shell.rects`
+  on the page. To move the page's controls instead, see game.json `screen.share` and `screen.chat`.
+
+**`guardGestures()`: a touch game's own page.** The play page refuses selection, the long-press
+callout and page gestures on itself and around the frame. Inside the game's document it is the
+game's turn: a long press on a HUD label or a button's text raises copy/paste on a phone and the
+thumb's touch is cancelled.
+
+```ts
+import { guardGestures } from '@homie-rocks/studio/netplay';
+const off = guardGestures({ touch: 'canvas, [data-action]' });   // once, early; off() undoes it
+```
+
+- Page text is unselectable, the callout and the context menu are suppressed, and iOS's page
+  pinch is stopped.
+- Touches that start on a `touch` surface (default `canvas`) get `touch-action: none` and a
+  non-passive `preventDefault`: no pan, no zoom, no double-tap zoom.
+- `input`, `textarea`, `select`, links, labels, `contenteditable` and anything inside
+  `[data-selectable]` keep the browser's own behaviour, also inside a gameplay surface. An
+  ordinary `<button>` outside a `touch` surface keeps its click.
+- It is opt-in: a text adventure wants selection. **Not verified on a physical phone**: the
+  listeners and the stylesheet are tested, and emulated touch does not raise the callout, so try
+  a real long press on a real iPhone and Android phone before calling it done.
+
+## 25. Whose body: seats that change hands (revision 9)
+
+A seat number is not a person. The relay reuses a number when its player has been gone a minute
+(or sooner, in a full room), a host can be cut off while people come and go, and a round can
+outlive everyone in it. Three cases went wrong in real games; all three now run the same code as
+an ordinary join.
+
+**`peer.occ`: which stay in the seat.** The relay numbers every stay: a new number whenever a seat
+is given to a new token, the same number across that browser's reloads and reconnects, kept
+through a deploy. `Roster.claim(seat, name, agent, occ)` and `Roster.reconcile(peers)` (pass
+`occ`) use it: the same stay keeps its body; a seat that changed hands gives the old body back to
+a bot and admits the newcomer like any arrival. `roster.occupants()` belongs in the checkpoint
+beside `roster.toJSON()`, and `Roster.from(slots, opts, occupants)` reads it back. With a relay
+that says no `occ`, a seat is taken to be the same player's, as before, and the helper still knows
+its own: `net.resumed` is true when its welcome gave back the seat its token named.
+
+**The takeover callbacks cover every way a body changes hands** (`createRoom`):
+
+| How | `onTakeover(body, info)` | `adopt(body)` |
+|---|---|---|
+| A person joins a running round | `{ why: 'join', own: false }` | on the joiner, when the host resets its body |
+| A visitor revives a room from its checkpoint | `{ why: 'restore', own: true }` for its own body, and for anyone claimed with it | on the new host, with the body it took |
+| A replica is promoted and someone arrived since the last checkpoint | `{ why: 'migrate' }` | on that player, by reset |
+| A host reconnects as host and someone arrived while it was away | `{ why: 'join' }` (the missed `join` is replayed) | on that player, by reset |
+| The same player comes back to the body they held | not called when the slot never left them; called with `back: true` when they left and returned (a reload) | as before |
+
+`info.back` is true when the player held that body before. The default (no `onTakeover`) is still
+"score 0, where it stands".
+
+**The restored room.** Everyone leaves; the relay keeps the round for 60 s; a new visitor arrives
+before that. It is welcomed as host with the checkpoint (`why: 'resumed'`), and the round goes on
+with the clock where it was. Before revision 9 the newcomer inherited a departed player's body
+without `onTakeover` (their score, with eleven seconds left) and without `adopt` (its local pose
+stayed at a default, so it could not move until the next round). Now `createRoom` hands the
+departed players' bodies back to bots, claims one for the newcomer through `admit`, calls
+`onTakeover` and then `adopt`. A player who comes back to their own room (their token) keeps
+their body and score, and is adopted onto it. A game on raw `createNetplay` does the same with
+`roster.reconcile(peers)` in its `role` handler: treat every slot in `claimed` as a takeover.
+
+**The host that reconnects as host.** A host whose socket drops and comes back while nobody else
+could host gets a welcome, not a `role` (its role did not change), so its `role` handler never
+ran, and the relay never told it who came or went meanwhile. A player who arrived in that window
+had no body for the rest of the visit, and one who left kept a frozen one. The helper now says
+the difference as the events it would have been: `leave` (with `why: 'gone'`) and `join`, by seat,
+with a seat whose `occ` changed as both. Nothing to write: the handlers a game already has do it.
+The same change stopped `createRoom` calling `onTakeover` (and zeroing the score) for a player
+whose body never left them.
+
+**`admit`: which body an arrival takes.** By default a newcomer takes the lowest bot's body. In an
+elimination round that can be a dead one while living bots stand by.
+
+```ts
+createRoom({
+  admit: (candidates, who) => candidates.find((b) => b.alive) ?? null,   // null: none will do
+});
+new Roster({ min, max, admit: (slots, who) => pickSlotId(slots) });      // raw: slots in, a slot id out
+```
+
+- Asked for every NEW arrival: a fresh join, a restored room's claims, a promoted host's
+  reconcile, a missed join replayed. Return the body (the slot id, on `Roster`), `undefined` for the
+  default, or `null` for "none of these": a new body is spawned while the room has space, and when
+  it has none the default applies (a seated person always gets a body).
+- Never asked for a player returning to the body they held: an eliminated player who reloads gets
+  their own dead body back, not a way into the round. `occ` is how the roster knows.
+- Never offered a seat kept for AI when a person arrives; an agent is offered the kept seats first
+  (the reservation of section 17 holds).
+- Decide from the bodies' own state so the next host makes the same choice. The host still resets
+  the body (`net.reset`), announces the roster and checkpoints, as for any claim.
+
+**The late-join checklist.** A game is not done with joining until each of these is true in two
+real browsers:
+
+1. A joiner mid-round takes a bot's body, the right one (`admit`), is reset onto it and can move.
+2. The host leaves; the other browser continues the same round; a joiner after that still works.
+3. A joiner who reloads comes back to the same body (and the same score, if the game keeps it:
+   `info.back`).
+4. **Everyone leaves, and a new visitor enters before the room is forgotten (60 s).** The round is
+   the same one; the visitor has a body it did not inherit silently (`onTakeover` ran, `adopt` ran),
+   can move at once, and is ranked as a newcomer.
+5. The same, but the visitor is one of the players who left (same tab, reloaded): their own body
+   and score.
+6. The host's network drops for a second while a third browser joins: after it reconnects, three
+   people, three bodies, and nobody's score was reset.
+7. A deploy with tabs open: section 23.
+
+## 26. Places and ties (revision 9)
+
+`createRoom` ranks a round's results by score. The order of the rows was always: higher score
+first, then **people before bots**, then **the lower slot**. Two bodies on 61 points were shown
+first and second with nothing saying why. The order is the tiebreaker and is unchanged; what
+place a tie gets is now the game's to say:
+
+| `createRoom({ ties })` | 61, 61, 40, 12 | |
+|---|---|---|
+| `'order'` (default) | 1, 2, 3, 4 | What results always were: the order above is the place. Say so to players if you keep it ("ties go to the player, then the earlier seat"). |
+| `'shared'` | 1, 1, 3, 4 | Standard competition places: equal scores share one and the next is skipped. |
+| `'dense'` | 1, 1, 2, 3 | Equal scores share one and none is skipped. |
+
+`placesOf(scores, ties)` is the same rule for a game that ranks its own rows (pass the scores in
+the order you show them). A game with a real tiebreaker (time, kills, who got there first) sorts
+by it before ranking and keeps `'order'`.
+
+## 27. The relay's log (revision 9)
+
+A room says its lifecycle one JSON line at a time, each with `at` (ISO time), `game` and `room`:
+`hello`, `leave` (who, which seat, host or not, how many are left, and `via: 'error'` when the
+socket failed rather than closed), `elect`, `restored`, `stale`, `room-stale`, `build-changed`,
+and `failed`.
+
+- **A departure is not a failure.** A browser that closes its tab, loses its network or is shut by
+  a test harness ends its socket without a goodbye, and the runtime reports that on the socket as
+  an error ("Network connection lost"). The Table handles the socket's `error` event as the
+  departure it is: one `socket-gone` line with the client it was, then the room's own `leave`. A
+  browser that goes away while its socket is still being opened is a `socket-gone` line from the
+  Worker, not an uncaught error.
+- **A failure is said as one.** A room operation that throws is caught at the socket boundary and
+  logged on the error stream as `failed` with what the room was doing (`op`, and the frame's type,
+  never its contents), the client and how many are connected; the beat that throws is
+  `tick-failed`; a socket error that is not a departure is `socket-error`; a room the Worker could
+  not reach is `room-unreachable`. One bad frame does not end a seat.
+- **No line carries a credential**: not a seat token, a ticket, a browser key or an address.
+- `HOMIE_ROOM_LOG=0` (a Worker variable) keeps only the failures.
+- Not verified against the Workers runtime's own console in this revision: the boundaries are
+  tested with stand-in sockets. If `wrangler dev` still prints an error with no room on it after a
+  host is closed, it comes from somewhere these boundaries do not cover; the `leave` and
+  `socket-gone` lines beside it say what the room was doing at that second.

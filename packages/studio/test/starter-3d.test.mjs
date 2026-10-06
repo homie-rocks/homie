@@ -78,7 +78,7 @@ test('the starter is text only: no model file in the repository, a library item 
     assert.equal(a.files[0].sha256, a.from.sha256, a.id);
     assert.equal(a.license.kind, 'cc0', a.id);
     assert.equal(a.license.spdx, 'CC0-1.0', a.id);
-    assert.equal(a.license.remix, 'include', a.id);
+    assert.ok(!('remix' in a.license), `${a.id}: no word about remixing in a record`);
     const budget = a.kind === 'character' ? 3000 : a.kind === 'kit' ? 1000 : 1500;
     assert.ok(a.measured.tris <= budget, `${a.id}: ${a.measured.tris} triangles (its budget is ${budget})`);
     const animal = /^animal-(.+)$/.exec(a.id)?.[1];

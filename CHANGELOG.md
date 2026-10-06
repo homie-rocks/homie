@@ -17,9 +17,84 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.31.0] - 2026-10-06
+
+**Plugin 0.32.0** · [#50](https://github.com/homie-rocks/homie/pull/50)
+
+Fixes from two creators' logs of building real studios: games now build on each other by sharing parts (remix is retired), a slow 3D game keeps its host, local play stays local, and synthesized bass plays at its written pitch.
+
+### Added
+
+- **Parts: how games build on each other.** A part is a piece of a game that its studio chooses to share: a creature, a level generator, a camera, a bot brain, an audio pack. Never the whole game. In chat, `parts_find` looks for pieces other studios shared, `part_add` brings one into your studio (every file checked, the original credited, yours to tune from then on), `part_new` lifts a piece out of one of your games (the game still builds and plays the same), and `part_share` shares it under a licence you pick. A part is private until you share it, and live after your next deploy. Your studio lists what it shares at `/.well-known/homie-parts.json`; homie.rocks lists the shared parts of listed studios at `/parts/`. The packages a part builds on are installed by npm. The design is `parts/PARTS.md`.
+- Planning or making a game now starts by looking for packages and for parts before anything is written from scratch, and a game's Codex has a Built from section saying what came from where. A deploy's plan shows the licences and credits of the parts a game uses, and says when they cannot be combined.
+- `homie-studio preview <id>`: one built game's files at an address on this computer, with no Wrangler and no rooms, for a capture or a script.
+- `homie-studio shoot <id>`: a two-browser seat check, then frames taken on a stepped clock, so a 3D game can be captured without a GPU.
+- `homie-studio trailer <id>`: films a game frame by frame on a virtual clock, rebuilds its sound from the game's own files, picks the shots from what the game played, and delivers 16:9, 1:1 and 9:16. Sound that does not go through the sound player (live-synthesized voices, speech) is not in the mix, and the result says so.
+- `homie-studio build --types` checks your games' TypeScript before building. New studios come with TypeScript; an older one runs `npm install --save-dev typescript`.
+- A game can `await import()`: it becomes a file that loads when asked for, so a 3D game can load its later scenes late.
+- game.json `netplay`: `stallMs` (how long a host may go quiet, 1.5 to 10 s), `version` (after a deploy, old tabs and new tabs no longer share a room; an old tab is told to reload at its round's break), and `params` (your own names passed from `/play?…` to the game as `net.params`; `debug` and `q` always pass).
+- `net.link` and a "Reconnecting…" line over the game say when a game is cut off from its room. `net.offline` and `net.connected` are documented against it, and `net.reconnects` counts.
+- `net.prefs` keeps a game's settings and personal bests (16 KB a game). `localStorage` throws inside the game's frame on purpose, and the docs now say why.
+- `createRoom({ admit })` chooses which body a newcomer takes, for fresh joins and for a room revived from its checkpoint alike; `createRoom({ ties: 'shared' })` gives equal scores the same place; `features` lets a host turn a new mechanic on only when every player's build has it. NETPLAY.md has a rollout recipe for changing a game's rules while rooms are open, and a late-join checklist that includes "everyone leaves, then a new visitor enters before the room expires".
+- `guardGestures()` for a touch game: a long press never selects text or raises copy and paste. The play page and its frame refuse selection too. Try it on a real phone; a harness cannot.
+- `net.shell` tells a game where the play page's own buttons sit, so a HUD stays clear of them.
+- A game declares what it scores with: game.json `playtest.primary` (a key or the mouse on a computer; a control or a region on a phone), and `"scoring": "together"` for a cooperative game.
+- studio.json `"site": { "order": [...] }` sets the order of your games everywhere they are listed. A Home of your own takes the generated hero with `<!-- homie:home-hero -->`.
+- A 3D game sets its own model budgets: game.json `"assets": { "budgets": { "triangles", "bytes" } }`, read by the game, by `assets check` and by `assets add`.
+- `assets use <game> <asset> unused` marks a file the game no longer draws. The lineup draws the inventory, the cast and the environment separately.
+- `collision_bake` (in chat; `homie-studio collision bake <game> <model.glb>`) turns a model into something figures can stand on, tied to the model by a checksum; `collision_check` fails when the model changed since, or a bot cannot walk a route you authored. It uses `@homie-rocks/heightfield`, which your AI installs in the studio the first time.
+- `assets add --lo 0.2` also writes `<asset>_lo.glb`, the cheap copy for the far band of a prop drawn at two levels of detail.
+- `homie-studio shoot <id> --preview` takes pictures of the built game with no site running, and names the build they are of.
+- The models skill brings in a finished job from a connected fal account under the same budget and receipts (`models.mjs import`), and tells a missing local key apart from a connector's sign-in.
+- New modules in the packages (each stands alone; install from npm): a third-person follow camera that never ends up in a wall or the player's head (`@homie-rocks/camera`); quality tiers, dynamic resolution that undoes a drop that did not help, and near/far instanced props (`@homie-rocks/render`); a ready-made post stack per tier (`@homie-rocks/postfx`); combo, hit-stop and bursts (`@homie-rocks/fx`); a per-sound limiter (`@homie-rocks/audio`); buildings with floors, doors and stairs, routes checked the way bots walk them, markers on every level, and grounded capture positions (`@homie-rocks/heightfield`); five bot personas and host-owned power-ups whose timers survive a host change (`@homie-rocks/studio/personas`, `/powerups`).
+
+### Changed
+
+- **Remix is retired.** A game is no longer handed over whole. `game remix`, the `game_remix` tool, the "Make a game like this" band, the office's Remixable switch and the Studio pane's Remix button are gone, and a studio no longer serves a game's source (its old address answers 410 and points to `/parts/`). A game that was a remix keeps its credit, "Based on <game> by <studio>".
+- A game's bundle is named by its content, so a fresh page never loads the previous bundle from the edge after a deploy. The build says for each game whether it changed and its build hash; a deploy says which games it changes; the live site says the same hash in `/.well-known/homie-studio.json`.
+- A build is put in place only when all of it is there. It no longer deletes `site/dist`, so anything running from it keeps its files.
+- `dev` keeps rooms local even when the studio has a custom domain: production routes are left out of the local configuration, and `dev` stops with a clear reason if a game would be handed a socket anywhere but this computer. A wrapper script is no longer needed for that.
+- `deploy` keeps your custom-domain and exact-host routes, refuses to deploy a wildcard or catch-all route, and says which route to add when another Worker's wildcard answers your domain first. Only one deploy of a studio runs at a time.
+- A playtest records what state the game was in at every press and picture (round phase, alive, time left, the link), and says BLOCKED or N/A instead of failing a row that landed on a results screen, a dead body, the loading cover or a dropped connection. "First picture" is the first picture of the game itself; the loading card is timed separately. UI coverage is measured with the thumb held on the stick, so numbers differ from earlier runs.
+- One scripted round is reported as one round: a bot win is a measured gap with a recommendation to repeat it, never "people cannot win". The report states that UI coverage is DOM-only and that canvas HUDs were not checked, and calls out a reconnect beside a completed round.
+- The playtest's review step asks one approval question naming exactly which files it sends and where, has a local fallback that sends nothing, and the report says which review ran, or that none did.
+- `assets check` calls its scene numbers an inventory estimate and lists what it cannot see without running the game. "First play" is now "shipped payload": the same number and budget, honestly named (`firstPlayMB` still works). `perf` reports what was really fetched before play and, when your game exposes them, the renderer's draw calls and triangles.
+- `check`, `perf`, `shoot`, `port check` and the playtest say the same sentence when this computer cannot look a site up. `perf` reports the arrival mode and when the game itself said it was ready, and the playtest reports a HUD element sitting under one of the play page's own controls.
+- Listing a studio shows the licences and credits of the parts its games use before it is listed.
+- `publish` says how many publishes are left today, and listing a studio again after a deploy is a re-read that does not count against the day.
+- A room's log lines carry a time, the game and the room, and tell a player leaving apart from a failed operation. Room and error lines under `dev` carry a time (`--timestamps` for every line).
+- The build names the hero files a landing wants and their shapes: `hero/wide.jpg` (16:9), `hero/tall.jpg` (9:16), and `wide.mp4` / `tall.mp4`.
+
+### Fixed
+
+- **Synthesized bass played octaves too high.** A number is now always hertz and a MIDI note is given as `midi`. A2 was written as 110 Hz and played as MIDI note 110 (4.7 kHz); the kick, the tom and several effects had the same fault. They sound different now: as written.
+- A loop keeps its seam through the limiter, and a loop that does not repeat is listed in the warnings instead of beside an empty list. The "steady tone" warning gives the tone's level and how much of the time it is there, and no longer fires on a melody's brief high partial. The sound player no longer hangs on an effect listed as a single file.
+- A trailer's cuts are counted in frames and stay on the beat, and every delivery is yuv420p, limited range, tagged BT.709.
+- A game that does not build fails `homie-studio build` and leaves the built site as it was.
+- A slow 3D game no longer swaps hosts on every hitch: the helper sends a heartbeat while a host's frames are stuck. A game that boots for seconds can wait longer for its room (`connectOpenMaxMs`) or start the wait itself (`net.start()`).
+- A visitor who revives an emptied room takes a body over properly (`onTakeover`, `adopt`). A player who joins while the host is briefly disconnected gets a body. A returning player's score is no longer reset.
+- Every command says at once when Node.js is older than 22, instead of ending without a word.
+- `dev` and `dev --stop` clean up after a server that was stopped another way, and a game added while `dev` runs is picked up.
+- A stuck screenshot decoder stops as BLOCKED after 20 seconds instead of hanging, and the playtest exits when its report is written.
+- A press into a wall is no longer reported as unresponsive controls: the playtest tries the other way and reports both.
+- The big-screen check no longer fails a local preview for a missing join QR; it still requires one on a deployed address.
+- A hostname this computer cannot look up is reported as this computer's network, with local testing offered, not as a broken site or game.
+- Standalone textures and skies are measured and counted in picture memory, and pictures shipped with no record are listed. Normal and roughness maps the game does not draw can be declared (`"inGame": { "maps": "base" }`) and leave the estimate.
+- A second clip library for one skeleton is refused unless declared supplemental; a supplemental one joins coverage and previews. Removing a starter character keeps its pack's credit while its retargeted clips remain. `anim plan` and `anim preview` show the ground speed each character's walk and run cover on its own rig.
+- A `net.playable()` that arrives after the automatic arrival warns: pass `arrival: 'game'`.
+
+### Upgrade notes
+
+- Remix settings do nothing now: `"remix"`, `"share"`, `landing.make` and the licence words `remix-with-credit`, `remix-freely` and `no-remix`. The build says so once; delete them when convenient. Leave `"remixOf"` in a game that was a remix: it is the credit. Nothing is removed from your database.
+- A game's `"license"` is now the SPDX licence it names for itself (`"MIT"`), shown in its credits.
+- Sound made with the sound skill plays at its written pitch after this release. If you raised a bass part an octave to work around the old fault, lower it again.
+- A game with no port probe gets its playtest `move` row BLOCKED where it used to pass silently.
+- The first deploy after upgrading asks the homie.rocks directory to read a listed studio again, once.
+- The packages that gained modules are new versions: `@homie-rocks/camera`, `render`, `postfx`, `fx`, `audio` and `heightfield` 0.2.0.
+
 ## [0.30.2] - 2026-10-04
 
-**Plugin 0.31.2** · [#48](https://github.com/homie-rocks/homie/pull/48)
+**Plugin 0.31.2** · [#48](https://github.com/homie-rocks/homie/pull/48) · [release-2026-10-04-studio-0.30.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-04-studio-0.30.2)
 
 Fixes from first runs in Codex and Grok: a missing connector no longer stops a new studio, you are told when Homie's holds are off (in Grok they are), Grok has an install command, and a one-sentence studio gives you a Play link before it polishes.
 

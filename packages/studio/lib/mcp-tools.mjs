@@ -2,7 +2,7 @@
  * THE LOCAL MCP SERVER'S TOOLS (`homie-studio mcp`, lib/mcp.mjs): the studio toolkit as MCP tools, so the Claude
  * desktop app (through the Homie extension), Claude Code or any MCP client builds games in the SAME chat that shows
  * the cards. Where a tool overlaps the remote Homie MCP (homie.rocks/mcp) it has the same name and the same input
- * shape: studio_scaffold, studio_card, game_make, game_remix, game_port, preview_run, studio_deploy,
+ * shape: studio_scaffold, studio_card, game_make, game_port, preview_run, studio_deploy,
  * studio_publish, build_open, build_progress, build_stop. The remote ones say what to run; these run it, here.
  *
  * Long work never holds a tool call: a check, a playtest, a deploy or an npm install starts as a job (lib/jobs.mjs)
@@ -28,7 +28,10 @@ import { cliJob, findNode, getJob, installJob, installed, jobView, runningJobs, 
 import { Feed, currentId, publicFeed, readFeed, startProgress } from './progress.mjs';
 import { newStudio, slugify } from './scaffold.mjs';
 import { repoFromUrl, studioRepo } from './repo.mjs';
-import { GAME_ID, PACKAGE_ROOT, findStudio, listGames, readLocal, readStudio, siteUrl, workerDir } from './studio.mjs';
+import { GAME_ID, PACKAGE_ROOT, findStudio, listGames, readLocal, readStudio, siteUrl } from './studio.mjs';
+import { runningDev } from './dev.mjs';
+import { deployWords } from './deploy-state.mjs';
+import { beforeLine, partsForListing, publishesSoFar } from './directory.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { compareVersions, whatsNew, whatsNewLines } from './changelog.mjs';
 import { pinnedVersion } from './upgrade.mjs';
@@ -37,6 +40,9 @@ import { detectLocalAi } from './local-ai.mjs';
 import { LAB_PORT, runningLab } from './lab.mjs';
 import { pictureFor } from './pictures.mjs';
 import { ART_UI, artToolDefs } from './art-tools.mjs';
+// GAME PARTS (parts/PARTS.md): parts_find, part_add, part_new and part_share are lib/parts-tools.mjs.
+import { PARTS_FIRST, partsToolDefs } from './parts-tools.mjs';
+import { partsPlanLines } from './parts-build.mjs';
 import { FEEDBACK_APPS, FEEDBACK_KINDS, FEEDBACK_LIMITS, appOf, cleanNote, draftId, noteBlock, sendNote, withLine } from './feedback.mjs';
 
 export const UI = Object.freeze({
@@ -285,12 +291,9 @@ function coverData(dir) {
   return null;
 }
 
+/** This studio's dev server when it really runs (lib/dev.mjs: a stale record, or a recycled process id, is not one). */
 function devOf(root) {
-  try {
-    const rec = JSON.parse(readFileSync(join(workerDir(root), '.wrangler', 'homie-dev.json'), 'utf8'));
-    process.kill(rec.pid, 0);
-    return { url: `http://127.0.0.1:${rec.port}`, port: rec.port, pid: rec.pid };
-  } catch { return null; }
+  try { return runningDev(root); } catch { return null; }
 }
 
 function published(root, kind) {
@@ -419,6 +422,10 @@ function buildCard(ctx, root, found) {
     feed.error ? `Last error: ${feed.error}` : null,
     ...(run?.look ? [`Pictures of the site (file_read shows one): ${run.look.join(', ')}`] : []),
     ...jobs.filter((j) => j.state === 'failed').map((j) => `${j.label} failed: ${j.result?.why ?? j.tail.slice(-2).join(' ')}`),
+    // A deploy that went through: which games it changed with each one's content hash, and anything it had to say
+    // about the studio's domain or the directory (lib/cloudflare.mjs).
+    ...jobs.filter((j) => j.result?.command === 'deploy' && j.result?.ok && (j.result.games ?? []).some((g) => g.hash)).map((j) => `Deployed: ${j.result.games.map((g) => `${g.id} ${deployWords(g)}`).join('; ')}.`),
+    ...jobs.filter((j) => j.result?.command === 'deploy').flatMap((j) => (j.result.notes ?? []).map((n) => `Note: ${n}`)),
     feed.state === 'running' ? 'The card on screen follows it live; you need not call this again to watch it.' : null,
   ].filter(Boolean).join('\n');
   // A check, playtest or deploy inside a build the person opened (build_open) ends before the build does: say so.
@@ -857,7 +864,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_make', title: 'Make a multiplayer game',
-      description: 'Make a game in the studio from a multiplayer starter, under the id you choose, to change into the person\'s game: gem-rush (an arena: every browser renders, one hosts the rules, bots fill empty seats, rounds restart), gem-rush-3d (the same arena in three.js, dressed with free CC0 models through @homie-rocks/studio/assets: the start for a 3D game), hero-rush-3d (the arena with animated CC0 heroes that run, jump and swing through @homie-rocks/studio/animate, a shared clip library per skeleton, a jump and a swing tuned in the Game Lab: the start for a 3D game with characters) or ember-vale (a hero who lasts for days, with cloud saves: for persistent games). In a new studio only once their game is planned (game_plan), or when they ask for a copy of a working starter; never as a first step. A planned game\'s codex stays.',
+      description: 'Make a game in the studio from a multiplayer starter, under the id you choose, to change into the person\'s game: gem-rush (an arena: every browser renders, one hosts the rules, bots fill empty seats, rounds restart), gem-rush-3d (the same arena in three.js, dressed with free CC0 models through @homie-rocks/studio/assets: the start for a 3D game), hero-rush-3d (the arena with animated CC0 heroes that run, jump and swing through @homie-rocks/studio/animate, a shared clip library per skeleton, a jump and a swing tuned in the Game Lab: the start for a 3D game with characters) or ember-vale (a hero who lasts for days, with cloud saves: for persistent games). In a new studio only once their game is planned (game_plan), or when they ask for a copy of a working starter; never as a first step. A planned game\'s codex stays. Before writing one of its systems from scratch, look for a piece of an existing game that does it (parts_find; part_add brings it in), and for the general mechanism in the @homie-rocks/* packages.',
       inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens): its address'), name: str('The game\'s display name'), from: str('Starter id (default gem-rush)'), ...STUDIO_ARG }, required: ['id', 'name'] },
       annotations: { title: 'Make a game', ...RW },
       run: async (a) => {
@@ -881,24 +888,6 @@ export function toolDefs(ctx, avail = {}) {
         const m = r.result?.models;
         const got = m ? ` Its models: ${m.fetched} from the starter library${m.missing.length ? `; ${m.missing.length} could not be fetched (${m.why ?? m.missing[0].why}), and it draws stand-ins for those` : ''}.` : '';
         return ok(`games/${a.id} is ${a.name}, from the ${a.from ?? 'gem-rush'} starter (${(r.result?.files ?? []).length} files).${got}${install} Change it in games/${a.id}/src/main.ts: file_read it once (a long file in two or three reads), decide every change, and make them in ONE file_edit with an edits list (never a call per change: twenty single edits use up a turn before the game is checked); then build and preview_run; check proves two browsers finish a round.`, { kind: 'game', ...r.result });
-      },
-    },
-    {
-      name: 'game_remix', title: 'Remix a shared game',
-      description: 'Bring a game another studio shared in the Homie directory into this studio as a new game of its own. The original stays credited: game.json remixOf says "Remix of <game> by <studio>" with a link back, shown on the new game\'s landing and in its credits. A game whose owner\'s licence says no remix is refused.',
-      inputSchema: { type: 'object', properties: { game: str('The directory game: "<studio site>/<game id>" or its play URL'), id: str('The new game id in this studio'), name: str('Optional: its new name'), ...STUDIO_ARG }, required: ['game', 'id'] },
-      annotations: { title: 'Remix a game', ...RW, openWorldHint: true },
-      run: async (a) => {
-        const root = ctx.root(a.studio);
-        let site; let gameId;
-        try { const u = new URL(String(a.game ?? '')); site = u.origin; gameId = u.pathname.split('/').filter(Boolean)[0]; } catch { return fail('game is "<studio site>/<game id>" or its play URL'); }
-        if (!/^https:\/\//.test(site) || !GAME_ID.test(String(gameId ?? '')) || !GAME_ID.test(String(a.id ?? ''))) return fail('game is "https://<studio site>/<game id>", and id a new lowercase id');
-        const source = `${site}/games/${gameId}/source.json`;
-        const r = await cli(ctx, root, `game remix ${a.id}`, ['game', 'remix', source, '--id', a.id, ...(a.name ? ['--name', String(a.name).slice(0, 60)] : [])]);
-        if (!r.ended) return stillRunning(r.job, 'The remix');
-        if (r.job.code !== 0) return fail(`Not remixed: ${whyOf(r.job)}`);
-        const credit = r.result?.credit ? ` Its game.json credits the original: "${r.result.credit}"${r.result.page ? ` (${r.result.page})` : ''}, on its landing and in its credits; keep it.` : '';
-        return ok(`games/${a.id} is a remix of ${site}/${gameId} (${(r.result?.files ?? []).length} files).${credit}`, { kind: 'game', ...r.result });
       },
     },
     {
@@ -928,7 +917,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_plan', title: 'Plan a game (its Game Codex)',
-      description: 'Step 4: start the game\'s Game Codex (games/<id>/CODEX.md, every section) and get the plan interview to run with the person: two or three questions a message, each with options and your pick, about game type and genre, style, devices, players and rooms, art and film, music and sound, and scope. A game is planned before it is made: with no game <id> yet, this starts its folder with only the codex. Fill CODEX.md from their answers in one call (file_write of the whole file, or one file_edit with an edits list), then game_codex shows it.',
+      description: 'Step 4: start the game\'s Game Codex (games/<id>/CODEX.md, every section) and get the plan interview to run with the person: two or three questions a message, each with options and your pick, about game type and genre, style, devices, players and rooms, art and film, music and sound, and scope. A game is planned before it is made: with no game <id> yet, this starts its folder with only the codex. Fill CODEX.md from their answers in one call (file_write of the whole file, or one file_edit with an edits list), then game_codex shows it. While planning, run `parts find` (the parts_find tool) for each system the game needs, so the plan starts from pieces of existing games and the @homie-rocks/* packages rather than from nothing; the codex\'s Built from section records what was found.',
       inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens)'), name: str('Its name, when the game is not made yet'), ...STUDIO_ARG }, required: ['id'] },
       annotations: { title: 'Plan a game', ...RW },
       run: async (a) => {
@@ -943,6 +932,7 @@ export function toolDefs(ctx, avail = {}) {
         return ok([
           made ? `Wrote games/${a.id}/CODEX.md (every section${made.planned ? '; the game is planned here before it is made' : ''}).` : `games/${a.id}/CODEX.md is there already: change it, never replace it.`,
           'Now the interview: two or three questions a message, each with concrete options and your pick, so "yes" is an answer. Say back what you heard in one line before the next. Stop after three or four rounds; "just build it" means fill the rest with your own choices and list them under Open questions. Then fill CODEX.md in one call (file_read it once; then file_write the whole file, or one file_edit whose edits list has every section) and show it with game_codex.',
+          '', PARTS_FIRST,
           ...(guide ? ['', guide] : []),
         ].join('\n'), { kind: 'plan', id: a.id, file: `games/${a.id}/CODEX.md`, created: Boolean(made) });
       },
@@ -977,7 +967,8 @@ export function toolDefs(ctx, avail = {}) {
         if (!r.ended) return stillRunning(r.job, 'The build');
         if (r.job.code !== 0) return fail(`The build failed: ${whyOf(r.job)}`);
         const g = r.result?.games ?? [];
-        return ok(`Built ${g.length ? g.map((x) => `${x.id} (${Math.round(x.bytes / 1024)} KB)`).join(', ') : 'the home page (no game yet)'}.${devOf(root) ? ' Reload the preview to see it.' : ''}`, { kind: 'built', ...r.result });
+        // Each game's build hash, in the words the terminal prints: the hash a deploy reports and the live site answers with.
+        return ok(`Built ${g.length ? g.map((x) => `${x.id} (${Math.round(x.bytes / 1024)} KB${x.hash ? `, ${x.changed ?? 'new'}${x.changed && x.changed !== 'new' ? ' since the last build here' : ''}, build ${x.hash}` : ''})`).join(', ') : 'the home page (no game yet)'}.${devOf(root) ? ' Reload the preview to see it.' : ''}`, { kind: 'built', ...r.result });
       },
     },
     {
@@ -1008,7 +999,9 @@ export function toolDefs(ctx, avail = {}) {
       run: async (a) => {
         const root = ctx.root(a.studio);
         const r = await cli(ctx, root, 'dev --stop', ['dev', '--stop'], { wait: 20_000 });
-        return ok(r.result?.stopped?.length ? 'Stopped the studio\'s site here.' : 'It was not running.', { kind: 'preview', stopped: r.result?.stopped ?? [] });
+        // What a server stopped another way left behind is cleaned up and said (lib/dev.mjs).
+        const note = r.result?.why && (r.result?.stale || r.result?.stopped?.length) ? ` ${r.result.why[0].toUpperCase()}${r.result.why.slice(1)}.` : '';
+        return ok(`${r.result?.stopped?.length ? 'Stopped the studio\'s site here.' : 'It was not running.'}${note}`, { kind: 'preview', stopped: r.result?.stopped ?? [], ...(r.result?.stale ? { stale: true } : {}) });
       },
     },
     {
@@ -1102,7 +1095,7 @@ export function toolDefs(ctx, avail = {}) {
           if (!r.ended) return stillRunning(r.job, 'The deploy plan');
           if (r.job.code !== 0) return fail(whyOf(r.job));
           const p = r.result;
-          return ok([`What going online does for ${p.studio}:`, ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`, 'The card on screen shows this plan (nothing is made yet): tell the person its gist in two or three lines, then go on.'].join('\n'), { kind: 'deploy-plan', ...p });
+          return ok([`What going online does for ${p.studio}:`, ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`, ...(p.parts ? partsPlanLines(p.parts) : []), 'The card on screen shows this plan (nothing is made yet): tell the person its gist in two or three lines, then go on.'].join('\n'), { kind: 'deploy-plan', ...p });
         }
         const studio = readStudio(root);
         return startRun(ctx, root, { kind: 'deploy', game: null, title: `${studio.name}: online`, steps: [{ label: 'deploy', args: ['deploy'] }] });
@@ -1126,15 +1119,22 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_publish', title: 'List the studio in the Homie directory',
-      description: 'List a deployed studio\'s games, songs and videos in the homie.rocks directory, with their Play links (at most 12 games per studio in the beta).',
-      inputSchema: { type: 'object', properties: { site: str('Optional: the live site address (default: the one deploy got)'), ...STUDIO_ARG } },
+      description: 'List a deployed studio\'s games, songs and videos in the homie.rocks directory, with their Play links (at most 12 games per studio in the beta). The beta also caps how many times a studio may publish in a day: the answer says how many are left when the directory gives the number, and before: true only says what this computer knows (how many it has sent today, what the directory last said was left) without publishing.',
+      inputSchema: { type: 'object', properties: { site: str('Optional: the live site address (default: the one deploy got)'), before: { type: 'boolean', description: 'Only say how many publishes this computer has sent today and what the directory last said was left; publish nothing' }, ...STUDIO_ARG } },
       annotations: { title: 'List in the directory', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio);
+        // What this computer knows of the day's cap, before anything is sent (lib/directory.mjs).
+        const soFar = beforeLine(publishesSoFar(root));
+        // The parts in the games a listing shows, in the deploy plan's own lines (licences, credits, and plainly when
+        // two cannot be combined): said before the studio is listed, and again with the answer.
+        const partsNow = partsForListing(root);
+        const partsSaid = partsPlanLines(partsNow, { at: 'publish' });
+        if (a.before === true) return ok([`${soFar.replace(/^Publishing to the directory: /, 'Not published. ')} A publish from another computer or from the Homie connector is not counted here.`, ...partsSaid].join('\n'), { kind: 'publish-count', ...publishesSoFar(root), ...(partsSaid.length ? { parts: partsNow } : {}) });
         const r = await cli(ctx, root, 'publish', ['publish', ...(a.site ? ['--site', String(a.site)] : [])]);
         if (!r.ended) return stillRunning(r.job, 'Listing');
-        if (r.job.code !== 0) return fail(`Not listed: ${whyOf(r.job)}`);
-        return ok(`Listed: ${r.result?.studioPage ?? r.result?.directory ?? ''}\n${(r.result?.games ?? []).map((g) => `  ${g.name}: ${g.play}`).join('\n')}`, { kind: 'publish', ...r.result });
+        if (r.job.code !== 0) return fail(`Not listed: ${whyOf(r.job)}`, r.result?.publishes ? { kind: 'publish', ok: false, needs: r.result.needs ?? null, publishes: r.result.publishes } : undefined);
+        return ok(`Listed: ${r.result?.studioPage ?? r.result?.directory ?? ''}\n${(r.result?.games ?? []).map((g) => `  ${g.name}: ${g.play}`).join('\n')}${r.result?.publishes?.line ? `\n${r.result.publishes.line}` : ''}${partsSaid.length ? `\n${partsSaid.join('\n')}` : ''}`, { kind: 'publish', ...r.result });
       },
     },
     {
@@ -1184,7 +1184,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_run', title: 'Run a studio command',
-      description: 'Any other homie-studio command in the studio, by its words (the guides name them): e.g. ["progress","stage","plan","done","--note","…"], ["progress","spend","0.40","--what","a cover"], ["look"], ["stats"], ["codex","link","<id>"], ["port","check","<id>","--url","…"], ["upgrade"], ["storage","add"]. Runs the studio\'s own pinned toolkit; long commands hand back a job. ["upgrade"] runs with THIS Homie\'s toolkit when the studio pins an older one (that is how a studio moves up to it): it says what is new since the studio\'s version and what would change, and changes nothing; ["upgrade","--apply"] only after the person agrees, then studio_install.',
+      description: 'Any other homie-studio command in the studio, by its words (the guides name them): e.g. ["progress","stage","plan","done","--note","…"], ["progress","spend","0.40","--what","a cover"], ["look"], ["stats"], ["codex","link","<id>"], ["port","check","<id>","--url","…"], ["shoot","<id>","--preview"], ["build","--types"], ["assets","use","<id>","<asset>","unused"], ["upgrade"], ["storage","add"]. Runs the studio\'s own pinned toolkit; long commands hand back a job. ["upgrade"] runs with THIS Homie\'s toolkit when the studio pins an older one (that is how a studio moves up to it): it says what is new since the studio\'s version and what would change, and changes nothing; ["upgrade","--apply"] only after the person agrees, then studio_install.',
       inputSchema: { type: 'object', properties: { args: { type: 'array', items: { type: 'string' }, description: 'The command\'s words after `homie-studio`' }, ...STUDIO_ARG }, required: ['args'] },
       annotations: { title: 'Run a studio command', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
@@ -1361,6 +1361,7 @@ export function toolDefs(ctx, avail = {}) {
   ];
   // Art direction, the cast, the starter library, generated props, checks, the lineup and the rights (lib/art-tools.mjs).
   tools.push(...artToolDefs(ctx, { ok, fail, cli, stillRunning, whyOf, needsInstall, ui, str, STUDIO_ARG, RO, RW, pictureFor, findNode, startJob, waitJob }));
+  tools.push(...partsToolDefs(ctx, { ok, fail, str, STUDIO_ARG, RO, RW }));
   const topics = guideTopics(ctx);
   if (topics.length) {
     tools.push({

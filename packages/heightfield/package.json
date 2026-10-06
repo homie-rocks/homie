@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/heightfield",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A regular grid of heights and the questions asked of one: bilinear fetch, normals and slope, band-limiting filters, a horizon bake for sky view, and skirted chunk meshes. Pure arithmetic; imports nothing.",
   "license": "Apache-2.0",
   "type": "module",

@@ -9,7 +9,7 @@ That line is all the session is given. The brief (what the person asked for, in 
 
 1. `npm install` (once per session).
 2. `npx --no-install homie-studio handoff hb_…` prints the brief and the steps for this kind of build (a new
-   studio's first session, a new game, a port, a remix or a change). It takes the build once, so the chat's card
+   studio's first session, a new game, a port or a change). It takes the build once, so the chat's card
    follows the work, and for a studio still being set up it checks in from this repository.
 3. If it says this session's network does not reach homie.rocks and the Homie connector's tools are in this session,
    call `build_progress` with `{ "build": "hb_…" }`: its answer carries the same brief. Otherwise tell the person

@@ -15,6 +15,10 @@
  *   createHud    a minimal clock / scores / results overlay
  *   BotBrain, seek, nearest, rubberBand
  *                bot scaffolds; `skill` makes a bot play at the room's dial (NETPLAY.md section 17)
+ *   createPersonaBrain, PERSONAS, botStats
+ *                bots that want different things (port/personas.ts; also @homie-rocks/studio/personas, with no port shims)
+ *   createPowerups, stepPowerups, collectPowerups, resolveHit, packPowerups
+ *                host-owned pickups whose timers survive a host change (port/powerups.ts; also @homie-rocks/studio/powerups)
  *   jitter, engages, standoff
  *                the dial for the rest of a bot's decisions (port/skill.ts)
  *   createSaves  player accounts and cloud saves (a character that lasts days, on every device; saves/SAVES.md)
@@ -32,10 +36,12 @@ export { createControls, type Controls, type ControlsOptions } from './controls'
 export { groundBasis, screenToGround, PlayerYaw, type GroundBasis, type CameraLike } from './camera';
 export { fitView, easeView, toScreen, createLabels, type Fit, type FitOptions, type LabelIn, type LabelOut, type LabelOptions, type LabelBox } from './view';
 export { createBubbles, paintBubbles, wrapText, BUBBLE_FONT, type Bubbles, type BubbleOptions, type BubbleIn, type BubbleOut, type BubbleStyle } from './view';
-export { exposePort, type PortProbeOptions, type View } from './probe';
-export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt } from './room';
+export { exposePort, PORT_EXTRA_NAMES, type PortExtra, type PortProbeOptions, type View } from './probe';
+export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt, type TakeoverInfo } from './room';
 export { createHud, type HudOptions } from './hud';
 export { BotBrain, brainOf, seek, flee, wanderer, nearest, rubberBand, protectedNewcomer, type V2 } from './bots';
 export { jitter, engages, standoff } from './skill';
+export * from './personas';
+export * from './powerups';
 export { lab, type TunableSpec, type TunableFile, type Tuned } from '../lab/lab';
 export { createSaves, SAVES_VERSION, type Saves, type SavesOptions, type Player, type SaveEntry, type SetResult, type Memorial, type SavesStatus, type Conflict } from '../saves/saves';

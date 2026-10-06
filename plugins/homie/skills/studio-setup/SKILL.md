@@ -108,7 +108,7 @@ studio's own commands; the connector is not needed for any of it. When the Homie
 list and you can run commands:
 
 - Say it once, in one line: "The Homie connector is not connected in this app, so I'm making the studio with
-  its own commands. Connected, it adds the homie.rocks directory search (remixing a game from it), the cards
+  its own commands. Connected, it adds the homie.rocks directory search, the cards
   where an app draws them, and notes to Homie."
 - The status is `npx -y @homie-rocks/studio@latest setup status --connector no --json`. Its connector row
   says why when it can tell: another MCP server named `homie` is set up in this app and has taken the name
@@ -234,8 +234,8 @@ the command cannot be run at all.
 
 **Only when they ask for a copy** (now, or in their first message): the Gem Rush starter (grab gems, knock
 rivals away; bots fill the empty seats), or Ember Vale (`--from ember-vale`: a hero who lasts for days, with
-cloud saves) when they want a persistent game. To copy one of another studio's games instead, use the `game`
-skill's remix.
+cloud saves) when they want a persistent game. Another studio's whole game cannot be copied; pieces
+of one that its studio shared can (the `parts` skill).
 
 ```sh
 npx --no-install homie-studio game new <id> --from gem-rush --name "<Name>"

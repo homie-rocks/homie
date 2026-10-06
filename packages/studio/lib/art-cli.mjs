@@ -21,9 +21,16 @@
  *   assets add <id> <library item> [--as <id>] [--height <m>] [--card "Items/Berry"]
  *   assets add <id> --file <model> --license <kind> [--attribution "…"] [--kind prop] [--as <id>] [--height <m>]
  *                   [--triangles <n>] [--texture <px>] [--route imported|generated] [--steps <steps.json>] [--concept <image>]
- *   assets optimise <in> --out <file> [--triangles 1500] [--texture 512] [--height <m>]
- *   assets check <id>       budgets, validator, licences, staleness, scene totals, big files
- *   assets lineup <id>      the lineup, silhouettes and palette drift (pictures in .studio/art/<id>/)
+ *   assets optimise <in> --out <file> [--triangles 1500] [--texture 512] [--height <m>] [--lo 0.2]
+ *                           --lo <ratio> (here and on `assets add --file`): also write <name>_lo.glb, the same model
+ *                           at that share of its triangles, for the far band of a prop drawn at two levels of detail
+ *   assets check <id>       budgets, validator, licences, staleness, big files, and an INVENTORY ESTIMATE of the scene
+ *                           (the recorded files' own numbers; the running game is measured by the playtest and perf)
+ *   assets lineup <id> [--scope inventory|cast|environment]
+ *                           the lineup, silhouettes and palette drift (pictures in .studio/art/<id>/): the whole
+ *                           inventory, and apart from it what is in play (the cast) and the scenery
+ *   assets use <id> <asset> cast|prop|environment|unused|auto
+ *                           what the game does with an asset now (unused: kept in the folder, drawn by nothing)
  *   assets review <id> --score <1-10> [--outliers a,b] [--note "…"]
  *   assets rights <id>      RIGHTS.md and credits.json written from the manifest
  *   assets stale <id>       assets made under an older decision
@@ -40,7 +47,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { licenceProblems, readManifest, removeAsset, rightsMarkdown, syncCredits, writeRights } from './asset-manifest.mjs';
+import { USAGES, licenceProblems, readManifest, removeAsset, rightsMarkdown, setUsage, syncCredits, usageOf, writeRights } from './asset-manifest.mjs';
 import { CATALOGUE_IDS, PHASES, blastRadius, decisionRows, derivedPrompt, initDecisions, lockDecision, oneLine, phaseProgress, pickDirection, readDecisions, setDecision, staleAssets, steerDecision, unlockDecision } from './decisions.mjs';
 import { listGames } from './studio.mjs';
 import { checkLines } from './asset-check.mjs';
@@ -98,7 +105,7 @@ export function writeArtSummary(root, id) {
       stale: doc ? staleAssets(doc, manifest).map((s) => s.id) : [],
       licence: licenceProblems(root, id, manifest),
       spend: artSpend(root, id),
-      check: check ? { ok: check.ok, at: check.at, totals: check.totals, budgets: { drawCalls: check.budgets?.drawCalls, triangles: check.budgets?.triangles, textureMB: check.budgets?.textureMB, firstPlayMB: check.budgets?.firstPlayMB }, failing: check.rows.filter((r) => !r.ok).map((r) => r.id) } : null,
+      check: check ? { ok: check.ok, at: check.at, totals: check.totals, budgets: { drawCalls: check.budgets?.drawCalls, triangles: check.budgets?.triangles, textureMB: check.budgets?.textureMB, shippedPayloadMB: check.budgets?.shippedPayloadMB ?? check.budgets?.firstPlayMB, firstPlayMB: check.budgets?.firstPlayMB }, scope: check.scope ?? 'inventory-estimate', failing: check.rows.filter((r) => !r.ok).map((r) => r.id) } : null,
       lineup: lineup ? { at: lineup.at, flagged: lineup.flagged, images: lineup.images } : null,
       // The characters and their clips (lib/characters.mjs animPlan): the Art tab's Characters, /cast and /clips.
       ...(() => {
@@ -170,7 +177,7 @@ export async function styleCommand(root, sub, positional, flags, { log = () => {
 }
 
 export async function assetsCommand(root, sub, positional, flags, { log = () => {} } = {}) {
-  const known = ['list', 'find', 'add', 'redo', 'optimise', 'optimize', 'check', 'lineup', 'review', 'rights', 'stale', 'remove'];
+  const known = ['list', 'find', 'add', 'redo', 'optimise', 'optimize', 'check', 'lineup', 'review', 'rights', 'stale', 'remove', 'use'];
   const verb = known.includes(sub) ? (sub === 'optimize' ? 'optimise' : sub) : 'list';
   const args = known.includes(sub) ? positional.slice(2) : positional.slice(1);
   if (verb === 'find') {
@@ -181,17 +188,18 @@ export async function assetsCommand(root, sub, positional, flags, { log = () => 
   }
   if (verb === 'optimise') {
     const { optimiseModel } = await import('./optimise.mjs');
-    if (!args[0] || !flags.get('out')) return { ok: false, command: 'assets optimise', why: 'usage: homie-studio assets optimise <model.glb> --out <file.glb> [--triangles 1500] [--texture 512] [--height <m>]' };
-    const r = await optimiseModel(resolve(args[0]), { out: resolve(String(flags.get('out'))), triangles: Number(flags.get('triangles') ?? 1500), texture: Number(flags.get('texture') ?? 512), height: flags.has('height') ? Number(flags.get('height')) : null, rigged: flags.has('rigged'), log });
-    const { glb, ...rest } = r;
-    return { ...rest, command: 'assets optimise' };
+    if (!args[0] || !flags.get('out')) return { ok: false, command: 'assets optimise', why: 'usage: homie-studio assets optimise <model.glb> --out <file.glb> [--triangles 1500] [--texture 512] [--height <m>] [--lo 0.2]' };
+    const r = await optimiseModel(resolve(args[0]), { out: resolve(String(flags.get('out'))), triangles: Number(flags.get('triangles') ?? 1500), texture: Number(flags.get('texture') ?? 512), height: flags.has('height') ? Number(flags.get('height')) : null, rigged: flags.has('rigged'), ...(flags.has('lo') ? { lo: { ratio: flags.get('lo') === true ? 0.2 : Number(flags.get('lo')) } } : {}), log });
+    const { glb, lo, ...rest } = r;
+    // The low copy's bytes stay out of the answer too: its path and numbers are what a person reads.
+    return { ...rest, ...(lo !== undefined ? { lo: lo ? { path: lo.path, triangles: lo.triangles, bytes: lo.bytes, sha256: lo.sha256 } : null } : {}), command: 'assets optimise' };
   }
   const id = gameOf(root, args[0], `assets ${verb}`);
   let r;
   if (verb === 'list') {
     const m = readManifest(root, id);
     const doc = readDecisions(root, id);
-    r = { ok: true, command: 'assets', id, assets: m.assets.map((a) => ({ id: a.id, kind: a.kind, route: a.route, tier: a.tier ?? null, card: a.card ?? null, license: a.license?.kind ?? null, remix: a.license?.remix ?? null, file: (a.files ?? []).find((f) => f.role === 'model')?.path ?? null, tris: a.measured?.tris ?? null, kb: a.measured?.glbKB ?? null, usd: +(a.made?.steps ?? []).reduce((n, s) => n + (Number(s.usd) || 0), 0).toFixed(3) })), stale: doc ? staleAssets(doc, m).map((s) => s.id) : [], spend: artSpend(root, id) };
+    r = { ok: true, command: 'assets', id, assets: m.assets.map((a) => ({ id: a.id, kind: a.kind, usage: usageOf(a), route: a.route, tier: a.tier ?? null, card: a.card ?? null, license: a.license?.kind ?? null, file: (a.files ?? []).find((f) => f.role === 'model')?.path ?? null, tris: a.measured?.tris ?? null, kb: a.measured?.glbKB ?? null, usd: +(a.made?.steps ?? []).reduce((n, s) => n + (Number(s.usd) || 0), 0).toFixed(3) })), stale: doc ? staleAssets(doc, m).map((s) => s.id) : [], spend: artSpend(root, id) };
   } else if (verb === 'add') {
     const rigFlags = { keep: flags.has('keep') ? list(flags.get('keep')) : null, verbs: list(flags.get('verbs')), clipsFrom: flags.get('clips-from') ?? null, texture: flags.get('texture') ?? null, triangles: flags.get('triangles') ?? null };
     const characterKind = ['character', 'creature'].includes(String(flags.get('kind') ?? ''));
@@ -206,7 +214,7 @@ export async function assetsCommand(root, sub, positional, flags, { log = () => 
       const { importModel } = await import('./asset-import.mjs');
       let steps = [];
       if (flags.get('steps')) steps = JSON.parse(readFileSync(resolve(String(flags.get('steps'))), 'utf8'));
-      r = await importModel(root, id, String(flags.get('file')), { as: flags.get('as') ?? args[1] ?? null, kind: flags.get('kind') ?? 'prop', tier: flags.get('tier') ?? null, card: flags.get('card') ?? null, height: flags.get('height') ?? null, triangles: flags.get('triangles') ?? null, texture: flags.get('texture') ?? null, license: flags.get('license') ?? null, attribution: flags.get('attribution') ?? null, notes: flags.get('notes') ?? null, owner: flags.get('owner') ?? null, route: flags.get('route') ?? 'imported', steps, concept: flags.get('concept') ?? null, slug: flags.get('slug') ?? null, rigged: flags.has('rigged') });
+      r = await importModel(root, id, String(flags.get('file')), { as: flags.get('as') ?? args[1] ?? null, kind: flags.get('kind') ?? 'prop', tier: flags.get('tier') ?? null, card: flags.get('card') ?? null, height: flags.get('height') ?? null, triangles: flags.get('triangles') ?? null, texture: flags.get('texture') ?? null, license: flags.get('license') ?? null, attribution: flags.get('attribution') ?? null, notes: flags.get('notes') ?? null, owner: flags.get('owner') ?? null, route: flags.get('route') ?? 'imported', steps, concept: flags.get('concept') ?? null, slug: flags.get('slug') ?? null, rigged: flags.has('rigged'), lo: flags.get('lo') && flags.get('lo') !== true ? flags.get('lo') : flags.has('lo') ? 0.2 : null });
     } else {
       if (!args[1]) return { ok: false, command: 'assets add', why: 'usage: homie-studio assets add <game> <library item> (assets find "<words>" lists them), or --file <model> --license <kind>' };
       const { addFromLibrary, libraryBase, loadIndex } = await import('./library.mjs');
@@ -223,7 +231,13 @@ export async function assetsCommand(root, sub, positional, flags, { log = () => 
     const { redoModel } = await import('./asset-import.mjs');
     r = await redoModel(root, id, args[1]);
   } else if (verb === 'check') { const { assetsCheck } = await import('./asset-check.mjs'); r = await assetsCheck(root, id, { validate: !flags.has('no-validate') }); }
-  else if (verb === 'lineup') { const { assetsLineup } = await import('./style-board.mjs'); r = await assetsLineup(root, id, { log }); }
+  else if (verb === 'lineup') { const { assetsLineup } = await import('./style-board.mjs'); r = await assetsLineup(root, id, { log, scope: flags.get('scope') ?? null }); }
+  else if (verb === 'use') {
+    // What the game does with an asset now: `assets use <id> <asset> cast|prop|environment|unused|auto`.
+    if (!args[1] || !args[2]) return { ok: false, command: 'assets use', why: `usage: homie-studio assets use <game> <asset> <${USAGES.join('|')}|auto> (unused: a file kept in the folder that the game no longer draws)` };
+    const x = setUsage(root, id, args[1], String(args[2]));
+    r = { ok: true, command: 'assets use', id, ...x };
+  }
   else if (verb === 'review') { const { recordReview } = await import('./style-board.mjs'); r = recordReview(root, id, { score: flags.get('score'), outliers: list(flags.get('outliers')), note: flags.get('note') ?? null }); }
   else if (verb === 'rights') { const m = readManifest(root, id); const file = writeRights(root, id, m); syncCredits(root, id, m); r = { ok: true, command: 'assets rights', id, file, text: rightsMarkdown(root, id, m), licence: licenceProblems(root, id, m) }; }
   else if (verb === 'stale') { const doc = readDecisions(root, id); r = { ok: true, command: 'assets stale', id, stale: doc ? staleAssets(doc, readManifest(root, id)) : [] }; }
@@ -325,7 +339,7 @@ export function artLines(r) {
       break;
     case 'assets':
       L.push(`${r.id}: ${r.assets.length} asset${r.assets.length === 1 ? '' : 's'}${r.spend.used ? `, US$${r.spend.used} spent${r.spend.cap !== null ? ` of US$${r.spend.cap}` : ''}` : ', US$0 spent'}`);
-      for (const a of r.assets) L.push(`  ${a.id.padEnd(20)} ${a.kind.padEnd(9)} ${a.route.padEnd(10)} ${String(a.license ?? 'NO LICENCE').padEnd(10)} ${a.tris ?? '?'} tris, ${a.kb ?? '?'} KB${a.usd ? `, US$${a.usd}` : ''}${r.stale.includes(a.id) ? '  STALE' : ''}`);
+      for (const a of r.assets) L.push(`  ${a.id.padEnd(20)} ${a.kind.padEnd(9)} ${a.route.padEnd(10)} ${String(a.license ?? 'NO LICENCE').padEnd(10)} ${a.tris ?? '?'} tris, ${a.kb ?? '?'} KB${a.usd ? `, US$${a.usd}` : ''}${a.usage === 'unused' ? '  unused' : ''}${r.stale.includes(a.id) ? '  STALE' : ''}`);
       break;
     case 'assets find':
       L.push(`${r.items.length} of ${r.total} library items for "${r.query}" (CC0, free; ${r.library}):`);
@@ -344,9 +358,19 @@ export function artLines(r) {
       break;
     case 'assets lineup':
       if (r.ok === false) { L.push(r.why); break; }
-      L.push(`Lineup of ${r.rows.length} asset${r.rows.length === 1 ? '' : 's'} (${r.flagged} flagged), pictures: ${r.images.front}, ${r.images.quarter}, ${r.images.silhouettes}`);
-      for (const x of r.rows) L.push(`  ${x.flags.length ? 'FLAG' : 'ok  '} ${x.id}${x.size ? ` (${x.size[1]} m)` : ''}${x.drift ? (x.drift.repaint ? ', repainted from style.json in the game' : `, palette distance ${x.drift.mean}`) : ''}${x.flags.length ? `: ${x.flags.join('; ')}` : ''}`);
-      L.push('  Next: a fresh reviewer scores "one game?" from the board, golden images and this lineup (assets review <id> --score <n>).');
+      // Three different questions, never one picture: everything in the folder, what is in play, and the scenery.
+      L.push(`Inventory lineup of ${r.rows.length} asset${r.rows.length === 1 ? '' : 's'} (every recorded model; ${r.flagged} flagged${r.unused?.length ? `; ${r.unused.length} marked unused, which the game does not draw` : ''}), pictures: ${r.images.front}, ${r.images.quarter}, ${r.images.silhouettes}`);
+      for (const [name, what] of [['cast', 'what is in play (characters, creatures, props)'], ['environment', 'the scenery']]) {
+        const l = r.lineups?.[name];
+        if (l?.images) L.push(`${name[0].toUpperCase()}${name.slice(1)} lineup of ${l.ids.length} (${what}): ${l.images.front}, ${l.images.quarter}, ${l.images.silhouettes}`);
+        else if (l?.same) L.push(`${name[0].toUpperCase()}${name.slice(1)} lineup: the same ${l.ids.length} as the inventory (no separate picture).`);
+      }
+      for (const x of r.rows) L.push(`  ${x.flags.length ? 'FLAG' : 'ok  '} ${x.id} [${x.usage}${x.usageExplicit ? '' : ', by its kind'}]${x.size ? ` (${x.size[1]} m)` : ''}${x.drift ? (x.drift.repaint ? ', repainted from style.json in the game' : `, palette distance ${x.drift.mean}`) : ''}${x.flags.length ? `: ${x.flags.join('; ')}` : ''}`);
+      if (!r.rows.some((x) => x.usageExplicit)) L.push('  Usage is read from each asset\'s kind. An asset the game no longer draws: homie-studio assets use <id> <asset> unused (it leaves the cast and environment lineups and the scene estimate).');
+      L.push('  Next: a fresh reviewer scores "one game?" from the board, golden images and the CAST and ENVIRONMENT lineups (what the game draws); the inventory lineup is the folder, not the game (assets review <id> --score <n>).');
+      break;
+    case 'assets use':
+      L.push(`${r.asset}: ${r.usage}${r.explicit ? '' : ' (by its kind)'}.${r.usage === 'unused' ? ' It is left out of the scene estimate and of the cast and environment lineups; it still ships until it is removed (assets remove).' : ''}`);
       break;
     case 'assets review':
       L.push(`Review: ${r.review.score}/10, ${r.review.verdict}${r.review.outliers.length ? `; needs review: ${r.review.outliers.join(', ')}` : ''}`);
@@ -372,12 +396,14 @@ export function artLines(r) {
         out.push(`  ${row.id} (${row.familyLabel}, ${row.skeleton}, ${row.bones} bones${row.animsKB ? `, its clip library ${row.animsKB} KB` : ''})`);
         for (const c of row.clips) out.push(`    ${c.have ? 'ok  ' : 'MISS'} ${c.verb}${c.have ? ` <- ${c.source}${c.retargeted ? ` (retargeted from ${c.from})` : ''}` : ''}`);
         if (row.extra.length) out.push(`    also: ${row.extra.join(', ')}`);
+        if (row.supplemental?.length) out.push(`    with the supplemental librar${row.supplemental.length === 1 ? 'y' : 'ies'} ${row.supplemental.join(', ')} (the game loads ${row.supplemental.length === 1 ? 'it' : 'them'} itself: loadCharacter(models, url, { anims: [...] }))`);
+        out.push(...gaitLines(row.gait).map((l) => `    ${l}`));
       }
       for (const u of r.unrigged) out.push(`  ${u}: no rig (a static model; the animate guide says how to rig one)`);
       return out;
     }
     case 'anim add': return [`${r.asset}: ${r.added.length ? `added ${r.added.join(', ')}` : 'nothing new'} (its skeleton ${r.skeleton}: ${r.verbs.join(', ')}${r.kb ? `; ${r.kb} KB` : ''})${r.missing.length ? `; no source has ${r.missing.join(', ')}` : ''}${r.why ? ` (${r.why})` : ''}`];
-    case 'anim preview': return [`Previews in .studio/art/${r.game}/anim/:`, ...r.rows.map((row) => `  ${row.id}: ${row.verbs.map((v) => v.verb).join(', ')}${row.sheet ? ` (sheet ${row.sheet})` : ''}`)];
+    case 'anim preview': return [`Previews in .studio/art/${r.game}/anim/:`, ...r.rows.flatMap((row) => [`  ${row.id}: ${row.verbs.map((v) => v.verb).join(', ')}${row.sheet ? ` (sheet ${row.sheet})` : ''}${row.why ? ` (${row.why})` : ''}`, ...gaitLines(row.gait).map((l) => `    ${l}`)])];
     case 'assets check':
       L.push(...checkLines(r));
       break;
@@ -385,6 +411,23 @@ export function artLines(r) {
       L.push(JSON.stringify(r, null, 2));
   }
   return L;
+}
+
+/**
+ * A character's measured ground speed, in words: what its walk and run cover on THIS rig beside animate's defaults,
+ * and what to do when they differ. With nothing measured, it says the default is unverified rather than nothing.
+ */
+export function gaitLines(gait) {
+  if (!gait || (!gait.walk && !gait.run)) return ['ground speed: not measured on this rig (no walk or run clip, or no foot bones), so animate\'s default walkSpeed 1.5 and runSpeed 4.2 m/s are unverified for it: look at its feet in the game'];
+  const out = [];
+  for (const [verb, key] of [['walk', 'walkSpeed'], ['run', 'runSpeed']]) {
+    const g = gait[verb];
+    if (!g) continue;
+    const off = Math.abs(g.mps / g.default - 1) > 0.2;
+    out.push(`${verb}: its feet cover about ${g.mps} m/s on this rig (animate's default ${key} is ${g.default})${off ? `: its feet will slide at the default; start from loadCharacter(models, url, { tune: { ${key}: ${g.mps} } })` : ''}`);
+  }
+  out.push('(a guide from the foot bones while they are down, not a verified foot contact)');
+  return out;
 }
 
 export function blastLines(b) {

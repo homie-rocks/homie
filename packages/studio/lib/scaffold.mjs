@@ -36,6 +36,11 @@ import { themeFile } from './site.mjs';
 export const COMPAT_DATE = '2026-06-01';
 /** 4.135.0 or later: Worker Previews (`wrangler preview`, a Durable Object namespace per Preview). */
 export const WRANGLER_VERSION = '4.145.0';
+/**
+ * The TypeScript a new studio asks for, so `build --types` (and an editor) has a compiler: the studio's own
+ * devDependency, never one of the toolkit's (a studio that never checks types pays nothing for it at runtime).
+ */
+export const TYPESCRIPT_VERSION = '5.9.3';
 
 export function slugify(name) {
   return String(name ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -58,7 +63,7 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false }) {
+export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false, routes = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/worker.mjs', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/worker.mjs', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
@@ -73,6 +78,10 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     compatibility_flags: ['global_fetch_strictly_public'],
     workers_dev: true,
     preview_urls: true,
+    // The studio's own custom-domain and exact-host routes, as its owner wrote them: this file is written again by
+    // every deploy, and one written without them sends the studio's domain back to whatever else the zone routes
+    // (lib/routes.mjs). A studio without routes gets no key at all.
+    ...(routes?.length ? { routes } : {}),
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }],
@@ -132,7 +141,23 @@ studio's pinned copy, never a registry lookup of the bare name.
   how hard making it multiplayer will be; \`port import\` brings it into \`games/\`, \`port check\` runs the
   owner tests (real touch, a late joiner, a killed host, two browsers finishing a round). The Homie
   plugin's \`port\` skill does the whole job.
-- \`npm run build\` — bundle every game into \`site/dist\`.
+- \`npm run build\` — bundle every game into \`site/dist\`. It builds in a folder of its own and puts the result
+  in place only when all of it is there: a game that does not build fails the command (a non-zero exit) and
+  leaves \`site/dist\` exactly as it was, and nothing running from \`site/dist\` loses its files. Each game's line
+  says \`changed\`, \`unchanged\` or \`new\` (against the build before) and its build hash;
+  \`site/dist/_site/build.json\` keeps the same, and the live site says each game's hash in
+  \`/.well-known/homie-studio.json\` (\`games[].build.hash\`), so "is the live game the one I built?" is one
+  comparison. A game's bundle is named by its content (\`assets/main-<HASH>.js\`; its built \`index.html\` names
+  it, so write \`./assets/main.js\` in the game's own \`index.html\` as always), and \`await import('./later')\` in
+  a game becomes a file of its own that loads when asked for: a 3D game can show its first screen before the
+  rest of its code arrives.
+- \`npx --no-install homie-studio build --types\` — the same, after checking the games' TypeScript (the build
+  itself only strips types; a type error ships otherwise). It uses the studio's own \`typescript\`
+  (\`npm install --save-dev typescript\` if this studio has none), reads a game's own \`tsconfig.json\` when it
+  has one, and a type error in a game's files stops the build.
+- \`npx --no-install homie-studio preview <id>\` — one built game's files at an address on this computer
+  (\`http://127.0.0.1:8788/\`), nothing else: no Wrangler, no rooms, no database. For a capture, a screenshot or
+  a perf script; the game plays offline with its bots. Ctrl-C stops it.
 - \`npm run dev\` — the whole site locally (pages, the netplay relay in a local
   Durable Object, D1): open the printed address in two browsers and they share a room.
   Stop it with \`npx --no-install homie-studio dev --stop\` (this studio's dev server only;
@@ -199,14 +224,18 @@ studio's pinned copy, never a registry lookup of the bare name.
   page is not found.
 - **A new studio goes live with its Home only:** its name and "First game coming soon", with what is on the way
   (games, posts, music and videos), until its first game, song or video is published. A post shows there at once.
-- **Every game gets a landing** at \`/<id>/\`: a full-bleed hero from the game's own footage
-  (\`games/<id>/hero/wide.mp4\` and \`tall.mp4\`, or a trailer in \`videos/\` with \`for.game\`), else its cover
-  with slow motion; the pitch, a big Play button into a public room, phone / computer / TV with the join code,
-  live rooms, how to play, credits, and "Make a game like this". Give it words in game.json's \`landing\` block
+- **Every game gets a landing** at \`/<id>/\`: a full-bleed hero from the game's own files in
+  \`games/<id>/hero/\`: \`wide.jpg\` (16:9, 1280×720 or larger) and \`tall.jpg\` (9:16, 720×1280, what an upright
+  phone gets) for a still, and \`wide.mp4\` and \`tall.mp4\` in the same shapes for footage (a silent loop of 8 to
+  15 s, under 3 MB each); else a trailer in \`videos/\` with \`for.game\`; else its cover with slow motion. Any
+  size is shown, cropped to fill; one file may be 25 MiB at most. Then the pitch, a big Play button into a public room, phone / computer / TV with the join code,
+  live rooms, how to play and credits. Give it words in game.json's \`landing\` block
   (\`pitch\`, \`about\`, \`controls\`, \`howToPlay\`, \`credits\`) and art with the plugin's \`art\` and \`video\` skills.
 - **The look** is \`site/theme.json\` (colours, fonts, corner radius, a logo). Anything in \`site/\` wins: a whole
   page in \`site/pages/\`, a piece of every page in \`site/partials/\`, files in \`site/public/\`, extra CSS in
-  \`site/theme.css\` (\`site/README.md\`). A game whose picture is white or cream gets a light landing with
+  \`site/theme.css\` (\`site/README.md\`). **The order of the games** everywhere (Home, the Games page, the cards,
+  the directory's manifest) is studio.json \`"site": { "order": ["<id>", "<id>"] }\`: those first, as named, the
+  rest by id; \`"site": { "featured": "<id>" }\` picks Home's hero. A game whose picture is white or cream gets a light landing with
   game.json \`"landing": { "scheme": "light" }\` (a dark tint would turn it grey).
 - **Cards and the directory** show each game's landing still (\`hero/wide.jpg\`), else its cover. A song without
   a cover of its own shows the music manifest's \`cover\`, else its game's still.
@@ -243,14 +272,47 @@ studio's pinned copy, never a registry lookup of the bare name.
   Auto cuts to it (\`NETPLAY.md\` section 16). A game that never reads \`viewSeat\` is watched as its overview. A
   game with hidden hands or roles says game.json \`"watch": "overview"\` (the whole room only) or \`false\` (no
   watch door); a private or invite-only game is watched only by those it lets in.
+- **A touch game guards its own page.** The play page refuses text selection, the long-press callout and page
+  gestures around the game's frame, but a long press INSIDE the game (a HUD label, a button's text, the canvas) is
+  the game's own: on a phone it raises copy/paste and the thumb's touch is lost. Call
+  \`guardGestures({ touch: 'canvas, [data-action]' })\` from \`@homie-rocks/studio/netplay\` once, early: no
+  selection, no callout, no pan or pinch on the gameplay surfaces; text fields, links and ordinary buttons keep the
+  browser's own behaviour (\`NETPLAY.md\` section 24). Try it with a real thumb on a real phone: emulated touch
+  does not raise the callout.
+- **The frame has no storage of its own.** The game runs in a sandboxed frame without \`allow-same-origin\` (a
+  stranger's game must never read this site's storage or the owner's session), so \`localStorage\` throws inside it.
+  A setting or a personal best goes in \`net.prefs\` (\`await net.prefs.get('quality', 'high')\`,
+  \`net.prefs.set('quality', 'low')\`: the play page keeps 16 KB a game); progress that must last goes in saves.
+  The play page's \`?debug\` and \`?q=…\` reach the game as \`net.params\`, with any names game.json
+  \`"netplay": { "params": ["seed"] }\` declares (\`NETPLAY.md\` section 24).
+- **game.json \`"netplay"\`** also takes \`"version"\` (the game's revision: bump it when a change makes an
+  already-open tab unable to play with a new one; rooms then run one build at a time and the old tab is told to
+  reload) and \`"stallMs"\` (1500 to 10000: how long a host may send no snapshot before the room is handed on, for
+  a heavy 3D game). \`NETPLAY.md\` sections 22 and 23.
 - Change a game in small steps, build, and look at it (\`dev\`, then \`check\`).
 - A game's id is its URL (\`/<id>/\`); keep it once published.
-- **Remixing.** A public game shares its source at \`/games/<id>/source.json\`, with who made it (the studio, the
-  game, its page) and the licence its owner picks in game.json \`"license"\`: \`"remix-with-credit"\` (the
-  default), \`"remix-freely"\` or \`"no-remix"\`, and \`{ "kind": "…", "spdx": "MIT" }\` to name a licence too.
-  \`npx --no-install homie-studio game remix <source.json> --id <new id>\` brings another studio's game in as a new
-  game here: its game.json \`remixOf\` says "Remix of <game> by <studio>" with a link back, and its landing and
-  credits show it; keep that credit. A game whose licence says no remix is refused.
+- **A game's own licence.** game.json \`"license": "MIT"\` (any SPDX identifier) is said on the game's page; a game
+  that names none says nothing. It is a statement about the game, not an offer of its source: no game is handed
+  over whole. A game.json that still has \`"remix"\`, \`"share"\`, \`landing.make\` or one of the old licence words
+  builds as before with one note (remix was retired; delete them). A game that has \`"remixOf"\` was made from another
+  studio's game: keep it, it is the credit its landing and credits show ("Based on <game> by <studio>").
+- **A 3D game's models.** \`createModels()\` warns in development about a model over 1,500 triangles or 300 KB,
+  which is a small prop's budget. A game whose models are bigger on purpose says so once in its game.json:
+  \`"assets": { "budgets": { "triangles": 8000, "bytes": 1500000 } }\` (per model; \`texturePx\` and \`materials\`
+  too). A game copied from a 3D starter has \`"assets": "library"\` there, which only mattered when it was copied:
+  replace it with the object.
+- **Parts: how games build on each other.** A part is a piece of a game its studio chose to share (a creature, a
+  level generator, a camera, a bot brain, an audio pack), never the whole game. **Before writing a system from
+  scratch, look for one**: the \`@homie-rocks/*\` packages (npm) have the general mechanism (camera, input, audio,
+  effects), and \`parts_find\` searches the pieces other studios shared; packages are not parts. \`part_add\` with
+  \`"<studio site>/<part id>"\` fetches one exact version, checks every file, copies it into \`parts/_vendor/\` where
+  the studio owns and tunes it (its \`tuning.json\` survives a newer version), credits it in the game, and lets npm
+  install the packages it builds on; the game imports it in one line, \`import … from '@parts/<studio site>/<part
+  id>'\`. Write in the game's CODEX (Built from) what came from where. A reusable piece of this studio's own game
+  becomes a part with \`part_new\` (it is lifted out and the game keeps working). **A part is private until the
+  person asks to share it** (\`part_share\`, with an SPDX licence they picked and who to credit); it is live after
+  the next deploy. Without the chat tools, the same jobs are \`npx --no-install homie-studio parts
+  find|add|new|share\`. The design is \`node_modules/@homie-rocks/studio/parts/PARTS.md\`.
 - **Progress that lasts** (a character, unlocks, a collection, days of play) goes in **saves**, never in the room:
   a room forgets everything 60 s after its last player leaves. game.json \`"saves": true\` and
   \`createSaves\` from \`@homie-rocks/studio/saves\` (\`node_modules/@homie-rocks/studio/saves/SAVES.md\`): per
@@ -301,8 +363,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   lean, look-at, crowds; every number a Game Lab tunable); \`game new <id> --from hero-rush-3d\` starts one. The
   plugin's \`animate\` skill has the rest.
 - **Licences**: a public game ships only assets whose licence allows it (CC0, CC BY with credit, the studio's own,
-  generated); \`publish\` refuses an asset with no licence record. A remix gets each redistributable model,
-  checked by SHA-256, and a grey placeholder for the rest.
+  generated); \`publish\` refuses an asset with no licence record.
 
 ## Running live games (the back office)
 
@@ -310,12 +371,12 @@ studio's pinned copy, never a registry lookup of the bare name.
   the owner a one-time sign-in link): every live room of every game, who is in it (handles; accounts once players
   sign in), bots, the round and uptime, refreshing by itself; Kick (that player cannot come back to that room for
   the minutes chosen), Mute (their chat and emotes reach nobody), Announce (one line every player sees), Close a
-  room; and per game: launch state, Remixable, players per room and invites.
+  room; and per game: launch state, players per room and invites.
 - **Launch states:** \`private\` (only the owner, signed in; \`office link --to /<id>/play\` signs the owner's phone
   in), \`invite\` (an invite-only beta: \`office invite <id>\` makes invite links and codes, each for one browser or
   as many as \`--uses\` says), \`public\` (the default; listed). A game that is not public is in no list and not in
   the directory manifest, so the directory drops it the next time it reads the studio. A new game stays private
-  from its first deploy with \`"launch": "private"\` in its game.json. **Remixable** publishes or withdraws its source.
+  from its first deploy with \`"launch": "private"\` in its game.json.
 - The owner is recognised in their own games: signed in, their play page has a small Owner button (tap a player:
   Mute, Kick; Announce). Nobody else's page has it.
 - **From the AI:** \`npx --no-install homie-studio office\` lists who is playing now; \`office announce "<text>"\` and
@@ -485,7 +546,7 @@ That line is all the session is given. The brief (what the person asked for, in 
 
 1. \`npm install\` (once per session).
 2. \`npx --no-install homie-studio handoff hb_…\` prints the brief and the steps for this kind of build (a new
-   studio's first session, a new game, a port, a remix or a change). It takes the build once, so the chat's card
+   studio's first session, a new game, a port or a change). It takes the build once, so the chat's card
    follows the work, and for a studio still being set up it checks in from this repository.
 3. If it says this session's network does not reach homie.rocks and the Homie connector's tools are in this session,
    call \`build_progress\` with \`{ "build": "hb_…" }\`: its answer carries the same brief. Otherwise tell the person
@@ -554,7 +615,7 @@ anything here wins. The whole list is in \`node_modules/@homie-rocks/studio/site
 | \`theme.json\` | The look: \`bg\`, \`fg\`, \`accent\`, \`glow\` colours, \`display\` and \`text\` fonts (\`fonts\` loads a file from \`public/\`), \`radius\`, \`mark\` (a logo). Or \`palette\`: neon, dock, gold, acid, ember, orchid, tide, candy. |
 | \`theme.css\` | Extra CSS on every page (restyle anything, the "Made with Homie" footer included). |
 | \`partials/<name>.html\` | A piece of every page: \`head\`, \`header\`, \`footer\`, \`home\` (a band on Home), \`game\` (a band on every game's landing), \`game-<id>\` (on one game's), \`post\`. |
-| \`pages/<path>/index.html\` | A whole page at \`/<path>/\`, instead of the generated one (\`pages/<id>/index.html\` replaces a game's landing) or beside them (\`pages/about/index.html\`). It may borrow \`<!-- homie:style -->\`, \`<!-- homie:header -->\`, \`<!-- homie:footer -->\`, \`<!-- homie:script -->\`, and \`<!-- homie:schema -->\` in its \`<head>\` (the page's structured data for search engines). |
+| \`pages/<path>/index.html\` | A whole page at \`/<path>/\`, instead of the generated one (\`pages/<id>/index.html\` replaces a game's landing) or beside them (\`pages/about/index.html\`). It may borrow \`<!-- homie:style -->\`, \`<!-- homie:header -->\`, \`<!-- homie:footer -->\`, \`<!-- homie:script -->\`, and \`<!-- homie:schema -->\` in its \`<head>\` (the page's structured data for search engines). A Home of your own (\`pages/index.html\`) takes the generated hero with \`<!-- homie:home-hero -->\` (the featured game) or \`<!-- homie:home-hero <id> -->\` (that game); a game's own hero files are served at \`/games/<id>/_landing/<file>\` (\`wide.jpg\`, \`tall.jpg\`, \`wide.mp4\`, \`tall.mp4\`) if a page of yours needs one by address (\`/api/games\` says each exactly, in \`landing.hero\`). |
 | \`public/\` | Files served as they are, at the same path (\`public/fonts/x.woff2\` is \`/fonts/x.woff2\`). A \`robots.txt\`, \`sitemap.xml\` or \`llms.txt\` here replaces the one the site makes. |
 
 \`src/worker.mjs\` and \`migrations/\` are the Worker (its config is \`wrangler.jsonc\`, at the studio's root); \`dist/\` is the build (not committed).
@@ -620,7 +681,7 @@ export function studioFiles({ name, slug, homie, template = false }) {
     private: true,
     type: 'module',
     scripts: { dev: 'homie-studio dev', build: 'homie-studio build', deploy: 'homie-studio deploy', check: 'homie-studio check', studio: 'homie-studio' },
-    devDependencies: { '@homie-rocks/studio': packageSpec(homie), wrangler: WRANGLER_VERSION },
+    devDependencies: { '@homie-rocks/studio': packageSpec(homie), typescript: TYPESCRIPT_VERSION, wrangler: WRANGLER_VERSION },
     // What Cloudflare's "Deploy to Cloudflare" form says about each setting (package.json `cloudflare.bindings`).
     cloudflare: {
       label: 'Homie studio',

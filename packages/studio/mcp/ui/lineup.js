@@ -21,14 +21,14 @@
     var list = C.el('ul', 'list');
     (sc.rows || []).forEach(function (r) {
       var li = C.el('li', r.flags.length ? 'now' : 'done');
-      li.appendChild(C.add(C.el('div', 'cb'), C.el('b', '', r.label + (r.size ? ' · ' + r.size[1] + ' m' : '')), C.el('span', '', r.kind + ', ' + r.route + (r.drift ? (r.drift.repaint ? ' · repainted from style.json in the game' : ' · palette distance ' + r.drift.mean) : '')), r.flags.length ? C.el('span', 'fix', r.flags.join(' · ')) : null));
+      li.appendChild(C.add(C.el('div', 'cb'), C.el('b', '', r.label + (r.size ? ' · ' + r.size[1] + ' m' : '')), C.el('span', '', r.kind + ', ' + r.route + (r.usage === 'unused' ? ' · unused (not drawn by the game)' : '') + (r.drift ? (r.drift.repaint ? ' · repainted from style.json in the game' : ' · palette distance ' + r.drift.mean) : '')), r.flags.length ? C.el('span', 'fix', r.flags.join(' · ')) : null));
       li.appendChild(C.pill(r.flags.length ? r.flags.length + ' flag' + (r.flags.length === 1 ? '' : 's') : 'Fits', r.flags.length ? 'warn' : 'ok'));
       list.appendChild(li);
     });
     card.appendChild(list);
     if (sc.totals && sc.budgets) {
-      card.appendChild(C.el('h2', '', 'Phone budgets, the whole scene'));
-      [bar('Draw calls', sc.totals.drawCalls, sc.budgets.drawCalls), bar('Triangles', sc.totals.triangles, sc.budgets.triangles), bar('Picture memory', sc.totals.textureMB, sc.budgets.textureMB, ' MB'), bar('First play', sc.totals.firstPlayMB, sc.budgets.firstPlayMB, ' MB')].forEach(function (b) { if (b) card.appendChild(b); });
+      card.appendChild(C.el('h2', '', 'Phone budgets: an estimate from the recorded files'));
+      [bar('Draw calls', sc.totals.drawCalls, sc.budgets.drawCalls), bar('Triangles', sc.totals.triangles, sc.budgets.triangles), bar('Picture memory', sc.totals.textureMB, sc.budgets.textureMB, ' MB'), bar('Shipped payload', sc.totals.firstPlayMB, sc.budgets.firstPlayMB, ' MB')].forEach(function (b) { if (b) card.appendChild(b); });
     }
   }
   function make(card, sc) {

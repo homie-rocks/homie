@@ -74,10 +74,27 @@ Fails: a promoted host starts a new round (restore from `e.round`/checkpoint —
 `createRoom` does), a joiner adds a body (use `Roster.claim`), a stale clock (draw the
 clock from the room's round), a joiner that never adopts its body (wire `adopt`).
 
+`port check` does not cover these three; try each by hand in two real browsers before calling
+joining done (NETPLAY.md section 25 has the whole list):
+
+- **Everyone leaves, then a new visitor enters before the room is forgotten (60 s).** The
+  visitor hosts the SAME round, restored from the checkpoint. It must have taken a body over
+  (`onTakeover(body, { why: 'restore', own: true })` ran, so it does not carry a departed
+  player's score), stand where that body stands (`adopt` ran) and move at once. A game that
+  only resets a newcomer in its `join` handler misses this path; `createRoom` covers it.
+- **The same, with one of the players who left** (the same tab, reloaded): their own body and
+  score back, and no takeover.
+- **The host's network drops for a second while a third browser joins.** After it reconnects:
+  three people, three bodies, nobody's score reset.
+
 ## tv
 
 `/<id>/tv` on a 1280×720 screen: a spectator with no seat and no body, the join QR,
-a game picture that is not black, frames advancing. Fails: the game gives a spectator
+a game picture that is not black, frames advancing. The join QR is required on an
+address another phone can reach; on a loopback preview (127.0.0.1, localhost) the page
+leaves the join card out on purpose, so the row says `qr: not applicable` and does not
+fail on it. A local pass therefore says nothing about the live QR: run this row against
+the deployed address before release. Fails: the game gives a spectator
 a body (check `room.mySeat() === null`), or renders nothing without a player.
 
 ## audio · sandbox · errors

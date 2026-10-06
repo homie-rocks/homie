@@ -95,7 +95,7 @@ function stage(data) {
 const office = () => ({
   ok: true, now: Date.now(), playing: 0, agentsTalk: false, fillSpot: null,
   games: [{
-    id: 'gem-rush', name: 'Gem Rush', playing: 0, play: '/gem-rush/play', page: '/gem-rush/', launch: 'public', remix: true, remixBuilt: true, seats: 8, maxPlayers: 8,
+    id: 'gem-rush', name: 'Gem Rush', playing: 0, play: '/gem-rush/play', page: '/gem-rush/', launch: 'public', seats: 8, maxPlayers: 8,
     servers: [{ id: 'public', name: 'Quick play', policy: 'open', aiSeats: 0, guides: 0, kids: false, bots: 'fill', level: 3, levelMax: 5, door: 'open', state: 'open', line: POLICY_WORDS.open.line }],
     passes: [], invites: [], rooms: [],
   }],

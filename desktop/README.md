@@ -83,7 +83,7 @@ Night Owls: build hb_…"*; the session fetches the brief itself (`homie-studio 
   command with the computer's Node.js (it never starts the app's own binary), found on the PATH or in the usual places
   (Homebrew, nvm, Volta, asdf, fnm, the Node.js installer).
 - **The same tool names as the remote connector** where they overlap (`studio_scaffold`, `studio_card`, `game_make`,
-  `game_remix`, `game_port`, `preview_run`, `studio_deploy`, `studio_publish`, `build_open`, `build_progress`,
+  `game_port`, `preview_run`, `studio_deploy`, `studio_publish`, `build_open`, `build_progress`,
   `build_stop`): the remote ones say what to run, these run it.
 - Check a build of it: `node scripts/desktop.mjs --check` validates the manifest with `mcpb validate`, packs it,
   unpacks it, and drives the packed server the way the app does.

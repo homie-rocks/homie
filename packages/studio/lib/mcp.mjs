@@ -38,7 +38,7 @@ A new studio follows one checklist, in order and never ahead. Show it in your fi
 1. The studio (studio_scaffold): it has NO game; its home page says "First game coming soon".
 2. See a working game (game_demo): a live game on Homie Arcade with its Play link, nothing copied in. Copy a starter in (game_make) only if they ask.
 3. One small change from one sentence of theirs: to the copied game, or to the studio's home (site/theme.json colours, a tagline in studio.json, a first post in posts/). Then build and preview_run, and they reload.
-4. Plan their game (game_plan): a short interview, two or three questions a message with options and your pick; then fill games/<id>/CODEX.md and show it (game_codex).
+4. Plan their game (game_plan): a short interview, two or three questions a message with options and your pick; then fill games/<id>/CODEX.md and show it (game_codex). Look for pieces first: the @homie-rocks/* packages for general mechanisms, and parts_find for pieces other studios shared (part_add brings one in).
 5. Build it: build_open, then game_make under the planned id (the codex stays), file edits (few and large: one file_edit carries every change to a file in its edits list, never a call per change), build, preview_run, check. The card follows every build.
 6. Playtest it (playtest), then put it online: studio_deploy with plan: true first (say what it creates and costs, free), cloudflare_login when not signed in (they approve once in their browser), studio_deploy, then studio_publish.
 If they ask for everything at once, show the list, make your own choices for steps 2 to 4 in one line each, and go on.

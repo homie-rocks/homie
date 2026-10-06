@@ -24,7 +24,7 @@ Night Owls and make a multiplayer game"* and it:
    homie.rocks in your studio's own look (Home, Games, Music, Videos, Rooms, Posts), and
    every game gets a landing page of its own, in the game's own palette: a full-bleed hero
    from its footage or art, a big Play button into a public room, phone / computer / TV,
-   live rooms, credits, and "Make a game like this". Play never opens on a blank screen:
+   live rooms and credits. Play never opens on a blank screen:
    the game's title, art and a progress line show while its room connects and it loads.
    Search engines and AI agents read it correctly: schema.org data on every page (a full
    VideoGame on each landing), and a sitemap, robots.txt and llms.txt made from what is public;
@@ -98,7 +98,7 @@ not need Claude's GitHub app; that hand-off we have not run end to end ourselves
 
 Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
 `port`, `publish`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
-`https://homie.rocks/mcp`, which has creator tools only: set up a studio, make or remix a game, make an
+`https://homie.rocks/mcp`, which has creator tools only: set up a studio, make a game, make an
 existing single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.
 
@@ -218,7 +218,7 @@ studio. Its cards do the rest, and every approval is one tap on the provider's o
    Worker, database and rooms, and Workers Builds deploys every push), *Let Claude work in
    it* (Claude's GitHub app, for that one repository), and an optional media provider. It
    follows the studio as it comes up.
-2. **"Build it" cards** on a new game, a port or a remix open a Claude Code session on the
+2. **"Build it" cards** on a new game or a port open a Claude Code session on the
    studio's repository with ONE short line, *"Continue building Night Owls: build hb_…"*. The
    session fetches the brief itself (`homie-studio handoff`, as the studio's `HANDOFF.md` says).
    The chat opens the build first, so its progress card (stages, checks going green, a picture,

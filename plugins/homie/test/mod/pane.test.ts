@@ -127,16 +127,17 @@ describe('the Studio pane', () => {
     expect(w.log.toasts.join(' ')).toContain('to 3 people')
   })
 
-  test('Games: the launch state and the remix switch are asked for', async ($, on) => {
+  test('Games: the launch state is asked for, and there is no remix switch', async ($, on) => {
     const w = world(on)
     await start($)
     await run($, 'studio', 'games')
     const ui = await $.ui.mount(pane('homie-studio', 'terminal'))
-    expect(textOf(await ui.drawn())).toContain('remixable')
+    const drawn = textOf(await ui.drawn())
+    expect(drawn).toContain('Owl Rush')
+    for (const gone of ['remixable', 'source closed', 'Remix']) expect(drawn).not.toContain(gone)
     await ui.select({ key: 'launch-owl-rush', value: 'invite' })
     expect(w.log.ran.find((a) => a.includes('launch')).slice(-5)).toEqual(['office', 'launch', 'owl-rush', 'invite', '--json'])
-    await ui.press({ key: 'remix-owl-rush' })
-    expect(w.log.ran.filter((a) => a.includes('launch')).pop()).toContain('--remixable')
+    expect(w.log.ran.some((a) => a.includes('--remixable'))).toBe(false)
   })
 
   for (const surface of SURFACES) {

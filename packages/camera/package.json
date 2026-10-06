@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/camera",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Camera maths for three.js games: closed-form springs, lens and field-of-view fitting, an exact frame solver, and chase-rig and cinematic building blocks. Every tuning number is the caller's; none has a default.",
   "license": "Apache-2.0",
   "type": "module",

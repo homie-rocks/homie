@@ -167,9 +167,13 @@ export function budgetWords(check) {
 
 const fmt = (n) => (Number.isInteger(n) ? n.toLocaleString('en-US') : String(+n.toFixed(1)));
 
-/** The four scene budgets as rows for bars: draw calls, triangles, picture MB, first-play MB. */
+/**
+ * The four scene budgets as rows for bars: draw calls, triangles, picture MB, and the shipped payload (every built file
+ * gzipped; the check's key for it is still `firstPlayMB`, its old name, and it never was a measured first-play
+ * download). All four are the asset check's inventory estimate, not a reading of the running game.
+ */
 export function budgetRows(check) {
-  return [['drawCalls', 'draw calls', ''], ['triangles', 'triangles', ''], ['textureMB', 'picture memory', 'MB'], ['firstPlayMB', 'first play', 'MB']].map(([k, label, unit]) => {
+  return [['drawCalls', 'draw calls', ''], ['triangles', 'triangles', ''], ['textureMB', 'picture memory', 'MB'], ['firstPlayMB', 'shipped payload', 'MB']].map(([k, label, unit]) => {
     const value = check.totals[k];
     const budget = check.budgets[k];
     return { key: k, label, unit, value, budget, over: value !== null && budget !== null && value > budget, percent: value !== null && budget ? Math.min(100, (value / budget) * 100) : 0 };
@@ -227,18 +231,19 @@ export function lockedChanges(before, after) {
 /* ------------------------------------------------------------------ the licence guard */
 
 const KNOWN = new Set(['cc0', 'cc-by-4.0', 'cc-by-3.0', 'own', 'generated', 'qal', 'mixamo', 'other']);
-// Licences that forbid handing the file on: a public source carries a placeholder ("none") or the origin ("reference").
-const CLOSED = new Set(['qal', 'mixamo', 'other']);
-
-/** A game whose source is public: game.json `launch` is not private or invite-only, and `share.source` is not false. */
-export function publicSource(meta) {
-  return Boolean(meta && typeof meta === 'object' && !['private', 'invite'].includes(meta.launch) && meta.share?.source !== false);
+/**
+ * A public game: game.json `launch` is not private or invite-only. (It used to matter too whether the game's source
+ * was shared, `share.source`; no game's source is shared any more, and that key is ignored.)
+ */
+export function publicGame(meta) {
+  return Boolean(meta && typeof meta === 'object' && !['private', 'invite'].includes(meta.launch));
 }
 
 /**
  * What a public game's assets/manifest.json ships that a deploy must not: { count, problems: [{ asset, problem }] }.
- * Refused: no licence, a kind the studio does not know, TurboSquid's EULA (never on the web), a CC BY asset with no
- * attribution, and a licence that forbids handing the file on whose `remix` is not "none" or "reference".
+ * Refused: no licence, a kind the studio does not know, TurboSquid's EULA (never on the web), and a CC BY asset with
+ * no attribution. A licence that forbids handing the file on (Quaternius, Mixamo, a EULA, a bought asset) is no
+ * problem here: a game serves its files to its players only, and what may be in a shared part is the toolkit's check.
  */
 export function licenceIssues(manifest) {
   const assets = manifest && typeof manifest === 'object' && Array.isArray(manifest.assets) ? manifest.assets : null;
@@ -254,7 +259,6 @@ export function licenceIssues(manifest) {
     if (kind === 'eula:turbosquid') { problems.push({ asset: id, problem: 'TurboSquid\'s licence never allows a web game to serve the file' }); continue; }
     if (!KNOWN.has(kind) && !eula && !market) { problems.push({ asset: id, problem: `"${str(kind, 40)}" is not a licence kind the studio knows` }); continue; }
     if (kind.startsWith('cc-by') && !str(lic.attribution, 300)) problems.push({ asset: id, problem: `${kind} needs credit, and there is no attribution line` });
-    if ((CLOSED.has(kind) || eula || market) && !['none', 'reference'].includes(lic.remix)) problems.push({ asset: id, problem: `${kind} forbids handing the file on, but its remix is "${str(lic.remix, 20) ?? 'unset'}" (it must be "none" or "reference")` });
   }
   return { count: assets.length, problems };
 }

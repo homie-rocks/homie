@@ -60,10 +60,42 @@ There is no barrel file: import the module you need.
 | `Haze.js` | `HazeSheet`: a drifting noise sheet for mist and ground haze, with distance and edge fades |
 | `Shafts.js` | `ShaftVolume`: light shafts in dirty air, one instanced additive draw |
 | `EffectLights.js` | `EffectLights`: a fixed pool of point lights that effects claim each frame by importance |
+| `juice.js` | `Combo`, `HitStop`, `kickImpulse`, `burstScale`: a combo multiplier with callouts, a hit-stop, a camera kick and a burst size by camera distance, as numbers |
 
 And 30 more in `src/`, among them `Shimmer.js` (a heat veil), `RacerSystem.js`
 (a base class that wires these pools into a racing game's frame) and
 `trajectory.js` (vacuum ballistics).
+
+## Juice
+
+`juice.js` is four pieces of feedback as plain numbers; use any one alone. It
+spawns nothing, moves no camera and plays no sound: the game does that with
+what these return. All of it runs on the `dt` it is handed.
+
+```ts
+import { Combo, HitStop, burstScale, kickImpulse } from '@homie-rocks/fx/juice.js';
+
+const combo = new Combo({ window: 2, perStep: 3, stepMult: 0.5, maxMult: 3,
+  callouts: [{ at: 3, text: 'Nice' }, { at: 6, text: 'Great' }] });
+const stop = new HitStop({ seconds: 0.06, maxSeconds: 0.15, scale: 0 });
+const burst = { count: 0, size: 0 };
+
+function onHit(at: THREE.Vector3, strength: number): void {
+  const hit = combo.hit();
+  score += 10 * hit.multiplier;
+  if (hit.callout) hud.announce(hit.callout); // once per threshold per combo
+  stop.hit(strength);
+  const d = camera.position.distanceTo(at);
+  cameraKick.kick(kickImpulse(strength, d, { gain: 2, max: 5, falloffM: 10 })); // any spring
+  burstScale(d, { count: 48, size: 0.2, refM: 8, minCount: 4, maxGrow: 4, cullM: 90 }, burst);
+  particles.burst(at, burst.count, burst.size); // fewer and larger far away
+}
+
+function frame(realDt: number): void {
+  const dt = stop.step(realDt); // 0 while stopped: step the game with this
+  if (combo.step(dt) > 0) hud.comboEnded();
+}
+```
 
 ## License
 

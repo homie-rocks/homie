@@ -77,7 +77,9 @@ crowd(allCharacters, camera);                                      // far and of
 ```
 
 - Locomotion blends idle, walk and run by the body's ground speed and plays each at the rate its feet need
-  (`walkSpeed`, `runSpeed`: tune them until the feet stop sliding).
+  (`walkSpeed`, `runSpeed`: tune them until the feet stop sliding). The defaults (1.5 and 4.2 m/s) are not measured
+  on your rig: `anim plan` and `anim preview` print the ground speed each character's walk and run cover on its own
+  rig (a guide from its foot bones); start `tune: { runSpeed: <that> }` from it, then look at the feet.
 - An action while moving plays on the upper body (the legs keep running); standing, on all of it.
 - A hit is an additive flinch over whatever plays, with a hit-stop (`hitStopMs`).
 - Jump, fall and land are clips plus springy squash and stretch (`jumpStretch`, `landSquash`, `squashHz`).
@@ -117,7 +119,7 @@ characters are needed. The `perf` skill's measured run on a phone is the real ga
 - Quaternius: its site licence (QAL v1.0, updated 2026-08-28) forbids redistributing the assets as a pack or template:
   never in the library or a public game's repository; reference only.
 - Mixamo: never in a public repository (raw files may not be redistributed); allowed only in a private studio's
-  shipped build, marked `remix: none`.
+  shipped build.
 - Text-to-motion: almost every open model is non-commercial in effect (trained on AMASS/HumanML3D, or SMPL), so this
   skill offers none of them. HY-Motion is territory-limited (not the EU, the UK or South Korea). Paid services with
   commercial terms (Meshy text to motion on the person's own Meshy plan) are a later phase.
