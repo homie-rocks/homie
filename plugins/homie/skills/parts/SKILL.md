@@ -75,6 +75,10 @@ Then fill `parts/<id>/part.json`: a one-sentence `summary`, tags, what it takes 
 packages it builds on (`requires.packages`), its scale and skeleton if it has them, costs only if measured, a small
 `preview/index.html` that shows it, and its tunables in `tuning.json`.
 
+When the preview is something to play with, declare its shape in `preview`: `"aspect": "4:3"` and
+`"phoneAspect": "3:4"` (whole numbers 1 to 32, no flatter than 3:1, no taller than 1:2). The default is 16:9, which
+on a 390 px phone is a frame about 197 px tall: the controls fit and the demo under them is cut off, with no error.
+
 ## 4. Share a part, only when the person asks
 
 Ask which licence (`CC-BY-4.0` for "use it, credit me", `CC0-1.0` for "no strings", `MIT` for code) and who to

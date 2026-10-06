@@ -6,6 +6,7 @@
  * is `parts/<id>/part.json` and the files beside it. A part is a piece of a game, never the whole game.
  *
  *   checkPart()        the shape of a part.json, each problem in plain words with its fix
+ *   previewAspect()    a preview's declared shape ("4:3") as two whole numbers, or null: the only reading of it
  *   hashDir()          every file of a part with its SHA-256 and size (node:crypto): written by the tool, never by hand
  *   newPart()          a part lifted out of one of the studio's games (the game still builds and plays the same)
  *   fileRights()       whose each file is: its own record, a game's asset record of the same bytes, or the part's provenance
@@ -41,6 +42,30 @@ export const LIMITS = Object.freeze({ fileBytes: 25 * 1024 * 1024, totalBytes: 1
 const clean = (s, n = 300) => (typeof s === 'string' ? s.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, n) : '');
 const isObj = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+/* ------------------------------------------------------------------ a preview's shape */
+
+/**
+ * The shape of a part's preview frame: `preview.aspect`, and `preview.phoneAspect` for a frame narrower than
+ * 600 CSS px. Each is "W:H" in whole numbers 1 to 32, no flatter than 3:1 and no taller than 1:2. The default
+ * is 16:9, which on a 390 px phone is a frame about 197 px tall: too short for a preview somebody plays with.
+ */
+const PREVIEW_SHAPE = Object.freeze({ max: 32, flattest: 3, tallest: 2 });
+/** { w, h } for a shape inside those bounds; null for anything else (the page then uses the default). */
+export function previewAspect(value) {
+  const m = typeof value === 'string' ? /^([1-9]\d?):([1-9]\d?)$/.exec(value) : null;
+  if (!m) return null;
+  const w = Number(m[1]); const h = Number(m[2]);
+  if (w > PREVIEW_SHAPE.max || h > PREVIEW_SHAPE.max || w > PREVIEW_SHAPE.flattest * h || h > PREVIEW_SHAPE.tallest * w) return null;
+  return { w, h };
+}
+/** Why a declared shape is refused, in plain words; null when it is fine. */
+function aspectProblem(value) {
+  if (previewAspect(value)) return null;
+  const m = typeof value === 'string' ? /^([1-9]\d?):([1-9]\d?)$/.exec(value) : null;
+  if (!m || Number(m[1]) > PREVIEW_SHAPE.max || Number(m[2]) > PREVIEW_SHAPE.max) return 'it is not a shape: two whole numbers from 1 to 32 with a colon between them';
+  return Number(m[1]) > Number(m[2]) ? 'it is flatter than 3:1, too short a frame to show a part in' : 'it is taller than 1:2, too tall a frame to fit a screen';
+}
 
 /* ------------------------------------------------------------------ versions and ranges */
 
@@ -241,6 +266,8 @@ export function checkPart(part, { id = null } = {}) {
     else {
       if (part.preview.page != null && (!safePath(part.preview.page) || !/\.html?$/.test(part.preview.page))) bad('preview.page', 'it is not an HTML file inside the part', 'preview/index.html');
       if (part.preview.image != null && (!safePath(part.preview.image) || !/\.(png|jpe?g|webp|gif|svg)$/i.test(part.preview.image))) bad('preview.image', 'it is not a picture inside the part', 'preview/cover.jpg');
+      // The frame's shape. Refused, never repaired: the studio's page builds its CSS from these two numbers and nothing else.
+      for (const k of ['aspect', 'phoneAspect']) if (part.preview[k] !== undefined && aspectProblem(part.preview[k])) bad(`preview.${k}`, aspectProblem(part.preview[k]), k === 'aspect' ? '"4:3", "1:1", "3:4"; leave it out for 16:9' : '"3:4" or "1:1": the shape on a phone; leave it out for the usual one');
       const listed = new Set((Array.isArray(part.files) ? part.files : []).map((f) => f?.path));
       for (const k of ['page', 'image']) if (part.preview[k] && Array.isArray(part.files) && safePath(part.preview[k]) && !listed.has(part.preview[k])) bad(`preview.${k}`, `${part.preview[k]} is not one of the part's files`, 'check the path; checking the part rewrites its file list');
     }

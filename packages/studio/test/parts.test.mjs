@@ -17,7 +17,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from '../lib/build.mjs';
-import { PART_KINDS, checkPart, fileRights, hashDir, licenceIssues, licenseOfPart, newPart, packPart, parseRef, readOrigins, readPart, requiredParts, shareProblems, sharedPartsOf, verifyFiles, writeHashes, writePart } from '../lib/parts.mjs';
+import { PART_KINDS, checkPart, previewAspect, fileRights, hashDir, licenceIssues, licenseOfPart, newPart, packPart, parseRef, readOrigins, readPart, requiredParts, shareProblems, sharedPartsOf, verifyFiles, writeHashes, writePart } from '../lib/parts.mjs';
 import { addPart, checkParts, ensurePackages, findParts, sharePart } from '../lib/parts-store.mjs';
 import { partsPlanLines, partsPublishReport } from '../lib/parts-build.mjs';
 import { PARTS_ADD_USAGE, partsCommand, partsLines } from '../lib/parts-cli.mjs';
@@ -264,7 +264,7 @@ export function createPickupField(spots: { x: number; z: number }[], options: Pa
 `;
 
 /** Studio A: a game with a pickup mechanic lifted out of it and shared, and a private part beside it. */
-async function studioA(folder = 'owls') {
+async function studioA(folder = 'owls', preview = {}) {
   const dir = studio(folder, 'Night Owls');
   game(dir, 'gem-cave', 'import { createPickupField } from \'./pickups/index\';\nconst f = createPickupField([{ x: 0, z: 0 }, { x: 9, z: 9 }]);\n(globalThis as any).__out = f.collect({ x: 0.5, z: 0 });\n', {}, {
     'src/pickups/index.ts': FIELD.replace('../tuning.json', './tuning.json'),
@@ -281,6 +281,7 @@ async function studioA(folder = 'owls') {
   write(pdir, 'preview/index.html', '<!doctype html><title>Pickup field</title><p>walk over the gems</p>');
   const part = readPart(pdir);
   Object.assign(part, { summary: 'Host-authoritative pickups on spawn spots.', license: 'CC-BY-4.0', attribution: 'Night Owls', tags: ['pickups', 'netplay'], version: '1.0.0', contract: { inputs: { player: 'a position in metres' }, state: { live: 'which spots still hold a pickup' }, netplay: 'host-authoritative' }, requires: { packages: { '@homie-rocks/studio': '>=0.1.0' } }, _note: 'INTERNAL-NOTE-MARK' });
+  Object.assign(part.preview, preview);
   writePart(pdir, part);
   // The game keeps importing its own tuning for nothing now; its shim re-exports the part.
   rmSync(join(dir, 'games/gem-cave/src/pickups/tuning.json'));
@@ -365,6 +366,12 @@ test('the site lists and serves shared parts only: a private part is never reach
   const html = await page.text();
   assert.equal(page.status, 200);
   assert.match(html, /<iframe class="pframe"[^>]+src="\/parts\/pickup-field\/1\.0\.0\/preview\/index\.html"[^>]+sandbox="allow-scripts allow-pointer-lock"/, 'the interactive preview');
+  // Nothing declared: 16:9, a narrow frame never under 320 px (70% of a short screen), and a plain link out of the frame.
+  assert.match(html, /<div class="pview" style="--pv:16\/9"><iframe class="pframe" title="Pickup field: try it"/, 'the default shape, and the frame keeps its title');
+  assert.match(html, /@container \(max-width:599\.98px\)\{\.pview \.pframe\{min-height:min\(320px,70vh\);min-height:min\(320px,70svh\)\}/, 'the narrow-screen minimum');
+  assert.match(html, /<a class="popen" href="\/parts\/pickup-field\/1\.0\.0\/preview\/index\.html" target="_blank" rel="noopener noreferrer">.*Open the preview/, 'a link, so no script and a keyboard reaches it');
+  assert.match(html, /\.popen:focus-visible\{outline:/, 'with a focus state that shows');
+  assert.equal(entry.preview.aspect, undefined, 'nothing is invented for a part that declared no shape');
   assert.match(html, /CC-BY-4\.0/);
   assert.match(html, /<dt>Credit<\/dt><dd>Night Owls<\/dd>/);
   assert.match(html, /@homie-rocks\/studio &gt;=0\.1\.0 \(a package, from npm\)/, 'requirements');
@@ -389,6 +396,57 @@ test('the site lists and serves shared parts only: a private part is never reach
   assert.deepEqual((await (await site('/.well-known/homie-parts.json')).json()).parts, []);
   assert.equal((await site('/parts/pickup-field/1.0.0/src/index.ts')).status, 404);
   assert.equal((await site('/parts/')).status, 404);
+});
+
+test('a part declares the shape of its preview frame; nothing but two checked numbers ever reaches the page', async () => {
+  const withShape = (preview) => checkPart({ ...GOOD, preview });
+  // The bounds: whole numbers 1 to 32, no flatter than 3:1, no taller than 1:2.
+  for (const ok of ['16:9', '4:3', '1:1', '3:4', '3:1', '1:2', '32:32', '32:11', '9:16']) {
+    assert.equal(withShape({ aspect: ok, phoneAspect: ok }).ok, true, `${ok} is a shape`);
+    const [w, h] = ok.split(':').map(Number);
+    assert.deepEqual(previewAspect(ok), { w, h });
+  }
+  const HOSTILE = ['16:9;background:url(x)', '0:0', '999:1', '4:1', '1:3', '33:32', '16:0', '016:9', '16 : 9', '16/9', ' 4:3', '4:3\n', '4.5:3', '-4:3', '4:3"><script>', '', 169, null, ['4:3'], { w: 4, h: 3 }];
+  const { aspectOf } = await import('../worker/parts.mjs');
+  for (const bad of HOSTILE) {
+    for (const k of ['aspect', 'phoneAspect']) {
+      const r = withShape({ [k]: bad });
+      assert.equal(r.ok, false, `${k} ${JSON.stringify(bad)} is refused`);
+      assert.deepEqual(r.problems.map((p) => p.field), [`preview.${k}`]);
+      assert.ok(!/undefined|\[object|url\(|script/.test(`${r.problems[0].problem}${r.problems[0].fix}`), 'said in plain words, without repeating the value');
+    }
+    assert.equal(previewAspect(bad), null);
+  }
+  assert.match(withShape({ aspect: '0:0' }).problems[0].problem, /two whole numbers from 1 to 32/);
+  assert.match(withShape({ aspect: '4:1' }).problems[0].problem, /flatter than 3:1/);
+  assert.match(withShape({ phoneAspect: '1:3' }).problems[0].problem, /taller than 1:2/);
+  // The site's own reading of a shape is the checker's, value for value (a Worker cannot import the checker).
+  for (const v of [...HOSTILE, '16:9', '4:3', '3:1', '1:2', '32:32', '32:10', '10:21', '3:4']) assert.deepEqual(aspectOf(v), previewAspect(v), JSON.stringify(v));
+
+  // A part that declares both: a hand-set hostile shape cannot even be shared.
+  const { dir, site } = await studioA('shapes', { aspect: '4:3', phoneAspect: '3:4' });
+  const entry = (await (await site('/.well-known/homie-parts.json')).json()).parts[0];
+  assert.deepEqual(entry.preview, { page: 'preview/index.html', aspect: '4:3', phoneAspect: '3:4' }, 'the well-known file carries both, unchanged');
+  const indexFile = join(dir, 'site', 'dist', 'parts', 'index.json');
+  assert.deepEqual(readJson(indexFile).parts[0].preview, { page: 'preview/index.html', aspect: '4:3', phoneAspect: '3:4' }, 'and so does the built index');
+  const framesOf = (html) => [...html.matchAll(/<div class="(pview[^"]*)" style="([^"]*)">/g)].map((m) => [m[1], m[2]]);
+  const html = await (await site('/parts/pickup-field/')).text();
+  assert.deepEqual(framesOf(html), [['pview pview-own', '--pv:4/3;--pvn:3/4']], 'those numbers and only those');
+  assert.match(html, /\.pview\.pview-own \.pframe\{aspect-ratio:var\(--pvn,var\(--pv,16\/9\)\);min-height:0\}/, 'a declared phone shape wins over the minimum');
+  assert.match(html, /<iframe class="pframe" title="Pickup field: try it"[^>]+sandbox="allow-scripts allow-pointer-lock"/, 'the same sandbox as before');
+  const pdir = join(dir, 'parts', 'pickup-field');
+  writePart(pdir, { ...readPart(pdir), version: '1.0.1', preview: { page: 'preview/index.html', aspect: '16:9;background:url(x)' } });
+  assert.equal(sharePart(dir, 'pickup-field').ok, false, 'the checker stands between a hostile shape and a shared part');
+
+  // And if one reached the built index some other way, the page still writes only numbers: the default.
+  const built = readJson(indexFile);
+  for (const [aspect, phoneAspect] of [['16:9;background:url(x)', '3:4}body{display:none'], ['0:0', '999:1'], ['4:3"><script>alert(1)</script>', 7]]) {
+    built.parts[0].preview = { page: 'preview/index.html', aspect, phoneAspect };
+    writeFileSync(indexFile, JSON.stringify(built));
+    const page = await (await site('/parts/pickup-field/')).text();
+    assert.deepEqual(framesOf(page), [['pview', '--pv:16/9']], `${aspect} never reaches the page`);
+    assert.ok(!/url\(x\)|\}body\{|alert\(1\)|999:1/.test(page));
+  }
 });
 
 test('a part set shared by hand past the checks stops the build instead of publishing it', async () => {

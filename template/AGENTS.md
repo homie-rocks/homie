@@ -176,7 +176,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   does not raise the callout.
 - **The frame has no storage of its own.** The game runs in a sandboxed frame without `allow-same-origin` (a
   stranger's game must never read this site's storage or the owner's session), so `localStorage` throws inside it.
-  A setting or a personal best goes in `net.prefs` (`await net.prefs.get('quality', 'high')`,
+  A setting or a personal best goes in `net.prefs` (`net.prefs.string('quality', 'high')`, `net.prefs.number('volume', 0.8, { min: 0, max: 1 })` after `await net.prefs.ready`: the typed readers give your fallback for a missing key, never a null that turns into 0,
   `net.prefs.set('quality', 'low')`: the play page keeps 16 KB a game); progress that must last goes in saves.
   The play page's `?debug` and `?q=…` reach the game as `net.params`, with any names game.json
   `"netplay": { "params": ["seed"] }` declares (`NETPLAY.md` section 24).
@@ -384,8 +384,8 @@ chat's card follows the work from then on) and, for a studio still being set up,
   `"games/*/game.json"`) and `"budget"` (`{ "usd": <n>, "credits": <n> }`: the most the studio's media jobs spend
   in all). In Claude Code, the Homie plugin's mod holds an edit to a protected file, a deploy, and a paid call past
   the budget until the person says Proceed, and takes keys out of command output. In Codex the plugin's hooks hold
-  the same calls until the person's own `proceed <code>`, once the person has trusted them; in Grok Build nothing
-  holds them yet. `npx --no-install homie-studio setup status --client codex` (or `grok`) says whether Homie's
+  the same calls until the person's own `proceed <code>`, once the person has trusted them, and in Grok Build once
+  the plugin is trusted. `npx --no-install homie-studio setup status --client codex` (or `grok`) says whether Homie's
   holds are on, and while they are off, ask before each of those yourself. When a call is refused, say what you
   meant to do and why; do not retry it unless the person asks.
 

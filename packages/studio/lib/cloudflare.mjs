@@ -19,21 +19,28 @@
  * It REFUSES to touch a Worker, database or bucket of that name that this
  * studio did not create (studio.json `cloudflare.created` is the record), so it
  * can never overwrite someone's existing site. `deploy --plan` says all of this
- * before anything happens and calls nothing.
+ * before anything happens and changes nothing.
+ *
+ * A studio on a CUSTOM DOMAIN shares that domain with whatever else its owner
+ * runs there. The plan and the deploy read the domain's Worker routes (a read,
+ * with Wrangler's own sign-in) and warn when another site's catch-all or
+ * wildcard covers the studio's hostname: that route is never the studio's to
+ * edit or remove (lib/routes.mjs, zoneCheck below).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { cloudflareAuth } from './brain-probe.mjs';
 import { build } from './build.mjs';
 import { builtGames, compareDeploy, deployWords, lastDeploy, lastDeployRecord, lockDeploy, recordDeploy } from './deploy-state.mjs';
 import { listedHere, publish } from './directory.mjs';
 import { MAX_ASSET_BYTES, R2_COST, mediaPlan, r2OverOf, recordMove, sha256File, sizeOf } from './media.mjs';
 import { whyFailed } from './net.mjs';
 import { repoOf } from './repo.mjs';
-import { keptRoutes, readConfig, shadowedDomain, wideRouteRefusal } from './routes.mjs';
+import { keptRoutes, readConfig, readZoneRoutes, routesOf, shadowedDomain, wideRouteRefusal, zoneFinding } from './routes.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
-import { LOCAL_STATE, configPath, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
+import { LOCAL_STATE, configPath, domainOrigin, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 import { projectsCloudflareEnv } from './projects-env.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -106,6 +113,54 @@ export function explainCloudflare(out, accountId = null) {
   return null;
 }
 
+/** The studio's custom hostname ("play.example.com"), or null for a studio on its workers.dev address. */
+export function customHost(studio) {
+  const cf = studio?.cloudflare ?? {};
+  const origin = domainOrigin(cf.domain) ?? (cf.url && !isWorkersDev(cf.url) ? domainOrigin(cf.url) : null);
+  return origin ? new URL(origin).hostname : null;
+}
+
+/**
+ * For a studio on a custom domain: what the domain's other Worker routes mean for it (lib/routes.mjs zoneFinding),
+ * read from Cloudflare with the sign-in Wrangler already has (lib/brain-probe.mjs cloudflareAuth: a token in the
+ * environment, else `wrangler auth token`). Null for a studio with no custom domain, which is asked nothing. It
+ * only reads; a list that cannot be read comes back as state 'unmeasured' with the reason. `config` stands in for
+ * wrangler.jsonc (a deploy that is about to add a route), `fetchFn` for the network in tests.
+ */
+export async function zoneCheck(root, { studio = readStudio(root), config = readConfig(root), accountId = null, fetchFn = null } = {}) {
+  const hostname = customHost(studio);
+  if (!hostname) return null;
+  const worker = studio.cloudflare?.worker ?? null;
+  // The toolkit's own tests (HOMIE_STUDIO_WARM=0) with no stand-in network ask nobody, as readLiveSite does.
+  if (!fetchFn && process.env.HOMIE_STUDIO_WARM === '0') return zoneFinding({ hostname, worker, config, zone: { read: false, why: 'not asked' } });
+  const bin = wranglerBin(root);
+  let headers = null;
+  try {
+    const w = bin ? runner(root, accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : {}) : null;
+    headers = await cloudflareAuth({
+      env: { ...process.env, ...projectsCloudflareEnv(root) }, bin, cwd: root,
+      exec: async (_bin, args) => { const r = w(args, { cwd: root }); return { code: r.code, stdout: r.stdout }; },
+    });
+  } catch { headers = null; }
+  const zone = await readZoneRoutes({ hostname, config, headers, ...(fetchFn ? { fetchFn } : {}) });
+  return zoneFinding({ hostname, worker, config, zone });
+}
+
+/** A zone finding as a deploy's result and its plan carry it: the state, the routes that are not the studio's, the one line. */
+function zoneView(z) {
+  return {
+    state: z.state, host: z.host, domain: z.zone, foreign: z.foreign.map((r) => ({ pattern: r.pattern, worker: r.script, kind: r.kind })),
+    ...(z.state === 'foreign' || z.state === 'unmeasured' ? { route: z.route, line: z.line } : {}),
+    ...(z.warning ? { warning: z.warning } : {}), ...(z.why ? { why: z.why } : {}),
+  };
+}
+
+/** `deploy --plan` for a studio on a custom domain: the plan, and what the domain's other routes mean for it. */
+export async function zonePlan(root, opts = {}) {
+  const z = await zoneCheck(root, opts);
+  return z ? zoneView(z) : null;
+}
+
 /** What `deploy` will create and what it costs, from studio.json alone. It calls nothing. */
 export function deployPlan(root) {
   const studio = readStudio(root);
@@ -150,7 +205,7 @@ export async function deploy(root, opts = {}) {
   try { return await deployLocked(root, opts); } finally { process.off('exit', onExit); lock.release(); }
 }
 
-async function deployLocked(root, { log = () => {}, homie, fetchFn = null } = {}) {
+async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRoute = false } = {}) {
   const studio = readStudio(root);
   const cf = { r2: null, created: [], ...studio.cloudflare };
   const created = new Set(cf.created ?? []);
@@ -159,7 +214,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null } = {}
   // studio's own routes exactly as its owner wrote them.
   const wide = wideRouteRefusal(readConfig(root), studio);
   if (wide) return { ok: false, command: 'deploy', ...wide };
-  const routes = keptRoutes(root, studio);
+  let routes = keptRoutes(root, studio);
   const who = whoami(root);
   if (!who) {
     if (cf.auth === 'stripe-projects') {
@@ -186,6 +241,25 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null } = {}
   };
   const steps = [];
   const step = (what, extra = {}) => { steps.push({ what, ...extra }); log(what); };
+  const notes = [];
+
+  // A studio on a custom domain: is another site's catch-all or wildcard route on the same domain covering its
+  // hostname? Read (never written) and said before Wrangler changes anything: the repair that suggests itself,
+  // editing or removing that route, takes the other site down (lib/routes.mjs). `--own-route` adds the one line
+  // that is the studio's to add, and only when the domain's routes were read and show it is needed.
+  let zone = await zoneCheck(root, { studio, accountId, fetchFn });
+  if (zone) {
+    if (ownRoute && zone.state === 'foreign') {
+      routes = [...(routes ?? []), zone.route];
+      step(`added the studio's own exact-host route to "routes" in wrangler.jsonc: ${zone.line}. It covers ${zone.host} only, and every deploy keeps it; the other site's route was not touched.`, { route: zone.route });
+      const config = readConfig(root) ?? {};
+      zone = await zoneCheck(root, { studio, accountId, fetchFn, config: { ...config, routes: [...routesOf(config), zone.route] } });
+    } else if (ownRoute) {
+      step(`--own-route added nothing: ${zone.state === 'unmeasured' ? 'the domain\'s routes could not be read, so the domain\'s name in Cloudflare is not known for sure' : zone.state === 'taken' ? `${zone.host} is routed to another Worker, which only the person can change` : zone.state === 'own-route' ? 'the studio\'s own exact-host route is already there' : `no other route covers ${zone.host}`}.`);
+    }
+    if (zone.warning) { notes.push(zone.warning); step(`warning: ${zone.warning}`, { needs: 'cloudflare-routes', ...(zone.state === 'foreign' ? { route: zone.route } : {}) }); }
+    else if (zone.why) step(zone.why);
+  } else if (ownRoute) step('--own-route added nothing: this studio has no custom domain (studio.json cloudflare.domain).');
 
   // The first deploy says what it is about to create, and what it costs, before it creates anything: the person
   // reads it in the transcript whether or not the AI repeated it.
@@ -290,7 +364,6 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null } = {}
   const directory = homie || studio.homie?.directory || 'https://homie.rocks';
   recordDeploy(root, builtNow);
   let claim = null;
-  const notes = [];
   if (url) {
     const read = await readLiveSite(url, fetchFn ? { fetchFn } : {});
     claim = read.claim;
@@ -340,6 +413,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null } = {}
     games: b.catalogue.map((id) => { const g = delta.games.find((x) => x.id === id); return { id, page: url ? `${url}/${id}/` : null, play: url ? `${url}/${id}/play` : null, hash: g?.hash ?? null, change: delta.first ? 'first deploy from this computer' : g?.change ?? null }; }),
     ...(delta.removed.length ? { removed: delta.removed } : {}),
     ...(routes ? { routes: routes.map((r) => r.pattern) } : {}),
+    ...(zone ? { zone: zoneView(zone) } : {}),
     ...(notes.length ? { notes } : {}),
     ...(reread ? { reread } : {}),
     songs: b.songs.map((slug) => ({ slug, page: url ? `${url}/music/${slug}/` : null })),

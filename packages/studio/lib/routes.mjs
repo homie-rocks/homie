@@ -16,8 +16,17 @@
  * So: the routes the owner wrote for the studio's OWN hostnames (a custom domain, an exact host) are kept across
  * every rewrite; a wildcard or catch-all route is never deployed by the studio unless studio.json says the zone is
  * the studio's (`cloudflare.allowWildcardRoutes: true`); and a deploy whose domain answers as something else says
- * which route is needed. Nothing here calls Cloudflare: a zone's other routes belong to other Workers, and the
- * studio never lists, changes or removes one.
+ * which route is needed.
+ *
+ *   4. The zone ALREADY has another site's catch-all or wildcard route, and the studio's custom domain sits beside
+ *      it. The studio's own config is clean, so nothing above speaks; the route answers the studio's hostname first,
+ *      and the tempting repair (edit or remove that route) takes the other site down. So a deploy and its plan READ
+ *      the zone's Worker routes when the studio has a custom domain (readZoneRoutes: two GETs with the sign-in
+ *      Wrangler already has, never a write) and say, before anything is deployed, that the route is another site's,
+ *      must not be edited or removed, and which one line makes the studio's hostname its own (zoneFinding). A list
+ *      that cannot be read is said as unmeasured, never as fine.
+ *
+ * The studio never changes or removes a route it did not make: a zone's other routes belong to other Workers.
  */
 import { readFileSync } from 'node:fs';
 import { configPath } from './studio.mjs';
@@ -128,5 +137,104 @@ export function shadowedDomain(config, hostname, answer = {}) {
   return {
     shadowed: true, route,
     why: `https://${host} ${said}, not as this studio: something else on the domain answers that hostname first. The usual reason is another Worker's route on the same zone that covers it (a wildcard like "*${route.zone_name}/*", or a catch-all): Cloudflare matches a route before a custom domain. The studio does not touch that route (it is not the studio's). Add the studio's own exact-host route to "routes" in wrangler.jsonc, which wins over a wildcard for this one hostname, and deploy again: ${JSON.stringify(route)} (zone_name is the domain as it is named in Cloudflare). Every deploy keeps it.`,
+  };
+}
+
+/* ------------------------------------------------------------------ the zone's routes, beside the studio's domain */
+
+const CF_API = 'https://api.cloudflare.com/client/v4';
+
+/** The zones a hostname may be in, likeliest first: the ones the config's routes name, then each parent of the hostname. */
+export function zoneCandidates(hostname, config = null) {
+  const parts = String(hostname ?? '').toLowerCase().split('.').filter(Boolean);
+  const named = routesOf(config).map((r) => String(r.zone_name ?? '').toLowerCase()).filter(Boolean);
+  const parents = [];
+  for (let i = 0; i <= parts.length - 2; i += 1) parents.push(parts.slice(i).join('.'));
+  return [...new Set([...named, ...parents])].slice(0, 6);
+}
+
+/**
+ * The Worker routes of the zone a hostname is in, READ from Cloudflare (GET /zones?name=…, then GET
+ * /zones/<id>/workers/routes) with headers the toolkit already has (lib/brain-probe.mjs cloudflareAuth: Wrangler's
+ * own sign-in). { read: true, zone: { id, name }, routes: [{ pattern, script }] }, or { read: false, why } when it
+ * could not be read (no sign-in, a sign-in that may not read the zone, no such zone on it, no network). It never
+ * writes. `fetchFn` stands in for the network in tests.
+ */
+export async function readZoneRoutes({ hostname, config = null, headers = null, fetchFn = globalThis.fetch, base = CF_API, ms = 10_000 } = {}) {
+  if (!headers) return { read: false, why: 'this computer has no Cloudflare sign-in to read them with' };
+  const root = String(base).replace(/\/+$/, '');
+  const get = async (path) => {
+    const res = await fetchFn(`${root}${path}`, { headers: { ...headers, accept: 'application/json', 'user-agent': 'homie-studio-deploy' }, signal: AbortSignal.timeout(ms) });
+    let body = null;
+    try { body = await res.json(); } catch { body = null; }
+    return { status: res.status, ok: res.ok && body?.success !== false, result: Array.isArray(body?.result) ? body.result : null };
+  };
+  const refused = (status) => (status === 401 || status === 403 ? 'this Cloudflare sign-in may not read the domain\'s routes' : `Cloudflare answered ${status}`);
+  try {
+    let zone = null;
+    for (const name of zoneCandidates(hostname, config)) {
+      const r = await get(`/zones?name=${encodeURIComponent(name)}`);
+      if (!r.ok || !r.result) return { read: false, why: refused(r.status) };
+      const hit = r.result.find((z) => String(z?.name ?? '').toLowerCase() === name && z?.id);
+      if (hit) { zone = { id: String(hit.id), name }; break; }
+    }
+    if (!zone) return { read: false, why: `no domain that ${String(hostname).toLowerCase()} belongs to is on the Cloudflare account this computer is signed in to` };
+    const r = await get(`/zones/${encodeURIComponent(zone.id)}/workers/routes`);
+    if (!r.ok || !r.result) return { read: false, zone, why: refused(r.status) };
+    return { read: true, zone, routes: r.result.filter((x) => typeof x?.pattern === 'string' && x.pattern.trim()).map((x) => ({ pattern: x.pattern.trim(), script: x.script ? String(x.script) : null })) };
+  } catch (error) {
+    return { read: false, why: error?.name === 'TimeoutError' ? `Cloudflare did not answer in ${Math.round(ms / 1000)} s` : `Cloudflare could not be reached (${String(error?.cause?.code ?? error?.code ?? error?.message ?? error).slice(0, 80)})` };
+  }
+}
+
+const NOT_OURS = 'Never edit or remove a route this studio did not make';
+
+/**
+ * What the zone's routes mean for a studio on a custom domain, in words for the plan, the terminal and the tool
+ * result. `zone` is readZoneRoutes' answer; `worker` the studio's own Worker; `config` its wrangler.jsonc.
+ *   state 'clear'       no other route covers the studio's hostname: nothing to say (`why` is null)
+ *   state 'foreign'     another site's wildcard or catch-all covers it and the studio has no exact-host route of its
+ *                       own: `warning`, with the one line to add (`route`, `line`)
+ *   state 'own-route'   another site's route covers it, and the studio's own exact-host route already wins for its
+ *                       hostname: `why` says to leave the other route alone
+ *   state 'taken'       the studio's own hostname is routed to another Worker: only the person can decide that
+ *   state 'unmeasured'  the list could not be read: said as that, with the reason
+ */
+export function zoneFinding({ hostname, worker = null, config = null, zone = null } = {}) {
+  const host = String(hostname ?? '').toLowerCase();
+  const guess = zone?.zone?.name ?? likelyZone(host);
+  const route = exactRouteFor(host, guess);
+  const line = JSON.stringify(route);
+  const ownInConfig = sortRoutes(config).own.find((r) => routeKind(r) === 'exact-host' && routeHost(r) === host) ?? null;
+  if (!zone?.read) {
+    return {
+      state: 'unmeasured', host, zone: zone?.zone?.name ?? null, foreign: [], route, line,
+      why: `Not checked: whether another site's route on the domain covers ${host} (${zone?.why ?? 'not read'}). That is unmeasured, not a pass. If ${host} answers as something else after a deploy, the fix is the studio's own exact-host route in "routes" in wrangler.jsonc, ${line} (zone_name is the domain as Cloudflare names it), which every deploy keeps. ${NOT_OURS}.`,
+    };
+  }
+  const others = zone.routes.filter((r) => r.script !== worker && routeCovers(r, host)).map((r) => ({ pattern: r.pattern, script: r.script, kind: routeKind(r) }));
+  const taken = others.filter((r) => r.kind === 'exact-host');
+  const wide = others.filter((r) => r.kind !== 'exact-host');
+  const said = (list) => list.map((r) => `"${r.pattern}" (${r.script ? `Worker ${r.script}` : 'no Worker: it turns Workers off for what it covers'})`).join(', ');
+  const base = { host, zone: zone.zone.name, route, line };
+  if (taken.length) {
+    return {
+      ...base, state: 'taken', foreign: others,
+      warning: `${host} itself is routed to another Worker on ${zone.zone.name}: ${said(taken)}. That route is not this studio's, so the studio does not take, edit or remove it, and neither should you: whatever it serves would stop answering. Only the person can decide to hand the hostname over, in the domain's Workers Routes in the Cloudflare dashboard; or give the studio a hostname nothing else uses (studio.json cloudflare.domain).`,
+    };
+  }
+  if (!wide.length) return { ...base, state: 'clear', foreign: [], why: null };
+  const ownLive = zone.routes.find((r) => r.script === worker && routeKind(r) === 'exact-host' && routeHost(r) === host) ?? null;
+  const all = wide.some((r) => r.kind === 'catch-all');
+  const them = `${wide.length === 1 ? 'a route' : 'routes'} that cover${wide.length === 1 ? 's' : ''} ${host} and ${wide.length === 1 ? 'is' : 'are'} not this studio's: ${said(wide)}`;
+  if (ownInConfig || ownLive) {
+    return {
+      ...base, state: 'own-route', foreign: wide,
+      why: `${zone.zone.name} has ${them}. ${wide.length === 1 ? 'It belongs' : 'They belong'} to another site on this domain and must not be edited or removed. The studio's own exact-host route ("${(ownInConfig ?? ownLive).pattern}") wins over ${wide.length === 1 ? 'it' : 'them'} for this one hostname, and every deploy keeps it: nothing to change.`,
+    };
+  }
+  return {
+    ...base, state: 'foreign', foreign: wide,
+    warning: `${zone.zone.name} already has ${them}. ${wide.length === 1 ? 'That route belongs' : 'Those routes belong'} to another site on this domain: ${wide.length === 1 ? 'it' : 'they'} must not be edited or removed, here or in the Cloudflare dashboard, or that site stops answering. Cloudflare matches a route before a custom domain, so ${all ? 'the catch-all' : 'the wildcard'} answers ${host} first and the studio's own domain would show the other site. The one safe fix is the studio's own exact-host route, which wins over a wider route for this one hostname only and which every deploy keeps. Add this line to "routes" in wrangler.jsonc and deploy: ${line} (or \`homie-studio deploy --own-route\`, which adds exactly that line and nothing else).`,
   };
 }

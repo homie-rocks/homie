@@ -66,9 +66,11 @@ async function shell(search, { lobby = 'pub-3', screen = false, room = null, g =
   const replaced = [];
   const fetched = [];
   const posted = [];
+  /** Every element the page made itself (a notice's heading, its links), in order. */
+  const drawn = [];
   const heard = {};
   const ctx = {
-    document: { querySelector: el, createElement: () => el(`new-${Math.random()}`), addEventListener() {} },
+    document: { querySelector: el, createElement: () => { const made = el(`new-${Math.random()}`); drawn.push(made); return made; }, addEventListener() {}, body: { appendChild(c) { return c; } } },
     location: { search, origin: 'https://owls.example', pathname: `/${game.id}/${screen ? 'tv' : 'play'}`, hash: '', host: 'owls.example', protocol: 'https:' },
     history: { state: null, replaceState: (s, t, u) => replaced.push(u) },
     sessionStorage: { getItem: () => null, setItem() {} },
@@ -85,7 +87,7 @@ async function shell(search, { lobby = 'pub-3', screen = false, room = null, g =
   await new Promise((r) => setTimeout(r, 10));
   /** What the game's helper says to the page (postMessage from the frame). */
   const fromGame = (m) => { for (const fn of heard.message ?? []) fn({ source: el('iframe.game').contentWindow, data: { t: 'homie-net', ...m } }); };
-  return { html, ctx, el, replaced, fetched, posted, heard, fromGame };
+  return { html, ctx, el, replaced, fetched, posted, heard, fromGame, drawn };
 }
 
 test('the room goes into the address, and the room button shares it: Invite, Big screen and the code', async () => {
@@ -338,6 +340,13 @@ test('net.prefs: the page keeps a game\'s few settings for its frame, per game a
   assert.equal(answer().ok, false);
   h.fromGame({ what: 'prefs', op: 'del', n: 7, k: 'quality' });
   assert.equal('quality' in JSON.parse(store.get('homie-prefs.rock-race')), false);
+  // A NaN would be written as null and read back as a setting (a volume of null plays as 0): refused, whoever sent it.
+  h.fromGame({ what: 'prefs', op: 'set', n: 30, k: 'music', v: 0.4 });
+  for (const [n, v] of [[31, NaN], [32, Infinity]]) {
+    h.fromGame({ what: 'prefs', op: 'set', n, k: 'music', v });
+    assert.deepEqual(h.posted.filter((m) => m.t === 'homie-prefs').at(-1), { t: 'homie-prefs', n, ok: false, why: 'value' });
+  }
+  assert.equal(JSON.parse(store.get('homie-prefs.rock-race')).music, 0.4, 'what was kept stands');
   // A message that is not from the game's own frame is not a prefs call.
   const before = store.get('homie-prefs.rock-race');
   for (const fn of h.heard.message) fn({ source: {}, data: { t: 'homie-net', what: 'prefs', op: 'set', n: 9, k: 'x', v: 1 } });
@@ -377,10 +386,19 @@ test('the link and a newer build: the page says "reconnecting", and loads the ga
   h.fromGame({ what: 'link', state: 'reconnecting', prev: 'online', why: 'lost', hosting: true });
   assert.deepEqual([h.ctx.__shell.link.state, h.ctx.__shell.link.why, h.ctx.__shell.link.hosting], ['reconnecting', 'lost', true]);
   assert.match(h.el('[data-status]').textContent, /reconnecting/);
+  // A page that was never in its room is not "reconnecting": it plays on its own and is looking.
   h.fromGame({ what: 'link', state: 'alone', prev: 'connecting', why: 'relay-timeout', hosting: true });
-  assert.match(h.el('[data-status]').textContent, /offline, reconnecting/);
+  assert.match(h.el('[data-status]').textContent, /playing on your own: looking for the room/);
+  assert.doesNotMatch(h.el('[data-status]').textContent, /reconnecting|offline/);
+  h.fromGame({ what: 'link', state: 'alone', prev: 'reconnecting', why: 'reconnect-timeout', hosting: true });
+  assert.match(h.el('[data-status]').textContent, /playing on your own: the room dropped/);
   h.fromGame({ what: 'link', state: 'online', prev: 'alone', why: 'welcome', hosting: false });
-  assert.doesNotMatch(h.el('[data-status]').textContent, /reconnecting/);
+  assert.doesNotMatch(h.el('[data-status]').textContent, /reconnecting|on your own/);
+  // Every seat is taken (the room's own word): the chip says so until the seat comes.
+  h.fromGame({ what: 'full', full: true });
+  assert.match(h.el('[data-status]').textContent, /waiting for a seat/);
+  h.fromGame({ what: 'token', token: 'seat-word', seat: 1, room: 'owl-party' });
+  assert.doesNotMatch(h.el('[data-status]').textContent, /waiting for a seat/, 'seated: it stops saying it (it never did before)');
   // The game's own word that it was playable, after the helper had already lifted the card: readable from the page.
   h.fromGame({ what: 'ready', by: 'game', mode: 'auto', ms: 1740, lateMs: 1500 });
   assert.deepEqual([h.ctx.__shell.ready.mode, h.ctx.__shell.ready.ms, h.ctx.__shell.ready.lateMs], ['auto', 1740, 1500]);
@@ -411,6 +429,26 @@ test('the link and a newer build: the page says "reconnecting", and loads the ga
 });
 
 /* ------------------------------------------------------------------ across the seam: the page says, the instruments read */
+
+test('a page that stopped for good never says "reconnecting": what is true, and for a room with no place left, a way out', async () => {
+  const says = async (why) => { const h = await shell('?room=owl-party'); h.fromGame({ what: 'attached', v: 1, rev: 9 }); h.fromGame({ what: 'closed', why }); return h; };
+  // Nothing is knocking any more, so "reconnecting" was never true for any of these.
+  for (const [why, word] of [['replaced', /opened in another tab/], ['version', /disconnected: reload to play/], ['stale', /updating/]]) {
+    const h = await says(why);
+    assert.match(h.el('[data-status]').textContent, word, why);
+    assert.doesNotMatch(h.el('[data-status]').textContent, /reconnecting/, why);
+    assert.equal(h.ctx.__shell.notice ?? null, null, `${why}: the game keeps the screen`);
+  }
+  // Not one more place in the room: the notice, with the way out a player can take.
+  const full = await says('room-full');
+  assert.equal(full.ctx.__shell.notice.kind, 'full');
+  assert.match(full.el('[data-status]').textContent, /room full/);
+  const texts = full.drawn.map((e) => e.textContent);
+  assert.ok(texts.includes('This room is full'));
+  assert.ok(texts.some((x) => /no place left/.test(x)));
+  const another = full.drawn.find((e) => e.textContent === 'Play in another room');
+  assert.equal(another.href, '/rock-race/play?not=owl-party', 'another room, not this one again');
+});
 
 test('what the play page says about its link, its arrival and its own controls is what check, perf and the playtest read', async () => {
   const rects = { '[data-share-toggle]': [348, 8, 34, 34], '[data-chip]': [10, 800, 132, 26], '[data-share-sheet]': [20, 60, 350, 300] };

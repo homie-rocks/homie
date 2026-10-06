@@ -61,9 +61,9 @@ delete, rename or redeploy anything the studio did not create. When it answers w
 `needs` step (a new account verifies its email address; an account with no workers.dev
 address picks one), say that step to the person and wait. The deploy itself is held for the
 person's Proceed, with where it goes and what changed since the last one: by the Homie mod in
-Claude Code, and by Homie's hooks in Codex (`studio-setup` says how a hold is answered there). Where nothing
-holds it (Codex before its hooks are trusted, and Grok Build, which runs no plugin's hooks yet: the setup
-status says "Homie's holds: off"), say what the deploy would do in a sentence and wait for the person's yes.
+Claude Code, and by Homie's hooks in Codex and Grok Build (`studio-setup` says how a hold is answered there).
+Where nothing holds it (Codex or Grok Build before the hooks are trusted: the setup status says "Homie's
+holds: off"), say what the deploy would do in a sentence and wait for the person's yes.
 
 Storage for songs and videos (`npx --no-install homie-studio storage add`, an R2 bucket) is
 separate and optional: Cloudflare asks for a payment method before R2 works, so only
@@ -147,12 +147,17 @@ never copy it into a committed file (README, posts, manifests). When the studio 
 domain, it goes in `studio.json` as `cloudflare.domain` (e.g. `"night-owls.example"`); deploy
 never replaces it, and the directory claim, `publish`, `check` and `stats` use it.
 
-A studio's domain usually shares its Cloudflare zone with other things. `deploy` keeps the studio's own routes in
-`wrangler.jsonc` (its custom domain, an exact-host route) and never lists, changes or removes any other route. If the
-domain answers as something else after a deploy, another Worker's wildcard route on the zone is answering first: the
-deploy prints the one exact-host route to add (`{ "pattern": "<host>/*", "zone_name": "<domain>" }`); add exactly
-that, never a wildcard or a catch-all (`*/*`), which `deploy` refuses because it would take over the zone's other
-sites. Only one deploy of a studio runs at a time; each prints which games changed since the last
+A studio's domain usually shares its Cloudflare zone with other things. **Never touch a route the studio does not
+own: not in `wrangler.jsonc`, not with Wrangler, not in the Cloudflare dashboard.** `deploy` keeps the studio's own
+routes in `wrangler.jsonc` (its custom domain, an exact-host route) and never changes or removes any other route. On a
+custom domain the plan and the deploy read the domain's Worker routes first, and warn when another site's catch-all
+(`*/*`) or wildcard covers the studio's hostname: that route answers the hostname before the studio does, and editing
+or removing it takes the other site down. Say the warning to the person as it is. The one safe fix is the line it
+gives, the studio's own exact-host route (`{ "pattern": "<host>/*", "zone_name": "<domain>" }` in `"routes"`), which
+`npx --no-install homie-studio deploy --own-route` (`studio_deploy` with `ownRoute: true`) adds for you once the
+person agrees; never a wildcard or a catch-all, which `deploy` refuses because it would take over the zone's other
+sites. When it says the routes could not be read, that is unmeasured, not fine: if the domain answers as something
+else after the deploy, the same one line is the fix. Only one deploy of a studio runs at a time; each prints which games changed since the last
 deploy from this computer with the game's build hash (the one `build` printed, and the one the live site says in
 `/.well-known/homie-studio.json` as `games[].build.hash`), so "is my build live" is a comparison of two hashes. "Network preflight failed" means this computer could not look the
 site's name up (a browser may still open it): test against the local dev site, and do not report the game as broken.

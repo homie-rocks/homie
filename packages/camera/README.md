@@ -12,7 +12,7 @@ Part of Homie's open game engine: the packages the Homie games are built on.
 ## Install
 
 ```sh
-npm install --save-exact @homie-rocks/camera@0.1.0 three@0.185.1
+npm install --save-exact @homie-rocks/camera@0.2.1 three@0.185.1
 ```
 
 ## Use
@@ -62,8 +62,75 @@ nothing at all, so it also runs in Node or on a page with no renderer.
 | `subject.js` | `localBounds`, `surveyTraffic`, `sightSkyBody`, `nearestKeylitIndex`: measuring the subject and what else is in frame |
 | `sightline.js`, `nearband.js`, `staging.js` | lift a shot clear of terrain, find the foreground ground a lens can see, stand where a crowd does not merge |
 | `follow.js` | `stepFollow`, `followState`, `cutFollow`, `fieldFromBlocked`: a third-person follow camera with a collision guard (swing, pull in, climb), numbers only |
+| `heading.js` | `headingFrom`, `headingOfVector`, `vectorOfHeading`, `stepHeadingWatch`: the one heading the package means, the adapter from any other, and the check that catches a wrong one |
 
 and 4 more in src/: `focuspick.js`, `pickscene.js`, `frame.js`, `scratch.js`.
+
+## The heading: read this before you hand the camera an angle
+
+**Yaw 0 faces +Z. Positive yaw turns toward +X. Radians.** Forward is
+`(sin yaw, cos yaw)` in (x, z), so `yaw = Math.atan2(forward.x, forward.z)`.
+
+```
+ seen from above, +Y toward you
+
+                  -Z   yaw = PI
+                   |
+ yaw = -PI/2  -X --+-- +X  yaw = +PI/2
+                   |
+                  +Z   yaw = 0
+```
+
+That is `object.rotation.y` for a model built facing +Z, and nothing else. It
+is the yaw `follow.js` takes (`FollowTarget.yaw`) and the yaw the chase rig
+hands back (`armYaw`, `faceYaw`). An angle is a bare number, so the wrong one
+does not throw: the camera sits beside the subject, or in front of it looking
+back. If your game measures its heading any other way, convert it with
+`heading.js`. Say which axis your angle 0 faces and which axis it has reached
+a quarter turn later:
+
+```ts
+import { headingFrom, headingOfVector } from '@homie-rocks/camera/heading.js';
+
+// A three.js model that faces +Z: rotation.y already is the yaw. No adapter.
+const yaw = hero.rotation.y;
+
+// A three.js model (or camera) that faces -Z:
+const toYaw = headingFrom({ zero: '-z', turn: 'ccw' }); // once, outside the loop
+const yaw = toYaw(hero.rotation.y);
+
+// A game whose heading 0 is +X: angle = Math.atan2(vz, vx)
+const toYaw = headingFrom({ zero: '+x', toward: '+z' });
+const yaw = toYaw(player.angle);
+
+// No angle at all, only a forward or velocity vector:
+const yaw = headingOfVector(forward.x, forward.z);
+```
+
+| your game's heading | the adapter |
+|---|---|
+| `rotation.y`, model faces +Z | none: it is the yaw |
+| `rotation.y`, model faces -Z | `headingFrom({ zero: '-z', turn: 'ccw' })` |
+| `Math.atan2(vz, vx)` (0 is +X) | `headingFrom({ zero: '+x', toward: '+z' })` |
+| 0 is +X, counter-clockwise from above | `headingFrom({ zero: '+x', turn: 'ccw' })` |
+| a compass in degrees, north is -Z | `headingFrom({ zero: '-z', turn: 'cw', degrees: true })` |
+| a forward vector | `headingOfVector(fx, fz)` |
+
+`turn` is as seen from above with +Y toward you: `'ccw'` turns the subject to
+its own left, which is three.js's `rotation.y`. `toward` says the same thing
+with an axis and cannot be misread; give either. A convention that makes no
+sense throws when the adapter is made. `toYaw.back(yaw)` goes the other way,
+for a game that reads a yaw back out of the camera.
+
+**The follow camera checks this for you in development.** While the subject
+moves, `stepFollow` compares the yaw it was given with the direction the
+subject is travelling. A sixth of a turn apart for a whole second prints one
+console warning that names the adapter. It reads only the numbers it was
+already handed, retires after half a minute of agreement, and a production
+bundle (`NODE_ENV` of `production`) never runs it. A subject that really does
+move against its heading is the exception: mark those frames with
+`reversing: true` on the target (a vehicle in reverse), or switch the check
+off with `followState({ headingCheck: false })` (a character that strafes).
 
 ## A third-person follow camera
 
@@ -89,6 +156,7 @@ const rig = followState();
 const field = (x: number, z: number) => level.distanceToWall(x, z);
 
 function lateUpdate(dt: number): void {
+  // yaw: 0 faces +Z, positive turns toward +X, radians. Anything else goes through heading.js first.
   stepFollow(rig, tuning, { x: p.x, y: p.y, z: p.z, yaw: p.yaw, speed: p.speed }, field, dt);
   camera.position.set(rig.eyeX, rig.eyeY, rig.eyeZ);
   camera.lookAt(rig.lookX, rig.lookY, rig.lookZ);

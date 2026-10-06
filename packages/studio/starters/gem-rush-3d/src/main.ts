@@ -23,6 +23,13 @@
  * byte). A model that is refused or not there is drawn as a stand-in in the same colours (see "models" below): a
  * round never waits on, or breaks for, a model.
  *
+ * HEADINGS, AND THERE ARE TWO: a body's `yaw` is `Math.atan2(dx, dy)` in the game's own x and y, so yaw 0 faces +y
+ * (three.js's +z, the way the models are built) and it goes straight into `rotation.y`. That is also the yaw
+ * `@homie-rocks/camera` means (0 faces +Z, positive turns toward +X, radians), so a follow or chase camera from that
+ * package takes a body's `yaw` as it stands. The knock and aim angles (`ang`, `base`) are the OTHER kind,
+ * `Math.atan2(dy, dx)`: 0 faces +x. Never hand one of those to a camera or to `rotation.y` without converting it:
+ * `headingFrom({ zero: '+x', toward: '+z' })` from `@homie-rocks/camera/heading.js` is the adapter.
+ *
  * PHONE BUDGETS: under 100 draw calls and 150k triangles a frame (the `drawCalls` and `triangles` probes read
  * renderer.info), the pixel ratio at most 1.5 on a phone and 2 on a computer, and no shadow map on a phone: a soft
  * disc under each body, gem, tree and rock (a computer draws the sun's real shadows). Repeated things (gems, trees, flowers, the fence, the discs) are one
@@ -42,7 +49,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 // The one model loader every studio game uses: checks each file, decodes meshopt and WebP, copies for placing.
 import { createModels, instancedCopies, placeCopy, repaint, stylize, type Copies } from '@homie-rocks/studio/assets';
-import { createNetplay, guardGestures, Roster, q, lerp, capMove, PALETTE, AI_MARK, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
+import { createNetplay, guardGestures, Roster, q, lerp, capMove, PALETTE, AI_MARK, type Peer, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` and `perf` read, and sandbox + audio shims), and name
 // labels that never pile up (port/view.ts).
 import { createBubbles, createLabels, exposePort, paintBubbles, type BubbleIn, type BubbleOut, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
@@ -199,9 +206,12 @@ function newZone(n: number): Zone {
 }
 function setZone(z: Zone): void { zone = z; net.state('zone', z); }
 
-function startRound(n: number): void {
+function startRound(n: number, rollover = false): void {
   const now = net.now();
   roster.trim();
+  // The next round of a running room: the trim is what makes room (the seats a server no longer keeps for AI go
+  // here), so whoever was seated with no body is given one now, before the bodies are placed.
+  if (rollover && !net.offline) seatWaiting();
   syncBodiesFromRoster();
   let i = 0;
   for (const b of [...bodies.values()].sort((a, c) => a.slot - c.slot)) {
@@ -314,15 +324,30 @@ net.on('role', (e) => {
   if (e.role === 'host') becomeHost(e);
   else { hosting = false; }
 });
-net.on('join', (p) => {
-  if (!hosting || p.seat === null) return;
+/** Host: a body for somebody the relay seated. False when every body is somebody's (they wait: see seatWaiting). */
+function giveBody(p: Peer): boolean {
+  if (p.seat === null) return false;
   // An AI takes a seat kept for AI, a person never does (revision 6: the Roster needs p.agent for that).
   const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null, p.occ ?? null);
-  if (!c) return; // full: they watch
+  if (!c) return false;
   syncBodiesFromRoster();
   const b = bodies.get(c.slot.slot);
   // The arriving human takes over the bot's body where it stands, score and all (reset = "adopt this position").
   if (b) { b.vx = 0; b.vy = 0; b.kvx = 0; b.kvy = 0; b.knockUntil = 0; hostMoved(b); }
+  return true;
+}
+/**
+ * SEAT WHOEVER IS WAITING (NETPLAY.md section 28). The relay seats a person; this host gives them a body. A claim that
+ * found every body taken (a server's AI seats were still kept, say) used to be tried once: that player watched for the
+ * rest of the visit, online, with nothing said. It is tried again whenever a body frees up and at every round start.
+ */
+function seatWaiting(): boolean {
+  let any = false;
+  for (const p of net.peers.values()) if (p.seat !== null && !roster.bySeat(p.seat) && giveBody(p)) any = true;
+  return any;
+}
+net.on('join', (p) => {
+  if (!hosting || !giveBody(p)) return;
   publishRoster();
   net.snapshot(buildSnap(), tick, true);
 });
@@ -330,7 +355,10 @@ net.on('leave', (p) => {
   if (!hosting || p.seat === null) return;
   roster.release(p.seat); // their body stays, driven by a bot
   syncBodiesFromRoster();
+  // A body just went to a bot: somebody seated with none takes it now.
+  const seated = seatWaiting();
   publishRoster();
+  if (seated) net.snapshot(buildSnap(), tick, true);
 });
 // The server's policy changed: its AI seats come (or go between rounds) at once.
 net.on('policy', () => { if (!hosting) return; roster.fill(); syncBodiesFromRoster(); publishRoster(); });
@@ -617,7 +645,7 @@ function stepHost(dt: number): void {
       }
     }
     if (now >= round.endsAt) endRound();
-  } else if (round && round.phase === 'over' && now >= round.endsAt) startRound(round.n + 1);
+  } else if (round && round.phase === 'over' && now >= round.endsAt) startRound(round.n + 1, true);
   if (net.snapshotDue()) net.snapshot(buildSnap(), tick);
 }
 
@@ -2021,7 +2049,8 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
       ctx.fillText(`${TOGETHER ? '' : `${row.place}. `}${mine && !net.watching ? 'You' : label(row.name, row.bot)}${mine && net.watching ? ' ◂' : ''} — ${row.score}`, cw / 2, ry + 1);
     });
   }
-  if (!net.offline && !net.connected && net.role !== 'host') {
+  // Only a browser that WAS in its room is reconnecting; one still joining, or stopped for good, is not (section 22).
+  if (net.link === 'reconnecting' && net.role !== 'host') {
     ctx.textAlign = 'center'; ctx.font = `700 15px ${FONT_BODY}`;
     const text = 'Reconnecting…'; const tw = ctx.measureText(text).width;
     chip(cw / 2 - tw / 2 - 12, ch - pad - 24, tw + 24, 26);

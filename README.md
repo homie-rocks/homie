@@ -81,11 +81,11 @@ ask for a studio. Checked on Grok Build 1.0.41, where `grok plugin validate` rea
 a search there: install it from this repository, as above.
 
 The plugin is `plugins/homie` (`.grok-plugin/plugin.json`, the same skills and MCP server). **Homie's holds
-do not run in Grok yet.** The plugin ships the same hooks for Grok (`hooks/grok.json`) as for Codex, but Grok
-Build 1.0.41 runs no plugin's hooks: none are registered in its headless and agent sessions, from any plugin
-(checked 2026-10-04). So nothing holds a deploy, a protected edit or a paid call there, and no secret is taken
-out of what Grok reads. Homie's skill tells Grok to ask you before each of those itself, and the setup status
-says "Homie's holds: off"; it turns on by itself with a Grok that runs them. There is no Cloudflare connector
+run in Grok once you trust the plugin** (`--trust` on the install command, or yes when Grok asks). The plugin
+ships the same hooks for Grok (`hooks/grok.json`) as for Codex: a deploy, a protected edit or a paid call past
+the budget comes back refused with a short code, and your own `proceed <code>` lets it through once; secrets
+are taken out of what Grok reads. `homie-studio setup status --client grok` says whether they ran just now
+("Homie's holds: on"); while it says off, Homie's skill tells Grok to ask you itself. There is no Cloudflare connector
 in Grok: approving Cloudflare in the browser (`npx wrangler login` on a computer) is still your step.
 
 Grok Bot (the desktop app) does not show Homie in its plugin list: tell it to read

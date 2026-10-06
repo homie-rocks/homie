@@ -61,7 +61,12 @@ export interface FlyAxes {
 
 /** The rig's own state. Create one, keep it, hand it back every call. */
 export interface FlyState {
-  /** Radians. Applied as a YXZ euler, so this is the Y term. */
+  /**
+   * Radians. Applied as a YXZ euler, so this is the Y term OF A CAMERA, and a
+   * three.js camera looks down -Z: at yaw 0 this one looks along -Z. That is
+   * half a turn from the subject yaw the rest of the package uses (0 faces
+   * +Z, `heading.ts`); `headingFrom({ zero: '-z', turn: 'ccw' })` converts.
+   */
   yaw: number;
   /** Radians, clamped by `pitchLimit`. */
   pitch: number;

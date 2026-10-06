@@ -23,6 +23,9 @@ revision-8 relay ignore every new field and frame):
   the `admit` callback, and createRoom's takeover and adopt callbacks for a room revived from its
   checkpoint and for a host that reconnects as host.
 - **Places** (section 26): a tie policy for results. **The relay's log** (section 27).
+- **Seat or solo** (section 28, added after 0.31.0 with no change to the wire): `createRoom({ fallback })`,
+  `room.standing`, `net.full`, `net.line()`, a bound on `reconnecting` (`reconnectMaxMs`), and typed
+  readers for `net.prefs` (section 24).
 - New optional fields `hello.ver`, `hello.feat`, `welcome.ver`, `welcome.stale`, `welcome.stall`,
   `peer.occ`, `peer.ver`, `peer.feat`, `snap.hb`; a relay → client `stale` frame; the final refusal
   `stale` and the reported `room-stale`; `NETPLAY_REVISION` 9 and the build mark `homie-netplay-rev:9`.
@@ -1529,8 +1532,8 @@ A page stands in one of six places with its room, and the helper says which:
 |---|---|---|---|
 | `connecting` | No welcome yet. | false | false |
 | `online` | In the room. | false | true |
-| `reconnecting` | It was in the room and its socket went. It knocks again with its token (250 ms, 500 ms, 1 s, 2 s, then every 4 s); its seat is held 60 s and a bot drives its body meanwhile. | false | false |
-| `alone` | The room never answered in time, so this page plays by itself as an offline host: no seat, its own bots, nobody else. It still knocks, and joins when it is answered (a `role` with `why: 'reconnected'`). | **true** | false |
+| `reconnecting` | It was in the room and its socket went. It knocks again with its token (250 ms, 500 ms, 1 s, 2 s, then every 4 s); its seat is held 60 s and a bot drives its body meanwhile. **Bounded**: after `reconnectMaxMs` (default 20000, 5000 to 300000) it is `alone`. | false | false |
+| `alone` | The room never answered in time (`why: 'relay-timeout'`), or it was in the room and the room did not come back (`why: 'reconnect-timeout'`). This page plays by itself as an offline host: no seat, its own bots, nobody else. It still knocks, and joins when it is answered (a `role` with `why: 'reconnected'`). | **true** | false |
 | `offline` | There is no room at all: a plain file, a dev server with no shell. | true | false |
 | `closed` | Stopped for good; `net.closedWhy` says why (`replaced`, `room-full`, `kicked`, `stale`…). | as it was | false |
 
@@ -1544,12 +1547,40 @@ A page stands in one of six places with its room, and the helper says which:
   anything, which is how two browsers of one room came to report `hosting: true` with different
   rosters. A game that must not score, save or award anything while it is cut off checks
   `net.link === 'online'`.
-- **The line over the game.** While the link is `reconnecting` (for more than 0.7 s) or `alone`,
-  the helper draws one line at the top of the game's own document: "Reconnecting…" or "Playing
-  offline · reconnecting…". It is an element `[data-homie-link="reconnecting" | "alone" |
-  "stale"]` whose default style has no specificity (`:where(…)`), so any rule the game writes for
+- **The line over the game.** One line at the top of the game's own document says where the
+  page stands whenever that is not "playing in the room". It says what is true, so "Reconnecting…"
+  is only ever shown to a page that was connected:
+
+  | When | `data-homie-link` | The line |
+  |---|---|---|
+  | `reconnecting` for more than 0.7 s | `reconnecting` | Reconnecting… |
+  | `alone`, never answered | `alone` | Playing on your own · still looking for the room… |
+  | `alone`, a room still on the old build (`room-stale`) | `alone` | Playing on your own · this room opens when its players have the new version |
+  | `alone`, the room did not come back | `alone` | Playing on your own · the room dropped, still trying… |
+  | `online`, every seat taken (`net.full`) | `full` | This room is full · watching until a seat is free |
+  | `online`, the game's own sentence (`net.line(text)`; `createRoom`'s `fallback` uses it) | `seat` | for example: Playing on your own until the next round |
+  | `closed`: `room-full`, `too-many` | `closed` | This room is full. (with "· playing on your own" once it does) |
+  | `closed`: `replaced`, `kicked`, `room-closed`, `version` | `closed` | This game is open in another tab. / This room is closed. / This game needs a reload to play online. |
+  | `closed`: `stale`, or a newer build is live | `stale` | This game was updated. Tap to reload. |
+
+  Its default style has no specificity (`:where(…)`), so any rule the game writes for
   `[data-homie-link]` restyles it. `createNetplay({ linkOverlay: false })` turns it off: listen
-  to `link` and draw your own. The play page's chip says "reconnecting" too.
+  to `link` and draw your own. The play page's chip says the same in a word ("reconnecting",
+  "playing on your own: looking for the room", "room full"), and a room with no place left at all
+  gets the page's notice with **Play in another room**. A game that draws its own "Reconnecting…"
+  tests `net.link === 'reconnecting'`, not `!net.connected`: that is also true of a page still
+  joining and of one that stopped for good.
+- **Every state ends somewhere a player can act, in bounded time.** `connecting` ends in `online`
+  or, after `connectOpenMaxMs`, in `alone`. `reconnecting` ends in `online` or, after
+  `reconnectMaxMs`, in `alone` (before this bound a replica whose room never came back showed a
+  frozen round and "Reconnecting…" for good). Going `alone` from a room is a `role` event (`role:
+  'host'`, `why: 'reconnect-timeout'`), also for a page that was the room's host: its seat went
+  with the room. `createRoom` keeps the round such a host was running (its own body and score,
+  everybody else's body a bot's); a game on raw `createNetplay` starts a round of its own, as it
+  does for `relay-timeout`. `closed` is said in words and the play page offers the way out.
+- **`net.full`** is true when this browser asked to play and every seat is taken: it is in the
+  room with no seat (`seat === null`, role `screen`) and the relay seats it when one frees up (a
+  `role` event with `why: 'seated'`). Section 28 says what a game does meanwhile.
 - **`net.reconnects`** is how many times the helper has scheduled another knock (the same number
   as `stats().reconnects`, which was always there; `net.reconnects` and
   `window.__homieNet.reconnects` are new). 0 means the connection was never interrupted, which is
@@ -1571,6 +1602,12 @@ net.start();                                             // booted: the clock ru
 With `connectClock: 'game'` the socket still opens at once and a welcome that arrives early is
 used at once; only the giving-up waits for `net.start()` (or for 60 s, so a game that never says
 is not left without a role).
+
+**A page that was blocked is not a dead socket.** The helper drops a socket that delivered
+nothing for `staleMs` (6 s) and knocks again. A heavy boot blocks the page for longer than that,
+and when it wakes its ping timer runs before the frames queued behind it: a healthy socket was
+dropped and every long hitch became a reconnect. A ping that itself runs more than 3.5 s late now
+gives the socket 2.5 s to be heard from first; one that is really dead is still dropped.
 
 **A host that hitches.** The relay hands the room on when its host has sent no snapshot for the
 stall time while others are present. That is right for a frozen tab and wrong for a game whose
@@ -1680,10 +1717,38 @@ those through the helper.
 
 **`net.prefs`: a few settings that last.** Quality, volume, a personal best, the last name typed.
 
+**The trap, and the fix: a setting that is not there must never reach your game as `null`.**
+`null * x` is `0` and `Number(null)` is `0`, so a volume that was never set, or was kept as `null`,
+plays as silence with no error. Read a number, a switch or a word with the typed readers: they
+answer with your fallback for a key never set, a `null`, a wrong type, a `NaN`, and a read before
+the prefs arrived.
+
 ```ts
-const q = await net.prefs.get('quality', 'high');   // always resolves, with the fallback if nothing is kept
-net.prefs.set('quality', 'low');                    // resolves true when kept
-await net.prefs.ready; net.prefs.peek('best', 0);   // after ready: read without waiting
+await net.prefs.ready;                                                     // once, before the first read
+const volume  = net.prefs.number('volume', 0.8, { min: 0, max: 1 });       // never null, never NaN, never out of range
+const muted   = net.prefs.boolean('muted', false);                         // true or false, never 0 or 'false'
+const quality = net.prefs.string('quality', 'high', { oneOf: ['low', 'high'] });
+net.prefs.set('volume', 0.4);                                              // resolves true when kept
+```
+
+- `number(key, fallback, { min, max, integer })`, `boolean(key, fallback)` and
+  `string(key, fallback, { oneOf })` read what has arrived, without waiting. The fallback is
+  yours and required: one of the wrong type (`number('volume')`, a `NaN`) throws a `TypeError`.
+- **Before `ready`** the page has not answered yet (on the play page the prefs come by message):
+  a typed reader and `peek` answer with the fallback and the console says so once, naming
+  `await net.prefs.ready`. `net.prefs.loaded` says whether they have arrived.
+- **A wrong type is said once** per key in the console, with what was kept (a string where a
+  number was asked for, a word that is not one of `oneOf`). A key that is simply not set says nothing.
+- **`set` refuses what JSON cannot keep**: `NaN`, `Infinity`, a function, a loop, `undefined`
+  inside an object. JSON would write `null`, and the next visit would read that as the setting.
+  It resolves false, warns once for the key, and what was kept stands. `set(key, null)` still
+  removes. A `null` that an earlier build kept this way is read as nothing kept, by `get` too.
+- `get(key, fallback)`, `all()` and `peek(key, fallback)` remain for JSON values (an object, a
+  list): they are not checked against the fallback's type.
+
+```ts
+const q = await net.prefs.get('layout', { hud: 'left' });   // always resolves, with the fallback if nothing is kept
+await net.prefs.ready; net.prefs.peek('best', 0);          // after ready: read without waiting
 ```
 
 - The play page keeps them in its own storage, one JSON object per game on this browser
@@ -1834,6 +1899,13 @@ real browsers:
 6. The host's network drops for a second while a third browser joins: after it reconnects, three
    people, three bodies, and nobody's score was reset.
 7. A deploy with tabs open: section 23.
+8. **A slow browser joins mid-round** (throttle one to "4x slowdown" and open the room's link
+   while a round runs, then again during the results). Within a few seconds it is in one of the
+   places section 28 names, and the screen says which: playing in the room on its own body,
+   playing on its own with bots, or watching with a line that says until when. Never a body-less
+   camera with nothing said, never "Reconnecting…" on a page that was never connected, and never
+   a line left up after the link came back. `room.standing` (or `net.link`, `net.full` and your
+   own roster on raw `createNetplay`) is what a test asserts.
 
 ## 26. Places and ties (revision 9)
 
@@ -1876,3 +1948,59 @@ and `failed`.
   tested with stand-in sockets. If `wrangler dev` still prints an error with no room on it after a
   host is closed, it comes from somewhere these boundaries do not cover; the `leave` and
   `socket-gone` lines beside it say what the room was doing at that second.
+
+## 28. Seat or solo: a page with no body (after 0.31.0)
+
+A page can be in its room and have nothing to play: `net.link === 'online'`, and no body. It
+happened three ways, and none of them said anything:
+
+| How | What the page had | What happens now |
+|---|---|---|
+| The relay seated the player and the host had no body free (every body was somebody's: a server stopped keeping seats for AI mid-round, or the game has fewer bodies than the room has seats). The claim was tried once, at the join. | a seat, role `replica`, no body, for the rest of the visit | The host seats everybody who is waiting **whenever a body frees up and at every round start** (`createRoom`; the starters on raw `createNetplay` do the same in `seatWaiting()`). |
+| Every seat is taken. The relay lets the page in with no seat. | `seat === null`, role `screen`, nothing said | `net.full` is true and the line says so; the relay seats it when a seat frees up, as before. |
+| The page was reset by its host before a snapshot showed its body. | a body it never adopted (it could not move until the next round) | `createRoom` owes the adoption until a snapshot shows the body. |
+
+**The recipe is an option, not prose.** `createRoom` decides what a body-less page does, after
+`seatWaitMs` (default 4000, 1000 to 30000) of time it could actually listen:
+
+```ts
+const room = createRoom({
+  // …
+  fallback: 'solo',        // 'wait' (default) | 'solo' | 'spectate'
+  seatWaitMs: 4000,
+  onStanding: (s) => hud.say(s.line),   // optional: the line over the game says it already
+});
+room.standing;   // { state: 'joining' | 'playing' | 'solo' | 'watching' | 'waiting' | 'closed', why, line }
+```
+
+| `fallback` | What the page does while the room has no body for it | The line |
+|---|---|---|
+| `'wait'` (default) | What a game did before: it waits. Now it says so, and the host seats it as above. | Waiting for a place in this round… |
+| `'solo'` | A private round with bots, here: `room.hosting` is true, `room.mine()` is its body, `room.solo` is true. Nothing of it is sent (no round, roster, snapshot or `room.send`). The moment the room has a body for it, the private round ends and `adopt` is called with the room's body. | Playing on your own until the next round (in a full room: This room is full · playing on your own until a seat is free) |
+| `'spectate'` | No body; `room.viewBody()` follows a person in the room until it has one. | Watching until the next round |
+
+`room.standing` ties it to the link states of section 22, so a game (and a test) asks one thing:
+
+| `standing.state` | `why` | `net.link` | Can the player play? |
+|---|---|---|---|
+| `joining` | `connecting`, `no-body`, `full`, `reconnecting` | `connecting`, or `online` inside `seatWaitMs` | not yet; a line after 0.7 s ("Joining the round…") |
+| `playing` | `seated`, `reconnecting` | `online` (or `reconnecting`, bounded) | yes, in the room |
+| `solo` | `alone`, `offline` (the link); `no-body`, `full` (the fallback) | `alone`, `offline`, or `online` | yes, on their own, with bots |
+| `watching` | `screen` (a watcher or a big screen, by choice); `no-body`, `full` (`spectate`) | `online` | no; the line says until when |
+| `waiting` | `no-body`, `full` (`wait`) | `online` | no; the line says so |
+| `closed` | `net.closedWhy` | `closed` | no; the line says why and the play page offers another room |
+
+- **Solo is the game's own host code, run privately.** `onRoundStart` runs for the private round
+  (with the room's round number, a clock of its own) and the game's rules move its bots, exactly
+  as offline. A score made there stays there: the room's body starts as the host made it. Events
+  from the real room still arrive on `room.on('event')` while solo; a game that plays sounds for
+  them checks `room.solo`.
+- **The wait counts only time the page could listen**, like the wait for the welcome: a page
+  blocked for six seconds by its own boot runs its timers before the snapshots queued behind
+  them, and a body that is already on its way is not "missing".
+- **The default changes nothing a working game did.** A page that gets its body with its first
+  snapshots never sees any of this; `'wait'` only adds the line and the host's second try.
+- **On raw `createNetplay`** there is no option: do what the starters do. Host: try the claim
+  again on `leave` and at a round's rollover (`seatWaiting()`). Everyone: test
+  `net.link === 'reconnecting'` for your own "Reconnecting…", read `net.full`, and say where the
+  player stands with `net.line('…')`.

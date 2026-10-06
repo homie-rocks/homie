@@ -5,18 +5,24 @@
  * same module the Claude Code mod asks, so the three apps hold the same calls with the same words. Only the envelope
  * is Grok's: its tool names (run_terminal_command, search_replace, server__tool) and its answers ({ decision, reason }).
  *
- * Grok's documented PreToolUse answers are allow and deny (a crash fail-opens, so a hold that cannot be checked is
- * denied here, as the mod denies). A hold denies the call with a short code. The person answers in their own message,
- * "proceed H7K2" or "cancel H7K2"; UserPromptSubmit records it, and the same call then goes through once. Grok's own
- * approval prompts still apply. PostToolUse takes secrets out of what the model reads (lib/redact.mjs).
+ * WHAT GROK GIVES AND TAKES (its own hooks guide, read at Grok 1.0.46). The event arrives on stdin in camelCase:
+ * `toolName`, `toolInput`, `sessionId`, `cwd`, `workspaceRoot`, and after a tool `toolResult` (with a `tool_response`
+ * copy). An MCP tool's name is `server__tool`. A PreToolUse hook answers { decision: "allow" | "deny", reason } on
+ * stdout; a hook that crashes, times out (5 s unless the hooks file says more, and ours does) or prints something
+ * else FAILS OPEN, so a call that cannot be checked is answered with an explicit deny here, as the mod denies. A hold
+ * denies the call with a short code. The person answers in their own message, "proceed H7K2" or "cancel H7K2";
+ * UserPromptSubmit records it (Grok discards what an allowing prompt hook prints, so nothing is printed), and the
+ * same call then goes through once. Grok also has an "ask" answer that raises its own permission prompt; a client
+ * that approves every prompt would approve that too, so a hold stays a deny that only the person's own message
+ * lifts. Grok's own approval prompts still apply. PostToolUse cannot stop anything, but it replaces what the model
+ * reads: `hookSpecificOutput.updatedToolOutput` as a string is the model's copy of the result (lib/redact.mjs takes
+ * the secrets out of it); the person's scrollback keeps the original.
  *
- * SEEN IN GROK BUILD 1.0.41 (2026-10-04): Grok registers no plugin's hooks. In headless (`grok -p`) and agent
- * (`grok agent stdio`) sessions its own log says "hooks: discovery complete total_hooks=0" with five plugins that
- * ship hooks installed, and the same for a plugin loaded with --plugin-dir whose only content is a standard
- * hooks/hooks.json; a deploy ran unheld. So these hooks do not run there yet, whatever file they are in: this
- * script answers correctly when fed a payload by hand, the skills tell Grok to ask the person itself, and the setup
- * status says "Homie's holds: off" until the mark below appears. Nothing here needs to change for a Grok that runs
- * them.
+ * WHERE GROK FINDS THESE HOOKS. Grok reads the hooks file a plugin's ROOT plugin.json names, and with none named it
+ * loads hooks/hooks.json. Ours is the Claude Code mod's file (modules, no "hooks" object), so until the root
+ * plugin.json named hooks/grok.json Grok registered nothing from this plugin: its log said "total_hooks=0", a deploy
+ * ran unheld, and 0.30.2 wrongly concluded that Grok runs no plugin's hooks. It does, once the plugin is trusted
+ * (`grok plugin install … --trust`). test/manifests.test.mjs keeps the root manifest pointing here.
  *
  *   node hooks/grok.mjs check -- <command line>     what Homie would do with a command, in words (nothing runs)
  *
@@ -61,10 +67,15 @@ export function asCodex(p) {
     tool_name: tool,
     tool_input: input,
     cwd,
-    session_id: String(p.session_id ?? p.sessionId ?? ''),
+    session_id: sessionOf(p),
     prompt: p.prompt ?? p.user_prompt ?? p.userPrompt ?? p.message ?? '',
-    tool_response: p.tool_response ?? p.toolResponse ?? p.tool_output ?? p.toolOutput,
+    tool_response: p.toolResult ?? p.tool_response ?? p.toolResponse ?? p.tool_output ?? p.toolOutput,
   };
+}
+
+/** The session a payload belongs to: its own `sessionId`, else the one Grok sets for every hook process. */
+function sessionOf(p) {
+  return String(p.sessionId ?? p.session_id ?? process.env.GROK_SESSION_ID ?? '');
 }
 
 const GROK = { app: 'grok', by: 'Grok' };
@@ -88,12 +99,19 @@ export function toGrok(mode, out) {
     const seen = out.systemMessage && !reason.includes(out.systemMessage) ? `${out.systemMessage} ${reason}` : reason;
     return { decision: 'deny', reason: seen };
   }
-  if (mode === 'prompt') return out;
-  const text = String(out.reason ?? out.stopReason ?? '');
+  // Grok discards what an allowing UserPromptSubmit hook prints, and reads { decision: "block" } as "refuse this
+  // prompt": the person's answer is recorded and nothing is printed.
+  if (mode === 'prompt') return null;
+  return withheld(String(out.reason ?? ''), String(out.stopReason ?? '').replace(/Codex/g, 'Grok'));
+}
+
+/**
+ * A PostToolUse answer that replaces what the model reads with `text` (a string is taken verbatim for every tool) and
+ * tells it why in a line. `mcp` adds the MCP-only spelling of the same key.
+ */
+export function withheld(text, why, { mcp = false } = {}) {
   return {
-    decision: 'block',
-    reason: text,
-    hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text, updatedToolOutput: text },
+    hookSpecificOutput: { hookEventName: 'PostToolUse', ...(why ? { additionalContext: why } : {}), updatedToolOutput: text, ...(mcp ? { updatedMCPToolOutput: text } : {}) },
   };
 }
 
@@ -103,9 +121,11 @@ export async function grokPre(p, opts = {}) {
   return toGrok('pre', await pre(call, { ...opts, ...GROK }));
 }
 
+/** The person's own "proceed <code>" or "cancel <code>": recorded, and nothing is printed. `said` is what it answered (tests). */
 export async function grokPrompt(p, opts = {}) {
-  const call = asCodex(p) ?? { prompt: p.prompt ?? p.userPrompt ?? '', session_id: String(p.session_id ?? p.sessionId ?? '') };
-  return toGrok('prompt', await prompt({ ...call, prompt: call.prompt }, opts));
+  const call = { prompt: p.prompt ?? p.userPrompt ?? p.user_prompt ?? p.message ?? '', session_id: sessionOf(p) };
+  const out = await prompt(call, opts);
+  return out ? { said: out.hookSpecificOutput?.additionalContext ?? '' } : null;
 }
 
 export async function grokPost(p, opts = {}) {
@@ -113,12 +133,7 @@ export async function grokPost(p, opts = {}) {
   if (!call) return null;
   const out = await post(call, opts);
   if (!out) return null;
-  const grok = toGrok('post', out);
-  const tool = String(call.tool_name ?? '');
-  if (tool.startsWith('mcp__')) {
-    grok.hookSpecificOutput = { hookEventName: 'PostToolUse', additionalContext: grok.reason, updatedMCPToolOutput: grok.reason };
-  }
-  return grok;
+  return withheld(String(out.reason ?? ''), String(out.stopReason ?? '').replace(/Codex/g, 'Grok'), { mcp: String(call.tool_name ?? '').startsWith('mcp__') });
 }
 
 async function stdinJson() {
@@ -141,12 +156,13 @@ async function main(mode) {
   try {
     const p = await stdinJson();
     if (mode === 'pre') out = await grokPre(p);
-    else if (mode === 'prompt') out = await grokPrompt(p);
+    else if (mode === 'prompt') await grokPrompt(p);
     else if (mode === 'post') out = await grokPost(p);
   } catch (error) {
     const why = String(error?.message ?? error).slice(0, 200);
     if (mode === 'pre') out = { decision: 'deny', reason: `The Homie hooks could not check this call (${why}), so it was not made. Ask the person, or try again.` };
-    else if (mode === 'post') out = { decision: 'block', reason: `The Homie hooks could not check this output for secrets (${why}), so it was withheld. Run it again, or ask the person to read it on their screen.` };
+    // A block here would only add a line beside the output; replacing the output is what withholds it.
+    else if (mode === 'post') out = withheld(`The Homie hooks could not check this output for secrets (${why}), so it was withheld. Run it again, or ask the person to read it on their screen.`, 'Homie could not check this output for secrets.', { mcp: true });
   }
   if (out) process.stdout.write(JSON.stringify(out));
 }

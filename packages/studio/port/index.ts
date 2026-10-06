@@ -37,7 +37,7 @@ export { groundBasis, screenToGround, PlayerYaw, type GroundBasis, type CameraLi
 export { fitView, easeView, toScreen, createLabels, type Fit, type FitOptions, type LabelIn, type LabelOut, type LabelOptions, type LabelBox } from './view';
 export { createBubbles, paintBubbles, wrapText, BUBBLE_FONT, type Bubbles, type BubbleOptions, type BubbleIn, type BubbleOut, type BubbleStyle } from './view';
 export { exposePort, PORT_EXTRA_NAMES, type PortExtra, type PortProbeOptions, type View } from './probe';
-export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt, type TakeoverInfo } from './room';
+export { createRoom, type Room, type RoomOptions, type BodyBase, type RoomSnap, type RoomCkpt, type TakeoverInfo, type Fallback, type Standing } from './room';
 export { createHud, type HudOptions } from './hud';
 export { BotBrain, brainOf, seek, flee, wanderer, nearest, rubberBand, protectedNewcomer, type V2 } from './bots';
 export { jitter, engages, standoff } from './skill';

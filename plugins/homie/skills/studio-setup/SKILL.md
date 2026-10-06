@@ -97,8 +97,9 @@ few seconds, and never prints a key:
    hooks ran just now in this app (`"on": true`). When it is off, say so in one sentence in this first reply,
    with the row's fix. In Codex: "Homie's holds are off in this session: open `/hooks` and trust Homie's
    three hooks. Until then I'll ask you before a deploy, a Cloudflare change, a paid call or a model
-   download." In Grok Build they are off as of 1.0.41, which runs no plugin's hooks: "Nothing holds a deploy
-   in Grok yet, so I'll ask you before a deploy, a Cloudflare change, a paid call or a model download." Then
+   download." In Grok Build: "Homie's holds are off in this session: install the Homie plugin again with
+   `--trust` and start a new session. Until then I'll ask you before a deploy, a Cloudflare change, a paid
+   call or a model download." Then
    do ask, every time, also when the app approves commands for you. When it is on, say nothing about it and
    change nothing: the hooks hold what they hold. A status with no `holds` row in Codex or Grok (a toolkit
    before 0.30.2) cannot tell: say the sentence anyway.
@@ -156,22 +157,23 @@ They answer in their own message, `proceed <code>` (that exact call goes through
 command or a file: only the person's own message counts. `node <this plugin's folder>/hooks/codex.mjs check
 -- <command>` (the folder above `skills/`) says what Homie would do with a command, and runs nothing.
 
-**Homie's holds in Grok: off, so you ask.** Homie ships the same hooks for Grok Build (`hooks/grok.json`, deciding
-with the module the mod and the Codex hooks ask, `hooks/lib/holds.mjs`), but Grok Build 1.0.41 runs no plugin's
-hooks: in its headless and agent sessions none are registered, from any plugin (checked 2026-10-04), and a deploy
-went through unasked. So in Grok, Build or chat, nothing is held and nothing is taken out of what you read: before
-a production deploy, a Cloudflare change outside that deploy, a paid call, a model download or an edit to a file
+**Homie's holds in Grok.** In Grok Build, Homie's hooks (`hooks/grok.json`, deciding with the module the mod
+and the Codex hooks ask, `hooks/lib/holds.mjs`) hold and refuse the same calls as in Codex, and take secrets out
+of what you read. Grok runs a plugin's hooks only once the person has trusted the plugin (`grok plugin install
+homie-rocks/homie#plugins/homie --trust`, then a new session; `/hooks` lists them). Never assume they are on:
+the setup status with `--client grok` says which it is (item 6 above), and while it says off, before a
+production deploy, a Cloudflare change outside that deploy, a paid call, a model download or an edit to a file
 `studio.json` `"protect"` lists, say what it would do in one sentence and wait for the person's yes, also when
-Grok approves commands by itself; and never repeat a key or a token you read. The setup status with `--client grok`
-says "Homie's holds: off" (item 6 above). If a later Grok runs the hooks, that row turns on by itself: then a held
-call comes back denied with a code, and the person answers `proceed <code>` or `cancel <code>` in their own
-message, as in Codex. `node <this plugin's folder>/hooks/grok.mjs check -- <command>` says what Homie would hold,
-and runs nothing: use it to know what to ask about.
+Grok approves commands by itself; and never repeat a key or a token you read. A held call comes back denied
+with a code, and the person answers `proceed <code>` or `cancel <code>` in their own message, as in Codex; then
+run exactly the same call again, or not at all. Never write that answer yourself. In Grok chat (the connector
+only, no plugin) there are no hooks: ask, every time. `node <this plugin's folder>/hooks/grok.mjs check --
+<command>` says what Homie would hold, and runs nothing.
 
 ## Grok and Grok Bot
 
 In Grok Build the Homie plugin brings the connector (its tools read `homie__studio_scaffold` and the like);
-its hooks do not run there yet (above). Say `--client grok` to the setup status. In Grok chat the connector is
+its hooks hold once the plugin is trusted (above). Say `--client grok` to the setup status. In Grok chat the connector is
 `https://homie.rocks/mcp`, once the person has added it. Use the one that is here; with neither, and a shell,
 go on without it (step 0). Do not send the person to Claude's GitHub app, to claude.ai/code, or to a button
 that only says "Connect to Claude". The studio's first-run band says **Connect this chat**.
@@ -364,7 +366,9 @@ later deploy says the token is not accepted: `stripe projects env --pull` in the
 
 The live address `deploy` prints is on `workers.dev`, which names the person's Cloudflare account;
 `deploy` keeps it in `.studio/local.json` (git-ignored). Never write it into a committed file. A custom
-domain goes in `studio.json` as `cloudflare.domain`.
+domain goes in `studio.json` as `cloudflare.domain`. Never touch a route the studio does not own: a catch-all
+or wildcard route already on that domain belongs to another site there, and the deploy's warning gives the
+one line to add instead (the `publish` skill has the rest).
 
 **The directory, only when asked.** Going online never lists a studio: listing in the homie.rocks directory
 is its own step, it is public, and it is the person's to ask for. When they asked to be listed (in their first
