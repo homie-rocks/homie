@@ -23,15 +23,15 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { deploy, explainCloudflare, readLiveSite } from '../lib/cloudflare.mjs';
+import { customHost, deploy, explainCloudflare, readLiveSite, zoneCheck } from '../lib/cloudflare.mjs';
 import { DEPLOY_LOCK, LOCK_MAX_AGE_MS, compareDeploy, deployWords, gameHash, lastDeploy, lockDeploy, lockHolds } from '../lib/deploy-state.mjs';
 import { gameDigest } from '../lib/build.mjs';
 import { buildDigest } from '../lib/perf.mjs';
 import { LOST_HINT, devConfig, devFile, devState, listenersOn, relayLines, socketOriginProblem, socketUrlIn } from '../lib/dev.mjs';
-import { beforeLine, isPublishCap, listedHere, publish, publishesSoFar, quotaLine, quotaOf } from '../lib/directory.mjs';
+import { beforeLine, isPublishCap, listedHere, publish, publishBefore, publishesSoFar, quotaLine, quotaOf } from '../lib/directory.mjs';
 import { reachSite, whyFailed } from '../lib/net.mjs';
 import { NODE_MIN, nodeProblem } from '../lib/node-version.mjs';
-import { exactRouteFor, keptRoutes, readConfig, routeCovers, routeKind, shadowedDomain, sortRoutes, wideRouteRefusal } from '../lib/routes.mjs';
+import { exactRouteFor, keptRoutes, readConfig, readZoneRoutes, routeCovers, routeKind, shadowedDomain, sortRoutes, wideRouteRefusal, zoneCandidates, zoneFinding } from '../lib/routes.mjs';
 import { wranglerConfig } from '../lib/scaffold.mjs';
 import { readLocal, readStudio, writeLocal, writeStudio } from '../lib/studio.mjs';
 
@@ -83,6 +83,7 @@ case "$1" in
         create) touch $S/db; echo '"database_id": "22222222-2222-2222-2222-222222222222"';;
         *) echo ok;;
       esac;;
+  auth) if [ -f $S/signed-in ]; then echo '{"type":"oauth","token":"stand-in"}'; else echo 'not signed in' >&2; exit 1; fi;;
   deploy) cp wrangler.jsonc $S/deployed-config 2>/dev/null; if [ -f $S/deploy-out ]; then cat $S/deploy-out >&2; exit ${deployCode}; fi; echo 'Deployed test-studio triggers https://test-studio.acct.workers.dev';;
   *) echo "unexpected: $*" >&2; exit 9;;
 esac
@@ -98,6 +99,178 @@ function editConfig(dir, change) {
   change(json);
   writeFileSync(file, `// edited by the studio's owner\n${JSON.stringify(json, null, 2)}\n`);
 }
+
+/**
+ * A stand-in for Cloudflare's API as the zone check reads it: the zones this sign-in has, and each one's Worker
+ * routes. `asked` is every request, with its method: the check only ever reads.
+ */
+function cloudflareApi({ zones = {}, status = 200 } = {}) {
+  const asked = [];
+  const fetchFn = async (url, init = {}) => {
+    const u = new URL(String(url));
+    asked.push(`${init.method ?? 'GET'} ${u.host}${u.pathname}${u.search}`);
+    if (u.host !== 'api.cloudflare.com') return new Response(JSON.stringify({ v: 1, name: 'Test Studio', claim: 'ab'.repeat(12), games: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const json = (body, code = 200) => new Response(JSON.stringify(body), { status: code, headers: { 'content-type': 'application/json' } });
+    if (status !== 200) return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }], result: null }, status);
+    if (u.pathname === '/client/v4/zones') { const name = u.searchParams.get('name'); return json({ success: true, result: zones[name] ? [{ id: `zone-${name}`, name }] : [] }); }
+    const m = /^\/client\/v4\/zones\/zone-(.+)\/workers\/routes$/.exec(u.pathname);
+    if (m && zones[m[1]]) return json({ success: true, result: zones[m[1]].map((r, i) => ({ id: `route-${i}`, ...r })) });
+    return json({ success: false, errors: [{ code: 7003, message: 'not found' }], result: null }, 404);
+  };
+  return { fetchFn, asked };
+}
+const HEADERS = { authorization: 'Bearer stand-in' };
+
+test('a custom domain beside another site\'s catch-all: the finding names the route, says never to edit or remove it, and gives the one line', async () => {
+  const api = cloudflareApi({ zones: { 'example.com': [{ pattern: '*/*', script: 'main-site' }, { pattern: 'example.com/blog/*', script: 'blog' }] } });
+  assert.deepEqual(zoneCandidates('play.example.com'), ['play.example.com', 'example.com']);
+  assert.deepEqual(zoneCandidates('play.example.co.uk', { routes: [{ pattern: 'play.example.co.uk', custom_domain: true, zone_name: 'example.co.uk' }] }).slice(0, 2), ['example.co.uk', 'play.example.co.uk']);
+  const read = await readZoneRoutes({ hostname: 'play.example.com', headers: HEADERS, fetchFn: api.fetchFn });
+  assert.deepEqual(read, { read: true, zone: { id: 'zone-example.com', name: 'example.com' }, routes: [{ pattern: '*/*', script: 'main-site' }, { pattern: 'example.com/blog/*', script: 'blog' }] });
+  assert.deepEqual(api.asked, ['GET api.cloudflare.com/client/v4/zones?name=play.example.com', 'GET api.cloudflare.com/client/v4/zones?name=example.com', 'GET api.cloudflare.com/client/v4/zones/zone-example.com/workers/routes'], 'two kinds of read, and nothing else');
+
+  const config = { routes: [{ pattern: 'play.example.com', custom_domain: true }] };
+  const f = zoneFinding({ hostname: 'play.example.com', worker: 'test-studio', config, zone: read });
+  assert.equal(f.state, 'foreign');
+  assert.deepEqual(f.foreign, [{ pattern: '*/*', script: 'main-site', kind: 'catch-all' }], 'the route that covers the studio\'s hostname; the blog\'s own path does not');
+  assert.deepEqual(f.route, { pattern: 'play.example.com/*', zone_name: 'example.com' });
+  assert.equal(f.line, '{"pattern":"play.example.com/*","zone_name":"example.com"}');
+  assert.match(f.warning, /^example\.com already has a route that covers play\.example\.com and is not this studio's: "\*\/\*" \(Worker main-site\)\./);
+  assert.match(f.warning, /That route belongs to another site on this domain: it must not be edited or removed, here or in the Cloudflare dashboard, or that site stops answering\./);
+  assert.match(f.warning, /the catch-all answers play\.example\.com first/);
+  assert.match(f.warning, /The one safe fix is the studio's own exact-host route, which wins over a wider route for this one hostname only and which every deploy keeps\./);
+  assert.ok(f.warning.includes('Add this line to "routes" in wrangler.jsonc and deploy: {"pattern":"play.example.com/*","zone_name":"example.com"}'), 'the exact line');
+  assert.match(f.warning, /homie-studio deploy --own-route/);
+
+  // A wildcard is said as a wildcard; a route with no Worker (it turns Workers off) is another site's too.
+  const wild = zoneFinding({ hostname: 'play.example.com', worker: 'test-studio', config, zone: { read: true, zone: read.zone, routes: [{ pattern: '*example.com/*', script: null }] } });
+  assert.equal(wild.state, 'foreign');
+  assert.match(wild.warning, /"\*example\.com\/\*" \(no Worker: it turns Workers off for what it covers\)/);
+  assert.match(wild.warning, /the wildcard answers play\.example\.com first/);
+
+  // With the studio's own exact-host route (in its config, or live on its Worker): nothing to fix, and the other
+  // route is still said to be left alone.
+  for (const fixed of [
+    zoneFinding({ hostname: 'play.example.com', worker: 'test-studio', config: { routes: [...config.routes, f.route] }, zone: read }),
+    zoneFinding({ hostname: 'play.example.com', worker: 'test-studio', config, zone: { ...read, routes: [...read.routes, { pattern: 'play.example.com/*', script: 'test-studio' }] } }),
+  ]) {
+    assert.equal(fixed.state, 'own-route');
+    assert.equal(fixed.warning, undefined);
+    assert.match(fixed.why, /belongs to another site on this domain and must not be edited or removed\. The studio's own exact-host route \("play\.example\.com\/\*"\) wins over it for this one hostname, and every deploy keeps it: nothing to change\./);
+  }
+
+  // The studio's hostname itself on another Worker is not something an exact-host route fixes: only the person can.
+  const taken = zoneFinding({ hostname: 'play.example.com', worker: 'test-studio', config, zone: { ...read, routes: [{ pattern: 'play.example.com/*', script: 'old-site' }] } });
+  assert.equal(taken.state, 'taken');
+  assert.match(taken.warning, /play\.example\.com itself is routed to another Worker on example\.com: "play\.example\.com\/\*" \(Worker old-site\)\. That route is not this studio's, so the studio does not take, edit or remove it, and neither should you/);
+});
+
+test('no catch-all: no warning; routes that cannot be read: unmeasured, never "fine"', async () => {
+  const config = { routes: [{ pattern: 'play.example.com', custom_domain: true }] };
+  // Other routes on the domain that do not cover the studio's hostname, and the studio's own.
+  const api = cloudflareApi({ zones: { 'example.com': [{ pattern: 'example.com/*', script: 'main-site' }, { pattern: 'shop.example.com/*', script: 'shop' }, { pattern: '*.example.com/*', script: 'test-studio' }] } });
+  const clear = zoneFinding({ hostname: 'play.example.com', worker: 'test-studio', config, zone: await readZoneRoutes({ hostname: 'play.example.com', headers: HEADERS, fetchFn: api.fetchFn }) });
+  assert.deepEqual([clear.state, clear.warning, clear.why, clear.foreign], ['clear', undefined, null, []]);
+
+  // Every way of not knowing: each says why, says it is unmeasured, and still gives the line and the rule.
+  const cases = [
+    [await readZoneRoutes({ hostname: 'play.example.com', headers: null, fetchFn: api.fetchFn }), /this computer has no Cloudflare sign-in to read them with/],
+    [await readZoneRoutes({ hostname: 'play.example.com', headers: HEADERS, fetchFn: cloudflareApi({ status: 403 }).fetchFn }), /this Cloudflare sign-in may not read the domain's routes/],
+    [await readZoneRoutes({ hostname: 'play.example.com', headers: HEADERS, fetchFn: cloudflareApi({ zones: {} }).fetchFn }), /no domain that play\.example\.com belongs to is on the Cloudflare account this computer is signed in to/],
+    [await readZoneRoutes({ hostname: 'play.example.com', headers: HEADERS, fetchFn: async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } }); } }), /Cloudflare could not be reached \(ENOTFOUND\)/],
+    [await readZoneRoutes({ hostname: 'play.example.com', headers: HEADERS, fetchFn: async () => new Response('<html>busy</html>', { status: 502 }) }), /Cloudflare answered 502/],
+  ];
+  for (const [read, why] of cases) {
+    assert.equal(read.read, false);
+    const f = zoneFinding({ hostname: 'play.example.com', worker: 'test-studio', config, zone: read });
+    assert.equal(f.state, 'unmeasured');
+    assert.equal(f.warning, undefined);
+    assert.match(f.why, /^Not checked: whether another site's route on the domain covers play\.example\.com \(/);
+    assert.match(f.why, why);
+    assert.match(f.why, /That is unmeasured, not a pass\./);
+    assert.ok(f.why.includes('{"pattern":"play.example.com/*","zone_name":"example.com"}'));
+    assert.match(f.why, /Never edit or remove a route this studio did not make\./);
+    assert.doesNotMatch(f.why, /\bfine\b|no other route/);
+  }
+});
+
+test('deploy and its plan warn before Wrangler changes anything, read only, and --own-route adds exactly the one line', async () => {
+  const dir = studio('beside-catch-all');
+  const cf = account(dir);
+  writeFileSync(join(cf.state, 'signed-in'), '');
+  // A studio with no custom domain is asked nothing at all.
+  assert.equal(customHost(readStudio(dir)), null);
+  assert.equal(await zoneCheck(dir, { fetchFn: async () => { throw new Error('not asked'); } }), null);
+  assert.equal(out(run(['deploy', '--plan'], dir)).zone, undefined);
+
+  writeStudio(dir, { ...readStudio(dir), cloudflare: { ...readStudio(dir).cloudflare, domain: 'play.example.com' } });
+  editConfig(dir, (c) => { c.routes = [{ pattern: 'play.example.com', custom_domain: true }]; });
+  assert.equal(customHost(readStudio(dir)), 'play.example.com');
+  const api = cloudflareApi({ zones: { 'example.com': [{ pattern: '*/*', script: 'main-site' }] } });
+
+  // The plan's own check, with the sign-in Wrangler already has.
+  const planned = await zoneCheck(dir, { fetchFn: api.fetchFn });
+  assert.equal(planned.state, 'foreign');
+  assert.deepEqual(cf.calls(), ['auth token --json'], 'the sign-in comes from Wrangler; nothing else was run');
+  // `deploy --plan` carries it (here unmeasured: the toolkit's own tests ask no real network), in JSON and in words.
+  const plan = out(run(['deploy', '--plan'], dir));
+  assert.deepEqual([plan.zone.state, plan.zone.host, plan.zone.line], ['unmeasured', 'play.example.com', '{"pattern":"play.example.com/*","zone_name":"example.com"}']);
+  const words = spawnSync(process.execPath, [CLI, 'deploy', '--plan'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } }).stdout;
+  assert.match(words, /\nNot checked: whether another site's route on the domain covers play\.example\.com \(not asked\)\. That is unmeasured, not a pass\./);
+
+  // The deploy: the warning is a step BEFORE anything is built or deployed, a note in the result, and the
+  // structured finding; only GETs went to Cloudflare; wrangler.jsonc is as the owner wrote it.
+  const said = [];
+  const warned = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, log: (line) => said.push(line) });
+  assert.equal(warned.ok, true, JSON.stringify(warned));
+  assert.equal(warned.zone.state, 'foreign');
+  assert.deepEqual(warned.zone.foreign, [{ pattern: '*/*', worker: 'main-site', kind: 'catch-all' }]);
+  assert.deepEqual(warned.zone.route, { pattern: 'play.example.com/*', zone_name: 'example.com' });
+  const at = said.findIndex((l) => l.startsWith('warning: example.com already has a route that covers play.example.com'));
+  assert.ok(at >= 0 && at < said.findIndex((l) => l.startsWith('built ')), 'said before the build, and so before Wrangler deploys');
+  assert.ok(warned.notes.some((n) => n.includes('must not be edited or removed') && n.includes(warned.zone.line)), 'and in the result the terminal and the tool print');
+  assert.deepEqual(warned.steps.find((s) => s.needs === 'cloudflare-routes')?.route, warned.zone.route);
+  assert.ok(api.asked.filter((a) => a.includes('api.cloudflare.com')).length >= 2);
+  assert.ok(api.asked.every((a) => a.startsWith('GET ')), `Cloudflare's API was only read: ${api.asked.join(' | ')}`);
+  assert.deepEqual(readConfig(dir).routes, [{ pattern: 'play.example.com', custom_domain: true }], 'nothing was added by itself');
+  // The terminal prints the note.
+  const cli = spawnSync(process.execPath, [CLI, 'deploy', '--homie', 'http://127.0.0.1:9'], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
+  assert.match(cli.stderr + cli.stdout, /Not checked: whether another site's route on the domain covers play\.example\.com/);
+
+  // --own-route: exactly that line joins the studio's own routes, is deployed and kept; the other site's route is
+  // never written to (there is no write to Cloudflare's API at all).
+  api.asked.length = 0;
+  const added = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, ownRoute: true });
+  assert.equal(added.ok, true, JSON.stringify(added));
+  assert.deepEqual(readConfig(dir).routes, [{ pattern: 'play.example.com', custom_domain: true }, { pattern: 'play.example.com/*', zone_name: 'example.com' }]);
+  assert.deepEqual(JSON.parse(readFileSync(join(cf.state, 'deployed-config'), 'utf8').replace(/^\s*\/\/.*$/gm, '')).routes, readConfig(dir).routes, 'and it is in the config Wrangler deployed');
+  assert.match(added.steps.map((s) => s.what).join('\n'), /added the studio's own exact-host route to "routes" in wrangler\.jsonc: \{"pattern":"play\.example\.com\/\*","zone_name":"example\.com"\}\. It covers play\.example\.com only, and every deploy keeps it; the other site's route was not touched\./);
+  assert.equal(added.zone.state, 'own-route');
+  assert.equal(added.notes, undefined, 'no warning once the studio has its own route');
+  assert.ok(api.asked.every((a) => a.startsWith('GET ')));
+  // The next plain deploy keeps it and has nothing to warn about; asking again adds nothing twice.
+  const kept = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, ownRoute: true });
+  assert.equal(kept.zone.state, 'own-route');
+  assert.equal(readConfig(dir).routes.length, 2);
+  assert.match(kept.steps.map((s) => s.what).join('\n'), /--own-route added nothing: the studio's own exact-host route is already there\./);
+
+  // --own-route never guesses: with routes it could not read it adds nothing, and says why.
+  const blind = studio('own-route-unread');
+  account(blind);
+  writeStudio(blind, { ...readStudio(blind), cloudflare: { ...readStudio(blind).cloudflare, domain: 'play.example.com' } });
+  const none = await deploy(blind, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, ownRoute: true });
+  assert.equal(none.ok, true, JSON.stringify(none));
+  assert.equal(none.zone.state, 'unmeasured');
+  assert.equal(readConfig(blind).routes, undefined);
+  assert.match(none.steps.map((s) => s.what).join('\n'), /--own-route added nothing: the domain's routes could not be read/);
+  // No catch-all on the domain: a deploy says nothing about routes at all.
+  const quiet = studio('no-catch-all');
+  writeFileSync(join(account(quiet).state, 'signed-in'), '');
+  writeStudio(quiet, { ...readStudio(quiet), cloudflare: { ...readStudio(quiet).cloudflare, domain: 'play.example.com' } });
+  const calm = await deploy(quiet, { homie: 'http://127.0.0.1:9', fetchFn: cloudflareApi({ zones: { 'example.com': [{ pattern: 'example.com/*', script: 'main-site' }] } }).fetchFn });
+  assert.deepEqual([calm.ok, calm.zone.state, calm.notes], [true, 'clear', undefined]);
+  assert.doesNotMatch(calm.steps.map((s) => s.what).join('\n'), /route/i);
+});
 
 /* ------------------------------------------------------------------ Node.js */
 
@@ -187,8 +360,11 @@ test('a studio beneath a zone\'s wildcard Worker route: the deploy says which ex
   assert.match(note, /\{"pattern":"play\.example\.com\/\*","zone_name":"example\.com"\}/, 'the route that is needed, ready to paste');
   assert.match(note, /The studio does not touch that route/);
   assert.deepEqual(shadowed.steps.find((s) => s.route)?.route, { pattern: 'play.example.com/*', zone_name: 'example.com' });
-  // Nothing was asked of Cloudflare about routes: only the calls a deploy always makes.
-  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['d1', 'deploy', 'versions', 'whoami']);
+  // The domain's routes are only ever read, and here they could not be (this stand-in Wrangler hands out no
+  // sign-in): the deploy says that as unmeasured before it deploys, and changes no route.
+  assert.deepEqual([...new Set(cf.calls().map((c) => c.split(' ')[0]))].sort(), ['auth', 'd1', 'deploy', 'versions', 'whoami']);
+  assert.equal(shadowed.zone.state, 'unmeasured');
+  assert.equal(zone.asked.some((u) => u.includes('api.cloudflare.com')), false, 'with no sign-in to read with, Cloudflare is asked nothing');
   assert.deepEqual(readConfig(dir).routes, [{ pattern: 'play.example.com', custom_domain: true }], 'the custom domain stayed; nothing was added by itself');
 
   // The owner adds the exact-host route. It is deployed, kept, and the studio answers on its own domain.
@@ -420,10 +596,18 @@ test('publish from the command line and the MCP tool: the count is in what a per
   writeLocal(dir, { url: 'https://test-studio.acct.workers.dev' });
   // A directory on this computer.
   const posts = [];
+  const reads = [];
   const directory = createServer((req, res) => {
     let body = '';
     req.on('data', (d) => { body += d; });
     req.on('end', () => {
+      // The directory's read-only count (GET): whether the site is listed and how many publishes are left.
+      if (req.method === 'GET') {
+        reads.push(`GET ${req.url}`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, site: 'https://test-studio.acct.workers.dev', listed: posts.length > 0, limit: 4, remaining: 4 - posts.length, resetsAt: '2026-10-07T00:00:00.000Z' }));
+        return;
+      }
       posts.push(`${req.method} ${req.url} ${body}`);
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ok: true, studioPage: 'http://127.0.0.1/studios/test-studio', games: [{ name: 'Crown Thief', play: 'https://test-studio.acct.workers.dev/crown-thief/play' }], remaining: 4 - posts.length, limit: 4 }));
@@ -434,13 +618,43 @@ test('publish from the command line and the MCP tool: the count is in what a per
   const homie = `http://127.0.0.1:${directory.address().port}`;
   writeStudio(dir, { ...readStudio(dir), homie: { directory: homie } });
   // Not spawnSync: the directory above lives in this process, which must stay free to answer.
-  const cli = await new Promise((done) => {
-    const c = spawn(process.execPath, [CLI, 'publish'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+  const runCli = (args) => new Promise((done) => {
+    const c = spawn(process.execPath, [CLI, ...args], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
     const r = { stdout: '', stderr: '', status: null };
     c.stdout.on('data', (d) => { r.stdout += d; });
     c.stderr.on('data', (d) => { r.stderr += d; });
     c.on('close', (code) => done({ ...r, status: code }));
   });
+  // `publish --before` is a preflight: it asks the directory with a read and publishes NOTHING. (0.31.0 did not
+  // know the flag, read the command as `publish`, and listed the studio.) No POST, and no file written here.
+  const localBefore = JSON.stringify(readLocal(dir));
+  const pre = await runCli(['publish', '--before']);
+  assert.equal(pre.status, 0, pre.stdout + pre.stderr);
+  assert.equal(pre.stdout, 'Not published. The directory says: this site is not listed yet; publishes left today: 4 of 4. It resets at 2026-10-07T00:00:00.000Z.\n');
+  assert.deepEqual(posts, [], 'publish --before sent no POST at all');
+  assert.deepEqual(reads, [`GET /api/studio/publish?site=${encodeURIComponent('https://test-studio.acct.workers.dev')}`], 'one read, of the directory\'s count for this site');
+  assert.equal(JSON.stringify(readLocal(dir)), localBefore, 'and wrote nothing on this computer: no count, no "listed"');
+  const preJson = out(await runCli(['publish', '--before', '--json']));
+  assert.deepEqual([preJson.ok, preJson.command, preJson.published, preJson.listed, preJson.publishes.remaining, preJson.publishes.limit, preJson.publishes.from], [true, 'publish before', false, false, 4, 4, 'directory']);
+  assert.deepEqual(posts, []);
+  // A directory that cannot be reached is said as that, with what this computer knows; still nothing is sent.
+  const asked = [];
+  const down = await publishBefore(dir, { homie: 'https://homie.test', fetchFn: async (url, init) => { asked.push(`${init?.method ?? 'GET'} ${url}`); throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }); } });
+  assert.deepEqual(asked, [`GET https://homie.test/api/studio/publish?site=${encodeURIComponent('https://test-studio.acct.workers.dev')}`]);
+  assert.deepEqual([down.ok, down.published, down.publishes.from, down.publishes.remaining], [true, false, 'this computer', null]);
+  assert.match(down.publishes.line, /^Not published\. The directory could not be asked how many publishes are left \(.+\), so this is only what this computer knows: this computer has sent 0 publishes today \(UTC\); a publish from another computer or from the Homie connector is not counted here\.$/);
+  // An older directory with no such read answers an error: said the same way, never as a count.
+  const old = await publishBefore(dir, { homie: 'https://homie.test', fetchFn: async () => new Response(JSON.stringify({ ok: false, message: 'method not allowed' }), { status: 405, headers: { 'content-type': 'application/json' } }) });
+  assert.deepEqual([old.publishes.from, old.unreached.status], ['this computer', 405]);
+  assert.match(old.publishes.line, /could not be asked how many publishes are left \(method not allowed\)/);
+  // A flag publish does not know stops it before anything is sent.
+  const strange = await runCli(['publish', '--preflight', '--json']);
+  assert.equal(strange.status, 1);
+  assert.deepEqual([out(strange).ok, out(strange).needs, out(strange).flags], [false, 'flag', ['preflight']]);
+  assert.deepEqual(posts, [], 'an unknown flag is never read as a plain publish');
+  reads.length = 0;
+
+  const cli = await runCli(['publish']);
   assert.equal(cli.status, 0, cli.stdout + cli.stderr);
   assert.match(cli.stderr, /Publishing to the directory: publish 1 from this computer today \(UTC\)/, 'before');
   assert.match(cli.stdout, /Listed in the directory: .*\n {2}Crown Thief: .*\nPublishes left today: 3 of 4\./, 'after');
@@ -459,14 +673,75 @@ test('publish from the command line and the MCP tool: the count is in what a per
   await request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
   const call = async (name, args) => (await request('tools/call', { name, arguments: { studio: 'publish-cli', ...args } })).result;
   const before = await call('studio_publish', { before: true });
-  assert.match(before.content[0].text, /^Not published\. it said 3 publishes were left today after the last one \(of 4 a day\)\./);
-  assert.equal(before.structuredContent.sent, 1);
-  assert.equal(posts.length, 1, 'before: true publishes nothing');
+  assert.match(before.content[0].text, /^Not published\. The directory says: this site is listed; publishes left today: 3 of 4\. It resets at 2026-10-07T00:00:00\.000Z\.$/);
+  assert.deepEqual([before.structuredContent.kind, before.structuredContent.published, before.structuredContent.sent, before.structuredContent.publishes.remaining, before.structuredContent.publishes.from], ['publish-count', false, 1, 3, 'directory']);
+  assert.equal(posts.length, 1, 'before: true sent no POST: the one on record is the publish above');
+  assert.deepEqual(reads, [`GET /api/studio/publish?site=${encodeURIComponent('https://test-studio.acct.workers.dev')}`], 'the tool asks the same read the terminal does');
   const after = await call('studio_publish', {});
   assert.notEqual(after.isError, true, JSON.stringify(after));
   assert.match(after.content[0].text, /Listed: .*\n {2}Crown Thief: .*\nPublishes left today: 2 of 4\./);
   assert.deepEqual([after.structuredContent.publishes.remaining, after.structuredContent.publishes.sentToday], [2, 2]);
   child.stdin.end();
+});
+
+/* ------------------------------------------------------------------ a flag a command does not know */
+
+test('a command that changes something outside this computer stops at a flag it does not know: nothing is sent', async (t) => {
+  const dir = studio('strange-flags');
+  const cf = account(dir);
+  // Everything such a command could reach is watched: Cloudflare (the stand-in Wrangler), and one server on this
+  // computer that is the studio's live site, its back office and its directory at once.
+  const heard = [];
+  const server = createServer((req, res) => { heard.push(`${req.method} ${req.url}`); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  t.after(() => server.close());
+  const here = `http://127.0.0.1:${server.address().port}`;
+  writeStudio(dir, { ...readStudio(dir), homie: { directory: here } });
+  writeLocal(dir, { url: here });
+  const files = () => JSON.stringify([readFileSync(join(dir, 'studio.json'), 'utf8'), readLocal(dir), existsSync(join(dir, 'wrangler.jsonc')) ? readFileSync(join(dir, 'wrangler.jsonc'), 'utf8') : null]);
+  const before = files();
+  const ask = (args) => new Promise((done) => {
+    const c = spawn(process.execPath, [CLI, ...args, '--json'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
+    let stdout = '';
+    c.stdout.on('data', (d) => { stdout += d; });
+    c.on('close', (status) => done({ status, stdout }));
+  });
+  // Each command with the words it would need to run for real, and one invented flag.
+  const commands = {
+    publish: [], deploy: [], 'storage add': [], 'media put': ['notes.txt'], 'media move': [], 'setup attach': ['hs_made_up'], handoff: ['hb_made_up'],
+    'players owner': [], 'stats key': [], 'stats link': [], 'stats revoke': [], 'stats share': ['off'],
+    'office link': [], 'office key': [], 'office announce': ['back', 'soon'], 'office invite': ['crown-thief'], 'office launch': ['crown-thief', 'public'],
+    'office kick': ['crown-thief', 'room-1', 'p1'], 'office mute': ['crown-thief', 'room-1', 'p1'], 'office close': ['crown-thief', 'room-1'], 'office revoke': [],
+    'lounge mod': ['someone'], 'lounge remove': ['m1'], 'chat remove': ['crown-thief', 'room-1', 'm1'], 'chat budget': ['200'],
+    'servers close': ['crown-thief', 'main'], 'servers level': ['crown-thief', 'main', 'two'], 'servers member': ['crown-thief', 'main', 'someone'],
+    'shop connect': [], 'shop disconnect': [], 'shop refund': ['order-1'], 'shop statements': [],
+    'agents pass': ['crown-thief'], 'agents revoke': ['pass-1'], 'agents brain': ['crown-thief', 'main', 'workers-ai'], 'agents sit': ['crown-thief'],
+  };
+  // The table in the command itself: every command in it is tried here, and none is tried that is not in it.
+  const table = /const OUTWARD_FLAGS = \{([\s\S]*?)\n\};/.exec(readFileSync(CLI, 'utf8'))[1];
+  const keys = [...table.matchAll(/(?:^|[\s,{])(?:'([a-z]+(?: [a-z]+)?)'|([a-z]+)): \[/g)].map((m) => m[1] ?? m[2]);
+  assert.deepEqual(keys.slice().sort(), Object.keys(commands).sort());
+  for (const [key, words] of Object.entries(commands)) {
+    const r = await ask([...key.split(' '), ...words, '--made-up-flag']);
+    assert.equal(r.status, 1, `${key} exits 1`);
+    const answer = JSON.parse(r.stdout);
+    assert.deepEqual([answer.ok, answer.command, answer.needs, answer.flags], [false, key, 'flag', ['made-up-flag']], key);
+    assert.match(answer.why, new RegExp(`^homie-studio ${key} does not take --made-up-flag, so it did not run: nothing was sent or changed\\.`), key);
+    assert.match(answer.why, /It takes: (--[a-z-]+(, --[a-z-]+)*|no flags of its own) \(and --json\)\.$/, key);
+    assert.deepEqual(cf.calls(), [], `${key}: Wrangler was not run`);
+    assert.deepEqual(heard, [], `${key}: no request left this command`);
+    assert.equal(files(), before, `${key}: no file of the studio changed`);
+  }
+  // A flag of another command is as unknown as an invented one: `deploy --dry-run` is not a dry run, so it is not a deploy.
+  const dry = JSON.parse((await ask(['deploy', '--dry-run'])).stdout);
+  assert.deepEqual([dry.ok, dry.needs, dry.flags], [false, 'flag', ['dry-run']]);
+  assert.deepEqual(cf.calls(), []);
+  // The flags a command does take still run it (here as far as the sign-in the stand-in account has).
+  assert.equal(JSON.parse((await ask(['deploy', '--plan'])).stdout).command, 'deploy plan');
+  assert.equal(JSON.parse((await ask(['publish', '--before', '--site', here])).stdout).published, false);
+  assert.deepEqual(heard, [`GET /api/studio/publish?site=${encodeURIComponent(here)}`], 'and the one request was a read');
+  // A command that only reads keeps ignoring a flag it does not know.
+  assert.equal(JSON.parse((await ask(['storage', '--made-up-flag'])).stdout).ok, true);
 });
 
 /* ------------------------------------------------------------------ local dev */

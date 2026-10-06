@@ -3,7 +3,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "^(Bash|run_terminal_cmd|run_terminal_command|Edit|Write|search_replace|apply_patch|mcp__.+|[^_]+__.+)$",
+        "matcher": "^(Bash|run_terminal_cmd|run_terminal_command|Edit|Write|search_replace|apply_patch|mcp__.+|.+__.+)$",
         "hooks": [
           { "type": "command", "command": "node \"${GROK_PLUGIN_ROOT}/hooks/grok.mjs\" pre", "timeout": 90, "statusMessage": "Homie: checking this call" }
         ]

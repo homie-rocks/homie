@@ -82,15 +82,15 @@ test('the person\'s own proceed answers the hold, and a secret does not reach th
     const held = await grokPre(payload, { dir: s.data });
     const code = /proceed ([A-HJKMNP-Z2-9]{4})/.exec(held.reason)[1];
     const said = await grokPrompt({ sessionId: 's2', prompt: `proceed ${code}` }, { dir: s.data });
-    assert.match(said.hookSpecificOutput.additionalContext, new RegExp(`proceed to Homie hold ${code}`));
+    assert.match(said.said, new RegExp(`proceed to Homie hold ${code}`));
     assert.equal((await grokPre(payload, { dir: s.data })).decision, 'allow');
     const secret = `sk_test_${'notasecretkey'.repeat(2)}`;
     const redacted = await grokPost({
       toolName: 'run_terminal_command', toolInput: { command: 'echo hi' }, cwd: s.root, sessionId: 's2', toolResponse: `token ${secret} done`,
     }, { dir: s.data });
-    assert.equal(redacted.decision, 'block');
-    assert.doesNotMatch(redacted.reason, /sk_test_/);
-    assert.match(redacted.reason, /hidden by Homie/);
+    assert.equal(redacted.decision, undefined, 'a PostToolUse "block" only adds a line beside the output; the output is replaced instead');
+    assert.doesNotMatch(JSON.stringify(redacted), /sk_test_/);
+    assert.match(redacted.hookSpecificOutput.updatedToolOutput, /hidden by Homie/);
   } finally { s.done(); }
 });
 
@@ -112,5 +112,95 @@ test('through stdin and stdout as Grok Build runs it: the answer is Grok\'s, and
     assert.match(held.reason, /proceed [A-HJKMNP-Z2-9]{4}/);
     run('prompt', { sessionId: 's3', prompt: 'hello' });
     assert.equal(JSON.parse(readFileSync(join(marks, 'grok.json'), 'utf8')).event, 'prompt');
+  } finally { s.done(); }
+});
+
+/*
+ * GROK'S OWN CONTRACT (its hooks guide, read at Grok 1.0.46), fed through stdin and read from stdout as Grok does:
+ * the event in camelCase (`hookEventName`, `hook_event_name`, `toolName`, `toolInput`, `sessionId`, `cwd`,
+ * `workspaceRoot`, `toolUseId`; after a tool `toolResult` with its `tool_response` copy), a PreToolUse answer of
+ * { decision: "allow" | "deny", reason }, and a PostToolUse answer whose `hookSpecificOutput.updatedToolOutput`
+ * (a string) replaces what the model reads. Any failure of a hook lets the call through, so every answer here is
+ * explicit and the script exits 0.
+ */
+test('Grok\'s documented shapes: a pass, a hold, the person\'s proceed, a refusal and a redaction', () => {
+  const s = studio();
+  try {
+    const marks = join(s.data, 'marks');
+    const env = { ...process.env, GROK_PLUGIN_DATA: s.data, HOMIE_HOLDS_MARKS: marks, GROK_SESSION_ID: 's9' };
+    const event = (name, more) => ({
+      hookEventName: name.replace(/[A-Z]/g, (c, i) => `${i ? '_' : ''}${c.toLowerCase()}`), hook_event_name: name, sessionId: 's9', cwd: s.root,
+      workspaceRoot: s.root, permissionMode: 'default', promptId: 'p1', timestamp: '2026-10-06T12:00:00Z', ...more,
+    });
+    const tool = (name, toolName, toolInput, more = {}) => event(name, { toolName, toolInput, toolUseId: 'call-1', toolInputTruncated: false, ...more });
+    const run = (mode, input) => {
+      const r = spawnSync(process.execPath, [SCRIPT, mode], { input: JSON.stringify(input), env, encoding: 'utf8' });
+      assert.equal(r.status, 0, `${mode} exits 0: any other exit lets the call through unchecked (${r.stderr})`);
+      return r.stdout ? JSON.parse(r.stdout) : null;
+    };
+
+    // A pass: exactly { decision: "allow" }.
+    assert.deepEqual(run('pre', tool('PreToolUse', 'run_terminal_command', { command: 'npm test' })), { decision: 'allow' });
+    assert.deepEqual(run('pre', tool('PreToolUse', 'read_file', { target_file: 'studio.json' })), { decision: 'allow' });
+
+    // A hold: { decision: "deny", reason }, the reason carrying the code and what it holds. For the shell tool and
+    // for the plugin's MCP tool under Grok's `server__tool` name.
+    const deploy = tool('PreToolUse', 'run_terminal_command', { command: 'npm run deploy' });
+    const held = run('pre', deploy);
+    assert.deepEqual(Object.keys(held).sort(), ['decision', 'reason']);
+    assert.equal(held.decision, 'deny');
+    assert.match(held.reason, /Held by Homie for the person's Proceed \(hold [A-HJKMNP-Z2-9]{4}\): Deploy Night Owls to production\?/);
+    assert.match(held.reason, /Run as Grok wrote it: homie-studio deploy/);
+    const code = /proceed ([A-HJKMNP-Z2-9]{4})/.exec(held.reason)[1];
+    const mcp = run('pre', tool('PreToolUse', 'homie__studio_deploy', {}));
+    assert.equal(mcp.decision, 'deny');
+    assert.match(mcp.reason, /Deploy Night Owls to production\?/);
+
+    // The person's own message answers it. Grok discards what an allowing prompt hook prints, and would read a
+    // "block" as "refuse this prompt": nothing is printed, and the same call then goes through, once.
+    assert.equal(run('prompt', event('UserPromptSubmit', { prompt: 'hello there' })), null);
+    assert.equal(run('prompt', event('UserPromptSubmit', { prompt: `proceed ${code}` })), null, 'the answer is recorded, nothing is printed');
+    assert.deepEqual(run('pre', deploy), { decision: 'allow' });
+    assert.equal(run('pre', deploy).decision, 'deny', 'once: the next deploy is held again');
+    // The model cannot answer for the person: a proceed inside a tool call is not a prompt.
+    assert.equal(run('pre', tool('PreToolUse', 'run_terminal_command', { command: `echo proceed ${code} && npm run deploy` })).decision, 'deny');
+
+    // A refusal: a deny with no code, and nothing to proceed.
+    mkdirSync(join(s.root, 'games', 'owl-rush', 'assets'), { recursive: true });
+    writeFileSync(join(s.root, 'games', 'owl-rush', 'assets', 'big.bin'), Buffer.alloc(6 * 1024 * 1024));
+    const refused = run('pre', tool('PreToolUse', 'run_terminal_command', { command: 'git add games/owl-rush/assets/big.bin' }));
+    assert.equal(refused.decision, 'deny');
+    assert.match(refused.reason, /^Refused by Homie: Not run: games\/owl-rush\/assets\/big\.bin \(6\.0 MB\) is over 5 MB/);
+    assert.doesNotMatch(refused.reason, /proceed [A-HJKMNP-Z2-9]{4}/);
+
+    // A redaction: Grok hands the shell tool's own result object (and a `tool_response` copy of it); the answer
+    // replaces the model's copy with a string, which Grok takes verbatim for every tool. No "block": that would
+    // only add a line beside the output and leave the secret in it.
+    const secret = `sk_test_${'notasecretkey'.repeat(2)}`;
+    const result = { type: 'Bash', command: 'cat .env', exit_code: 0, output_for_prompt: `STRIPE=${secret}\nready` };
+    const redacted = run('post', tool('PostToolUse', 'run_terminal_command', { command: 'cat .env' }, { toolResult: result, tool_response: result, toolResultTruncated: false }));
+    assert.deepEqual(Object.keys(redacted), ['hookSpecificOutput']);
+    assert.deepEqual(Object.keys(redacted.hookSpecificOutput).sort(), ['additionalContext', 'hookEventName', 'updatedToolOutput']);
+    assert.equal(redacted.hookSpecificOutput.hookEventName, 'PostToolUse');
+    assert.equal(typeof redacted.hookSpecificOutput.updatedToolOutput, 'string');
+    assert.match(redacted.hookSpecificOutput.updatedToolOutput, /^STRIPE=.*hidden by Homie.*\nready\n/, 'the output the model would have read, with the secret out of it');
+    assert.match(redacted.hookSpecificOutput.additionalContext, /out of what Grok reads/);
+    assert.doesNotMatch(JSON.stringify(redacted), /sk_test_|Codex/);
+    // A result too big for Grok to send typed arrives as the model-facing text itself, a string.
+    const big = run('post', tool('PostToolUse', 'run_terminal_command', { command: 'cat .env' }, { toolResult: `STRIPE=${secret}`, toolResultTruncated: true }));
+    assert.doesNotMatch(big.hookSpecificOutput.updatedToolOutput, /sk_test_/);
+    // An MCP tool's result: the MCP spelling of the key rides along.
+    const viaMcp = run('post', tool('PostToolUse', 'homie__studio_run', {}, { toolResult: { content: [{ type: 'text', text: `key ${secret}` }] } }));
+    assert.equal(viaMcp.hookSpecificOutput.updatedMCPToolOutput, viaMcp.hookSpecificOutput.updatedToolOutput);
+    assert.doesNotMatch(JSON.stringify(viaMcp), /sk_test_/);
+    // Nothing secret: nothing printed, and the model reads the tool's own output.
+    assert.equal(run('post', tool('PostToolUse', 'run_terminal_command', { command: 'ls' }, { toolResult: { type: 'Bash', command: 'ls', exit_code: 0, output_for_prompt: 'studio.json' } })), null);
+
+    // A payload that cannot be read is not a pass: Grok lets a failed hook's call through, so the answer is an
+    // explicit deny (before a call) or a replaced output (after one), still with exit 0.
+    const broken = (mode) => { const r = spawnSync(process.execPath, [SCRIPT, mode], { input: '{not json', env, encoding: 'utf8' }); assert.equal(r.status, 0); return JSON.parse(r.stdout); };
+    assert.equal(broken('pre').decision, 'deny');
+    assert.match(broken('pre').reason, /could not check this call/);
+    assert.match(broken('post').hookSpecificOutput.updatedToolOutput, /could not check this output for secrets .* so it was withheld/);
   } finally { s.done(); }
 });

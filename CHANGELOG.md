@@ -17,9 +17,41 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.31.1] - 2026-10-06
+
+**Plugin 0.32.1** · [#53](https://github.com/homie-rocks/homie/pull/53)
+
+Fixes from two creators' notes on 0.31.0: Homie's holds run in Grok, `publish --before` publishes nothing, a page that loses its room is never stuck, a missing setting is never a silent zero, and a part's preview fits a phone.
+
+### Added
+
+- `@homie-rocks/camera/heading.js` (camera 0.2.1): `headingFrom({ zero: '+x', toward: '+z' })` converts your game's own heading into the camera's and back, and `headingOfVector(dx, dz)` does it from a forward vector. The package now says plainly which way its heading points (yaw 0 faces +Z, a positive yaw turns toward +X, in radians), with a picture in the README and in the types. In development the follow camera warns once when the subject keeps travelling one way while its heading says another, and names the adapter; mark reversing frames with `reversing: true`, or turn it off with `followState({ headingCheck: false })`.
+- `net.prefs.number`, `net.prefs.boolean` and `net.prefs.string` read a setting with your fallback for a missing key, a null, a wrong type or a read before the prefs arrived, and say so once in the console. `net.prefs.set` refuses a `NaN` or anything else that would be kept as `null`.
+- `createRoom({ fallback })`, seat or solo: `'solo'` plays a private round with bots until the room has a body for the player, `'spectate'` watches, and `room.standing` says where the player stands. NETPLAY.md section 28 is the recipe, and the late-join checklist has the slow-boot, mid-round join.
+- A shared part can say the shape of its preview: `"aspect": "4:3"` and, for phones, `"phoneAspect": "3:4"` in `preview` (whole numbers 1 to 32, no flatter than 3:1, no taller than 1:2; 16:9 if you say nothing). Every part preview has an "Open the preview" link that shows it in a tab of its own.
+- On a custom domain, a deploy and its plan warn before anything goes live when another site's catch-all or wildcard route covers your studio's address: leave that route alone, and add the one line shown (or `deploy --own-route`). When the routes cannot be read, it says so rather than saying all is well.
+
+### Fixed
+
+- **Homie's holds run in Grok once you trust the plugin.** 0.30.2 said Grok runs no plugin's hooks. That was wrong: Grok takes a plugin's hooks from its main manifest, ours named none there, and Grok was loading the Claude Code file instead and finding nothing. A secret is also now really taken out of what the AI reads in Grok (it was only being flagged beside the output). `setup status --client grok` says whether the holds ran and how to turn them on.
+- **`publish --before` publishes nothing.** It asks the directory whether you are listed and how many publishes are left today. In 0.31.0 the command line ignored the flag and published.
+- Commands that change something outside your computer (deploy, publish, storage, the office and others) stop at a flag they do not know, before anything is sent. `deploy --dry-run` was one such flag: it used to deploy.
+- A page that loses its room no longer shows "Reconnecting…" for ever: after 20 seconds (`reconnectMaxMs`) it plays on its own with bots, says so, and rejoins when the room answers. The line over the game says what is true: "Reconnecting…" only to a page that was connected, and a full room is said in words with a way to another room.
+- A player who is seated while every body is taken gets one as soon as a body frees up or the next round starts, instead of watching for the rest of the visit.
+- A browser that freezes for a few seconds while a heavy game boots no longer drops its connection when it wakes.
+- A part's preview is no longer cut off on a phone: a narrow frame is at least 320 px tall instead of about 197.
+- The 3D starters say which of their angles a camera can take as it stands and which needs converting.
+
+### Upgrade notes
+
+- Grok: install or reinstall the plugin with trust, `grok plugin install homie-rocks/homie#plugins/homie --trust`. From then on a deploy, a Cloudflare change and a paid call are held for your "proceed", as in Codex.
+- A studio that pins 0.31.0 still publishes on `publish --before` from its own command line until it upgrades.
+- If your game reads settings with `net.prefs.get`, move numbers to `net.prefs.number(key, fallback)`: a `null` kept by an older build is now read as nothing kept.
+- `@homie-rocks/camera` is 0.2.1.
+
 ## [0.31.0] - 2026-10-06
 
-**Plugin 0.32.0** · [#50](https://github.com/homie-rocks/homie/pull/50)
+**Plugin 0.32.0** · [#50](https://github.com/homie-rocks/homie/pull/50) · [release-2026-10-06-studio-0.31.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-06-studio-0.31.0)
 
 Fixes from two creators' logs of building real studios: games now build on each other by sharing parts (remix is retired), a slow 3D game keeps its host, local play stays local, and synthesized bass plays at its written pitch.
 

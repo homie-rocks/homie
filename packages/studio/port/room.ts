@@ -17,6 +17,12 @@
  *   - Snapshots: one small row per body [slot, seat (-1 = bot), score, ...your
  *     fields], plus your fast world, at 20 Hz; replicas interpolate them.
  *
+ *   - Seat or solo (NETPLAY.md section 28): a page in the room with no body is
+ *     never left with nothing said. The host seats whoever is waiting when a
+ *     body frees up and at every round start; `fallback` decides what the page
+ *     does meanwhile (wait, a private round with bots, or watch), within
+ *     `seatWaitMs`, and `room.standing` says where the player stands.
+ *
  *   - Servers and agent seats (NETPLAY.md section 17): a hybrid server's AI
  *     seats are kept as AI bodies (the game's bots move them, marked AI), an AI
  *     that sits takes one, the server's `bots: 'off'` adds no filler bots, and
@@ -47,6 +53,26 @@ export interface RoomCkpt<B, S> {
  * so a game that keeps a returning player's score reads this.
  */
 export interface TakeoverInfo { why: 'join' | 'restore' | 'migrate'; own: boolean; back: boolean }
+
+/**
+ * SEAT OR SOLO (NETPLAY.md section 28): what a page does while the room has no body for it. `wait` (the default):
+ * nothing but say so. `solo`: play a private round with bots, and move into the room the moment it has a body for
+ * this player (at the latest its next round start). `spectate`: watch the room until then.
+ */
+export type Fallback = 'wait' | 'solo' | 'spectate';
+/**
+ * Where this player stands, in one word a game can act on. `joining`: not in the round yet (no welcome, or no body
+ * yet and still inside `seatWaitMs`). `playing`: a body in the room. `solo`: playing by itself with bots (`why`:
+ * `alone` or `offline` from the link, `no-body` or `full` from the fallback). `watching`: a screen or a watcher by
+ * choice (`screen`), or the fallback's `spectate`. `waiting`: the fallback's `wait`, past `seatWaitMs`. `closed`:
+ * the link stopped for good (`why` is `net.closedWhy`).
+ */
+export interface Standing {
+  state: 'joining' | 'playing' | 'solo' | 'watching' | 'waiting' | 'closed';
+  why: string;
+  /** The sentence on screen for it (the line over the game), or null. */
+  line: string | null;
+}
 
 export interface RoomOptions<B extends BodyBase, F = unknown, S = unknown> {
   /** The game id (the relay's logs). */
@@ -113,14 +139,30 @@ export interface RoomOptions<B extends BodyBase, F = unknown, S = unknown> {
   adopt?: (body: B) => void;
   /** A replica's own body as it sees it right now (owner movement): a promotion keeps it exactly there. */
   local?: () => B | null;
+  /**
+   * SEAT OR SOLO (section 28): what this page does when it is in the room and the room has no body for it for
+   * `seatWaitMs`: its host has not seated it (every body is somebody's), every seat is taken, or no snapshot has
+   * shown its body yet. `'wait'` (the default) keeps what a game did before, and says so on the line over the game.
+   * `'solo'`: a private round with bots, here, until the room has a body for this player (the host seats everybody
+   * who is waiting at every round start and whenever a body frees up). `'spectate'`: `viewBody()` follows the room.
+   */
+  fallback?: Fallback;
+  /** How long a page in the room waits for its body before the fallback applies. Default 4000 ms; 1000 to 30000. */
+  seatWaitMs?: number;
+  /** Where this player stands changed (also `room.standing`): draw your own words for it, or leave the line to say it. */
+  onStanding?: (s: Standing) => void;
   /** Extra netplay options (snapshotHz, inputHz, config for tests). */
   netplay?: Partial<NetplayOptions<RoomCkpt<B, S>>>;
 }
 
 export interface Room<B extends BodyBase, F = unknown, S = unknown> {
   readonly net: Netplay<RoomSnap<F>, unknown[], RoomCkpt<B, S>>;
-  /** True while this browser runs the rules. */
+  /** True while this browser runs the rules: the room's, or (`solo`) a private round of its own. */
   readonly hosting: boolean;
+  /** This browser plays a private round with bots while the room has no body for it (`fallback: 'solo'`). */
+  readonly solo: boolean;
+  /** Where this player stands (section 28): playing, on its own, watching, waiting, joining or closed, and why. */
+  readonly standing: Standing;
   /** Host: every body by slot. */
   readonly bodies: Map<number, B>;
   /** The live round (host: authoritative; others: the relay's copy). */
@@ -199,6 +241,21 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   let round: RoundInfo | null = null;
   let hosting = false;
   let tick = 0;
+  // Seat or solo (section 28).
+  const fallback: Fallback = opts.fallback === 'solo' || opts.fallback === 'spectate' ? opts.fallback : 'wait';
+  const seatWaitMs = Math.max(1000, Math.min(30_000, Number(opts.seatWaitMs) || 4000));
+  /** A private round with bots while the room has no body for this page: `hosting` is true, and nothing is sent. */
+  let solo = false;
+  let standing: Standing = { state: 'joining', why: 'connecting', line: null };
+  /** How long this page, in the room, has been without a body, counted only while it could listen (0: it has one). */
+  let noBodyMs = 0;
+  let lastCheckAt = 0;
+  /** The seat this browser held in its room (and in a private round), for the moment the helper gives the room up. */
+  let lastSeat: number | null = null;
+  let soloSeat = 0;
+  let saidLine: string | null = null;
+  /** The host reset this seat and the snapshot that said so had no body for it yet: adopt when one does. */
+  let adoptDue = false;
 
   const net = createNetplay<RoomSnap<F>, unknown[], RoomCkpt<B, S>>({
     game: opts.game, maxPlayers: max, movement: opts.movement ?? 'owner',
@@ -209,7 +266,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     caps: [...new Set([...(opts.netplay?.caps ?? []), 'agents' as const])],
   });
 
-  const mySeat = (): number | null => (net.offline ? 0 : net.seat);
+  // Offline, and in a private round of a full room (no seat at all), this browser is seat 0 of its own round.
+  const mySeat = (): number | null => (net.offline ? 0 : solo && net.seat === null ? 0 : net.seat);
   const bodyOfSeat = (seat: number | null): B | null => {
     if (seat === null) return null;
     for (const b of bodies.values()) if (!b.bot && b.seat === seat) return b;
@@ -246,7 +304,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   function moved(b: B): void {
     if (b.bot || b.seat === null) return;
     if (b.seat === mySeat()) { opts.adopt?.(b); return; }
-    net.reset(b.seat);
+    if (!solo) net.reset(b.seat);
   }
 
   const packRow = (b: B): number[] => [b.slot, b.seat ?? -1, b.score, ...opts.pack(b)];
@@ -257,9 +315,34 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     return snap;
   }
 
-  function startRound(n: number): void {
+  /**
+   * Everybody who holds a seat and has no body is seated now (section 28). A join is claimed once, when it happens;
+   * a claim that found no body free was never tried again, so that player watched for the rest of the visit, online
+   * and with nothing said. Tried again whenever a body frees up, and at every round start.
+   */
+  function seatEveryone(quiet = false): boolean {
+    if (!hosting || solo || net.offline) return false;
+    let any = false;
+    for (const p of net.peers.values()) {
+      if (p.seat === null || p.seat === mySeat() || roster.bySeat(p.seat)) continue;
+      const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null, p.occ ?? null);
+      if (!c) continue;
+      any = true;
+      syncBodies();
+      const b = bodies.get(c.slot.slot);
+      if (!b) continue;
+      if (c.yielded || c.added) takeover(b, { why: 'join', own: false, back: c.back });
+      if (!quiet) moved(b);
+    }
+    return any;
+  }
+
+  function startRound(n: number, rollover = false): void {
     const now = net.now();
     roster.trim();
+    // The next round of a running room seats whoever is still waiting for a body, before the bodies are dealt: the
+    // trim above is what makes room for them (the seats a server no longer keeps for AI go at the round, not before).
+    if (rollover) seatEveryone(true);
     syncBodies();
     let i = 0;
     spawned = new Map();
@@ -273,6 +356,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     round = { n, phase: 'live', startedAt: now, endsAt: now + roundMs };
     opts.onRoundStart?.(n);
     for (const b of bodies.values()) moved(b);
+    // A private round (solo) is this browser's alone: the room's round, roster and snapshots are its host's to say.
+    if (solo) return;
     net.round(round);
     net.roster(roster.toJSON());
     net.snapshot(buildSnap(), tick, true);
@@ -297,7 +382,7 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     const results = rank();
     round = { n: round.n, phase: 'over', startedAt: now, endsAt: now + breakMs, results };
     opts.onRoundEnd?.(results);
-    net.round(round);
+    if (!solo) net.round(round);
   }
 
   function restore(e: RoleChange<RoomSnap<F>, RoomCkpt<B, S>>): void {
@@ -345,8 +430,24 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     // A browser that was in the room a moment ago (a replica being promoted) sees its own body somewhere real; one
     // that just arrived (its first role) does not: what it shows locally is a place it has never been.
     const arriving = e.prev === null;
+    // It was playing a private round: what it shows locally is that round's place, not one in the room.
+    const wasSolo = solo;
+    solo = false;
+    // THE ROOM DID NOT COME BACK (section 22): this browser was the room's host, cut off for `reconnectMaxMs`, and
+    // plays alone from here. It keeps the round it was running: its own body is seat 0 of a round of its own now,
+    // and everybody else's goes to a bot, exactly as if they had left.
+    // The same for a private round the page was already playing when its link went: that round goes on.
+    if (net.offline && hosting && round && (wasSolo || (e.why === 'reconnect-timeout' && e.prev === 'host'))) {
+      const was = wasSolo ? soloSeat : lastSeat;
+      const mineWas = was === null ? undefined : roster.slots.find((s) => !s.bot && !s.agent && s.seat === was);
+      for (const s of roster.humans()) if (s.seat !== null && s !== mineWas) roster.release(s.seat);
+      if (mineWas) { mineWas.seat = 0; mineWas.name = 'You'; } else roster.claim(0, 'You');
+      syncBodies();
+      net.roster(roster.toJSON());
+      return;
+    }
     // My own body was mine a moment ago: keep it exactly where I see it.
-    const before = !hosting && mySeat() !== null && opts.local && !(e.promoted && arriving) ? opts.local() : null;
+    const before = !hosting && !wasSolo && mySeat() !== null && opts.local && !(e.promoted && arriving) ? opts.local() : null;
     hosting = true;
     if (e.promoted) restore(e);
     else {
@@ -381,7 +482,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     if (mine && before) opts.unpack(opts.pack(before), mine);
     // A browser that arrived as the host of a restored round stands where its body stands (its own old one, or the
     // one it just took over): without this the game's local pose and the host's body disagreed until the next round.
-    else if (mine && e.promoted && arriving) opts.adopt?.(mine);
+    // The same for one that came out of a private round to host the room's.
+    else if (mine && e.promoted && (arriving || wasSolo)) opts.adopt?.(mine);
     net.roster(roster.toJSON());
   }
 
@@ -393,10 +495,12 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
 
   net.on('role', (e) => {
     if (e.role === 'host') becomeHost(e);
-    else hosting = false;
+    // A private round goes on while the room's own roles change around it.
+    else if (!solo) hosting = false;
+    check();
   });
   net.on('join', (p) => {
-    if (!hosting || p.seat === null) return;
+    if (!hosting || solo || p.seat === null) return;
     // An AI takes a seat kept for AI (its hands say who moves the body); a person never does (section 17).
     const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null, p.occ ?? null);
     if (!c) return; // full: they watch
@@ -412,27 +516,123 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
     net.snapshot(buildSnap(), tick, true);
   });
   net.on('leave', (p) => {
-    if (!hosting || p.seat === null) return;
+    if (!hosting || solo || p.seat === null) return;
     roster.release(p.seat); // the body stays, a bot drives it now
     syncBodies();
+    // A body just went to a bot: somebody who was seated with none takes it now, not at the next round.
+    const seated = seatEveryone();
     net.roster(roster.toJSON());
+    if (seated) net.snapshot(buildSnap(), tick, true);
   });
   // The server's policy changed (a new server stamp, the owner): its AI seats come or go at once, filler at the round.
   net.on('policy', () => {
-    if (!hosting) return;
+    if (!hosting || solo) return;
     roster.fill();
     syncBodies();
+    seatEveryone();
     net.roster(roster.toJSON());
   });
-  net.on('control', (e) => {
-    if (!e.reset || !opts.adopt) return;
-    const snap = e.snap as Snapshot<RoomSnap<F>> | null;
-    const row = snap?.d?.b?.find((r) => r[1] === net.seat);
-    if (!row) return;
+  /** This seat's row in a snapshot of the room (the newest one, unless given): the body the room has for this page. */
+  function roomRow(snap?: Snapshot<RoomSnap<F>> | null): number[] | null {
+    if (net.seat === null) return null;
+    const s = snap === undefined ? net.latest() : snap;
+    return s?.d?.b?.find((r) => r[1] === net.seat) ?? null;
+  }
+  function adoptRow(row: number[]): void {
+    adoptDue = false;
+    if (!opts.adopt) return;
     const b = { slot: row[0], seat: row[1], score: row[2], name: net.name, bot: false } as unknown as B;
     opts.unpack(row.slice(3), b);
     opts.adopt(b);
+  }
+  net.on('control', (e) => {
+    if (!e.reset) return;
+    // In a private round the room's reset waits: this browser adopts its body when it moves in.
+    const row = solo ? null : roomRow(e.snap as Snapshot<RoomSnap<F>> | null);
+    // A reset whose snapshot has no body for this seat yet (the host knew the seat before it had a body for it) used
+    // to be spent on nothing: the body that came later was never adopted. It is owed until a snapshot shows one.
+    if (!row) { adoptDue = true; return; }
+    adoptRow(row);
   });
+
+  /* ------------------------------------------------------------ seat or solo (section 28) */
+  function enterSolo(): void {
+    solo = true;
+    hosting = true;
+    soloSeat = mySeat() as number;
+    roster = new Roster(rosterOpts());
+    bodies = new Map();
+    spawned = new Map();
+    roster.claim(mySeat() as number, net.name || 'You', null, null);
+    syncBodies();
+    // The room's own round number, so the HUD does not jump back to 1; the clock is this browser's.
+    startRound(Math.max(1, net.roundInfo?.n ?? 1));
+  }
+  /** The room has a body for this page (or its link changed): the private round ends and it stands in the room. */
+  function leaveSolo(): void {
+    solo = false;
+    hosting = false;
+    bodies = new Map();
+    spawned = new Map();
+    round = null;
+    const row = roomRow();
+    if (row) adoptRow(row);
+  }
+  const SAYS: Record<string, string> = {
+    joining: 'Joining the round…',
+    'wait:no-body': 'Waiting for a place in this round…',
+    'solo:no-body': 'Playing on your own until the next round',
+    'solo:full': 'This room is full · playing on your own until a seat is free',
+    'spectate:no-body': 'Watching until the next round',
+  };
+  function stand(state: Standing['state'], why: string, line: string | null): void {
+    // The line over the game is the room's only while it has something to say: a game's own `net.line` is left alone.
+    if (line !== saidLine) { saidLine = line; net.line(line); }
+    if (standing.state === state && standing.why === why && standing.line === line) return;
+    standing = { state, why, line };
+    try { opts.onStanding?.(standing); } catch (err) { console.warn('[room] onStanding()', err); }
+  }
+  /** Where this player stands, worked out again: on every role and link change, and four times a second. */
+  function check(): void {
+    const link = net.link;
+    const t = Date.now();
+    // Only time this page could listen counts (as for the welcome): after a frame that blocked for seconds, this
+    // timer runs before the snapshots queued behind it, and a body that is already on its way is not "missing".
+    const heard = lastCheckAt ? Math.max(0, Math.min(t - lastCheckAt, 300)) : 0;
+    lastCheckAt = t;
+    if (!net.offline && net.seat !== null) lastSeat = net.seat;
+    // Stopped for good. A page that plays a round of its own meanwhile (a private one, or the helper's own fallback
+    // for a room that refused it) is still playing: the helper's line says why it is not in the room.
+    if (link === 'closed') { noBodyMs = 0; stand(solo || (net.offline && hosting) ? 'solo' : 'closed', net.closedWhy ?? 'closed', solo ? saidLine : null); return; }
+    // Playing alone (no room, or it never answered, or it did not come back): the helper's own line says which.
+    if (net.offline) { noBodyMs = 0; stand('solo', link === 'offline' ? 'offline' : 'alone', null); return; }
+    if (link === 'connecting') { noBodyMs = 0; stand('joining', 'connecting', null); return; }
+    // A watcher, or a screen that never asked for a seat: watching is what it came for.
+    if (net.watching || (net.seat === null && !net.full && !solo)) { noBodyMs = 0; stand('watching', 'screen', null); return; }
+    const row = hosting && !solo ? null : roomRow();
+    const has = hosting && !solo ? Boolean(bodyOfSeat(mySeat())) : Boolean(row);
+    if (has && link === 'online') {
+      if (solo) leaveSolo();
+      else if (adoptDue && row) adoptRow(row);
+      noBodyMs = 0;
+      stand('playing', 'seated', null);
+      return;
+    }
+    const why = net.full ? 'full' : 'no-body';
+    if (solo) { stand('solo', why, SAYS[`solo:${why}`] as string); return; }
+    // Cut off for a moment: still its player (the helper says "Reconnecting…", for a bounded time).
+    if (link === 'reconnecting') { stand(has ? 'playing' : 'joining', 'reconnecting', null); return; }
+    noBodyMs += heard;
+    if (noBodyMs < seatWaitMs) { stand('joining', why, !net.full && noBodyMs >= 700 ? SAYS['joining'] as string : null); return; }
+    // BOUNDED: past seatWaitMs the page is told where it stands and, when the game asked, given something to do.
+    if (fallback === 'solo' && !hosting) { enterSolo(); stand('solo', why, SAYS[`solo:${why}`] as string); return; }
+    if (fallback === 'spectate') { stand('watching', why, net.full ? null : SAYS['spectate:no-body'] as string); return; }
+    stand('waiting', why, net.full ? null : SAYS['wait:no-body'] as string);
+  }
+  const checkTimer = setInterval(check, 250);
+  // A room nobody closed must not keep a test or a tool alive.
+  (checkTimer as unknown as { unref?: () => void }).unref?.();
+  net.on('link', (e) => { check(); if (e.state === 'closed') clearInterval(checkTimer); });
 
   function interpolated(): B[] {
     const smp = net.sample();
@@ -458,14 +658,18 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
   const room: Room<B, F, S> = {
     net,
     get hosting() { return hosting; },
+    get solo() { return solo; },
+    get standing() { return standing; },
     get bodies() { return bodies; },
     get round() { return hosting ? round : (net.roundInfo ?? round); },
     mySeat,
-    viewSeat: () => (net.offline ? 0 : net.viewSeat),
+    viewSeat: () => (net.offline || solo ? mySeat() : net.viewSeat),
     viewBody() {
-      const s = net.offline ? 0 : net.viewSeat;
-      if (s === null) return null;
-      for (const b of room.view()) if (!b.bot && b.seat === s) return b;
+      const s = net.offline || solo ? mySeat() : net.viewSeat;
+      const all = room.view();
+      if (s !== null) for (const b of all) if (!b.bot && b.seat === s) return b;
+      // `fallback: 'spectate'`: no body of its own yet, so the camera follows the room (a person first, else anybody).
+      if (standing.state === 'watching' && standing.why !== 'screen') return all.find((b) => !b.bot) ?? all[0] ?? null;
       return null;
     },
     skillOf: (body) => net.skillOf(body.slot),
@@ -475,8 +679,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
       tick += 1;
       const now = net.now();
       if (round && round.phase === 'live' && now >= round.endsAt) endRound();
-      else if (round && round.phase === 'over' && now >= round.endsAt) startRound(round.n + 1);
-      if (net.snapshotDue()) net.snapshot(buildSnap(), tick);
+      else if (round && round.phase === 'over' && now >= round.endsAt) startRound(round.n + 1, true);
+      if (!solo && net.snapshotDue()) net.snapshot(buildSnap(), tick);
     },
     avatar: (b) => (b.bot || b.seat === null ? null : (net.avatar(b.seat) as unknown[] | null)),
     bound(b, claim, maxSpeed, dt) {
@@ -498,7 +702,8 @@ export function createRoom<B extends BodyBase, F = unknown, S = unknown>(opts: R
       return { n: r.n, phase: r.phase, secondsLeft: Math.max(0, Math.ceil((r.endsAt - net.now()) / 1000)) };
     },
     results: () => (hosting ? rank() : (room.round?.results ?? [])),
-    send: (kind, data) => net.send(kind, data),
+    // A private round's effects are this browser's own: they are not sent into a room it is not playing in.
+    send: (kind, data) => { if (!solo) net.send(kind, data); },
     on: net.on.bind(net) as Room<B, F, S>['on'],
   };
   return room;

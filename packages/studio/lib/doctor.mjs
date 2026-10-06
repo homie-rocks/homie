@@ -11,8 +11,8 @@
  *                                  homie in its own config, the row says so: that name is the plugin's connector's
  *   Homie's holds      in Codex and Grok Build only: whether the plugin's hooks ran just now (they leave a dated
  *                                  mark, hooks/codex.mjs), so a session where nothing is held says so, and how to turn
- *                                  them on (Codex: trust them in /hooks; Grok Build 1.0.41 runs no plugin's hooks, so
- *                                  there the row is off until a Grok that runs them). The app is the one the AI names
+ *                                  them on (Codex: trust them in /hooks; Grok Build: trust the plugin, which
+ *                                  `grok plugin install … --trust` does). The app is the one the AI names
  *                                  (--client codex|grok) or its environment shows
  *   Cloudflare         to go online: signed in, and the account's email verified (Cloudflare checks that at the
  *                                  first deploy; a deploy that went through proves it)
@@ -271,26 +271,27 @@ export async function setupStatus({
     });
   }
 
-  // Homie's holds, in Codex and Grok Build: Codex runs the plugin's hooks only once the person has trusted them, Grok
-  // Build 1.0.41 was seen to run no plugin's hooks at all, and neither app says so. The hooks leave a dated mark at
-  // every message and tool call; a fresh one means they are on. Off in Grok is Grok's doing, so it is said as that.
+  // Homie's holds, in Codex and Grok Build: each app runs a plugin's hooks only once the person has trusted them
+  // (Codex in /hooks, Grok by trusting the plugin), and neither says so when it skips them. The hooks leave a dated
+  // mark at every message and tool call; a fresh one means they are on. (0.30.2 said Grok runs no plugin's hooks.
+  // It does: the plugin's root manifest named no hooks file, so Grok loaded the Claude Code mod's and found none.)
   if (app === 'codex' || app === 'grok') {
     const name = APPS[app].name;
     const seen = holdsMark(app, { env, now: nowMs });
     const on = Boolean(seen && seen.ageMs <= HOLDS_FRESH_MS);
     rows.push({
-      // Off in Codex is the person's to fix now (trust the hooks); off in Grok is nothing they can fix.
-      id: 'holds', label: 'Homie\'s holds', need: 'recommended', state: on ? 'ok' : app === 'codex' ? 'act' : 'optional', on, app,
+      // Off is the person's to fix now, in either app: trust the hooks.
+      id: 'holds', label: 'Homie\'s holds', need: 'recommended', state: on ? 'ok' : 'act', on, app,
       detail: on ? `on: Homie's hooks ran in ${name} ${ago(seen.ageMs)} ago`
         : seen ? `off: Homie's hooks last ran in ${name} ${ago(seen.ageMs)} ago, and not for this session's calls`
-          : app === 'grok' ? 'off: Grok Build runs no plugin\'s hooks yet (1.0.41), so nothing is held in Grok' : `off: Homie's hooks have not run in ${name} on this computer`,
+          : `off: Homie's hooks have not run in ${name} on this computer`,
       ...(seen ? { seen: { at: new Date(seen.at).toISOString(), event: seen.event } } : {}),
       unlocks: 'a wait for your own "proceed <code>" before a production deploy, an edit to a file the studio protects, a Cloudflare change outside the deploy, a paid call past the budget and a model download; and secrets taken out of what your AI reads',
       fix: on ? null : {
         who: 'person',
         say: app === 'codex'
           ? 'In Codex, open /hooks and trust Homie\'s three hooks: Codex runs no plugin\'s hooks until you do. Then run this again. Until then nothing is held, so your AI asks you before each of those itself.'
-          : 'Nothing to do on your side: Grok Build 1.0.41 runs no plugin\'s hooks (none are registered in its headless and agent sessions, from any plugin; checked 2026-10-04), so Homie\'s holds are off in Grok. Nothing is held and no secret is taken out of what your AI reads, so your AI asks you before each of those itself. This row turns on by itself when a Grok that runs them leaves the hooks\' mark.',
+          : 'Grok runs a plugin\'s hooks only once the plugin is trusted, and only from a Homie plugin new enough to name them for Grok. Install it again with trust (grok plugin install homie-rocks/homie#plugins/homie --trust), start a new session (/hooks lists Homie\'s three), then run this again. Until then nothing is held, so your AI asks you before each of those itself.',
       },
     });
   }

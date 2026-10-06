@@ -76,6 +76,47 @@ test('the Grok plugin manifest agrees with plugin.json, and its skills, MCP serv
   assert.match(readFileSync(join(PLUGIN, 'hooks', 'lib', 'holds.mjs'), 'utf8'), /hooks\/grok\.mjs/);
 });
 
+/*
+ * WHICH HOOKS FILE GROK IS GIVEN. Grok takes a plugin's hooks file from the plugin's ROOT plugin.json, and with
+ * none named there it loads hooks/hooks.json. Ours is the Claude Code mod's ({ "modules": [...] }, no "hooks"
+ * object), so a root manifest that names no hooks hands Grok a file it registers nothing from: no hold ran in Grok,
+ * and 0.30.2 put that down to Grok.
+ */
+test('the root plugin.json names the hooks file Grok runs, and Grok is never given the Claude Code mod\'s hooks.json', () => {
+  const root = json(join(PLUGIN, 'plugin.json'));
+  assert.equal(typeof root.hooks, 'string', 'the root plugin.json names a hooks file: without one Grok falls back to hooks/hooks.json');
+  const named = join(PLUGIN, root.hooks);
+  assert.ok(existsSync(named), `plugin.json names ${root.hooks}, which exists`);
+  assert.notEqual(join(PLUGIN, root.hooks), join(PLUGIN, 'hooks', 'hooks.json'), 'never the Claude Code mod\'s file');
+  assert.equal(root.hooks, json(join(PLUGIN, '.grok-plugin', 'plugin.json')).hooks, 'the same file .grok-plugin/plugin.json names');
+  const file = json(named);
+  assert.ok(file.hooks && typeof file.hooks === 'object' && !Array.isArray(file.hooks), 'it has a "hooks" object');
+  for (const event of ['PreToolUse', 'UserPromptSubmit', 'PostToolUse']) {
+    const handlers = (file.hooks[event] ?? []).flatMap((g) => g.hooks ?? []);
+    assert.ok(handlers.length, `${event} has a handler`);
+    for (const h of handlers) {
+      assert.equal(h.type, 'command');
+      assert.match(h.command, /^node "\$\{GROK_PLUGIN_ROOT\}\/hooks\/grok\.mjs" (pre|prompt|post)$/, 'run from the folder Grok installed the plugin in');
+      // Grok kills a hook after 5 s unless told otherwise, and a killed hook lets the call through.
+      assert.ok(Number(h.timeout) >= 10, `${event}: a timeout of its own`);
+    }
+  }
+  // The matcher is tested against the tool's real name: Grok's own shell and edit tools, and server__tool for MCP
+  // (a server's name may itself have an underscore).
+  const matcher = new RegExp(file.hooks.PreToolUse[0].matcher);
+  for (const name of ['run_terminal_command', 'Bash', 'search_replace', 'Edit', 'Write', 'homie__studio_deploy', 'homie-rocks__studio_deploy', 'cloudflare_bindings__workers_delete', 'mcp__homie__studio_deploy']) assert.match(name, matcher);
+  for (const name of ['read_file', 'grep', 'list_dir', 'web_search']) assert.doesNotMatch(name, matcher);
+  // What Grok falls back to with no hooks named is the mod's file, which has nothing Grok can register.
+  const mod = json(join(PLUGIN, 'hooks', 'hooks.json'));
+  assert.equal(mod.hooks, undefined, 'hooks/hooks.json is the Claude Code mod (modules), with no "hooks" object');
+  assert.ok(Array.isArray(mod.modules));
+  // Codex still reads its hooks from its own manifest, and the root one declares no $schema (Codex would then read
+  // it, and run none of the plugin's hooks).
+  assert.equal(root.$schema, undefined);
+  assert.equal(json(join(PLUGIN, '.codex-plugin', 'plugin.json')).hooks, './hooks/codex.json');
+  assert.equal(root.extensions['com.openai'].hooks, './hooks/codex.json');
+});
+
 test('both MCP configurations point at the Homie MCP server', () => {
   const claude = json(join(PLUGIN, '.mcp.json'));
   const codex = json(join(PLUGIN, 'mcp.json'));

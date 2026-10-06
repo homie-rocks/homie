@@ -31,7 +31,7 @@ import { repoFromUrl, studioRepo } from './repo.mjs';
 import { GAME_ID, PACKAGE_ROOT, findStudio, listGames, readLocal, readStudio, siteUrl } from './studio.mjs';
 import { runningDev } from './dev.mjs';
 import { deployWords } from './deploy-state.mjs';
-import { beforeLine, partsForListing, publishesSoFar } from './directory.mjs';
+import { partsForListing, publishBefore, publishesSoFar } from './directory.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { compareVersions, whatsNew, whatsNewLines } from './changelog.mjs';
 import { pinnedVersion } from './upgrade.mjs';
@@ -1085,7 +1085,7 @@ export function toolDefs(ctx, avail = {}) {
     {
       name: 'studio_deploy', title: 'Put the studio online',
       description: 'Put the studio\'s site online on the studio\'s OWN Cloudflare account: one Worker, one D1 database and two Durable Objects, free plan, no payment method. Call it with plan: true first and tell the person in two or three lines what it creates and costs. If Cloudflare is not signed in, cloudflare_login opens it in their browser to approve once. Runs in the background with the build card.',
-      inputSchema: { type: 'object', properties: { plan: { type: 'boolean', description: 'Only say what it will create and what it costs; change nothing' }, ...STUDIO_ARG } },
+      inputSchema: { type: 'object', properties: { plan: { type: 'boolean', description: 'Only say what it will create and what it costs; change nothing' }, ownRoute: { type: 'boolean', description: 'Only after the plan or a deploy warned that another site\'s route on the studio\'s custom domain covers its hostname, and the person agreed: add the studio\'s own exact-host route (the one line the warning gives) and deploy. It never edits or removes any other route' }, ...STUDIO_ARG } },
       annotations: { title: 'Put the studio online', readOnlyHint: false, destructiveHint: false, openWorldHint: true }, _meta: ui(UI.build),
       run: async (a) => {
         const root = ctx.root(a.studio);
@@ -1095,10 +1095,10 @@ export function toolDefs(ctx, avail = {}) {
           if (!r.ended) return stillRunning(r.job, 'The deploy plan');
           if (r.job.code !== 0) return fail(whyOf(r.job));
           const p = r.result;
-          return ok([`What going online does for ${p.studio}:`, ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`, ...(p.parts ? partsPlanLines(p.parts) : []), 'The card on screen shows this plan (nothing is made yet): tell the person its gist in two or three lines, then go on.'].join('\n'), { kind: 'deploy-plan', ...p });
+          return ok([`What going online does for ${p.studio}:`, ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`, ...(p.parts ? partsPlanLines(p.parts) : []), ...(p.zone?.warning ? [`Warning (say this to the person as it is): ${p.zone.warning}`] : p.zone?.why ? [p.zone.why] : []), 'The card on screen shows this plan (nothing is made yet): tell the person its gist in two or three lines, then go on.'].join('\n'), { kind: 'deploy-plan', ...p });
         }
         const studio = readStudio(root);
-        return startRun(ctx, root, { kind: 'deploy', game: null, title: `${studio.name}: online`, steps: [{ label: 'deploy', args: ['deploy'] }] });
+        return startRun(ctx, root, { kind: 'deploy', game: null, title: `${studio.name}: online`, steps: [{ label: 'deploy', args: ['deploy', ...(a.ownRoute === true ? ['--own-route'] : [])] }] });
       },
     },
     {
@@ -1119,18 +1119,22 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_publish', title: 'List the studio in the Homie directory',
-      description: 'List a deployed studio\'s games, songs and videos in the homie.rocks directory, with their Play links (at most 12 games per studio in the beta). The beta also caps how many times a studio may publish in a day: the answer says how many are left when the directory gives the number, and before: true only says what this computer knows (how many it has sent today, what the directory last said was left) without publishing.',
-      inputSchema: { type: 'object', properties: { site: str('Optional: the live site address (default: the one deploy got)'), before: { type: 'boolean', description: 'Only say how many publishes this computer has sent today and what the directory last said was left; publish nothing' }, ...STUDIO_ARG } },
+      description: 'List a deployed studio\'s games, songs and videos in the homie.rocks directory, with their Play links (at most 12 games per studio in the beta). The beta also caps how many times a studio may publish in a day: the answer says how many are left when the directory gives the number, and before: true publishes nothing: it asks the directory how many are left and whether the site is listed (a read), and says so plainly when the directory cannot be reached.',
+      inputSchema: { type: 'object', properties: { site: str('Optional: the live site address (default: the one deploy got)'), before: { type: 'boolean', description: 'Publish nothing: ask the directory (a read) whether this site is listed and how many publishes are left today, and say the parts\' licence lines. When the directory cannot be reached it says so, with what this computer has sent today' }, ...STUDIO_ARG } },
       annotations: { title: 'List in the directory', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       run: async (a) => {
         const root = ctx.root(a.studio);
-        // What this computer knows of the day's cap, before anything is sent (lib/directory.mjs).
-        const soFar = beforeLine(publishesSoFar(root));
         // The parts in the games a listing shows, in the deploy plan's own lines (licences, credits, and plainly when
         // two cannot be combined): said before the studio is listed, and again with the answer.
         const partsNow = partsForListing(root);
         const partsSaid = partsPlanLines(partsNow, { at: 'publish' });
-        if (a.before === true) return ok([`${soFar.replace(/^Publishing to the directory: /, 'Not published. ')} A publish from another computer or from the Homie connector is not counted here.`, ...partsSaid].join('\n'), { kind: 'publish-count', ...publishesSoFar(root), ...(partsSaid.length ? { parts: partsNow } : {}) });
+        // before: true is `publish --before`, the same function the terminal runs (lib/directory.mjs publishBefore):
+        // the directory's read-only count for this site, the parts' lines, and nothing published. Run here, by THIS
+        // toolkit, never handed to the studio's pinned one: a 0.31.0 toolkit reads `publish --before` as `publish`.
+        if (a.before === true) {
+          const b = await publishBefore(root, { site: a.site ? String(a.site) : undefined });
+          return ok(b.lines.join('\n'), { kind: 'publish-count', ...publishesSoFar(root), ...b });
+        }
         const r = await cli(ctx, root, 'publish', ['publish', ...(a.site ? ['--site', String(a.site)] : [])]);
         if (!r.ended) return stillRunning(r.job, 'Listing');
         if (r.job.code !== 0) return fail(`Not listed: ${whyOf(r.job)}`, r.result?.publishes ? { kind: 'publish', ok: false, needs: r.result.needs ?? null, publishes: r.result.publishes } : undefined);

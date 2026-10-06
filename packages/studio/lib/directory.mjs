@@ -16,10 +16,11 @@ import { partsPlanLines, partsPublishReport } from './parts-build.mjs';
  * `publishesLeft`, or those inside `quota` / `limits` / `rateLimit`), or the standard rate-limit headers
  * (`ratelimit-remaining`, `x-ratelimit-remaining`, `retry-after`). What it finds is said after every publish.
  *
- * Before a publish there is nothing to ask (the directory has no "how many are left" call this toolkit knows), so
- * the toolkit says what THIS COMPUTER knows: how many it has sent today (UTC, the day the cap counts in), and
- * what the directory said was left after the last one. That is a floor, never a promise: a publish from another
- * computer or from the Homie connector is not counted here.
+ * Before a publish, `publishBefore` asks the directory itself, with a read (GET /api/studio/publish?site=<origin>
+ * answers { ok, site, listed, limit, remaining, resetsAt } and changes nothing). When the directory cannot be
+ * reached, or is one that has no such read, it says so plainly and falls back to what THIS COMPUTER knows: how many
+ * it has sent today (UTC, the day the cap counts in), and what the directory said was left after the last one. That
+ * is a floor, never a promise: a publish from another computer or from the Homie connector is not counted here.
  */
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : null);
 const first = (...values) => { for (const v of values) { const n = num(v); if (n !== null) return n; } return null; };
@@ -82,16 +83,67 @@ export function partsForListing(root) {
   return { ...report, games, ok: games.every((g) => g.ok) && !report.why };
 }
 
-export async function publish(root, { homie, site, log = () => {}, fetchFn } = {}) {
-  const studio = readStudio(root);
-  const directory = (homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
-  const url = site || siteUrl(root, studio);
-  // Licences first: a public game may ship only assets with a licence record that allows it.
+/** The asset licence problems that stop a listing: a public game may ship only assets with a licence record that allows it. */
+function licenceRefusals(root) {
   const refused = [];
   for (const g of listGames(root)) {
     if (g.launch === 'private' || g.launch === 'invite') continue;
     for (const p of licenceProblems(root, g.id, readManifest(root, g.id))) if (p.level === 'refuse') refused.push({ game: g.id, ...p });
   }
+  return refused;
+}
+
+/**
+ * `homie-studio publish --before` and the studio_publish tool's `before: true`, one code path: what a publish would
+ * meet, and NOTHING is published. It sends one GET (the directory's own read-only count for this site), never a
+ * POST, and writes no file, not even this computer's count. { ok: true, published: false, listed, publishes: {
+ * remaining, limit, resetsAt, sentToday, from: 'directory' | 'this computer', line }, parts?, refused? }, and
+ * `unreached: { why }` when the directory could not be asked. `ok` says the preflight ran, never that a publish
+ * would go through.
+ */
+export async function publishBefore(root, { homie, site, log = () => {}, fetchFn } = {}) {
+  const studio = readStudio(root);
+  const directory = (homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
+  const url = site || siteUrl(root, studio);
+  const refused = licenceRefusals(root);
+  const parts = partsForListing(root);
+  const local = publishesSoFar(root);
+  const mine = `this computer has sent ${local.sent} publish${local.sent === 1 ? '' : 'es'} today (UTC)${local.remaining !== null ? `, and the directory said ${local.remaining === 0 ? 'none were' : `${local.remaining} ${local.remaining === 1 ? 'was' : 'were'}`} left after the last one${local.limit !== null ? ` (of ${local.limit} a day)` : ''}` : ''}; a publish from another computer or from the Homie connector is not counted here`;
+  let origin = null;
+  try { origin = url ? new URL(url).origin : null; } catch { origin = null; }
+  let asked = null;
+  if (origin) asked = await request(`${directory}/api/studio/publish?site=${encodeURIComponent(origin)}`, { method: 'GET', headers: { accept: 'application/json' } }, { timeout: 15_000, ...(fetchFn ? { fetchFn } : {}) });
+  const q = asked?.ok ? quotaOf(asked.body, asked.headers) : null;
+  const counted = Boolean(q && q.remaining !== null);
+  const listed = asked?.ok && typeof asked.body?.listed === 'boolean' ? asked.body.listed : null;
+  const why = !origin ? null : asked.ok ? 'it answered without a count' : String(asked.body?.message ?? asked.why ?? 'no answer').split('\n')[0];
+  const line = !origin
+    ? 'Not published. This studio has no live site yet, so there is nothing to list: put it online first (npm run deploy).'
+    : counted
+      ? `Not published. The directory says: this site is ${listed === true ? 'listed' : listed === false ? 'not listed yet' : 'known to it or not, it did not say'}; ${quotaLine(q).replace(/^P/, 'p')}`
+      : `Not published. The directory could not be asked how many publishes are left (${why}), so this is only what this computer knows: ${mine}.`;
+  const lines = [
+    line,
+    ...(refused.length ? [`A publish now would be refused: ${refused.length} asset licence problem${refused.length === 1 ? '' : 's'} (${refused.slice(0, 6).map((p) => `${p.game}/${p.asset}: ${p.problem}`).join('; ')}${refused.length > 6 ? '; …' : ''}). homie-studio assets check <id> says how to fix each.`] : []),
+    ...partsPlanLines(parts, { at: 'publish' }),
+  ];
+  for (const l of lines) log(l);
+  return {
+    ok: true, command: 'publish before', published: false, directory, site: url ?? null, listed,
+    publishes: { remaining: counted ? q.remaining : local.remaining, limit: (counted ? q.limit : null) ?? local.limit, resetsAt: q?.resetsAt ?? null, sentToday: local.sent, from: counted ? 'directory' : 'this computer', line },
+    ...(origin && !counted ? { unreached: { why, ...(asked.status !== undefined ? { status: asked.status } : {}) } } : {}),
+    ...(refused.length ? { refused } : {}),
+    ...(parts.games.length || parts.sharing.length || parts.why ? { parts } : {}),
+    lines,
+  };
+}
+
+export async function publish(root, { homie, site, log = () => {}, fetchFn } = {}) {
+  const studio = readStudio(root);
+  const directory = (homie || studio.homie?.directory || 'https://homie.rocks').replace(/\/+$/, '');
+  const url = site || siteUrl(root, studio);
+  // Licences first: a public game may ship only assets with a licence record that allows it.
+  const refused = licenceRefusals(root);
   if (refused.length) return { ok: false, command: 'publish', refused, why: `not listed: ${refused.length} asset licence problem${refused.length === 1 ? '' : 's'}:\n${refused.map((p) => `  ${p.game}/${p.asset}: ${p.problem}${p.fix ? ` (${p.fix})` : ''}`).join('\n')}\nhomie-studio assets check <id> says the same; fix them, deploy, then publish again.` };
   if (!url) return { ok: false, command: 'publish', why: 'this studio has no live site yet: run `npm run deploy` first' };
   // Parts from other studios in the games about to be listed: their licences and credits, and plainly when two

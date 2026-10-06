@@ -50,13 +50,33 @@
  *  **NO three, NO renderer, NO clock.** It reads numbers and writes numbers,
  *  every filter is a closed-form exponential in `dt`, and the same inputs give
  *  the same outputs on any machine, so a test can drive a thousand frames in
- *  Node. Heading convention: yaw 0 looks along +Z and forward is
- *  `(sin yaw, cos yaw)` in (x, z), which is what `Object3D.rotation.y` means
- *  for a model that faces +Z.
+ *  Node.
+ *
+ *  **THE HEADING: YAW 0 FACES +Z, POSITIVE YAW TURNS TOWARD +X, RADIANS.**
+ *
+ *      forward = (sin yaw, cos yaw) in (x, z)
+ *
+ *                       -Z   yaw = PI
+ *                        |
+ *      yaw = -PI/2  -X --+-- +X  yaw = +PI/2          (seen from above)
+ *                        |
+ *                       +Z   yaw = 0
+ *
+ *  That is `Object3D.rotation.y` for a model built facing +Z, and nothing
+ *  else. A game whose heading is measured from +X, or whose model faces -Z,
+ *  or that counts in degrees, converts with `headingFrom` or `headingOfVector`
+ *  in `heading.ts` BEFORE it fills in {@link FollowTarget.yaw}. Feeding the
+ *  wrong angle does not throw: the lens sits beside the subject or in front
+ *  of it. So in a development build the rig watches for the signature of it
+ *  (the subject keeps travelling one way while its yaw says another, for a
+ *  second) and says so once on the console. See {@link FollowOptions}.
  *
  *  Zero allocation per frame: the answer is written into the caller's state.
  * ============================================================================
  */
+import {
+  headingWatch, isProductionBuild, restHeadingWatch, stepHeadingWatch, type HeadingWatch,
+} from './heading.ts';
 import { clamp, expApproach, smootherstep, wrapAngle } from './spring.ts';
 
 /** Clearance at a ground point, metres. Positive is open air, negative is inside solid. */
@@ -80,10 +100,42 @@ export interface FollowTarget {
   readonly x: number;
   readonly y: number;
   readonly z: number;
-  /** Heading, radians. See the header for the convention. */
+  /**
+   * Heading, radians: **0 faces +Z, positive turns toward +X**, so forward is
+   * `(sin yaw, cos yaw)` in (x, z). Any other convention goes through
+   * `headingFrom` or `headingOfVector` (`heading.ts`) first.
+   */
   readonly yaw: number;
   /** Metres per second, unsigned. */
   readonly speed: number;
+  /**
+   * True on a frame where the subject is meant to travel against its heading:
+   * a vehicle in reverse, a character backpedalling or strafing. It changes
+   * nothing about the camera; it only tells the development heading check not
+   * to read that frame.
+   */
+  readonly reversing?: boolean;
+}
+
+/** How to make a rig. Every field is optional and none of them moves the lens. */
+export interface FollowOptions {
+  /**
+   * The development heading check, on unless this is `false`.
+   *
+   * While the subject moves, its yaw is compared with its direction of travel;
+   * a sixth of a turn apart for a whole second is a heading in the wrong
+   * convention far more often than it is anything else, and the rig says so
+   * once, naming the adapter. Turn it off for a subject that moves against its
+   * heading as a matter of course (a twin-stick character, a strafing
+   * shooter), or mark only those frames with {@link FollowTarget.reversing}.
+   * A production bundle never runs it.
+   */
+  readonly headingCheck?: boolean;
+  /**
+   * Where the one warning goes. `console.warn` when absent. Passing one also
+   * runs the check in a production build, which is how a test drives it.
+   */
+  readonly warn?: (message: string) => void;
 }
 
 /** Every number the rig runs on. None has a default: they are the game's feel. */
@@ -141,12 +193,19 @@ export interface FollowState {
   /** The answer. */
   eyeX: number; eyeY: number; eyeZ: number;
   lookX: number; lookY: number; lookZ: number;
+  /** The development heading check, or null when it is off. See {@link FollowOptions}. */
+  heading?: HeadingWatch | null;
 }
 
-export function followState(): FollowState {
+export function followState(options: FollowOptions = {}): FollowState {
+  const watch = options.headingCheck === false ? null
+    : options.warn ? headingWatch(options.warn)
+    : isProductionBuild() ? null
+    : headingWatch((message) => console.warn(message));
   return {
     yaw: 0, dist: 0, swing: 0, reach: 0, climb: 0, guard: 'clear', primed: false,
     eyeX: 0, eyeY: 0, eyeZ: 0, lookX: 0, lookY: 0, lookZ: 0,
+    heading: watch,
   };
 }
 
@@ -206,6 +265,14 @@ function poseClear(
 export function stepFollow(
   s: FollowState, t: FollowTuning, target: FollowTarget, field: FollowField, dt: number,
 ): FollowState {
+  // 0. Development only: is this yaw in the convention the header states? A
+  //    cut or a reversing frame is not evidence either way.
+  const watch = s.heading;
+  if (watch && !watch.done) {
+    if (!s.primed || target.reversing) restHeadingWatch(watch);
+    if (!target.reversing) stepHeadingWatch(watch, target.x, target.z, target.yaw, dt);
+  }
+
   // 1. The yaw, with the time constant shortened by how far behind it is.
   const err = wrapAngle(target.yaw - s.yaw);
   const hard = smootherstep(clamp(Math.abs(err) / t.hardTurn, 0, 1));

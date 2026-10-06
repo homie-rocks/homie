@@ -112,7 +112,13 @@ const CSS = `<style>
 .pcard h3{margin:0;font:800 19px/1.2 var(--display)}
 .pcard p{margin:0;color:var(--dim);font-size:14px}
 .ptag{font:600 11px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-.pframe{width:100%;aspect-ratio:16/9;border:1px solid color-mix(in srgb,var(--fg) 14%,transparent);border-radius:16px;background:#000}
+.pframe{display:block;width:100%;aspect-ratio:16/9;border:1px solid color-mix(in srgb,var(--fg) 14%,transparent);border-radius:16px;background:#000}
+.pview{container-type:inline-size}
+.pview .pframe{aspect-ratio:var(--pv,16/9)}
+@container (max-width:599.98px){.pview .pframe{min-height:min(320px,70vh);min-height:min(320px,70svh)}.pview.pview-own .pframe{aspect-ratio:var(--pvn,var(--pv,16/9));min-height:0}}
+.popen{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin:8px 0 0;color:inherit;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.popen svg{width:16px;height:16px}
+.popen:focus-visible{outline:3px solid var(--fg);outline-offset:3px;border-radius:6px}
 .pfacts{display:grid;grid-template-columns:max-content 1fr;gap:8px 20px;margin:0}
 .pfacts dt{color:var(--dim);font-size:14px}.pfacts dd{margin:0;overflow-wrap:anywhere}
 .pband{max-width:calc(1180px + 2 * var(--gutter));margin:0 auto;padding:clamp(40px,6vw,80px) var(--gutter)}
@@ -165,10 +171,45 @@ function costLine(c) {
   return `${bits.join(' · ')}${c.measuredOn ? ` (measured on ${String(c.measuredOn).slice(0, 80)})` : ''}`;
 }
 
+/**
+ * A preview's declared shape ("4:3") as two whole numbers, or null. The same reading as previewAspect() in
+ * lib/parts.mjs (a Worker cannot import that file: it reads the disk); test/parts.test.mjs holds the two together.
+ * The page's CSS is built from these NUMBERS, never from the text in part.json, so nothing a part declares can
+ * write CSS or HTML of its own.
+ */
+export function aspectOf(value) {
+  const m = typeof value === 'string' ? /^([1-9]\d?):([1-9]\d?)$/.exec(value) : null;
+  if (!m) return null;
+  const w = Number(m[1]); const h = Number(m[2]);
+  return w > 32 || h > 32 || w > 3 * h || h > 2 * w ? null : { w, h };
+}
+
+/**
+ * The part's interactive preview: its frame in the shape the part declares, and a plain link out of the frame.
+ *
+ * THE SHAPE. `preview.aspect` (default 16:9), and `preview.phoneAspect` when the frame is under 600 px wide. With no
+ * phone shape declared a narrow frame still gets a minimum height: 16:9 across a 390 px phone is about 197 px,
+ * which hides whatever a preview draws under its heading and controls.
+ *
+ * THE LINK opens the same preview file in a tab of its own, at the size of the screen. That file is this studio's
+ * own packed part on this studio's own address, and it is answered with `content-security-policy: sandbox
+ * allow-scripts allow-pointer-lock` (above), so a tab of its own gives it nothing the frame did not: no origin, so
+ * none of the site's cookies or storage, no forms, no pop-ups, no navigating the page that opened it (and
+ * rel="noopener" gives it no handle on that page either). It is a link, so it needs no script and a keyboard reaches it.
+ */
+function previewOf(p) {
+  const src = esc(`${p.url}${p.preview.page}`);
+  const shape = aspectOf(p.preview.aspect) ?? { w: 16, h: 9 };
+  const phone = aspectOf(p.preview.phoneAspect);
+  const vars = `--pv:${Number(shape.w)}/${Number(shape.h)}${phone ? `;--pvn:${Number(phone.w)}/${Number(phone.h)}` : ''}`;
+  return `<div class="pview${phone ? ' pview-own' : ''}" style="${vars}"><iframe class="pframe" title="${esc(p.name)}: try it" src="${src}" sandbox="allow-scripts allow-pointer-lock" loading="lazy" referrerpolicy="no-referrer"></iframe></div>
+<a class="popen" href="${src}" target="_blank" rel="noopener noreferrer">${icon('arrow')}<span>Open the preview in its own tab</span></a>`;
+}
+
 export function partPage(cat, p, url) {
   const name = studioOf(cat);
   const preview = p.preview?.page
-    ? `<iframe class="pframe" title="${esc(p.name)}: try it" src="${esc(`${p.url}${p.preview.page}`)}" sandbox="allow-scripts allow-pointer-lock" loading="lazy" referrerpolicy="no-referrer"></iframe>`
+    ? previewOf(p)
     : p.preview?.image ? `<img class="pframe" src="${esc(`${p.url}${p.preview.image}`)}" alt="${esc(p.name)}">` : '';
   const facts = [
     ['Kind', esc(kindOf(p))],

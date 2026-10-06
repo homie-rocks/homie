@@ -16,13 +16,14 @@ on the free plan.
 - **Homie's hooks for Grok** (`hooks/grok.json`, `hooks/grok.mjs`): the same holds, decided by the same
   module (`hooks/lib/holds.mjs`, through `hooks/codex.mjs`), so Claude Code, Codex and Grok cannot drift.
   Grok Build answers allow or deny; a hold denies the call until the person says `proceed <code>`.
-  **They do not run yet.** Grok Build 1.0.41 registers no plugin's hooks: its own log says `hooks: discovery
-  complete total_hooks=0` in headless (`grok -p`) and agent (`grok agent stdio`) sessions with five plugins
-  that ship hooks installed, and the same for a plugin loaded with `--plugin-dir` that holds nothing but a
-  standard `hooks/hooks.json`; a deploy ran unheld (2026-10-04). It is not this plugin's layout. Until a Grok
-  that runs them, nothing is held in Grok and no secret is taken out of what it reads: the `studio-setup`
-  skill tells Grok to ask the person itself, and `homie-studio setup status --client grok` says "Homie's
-  holds: off" (it reads the hooks' own mark, so it turns on by itself).
+  Grok runs them once the plugin is trusted. It reads the hooks file the plugin's ROOT `plugin.json` names
+  (`"hooks": "./hooks/grok.json"`), and with none named it loads `hooks/hooks.json`, which here is the
+  Claude Code mod's file and holds no hooks for Grok. Before the root manifest named it,
+  Grok registered nothing from this plugin (`total_hooks=0` in its log) and a deploy ran unheld. 0.30.2 read
+  that as "Grok runs no plugin's hooks", which was wrong: it was this plugin's layout. PostToolUse replaces
+  what Grok reads (`updatedToolOutput`), so a secret is out of the model's copy and still on the person's
+  screen. `homie-studio setup status --client grok` reads the hooks' own mark and says whether they ran just
+  now; while it says off, the `studio-setup` skill tells Grok to ask the person itself.
   In Grok Build the plugin installs with `grok plugin install homie-rocks/homie#plugins/homie` (checked on
   1.0.41; Grok asks whether to trust it, or takes `--trust`, and loads its skills, MCP server and hooks only
   once you do). Grok Bot installs Homie itself when told to read https://homie.rocks/install.md (checked
@@ -36,7 +37,8 @@ on the free plan.
   `test/manifests.test.mjs` checks that they do. Codex reads the skills, the MCP server and Homie's
   hooks from `.codex-plugin/plugin.json`, and ignores the mod. `plugin.json` declares no `$schema`:
   Codex (0.156.1 to 0.160.0, tested) reads a root `plugin.json` only when it declares the Agent
-  Plugins schema, and then runs none of the plugin's hooks.
+  Plugins schema, and then runs none of the plugin's hooks. Its top-level `"hooks"` is for Grok Build,
+  which takes a plugin's hooks file from the root `plugin.json` and from nowhere else (above).
 
 Install it, and read what a studio is and what it costs, in the
 [repository's README](https://github.com/homie-rocks/homie#readme). In short:
@@ -382,8 +384,8 @@ each time one runs (a message, a tool call) it leaves a dated mark, `codex.json`
 in `.cache/homie-studio/holds/` of the home folder: the app, the time and which hook, nothing about the
 folder, the session or the call. `homie-studio setup status --client codex` (or `grok`; in Codex the
 toolkit also reads the app from its environment) reads it as a row, **Homie's holds**: on when the mark is
-from the last ten minutes, off otherwise, with how to turn them on (in Grok Build 1.0.41 it is off, and
-nothing the person does turns it on: that Grok runs no plugin's hooks). The `studio-setup` skill passes it on: one
+from the last ten minutes, off otherwise, with how to turn them on (in Grok Build: trust the plugin, which
+`grok plugin install … --trust` does, and start a new session). The `studio-setup` skill passes it on: one
 sentence in the first reply when they are off, and from then on the AI asks before a deploy, a Cloudflare
 change, a paid call or a model download itself. When they are on nothing changes. The row is a report, not
 a lock: a mark can be forged like any file, and nothing reads it to let a call through.

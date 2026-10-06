@@ -58,15 +58,19 @@
  *   - The link, said out loud (revision 9, NETPLAY.md section 22): `net.link` and
  *     `on('link')` say whether this browser is in its room (`online`), trying to
  *     get back (`reconnecting`), playing by itself because the room never
- *     answered (`alone`), or stopped (`closed`); a small "Reconnecting…" line is
- *     drawn over the game meanwhile (restyle it, or `linkOverlay: false`). A host
- *     whose frames hitch keeps its role with a heartbeat snapshot from a timer.
+ *     answered or did not come back (`alone`), or stopped (`closed`); one line
+ *     over the game says which, in words that are true ("Reconnecting…" only to a
+ *     page that was connected; restyle it, or `linkOverlay: false`). `reconnecting`
+ *     is bounded (`reconnectMaxMs`); `net.full` and `net.line()` say a full room
+ *     and a game's own sentence (section 28). A host whose frames hitch keeps its
+ *     role with a heartbeat snapshot from a timer.
  *   - Game revisions (section 23): game.json `netplay.version` rides in the hello;
  *     a room runs one build at a time and an older tab is told to reload
  *     (`on('stale')`). `features` are per-peer capability flags the relay keeps,
  *     so a new host knows them without asking again.
  *   - The page around the frame (section 24): `net.prefs` (a few settings kept by
- *     the play page, because the frame has no storage of its own), `net.params`
+ *     the play page, because the frame has no storage of its own; read a number
+ *     with `net.prefs.number(key, fallback)`, never a `null` to multiply by), `net.params`
  *     (the address's switches the page passed in), `net.shell` (where the page's
  *     own buttons sit over the game), and `guardGestures()` for a touch game.
  *
@@ -141,8 +145,9 @@ export interface NetConfig {
 
 /**
  * Where this browser stands with its room. `connecting`: no welcome yet. `online`: in the room. `reconnecting`: it
- * was in the room and its socket went; it is knocking again (its seat token keeps its body). `alone`: the room never
- * answered in time, so this browser plays by itself as an offline host (it still knocks, and joins when answered).
+ * was in the room and its socket went; it is knocking again (its seat token keeps its body), for `reconnectMaxMs` at
+ * most. `alone`: the room never answered in time, or did not come back in that time, so this browser plays by itself
+ * as an offline host with its own bots (it still knocks, and joins when answered).
  * `offline`: there is no room at all (a plain file, a dev server with no shell). `closed`: stopped for good
  * (`net.closedWhy` says why: another tab took the seat, the room is full, the game was updated…).
  */
@@ -150,7 +155,7 @@ export type LinkState = 'connecting' | 'online' | 'reconnecting' | 'alone' | 'of
 export interface LinkChange {
   state: LinkState;
   prev: LinkState;
-  /** Why it changed: `welcome`, `lost` (the socket closed), `stale` (it went silent), `relay-timeout`, `no-shell`, or a refusal's code. */
+  /** Why it changed: `welcome`, `lost` (the socket closed), `stale` (it went silent), `relay-timeout` (the room never answered), `reconnect-timeout` (it was in the room and the room did not come back in `reconnectMaxMs`), `no-shell`, or a refusal's code. */
   why: string;
   /** This browser is running the rules right now (alone, or as the room's host): two browsers can both say so while one is cut off. */
   hosting: boolean;
@@ -181,17 +186,38 @@ export interface ShellLayout {
  * characters a key, 32 keys. Never a secret, never progress that must not be lost (that is cloud saves).
  */
 export interface Prefs {
-  /** The value kept under `key`, or `fallback`. Always resolves (with the fallback when the page cannot answer). */
+  /**
+   * The value kept under `key`, or `fallback`. Always resolves (with the fallback when the page cannot answer, and
+   * when nothing or `null` is kept). It is NOT checked against the fallback's type: for a number, a switch or one of
+   * a few words, use `number`, `boolean` and `string` below, which cannot hand a game a `null` to multiply by.
+   */
   get<T = unknown>(key: string, fallback?: T): Promise<T>;
-  /** Keep a value (`null` or `undefined` removes it). Resolves false when it was not kept (too big, no page). */
+  /**
+   * A NUMBER that cannot go quiet (section 24). The kept value when it is a finite number, else `fallback`: for a
+   * key never set, a `null`, a string, a `NaN`, and before the prefs have arrived (`await net.prefs.ready` first;
+   * a read before that returns the fallback and warns once). `min` and `max` hold the answer (and the fallback) to
+   * a range; `integer` rounds it. `fallback` must itself be a finite number: anything else throws a TypeError.
+   */
+  number(key: string, fallback: number, range?: { min?: number; max?: number; integer?: boolean }): number;
+  /** A switch: the kept value when it is `true` or `false`, else `fallback` (never `0`, `'false'` or `null` read as a boolean). */
+  boolean(key: string, fallback: boolean): boolean;
+  /** A word: the kept value when it is a string (and one of `oneOf`, when given), else `fallback`. */
+  string<T extends string = string>(key: string, fallback: T, opts?: { oneOf?: readonly T[] }): T;
+  /**
+   * Keep a value (`null` or `undefined` removes it). Resolves false when it was not kept: too big, no page, or a
+   * value JSON cannot hold (`NaN`, `Infinity`, a function, a loop), which is refused with a warning rather than
+   * kept as `null`.
+   */
   set(key: string, value: unknown): Promise<boolean>;
   remove(key: string): Promise<boolean>;
   /** Everything kept for this game. */
   all(): Promise<Record<string, unknown>>;
-  /** What this page has read so far, without waiting (after `all()` or `ready` resolved: everything). */
+  /** What this page has read so far, without waiting (after `all()` or `ready` resolved: everything). Before that it is the fallback, and says so once. */
   peek<T = unknown>(key: string, fallback?: T): T;
-  /** Resolves once everything kept was read (so `peek` is complete). */
+  /** Resolves once everything kept was read (so `peek`, `number`, `boolean` and `string` are complete). */
   readonly ready: Promise<void>;
+  /** Everything kept has been read: the typed readers answer from what is kept, not from their fallbacks. */
+  readonly loaded: boolean;
   /** Where the values live: `page` (the play page's storage), `local` (this document's own), `memory` (this visit only). */
   readonly where: 'page' | 'local' | 'memory';
 }
@@ -564,6 +590,12 @@ export interface NetplayOptions<C = unknown> {
    */
   connectClock?: 'auto' | 'game';
   /**
+   * How long a page that WAS in its room keeps `reconnecting` before it plays `alone` (a private round with its own
+   * bots; it still knocks, and joins when it is answered). Default 20000; 5000 to 300000. Before this there was no
+   * bound: a replica whose room never came back showed a frozen round and "Reconnecting…" for good.
+   */
+  reconnectMaxMs?: number;
+  /**
    * A host's heartbeat: when the game has not sent a snapshot for this long while others are present (its frames
    * hitched: a long load, a shader compile, a throttled tab), the helper sends the last one again from a timer, so
    * the relay does not hand the room to somebody else for a pause. Default 500 ms; 0 turns it off. It stops after
@@ -582,8 +614,9 @@ export interface NetplayOptions<C = unknown> {
    */
   features?: string[];
   /**
-   * The line drawn over the game while the link is down ("Reconnecting…"). Default true in a room; false turns it
-   * off (listen to `link` and draw your own). Restyle it with CSS on `[data-homie-link]`.
+   * The line drawn over the game while the link is down ("Reconnecting…", "Playing on your own…"), while the room
+   * is full, and for `net.line()`. Default true in a room; false turns it off (listen to `link` and draw your own).
+   * Restyle it with CSS on `[data-homie-link]`.
    */
   linkOverlay?: boolean;
   /** A socket that delivered nothing for this long is dropped and reopened (pongs come every 2 s). Default 6000. */
@@ -705,6 +738,18 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   readonly reconnects: number;
   /** My welcome gave me back the seat my token named: I am the player who was here, not a new one in the same seat number. */
   readonly resumed: boolean;
+  /**
+   * This browser asked to play and every seat is taken: it is in the room with no seat (`seat === null`, role
+   * `screen`) and the relay seats it when one frees up (a `role` event with `why: 'seated'`). The line over the game
+   * says so; `createRoom({ fallback })` decides what the page does meanwhile.
+   */
+  readonly full: boolean;
+  /**
+   * The line over the game is the game's to use too: one short sentence about where this player stands ("Playing
+   * on your own until the next round"), or null to take it away. Shown while the link is `online`; a link that is
+   * down says its own line first. `createRoom` uses it for its `fallback`.
+   */
+  line(text: string | null): void;
   /** `connectClock: 'game'`: the game has finished booting; the wait for the room's welcome starts now. Once. */
   start(): void;
   /** REVISIONS (section 23): this page's game revision (null: the game names none). */
@@ -1233,6 +1278,8 @@ const CONNECT_CLOCK_MAX_MS = 60_000;
 /** A host's heartbeat (section 22): the default gap without a snapshot before the timer sends one, and how long it keeps a silent game its role. */
 const HEARTBEAT_MS = 500;
 const HEARTBEAT_MAX_MS = 4000;
+/** How long a page that was in its room stays `reconnecting` before it plays alone: the default of `reconnectMaxMs`. */
+const RECONNECT_MAX_MS = 20_000;
 /** The link overlay: a reconnect shorter than this is never drawn. */
 const LINK_OVERLAY_MS = 700;
 /** `net.prefs` (section 24): what the play page keeps for one game on one browser. worker/pages.mjs has the same numbers. */
@@ -1389,6 +1436,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const checkpointMs = Math.max(250, opts.checkpointMs ?? 1000);
   const connectTimeoutMs = opts.connectTimeoutMs ?? 4000;
   const connectOpenMaxMs = Math.max(2000, Math.min(120_000, Number(opts.connectOpenMaxMs) || CONNECT_OPEN_MAX_MS));
+  const reconnectMaxMs = Math.max(5000, Math.min(300_000, Number(opts.reconnectMaxMs) || RECONNECT_MAX_MS));
   const heartbeatMs = opts.heartbeatMs === 0 ? 0 : Math.max(200, Math.min(2000, Number(opts.heartbeatMs) || HEARTBEAT_MS));
   const staleMs = Math.max(2500, opts.staleMs ?? 6000);
   // Revisions (section 23): the game's revision (the page's word, or the game's own) and what this build can do.
@@ -1653,7 +1701,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     } catch { overlay = null; }
     return overlay;
   }
-  function showOverlay(kind: 'reconnecting' | 'alone' | 'stale', text: string, forMs = 0): void {
+  /** Asked to play and every seat is taken (the welcome's `full`): in the room, watching, seated when one frees up. */
+  let full = false;
+  /** The game's own sentence for the line (`net.line`), shown while the link is up. */
+  let gameLine: string | null = null;
+  /** Why this page plays alone, and the last refusal that was not final (`room-stale`): the line says the true one. */
+  let aloneWhy = '';
+  let lastRefusal = '';
+  type LineKind = 'reconnecting' | 'alone' | 'stale' | 'closed' | 'full' | 'seat';
+  function showOverlay(kind: LineKind, text: string, forMs = 0): void {
     const el = overlayEl();
     if (!el) return;
     if (overlayHide) { clearTimeout(overlayHide); overlayHide = null; }
@@ -1662,14 +1718,33 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     el.hidden = false;
     if (forMs > 0) overlayHide = setTimeout(() => { overlayHide = null; if (el.getAttribute('data-homie-link') === kind) el.hidden = true; }, forMs);
   }
+  /** What is true of a page that plays by itself: it never says "reconnecting" to somebody who was never connected. */
+  function aloneText(): string {
+    if (aloneWhy === 'reconnect-timeout') return 'Playing on your own · the room dropped, still trying…';
+    if (lastRefusal === 'room-stale') return 'Playing on your own · this room opens when its players have the new version';
+    return 'Playing on your own · still looking for the room…';
+  }
+  /** A page stopped for good says why in words; the play page around it offers the way out (another room, a reload). */
+  function closedText(): string | null {
+    if (closedWhy === 'room-full' || closedWhy === 'too-many') return offline ? 'This room is full · playing on your own' : 'This room is full.';
+    if (closedWhy === 'replaced') return 'This game is open in another tab.';
+    if (closedWhy === 'kicked' || closedWhy === 'room-closed') return 'This room is closed.';
+    if (closedWhy === 'version') return 'This game needs a reload to play online.';
+    return null;
+  }
   function paintLink(): void {
     if (!overlayOn) return;
     if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
+    const closedSays = link === 'closed' ? closedText() : null;
     if (link === 'reconnecting') {
       // A blip shorter than a blink is never drawn.
       overlayTimer = setTimeout(() => { overlayTimer = null; if (link === 'reconnecting') showOverlay('reconnecting', 'Reconnecting…'); }, LINK_OVERLAY_MS);
-    } else if (link === 'alone') showOverlay('alone', 'Playing offline · reconnecting…');
+    } else if (link === 'alone') showOverlay('alone', aloneText());
     else if (link === 'closed' && closedWhy === 'stale') showOverlay('stale', 'This game was updated. Tap to reload.');
+    else if (closedSays) showOverlay('closed', closedSays);
+    // In the room: the game's own sentence about where this player stands, else that the room is full.
+    else if (link === 'online' && gameLine) showOverlay('seat', gameLine);
+    else if (link === 'online' && full) showOverlay('full', 'This room is full · watching until a seat is free');
     else if (overlay && overlay.getAttribute('data-homie-link') !== 'stale') overlay.hidden = true;
   }
   function setLink(next: LinkState, why: string): void {
@@ -1753,11 +1828,14 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const take = (all: unknown): void => {
       if (!all || typeof all !== 'object') return;
       // What this visit already set wins over what was read (a set that raced the first read).
-      for (const [k, v] of Object.entries(all as Record<string, unknown>)) if (!prefsCache.has(k)) prefsCache.set(k, v);
+      // A `null` on disk is what an earlier build kept for a NaN: it is nothing, not a setting.
+      for (const [k, v] of Object.entries(all as Record<string, unknown>)) if (!prefsCache.has(k) && v !== null && v !== undefined) prefsCache.set(k, v);
     };
-    if (prefsWhere === 'page') prefsReady = prefsAsk({ op: 'all' }).then((m) => take(m['all']));
+    if (prefsWhere === 'page') prefsReady = prefsAsk({ op: 'all' }).then((m) => { take(m['all']); prefsLoaded = true; });
     else {
       if (prefsWhere === 'local') { try { take(JSON.parse(localStore()?.getItem(prefsKey) ?? '{}')); } catch { /* nothing kept */ } }
+      // With no page to ask, everything is read at once: a typed reader never meets "not arrived yet" here.
+      prefsLoaded = true;
       prefsReady = Promise.resolve();
     }
     return prefsReady;
@@ -1770,15 +1848,82 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     try { text = JSON.stringify(next); } catch { return false; }
     return typeof text === 'string' && text.length <= PREFS_LIMITS.bytes && Object.keys(next).length <= PREFS_LIMITS.keys;
   }
+  /** Said once a visit, not once every ten seconds: a mistake in the game's code, for whoever is building it. */
+  const saidOnce = new Set<string>();
+  const sayOnce = (key: string, msg: string): void => { if (saidOnce.has(key)) return; saidOnce.add(key); console.warn('[netplay]', msg); };
+  let prefsLoaded = false;
+  const kindOf = (v: unknown): string => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v === 'number' && !Number.isFinite(v) ? String(v) : `a ${typeof v}`);
+  /** Why JSON cannot hold `v` as it is (it would be kept as `null`, or not at all), or null when it can. */
+  function unkeepable(v: unknown, depth = 0, seen: Set<object> = new Set()): string | null {
+    if (v === null || typeof v === 'string' || typeof v === 'boolean') return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? null : `${String(v)} (JSON keeps it as null)`;
+    if (typeof v === 'undefined') return depth ? 'undefined inside it' : null;
+    if (typeof v === 'function' || typeof v === 'symbol' || typeof v === 'bigint') return `a ${typeof v}`;
+    if (depth > 8) return 'nested too deep';
+    const o = v as object;
+    if (seen.has(o)) return 'a loop';
+    seen.add(o);
+    for (const x of Array.isArray(o) ? o : Object.values(o)) { const why = unkeepable(x, depth + 1, seen); if (why) return why; }
+    seen.delete(o);
+    return null;
+  }
+  /**
+   * The kept value for a typed reader, or `undefined` for "use the fallback": nothing kept, a `null`, or the prefs
+   * not read yet. Reading before they arrive is the mistake that made a volume silent, so it is said once, with the fix.
+   */
+  function prefsRaw(key: string, how: string, fallback: unknown): unknown {
+    if (!prefsLoaded) {
+      void prefsLoad();
+      if (!prefsCache.has(key)) {
+        sayOnce('prefs-early', `net.prefs.${how}('${key}') was read before the prefs had arrived, so it answered with its fallback (${JSON.stringify(fallback)}). Wait for them first: await net.prefs.ready`);
+        return undefined;
+      }
+    }
+    const v = prefsCache.get(key);
+    return v === null ? undefined : v;
+  }
+  const wrongType = (key: string, how: string, v: unknown, fallback: unknown): void =>
+    sayOnce(`prefs-type:${key}`, `net.prefs.${how}('${key}'): what is kept is ${kindOf(v)}, so it answered with its fallback (${JSON.stringify(fallback)})`);
   const prefs: Prefs = {
-    get: <T,>(key: string, fallback?: T): Promise<T> => prefsLoad().then(() => (prefsCache.has(key) ? prefsCache.get(key) as T : fallback as T)),
-    peek: <T,>(key: string, fallback?: T): T => (prefsCache.has(key) ? prefsCache.get(key) as T : fallback as T),
+    // A kept `null` is never a value (set(key, null) removes): the fallback, not a null a game multiplies into silence.
+    get: <T,>(key: string, fallback?: T): Promise<T> => prefsLoad().then(() => { const v = prefsCache.get(key); return (v === undefined || v === null ? fallback : v) as T; }),
+    peek: <T,>(key: string, fallback?: T): T => { const v = prefsRaw(key, 'peek', fallback); return (v === undefined ? fallback : v) as T; },
+    number(key: string, fallback: number, range: { min?: number; max?: number; integer?: boolean } = {}): number {
+      if (typeof fallback !== 'number' || !Number.isFinite(fallback)) throw new TypeError(`net.prefs.number('${key}', fallback): the fallback must be a finite number, not ${kindOf(fallback)}`);
+      const min = typeof range.min === 'number' && Number.isFinite(range.min) ? range.min : -Infinity;
+      const max = typeof range.max === 'number' && Number.isFinite(range.max) ? range.max : Infinity;
+      if (min > max) throw new TypeError(`net.prefs.number('${key}'): min (${min}) is above max (${max})`);
+      const v = prefsRaw(key, 'number', fallback);
+      let n = fallback;
+      if (typeof v === 'number' && Number.isFinite(v)) n = v; else if (v !== undefined) wrongType(key, 'number', v, fallback);
+      if (range.integer) n = Math.round(n);
+      return Math.max(min, Math.min(max, n));
+    },
+    boolean(key: string, fallback: boolean): boolean {
+      if (typeof fallback !== 'boolean') throw new TypeError(`net.prefs.boolean('${key}', fallback): the fallback must be true or false, not ${kindOf(fallback)}`);
+      const v = prefsRaw(key, 'boolean', fallback);
+      if (typeof v === 'boolean') return v;
+      if (v !== undefined) wrongType(key, 'boolean', v, fallback);
+      return fallback;
+    },
+    string<T extends string = string>(key: string, fallback: T, o: { oneOf?: readonly T[] } = {}): T {
+      if (typeof fallback !== 'string') throw new TypeError(`net.prefs.string('${key}', fallback): the fallback must be a string, not ${kindOf(fallback)}`);
+      if (o.oneOf && !o.oneOf.includes(fallback)) throw new TypeError(`net.prefs.string('${key}'): the fallback '${fallback}' is not one of ${JSON.stringify(o.oneOf)}`);
+      const v = prefsRaw(key, 'string', fallback);
+      if (typeof v === 'string' && (!o.oneOf || o.oneOf.includes(v as T))) return v as T;
+      if (v !== undefined) sayOnce(`prefs-type:${key}`, typeof v === 'string' ? `net.prefs.string('${key}'): '${v.slice(0, 40)}' is not one of ${JSON.stringify(o.oneOf)}, so it answered with its fallback ('${fallback}')` : `net.prefs.string('${key}'): what is kept is ${kindOf(v)}, so it answered with its fallback ('${fallback}')`);
+      return fallback;
+    },
     all: () => prefsLoad().then(() => Object.fromEntries(prefsCache)),
     remove: (key: string) => prefs.set(key, null),
     async set(key: string, value: unknown): Promise<boolean> {
-      if (!prefsKeyOk(key)) return false;
-      await prefsLoad();
+      if (!prefsKeyOk(key)) { sayOnce('prefs-key', `net.prefs.set: a key is 1 to ${PREFS_LIMITS.key} characters; ${JSON.stringify(String(key as unknown).slice(0, 24))} was not kept`); return false; }
       const del = value === null || value === undefined;
+      // NaN, Infinity, a function, a loop: JSON would keep `null` (or nothing), and the next visit would read that as
+      // a setting. Refused here, in words, instead of a volume that is silent from then on.
+      const bad = del ? null : unkeepable(value);
+      if (bad) { sayOnce(`prefs-value:${key}`, `net.prefs.set('${key}', …): the value is ${bad}, which cannot be kept, so nothing was changed. Keep a finite number, a string, a boolean or plain JSON`); return false; }
+      await prefsLoad();
       if (!del && !prefsFits(key, value)) { warnOnce('prefs-size', `net.prefs: '${key}' was not kept (a game's prefs are ${PREFS_LIMITS.bytes / 1024} KB and ${PREFS_LIMITS.keys} keys in all)`); return false; }
       const had = prefsCache.has(key);
       const before = prefsCache.get(key);
@@ -1793,6 +1938,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       return true;
     },
     get ready() { return prefsLoad(); },
+    get loaded() { return prefsLoaded; },
     get where() { return prefsWhere; },
   };
 
@@ -2088,6 +2234,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         colour = typeof m['colour'] === 'number' ? m['colour'] : colour;
         if (id) { const p = peers.get(id); if (p) { p.seat = seat; p.name = name; p.colour = colour; } }
         post?.({ what: 'token', token, seat, room: cfg?.room ?? null });
+        if (full) { full = false; post?.({ what: 'full', full: false }); paintLink(); }
         setRole(m['role'] === 'host' ? 'host' : 'replica', 'seated');
         return;
       }
@@ -2152,7 +2299,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (code === 'rate' || code === 'state-full') { warnOnce(`${code}:${String(m['of'] ?? '')}`, m['message']); return; }
         // The room still runs another build of the game (section 23): not final. Its players were told to reload; this
         // browser keeps knocking and is let in when they have. Said once, not at every knock.
-        if (code === 'room-stale') { warnOnce('room-stale', m['message']); return; }
+        if (code === 'room-stale') { lastRefusal = code; warnOnce('room-stale', m['message']); if (link === 'alone') paintLink(); return; }
         console.warn('[netplay] relay refused:', code, m['message']);
         // The same seat opened in another tab, a full room, a version the relay does not speak: reconnecting
         // would repeat the refusal (or, for 'replaced', make the two tabs evict each other for ever).
@@ -2224,6 +2371,11 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     connected = true;
     downSince = 0;
     attempt = 0;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    lastRefusal = '';
+    // Asked to play and every seat is taken: in the room with no seat, and seated when one frees up (a `seat` frame).
+    const nowFull = m['full'] === true && seat === null && !watching;
+    if (nowFull !== full) { full = nowFull; post?.({ what: 'full', full }); }
     emit('status', true);
     post?.({ what: 'token', token, seat, room: cfg?.room ?? null });
     // First welcome, a reconnect, or coming back from an offline fallback: only a CHANGE is a role event,
@@ -2233,7 +2385,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (next === 'host' && snap) tick = Math.max(tick, snap.k);
     }
     if (continuing) { reannounce(); catchUp(had, hadSeat); }
-    setLink('online', 'welcome');
+    if (link === 'online') paintLink(); else setLink('online', 'welcome');
     // A build older than the live one, let in to its own room (section 23).
     if (m['stale'] && typeof m['stale'] === 'object') noteStale((m['stale'] as { ver?: unknown }).ver, false);
     resolveView('seat');
@@ -2406,6 +2558,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let statsTimer: ReturnType<typeof setInterval> | null = null;
   let connectTimer: ReturnType<typeof setTimeout> | undefined;
   let hbTimer: ReturnType<typeof setInterval> | null = null;
+  /** `reconnecting` is bounded (`reconnectMaxMs`): when this fires and the room is still not back, the page plays alone. */
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When `ping()` last ran: one that runs seconds late (the page was blocked) says nothing about the socket. */
+  let lastPingTick = 0;
   /** `connectClock: 'game'`: the wait for the welcome is not counted until the game says it has booted. */
   let clockRunning = opts.connectClock !== 'game';
   let lastStatsPost = 0;
@@ -2440,14 +2596,26 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   function hidden(): boolean { try { return Boolean(g.document?.hidden); } catch { return false; } }
   function ping(): void {
+    // This runs every two seconds at least. A gap of more than three and a half means the page itself was held.
+    const beat = wall();
+    const pingHeld = beat - lastPingTick > 2000 + 1500;
+    lastPingTick = beat;
     if (!connected) {
       // A socket that opened and was never welcomed (a room that is not answering) is as dead as a silent one: drop
       // it and knock again, so a page that gave up and plays alone still finds its room when the room is back.
       if (ws && ws.readyState === 1 && lastMsgAt && wall() - lastMsgAt > Math.max(staleMs, connectOpenMaxMs)) lost(ws, 'stale');
       return;
     }
-    // A socket that delivered nothing (not even a pong) for staleMs is half-open: drop it and reconnect.
-    if (ws && lastMsgAt && wall() - lastMsgAt > staleMs) { lost(ws, 'stale'); return; }
+    // A socket that delivered nothing (not even a pong) for staleMs is half-open: drop it and reconnect. But not on
+    // the word of a timer that itself ran seconds late: the page was blocked (a heavy boot, shaders compiling) and
+    // could not have heard anything, and what the relay sent meanwhile is still queued behind this very timer.
+    // Dropping a healthy socket there turned every long hitch into a reconnect.
+    if (ws && lastMsgAt && wall() - lastMsgAt > staleMs) {
+      if (!pingHeld) { lost(ws, 'stale'); return; }
+      // Two and a half seconds to be heard from (a pong answers the ping below): a socket that is really dead is
+      // still dropped, two beats from now.
+      lastMsgAt = wall() - staleMs + 2500;
+    }
     const c = Date.now();
     pingsOut.set(c, c);
     if (pingsOut.size > 16) { const first = pingsOut.keys().next().value; if (first !== undefined) pingsOut.delete(first); }
@@ -2535,9 +2703,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     offline = true;
     connected = false;
     seat = null;
-    if (!roleKnown || role !== 'host') setRole('host', why);
-    // No shell at all is `offline` from the start; a room that never answered is `alone` (and still knocked at).
-    if (why !== 'offline') setLink('alone', why);
+    if (full) { full = false; post?.({ what: 'full', full: false }); }
+    aloneWhy = why;
+    // A page that gives up on a room it WAS in says so as a role event even when it was that room's host: its seat is
+    // gone with the room, and the game seats itself again for a round of its own (createRoom keeps the round it had).
+    if (!roleKnown || role !== 'host' || why === 'reconnect-timeout') setRole('host', why);
+    // No shell at all is `offline` from the start; a room that never answered is `alone` (and still knocked at). A
+    // page the relay refused for good stays `closed` (nothing is knocking): it plays by itself and its line says why.
+    if (closed) paintLink();
+    else if (why !== 'offline') setLink('alone', why);
   }
 
   function lost(sock: WebSocketLike, why: string): void {
@@ -2551,7 +2725,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (was) emit('status', false);
     // It was in its room and the socket went: it knocks again with its token. (Never welcomed yet: still `connecting`,
     // or `alone` once it gave up waiting; stopped for good: `closed`.)
-    if (was && !closed) setLink('reconnecting', why === 'stale' ? 'stale' : 'lost');
+    if (was && !closed) {
+      setLink('reconnecting', why === 'stale' ? 'stale' : 'lost');
+      // BOUNDED (section 22): a room that does not come back in reconnectMaxMs is not waited for with a frozen round
+      // on screen. The page plays alone with its own bots, says so, and keeps knocking.
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => { reconnectTimer = null; if (link === 'reconnecting' && !closed) goOfflineHost('reconnect-timeout'); }, reconnectMaxMs);
+    }
     notifyStats(true);
     retry();
   }
@@ -2614,6 +2794,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     };
     connectTimer = setTimeout(connectCheck, 250);
     if (heartbeatMs) hbTimer = setInterval(heartbeat, 250);
+    lastPingTick = wall();
     pingTimer = setInterval(ping, 2000);
     ckptTimer = setInterval(sendCheckpoint, checkpointMs);
     statsTimer = setInterval(() => notifyStats(true), 500);
@@ -2761,6 +2942,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get link() { return link; },
     get reconnects() { return reconnects; },
     get resumed() { return resumed; },
+    get full() { return full; },
+    line(text: string | null): void {
+      const next = typeof text === 'string' && text.trim() ? text.trim().slice(0, 120) : null;
+      if (next === gameLine) return;
+      gameLine = next;
+      paintLink();
+    },
     start(): void { clockRunning = true; },
     get version() { return version; },
     get stale() { return staleVer; },
@@ -3033,6 +3221,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       if (statsTimer) clearInterval(statsTimer);
       if (watchTimer) clearInterval(watchTimer);
       if (hbTimer) clearInterval(hbTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (spotTimer) clearTimeout(spotTimer);
       if (overlayTimer) clearTimeout(overlayTimer);
       if (overlayHide) clearTimeout(overlayHide);
@@ -3062,6 +3251,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       get revision() { return NETPLAY_REVISION; },
       /** Revision 9: the link, how often it was interrupted, the game's revision, and the arrival's facts (for a probe). */
       get link() { return link; },
+      get full() { return full; },
+      get line() { return overlay && !overlay.hidden ? { kind: overlay.getAttribute('data-homie-link'), text: overlay.textContent } : null; },
       get reconnects() { return reconnects; },
       get drops() { return drops; },
       get version() { return version; },

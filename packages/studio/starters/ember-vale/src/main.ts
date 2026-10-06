@@ -174,6 +174,10 @@ const room = createRoom<Body, SlimeRow[], { slimes: Slime[]; seq: number }>({
   adopt: (b) => { me.x = b.x; me.y = b.y; me.has = true; },
   local: () => (me.has ? ({ ...mine(), x: me.x, y: me.y } as Body) : null),
   onTakeover: (b) => { b.score = 0; b.flags = 0; b.hp = b.maxHp; },
+  // SEAT OR SOLO (NETPLAY.md section 28). A hero who is in the room but has no body in tonight's hunt (every body is
+  // somebody's, or every seat is taken) is not left watching: after four seconds they hunt on their own with bots,
+  // the line over the game says so, and they step into the room's hunt the moment it has a body for them.
+  fallback: 'solo',
 });
 const net = room.net;
 const myLevel = (): number => hero?.level ?? 1;

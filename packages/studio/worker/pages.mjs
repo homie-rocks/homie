@@ -455,6 +455,9 @@ const SHELL_JS = String.raw`(function () {
       if (m.what === 'attached') { state.attached = true; lastRects = ''; tellRects(); }
       // The link (section 22): in the room, knocking again, or playing alone because the room never answered.
       if (m.what === 'link' && typeof m.state === 'string') state.link = { state: m.state, why: String(m.why || ''), hosting: m.hosting === true, at: Date.now() };
+      // Every seat is taken and this browser asked to play (the room's own word, in its welcome): it watches until one
+      // frees up, and the chip says so. Not full any more once it has been seated, or plays by itself.
+      if (m.what === 'full') state.full = m.full === true;
       // The game's own word that it was playable (section 21), beside who lifted the card: a late one is a game whose
       // arrival should be 'game'. A performance probe reads both here.
       if (m.what === 'ready') {
@@ -469,11 +472,13 @@ const SHELL_JS = String.raw`(function () {
         if (m.final === true || screenMode) reloadGame();
         else flash('A new version of ' + boot.name + ' is ready: it loads after this round.');
       }
-      if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
+      if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; if (typeof m.seat === 'number') state.full = false; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
       if (m.what === 'stats') state.stats = m.stats;
       if (m.what === 'round') { onRound(m.round); if (state.stale && m.round && m.round.phase === 'over') reloadGame(); }
       if (m.what === 'roster') state.roster = m.slots;
-      if (m.what === 'closed') { state.closed = m.why; if (m.why === 'kicked' || m.why === 'room-closed' || m.why === 'agents-off') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); }
+      // Stopped for good. Removed, or the room closed: the notice. A room with no place left at all: the same notice
+      // with its own words, because "try another room" is the only thing a player can do about it.
+      if (m.what === 'closed') { state.closed = m.why; if (m.why === 'kicked' || m.why === 'room-closed' || m.why === 'agents-off') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); else if (m.why === 'room-full' || m.why === 'too-many') notice('full', m); }
       // A game's net.pickPlayer(seat): only an owner's page listens (its overlay opens that player's card).
       if (m.what === 'pick' && (m.seat === null || typeof m.seat === 'number')) { try { window.dispatchEvent(new CustomEvent('homie-pick', { detail: { seat: m.seat } })); } catch (e) {} }
       paint();
@@ -520,8 +525,10 @@ const SHELL_JS = String.raw`(function () {
         var next = {};
         Object.keys(all).forEach(function (x) { if (x !== k) next[x] = all[x]; });
         if (m.op === 'set' && m.v !== null && m.v !== undefined) next[k] = m.v;
-        var how = prefsWrite(next);
-        if (how === 'too-large') out.why = how; else { out.ok = true; out.kept = how; }
+        // A NaN or an Infinity would be written as null and read back as a setting (a volume of null plays as 0):
+        // refused, whatever helper sent it.
+        var how = m.op === 'set' && typeof m.v === 'number' && !isFinite(m.v) ? 'value' : prefsWrite(next);
+        if (how === 'too-large' || how === 'value') out.why = how; else { out.ok = true; out.kept = how; }
       } else out.why = 'op';
     } catch (e) { out.why = 'error'; }
     state.prefs = { op: m.op, ok: out.ok, why: out.why || null };
@@ -656,8 +663,8 @@ const SHELL_JS = String.raw`(function () {
     var label = labelOf(state.room || '');
     var box = document.createElement('div'); box.className = 'notice'; box.setAttribute('data-notice', kind); box.setAttribute('role', 'alertdialog'); box.setAttribute('data-keep-focus', '');
     var inner = document.createElement('div'); inner.className = 'box';
-    var h = document.createElement('h1'); h.textContent = kind === 'kicked' ? 'You were removed from this room' : 'This room is closed';
-    var p = document.createElement('p'); p.textContent = state.notice.message || (kind === 'kicked' ? 'The studio removed you from this room.' : 'The studio closed this room. Thanks for playing!');
+    var h = document.createElement('h1'); h.textContent = kind === 'kicked' ? 'You were removed from this room' : kind === 'full' ? 'This room is full' : 'This room is closed';
+    var p = document.createElement('p'); p.textContent = kind === 'full' ? label + ' has no place left, to play or to watch. Another room is one tap away.' : state.notice.message || (kind === 'kicked' ? 'The studio removed you from this room.' : 'The studio closed this room. Thanks for playing!');
     var w = document.createElement('p'); w.className = 'when';
     w.textContent = mins ? (kind === 'kicked' ? 'You can come back to ' + label + ' in ' + mins + ' min.' : label + ' opens again in ' + mins + ' min.') : '';
     var acts = document.createElement('div'); acts.className = 'acts';
@@ -666,7 +673,7 @@ const SHELL_JS = String.raw`(function () {
     acts.append(other, back);
     inner.append(h, p, w, acts); box.appendChild(inner);
     document.body.appendChild(box);
-    say(kind === 'kicked' ? 'removed from this room' : 'room closed');
+    say(kind === 'kicked' ? 'removed from this room' : kind === 'full' ? 'room full' : 'room closed');
   }
 
   function paint() {
@@ -680,10 +687,12 @@ const SHELL_JS = String.raw`(function () {
     if (aiN) bits.push(aiN + ' AI');
     if (f && f.counts && f.counts.watchers) bits.push(f.counts.watchers + ' watching');
     if (state.full) bits.push('waiting for a seat');
-    if (state.closed) bits.push(state.closed === 'replaced' ? 'opened in another tab' : 'reconnecting');
-    // The link (section 22): cut off from the room and knocking again, or playing alone because it never answered.
+    // Stopped for good: nothing is knocking any more, so it never says "reconnecting". What is true, in a word.
+    if (state.closed) bits.push({ replaced: 'opened in another tab', 'room-full': 'room full', 'too-many': 'room full', stale: 'updating…', kicked: 'removed from this room', 'room-closed': 'room closed', 'agents-off': 'room closed' }[state.closed] || 'disconnected: reload to play');
+    // The link (section 22): cut off from a room it was in and knocking again ("reconnecting" is true only then), or
+    // playing by itself because the room never answered, or did not come back in time.
     else if (state.link && state.link.state === 'reconnecting') bits.push('reconnecting');
-    else if (state.link && state.link.state === 'alone') bits.push('offline, reconnecting');
+    else if (state.link && state.link.state === 'alone') bits.push(state.link.why === 'reconnect-timeout' ? 'playing on your own: the room dropped' : 'playing on your own: looking for the room');
     // The arrival card's line: the room and who is in it ("Room 2 · 3 playing · 2 AI").
     if (!A.done && state.room) A.facts([labelOf(state.room), n ? n + ' playing' : '', aiN ? aiN + ' AI' : ''].filter(Boolean).join(' · '));
     say(bits.join(' · ') || 'joining…');

@@ -268,6 +268,8 @@ export async function prompt(p, { dir = dataDir() } = {}) {
 /** A tool's result as the text the model would read: a string, or an MCP result's text parts. */
 function resultText(r) {
   if (typeof r === 'string') return r;
+  // Grok's own result for a built-in tool is a tagged object whose `output_for_prompt` is what the model reads.
+  if (r && typeof r.output_for_prompt === 'string') return r.output_for_prompt;
   if (r && Array.isArray(r.content)) {
     const parts = r.content.map((c) => (c?.type === 'text' ? String(c.text ?? '') : c?.type ? `[${c.type}]` : '')).filter(Boolean);
     const structured = r.structuredContent !== undefined ? `\n${JSON.stringify(r.structuredContent)}` : '';

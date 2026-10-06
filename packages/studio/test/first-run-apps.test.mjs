@@ -160,19 +160,22 @@ test('Homie\'s holds: off with no mark, on with the mark the plugin\'s hooks lea
   assert.equal(h.seen.event, 'pre');
   assert.ok(!r.next.some((n) => n.id === 'holds'));
 
-  // Codex's hooks say nothing about Grok's. Grok Build 1.0.41 runs no plugin's hooks: off is said as Grok's doing,
-  // with nothing for the person to do, and it is never a "do this now".
+  // Codex's hooks say nothing about Grok's: Grok has its own mark. Grok runs a plugin's hooks once the plugin is
+  // trusted, so off is the person's to fix there too, with the command that does it; nothing says Grok runs none.
   r = await status(p, { client: 'grok', connector: 'yes', nowMs: t0 });
   h = row(r, 'holds');
   assert.equal(h.on, false);
-  assert.equal(h.state, 'optional');
-  assert.equal(h.detail, "off: Grok Build runs no plugin's hooks yet (1.0.41), so nothing is held in Grok");
-  assert.match(h.fix.say, /^Nothing to do on your side: Grok Build 1\.0\.41 runs no plugin's hooks/);
-  assert.match(h.fix.say, /your AI asks you before each of those itself/);
-  assert.ok(!r.next.some((n) => n.id === 'holds'));
-  // A Grok that does run them leaves the mark, and the row turns on by itself.
-  await mark('grok', 'prompt', { dir: p.marks, now: t0 });
-  assert.equal(row(await status(p, { client: 'grok', connector: 'yes', nowMs: t0 }), 'holds').on, true);
+  assert.equal(h.state, 'act');
+  assert.equal(h.detail, "off: Homie's hooks have not run in Grok on this computer");
+  assert.match(h.fix.say, /^Grok runs a plugin's hooks only once the plugin is trusted/);
+  assert.match(h.fix.say, /grok plugin install homie-rocks\/homie#plugins\/homie --trust/);
+  assert.match(h.fix.say, /Until then nothing is held, so your AI asks you before each of those itself/);
+  assert.doesNotMatch(JSON.stringify(h), /runs no plugin's hooks|1\.0\.41|Nothing to do on your side/);
+  assert.ok(r.next.some((n) => n.id === 'holds'));
+  // Grok's hooks leave the mark as Codex's do, and the row reads it the same way.
+  await mark('grok', 'prompt', { dir: p.marks, now: t0 - 4000 });
+  h = row(await status(p, { client: 'grok', connector: 'yes', nowMs: t0 }), 'holds');
+  assert.deepEqual([h.on, h.state, h.fix, h.detail], [true, 'ok', null, "on: Homie's hooks ran in Grok 4 s ago"]);
 
   // An old mark is not "now": hooks that stopped running (trust taken back, a changed hook) read as off.
   h = row(await status(p, { client: 'codex', connector: 'yes', nowMs: t0 + HOLDS_FRESH_MS + 60_000 }), 'holds');

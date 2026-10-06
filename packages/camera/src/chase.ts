@@ -16,7 +16,13 @@
  *  so it lives here now and each game's header names what IT adds instead.
  *
  *   1. **A BEARING.** One scalar — `armYaw` — is the compass direction the
- *      lens sits behind. It springs toward the machine's direction of TRAVEL
+ *      lens sits behind. **YAW 0 FACES +Z, POSITIVE YAW TURNS TOWARD +X,
+ *      RADIANS**: `armYaw = atan2(arm.x, arm.z)`, and `faceYaw` is the same
+ *      for the chassis (`heading.ts` draws it). The rig is handed the
+ *      machine's `forward` as a VECTOR, so a game cannot feed it an angle on
+ *      the wrong axis; the trap here is on the way out, when a game reads
+ *      `armYaw` or `faceYaw` back into its own heading. Convert with
+ *      `headingFrom(...).back(yaw)`. It springs toward the machine's direction of TRAVEL
  *      (not its facing, which is what makes a drift read as a drift), and it
  *      is bounded two ways: it may never fall more than `maxLag` behind the
  *      chassis, and it may never move faster than `maxRate`. Those two bounds
@@ -509,6 +515,7 @@ export function applyChaseFov(
 
 /** The five fields the two composition passes read off a rig. */
 export interface FrameRig {
+  /** Radians, 0 faces +Z, positive turns toward +X: see `heading.ts`. */
   readonly armYaw: number;
   readonly faceYaw: number;
   readonly bend: number;

@@ -67,18 +67,22 @@ test('a first run in Codex and Grok: no connector is no dead end, the holds are 
   assert.match(skill('game'), /\*\*Other studios\*\* beside this one .* are other people's\s+work: never read their games or copy from them/);
   // Nothing promises Codex or Grok what only Claude draws.
   assert.match(s, /In Codex and Grok Build Homie\s+draws no status line, pane or card/);
-  // Grok Build 1.0.41 runs no plugin's hooks: no skill says Homie's hooks hold anything in Grok, and the setup skill
-  // tells Grok to ask the person itself.
-  assert.match(s, /\*\*Homie's holds in Grok: off, so you ask\.\*\*/);
-  assert.match(s, /Grok Build 1\.0\.41 runs no plugin's\s+hooks/);
+  // Grok Build runs a plugin's hooks once the plugin is trusted (0.30.2 said it runs none: Grok had been handed the
+  // Claude Code mod's hooks file, see test/manifests.test.mjs). The setup skill says so, never assumes they are
+  // on, and tells Grok to ask the person itself while the setup status says off.
+  assert.match(s, /\*\*Homie's holds in Grok\.\*\*/);
+  assert.match(s, /Grok runs a plugin's hooks only once the person has trusted the plugin/);
+  assert.match(s, /Never assume they are on:\s+the setup status with `--client grok` says which it is/);
   assert.match(s, /say what it would do in one sentence and wait for the person's yes/);
-  for (const name of readdirSync(join(PLUGIN, 'skills'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)) {
-    assert.doesNotMatch(skill(name), /hooks \(Codex, Grok Build\)|hooks in Codex and Grok Build|Claude or Codex runs/, `${name}: no hold is claimed in Grok`);
+  const everywhere = [...readdirSync(join(PLUGIN, 'skills'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => [d.name, skill(d.name)]),
+    ...['plugin.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', '.grok-plugin/plugin.json', 'README.md', 'hooks/grok.json'].map((m) => [m, readFileSync(join(PLUGIN, m), 'utf8')])];
+  for (const [name, text] of everywhere) {
+    // The one place the old claim is still spelled is the README's account of why it was wrong.
+    const said = text.replace(/read\s+that as "Grok runs no plugin's hooks", which was wrong/, '');
+    assert.doesNotMatch(said, /Grok(?: Build)?(?: 1\.0\.\d+)? (?:runs|registers) no plugin's\s+hooks|hooks do not run (?:in Grok|there) yet|nothing is held (?:there|in Grok) yet/, `${name}: nothing says Grok runs no hooks`);
   }
   for (const m of ['plugin.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', '.grok-plugin/plugin.json']) {
-    const text = readFileSync(join(PLUGIN, m), 'utf8');
-    assert.doesNotMatch(text, /In Grok, Homie's hooks|In Grok, the same holds/, `${m}: no hold is claimed in Grok`);
-    assert.match(text, /Grok Build 1\.0\.41 runs no plugin's hooks/, m);
+    assert.match(readFileSync(join(PLUGIN, m), 'utf8'), /In Grok Build the same hooks hold the same calls once you trust the plugin/, m);
   }
   // Going online never lists: the directory is a separate step the person asks for.
   assert.match(s, /\*\*The directory, only when asked\.\*\* Going online never lists a studio/);

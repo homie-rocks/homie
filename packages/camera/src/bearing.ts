@@ -67,7 +67,12 @@ const _right = /* @__PURE__ */ new THREE.Vector3();
  * moved into a new object, so no call site anywhere else in either rig changed.
  */
 export interface BearingState {
-  /** World yaw the lens sits behind, radians. */
+  /**
+   * World yaw the lens sits behind, radians: **0 faces +Z, positive turns
+   * toward +X**, `atan2(arm.x, arm.z)`. `faceYaw` and `lagYaw` are the same.
+   * A game with another heading reads these through `headingFrom(...).back`
+   * (`heading.ts`).
+   */
   armYaw: number;
   /** Unit-vector form of `armYaw`, rewritten from it every frame. */
   arm: THREE.Vector3;

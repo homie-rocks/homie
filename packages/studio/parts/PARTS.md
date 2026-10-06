@@ -76,7 +76,7 @@ named after it):
   "from": { "game": "gem-cave", "studio": "Night Owls" },
   "entry": "src/index.ts",
   "files": [{ "path": "src/index.ts", "sha256": "…", "bytes": 1234 }],
-  "preview": { "page": "preview/index.html", "image": "preview/cover.jpg" },
+  "preview": { "page": "preview/index.html", "image": "preview/cover.jpg", "aspect": "4:3", "phoneAspect": "3:4" },
   "requires": { "packages": { "@homie-rocks/camera": "^0.2.0" }, "parts": ["other-studio.example/some-part"] },
   "physical": { "units": "metres", "scale": 1, "pivot": "feet", "collision": "collision.json" },
   "skeleton": { "rig": "humanoid-v1", "clips": ["idle", "run"] },
@@ -95,7 +95,7 @@ named after it):
 | `from` | The game and studio the part came out of. Written when a part is lifted out of a game. |
 | `entry` | For a part with code: the module a game imports. A part of assets or data has none. |
 | `files` | Every file with its SHA-256 and size, **written by the tool, never by hand**. A file may carry `"rights"` (below). |
-| `preview` | `page`: a self-contained HTML page shown in a sandboxed frame. `image`: a still. |
+| `preview` | `page`: a self-contained HTML page shown in a sandboxed frame. `image`: a still. `aspect`: the frame's shape as `"W:H"` (whole numbers 1 to 32, no flatter than 3:1, no taller than 1:2; default `"16:9"`). `phoneAspect`: the shape when the frame is narrower than 600 px. |
 | `requires.packages` | The npm packages it builds on, as `package.json` would name them. npm reads them; nothing else does. |
 | `requires.parts` | Other parts it needs: a plain list of `"<host>/<id>"`. Named to the person, never solved. |
 | `physical`, `skeleton`, `contract`, `cost` | Optional descriptions for whoever uses the piece: its scale, pivot and collision data; its rig and clips; its inputs, state and who decides in a room (`host-authoritative`, `replicated`, `local`); device costs that were measured (never guessed). |
@@ -134,6 +134,12 @@ well-known file and through them the hub read nothing else.
 - `GET /parts/` and `/parts/<id>/`: the studio's own pages in its own look (each part's game, licence,
   attribution, preview, what it builds on and costs, and what to say in chat to add it), and a **Parts from this
   game** band on a game's landing page.
+
+**Declare the shape of an interactive preview.** The default frame is 16:9, and across a 390 px phone that is
+about 197 px tall: a heading and two buttons fill it, and what the preview draws below them is cut off with no
+error to notice. Say `"aspect"` and `"phoneAspect"` in `preview` for a preview somebody plays with. With neither, a
+narrow frame is at least 320 px tall (70% of a short screen), and every preview has an **Open the preview** link
+that shows it in a tab of its own.
 
 Sharing packs the part: the exact bytes of that version are kept in `parts/_packed/<id>/<version>/`, and every
 packed version of a shared part is served, so "one exact version" stays true after a newer one ships.

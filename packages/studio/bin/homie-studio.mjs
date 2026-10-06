@@ -87,9 +87,17 @@
  *                                         One deploy of a studio at a time (a lock in .studio/); it says which games changed
  *                                         with each one's content hash, keeps the studio's own custom-domain and exact-host
  *                                         routes in wrangler.jsonc, and never deploys a wildcard or catch-all route.
+ *                                         On a custom domain, the plan and the deploy read the domain's Worker routes and
+ *                                         warn when another site's catch-all or wildcard covers the studio's hostname
+ *                                         (never edit or remove that route). --own-route adds the studio's own
+ *                                         exact-host route, the one safe fix, when that read shows it is needed.
  *                                         In Cloudflare's Workers Builds (WORKERS_CI=1, or --ci) it only applies the D1
  *                                         migrations and deploys: the Worker and database are the Deploy button's.
- *   homie-studio publish                  (the directory's beta has a daily cap: it says how many publishes are left)
+ *   homie-studio publish [--before]       (the directory's beta has a daily cap: it says how many publishes are left)
+ *                                         --before publishes NOTHING: it asks the directory (a read) whether the site
+ *                                         is listed and how many publishes are left today, and says the parts' licences.
+ *                                         A command that changes something outside this computer (deploy, publish,
+ *                                         storage add, the office, …) stops at a flag it does not know: nothing is sent.
  *   homie-studio storage add              (large media only: an R2 bucket; needs R2 turned on for the account)
  *   homie-studio media list               (every song and video page, where each file is served from, what moves to R2)
  *   homie-studio media move [<file>...] [--dry-run] [--verify]
@@ -287,11 +295,11 @@ import { basename, join, relative, resolve } from 'node:path';
 import { build } from '../lib/build.mjs';
 import { PREVIEW_PORT, previewServer } from '../lib/preview.mjs';
 import { check } from '../lib/check.mjs';
-import { ciDeploy, deploy, deployPlan, mediaMove, storageAdd, whoami, wranglerBin } from '../lib/cloudflare.mjs';
+import { ciDeploy, deploy, deployPlan, mediaMove, storageAdd, whoami, wranglerBin, zonePlan } from '../lib/cloudflare.mjs';
 import { setupAttach } from '../lib/setup.mjs';
 import { chromeArgs, findChrome, installChrome, noChrome } from '../lib/chrome.mjs';
 import { deployWords } from '../lib/deploy-state.mjs';
-import { publish } from '../lib/directory.mjs';
+import { publish, publishBefore } from '../lib/directory.mjs';
 import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
@@ -333,7 +341,7 @@ import { trailerCommand, trailerLines } from '../lib/trailer.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -459,10 +467,14 @@ function print(result) {
         ...result.cloudflare.map((r) => `  ${r.kind}${r.name ? ` ${r.name}` : ''}: ${r.what} [${r.state}${r.plan ? `; ${r.plan}` : ''}]`), '',
         `Cost: ${result.cost}`, `Sign-in: ${result.login}`, `Address: ${result.address}`,
         `The directory (${result.directory.site}) stores: ${result.directory.stores}`, result.never,
+        ...(result.zone?.warning ? ['', `Warning: ${result.zone.warning}`] : result.zone?.why ? ['', result.zone.why] : []),
         ...(result.parts && partsPlanLines(result.parts).length ? ['', ...partsPlanLines(result.parts)] : []));
       break;
     case 'storage add':
       lines.push(result.already ? `Storage is already added: R2 bucket ${result.bucket}.` : `Storage added: R2 bucket ${result.bucket}.`, 'Next:', ...result.next.map((n) => `  ${n}`));
+      break;
+    case 'publish before':
+      lines.push(...result.lines);
       break;
     case 'publish':
       lines.push(`Listed in the directory: ${result.studioPage ?? result.directory}`, ...(result.games ?? []).map((g) => `  ${g.name}: ${g.play}`), ...(result.publishes?.line ? [result.publishes.line] : []),
@@ -743,6 +755,52 @@ function print(result) {
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 
+/*
+ * A COMMAND THAT CHANGES SOMETHING OUTSIDE THIS COMPUTER NEVER RUNS WITH A FLAG IT DOES NOT KNOW. The parser above
+ * keeps every `--word`, and a command reads the ones it knows: `publish --before` (a flag the MCP tool had and this
+ * command did not) was read as plain `publish`, and listed the studio while its caller believed it was a preflight.
+ * So each command below names every flag it takes, and anything else stops it before anything is sent: a typo, a
+ * flag of another command, or one from a newer toolkit's notes. The key is the command and its sub-command, else
+ * the command alone. Commands that only read, or only change files in this folder, are not in this table.
+ */
+const OUTWARD_FLAGS = {
+  publish: ['homie', 'site', 'before'],
+  deploy: ['plan', 'ci', 'homie', 'own-route'],
+  'storage add': [],
+  'media put': ['as'],
+  'media move': ['dry-run', 'plan', 'verify'],
+  'setup attach': ['homie', 'client'],
+  handoff: ['homie', 'client'],
+  'players owner': ['url', 'revoke'],
+  'stats key': ['url', 'hours'], 'stats link': ['url'], 'stats revoke': ['url'], 'stats share': [],
+  'office link': ['url', 'to'], 'office key': ['url', 'hours'], 'office announce': ['url', 'game', 'room', 'seconds'],
+  'office invite': ['url', 'label', 'uses', 'count', 'days', 'server'], 'office launch': ['url', 'max'],
+  'office kick': ['url', 'minutes'], 'office mute': ['url', 'minutes', 'off'], 'office close': ['url', 'minutes', 'reopen'], 'office revoke': ['url'],
+  'lounge mod': ['url', 'remove'], 'lounge remove': ['url', 'all'],
+  'chat remove': ['url', 'all'], 'chat budget': ['url'],
+  'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
+  'shop connect': ['url', 'managed', 'live'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note'], 'shop statements': ['url', 'period', 'send'],
+  'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
+  'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
+};
+/** Every command takes these: how it answers, never what it does. */
+const ANY_COMMAND = ['json', 'help', 'version'];
+
+/** The refusal for a flag an outward-writing command does not take, or null. Nothing has run when this is asked. */
+function unknownFlags(words, given) {
+  const [cmd, sub] = words;
+  const key = sub !== undefined && OUTWARD_FLAGS[`${cmd} ${sub}`] ? `${cmd} ${sub}` : OUTWARD_FLAGS[cmd] ? cmd : null;
+  if (!key) return null;
+  const takes = OUTWARD_FLAGS[key];
+  const strange = [...given.keys()].filter((k) => !takes.includes(k) && !ANY_COMMAND.includes(k));
+  if (!strange.length) return null;
+  const named = strange.map((k) => `--${k}`).join(', ');
+  return {
+    ok: false, command: key, needs: 'flag', flags: strange, takes: takes.map((k) => `--${k}`),
+    why: `homie-studio ${key} does not take ${named}, so it did not run: nothing was sent or changed. It changes something outside this computer, and a flag it does not know is never guessed at. It takes: ${takes.length ? takes.map((k) => `--${k}`).join(', ') : 'no flags of its own'} (and --json).`,
+  };
+}
+
 async function main() {
   const [cmd, sub] = positional;
   if (!cmd || cmd === 'help' || flags.has('help')) {
@@ -751,6 +809,8 @@ async function main() {
     return { ok: true, command: 'help' };
   }
   if (cmd === 'version' || flags.has('version')) return { ok: true, command: 'version', version: STUDIO_VERSION };
+  const strange = unknownFlags(positional, flags);
+  if (strange) return strange;
   if (cmd === 'new') return newStudio(positional[1], { name: flags.get('name'), homie: flags.get('homie'), slug: flags.get('slug'), install: !flags.has('no-install'), template: flags.has('template') });
   if (cmd === 'starters') return { ok: true, command: 'starters', starters: starters() };
   // The floor's built-in words need no studio: anyone can read what a studio's chat always holds.
@@ -870,16 +930,21 @@ async function main() {
     const only = flags.get('only') ? String(flags.get('only')).split(',').filter((d) => ['computer', 'phone', 'sideways'].includes(d)) : undefined;
     return look({ url, paths, shots: flags.get('shots') ? resolve(flags.get('shots')) : join(root, '.studio', 'look'), devices: only, log });
   }
-  if (cmd === 'deploy' && flags.has('plan')) return { ...deployPlan(root), parts: partsPublishReport(root) };
+  if (cmd === 'deploy' && flags.has('plan')) {
+    // On a custom domain the plan also reads the domain's Worker routes (lib/routes.mjs): a read, nothing changes.
+    const zone = await zonePlan(root);
+    return { ...deployPlan(root), parts: partsPublishReport(root), ...(zone ? { zone } : {}) };
+  }
   // Cloudflare's Workers Builds runs `npm run deploy` with WORKERS_CI=1 (and its own token for this one account).
   if (cmd === 'deploy' && (process.env.WORKERS_CI === '1' || flags.has('ci'))) return tracked(root, 'deploy', () => ciDeploy(root, { log }), 'deploy');
-  if (cmd === 'deploy') return tracked(root, 'deploy', () => deploy(root, { log, homie: flags.get('homie') }), 'deploy');
+  if (cmd === 'deploy') return tracked(root, 'deploy', () => deploy(root, { log, homie: flags.get('homie'), ownRoute: flags.has('own-route') }), 'deploy');
   if (cmd === 'storage' && sub === 'add') return storageAdd(root, { log });
   if (cmd === 'storage') {
     const cf = readStudio(root).cloudflare ?? {};
     const has = Boolean(cf.r2 && (cf.created ?? []).includes(`r2:${cf.r2}`));
     return { ok: true, command: 'storage', storage: has ? { kind: 'r2', bucket: cf.r2 } : null, why: has ? undefined : 'no storage yet: the studio runs without it; `homie-studio storage add` adds an R2 bucket for large media (Cloudflare asks for a payment method before R2 works)' };
   }
+  if (cmd === 'publish' && flags.has('before')) return publishBefore(root, { homie: flags.get('homie'), site: flags.get('site'), log: () => {} });
   if (cmd === 'publish') return publish(root, { homie: flags.get('homie'), site: flags.get('site'), log });
   if (cmd === 'players' && sub === 'owner') return playersOwner(root, { url: flags.get('url'), revoke: flags.has('revoke') });
   if (cmd === 'players' && !sub) return playersShow(root, { url: flags.get('url') });

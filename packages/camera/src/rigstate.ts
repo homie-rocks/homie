@@ -81,7 +81,7 @@ export class ChaseRigState {
   // =========================================================================
 
   // --- the bearing, and everything hanging off it --------------------------
-  /** World yaw the lens sits behind. */
+  /** World yaw the lens sits behind, radians: 0 faces +Z, positive turns toward +X (`heading.ts`). */
   armYaw = 0;
   armVel: Vel = { v: 0 };
   /** Unit-vector form of {@link armYaw}. */

@@ -496,8 +496,8 @@ this toolkit alone (`new`, `deploy`, `publish`), and the connector row says so. 
   an address or a command; the command itself is never read out.
 - **Homie's holds**: whether the plugin's hooks ran in this app in the last ten minutes, from the dated mark
   they leave in `.cache/homie-studio/holds/` of the home folder. Off means nothing is held: Codex runs no plugin's hooks
-  until the person trusts them in `/hooks`, and the row says so; Grok Build 1.0.41 runs no plugin's hooks at all, so
-  there the row is off until a Grok that does.
+  until the person trusts them in `/hooks`, and Grok Build runs them once the plugin is trusted
+  (`grok plugin install … --trust`); the row says which.
 
 `homie-studio demo` answers without a network too (0.30.2): where it cannot reach the arcade it names the arcade's
 standing first pick, with `reached: false`.
@@ -659,10 +659,14 @@ as `cloudflare.domain` and is what the directory claim, `publish`, `check` and `
 
 **Routes.** `deploy` writes `wrangler.jsonc` again each time, and keeps the routes that are the studio's own exactly
 as they were written: a custom domain (`{ "pattern": "play.example.com", "custom_domain": true }`) and an exact-host
-route (`{ "pattern": "play.example.com/*", "zone_name": "example.com" }`). A zone's other routes are never listed,
-changed or removed. When the zone already has a wildcard route on another Worker (`*example.com/*`), that Worker
-answers the studio's hostname first; the deploy notices that its own domain answers as something else and prints the
-exact-host route to add, once. A wildcard or catch-all route (`*/*`) in the studio's own config would hand every
+route (`{ "pattern": "play.example.com/*", "zone_name": "example.com" }`). A zone's other routes are never
+changed or removed. On a custom domain, `deploy` and `deploy --plan` read the domain's Worker routes first (two GETs
+with the sign-in Wrangler already has) and warn, before anything is deployed, when another Worker's catch-all (`*/*`)
+or wildcard (`*example.com/*`) covers the studio's hostname: that route answers the hostname before the studio does,
+it belongs to another site on the domain, and it must not be edited or removed. The warning gives the one safe fix,
+the studio's own exact-host route, as the exact line; `deploy --own-route` adds that line and nothing else, only when
+the read showed it is needed. Routes that could not be read are said as unmeasured, never as fine; after the deploy,
+a domain that answers as something else still gets the route to add. A wildcard or catch-all route (`*/*`) in the studio's own config would hand every
 hostname of the zone to the studio's Worker, so `deploy` refuses it before it asks Cloudflare anything; a studio that
 really owns the whole zone says so in studio.json (`"cloudflare": { "allowWildcardRoutes": true }`).
 
