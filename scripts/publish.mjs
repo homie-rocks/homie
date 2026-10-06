@@ -135,11 +135,21 @@ if (inCI && !DRY && brandNew.length) {
     + 'Trusted publishing can only add versions to a package that exists: a maintainer publishes its first version once, '
     + 'then registers this workflow as its trusted publisher (repository homie-rocks/homie, workflow publish.yml, environment npm).');
 }
+// A package the registry refuses (it has not named this workflow as its trusted publisher yet, so the PUT answers
+// 404) must not hold back the ones that do not depend on it: the toolkit shipped with nothing published once, behind a
+// package it never imports. Each refusal is kept; a package that depends on a refused one is not tried (it would pin
+// a version that is not on npm); the rest publish; and the release still fails at the end, naming every one left.
+const refused = [];
+const waiting = [];
+const depsOf = (q) => { const j = JSON.parse(readFileSync(join(ROOT, q.dir, 'package.json'), 'utf8')); return Object.keys({ ...j.dependencies, ...j.peerDependencies, ...j.optionalDependencies }); };
 for (const p of todo) {
+  const held = depsOf(p).filter((d) => refused.includes(d) || waiting.includes(d));
+  if (held.length) { waiting.push(p.name); process.stdout.write(`\nnot tried: ${p.name}@${p.version} depends on ${held.join(', ')}, which did not publish\n`); continue; }
   const argv = ['publish', '--workspace', p.dir, '--access', 'public'];
   if (inCI) argv.push('--provenance');
   if (DRY) argv.push('--dry-run');
   process.stdout.write(`\n$ npm ${argv.join(' ')}\n`);
   const r = npm(argv, { stdio: 'inherit' });
-  if (r.status !== 0) fail(`${p.name}@${p.version} did not publish; the packages before it did. Run the release again: published versions are skipped.`);
+  if (r.status !== 0) { refused.push(p.name); process.stdout.write(`\n${p.name}@${p.version} did not publish; going on with the packages that do not depend on it\n`); }
 }
+if (refused.length) fail(`${refused.join(', ')} did not publish${waiting.length ? ` (and ${waiting.join(', ')} waited on them)` : ''}; every other package did. A 404 on the PUT means the package has not named this workflow as its trusted publisher (npmjs.com, the package's Settings, Trusted Publisher: repository homie-rocks/homie, workflow publish.yml, environment npm). Then run the release again: published versions are skipped.`);
