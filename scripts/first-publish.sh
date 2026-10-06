@@ -27,14 +27,29 @@
 #      homie-rocks/homie, workflow publish.yml, environment npm), and sets each package
 #      to "require two-factor authentication and disallow tokens";
 #   6. checks the registry: each bootstrapped package is there with the same integrity
-#      as the tarball this checkout packs, and each package trusts the workflow.
+#      as the tarball this checkout packs. Whether a package trusts the workflow is step
+#      5's own answer, said per package; nothing is inferred afterwards.
 #
 # Every call that writes to the registry (publish, its dry run, npm trust, npm access) runs
 # as `npx -y npm@11`, whatever the global npm is (a global self-upgrade can fail); reads use
 # the global npm. It is safe to run again: a published package, a registered publisher and
-# a set access level are each skipped. 2FA: npm asks in the browser; tick "skip two-factor
-# authentication for the next 5 minutes" and the whole run fits in that window. If the
-# window lapses mid-run, run this again.
+# a set access level are each skipped.
+#
+# 2FA, AND WHY EVERY npm trust CALL TALKS STRAIGHT TO THE TERMINAL. npm asks for two-factor in the
+# browser, and it can only ask when its output is a terminal: with its output sent to a file or a
+# pipe it fails at once with EOTP instead. This script used to hide `npm trust github` in a file and
+# to ask `npm trust list` whether a package was registered already, through a pipe. The first could
+# never be approved, and the second (which needs two-factor itself) printed its sign-in prompt,
+# which was read as "yes, trusted": packages were skipped that had no publisher, and a release
+# was refused by the registry for each of them (a 404 on the PUT). So step 5 now runs each call in
+# the open and goes by its exit status alone. When npm asks, press ENTER, approve in the browser and
+# tick "skip two-factor authentication for the next 5 minutes": the rest of the calls then pass
+# without asking. The slow checks (steps 0 to 2, about twelve minutes) come before the first
+# question, so they never eat into that window.
+#
+#   bash scripts/first-publish.sh                 every package
+#   bash scripts/first-publish.sh camera render   step 5 for these only (a new package, or one a
+#                                                 release was refused for)
 #
 # Nothing here pushes to git. It prints no secret and no account name.
 
@@ -54,7 +69,6 @@ on_npm() {
   if printf '%s' "$err" | grep -q -E 'E404|404 Not Found|is not in this registry'; then return 1; fi
   die "npm view $1 failed: $(printf '%s' "$err" | head -1)"
 }
-trusted() { npm11 trust list "$1" 2> /dev/null | grep -q -i -E "$WORKFLOW|github"; }
 die() { printf '\nfirst-publish: STOPPED: %s\n' "$*" >&2; exit 1; }
 npm11() { npx -y npm@11 "$@"; }
 
@@ -135,24 +149,28 @@ else
 fi
 
 say "5. Trusted publisher ($GH_REPO, $WORKFLOW, environment $ENVIRONMENT) and publishing access"
+# No call here has its output redirected, and nothing asks npm whether a package is registered already (see the
+# header). A package npm refuses is not a reason to stop: the commonest refusal is a publisher that is there
+# already, which cannot be told from another refusal without hiding npm's prompt, so it is listed at the end.
+ONLY=" $* "
+REGISTERED=()
+REFUSED=()
 while read -r name dir version; do
-  if trusted "$name"; then
-    echo "trusted      $name"
-  elif npm11 trust github "$name" --file "$WORKFLOW" --repo "$GH_REPO" --env "$ENVIRONMENT" --allow-publish --yes > "$WORK/trust.out" 2>&1; then
+  if [ "$#" -gt 0 ] && [[ "$ONLY" != *" $name "* ]] && [[ "$ONLY" != *" ${name#@homie-rocks/} "* ]]; then continue; fi
+  if npm11 trust github "$name" --file "$WORKFLOW" --repo "$GH_REPO" --env "$ENVIRONMENT" --allow-publish --yes < /dev/tty; then
     echo "registered   $name"
-    sleep 2 # npm's guidance for bulk registration: a pause between calls avoids rate limiting
-  elif grep -q -i -E 'already|exists|conflict|409' "$WORK/trust.out"; then
-    echo "trusted      $name (already registered)"
+    REGISTERED+=("$name")
   else
-    cat "$WORK/trust.out" >&2
-    die "could not register the trusted publisher for $name; run this again to continue"
+    echo "not now      $name (npm refused: read its words above)"
+    REFUSED+=("$name")
   fi
-  npm11 access set mfa=publish "$name" > /dev/null || die "could not set publishing access for $name; run this again to continue"
+  npm11 access set mfa=publish "$name" < /dev/tty || echo "             publishing access was not set for $name (set it on its access page)"
+  sleep 2 # npm's guidance for bulk registration: a pause between calls avoids rate limiting
 done <<< "$PLAN"
 
 say "6. Registry check"
 BAD=0
-for row in "${NEW[@]}"; do
+for row in ${NEW[@]+"${NEW[@]}"}; do   # an empty array is "unbound" to bash 3.2 (macOS) under set -u
   read -r name dir version <<< "$row"
   want="$(npm11 pack --workspace "$dir" --dry-run --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)[0].integrity))')"
   got=""
@@ -165,9 +183,18 @@ for row in "${NEW[@]}"; do
   elif [ "$got" != "$want" ]; then echo "DIFFERENT    $name@$version (the registry's tarball is not this checkout's)"; BAD=1
   else echo "on npm       $name@$version"; fi
 done
-while read -r name dir version; do
-  trusted "$name" || { echo "NOT TRUSTED  $name (npm trust list did not name the workflow: check https://www.npmjs.com/package/$name/access)"; BAD=1; }
-done <<< "$PLAN"
 [ "$BAD" = 0 ] || die "the registry check failed"
-say "Done. Every package exists on npm and trusts $GH_REPO/.github/workflows/$WORKFLOW."
+say "Done. Registered now: ${#REGISTERED[@]}."
+if [ "${#REFUSED[@]}" -gt 0 ]; then
+  echo "npm refused ${#REFUSED[@]}. A package that already names this workflow is refused a second time, and that is fine;"
+  echo "anything else is not. Each one's access page says which (Trusted Publisher: $GH_REPO, $WORKFLOW, $ENVIRONMENT):"
+  for name in "${REFUSED[@]}"; do
+    echo "  https://www.npmjs.com/package/$name/access"
+    for row in ${NEW[@]+"${NEW[@]}"}; do
+      # A package this run created cannot have had a publisher: its refusal is a failure, never "already".
+      [ "${row%% *}" = "$name" ] && FRESH_REFUSED=1
+    done
+  done
+  [ -z "${FRESH_REFUSED:-}" ] || die "a package published for the first time just now was refused a trusted publisher: a release cannot publish it until it has one"
+fi
 echo "From now on a release is a tag in the public repo: git tag release-YYYY-MM-DD && git push origin release-YYYY-MM-DD"
