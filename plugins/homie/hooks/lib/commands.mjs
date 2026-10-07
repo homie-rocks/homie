@@ -88,7 +88,7 @@ export function studioCalls(command) {
       continue;
     }
     if (!rest) continue;
-    const { flags, pos } = flagsOf(rest, ['json', 'plan', 'yes', 'dry-run', 'apply', 'share', 'stop', 'install', 'remove', 'reopen', 'off', 'revoke', 'release']);
+    const { flags, pos } = flagsOf(rest, ['json', 'plan', 'yes', 'dry-run', 'apply', 'share', 'stop', 'install', 'remove', 'reopen', 'off', 'revoke', 'release', 'device']);
     const second = TWO[pos[0]];
     const sub = !pos.length ? 'help' : second && second.includes(pos[1]) ? `${pos[0]} ${pos[1]}` : pos[0];
     calls.push({ sub, args: rest, flags, pos, dir: seg.dir, text: seg.text });

@@ -216,6 +216,11 @@ test('a studio on an older toolkit: the card says what\'s new, and studio_run ["
     const copy = await s.call('game_standalone', { game: 'comet-crews', plan: true, for: ['windows', 'linux'] });
     assert.ok(!copy.isError, copy.content[0].text);
     assert.equal(copy.structuredContent.kind, 'standalone-plan');
+    // The run on a real phone is the same tool, and its description carries what that changes outside the computer.
+    const described = (await s.request(['tools', 'list'].join('/'))).result.tools.find((x) => x.name === 'game_standalone');
+    assert.equal(described.inputSchema.properties.device.type, 'boolean');
+    assert.match(described.description, /device: true builds the game for the one phone plugged in[\s\S]*This adds the phone to your Apple team's list of development devices[\s\S]*only after the person said yes to that/);
+    assert.match(described.description, /Quick play finds a room only when the studio's live site is on @homie-rocks\/studio 0\.32\.0 or later[\s\S]*a room made or joined by its code works with an older site too/);
     assert.deepEqual(copy.structuredContent.targets.map((t) => [t.target, t.state]), [['windows', 'ready'], ['linux', 'ready']]);
     assert.match(copy.structuredContent.toolkitNote, /pins @homie-rocks\/studio 0\.16\.1/);
     assert.match(copy.content[0].text, /What the standalone game does not have \(v1\):\n {2}- Player accounts and sign-in: /);

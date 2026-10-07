@@ -24,6 +24,7 @@ npx --no-install homie-studio standalone plan <game>      # what would be built,
 npx --no-install homie-studio standalone build <game>     # every target this computer can make
 npx --no-install homie-studio standalone build <game> --for mac,windows
 npx --no-install homie-studio standalone run <game>       # the built desktop copy, here (--for ios | android)
+npx --no-install homie-studio standalone run <game> --for ios --device   # onto the iPhone or iPad plugged in
 npx --no-install homie-studio standalone steam <game>     # Steam's build file; uploads nothing
 npx --no-install homie-studio standalone ci <game>        # a GitHub workflow that builds all five
 ```
@@ -55,7 +56,8 @@ Say this to whoever will ship it, before they do.
 
 ## What has been run and what has not
 
-This is version 1, and it says what it knows. As of 2026-10-06, by the people who wrote it, on one Mac:
+This is version 1, and it says what it knows. By the people who wrote it, on one Mac and one iPhone; each line
+was true on 2026-10-06 unless it says another day:
 
 **Run and seen:**
 
@@ -70,6 +72,16 @@ This is version 1, and it says what it knows. As of 2026-10-06, by the people wh
   environment), and the bundle carries that key's certificate.
 - The Windows build's program carries the game's icon and its name; the Linux build is a Linux program. Both
   were made on the Mac.
+- **On a real iPhone (2026-10-07).** A 3D game's iOS build was signed for a development team, installed over
+  the cable and started by hand, with the same three tools `standalone run --for ios --device` now runs. It
+  loaded and played offline with its bots.
+- **Online from that phone (2026-10-07).** A private room made in the app, joined from another device by its
+  invite link, connected through a studio's live Worker. That site was on 0.31.0, from before standalone copies.
+- **`standalone run --for ios --device` itself (2026-10-07).** It found the phone, read the team from the
+  keychain, built and signed the app for the phone and installed it; the phone's own list of apps had it. The
+  phone was locked, so the command waited a minute, said so, and stopped with "the game is on the phone, and
+  the phone is locked". Its last two steps, starting the game and finding it among the phone's running programs,
+  have been run against stand-ins only.
 
 **Never run:**
 
@@ -84,18 +96,29 @@ This is version 1, and it says what it knows. As of 2026-10-06, by the people wh
   checks the result (`codesign --verify`, `xcrun stapler validate`); it says "notarized" only when the second
   agrees. That path has not been run with a real identity. Opening a notarized app on another Mac was not tried.
 - **The iOS archive and its `.ipa`.** It needs Xcode signed in to an Apple account of your team; it was not run.
-- **Anything on a real phone**, and a phone build that plays online.
+- **Quick play online from a phone.** The one site a phone build has met was older than 0.32.0, where an app
+  cannot read the Lobby's answer: Quick play was offline there, as it should be.
+- **A real Android phone.** The Android build has run in the emulator only. `standalone run --for android` hands
+  over to Capacitor, which asks which phone or emulator; `--device` is for an iPhone or iPad.
+- **`run --device` starting a game on an unlocked phone**, and each of its answers for a phone that is not
+  ready (Developer Mode off, not trusted, no Apple account in Xcode), other than against stand-ins. The words
+  it matches for those are the ones Xcode printed on 2026-10-07.
 - **The GitHub workflow.** It is checked as text. Read the first run's log.
 - **A copy meeting a deployed site**, and an old copy meeting a newer site, outside the tests.
 - **Building from Windows or Linux.**
 
 When one of these fails for you, that is news to us: tell Homie.
 
-## Before a copy can find rooms
+## Before Quick play can find a room
 
-Your studio must be on `@homie-rocks/studio` 0.32.0 or later **and deployed**. The app's page is not served by
-your site, so it is another origin to your Worker; 0.32.0 is the first Worker that lets an app read the Lobby's
-answer. A copy pointed at an older site plays offline.
+For **Quick play**, your studio must be on `@homie-rocks/studio` 0.32.0 or later **and deployed**. The app's
+page is not served by your site, so it is another origin to your Worker; 0.32.0 is the first Worker that lets an
+app read the Lobby's answer, which is how Quick play learns which room to join. With an older site, Quick play
+is offline with the game's bots.
+
+**A room made or joined by its code does not need that.** The room's own socket never asked where a page came
+from, so "New private room" and "Join a room" connect through an older site too. That has been seen against a
+site on 0.31.0; it is not promised for every older version.
 
 The site's address is **built into every copy** (`--site <address>`, else `HOMIE_STANDALONE_SITE`, else the
 address your last deploy from this computer got). A copy that has shipped keeps it for good, so put the studio
@@ -106,6 +129,38 @@ A game that loads something from another site at run time (a web font, a picture
 connection for that in the app, exactly as on the web: bundle what the game must have offline. And a game whose
 `index.html` carries a Content-Security-Policy that forbids inline scripts never hears the shell (a copy adds
 one inline script to that page) and plays offline only; the plan warns when it sees one.
+
+## On your own iPhone or iPad
+
+```sh
+npx --no-install homie-studio standalone run <game> --for ios --device
+```
+
+builds the game for the **one** iPhone or iPad plugged in to this Mac, signs it for your Apple team, installs it
+over the cable, starts it, and then looks for it among the phone's running programs. It says the game is running
+only when it found it there.
+
+**`--device` is your yes to what this changes outside your computer:** it adds the phone to your Apple team's
+list of development devices (a team may register a limited number a year, and a device stays on the list until
+the membership year renews) and lets Xcode make a development profile for the app. The app is signed for that
+phone only. It is a build to try, never one for the store, and it stops opening when its profile ends (a week
+with a free Apple account, a year with a Developer membership).
+
+What it needs, and what it says when one is missing:
+
+- **A Mac with Xcode, signed in to your Apple account** (Xcode, Settings, Accounts). Not signed in: it says so.
+- **Your team.** `HOMIE_APPLE_TEAM`, else the one team among the keychain's development identities (it says
+  which it used, never an identity's name). None, or more than one: it stops and asks for `HOMIE_APPLE_TEAM`.
+- **One phone, plugged in, unlocked, trusting this Mac.** None, or several: it says which models it sees and
+  builds nothing. Locked: it waits a minute for you to unlock it. Not trusted: unlock it and tap Trust.
+- **Developer Mode on**: on the phone, Settings, Privacy & Security, Developer Mode. The phone restarts and asks
+  once more. The switch appears only after the phone has been plugged in to a Mac with Xcode.
+
+Nothing it prints or returns names the phone, its id or your team's id: a phone is said by its model.
+
+For an Android phone there is no `--device` yet: `standalone run <game> --for android` hands over to Capacitor,
+with the JDK and SDK the build uses, and Capacitor asks which phone or emulator. That has been run on an
+emulator, never on a real Android phone.
 
 ## Versions: an old copy and a new site
 

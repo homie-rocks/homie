@@ -30,7 +30,7 @@ import {
   APP_ID, CI_ACTIONS, MISSING, NET_SCRIPT, STANDALONE_PINS, TARGETS, appIdOf, capacitorConfig, configScript, electronApp, electronPackage, entitlementsPlist,
   cspBlocksInline, exportOptionsPlist, fileName, patchAndroidManifest, patchGradle, patchInfoPlist, projectPackage, standaloneBlock, standaloneMeta, steamAppBuild, steamLaunch, withNetScript, workflowYaml,
 } from '../lib/standalone-files.mjs';
-import { ANDROID_PLATFORM, JDK_FITS, androidSigning, findJdk, installTools, runTool, standaloneBuild, standaloneCi, standaloneDeployNotes, standaloneDir, standalonePlan, standaloneRows, standaloneSteam, toolEnv, toolkitNote, webBundle } from '../lib/standalone.mjs';
+import { ANDROID_PLATFORM, DEVICE_ADDS, JDK_FITS, androidSigning, appleTeam, deviceTrouble, findJdk, installTools, phones, runTool, standaloneRun, standaloneBuild, standaloneCi, standaloneDeployNotes, standaloneDir, standalonePlan, standaloneRows, standaloneSteam, toolEnv, toolkitNote, webBundle } from '../lib/standalone.mjs';
 import { SAY_MISSING, missingLines, standaloneCommand, standaloneLines } from '../lib/standalone-cli.mjs';
 import { iconSource, letterTile } from '../lib/standalone-icons.mjs';
 import { listGames, readStudio } from '../lib/studio.mjs';
@@ -800,6 +800,10 @@ test('a config with no socket is offline with its bots, and its prefs are still 
 const nothing = async () => ({ code: 127, stdout: '', stderr: '' });
 const bare = { platform: 'linux', env: {}, exec: nothing, home: join(scratch, 'nobody') };
 const ROWS = ['standalone-xcode', 'standalone-android', 'standalone-jdk', 'standalone-apple-signing', 'standalone-notary', 'standalone-ios-signing', 'standalone-steamcmd'];
+/** On a Mac there is one more: a phone to try a build on. */
+const MAC_ROWS = [...ROWS.slice(0, 6), 'standalone-phone', 'standalone-steamcmd'];
+/** What the real command lists on the computer this test runs on. */
+const HERE_ROWS = process.platform === 'darwin' ? MAC_ROWS : ROWS;
 
 test('a plan on a computer with nothing: every target said with what it needs, none passed over, nothing written', async () => {
   const root = studio('plan');
@@ -821,7 +825,8 @@ test('a plan on a computer with nothing: every target said with what it needs, n
   assert.match(plan.warnings.join('\n'), /OFFLINE ONLY/);
   assert.match(plan.warnings.join('\n'), /names no "netplay\.version"/);
   assert.match(plan.warnings.join('\n'), /made-up one for trying a build/);
-  assert.match(plan.needs, /0\.32\.0 or later/);
+  assert.match(plan.needs, /^Quick play finds a room only when the live site runs @homie-rocks\/studio 0\.32\.0 or later/, 'only Quick play needs the newer site');
+  assert.match(plan.needs, /A room made or joined by its code works with an older site too \(seen against 0\.31\.0, not promised for every older version\)/);
   assert.match(plan.needs, /did not ask the site/, 'what was not checked is said as not checked');
   assert.equal(existsSync(join(root, '.studio', 'standalone')), false, 'a plan writes nothing and installs nothing');
   const text = standaloneLines(plan).join('\n');
@@ -1098,11 +1103,223 @@ test('a tool that runs out of time is ended with everything it started, not left
   assert.deepEqual(await runTool(process.execPath, ['-e', 'process.stdout.write("hi"); process.exit(3)']), { code: 3, stdout: 'hi', stderr: '' });
 });
 
+/* ------------------------------------------------------------------ onto a real phone, with every tool a stand-in */
+
+/**
+ * A Mac with Xcode, a keychain and (maybe) a phone, as stand-ins. `world` says what is plugged in and how each tool
+ * answers; `calls` is every command asked for. The ids are made up, and none may appear in anything a person is told.
+ */
+const UDID = 'MADE-UP-PHONE-NUMBER';
+const CORE = 'MADE-UP-PHONE-HANDLE';
+const TEAM = 'TEAMTEAM01';
+const phoneOf = (o = {}) => ({ identifier: o.id ?? CORE, hardwareProperties: { udid: o.udid ?? UDID, marketingName: o.model ?? 'iPhone 14 Pro Max', deviceType: o.type ?? 'iPhone', platform: 'iOS', reality: o.reality ?? 'physical' }, connectionProperties: { pairingState: o.trusted === false ? 'unpaired' : 'paired', tunnelState: o.here === false ? 'unavailable' : 'disconnected' }, deviceProperties: { developerModeStatus: o.developerMode === false ? 'disabled' : 'enabled' } });
+function macWith(world = {}) {
+  const calls = [];
+  const at = { unlockAsks: 0 };
+  const exec = async (cmd, args, opts = {}) => {
+    calls.push({ cmd, args, env: opts.env ?? null });
+    const out = (stdout = '', code = 0, stderr = '') => ({ code, stdout, stderr });
+    const json = (o, code = 0, stderr = '') => { const f = args[args.indexOf('--json-output') + 1]; if (o) writeFileSync(f, JSON.stringify(o)); return out('', code, stderr); };
+    if (cmd === 'xcodebuild' && args[0] === '-version') return out('Xcode 26.3\nBuild version 17C529\n');
+    if (cmd === 'xcodebuild' && args[0] === '-showsdks') return out('\tiOS 26.2 -sdk iphoneos26.2\n\tSimulator - iOS 26.2 -sdk iphonesimulator26.2\n');
+    if (cmd === 'security' && args[0] === 'find-identity') return world.identities === 'fails' ? out('', 1) : out(world.identities ?? '     0 valid identities found\n');
+    if (cmd === 'security' && args[0] === 'find-certificate') return out(world.certificates ?? '');
+    if (cmd === 'xcrun' && args[1] === 'list') return world.devices === 'fails' ? out('', 1, 'devicectl: no service') : json({ result: { devices: world.devices ?? [phoneOf()] } });
+    if (/npm(\.cmd)?$/.test(cmd) && args[0] === 'install') {
+      const pkg = JSON.parse(readFileSync(join(opts.cwd, 'package.json'), 'utf8'));
+      for (const name of Object.keys(pkg.devDependencies ?? {})) { mkdirSync(join(opts.cwd, 'node_modules', ...name.split('/')), { recursive: true }); writeFileSync(join(opts.cwd, 'node_modules', ...name.split('/'), 'package.json'), '{}'); }
+      writeFileSync(join(opts.cwd, 'node_modules', '.package-lock.json'), '{}');
+      return out('added');
+    }
+    if (String(args[0]).endsWith('capacitor') && args[1] === 'add') { mkdirSync(join(opts.cwd, 'ios', 'App', 'App.xcodeproj'), { recursive: true }); mkdirSync(join(opts.cwd, 'ios', 'App', 'App'), { recursive: true }); writeFileSync(join(opts.cwd, 'ios', 'App', 'App', 'Info.plist'), '<dict></dict>'); return out('added'); }
+    if (String(args[0]).endsWith('capacitor') || String(args[0]).endsWith('capacitor-assets')) return out('ok');
+    if (cmd === 'xcodebuild' && args.includes('build')) {
+      if (world.build) return out('', 70, world.build);
+      const derived = args[args.indexOf('-derivedDataPath') + 1];
+      mkdirSync(join(derived, 'Build', 'Products', 'Debug-iphoneos', 'App.app'), { recursive: true });
+      return out('** BUILD SUCCEEDED **');
+    }
+    if (cmd === 'xcrun' && args[2] === 'install') return world.install ? json(null, 1, world.install) : json({ result: { installedApplications: [{ bundleID: 'com.example.gem', installationURL: 'file:///private/var/containers/Bundle/Application/1111/App.app/' }] } });
+    if (cmd === 'xcrun' && args[2] === 'info' && args[3] === 'apps') return json({ result: { apps: world.listed === false ? [] : [{ bundleIdentifier: 'com.other.game', url: 'file:///private/var/containers/Bundle/Application/9999/App.app/' }, { bundleIdentifier: 'com.example.gem', url: 'file:///private/var/containers/Bundle/Application/1111/App.app/' }] } });
+    if (cmd === 'xcrun' && args[3] === 'lockState') { at.unlockAsks += 1; return json({ result: { passcodeRequired: world.locked === true || (typeof world.locked === 'number' && at.unlockAsks <= world.locked) } }); }
+    if (cmd === 'xcrun' && args[2] === 'process') return world.launch ? json(null, 1, world.launch) : json({ result: { process: { processIdentifier: 4242 } } });
+    if (cmd === 'xcrun' && args[3] === 'processes') return world.processes === 'fails' ? out('', 1) : json({ result: { runningProcesses: world.processes ?? [{ processIdentifier: 77, executable: 'file:///private/var/containers/Bundle/Application/9999/App.app/App' }, { processIdentifier: 4242, executable: 'file:///private/var/containers/Bundle/Application/1111/App.app/App' }] } });
+    return out('', 127);
+  };
+  return { exec, calls, did: (what) => calls.filter((c) => c.args.join(' ').includes(what)).length };
+}
+
+test('onto a real phone: built, signed for the team, installed, started, and LOOKED FOR among what the phone is running', async () => {
+  const root = studio('phone');
+  const file = join(root, 'games', 'gem', 'game.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), standalone: { appId: 'com.example.gem' } }, null, 2));
+  assert.equal(JSON.parse(run(['build'], root).stdout).ok, true);
+  const base = { home: join(scratch, 'nobody'), buildSite: false, platform: 'darwin', for: 'ios', device: true, wait: async () => {}, unlockMs: 9000 };
+  const said = [];
+  let mac = macWith();
+  let r = await standaloneRun(root, 'gem', { ...base, env: { HOMIE_APPLE_TEAM: TEAM, HOMIE_ANDROID_KEYSTORE_PASSWORD: 'never-here' }, exec: mac.exec, log: (l) => said.push(l) });
+  assert.deepEqual([r.ok, r.command, r.stage, r.device, r.built, r.installed, r.running], [true, 'standalone run', 'started', true, true, true, true]);
+  assert.deepEqual([r.phone, r.team, r.adds], [{ model: 'iPhone 14 Pro Max' }, { from: 'HOMIE_APPLE_TEAM' }, DEVICE_ADDS]);
+  // What it changes outside this computer is said BEFORE the build that does it, in the same words as the result.
+  assert.ok(said.indexOf(DEVICE_ADDS) >= 0 && said.indexOf(DEVICE_ADDS) < said.findIndex((l) => /^xcodebuild: a Debug build for the phone/.test(l)));
+  assert.match(DEVICE_ADDS, /^This adds the phone to your Apple team's list of development devices/);
+  // The build is for that phone, signed by Xcode for that team, and may register the phone.
+  const build = mac.calls.find((c) => c.cmd === 'xcodebuild' && c.args.includes('build')).args;
+  for (const word of ['-destination', `id=${UDID}`, `DEVELOPMENT_TEAM=${TEAM}`, 'CODE_SIGN_STYLE=Automatic', '-allowProvisioningUpdates', '-allowProvisioningDeviceRegistration', '-configuration', 'Debug']) assert.ok(build.includes(word), word);
+  // Installed and started on the phone by its id, and then read back: the process it started, where the phone put the app.
+  assert.deepEqual([mac.did(`install app --device ${CORE}`), mac.did(`process launch --device ${CORE} --terminate-existing com.example.gem`), mac.did(`info processes --device ${CORE}`)], [1, 1, 1]);
+  // Nothing a person is told carries the phone's id, the team's id, or anything of the signing environment.
+  const told = JSON.stringify([r, said, standaloneLines(r)]);
+  for (const secret of [UDID, CORE, TEAM, 'never-here']) assert.equal(told.includes(secret), false, secret);
+  for (const c of mac.calls.filter((x) => x.env)) assert.deepEqual(Object.keys(c.env).filter((k) => /^HOMIE_(APPLE|ANDROID)_/.test(k)), [], 'no tool is given a signing value: the team goes to xcodebuild as its own setting');
+  const lines = standaloneLines(r).join('\n');
+  assert.match(lines, /^Gem Rush is on the iPhone 14 Pro Max and running: it was built, installed over the cable, started, and then found among the phone's running programs\./);
+  assert.match(lines, /Signed for the team HOMIE_APPLE_TEAM names, as com\.example\.gem\./);
+  assert.match(lines, /This adds the phone to your Apple team's list of development devices/);
+  assert.match(lines, /it stops opening when its profile ends/);
+  // Another game's program of the same name is running, and ours is not: never "running".
+  mac = macWith({ processes: [{ processIdentifier: 77, executable: 'file:///private/var/containers/Bundle/Application/9999/App.app/App' }] });
+  r = await standaloneRun(root, 'gem', { ...base, env: { HOMIE_APPLE_TEAM: TEAM }, exec: mac.exec });
+  assert.deepEqual([r.ok, r.stage, r.installed], [false, 'not-running', true]);
+  assert.match(standaloneLines(r).join('\n'), /NOT on the iPhone 14 Pro Max: the game was installed and started, and four seconds later it was not among the phone's running programs[\s\S]*The game IS installed on the iPhone 14 Pro Max; it was not seen running\./);
+  mac = macWith({ processes: 'fails' });
+  r = await standaloneRun(root, 'gem', { ...base, env: { HOMIE_APPLE_TEAM: TEAM }, exec: mac.exec });
+  assert.deepEqual([r.ok, r.stage], [false, 'not-confirmed'], 'what could not be read back is never said as running');
+  // A locked phone is waited for; unlocked in time, the game starts; still locked, it says so and that the game is installed.
+  mac = macWith({ locked: 2 });
+  said.length = 0;
+  r = await standaloneRun(root, 'gem', { ...base, env: { HOMIE_APPLE_TEAM: TEAM }, exec: mac.exec, log: (l) => said.push(l) });
+  assert.equal(r.ok, true);
+  assert.match(said.join('\n'), /The iPhone 14 Pro Max is locked: unlock it now \(waiting up to a minute\)\./);
+  mac = macWith({ locked: true, launch: 'Unable to launch com.example.gem because the device was not, or could not be, unlocked. BSErrorCodeDescription = Locked' });
+  r = await standaloneRun(root, 'gem', { ...base, env: { HOMIE_APPLE_TEAM: TEAM }, exec: mac.exec });
+  assert.deepEqual([r.ok, r.stage, r.installed, r.fix], [false, 'locked', true, 'Unlock the phone and tap Gem Rush on its home screen.']);
+  // The phone says it took the app, and its own list of apps does not have it.
+  r = await standaloneRun(root, 'gem', { ...base, env: { HOMIE_APPLE_TEAM: TEAM }, exec: macWith({ listed: false }).exec });
+  assert.deepEqual([r.ok, r.stage], [false, 'install-failed']);
+  r = await standaloneRun(root, 'gem', { ...base, env: { HOMIE_APPLE_TEAM: TEAM }, exec: macWith({ install: `ERROR: The device ${CORE} refused` }).exec });
+  assert.deepEqual([r.ok, r.stage, r.built], [false, 'install-failed', true]);
+  assert.equal(JSON.stringify(r).includes(CORE), false, 'a tool\'s own words are said with the phone\'s id taken out');
+});
+
+test('onto a real phone: every way it stops is an answer with what to do, and nothing is built for a phone that is not ready', async () => {
+  const root = studio('phone-stops');
+  assert.equal(JSON.parse(run(['build'], root).stdout).ok, true);
+  const base = { home: join(scratch, 'nobody'), buildSite: false, platform: 'darwin', for: 'ios', device: true, wait: async () => {}, env: { HOMIE_APPLE_TEAM: TEAM } };
+  const stops = async (world, extra = {}) => { const mac = macWith(world); const r = await standaloneRun(root, 'gem', { ...base, ...extra, exec: mac.exec }); return { r, mac, lines: standaloneLines(r).join('\n') }; };
+  // No phone; a phone this Mac knows that is not here; several.
+  let x = await stops({ devices: [] });
+  assert.deepEqual([x.r.ok, x.r.command, x.r.stage, x.r.device], [false, 'standalone run', 'no-phone', true]);
+  assert.match(x.lines, /^NOT on a phone: no iPhone or iPad is connected to this Mac\.\n {2}Plug the phone in with a cable, unlock it, and tap Trust/);
+  assert.equal(x.mac.did('build'), 0, 'nothing was built');
+  x = await stops({ devices: [phoneOf({ here: false }), phoneOf({ reality: 'simulated', id: 'SIM' }), phoneOf({ type: 'appleWatch', id: 'W' })] });
+  assert.equal(x.r.stage, 'no-phone');
+  assert.match(x.r.why, /no iPhone or iPad is connected now \(this Mac knows 1: iPhone 14 Pro Max\)/);
+  x = await stops({ devices: [phoneOf(), phoneOf({ id: 'B', udid: 'U2', model: 'iPad Air', type: 'iPad' })] });
+  assert.deepEqual([x.r.stage, x.r.phones], ['several', [{ model: 'iPhone 14 Pro Max' }, { model: 'iPad Air' }]]);
+  assert.match(x.lines, /2 phones are connected \(iPhone 14 Pro Max, iPad Air\), and this puts the game on one\.\n {2}Unplug all but the one/);
+  // Developer Mode off: the exact path in Settings, and that the phone restarts. Not trusted. Neither is built for.
+  x = await stops({ devices: [phoneOf({ developerMode: false })] });
+  assert.equal(x.r.stage, 'developer-mode');
+  assert.match(x.lines, /Developer Mode is off on the iPhone 14 Pro Max[\s\S]*On the phone: Settings, Privacy & Security, Developer Mode, turn it on\. The phone restarts/);
+  assert.equal(x.mac.did('build'), 0);
+  x = await stops({ devices: [phoneOf({ trusted: false })] });
+  assert.equal(x.r.stage, 'not-trusted');
+  assert.match(x.lines, /does not trust this Mac yet\.\n {2}Unlock the phone, plug it in and tap Trust/);
+  x = await stops({ devices: 'fails' });
+  assert.deepEqual([x.r.stage, /could not look for a phone: Xcode's device list did not answer/.test(x.r.why)], ['could-not-check', true], 'a list that could not be read is not "no phone"');
+  // The team: none, several, or not a team id. Refused before anything is built or registered.
+  x = await stops({ identities: '     0 valid identities found\n' }, { env: {} });
+  assert.equal(x.r.stage, 'no-team');
+  assert.match(x.lines, /no Apple team to sign for: the keychain has no Apple Development identity[\s\S]*Put your team id in HOMIE_APPLE_TEAM[\s\S]*never in the chat/);
+  assert.equal(x.mac.did('build'), 0);
+  assert.equal((await stops({}, { env: { HOMIE_APPLE_TEAM: 'my team' } })).r.stage, 'no-team');
+  assert.equal((await stops({ identities: 'fails' }, { env: {} })).r.why.includes('could not check the keychain'), true);
+  // What xcodebuild and the phone said on the day, each as what it means: Developer Mode, no account, no devices, a timeout.
+  for (const [text, stage, words] of [
+    ['xcodebuild: error: Timed out waiting for all destinations matching the provided destination specifier to become available\n{ platform:iOS, error:Developer Mode disabled To use the phone for development, enable Developer Mode in Settings → Privacy & Security. }', 'developer-mode', /Settings, Privacy & Security, Developer Mode/],
+    ['error: No Accounts: Add a new account in Accounts settings. (in target \'App\' from project \'App\')', 'no-account', /Xcode is not signed in to an Apple account of that team[\s\S]*Open Xcode, Settings, Accounts/],
+    ['error: Communication with Apple failed: Your team has no devices from which to generate a provisioning profile.\nerror: No profiles for \'com.example.gem\' were found', 'no-devices', /your Apple team has no registered phone/],
+    ['xcodebuild: error: Timed out waiting for all destinations matching the provided destination specifier to become available', 'not-ready', /Xcode waited for the phone and it never became ready[\s\S]*Unlock the phone/],
+    ['error: The device is passcode locked. Unlock it to Continue', 'locked', /the phone is locked\.\n {2}Unlock the phone/],
+    [`error: something new about ${UDID} and team ${TEAM}\n** BUILD FAILED **`, 'build-failed', /xcodebuild did not finish: error: something new about <the phone> and team <your team>/],
+  ]) {
+    x = await stops({ build: text });
+    assert.deepEqual([x.r.ok, x.r.stage], [false, stage], text.slice(0, 40));
+    assert.match(x.lines, words);
+    assert.equal(JSON.stringify(x.r).includes(UDID) || JSON.stringify(x.r).includes(TEAM), false);
+  }
+  assert.equal(deviceTrouble('all is well'), null);
+  // Not this command's to do: a Mac is needed; Android has no such run yet; a desktop target is not a phone.
+  assert.match((await standaloneRun(root, 'gem', { ...base, platform: 'linux', exec: nothing })).why, /a game goes onto an iPhone from a Mac with Xcode/);
+  assert.match((await standaloneRun(root, 'gem', { ...base, for: 'android', exec: nothing })).why, /--device is for an iPhone or iPad in this version[\s\S]*never on a real Android phone/);
+  assert.match((await standaloneRun(root, 'gem', { ...base, for: 'mac', exec: nothing })).why, /A mac build runs on a computer/);
+  // Through the command: --device is a word the command knows, and a flag it does not know stops it before anything.
+  const refused = JSON.parse(run(['standalone', 'run', 'gem', '--for', 'ios', '--device', '--made-up'], root).stdout);
+  assert.deepEqual([refused.ok, refused.command, refused.needs], [false, 'standalone run', 'flag']);
+  assert.match(refused.why, /does not take --made-up, so it did not run/);
+  const viaCommand = await standaloneCommand(root, 'run', ['standalone', 'run', 'gem'], new Map([['for', 'ios'], ['device', true]]), { on: { ...base, exec: macWith({ devices: [] }).exec } });
+  assert.deepEqual([viaCommand.stage, viaCommand.say[0]], ['no-phone', 'NOT on a phone: no iPhone or iPad is connected to this Mac.'], 'the words for the person ride in the result');
+});
+
+test('the Apple team is the one HOMIE_APPLE_TEAM names, else the keychain\'s only one, read from the certificate and never from a name', async (t) => {
+  assert.deepEqual(await appleTeam({ env: { HOMIE_APPLE_TEAM: TEAM }, exec: nothing }), { team: TEAM, from: 'HOMIE_APPLE_TEAM' });
+  assert.equal((await appleTeam({ env: { HOMIE_APPLE_TEAM: 'lowercase1' }, exec: nothing })).team, null);
+  // A certificate of our own making, as a development identity's is shaped: a person's id in its name, the team in its OU.
+  const dir = join(scratch, 'certs');
+  mkdirSync(dir, { recursive: true });
+  const make = (name, ou) => { const r = spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2', '-subj', `/CN=Apple Development: Somebody (PERSONID01)/OU=${ou}/O=Somebody`, '-keyout', join(dir, `${name}.key`), '-out', join(dir, `${name}.pem`)], { encoding: 'utf8' }); return r.status === 0 ? readFileSync(join(dir, `${name}.pem`), 'utf8') : null; };
+  const one = make('one', TEAM);
+  if (!one) { t.diagnostic('openssl is not on this computer: the keychain reading was not run'); return; }
+  const { X509Certificate } = await import('node:crypto');
+  const hash = (pem) => new X509Certificate(pem).fingerprint.replace(/:/g, '');
+  const keychain = (pems, listed = pems) => async (cmd, args) => (args[0] === 'find-identity' ? { code: 0, stdout: `${listed.map((p, i) => `  ${i + 1}) ${hash(p)} "Apple Development: Somebody (PERSONID01)"`).join('\n')}\n     ${listed.length} valid identities found\n`, stderr: '' } : { code: 0, stdout: pems.join('\n'), stderr: '' });
+  const found = await appleTeam({ env: {}, exec: keychain([one]) });
+  assert.deepEqual(found, { team: TEAM, from: 'the one Apple team among the keychain\'s development identities' }, 'the OU of the certificate, not the id in the identity\'s name');
+  const two = make('two', 'OTHERTEAM2');
+  const several = await appleTeam({ env: {}, exec: keychain([one, two]) });
+  assert.deepEqual([several.team, several.teams], [null, 2]);
+  assert.match(several.why, /development identities of 2 Apple teams, and which one is yours to say/);
+  // A certificate in the keychain that is not one of the identities (no key of ours) is nobody's team.
+  assert.equal((await appleTeam({ env: {}, exec: keychain([one, two], [one]) })).team, TEAM);
+});
+
+test('the phone row: what is connected by model and its Developer Mode, or "could not check"', async () => {
+  const mac = (world) => standaloneRows({ platform: 'darwin', env: {}, home: join(scratch, 'nobody'), exec: macWith(world).exec });
+  const row = (rows) => rows.find((r) => r.id === 'standalone-phone');
+  assert.deepEqual((await mac({})).map((r) => r.id), MAC_ROWS);
+  assert.deepEqual([row(await mac({})).state, row(await mac({})).detail, row(await mac({})).fix], ['ok', 'connected: iPhone 14 Pro Max, Developer Mode on', null]);
+  assert.match(row(await mac({})).unlocks, /it adds the phone to your Apple team's device list/);
+  let r = row(await mac({ devices: [phoneOf({ developerMode: false })] }));
+  assert.deepEqual([r.state, r.detail], ['optional', 'connected: iPhone 14 Pro Max, Developer Mode OFF']);
+  assert.match(r.fix.say, /Settings, Privacy & Security, Developer Mode/);
+  r = row(await mac({ devices: [] }));
+  assert.deepEqual([r.state, r.detail], ['optional', 'no iPhone or iPad is connected now']);
+  r = row(await mac({ devices: 'fails' }));
+  assert.equal(r.state, 'unknown');
+  assert.match(r.detail, /^could not check \(Xcode's device list did not answer/);
+  assert.equal(row(await mac({ devices: [phoneOf(), phoneOf({ id: 'B', model: 'iPad Air', type: 'iPad' })] })).state, 'optional', 'two phones are not one to run on');
+  assert.equal(JSON.stringify(await mac({})).includes(UDID) || JSON.stringify(await mac({})).includes(CORE), false, 'by model, never by id');
+  // Not a Mac: no such row. The list of phones itself: only real iPhones and iPads.
+  assert.deepEqual((await standaloneRows(bare)).map((x) => x.id), ROWS);
+  assert.deepEqual((await phones({ env: {}, exec: macWith({ devices: [phoneOf(), phoneOf({ reality: 'simulated' }), phoneOf({ type: 'appleTV' })] }).exec })).phones.length, 1);
+});
+
 test('the toolkit note compares the studio\'s pin with the version standalone arrived in, not with this toolkit', () => {
   const root = studio('pins');
   const pin = (v) => { const f = join(root, 'package.json'); const p = JSON.parse(readFileSync(f, 'utf8')); p.devDependencies['@homie-rocks/studio'] = v; writeFileSync(f, JSON.stringify(p, null, 2)); };
   pin('0.31.1');
-  assert.match(toolkitNote(root), /pins @homie-rocks\/studio 0\.31\.1, from before standalone copies \(0\.32\.0\)[\s\S]*OFFLINE until the studio is upgraded to 0\.32\.0 or later AND deployed again/);
+  assert.match(toolkitNote(root), /pins @homie-rocks\/studio 0\.31\.1, from before standalone copies \(0\.32\.0\)[\s\S]*Quick play is OFFLINE until the studio is upgraded to 0\.32\.0 or later AND deployed again\. A room made or joined by its code still connects \(seen against 0\.31\.0, not promised for every older version\)/);
+  // The guide says the same, and nowhere that a copy "needs 0.32.0 to find rooms".
+  const guide = read('standalone', 'STANDALONE.md');
+  assert.match(guide, /## Before Quick play can find a room/);
+  assert.match(guide, /\*\*A room made or joined by its code does not need that\.\*\*[\s\S]*seen against a\nsite on 0\.31\.0; it is not promised for every older version/);
+  assert.doesNotMatch(guide, /before a copy can find rooms/i);
+  // What has been run on a real phone, with its day, and what still has not.
+  assert.match(guide, /\*\*On a real iPhone \(2026-10-07\)\.\*\*/);
+  assert.match(guide, /\*\*Online from that phone \(2026-10-07\)\.\*\*/);
+  for (const never of ['Nothing has been started by Steam', 'A macOS app signed with a Developer ID, and notarization', 'The iOS archive and its `.ipa`', 'The GitHub workflow', 'The Windows and Linux builds have never been started', 'A real Android phone', 'Quick play online from a phone']) assert.ok(guide.includes(never), never);
+  assert.match(guide, /\*\*`--device` is your yes to what this changes outside your computer:\*\* it adds the phone to your Apple team's\nlist of development devices/);
   pin('0.32.0');
   assert.equal(toolkitNote(root), null);
   // A studio on 0.32.0 is not "behind" for this, however new the toolkit that runs: only before-0.32.0 is.
@@ -1131,7 +1348,7 @@ test('a release never guesses the app\'s id: it stops, with the exact lines to a
   const ok = JSON.parse(run(['standalone', 'plan', 'gem', '--release', '--for', 'windows,linux'], root).stdout);
   assert.deepEqual([ok.ok, ok.appId, ok.appIdFrom, ok.release], [true, 'com.example.gem', 'game.json', true]);
   assert.deepEqual(ok.targets.map((t) => t.target), ['windows', 'linux']);
-  assert.ok(Array.isArray(ok.rows) && ok.rows.length === ROWS.length && ok.missing.length === MISSING.length);
+  assert.ok(Array.isArray(ok.rows) && ok.rows.length === HERE_ROWS.length && ok.missing.length === MISSING.length);
   // The words for the person ride in the result, ending with what to do with the list.
   assert.match(ok.say.join('\n'), /What the standalone game does not have \(v1\):/);
   assert.equal(ok.say.at(-1), SAY_MISSING);
@@ -1191,7 +1408,7 @@ test('Steam\'s file and the workflow are written where they belong; an upload is
   assert.match(ci.next.join('\n'), /has not been run by the people who wrote the command/);
   // With a "standalone" block, the setup status carries the rows; without one it does not.
   const status = JSON.parse(run(['setup', 'status', '--connector', 'no'], root).stdout);
-  assert.deepEqual(status.rows.filter((x) => String(x.id).startsWith('standalone-')).map((x) => x.id), ROWS);
+  assert.deepEqual(status.rows.filter((x) => String(x.id).startsWith('standalone-')).map((x) => x.id), HERE_ROWS);
   assert.equal(JSON.parse(run(['setup', 'status', '--connector', 'no'], studio('plain')).stdout).rows.some((x) => String(x.id).startsWith('standalone-')), false);
   assert.equal(statSync(join(root, '.github', 'workflows', 'standalone.yml')).isFile(), true);
 });

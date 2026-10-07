@@ -17,9 +17,36 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.32.1] - 2026-10-07
+
+**Plugin 0.33.1** · [#55](https://github.com/homie-rocks/homie/pull/55)
+
+A standalone game can be put on your own iPhone or iPad with one command, and the guide says what has now been run on a real phone and corrects what an older site means for a copy.
+
+### Added
+
+- **`homie-studio standalone run <game> --for ios --device`** builds the game for the one iPhone or iPad plugged in to your Mac, signs it for your Apple team, installs it over the cable, starts it, and then looks for it among the phone's running programs. It says the game is running only when it found it there. In chat it is `game_standalone` with `device: true`.
+- **`--device` is your yes to what that changes outside your computer.** It adds the phone to your Apple team's list of development devices (a team may register a limited number a year, and a device stays on the list until the membership year renews) and lets Xcode make a development profile for the app. The app is signed for that phone only: a build to try, never one for the store.
+- Every way it can stop is an answer with what to do: no phone connected, more than one (it lists them by model and builds nothing), Developer Mode off (on the phone: Settings, Privacy & Security, Developer Mode; the phone restarts), a phone that does not trust the Mac, a locked phone (it waits a minute for you to unlock it), no Apple account signed in to Xcode, a team with no registered phone, a build that failed. It never says or returns the phone's id, its name or your team's id.
+- The team is `HOMIE_APPLE_TEAM`, else the one team among your keychain's development identities; it says which it used. With none, or more than one, it stops and asks for `HOMIE_APPLE_TEAM`.
+- `setup status` and `standalone plan` have a row for a phone to try a build on: which model is connected and whether its Developer Mode is on, or "could not check".
+
+### Fixed
+
+- **What an older site means for a copy was said too broadly.** Only **Quick play** needs your live site on 0.32.0 or later: it asks the site which room to join, and an older site does not let an app read the answer. A room made in the app or joined by its code connects through an older site too. We saw that against a site on 0.31.0; it is not promised for every older version. The plan, the build, the chat tool, the skill and the guide now say this.
+
+### Changed
+
+- The guide's "What has been run and what has not" now has what was run on 2026-10-07: an iOS build on a real iPhone, signed for a development team and installed over the cable, playing offline with its bots, and an online private room from that phone through a studio's live site. The new command built, signed and installed a game on that iPhone; the phone was locked, so its last two steps (starting the game and finding it running) have been run against stand-ins only. Still never run: anything under Steam, Developer ID signing and notarization, the iOS archive for the App Store, the GitHub workflow, the Windows and Linux builds started on any computer, a real Android phone, and Quick play online from a phone.
+
+### Upgrade notes
+
+- A run on a phone needs a Mac with Xcode signed in to your Apple account, and the phone unlocked, trusting the Mac, with Developer Mode on.
+- There is no `--device` for an Android phone yet: `standalone run <game> --for android` hands over to Capacitor, which asks which phone or emulator. That has been run on an emulator only.
+
 ## [0.32.0] - 2026-10-06
 
-**Plugin 0.33.0** · [#54](https://github.com/homie-rocks/homie/pull/54)
+**Plugin 0.33.0** · [#54](https://github.com/homie-rocks/homie/pull/54) · [release-2026-10-06-studio-0.32.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-06-studio-0.32.0)
 
 A game can now be an app of its own: a desktop app for macOS, Windows and Linux and a phone app for iOS and Android, the same web game in a thin shell that still plays through your studio's own site.
 
@@ -46,7 +73,7 @@ A game can now be an app of its own: a desktop app for macOS, Windows and Linux 
 
 ### Upgrade notes
 
-- **Upgrade and deploy before a standalone copy can find rooms.** A copy talks to your live site, and only a site deployed with 0.32.0 or later answers it. Until then every copy plays offline.
+- **Upgrade and deploy before Quick play can find a room in a standalone copy.** Quick play asks your live site which room to join, and only a site deployed with 0.32.0 or later lets an app read the answer. Until then Quick play is offline with the game's bots. (Corrected in 0.32.1: a room made or joined by its code connects through an older site too.)
 - The address of your site is built into every copy and cannot be changed in a copy that has shipped. Put the studio on its own domain before you ship: a workers.dev address belongs to the Cloudflare account.
 - Before you ship, name the game's revision in `game.json` (`"netplay": { "version": "1" }`) and raise it with every change an older copy cannot play with. Older copies then keep playing with each other, and say "Update <Name> to play online with everyone." when they meet a newer one.
 - In an app the game's code is trusted with everything the app's page has, and on phones with Capacitor's native bridge. That is fine for your own code; do not load scripts from the network in a game you ship as an app.

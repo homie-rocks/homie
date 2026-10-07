@@ -823,12 +823,19 @@ every other target says "built, not started on this computer".
 
 **What the standalone game does not have (v1):** player accounts and sign-in, cloud saves (saves stay on the
 device and are lost when the app is uninstalled), the shop, room chat, watching and the big screen, servers
-other than the public one, automatic updates, and a signed Windows build. A studio must be on 0.32.0 or later
-**and deployed** before a copy can find rooms.
+other than the public one, automatic updates, and a signed Windows build. For Quick play to find a room, a
+studio must be on 0.32.0 or later **and deployed**; a room made or joined by its code works with an older site
+too (seen against 0.31.0, not promised for every older version).
+
+**On your own iPhone or iPad:** `standalone run <id> --for ios --device` builds the game for the one phone
+plugged in, signs it for your Apple team, installs it over the cable, starts it and looks for it among the
+phone's running programs. `--device` is your yes to what it changes: it adds the phone to your Apple team's list
+of development devices.
 
 **What has not been run:** the Windows and Linux builds have never been started; nothing has been started by
 Steam (its overlay, which Electron apps often do not show, included); a Developer ID signature, notarization and
-the iOS archive have never been made; nothing has run on a real phone. The guide lists it all.
+the iOS archive have never been made; nothing has run on a real Android phone, and Quick play has not been seen
+online from a phone. The guide lists it all.
 
 ## How it feels: the Game Lab (`homie-studio lab`)
 

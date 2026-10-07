@@ -77,6 +77,10 @@ test('commands: homie-studio calls, through npx, npm run and a cd', () => {
   // A standalone build is a command of its own words, and never a deploy: it uploads nothing.
   assert.equal(studioCalls('npx --no-install homie-studio standalone build owl-rush --for mac --release')[0].sub, 'standalone build');
   assert.deepEqual(studioCalls('npx --no-install homie-studio standalone build owl-rush --release --for mac')[0].pos, ['standalone', 'build', 'owl-rush']);
+  // A run onto a real phone: --device is a switch of its own (the person's yes), never a word that swallows the next one.
+  const onPhone = studioCalls('npx --no-install homie-studio standalone run owl-rush --device --for ios')[0];
+  assert.deepEqual([onPhone.sub, onPhone.flags.get('device'), onPhone.flags.get('for'), onPhone.pos], ['standalone run', true, 'ios', ['standalone', 'run', 'owl-rush']]);
+  assert.equal(deployOf('npx --no-install homie-studio standalone run owl-rush --for ios --device'), null, 'it deploys nothing');
   assert.equal(studioCalls('npx --no-install homie-studio setup status')[0].sub, 'setup status');
   assert.deepEqual(studioCalls('ls -la && git status'), []);
 });
