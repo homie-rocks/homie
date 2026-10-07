@@ -32,6 +32,7 @@ import { CHAT_MIGRATION, CHAT_MIGRATION_FILE } from '../worker/chat-store.mjs';
 import { SHOP_MIGRATION, SHOP_MIGRATION_FILE } from '../worker/shop-store.mjs';
 import { LOUNGE_MIGRATION, LOUNGE_MIGRATION_FILE } from '../worker/lounge-store.mjs';
 import { themeFile } from './site.mjs';
+import { rulesIndex } from './studio.mjs';
 
 export const COMPAT_DATE = '2026-06-01';
 /** 4.135.0 or later: Worker Previews (`wrangler preview`, a Durable Object namespace per Preview). */
@@ -75,7 +76,9 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // The site's own fetches (its directory claim, "played this week") go out as any browser's would, so a studio
     // whose directory is on the same zone (a house studio on *.homie.rocks, or two Workers on one workers.dev
     // subdomain) reaches it instead of failing with 1042.
-    compatibility_flags: ['global_fetch_strictly_public'],
+    // `disallow_eval_during_startup`: no code is made from a string while the Worker loads (Cloudflare never allows it
+    // later). A game's rules run in this Worker (NETPLAY.md section 29), and nothing in them is ever made from text.
+    compatibility_flags: ['global_fetch_strictly_public', 'disallow_eval_during_startup'],
     workers_dev: true,
     preview_urls: true,
     // The studio's own custom-domain and exact-host routes, as its owner wrote them: this file is written again by
@@ -710,8 +713,14 @@ export function studioFiles({ name, slug, homie, template = false }) {
     'site/README.md': SITE_README,
     'site/src/worker.mjs': `// This studio's site: pages, public rooms (Table + Lobby Durable Objects), D1, and R2 once storage is added.
 // The code is @homie-rocks/studio's, pinned in package.json, so an update never changes a published game by surprise.
+import { hostRules } from '@homie-rocks/studio/worker';
+// The rules of this studio's games that run on the server (written by homie-studio build; empty until a game has some).
+import rules from './rules/index.mjs';
+
+hostRules(rules);
 export { default, Table, Lobby } from '@homie-rocks/studio/worker';
 `,
+    'site/src/rules/index.mjs': rulesIndex([]),
     'site/migrations/0001_studio.sql': MIGRATION,
     [`site/migrations/${STATS_MIGRATION_FILE}`]: STATS_MIGRATION,
     [`site/migrations/${PLAYERS_MIGRATION_FILE}`]: PLAYERS_MIGRATION,
