@@ -41,6 +41,12 @@
  * on typed text (worker/chat.mjs), waits for the studio's review when there is one (the Table's Workers AI), and fans
  * the line out to every socket and every watching shell. It keeps the last few minutes in memory for a page that just
  * opened, and nothing anywhere else.
+ *
+ * THE SERVER AS HOST (revision 10, NETPLAY.md section 29): a game whose rules run on the server has no browser host.
+ * The Table hands the room a host runtime (`setServerHost`, rules/host.ts). It is not a client: it is not in
+ * `clients`, it has no socket, it is never elected away, and stall detection, yield and the caps written for a host
+ * that is somebody's phone (`LIMITS`, `RATES`) do not apply to it. The relay calls it with parsed frames (`in`, `ev`,
+ * who came and went) and fans out each frame it hands back (`hostFrame`). Everything else here is as it was.
  * =============================================================================
  */
 import { aiName, skillPreset, stripAi } from './agents.mjs';
@@ -49,7 +55,7 @@ import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normaliz
 
 export const NET_VERSION = 1;
 /** The contract revision this relay speaks (NETPLAY.md): optional fields, frames and refusals; the wire stays `v: 1`. */
-export const NET_REVISION = 9;
+export const NET_REVISION = 10;
 /**
  * Revision 9 (NETPLAY.md sections 22 and 23). STALL: how long a host may send no snapshot, while others are present,
  * before the room is handed on: 1.5 s unless the game names its own (game.json `netplay.stallMs`), never under
@@ -376,6 +382,173 @@ export class NetRoom {
     this.decidePending = 0;
     this.watchIds = new WeakMap();
     this.defaultChat = null;
+    /**
+     * Revision 10: the server as host (`setServerHost`), the seats it has been told of (seat → the stay's number), why
+     * it could not start (`hostFailed`: the room then refuses joins and says why), and what the Table does when the
+     * room forgets everything (`onForget`: it ends the host runtime).
+     */
+    this.server = null;
+    this.hosted = new Map();
+    this.hostFailed = null;
+    this.onForget = null;
+  }
+
+  /* ------------------------------------------------------------ the server as host (revision 10, section 29) */
+
+  /** The host runtime of a server-hosted room (`{ frame(m), facts() }`), or null. Seats already here are said as joins. */
+  setServerHost(h) {
+    this.server = h;
+    this.hostFailed = null;
+    this.hostId = null;
+    this.preferHost = null;
+    this.hosted.clear();
+    if (!h) return;
+    this.toServer({ t: 'policy', policy: this.policyOut() });
+    for (const c of this.live()) if (c.seat !== null && !c.watch) this.joinServer(c);
+  }
+
+  /** The rules could not start: the room refuses joins and says why. It never falls back to a browser by itself. */
+  failServerHost(message) {
+    this.server = null;
+    this.hostFailed = String(message ?? 'this game\'s rules could not start').slice(0, 200);
+    this.log({ ev: 'host-failed', room: this.code, error: this.hostFailed });
+  }
+
+  /** One parsed frame for the host runtime. Rules that throw are caught there; anything thrown here is the runtime's own failure, logged with the room. */
+  toServer(m) {
+    if (!this.server) return;
+    try { this.server.frame(m); } catch (error) { this.stats.failed = (this.stats.failed ?? 0) + 1; this.log({ ev: 'failed', room: this.code, op: 'host-frame', frame: m.t, error: errorLine(error) }); }
+  }
+
+  joinServer(c) {
+    this.hosted.set(c.seat, this.seats.get(c.seat)?.occ ?? null);
+    this.toServer({ t: 'join', peer: this.peer(c) });
+  }
+
+  /** A seat the host runtime knows that is no longer held (its hold ran out, the owner removed its player): its body's seat is given up. */
+  syncServerSeats() {
+    if (!this.server) return;
+    for (const [seat, occ] of [...this.hosted]) {
+      const s = this.seats.get(seat);
+      if (s && (s.occ ?? null) === occ) continue;
+      this.hosted.delete(seat);
+      this.toServer({ t: 'free', seat });
+    }
+  }
+
+  /**
+   * One frame from the host runtime, fanned out as a browser host's would be: `snap`, `state`, `round`, `roster`,
+   * `caps` and `ev`. `text` is the frame already encoded, when the runtime encoded it, so nothing is encoded twice.
+   */
+  hostFrame(m, text = null) {
+    if (!this.server || !m || typeof m.t !== 'string') return;
+    const now = this.now();
+    switch (m.t) {
+      case 'snap': return this.hostSnap(null, m, now, text);
+      case 'state': return this.hostState(null, m, 0);
+      case 'round': return this.hostRound(null, m);
+      case 'roster': return this.hostRoster(null, m);
+      case 'caps': return this.hostCaps(null, m);
+      case 'ev': {
+        const kind = String(m.k ?? '').slice(0, 64);
+        if (SPEECH.test(kind) && (this.policy.speech === 'off' || (this.policy.speech === 'lines' && /^chat/i.test(kind)))) { this.stats.speechDrops += 1; return; }
+        this.stats.evs += 1;
+        const out = { t: 'ev', from: Number.isInteger(m.from) ? m.from : null, k: kind, d: m.d ?? null };
+        const line = JSON.stringify(out);
+        if (Number.isInteger(m.to)) { for (const o of this.live()) if (o.seat === m.to) this.sendText(o.conn, line); return; }
+        for (const o of this.live()) if (!this.lite(o) || this.liteHears(kind)) this.sendText(o.conn, line);
+        return;
+      }
+      default: return;
+    }
+  }
+
+  /** A snapshot from the host (a browser's socket `c`, or the server: `c` null), kept for joiners and fanned out. */
+  hostSnap(c, m, now, text = null) {
+    // The server's stamp is this relay's own clock; a browser's is its estimate of it, and is checked.
+    const snap = { k: Number(m.k) || 0, st: c ? this.stamp(m.st) : Number(m.st) || now, d: m.d ?? null };
+    if (Array.isArray(m.c)) snap.c = m.c.slice(0, 64);
+    // Revision 10: a rules game's snapshot names the room's epoch.
+    if (!c && Number.isFinite(m.e)) snap.e = m.e;
+    this.lastSnap = snap;
+    if (c) c.lastSnapAt = now;
+    this.stats.snaps += 1;
+    this.snapTimes.push(now);
+    while (this.snapTimes.length && this.snapTimes[0] < now - 1000) this.snapTimes.shift();
+    // A heartbeat (revision 9): the host's last state again while its frames hitch. It counts as a snapshot here
+    // (the host is alive), and replicas are told which it is.
+    const out = text ?? JSON.stringify({ t: 'snap', from: c ? c.seat : null, ...snap, ...(m.hb === 1 ? { hb: 1 } : {}) });
+    if (m.hb === 1) this.stats.heartbeats = (this.stats.heartbeats ?? 0) + 1;
+    this.lastSnapText = out;
+    for (const o of this.others(c)) {
+      if (this.lite(o)) continue; // an agent with no game client draws nothing
+      // A congested socket skips a snapshot rather than queueing a stale one.
+      if (o.conn.buffered && o.conn.buffered() > 256 * 1024) { this.stats.drops += 1; continue; }
+      this.sendText(o.conn, out);
+    }
+  }
+
+  /** One key of the slow state channel from the host. `bytes`: the frame's size, counted against the room's cap for a browser host. */
+  hostState(c, m, bytes) {
+    const key = typeof m.k === 'string' ? m.k.slice(0, 64) : '';
+    if (!key) return;
+    const prev = this.state.get(key);
+    if (m.d === null || m.d === undefined) {
+      if (!prev) return;
+      this.state.delete(key);
+      this.stateBytes -= prev.bytes;
+    } else {
+      if (c && ((!prev && this.state.size >= STATE_CAPS.keys) || this.stateBytes - (prev?.bytes ?? 0) + bytes > STATE_CAPS.bytes)) {
+        this.error(c, 'state-full', `state is capped at ${STATE_CAPS.keys} keys and ${STATE_CAPS.bytes} B`);
+        return;
+      }
+      this.state.set(key, { d: m.d, bytes });
+      this.stateBytes += bytes - (prev?.bytes ?? 0);
+    }
+    this.stats.states += 1;
+    this.persistDirty = true;
+    const out = JSON.stringify({ t: 'state', k: key, d: m.d ?? null });
+    for (const o of this.others(c)) if (!this.lite(o)) this.sendText(o.conn, out);
+  }
+
+  hostRound(c, m) {
+    if (!m.round || typeof m.round !== 'object') return;
+    // The results name every AI as AI, whatever the host's game says (section 17).
+    const round = Array.isArray(m.round.results) ? { ...m.round, results: this.labelResults(m.round.results) } : m.round;
+    const wasLive = this.lastRound && this.lastRound.phase === 'live' ? Number(this.lastRound.n) : null;
+    this.lastRound = round;
+    // The round a launch change waits for is over: everyone sees its results for a moment, then the room re-gates.
+    if (this.regate && round.phase === 'over' && (this.regate.roundN === null || Number(round.n) >= this.regate.roundN)) this.regate.until = Math.min(this.regate.until, this.now() + 5000);
+    if (this.agentsOut && round.phase === 'over' && (this.agentsOut.roundN === null || Number(round.n) >= this.agentsOut.roundN)) this.agentsOut.until = Math.min(this.agentsOut.until, this.now() + 5000);
+    this.stats.rounds += 1;
+    this.persistDirty = true;
+    for (const o of this.others(c)) this.send(o, { t: 'round', round });
+    // A party's first live round with AI seats: the vote on how strong the AI should be (once per 30 minutes).
+    if (round.phase === 'live' && wasLive !== Number(round.n)) this.autoVote();
+    this.tellWatchers();
+  }
+
+  hostRoster(c, m) {
+    if (!Array.isArray(m.slots)) return;
+    // A host cannot hide an AI: a seat an agent holds is named and marked so, a slot with no seat is a bot.
+    this.lastRoster = this.labelRoster(m.slots.slice(0, 64));
+    this.persistDirty = true;
+    for (const o of this.others(c)) this.send(o, { t: 'roster', slots: this.lastRoster });
+    this.tellWatchers();
+  }
+
+  hostCaps(c, m) {
+    // The host's game reads the dial and/or moves agents' bodies (section 17): the office and the shell say so.
+    if (!Array.isArray(m.caps)) return;
+    if (c) { for (const k of m.caps) if (CAPS.includes(k)) c.caps.add(k); this.caps = new Set(c.caps); } else this.caps = new Set(m.caps.filter((k) => CAPS.includes(k)));
+    this.persistDirty = true;
+    this.tellWatchers();
+  }
+
+  /** The room's policy, to everyone in it and to the server host. */
+  tellPolicy() {
+    this.broadcast({ t: 'policy', policy: this.policyOut() });
+    this.toServer({ t: 'policy', policy: this.policyOut() });
   }
 
   /* ------------------------------------------------------------ sockets */
@@ -473,7 +646,7 @@ export class NetRoom {
   live() { return [...this.clients.values()].filter((c) => c.helloed); }
   others(c) { return this.live().filter((o) => o !== c); }
   host() { return this.hostId ? this.clients.get(this.hostId) ?? null : null; }
-  hostRef() { const h = this.host(); return h ? { id: h.id, seat: h.seat } : null; }
+  hostRef() { if (this.server) return { id: 'server', seat: null }; const h = this.host(); return h ? { id: h.id, seat: h.seat } : null; }
   roleOf(c) { return c.id === this.hostId ? 'host' : c.seat === null ? 'screen' : 'replica'; }
   peer(c) {
     // Revision 9: which stay in the seat this is (`occ`), the peer's game revision and what its build can do.
@@ -582,28 +755,18 @@ export class NetRoom {
     switch (m.t) {
       case 'snap': {
         if (!isHost) return;
-        const snap = { k: Number(m.k) || 0, st: this.stamp(m.st), d: m.d ?? null };
-        if (Array.isArray(m.c)) snap.c = m.c.slice(0, 64);
-        this.lastSnap = snap;
-        c.lastSnapAt = now;
-        this.stats.snaps += 1;
-        this.snapTimes.push(now);
-        while (this.snapTimes.length && this.snapTimes[0] < now - 1000) this.snapTimes.shift();
-        // A heartbeat (revision 9): the host's last state again while its frames hitch. It counts as a snapshot here
-        // (the host is alive), and replicas are told which it is.
-        const out = JSON.stringify({ t: 'snap', from: c.seat, ...snap, ...(m.hb === 1 ? { hb: 1 } : {}) });
-        if (m.hb === 1) this.stats.heartbeats = (this.stats.heartbeats ?? 0) + 1;
-        this.lastSnapText = out;
-        for (const o of this.others(c)) {
-          if (this.lite(o)) continue; // an agent with no game client draws nothing
-          // A congested socket skips a snapshot rather than queueing a stale one.
-          if (o.conn.buffered && o.conn.buffered() > 256 * 1024) { this.stats.drops += 1; continue; }
-          this.sendText(o.conn, out);
-        }
-        return;
+        return this.hostSnap(c, m, now);
       }
       case 'in': {
         if (isHost || c.seat === null || this.lite(c)) return;
+        // Revision 10: a rules game's input goes to the server host as it came (`e`, `k`, `s`, `r`); the runtime holds
+        // every value to its declared type, so nothing here needs to know the game's fields.
+        if (this.server) {
+          if (!Array.isArray(m.s)) return;
+          this.stats.ins += 1;
+          this.toServer({ t: 'in', from: c.seat, e: Number(m.e) || 0, k: Number(m.k) || 0, s: m.s.slice(0, 64), r: Number(m.r) || 0 });
+          return;
+        }
         const h = this.host();
         if (!h) return;
         this.stats.ins += 1;
@@ -647,7 +810,8 @@ export class NetRoom {
           else for (const o of this.others(c)) { if (!this.lite(o) || this.liteHears(kind)) this.send(o, out); }
         } else {
           const h = this.host();
-          if (h) this.send(h, { ...out, id: c.id });
+          if (this.server) this.toServer({ ...out, id: c.id });
+          else if (h) this.send(h, { ...out, id: c.id });
           // The lite feed (section 18): an AI with no game client hears the party's lines, and an ask made of it.
           if (!c.agent) this.copyToLite(c, kind, out);
         }
@@ -663,62 +827,19 @@ export class NetRoom {
       }
       case 'state': {
         if (!isHost) return;
-        const key = typeof m.k === 'string' ? m.k.slice(0, 64) : '';
-        if (!key) return;
-        const prev = this.state.get(key);
-        if (m.d === null || m.d === undefined) {
-          if (!prev) return;
-          this.state.delete(key);
-          this.stateBytes -= prev.bytes;
-        } else {
-          const bytes = text.length;
-          if ((!prev && this.state.size >= STATE_CAPS.keys) || this.stateBytes - (prev?.bytes ?? 0) + bytes > STATE_CAPS.bytes) {
-            this.error(c, 'state-full', `state is capped at ${STATE_CAPS.keys} keys and ${STATE_CAPS.bytes} B`);
-            return;
-          }
-          this.state.set(key, { d: m.d, bytes });
-          this.stateBytes += bytes - (prev?.bytes ?? 0);
-        }
-        this.stats.states += 1;
-        this.persistDirty = true;
-        const out = JSON.stringify({ t: 'state', k: key, d: m.d ?? null });
-        for (const o of this.others(c)) if (!this.lite(o)) this.sendText(o.conn, out);
-        return;
+        return this.hostState(c, m, text.length);
       }
       case 'round': {
-        if (!isHost || !m.round || typeof m.round !== 'object') return;
-        // The results name every AI as AI, whatever the host's game says (section 17).
-        const round = Array.isArray(m.round.results) ? { ...m.round, results: this.labelResults(m.round.results) } : m.round;
-        const wasLive = this.lastRound && this.lastRound.phase === 'live' ? Number(this.lastRound.n) : null;
-        this.lastRound = round;
-        // The round a launch change waits for is over: everyone sees its results for a moment, then the room re-gates.
-        if (this.regate && round.phase === 'over' && (this.regate.roundN === null || Number(round.n) >= this.regate.roundN)) this.regate.until = Math.min(this.regate.until, this.now() + 5000);
-        if (this.agentsOut && round.phase === 'over' && (this.agentsOut.roundN === null || Number(round.n) >= this.agentsOut.roundN)) this.agentsOut.until = Math.min(this.agentsOut.until, this.now() + 5000);
-        this.stats.rounds += 1;
-        this.persistDirty = true;
-        for (const o of this.others(c)) this.send(o, { t: 'round', round });
-        // A party's first live round with AI seats: the vote on how strong the AI should be (once per 30 minutes).
-        if (round.phase === 'live' && wasLive !== Number(round.n)) this.autoVote();
-        this.tellWatchers();
-        return;
+        if (!isHost) return;
+        return this.hostRound(c, m);
       }
       case 'roster': {
-        if (!isHost || !Array.isArray(m.slots)) return;
-        // A host cannot hide an AI: a seat an agent holds is named and marked so, a slot with no seat is a bot.
-        this.lastRoster = this.labelRoster(m.slots.slice(0, 64));
-        this.persistDirty = true;
-        for (const o of this.others(c)) this.send(o, { t: 'roster', slots: this.lastRoster });
-        this.tellWatchers();
-        return;
+        if (!isHost) return;
+        return this.hostRoster(c, m);
       }
       case 'caps': {
-        // The host's game reads the dial and/or moves agents' bodies (section 17): the office and the shell say so.
-        if (!isHost || !Array.isArray(m.caps)) return;
-        for (const k of m.caps) if (CAPS.includes(k)) c.caps.add(k);
-        this.caps = new Set(c.caps);
-        this.persistDirty = true;
-        this.tellWatchers();
-        return;
+        if (!isHost) return;
+        return this.hostCaps(c, m);
       }
       case 'vote': {
         this.onVote(c, m);
@@ -778,6 +899,8 @@ export class NetRoom {
       this.clients.delete(c.id);
       try { c.conn.close(1008, code); } catch { /* gone */ }
     };
+    // Revision 10: this game's rules run on the server and could not start. Nobody is let in, and the reason is said.
+    if (this.hostFailed) return refuse('host-failed', this.hostFailed);
     // The owner closed this room, or held this player out of it (section 15): refused, with when it ends.
     if (this.closedUntil > this.now()) return refuse('room-closed', this.closedWhy || 'The studio closed this room.', { until: this.closedUntil });
     const ban = this.banOf(c, typeof m.token === 'string' ? m.token : '');
@@ -872,7 +995,8 @@ export class NetRoom {
     // A watcher hosts only a room nobody else can host (a player who can is elected first), and never deposes one;
     // an agent hosts only a room no person can host.
     const lastResort = (c.watch && live.some((o) => o.canHost && !o.watch && !o.agent && !o.hidden)) || (c.agent && live.some((o) => o.canHost && !o.agent && !o.hidden));
-    if (c.canHost && !lastResort && (preferred === undefined || preferred === c.seat)) {
+    // A browser never becomes host of a server-hosted room.
+    if (!this.server && c.canHost && !lastResort && (preferred === undefined || preferred === c.seat)) {
       if (!h) {
         role = 'host';
         why = this.lastSnap || this.lastCkpt ? 'resumed' : 'first';
@@ -915,6 +1039,8 @@ export class NetRoom {
       ...(c.agent ? { agent: { ...c.agent, name: c.name } } : {}),
     });
     for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
+    // The server host hears of every seat taken (a reconnect is the same stay: its body is back, not new).
+    if (this.server && c.seat !== null) { this.syncServerSeats(); this.joinServer(c); }
     // A seat taken by a browser that also watches this room: its watching tab sees the overview from now on.
     this.refreshWatchers(c);
     if (deposed) {
@@ -1003,6 +1129,7 @@ export class NetRoom {
       this.stats.seated += 1;
       this.send(c, { t: 'seat', seat: c.seat, token: c.token, name: c.name, colour: c.colour, role: this.roleOf(c) });
       for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
+      if (this.server) { this.syncServerSeats(); this.joinServer(c); }
       this.log({ ev: 'seated', room: this.code, id: c.id, seat: c.seat });
       this.persist();
       this.refreshWatchers();
@@ -1375,6 +1502,8 @@ export class NetRoom {
       this.hostId = null;
       this.elect(null, why === 'replaced' ? 'host-replaced' : why === 'silent' ? 'host-stalled' : 'host-left');
     }
+    // The server host: the socket closed and the seat is held, so the body is away.
+    if (this.server && c.seat !== null) this.toServer({ t: 'leave', id: c.id, seat: c.seat, why });
     if (c.seat !== null && !c.agent) this.lastHumanAt = now;
     // An agent never keeps a room from forgetting (DESIGN D9): the room is empty when no person is left.
     if (!this.live().some((o) => !o.agent) && !this.emptySince) this.emptySince = now;
@@ -1389,6 +1518,8 @@ export class NetRoom {
    * is handed the last checkpoint, the last snapshot (newer), the round, the roster and the keyed state.
    */
   elect(excludeId, why) {
+    // The server is never elected away.
+    if (this.server) return null;
     const now = this.now();
     const silent = (c) => Number(now - c.lastSeen > this.silentMs);
     const tenure = (c) => Math.floor((now - c.joinedAt) / 30_000);
@@ -1458,7 +1589,7 @@ export class NetRoom {
       }
     }
     // Nobody hosting (a restored room whose old host did not come back in time): elect.
-    if (!this.host() && (!this.preferHost || now >= this.preferHost.until)) {
+    if (!this.server && !this.host() && (!this.preferHost || now >= this.preferHost.until)) {
       this.preferHost = null;
       if (this.live().some((c) => c.canHost)) this.elect(null, 'host-left');
     }
@@ -1474,29 +1605,35 @@ export class NetRoom {
       }
     }
     this.reapSeats(now);
+    this.syncServerSeats();
     this.seatWaiting();
     // The chat window is minutes long; buckets of senders who went quiet are dropped.
     const keepMs = windowMsOf(this.chatRules());
     while (this.chatLog.length && now - this.chatLog[0].at > keepMs) this.chatLog.shift();
     if (this.chatBuckets.size > 512) this.chatBuckets.clear();
     if (this.chatAddress.size > 512) this.chatAddress.clear();
-    if (!this.live().some((c) => !c.agent) && this.emptySince && now - this.emptySince > this.forgetMs) {
-      for (const c of this.live()) this.kick(c, 'agents-alone', 4001);
-      this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
-      this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null;
-      this.emptySince = 0; this.openedAt = 0; this.askedMax = null;
-      // The room is nobody's build again (section 23): the next visitor's is its build.
-      this.gameVer = undefined;
-      // The party's dial and vote are the room's: a new party starts from the server's level.
-      this.level = null; this.levelBy = null; this.vote = null; this.agentsOut = null;
-      // Room chat (section 19): an empty room forgets what was said, as it forgets everything else.
-      this.chatLog = []; this.chatBuckets.clear(); this.chatAddress.clear(); this.chatReacts = [];
-      // A room that keeps history reads it back when somebody comes again (it is in D1, not here).
-      this.hydrated = false;
-      this.seatsDirty = false; this.persistDirty = false;
-      try { this.store?.clear?.(); } catch { /* best effort */ }
-    }
+    if (!this.live().some((c) => !c.agent) && this.emptySince && now - this.emptySince > this.forgetMs) this.forget();
     this.persist(now);
+  }
+
+  /** An EMPTY room forgets everything (after `forgetMs`, or when the Table's alarm ends a server-hosted room nobody came back to). */
+  forget() {
+    for (const c of this.live()) this.kick(c, 'agents-alone', 4001);
+    this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
+    this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null;
+    this.emptySince = 0; this.openedAt = 0; this.askedMax = null;
+    // The room is nobody's build again (section 23): the next visitor's is its build.
+    this.gameVer = undefined;
+    // The party's dial and vote are the room's: a new party starts from the server's level.
+    this.level = null; this.levelBy = null; this.vote = null; this.agentsOut = null;
+    // Room chat (section 19): an empty room forgets what was said, as it forgets everything else.
+    this.chatLog = []; this.chatBuckets.clear(); this.chatAddress.clear(); this.chatReacts = [];
+    // A room that keeps history reads it back when somebody comes again (it is in D1, not here).
+    this.hydrated = false;
+    this.seatsDirty = false; this.persistDirty = false;
+    try { this.store?.clear?.(); } catch { /* best effort */ }
+    this.hosted.clear();
+    try { this.onForget?.(); } catch { /* the room is forgotten either way */ }
   }
 
   /* ------------------------------------------------------------ servers, agents and the dial (section 17) */
@@ -1526,7 +1663,7 @@ export class NetRoom {
     if (Array.isArray(this.lastRoster)) this.lastRoster = this.labelRoster(this.lastRoster);
     this.seatsDirty = true;
     this.officeDirty = true;
-    this.broadcast({ t: 'policy', policy: this.policyOut() });
+    this.tellPolicy();
     this.tellWatchers();
     return { ok: true, policy: this.policyOut(), leaving: this.agentsOut ? agents : 0, ...(this.agentsOut ? { until: this.agentsOut.until } : {}) };
   }
@@ -1694,7 +1831,7 @@ export class NetRoom {
       v.result = { level: this.level, name: s.name, votes: counted.length, why };
       // Saved on the next tick, not within 30 s: a deploy right after the vote keeps the party's choice.
       this.seatsDirty = true;
-      this.broadcast({ t: 'policy', policy: this.policyOut() });
+      this.tellPolicy();
     } else v.result = { level: this.levelNow(), name: skillPreset(this.levelNow()).name, votes: 0, why };
     this.tellVote();
     return v.result;
@@ -1722,6 +1859,8 @@ export class NetRoom {
       ckpt: this.lastCkpt, round: this.lastRound, roster: this.lastRoster, state: this.stateObject(),
       // Section 17: a deploy keeps the room's policy, the party's dial and what its game reads.
       policy: this.policy, level: this.level, levelBy: this.levelBy, caps: [...this.caps],
+      // Revision 10: a server-hosted room keeps its seats through a restart; its match starts fresh until the save ships.
+      ...(this.server ? { hosted: 'server' } : {}),
     };
   }
 
@@ -1745,15 +1884,17 @@ export class NetRoom {
     if (Array.isArray(saved.caps)) this.caps = new Set(saved.caps.filter((k) => CAPS.includes(k)));
     // The people coming back get the agents' grace too (an AI is not "alone" in a room a deploy just emptied).
     if ((saved.seats ?? []).some((s) => !s[3])) this.lastHumanAt = now;
-    this.lastCkpt = saved.ckpt ?? null;
-    this.lastRound = saved.round ?? null;
-    this.lastRoster = saved.roster ?? null;
-    for (const [k, d] of Object.entries(saved.state ?? {})) {
+    // A server-hosted room has no browser host to hand a checkpoint to, and what its last match showed is not this one's.
+    const fresh = saved.hosted === 'server';
+    this.lastCkpt = fresh ? null : saved.ckpt ?? null;
+    this.lastRound = fresh ? null : saved.round ?? null;
+    this.lastRoster = fresh ? null : saved.roster ?? null;
+    for (const [k, d] of Object.entries(fresh ? {} : saved.state ?? {})) {
       const bytes = JSON.stringify({ t: 'state', k, d }).length;
       this.state.set(k, { d, bytes });
       this.stateBytes += bytes;
     }
-    if (Number.isInteger(saved.hostSeat)) this.preferHost = { seat: saved.hostSeat, until: now + graceMs };
+    if (Number.isInteger(saved.hostSeat) && !fresh) this.preferHost = { seat: saved.hostSeat, until: now + graceMs };
     this.emptySince = now;
     this.stats.restoredFrom = now - saved.savedAt;
     this.log({ ev: 'restored', room: this.code, seats: this.seats.size, ageMs: now - saved.savedAt, hostSeat: saved.hostSeat });
@@ -1947,6 +2088,8 @@ export class NetRoom {
         this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null; this.openedAt = 0; this.askedMax = null;
         this.emptySince = now; this.seatsDirty = false; this.persistDirty = false;
         try { this.store?.clear?.(); } catch { /* best effort */ }
+        this.hosted.clear();
+        try { this.onForget?.(); } catch { /* the room is closed either way */ }
         const msg = JSON.stringify({ t: 'closed', room: this.code, until, message });
         for (const w of this.watchers) this.sendText(w, msg);
         this.tellWatchers();
@@ -1987,7 +2130,7 @@ export class NetRoom {
         this.level = Math.min(this.policy.levelMax, n);
         this.levelBy = 'owner';
         this.seatsDirty = true;
-        this.broadcast({ t: 'policy', policy: this.policyOut() });
+        this.tellPolicy();
         this.tellWatchers();
         return { ok: true, op, level: this.level, name: skillPreset(this.level, { kids: this.policy.kids }).name };
       }
@@ -2152,6 +2295,8 @@ export class NetRoom {
       caps: [...this.caps],
       // Revision 9: the build this room runs (null: the game names none, or nobody is here) and its stall time.
       ver: this.gameVer ?? null, stallMs: this.stallMs,
+      // Revision 10: the rules run on the server, and how its clock is keeping (ticks run, late ticks, the budget).
+      ...(this.server ? { hosted: 'server', ticks: this.server.facts?.() ?? null } : this.hostFailed ? { hosted: 'server', hostFailed: this.hostFailed } : {}),
       // Revision 7: whether this room's game has a vocabulary its AI may speak (agents.json).
       vocab: Boolean(this.vocab),
       memory: {

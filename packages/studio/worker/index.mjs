@@ -84,6 +84,7 @@
  * it when a server uses it), or the owner's own key (secret HOMIE_BRAIN_KEY).
  */
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
+import { hostedGame, startHost } from './hosted.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
 import {
@@ -124,6 +125,8 @@ import { licenseOf } from './license.mjs';
 import { PART_FILES, isPartsPath, partsRoutes, withPartsBand } from './parts.mjs';
 
 export { SEAT_MAX } from './seats.mjs';
+// Server-hosted games (NETPLAY.md section 29): the studio's site/src/worker.mjs hands the build's rules over with this.
+export { hostRules } from './hosted.mjs';
 /** For a studio whose Worker has player accounts: hand their server API to the back office once (worker/office.mjs). */
 export { usePlayers } from './office.mjs';
 /** For a studio's own wrapper Worker: count its own pages the way the template counts its pages. */
@@ -1117,7 +1120,7 @@ async function route(request, env, ctx) {
       const cur = versionOf(meta?.netplay?.version) ?? '';
       const gv = versionOf(url.searchParams.get('gv')) ?? '';
       const stall = Number(meta?.netplay?.stallMs) || 0;
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}&cur=${encodeURIComponent(cur)}${gv ? `&gv=${encodeURIComponent(gv)}` : ''}${stall ? `&stall=${stall}` : ''}`;
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}&cur=${encodeURIComponent(cur)}${gv ? `&gv=${encodeURIComponent(gv)}` : ''}${stall ? `&stall=${stall}` : ''}${meta?.room?.host === 'server' ? '&host=server' : ''}`;
       // The room's own failure to answer is told apart from the browser going away while it was connecting (a closed
       // tab, a reload racing its own socket): the second is a departure, said in one line with its room, never an
       // uncaught error with nothing on it.
@@ -1182,6 +1185,10 @@ async function fallback(request, env, url, getCat) {
 }
 
 
+/** A server-hosted room in play keeps the alarm this far ahead; a paused one ends this long after its pause (the relay's `forgetMs`). */
+const ROOM_ALARM_MS = 10 * 60_000;
+const ROOM_PAUSE_MS = 60_000;
+
 /**
  * TABLE — one public room: the netplay relay (room.mjs) for every browser in it.
  * It keeps nothing per frame; seats and a checkpoint go to storage (a deploy
@@ -1218,6 +1225,12 @@ export class Table {
     this.chatReadAt = 0;
     this.chatPend = { neurons: 0, ok: 0, held: 0, error: 0 };
     this.chatSent = { chatLines: 0, chatReacts: 0, held: {} };
+    /**
+     * Revision 10 (NETPLAY.md section 29): the host runtime of a server-hosted room (rules/host.ts), and when this
+     * room next needs the object's one alarm (the house guides and the day's counters share it).
+     */
+    this.hostRt = null;
+    this.roomAlarmAt = 0;
     ctx.blockConcurrencyWhile(async () => {
       this.saved = (await ctx.storage.get('net')) ?? null;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
@@ -1254,7 +1267,85 @@ export class Table {
     this.room.onUnsaid = (ids) => this.keptQueue(() => forgetLines(this.env, this.game, this.code, ids));
     // A game's own decisions (section 20): the host's typed questions, for a game whose game.json opts in.
     this.room.decider = (state, questions, opts) => this.decide(state, questions, opts);
+    // A server-hosted room that forgets everything (nobody came back, or the owner closed it) ends its host runtime.
+    this.room.onForget = () => { if (this.hostRt) { this.hostRt.stop(); this.hostRt = null; this.say({ ev: 'host-over', why: 'forgotten' }); } };
     return this.room;
+  }
+
+  /* ------------------------------------------------------------ the server as host (NETPLAY.md section 29) */
+
+  /**
+   * A room of a server-hosted game gets its host runtime before its first socket is attached, so no browser is ever
+   * elected. `hosted`: the Worker's word that this game's settings say `host: server`. Rules that are missing from
+   * this build, or do not fit the contract, do not start: the room refuses joins and says why.
+   */
+  ensureHost(room, hosted) {
+    if (this.hostRt || !this.game) return;
+    if (!hostedGame(this.game)) {
+      if (hosted) room.failServerHost('This game runs its rules on the server, and this build of the site does not hold them. Build and deploy it again.');
+      return;
+    }
+    try {
+      this.hostRt = startHost(this.game, {
+        send: (m, text) => room.hostFrame(m, text),
+        log: (line) => this.say(line),
+        onPause: () => this.armRoom(Date.now() + ROOM_PAUSE_MS),
+        onResume: () => this.armRoom(Date.now() + ROOM_ALARM_MS),
+        onEnd: (why) => this.endHosted(why),
+      });
+      room.setServerHost(this.hostRt);
+      this.armRoom(Date.now() + ROOM_ALARM_MS);
+    } catch (error) {
+      this.hostRt = null;
+      room.failServerHost(`This game's rules could not start: ${String(error?.message ?? error).slice(0, 160)}`);
+    }
+  }
+
+  /** The room wants the alarm at `at` (ms): set it unless an earlier one is already waiting. */
+  armRoom(at) {
+    this.roomAlarmAt = at;
+    this.ctx.waitUntil((async () => { const cur = await this.ctx.storage.getAlarm(); if (cur === null || cur > at) await this.ctx.storage.setAlarm(at); })().catch(() => {}));
+  }
+
+  /**
+   * The rules failed again and again (rules/host.ts: the budget on every tick for two seconds, or slow ticks for
+   * five): the room ends. Its players are told, their seats are freed, and the next visitor starts a fresh room.
+   */
+  endHosted(why) {
+    const room = this.room;
+    this.hostRt = null;
+    if (!room) return;
+    for (const c of [...room.clients.values()]) {
+      if (c.helloed) room.error(c, 'room-over', 'This room ended because its game stopped working. Join again for a fresh one.');
+      room.clients.delete(c.id);
+      try { c.conn.close(1011, 'room-over'); } catch { /* gone */ }
+    }
+    room.emptySince = Date.now();
+    room.forget();
+    this.say({ ev: 'host-over', why });
+    this.report();
+  }
+
+  /**
+   * The room's part of the alarm (section 4.5 of the design). A room nobody came back to within a minute of its
+   * pause ends: the relay forgets it and its stored seats go (`office` and `recorded` stay). A room in play keeps an
+   * alarm ahead of it, so one that Cloudflare restarted and nobody returned to is still ended. After a restart there
+   * is no room in memory: stored seats of a server-hosted room that nobody reconnected to are deleted.
+   */
+  async roomAlarm() {
+    const now = Date.now();
+    const room = this.room;
+    if (!room) {
+      if (this.saved?.hosted === 'server') { this.saved = null; await this.ctx.storage.delete('net').catch(() => {}); this.say({ ev: 'host-over', why: 'nobody-returned' }); }
+      return;
+    }
+    if (!this.hostRt) return;
+    if (this.hostRt.people > 0) { if (now >= this.roomAlarmAt - 1000) this.armRoom(now + ROOM_ALARM_MS); else this.armRoom(this.roomAlarmAt); return; }
+    if (now < this.roomAlarmAt - 1000) { this.armRoom(this.roomAlarmAt); return; }
+    // Nobody returned: the room ends. Watchers and AI seats never keep it.
+    for (const c of [...room.clients.values()]) { if (c.helloed) room.error(c, 'room-over', 'Everyone left, so this room ended.'); room.clients.delete(c.id); try { c.conn.close(1000, 'room-over'); } catch { /* gone */ } }
+    room.forget();
+    this.report();
   }
 
   /**
@@ -1420,7 +1511,8 @@ export class Table {
       if (!talks(room.policy) || !room.vocab || !(room.policy.guides > 0)) return;
       this.house = new HouseAgents({
         room, env: this.env,
-        setAlarm: (at) => { this.ctx.storage.setAlarm(at).catch(() => {}); },
+        // The room's own alarm (a paused server-hosted room ends on it) is never pushed back by a guide's.
+        setAlarm: (at) => { this.ctx.storage.setAlarm(this.roomAlarmAt > Date.now() ? Math.min(at, this.roomAlarmAt) : at).catch(() => {}); },
         budget: { left: (kind) => this.brainCap[kind] - this.brainUsed[kind], spend: (c) => this.brainSpend(c) },
         log: (line) => { try { console.log(JSON.stringify(line)); } catch { /* no console */ } },
       });
@@ -1485,6 +1577,7 @@ export class Table {
     // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
     try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }
     try { await this.flushBrain(); } catch { /* counted next time */ }
+    try { await this.roomAlarm(); } catch (error) { this.say({ ev: 'failed', op: 'room-alarm', error: errorLine(error) }); }
   }
 
   async fetch(request) {
@@ -1528,6 +1621,8 @@ export class Table {
     if (pol && chatRules && typeof chatRules === 'object') pol.chat = chatRules;
     if (pol) room.setPolicy(pol);
     if (this.house) this.house.sync();
+    // Revision 10: a server-hosted game's room has its host before anybody is let in.
+    this.ensureHost(room, url.searchParams.get('host') === 'server');
     const agent = decodeFacts(url.searchParams.get('ag'));
     // Kept chat (0.29.0): the room's history is back in its window before this page hears it.
     await this.hydrateHistory(room);
@@ -1633,6 +1728,8 @@ export class Table {
       if (n % 4 === 0) { room.tellWatchers(); this.report(); this.recordRound(); this.syncHouse(); }
       // Room chat's counts, once a minute (section 19).
       if (n % 240 === 0) this.ctx.waitUntil(this.flushChat().catch(() => {}));
+      // A server-hosted room in play keeps its alarm ahead of it (re-armed every five minutes of play).
+      if (n % 1200 === 0 && this.hostRt?.running) this.armRoom(Date.now() + ROOM_ALARM_MS);
       if (room.seats.size === 0 && room.clients.size === 0) this.openCounted = false;
       if (room.clients.size === 0 && room.watchers.size === 0) { clearInterval(this.timer); this.timer = null; this.report(); this.ctx.waitUntil(this.flushChat().catch(() => {})); if (this.house) { this.ctx.waitUntil(this.flushBrain(true).catch(() => {})); this.house = null; } }
     }, 250);
