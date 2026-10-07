@@ -1,7 +1,7 @@
 ---
 name: standalone
 description: Make a studio's game into an app of its own, a desktop app for macOS, Windows and Linux (the kind of build Steam accepts for upload) and a phone app for iOS and Android (the files the App Store and Google Play accept for upload; each store's review, fees and rules are its own). It is the same web build of the game in a thin shell (Electron on computers, Capacitor on phones) that still finds its rooms on the studio's own deployed site and plays offline with its bots when it cannot. Use when someone asks for a Steam build, a desktop app, a download, an installer, an iPhone, iPad or Android app, a store release, or "a standalone version" of a game.
-compatibility: Node 22 and a studio on @homie-rocks/studio 0.32.0 or later. A Mac for the macOS and iOS builds (Xcode for iOS). The Android SDK and JDK 21 for Android. Nothing is installed for the person; a target whose tool is missing is skipped, and a GitHub workflow can build it instead.
+compatibility: Node 22 and a studio on @homie-rocks/studio 0.32.0 or later (0.32.1 for a run on a real iPhone). A Mac for the macOS and iOS builds (Xcode for iOS). The Android SDK and JDK 21 for Android. Nothing is installed for the person; a target whose tool is missing is skipped, and a GitHub workflow can build it instead.
 ---
 
 # A game as an app of its own
@@ -42,9 +42,11 @@ It changes nothing and installs nothing. Tell the person, in your own short word
   test for new personal accounts; Steam Direct's fee for each app and its waiting periods), and that those facts
   have a date on them: they check each store's own page.
 
-Two things must be true before a copy can find rooms: the studio is on `@homie-rocks/studio` 0.32.0 or later
-(the `studio-setup` skill's upgrade), **and it has been deployed since** (the `publish` skill). The plan cannot
-see which version the live site runs; ask, or deploy.
+Two things must be true before **Quick play** finds a room in a copy: the studio is on `@homie-rocks/studio`
+0.32.0 or later (the `studio-setup` skill's upgrade), **and it has been deployed since** (the `publish` skill).
+The plan cannot see which version the live site runs; ask, or deploy. A room made or joined by its code works
+with an older site too (seen against 0.31.0, not promised for every older version): say both halves, and never
+"it needs 0.32.0 to play online".
 
 Before anything ships, the game should name its revision: `"netplay": { "version": "1" }` in its `game.json`.
 An older copy then keeps playing with other copies of its revision, and says "Update <Name> to play online
@@ -76,11 +78,32 @@ release.
 
 ```sh
 npx --no-install homie-studio standalone run <id>            # this computer's desktop build
-npx --no-install homie-studio standalone run <id> --for ios  # or android: Capacitor picks a device or simulator
+npx --no-install homie-studio standalone run <id> --for ios  # or android: Capacitor asks which simulator or phone
 ```
 
 Play it with the person. Check that it finds a room when the studio is online (the room button says "Room 3")
 and plays with its bots when it is not ("Playing offline · Try again").
+
+### On their own iPhone or iPad
+
+```sh
+npx --no-install homie-studio standalone run <id> --for ios --device
+```
+
+builds the game for the one phone plugged in to the Mac, signs it for their Apple team, installs it over the
+cable, starts it, and looks for it among the phone's running programs. **Ask before you run it, in these
+words: this adds the phone to your Apple team's device list** (a team may register a limited number a year, and
+a device stays until the membership year renews), and Xcode makes a development profile for the app. `--device`
+is their yes: never add it on your own. With no terminal, `game_standalone` with `device: true` does the same,
+as a background job.
+
+It needs Xcode signed in to their Apple account, the phone unlocked and trusting the Mac, and Developer Mode
+on. When one is missing the result says which, with the fix; pass it on as it is (for Developer Mode: on the
+phone, Settings, Privacy & Security, Developer Mode, and the phone restarts). It says "running" only when it
+found the game among the phone's programs; "installed, not seen running" is not "running". The team comes from
+`HOMIE_APPLE_TEAM`, else the keychain's only one: never ask for a team id, a phone's id or a name in the chat,
+and never repeat one. There is no such run for an Android phone yet: `standalone run <id> --for android` lets
+Capacitor ask which phone, and that has never been run on a real Android phone.
 
 ## 4. A release
 

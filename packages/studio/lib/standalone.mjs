@@ -24,8 +24,9 @@
  * "built, not started on this computer". A release that could not be signed is said as UNSIGNED and is not `ok`.
  */
 import { spawn } from 'node:child_process';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { X509Certificate } from 'node:crypto';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { build as buildSite, uiOf } from './build.mjs';
 import { compareVersions } from './changelog.mjs';
@@ -222,6 +223,20 @@ export async function standaloneRows({ platform = process.platform, exec = runTo
       fix: mac && team ? null : { who: 'person', open: 'https://developer.apple.com/account#MembershipDetailsCard', say: `With an Apple Developer membership: sign in to it in Xcode (Settings, Accounts), and put your team id (ten letters and digits, on that page) in HOMIE_APPLE_TEAM. ${ENV_HOW}` },
     });
   }
+  // A phone for trying a build on (standalone run --for ios --device): what Xcode's own device list says is
+  // connected now, by model, and whether its Developer Mode is on. Nothing is asked of the phone itself.
+  if (mac) {
+    const found = await phones({ exec, env });
+    const here = found.ok ? found.phones.filter((p) => p.here) : [];
+    const ready = here.filter((p) => p.trusted && p.developerMode === true);
+    const one = (p) => `${p.model}${!p.trusted ? ', which does not trust this Mac yet' : p.developerMode === true ? ', Developer Mode on' : p.developerMode === false ? ', Developer Mode OFF' : ', Developer Mode not known'}`;
+    rows.push({
+      id: 'standalone-phone', label: 'A phone for trying a build', need: 'optional', state: !found.ok ? 'unknown' : ready.length === 1 && here.length === 1 ? 'ok' : 'optional',
+      detail: !found.ok ? `could not check (${found.why})` : here.length ? `connected: ${here.map(one).join('; ')}${here.length > 1 ? ' (a run takes one phone: unplug the others)' : ''}` : 'no iPhone or iPad is connected now',
+      unlocks: 'the game on your own iPhone or iPad, over the cable (standalone run <game> --for ios --device): it adds the phone to your Apple team\'s device list',
+      fix: !found.ok || (ready.length === 1 && here.length === 1) ? null : !here.length ? { who: 'person', say: 'Plug the phone in with a cable, unlock it, and tap Trust if it asks about this computer.' } : here.some((p) => !p.trusted) ? { who: 'person', say: deviceTrouble('not paired').fix } : here.some((p) => p.developerMode !== true) ? { who: 'person', say: deviceTrouble('Developer Mode disabled').fix } : { who: 'person', say: 'Unplug all but the one phone to try the game on.' },
+    });
+  }
   // steamcmd: only to upload, which a person does.
   {
     const r = await exec(platform === 'win32' ? 'where' : 'which', ['steamcmd'], { timeout: 5000 });
@@ -292,7 +307,7 @@ export function toolkitNote(root) {
   try { pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')); } catch { return null; }
   const pinned = pinnedVersion(pkg?.devDependencies?.['@homie-rocks/studio'] ?? pkg?.dependencies?.['@homie-rocks/studio']);
   if (!pinned || compareVersions(pinned, STANDALONE_SINCE) >= 0) return null;
-  return `This studio pins @homie-rocks/studio ${pinned}, from before standalone copies (${STANDALONE_SINCE}): its live site cannot answer a standalone copy, so every copy plays OFFLINE until the studio is upgraded to ${STANDALONE_SINCE} or later AND deployed again.`;
+  return `This studio pins @homie-rocks/studio ${pinned}, from before standalone copies (${STANDALONE_SINCE}): its live site does not let a standalone copy read which room to join, so in a copy Quick play is OFFLINE until the studio is upgraded to ${STANDALONE_SINCE} or later AND deployed again. A room made or joined by its code still connects (seen against 0.31.0, not promised for every older version).`;
 }
 
 /** Everything a plan and a build both need to know, read once. */
@@ -366,7 +381,7 @@ export async function standalonePlan(root, id, opts = {}) {
     icon: { from: s.icon.from, note: s.icon.note }, steam: s.meta.steam,
     dir: relative(root, s.dir), targets, rows: s.rows, warnings: s.warnings, missing: MISSING, pins: STANDALONE_PINS,
     ...(s.note ? { toolkitNote: s.note } : {}),
-    needs: `The live site must run @homie-rocks/studio ${STANDALONE_SINCE} or later for a copy to find rooms (upgrade the studio, then deploy). This plan did not ask the site which version it runs.`,
+    needs: `Quick play finds a room only when the live site runs @homie-rocks/studio ${STANDALONE_SINCE} or later (upgrade the studio, then deploy). A room made or joined by its code works with an older site too (seen against 0.31.0, not promised for every older version). This plan did not ask the site which version it runs.`,
     ...(refused ? { why: refused.why, instead: refused.instead, needsField: 'appId' } : {}),
   };
 }
@@ -560,15 +575,22 @@ async function capProject(s, platform, { say }) {
 const patch = (file, fn) => { if (!existsSync(file)) return false; const before = readFileSync(file, 'utf8'); const after = fn(before); if (after !== before) writeFileSync(file, after); return true; };
 const freshOut = (s, target) => { const out = join(s.dir, 'out', target, s.kind); rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true }); return out; };
 
-async function buildIos(s, { say }) {
+/** The iOS project with this build's web folder in it, ready for xcodebuild: { ok, notes, project } or { ok: false, why }. */
+async function iosProject(s, { say }) {
   const p = await capProject(s, 'ios', { say });
-  if (!p.ok) return { state: 'failed', why: p.why };
+  if (!p.ok) return { ok: false, why: p.why };
   const notes = [...p.notes];
   if (!patch(join(s.dir, 'ios', 'App', 'App', 'Info.plist'), (t) => patchInfoPlist(t, s.meta.orientation))) notes.push('Info.plist was not where Capacitor puts it: the way the game is held was not set');
   const sync = await tool(s, 'cap', ['sync', 'ios'], { env: p.env, timeout: 15 * 60_000 });
-  if (sync.code !== 0) return { state: 'failed', why: `cap sync ios failed: ${tail(sync)}` };
+  if (sync.code !== 0) return { ok: false, why: `cap sync ios failed: ${tail(sync)}` };
   const app = join(s.dir, 'ios', 'App');
-  const project = existsSync(join(app, 'App.xcworkspace')) ? ['-workspace', join(app, 'App.xcworkspace')] : ['-project', join(app, 'App.xcodeproj')];
+  return { ok: true, notes, project: existsSync(join(app, 'App.xcworkspace')) ? ['-workspace', join(app, 'App.xcworkspace')] : ['-project', join(app, 'App.xcodeproj')] };
+}
+
+async function buildIos(s, { say }) {
+  const p = await iosProject(s, { say });
+  if (!p.ok) return { state: 'failed', why: p.why };
+  const { notes, project } = p;
   const derived = join(s.dir, 'ios', 'build');
   const version = [`MARKETING_VERSION=${s.meta.version}`, `CURRENT_PROJECT_VERSION=${s.meta.build}`];
   const env = toolEnv(s.env);
@@ -753,9 +775,18 @@ export async function standaloneBuild(root, id, opts = {}) {
 /* ------------------------------------------------------------------ run, steam, ci, deploy */
 
 /** `standalone run <game> [--for mac|windows|linux|ios|android]`: the copy that was built, started here. */
-export async function standaloneRun(root, id, { for: said = null, platform = process.platform, env = process.env, exec = runTool, home = homedir() } = {}) {
+export async function standaloneRun(root, id, opts = {}) {
+  const { for: said = null, platform = process.platform, env = process.env, exec = runTool, home = homedir(), device = false } = opts;
   const g = gameOf(root, id);
   if (g.why) return { ok: false, command: 'standalone run', why: g.why };
+  // --device: onto the one phone that is plugged in (runOnPhone). It is the person's yes to what that changes.
+  if (device) {
+    const asked = targetsOf(said ?? 'ios');
+    if (asked.why || asked.targets.length !== 1) return { ok: false, command: 'standalone run', why: asked.why ?? '--device takes one target: --for ios' };
+    if (asked.targets[0] === 'android') return { ok: false, command: 'standalone run', why: '--device is for an iPhone or iPad in this version. For an Android phone, leave --device out: `standalone run <game> --for android` hands over to Capacitor, which lists the phones and emulators it finds over adb and asks which one. That has been run on an emulator, never on a real Android phone.' };
+    if (asked.targets[0] !== 'ios') return { ok: false, command: 'standalone run', why: `--device puts the game on a phone: --for ios. A ${asked.targets[0]} build runs on a computer (leave --device out).` };
+    return runOnPhone(root, id, opts);
+  }
   const dir = standaloneDir(root, g.game.id);
   const host = { darwin: 'mac', win32: 'windows', linux: 'linux' }[platform] ?? 'linux';
   const t = targetsOf(said ?? host);
@@ -863,6 +894,181 @@ export function standaloneDeployNotes(root) {
     for (const e of by.values()) notes.push(`Standalone copies of ${game.name ?? game.id} (${e.version} build ${e.build}) were made on netplay version ${said(e.netplayVersion)}; this deploy makes ${said(now)} live. Copies already out keep playing offline and with each other, never with players on the new version, until you ship an update: homie-studio standalone build ${game.id}.`);
   }
   return notes;
+}
+
+/* ------------------------------------------------------------------ a real iPhone or iPad */
+
+/** What `--device` changes outside this computer, said before it happens, in the result, in the tool and in the skill. */
+export const DEVICE_ADDS = 'This adds the phone to your Apple team\'s list of development devices (a team may register a limited number a year, and a device stays on the list until the membership year renews) and lets Xcode make a development profile for this app. Apple signs the app for that phone only: it is a build to try, never one for the store.';
+
+/** A devicectl command whose answer is a JSON file: { r, json } (json null when it wrote none). */
+async function jsonOf(s, args, { timeout = 60_000 } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'standalone-device-'));
+  const file = join(dir, 'out.json');
+  const r = await s.exec('xcrun', ['devicectl', ...args, '--json-output', file], { env: toolEnv(s.env), timeout });
+  let json = null;
+  try { json = JSON.parse(readFileSync(file, 'utf8')); } catch { json = null; }
+  rmSync(dir, { recursive: true, force: true });
+  return { r, json };
+}
+
+/**
+ * The iPhones and iPads this Mac knows, as Xcode's own devicectl lists them: { ok, phones: [{ id, udid, model,
+ * trusted, here, developerMode }] } or { ok: false, why }. `here`: plugged in or on the network now. An id never
+ * leaves this module in a result or a line: a person is told a phone by its model.
+ */
+export async function phones({ exec = runTool, env = process.env } = {}) {
+  const { r, json } = await jsonOf({ exec, env }, ['list', 'devices']);
+  const list = json?.result?.devices;
+  if (r.code !== 0 || !Array.isArray(list)) return { ok: false, why: r.code === 127 ? 'xcrun is not here (Xcode is not installed)' : `Xcode's device list did not answer (${tail(r, 2) || `code ${r.code}`})` };
+  return {
+    ok: true,
+    phones: list.filter((d) => d?.hardwareProperties?.reality === 'physical' && ['iPhone', 'iPad'].includes(d?.hardwareProperties?.deviceType)).map((d) => ({
+      id: String(d.identifier ?? ''), udid: String(d.hardwareProperties.udid ?? ''), model: String(d.hardwareProperties.marketingName ?? d.hardwareProperties.deviceType),
+      trusted: d.connectionProperties?.pairingState === 'paired', here: ['connected', 'disconnected'].includes(d.connectionProperties?.tunnelState),
+      developerMode: d.deviceProperties?.developerModeStatus === 'enabled' ? true : d.deviceProperties?.developerModeStatus === 'disabled' ? false : null,
+    })),
+  };
+}
+
+const TEAM_ID = /^[A-Z0-9]{10}$/;
+/**
+ * The Apple team a build to try is signed for: HOMIE_APPLE_TEAM, else the ONE team among the keychain's development
+ * identities. An identity's name carries a person's id, not the team's: the team is in its certificate (the OU of
+ * its subject), which is read here and nothing else of it is kept. { team, from } or { team: null, why, teams }.
+ */
+export async function appleTeam({ env = process.env, exec = runTool } = {}) {
+  const said = String(env.HOMIE_APPLE_TEAM ?? '').trim();
+  if (said) return TEAM_ID.test(said) ? { team: said, from: 'HOMIE_APPLE_TEAM' } : { team: null, teams: 0, why: 'HOMIE_APPLE_TEAM is set and is not a team id (ten capital letters and digits, on your Apple Developer account\'s Membership page)' };
+  const ids = await exec('security', ['find-identity', '-v', '-p', 'codesigning'], { timeout: 10_000 });
+  if (ids.code !== 0) return { team: null, teams: 0, why: 'could not check the keychain for a development identity (the security tool did not answer)' };
+  const hashes = new Set(ids.stdout.split('\n').filter((l) => /"(Apple Development|iPhone Developer): /.test(l)).map((l) => /\b([0-9A-F]{40})\b/.exec(l)?.[1]).filter(Boolean));
+  if (!hashes.size) return { team: null, teams: 0, why: 'the keychain has no Apple Development identity: sign in to your Apple account in Xcode (Settings, Accounts), which makes one' };
+  const certs = await exec('security', ['find-certificate', '-a', '-p'], { timeout: 20_000 });
+  const teams = new Set();
+  for (const pem of certs.stdout.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? []) {
+    try {
+      const c = new X509Certificate(pem);
+      if (!hashes.has(c.fingerprint.replace(/:/g, ''))) continue;
+      const ou = /^OU=([A-Z0-9]{10})$/m.exec(c.subject)?.[1];
+      if (ou) teams.add(ou);
+    } catch { /* not a certificate this reads */ }
+  }
+  if (teams.size === 1) return { team: [...teams][0], from: 'the one Apple team among the keychain\'s development identities' };
+  return { team: null, teams: teams.size, why: teams.size ? `the keychain has development identities of ${teams.size} Apple teams, and which one is yours to say` : 'the team of the keychain\'s development identity could not be read' };
+}
+
+/**
+ * What stopped xcodebuild, devicectl or the phone, in the words a person can act on: { stage, why, fix } or null
+ * when the text is none of the things met so far (the caller then says the tool's own last lines).
+ */
+export function deviceTrouble(text) {
+  const t = String(text ?? '');
+  if (/Developer Mode disabled|enable Developer Mode|developer mode is (?:not enabled|disabled)/i.test(t)) return { stage: 'developer-mode', why: 'Developer Mode is off on the phone, so it takes no build to try', fix: 'On the phone: Settings, Privacy & Security, Developer Mode, turn it on. The phone restarts, then asks once more to turn it on: say yes, unlock it, and run this again. (The switch appears only after the phone has been plugged in to a Mac with Xcode.)' };
+  if (/No Accounts?:|No Account for Team|Add a new account in Accounts settings|not signed in|requires? (?:a|an) (?:development team|Apple ID)/i.test(t)) return { stage: 'no-account', why: 'Xcode is not signed in to an Apple account of that team, so nothing can sign the app', fix: 'Open Xcode, Settings, Accounts, add your Apple account (a free one can put a game on your own phone for a week; a Developer membership for longer), then run this again.' };
+  if (/has no devices from which to generate a provisioning profile|No profiles for '[^']*' were found/i.test(t)) return { stage: 'no-devices', why: 'your Apple team has no registered phone to make a development profile for, and Apple did not register this one', fix: 'Unlock the phone, keep it plugged in and run this again: it registers the phone. If it says the same, open the project once in Xcode (ios/App/App.xcodeproj in the standalone folder), pick the phone and press Run: Xcode registers it and says what stands in the way.' };
+  if (/device (?:is|was) (?:passcode )?locked|is locked|Unlock .* to Continue|could not be unlocked|because the device was not, or could not be, unlocked/i.test(t)) return { stage: 'locked', why: 'the phone is locked', fix: 'Unlock the phone, keep it awake and run this again.' };
+  if (/not paired|is not trusted|Trust This Computer|pairing/i.test(t)) return { stage: 'not-trusted', why: 'the phone does not trust this Mac yet', fix: 'Unlock the phone, plug it in and tap Trust when it asks about this computer (it asks for the passcode), then run this again.' };
+  if (/Timed out waiting for all destinations|Unable to find a (?:destination|device) matching/i.test(t)) return { stage: 'not-ready', why: 'Xcode waited for the phone and it never became ready', fix: 'Unlock the phone, keep it plugged in and awake, and run this again. If Xcode has never seen this phone, open Xcode once with it plugged in (Window, Devices and Simulators) and let it finish preparing the phone.' };
+  return null;
+}
+
+/**
+ * `standalone run <game> --for ios --device`: the game built for the ONE iPhone or iPad that is plugged in, signed
+ * for the person's own Apple team, installed over the cable and started, and then LOOKED FOR among the phone's
+ * running programs: "started" is said only when it is there. Every way it can stop is an answer with what to do.
+ * Nothing of the phone or the team is in the result but the phone's model and where the team's id was found.
+ */
+async function runOnPhone(root, id, opts = {}) {
+  const say = opts.log ?? (() => {});
+  const command = 'standalone run';
+  const stop = (stage, why, extra = {}) => ({ ok: false, command, target: 'ios', device: true, stage, why, ...extra });
+  if ((opts.platform ?? process.platform) !== 'darwin') return stop('not-a-mac', 'a game goes onto an iPhone from a Mac with Xcode');
+  const s = await survey(root, id, { ...opts, for: 'ios', release: false });
+  if (s.why) return stop('game', s.why);
+  const g = gate('ios', s);
+  if (g) return stop('xcode', g.why, { game: s.game.id, row: g.row?.id ?? null, fix: g.row?.fix?.say ?? null });
+  const base = { game: s.game.id, name: s.meta.name, appId: s.meta.appId, appIdFrom: s.meta.appIdFrom, site: s.where.url || null, warnings: s.warnings, adds: DEVICE_ADDS };
+  // The phone: exactly one, trusted, here, with Developer Mode on.
+  const found = await phones(s);
+  if (!found.ok) return stop('could-not-check', `could not look for a phone: ${found.why}`, base);
+  const here = found.phones.filter((p) => p.here);
+  if (!here.length) {
+    const known = found.phones.length;
+    return stop('no-phone', known ? `no iPhone or iPad is connected now (this Mac knows ${known}: ${found.phones.map((p) => p.model).join(', ')})` : 'no iPhone or iPad is connected to this Mac', { ...base, fix: 'Plug the phone in with a cable, unlock it, and tap Trust if it asks about this computer. Then run this again.' });
+  }
+  if (here.length > 1) return stop('several', `${here.length} phones are connected (${here.map((p) => p.model).join(', ')}), and this puts the game on one`, { ...base, phones: here.map((p) => ({ model: p.model })), fix: 'Unplug all but the one to try the game on (and turn Wi-Fi off on the others, or they stay connected over the network), then run this again.' });
+  const phone = here[0];
+  const device = { model: phone.model };
+  if (!phone.trusted) return stop('not-trusted', `the ${phone.model} does not trust this Mac yet`, { ...base, phone: device, fix: deviceTrouble('not paired').fix });
+  if (phone.developerMode === false) { const t = deviceTrouble('Developer Mode disabled'); return stop(t.stage, `Developer Mode is off on the ${phone.model}, so it takes no build to try`, { ...base, phone: device, fix: t.fix }); }
+  // The team: said, or the keychain's only one. Where it came from is said; the id is not.
+  const signer = await appleTeam(s);
+  if (!signer.team) return stop('no-team', `no Apple team to sign for: ${signer.why}`, { ...base, phone: device, fix: `Put your team id in HOMIE_APPLE_TEAM (ten capital letters and digits, on your Apple Developer account's Membership page). ${ENV_HOW}` });
+  say(`for the ${phone.model}, signed for ${signer.from === 'HOMIE_APPLE_TEAM' ? 'the team HOMIE_APPLE_TEAM names' : signer.from}`);
+  say(DEVICE_ADDS);
+  const on = { ...base, phone: device, team: { from: signer.from } };
+  // The game, built as the site builds it, in the same project a simulator build uses.
+  if (opts.buildSite !== false) {
+    say(`building ${s.game.id} for the web (the same build the site serves)`);
+    try { await (opts.buildSite ?? buildSite)(root, { only: s.game.id, log: say }); } catch (error) { return stop('build-failed', `the game did not build: ${String(error?.message ?? error)}`, on); }
+  }
+  const tools = await installTools(s, { say });
+  if (!tools.ok) return stop('build-failed', tools.why, on);
+  await writeIcons(s.dir, s.icon, { name: s.meta.name, colours: uiOf(s.game) });
+  try { webBundle(root, s.game, s.dir, { meta: s.meta, target: 'ios', site: s.where.url }); } catch (error) { return stop('build-failed', String(error?.message ?? error).split('\n')[0], on); }
+  const p = await iosProject(s, { say });
+  if (!p.ok) return stop('build-failed', p.why, on);
+  const derived = join(s.dir, 'ios', 'build-device');
+  say('xcodebuild: a Debug build for the phone, signed by Xcode for your team (the first one registers the phone and makes its profile)');
+  const b = await s.exec('xcodebuild', [...p.project, '-scheme', 'App', '-configuration', 'Debug', '-destination', `id=${phone.udid}`, '-derivedDataPath', derived, `MARKETING_VERSION=${s.meta.version}`, `CURRENT_PROJECT_VERSION=${s.meta.build}`, `DEVELOPMENT_TEAM=${signer.team}`, 'CODE_SIGN_STYLE=Automatic', '-allowProvisioningUpdates', '-allowProvisioningDeviceRegistration', 'build'], { cwd: s.dir, env: toolEnv(s.env), timeout: 40 * 60_000 });
+  const app = join(derived, 'Build', 'Products', 'Debug-iphoneos', 'App.app');
+  // What a tool printed may name the phone or the team: only its meaning, or its last lines with both taken out, is said.
+  const hush = (text) => String(text).split(phone.udid).join('<the phone>').split(phone.id).join('<the phone>').split(signer.team).join('<your team>');
+  if (b.code !== 0 || !existsSync(app)) {
+    const t = deviceTrouble(`${b.stdout}\n${b.stderr}`);
+    return t ? stop(t.stage, t.why, { ...on, fix: t.fix }) : stop('build-failed', `xcodebuild did not finish: ${hush(tail(b, 12))}`, on);
+  }
+  say(`installing it on the ${phone.model}`);
+  const i = await jsonOf(s, ['device', 'install', 'app', '--device', phone.id, app], { timeout: 10 * 60_000 });
+  if (i.r.code !== 0) {
+    const t = deviceTrouble(`${i.r.stdout}\n${i.r.stderr}`);
+    return t ? stop(t.stage, t.why, { ...on, built: true, fix: t.fix }) : stop('install-failed', `the app was built and the phone did not take it: ${hush(tail(i.r, 6))}`, { ...on, built: true });
+  }
+  // Where the phone put it, from the phone's own list of apps: every Capacitor app's program has the same name, so
+  // a running one is told from another game's by where it is installed.
+  const apps = await jsonOf(s, ['device', 'info', 'apps', '--device', phone.id], { timeout: 60_000 });
+  const listed = (apps.json?.result?.apps ?? []).find((x) => x?.bundleIdentifier === s.meta.appId);
+  if (apps.r.code === 0 && Array.isArray(apps.json?.result?.apps) && !listed) return stop('install-failed', 'the phone said it took the app, and the app is not in the phone\'s list of apps', { ...on, built: true });
+  const where = String(listed?.url ?? i.json?.result?.installedApplications?.[0]?.installationURL ?? '');
+  // A locked phone starts nothing. It is asked for now, and waited for a minute, rather than failing at the last step.
+  const wait = opts.wait ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const locked = async () => (await jsonOf(s, ['device', 'info', 'lockState', '--device', phone.id], { timeout: 30_000 })).json?.result?.passcodeRequired === true;
+  if (await locked()) {
+    say(`The ${phone.model} is locked: unlock it now (waiting up to a minute).`);
+    for (let t = 0; t < (opts.unlockMs ?? 60_000); t += 3000) { await wait(3000); if (!(await locked())) break; }
+  }
+  say('starting it');
+  const l = await jsonOf(s, ['device', 'process', 'launch', '--device', phone.id, '--terminate-existing', s.meta.appId], { timeout: 2 * 60_000 });
+  if (l.r.code !== 0) {
+    const t = deviceTrouble(`${l.r.stdout}\n${l.r.stderr}`);
+    return stop(t?.stage === 'locked' ? 'locked' : 'not-started', t?.stage === 'locked' ? 'the game is on the phone, and the phone is locked, so it was not started' : `the game is on the phone and did not start: ${hush(tail(l.r, 6))}`, { ...on, built: true, installed: true, fix: `Unlock the phone and tap ${s.meta.name} on its home screen.` });
+  }
+  const pid = Number(l.json?.result?.process?.processIdentifier);
+  // Read back: the game is among the phone's running programs a few seconds later, or it is not said to be running.
+  await wait(4000);
+  const ps = await jsonOf(s, ['device', 'info', 'processes', '--device', phone.id], { timeout: 60_000 });
+  const list = ps.json?.result?.runningProcesses;
+  if (ps.r.code !== 0 || !Array.isArray(list)) return stop('not-confirmed', 'the game was installed and asked to start, and the phone\'s running programs could not be read to see it', { ...on, built: true, installed: true, fix: `Look at the phone: ${s.meta.name} should be on its screen.` });
+  const running = list.some((x) => (Number.isFinite(pid) && Number(x?.processIdentifier) === pid) || (where && String(x?.executable ?? '').startsWith(where)));
+  if (!running) return stop('not-running', 'the game was installed and started, and four seconds later it was not among the phone\'s running programs: it closed, or crashed, as it opened', { ...on, built: true, installed: true, fix: `Tap ${s.meta.name} on the phone; if it closes again, open Xcode, Window, Devices and Simulators, the phone, and read its crash log.` });
+  return {
+    ok: true, command, target: 'ios', device: true, stage: 'started', ...on, built: true, installed: true, running: true,
+    notes: [
+      'a development build signed for this phone only: it stops opening when its profile ends (a week with a free Apple account, a year with a Developer membership), and it is not a build for the store',
+      s.where.url ? `Quick play finds a room only when ${s.where.url} runs @homie-rocks/studio ${STANDALONE_SINCE} or later; a room made or joined by its code works with an older site too` : 'this copy has no address built in: it plays offline with its bots',
+    ],
+  };
 }
 
 export { MISSING, TARGETS };

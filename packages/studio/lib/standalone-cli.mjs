@@ -9,6 +9,10 @@
  *   standalone build <game> [--for …] [--release] [--site <address>] [--build <n>]
  *       builds the game for the web, then every target this computer can make; one it cannot is skipped with why.
  *   standalone run <game> [--for ios|android]      the built copy, started here (none: this computer's desktop app)
+ *   standalone run <game> --for ios --device       built for the one iPhone or iPad plugged in, signed for the person's
+ *       Apple team (HOMIE_APPLE_TEAM, else the keychain's only one), installed over the cable, started, and then looked
+ *       for among the phone's running programs. --device is the yes to what it changes: the phone is added to the Apple
+ *       team's list of development devices.
  *   standalone steam <game>                        Steam's build files from game.json's numbers; uploads nothing
  *   standalone ci <game>                           .github/workflows/standalone.yml: every target on GitHub's machines
  *
@@ -35,7 +39,9 @@ export async function standaloneCommand(root, sub, positional, flags, { log = ()
   switch (sub ?? 'plan') {
     case 'plan': return told(await standalonePlan(root, id, opts));
     case 'build': return told(await standaloneBuild(root, id, opts));
-    case 'run': return standaloneRun(root, id, { for: flags.has('for') ? flags.get('for') : null });
+    // --device: onto the one iPhone or iPad that is plugged in. It is the person's yes to what that changes outside
+    // this computer (DEVICE_ADDS), and the result carries its own words like a build's.
+    case 'run': { const r = await standaloneRun(root, id, { for: flags.has('for') ? flags.get('for') : null, device: flags.has('device'), site: str('site'), log, ...on }); return r?.device ? { ...r, say: standaloneLines(r) } : r; }
     case 'steam': return standaloneSteam(root, id);
     case 'ci': return standaloneCi(root, id);
     default: return { ok: false, command: 'standalone', why: `"${sub}" is not a standalone command: ${STANDALONE_VERBS.join(', ')}` };
@@ -52,8 +58,30 @@ export function missingLines(missing) {
   return ['What the standalone game does not have (v1):', ...missing.map((m) => `  - ${m.what}: ${m.why}.`)];
 }
 
+/** A run on a real phone: what happened, in the order a person needs it, with what it changed outside this computer. */
+function deviceLines(r) {
+  const L = [];
+  const on = r.phone?.model ? `the ${r.phone.model}` : 'the phone';
+  if (r.ok) {
+    L.push(`${r.name} is on ${on} and running: it was built, installed over the cable, started, and then found among the phone's running programs.`,
+      `  Signed for ${r.team.from === 'HOMIE_APPLE_TEAM' ? 'the team HOMIE_APPLE_TEAM names' : r.team.from}, as ${r.appId}${r.appIdFrom === 'derived' ? ' (a made-up id for trying a build)' : ''}.`,
+      `  ${r.adds}`, ...r.notes.map((n) => `  ${n}`));
+  } else {
+    L.push(`NOT on ${r.phone?.model ? on : 'a phone'}: ${r.why}.`);
+    if (r.fix) L.push(`  ${r.fix}`);
+    if (r.installed) L.push(`  The game IS installed on ${on}; it was not seen running.`);
+    else if (r.built) L.push('  The app was built and signed; it is not on the phone.');
+    // What it may already have changed outside this computer, said even when the rest did not work.
+    if (r.team && r.built) L.push('  The build was signed: the phone is on your Apple team\'s list of development devices now, if it was not before.');
+    else if (r.team && r.stage === 'build-failed') L.push('  The build stopped before the app was made; it may have added the phone to your Apple team\'s list of development devices on the way.');
+  }
+  for (const w of r.warnings ?? []) L.push(`Warning: ${w}`);
+  return L;
+}
+
 export function standaloneLines(r) {
   const L = [];
+  if (r.command === 'standalone run' && r.device) return deviceLines(r);
   // A refusal with something to do about it (a release with no id yet, Steam with no numbers) still says it all.
   if (r.ok === false && !r.targets && !r.rows) { L.push(r.why ?? 'failed'); if (r.instead) L.push('', r.instead); return L; }
   switch (r.command) {
@@ -89,7 +117,7 @@ export function standaloneLines(r) {
       break;
     }
     case 'standalone run':
-      L.push(`${r.game} (${r.target}) ended.`);
+      if (r.device) L.push(...deviceLines(r)); else L.push(`${r.game} (${r.target}) ended.`);
       break;
     case 'standalone steam':
       L.push(`Steam's build file for app ${r.app}: ${r.dir}/${r.wrote.join(', ')} (each depot is that system's release build, out/<system>/release/).`,

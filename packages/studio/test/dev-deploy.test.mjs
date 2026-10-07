@@ -716,6 +716,8 @@ test('a command that changes something outside this computer stops at a flag it 
     'servers close': ['crown-thief', 'main'], 'servers level': ['crown-thief', 'main', 'two'], 'servers member': ['crown-thief', 'main', 'someone'],
     'shop connect': [], 'shop disconnect': [], 'shop refund': ['order-1'], 'shop statements': [],
     'agents pass': ['crown-thief'], 'agents revoke': ['pass-1'], 'agents brain': ['crown-thief', 'main', 'workers-ai'], 'agents sit': ['crown-thief'],
+    // With --device it adds a phone to the person's Apple team and installs a game on it (0.32.1).
+    'standalone run': ['crown-thief', '--for', 'ios', '--device'],
   };
   // The table in the command itself: every command in it is tried here, and none is tried that is not in it.
   const table = /const OUTWARD_FLAGS = \{([\s\S]*?)\n\};/.exec(readFileSync(CLI, 'utf8'))[1];

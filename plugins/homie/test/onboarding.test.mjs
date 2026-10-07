@@ -137,6 +137,10 @@ test('standalone: plan first, what the app does not have said before shipping, s
   // What was run and what was not, said as it is: built is not works, a store is not a yes, Steam's overlay is not promised.
   for (const needle of ['"started here and loaded the game: yes" or "NO"', '"built, not\nstarted on this computer"', '**UNSIGNED**', 'The Windows and Linux builds have never been started', 'lost when the app is\n  uninstalled', 'never a promise that the store\n  takes the game', 'Before you spend money', 'do not promise an overlay', 'has not been run by the people who made it', '`launchctl setenv`', 'studio_job']) at(s, needle);
   assert.doesNotMatch(s, /the builds (Steam|the App Store and Google Play) takes?/, 'a file a store accepts for upload, never "the build the store takes"');
+  // Onto the person's own phone: asked for first, in the words of what it changes; and what an older site means, both halves.
+  for (const needle of ['standalone run <id> --for ios --device', '**Ask before you run it, in these\nwords: this adds the phone to your Apple team\'s device list**', '`--device`\nis their yes: never add it on your own', 'Settings, Privacy & Security, Developer Mode, and the phone restarts', '"installed, not seen running" is not "running"', 'never ask for a team id, a phone\'s id or a name in the chat', 'never been run on a real Android phone', 'before **Quick play** finds a room in a copy', 'A room made or joined by its code works\nwith an older site too (seen against 0.31.0, not promised for every older version)']) at(s, needle);
+  at(usage, 'homie-studio standalone run <game> --for ios --device');
+  assert.match(usage, /--device is your yes to what it changes outside this computer: it\n \*\s+adds the phone to your Apple team's list of development devices/);
   // The guide it points at ships in the package, and the hooks read its commands as what they are.
   assert.ok(existsSync(join(ROOT, 'packages', 'studio', 'standalone', 'STANDALONE.md')));
 });
