@@ -796,6 +796,40 @@ it, named like the asset tools: `parts_find`, `part_add`, `part_new` and `part_s
   `package.json` is left as it is, and a package the part builds on that the studio lacks is named NOT INSTALLED
   with the npm command that installs it.
 
+## A game as an app of its own (`homie-studio standalone`)
+
+`homie-studio standalone` turns a game into a desktop app for macOS, Windows and Linux (the kind of build Steam
+accepts for upload) and a phone app for iOS and Android (the files the App Store and Google Play accept for
+upload; each store's review, fees and rules are its own). It is the same web build of
+the game in the thinnest shell each platform has (Electron on computers, Capacitor on phones), and nothing about
+one game lives in a shell. Multiplayer still goes through your studio's own deployed site; with no connection the
+game plays offline with its bots. [`standalone/STANDALONE.md`](standalone/STANDALONE.md) is the guide; the
+plugin's `standalone` skill is the method, and in chat it is the `game_standalone` tool.
+
+```sh
+npx --no-install homie-studio standalone plan <id>     # what would be built and what is missing; changes nothing
+npx --no-install homie-studio standalone build <id>    # every target this computer can make
+npx --no-install homie-studio standalone run <id>      # the built desktop copy, here
+npx --no-install homie-studio standalone steam <id>    # Steam's build file; uploads nothing
+npx --no-install homie-studio standalone ci <id>       # a GitHub workflow that builds all five
+```
+
+The wrapper tools are installed at exact versions into `.studio/standalone/<id>/` on the first build, so this
+package gains no dependency and a studio that never makes a standalone copy downloads none of them. A target
+whose tool is missing on this computer is skipped with its fix, and the others still build. Signing reads
+environment variables only, and nothing is ever uploaded to Steam or a store: the exact steps are printed. The
+desktop build for the computer it is made on is started once, and the result says whether the game loaded;
+every other target says "built, not started on this computer".
+
+**What the standalone game does not have (v1):** player accounts and sign-in, cloud saves (saves stay on the
+device and are lost when the app is uninstalled), the shop, room chat, watching and the big screen, servers
+other than the public one, automatic updates, and a signed Windows build. A studio must be on 0.32.0 or later
+**and deployed** before a copy can find rooms.
+
+**What has not been run:** the Windows and Linux builds have never been started; nothing has been started by
+Steam (its overlay, which Electron apps often do not show, included); a Developer ID signature, notarization and
+the iOS archive have never been made; nothing has run on a real phone. The guide lists it all.
+
 ## How it feels: the Game Lab (`homie-studio lab`)
 
 ```sh

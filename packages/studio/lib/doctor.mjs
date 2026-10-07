@@ -27,6 +27,9 @@
  *   Stripe             for selling only in a studio with shop.json (0.24.3): Stripe's own agent plugin (its MCP server
  *                                  and skills) for this AI, set up when the studio starts selling; the shop's key itself
  *                                  goes in through `homie-studio shop connect`, never here
+ *   Standalone builds  optional    only in a studio where a game.json has a "standalone" block: Xcode, the Android SDK
+ *                                  and a JDK it builds on, Apple signing (a count of identities, never a name),
+ *                                  notarization and steamcmd (lib/standalone.mjs standaloneRows)
  *   Clef locally       optional    Ollama with clef-flash: AI under dev for free (never downloaded without a yes)
  *   status line        optional    (Claude Code only) the build's progress under the prompt
  *
@@ -47,7 +50,8 @@ import { detectLocalAi } from './local-ai.mjs';
 import { findChrome } from './chrome.mjs';
 import { whyFailed } from './net.mjs';
 import { isOurs } from './statusline.mjs';
-import { findStudio, readLocal, readStudio } from './studio.mjs';
+import { findStudio, listGames, readLocal, readStudio } from './studio.mjs';
+import { standaloneRows } from './standalone.mjs';
 import { projectsCloudflareEnv, projectsElevenLabs } from './projects-env.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
@@ -413,6 +417,14 @@ export async function setupStatus({
         open: 'https://dashboard.stripe.com/register',
       },
     });
+  }
+
+  // Standalone copies (standalone/STANDALONE.md), only in a studio where a game has a "standalone" block: what the
+  // desktop and phone builds need here. Every one is optional: a target whose tool is missing is skipped, never blocking.
+  {
+    let asked = false;
+    try { asked = Boolean(root) && listGames(root).some((g) => g.standalone && typeof g.standalone === 'object'); } catch { asked = false; }
+    if (asked) rows.push(...await standaloneRows({ platform, exec, env }));
   }
 
   // The Claude Code status line (only in Claude Code, only in a studio).

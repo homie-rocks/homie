@@ -1662,6 +1662,16 @@ reads the other's snapshot with the wrong code.
   names no version is one pool, as before. A relay nobody tells which build is live (no Worker in
   front) uses the hello's `ver`: two builds still never share a room, and nobody is called stale.
 
+**A standalone copy** (a desktop or phone app, `standalone/STANDALONE.md`) is one build for good:
+it cannot load a newer one, only be updated. So it says its own revision to the Lobby
+(`/api/lobby?gv=`), which matches it with copies of that revision whatever is live now, and its
+`HOMIE_NET.app` makes the helper's lines truthful: "A new version is out. Update the app to play
+online.", and a tap reloads nothing. A copy that knocks at a room of the live revision is refused
+like any old tab, and plays on by itself. What a copy says of itself is its own word, so the Lobby
+keeps rooms for at most eight revisions besides the live one (a copy on a ninth plays offline for
+now), and a helper's `closed` word to its page names the room it is about. Nothing on the wire differs. `homie-studio deploy` says
+when a deploy makes another revision live than the copies a studio has built.
+
 **What a revision cannot see.** Until a game's bundle has a content-hashed
 name, the edge may serve the previous `main.js` for up to a minute after a deploy while the page
 around it is already stamped with the new version. A tab loaded in that minute says it is the new

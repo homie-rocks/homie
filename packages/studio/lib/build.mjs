@@ -94,7 +94,7 @@ function dirBytes(dir) {
   return n;
 }
 /** From games/<id>/style.json: the light colour as paper, the dark as text, and the accent; null without one. */
-function uiOf(g) {
+export function uiOf(g) {
   let pal = null;
   try { pal = JSON.parse(readFileSync(join(g.dir, 'style.json'), 'utf8'))?.palette ?? null; } catch { pal = null; }
   const hex = (v) => (/^#[0-9a-f]{6}$/i.test(String(v ?? '')) ? String(v).toLowerCase() : null);

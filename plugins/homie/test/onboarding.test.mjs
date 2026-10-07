@@ -12,7 +12,7 @@
  * Run: node --test plugins/homie/test/onboarding.test.mjs
  */
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -115,6 +115,30 @@ test('parallel: a choice with its trade-off, one folder each, then merge, check,
   assert.match(s, /Shared files have one owner/);
   const order = ['2. `npm run build`', '3. `npm run dev` in the background, then `npx --no-install homie-studio check <id>', 'The `playtest` skill', 'then its blind review', 'Update the codex', 'Commit once'].map((x) => at(s, x));
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'merge, check, playtest, review, codex, commit, in that order');
+});
+
+test('standalone: plan first, what the app does not have said before shipping, signing and uploads left to the person', () => {
+  const s = skill('standalone');
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(s)[1];
+  assert.match(front, /^name: standalone$/m);
+  assert.match(front, /^description: .*Steam.*iOS and Android/m);
+  assert.doesNotMatch(front.split('\n').find((l) => l.startsWith('description: ')).slice(13), /: | #/, 'plain YAML');
+  // Every command it names is in the toolkit's usage, as the toolkit spells it.
+  const usage = readFileSync(join(ROOT, 'packages', 'studio', 'bin', 'homie-studio.mjs'), 'utf8').split('*/')[0];
+  assert.match(usage, /homie-studio standalone plan\|build\|run\|steam\|ci <game>/);
+  const verbs = [...s.matchAll(/homie-studio standalone ([a-z]+)/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(verbs)].sort(), ['build', 'ci', 'plan', 'run', 'steam']);
+  for (const flag of ['--for', '--release']) { at(s, flag); at(usage, flag); }
+  // The order: the plan, then the build; and the honest list before anything ships.
+  const order = ['standalone plan <id>', 'What the standalone game does not have (v1)', 'standalone build <id>', 'standalone run <id>', '--release', 'standalone ci <id>'].map((x) => at(s, x));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  for (const needle of ['no player accounts or sign-in', 'no cloud saves', 'no shop', 'no room chat', 'no automatic updates', 'Do not soften it', 'Never\n  install a JDK', 'Never\n   ask for a password', '**Uploading is the person\'s.**', '0.32.0 or later', '**and it has been deployed since**', '"netplay": { "version": "1" }', 'game_standalone']) at(s, needle);
+  assert.match(s, /"Skipped" is not "built"/);
+  // What was run and what was not, said as it is: built is not works, a store is not a yes, Steam's overlay is not promised.
+  for (const needle of ['"started here and loaded the game: yes" or "NO"', '"built, not\nstarted on this computer"', '**UNSIGNED**', 'The Windows and Linux builds have never been started', 'lost when the app is\n  uninstalled', 'never a promise that the store\n  takes the game', 'Before you spend money', 'do not promise an overlay', 'has not been run by the people who made it', '`launchctl setenv`', 'studio_job']) at(s, needle);
+  assert.doesNotMatch(s, /the builds (Steam|the App Store and Google Play) takes?/, 'a file a store accepts for upload, never "the build the store takes"');
+  // The guide it points at ships in the package, and the hooks read its commands as what they are.
+  assert.ok(existsSync(join(ROOT, 'packages', 'studio', 'standalone', 'STANDALONE.md')));
 });
 
 test('every homie-studio command a skill names is one the toolkit has', () => {

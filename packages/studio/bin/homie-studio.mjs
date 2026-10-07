@@ -279,6 +279,23 @@
  *                                          its own games from other studios. The plumbing behind the chat tools
  *                                          parts_find, part_add, part_new and part_share; nobody is asked to type it
  *
+ *   homie-studio standalone plan|build|run|steam|ci <game> [--for mac,windows,linux,ios,android] [--release]
+ *                                        [--site <address>] [--build <n>]
+ *                                         the game as an app of its own (standalone/STANDALONE.md): the same web build in
+ *                                          Electron for macOS, Windows and Linux and Capacitor for iOS and Android (the
+ *                                          files Steam and the stores accept for upload; their review is theirs), finding
+ *                                          its rooms on the studio's own site and playing offline with its bots when it
+ *                                          cannot. plan: what would be built, what each target needs on this computer,
+ *                                          and what a standalone copy does not have (no accounts, cloud saves, shop or
+ *                                          chat); build: every target this computer can make, in
+ *                                          .studio/standalone/<game>/out/<target>/<debug|release>/ (a missing
+ *                                          prerequisite skips that target with its fix; this computer's own desktop
+ *                                          build is started once and the result says whether the game loaded;
+ *                                          --release: signed from the environment only, game.json must name the app's
+ *                                          id, and an unsigned release is said as UNSIGNED and is not a success); run:
+ *                                          the built copy, here; steam: Steam's build file; ci: a GitHub workflow that
+ *                                          builds all five. Nothing is ever uploaded to Steam or a store
+ *
  *   homie-studio statusline               the current build in one line (what Claude Code's status line shows)
  *   homie-studio statusline --install [--project <folder>]
  *                                         turn it on in Claude Code for this studio (.claude/settings.local.json);
@@ -338,10 +355,13 @@ import { formatHandoff, handoff } from '../lib/handoff.mjs';
 import { partsCommand, partsLines } from '../lib/parts-cli.mjs';
 import { partsPlanLines, partsPublishReport } from '../lib/parts-build.mjs';
 import { trailerCommand, trailerLines } from '../lib/trailer.mjs';
+// STANDALONE COPIES (standalone/STANDALONE.md): `standalone …` is lib/standalone-cli.mjs; a deploy says what it means for them.
+import { standaloneCommand, standaloneLines } from '../lib/standalone-cli.mjs';
+import { standaloneDeployNotes } from '../lib/standalone.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -357,6 +377,8 @@ const log = asJson ? () => {} : (line) => process.stderr.write(`${line}\n`);
 
 function print(result) {
   if (asJson) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); return; }
+  // A standalone plan or build says every target, built or not, and what a standalone copy does not have.
+  if (/^standalone( |$)/.test(String(result.command ?? ''))) { process.stdout.write(`${standaloneLines(result).join('\n')}\n`); return; }
   // A check that found problems still prints them (its rows say what to fix), never a bare "failed".
   if (result.ok === false && result.command !== 'port check' && !(result.command === 'look' && result.rows) && !(result.command === 'assets check' && result.rows) && !(result.command === 'parts check' && result.rows) && !(result.command === 'shoot' && result.frames !== undefined)) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}${result.instead ? `\n${result.instead}` : ''}\n`); return; }
   if (result.ok === false && result.command === 'port check' && !result.rows) { process.stdout.write(`homie-studio: ${result.why ?? 'failed'}\n`); return; }
@@ -460,7 +482,8 @@ function print(result) {
         // (lib/deploy-state.mjs): the hash `build` printed and the one the live site's manifest answers with.
         ...result.games.map((g) => `  ${g.id}: ${g.play}${g.hash ? `  [${deployWords(g)}]` : ''}`), ...(result.removed?.length ? [`  no longer on the site: ${result.removed.join(', ')}`] : []), ...(result.notes ?? []).map((n) => `  Note: ${n}`), ...(result.songs ?? []).map((m) => `  song ${m.slug}: ${m.page}`), ...(result.videos ?? []).map((m) => `  video ${m.slug}: ${m.page}`),
         ...(result.media?.moved ?? []).map((m) => `  moved to R2 (checked by SHA-256): ${m.path}, still at ${m.url}`), ...(result.media?.failed ?? []).map((m) => `  not moved to R2: ${m.path}: ${m.why}`), '', `Cloudflare: Worker ${result.worker}, D1 ${result.d1}, Durable Objects Table + Lobby${result.r2 ? `, R2 ${result.r2}` : ' (no storage: none needed; `homie-studio storage add` adds it for large media)'}. All on the free Workers plan${result.r2 ? ' plus R2' : ''}.`,
-        result.claim ? 'The site claimed itself in the directory: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim yet (the site claims itself when the directory first reads it; publish does).');
+        result.claim ? 'The site claimed itself in the directory: list the games with the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish' : 'No directory claim yet (the site claims itself when the directory first reads it; publish does).',
+        ...(result.standalone?.length ? ['', ...result.standalone] : []));
       break;
     case 'deploy plan':
       lines.push(`What \`npm run deploy\` does for ${result.studio}, on the Cloudflare account the person approves:`, '',
@@ -468,7 +491,8 @@ function print(result) {
         `Cost: ${result.cost}`, `Sign-in: ${result.login}`, `Address: ${result.address}`,
         `The directory (${result.directory.site}) stores: ${result.directory.stores}`, result.never,
         ...(result.zone?.warning ? ['', `Warning: ${result.zone.warning}`] : result.zone?.why ? ['', result.zone.why] : []),
-        ...(result.parts && partsPlanLines(result.parts).length ? ['', ...partsPlanLines(result.parts)] : []));
+        ...(result.parts && partsPlanLines(result.parts).length ? ['', ...partsPlanLines(result.parts)] : []),
+        ...(result.standalone?.length ? ['', ...result.standalone] : []));
       break;
     case 'storage add':
       lines.push(result.already ? `Storage is already added: R2 bucket ${result.bucket}.` : `Storage added: R2 bucket ${result.bucket}.`, 'Next:', ...result.next.map((n) => `  ${n}`));
@@ -846,6 +870,9 @@ async function main() {
   if (cmd === 'anim') return animCommand(root, sub, positional, flags, { log });
   if (cmd === 'collision') return collisionCommand(root, sub, positional, flags);
   if (cmd === 'parts') return partsCommand(root, sub, positional, flags, { log });
+  // A build takes minutes: its lines go to stderr even under --json (the result alone is on stdout), so a chat tool
+  // that runs it as a job has last lines to show; and into the progress feed, when one is open.
+  if (cmd === 'standalone') { const feed = currentFeed(root); return standaloneCommand(root, sub, positional, flags, { log: (line) => { process.stderr.write(`${line}\n`); try { feed?.log(String(line).slice(0, 200)); } catch { /* the feed is extra */ } } }); }
   if (cmd === 'cast') { const games = listGames(root); const id = sub ?? (games.length === 1 ? games[0].id : null); if (!id) return { ok: false, command: 'cast', why: `name the game: homie-studio cast <id>${games.length ? ` (${games.map((g) => g.id).join(', ')})` : ''}` }; return castView(root, id); }
   if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
@@ -933,11 +960,12 @@ async function main() {
   if (cmd === 'deploy' && flags.has('plan')) {
     // On a custom domain the plan also reads the domain's Worker routes (lib/routes.mjs): a read, nothing changes.
     const zone = await zonePlan(root);
-    return { ...deployPlan(root), parts: partsPublishReport(root), ...(zone ? { zone } : {}) };
+    return { ...deployPlan(root), parts: partsPublishReport(root), ...(zone ? { zone } : {}), standalone: standaloneDeployNotes(root) };
   }
   // Cloudflare's Workers Builds runs `npm run deploy` with WORKERS_CI=1 (and its own token for this one account).
   if (cmd === 'deploy' && (process.env.WORKERS_CI === '1' || flags.has('ci'))) return tracked(root, 'deploy', () => ciDeploy(root, { log }), 'deploy');
-  if (cmd === 'deploy') return tracked(root, 'deploy', () => deploy(root, { log, homie: flags.get('homie'), ownRoute: flags.has('own-route') }), 'deploy');
+  // What the deploy means for standalone copies already made (a changed netplay version), read before it runs.
+  if (cmd === 'deploy') { const copies = standaloneDeployNotes(root); return tracked(root, 'deploy', async () => { const r = await deploy(root, { log, homie: flags.get('homie'), ownRoute: flags.has('own-route') }); return r?.ok ? { ...r, standalone: copies } : r; }, 'deploy'); }
   if (cmd === 'storage' && sub === 'add') return storageAdd(root, { log });
   if (cmd === 'storage') {
     const cf = readStudio(root).cloudflare ?? {};

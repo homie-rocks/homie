@@ -188,7 +188,8 @@ test('a studio on an older toolkit: the card says what\'s new, and studio_run ["
   mkdirSync(join(pinned, 'bin'), { recursive: true });
   writeFileSync(join(pinned, 'package.json'), JSON.stringify({ name: '@homie-rocks/studio', version: '0.16.1' }));
   writeFileSync(join(pinned, 'bin', 'homie-studio.mjs'), 'console.log(JSON.stringify({ ok: true, pinnedCopy: true }));\n');
-  const s = server(['--studios', studios, '--no-install']);
+  // No Android SDK for the standalone build below to find: none named, and none in this test's own home folder.
+  const s = server(['--studios', studios, '--no-install'], { env: { ANDROID_HOME: '', ANDROID_SDK_ROOT: '' } });
   try {
     await s.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
     const card = await s.call('studio_card', { studio: 'night-owls' });
@@ -208,6 +209,39 @@ test('a studio on an older toolkit: the card says what\'s new, and studio_run ["
     assert.equal(plan.structuredContent.result.whatsNew.from, '0.16.1');
     assert.ok(plan.structuredContent.result.changes.some((c) => c.kind === 'pin'), 'the plan moves the pin');
     assert.equal(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).devDependencies['@homie-rocks/studio'], '0.16.1', 'the plan changes nothing');
+    // A standalone copy (0.32.0): the plan is this toolkit's, since the pinned one has no such command, and it says
+    // what a standalone game does not have and that this studio's site cannot answer a copy until it upgrades and deploys.
+    mkdirSync(join(root, 'games', 'comet-crews'), { recursive: true });
+    writeFileSync(join(root, 'games', 'comet-crews', 'game.json'), JSON.stringify({ id: 'comet-crews', name: 'Comet Crews', players: { min: 1, max: 4 } }));
+    const copy = await s.call('game_standalone', { game: 'comet-crews', plan: true, for: ['windows', 'linux'] });
+    assert.ok(!copy.isError, copy.content[0].text);
+    assert.equal(copy.structuredContent.kind, 'standalone-plan');
+    assert.deepEqual(copy.structuredContent.targets.map((t) => [t.target, t.state]), [['windows', 'ready'], ['linux', 'ready']]);
+    assert.match(copy.structuredContent.toolkitNote, /pins @homie-rocks\/studio 0\.16\.1/);
+    assert.match(copy.content[0].text, /What the standalone game does not have \(v1\):\n {2}- Player accounts and sign-in: /);
+    assert.match(copy.content[0].text, /Say this to the person as it is/);
+    assert.match(copy.content[0].text, /This studio pins @homie-rocks\/studio 0\.16\.1, from before standalone copies \(0\.32\.0\)[\s\S]*OFFLINE until the studio is upgraded to 0\.32\.0 or later AND deployed again/);
+    const refusedCopy = await s.call('game_standalone', { game: 'comet-crews', plan: true, release: true });
+    assert.equal(refusedCopy.isError, true, 'a release never guesses the app\'s id');
+    assert.match(refusedCopy.content[0].text, /"appId": "rocks\.homie\./);
+    // The build is a job (run by this toolkit: the pinned one has no such command). Here no Android SDK is to be
+    // found, so it ends at once with the target skipped; what matters is that the words for the person are IN the
+    // job's result, so studio_job says them (the list, what to do with it, the upgrade-and-deploy note) and not a
+    // page of JSON, when a real build outlasts the tool's own wait.
+    const tried = await s.call('game_standalone', { game: 'comet-crews', for: ['android'] });
+    assert.equal(tried.isError, true, 'a named target that was not built is not a success');
+    const words = tried.content[0].text;
+    assert.match(words, /○ android {2}SKIPPED: the Android SDK is not ready/);
+    assert.match(words, /What the standalone game does not have \(v1\):/);
+    assert.match(words, /from before standalone copies \(0\.32\.0\)/);
+    assert.match(words, /NOT DONE: not built: android/);
+    assert.ok(words.trimEnd().endsWith('Say this to the person as it is, before they ship anything: it is what a player of the standalone game does not get.'));
+    assert.deepEqual(tried.structuredContent.say.join('\n'), words);
+    const jobId = readdirSync(join(root, '.studio', 'mcp')).filter((n) => /^j_.*\.log$/.test(n)).map((n) => n.slice(0, -4)).find((id) => readFileSync(join(root, '.studio', 'mcp', `${id}.log`), 'utf8').includes(' standalone build comet-crews'));
+    const later = await s.call('studio_job', { job: jobId });
+    assert.match(later.content[0].text, /^standalone build comet-crews: failed after \d+ s/);
+    assert.ok(later.content[0].text.includes(words), 'studio_job reads the same words out');
+    assert.doesNotMatch(later.content[0].text, /"missing": \[/, 'never the raw result with the list buried in it');
   } finally { await s.close(); }
   // A studio on this version: no "behind".
   pkg.devDependencies['@homie-rocks/studio'] = STUDIO_VERSION;

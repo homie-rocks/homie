@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Game</title>
+<link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<iframe class="game" title="Game" allow="fullscreen; autoplay; gamepad"></iframe>
+<div class="room at-top-right" data-room-ui>
+  <button class="pill" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room and invite"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Finding a room…</span></button>
+  <div class="sheet" id="share-sheet" role="dialog" aria-label="This room" data-share-sheet hidden>
+    <div class="code"><b data-room-label>Offline</b><span data-room-state></span></div>
+    <div class="acts">
+      <button type="button" class="primary" data-invite>Invite</button>
+      <button type="button" data-quick>Quick play</button>
+    </div>
+    <span class="link" data-room-link></span>
+    <form class="join" data-join-form>
+      <input type="text" data-join-code inputmode="latin" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32" placeholder="Room code" aria-label="Room code">
+      <button type="submit">Join a room</button>
+    </form>
+    <div class="foot"><button type="button" data-private>New private room</button><button type="button" data-offline>Play offline</button></div>
+  </div>
+</div>
+<div class="toast" data-toast role="status" hidden></div>
+<div class="notice" data-notice role="alertdialog" aria-modal="true" hidden>
+  <div class="box"><h1 data-notice-title></h1><p data-notice-text></p>
+    <div class="acts"><button type="button" class="primary" data-notice-quick>Quick play</button><button type="button" data-notice-offline>Play offline</button></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="shell.js"></script>
+</body>
+</html>
