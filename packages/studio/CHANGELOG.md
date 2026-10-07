@@ -17,9 +17,44 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.32.0] - 2026-10-06
+
+**Plugin 0.33.0** · [#54](https://github.com/homie-rocks/homie/pull/54)
+
+A game can now be an app of its own: a desktop app for macOS, Windows and Linux and a phone app for iOS and Android, the same web game in a thin shell that still plays through your studio's own site.
+
+### Added
+
+- **Standalone copies of a game.** `homie-studio standalone build <game>` makes the game you already have into a desktop app (Electron) for macOS, Windows and Linux, and a phone app (Capacitor) for iOS and Android. The app shows the same files your site serves, so the game is not ported or rewritten. It finds its rooms on your studio's own deployed site, so a player in the app and a player in a browser meet in the same room; with no connection it plays offline with its bots. In chat it is the `game_standalone` tool, and the plugin has a `standalone` skill.
+- **What the standalone game does not have (v1).** Say this to anyone who will ship one; the web game has all of these, and the app does not yet. No player accounts and no sign-in: a player in the app is a guest. No cloud saves: saves and settings are kept on the device only, do not follow a player to the site or to another device, and are lost when the app is uninstalled. No shop: nothing is sold in the app. No room chat: it is off until the app has report and mute controls. No watch page, no big screen and no owner's controls. Only the public server through an open door: a private or invite-only game, or a server behind an account or an invite, plays offline in the app. No automatic updates: a newer version reaches players only when you build again and ship it through Steam or the store. Steam's overlay, achievements and friends: none of it has been run, and Electron apps often show no overlay. Nothing is uploaded for you: the steps for Steam, App Store Connect and Google Play are printed, and you run them. The Windows build is unsigned.
+- **What has been run and what has not.** Each build is the kind of file Steam or a store accepts for upload; whether a store takes your game is the store's decision, with its own review, fees and rules. On one Mac we started the macOS build (the game loaded, found a room on a local dev server and played), the iOS build in the Simulator and the Android build in the emulator. **The Windows and Linux builds have never been started on any computer.** Nothing has been started by Steam. A Developer ID signature, notarization and the iOS archive for the App Store have never been made. Nothing has run on a real phone. The GitHub workflow has never been run. `standalone/STANDALONE.md` has the whole list, and what each store asks before you pay it anything.
+- `standalone plan <game>` says, before anything is built or downloaded: which of the five this computer can build, what each of the others needs and how to get it, the address that will be built into every copy, and what a standalone copy does not have. It changes nothing. A row says "ok" only for what it looked at: a signing name in the environment is "set, checked later", and a keychain it could not read is "could not check".
+- A build's result says what is true of each target. **Built** means the file is at the path given. The desktop build for the computer it is made on is also started once, and says "started here and loaded the game: yes" or "NO"; every other target says "built, not started on this computer". **Skipped** means a tool is missing, with its fix. A release that could not be signed is **UNSIGNED**, and the command does not report success. The command succeeds only when something was built, nothing failed and no release came out unsigned.
+- A target whose tool is missing on your computer is skipped, and the others still build. A Windows build can be made on a Mac (no Wine needed). An Android build uses Android Studio's own JDK when the Java on your PATH is too new for it. Nothing is installed for you.
+- `standalone ci <game>` writes a GitHub workflow that builds all five on GitHub's own Windows, Linux and macOS machines when you start it by hand, for a target your computer cannot make. Its macOS and iOS builds are never releases: it has no Apple certificate.
+- `standalone steam <game>` writes Steam's build file from the App ID and Depot IDs in `game.json`, prints the one `steamcmd` command to run yourself, and says the launch options to set in Steamworks (the Linux one needs `--no-sandbox`). `standalone run <game>` starts the built copy here.
+- A release (`--release`) is signed from environment variables you set yourself, never from a file or the chat: `HOMIE_APPLE_IDENTITY` and `HOMIE_APPLE_NOTARY_PROFILE` for macOS, `HOMIE_APPLE_TEAM` for iOS, and the four `HOMIE_ANDROID_*` for Android. Only the one tool that signs is given them. A macOS app is called notarized only when Apple's own tool confirms it on the finished app, and an Android bundle is called signed only when its signature is read back from it. A release and a build to try are kept in separate folders.
+- An optional `"standalone"` block in a game's `game.json`: the app's id, version, build number, how a phone holds it, its icon, and Steam's numbers. With no icon the app wears the game's cover, or a tile with its first letter.
+- `homie-studio deploy` and `deploy --plan` say when a deploy makes a different netplay version live than the standalone copies you built, and what that means for them.
+- `setup status` lists what the standalone builds need (Xcode with its iOS platform, the Android SDK with its platform, a JDK, signing) in a studio where a game has a `"standalone"` block.
+
+### Changed
+
+- The netplay helper knows when it runs in an app (`HOMIE_NET.app`): its lines about a newer version read "A new version is out. Update the app to play online." and a tap on one reloads nothing, because a reload cannot bring a newer build to an app. Nothing on the wire changed, and a game on the web behaves as before.
+- Your site's Worker lets a standalone copy read one answer from another origin: which public room to join. Nothing else is opened: no sign-in, saves, shop or office request is accepted from an app, and no cookie crosses.
+- The Lobby keeps a bounded list of rooms: at most 512 for a game (rooms nobody is seated in make way first), rooms for the live version of a game and at most eight others at a time, and never more rooms on a server than the server may have, whatever version asks. When that last limit is reached by rooms still on an older version, a visitor on the new one waits at one of them instead of getting an extra room.
+
+### Upgrade notes
+
+- **Upgrade and deploy before a standalone copy can find rooms.** A copy talks to your live site, and only a site deployed with 0.32.0 or later answers it. Until then every copy plays offline.
+- The address of your site is built into every copy and cannot be changed in a copy that has shipped. Put the studio on its own domain before you ship: a workers.dev address belongs to the Cloudflare account.
+- Before you ship, name the game's revision in `game.json` (`"netplay": { "version": "1" }`) and raise it with every change an older copy cannot play with. Older copies then keep playing with each other, and say "Update <Name> to play online with everyone." when they meet a newer one.
+- In an app the game's code is trusted with everything the app's page has, and on phones with Capacitor's native bridge. That is fine for your own code; do not load scripts from the network in a game you ship as an app.
+- The first standalone build downloads the wrapper tools (a few hundred MB) into the studio's `.studio/` folder, which is not committed. `@homie-rocks/studio` itself gained no dependency.
+
 ## [0.31.1] - 2026-10-06
 
-**Plugin 0.32.1** · [#53](https://github.com/homie-rocks/homie/pull/53)
+**Plugin 0.32.1** · [#53](https://github.com/homie-rocks/homie/pull/53) · [release-2026-10-06-studio-0.31.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-06-studio-0.31.1)
 
 Fixes from two creators' notes on 0.31.0: Homie's holds run in Grok, `publish --before` publishes nothing, a page that loses its room is never stuck, a missing setting is never a silent zero, and a part's preview fits a phone.
 

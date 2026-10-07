@@ -58,6 +58,8 @@ const TWO = {
   progress: ['start', 'stage', 'check', 'preview', 'spend', 'shot', 'song', 'log', 'stop', 'end', 'attach', 'change', 'pr', 'show'],
   agents: ['pass', 'passes', 'revoke', 'brain', 'sit'], servers: ['new', 'set', 'close', 'level', 'member'], media: ['list', 'move', 'put'],
   players: ['owner'], storage: ['add'], statusline: [], chrome: ['install'],
+  // A game as an app of its own: it builds on this computer and uploads nothing, so none of these is held.
+  standalone: ['plan', 'build', 'run', 'steam', 'ci'],
 };
 
 /**
@@ -86,7 +88,7 @@ export function studioCalls(command) {
       continue;
     }
     if (!rest) continue;
-    const { flags, pos } = flagsOf(rest, ['json', 'plan', 'yes', 'dry-run', 'apply', 'share', 'stop', 'install', 'remove', 'reopen', 'off', 'revoke']);
+    const { flags, pos } = flagsOf(rest, ['json', 'plan', 'yes', 'dry-run', 'apply', 'share', 'stop', 'install', 'remove', 'reopen', 'off', 'revoke', 'release']);
     const second = TWO[pos[0]];
     const sub = !pos.length ? 'help' : second && second.includes(pos[1]) ? `${pos[0]} ${pos[1]}` : pos[0];
     calls.push({ sub, args: rest, flags, pos, dir: seg.dir, text: seg.text });

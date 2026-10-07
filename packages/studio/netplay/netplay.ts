@@ -139,6 +139,12 @@ export interface NetConfig {
   params?: Record<string, string>;
   /** Revision 9: the page around the frame keeps `net.prefs` (a play page from before it does not say so). */
   prefs?: boolean;
+  /**
+   * This game runs in a standalone copy (a desktop or phone app, standalone/STANDALONE.md), whose files are the
+   * build it was made from: a reload cannot bring a newer one, only an update of the app can. The lines about a newer
+   * version say so, and a tap on one reloads nothing. Nothing on the wire changes.
+   */
+  app?: boolean;
 }
 
 /* ------------------------------------------------- the link, revisions and the page (revision 9, sections 22-24) */
@@ -1282,6 +1288,8 @@ const HEARTBEAT_MAX_MS = 4000;
 const RECONNECT_MAX_MS = 20_000;
 /** The link overlay: a reconnect shorter than this is never drawn. */
 const LINK_OVERLAY_MS = 700;
+/** What a standalone copy says when a newer build of the game is live: the way to it is the app's own update. */
+export const APP_STALE_LINE = 'A new version is out. Update the app to play online.';
 /** `net.prefs` (section 24): what the play page keeps for one game on one browser. worker/pages.mjs has the same numbers. */
 export const PREFS_LIMITS = Object.freeze({ bytes: 16_384, keys: 32, key: 64 });
 const PREFS_WAIT_MS = 2000;
@@ -1678,6 +1686,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let link: LinkState = offline ? 'offline' : 'connecting';
   /** The line over the game while the link is down: made on first need, in this document, so a game's CSS reaches it. */
   const overlayOn = opts.linkOverlay !== false && !offline;
+  /** A standalone copy (HOMIE_NET.app): a newer build is reached by updating the app, never by a reload. */
+  const inApp = cfg?.app === true;
   let overlay: HTMLElement | null = null;
   let overlayTimer: ReturnType<typeof setTimeout> | null = null;
   let overlayHide: ReturnType<typeof setTimeout> | null = null;
@@ -1695,7 +1705,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       el.setAttribute('role', 'status');
       el.setAttribute('aria-live', 'polite');
       el.hidden = true;
-      el.addEventListener('click', () => { if (el.getAttribute('data-homie-link') === 'stale') { try { (globalThis as { location?: Location }).location?.reload(); } catch { /* not a page */ } } });
+      el.addEventListener('click', () => { if (!inApp && el.getAttribute('data-homie-link') === 'stale') { try { (globalThis as { location?: Location }).location?.reload(); } catch { /* not a page */ } } });
       doc.body.appendChild(el);
       overlay = el;
     } catch { overlay = null; }
@@ -1729,7 +1739,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (closedWhy === 'room-full' || closedWhy === 'too-many') return offline ? 'This room is full · playing on your own' : 'This room is full.';
     if (closedWhy === 'replaced') return 'This game is open in another tab.';
     if (closedWhy === 'kicked' || closedWhy === 'room-closed') return 'This room is closed.';
-    if (closedWhy === 'version') return 'This game needs a reload to play online.';
+    if (closedWhy === 'version') return inApp ? APP_STALE_LINE : 'This game needs a reload to play online.';
     return null;
   }
   function paintLink(): void {
@@ -1740,7 +1750,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       // A blip shorter than a blink is never drawn.
       overlayTimer = setTimeout(() => { overlayTimer = null; if (link === 'reconnecting') showOverlay('reconnecting', 'Reconnecting…'); }, LINK_OVERLAY_MS);
     } else if (link === 'alone') showOverlay('alone', aloneText());
-    else if (link === 'closed' && closedWhy === 'stale') showOverlay('stale', 'This game was updated. Tap to reload.');
+    else if (link === 'closed' && closedWhy === 'stale') showOverlay('stale', inApp ? APP_STALE_LINE : 'This game was updated. Tap to reload.');
     else if (closedSays) showOverlay('closed', closedSays);
     // In the room: the game's own sentence about where this player stands, else that the room is full.
     else if (link === 'online' && gameLine) showOverlay('seat', gameLine);
@@ -1763,7 +1773,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     staleVer = next;
     if (!first && !final) return;
     post?.({ what: 'stale', ver: next || null, mine: version, final });
-    if (!final) showOverlay('stale', 'A new version is ready. Tap to reload.', 10_000);
+    if (!final) showOverlay('stale', inApp ? APP_STALE_LINE : 'A new version is ready. Tap to reload.', 10_000);
     emit('stale', { ver: next || null, mine: version, final });
   }
 
@@ -2306,7 +2316,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (FINAL_ERRORS.has(code)) {
           closed = true;
           closedWhy = code;
-          post?.({ what: 'closed', why: code, ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}), ...(typeof m['message'] === 'string' ? { message: String(m['message']).slice(0, 200) } : {}) });
+          post?.({ what: 'closed', why: code, room: cfg?.room ?? null, ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}), ...(typeof m['message'] === 'string' ? { message: String(m['message']).slice(0, 200) } : {}) });
           // Kept out of a room for running an older build (section 23): the page reloads the game; the game may too.
           if (code === 'stale') noteStale(m['ver'], true);
           setLink('closed', code);

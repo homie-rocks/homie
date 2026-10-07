@@ -96,8 +96,7 @@ then asked for the Cloudflare approval. In Grok chat the Homie connector is the 
 checks the repository in with `npx --no-install homie-studio setup attach <hs_…> --client grok`, which does
 not need Claude's GitHub app; that hand-off we have not run end to end ourselves.
 
-Then ask for a studio. The plugin adds fourteen skills (`studio-setup`, `plan`, `parallel`, `game`, `office`,
-`port`, `publish`, `sound`, `music`, `art`, `style`, `models`, `video`, `playtest`, `perf`, `lab`) and connects the Homie MCP server at
+Then ask for a studio. The plugin adds twenty-one skills (`studio-setup`, `plan`, `parallel`, `game`, `parts`, `port`, `publish`, `office`, `servers`, `shop`, `sound`, `music`, `art`, `style`, `models`, `animate`, `video`, `playtest`, `perf`, `lab`, `standalone`) and connects the Homie MCP server at
 `https://homie.rocks/mcp`, which has creator tools only: set up a studio, make a game, make an
 existing single-player web game multiplayer, preview it, deploy it, and list it.
 A studio needs Node.js 22 or later.

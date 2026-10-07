@@ -74,6 +74,9 @@ test('commands: homie-studio calls, through npx, npm run and a cd', () => {
   assert.equal(studioCalls('npm run deploy')[0].sub, 'deploy');
   assert.equal(studioCalls('node node_modules/@homie-rocks/studio/bin/homie-studio.mjs office kick owl-rush pub-3 2')[0].sub, 'office kick');
   assert.equal(studioCalls('npx --no-install homie-studio codex owl-rush')[0].sub, 'codex');
+  // A standalone build is a command of its own words, and never a deploy: it uploads nothing.
+  assert.equal(studioCalls('npx --no-install homie-studio standalone build owl-rush --for mac --release')[0].sub, 'standalone build');
+  assert.deepEqual(studioCalls('npx --no-install homie-studio standalone build owl-rush --release --for mac')[0].pos, ['standalone', 'build', 'owl-rush']);
   assert.equal(studioCalls('npx --no-install homie-studio setup status')[0].sub, 'setup status');
   assert.deepEqual(studioCalls('ls -la && git status'), []);
 });

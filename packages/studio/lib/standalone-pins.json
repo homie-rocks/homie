@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "desktop": {
+    "electron": "44.6.0",
+    "@electron/packager": "20.3.0",
+    "@shockpkg/icon-encoder": "3.2.3"
+  },
+  "mobile": {
+    "@capacitor/core": "8.5.2",
+    "@capacitor/cli": "8.5.2",
+    "@capacitor/ios": "8.5.2",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/assets": "3.0.5"
+  },
+  "steam": {
+    "steamworks-ffi-node": "0.11.3"
+  }
+}

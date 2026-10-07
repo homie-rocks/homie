@@ -23,7 +23,8 @@
  *   /<game>/__game/...         the game's own files (index.html gets HOMIE_NET)
  *   /<game>/__net?room=        the room's netplay socket (Table Durable Object)
  *   /<game>/__watch?room=      the room's facts, for the shell
- *   /<game>/api/lobby          which public room to join (Lobby Durable Object); ?server=<id>: a room of that server
+ *   /<game>/api/lobby          which public room to join (Lobby Durable Object); ?server=<id>: a room of that server;
+ *                              the one answer a standalone copy's app may read (worker/standalone.mjs)
  *   /<game>/api/watch          which public room to watch: the busiest one now (nothing is reserved)
  *   /<game>/servers/           the game's servers (worker/servers.mjs): named, lasting room pools with their own
  *                              policy (open, humans-only, hybrid, beginner) and door; /<game>/api/servers as JSON
@@ -83,6 +84,7 @@
  * it when a server uses it), or the owner's own key (secret HOMIE_BRAIN_KEY).
  */
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
+import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
 import {
   PUBLIC_SERVER, SERVER_ID, homeOf, memberCounts, memberOf, noteMember, policyOf, pooledRoom, roomCode, roomServer, serverAccess, serverPassOf, serverView, serversOf,
@@ -576,7 +578,16 @@ function finish(res, path) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const res = finish(await route(request, env, ctx), url.pathname);
+    // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
+    // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
+    const appLobby = isAppOrigin(request) && /^\/[^/]+\/api\/lobby\/?$/.test(url.pathname);
+    let res;
+    try { res = finish(await route(request, env, ctx), url.pathname); } catch (error) {
+      if (!appLobby) throw error;
+      try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
+      res = json({ ok: false, error: 'failed' }, 500);
+    }
+    if (appLobby) return appCors(request, res);
     // A referral's arrival (worker/referrals.mjs): only a person's page load with ?via= of another site, on a studio
     // that pays referrals. The page is answered first; a cookie is added to it only then.
     if (url.searchParams.has('via') && res && res.status === 200 && /text\/html/i.test(res.headers.get('content-type') ?? '')) {
@@ -998,9 +1009,14 @@ async function route(request, env, ctx) {
       return json({ ok: true, game, room: best?.room ?? null, players: best?.players ?? 0, max }, 200, { 'cache-control': 'no-store' });
     }
     if (sub === 'api/lobby') {
+      // A standalone copy's page reads this answer from another origin: the Worker's own `fetch` adds its header to
+      // every answer of this address (worker/standalone.mjs), whichever line here made it.
+      const app = isAppOrigin(request);
       if (!door.ok) return json({ ok: false, error: 'not-found' }, 404);
       // ?server=<id>: a room of that server's pool (its door first); none: public. Strangers never meet across servers.
       const sid = url.searchParams.get('server') ?? 'public';
+      // An app plays on the public server only: it has no account and no invite to show a server's door.
+      if (app && sid !== 'public') return json({ ok: false, error: 'app-public', message: 'A standalone copy plays on the public server.' }, 403);
       const srv = SERVER_ID.test(sid) || sid === 'public' ? serverById(sid) : null;
       if (!srv) return json({ ok: false, error: 'no-server', message: `${meta.name} has no server called ${String(sid).slice(0, 24)}.` }, 404);
       if (srv.id === 'public' && publicHidden() && !(await pageDoor(srv)).owner) return json({ ok: false, error: 'closed', message: 'Pick a server to play on.' }, 403);
@@ -1010,8 +1026,11 @@ async function route(request, env, ctx) {
       const not = String(url.searchParams.get('not') ?? '').split(',').filter((r) => ROOM_ID.test(r)).slice(0, 4).join(',');
       const pol = policyFor(srv);
       // Strangers on different builds of the game never meet (section 23): the Lobby matches within the live build.
-      const ver = versionOf(meta?.netplay?.version);
-      return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}${ver ? `&ver=${encodeURIComponent(ver)}` : ''}`, { method: 'POST' });
+      // A standalone copy is the build it was made from, whatever is live now: it says its own (`gv`, or none for a
+      // game that named none then) and is matched with copies of that build. What it says is its own word, so the
+      // Lobby is told it came from an app (`app=1`) and keeps only a few such builds' rooms (LOBBY_APP_VERSIONS).
+      const ver = app ? versionOf(url.searchParams.get('gv')) : versionOf(meta?.netplay?.version);
+      return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}${ver ? `&ver=${encodeURIComponent(ver)}` : ''}${app ? '&app=1' : ''}`, { method: 'POST' });
     }
     if (sub === 'api/agent') {
       // An AI's seat (worker/agents.mjs): its pass, the server's policy, a room with people in it, a ticket.
@@ -1700,6 +1719,11 @@ export class Table {
  * room, where it waits as a spectator and is seated when a seat frees (`full: true`). An AI (`agent=1`) is only ever
  * sent to a room with people in it; it never opens one. Players are people: agents are reported apart.
  */
+/** How many builds of a game besides the live one may have Lobby rooms on one server at once (standalone copies name their own). */
+export const LOBBY_APP_VERSIONS = 8;
+/** How many rooms a game's Lobby keeps in all. Its list is one stored value: 512 rooms is about a third of what one may hold. */
+export const LOBBY_ROOMS_MAX = 512;
+
 export class Lobby {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -1779,8 +1803,15 @@ export class Lobby {
       const not = new Set(String(url.searchParams.get('not') ?? '').split(',').filter(Boolean));
       for (const [name, until] of this.closed) if (until <= now) this.closed.delete(name);
       // Every room of the server counts toward its `rooms_max` and its numbering; only this build's rooms are matched.
-      const ofServer = [...this.rooms.values()].filter((r) => (r.server ?? 'public') === server && !not.has(r.name) && !this.closed.has(r.name));
+      const everyRoom = [...this.rooms.values()].filter((r) => (r.server ?? 'public') === server);
+      const ofServer = everyRoom.filter((r) => !not.has(r.name) && !this.closed.has(r.name));
       const pool = ofServer.filter((r) => (r.ver ?? '') === ver);
+      // A standalone copy names its own build (the Worker says `app=1`), and anybody can claim to be one: only a few
+      // builds besides the live one ever have rooms here, so a caller that invents a build a request makes no pool.
+      const app = url.searchParams.get('app') === '1';
+      if (app && !everyRoom.some((r) => (r.ver ?? '') === ver) && new Set(everyRoom.map((r) => r.ver ?? '')).size > LOBBY_APP_VERSIONS) {
+        return json({ ok: false, room: null, error: 'versions', message: 'Too many versions of this game are being played at once: play offline for now.' }, 503);
+      }
       if (url.searchParams.get('agent') === '1') {
         // An AI: a room of this pool with people in it and an AI seat free (the most people first). Never a new room.
         const reserve = Math.max(0, Math.floor(Number(url.searchParams.get('ai'))) || 0);
@@ -1802,10 +1833,26 @@ export class Lobby {
       }
       let room = best?.r;
       let full = false;
-      if (!room && server !== 'public' && pool.length >= roomsMax) {
-        // Every room this server may have is full: the fullest one, where the visitor waits for a seat.
-        room = pool.reduce((a, b) => (b.players + b.pending.length > a.players + a.pending.length ? b : a), pool[0]);
+      const fullest = (list) => list.reduce((a, b) => (b.players + b.pending.length > a.players + a.pending.length ? b : a), list[0]);
+      if (!room && server !== 'public' && everyRoom.length >= roomsMax) {
+        // Every room this server may have exists, whatever build each runs: the fullest one of this build, where the
+        // visitor waits for a seat; with none of this build, the fullest of the server (its players are told a newer
+        // build is live, and the visitor is let in when they have it). Never a room past the server's own number.
+        const from = pool.length ? pool : ofServer;
+        if (!from.length) return json({ ok: false, room: null, error: 'full', message: 'Every room of this server is taken.' }, 503);
+        room = fullest(from);
         full = true;
+      }
+      if (!room && this.rooms.size >= LOBBY_ROOMS_MAX) {
+        // The Lobby keeps a bounded list (it is one stored value): rooms nobody is seated in go first, the oldest
+        // first. When every room has people in it, nobody gets a new one: this build's fullest, or no room at all.
+        const empty = [...this.rooms.values()].filter((r) => r.players === 0).sort((a, b) => a.at - b.at);
+        for (const r of empty) { if (this.rooms.size < LOBBY_ROOMS_MAX) break; this.rooms.delete(r.name); }
+        if (this.rooms.size >= LOBBY_ROOMS_MAX) {
+          if (!pool.length) return json({ ok: false, room: null, error: 'busy', message: 'Every room is taken right now.' }, 503);
+          room = fullest(pool);
+          full = true;
+        }
       }
       if (!room) {
         let n = this.next[server] ?? 1;

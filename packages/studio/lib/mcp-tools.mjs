@@ -42,6 +42,7 @@ import { pictureFor } from './pictures.mjs';
 import { ART_UI, artToolDefs } from './art-tools.mjs';
 // GAME PARTS (parts/PARTS.md): parts_find, part_add, part_new and part_share are lib/parts-tools.mjs.
 import { PARTS_FIRST, partsToolDefs } from './parts-tools.mjs';
+import { standaloneToolDefs } from './standalone-tools.mjs';
 import { partsPlanLines } from './parts-build.mjs';
 import { FEEDBACK_APPS, FEEDBACK_KINDS, FEEDBACK_LIMITS, appOf, cleanNote, draftId, noteBlock, sendNote, withLine } from './feedback.mjs';
 
@@ -1268,7 +1269,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_job', title: 'A job, so far',
-      description: 'Where a job a tool handed back is (an npm install, a check, a deploy, a render): running or done, its last lines and its result. Waits up to 30 s for it to finish.',
+      description: 'Where a job a tool handed back is (an npm install, a check, a deploy, a render, a standalone build): running or done, its last lines and its result. A result that comes with its own words for the person (a standalone build\'s) is given in those words: read them to the person. Waits up to 30 s for it to finish.',
       inputSchema: { type: 'object', properties: { job: str('The job id (j_…)') }, required: ['job'] },
       annotations: { title: 'A job', ...RO },
       run: async (a) => {
@@ -1277,7 +1278,7 @@ export function toolDefs(ctx, avail = {}) {
         await waitJob(job, Math.min(ctx.waitMs, 30_000));
         const v = jobView(job, { lines: 20 });
         if (job.endedAt) ctx.status = null;
-        return ok(`${v.label}: ${v.state}${v.state === 'running' ? ` (${v.seconds} s so far)` : ` after ${v.seconds} s`}${v.state === 'failed' ? `: ${whyOf(job)}` : ''}${v.result ? `\n${JSON.stringify(v.result, null, 1).slice(0, 8000)}` : v.tail.length ? `\n${v.tail.join('\n')}` : ''}`, { kind: 'job', ...v });
+        return ok(`${v.label}: ${v.state}${v.state === 'running' ? ` (${v.seconds} s so far)` : ` after ${v.seconds} s`}${v.state === 'failed' ? `: ${whyOf(job)}` : ''}${Array.isArray(v.result?.say) && v.result.say.length ? `\n${v.result.say.join('\n').slice(0, 16_000)}` : v.result ? `\n${JSON.stringify(v.result, null, 1).slice(0, 8000)}` : v.tail.length ? `\n${v.tail.join('\n')}` : ''}`, { kind: 'job', ...v });
       },
     },
     {
@@ -1366,6 +1367,8 @@ export function toolDefs(ctx, avail = {}) {
   // Art direction, the cast, the starter library, generated props, checks, the lineup and the rights (lib/art-tools.mjs).
   tools.push(...artToolDefs(ctx, { ok, fail, cli, stillRunning, whyOf, needsInstall, ui, str, STUDIO_ARG, RO, RW, pictureFor, findNode, startJob, waitJob }));
   tools.push(...partsToolDefs(ctx, { ok, fail, str, STUDIO_ARG, RO, RW }));
+  // A game as an app of its own, for computers and phones (lib/standalone-tools.mjs).
+  tools.push(...standaloneToolDefs(ctx, { ok, fail, cli, stillRunning, whyOf, needsInstall, str, STUDIO_ARG }));
   const topics = guideTopics(ctx);
   if (topics.length) {
     tools.push({
