@@ -16,6 +16,7 @@ export interface TileData {
   config: BakeConfig; x: number; z: number;
   /** Compact spans retained so obstacles can be carved without original triangles. */
   compact: nav.CompactHeightfield;
+  baked: nav.NavMeshTile | null;
 }
 export function checkConfig(c: BakeConfig): void {
   point(c.origin);
@@ -55,12 +56,19 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
   nav.filterLedgeSpans(hf, height, climb);
   nav.filterWalkableLowHeightSpans(hf, height);
   const compact = nav.buildCompactHeightfield(ctx, height, climb, hf);
-  return pack('tile', { config: { ...c, origin: [...c.origin] }, x, z, compact } satisfies TileData);
+  const data: TileData = { config: { ...c, origin: [...c.origin] }, x, z, compact, baked: null };
+  // Polygon generation edits its compact input. Retain pristine spans for later carving.
+  data.baked = finishTile(unpack<TileData>('tile', pack('tile', data)), []);
+  return pack('tile', data);
 }
 /** Build polygons from saved spans. Obstacles are carved BEFORE radius erosion. */
 export function tilePolygons(bytes: Uint8Array, obstacles: readonly Obstacle[]): nav.NavMeshTile | null {
-  const data = unpack<TileData>('tile', bytes), c = data.config;
-  checkConfig(c);
+  const data = unpack<TileData>('tile', bytes);
+  checkConfig(data.config);
+  return obstacles.length ? finishTile(data, obstacles) : data.baked;
+}
+function finishTile(data: TileData, obstacles: readonly Obstacle[]): nav.NavMeshTile | null {
+  const c = data.config;
   const compact = data.compact;
   for (const o of obstacles) {
     // Mark spans whose standing body overlaps the box vertically. Erosion handles XZ radius.

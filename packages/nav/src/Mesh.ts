@@ -19,7 +19,12 @@ export class Mesh implements NavigationQuery {
   /** Loaded areas only are reachable. Matching global origin/config prevents bad seams. */
   loadTile(bytes: Uint8Array): void {
     const t = unpack<TileData>('tile', bytes);
-    if (JSON.stringify(t.config) !== JSON.stringify(this.state.config)) throw new Error('nav: tile configuration differs from mesh');
+    checkConfig(t.config);
+    const expected = this.state.config;
+    if (Object.keys(expected).some(key => {
+      const k = key as keyof BakeConfig;
+      return k === 'origin' ? expected.origin.some((v, i) => v !== t.config.origin[i]) : expected[k] !== t.config[k];
+    })) throw new Error('nav: tile configuration differs from mesh');
     const key = `${t.x},${t.z}`;
     const tile = tilePolygons(bytes, Object.values(this.state.obstacles));
     nav.removeTile(this.state.nav, t.x, t.z, 0);
@@ -31,7 +36,7 @@ export class Mesh implements NavigationQuery {
     nav.removeTile(this.state.nav, x, z, 0); delete this.state.tiles[key]; this.state.revision++; return true;
   }
   private rebuild(obstacle: Obstacle): void {
-    const c = this.state.config, size = c.cellSize * c.tileCells, pad = c.radius + 3 * c.cellSize;
+    const c = this.state.config, size = c.cellSize * c.tileCells, pad = (Math.ceil(c.radius / c.cellSize) + 3) * c.cellSize;
     for (const key of Object.keys(this.state.tiles)) {
       const [x, z] = key.split(',').map(Number) as [number, number];
       const x0 = c.origin[0] + x * size, z0 = c.origin[2] + z * size;

@@ -95,3 +95,31 @@ test('malformed geometry and agent dimensions fail before baking', () => {
   assert.throws(() => bakeTile(field(), { ...config, cellSize: 0 }, 0, 0), /cellSize/);
   assert.throws(() => flat().addObstacle({ min: [1, 1, 1], max: [0, 0, 0] }), /bounds/);
 });
+
+test('stacked floors stay distinct and compatible config key order does not matter', () => {
+  const lower = field(), upper = field(() => 3);
+  const triangles = { positions: [...lower.positions, ...upper.positions], indices: [...lower.indices, ...Array.from(upper.indices, i => i + lower.positions.length / 3)] };
+  const reordered = Object.fromEntries(Object.entries(config).reverse());
+  const m = new Mesh(reordered, [1, .5, 1]);m.loadTile(bakeTile(triangles, config, 0, 0));
+  assert.ok(m.nearest([5, .1, 5])[1] < .3);
+  assert.ok(m.nearest([5, 3.1, 5])[1] > 3);
+  assert.equal(m.path([2, .1, 2], [8, 3.1, 8]).complete, false);
+  const id = m.addObstacle({ min: [4, 2.5, -1], max: [6, 6, 11] });
+  assert.equal(m.path([2, .1, 5], [8, .1, 5]).complete, true);
+  assert.equal(m.path([2, 3.1, 5], [8, 3.1, 5]).complete, false);
+  m.removeObstacle(id);
+  assert.equal(m.path([2, 3.1, 5], [8, 3.1, 5]).complete, true);
+});
+
+test('unloaded tiles apply existing obstacles and links reconnect after reloading', () => {
+  const m = flat(), right = bakeTile(field(() => 0, 8), config, 1, 0);
+  const box = m.addObstacle({ min: [14, -1, -1], max: [16, 4, 11] });
+  m.loadTile(right);
+  assert.equal(m.path([1, .1, 5], [19, .1, 5]).complete, false);
+  m.addLink([13, .1, 5], [17, .1, 5], .5, true);
+  assert.equal(m.path([1, .1, 5], [19, .1, 5]).complete, true);
+  m.unloadTile(1, 0);m.loadTile(right);
+  assert.equal(m.path([1, .1, 5], [19, .1, 5]).complete, true);
+  m.removeObstacle(box);
+  assert.equal(m.raycast([1, .1, 5], [19, .1, 5]).clear, true);
+});
