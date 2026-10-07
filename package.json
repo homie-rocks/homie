@@ -18,6 +18,7 @@
     "packages/heightfield",
     "packages/input",
     "packages/loop",
+    "packages/nav",
     "packages/noise",
     "packages/postfx",
     "packages/props",

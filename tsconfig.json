@@ -16,6 +16,7 @@
     { "path": "packages/heightfield" },
     { "path": "packages/input" },
     { "path": "packages/loop" },
+    { "path": "packages/nav" },
     { "path": "packages/noise" },
     { "path": "packages/postfx" },
     { "path": "packages/props" },
