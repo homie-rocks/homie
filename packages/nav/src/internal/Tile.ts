@@ -28,7 +28,13 @@ export function encodeTile(data: TileData): Uint8Array {
   expanded.spans.forEach((v, i) => spans.set([v.y, v.region, v.con, v.h], i * 4));
   return pack('tile', {
     ...data,
-    compact: { ...c, cells, spans, areas: Uint8Array.from(c.areas), distances: [] },
+    compact: {
+      ...c,
+      cells,
+      spans,
+      areas: Uint8Array.from(c.areas),
+      distances: [],
+    },
   });
 }
 export function decodeTile(bytes: Uint8Array): TileData {

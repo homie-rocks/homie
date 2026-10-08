@@ -51,7 +51,12 @@ export class Grid implements NavigationQuery {
       width * depth > 4_000_000 ||
       (blocked && blocked.length !== width * depth)
     )
-      throw new Error('nav: invalid grid dimensions');
+      throw new Error(
+        `nav: invalid grid dimensions ${width} by ${depth}; need positive integers with at most 4000000 cells` +
+          (blocked
+            ? ` and exactly ${width * depth} blocked bytes (received ${blocked.length})`
+            : ''),
+      );
     if (options.up !== undefined && options.up !== 'y' && options.up !== 'z')
       throw new Error('nav: up must be y or z');
     this.#options = { ...options };
@@ -466,7 +471,10 @@ export class Grid implements NavigationQuery {
     }
   }
   private static restoreData(bytes: Uint8Array): Grid {
-    const { state: s, options } = unpack<{ state: GridState; options: GridOptions }>('grid', bytes);
+    const { state: s, options } = unpack<{
+      state: GridState;
+      options: GridOptions;
+    }>('grid', bytes);
     return new Grid(s.width, s.depth, s.cell, fromAxes(s.origin, s.up), s.blocked, options);
   }
 }

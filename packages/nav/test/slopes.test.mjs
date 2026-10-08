@@ -45,3 +45,33 @@ for (const degrees of [5, 10, 20, 25, 30, 40, 45, 50, 55, 60]) {
 test('unsafe voxel slope configuration fails with a useful diagnostic', () => {
   assert.throws(() => checkConfig({ ...config, stepHeight: 0, slopeDegrees: 60 }), /nav:.*slope/);
 });
+
+test('impossible slope errors give the supported angle and required climb', () => {
+  const impossible = {
+    ...config,
+    cellSize: 0.4,
+    cellHeight: 0.2,
+    stepHeight: 0.3,
+    slopeDegrees: 60,
+  };
+  assert.throws(
+    () => checkConfig(impossible),
+    (error) => {
+      assert.match(error.message, /slope 60.*cellSize 0.4.*cellHeight 0.2.*stepHeight 0.3/);
+      assert.match(error.message, /maximum slope is 26.565/);
+      assert.match(error.message, /stepHeight at least 0.8/);
+      return true;
+    },
+  );
+});
+
+test('configuration refusals include the supplied numbers and limits', async () => {
+  const { Crowd } = await import('@homie-rocks/nav/Crowd.js');
+  const { Grid } = await import('@homie-rocks/nav/Grid.js');
+  const mesh = new Mesh(config, [1, 2, 1]);
+  assert.throws(() => new Crowd(mesh, 0.2, 0.3), /0.2.*0.1/);
+  assert.throws(() => new Crowd(mesh, 0.05, 0.8), /0.8.*0.3/);
+  assert.throws(() => new Crowd(mesh, 0.05, 0.3, { searchIterations: 9999 }), /9999.*8192/);
+  assert.throws(() => new Mesh(config, [1, 2, 1], { maxRetainedCells: -3 }), /-3.*1/);
+  assert.throws(() => new Grid(2001, 2001, 1, [0, 0, 0]), /2001.*2001.*4000000/);
+});

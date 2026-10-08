@@ -39,13 +39,13 @@ export function checkConfig(c: BakeConfig): void {
   for (const region of c.doorRegions ?? []) checkObstacle(region);
   for (const count of [c.minRegionCells, c.mergeRegionCells])
     if (count !== undefined && (!Number.isSafeInteger(count) || count < 0))
-      throw new Error('nav: region sizes must be nonnegative integers');
+      throw new Error(`nav: region size ${count} must be a nonnegative integer`);
   if (c.retainSpans !== undefined && typeof c.retainSpans !== 'boolean')
     throw new Error('nav: retainSpans must be boolean');
   if (c.up !== undefined && c.up !== 'y' && c.up !== 'z') throw new Error('nav: up must be y or z');
   for (const k of ['cellSize', 'cellHeight', 'height'] as const) positive(c[k], k);
   if (!Number.isInteger(c.tileCells) || c.tileCells < 4 || c.tileCells > 1024)
-    throw new Error('nav: tileCells must be an integer from 4 to 1024');
+    throw new Error(`nav: tileCells ${c.tileCells} must be an integer from 4 to 1024`);
   if (
     ![c.minY, c.maxY, c.radius, c.stepHeight, c.slopeDegrees].every(Number.isFinite) ||
     c.maxY <= c.minY ||
@@ -55,17 +55,39 @@ export function checkConfig(c: BakeConfig): void {
     c.slopeDegrees < 0 ||
     c.slopeDegrees >= 90
   )
-    throw new Error('nav: invalid agent or vertical bounds');
+    throw new Error(
+      `nav: invalid dimensions: minY ${c.minY}, maxY ${c.maxY}, radius ${c.radius}, ` +
+        `height ${c.height}, stepHeight ${c.stepHeight}, slopeDegrees ${c.slopeDegrees}; ` +
+        'require maxY > minY, radius >= 0, 0 <= stepHeight < height, and 0 <= slopeDegrees < 90',
+    );
   const angle = c.slopeDegrees * (Math.PI / 180);
   const rise = (c.cellSize * deterministicSin(angle)) / deterministicCos(angle);
-  if (Math.ceil(rise / c.cellHeight - 1e-9) > Math.floor(c.stepHeight / c.cellHeight + 1e-9))
+  if (Math.ceil(rise / c.cellHeight - 1e-9) > Math.floor(c.stepHeight / c.cellHeight + 1e-9)) {
+    const supportedRise = Math.floor(c.stepHeight / c.cellHeight + 1e-9) * c.cellHeight;
+    let low = 0,
+      high = Math.PI / 2;
+    for (let i = 0; i < 56; i++) {
+      const mid = (low + high) / 2;
+      if (c.cellSize * deterministicSin(mid) <= supportedRise * deterministicCos(mid)) low = mid;
+      else high = mid;
+    }
     throw new Error(
-      'nav: slope cannot be honoured at this cell size, cell height and step height; reduce cellSize/cellHeight or increase stepHeight',
+      `nav: slope ${c.slopeDegrees} degrees cannot be honoured with cellSize ${c.cellSize}, ` +
+        `cellHeight ${c.cellHeight} and stepHeight ${c.stepHeight}; maximum slope is ` +
+        `${(low * 180) / Math.PI} degrees; ` +
+        `requested slope needs stepHeight at least ${Math.ceil(rise / c.cellHeight - 1e-9) * c.cellHeight}`,
     );
+  }
   if ((c.maxY - c.minY) / c.cellHeight > 65535)
-    throw new Error('nav: vertical bounds exceed voxel range');
+    throw new Error(
+      `nav: vertical bounds ${c.minY} to ${c.maxY} at cellHeight ${c.cellHeight} ` +
+        `need ${(c.maxY - c.minY) / c.cellHeight} cells, exceeding 65535`,
+    );
   if (c.tileCells + 2 * (Math.ceil(c.radius / c.cellSize) + 3) > 2048)
-    throw new Error('nav: tile halo too large');
+    throw new Error(
+      `nav: tile halo ${c.tileCells + 2 * (Math.ceil(c.radius / c.cellSize) + 3)} cells exceeds 2048 ` +
+        `(tileCells ${c.tileCells}, radius ${c.radius}, cellSize ${c.cellSize})`,
+    );
 }
 export function checkObstacle(o: Obstacle): void {
   if (o.radius !== undefined) positive(o.radius, 'cylinder radius');
