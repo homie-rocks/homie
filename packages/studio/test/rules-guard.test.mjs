@@ -246,6 +246,8 @@ test('coin-dash passes, and its linked module is the checked one: no unguarded k
   assert.deepEqual(again(code.replace(/__homie\d*\.w\(self, \d+\)\.score = 0;/, 'self.score = 0;')), ['the linked module holds a write to a property the guard did not check']);
   assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+)__homie\d*\.t\(\);/, '$1')), ['the linked module holds a function the guard did not count']);
   assert.deepEqual(again(code.replace(/(for \(const coin of [^\n]+\{\n\s+)__homie\d*\.t\(\);/, '$1')), ['the linked module holds a loop the guard did not count']);
+  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+__homie\d*\.t\(\);)/, '$1\n        const [first, ...others] = [1, 2];')), ['the linked module holds a rest (...) in a pattern that the guard did not count']);
+  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+__homie\d*\.t\(\);)/, '$1\n        if (world === self) return;')), ['the linked module holds an operator whose operand the guard did not check']);
   assert.match(again(`import fs from "node:fs";\n${code}`)[0], /rules import only/);
   assert.match(again(`${code}\nvar leak = fetch("https://example.com");`).join('\n'), /fetch is not available in rules/);
 });

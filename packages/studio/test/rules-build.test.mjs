@@ -57,7 +57,7 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   const built = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;
-  assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{16}; three seconds with bots: the busiest tick used \d+ of 1000000 budget units, \d+ of them in one handler\)/);
+  assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{16}; three seconds with bots: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler\)/);
   assert.match(said, /hosted by a player's browser, as before \(no src\/rules\.ts; nothing to do\): gems\n/);
   // The rules module: one file, importing only Homie's rules module and the guard.
   const rules = read(dir, 'site/src/rules/coin-dash.mjs');

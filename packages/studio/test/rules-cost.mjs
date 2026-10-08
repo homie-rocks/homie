@@ -70,6 +70,22 @@ const PLANTED = [
   ['a Map: set and get', `const m = new Map(); ${LOOP} { m.set(i % 50000, i); m.get(i % 777); }`],
   ['a Map of 4,096: keys', `const m = new Map(); for (let i = 0; i < 4096; i += 1) m.set(i, i); ${LOOP} { const k = m.keys(); }`],
   ['the keys of an object of 1,000', `const o = {}; for (let i = 0; i < 1000; i += 1) o['k' + i] = i; ${LOOP} { const k = Object.keys(o); }`],
+  ['the entries of an object of 1,000', `const o = {}; for (let i = 0; i < 1000; i += 1) o['k' + i] = i; ${LOOP} { const k = Object.entries(o); }`],
+  ['an object of 1,000 copied by a spread', `const o = {}; for (let i = 0; i < 1000; i += 1) o['k' + i] = i; ${LOOP} { const k = { ...o }; }`],
+  ['the rest of an object of 1,000 taken by a pattern', `const o = {}; for (let i = 0; i < 1000; i += 1) o['k' + i] = i; ${LOOP} { const { k0, ...others } = o; }`],
+  ['the rest of a list of 4,096 taken by a pattern', `${LIST} ${LOOP} { const [first, ...others] = a; }`],
+  ['a text of 4,096 split into characters', `let s = 'abcdefgh'; for (let i = 0; i < 9; i += 1) s = s + s; ${LOOP} { const b = s.split(''); }`],
+  ['a text of 4,096 split at commas', `let s = 'abcdef,h'; for (let i = 0; i < 9; i += 1) s = s + s; ${LOOP} { const b = s.split(','); }`],
+  ['a text of 4,096 made upper case', `let s = 'abcdefgh'; for (let i = 0; i < 9; i += 1) s = s + s; ${LOOP} { const b = s.toUpperCase(); }`],
+  ['an Error made', `${LOOP} { const e = new Error('no'); }`],
+  ['a list written out', `${LOOP} { const a = [i, i, i, i, i, i, i, i]; }`],
+  ['an object written out', `${LOOP} { const o = { a: i, b: i, c: i, d: i }; }`],
+  ['a function made', `let k = 0; ${LOOP} { const fn = () => i; k += 1; }`],
+  ['a number made into a text', `let k = 0; ${LOOP} { const s = String(i * 1.37); k += 1; }`],
+  ['a template of a number', `let k = 0; ${LOOP} { const s = \`\${i * 1.37}\`; k += 1; }`],
+  ['a text made into a number', `let k = 0; ${LOOP} { k += Number('12345.678'); }`],
+  ['Math functions', `let k = 0; ${LOOP} { k += Math.sqrt(Math.abs(Math.floor(i * 1.5))); }`],
+  ['a Set: add and has', `const m = new Set(); ${LOOP} { m.add(i % 50000); m.has(i % 777); }`],
   ['world.math', `let v = { x: 1, y: 2, z: 0 }; ${LOOP} v = world.math.norm(world.math.add(v, { x: 0.1, y: 0.2, z: 0 }));`],
   ['world.random', `let k = 0; ${LOOP} k += world.random();`],
   ['world.send', `${LOOP} world.send(self.id, 'ping', { n: 1 });`],
@@ -85,7 +101,7 @@ const PLANTED = [
   ['world.sweep past 2,000', `${LOOP} world.sweep(self, { x: 0.001, y: 0, z: 0 });`, { rocks: 2000 }],
   ['a number written to a field', `${LOOP} self.n = i;`],
   ['a vector written to vel', `${LOOP} self.vel = { x: 1, y: 2, z: 0 };`],
-  ['a text of 4,096 written to a field', `let s = ''; for (let i = 0; i < 512; i += 1) s = s + 'abcdefgh'; ${LOOP} self.note = s;`],
+  ['a text of 4,096 written to a field', `let s = 'abcdefgh'; for (let i = 0; i < 9; i += 1) s = s + s; ${LOOP} self.note = s;`],
   ['a list of 1,024 read from a field', `let k = 0; ${LOOP} k += self.bag.length;`, { pre: 'const a = []; for (let i = 0; i < 1024; i += 1) a.push(i); self.bag = a;' }],
   ['a list of 1,024 written to a field', `const a = []; for (let i = 0; i < 1024; i += 1) a.push(i); ${LOOP} self.bag = a;`],
   ['a list of 64 vectors written to a field', `const a = []; for (let i = 0; i < 64; i += 1) a.push({ x: i, y: 2, z: 0 }); ${LOOP} self.path = a;`],
@@ -127,7 +143,7 @@ if (!only && rows.length) {
   const D = L.R.ROOM_DEFAULTS.budget.tick;
   console.log(`\nThe dearest unit is ${worst.ns.toFixed(1)} ns ("${worst.name}").`);
   console.log(`The default budget is ${D} units a tick. A tick that uses all of it on the dearest work takes ${(D * worst.ns / 1e6).toFixed(1)} ms here;`);
-  console.log(`at the very worst (its last handler a quarter over, and a full room's move and think each taking its small share) ${(1.75 * D * worst.ns / 1e6).toFixed(1)} ms.`);
+  console.log(`at the very worst (a full room's move and think each taking its small share after that) ${(1.5 * D * worst.ns / 1e6).toFixed(1)} ms.`);
   console.log(`A tick lasts ${1000 / L.R.ROOM_DEFAULTS.tickHz} ms at ${L.R.ROOM_DEFAULTS.tickHz} ticks a second.\n`);
   // coin-dash, the example: its busiest tick in two and a half minutes of play, for a room of each size.
   for (const [people, seats] of [[1, 8], [8, 8], [32, 32]]) {

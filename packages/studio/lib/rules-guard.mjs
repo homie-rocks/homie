@@ -172,6 +172,8 @@ function numBinding(b, seen) {
 const light = (n, scope, ids = null) => num(n, scope, new Set(), ids) || (t.isStringLiteral(n) && n.value.length < SHORT) || (isGuardCall(n) && n.callee.property.name === 'p');
 /** One side of `===` that makes the comparison cheap whatever the other is: a number, a short text written out, or what `typeof` says. */
 const cheapSide = (n, scope, ids = null) => num(n, scope, new Set(), ids) || (t.isStringLiteral(n) && n.value.length < SHORT) || t.isUnaryExpression(n, { operator: 'typeof' });
+/** Whether a pattern takes a rest out of the value it is handed: `[first, ...others]`, `{ a, ...others }`. */
+const hasRest = (pat) => (t.isArrayPattern(pat) && pat.elements.some((e) => t.isRestElement(e))) || (t.isObjectPattern(pat) && pat.properties.some((e) => t.isRestElement(e)));
 /** Whether a member expression is written to: the left of an assignment, the operand of `++`, a loop's variable, or a place in a pattern. */
 const isTarget = (path) => (path.parentPath.isAssignmentExpression() && path.parent.left === path.node) || (path.parentPath.isUpdateExpression()) || (path.parentPath.isForXStatement() && path.parent.left === path.node)
   || path.parentPath.isArrayPattern() || (path.parentPath.isObjectProperty() && path.parentPath.parentPath.isObjectPattern()) || path.parentPath.isRestElement() || (path.parentPath.isAssignmentPattern() && path.parent.left === path.node);
@@ -331,6 +333,16 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     },
     ForOfStatement(path) { if (path.node.await) bad(path.node, 'await is refused: a handler finishes inside its tick'); if (!t.isVariableDeclaration(path.node.left)) checkWrite(path, path.node.left); },
     ForInStatement(path) { if (!t.isVariableDeclaration(path.node.left)) checkWrite(path, path.node.left); },
+    // A rest in a pattern copies every entry or key that is left, at one go and uncounted. It is allowed where the guard
+    // can charge for the copy first: in a declaration or an assignment of its own, with the value written beside it.
+    RestElement(path) {
+      const pat = path.parentPath;
+      if (linked || !(pat.isArrayPattern() || pat.isObjectPattern())) return;   // a function's own rest parameter is filled by its caller, who is charged
+      const owner = pat.parentPath;
+      const declared = owner.isVariableDeclarator() && owner.node.id === pat.node && Boolean(owner.node.init);
+      const assigned = owner.isAssignmentExpression({ operator: '=' }) && owner.node.left === pat.node;
+      if (!declared && !assigned) bad(path.node, 'take the rest (...) out of a value in a declaration of its own, `const [first, ...others] = list`, not in a parameter, a loop\'s head or inside another pattern');
+    },
     // Nothing in rules passes the size cap, a constant written out in full no more than a list built in a loop.
     ArrayExpression(path) { if (path.node.elements.length > SIZE_CAP) bad(path.node, `a list holds ${SIZE_CAP} entries at most: this one is written out with ${path.node.elements.length}`); },
     ObjectExpression(path) { if (path.node.properties.length > SIZE_CAP) bad(path.node, `an object holds ${SIZE_CAP} keys at most: this one is written out with ${path.node.properties.length}`); },
@@ -428,6 +440,10 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     // `for (k in o)` lists every key of `o` before its first turn: the guard charges a constant's first.
     ForInStatement: { exit(path) { if (!isGuardCall(path.node.right)) path.node.right = call('fi', [path.node.right, line(path.node)]); } },
     Function(path) { if (!path.node._homie) block(path, 'body'); },
+    VariableDeclarator: {
+      // `const [first, ...others] = list`: the copy the rest makes is charged, and capped, before it is made.
+      exit(path) { const d = path.node; if (hasRest(d.id) && d.init && !isGuardCall(d.init)) d.init = call('sp', [d.init, line(d)]); },
+    },
     VariableDeclaration: {
       exit(path) {
         const list = statementsOf(path);
@@ -502,7 +518,8 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     NewExpression: {
       exit(path) {
         const name = path.node.callee.name;
-        if (name === 'Error') { path.node.arguments = path.node.arguments.map((a) => (t.isSpreadElement(a) ? a : P(a, path.node, path.scope))); return; }
+        // `new Error(message)` is made by the guard: charged, and with nothing recorded about where.
+        if (name === 'Error') { path.replaceWith(call('err', path.node.arguments.slice(0, 1).map((a) => (t.isSpreadElement(a) ? a : P(a, path.node, path.scope))))); path.skip(); return; }
         if (name !== 'Map' && name !== 'Set') return;
         path.replaceWith(call(name === 'Map' ? 'map' : 'set', path.node.arguments));
         path.skip();
@@ -525,6 +542,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
           return;
         }
         if (n.operator === '=') {
+          if (hasRest(left) && !isGuardCall(n.right)) n.right = call('sp', [n.right, line(n)]);
           // `o.toString = v`: never a function under a name JavaScript calls by itself.
           if (t.isMemberExpression(left) && !left.computed && HOOK_NAMES.includes(left.property.name) && !isNum(n.right, path.scope) && !t.isStringLiteral(n.right)) n.right = call('nh', [n.right, line(n)]);
           return;
@@ -577,7 +595,11 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         }
         for (let i = 0; i < n.arguments.length; i += 1) { const a = n.arguments[i]; if (t.isSpreadElement(a) && !isGuardCall(a.argument)) a.argument = call('sp', [a.argument, line(a)]); }
         // `Number(x)`, `String(x)` and `Error(x)` turn their argument into a number or a text: it is checked to be one.
-        if (t.isIdentifier(c) && ['Number', 'String', 'Error'].includes(c.name) && !path.scope.getBinding(c.name)) n.arguments = n.arguments.map((a) => (t.isSpreadElement(a) ? a : P(a, n, path.scope)));
+        if (t.isIdentifier(c) && ['Number', 'String', 'Error'].includes(c.name) && !path.scope.getBinding(c.name)) {
+          n.arguments = n.arguments.map((a) => (t.isSpreadElement(a) ? a : P(a, n, path.scope)));
+          // `Error(x)` is `new Error(x)`. And the text `String(x)` makes is charged and capped like any other: a number is not written out for nothing.
+          if (c.name === 'Error') { path.replaceWith(call('err', n.arguments.slice(0, 1))); path.skip(); } else if (c.name === 'String') { n._homie = true; path.replaceWith(call('tpl', [n, line(n)])); path.skip(); }
+        }
       },
     },
     OptionalCallExpression: {
@@ -633,6 +655,13 @@ function verifyLinked(ast, bad) {
   traverse(ast, {
     Loop(path) { if (!counts(path.node.body)) bad(path.node, 'the linked module holds a loop the guard did not count'); },
     ForInStatement(path) { if (!isGuardCall(path.node.right)) bad(path.node, 'the linked module holds a loop the guard did not count'); },
+    RestElement(path) {
+      const pat = path.parentPath;
+      if (!(pat.isArrayPattern() || pat.isObjectPattern())) return;
+      const owner = pat.parentPath;
+      const from = owner.isVariableDeclarator() && owner.node.id === pat.node ? owner.node.init : owner.isAssignmentExpression({ operator: '=' }) && owner.node.left === pat.node ? owner.node.right : null;
+      if (!from || !isGuardCall(from)) bad(path.node, 'the linked module holds a rest (...) in a pattern that the guard did not count');
+    },
     Function(path) {
       const own = path.node.params.length === 1 && t.isIdentifier(path.node.params[0]) && path.node.params[0].name.startsWith(G);
       if (!own && !counts(path.node.body)) bad(path.node, 'the linked module holds a function the guard did not count');
@@ -643,6 +672,13 @@ function verifyLinked(ast, bad) {
       else if ((n.operator === '===' || n.operator === '!==') && !cheapSide(n.left, path.scope) && !cheapSide(n.right, path.scope)) bad(n, OPERATOR);
     },
     SwitchStatement(path) { if (!isGuardCall(path.node.discriminant)) bad(path.node, OPERATOR); },
+    NewExpression(path) { if (t.isIdentifier(path.node.callee, { name: 'Error' })) bad(path.node, 'the linked module makes an Error the guard did not count'); },
+    CallExpression(path) {
+      const c = path.node.callee;
+      if (!t.isIdentifier(c) || path.scope.getBinding(c.name)) return;
+      if (c.name === 'Error') bad(path.node, 'the linked module makes an Error the guard did not count');
+      if (c.name === 'String' && !(isGuardCall(path.parent) && path.parent.callee.property.name === 'tpl')) bad(path.node, OPERATOR);
+    },
     UnaryExpression(path) { if (['-', '+', '~'].includes(path.node.operator) && !ok(path.node.argument, path)) bad(path.node, OPERATOR); },
     TemplateLiteral(path) { if (!path.node.expressions.every((e) => ok(e, path))) bad(path.node, OPERATOR); },
     MemberExpression(path) { if (isTarget(path) && !isGuardCall(path.node.object)) bad(path.node, WRITE); },

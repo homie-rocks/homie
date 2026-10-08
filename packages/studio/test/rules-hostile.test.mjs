@@ -51,8 +51,8 @@ export default defineRules({ contract: 2, space: { dims: 2 }, move, shapes: { ${
   move: `import { defineMove } from '@homie-rocks/studio/rules';\nexport const move = defineMove({ ${move} });`,
 });
 let made = 0;
-/** The planted game through the real build wall and into the real host runtime. `refused`: the lines the build refused it with, or null. */
-async function plant(parts, { budget = undefined, seats = 4, host = {}, clock = undefined } = {}) {
+/** The planted game through the real build wall and into the real host runtime. `refused`: the lines the build refused it with, or null. (A budget of a million units a tick unless a case names its own: room enough for a case to build what it plants before it reaches the line that matters.) */
+async function plant(parts, { budget = 1_000_000, seats = 4, host = {}, clock = undefined } = {}) {
   made += 1;
   let L;
   try { L = await loadGame(scratch, writeGame(scratch, `g${made}`, game(parts)), `g${made}`); } catch (error) { return { refused: String(error.message), L: null, rig: null, c: null }; }
@@ -547,7 +547,7 @@ test('the build stops on a tick that takes longer than a tick lasts, on its own 
   // One slow tick on a busy computer proves nothing.
   assert.doesNotThrow(() => smokeRun(L.H, c, 'coin-dash', { timer: stopwatch((i) => (i === 7 ? 120 : 2)) }));
   // Three ticks over the period, or one over four periods, stop the build with the handler that used the most.
-  assert.throws(() => smokeRun(L.H, c, 'coin-dash', { timer: stopwatch((i) => (i % 10 === 0 ? 60 : 2)) }), /games\/coin-dash: its rules ran for three seconds with bots and were too slow: tick \d+ took 60 ms, and 6 ticks took longer than a tick lasts\. A tick lasts 50 ms at 20 ticks a second\. The handler that used the most: \w+\.[\w.]+ \(\d+ budget units\); the busiest tick used \d+ of 1000000/);
+  assert.throws(() => smokeRun(L.H, c, 'coin-dash', { timer: stopwatch((i) => (i % 10 === 0 ? 60 : 2)) }), /games\/coin-dash: its rules ran for three seconds with bots and were too slow: tick \d+ took 60 ms, and 6 ticks took longer than a tick lasts\. A tick lasts 50 ms at 20 ticks a second\. The handler that used the most: \w+\.[\w.]+ \(\d+ budget units\); the busiest tick used \d+ of 500000/);
   assert.throws(() => smokeRun(L.H, c, 'coin-dash', { timer: stopwatch((i) => (i === 30 ? 900 : 2)) }), /were too slow: tick 30 took 900 ms\. A tick lasts 50 ms/);
   // And on the real clock: the review's slow game, which built before, and builds now because it is no longer slow.
   assert.equal(smokeRun(L.H, c, 'coin-dash').errors, 0);
@@ -616,6 +616,13 @@ const CASES = [
   ['an iterator spread into a list', { tick: `const m = new Map([[1, 2]]); const it = m.entries(); const o = { ...it }; self.score = it.length;` }, null],
   ['thousands of announcements for every entity to hear', { kinds: `rock: { fields: { n: f.u8() }, onRoom: { poke(world, self) { self.n += 1; } } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); }, on: { roundStart(world) { for (let i = 0; i < 9000000; i += 1) world.announce('poke', { n: 1 }); } },` }, /^room\.on\.roundStart: (this room already holds 16384 events and timers that are waiting|this handler ran too long)/],
   ['thousands of announcements nobody hears', { kinds: `rock: { fields: { n: f.u8() } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); }, on: { roundStart(world) { for (let i = 0; i < 9000000; i += 1) world.announce('poke', { n: 1 }); } },` }, /^room\.on\.roundStart: (this room already holds 16384 events|this handler ran too long)/],
+  ['the rest of a long list taken by a pattern, in a loop', { tick: `const a = []; for (let i = 0; i < 30000; i += 1) a.push(i); let n = 0; for (let i = 0; i < 9000000; i += 1) { const [first, ...others] = a; n += first; }` }, /this handler ran too long/],
+  ['the rest of a large object taken by a pattern, in a loop', { tick: `const o = {}; for (let i = 0; i < 4000; i += 1) o['k' + i] = i; let n = 0; for (let i = 0; i < 9000000; i += 1) { const { k0, ...others } = o; n += k0; }` }, /this handler ran too long/],
+  ['the rest of a long list taken by an assignment, in a loop', { tick: `const a = []; for (let i = 0; i < 30000; i += 1) a.push(i); let first = 0; let others = []; for (let i = 0; i < 9000000; i += 1) { [first, ...others] = a; }` }, /this handler ran too long/],
+  ['a rest in a parameter', { tick: `const f = ([first, ...others]) => first; self.score = f([1, 2]);` }, { refused: /src\/rules\.ts:7 take the rest \(\.\.\.\) out of a value in a declaration of its own, `const \[first, \.\.\.others\] = list`, not in a parameter, a loop's head or inside another pattern/ }],
+  ['a rest in a loop\'s head', { tick: `for (const [first, ...others] of [[1, 2]]) { self.score = first; }` }, { refused: /take the rest \(\.\.\.\) out of a value in a declaration of its own/ }],
+  ['a rest inside another pattern', { tick: `const { a: [first, ...others] } = { a: [1, 2] }; self.score = first;` }, { refused: /take the rest \(\.\.\.\) out of a value in a declaration of its own/ }],
+  ['the rest of world', { tick: `const { tick, ...others } = world; self.score = 1;` }, /world and ctx are not lists of values/],
   // --- a long text is read end to end by whatever compares it: that is charged too
   ['two long texts compared with ===, in a loop', { tick: `let a = 'ab'; for (let i = 0; i < 13; i += 1) a = a + a; let b = 'ab'; for (let i = 0; i < 13; i += 1) b = b + b; let n = 0; for (let i = 0; i < 9000000; i += 1) { if (a === b) n += 1; }` }, /this handler ran too long/],
   ['two long texts compared with <, in a loop', { tick: `let a = 'ab'; for (let i = 0; i < 13; i += 1) a = a + a; let b = 'ab'; for (let i = 0; i < 13; i += 1) b = b + b; let n = 0; for (let i = 0; i < 9000000; i += 1) { if (a < b) n += 1; }` }, /this handler ran too long/],
@@ -676,7 +683,7 @@ test('move, think and join always run, and once the tick\'s budget is gone each 
   assert.equal(ran.escaped, null);
   const s = stats(rig);
   const T = c.settings.budget.tick;
-  assert.ok(s.maxTickUnits <= 1.75 * T, `the busiest tick used ${s.maxTickUnits} units: no more than the budget, one handler's quarter over it, and half a budget of small shares (${1.75 * T})`);
+  assert.ok(s.maxTickUnits <= 1.5 * T + 1024, `the busiest tick used ${s.maxTickUnits} units: no more than a budget and a half (${1.5 * T}), which is where a body's move stops being run at all`);
   assert.ok(s.maxTickUnits > T, 'and it did use the whole budget');
   assert.equal(s.budgetStops >= 3 * 2000, true, 'every one of them was run, and stopped');
   assert.ok(ran.slowest < SLOW_MS, `the slowest tick took ${ran.slowest.toFixed(0)} ms`);
@@ -703,8 +710,40 @@ test('once the tick\'s budget is gone, a body\'s small share buys nothing large:
     assert.equal(ran.escaped, null, what);
     assert.ok(ran.slowest < SLOW_MS, `${what}: with 2,000 bodies trying it on every tick, the slowest tick took ${ran.slowest.toFixed(0)} ms`);
     assert.ok(stats(rig).budgetStops > 2000, `${what}: they were stopped (${stats(rig).budgetStops} times)`);
-    assert.ok(stats(rig).maxTickUnits <= 1.75 * c.settings.budget.tick, what);
+    assert.ok(stats(rig).maxTickUnits <= 1.5 * c.settings.budget.tick + 1024, what);
   }
+});
+
+test('a room whose handlers all throw is no slower for it, pays for it, and ends when they use up every tick', async () => {
+  // Making an Error has JavaScript record where it was made, which costs thousands of loop turns; so does every Error
+  // the runtime or the language throws for a mistake. In a handler none of that is recorded, and a handler that throws
+  // costs its tick 512 units.
+  const made = await plant({ tick: `let n = 0; for (let i = 0; i < 9000000; i += 1) { const e = new Error('no'); n += 1; }` });
+  const ran = drive(made.rig, 4);
+  assert.ok(ran.slowest < SLOW_MS, `a loop that makes Errors: the slowest tick took ${ran.slowest.toFixed(0)} ms (it was about 2,000 ms)`);
+  assert.match(stats(made.rig).lastError, /this handler ran too long/);
+  for (const [what, line, said] of [
+    ['an Error of the game\'s own', `throw new Error('no coins left');`, /^rock\.tick: no coins left$/],
+    ['a key read of nothing', `const o = null; self.n = o.x;`, /^rock\.tick: Cannot read properties of null/],
+    ['a call the host refuses', `world.send(self.id, 'nope', {});`, /^rock\.tick: the event "nope" is not declared in shapes$/],
+    ['a key the guard refuses', `const k = 'con' + 'structor'; self.n = self[k];`, /^rock\.tick: the key "constructor" is not allowed in rules/],
+  ]) {
+    const r = await plant({ kinds: `rock: { fields: { n: f.u8() }, tick(world, self) { ${line} } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); },` });
+    const t = drive(r.rig, 6);
+    assert.equal(t.escaped, null, what);
+    assert.ok(t.slowest < SLOW_MS, `${what}: with 2,000 handlers throwing on every tick, the slowest tick took ${t.slowest.toFixed(0)} ms`);
+    assert.match(stats(r.rig).lastError, said, what);
+    assert.ok(stats(r.rig).ticksCut >= 4, `${what}: 2,000 throws use up a tick's budget, so the tick is cut short`);
+    assert.ok(stats(r.rig).tickUnits >= r.c.settings.budget.tick, what);
+    r.rig.ticks(60);
+    assert.deepEqual(r.rig.ended.map((e) => [e.why, e.kind, e.handler]), [['budget', 'rock', 'tick (so many handlers threw that the tick had no budget left)']], what);
+  }
+  // A few handlers that throw are not a room's end: the error is counted and the room goes on.
+  const few = await plant({ kinds: `rock: { fields: { n: f.u8() }, tick(world, self) { throw new Error('no'); } }`, room: `start(world) { for (let i = 0; i < 50; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); },` });
+  few.rig.ticks(200);
+  assert.deepEqual(few.rig.ended, []);
+  assert.equal(stats(few.rig).ticksCut, 0);
+  assert.equal(stats(few.rig).errors, 50 * 199);
 });
 
 test('a room that holds more than a tick can send is charged for it, and ends', async () => {

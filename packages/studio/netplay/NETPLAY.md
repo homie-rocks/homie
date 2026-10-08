@@ -2182,9 +2182,10 @@ from outside the studio run on its server.
   (`world.near`) hands it out without copying it.
 - **At run time**: a handler that has used a quarter of `room.budget.tick` is stopped and abandoned,
   as one that throws is. Rules cannot catch it, because rules cannot contain `try`. The default is
-  1,000,000 units a tick at 20 ticks a second or fewer, and 20,000,000 divided by the tick rate
+  500,000 units a tick at 20 ticks a second or fewer, and 10,000,000 divided by the tick rate
   above that. When a tick has used all of `budget.tick` it ends early: `move` has run for every
-  body (once the budget is gone, with a small share each), handlers not yet run are skipped, and
+  body (once the budget is gone with a small share each, and not at all once the tick has used half
+  its budget again), handlers not yet run are skipped, and
   events not yet run stay queued in order. The tick pays first for the state it sends: 4 units for
   every value in its snapshot.
 - **Bounds a game is written inside**: a room holds 2,048 entities, 16,384 events and timers

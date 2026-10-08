@@ -23,10 +23,10 @@
  * THE BUDGET (section 10, guard.ts). Before each handler the core sets the guard's counter to a quarter of
  * `budget.tick`, or what is left of the tick when that is less. A handler that uses it all is abandoned, as one that
  * throws is. When a tick has used all of `budget.tick`, handlers not yet run are skipped and events not yet run stay
- * queued, in order, for the next tick. `move`, `think`, `room.join` and `room.start` always run; once the tick's
- * budget is gone each of them is given a small share and no more (`floor`, below). So a tick's worst case is the
- * budget, the one quarter its last handler may run over it, and half a budget of small shares in a room full of
- * bodies: a budget and three quarters, however many bodies there are.
+ * queued, in order, for the next tick. `move`, `think`, `room.join` and `room.start` run all the same; once the
+ * tick's budget is gone each of them is given a small share and no more (`floor`, below), and a body's `move` and
+ * `think` stop being run when the tick has used half its budget again. So a tick's worst case is a budget and a half,
+ * however many bodies there are and whatever they do.
  *
  * WHAT COMES BACK FROM RULES (pack.ts, "THE BOUNDARY"). Nothing the rules hand over is used as it is. A handler's
  * return value, every argument of a `world` call and everything written to a field, a list, `motion`, an event or an
@@ -60,6 +60,8 @@ export const SET = 3;
 export const SNAP = 4;
 /** One event or timer put on the room's queue (`world.send`, `sendRoom`, `announce`, `after`): it is sorted and delivered on a later tick, and the sender pays for that too. */
 export const SEND = 16;
+/** A handler that threw: what catching it and writing it down costs the tick. */
+export const THROWN = 512;
 /** The most area events (`world.sendArea`) one tick takes. */
 export const AREAS_MAX = 64;
 /** What the log names when a room ends because of what it holds, not because of a handler. */
@@ -160,6 +162,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
   const quarter = Math.max(1, Math.floor(c.settings.budget.tick / 4));
+  const half = Math.floor(c.settings.budget.tick / 2);
   /** What `move`, `think`, `join` and `start` are given each once the tick's budget is gone: all of them together, in a full room, use half a budget more. */
   const floor = Math.max(1, Math.floor(c.settings.budget.tick / (4 * ENTITY_MAX)));
   const stage = String(opts.stage ?? '');
@@ -326,16 +329,24 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
    * budget; and the counter and the scope are put back whatever happens. Nothing of the rules' is touched after this
    * returns.
    */
-  function run(kind: string, handler: string, ent: Ent | null, scope: Ctx['scope'], fn: () => void, always = false): boolean {
+  function run(kind: string, handler: string, ent: Ent | null, scope: Ctx['scope'], fn: () => void, always: boolean | 'body' = false): boolean {
     if (left <= 0) {
       cut = true;
-      if (!always) { stats.skipped += 1; return false; }
+      // Skipped once the tick's budget is gone. `room.join` and `room.start` never are; a body's `move` and `think`
+      // are only when the tick has used half its budget again, which is what a full room's small shares come to.
+      if (!always || (always === 'body' && left <= -half)) { stats.skipped += 1; return false; }
     }
     // A handler that runs is given a whole quarter, as the design has it: the tick ends early once the budget is used,
     // so its last handler may take it one quarter over, and no handler is cut short for running late in a busy tick.
     const quota = left > 0 ? quarter : floor;
     const before = cx;
     cx = { scope, ent };
+    // Whatever is thrown while the handler runs (by the rules, by the guard, by this file, by JavaScript itself for a key
+    // read of nothing) is made with no record of where: recording it costs thousands of loop turns, and only the message
+    // is ever kept. So a room whose every handler throws on every tick is no slower than one whose handlers do not.
+    const E = Error as unknown as { stackTraceLimit?: number };
+    const limit = E.stackTraceLimit;
+    E.stackTraceLimit = 0;
     G.left = quota;
     try {
       let bad = false; let thrown: unknown;
@@ -346,6 +357,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     } finally {
       const used = quota - (G.left > 0 ? G.left : 0);
       G.left = Infinity;
+      E.stackTraceLimit = limit;
       cx = before;
       touched = [];
       left -= used;
@@ -355,10 +367,16 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     return true;
   }
   let failing: { kind: string; handler: string } = { kind: '', handler: '' };
+  /** In the running tick: whether the budget stopped a handler, and the handler that last threw. A tick cut short with no handler stopped was used up by handlers that threw. */
+  let stopped = false;
+  let threw: { kind: string; handler: string } | null = null;
   function failed(kind: string, handler: string, error: unknown): void {
     stats.errors += 1;
     stats.lastError = `${kind}.${handler}: ${errorText(error)}`;
-    if (error instanceof BudgetError) { stats.budgetStops += 1; cut = true; failing = { kind, handler }; stats.failing = `${kind}.${handler}`; }
+    // A throw unwinds the handler and is written down here: that is the tick's own work, and the tick pays for it.
+    // (The budget's own stop costs next to nothing, and the handler it stopped has used its share already.)
+    if (!(error instanceof BudgetError)) left -= THROWN;
+    if (error instanceof BudgetError) { stats.budgetStops += 1; cut = true; stopped = true; failing = { kind, handler }; stats.failing = `${kind}.${handler}`; } else threw = { kind, handler };
   }
 
   /* ---------------------------------------------------------------- world: all that rules are handed */
@@ -813,7 +831,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     tick = (tick + 1) >>> 0;
     // The tick pays first for the state it sends: what the last snapshot packed. A room that holds more than a tick can send has nothing left for its handlers, and ends as any room does whose budget trips on every tick.
     left = c.settings.budget.tick - SNAP * snapCells;
-    cut = false;
+    cut = false; stopped = false; threw = null;
     // When sending the state takes more than half of a tick's budget, that is what a cut tick is put down to.
     stateHeavy = 2 * SNAP * snapCells > c.settings.budget.tick;
     // A room that holds more than a whole tick's budget can send has no handler left to run that could make it
@@ -850,7 +868,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
               const back: unknown = (k.think as NonNullable<KindTable['think']>)(world, e.self);
               charge(COPY * k.input.length);
               stepIn = coerceFields(k.input, back, dims);
-            }, true);
+            }, 'body');
             e.input = Object.freeze(stepIn ?? initFields(k.input, dims));
           } else e.input = Object.freeze(initFields(k.input, dims));
           if (driven && body.owner) {
@@ -872,7 +890,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
         if (!k.move) continue;
         const b = { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: e.mself };
         moveRadius = body.radius;
-        run(k.name, 'move', e, 'move', () => (k.move as NonNullable<KindTable['move']>)(b, e.input, moveCtx), true);
+        run(k.name, 'move', e, 'move', () => (k.move as NonNullable<KindTable['move']>)(b, e.input, moveCtx), 'body');
         // The runtime rounds to 32-bit floats, here and in the browser, so both step from exactly the same numbers.
         // `b` is the runtime's own object: what `move` left in it is read by its own data properties and cannot throw.
         e.pos = clampIn(V(own(b, 'pos')), body.radius); e.vel = V(own(b, 'vel')); e.heading = dir(own(b, 'heading'), dims); e.grounded = own(b, 'grounded') === true;
@@ -921,7 +939,9 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     stats.tickUnits = c.settings.budget.tick - left;
     if (stats.tickUnits > stats.maxTickUnits) stats.maxTickUnits = stats.tickUnits;
     if (cut) {
-      if (stateHeavy) { failing = { kind: 'room', handler: STATE_TOO_LARGE }; stats.failing = `${failing.kind}.${failing.handler}`; }
+      if (stateHeavy) failing = { kind: 'room', handler: STATE_TOO_LARGE };
+      else if (!stopped && threw) failing = { kind: threw.kind, handler: `${threw.handler} (so many handlers threw that the tick had no budget left)` };
+      stats.failing = `${failing.kind}.${failing.handler}`;
       stats.ticksCut += 1;
       trips += 1;
       // The budget tripping on every tick for two seconds: the room ends, and the log names the handler.

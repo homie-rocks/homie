@@ -86,6 +86,8 @@ export function plainData(v: unknown, left: { n: number }, deep = 4, text = 256)
 export class BudgetError extends Error {
   constructor() { super('this handler ran too long: it used its whole share of the tick (a loop that never ends, or too much work in one step)'); this.name = 'BudgetError'; }
 }
+/** The one BudgetError there is: thrown again each time, so stopping a handler makes nothing (a full room's bodies may each be stopped on every tick). */
+const STOP = new BudgetError();
 /** Thrown when rules reach for something outside the wall at run time (a built key, a method that is not allowed, a size past the cap). */
 export class GuardError extends Error {
   constructor(message: string) { super(message); this.name = 'GuardError'; }
@@ -94,13 +96,15 @@ export class GuardError extends Error {
 /** Take `n` units from the running handler. The host runtime's own functions call it with the weights of the design. */
 export function charge(n: number): void {
   // Written so that anything but a count still inside the budget stops the handler: a charge that is not a number can never switch the counter off.
-  if (!((G.left -= n) >= 0)) throw new BudgetError();
+  if (!((G.left -= n) >= 0)) throw STOP;
 }
 /** One loop turn, or one call of a function in rules. */
 export function t(): void {
-  if (!((G.left -= 1) >= 0)) throw new BudgetError();
+  if (!((G.left -= 1) >= 0)) throw STOP;
 }
 
+/** What one key of an object costs when the whole object is copied or gone through: a spread, a rest in a pattern, a constant's keys. */
+export const KEY = 24;
 /** What one guarded method call costs before anything it does: finding which kind of value it is called on, and the call itself. */
 export const CALL = 3;
 
@@ -146,12 +150,28 @@ export function w<T>(o: T, line?: number): T {
   return o;
 }
 
+/**
+ * `new Error(message)`. Making an Error has JavaScript record where it was made, which costs thousands of loop turns
+ * and which rules can never read (`stack` is a refused name). So one is made with nothing recorded, and charged.
+ */
+export function err(message?: unknown): Error {
+  charge(16);
+  const E = Error as unknown as { stackTraceLimit?: number };
+  const limit = E.stackTraceLimit;
+  E.stackTraceLimit = 0;
+  try { return message === undefined ? new Error() : new Error(message as string); } finally { E.stackTraceLimit = limit; }
+}
+/** A number used as a key is a whole number: one with a fraction would be turned into a text to be looked up, which costs as much as fifty loop turns. */
+function whole(k: number, line?: number): void {
+  if (!(Number.isInteger(k) && k > -2147483648 && k < 4294967296)) refuse('a number used as a key is a whole number', line);
+}
+
 /** A computed read, `a[k]`: a number, or a string naming an own property that is not a function. Anything else throws. Never a prototype. */
 export function g(o: any, k: unknown, line?: number): unknown {
   if (o === null || o === undefined) throw new TypeError(`cannot read a key of ${o}${at(line)}`);
   // A unit for the guarded access itself: a loop that does nothing but read keys is then paid for at the rate of any other.
-  if (!((G.left -= 1) >= 0)) throw new BudgetError();
-  if (typeof k === 'number') return o[k];
+  if (!((G.left -= 1) >= 0)) throw STOP;
+  if (typeof k === 'number') { whole(k, line); return o[k]; }
   if (typeof k !== 'string') refuse('a computed key is a number or a string', line);
   if (refusedName(k)) refuse(`the key "${k}" is not allowed in rules`, line);
   const v = o[k];
@@ -166,7 +186,7 @@ export function go(o: any, k: unknown, line?: number): unknown {
 }
 /** A computed key that is only named (an object literal's `{ [k]: 1 }`, a destructuring pattern's `{ [k]: v }`). */
 export function k(key: unknown, line?: number): string | number {
-  if (typeof key === 'number') return key;
+  if (typeof key === 'number') { whole(key, line); return key; }
   if (typeof key !== 'string') refuse('a computed key is a number or a string', line);
   if (refusedName(key) || HOOK_NAMES.has(key)) refuse(`the key "${key}" is not allowed in rules`, line);
   return key;
@@ -174,8 +194,8 @@ export function k(key: unknown, line?: number): string | number {
 /** A computed write, `a[k] = v`: a number (inside the size cap), or a string other than the refused names. */
 export function s(o: any, key: unknown, v: unknown, line?: number): unknown {
   if (o === null || typeof o !== 'object') throw new TypeError(`cannot write a key of ${o === null ? 'null' : typeof o}${at(line)}`);
-  if (!((G.left -= 1) >= 0)) throw new BudgetError();
-  if (typeof key === 'number') { if (Array.isArray(o) && key >= SIZE_CAP) sized(key + 1, line); } else if (typeof key === 'string' && HOOK_NAMES.has(key)) nh(v, line); else k(key, line);
+  if (!((G.left -= 1) >= 0)) throw STOP;
+  if (typeof key === 'number') { whole(key, line); if (Array.isArray(o) && key >= SIZE_CAP) sized(key + 1, line); } else if (typeof key === 'string' && HOOK_NAMES.has(key)) nh(v, line); else k(key, line);
   o[key as string] = v;
   return v;
 }
@@ -324,7 +344,8 @@ export function sp<T>(x: T, line?: number): T {
     hostless(x, line);
     const proto = Object.getPrototypeOf(x);
     if (proto !== Object.prototype && proto !== null) refuse('only a list, a text, a Map, a Set or a plain object can be spread', line);
-    if (!prepaid(x)) charge(1 + Object.keys(x as object).length);
+    // Copying an object key by key is dear: `KEY` units a key, as for a constant's.
+    if (!prepaid(x)) charge(1 + KEY * Object.keys(x as object).length);
     return x;
   }
   const n = lengthOf(x);
@@ -352,8 +373,8 @@ export function add(a: any, b: any, line?: number): any {
 export function tpl(text: string, line?: number): string { charge(text.length); sized(text.length, line); return text; }
 /** `Object.keys`, `values` and `entries`, charged a unit a key. */
 export function keys(o: object): string[] { const paid = prepaid(o); const out = Object.keys(o); if (!paid) charge(1 + out.length); return out; }
-export function values(o: object): unknown[] { hostless(o); const paid = prepaid(o); const out = Object.values(o); if (!paid) charge(1 + out.length); return out; }
-export function entries(o: object): [string, unknown][] { hostless(o); const paid = prepaid(o); const out = Object.entries(o); if (!paid) charge(1 + out.length); return out; }
+export function values(o: object): unknown[] { hostless(o); const paid = prepaid(o); const out = Object.values(o); if (!paid) charge(1 + 2 * out.length); return out; }
+export function entries(o: object): [string, unknown][] { hostless(o); const paid = prepaid(o); const out = Object.entries(o); if (!paid) charge(1 + 8 * out.length); return out; }
 /**
  * How many keys a value has, when that is known without counting them: a list or a text by its length, and a
  * module-level constant by the count taken when it was frozen at load.
@@ -364,14 +385,14 @@ export function keyCount(o: unknown): number | undefined {
   return o !== null && typeof o === 'object' ? KEYS.get(o) : undefined;
 }
 /**
- * Going through all of a value's keys, charged BEFORE it is done when the count is known (16 units a key for a
+ * Going through all of a value's keys, charged BEFORE it is done when the count is known (`KEY` units a key for a
  * constant, whose keys cost the handler nothing to make). True when it was. A value whose count is not known was made
  * by the running handler, which paid a unit and more for every key it has: that one is charged after.
  */
 export function prepaid(o: unknown): boolean {
   const n = keyCount(o);
   if (n === undefined) return false;
-  charge(1 + (typeof o === 'string' || Array.isArray(o) ? n : 16 * n));
+  charge(1 + (typeof o === 'string' || Array.isArray(o) ? n : KEY * n));
   return true;
 }
 /** `for (const k in o)`: JavaScript lists every key before the first turn, so a constant's are paid for here. */

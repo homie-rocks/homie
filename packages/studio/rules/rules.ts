@@ -176,14 +176,14 @@ export interface RoomSettings {
   predict: { catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
 }
 /**
- * The default `budget.tick`: 1,000,000 units at 20 ticks a second or fewer, and less at a faster rate, so a second of
- * ticks never has more than 20,000,000. The figure is derived from a measurement (rooms-slice-1-notes.md, "The
- * budget, measured"): the dearest charged work costs about 12 ns a unit on the computer it was measured on, so a tick
- * that uses its whole budget takes about 12 ms there, and 21 ms at the very worst (a full room in which every `move`
- * and `think` also takes its floor). That is under half a 50 ms period, with as much again to spare for a slower server.
+ * The default `budget.tick`: 500,000 units at 20 ticks a second or fewer, and less at a faster rate, so a second of
+ * ticks never has more than 10,000,000. The figure is derived from a measurement (rooms-slice-1-notes.md, "The
+ * budget, measured"): the dearest charged work costs 12 to 16 ns a unit on the computer it was measured on, and a
+ * tick's worst case is a budget and a half (core.ts), so the worst tick takes about 12 ms there. That is a quarter of a
+ * 50 ms period, which leaves a server half as fast inside half a period, where the design wants a tick to end.
  */
-export const BUDGET_TICK = 1_000_000;
-export const BUDGET_SECOND = 20_000_000;
+export const BUDGET_TICK = 500_000;
+export const BUDGET_SECOND = 10_000_000;
 export const budgetFor = (tickHz: number): number => Math.min(BUDGET_TICK, Math.floor(BUDGET_SECOND / tickHz));
 export const ROOM_DEFAULTS: RoomSettings = deepFreeze({
   host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: BUDGET_TICK },

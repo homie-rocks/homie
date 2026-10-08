@@ -124,7 +124,10 @@ test('a declaration that does not fit the contract is named', async () => {
   assert.equal(s.settings.tickHz, 20);
   assert.equal(s.settings.host, 'server');
   assert.equal(s.problems.length, 3);
-  assert.deepEqual(L.R.roomSettings(undefined), { settings: { host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: 1_000_000 }, predict: { catchM: null, catchUp: 1.25, snapM: null, blendMs: 100, interpMs: null } }, problems: [] });
+  assert.deepEqual(L.R.roomSettings(undefined), { settings: { host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: 500_000 }, predict: { catchM: null, catchUp: 1.25, snapM: null, blendMs: 100, interpMs: null } }, problems: [] });
+  // The default budget is the same work a second at any tick rate above twenty.
+  assert.deepEqual([10, 20, 30, 60].map((tickHz) => L.R.roomSettings({ tickHz }).settings.budget.tick), [500_000, 500_000, 333_333, 166_666]);
+  assert.equal(L.R.roomSettings({ tickHz: 60, budget: { tick: 900_000 } }).settings.budget.tick, 900_000, 'and a game may name its own');
   assert.throws(() => L.R.compileMap({}), /needs "bounds"/);
 });
 
