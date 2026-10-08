@@ -40,7 +40,7 @@ import type { Netplay, NetplayOptions, RoundInfo, Snapshot, StepEntry } from '..
 import { exposePort } from '../port/probe.ts';
 import { BudgetError, G, brand } from './guard.ts';
 import { math, sweepMap } from './math.ts';
-import { coerce, coerceFields, dir, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
+import { coerce, coerceFields, dir, num, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
 import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
 
@@ -165,7 +165,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let moveTick = 0;
   const moveCtx = brand(Object.freeze({
     get tick() { return moveTick; }, dt: 1 / tickHz, tune, math,
-    ticks: (seconds: number): number => { const n = Math.round(Number(seconds) * tickHz); return Number(seconds) > 0 ? Math.max(1, n) : 0; },
+    // As the server's `ctx.ticks` reads it: a plain number, or nothing.
+    ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },
     map: brand(Object.freeze({ name: game.map.name ?? 'main', spot: (name: string) => spots[name]?.[0], spots: (name: string) => spots[name] ?? Object.freeze([]), sweep: (body: any, delta: unknown) => sweepMap(map, body, delta, myKind()?.radius ?? 0, dims) })),
   }));
   function rebase(k: number): void {

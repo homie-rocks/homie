@@ -417,6 +417,47 @@ test('a value is held to its declared shape without throwing, whatever it is', a
   assert.doesNotThrow(() => declare({ bag: f.list(f.u32(), 1024), path: f.list(f.vec3(), 1024) }));
 });
 
+test('a declaration is read as plain data too: nothing a module declares is turned into a number, walked without end or handed on as it is', async () => {
+  // The contract is read once, when a room's Worker loads, with no handler running and so no budget: it must not be
+  // possible to make that reading long. This module is handed over as plain JavaScript, as the one above is.
+  const L = await loadGame(scratch, COIN_DASH, 'coin-dash');
+  const f = L.R.f;
+  let hooks = 0;
+  const hook = () => { hooks += 1; return 7; };
+  // A list that holds another twice, forty levels deep: 2^40 entries to anything that walks it.
+  let deep = ['x'];
+  for (let i = 0; i < 40; i += 1) deep = [deep, deep];
+  const evil = { valueOf: hook, toString: hook, toJSON: hook, [Symbol.toPrimitive]: hook };
+  const compile = (over, env = {}) => L.R.compileRules(L.R.defineRules({ contract: 2, space: { dims: 2 }, entities: { a: { fields: { n: f.u8() } } }, ...over }), env);
+  const quick = (what, fn) => { const t0 = performance.now(); const out = fn(); const ms = performance.now() - t0; assert.ok(ms < SLOW_MS, `${what} took ${ms.toFixed(0)} ms`); return out; };
+  // `init`: copied as plain data of a bounded size when the declaration is read, whether it came through `f` or was written by hand.
+  const c = quick('a declaration whose init is very deep', () => compile({ entities: { a: { fields: { bag: f.list(f.u8(), 4, { init: deep }), n: { t: 'u8', init: evil }, note: f.text(8, { init: evil }), at: f.vec3({ init: { x: evil, y: deep, z: 1 } }) } } } }));
+  assert.equal(hooks, 0);
+  const core = L.C.createCore({ ...c, start: (world) => { world.spawn('a', { x: 0, y: 0, z: 0 }, {}); } }, { seed: 1 });
+  core.step();
+  assert.deepEqual(core.snapshot()[1][0][7], [[0, 0], 0, '', [0, 0]], 'and each field starts as the zero of its type');
+  // The declarations as a view is handed them: JSON, with nothing of the module's in it.
+  const text = quick('the declarations as JSON', () => JSON.stringify(L.R.schemaOf(c)));
+  assert.equal(hooks, 0);
+  assert.ok(text.length < 20_000, `${text.length} characters`);
+  assert.doesNotMatch(text, /function|=>/);
+  // A declaration used inside itself again and again is counted once, and refused for its size before anything walks it.
+  let nest = f.struct({ a: f.u8() });
+  for (let i = 0; i < 40; i += 1) nest = f.struct({ a: nest, b: nest });
+  assert.throws(() => quick('a struct that holds another twice, forty levels deep', () => compile({ entities: { a: { fields: { nest } } } })), /entities\.a\.fields\.nest may hold \d+ values when it is full, and one field holds 16384 at most/);
+  let lists = f.u8();
+  for (let i = 0; i < 40; i += 1) lists = f.list(lists, 2);
+  assert.throws(() => quick('a list of lists, forty levels deep', () => compile({ entities: { a: { fields: { lists } } } })), /may hold \d+ values when it is full/);
+  // A number in a declaration is a number, or the declaration is refused: it is never made from something else.
+  assert.throws(() => quick('rounds', () => compile({ room: { rounds: { seconds: deep, breakSeconds: 1 } } })), /room\.rounds is \{ seconds, breakSeconds \}/);
+  assert.throws(() => quick('rounds', () => compile({ room: { rounds: { seconds: evil, breakSeconds: evil } } })), /room\.rounds is \{ seconds, breakSeconds \}/);
+  assert.throws(() => quick('bots', () => compile({ room: { bots: { keep: deep } } })), /room\.bots is \{ keep: n \}/);
+  assert.throws(() => quick('a body', () => compile({ entities: { a: { body: { shape: 'circle', radius: deep, maxSpeed: evil } } } })), /entities\.a\.body needs radius \(metres\) and maxSpeed/);
+  assert.throws(() => quick('a field', () => compile({ entities: { a: { fields: { n: { t: deep } } } } })), /entities\.a\.fields\.n is not a field type/);
+  assert.throws(() => quick('a list', () => compile({ entities: { a: { fields: { n: f.list(f.u8(), deep) } } } })), /a list or a map declares its largest size/);
+  assert.equal(hooks, 0, 'and no hook of the module\'s was run by any of it');
+});
+
 /* ================================================================== the budget is honest */
 
 test('a query copies nothing: four hundred entities with full lists cost what four hundred entities cost', async () => {

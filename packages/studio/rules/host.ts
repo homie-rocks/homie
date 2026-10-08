@@ -262,10 +262,10 @@ export function createHost(o: HostOptions): Host {
         if (!p || !Number.isInteger(p.seat)) return;
         const seat = p.seat as number;
         const driver: Driver = p.agent ? 'ai' : 'person';
-        names.set(seat, String(p.name ?? '').slice(0, 40));
+        names.set(seat, typeof p.name === 'string' ? p.name.slice(0, 40) : '');
         present.set(seat, driver === 'person');
         // The relay numbers every stay in a seat (`occ`): the same number is the same holder, back.
-        core.seatJoin({ seat, driver, owner: `p${Number.isInteger(p.occ) ? p.occ : String(p.id ?? seat)}` });
+        core.seatJoin({ seat, driver, owner: `p${Number.isInteger(p.occ) ? p.occ : typeof p.id === 'string' ? p.id.slice(0, 40) : seat}` });
         core.seatAway(seat, false);
         queues.delete(seat);
         rosterText = '';
@@ -289,9 +289,10 @@ export function createHost(o: HostOptions): Host {
         return;
       }
       case 'ev': {
-        const kind = String(m.k ?? '');
+        // What a player sends is read as what it is: a kind or a command's name that is not a text is no kind and no command.
+        const kind = typeof m.k === 'string' ? m.k : '';
         if (!Number.isInteger(m.from)) return;
-        if (kind === 'cmd') { const d = m.d as unknown[]; if (Array.isArray(d)) core.command(m.from as number, String(d[0]), d[1]); return; }
+        if (kind === 'cmd') { const d = m.d as unknown[]; if (Array.isArray(d) && typeof d[0] === 'string') core.command(m.from as number, d[0], d[1]); return; }
         // A seat's speech and emotes reach everyone unchanged, as a browser host relays them today.
         if (SPEECH.test(kind)) o.send({ t: 'ev', from: m.from, k: kind, d: m.d ?? null });
         return;

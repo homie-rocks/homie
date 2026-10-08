@@ -38,7 +38,7 @@
  * that is held to its shape, and paid for, before the handler's budget is closed.
  * =============================================================================
  */
-import { BudgetError, G, brand, charge, deepFreeze, keyCount } from './guard.ts';
+import { BudgetError, G, brand, charge, deepFreeze, plainData } from './guard.ts';
 import { SKIN, castMap, exact, math, rayCircle, sweepMap } from './math.ts';
 import type { Hit } from './math.ts';
 import { AHEAD, ZERO, coerce, coerceFields, dir, est, estFields, initFields, mutable, num, own, packEntity, packFields, packVec, packed, said, thaw, unpackFields, unpackVec, vec3 } from './pack.ts';
@@ -113,31 +113,6 @@ function errorText(error: unknown): string {
   const m = error instanceof Error ? own(error, 'message') : undefined;
   return typeof m === 'string' ? m.slice(0, 200) : 'a handler threw a value that is not an Error';
 }
-/** Plain data with no declared shape (a game's own answer to `world.ask`): numbers, short texts, true, false, lists and objects of them, a few levels deep and `left.n` values at most. Nothing of the value is run, and anything else is null. */
-function plainData(v: unknown, left: { n: number }, depth = 0): unknown {
-  left.n -= 1;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-  if (typeof v === 'boolean' || v === null) return v;
-  if (typeof v === 'string') return v.slice(0, 256);
-  if (typeof v !== 'object' || depth >= 4 || left.n <= 0) return null;
-  if (Array.isArray(v)) {
-    const out: unknown[] = [];
-    for (let i = 0; i < v.length && left.n > 0; i += 1) out.push(plainData(own(v, i), left, depth + 1));
-    return Object.freeze(out);
-  }
-  const out: Record<string, unknown> = {};
-  let seen = 0;
-  // A constant's keys are all listed before the first is read: they are paid for first. (Anything else the handler made, and paid for.)
-  const known = keyCount(v);
-  if (known !== undefined) charge(known);
-  for (const key in v) {
-    // Keys are counted as they are met, so an object with very many is left after the first few.
-    if ((seen += 1) > 64 || left.n <= 0) break;
-    if (Object.hasOwn(v, key) && key.length <= 32 && !REFUSED.has(key)) out[key] = plainData(own(v, key), left, depth + 1);
-  }
-  return Object.freeze(out);
-}
-const REFUSED: ReadonlySet<string> = new Set(['constructor', 'prototype', '__proto__']);
 
 
 /* ------------------------------------------------------------------ the saved room */

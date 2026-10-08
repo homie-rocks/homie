@@ -22,7 +22,7 @@
  * No imports but the guard, erasable TypeScript only: Node, a browser bundle and the Worker all load it as it is.
  * =============================================================================
  */
-import { brand, deepFreeze } from './guard.ts';
+import { brand, deepFreeze, own, plainData } from './guard.ts';
 
 /** The version of the rules contract this runtime runs. Today's netplay contract is version 1. */
 export const RULES_CONTRACT = 2;
@@ -86,14 +86,19 @@ export const f = brand(Object.freeze({
  */
 const CELLS = new WeakMap<object, number>();
 export function cellsOf(fd: Field): number {
+  // Asked of a declaration before it has been checked, so it takes anything: what is not a field counts as one value.
+  if (fd === null || typeof fd !== 'object') return 1;
   const hit = CELLS.get(fd);
   if (hit !== undefined) return hit;
+  // Set before going down, and remembered after: a declaration used in many places (or one that holds itself) is counted once.
+  CELLS.set(fd, 1);
+  const max = typeof fd.max === 'number' && fd.max > 0 ? fd.max : 0;
   let n = 1;
   if (fd.t === 'vec3' || fd.t === 'dir') n = 4;
-  else if (fd.t === 'text') n = 1 + Math.ceil((fd.max ?? 0) / 64);
-  else if (fd.t === 'list') n = 1 + (fd.max ?? 0) * cellsOf(fd.of as Field);
-  else if (fd.t === 'map') n = 1 + (fd.max ?? 0) * (1 + cellsOf(fd.of as Field));
-  else if (fd.t === 'struct') for (const sub of Object.values(fd.fields ?? {})) n += cellsOf(sub);
+  else if (fd.t === 'text') n = 1 + Math.ceil(max / 64);
+  else if (fd.t === 'list') n = 1 + max * cellsOf(fd.of as Field);
+  else if (fd.t === 'map') n = 1 + max * (1 + cellsOf(fd.of as Field));
+  else if (fd.t === 'struct' && fd.fields !== null && typeof fd.fields === 'object') for (const sub of Object.values(fd.fields)) n += cellsOf(sub);
   CELLS.set(fd, n);
   return n;
 }
@@ -321,9 +326,28 @@ const NAME = /^[a-z][A-Za-z0-9_]{0,31}$/;
 const INTS = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32']);
 const TYPES = new Set(['u8', 'u16', 'u32', 'i8', 'i16', 'i32', 'bit', 'fix', 'vec3', 'dir', 'tick', 'ticks', 'ref', 'text', 'list', 'map', 'struct', 'press']);
 
+/**
+ * One declared field, checked, and made again as the runtime's own: a frozen record of its type, its sizes and its
+ * `init`, with nothing of what the rules handed over left in it. Its `init` is copied as plain data of a bounded size
+ * (`plainData`), so no later reader of a declaration (the packer, the view's copy of the declarations as JSON) ever
+ * meets a value of the rules'. `fieldList` has bounded the whole declaration before this is called (`cellsOf`).
+ */
+function cleanField(fd: unknown, where: string, inInput: boolean): Field {
+  checkField(fd, where, inInput);
+  const x = fd as Field;
+  const init = own(x, 'init');
+  return Object.freeze({
+    t: x.t,
+    ...(x.t === 'text' || x.t === 'list' || x.t === 'map' ? { max: x.max } : {}),
+    ...(x.t === 'list' || x.t === 'map' ? { of: cleanField(x.of, `${where} (its entries)`, false) } : {}),
+    ...(x.t === 'struct' ? { fields: Object.freeze(Object.fromEntries(Object.entries(x.fields ?? {}).map(([key, sub]) => [key, cleanField(sub, `${where}.${key}`, false)]))) } : {}),
+    ...(init !== undefined ? { init: plainData(init, { n: FIELD_CELLS_MAX }, 8, 4096) } : {}),
+    ...(own(x, 'score') === true ? { score: true as const } : {}),
+  });
+}
 function checkField(fd: unknown, where: string, inInput: boolean): void {
   const x = fd as Field;
-  if (!x || typeof x !== 'object' || !TYPES.has(x.t)) throw new Error(`${where} is not a field type: declare it with f (f.u16(), f.vec3(), f.list(f.ref(), 8)…)`);
+  if (!x || typeof x !== 'object' || typeof x.t !== 'string' || !TYPES.has(x.t)) throw new Error(`${where} is not a field type: declare it with f (f.u16(), f.vec3(), f.list(f.ref(), 8)…)`);
   if (x.t === 'press' && !inInput) throw new Error(`${where}: f.press() is for input only (a button that fires once)`);
   if (inInput && !(INTS.has(x.t) || x.t === 'bit' || x.t === 'press' || x.t === 'fix')) throw new Error(`${where}: an input field is a whole number, f.fix(), f.bit() or f.press()`);
   if (x.t === 'text' && !(Number.isInteger(x.max) && (x.max as number) >= 1 && (x.max as number) <= 4096)) throw new Error(`${where}: f.text(max) needs its largest length, 1 to 4096 characters`);
@@ -341,10 +365,10 @@ function fieldList(obj: unknown, where: string, { input = false, builtIns = fals
   for (const [key, fd] of Object.entries(obj)) {
     if (!NAME.test(key)) throw new Error(`${where}.${key} is not a field name (a letter, then letters, digits or _)`);
     if (builtIns && BUILT_IN_FIELDS.includes(key)) throw new Error(`${where}.${key}: every entity already has "${key}"; give this field another name`);
-    checkField(fd, `${where}.${key}`, input);
+    // Its size first, counted once however often a declaration is used inside itself: a field too large is refused before anything walks it.
     const cells = cellsOf(fd as Field);
-    if (cells > FIELD_CELLS_MAX) throw new Error(`${where}.${key} may hold ${cells} values when it is full, and one field holds ${FIELD_CELLS_MAX} at most (a list of lists multiplies: give the lists smaller sizes)`);
-    out.push([key, fd as Field]);
+    if (!(cells <= FIELD_CELLS_MAX)) throw new Error(`${where}.${key} may hold ${cells} values when it is full, and one field holds ${FIELD_CELLS_MAX} at most (a list of lists multiplies: give the lists smaller sizes)`);
+    out.push([key, cleanField(fd, `${where}.${key}`, input)]);
   }
   return Object.freeze(out);
 }
@@ -443,9 +467,9 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
       const b = e.body;
       const shapes = dims === 2 ? ['circle'] : ['sphere', 'capsule', 'box'];
       if (!b || !shapes.includes(b.shape)) throw new Error(`${at}.body.shape is ${shapes.map((s) => `'${s}'`).join(' or ')} when space.dims is ${dims}`);
-      if (!(b.radius > 0) || !(b.maxSpeed >= 0)) throw new Error(`${at}.body needs radius (metres) and maxSpeed (metres a second)`);
+      if (typeof b.radius !== 'number' || typeof b.maxSpeed !== 'number' || !(b.radius > 0) || !(b.maxSpeed >= 0)) throw new Error(`${at}.body needs radius (metres) and maxSpeed (metres a second)`);
       if (b.move !== undefined && b.move !== 'owner') throw new Error(`${at}.body.move is 'owner', or left out`);
-      body = { shape: b.shape, radius: b.radius, height: Number(b.height) || 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner' };
+      body = { shape: b.shape, radius: b.radius, height: typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner' };
     }
     if (player && !body) throw new Error(`${at}: a player's kind needs a body`);
     const moveFn = move && typeof move[name] === 'function' ? move[name] as MoveFn : null;
@@ -468,11 +492,12 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   for (const key of Object.keys(roomOn)) if (!events[key] && !ROOM_EVENTS.includes(key) && !SEAT_EVENTS.includes(key) && key !== 'answer' && key !== 'undeliverable') throw new Error(`room.on.${key}: no event "${key}" is declared in shapes.events`);
   let rounds: Compiled['rounds'] = null;
   if (room.rounds !== undefined) {
-    const s = Number(room.rounds?.seconds); const b = Number(room.rounds?.breakSeconds);
-    if (!(s >= 0) || !(b >= 0)) throw new Error('room.rounds is { seconds, breakSeconds } (seconds: 0 means a round ends only when room scope ends it)');
+    // A number is a number: nothing a module declares is ever turned into one.
+    const s = room.rounds?.seconds; const b = room.rounds?.breakSeconds;
+    if (typeof s !== 'number' || typeof b !== 'number' || !(s >= 0) || !(b >= 0)) throw new Error('room.rounds is { seconds, breakSeconds } (seconds: 0 means a round ends only when room scope ends it)');
     rounds = { seconds: s, breakSeconds: b };
   }
-  const keep = room.bots === undefined ? 0 : Math.floor(Number(room.bots?.keep));
+  const keep = room.bots === undefined ? 0 : typeof room.bots?.keep === 'number' ? Math.floor(room.bots.keep) : NaN;
   if (!(keep >= 0 && keep <= SEATS_MAX)) throw new Error(`room.bots is { keep: n }, 0 to ${SEATS_MAX}`);
   if (room.start !== undefined && typeof room.start !== 'function') throw new Error('room.start is a function');
   if (room.join !== undefined && typeof room.join !== 'function') throw new Error('room.join is a function');

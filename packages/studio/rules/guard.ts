@@ -52,6 +52,36 @@ export function put(o: object, key: string, v: unknown): void {
   (o as Record<string, unknown>)[key] = v;
 }
 
+/**
+ * Plain data with no declared shape (a game's own answer to `world.ask`, the `init` of a declared field): numbers,
+ * texts, true, false, lists and objects of them, `left.n` values at most and `deep` levels deep at most. Nothing of the
+ * value is run to read it, and anything else is null. The count is of values read, so a list that holds another twice
+ * is copied twice only for as long as the count lasts: no shape of value makes this take long.
+ */
+export function plainData(v: unknown, left: { n: number }, deep = 4, text = 256): unknown {
+  left.n -= 1;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'boolean' || v === null) return v;
+  if (typeof v === 'string') return v.slice(0, text);
+  if (typeof v !== 'object' || deep <= 0 || left.n <= 0) return null;
+  if (Array.isArray(v)) {
+    const out: unknown[] = [];
+    for (let i = 0; i < v.length && left.n > 0; i += 1) out.push(plainData(own(v, i), left, deep - 1, text));
+    return Object.freeze(out);
+  }
+  const out: Record<string, unknown> = {};
+  let seen = 0;
+  // A constant's keys are all listed before the first is read: they are paid for first. (Anything else the handler made, and paid for.)
+  const known = keyCount(v);
+  if (known !== undefined) charge(known);
+  for (const key in v) {
+    // Keys are counted as they are met, so an object with very many is left after the first few.
+    if ((seen += 1) > 64 || left.n <= 0) break;
+    if (Object.hasOwn(v, key) && key.length <= 32 && !refusedName(key)) out[key] = plainData(own(v, key), left, deep - 1, text);
+  }
+  return Object.freeze(out);
+}
+
 /** Thrown when a handler has used its share of the tick. Rules cannot catch it. */
 export class BudgetError extends Error {
   constructor() { super('this handler ran too long: it used its whole share of the tick (a loop that never ends, or too much work in one step)'); this.name = 'BudgetError'; }
