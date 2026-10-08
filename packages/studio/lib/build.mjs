@@ -528,7 +528,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
     });
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} ${chunks.length === 1 ? 'chunk' : 'chunks'} loaded later, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
-    if (rules) log(`  ${g.id}: its rules run on the server (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; three seconds with bots used at most ${rules.units} of ${rules.settings.budget.tick} budget units in one handler)`);
+    if (rules) log(`  ${g.id}: its rules run on the server (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; three seconds with bots: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler)`);
   }
   // A game written before rules (its own code is the host) builds and runs exactly as it did. Said in one line.
   if (browserHosted.length) log(`hosted by a player's browser, as before (no src/rules.ts; nothing to do): ${browserHosted.join(', ')}`);

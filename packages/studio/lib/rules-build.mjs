@@ -16,8 +16,9 @@
  *
  * Before anything is written the rules are loaded in Node, with no Cloudflare at all: compiled against the contract
  * (rules/rules.ts `compileRules`), then run for three seconds of the room's clock with bots and one seated player.
- * A declaration that does not fit, or a handler that throws or runs out its budget in those seconds, stops the build
- * with its name. (The full build check, with generated runs compared tick by tick, is a later release's.)
+ * A declaration that does not fit, a handler that throws or runs out its budget in those seconds, or a tick that takes
+ * longer on this computer's own clock than the room's period (`smokeRun`), stops the build with its name. (The full
+ * build check, with generated runs compared tick by tick, is a later release's.)
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -71,22 +72,39 @@ export async function loadRules(esbuild, root, id, code) {
 }
 let loads = 0;
 
-/** Three seconds of the room's clock with bots and one seated player, on a clock of the build's own. */
-function smokeRun(H, compiled, id) {
+/**
+ * Three seconds of the room's clock with bots and one seated player, on a clock of the build's own.
+ *
+ * Every tick is also timed on this computer's real clock (`timer`, milliseconds). A tick has one period of the room's
+ * clock to run in. One slow tick on a busy computer proves nothing, so the line is three ticks of the run over the
+ * period, or one tick over four periods: either stops the build, naming the handler that used the most.
+ */
+export function smokeRun(H, compiled, id, { timer = () => performance.now() } = {}) {
   let now = 0;
   const host = H.createHost({ game: id, compiled, send() {}, clock: { now: () => now, setTimer: () => 0, clearTimer() {} }, random: () => 0.5 });
   host.frame({ t: 'join', peer: { id: 'build', seat: 0, name: 'Build', occ: 1 } });
   const period = 1000 / compiled.settings.tickHz;
-  for (let i = 0; i < 3 * compiled.settings.tickHz; i += 1) { now += period; host.tickNow(); }
+  let slowest = 0; let slowestTick = 0; let over = 0;
+  for (let i = 0; i < 3 * compiled.settings.tickHz; i += 1) {
+    now += period;
+    const t0 = timer();
+    host.tickNow();
+    const ms = timer() - t0;
+    if (ms > slowest) { slowest = ms; slowestTick = host.tick; }
+    if (ms > period) over += 1;
+  }
   const s = host.core.stats;
+  const facts = host.facts();
   host.stop();
+  if (facts.faults) throw new Error(`games/${id}: its rules ran for three seconds with bots and the runtime itself failed ${facts.faults} ${facts.faults === 1 ? 'time' : 'times'}. The last: ${facts.lastFault}`);
   if (s.errors) throw new Error(`games/${id}: its rules ran for three seconds with bots and ${s.errors} ${s.errors === 1 ? 'handler' : 'handlers'} failed. The last: ${s.lastError}`);
-  return s;
+  if (over >= 3 || slowest > 4 * period) throw new Error(`games/${id}: its rules ran for three seconds with bots and were too slow: tick ${slowestTick} took ${Math.round(slowest)} ms${over > 1 ? `, and ${over} ticks took longer than a tick lasts` : ''}. A tick lasts ${Math.round(period)} ms at ${compiled.settings.tickHz} ticks a second. The handler that used the most: ${s.worst || 'none'} (${s.maxUnits} budget units); the busiest tick used ${s.maxTickUnits} of ${compiled.settings.budget.tick}`);
+  return { ...s, slowestMs: slowest };
 }
 
 /**
  * Everything a rules game's build needs, or an Error that says what to fix (each refused line named).
- * Returns { code, tune, map, settings, seats, schema, publicTune, build, files, rounds, problems, units }.
+ * Returns { code, tune, map, settings, seats, schema, publicTune, build, files, rounds, problems, units, tickUnits, slowestMs }.
  */
 export async function prepareRules(esbuild, root, g, { log = () => {} } = {}) {
   const guarded = await guardRules(esbuild, root, g.dir);
@@ -104,7 +122,7 @@ export async function prepareRules(esbuild, root, g, { log = () => {} } = {}) {
   const data = { tune, map, settings, seats };
   return {
     code: guarded.code, ...data, schema: R.schemaOf(compiled), publicTune: compiled.publicTune, files: guarded.files, rounds: compiled.rounds,
-    build: createHash('sha256').update(guarded.code).update(JSON.stringify(data)).digest('hex').slice(0, 16), units: stats.maxUnits,
+    build: createHash('sha256').update(guarded.code).update(JSON.stringify(data)).digest('hex').slice(0, 16), units: stats.maxUnits, tickUnits: stats.maxTickUnits, slowestMs: stats.slowestMs,
   };
 }
 
