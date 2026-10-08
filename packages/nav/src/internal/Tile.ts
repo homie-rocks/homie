@@ -57,7 +57,6 @@ export function decodeTile(bytes: Uint8Array): TileData {
       throw new Error('nav: invalid compact spans');
     for (let i = 0; i < cells.length; i += 2)
       if (cells[i]! + cells[i + 1]! > c.spanCount) throw new Error('nav: invalid span range');
-
   }
   if (data.baked && (!Array.isArray(data.baked.polys) || !Array.isArray(data.baked.vertices)))
     throw new Error('nav: invalid tile polygons');
@@ -67,23 +66,44 @@ export function decodeTile(bytes: Uint8Array): TileData {
     numbers(t.bounds, 6);
     numbers(t.detailVertices);
     numbers(t.detailTriangles);
-    requireState(t.vertices.length % 3 === 0 && t.detailVertices.length % 3 === 0 &&
-      t.detailTriangles.length % 4 === 0 && Array.isArray(t.detailMeshes) &&
-      t.detailMeshes.length === t.polys.length && Array.isArray(t.polyNodes));
+    requireState(
+      t.vertices.length % 3 === 0 &&
+        t.detailVertices.length % 3 === 0 &&
+        t.detailTriangles.length % 4 === 0 &&
+        Array.isArray(t.detailMeshes) &&
+        t.detailMeshes.length === t.polys.length &&
+        Array.isArray(t.polyNodes),
+    );
     for (const p of t.polys) {
       requireState(p && typeof p === 'object');
       numbers(p.vertices);
       numbers(p.neis, p.vertices.length);
-      requireState(p.vertices.length >= 3 && p.vertices.every(i => Number.isInteger(i) && i >= 0 && i * 3 < t.vertices.length) &&
-        Number.isSafeInteger(p.flags) && Number.isSafeInteger(p.area));
+      requireState(
+        p.vertices.length >= 3 &&
+          p.vertices.every((i) => Number.isInteger(i) && i >= 0 && i * 3 < t.vertices.length) &&
+          Number.isSafeInteger(p.flags) &&
+          Number.isSafeInteger(p.area),
+      );
     }
     for (const d of t.detailMeshes) {
-      requireState(d && [d.verticesBase, d.verticesCount, d.trianglesBase, d.trianglesCount].every(n => Number.isSafeInteger(n) && n >= 0));
-      requireState((d.verticesBase + d.verticesCount) * 3 <= t.detailVertices.length &&
-        (d.trianglesBase + d.trianglesCount) * 4 <= t.detailTriangles.length);
+      requireState(
+        d &&
+          [d.verticesBase, d.verticesCount, d.trianglesBase, d.trianglesCount].every(
+            (n) => Number.isSafeInteger(n) && n >= 0,
+          ),
+      );
+      requireState(
+        (d.verticesBase + d.verticesCount) * 3 <= t.detailVertices.length &&
+          (d.trianglesBase + d.trianglesCount) * 4 <= t.detailTriangles.length,
+      );
     }
-    requireState(t.bvTree && Array.isArray(t.bvTree.nodes) && Number.isFinite(t.bvTree.quantFactor));
-    for (const node of t.bvTree.nodes) { numbers(node.bounds, 6); requireState(Number.isSafeInteger(node.i)); }
+    requireState(
+      t.bvTree && Array.isArray(t.bvTree.nodes) && Number.isFinite(t.bvTree.quantFactor),
+    );
+    for (const node of t.bvTree.nodes) {
+      numbers(node.bounds, 6);
+      requireState(Number.isSafeInteger(node.i));
+    }
   }
   return data;
 }
@@ -91,15 +111,22 @@ export function cloneCompact(c: nav.CompactHeightfield | PackedCompact): nav.Com
   return {
     ...c,
     bounds: [...c.bounds],
-    cells: c.cells instanceof Uint32Array
-      ? Array.from({ length: c.cells.length / 2 }, (_, i) => ({
-          index: (c.cells as Uint32Array)[i * 2]!, count: (c.cells as Uint32Array)[i * 2 + 1]!,
-        })) : c.cells,
-    spans: c.spans instanceof Uint32Array
-      ? Array.from({ length: c.spanCount }, (_, i) => ({
-          y: (c.spans as Uint32Array)[i * 4]!, region: (c.spans as Uint32Array)[i * 4 + 1]!,
-          con: (c.spans as Uint32Array)[i * 4 + 2]!, h: (c.spans as Uint32Array)[i * 4 + 3]!,
-        })) : c.spans.map((s) => ({ ...s })),
+    cells:
+      c.cells instanceof Uint32Array
+        ? Array.from({ length: c.cells.length / 2 }, (_, i) => ({
+            index: (c.cells as Uint32Array)[i * 2]!,
+            count: (c.cells as Uint32Array)[i * 2 + 1]!,
+          }))
+        : c.cells,
+    spans:
+      c.spans instanceof Uint32Array
+        ? Array.from({ length: c.spanCount }, (_, i) => ({
+            y: (c.spans as Uint32Array)[i * 4]!,
+            region: (c.spans as Uint32Array)[i * 4 + 1]!,
+            con: (c.spans as Uint32Array)[i * 4 + 2]!,
+            h: (c.spans as Uint32Array)[i * 4 + 3]!,
+          }))
+        : c.spans.map((s) => ({ ...s })),
     areas: Array.from(c.areas),
     distances: new Array(c.spanCount).fill(0),
   };

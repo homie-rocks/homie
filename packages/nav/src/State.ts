@@ -20,27 +20,51 @@ const arrays = [
 function writeElement(v: DataView, type: number, i: number, n: number): void {
   const o = i * arrays[type]!.BYTES_PER_ELEMENT;
   switch (type) {
-    case 0: v.setUint8(o, n); break;
-    case 1: v.setUint16(o, n, true); break;
-    case 2: v.setUint32(o, n, true); break;
-    case 3: v.setInt8(o, n); break;
-    case 4: v.setInt16(o, n, true); break;
-    case 5: v.setInt32(o, n, true); break;
-    case 6: v.setFloat32(o, n, true); break;
-    case 7: v.setFloat64(o, n, true); break;
+    case 0:
+      v.setUint8(o, n);
+      break;
+    case 1:
+      v.setUint16(o, n, true);
+      break;
+    case 2:
+      v.setUint32(o, n, true);
+      break;
+    case 3:
+      v.setInt8(o, n);
+      break;
+    case 4:
+      v.setInt16(o, n, true);
+      break;
+    case 5:
+      v.setInt32(o, n, true);
+      break;
+    case 6:
+      v.setFloat32(o, n, true);
+      break;
+    case 7:
+      v.setFloat64(o, n, true);
+      break;
   }
 }
 function readElement(v: DataView, type: number, i: number): number {
   const o = i * arrays[type]!.BYTES_PER_ELEMENT;
   switch (type) {
-    case 0: return v.getUint8(o);
-    case 1: return v.getUint16(o, true);
-    case 2: return v.getUint32(o, true);
-    case 3: return v.getInt8(o);
-    case 4: return v.getInt16(o, true);
-    case 5: return v.getInt32(o, true);
-    case 6: return v.getFloat32(o, true);
-    default: return v.getFloat64(o, true);
+    case 0:
+      return v.getUint8(o);
+    case 1:
+      return v.getUint16(o, true);
+    case 2:
+      return v.getUint32(o, true);
+    case 3:
+      return v.getInt8(o);
+    case 4:
+      return v.getInt16(o, true);
+    case 5:
+      return v.getInt32(o, true);
+    case 6:
+      return v.getFloat32(o, true);
+    default:
+      return v.getFloat64(o, true);
   }
 }
 const MAGIC = 0x324e4d48;

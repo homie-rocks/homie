@@ -69,7 +69,10 @@ export class Grid implements NavigationQuery {
       up: options.up ?? 'y',
     };
     for (let i = 0; i < this.#state.blocked.length; i++) {
-      if (this.#state.blocked[i]) { this.#state.blocked[i] = 1; this.#blockedCount++; }
+      if (this.#state.blocked[i]) {
+        this.#state.blocked[i] = 1;
+        this.#blockedCount++;
+      }
     }
     // Allocated lazily for A*, retained across searches. JPS uses sparse nodes.
     this.#scores = new Float64Array(0);
@@ -130,22 +133,32 @@ export class Grid implements NavigationQuery {
     if (this.#labels) return;
     const { width: w, depth: h, blocked } = this.#state;
     const labels = new Int32Array(blocked.length).fill(-1);
-    const queue = new Int32Array(blocked.length), components: Int32Array[] = [];
+    const queue = new Int32Array(blocked.length),
+      components: Int32Array[] = [];
     let tail = 0;
     for (let root = 0; root < labels.length; root++) {
       if (blocked[root] || labels[root] !== -1) continue;
-      const id = components.length, first = tail;
-      queue[tail++] = root; labels[root] = id;
+      const id = components.length,
+        first = tail;
+      queue[tail++] = root;
+      labels[root] = id;
       for (let head = first; head < tail; head++) {
-        const cell = queue[head]!, x = cell % w, z = Math.floor(cell / w);
+        const cell = queue[head]!,
+          x = cell % w,
+          z = Math.floor(cell / w);
         for (let dz = -1; dz <= 1; dz++) {
           if (z + dz < 0 || z + dz >= h) continue;
           for (let dx = -1; dx <= 1; dx++) {
             if ((!dx && !dz) || x + dx < 0 || x + dx >= w) continue;
             const next = cell + dz * w + dx;
-            if (labels[next] !== -1 || blocked[next] ||
-              (dx && dz && (blocked[cell + dx] || blocked[cell + dz * w]))) continue;
-            labels[next] = id; queue[tail++] = next;
+            if (
+              labels[next] !== -1 ||
+              blocked[next] ||
+              (dx && dz && (blocked[cell + dx] || blocked[cell + dz * w]))
+            )
+              continue;
+            labels[next] = id;
+            queue[tail++] = next;
           }
         }
       }
@@ -189,28 +202,39 @@ export class Grid implements NavigationQuery {
       if (!s.blocked[cell] && this.#labels![cell] === this.#labels![this.at(start)])
         return this.center(cell);
     } else if (!s.blocked[cell]) return this.center(cell);
-    let best = -1, cost = Infinity;
-    const px = (v[0] - s.origin[0]) / s.cell, pz = (v[2] - s.origin[2]) / s.cell;
+    let best = -1,
+      cost = Infinity;
+    const px = (v[0] - s.origin[0]) / s.cell,
+      pz = (v[2] - s.origin[2]) / s.cell;
     const visit = (xx: number, zz: number): void => {
       if (xx < 0 || zz < 0 || xx >= s.width || zz >= s.depth) return;
       const i = zz * s.width + xx;
       if (s.blocked[i] || (component !== undefined && this.#labels![i] !== component)) return;
-      const dx = xx + 0.5 - px, dz = zz + 0.5 - pz, d = dx * dx + dz * dz;
-      if (d < cost || (d === cost && i < best)) { best = i; cost = d; }
+      const dx = xx + 0.5 - px,
+        dz = zz + 0.5 - pz,
+        d = dx * dx + dz * dz;
+      if (d < cost || (d === cost && i < best)) {
+        best = i;
+        cost = d;
+      }
     };
     // Expand only as far as the nearest eligible cell. The lower bound also
     // handles points outside the grid and disconnected components exactly.
     for (let r = 0; r < Math.max(s.width, s.depth); r++) {
       for (let xx = Math.max(0, x - r); xx <= Math.min(s.width - 1, x + r); xx++) {
-        visit(xx, z - r); if (r) visit(xx, z + r);
+        visit(xx, z - r);
+        if (r) visit(xx, z + r);
       }
       for (let zz = Math.max(0, z - r + 1); zz <= Math.min(s.depth - 1, z + r - 1); zz++) {
-        visit(x - r, zz); if (r) visit(x + r, zz);
+        visit(x - r, zz);
+        if (r) visit(x + r, zz);
       }
-      const lower = Math.min(x - r > 0 ? Math.abs(x - r - 0.5 - px) : Infinity,
+      const lower = Math.min(
+        x - r > 0 ? Math.abs(x - r - 0.5 - px) : Infinity,
         x + r + 1 < s.width ? Math.abs(x + r + 1.5 - px) : Infinity,
         z - r > 0 ? Math.abs(z - r - 0.5 - pz) : Infinity,
-        z + r + 1 < s.depth ? Math.abs(z + r + 1.5 - pz) : Infinity);
+        z + r + 1 < s.depth ? Math.abs(z + r + 1.5 - pz) : Infinity,
+      );
       if (best >= 0 && cost < lower * lower) break;
     }
     return best < 0 ? null : this.center(best);
@@ -258,7 +282,9 @@ export class Grid implements NavigationQuery {
       };
     }
     let ids =
-      options.search === 'jps'
+      options.search === 'jps' &&
+      this.#blockedCount / this.#state.blocked.length >= 0.001 &&
+      this.#blockedCount / this.#state.blocked.length < 0.05
         ? jumpPath(
             w,
             start,
@@ -296,11 +322,16 @@ export class Grid implements NavigationQuery {
   }
   private clearOctile(start: number, end: number): boolean {
     const w = this.#state.width;
-    const x = start % w, z = Math.floor(start / w), ex = end % w, ez = Math.floor(end / w);
+    const x = start % w,
+      z = Math.floor(start / w),
+      ex = end % w,
+      ez = Math.floor(end / w);
     const diagonal = Math.min(Math.abs(ex - x), Math.abs(ez - z));
     const elbow = (z + Math.sign(ez - z) * diagonal) * w + x + Math.sign(ex - x) * diagonal;
-    return this.raycast(this.center(start), this.center(elbow)).clear &&
-      this.raycast(this.center(elbow), this.center(end)).clear;
+    return (
+      this.raycast(this.center(start), this.center(elbow)).clear &&
+      this.raycast(this.center(elbow), this.center(end)).clear
+    );
   }
   private astar(start: number, end: number): number[] {
     const n = this.#state.blocked.length,

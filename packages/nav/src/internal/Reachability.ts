@@ -15,7 +15,8 @@ function index(mesh: object): Index {
   const s = meshData(mesh);
   const cached = indices.get(mesh);
   if (cached?.revision === s.revision) return cached;
-  const forward = new Map<number, number[]>(), reverse = new Map<number, number[]>();
+  const forward = new Map<number, number[]>(),
+    reverse = new Map<number, number[]>();
   for (const node of s.nav.nodes) {
     if (!node.allocated || !nav.DEFAULT_QUERY_FILTER.passFilter(node.ref, s.nav)) continue;
     forward.set(node.ref, []);
@@ -29,7 +30,8 @@ function index(mesh: object): Index {
       reverse.get(link.toNodeRef)!.push(ref);
     }
   }
-  const seen = new Set<number>(), order: number[] = [];
+  const seen = new Set<number>(),
+    order: number[] = [];
   for (const root of forward.keys()) {
     if (seen.has(root)) continue;
     const stack: [number, number][] = [[root, 0]];
@@ -37,19 +39,31 @@ function index(mesh: object): Index {
     while (stack.length) {
       const top = stack[stack.length - 1]!;
       const edges = forward.get(top[0])!;
-      if (top[1] === edges.length) { order.push(top[0]); stack.pop(); continue; }
+      if (top[1] === edges.length) {
+        order.push(top[0]);
+        stack.pop();
+        continue;
+      }
       const next = edges[top[1]++]!;
-      if (!seen.has(next)) { seen.add(next); stack.push([next, 0]); }
+      if (!seen.has(next)) {
+        seen.add(next);
+        stack.push([next, 0]);
+      }
     }
   }
-  const component = new Map<number, number>(), members: number[][] = [];
+  const component = new Map<number, number>(),
+    members: number[][] = [];
   for (const root of order.reverse()) {
     if (component.has(root)) continue;
-    const id = members.length, group = [root];
+    const id = members.length,
+      group = [root];
     component.set(root, id);
     for (let i = 0; i < group.length; i++) {
       for (const next of reverse.get(group[i]!)!) {
-        if (!component.has(next)) { component.set(next, id); group.push(next); }
+        if (!component.has(next)) {
+          component.set(next, id);
+          group.push(next);
+        }
       }
     }
     members.push(group);
@@ -67,16 +81,22 @@ function index(mesh: object): Index {
   return result;
 }
 export function reachable(mesh: object, from: number): Set<number> {
-  const data = index(mesh), root = data.component.get(from);
+  const data = index(mesh),
+    root = data.component.get(from);
   if (root === undefined) return new Set();
   const cached = data.reachable.get(root);
   if (cached) return cached;
-  const queue = [root], seen = new Set(queue), refs = new Set<number>();
+  const queue = [root],
+    seen = new Set(queue),
+    refs = new Set<number>();
   for (let i = 0; i < queue.length; i++) {
     const id = queue[i]!;
     for (const ref of data.members[id]!) refs.add(ref);
     for (const next of data.edges[id]!) {
-      if (!seen.has(next)) { seen.add(next); queue.push(next); }
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
     }
   }
   data.reachable.set(root, refs);

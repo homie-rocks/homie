@@ -56,9 +56,11 @@ export function checkConfig(c: BakeConfig): void {
   )
     throw new Error('nav: invalid agent or vertical bounds');
   const angle = c.slopeDegrees * (Math.PI / 180);
-  const rise = c.cellSize * deterministicSin(angle) / deterministicCos(angle);
+  const rise = (c.cellSize * deterministicSin(angle)) / deterministicCos(angle);
   if (Math.ceil(rise / c.cellHeight - 1e-9) > Math.floor(c.stepHeight / c.cellHeight + 1e-9))
-    throw new Error('nav: slope cannot be honoured at this cell size, cell height and step height; reduce cellSize/cellHeight or increase stepHeight');
+    throw new Error(
+      'nav: slope cannot be honoured at this cell size, cell height and step height; reduce cellSize/cellHeight or increase stepHeight',
+    );
   if ((c.maxY - c.minY) / c.cellHeight > 65535)
     throw new Error('nav: vertical bounds exceed voxel range');
   if (c.tileCells + 2 * (Math.ceil(c.radius / c.cellSize) + 3) > 2048)
@@ -96,7 +98,6 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
       positions[i + 1] = positions[i + 2]!;
       positions[i + 2] = -y;
     }
-
   }
   const c = { ...config, origin: axes(config.origin, config.up) },
     border = Math.ceil(c.radius / c.cellSize) + 3,
@@ -155,8 +156,11 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
   // A slope can cover two cells plus one rounding voxel, independently of
   // the maximum step between adjacent compact spans (still `climb`).
   const angle = c.slopeDegrees * (Math.PI / 180);
-  const ledge = Math.max(climb, Math.ceil(2 * c.cellSize *
-    deterministicSin(angle) / deterministicCos(angle) / c.cellHeight) + 1);
+  const ledge = Math.max(
+    climb,
+    Math.ceil((2 * c.cellSize * deterministicSin(angle)) / deterministicCos(angle) / c.cellHeight) +
+      1,
+  );
   nav.filterLedgeSpans(hf, height, ledge);
   nav.filterWalkableLowHeightSpans(hf, height);
   const compact = nav.buildCompactHeightfield(ctx, height, climb, hf);
@@ -277,7 +281,7 @@ export function bakeLevel(input: Triangles, config: BakeConfig): BakedTile[] {
       return { x, z, bytes: bakeTile({ positions: values }, config, x, z) };
     })
     .sort((a, b) => a.z - b.z || a.x - b.x);
-  if (result.length && result.every(tile => !decodeTile(tile.bytes).baked))
+  if (result.length && result.every((tile) => !decodeTile(tile.bytes).baked))
     throw new Error('nav: no walkable triangles; check winding, slope, clearance and region size');
   return result;
 }
@@ -309,10 +313,23 @@ export function bakeHeightfield(
       // Align every tile's samples to the same lattice, including its halo.
       const loX = Math.max(0, Math.floor((origin[0] + x * size - halo - x0!) / sampleStep));
       const loZ = Math.max(0, Math.floor((origin[2] + z * size - halo - z0!) / sampleStep));
-      const hiX = Math.min(Math.ceil((x1! - x0!) / sampleStep), Math.ceil((origin[0] + (x + 1) * size + halo - x0!) / sampleStep));
-      const hiZ = Math.min(Math.ceil((z1! - z0!) / sampleStep), Math.ceil((origin[2] + (z + 1) * size + halo - z0!) / sampleStep));
-      const input = heightfieldTriangles(field, x0! + loX * sampleStep, z0! + loZ * sampleStep,
-        hiX - loX + 1, hiZ - loZ + 1, sampleStep, config.up);
+      const hiX = Math.min(
+        Math.ceil((x1! - x0!) / sampleStep),
+        Math.ceil((origin[0] + (x + 1) * size + halo - x0!) / sampleStep),
+      );
+      const hiZ = Math.min(
+        Math.ceil((z1! - z0!) / sampleStep),
+        Math.ceil((origin[2] + (z + 1) * size + halo - z0!) / sampleStep),
+      );
+      const input = heightfieldTriangles(
+        field,
+        x0! + loX * sampleStep,
+        z0! + loZ * sampleStep,
+        hiX - loX + 1,
+        hiZ - loZ + 1,
+        sampleStep,
+        config.up,
+      );
       tiles.push({ x, z, bytes: bakeTile(input, config, x, z) });
     }
   }

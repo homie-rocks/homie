@@ -44,11 +44,18 @@ export function axisExtents(p: Point, up: Up = 'y'): Vector {
   return axes(p, up).map(Math.abs) as Vector;
 }
 /** Rotating a box also changes which corner is its minimum. */
-export function axisBounds(min: Point, max: Point, up: Up = 'y', inverse = false): { min: Vector; max: Vector } {
+export function axisBounds(
+  min: Point,
+  max: Point,
+  up: Up = 'y',
+  inverse = false,
+): { min: Vector; max: Vector } {
   const a = inverse ? fromAxes(min, up) : axes(min, up);
   const b = inverse ? fromAxes(max, up) : axes(max, up);
-  return { min: a.map((v, i) => Math.min(v, b[i]!)) as Vector,
-    max: a.map((v, i) => Math.max(v, b[i]!)) as Vector };
+  return {
+    min: a.map((v, i) => Math.min(v, b[i]!)) as Vector,
+    max: a.map((v, i) => Math.max(v, b[i]!)) as Vector,
+  };
 }
 export function positive(n: number, name: string): void {
   if (!Number.isFinite(n) || n <= 0) throw new Error(`nav: ${name} must be positive and finite`);

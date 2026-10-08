@@ -55,10 +55,13 @@ export class Mesh implements NavigationQuery {
     return copyConfig(this.#state.config);
   }
   constructor(config: BakeConfig, queryHalfExtents: Point, options: MeshOptions = {}) {
-    this.#limits = { maxRetainedCells: options.maxRetainedCells ?? 1_000_000,
-      maxRetainedSpans: options.maxRetainedSpans ?? 1_000_000 };
+    this.#limits = {
+      maxRetainedCells: options.maxRetainedCells ?? 1_000_000,
+      maxRetainedSpans: options.maxRetainedSpans ?? 1_000_000,
+    };
     for (const value of Object.values(this.#limits))
-      if (!Number.isSafeInteger(value) || value < 1) throw new Error('nav: invalid retention budget');
+      if (!Number.isSafeInteger(value) || value < 1)
+        throw new Error('nav: invalid retention budget');
     checkConfig(config);
     point(queryHalfExtents);
     vector(queryHalfExtents).forEach((v) => positive(v, 'query half extent'));
@@ -144,7 +147,7 @@ export class Mesh implements NavigationQuery {
   }
   private rebuild(changes: readonly Obstacle[]): void {
     for (const data of Object.values(this.#state.tiles)) {
-      if (!changes.some(obstacle => this.overlaps(data, obstacle))) continue;
+      if (!changes.some((obstacle) => this.overlaps(data, obstacle))) continue;
       const obstacles = this.overlapping(data);
       const tile = obstacles.length ? finishTile(data, obstacles) : data.baked;
       nav.removeTile(this.#state.nav, data.x, data.z, 0);
@@ -158,15 +161,15 @@ export class Mesh implements NavigationQuery {
   }
   /** Validate the whole batch, then rebuild each affected tile once. */
   addObstacles(obstacles: readonly Obstacle[]): number[] {
-    const changes = obstacles.map(obstacle => {
+    const changes = obstacles.map((obstacle) => {
       checkObstacle(obstacle);
       return { ...obstacle, ...axisBounds(obstacle.min, obstacle.max, this.up) };
     });
     for (const tile of Object.values(this.#state.tiles))
-      if (!tile.compact && changes.some(obstacle => this.overlaps(tile, obstacle)))
+      if (!tile.compact && changes.some((obstacle) => this.overlaps(tile, obstacle)))
         throw new Error('nav: obstacle touches a tile without carve spans');
     if (!changes.length) return [];
-    const ids = changes.map(obstacle => {
+    const ids = changes.map((obstacle) => {
       const id = this.#state.nextId++;
       this.#state.obstacles[id] = obstacle;
       return id;
@@ -181,9 +184,9 @@ export class Mesh implements NavigationQuery {
   /** An unknown id rejects the entire batch without changing the mesh. */
   removeObstacles(ids: readonly number[]): boolean {
     const unique = [...new Set(ids)];
-    if (unique.some(id => !this.#state.obstacles[id])) return false;
+    if (unique.some((id) => !this.#state.obstacles[id])) return false;
     if (!unique.length) return true;
-    const changes = unique.map(id => this.#state.obstacles[id]!);
+    const changes = unique.map((id) => this.#state.obstacles[id]!);
     for (const id of unique) delete this.#state.obstacles[id];
     this.rebuild(changes);
     this.changed();
@@ -382,8 +385,12 @@ export class Mesh implements NavigationQuery {
     positive(height, 'cylinder height');
     const p = axes(baseCenter, this.up);
     return this.addObstacle({
-      ...axisBounds([p[0] - radius, p[1], p[2] - radius],
-        [p[0] + radius, p[1] + height, p[2] + radius], this.up, true),
+      ...axisBounds(
+        [p[0] - radius, p[1], p[2] - radius],
+        [p[0] + radius, p[1] + height, p[2] + radius],
+        this.up,
+        true,
+      ),
       radius,
     });
   }
@@ -463,7 +470,11 @@ export class Mesh implements NavigationQuery {
       seams.push(...this.seamsAt(data.x, data.z, true));
     const links = Object.entries(this.#state.links).map(([id, backend]) => {
       const link = this.#state.nav.offMeshConnections[backend]!;
-      return { id: Number(id), from: fromAxes(link.start, this.up), to: fromAxes(link.end, this.up) };
+      return {
+        id: Number(id),
+        from: fromAxes(link.start, this.up),
+        to: fromAxes(link.end, this.up),
+      };
     });
     return { triangles, links, seams };
   }
