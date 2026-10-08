@@ -49,9 +49,6 @@ is none, use the `studio-setup` skill first.
   page; a game that names none says nothing. A game.json with `"remixOf"` was made from another
   studio's game: keep the key, whatever else changes (its landing says "Based on <game> by
   <studio>").
-- Some names are protected (the homie.rocks house games): `game_make` and
-  `studio_publish` refuse them. Pick your own name, or ask the name's owner
-  with `studio_request_grant` (only the owner can approve, in their browser).
 
 ## Change it
 
