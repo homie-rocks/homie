@@ -133,7 +133,7 @@ test('the studio card\'s "behind": an older pin gets what\'s new; this version, 
   assert.equal(b.here, STUDIO_VERSION);
   assert.equal(b.whatsNew.versions[0].version, STUDIO_VERSION);
   assert.ok(b.whatsNew.versions.every((v) => compareVersions(v.version, '0.16.1') > 0));
-  assert.equal(behindOf(studio('tarball', 'https://homie.rocks/npm/homie-studio-0.9.0.tgz')).pinned, '0.9.0');
+  assert.equal(behindOf(studio('old-address', 'https://homie.rocks/npm/homie-studio-0.9.0.tgz')).pinned, '0.9.0', 'a studio from before 0.10.0 is behind too: its upgrade moves it to the registry');
   assert.equal(behindOf(studio('same', STUDIO_VERSION)), null);
   assert.equal(behindOf(studio('newer', '99.0.0')), null);
   assert.equal(behindOf(studio('linked', 'file:../homie/packages/studio')), null);

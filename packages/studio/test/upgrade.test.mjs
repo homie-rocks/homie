@@ -40,14 +40,19 @@ const read = (dir, rel) => readFileSync(join(dir, rel), 'utf8');
 const json = (dir, rel) => JSON.parse(read(dir, rel));
 const save = (dir, rel, v) => writeFileSync(join(dir, rel), typeof v === 'string' ? v : `${JSON.stringify(v, null, 2)}\n`);
 
-/** A Night Owls studio as 0.7.0 left it, with a section of its own and its own words in Rules. */
+/**
+ * A Night Owls studio as 0.7.0 left it, with a section of its own and its own words in Rules. A studio that old
+ * pinned the toolkit by an address on homie.rocks (OLD_PIN); nothing is served there any more, and its upgrade
+ * moves the pin to the npm registry's exact version.
+ */
+const OLD_PIN = 'https://homie.rocks/npm/homie-studio-0.7.0.tgz';
 function oldStudio(name) {
   const dir = join(scratch, name);
   assert.equal(run(['new', dir, '--name', 'Night Owls', '--homie', 'https://homie.rocks', '--no-install'], scratch).status, 0);
   const own = '## This studio: Night Owls\n\nOur games are about owls. Keep every game under 3 MB.\n';
   save(dir, 'AGENTS.md', `${OLD_AGENTS.replace('- Nothing in this studio needs `~/.homie` or a Homie box.', '- Nothing in this studio needs `~/.homie` or a Homie box.\n- Owls only: no other birds.')}\n${own}`);
   const pkg = json(dir, 'package.json');
-  pkg.devDependencies['@homie-rocks/studio'] = 'https://homie.rocks/npm/homie-studio-0.7.0.tgz';
+  pkg.devDependencies['@homie-rocks/studio'] = OLD_PIN;
   delete pkg.scripts.check;
   save(dir, 'package.json', pkg);
   const s = json(dir, 'studio.json');
@@ -93,7 +98,9 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'version studio.json',
   ].sort());
   assert.deepEqual(plan.changes.find((c) => c.kind === 'add-lines').lines, ['# Screenshots from check and look runs.', '.checks/'], 'a missing line comes with its comment');
-  assert.deepEqual(plan.changes.find((c) => c.kind === 'pin').to, `https://homie.rocks/npm/homie-studio-${STUDIO_VERSION}.tgz`, 'the same kind of pin, this version');
+  const pin = plan.changes.find((c) => c.kind === 'pin');
+  assert.deepEqual([pin.from, pin.to], [OLD_PIN, STUDIO_VERSION], 'the old address becomes the npm registry\'s exact version');
+  assert.match(pin.what, /from the npm registry \(was 0\.7\.0, at an address that is no longer served\)/);
   assert.deepEqual(plan.changes.find((c) => c.kind === 'scripts').scripts, { check: 'homie-studio check' });
   assert.deepEqual(plan.kept.map((k) => `${k.file}${k.section ? ` ${k.section}` : ''}`).sort(), ['AGENTS.md ## Rules', 'site/src/worker.mjs'], 'the studio\'s own words are kept');
   for (const [f, text] of before) assert.equal(read(dir, f), text, `${f} is untouched without --apply`);
@@ -127,7 +134,8 @@ test('--apply takes the template\'s new text where the studio never changed it, 
   assert.equal(read(dir, 'site/README.md'), want['site/README.md']);
   assert.equal(read(dir, 'site/migrations/0002_studio_stats.sql'), want['site/migrations/0002_studio_stats.sql']);
   assert.match(read(dir, '.gitignore'), /\n# Screenshots from check and look runs\.\n\.checks\/\n$/);
-  assert.equal(json(dir, 'package.json').devDependencies['@homie-rocks/studio'], `https://homie.rocks/npm/homie-studio-${STUDIO_VERSION}.tgz`);
+  assert.equal(json(dir, 'package.json').devDependencies['@homie-rocks/studio'], STUDIO_VERSION, 'the registry\'s exact version, never an address again');
+  assert.doesNotMatch(read(dir, 'package.json'), /\.tgz|homie\.rocks\/npm/);
   assert.equal(json(dir, 'package.json').scripts.check, 'homie-studio check');
   assert.equal(json(dir, 'studio.json').homie.studio, STUDIO_VERSION);
   assert.equal(read(dir, 'site/src/worker.mjs'), "// Our own wrapper.\nexport { default, Table, Lobby } from '@homie-rocks/studio/worker';\n", 'the studio\'s own Worker is never replaced');
@@ -138,10 +146,10 @@ test('--apply takes the template\'s new text where the studio never changed it, 
   assert.deepEqual(again.kept.map((k) => k.section ?? k.file).sort(), ['## Rules', 'site/src/worker.mjs']);
 });
 
-test('the pin: a newer studio is refused, a link to a checkout is left as it is', () => {
+test('the pin: a newer studio is refused, a link to a checkout is left as it is, and an old address always moves to the registry', () => {
   const { dir } = oldStudio('pins');
   const pkg = json(dir, 'package.json');
-  pkg.devDependencies['@homie-rocks/studio'] = 'https://homie.rocks/npm/homie-studio-99.0.0.tgz';
+  pkg.devDependencies['@homie-rocks/studio'] = '99.0.0';
   save(dir, 'package.json', pkg);
   const newer = out(run(['upgrade'], dir));
   assert.equal(newer.ok, false);
@@ -151,6 +159,18 @@ test('the pin: a newer studio is refused, a link to a checkout is left as it is'
   const linked = out(run(['upgrade'], dir));
   assert.equal(linked.changes.some((c) => c.kind === 'pin'), false);
   assert.ok(linked.kept.some((k) => k.file === 'package.json'));
+  // An address that names this very version is moved too: the registry has the same version, and the address is gone.
+  pkg.devDependencies['@homie-rocks/studio'] = `https://homie.rocks/npm/homie-studio-${STUDIO_VERSION}.tgz`;
+  save(dir, 'package.json', pkg);
+  assert.equal(out(run(['upgrade'], dir)).changes.find((c) => c.kind === 'pin').to, STUDIO_VERSION);
+  out(run(['upgrade', '--apply'], dir));
+  assert.equal(json(dir, 'package.json').devDependencies['@homie-rocks/studio'], STUDIO_VERSION);
+  assert.equal(out(run(['upgrade'], dir)).changes.some((c) => c.kind === 'pin'), false, 'and once moved, there is nothing more to pin');
+  // An alias stays an alias, at this version.
+  pkg.devDependencies['@homie-rocks/studio'] = 'npm:@homie-rocks/studio@0.7.0';
+  save(dir, 'package.json', pkg);
+  assert.equal(out(run(['upgrade'], dir)).changes.find((c) => c.kind === 'pin').to, `npm:@homie-rocks/studio@${STUDIO_VERSION}`);
+  assert.equal(pinnedVersion(OLD_PIN), '0.7.0', 'the old address is read, so its studio can be moved off it');
   assert.equal(pinnedVersion('npm:@homie-rocks/studio@0.7.0'), '0.7.0');
   assert.equal(pinnedVersion('0.8.0'), '0.8.0');
   assert.equal(pinnedVersion('^0.8.0'), null, 'a range is not a pin');

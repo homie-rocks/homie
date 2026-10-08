@@ -213,7 +213,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   one-time link that marks their own player account (a passkey on this site) as the owner's, so their games and
   the studio's back office recognise them.
 - \`npx --no-install homie-studio upgrade\` — after pinning a newer \`@homie-rocks/studio\` (or through
-  \`npx -y --package=<its tarball> homie-studio upgrade\`): what the newer template adds to this studio (AGENTS.md
+  \`npx -y @homie-rocks/studio@<its version> upgrade\`): what the newer template adds to this studio (AGENTS.md
   sections, READMEs, .gitignore lines) and what it keeps. It changes nothing until \`--apply\`, and never
   touches a file or section this studio changed; \`--diff\` shows how those differ from the template's.
 

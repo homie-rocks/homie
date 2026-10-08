@@ -323,10 +323,6 @@ repository:
   ([privacy](https://homie.rocks/privacy/)).
 - **Protected names.** Homie's own games' names are protected: a studio that wants one
   asks with `studio_request_grant`, and only the name's owner can approve it.
-- **Release tarballs.** homie.rocks serves every published `@homie-rocks/studio` version
-  at `https://homie.rocks/npm/homie-studio-<version>.tgz`, the same bytes as the npm
-  registry's. Studios made before 0.10.0 pin those; a new studio pins the registry's
-  exact version, which Workers Builds and Claude Code cloud sessions reach by default.
 
 homie.rocks itself and Homie's own games (their
 code, art, music and names) are not open source; the engine they are built on is.

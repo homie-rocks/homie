@@ -1218,8 +1218,7 @@ npx homie-studio port check my-game --url http://127.0.0.1:8787   # the owner te
 Versions are immutable: a published version never changes, so a studio that pinned one
 never changes by surprise. A change ships as a new `version` on the npm registry as
 `@homie-rocks/studio`, which is what `homie-studio new` pins (the exact version; package-lock.json keeps its
-integrity). The registry is what Workers Builds and a Claude Code cloud session reach by default. Older studios
-pinned a tarball at `https://homie.rocks/npm/homie-studio-<version>.tgz`, which stays.
+integrity). The registry is what Workers Builds and a Claude Code cloud session reach by default.
 
 ## Beta
 
