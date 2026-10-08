@@ -722,6 +722,15 @@ test('a room that holds more than a tick can send is charged for it, and ends', 
   assert.ok(stats(rig).tickUnits > rig.host.core.snapshot()[1].length * 1024, 'the tick was charged for every number it sent');
   rig.ticks(120);
   assert.deepEqual(rig.ended.map((e) => [e.why, e.kind, e.handler]), [['budget', 'room', 'state (the room holds more than a tick can send)']]);
+  assert.ok(rig.host.tick <= 4, `it ended on tick ${rig.host.tick}: such a room has no handler left to run that could make it smaller, so it is not left to grow`);
+  // A long text is sent character by character, and counted so: one text of 4,096 characters written to eight fields
+  // of 600 entities is one value 4,800 times over to the handler that writes it, and 19 million characters a tick to send.
+  const texts = await plant({
+    kinds: `rock: { fields: { a: f.text(4096), b: f.text(4096), c: f.text(4096), d: f.text(4096), e: f.text(4096), g: f.text(4096), h: f.text(4096), i: f.text(4096) }, on: { arrive(world, self) { let s = 'abcdefgh'; for (let k = 0; k < 9; k += 1) s = s + s; self.a = s; self.b = s; self.c = s; self.d = s; self.e = s; self.g = s; self.h = s; self.i = s; } } }`,
+    room: `start(world) { for (let i = 0; i < 600; i += 1) world.spawn('rock', { x: 0, y: 0, z: 0 }, {}); },`,
+  });
+  texts.rig.ticks(40);
+  assert.deepEqual(texts.rig.ended.map((e) => [e.why, e.kind, e.handler]), [['budget', 'room', 'state (the room holds more than a tick can send)']]);
 });
 
 test('with the tick\'s budget gone nothing is lost: an entity that has not arrived waits, and so does a command', async () => {

@@ -62,6 +62,8 @@ export const SNAP = 4;
 export const SEND = 16;
 /** The most area events (`world.sendArea`) one tick takes. */
 export const AREAS_MAX = 64;
+/** What the log names when a room ends because of what it holds, not because of a handler. */
+const STATE_TOO_LARGE = 'state (the room holds more than a tick can send)';
 /** The most ids `world.sweep`'s `ignore` reads. */
 export const IGNORE_MAX = 16;
 /** The most values a game's own answer to `world.ask` holds. */
@@ -814,7 +816,9 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     cut = false;
     // When sending the state takes more than half of a tick's budget, that is what a cut tick is put down to.
     stateHeavy = 2 * SNAP * snapCells > c.settings.budget.tick;
-    if (left <= 0) cut = true;
+    // A room that holds more than a whole tick's budget can send has no handler left to run that could make it
+    // smaller, and every tick it lives it sends all of it again: it ends now, not after two seconds of growing.
+    if (left <= 0) { cut = true; out.push({ t: 'fail', why: 'budget', kind: 'room', handler: STATE_TOO_LARGE }); }
     // Phase 0: rounds, seats, bots, arrivals.
     turnRounds();
     if (playing) {
@@ -917,7 +921,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     stats.tickUnits = c.settings.budget.tick - left;
     if (stats.tickUnits > stats.maxTickUnits) stats.maxTickUnits = stats.tickUnits;
     if (cut) {
-      if (stateHeavy) { failing = { kind: 'room', handler: 'state (the room holds more than a tick can send)' }; stats.failing = `${failing.kind}.${failing.handler}`; }
+      if (stateHeavy) { failing = { kind: 'room', handler: STATE_TOO_LARGE }; stats.failing = `${failing.kind}.${failing.handler}`; }
       stats.ticksCut += 1;
       trips += 1;
       // The budget tripping on every tick for two seconds: the room ends, and the log names the handler.

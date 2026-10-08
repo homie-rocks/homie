@@ -199,7 +199,8 @@ export const mutable = (fd: Field): boolean => fd.t === 'list' || fd.t === 'map'
 export const packed = { n: 0 };
 
 export function pack(fd: Field, v: unknown, dims: number): unknown {
-  packed.n += 1;
+  // One for the value, and for a text one more for every 64 characters: the same count `cellsOf` makes of a declaration.
+  packed.n += fd.t === 'text' ? 1 + ((v as string).length >> 6) : 1;
   switch (fd.t) {
     case 'bit': case 'press': return v ? 1 : 0;
     case 'vec3': case 'dir': { const p = v as Vec3; return dims === 2 ? [p.x, p.y] : [p.x, p.y, p.z]; }

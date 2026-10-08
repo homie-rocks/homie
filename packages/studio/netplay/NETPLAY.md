@@ -2137,7 +2137,8 @@ rounds and placements are the server's in either case.
 | A person returns within 60 s | The room resumes at the tick it paused on. No tick is skipped and none runs for the gap |
 | Nobody returns within 60 s | **The room ends.** The relay forgets it and its stored seats are deleted (`office` and `recorded` are kept). The next visitor gets a fresh room, with a new epoch |
 | A restart or a deploy | There is no save yet. Seats keep their tokens (the relay's `net`, as today); the room starts a fresh match under a new epoch and players reconnect into it. The round in progress is lost |
-| The rules fail again and again | A handler that used its whole share of the tick on every tick for two seconds, or ticks that kept starting late for five: the room ends, its players get the error `room-over`, and the log names the game, its build, the kind and the handler |
+| The rules fail again and again | Every tick failing for two seconds of the clock (a handler that used its whole share, or a fault in the runtime itself), or ticks that ran slow for five: the room ends, its players get the error `room-over`, and the log names the game, its build, the kind and the handler (`why`: `budget`, `fault`, `overrun`). Both are seconds on the clock, not a count of ticks |
+| Anything is thrown in a tick | It is caught where the tick began, written to the log as `host-fault` (game, build, tick, the part of the tick, at most once a second) and counted. The tick after it runs: a room that is running always has exactly one timer pending, and a room that is paused or ended has none |
 
 ### 29.4 What the testing tools read
 
@@ -2159,16 +2160,37 @@ from outside the studio run on its server.
 
 - **At build**, with the line named: globals, methods and syntax are allowlists (no `Date`, no
   `Math.sin` or `**`, no `JSON`, `fetch`, timers, `class`, `this`, `try`, `async`, regular
-  expressions, `delete`, getters; no `constructor`, `prototype`, `__proto__`); a rules module has no
-  state of its own (no module-level `let` or `var`, nothing module-level assigned to, nothing of the
-  game's run at load); it imports only `@homie-rocks/studio/rules` and the game's own files.
+  expressions, `delete`, getters; no `constructor`, `prototype`, `__proto__`; no `==` or `!=` except
+  against `null`; no whole number of any size such as `10n`; no function under the name `valueOf`,
+  `toString` or `toJSON`); a rules module has no state of its own (no module-level `let` or `var`,
+  nothing module-level assigned to, nothing of the game's run at load); it imports only
+  `@homie-rocks/studio/rules` and the game's own files.
 - **Rewritten**: every loop and function counts a unit against the running handler's budget; every
   computed key and method call goes through a guard that never reaches a prototype, a constructor
-  or a method read as a value; text made by `+` or a template, a spread and the list methods are
-  charged by their size; no list, text, `Map` or `Set` passes 65,536 entries.
-- **At run time**: a handler that has used a quarter of `room.budget.tick` (2,000,000 units by
-  default) is stopped and abandoned, as one that throws is. Rules cannot catch it, because rules
-  cannot contain `try`. When a tick has used all of `budget.tick` it ends early: `move` has run for
-  every body, handlers not yet run are skipped, and events not yet run stay queued in order.
+  or a method read as a value; every value an operator would turn into a number or a text (an
+  operand of `-`, `<` or `+`, a part of a template, an argument of `Number`, `String` or `Math.max`)
+  is checked to be one already, so a list or an object there stops the handler instead of being
+  walked uncounted; a write to a property is checked not to land on a function, so nothing is kept
+  on one; text made by `+` or a template, a spread and the list methods are charged by their size,
+  and before they run; no list, text, `Map` or `Set` passes 65,536 entries.
+- **What comes back from rules is read as plain data.** What a handler returns, every argument of a
+  `world` call and everything written to a field, a list, `motion`, an event or an effect is read by
+  `typeof` and by its own data properties, inside the try that catches the handler and inside its
+  budget. The runtime never calls a `valueOf`, a `toString`, a getter or an iterator of the rules,
+  nothing in the reading can throw, and what is not a number, a text, true, false, a list or an
+  object of the declared shape becomes the zero of that shape. Stored state is frozen, so a query
+  (`world.near`) hands it out without copying it.
+- **At run time**: a handler that has used a quarter of `room.budget.tick` is stopped and abandoned,
+  as one that throws is. Rules cannot catch it, because rules cannot contain `try`. The default is
+  1,000,000 units a tick at 20 ticks a second or fewer, and 20,000,000 divided by the tick rate
+  above that. When a tick has used all of `budget.tick` it ends early: `move` has run for every
+  body (once the budget is gone, with a small share each), handlers not yet run are skipped, and
+  events not yet run stay queued in order. The tick pays first for the state it sends: 4 units for
+  every value in its snapshot.
+- **Bounds a game is written inside**: a room holds 2,048 entities, 16,384 events and timers
+  waiting, 64 area events a tick and 256 effects a tick; a declared field holds 16,384 values when
+  it is full and all the fields of one kind of entity 65,536 (a list of lists multiplies);
+  `world.sweep` reads the first 16 ids of `ignore`; a game's own answer to `world.ask` holds 256
+  values, four levels deep. `world.math` takes numbers and vectors of numbers.
 - The view's bundle holds the same guarded `move` code the server runs, and the rules'
   declarations as data. It holds none of the rules' handlers.
