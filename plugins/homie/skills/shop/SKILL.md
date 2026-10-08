@@ -1,6 +1,6 @@
 ---
 name: shop
-description: Sell things in a Homie studio's games with the studio's OWN Stripe - a supporter pack, cosmetics, a season pass, a one-time unlock, a tip - in real money, with Stripe Checkout, Stripe Tax or Stripe Managed Payments, refunds from the office, and the kids rules built in; set up with Stripe's own agent tools (Stripe's MCP server and skills) so the owner only makes the account, approves Stripe's pages and pastes one key. Use when someone asks to sell something, add a shop or store, take payments or donations, make money from a game, set up or connect Stripe, make the products in Stripe, asks "how are sales?", about tax or Managed Payments, to add a supporter badge, refund a player, or about chargebacks, referral shares or affiliate links between studios.
+description: Sell things in a Homie studio's games with the studio's OWN Stripe - a supporter pack, cosmetics, a season pass, a one-time unlock, a tip - in real money, with Stripe Checkout, Stripe Tax or Stripe Managed Payments, refunds from the office, and editable studio policies with protective defaults; set up with Stripe's own agent tools (Stripe's MCP server and skills) so the owner only makes the account, approves Stripe's pages and pastes one key. Use when someone asks to sell something, add a shop or store, take payments or donations, make money from a game, set up or connect Stripe, make the products in Stripe, asks "how are sales?", about tax or Managed Payments, to add a supporter badge, refund a player, or about chargebacks, referral shares or affiliate links between studios.
 compatibility: The studio's own pinned toolkit (@homie-rocks/studio 0.24.3 or later) and Wrangler. Stripe's own agent plugin (its MCP server and skills) once the studio sells, signed in by the owner on Stripe's page.
 metadata:
   providers: stripe
@@ -63,11 +63,9 @@ only when they say the shop goes live, and then read access is enough for everyt
 - Never refund, mark a referrer paid, or switch to live keys by yourself: you **ask**, the owner taps. Never write to
   a live account, change tax settings or registrations, Managed Payments, payouts or bank details: those are the
   owner's, in Stripe. Reading them is fine.
-- Never sell anything random (loot boxes, mystery crates, spins), never a currency (gems, coins, points), never a
-  countdown, never pay-to-win on a beginner or kids server, never anything on a kids server or in a studio made for
-  children. The kit refuses these anyway; do not look for a way around it.
-- Never put a buy button on the play, start or wake button, never open the shop on a timer, never word a sale at
-  children ("ask your parents!"). The television never sells.
+- Read the studio's `policy` in shop.json and follow its chosen rules. New shops start with the protective
+  preset. Do not silently relax protection for children. The studio chooses what it sells and to whom, and is
+  responsible for law and payment-provider terms where it sells; a preset is not legal advice.
 
 ## The owner's steps, for a creator with a fresh Stripe account
 
@@ -88,8 +86,8 @@ Say these as they come, one or two at a time. Everything else is yours.
 | The person says | Run | What happens |
 |---|---|---|
 | "Sell a supporter pack for $5" | `npx --no-install homie-studio shop init --supporter` (then `shop check`) | `shop.json` with a US$5 Supporter pack (a badge on their profile and beside their name in rooms, for a year; it changes nothing about play) and `SELLING.md`. Commit both. |
-| "Sell a skin / a season pass / the full game" | edit `shop.json` `items` (`kind`: `cosmetic`, `pass`, `unlock`; `price` in cents; `gives`: the keys the game reads), `shop check`, then `shop catalog` again | Real money only. An item that changes how the game plays gets `"advantage": true`: never sold or counted on beginner servers. Under US$3 the check warns: fees eat it. |
-| "Let people tip" | an item `{ "kind": "tip", "price": "choose", "min": 200, "max": 5000 }` | Pay what you want between min and max. |
+| "Sell a skin / a season pass / the full game" | edit `shop.json` `items` (`kind`: `cosmetic`, `pass`, `unlock`; `price` in Stripe currency units; `gives`: the keys the game reads), `shop check`, then `shop catalog` again | Kinds are studio labels, without a fixed list. `"advantage": true` follows the studio policy for beginner and kids servers. Homie sets no price ceiling. |
+| "Let people tip" | an item `{ "kind": "tip", "price": "choose", "min": 200, "max": 5000 }` | Pay what you want; min follows Stripe currency requirements, and max is optional and chosen by the studio. |
 | "Make the products in Stripe" | `shop catalog`, then the read with `stripe_api_read`, then `shop catalog --have <file>` | The exact `stripe_api_write` calls still needed (one Product an item, id `homie_<studio>_<item>`, with a tax code and a default Price of shop.json's amount); a changed price is a new Price made the default; a removed item is archived, never deleted. In sync, shop.json `catalog` records the mode and checkouts name the Products. shop.json's price is always what is charged. |
 | "Connect my Stripe" / "turn the shop on" | `npm run deploy`, then `npx --no-install homie-studio shop connect`; give the owner the 127.0.0.1 link | One restricted key (Checkout Sessions: Write, Charges: Write, PaymentIntents: Read, Disputes: Read, Webhook Endpoints: Write), pasted on the page; the page makes the webhook to `<site>/api/shop/hook` with it and asks **who is the seller**: the studio (Stripe Tax on) or Stripe (Managed Payments: 3.5% more). TEST keys only; `--live` only when the owner says the shop is ready to sell for real. A key without Webhook Endpoints: the page takes a webhook secret the owner made themselves. |
 | "Is tax set up?" | `stripe_api_read` `GET /v1/tax/settings`, and `GET /v1/tax/registrations` | Seller "stripe": Stripe Tax needs `status: active` (the business address in Settings, Tax), or checkouts fail; with no registrations it collects no tax anywhere: say so, the accountant decides where to register. Seller "stripe-managed": Stripe files the tax; the connect page's test checkout said whether Managed Payments is on. Change nothing yourself. |
@@ -100,15 +98,29 @@ Say these as they come, one or two at a time. Everything else is yours.
 | "Show the item in the game" / "the supporter badge" | in the game: `createShop()` from `@homie-rocks/studio/shop`; `shop.has('skin:ember')`, `shop.on('change', …)`, `shop.open('ember-skin')` from a button the player pressed, `shop.used(key)` when equipped | The play shell answers for the signed-in player; a badge rides on their seat as `peer.badge` (the Worker sets it, never a hello). |
 | "Pay studios that send us players" / "affiliate links" | `shop.json` `referrals` (rate, window, hold), `shop statements [--send]` | A `?via=<host>` link from another site (homie.rocks is one more referrer, on the same terms) counts for a new player's purchases; statements are signed with the studio's key; the referrer invoices the studio; the owner pays and marks it paid (an ASK from you). Nothing moves through Homie. |
 
-## Who may buy (the kit decides; tell the person)
+## The studio settings
 
-A guest makes an account first (a passkey). Every account answers one neutral question once: the year they were
-born (no default; kept only as adult, teen or child). Under 13: nothing, ever. 13 to 17: a one-time link a parent
-opens on their own phone and pays in their own name. Adults: Stripe's own hosted page, one item at a time, with a
-monthly cap (US$50 at most). A kids server shows no shop. A TV's store sheet is a code to buy on a phone.
+`policy.preset`: `protective` (new shops, and the fallback for existing files), `adults-only`, or `custom`.
+Each rule is readable and editable in shop.json: `requireAccount`, `ageQuestion`, `children`, `teens`,
+`kidsStudio`, `kidsServer`, `kidsAdvantages`, `beginnerAdvantages`, `paidRandomRewards`, `countdownOffers`,
+`virtualCurrency`, `supporterAdvantages`, `repeatPurchases`, `refundUsedItems`, `televisionCheckout`, `withdrawalAcknowledgement` (true in every preset). Children and teens use
+`deny`, `parent`, or `allow`; the others are booleans. `childAge` and `adultAge` are editable whole-year thresholds, initially 13 and 18. SHOP.md lists the preset values.
+
+Protective keeps today's account and age question, under-13 refusal, parent checkout for teens, closed kids
+shops, beginner fairness, refusal of paid randomness and countdowns, and TV code to a phone. Adults-only also
+refuses teens. Custom enables all policies. Override individual rules only as the studio chooses.
+
+Prices, tips, item counts, kinds, keys, text and durations have no Homie ceilings. `capPerPlayerMonth` and
+`refundDays` are optional, have no default or ceiling, and existing written values stay in effect. Referral
+rate, window, per-player cap, hold and invoice minimum are the studio's. Omitted limits do not apply.
+`purchaseAttemptsPerMinute` is configurable account flood protection (default 6); `purchaseAttemptsPerAddressPerMinute` is separate address protection (default 600 for shared connections). `guestBuyersPerAddressPerHour` defaults to 600 and must be a positive whole number. These are flood settings, not spending limits.
+Never put a buy button on play/start, open the shop on a timer, or word a sale at children. Open it only from a deliberate shop button.
+
+Use Stripe currency units, including zero-decimal currencies: 500 JPY is ¥500. Stripe minimums, currency units,
+and safe arithmetic remain; errors say why. A kind label does not implement recurring billing or fulfillment.
 
 ## The first sale (the acceptance)
 
 In test mode: buy the supporter pack on a phone with Stripe's test card `4242 4242 4242 4242`, see "It's yours",
 see the badge on the account page and beside the name in a room (from the next room the player joins), refund it
-from `/_studio/office/shop`, and see the badge go. A kids server's room shows no shop; `/<game>/tv` shows only a code.
+from `/_studio/office/shop`, and see the badge go. With the protective preset, a kids server's room shows no shop and `/<game>/tv` shows only a code.

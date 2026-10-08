@@ -328,18 +328,18 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **The studio sells with its OWN Stripe account.** The studio is the seller: its prices, its refunds, its tax, its
   disputes. Money goes from players to the studio's Stripe; homie.rocks never sees it and Homie takes no cut.
   `SELLING.md` says what that means for the owner in plain words (not legal advice).
-- **`shop.json`** (at the studio's root, reviewed in git): `till` (`stripe`, the studio is the seller with Stripe
-  Tax on; `stripe-managed`, Stripe Managed Payments is the seller of record and files the tax for 3.5% more; or
-  `off`), `currency`, `refundDays` (at least 14), `capPerPlayerMonth` (cents, at most 5000) and `items`:
-  `{ "id", "kind": "cosmetic"|"supporter"|"pass"|"unlock"|"tip", "name", "price": <cents>, "gives": ["skin:ember"],
-  "days"?, "game"?, "advantage"? }`. Real money only: no gems, coins or points. `npx --no-install homie-studio shop
-  init --supporter` writes a US$5 Supporter pack; `shop check` and every build refuse what the kit refuses.
-- **The kids rules are the kit's, not the studio's to switch off:** nothing random for money (an item that names
-  chance, odds, a crate, a box or a mystery is refused), no countdown offers, no shop on a kids server or in a studio
-  with `"audience": "kids"` in studio.json, spending off on every account until a neutral age question says adult,
-  nothing ever for under-13s, 13-17 only through a parent's own checkout (a one-time link), nothing with
-  `"advantage": true` on a beginner server, one hosted Stripe checkout per purchase, a monthly cap. The television
-  never sells: its store sheet is a code to buy on a phone.
+- **`shop.json`** is the studio's settings file: `till` (`stripe`, `stripe-managed`, or `off`), `currency`,
+  optional `refundDays` and `capPerPlayerMonth`, and items with studio-chosen kinds, names, prices and entitlement
+  keys. No Homie ceiling on prices, tips, item count, keys, text, durations or referral terms. Stripe currency
+  units and provider minimums still apply, including zero-decimal currencies. `shop init --supporter` writes a
+  supporter item and explicit protective policy, with no spending cap or refund window. Existing values stay.
+- **The studio chooses who may buy:** `policy.preset` is `protective` (the default), `adults-only`, or `custom`.
+  Each rule can be read and edited in shop.json; SHOP.md lists them. Protective keeps the account and age
+  question, under-13 refusal, parent checkout for teens, closed kids shops, beginner fairness, refusal of paid
+  randomness and countdowns, and TV code to a phone. Do not silently relax protection for children. The studio
+  is responsible for law and provider terms where it sells; presets are not legal advice.
+- **Flood protection:** `purchaseAttemptsPerMinute` (default 6) is per account; `purchaseAttemptsPerAddressPerMinute` (default 600) is per address. Both are per Worker instance and configurable.
+  New guest buyers use `guestBuyersPerAddressPerHour` (default 600). These protect against floods, not spending.
 - **In a game:** `import { createShop } from '@homie-rocks/studio/shop'`; `shop.has('skin:ember')`,
   `shop.entitlements()`, `shop.on('change', …)`, `shop.open(item)` from a button the player pressed (never the
   play button, never on a timer), `shop.used(key)` when it is equipped. A supporter's badge rides on their seat

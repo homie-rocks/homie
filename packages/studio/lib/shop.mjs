@@ -5,7 +5,7 @@
  *   homie-studio shop                       is it selling, and if not, what is missing (the live site's office view)
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]
  *                                           writes shop.json (a $5 Supporter pack with --supporter) and SELLING.md
- *   homie-studio shop check                 shop.json against the kit's rules (no randomness, real money, the cap…)
+ *   homie-studio shop check                 shop.json against the studio settings and provider requirements
  *   homie-studio shop connect [--managed] [--live]   a page on THIS computer (127.0.0.1, one use, ten minutes) where the owner
  *                                           pastes the studio's restricted Stripe key (the one thing only they can make);
  *                                           with it this process makes the webhook (0.24.3), and the key and the
@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { askedFor, withKey } from './office.mjs';
 import { runner } from './cloudflare.mjs';
 import { listGames, readStudio, siteUrl } from './studio.mjs';
-import { SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
+import { POLICY_PRESETS, SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
 import {
   KEY_SHAPE, STRIPE_VERSION, StripeError, WEBHOOK_SECRET_SHAPE, createWebhookEndpoint, expireCheckoutSession, isPermissionError, listWebhookEndpoints, modeOf,
   stripeCall, updateWebhookEndpoint,
@@ -62,14 +62,14 @@ export function readShop(root) {
   try { raw = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { return { ok: false, shop: null, errors: [{ at: '', message: `shop.json is not JSON: ${error.message}` }], warnings: [], file }; }
   const games = listGames(root).map((g) => g.id);
   const studio = readStudio(root);
-  return { ...checkShop(raw, { games, audience: audienceOf(studio) }), file };
+  return { ...checkShop(raw, { games, audience: audienceOf(studio), studioName: studio.name }), file };
 }
 
 /** The build's half: the checked shop for games.json, or a thrown error that says what to fix (nothing is published). */
 export function shopForBuild(root, { log = () => {} } = {}) {
   const r = readShop(root);
   if (r.absent) return null;
-  if (!r.ok) throw new Error(`shop.json breaks the shop's rules, so the build stops (nothing is sold that the kit refuses):\n${r.errors.map((e) => `  ${e.at || 'shop.json'}: ${e.message}`).join('\n')}`);
+  if (!r.ok) throw new Error(`shop.json conflicts with the studio settings or payment requirements, so the build stops (check the studio settings and payment requirements):\n${r.errors.map((e) => `  ${e.at || 'shop.json'}: ${e.message}`).join('\n')}`);
   for (const w of r.warnings) log(`shop.json ${w.at}: ${w.message}`);
   return r.shop;
 }
@@ -77,7 +77,7 @@ export function shopForBuild(root, { log = () => {} } = {}) {
 export function shopCheck(root) {
   const r = readShop(root);
   if (r.absent) return { ok: true, command: 'shop check', absent: true, message: 'No shop.json: this studio sells nothing (homie-studio shop init writes one).' };
-  return { ok: r.ok, command: 'shop check', errors: r.errors, warnings: r.warnings, items: r.shop?.items.map((i) => `${i.id} (${i.kind}, ${i.kind === 'tip' ? 'pay what you want' : money(i.price, r.shop.currency)})`) ?? [], till: r.shop?.till ?? null, why: r.ok ? undefined : `shop.json: ${r.errors.map((e) => `${e.at}: ${e.message}`).join('; ')}` };
+  return { ok: r.ok, command: 'shop check', policy: r.shop?.policy, capPerPlayerMonth: r.shop?.capPerPlayerMonth, refundDays: r.shop?.refundDays, errors: r.errors, warnings: r.warnings, items: r.shop?.items.map((i) => `${i.id} (${i.kind}, ${i.kind === 'tip' ? 'pay what you want' : money(i.price, r.shop.currency)})`) ?? [], till: r.shop?.till ?? null, why: r.ok ? undefined : `shop.json: ${r.errors.map((e) => `${e.at}: ${e.message}`).join('; ')}` };
 }
 
 /** The Supporter pack the kit suggests first: deterministic, never pay-to-win, a badge on the profile and in rooms. */
@@ -89,11 +89,10 @@ export function shopInit(root, { supporter = false, currency = 'usd', price = 50
   const file = join(root, SHOP_FILE);
   if (existsSync(file)) return { ok: false, command: 'shop init', why: 'shop.json is here already: change it, then homie-studio shop check' };
   const studio = readStudio(root);
-  if (audienceOf(studio) === 'kids') return { ok: false, command: 'shop init', why: 'studio.json says "audience": "kids": a studio made for children sells nothing in its games' };
   const shop = {
-    till: managed ? 'stripe-managed' : 'stripe', currency: String(currency).toLowerCase(), refundDays: 14, capPerPlayerMonth: 5000,
-    items: supporter ? [supporterItem({ price: Math.floor(Number(price)) || 500 })] : [],
-    referrals: { rate: 0.1, windowDays: 30, capPerPlayer: 1000, holdDays: 30, minimumInvoice: 2500, accept: ['stripe-invoice'] },
+    till: managed ? 'stripe-managed' : 'stripe', currency: String(currency).toLowerCase(),
+    policy: { preset: 'protective', ...POLICY_PRESETS.protective },
+    items: supporter ? [supporterItem({ price: Number(price) })] : [],
   };
   const r = checkShop(shop, { games: listGames(root).map((g) => g.id) });
   if (!r.ok) return { ok: false, command: 'shop init', why: r.errors.map((e) => e.message).join('; ') };
@@ -124,10 +123,26 @@ export async function shopRefund(root, order, { url, reason, note } = {}) {
   return askedFor(root, url, r, 'shop refund');
 }
 
-export async function shopStatements(root, { url, period, send = false } = {}) {
-  const r = await withKey(root, url, (call) => (send ? call('/_studio/api/shop/statements/send', { ...(period ? { period } : {}) }) : call(`/_studio/api/shop/statements${period ? `?period=${encodeURIComponent(period)}` : ''}`)));
-  if (!r.ok) return { ok: false, command: 'shop statements', why: r.message ?? r.why ?? 'the studio did not answer' };
-  return { ok: true, command: 'shop statements', period: r.period, ...(send ? { sent: r.sent } : { statements: r.statements }) };
+export async function shopStatements(root, { url, period, cursor = '', send = false } = {}) {
+  if (!send) {
+    const r = await withKey(root, url, (call) => call(`/_studio/api/shop/statements?cursor=${encodeURIComponent(cursor)}${period ? `&period=${encodeURIComponent(period)}` : ''}`));
+    return r.ok ? { ok: true, command: 'shop statements', period: r.period, nextCursor: r.nextCursor, statements: r.statements } : { ok: false, command: 'shop statements', why: r.message ?? r.why ?? 'the studio did not answer' };
+  }
+  const sent = [];
+  console.error('Sending statements. Keep this command open; run it again after closing to resume safely.');
+  return withKey(root, url, async (call) => {
+    do {
+      const page = await call('/_studio/api/shop/statements/send', { cursor, ...(period ? { period } : {}) });
+      if (!page.ok) return { ok: false, command: 'shop statements', sent, why: page.message ?? page.why ?? 'the studio did not answer' };
+      for (const failure of page.failures ?? []) if (!sent.some((x) => !x.ok && x.via === failure.via)) { sent.push(failure); console.error(`${failure.via}: failed: ${failure.why ?? failure.status}`); }
+      sent.push(...page.sent);
+      for (const result of page.sent) console.error(`${result.via}: ${result.ok ? 'page sent' : 'failed: ' + (result.why ?? result.status)}`);
+      period = page.period;
+      cursor = page.nextCursor;
+      if (page.retryAfter) await new Promise((resolve) => setTimeout(resolve, page.retryAfter * 1000));
+    } while (cursor !== null);
+    return { ok: true, command: 'shop statements', period, nextCursor: null, sent };
+  });
 }
 
 /* ------------------------------------------------------------------ the key, from a page on this computer */
@@ -346,15 +361,17 @@ export function shopLines(r) {
   } else if (r.command === 'shop check') {
     if (r.absent) lines.push(r.message);
     else {
-      lines.push(r.ok ? `shop.json follows the rules: ${r.items.join(', ') || 'no items yet'} (till: ${r.till}).` : 'shop.json breaks the rules:');
+      lines.push(r.ok ? `shop.json matches the studio settings: ${r.items.join(', ') || 'no items yet'} (till: ${r.till}).` : 'shop.json conflicts with the studio settings or payment requirements:');
+      if (r.policy) lines.push(`Studio policy: ${r.policy.preset}; edit policy in shop.json. Monthly cap: ${r.capPerPlayerMonth ?? 'not set'}; refund days: ${r.refundDays ?? 'not set'}.`);
       for (const e of r.errors ?? []) lines.push(`  ${e.at}: ${e.message}`);
       for (const w of r.warnings ?? []) lines.push(`  note ${w.at}: ${w.message}`);
     }
   } else if (r.command === 'shop init') {
     lines.push(`Wrote ${r.wrote.join(', ')} (till: ${r.till}${r.items.length ? `; ${r.items.join(', ')}` : ''}). Next:`, ...r.next.map((n) => `  ${n}`));
   } else if (r.command === 'shop statements') {
+    if (r.nextCursor) lines.push(`More rows: shop statements --period ${r.period} --cursor '${r.nextCursor.replaceAll("'", "'\\''")}'${r.sent ? ' --send' : ''}`);
     if (r.sent) for (const s of r.sent) lines.push(`${s.via}: ${s.ok ? 'sent' : `not sent (${s.why ?? s.status})`}`);
-    else for (const s of r.statements ?? []) lines.push(`${s.statement.referrer}: due ${money(s.statement.totals.due, s.statement.currency)} (${s.statement.lines.length} line(s)), signed`);
+    else for (const s of r.statements ?? []) lines.push(`${s.statement.referrer}: due ${s.statement.totals ? money(s.statement.totals.due, s.statement.currency) : 'see first page'} (${s.statement.lines.length} line(s)), signed`);
     if (!(r.sent ?? r.statements ?? []).length) lines.push(`No referral statements for ${r.period}.`);
   } else lines.push(r.message ?? '');
   return lines;

@@ -27,16 +27,17 @@ import { productIdOf } from '../worker/stripe.mjs';
 const MARK = 'shop-v1';
 
 /** The Products the catalog should hold, from the checked shop.json. */
-export function wantedProducts(shop, slug) {
-  return (shop?.items ?? []).map((it) => {
-    const id = productIdOf(slug, it.id);
+export async function wantedProducts(shop, slug) {
+  return Promise.all((shop?.items ?? []).map(async (it) => {
+    const id = await productIdOf(slug, it.id);
     return {
       id, item: it.id, name: it.name, description: it.blurb ?? null, tax_code: defaultTaxCode(it),
-      metadata: { homie: MARK, homie_studio: String(slug), homie_item: it.id },
+      // Stripe metadata values: 500 characters. https://docs.stripe.com/metadata (fetched 2026-10-08).
+      metadata: { homie: MARK, homie_studio: String(slug), homie_item: it.id.length <= 500 ? it.id : id },
       price: it.kind === 'tip' ? null : { currency: shop.currency, unit_amount: it.price, tax_behavior: 'exclusive' },
-      shown: it.kind === 'tip' ? `pay what you want, ${money(it.min, shop.currency)} to ${money(it.max, shop.currency)}` : money(it.price, shop.currency),
+      shown: it.kind === 'tip' ? `pay what you want, ${money(it.min, shop.currency)}${it.max === null ? ' or more' : ` to ${money(it.max, shop.currency)}`}` : money(it.price, shop.currency),
     };
-  });
+  }));
 }
 
 /**
@@ -60,14 +61,14 @@ export function productsIn(value, out = [], depth = 0) {
 const taxCodeOf = (p) => (typeof p?.tax_code === 'string' ? p.tax_code : p?.tax_code?.id ?? null);
 
 /** The plan: the read first, then (with what Stripe answered) the writes still needed. */
-export function catalogPlan(root, { have = null, mode = null, record = true } = {}) {
+export async function catalogPlan(root, { have = null, mode = null, record = true } = {}) {
   const r = readShop(root);
   if (r.absent) return { ok: false, command: 'shop catalog', why: 'no shop.json: homie-studio shop init writes one first' };
-  if (!r.ok) return { ok: false, command: 'shop catalog', why: `shop.json breaks the rules (homie-studio shop check): ${r.errors.map((e) => `${e.at}: ${e.message}`).join('; ')}` };
+  if (!r.ok) return { ok: false, command: 'shop catalog', why: `shop.json conflicts with the studio settings or payment requirements (homie-studio shop check): ${r.errors.map((e) => `${e.at}: ${e.message}`).join('; ')}` };
   const studio = readStudio(root);
   const slug = studio.slug;
   if (!slug) return { ok: false, command: 'shop catalog', why: 'studio.json has no slug: the catalog\'s Product ids are made from it' };
-  const wanted = wantedProducts(r.shop, slug);
+  const wanted = await wantedProducts(r.shop, slug);
   const read = {
     tool: 'stripe_api_read', method: 'GET', path: '/v1/products', params: { limit: 100, expand: ['data.default_price'] },
     then: 'Save exactly what it answers (every page, while has_more) to a file in the scratch folder, then run: npx --no-install homie-studio shop catalog --have <that file>',

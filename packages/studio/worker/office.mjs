@@ -67,7 +67,7 @@ import { esc, layout, notFoundPage } from './site.mjs';
 import { confirmPage, lockedPage, officePage } from './office-page.mjs';
 import { CHAT_MODES, CHAT_WHO, checkChatRules, publicChat } from './chat.mjs';
 import { chatDay, chatOf, chatRowsOf, clearChatRules, dismissReport, reportsOf, writeChatRules } from './chat-store.mjs';
-import { checkRefund, checkSettle, describeRefund, officeShopPage, ordersCsv, performRefund, settleReferrer, shopOffice, statementsOut, statementsSend } from './shop.mjs';
+import { linesOf, checkRelease, performRelease, checkRefund, checkSettle, describeRefund, officeShopPage, ordersCsv, performRefund, receivedPages, settleReferrer, shopOffice, statementsOut, statementsSend } from './shop.mjs';
 import { orderById } from './shop-store.mjs';
 import { checkLoungeAction, describeLounge, loungeNeedsAsk, loungeOffice, performLounge } from './lounge.mjs';
 
@@ -741,6 +741,7 @@ function checkAction(cat, op, body) {
       if (!(level >= 1 && level <= 5)) return bad('level is 1 to 5 (Rookie, Steady, Fair, Strong, Maxed)');
       return { ok: true, action: { op, game: meta.id, room, level } };
     }
+    case 'shop-release': return checkRelease(body);
     case 'refund': return checkRefund(body);
     case 'shop-settle': return checkSettle(body);
     case 'agents-brain': {
@@ -842,8 +843,9 @@ export function describe(cat, a) {
     case 'member': return a.remove ? `Remove ${a.name ?? 'that player'} from ${gname}'s server ${a.server} (they can join again unless its door keeps them out).` : `Make ${a.name ?? 'that player'} a ${a.role} of ${gname}'s server ${a.server}.`;
     case 'pass': return a.action === 'revoke' ? `Revoke the agent pass ${a.id}: that AI leaves every room and cannot sit again.` : `Issue an agent pass for an AI called "${a.label} · AI".`;
     case 'room-level': return `Set the AI in ${where} to ${levelName(a.level)} (level ${a.level}).`;
+    case 'shop-release': return `Release reservation ${a.order}: it stops counting toward the cap. We ask Stripe to expire an open Checkout Session. This does not refund a payment. A payment that still arrives grants the item, counts toward spending and can be refunded from the office.`;
     case 'refund': return describeRefund(cat, a, a.item ? { item: a.item, amount: a.amount, currency: a.currency } : null);
-    case 'shop-settle': return `Mark what this studio owes ${a.via} for referrals as paid${a.ref ? ` (${a.ref})` : ''}: its owed lines are settled in the books.`;
+    case 'shop-settle': return `Mark what this studio owes ${a.via} for referrals in ${a.currency.toUpperCase()} as paid${a.ref ? ` (${a.ref})` : ''}: its owed lines are settled in the books.`;
     case 'agents-brain': return ['workers-ai', 'owner-key'].includes(a.mode)
       ? `Let the AI guides on ${gname}'s server ${a.server} talk: they speak only the lines the game's own agents.json gives them (never free text), at most one line every 8 seconds, never about a person, and a player can quiet them. Their brain runs on ${a.mode === 'workers-ai' ? `this studio's own Workers AI (free allowance${a.budget !== undefined ? `; at most ${Math.round(a.budget).toLocaleString('en-US')} neurons a day` : ''})` : `your own AI provider key (claude-haiku-4-5, your money${a.budget !== undefined ? `, at most $${Number(a.budget).toFixed(2)} a day` : ', capped daily'})`}.`
       : `Set the AI guides' brain on ${gname}'s server ${a.server} to ${a.mode}.`;
@@ -876,7 +878,7 @@ export async function needsAsk(env, cat, a) {
   if (String(a.op).startsWith('lounge-')) return loungeNeedsAsk(env, cat, a, chatOpensUp);
   if (DESTRUCTIVE.has(a.op)) return true;
   // Money: the owner's AI may only propose a refund or a settlement; the owner says yes.
-  if (a.op === 'refund' || a.op === 'shop-settle') return true;
+  if (a.op === 'refund' || a.op === 'shop-settle' || a.op === 'shop-release') return true;
   if (a.op === 'server-close') return !a.reopen;
   if (a.op === 'member') return a.remove === true;
   if (a.op === 'server-set') {
@@ -913,6 +915,15 @@ async function pushPolicy(env, meta, settings, server) {
   const rooms = await serverRooms(env, meta.id, server.id);
   const res = await Promise.all(rooms.map((r) => roomControl(env, meta, settings, r.room, 'policy', { pol })));
   return { rooms: rooms.length, leaving: res.reduce((n, r) => n + (r.leaving ?? 0), 0) };
+}
+
+/** The authenticated owner who actually confirms the release. */
+async function releaseIdentity(request, env) {
+  const player = await players?.of?.(request, env);
+  if (player?.owner) return `account ${player.id}`;
+  const session = await ownerSession(request, env);
+  // Legacy owner sessions have no account or label. Record a fingerprint, never the credential.
+  return `owner session ${await sha256(session)}`;
 }
 
 /** Do it: the owner's own session did, or the owner confirmed what the AI asked. */
@@ -1098,6 +1109,7 @@ export async function perform(env, cat, a) {
       if (a.mode === 'off') notes.push('The guides are the game\'s plain bots.');
       return { ok: true, op: a.op, game: meta.id, server: sv.id, brain: sv.brain, budget: day.budget, note: `Saved. ${notes.join(' ')}`.trim() };
     }
+    case 'shop-release': return performRelease(env, a);
     case 'refund': return performRefund(env, cat, a);
     case 'shop-settle': return settleReferrer(env, a);
     default: return { ok: false, error: 'op' };
@@ -1243,20 +1255,22 @@ async function api(request, env, url, cat) {
     return lounge ? json({ ok: true, lounge }) : json({ ok: false, error: 'no-lounge', message: 'This studio has no Lounge: add "lounge": true to studio.json and deploy.' }, 404);
   }
   // The shop (0.24.0): the owner's view, the accountant's CSV, the referral statements.
-  if (path === '/_studio/api/shop' && request.method === 'GET') return json(await shopOffice(env, cat, url.origin));
+  if (path === '/_studio/api/shop' && request.method === 'GET') return json(await shopOffice(env, cat, url.origin, url.searchParams.get('cursor') ?? '', /^\d+$/.test(url.searchParams.get('itemCursor') ?? '') ? Number(url.searchParams.get('itemCursor')) : 0, /^\d+$/.test(url.searchParams.get('orderCursor') ?? '') ? Math.min(Number(url.searchParams.get('orderCursor')), Number.MAX_SAFE_INTEGER) : 0));
   if (path === '/_studio/api/shop/orders.csv' && request.method === 'GET') {
     try {
       return new Response(await ordersCsv(env), { headers: { 'content-type': 'text/csv; charset=utf-8', 'cache-control': 'no-store, private', 'content-disposition': `attachment; filename="orders-${today()}.csv"` } });
     } catch { return json({ ok: false, error: 'not-migrated', message: 'The shop needs migration 0008_studio_shop.sql (npm run deploy).' }, 503); }
   }
-  if (path === '/_studio/api/shop/statements' && request.method === 'GET') return json(await statementsOut(env, cat, url.origin, url.searchParams.get('period')));
-  if (path === '/_studio/api/shop/statements/send' && request.method === 'POST') return json(await statementsSend(env, cat, url.origin, body.period));
+  if (path === '/_studio/api/shop/lines' && request.method === 'GET') return json({ ok: true, ...(await linesOf(env, { via: url.searchParams.get('via'), currency: url.searchParams.get('currency'), cursor: url.searchParams.get('cursor') ?? '' })) });
+  if (path === '/_studio/api/shop/received' && request.method === 'GET') return json(await receivedPages(env, url.searchParams.get('seller') ?? '', url.searchParams.get('period') ?? '', url.searchParams.get('cursor') ?? ''));
+  if (path === '/_studio/api/shop/statements' && request.method === 'GET') return json(await statementsOut(env, cat, url.origin, url.searchParams.get('period'), url.searchParams.get('cursor') ?? ''));
+  if (path === '/_studio/api/shop/statements/send' && request.method === 'POST') return json(await statementsSend(env, cat, url.origin, body.period, body.cursor ?? ''));
   const OPS = {
     '/_studio/api/chat/rules': 'chat-rules', '/_studio/api/chat/remove': 'chat-remove', '/_studio/api/chat/report': 'chat-report', '/_studio/api/chat/budget': 'chat-budget',
     '/_studio/api/kick': 'kick', '/_studio/api/mute': 'mute', '/_studio/api/close': 'close', '/_studio/api/announce': 'announce', '/_studio/api/game': 'game',
     '/_studio/api/servers': 'server-create', '/_studio/api/servers/set': 'server-set', '/_studio/api/servers/close': 'server-close', '/_studio/api/servers/member': 'member',
     '/_studio/api/agents/pass': 'pass', '/_studio/api/room-level': 'room-level', '/_studio/api/agents/brain': 'agents-brain',
-    '/_studio/api/shop/refund': 'refund', '/_studio/api/shop/settle': 'shop-settle',
+    '/_studio/api/shop/release': 'shop-release', '/_studio/api/shop/refund': 'refund', '/_studio/api/shop/settle': 'shop-settle',
     '/_studio/api/lounge/rules': 'lounge-rules', '/_studio/api/lounge/night': 'lounge-night', '/_studio/api/lounge/mod': 'lounge-mod',
     '/_studio/api/lounge/remove': 'lounge-remove', '/_studio/api/lounge/hold': 'lounge-hold',
   };
@@ -1265,6 +1279,7 @@ async function api(request, env, url, cat) {
   const checked = checkAction(cat, op, body);
   if (!checked.ok) return json(checked, 400);
   const action = checked.action;
+  if (op === 'shop-release' && who === 'session') action.by = await releaseIdentity(request, env);
   if (op === 'server-create' || op === 'pass' || op === 'lounge-night') action.origin = url.origin;
   if (op === 'refund') {
     // The ask and the confirm page say what the order is (its item and price), read from the books now.
@@ -1331,6 +1346,7 @@ export async function officeRoutes(request, env, url, { catalogueOf }) {
     await env.DB.prepare("UPDATE office_asks SET state = 'working' WHERE id = ?1 AND state = 'pending'").bind(ask.id).run();
     const claimed = await readAsk(env, ask.id);
     if (claimed?.state !== 'working') return confirmPage(cat, askView(claimed ?? row, cat, url.origin));
+    if (ask.action.op === 'shop-release') ask.action.by = await releaseIdentity(request, env);
     const result = await perform(env, cat, ask.action);
     await env.DB.prepare('UPDATE office_asks SET state = ?2, result = ?3 WHERE id = ?1').bind(ask.id, result.ok ? 'done' : 'failed', JSON.stringify(result).slice(0, 4000)).run();
     return confirmPage(cat, { ...ask, state: result.ok ? 'done' : 'failed', result });

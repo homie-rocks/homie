@@ -29,7 +29,7 @@ import { PLAYERS_MIGRATION, PLAYERS_MIGRATION_FILE } from '../worker/players.mjs
 import { OFFICE_MIGRATION, OFFICE_MIGRATION_FILE } from '../worker/office-schema.mjs';
 import { SERVERS_MIGRATION, SERVERS_MIGRATION_FILE } from '../worker/servers.mjs';
 import { CHAT_MIGRATION, CHAT_MIGRATION_FILE } from '../worker/chat-store.mjs';
-import { SHOP_MIGRATION, SHOP_MIGRATION_FILE } from '../worker/shop-store.mjs';
+import { SHOP_MIGRATION, SHOP_MIGRATION_FILE, SHOP_RESERVATIONS, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS, SHOP_STATEMENTS_FILE } from '../worker/shop-store.mjs';
 import { LOUNGE_MIGRATION, LOUNGE_MIGRATION_FILE } from '../worker/lounge-store.mjs';
 import { themeFile } from './site.mjs';
 import { rulesIndex } from './studio.mjs';
@@ -436,18 +436,18 @@ studio's pinned copy, never a registry lookup of the bare name.
 - **The studio sells with its OWN Stripe account.** The studio is the seller: its prices, its refunds, its tax, its
   disputes. Money goes from players to the studio's Stripe; homie.rocks never sees it and Homie takes no cut.
   \`SELLING.md\` says what that means for the owner in plain words (not legal advice).
-- **\`shop.json\`** (at the studio's root, reviewed in git): \`till\` (\`stripe\`, the studio is the seller with Stripe
-  Tax on; \`stripe-managed\`, Stripe Managed Payments is the seller of record and files the tax for 3.5% more; or
-  \`off\`), \`currency\`, \`refundDays\` (at least 14), \`capPerPlayerMonth\` (cents, at most 5000) and \`items\`:
-  \`{ "id", "kind": "cosmetic"|"supporter"|"pass"|"unlock"|"tip", "name", "price": <cents>, "gives": ["skin:ember"],
-  "days"?, "game"?, "advantage"? }\`. Real money only: no gems, coins or points. \`npx --no-install homie-studio shop
-  init --supporter\` writes a US$5 Supporter pack; \`shop check\` and every build refuse what the kit refuses.
-- **The kids rules are the kit's, not the studio's to switch off:** nothing random for money (an item that names
-  chance, odds, a crate, a box or a mystery is refused), no countdown offers, no shop on a kids server or in a studio
-  with \`"audience": "kids"\` in studio.json, spending off on every account until a neutral age question says adult,
-  nothing ever for under-13s, 13-17 only through a parent's own checkout (a one-time link), nothing with
-  \`"advantage": true\` on a beginner server, one hosted Stripe checkout per purchase, a monthly cap. The television
-  never sells: its store sheet is a code to buy on a phone.
+- **\`shop.json\`** is the studio's settings file: \`till\` (\`stripe\`, \`stripe-managed\`, or \`off\`), \`currency\`,
+  optional \`refundDays\` and \`capPerPlayerMonth\`, and items with studio-chosen kinds, names, prices and entitlement
+  keys. No Homie ceiling on prices, tips, item count, keys, text, durations or referral terms. Stripe currency
+  units and provider minimums still apply, including zero-decimal currencies. \`shop init --supporter\` writes a
+  supporter item and explicit protective policy, with no spending cap or refund window. Existing values stay.
+- **The studio chooses who may buy:** \`policy.preset\` is \`protective\` (the default), \`adults-only\`, or \`custom\`.
+  Each rule can be read and edited in shop.json; SHOP.md lists them. Protective keeps the account and age
+  question, under-13 refusal, parent checkout for teens, closed kids shops, beginner fairness, refusal of paid
+  randomness and countdowns, and TV code to a phone. Do not silently relax protection for children. The studio
+  is responsible for law and provider terms where it sells; presets are not legal advice.
+- **Flood protection:** \`purchaseAttemptsPerMinute\` (default 6) is per account; \`purchaseAttemptsPerAddressPerMinute\` (default 600) is per address. Both are per Worker instance and configurable.
+  New guest buyers use \`guestBuyersPerAddressPerHour\` (default 600). These protect against floods, not spending.
 - **In a game:** \`import { createShop } from '@homie-rocks/studio/shop'\`; \`shop.has('skin:ember')\`,
   \`shop.entitlements()\`, \`shop.on('change', …)\`, \`shop.open(item)\` from a button the player pressed (never the
   play button, never on a timer), \`shop.used(key)\` when it is equipped. A supporter's badge rides on their seat
@@ -728,6 +728,8 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
     [`site/migrations/${SERVERS_MIGRATION_FILE}`]: SERVERS_MIGRATION,
     [`site/migrations/${CHAT_MIGRATION_FILE}`]: CHAT_MIGRATION,
     [`site/migrations/${SHOP_MIGRATION_FILE}`]: SHOP_MIGRATION,
+    [`site/migrations/${SHOP_RESERVATIONS_FILE}`]: SHOP_RESERVATIONS,
+    [`site/migrations/${SHOP_STATEMENTS_FILE}`]: SHOP_STATEMENTS,
     [`site/migrations/${LOUNGE_MIGRATION_FILE}`]: LOUNGE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
@@ -834,6 +836,22 @@ export function ensureShopMigration(root) {
   return `site/migrations/${SHOP_MIGRATION_FILE}`;
 }
 
+function ensureShopReservations(root) {
+  const file = join(root, 'site', 'migrations', SHOP_RESERVATIONS_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, SHOP_RESERVATIONS);
+  return `site/migrations/${SHOP_RESERVATIONS_FILE}`;
+}
+
+function ensureShopStatements(root) {
+  const file = join(root, 'site', 'migrations', SHOP_STATEMENTS_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, SHOP_STATEMENTS);
+  return `site/migrations/${SHOP_STATEMENTS_FILE}`;
+}
+
 /** Every migration the template owns that this studio lacks, added: the files written (deploy and dev say so). */
 /** A studio made before 0.23.0 has no room chat tables: the owner's chat rules and players' reports. */
 function ensureChatMigration(root) {
@@ -854,7 +872,7 @@ function ensureLoungeMigration(root) {
 }
 
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */

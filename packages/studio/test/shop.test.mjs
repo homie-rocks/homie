@@ -2,8 +2,7 @@
  * @homie-rocks/studio 0.24.0: the shop kit (worker/shop.mjs, shop-rules.mjs, shop-store.mjs, stripe.mjs,
  * referrals.mjs, shop-page.mjs; lib/shop.mjs; shop/shop.ts). A studio sells with ITS OWN Stripe.
  *
- *   - the rules: real money only, nothing random, no countdowns, no gems, a cap that cannot be raised or removed, a
- *     14-day refund floor; a kids studio sells nothing; who may buy (guest, the age question, under 13, 13-17, adult);
+ *   - studio settings: optional amounts without ceilings and editable presets; the protective policy closes kids studios; who may buy (guest, the age question, under 13, 13-17, adult);
  *   - Stripe: the form encoding, the webhook signature (good, wrong, old, a rolled secret), test or live by the key;
  *   - the Worker against a stand-in Stripe at the HTTP boundary (Stripe's documented objects): closed until the key
  *     and the webhook secret are in; a kids server shows nothing and refuses a buy; a beginner server hides an item
@@ -32,9 +31,9 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { CAP_CEILING, bandOf, checkShop, wayFor } from '../worker/shop-rules.mjs';
+import { POLICY_PRESETS, parseAmount, amountError, currencyScale, money, bandOf, checkShop, wayFor } from '../worker/shop-rules.mjs';
 import { formEncode, modeOf, apiBase, signPayload, verifyWebhook } from '../worker/stripe.mjs';
-import { SHOP_MIGRATION_FILE } from '../worker/shop-store.mjs';
+import { SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE } from '../worker/shop-store.mjs';
 import { canonicalJson, resetReferrers, verifyStatement } from '../worker/referrals.mjs';
 import { resetShopLimits } from '../worker/shop.mjs';
 
@@ -56,34 +55,70 @@ const SUPPORTER = { id: 'supporter', kind: 'supporter', name: 'Supporter', price
 
 /* ------------------------------------------------------------------ the rules */
 
-test('the rules: real money, nothing random, no countdowns or gems, the cap and the refund floor are the kit\'s', () => {
-  const ok = checkShop({ till: 'stripe', currency: 'usd', items: [SUPPORTER] });
-  assert.equal(ok.ok, true, JSON.stringify(ok.errors));
-  assert.equal(ok.shop.open, true);
-  assert.equal(ok.shop.capPerPlayerMonth, CAP_CEILING);
-  assert.equal(ok.shop.refundDays, 14);
-  assert.equal(ok.shop.items[0].badge, 'Supporter');
-  const bad = (raw, re, why) => { const r = checkShop(raw); assert.equal(r.ok, false, why); assert.match(r.errors.map((e) => e.message).join(' | '), re, why); };
-  bad({ items: [{ ...SUPPORTER, id: 'box', name: 'Mystery Box' }] }, /paid randomness/, 'a mystery box');
-  bad({ items: [{ ...SUPPORTER, blurb: 'A random skin from 40' }] }, /paid randomness/, 'random in its words');
-  bad({ items: [{ ...SUPPORTER, odds: { rare: 0.01 } }] }, /odds, drops or a random pool/, 'an odds field');
-  bad({ items: [{ ...SUPPORTER, kind: 'loot' }] }, /paid randomness|kind is one of/, 'a loot kind');
-  bad({ items: [{ ...SUPPORTER, countdown: '2026-12-01' }] }, /countdown/, 'a countdown field');
-  bad({ items: [{ ...SUPPORTER, kind: 'gems' }] }, /gems are not in version 1/, 'gems');
-  bad({ items: [{ ...SUPPORTER, price: '500 gems' }] }, /real money only/, 'a price in gems');
-  bad({ items: [{ ...SUPPORTER, gives: ['coins:500'] }] }, /is a currency/, 'a currency key');
-  bad({ items: [{ ...SUPPORTER, kind: 'subscription' }] }, /later version/, 'subscriptions later');
-  bad({ capPerPlayerMonth: 100000, items: [SUPPORTER] }, /never remove it/, 'a raised cap');
-  bad({ refundDays: 3, items: [SUPPORTER] }, /at least 14 days/, 'a short refund window');
-  bad({ till: 'link', items: [SUPPORTER] }, /later version/, 'another merchant of record later');
-  bad({ supportHomie: 0.05, items: [SUPPORTER] }, /Homie takes no cut/, 'no cut');
-  bad({ items: [{ ...SUPPORTER, advantage: true }] }, /never changes how the game plays/, 'a supporter pack is never pay-to-win');
-  assert.equal(checkShop({ items: [{ ...SUPPORTER, name: 'Jukebox skin' }] }).ok, true, 'a whole word: "Jukebox" is fine');
-  assert.match(checkShop({ items: [{ ...SUPPORTER, price: 99 }] }).warnings[0].message, /fees/);
-  const kids = checkShop({ till: 'stripe', items: [SUPPORTER] }, { audience: 'kids' });
-  assert.equal(kids.shop.till, 'off', 'a kids studio sells nothing');
-  assert.equal(kids.shop.open, false);
-  assert.equal(checkShop({ items: [{ ...SUPPORTER, game: 'nope' }] }, { games: ['owl-run'] }).ok, false, 'an item of a game that is not here');
+test('the studio chooses its amounts, catalog and policy; only provider units and safe arithmetic constrain prices', () => {
+  const raw = { till: 'stripe', currency: 'usd', items: [SUPPORTER] };
+  const checked = checkShop(raw);
+  assert.equal(checked.ok, true);
+  assert.equal(checked.shop.capPerPlayerMonth, null);
+  assert.equal(checked.shop.refundDays, null);
+  assert.equal(checked.shop.policy.preset, 'protective');
+  for (const [field, value] of [['capPerPlayerMonth', 10000000], ['refundDays', 10000], ['refundDays', 0], ['refundDays', 0.5]]) {
+    const r = checkShop({ ...raw, [field]: value });
+    assert.equal(r.ok, true, JSON.stringify(r.errors));
+    assert.equal(r.shop[field], value);
+  }
+  const written = checkShop({ ...raw, capPerPlayerMonth: '5000', refundDays: '14', referrals: { rate: '0.1', windowDays: '30', capPerPlayer: '1000', holdDays: '30', minimumInvoice: '2500' } });
+  assert.equal(written.ok, true);
+  assert.equal(written.shop.capPerPlayerMonth, 5000);
+  assert.equal(written.shop.refundDays, 14);
+  assert.equal(written.shop.referrals.capPerPlayer, 1000);
+  const large = { ...SUPPORTER, id: 'a'.repeat(500), name: 'A'.repeat(500), blurb: 'B'.repeat(1000), badge: 'C'.repeat(100), price: 1000000, days: 20000, gives: Array.from({ length: 20 }, (_, i) => `key:${i}:${'x'.repeat(100)}`) };
+  const big = checkShop({ items: Array.from({ length: 100 }, (_, i) => ({ ...large, id: large.id + i })) });
+  assert.equal(big.ok, true, JSON.stringify(big.errors));
+  assert.equal(big.shop.items.length, 100);
+  assert.equal(big.shop.items[0].name.length, 500);
+  assert.equal(big.shop.items[0].blurb.length, 1000);
+  assert.equal(big.shop.items[0].gives.length, 20);
+  assert.equal(checkShop({ items: [{ ...SUPPORTER, days: 0.5 }] }).shop.items[0].days, 0.5);
+  assert.equal(checkShop({ items: [{ ...SUPPORTER, days: 100000000 }] }).ok, false, 'JavaScript cannot represent the expiry timestamp');
+  assert.equal(checkShop({ items: [{ id: 'service', kind: 'service', name: 'A service', price: 100000 }] }).ok, true);
+  assert.equal(checkShop({ items: [{ ...SUPPORTER, kind: 'subscription' }] }).ok, true);
+  const tip = checkShop({ items: [{ id: 'tip', name: 'A tip', kind: 'tip', min: 50 }] });
+  assert.equal(tip.ok, true);
+  assert.equal(tip.shop.items[0].max, null);
+  assert.equal(checkShop({ items: [{ id: 'tip', name: 'A tip', kind: 'tip', min: 50, max: 10000000 }] }).ok, true);
+  for (const it of [{ ...SUPPORTER, name: 'Mystery Box' }, { ...SUPPORTER, odds: 1 }, { ...SUPPORTER, countdown: 1 }, { ...SUPPORTER, gives: ['coins:500'] }, { ...SUPPORTER, advantage: true }]) {
+    assert.equal(checkShop({ items: [it] }).ok, false, JSON.stringify(it));
+    assert.equal(checkShop({ policy: { preset: 'custom' }, items: [it] }).ok, true, JSON.stringify(it));
+  }
+  assert.equal(checkShop(raw, { audience: 'kids' }).shop.open, false);
+  assert.equal(checkShop({ ...raw, policy: { preset: 'protective', kidsStudio: true } }, { audience: 'kids' }).shop.open, true);
+  assert.equal(checkShop({ ...raw, policy: { preset: 'typo' } }).ok, false);
+  const referrals = { rate: 2, windowDays: 1000, capPerPlayer: 1000000, holdDays: 1000, minimumInvoice: 1000000, accept: ['bank-transfer'] };
+  assert.deepEqual(checkShop({ ...raw, referrals }).shop.referrals, { ...referrals, basis: 'pre-tax' });
+  assert.equal(checkShop({ ...raw, refundDays: 1000, referrals: { rate: 0.1, holdDays: 0 } }).ok, true);
+  for (const currency of ['usd', 'jpy', 'krw', 'isk', 'ugx']) {
+    assert.equal(checkShop({ currency, items: [{ ...SUPPORTER, price: 50000 }] }).ok, true, currency);
+  }
+  assert.equal(currencyScale('jpy'), 1);
+  assert.equal(currencyScale('ugx'), 100);
+  assert.match(money(500, 'jpy'), /500/);
+  assert.equal(amountError(30, 'gbp'), null);
+  assert.equal(amountError(0, 'usd'), null);
+  assert.equal(parseAmount('0.29'), 29);
+  assert.ok(Number.isNaN(parseAmount('1.001')));
+  assert.ok(Number.isNaN(parseAmount('1.5', 1)));
+  assert.equal(parseAmount('90071992547409.91'), Number.MAX_SAFE_INTEGER);
+  assert.equal(money(1045, 'huf').includes('10.45'), true);
+  assert.equal(money(500, 'ugx').includes('500'), false);
+  assert.equal(amountError(49, 'usd'), null);
+  assert.match(checkShop({ items: [{ ...SUPPORTER, price: 49 }] }).warnings[0].message, /Stripe.*minimum/);
+  assert.match(amountError(101, 'isk'), /divisible by 100/);
+  for (const price of [1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) assert.equal(checkShop({ items: [{ ...SUPPORTER, price }] }).ok, false);
+  assert.equal(wayFor(SUPPORTER, { player: { guest: false }, band: 'adult', spent: 10000000 }), 'checkout');
+  assert.equal(wayFor(SUPPORTER, { player: { guest: false }, band: 'adult', cap: 0 }), 'cap');
+  assert.equal(wayFor(SUPPORTER, { policy: POLICY_PRESETS.custom, owned: true }), 'checkout');
+  assert.equal(wayFor(SUPPORTER, { policy: POLICY_PRESETS['adults-only'], player: { guest: false }, band: 'teen' }), 'no');
 });
 
 test('who may buy: the age band, a guest, under 13, 13-17, an adult, a kids or beginner server, the cap', () => {
@@ -148,7 +183,7 @@ function studio(name) {
 
 function fakeD1(dir) {
   const sql = new DatabaseSync(':memory:');
-  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', SHOP_MIGRATION_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
+  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
   const stmt = (query, args = []) => ({
     bind: (...a) => stmt(query, a),
     first: async () => sql.prepare(query).get(...args) ?? null,
@@ -195,7 +230,7 @@ async function fakeStripe() {
   const calls = [];
   // What the stand-in does on purpose (a test sets these): a missing catalog Product, a refund Stripe holds for
   // approval (an Agent key), a key without Webhook Endpoints, Managed Payments not on, the account's endpoints.
-  const behave = { missingProduct: false, approval: false, webhookDenied: false, managedRefused: false, endpoints: [], made: [], updated: [] };
+  const behave = { missingProduct: false, approval: false, webhookDenied: false, managedRefused: false, endpoints: [], made: [], updated: [], sessions: new Map(), unreachable: false };
   let n = 0;
   const server = createServer((req, res) => {
     let body = '';
@@ -207,6 +242,11 @@ async function fakeStripe() {
       const send = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
       n += 1;
       const denied = () => send(403, { error: { type: 'invalid_request_error', message: 'The provided key does not have the required permissions for this endpoint. Having the \'rak_webhook_write\' permission would allow this request to continue.' } });
+      if (req.method === 'GET' && url.pathname.startsWith('/v1/checkout/sessions/')) {
+        if (behave.disconnect) return req.destroy();
+        const answer = () => behave.error ? send(behave.error.status, { error: behave.error }) : behave.unreachable ? send(503, { error: { message: 'unreachable' } }) : send(200, behave.sessions.get(url.pathname.split('/').pop()) ?? {});
+        return behave.delay ? setTimeout(answer, behave.delay).unref() : answer();
+      }
       if (req.method === 'GET' && url.pathname === '/v1/webhook_endpoints') return behave.webhookDenied ? denied() : send(200, { object: 'list', data: behave.endpoints, has_more: false });
       if (req.method === 'POST' && url.pathname === '/v1/webhook_endpoints') {
         if (behave.webhookDenied) return denied();
@@ -225,7 +265,9 @@ async function fakeStripe() {
       if (req.method === 'POST' && url.pathname === '/v1/refunds' && behave.approval) return send(400, { error: { type: 'invalid_request_error', code: 'approval_required', message: 'This request requires approval.' } });
       if (req.method === 'POST' && url.pathname === '/v1/checkout/sessions') {
         const id = `cs_test_${String(n).padStart(6, '0')}abc`;
-        return send(200, { id, object: 'checkout.session', url: `https://checkout.stripe.com/c/pay/${id}`, mode: 'payment', livemode: false, client_reference_id: form.get('client_reference_id'), metadata: Object.fromEntries([...form].filter(([k]) => k.startsWith('metadata[')).map(([k, v]) => [k.slice(9, -1), v])), currency: form.get('line_items[0][price_data][currency]'), amount_subtotal: Number(form.get('line_items[0][price_data][unit_amount]')), payment_status: 'unpaid', status: 'open' });
+        const session = { id, object: 'checkout.session', url: `https://checkout.stripe.com/c/pay/${id}`, mode: 'payment', livemode: false, client_reference_id: form.get('client_reference_id'), metadata: Object.fromEntries([...form].filter(([k]) => k.startsWith('metadata[')).map(([k, v]) => [k.slice(9, -1), v])), currency: form.get('line_items[0][price_data][currency]'), amount_subtotal: Number(form.get('line_items[0][price_data][unit_amount]')), payment_status: 'unpaid', status: 'open' };
+        behave.sessions.set(id, session);
+        return send(200, session);
       }
       if (req.method === 'POST' && url.pathname === '/v1/refunds') return send(200, { id: `re_test_${n}`, object: 'refund', status: 'succeeded', payment_intent: form.get('payment_intent'), amount: 500 });
       if (req.method === 'GET' && url.pathname === '/v1/checkout/sessions') return send(200, { object: 'list', data: [], has_more: false });
@@ -239,7 +281,7 @@ async function fakeStripe() {
 }
 
 let built = null;
-async function site({ key = true, managed = false, catalog = null } = {}) {
+async function site({ key = true, managed = false, catalog = null, settings = null } = {}) {
   if (!built) {
     const dir = studio('worker');
     assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
@@ -258,12 +300,13 @@ async function site({ key = true, managed = false, catalog = null } = {}) {
     built = dir;
   }
   const dir = built;
-  const variant = managed || catalog;
+  const variant = managed || catalog || settings;
   const mdir = join(scratch, `variant-dist-${managed ? 'managed' : 'stripe'}-${(catalog ?? []).join('-') || 'inline'}`);
   if (variant) {
     // The same build, with Managed Payments as the till and/or the catalog made in Stripe (games.json is what the
     // Worker reads).
     const cat = JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games.json'), 'utf8'));
+    if (settings) Object.assign(cat.shop, settings);
     if (managed) cat.shop.till = 'stripe-managed';
     if (catalog) cat.shop.catalog = catalog;
     mkdirSync(join(mdir, 'site', 'dist'), { recursive: true });
@@ -325,11 +368,11 @@ async function site({ key = true, managed = false, catalog = null } = {}) {
     const sid = /\/pay\/(cs_test_\w+)/.exec(j.url)[1];
     const pi = `pi_test_${sid.slice(8, 20)}`;
     const amount = Number(call.form.get('line_items[0][price_data][unit_amount]'));
-    const h = await hook('checkout.session.completed', { id: sid, object: 'checkout.session', payment_status: 'paid', payment_intent: pi, client_reference_id: p.id, metadata: { order: j.order, item }, currency: 'usd', amount_subtotal: amount, amount_total: amount + 40, total_details: { amount_tax: 40 } });
+    const h = await hook('checkout.session.completed', { id: sid, object: 'checkout.session', payment_status: 'paid', payment_intent: pi, client_reference_id: p.id, metadata: { order: j.order, item }, currency: call.form.get('line_items[0][price_data][currency]'), amount_subtotal: amount, amount_total: amount + 40, total_details: { amount_tax: 40 } });
     assert.equal(h.status, 200);
     return { order: j.order, session: sid, payment: pi, hook: await h.json(), call };
   };
-  return { env, DB, fetchSite, fetchAt, post, player, as, owner, key0, hook, buyPaid, stripe, dir, waits, same };
+  return { env, DB, worker, fetchSite, fetchAt, post, player, as, owner, key0, hook, buyPaid, stripe, dir, waits, same };
 }
 
 test('closed until the key and the webhook secret are in; a Preview and a missing migration say so', async () => {
@@ -428,7 +471,7 @@ test('an adult buys: one order, Stripe\'s own Checkout (Stripe Tax on), the sign
   s.stripe.close();
 });
 
-test('kids and beginners: no shop on a kids server; an advantage is never sold or counted on a beginner server; under 13 never', async () => {
+test('protective policy: no shop on a kids server, no advantages on beginner servers, no purchases under 13', async () => {
   const s = await site();
   for (const b of [{ name: 'Little Ones', policy: 'beginner', kids: true }, { name: 'First Light', policy: 'beginner' }]) {
     const r = await s.fetchSite('/_studio/api/servers', { method: 'POST', headers: s.key0, body: JSON.stringify({ game: 'owl-run', ...b }) });
@@ -465,7 +508,7 @@ test('kids and beginners: no shop on a kids server; an advantage is never sold o
   assert.match(play, /data-shop-open/);
   const tv = await (await s.fetchSite('/owl-run/tv')).text();
   assert.match(tv, /"screen":true/);
-  assert.match(tv, /"shop":\{[^}]*"qr":"\\u003csvg/, 'the television gets a code to buy on a phone');
+  assert.match(tv, /"qr":"\\u003csvg/, 'the television gets a code to buy on a phone');
   assert.match(tv, /Nothing is sold on this screen/);
   // The game's frame knows there is a shop (the shell answers it).
   const frame = await (await s.fetchSite('/owl-run/__game/?room=pub-1')).text();
@@ -686,7 +729,7 @@ test('a refund Stripe holds for approval (an Agent key) is accepted, not refused
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'paid', 'nothing changes until Stripe refunds');
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns.length > 0, true);
   // Someone approves it in Stripe; Stripe refunds and says so: the item leaves the account.
-  assert.equal((await (await s.hook('refund.created', { id: 're_test_held', object: 'refund', status: 'succeeded', payment_intent: a.payment })).json()).did, 'refunded');
+  assert.equal((await (await s.hook('refund.created', { id: 're_test_held', object: 'refund', status: 'succeeded', amount: 540, payment_intent: a.payment })).json()).did, 'refunded');
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'refunded');
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns, []);
   // A player's own refund, held the same way: plain words for the player, not Stripe's settings.
@@ -821,9 +864,9 @@ test('referrals: an arrival from another site, a new player\'s sale, a held line
     assert.equal(bad.status, 401);
     assert.equal((await s.fetchAt('elsewhere.example', '/api/referrals/statement', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(env0) })).status, 400);
     // A refund after the hold: a settled line becomes a clawback. Marking paid is an ask from an office key.
-    const settle = await s.fetchSite('/_studio/api/shop/settle', { method: 'POST', headers: s.key0, body: JSON.stringify({ via: 'friends.example', ref: 'INV-1' }) });
+    const settle = await s.fetchSite('/_studio/api/shop/settle', { method: 'POST', headers: s.key0, body: JSON.stringify({ via: 'friends.example', currency: 'usd', ref: 'INV-1' }) });
     assert.equal(settle.status, 202);
-    const done = await s.fetchSite('/_studio/api/shop/settle', { method: 'POST', headers: s.owner, body: JSON.stringify({ via: 'friends.example', ref: 'INV-1' }) });
+    const done = await s.fetchSite('/_studio/api/shop/settle', { method: 'POST', headers: s.owner, body: JSON.stringify({ via: 'friends.example', currency: 'usd', ref: 'INV-1' }) });
     assert.equal((await done.json()).ok, true);
     assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order).state, 'settled');
     await s.fetchSite('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: b.order }) });
@@ -898,6 +941,10 @@ test('the CLI: shop init and check; the build refuses a shop that breaks the rul
   r = JSON.parse(run(['shop', 'init', '--supporter'], dir).stdout);
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.deepEqual(r.wrote, ['shop.json', 'SELLING.md']);
+  const initialized = JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8'));
+  assert.equal(initialized.policy.preset, 'protective');
+  assert.equal(initialized.capPerPlayerMonth, undefined);
+  assert.equal(initialized.refundDays, undefined);
   assert.match(readFileSync(join(dir, 'SELLING.md'), 'utf8'), /not legal or tax advice/);
   r = JSON.parse(run(['shop', 'check'], dir).stdout);
   assert.equal(r.ok, true);
@@ -908,13 +955,13 @@ test('the CLI: shop init and check; the build refuses a shop that breaks the rul
   assert.equal(r.ok, false);
   const b = run(['build'], dir);
   assert.notEqual(b.status, 0);
-  assert.match(b.stdout + b.stderr, /shop\.json breaks the shop's rules/);
+  assert.match(b.stdout + b.stderr, /shop\.json conflicts with the studio settings/);
   const studioJson = JSON.parse(readFileSync(join(dir, 'studio.json'), 'utf8'));
   writeFileSync(join(dir, 'studio.json'), JSON.stringify({ ...studioJson, audience: 'kids' }));
   rmSync(join(dir, 'shop.json'));
   r = JSON.parse(run(['shop', 'init', '--supporter'], dir).stdout);
-  assert.equal(r.ok, false);
-  assert.match(r.why, /made for children/);
+  assert.equal(r.ok, true);
+  assert.equal(JSON.parse(run(['shop', 'check'], dir).stdout).ok, true);
   assert.ok(existsSync(join(dir, 'site', 'migrations', SHOP_MIGRATION_FILE)), 'a new studio has the shop migration');
 });
 
@@ -1105,4 +1152,1016 @@ test('the pages\' scripts parse (the shop page, the play shell\'s store sheet, t
   const { Script } = await import('node:vm');
   const pages = await import('../worker/shop-page.mjs');
   for (const name of ['SHOP_JS', 'SHOP_SHELL_JS', 'OFFICE_SHOP_SCRIPT']) assert.doesNotThrow(() => new Script(pages[name]), name);
+});
+
+
+test('custom settings reach checkout, guests, refunds, kids servers, tips and zero-decimal reports', async () => {
+  const s = await site({ settings: { policy: { preset: 'custom' }, capPerPlayerMonth: null, refundDays: null, currency: 'jpy', purchaseAttemptsPerMinute: 30,
+    items: [{ ...SUPPORTER, price: 100000 }, { id: 'tip', kind: 'tip', name: 'Tip', min: 50 }] } });
+  const p = s.player(400, { guest: true, band: 'child' });
+  const list = await (await s.fetchSite('/api/shop', { headers: { cookie: p.cookie } })).json();
+  assert.equal(list.items[0].way, 'checkout');
+  assert.equal(list.cap, null);
+  assert.equal(list.currencyScale, 1);
+  assert.match(list.items[0].shown, /100,000/);
+  const b = await s.buyPaid(p);
+  assert.equal(b.call.form.get('line_items[0][price_data][unit_amount]'), '100000');
+  assert.equal(b.call.form.get('line_items[0][price_data][currency]'), 'jpy');
+  assert.doesNotMatch(b.call.form.get('custom_text[submit][message]'), /null days/);
+  assert.equal((await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).status, 200, 'repeat purchase allowed');
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 1000000 }, s.as(p))).status, 200, 'no tip ceiling');
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 50.5 }, s.as(p))).status, 400, 'no fractional provider units');
+  assert.equal((await s.post('/api/shop/refund', { order: b.order }, s.as(p))).status, 403, 'no self-service refund window unless set');
+  const csv = await (await s.fetchSite('/_studio/api/shop/orders.csv', { headers: s.owner })).text();
+  assert.match(csv, /,100000,/);
+  await s.fetchSite('/_studio/api/servers', { method: 'POST', headers: s.key0, body: JSON.stringify({ game: 'owl-run', name: 'Little Ones', policy: 'beginner', kids: true }) });
+  const kids = await (await s.fetchSite('/api/shop?game=owl-run&server=little-ones', { headers: { cookie: p.cookie } })).json();
+  assert.equal(kids.open, true);
+  assert.match(await (await s.fetchSite('/owl-run/s/little-ones/play')).text(), /"shop":\{/);
+  const anonymous = await s.post('/api/shop/buy', { item: 'supporter' }, s.same);
+  assert.equal(anonymous.status, 200, await anonymous.clone().text());
+  assert.match(anonymous.headers.get('set-cookie'), /studio_player=/);
+  const cookie = anonymous.headers.get('set-cookie').split(';')[0];
+  assert.equal((await (await s.fetchSite('/api/shop', { headers: { cookie } })).json()).player.guest, true);
+  s.stripe.close();
+});
+
+test('purchase flood protection uses the address and the studio can change its rate', async () => {
+  const s = await site({ settings: { purchaseAttemptsPerAddressPerMinute: 2 } });
+  for (let i = 0; i < 2; i++) {
+    const p = s.player(400, { band: 'adult' });
+    assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.as(p), 'cf-connecting-ip': '203.0.113.9' })).status, 200);
+  }
+  const p = s.player(400, { band: 'adult' });
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.as(p), 'cf-connecting-ip': '203.0.113.9' })).status, 429);
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.as(p), 'cf-connecting-ip': '203.0.113.10' })).status, 200);
+  s.stripe.close();
+});
+
+
+test('long identifiers and entitlement keys survive checkout, catalog generation, use and guest adoption', async () => {
+  const id = 'A studio item / ' + 'x'.repeat(6000);
+  const key = 'Own this / ' + 'k'.repeat(6000);
+  const s = await site({ catalog: ['test'], settings: { capPerPlayerMonth: 1000000, refundDays: 400, policy: { preset: 'custom' }, items: [{ id, kind: 'service', name: 'A service', price: 60000, gives: [key] }] } });
+  const guest = s.player(400, { guest: true });
+  const bought = await s.buyPaid(guest, id);
+  assert.match(bought.call.form.get('line_items[0][price_data][product]'), /^homie_shop_owls_item_[a-f0-9]{64}$/);
+  assert.equal(bought.call.form.has('metadata[item]'), false, 'the complete identifier stays in the order, within provider metadata constraints');
+  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: guest.cookie } })).json()).owns, [key]);
+  assert.equal((await s.post('/api/shop/used', { key }, s.as(guest))).status, 200);
+  const account = s.player(400, { band: 'adult' });
+  const { adoptShopStatements } = await import('../worker/shop-store.mjs');
+  await s.DB.batch(await adoptShopStatements(s.env, guest.id, account.id));
+  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: account.cookie } })).json()).owns, [key]);
+  assert.equal((await s.post('/api/shop/refund', { order: bought.order }, s.as(account))).status, 200, 'studio permits used refunds');
+  const { wantedProducts } = await import('../lib/shop-catalog.mjs');
+  const products = await wantedProducts(checkShop({ policy: { preset: 'custom' }, items: [{ id, kind: 'service', name: 'A service', price: 60000 }] }).shop, 'shop-owls');
+  assert.equal(products[0].id, bought.call.form.get('line_items[0][price_data][product]'));
+  s.stripe.close();
+});
+
+test('referral terms have no ceilings and omission leaves no per-player cap or hold', async () => {
+  const s = await site();
+  const { lineFor, booksOf } = await import('../worker/referrals.mjs');
+  const shop = checkShop({ referrals: { rate: 1.5 } }).shop;
+  const order = { id: 'ord_referral_large', player: 'player-ref', via: 'friends.example', amount: 1000000, currency: 'usd' };
+  await s.DB.batch(await lineFor(s.env, order, shop));
+  const line = s.DB.sql.prepare('SELECT * FROM referral_lines WHERE order_id = ?').get(order.id);
+  assert.equal(line.share, 1500000);
+  assert.ok(line.hold_until <= Date.now());
+  const capped = checkShop({ referrals: { rate: 1.5, capPerPlayer: 200000 } }).shop;
+  await s.DB.batch(await lineFor(s.env, { ...order, id: 'ord_referral_capped' }, capped));
+  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get('ord_referral_capped').share, 200000);
+  const fixed = s.DB.sql.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, 'player-ref', 'supporter', 1, 'usd', 'stripe', 'test', 'paid', 1, 1)");
+  const referred = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', 1, 1, 1, 'usd', 'owed', '2026-10', 1, 1)");
+  for (let i = 0; i < 2001; i++) { fixed.run('order-many-' + i); referred.run('order-many-' + i); }
+  assert.equal((await booksOf(s.env)).books[0].due, 1702001, 'the books do not stop at 2000 sales');
+  s.stripe.close();
+});
+
+
+test('the studio can permit parent checkout for children, including a tip chosen by the parent', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: null, policy: { preset: 'protective', children: 'parent' }, items: [{ id: 'tip', kind: 'tip', name: 'Tip', min: 50 }] } });
+  const child = s.player(400, { band: 'child' });
+  const link = await (await s.post('/api/shop/parent', { item: 'tip' }, s.as(child))).json();
+  assert.equal(link.ok, true);
+  const go = await s.fetchSite(new URL(link.link).pathname, { method: 'POST', headers: { origin: 'https://owls.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'grownup=yes&amount=123.45' });
+  assert.equal(go.status, 303);
+  assert.equal(s.stripe.calls.at(-1).form.get('line_items[0][price_data][unit_amount]'), '12345');
+  s.stripe.close();
+});
+
+test('fractional durations, decimal amounts, provider strings and policy validation', async () => {
+  for (let n = 1; n <= 1000; n++) {
+    const r = checkShop({ refundDays: n / 100, items: [{ ...SUPPORTER, days: n / 100 }] });
+    assert.equal(r.ok, true, JSON.stringify(r.errors));
+  }
+  for (const cap of ['', false, true, [], '0x10', 2500.7]) {
+    const r = checkShop({ capPerPlayerMonth: cap });
+    assert.equal(r.ok, false);
+    assert.equal(r.errors[0].at, 'capPerPlayerMonth');
+    assert.match(r.errors[0].message, /whole number of minor units/);
+  }
+  assert.equal(checkShop({ purchaseAttemptsPerMinute: '10' }).ok, true);
+  for (const currency of ['bhd', 'jod', 'kwd', 'omr', 'tnd']) {
+    assert.equal(currencyScale(currency), 1000);
+    assert.equal(parseAmount('5.120', 1000), 5120);
+    assert.equal(amountError(5120, currency), null);
+    assert.equal(amountError(5125, currency), null);
+    assert.match(money(5000, currency), /5\.000/);
+  }
+  for (const raw of [{ till: 'unknown' }, { supportHomie: 1 }, { items: [{ ...SUPPORTER, game: 'missing' }] }, { items: [{ ...SUPPORTER, kind: 'gems' }] }, { items: [{ ...SUPPORTER, blurb: 'random reward' }] }, { items: [{ ...SUPPORTER, id: '   ' }] }, { items: [{ ...SUPPORTER, name: 'x'.repeat(5001) }] }, { items: [{ ...SUPPORTER, blurb: 'x'.repeat(40001) }] }]) assert.equal(checkShop(raw, { games: ['owl-run'] }).ok, false);
+  assert.equal(checkShop({ items: [{ ...SUPPORTER, name: 'Jukebox' }] }).ok, true);
+  const publicItem = checkShop({ items: [{ ...SUPPORTER, supplier: 'private', internalNote: 'private' }] }).shop.items[0];
+  assert.equal(publicItem.supplier, undefined);
+  assert.equal(publicItem.internalNote, undefined);
+  assert.equal(checkShop({ items: [SUPPORTER] }, { studioName: 'x'.repeat(1200) }).ok, false);
+  const { productIdOf } = await import('../worker/stripe.mjs');
+  assert.equal(await productIdOf('!!!', 'x'), null);
+});
+
+test('invalid unauthenticated requests create no guest rows; valid purchases obey player limits', async () => {
+  const s = await site({ settings: { policy: { preset: 'custom' } } });
+  for (let i = 0; i < 300; i++) assert.equal((await s.post('/api/shop/buy', { item: 'nonexistent' }, { ...s.same, 'cf-connecting-ip': `198.51.${Math.floor(i / 250)}.${i % 250}` })).status, 404);
+  for (let i = 0; i < 20; i++) await s.post('/api/shop/age', { year: [] }, s.same);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM players').get().n, 0);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM player_sessions').get().n, 0);
+  for (let i = 0; i < 300; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.same, 'cf-connecting-ip': '198.51.100.210' })).status, 200);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM players').get().n, 300);
+  s.env.PLAYER_LIMIT_DAILY = '60';
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.same, 'cf-connecting-ip': '198.51.100.211' })).status, 503);
+  s.stripe.close();
+});
+
+test('account flood protection survives address rotation and lets shared addresses buy', async () => {
+  const s = await site();
+  const p = s.player(400, { band: 'adult' });
+  for (let i = 0; i < 9; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.as(p), 'cf-connecting-ip': `198.51.100.${i}` })).status, i < 6 ? 200 : 429);
+  for (let i = 0; i < 20; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.as(s.player(400, { band: 'adult' })), 'cf-connecting-ip': '198.51.100.220' })).status, 200);
+  s.stripe.close();
+});
+
+test('many concurrent purchases reserve the studio cap atomically and expiry releases it', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: 800, purchaseAttemptsPerMinute: 1000 } });
+  const p = s.player(400, { band: 'adult' });
+  const results = await Promise.all(Array.from({ length: 200 }, () => s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))));
+  assert.equal(results.filter((r) => r.status === 200).length, 4);
+  assert.equal(s.DB.sql.prepare("SELECT SUM(amount) AS n FROM shop_orders WHERE status = 'started'").get().n, 800);
+  const order = s.DB.sql.prepare('SELECT * FROM shop_orders LIMIT 1').get();
+  s.DB.sql.prepare('UPDATE shop_orders SET updated_at = 1, expires_at = ? WHERE id = ?').run(Date.now() - DAY, order.id);
+  s.stripe.behave.sessions.get(order.session).status = 'expired';
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 200, 'Stripe expiry releases capacity without an event');
+  await s.hook('checkout.session.expired', { id: order.session });
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 403);
+  s.stripe.close();
+});
+
+test('free orders can be revoked without Stripe and mismatched webhook currency grants nothing', async () => {
+  const s = await site({ settings: { policy: { preset: 'custom' }, refundDays: 14, items: [{ ...SUPPORTER, price: 0 }] } });
+  const p = s.player(400, { band: 'adult' });
+  const b = await s.buyPaid(p);
+  const before = s.stripe.calls.length;
+  assert.equal((await s.post('/api/shop/refund', { order: b.order }, s.as(p))).status, 200);
+  assert.equal(s.stripe.calls.length, before);
+  assert.equal(s.DB.sql.prepare('SELECT state FROM entitlements LIMIT 1').get().state, 'revoked');
+  const buy = await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).json();
+  const order = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(buy.order);
+  const response = await s.hook('checkout.session.completed', { id: order.session, metadata: { order: order.id }, payment_status: 'no_payment_required', currency: 'jpy', amount_subtotal: 0 });
+  assert.equal((await response.json()).did, 'mismatch');
+  s.stripe.close();
+});
+
+test('200000 referral rows have exact SQL totals and bounded pages and heap', async (t) => {
+  const { booksOf } = await import('../worker/referrals.mjs');
+  const s = await site();
+  const order = s.DB.sql.prepare("INSERT INTO shop_orders (id, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, 'supporter', 500, 'usd', 'stripe', 'test', 'paid', 1, 1)");
+  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, ?, 500, 0.1, 50, 'usd', 'pending', '2026-10', ?, 1)");
+  s.DB.sql.exec('BEGIN');
+  for (let i = 0; i < 200000; i++) { const id = `order-${String(i).padStart(6, '0')}`; order.run(id); line.run(id, `ref${i % 50}.example`, Date.now() + DAY); }
+  s.DB.sql.exec('COMMIT');
+  const { linesOf } = await import('../worker/referrals.mjs');
+  const before = process.memoryUsage().heapUsed;
+  const started = performance.now();
+  const { books, nextCursor } = await booksOf(s.env);
+  assert.equal(books.length, 50);
+  assert.equal(nextCursor, null);
+  assert.equal(books.reduce((n, b) => n + b.pending, 0), 10000000);
+  let count = 0, sum = 0;
+  for (const book of books) {
+    let cursor = '';
+    do {
+      const page = await linesOf(s.env, { via: book.via, currency: book.currency, cursor });
+      count += page.lines.length;
+      sum += page.lines.reduce((n, l) => n + l.share, 0);
+      assert.ok(JSON.stringify(page).length < 100000);
+      cursor = page.nextCursor;
+    } while (cursor);
+  }
+  assert.equal(count, 200000);
+  assert.equal(sum, 10000000);
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 15000, `full read took ${elapsed}ms`);
+  const heapDelta = process.memoryUsage().heapUsed - before;
+  assert.ok(heapDelta < 48 * 1024 * 1024);
+  t.diagnostic(`200000 rows: exact total ${sum}; full read ${Math.round(elapsed)}ms; heap delta ${heapDelta} bytes.`);
+  const { statementPage } = await import('../worker/referrals.mjs');
+  let statementCursor = '', statementLines = 0, statementTotal = 0;
+  const statementStart = performance.now();
+  do {
+    const page = await statementPage(s.env, 'https://seller.example', null, '2026-10', statementCursor);
+    for (const e of page.statements) {
+      assert.ok(e.statement.lines.length <= 100);
+      statementLines += e.statement.lines.length;
+      statementTotal += e.statement.totals?.pending ?? 0;
+    }
+    statementCursor = page.nextCursor;
+  } while (statementCursor);
+  assert.equal(statementLines, 200000);
+  assert.equal(statementTotal, sum);
+  t.diagnostic(`Immutable statement edition: ${statementLines} lines, ${Math.round(performance.now() - statementStart)}ms.`);
+  s.stripe.close();
+});
+
+test('referral flood settings keep a global bound and cookies have persistent integer lifetimes', async () => {
+  const { receiveStatement, resetReferralLimits, arrivalCookie } = await import('../worker/referrals.mjs');
+  for (const setting of [undefined, -1, 0, 'text', '0x10', '1.5']) {
+    resetReferralLimits();
+    const statuses = [];
+    for (let i = 0; i < 200; i++) statuses.push((await receiveStatement(new Request('https://owls.example/api/referrals/statement', { method: 'POST', headers: { 'cf-connecting-ip': `198.51.100.${i}` }, body: '{}' }), { REFERRAL_STATEMENTS_PER_MINUTE: setting, REFERRAL_STATEMENT_BYTES: setting }, new URL('https://owls.example/api/referrals/statement'))).status);
+    assert.equal(statuses.filter((s) => s === 400).length, setting === undefined ? 30 : 0);
+    assert.equal(statuses.filter((s) => s === 429).length, setting === undefined ? 170 : 0);
+    if (setting !== undefined) assert.ok(statuses.every((s) => s === 503));
+  }
+  resetReferralLimits();
+  const s = await site();
+  const url = new URL('https://owls.example/?via=friends.example');
+  for (const windowDays of [null, 0.07, 1000000]) {
+    const cookie = await arrivalCookie(new Request(url, { headers: { 'user-agent': BROWSER, accept: 'text/html' } }), s.env, url, { open: true, referrals: { windowDays } });
+    assert.match(cookie, /; Max-Age=\d+(?:;|$)/);
+  }
+  s.stripe.close();
+});
+
+test('catalog and referral cursor traversal exposes every row once', async () => {
+  const s = await site({ settings: { policy: { preset: 'custom' }, items: Array.from({ length: 251 }, (_, i) => ({ id: `item-${i}`, kind: 'service', name: `Item ${i}`, price: 100, gives: [] })) } });
+  const seen = new Set();
+  let cursor = '';
+  do {
+    const page = await (await s.fetchSite('/api/shop?cursor=' + cursor)).json();
+    assert.ok(page.items.length <= 100);
+    for (const item of page.items) { assert.ok(!seen.has(item.id)); seen.add(item.id); }
+    cursor = page.nextCursor;
+  } while (cursor);
+  assert.equal(seen.size, 251);
+  s.stripe.close();
+});
+
+test('fractional amount errors stop publication and name every amount setting', () => {
+  const dir = studio('amount-settings');
+  const raw = { items: [SUPPORTER], capPerPlayerMonth: 2500.7 };
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify(raw));
+  const result = run(['build'], dir);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /capPerPlayerMonth.*2500.*2500\.7/s);
+  for (const settings of [{ items: [{ ...SUPPORTER, price: 1.1 }] }, { items: [{ id: 'tip', kind: 'tip', name: 'Tip', min: 1.1 }] }, { items: [{ id: 'tip', kind: 'tip', name: 'Tip', max: 1.1 }] }, { referrals: { capPerPlayer: 1.1 } }, { referrals: { minimumInvoice: 1.1 } }]) assert.equal(checkShop(settings).ok, false);
+});
+
+test('processing payments reserve until expiry or failure; refunds release paid spending', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: 500, purchaseAttemptsPerMinute: 100 } });
+  const p = s.player(400, { band: 'adult' });
+  const started = await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).json();
+  const o = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(started.order);
+  await s.hook('checkout.session.completed', { id: o.session, payment_status: 'unpaid' });
+  s.DB.sql.prepare('UPDATE shop_orders SET created_at = ? WHERE id = ?').run(Date.now() - DAY, o.id);
+  assert.equal((await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).status, 403);
+  await s.hook('checkout.session.async_payment_failed', { id: o.session });
+  const bought = await s.buyPaid(p);
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 403);
+  assert.equal((await s.post('/api/shop/refund', { order: bought.order }, s.as(p))).status, 200);
+  assert.equal((await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).status, 200);
+  s.stripe.close();
+});
+
+test('catalog ETags reuse validation and a changed asset invalidates it', async () => {
+  const s = await site();
+  const assets = s.env.ASSETS;
+  let reads = 0;
+  let tag = 'catalog-one';
+  s.env.ASSETS = { async fetch(request) {
+    const response = await assets.fetch(request);
+    if (new URL(request.url).pathname === '/games.json') {
+      response.headers.set('etag', tag);
+      const read = response.json.bind(response);
+      response.json = () => { reads++; return read(); };
+    }
+    return response;
+  } };
+  await s.fetchSite('/api/shop');
+  await s.fetchSite('/api/shop');
+  assert.equal(reads, 1);
+  tag = 'catalog-two';
+  await s.fetchSite('/api/shop');
+  assert.equal(reads, 2);
+  s.stripe.close();
+});
+
+test('signed statement cursor pages expose all referral lines without duplicating totals', async () => {
+  const { receiveStatement, resetReferralLimits, receivedPages } = await import('../worker/referrals.mjs');
+  resetReferralLimits();
+  const s = await site();
+  const order = s.DB.sql.prepare("INSERT INTO shop_orders (id, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, 'supporter', 500, 'usd', 'stripe', 'test', 'paid', 1, 1)");
+  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', 500, 0.1, 50, 'usd', 'owed', '2026-10', 1, 1)");
+  for (let i = 0; i < 251; i++) { const id = `order-${String(i).padStart(6, '0')}`; order.run(id); line.run(id); }
+  let cursor = '';
+  const seen = new Set();
+  do {
+    const page = await (await s.fetchSite('/_studio/api/shop/statements?period=2026-10&cursor=' + encodeURIComponent(cursor), { headers: s.owner })).json();
+    assert.equal(page.ok, true);
+    for (const envelope of page.statements) {
+      assert.equal(await verifyStatement(envelope, envelope.key), true);
+      const received = await receiveStatement(new Request('https://friends.example/api/referrals/statement', { method: 'POST', body: JSON.stringify(envelope) }), s.env, new URL('https://friends.example/api/referrals/statement'), { fetcher: async () => Response.json({ referrals: { key: { x: envelope.key } } }) });
+      assert.equal(received.status, 200);
+      if (!envelope.statement.page.cursor) assert.equal(envelope.statement.totals.due, 12550);
+      else assert.equal(envelope.statement.totals, undefined);
+      for (const line of envelope.statement.lines) { assert.ok(!seen.has(line.order)); seen.add(line.order); }
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
+  assert.equal(seen.size, 251);
+  cursor = '';
+  let storedLines = 0;
+  do {
+    const page = await receivedPages(s.env, 'https://owls.example', '2026-10', cursor);
+    storedLines += page.statements[0].statement.lines.length;
+    cursor = page.nextCursor;
+  } while (cursor);
+  assert.equal(storedLines, 251, 'receiving a later page preserves earlier signed lines');
+  s.stripe.close();
+});
+
+test('expired, sessionless and test-mode reservations are resolved without guessing', async () => {
+  const { spentThisMonth } = await import('../worker/shop-store.mjs');
+  for (const kind of ['lost-expiry-event', 'sessionless', 'test-mode', 'processing', 'unreachable', 'failed-bank']) {
+    const s = await site({ settings: { capPerPlayerMonth: 500, purchaseAttemptsPerMinute: 100 } });
+    const p = s.player(400, { band: 'adult' });
+    const bought = await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).json();
+    const order = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(bought.order);
+    const truth = s.stripe.behave.sessions.get(order.session);
+    if (['processing', 'failed-bank'].includes(kind)) {
+      await s.hook('checkout.session.completed', { id: order.session, payment_status: 'unpaid' });
+      truth.status = 'complete';
+      truth.payment_intent = { id: 'pi_bank', status: kind === 'processing' ? 'processing' : 'requires_payment_method', last_payment_error: kind === 'failed-bank' ? { code: 'failed' } : null };
+    }
+    if (kind === 'unreachable') s.stripe.behave.unreachable = true;
+    if (kind === 'lost-expiry-event') truth.status = 'expired';
+    if (kind === 'test-mode') s.env.STRIPE_KEY = TEST_KEY.replace('_test_', '_live_');
+    else s.DB.sql.prepare('UPDATE shop_orders SET updated_at = 1, expires_at = ?, session = ? WHERE id = ?').run(Date.now() - DAY, kind === 'sessionless' ? null : order.session, order.id);
+    const pending = ['processing', 'unreachable'].includes(kind);
+    assert.equal((await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).status, pending ? 403 : 200, kind);
+    assert.equal(await spentThisMonth(s.env, p.id), 500, kind);
+    if (kind === 'lost-expiry-event') {
+      for (let i = 0; i < 3; i++) await s.hook('checkout.session.expired', { id: order.session });
+      assert.equal(await spentThisMonth(s.env, p.id), 500);
+    }
+    s.stripe.close();
+  }
+});
+
+test('pruning progresses past 25 owners and removes the other 500 idle guests', async () => {
+  const { pruneGuests } = await import('../worker/players.mjs');
+  const s = await site();
+  for (let i = 0; i < 525; i++) {
+    const p = s.player(400, { guest: true });
+    if (i < 25) s.DB.sql.prepare("INSERT INTO entitlements (player, key, item, order_id, starts_at, state) VALUES (?, 'badge:supporter', 'supporter', ?, 1, 'active')").run(p.id, `order-prune-${i}`);
+  }
+  s.DB.sql.prepare('UPDATE players SET seen_at = ?').run(Date.now() - 400 * DAY);
+  for (let i = 0; i < 40; i++) await pruneGuests(s.env);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM players').get().n, 25);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM entitlements').get().n, 25);
+  s.stripe.close();
+});
+
+test('2000 referrers are listed once and their displayed totals equal SQL exactly', async () => {
+  const { booksOf } = await import('../worker/referrals.mjs');
+  const s = await site();
+  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, ?, 500, 0.5, 250, 'usd', 'owed', '2026-10', 1, 1)");
+  for (let i = 0; i < 2000; i++) line.run(`order-${i}`, `ref${String(i).padStart(4, '0')}.example`);
+  const seen = new Set();
+  let cursor = '', sum = 0;
+  do {
+    const page = await booksOf(s.env, { cursor });
+    for (const b of page.books) { assert.ok(!seen.has(b.via)); seen.add(b.via); sum += b.due; assert.equal(b.lineCount, 1); }
+    cursor = page.nextCursor;
+  } while (cursor);
+  assert.equal(seen.size, 2000);
+  assert.equal(sum, s.DB.sql.prepare('SELECT SUM(share) AS n FROM referral_lines').get().n);
+  s.stripe.close();
+});
+
+test('address churn cannot reset an account, and new guest rates are configurable and positive', async () => {
+  for (const value of [0, -1, false, '', '0x10', 1.5]) assert.equal(checkShop({ guestBuyersPerAddressPerHour: value }).ok, false);
+  const s = await site({ settings: { capPerPlayerMonth: null } });
+  const p = s.player(400, { band: 'adult' });
+  for (let i = 0; i < 6; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 200);
+  for (let i = 0; i < 10005; i++) await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.same, 'cf-connecting-ip': `2001:db8::${i.toString(16)}` });
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 429);
+  s.stripe.close();
+  const limited = await site({ settings: { policy: { preset: 'custom' }, guestBuyersPerAddressPerHour: 2 } });
+  for (const status of [200, 200, 429]) assert.equal((await limited.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...limited.same, 'cf-connecting-ip': '198.51.100.222' })).status, status);
+  limited.stripe.close();
+});
+
+test('a guest keeps the cookie when Stripe refuses and can answer the age question', async () => {
+  const s = await site({ managed: true, settings: { policy: { preset: 'custom', ageQuestion: true } } });
+  const age = await s.post('/api/shop/age', { year: new Date().getFullYear() - 30 }, s.same);
+  assert.equal(age.status, 200);
+  const cookie = age.headers.get('set-cookie').split(';')[0];
+  s.stripe.behave.managedRefused = true;
+  for (let i = 0; i < 5; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.same, cookie })).status, 502);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM players').get().n, 1);
+  s.stripe.close();
+  const noAge = await site({ managed: true, settings: { policy: { preset: 'custom' } } });
+  noAge.stripe.behave.managedRefused = true;
+  const refusal = await noAge.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...noAge.same, 'cf-connecting-ip': '198.51.100.223' });
+  assert.equal(refusal.status, 502);
+  assert.match(refusal.headers.get('set-cookie'), /studio_player=/);
+  assert.match((await refusal.json()).message, /Managed Payments is not enabled/);
+  noAge.stripe.close();
+});
+
+test('free items and zero tips work above a lowered cap; partial refunds retain ownership', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: 500, policy: { preset: 'custom' }, items: [SUPPORTER, { id: 'free', name: 'Free', kind: 'service', price: 0 }, { id: 'tip', name: 'Tip', kind: 'tip', min: 0 }] } });
+  const p = s.player(400);
+  const paid = await s.buyPaid(p);
+  s.DB.sql.prepare('UPDATE shop_orders SET amount = 1500 WHERE id = ?').run(paid.order);
+  assert.equal((await s.post('/api/shop/buy', { item: 'free' }, s.as(p))).status, 200);
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 0 }, s.as(p))).status, 200);
+  await s.hook('refund.updated', { id: 're_test_partial', status: 'succeeded', amount: 100, payment_intent: paid.payment });
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(paid.order).status, 'paid');
+  assert.equal(s.DB.sql.prepare('SELECT state FROM entitlements WHERE order_id = ? LIMIT 1').get(paid.order).state, 'active');
+  await s.hook('charge.refunded', { payment_intent: paid.payment, amount: 540, amount_refunded: 540, refunded: true });
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(paid.order).status, 'refunded');
+  s.stripe.close();
+});
+
+test('simultaneous referral lines share one atomic per-player cap', async () => {
+  const { lineFor } = await import('../worker/referrals.mjs');
+  const s = await site();
+  const shop = checkShop({ referrals: { rate: 1, capPerPlayer: 800 } }).shop;
+  const orders = Array.from({ length: 40 }, (_, i) => ({ id: `order-ref-concurrent-${i}`, player: 'ref-player', via: 'friends.example', amount: 300, currency: 'usd' }));
+  for (const o of orders) s.DB.sql.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) VALUES (?, ?, 'supporter', 300, 'usd', 'stripe', 'test', 'paid', 1, 1)").run(o.id, o.player);
+  const writes = await Promise.all(orders.map((o) => lineFor(s.env, o, shop)));
+  await Promise.all(writes.map((w) => s.DB.batch(w)));
+  assert.equal(s.DB.sql.prepare('SELECT SUM(share) AS n FROM referral_lines').get().n, 800);
+  s.stripe.close();
+});
+
+test('statement delivery continues after receiver throttling and a replacement removes stale pages', async () => {
+  const { sendStatements, receiveStatement, resetReferralLimits, receivedPages, statementFor } = await import('../worker/referrals.mjs');
+  const s = await site();
+  resetReferralLimits();
+  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', 100, 1, 100, 'usd', 'owed', '2026-10', 1, 1)");
+  for (let i = 0; i < 251; i++) line.run(`order-${String(i).padStart(5, '0')}`);
+  const envelopes = [];
+  let throttle = true;
+  const fetcher = async (url, init) => {
+    if (!init?.body) return Response.json({ referrals: { statements: 'https://friends.example/api/referrals/statement' } });
+    if (throttle) { throttle = false; return new Response('', { status: 429 }); }
+    const envelope = JSON.parse(init.body);
+    envelopes.push(envelope);
+    return receiveStatement(new Request(url, init), s.env, new URL(url), { fetcher: async () => Response.json({ referrals: { key: { x: envelope.key } } }) });
+  };
+  let cursor = '', total = 0;
+  do {
+    s.DB.sql.exec("UPDATE meta SET value = json_set(value, '$.nextAt', 0) WHERE key LIKE 'referral-send:%'");
+    const page = await sendStatements(s.env, 'https://owls.example', {}, '2026-10', { cursor, fetcher });
+    if (page.retryAfter === 60) { assert.equal(page.nextCursor, 'resume'); assert.equal(page.sent.length, 0); }
+    for (const result of page.sent) assert.equal(result.ok, true);
+    cursor = page.nextCursor;
+  } while (cursor !== null);
+  assert.equal(envelopes.length, 3);
+  assert.equal(envelopes.reduce((n, e) => n + (e.statement.totals?.due ?? 0), 0), 25100);
+  assert.equal(envelopes.reduce((n, e) => n + e.statement.lines.length, 0), 251);
+  const book = { via: 'friends.example', currency: 'usd', pending: 0, owed: 100, clawback: 0, due: 100, lines: [] };
+  const replacement = await statementFor(s.env, 'https://owls.example', book, '2026-10', null);
+  const receive = (envelope) => receiveStatement(new Request('https://friends.example/api/referrals/statement', { method: 'POST', body: JSON.stringify(envelope) }), s.env, new URL('https://friends.example/api/referrals/statement'), { fetcher: async () => Response.json({ referrals: { key: { x: envelope.key } } }) });
+  assert.equal((await receive(envelopes[0])).status, 200);
+  assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM meta WHERE key LIKE 'referral-page:%'").get().n, 3, 'a late first-page replay never discards continuations');
+  assert.equal((await receive(replacement)).status, 200);
+  const page = await receivedPages(s.env, 'https://owls.example', '2026-10');
+  assert.equal(page.nextCursor, null);
+  assert.equal(page.statements[0].statement.totals.due, 100);
+  assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM meta WHERE key LIKE 'referral-page:%'").get().n, 1);
+  const hostile = await statementFor(s.env, 'https://owls.example', { ...book, page: { cursor: 'x'.repeat(257), nextCursor: null } }, '2026-10', null);
+  assert.equal((await receive(hostile)).status, 400);
+  const invented = await statementFor(s.env, 'https://owls.example', { ...book, page: { cursor: 'invented', nextCursor: null } }, '2026-10', null);
+  assert.equal((await receive(invented)).status, 409);
+  s.stripe.close();
+});
+
+test('the game sheet reaches item 101 and one office click drains queued statement pages', async () => {
+  const { runInNewContext } = await import('node:vm');
+  const { SHOP_SHELL_JS, OFFICE_SHOP_SCRIPT } = await import('../worker/shop-page.mjs');
+  const nodes = [];
+  const element = () => {
+    const node = { children: [], events: {}, setAttribute() {}, appendChild(child) { this.children.push(child); return child; }, addEventListener(name, fn) { this.events[name] = fn; }, remove() {} };
+    nodes.push(node); return node;
+  };
+  const frame = { contentWindow: { postMessage() {} } };
+  const ids = new Map();
+  const document = { body: element(), createElement: element, createTextNode: (text) => ({ textContent: text }), addEventListener() {}, querySelector(selector) {
+    if (selector === 'iframe.game') return frame;
+    if (!ids.has(selector)) ids.set(selector, element());
+    return ids.get(selector);
+  } };
+  const window = { __HOMIE_PLAY: { game: 'owl-run', name: 'Owl Run', shop: { policy: {} } }, addEventListener() {} };
+  const paths = [];
+  const fetchItems = async (path) => {
+    paths.push(path);
+    if (path.startsWith('/api/player/owns')) return Response.json({ owns: [] });
+    const cursor = new URL(path, 'https://owls.example').searchParams.get('cursor');
+    return Response.json({ ok: true, open: true, items: [{ id: cursor ? 'item-101' : 'item-1', name: cursor ? 'Item 101' : 'Item 1', kind: 'service', way: 'cap', retryWay: 'checkout', shown: '$1.00' }], nextCursor: cursor ? null : '100' });
+  };
+  runInNewContext(SHOP_SHELL_JS, { window, document, fetch: fetchItems, setTimeout, URL });
+  window.__shell.shop.open();
+  await new Promise(setImmediate);
+  const next = nodes.find((n) => n.textContent === 'Next items');
+  assert.ok(next);
+  next.onclick();
+  await new Promise(setImmediate);
+  assert.ok(paths.some((p) => p.includes('cursor=100')));
+  assert.ok(nodes.some((n) => n.textContent === 'Item 101'));
+  assert.ok(nodes.some((n) => n.textContent === 'Buy on Stripe'), 'cap refusals still permit a purchase retry');
+  const calls = [], waits = [];
+  runInNewContext(OFFICE_SHOP_SCRIPT, { document, clearTimeout() {}, setTimeout(fn, ms) { waits.push(ms); fn(); }, fetch: async (path, init) => {
+    if (init.method === 'GET') return Response.json({ ok: true, ready: true, mode: 'test', missing: [], stripe: {}, orders: [], referrals: { owe: [{ via: 'friends.example', currency: 'usd', due: 1, pending: 0, lineCount: 251 }], owedToUs: [] } });
+    calls.push(JSON.parse(init.body));
+    return Response.json({ ok: true, period: '2026-10', sent: calls.length === 2 ? [] : [{ ok: true }], nextCursor: calls.length === 1 || calls.length === 2 ? 'next' : null, retryAfter: calls.length === 2 ? 60 : undefined });
+  } });
+  await new Promise(setImmediate);
+  const send = nodes.find((n) => n.textContent === "Send last month's signed statements");
+  assert.ok(send);
+  await send.events.click();
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls.map((c) => c.cursor), ['', 'next', 'next']);
+  assert.equal(calls[1].period, '2026-10');
+  assert.ok(waits.includes(60000));
+  assert.equal(send.disabled, false);
+});
+
+test('four late-webhook windows and bank-debit windows never overspend; duplicate events do nothing', async () => {
+  const { spentThisMonth } = await import('../worker/shop-store.mjs');
+  for (const bank of [false, true]) {
+    const s = await site({ settings: { capPerPlayerMonth: 1000, purchaseAttemptsPerMinute: 100 } });
+    const p = s.player(400, { band: 'adult' });
+    for (let i = 0; i < 2; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 500 }, s.as(p))).status, 200);
+    const orders = s.DB.sql.prepare('SELECT * FROM shop_orders').all();
+    for (const o of orders) {
+      const truth = s.stripe.behave.sessions.get(o.session);
+      truth.status = 'complete';
+      truth.payment_intent = { id: `pi_${o.id}`, status: bank ? 'processing' : 'succeeded' };
+      if (bank) await s.hook('checkout.session.completed', truth);
+      else truth.payment_status = 'paid';
+    }
+    for (let window = 0; window < 4; window++) {
+      s.DB.sql.prepare('UPDATE shop_orders SET expires_at = ?').run(Date.now() - (window + 1) * 33 * 60000);
+      assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 500 }, s.as(p))).status, 403);
+      assert.equal(await spentThisMonth(s.env, p.id), 1000);
+    }
+    for (const o of orders) {
+      const truth = s.stripe.behave.sessions.get(o.session);
+      truth.payment_status = 'paid'; truth.payment_intent.status = 'succeeded';
+      for (let i = 0; i < 3; i++) await s.hook('checkout.session.async_payment_succeeded', truth);
+      await s.hook('checkout.session.expired', { id: o.session });
+    }
+    assert.equal(await spentThisMonth(s.env, p.id), 1000);
+    assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM shop_orders WHERE status = 'paid'").get().n, 2);
+    s.stripe.close();
+  }
+});
+
+test('statement failures retry identical pages, resume without caller cursors, and preserve an edition during settlement', async () => {
+  const { sendStatements, receiveStatement, resetReferralLimits, settle, pendingStatementPeriod, statementsIn, statementPage } = await import('../worker/referrals.mjs');
+  const s = await site();
+  const receiver = await site();
+  resetReferralLimits();
+  const insert = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, ?, 100, 1, 100, ?, 'owed', '2026-10', 1, 1)");
+  for (const host of ['a.example', 'b.example', 'c.example']) for (let i = 0; i < 201; i++) insert.run(`${host}-${i.toString().padStart(3, '0')}`, host, 'usd');
+  insert.run('euro', 'c.example', 'eur');
+  const bodies = [], failures = [], received = [];
+  let once = true, lostReply = true, settled = false;
+  const fetcher = async (url, init) => {
+    assert.equal(init.redirect, 'manual');
+    const host = new URL(url).hostname;
+    if (!init?.body) return Response.json({ referrals: { statements: `https://${host}/api/referrals/statement` } });
+    bodies.push(init.body);
+    const e = JSON.parse(init.body);
+    if (host === 'a.example' && e.statement.page.cursor && once) { once = false; return new Response('', { status: 500 }); }
+    if (host === 'b.example') return new Response('', { status: 500 });
+    const result = await receiveStatement(new Request(url, init), host === 'a.example' ? receiver.env : s.env, new URL(url), { fetcher: async () => Response.json({ referrals: { key: { x: e.key } } }) });
+    if (result.ok) received.push(e);
+    if (host === 'a.example' && !settled) { settled = true; assert.equal((await settle(s.env, host, 'invoice', { currency: 'usd' })).ok, true); }
+    if (host === 'a.example' && !e.statement.page.cursor && lostReply) { lostReply = false; throw new Error('response lost after acceptance'); }
+    return result;
+  };
+  let page, calls = 0;
+  do {
+    s.DB.sql.exec("UPDATE meta SET value = json_set(value, '$.nextAt', 0) WHERE key LIKE 'referral-send:%'");
+    // Restart with an empty or hostile cursor each time: only persisted server progress is used.
+    page = await sendStatements(s.env, 'https://seller.example', {}, '2026-10', { cursor: calls++ % 2 ? '["","victim.example","usd",""]' : '', fetcher });
+    failures.push(...page.sent.filter((x) => !x.ok));
+    assert.equal(await pendingStatementPeriod(s.env, 'https://seller.example'), page.nextCursor === null ? null : '2026-10');
+    assert.ok(calls < 25);
+  } while (page.nextCursor !== null);
+  assert.deepEqual(failures.map((x) => x.via), ['b.example']);
+  assert.equal(bodies[0], bodies[1], 'a lost reply replays the exact first page');
+  assert.equal(bodies[2], bodies[3], 'a failed continuation retries the exact page');
+  const summaries = [...await statementsIn(s.env), ...await statementsIn(receiver.env)];
+  assert.equal(summaries.length, 3, 'a USD, c EUR, c USD; failed b does not prevent c');
+  assert.equal(summaries.find((r) => r.seller === 'https://seller.example' && r.currency === 'eur').due, 100);
+  // Different receiver hosts share this test DB: inspect signed a pages separately in the observed traffic.
+  const aPages = new Map(received.filter((e) => e.statement.referrer === 'a.example').map((e) => [e.statement.page.cursor, e]));
+  assert.equal([...aPages.values()].flatMap((e) => e.statement.lines).length, 201);
+  assert.equal([...aPages.values()][0].statement.totals.due, 20100);
+  assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM referral_lines WHERE via = 'a.example' AND state = 'settled'").get().n, 201);
+  for (const cursor of ['[1e308,1e308]', '["","victim.example","usd",""]', '["",5,"usd",""]']) {
+    const result = await statementPage(s.env, 'https://seller.example', null, '2026-10', cursor);
+    assert.equal(result.statements.length, 0);
+  }
+  s.stripe.close(); receiver.stripe.close();
+});
+
+test('two received currencies and currency-specific settlement remain independent', async () => {
+  const { statementFor, receiveStatement, statementsIn, settle, resetReferralLimits } = await import('../worker/referrals.mjs');
+  const s = await site(); resetReferralLimits();
+  for (const [currency, due] of [['eur', 100], ['usd', 70]]) {
+    const e = await statementFor(s.env, 'https://seller.example', { via: 'friends.example', currency, pending: 0, owed: due, clawback: 0, due, lines: [] }, '2026-10', null);
+    assert.equal((await receiveStatement(new Request('https://friends.example/api/referrals/statement', { method: 'POST', body: JSON.stringify(e) }), s.env, new URL('https://friends.example'), { fetcher: async () => Response.json({ referrals: { key: { x: e.key } } }) })).status, 200);
+    s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'friends.example', ?, 1, ?, ?, 'owed', '2026-10', 1, 1)").run(currency, due, due, currency);
+  }
+  assert.equal((await statementsIn(s.env)).length, 2);
+  await settle(s.env, 'friends.example', 'invoice', { currency: 'eur' });
+  assert.deepEqual(s.DB.sql.prepare('SELECT currency, state FROM referral_lines ORDER BY currency').all().map((x) => [x.currency, x.state]), [['eur', 'settled'], ['usd', 'owed']]);
+  s.stripe.close();
+});
+
+test('missing reservation schema closes the shop; no cap avoids spending SUM; future entitlements survive pruning', async () => {
+  const { pruneGuests, players } = await import('../worker/players.mjs');
+  const s = await site({ settings: { capPerPlayerMonth: null, policy: { preset: 'custom' } } });
+  const p = s.player(400, { band: 'adult', guest: true });
+  const queries = [], prepare = s.DB.prepare;
+  s.DB.prepare = (q) => { queries.push(q); return prepare(q); };
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 200);
+  assert.ok(!queries.some((q) => /SELECT COALESCE\(SUM/.test(q) && !q.startsWith('INSERT')));
+  s.DB.sql.prepare("INSERT INTO entitlements (player, key, item, order_id, starts_at, state) VALUES (?, 'future', 'supporter', 'future', ?, 'active')").run(p.id, Date.now() + 365 * DAY);
+  s.DB.sql.prepare('UPDATE players SET seen_at = ?').run(Date.now() - 400 * DAY);
+  await pruneGuests(s.env);
+  assert.ok(s.DB.sql.prepare('SELECT 1 FROM players WHERE id = ?').get(p.id));
+  s.DB.sql.exec('ALTER TABLE shop_orders DROP COLUMN expires_at');
+  // A new binding represents the next isolate; complete schemas are cached for an isolate's lifetime.
+  s.env.DB = { ...s.DB };
+  const office = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
+  assert.equal(office.ready, false);
+  assert.match(office.missing.map((x) => x.words).join(' '), /0010_shop_reservations/);
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 503);
+  s.stripe.close();
+});
+
+test('guest shopping leaves the ordinary new-player address allowance intact', async () => {
+  const s = await site({ settings: { policy: { preset: 'custom' } } });
+  const headers = { ...s.same, 'cf-connecting-ip': '198.51.100.241' };
+  for (let i = 0; i < 61; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, headers)).status, 200);
+  const saved = await s.post('/api/player/saves/owl-run', { set: [{ key: 'checkpoint', value: 1, base: 0 }] }, headers);
+  assert.equal(saved.status, 200, await saved.text());
+  s.stripe.close();
+});
+
+test('statement CLI mints one key, renews it, reports progress and drops it once', async () => {
+  const { shopStatements } = await import('../lib/shop.mjs');
+  const dir = studio('statement-cli-key');
+  const callsFile = join(dir, 'wrangler-calls.jsonl');
+  mkdirSync(join(dir, 'node_modules', '.bin'), { recursive: true });
+  const fake = join(dir, 'node_modules', '.bin', 'wrangler');
+  writeFileSync(fake, `#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(process.argv.slice(2)) + '\\n');\n`);
+  chmodSync(fake, 0o755);
+  const originalFetch = globalThis.fetch, originalNow = Date.now, originalError = console.error;
+  let now = originalNow(), pages = 0;
+  const progress = [], keys = new Set();
+  try {
+    Date.now = () => now;
+    console.error = (s) => progress.push(s);
+    globalThis.fetch = async (url, init) => {
+      keys.add(init.headers.authorization);
+      pages++;
+      if (pages === 1) now += 9.5 * 60000;
+      return Response.json({ ok: true, period: '2026-10', sent: [{ via: 'friends.example', ok: pages !== 2, status: pages === 2 ? 500 : 200 }], nextCursor: pages < 3 ? 'resume' : null });
+    };
+    const result = await shopStatements(dir, { url: 'http://127.0.0.1:8787', send: true });
+    assert.equal(result.ok, true);
+    assert.equal(pages, 3);
+    assert.equal(keys.size, 1);
+    assert.ok(progress.some((s) => /resume safely/.test(s)));
+    assert.ok(progress.some((s) => /friends.example: failed: 500/.test(s)));
+    const commands = readFileSync(callsFile, 'utf8').trim().split('\n').map(JSON.parse).map((args) => args.at(-1));
+    assert.equal(commands.filter((s) => s.includes('INSERT INTO stats_keys')).length, 1);
+    assert.equal(commands.filter((s) => s.startsWith('UPDATE stats_keys')).length, 1);
+    assert.equal(commands.filter((s) => s.startsWith('DELETE FROM stats_keys WHERE hash')).length, 1);
+  } finally { globalThis.fetch = originalFetch; Date.now = originalNow; console.error = originalError; }
+});
+
+// Unresolved orders whose original checkout window has passed; no fake passage of only expires_at.
+function unresolved(s, p, count, { status = 'processing', amount = 200, age = DAY } = {}) {
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    const id = `ord_${String(i).padStart(20, '0')}`, session = `cs_test_pending_${i}`;
+    const created = Date.now() - age;
+    s.DB.sql.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, session, created_at, updated_at, expires_at) VALUES (?, ?, 'tip', ?, 'usd', 'stripe', 'test', ?, ?, ?, 1, ?)").run(id, p.id, amount, status, session, created, created + 1860000);
+    const truth = { id: session, status: status === 'processing' ? 'complete' : 'open', payment_status: 'unpaid', livemode: false, metadata: { order: id }, client_reference_id: p.id, amount_subtotal: amount, currency: 'usd', payment_intent: { id: `pi_${i}`, status: 'processing' } };
+    s.stripe.behave.sessions.set(session, truth);
+    rows.push({ id, session, truth });
+  }
+  return rows;
+}
+const stripeReads = (s) => s.stripe.calls.filter((c) => c.method === 'GET' && c.path.startsWith('/v1/checkout/sessions/'));
+
+test('200 reloads and 300 simultaneous lists with 50 pending payments make no Stripe reads', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: 10000 } });
+  const p = s.player(400, { band: 'adult' });
+  unresolved(s, p, 50);
+  s.stripe.behave.delay = 10000;
+  for (let i = 0; i < 200; i++) assert.equal((await s.fetchSite('/api/shop', { headers: s.as(p) })).status, 200);
+  const start = performance.now();
+  const lists = await Promise.all(Array.from({ length: 300 }, () => s.fetchSite('/api/shop', { headers: s.as(p) })));
+  assert.ok(lists.every((r) => r.status === 200));
+  assert.equal(stripeReads(s).length, 0);
+  assert.ok(performance.now() - start < 5000, 'lists do not wait for slow Stripe');
+  s.stripe.close();
+});
+
+test('atomic reconciliation claims bound concurrent refusals and retries, including wrong answers', async () => {
+  const { reconcileOrders } = await import('../worker/shop.mjs');
+  const { spentThisMonth } = await import('../worker/shop-store.mjs');
+  const s = await site({ settings: { capPerPlayerMonth: 1000, purchaseAttemptsPerMinute: 1000 } });
+  const p = s.player(400, { band: 'adult' });
+  const rows = unresolved(s, p, 2, { amount: 500 });
+  s.stripe.behave.delay = 50;
+  const results = await Promise.all(Array.from({ length: 200 }, () => s.post('/api/shop/buy', { item: 'tip', amount: 250 }, s.as(p))));
+  assert.ok(results.every((r) => r.status === 403));
+  assert.equal(stripeReads(s).length, 2);
+  for (let i = 0; i < 10; i++) await reconcileOrders(s.env, { items: [] }, p.id);
+  assert.equal(stripeReads(s).length, 2, 'minimum interval survives repeated attempts');
+  assert.equal(await spentThisMonth(s.env, p.id), 1000);
+  for (const row of rows) row.truth.status = 'expired';
+  s.DB.sql.exec('UPDATE shop_orders SET updated_at = 1');
+  const retry = await Promise.all(Array.from({ length: 200 }, () => s.post('/api/shop/buy', { item: 'tip', amount: 250 }, s.as(p))));
+  const opened = retry.filter((r) => r.status === 200).length;
+  assert.ok(opened >= 1 && opened <= 4, 'claim losers refuse while the one reader is still working');
+  for (let i = opened; i < 4; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 250 }, s.as(p))).status, 200);
+  assert.equal(stripeReads(s).length, 4);
+  assert.equal(await spentThisMonth(s.env, p.id), 1000);
+  s.stripe.close();
+
+  const q = await site({ settings: { capPerPlayerMonth: 800, purchaseAttemptsPerMinute: 1000 } });
+  const person = q.player(400, { band: 'adult' });
+  const four = unresolved(q, person, 4, { status: 'started' });
+  four[0].truth.livemode = true;
+  four[1].truth.id = 'wrong-session';
+  q.stripe.behave.sessions.set(four[2].session, {});
+  four[3].truth.status = 'expired';
+  assert.equal((await q.post('/api/shop/buy', { item: 'tip', amount: 200 }, q.as(person))).status, 403);
+  assert.equal(stripeReads(q).length, 3);
+  assert.equal((await q.post('/api/shop/buy', { item: 'tip', amount: 200 }, q.as(person))).status, 200);
+  assert.equal(stripeReads(q).length, 4, 'bad answers rotate; fourth row is reachable');
+  q.stripe.close();
+});
+
+test('slow Stripe bounds a refused buy to two seconds in parallel and backs off', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: 600, purchaseAttemptsPerMinute: 1000 } });
+  const p = s.player(400, { band: 'adult' });
+  unresolved(s, p, 3);
+  s.stripe.behave.delay = 10000;
+  const start = performance.now();
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 403);
+  assert.ok(performance.now() - start < 3500, 'three reads run concurrently with a 2s timeout');
+  assert.equal(stripeReads(s).length, 3);
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 403);
+  assert.equal(stripeReads(s).length, 3);
+  s.stripe.close();
+});
+
+test('resource_missing releases a session, other errors retain it, and late paid rows use Stripe charge time', async () => {
+  const { spentThisMonth } = await import('../worker/shop-store.mjs');
+  for (const error of [{ status: 404, code: 'resource_missing' }, { status: 404, code: 'unknown' }, { status: 401, code: 'resource_missing' }, { status: 429, code: 'rate_limit' }]) {
+    const s = await site({ settings: { capPerPlayerMonth: 500 } });
+    const p = s.player(400, { band: 'adult' });
+    const [row] = unresolved(s, p, 1, { amount: 500 });
+    s.stripe.behave.error = error;
+    const missing = error.status === 404 && error.code === 'resource_missing';
+    assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 500 }, s.as(p))).status, missing ? 200 : 403);
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, missing ? 'missing' : 'processing');
+    await s.hook('checkout.session.expired', { id: row.session });
+    // Stripe's own closing event is the truth for a row marked missing: the player stops seeing it as in progress.
+    if (missing) assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'expired');
+    s.stripe.close();
+  }
+  const s = await site({ settings: { capPerPlayerMonth: 500 } });
+  const p = s.player(400, { band: 'adult' });
+  const [row] = unresolved(s, p, 1, { amount: 500, age: 41 * DAY });
+  const paidTime = Math.floor((Date.now() - 40 * DAY) / 1000);
+  Object.assign(row.truth, { payment_status: 'paid', payment_intent: { id: 'pi_old', status: 'succeeded', latest_charge: { created: paidTime } } });
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 500 }, s.as(p))).status, 200);
+  assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id = ?').get(row.id).paid_at, paidTime * 1000);
+  assert.equal(await spentThisMonth(s.env, p.id), 500, 'only the new checkout counts this month');
+  await s.hook('checkout.session.completed', row.truth);
+  assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id = ?').get(row.id).paid_at, paidTime * 1000);
+  s.stripe.close();
+});
+
+test('office pages old unresolved orders and records an owner release; office keys only ask', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: 500 } });
+  const p = s.player(400, { band: 'adult' });
+  const rows = unresolved(s, p, 101, { status: 'started' });
+  const office = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
+  assert.equal(office.orders.length, 100);
+  assert.equal(office.nextOrdersCursor, '100');
+  const second = await (await s.fetchSite('/_studio/api/shop?orderCursor=100', { headers: s.owner })).json();
+  assert.equal(second.orders.length, 1);
+  assert.equal(second.orders[0].releasable, true);
+  const order = rows[0].id;
+  assert.equal((await s.post('/_studio/api/shop/release', { order }, s.same)).status, 401);
+  const ask = await s.post('/_studio/api/shop/release', { order }, s.key0);
+  assert.equal(ask.status, 202);
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order).status, 'started');
+  const pending = (await ask.json()).ask;
+  assert.match(pending.what, /expire an open Checkout Session/);
+  const ownerAccount = s.player();
+  s.DB.sql.prepare('UPDATE players SET owner = 1 WHERE id = ?').run(ownerAccount.id);
+  const confirm = await s.fetchSite(`/_studio/confirm/${pending.id}`, { method: 'POST', headers: { ...s.as(ownerAccount), 'content-type': 'application/x-www-form-urlencoded' }, body: 'do=yes' });
+  assert.match(await confirm.text(), /Done\./);
+  assert.match(s.DB.sql.prepare('SELECT note FROM shop_orders WHERE id = ?').get(order).note, new RegExp(ownerAccount.id));
+  assert.equal((await (await s.fetchSite('/api/shop/mine', { headers: s.as(p) })).json()).orders.length, 0);
+  assert.equal((await (await s.fetchSite(`/api/shop/order?session=${rows[0].session}`, { headers: s.as(p) })).json()).status, 'started');
+  // Another row exercises the direct legacy owner-session release.
+  const direct = rows[1].id;
+
+  assert.equal((await s.post('/_studio/api/shop/release', { order: direct }, s.owner)).status, 200);
+  const released = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(direct);
+  assert.equal(released.status, 'released');
+  assert.match(released.note, /^Reservation released by owner session [a-f0-9]{64} at \d{4}-/);
+  assert.ok(released.updated_at > Date.now() - 10000);
+  assert.equal((await s.post('/_studio/api/shop/release', { order }, s.owner)).status, 400);
+  await s.hook('checkout.session.completed', { ...rows[0].truth, payment_status: 'paid' });
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order).status, 'paid');
+  assert.ok(s.stripe.calls.some((c) => c.method === 'POST' && c.path === `/v1/checkout/sessions/${rows[0].session}/expire`));
+  s.stripe.close();
+});
+
+test('read-only statements never allocate editions; complete schema probes run once and missing schemas retry', async () => {
+  const { migrationNeeded } = await import('../worker/shop-store.mjs');
+  const s = await site();
+  const line = s.DB.sql.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES (?, 'referrer.example', 100, 1, 100, 'usd', 'owed', '2026-09', 1, 1)");
+  for (let i = 0; i < 280; i++) line.run(`line-${i}`);
+  for (let i = 0; i < 10; i++) assert.equal((await s.fetchSite('/_studio/api/shop/statements?period=2026-09', { headers: s.key0 })).status, 200);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM referral_editions').get().n, 0);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM referral_edition_lines').get().n, 0);
+  let probes = 0;
+  const DB = { prepare: (...args) => { probes++; return s.DB.prepare(...args); } };
+  assert.equal(await migrationNeeded({ DB }), null);
+  const once = probes;
+  for (let i = 0; i < 200; i++) assert.equal(await migrationNeeded({ DB }), null);
+  assert.equal(probes, once);
+  let missing = true, attempts = 0;
+  const absent = { prepare: () => ({ first: async () => { attempts++; if (missing) throw new Error('missing'); } }) };
+  assert.equal(await migrationNeeded({ DB: absent }), SHOP_MIGRATION_FILE);
+  missing = false;
+  assert.equal(await migrationNeeded({ DB: absent }), null);
+  assert.ok(attempts > 1);
+  s.stripe.close();
+});
+
+test('a purchase below the cap returns before background reconciliation; old rows back off longer', async () => {
+  const { reconcileOrders } = await import('../worker/shop.mjs');
+  const s = await site({ settings: { capPerPlayerMonth: 5000 } });
+  const p = s.player(400, { band: 'adult' });
+  unresolved(s, p, 3);
+  s.stripe.behave.delay = 10000;
+  const background = [];
+  const start = performance.now();
+  const response = await s.worker.fetch(new Request('https://owls.example/api/shop/buy', { method: 'POST', headers: s.as(p), body: JSON.stringify({ item: 'tip', amount: 200 }) }), s.env, { waitUntil: (promise) => background.push(promise) });
+  assert.equal(response.status, 200);
+  assert.ok(performance.now() - start < 1000, 'only the new checkout creation is awaited');
+  assert.ok(background.length);
+  await Promise.all(background);
+  assert.equal(stripeReads(s).length, 3);
+  s.stripe.behave.delay = 0;
+  // Day-old rows have reached the one-hour maximum, even if last checked ten minutes ago.
+  s.DB.sql.prepare("UPDATE shop_orders SET updated_at = ? WHERE status = 'processing'").run(Date.now() - 10 * 60000);
+  await reconcileOrders(s.env, { items: [] }, p.id);
+  assert.equal(stripeReads(s).length, 3);
+  s.DB.sql.prepare("UPDATE shop_orders SET updated_at = ? WHERE status = 'processing'").run(Date.now() - 61 * 60000);
+  await reconcileOrders(s.env, { items: [] }, p.id);
+  assert.equal(stripeReads(s).length, 6);
+  s.stripe.close();
+});
+
+test('at the cap a teen can request a parent link without reading Stripe; only parent payment reconciles', async () => {
+  const s = await site({ settings: { capPerPlayerMonth: 500 } });
+  const p = s.player(400, { band: 'teen' });
+  const [row] = unresolved(s, p, 1, { amount: 500 });
+  row.truth.status = 'expired';
+  const list = await (await s.fetchSite('/api/shop', { headers: s.as(p) })).json();
+  assert.equal(list.items[0].way, 'cap');
+  assert.equal(list.items[0].retryWay, 'ask-a-parent');
+  const link = await (await s.post('/api/shop/parent', { item: 'supporter' }, s.as(p))).json();
+  assert.ok(link.link);
+  assert.equal(stripeReads(s).length, 0);
+  const path = new URL(link.link).pathname;
+  await s.fetchSite(path);
+  assert.equal(stripeReads(s).length, 0);
+  const paid = await s.fetchSite(path, { method: 'POST', headers: { origin: 'https://owls.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'grownup=yes' });
+  assert.equal(paid.status, 303);
+  assert.equal(stripeReads(s).length, 1);
+  s.stripe.close();
+});
+
+test('verified late payments grant once after missing, release, expiry or failure and remain refundable', async () => {
+  const { spentThisMonth, shopDataOf } = await import('../worker/shop-store.mjs');
+  for (const state of ['missing', 'released', 'expired', 'failed']) for (const type of ['checkout.session.completed', 'checkout.session.async_payment_succeeded']) {
+    const s = await site({ settings: { capPerPlayerMonth: 500 } });
+    const p = s.player(400, { band: 'adult' });
+    const [row] = unresolved(s, p, 1, { amount: 500 });
+    s.DB.sql.prepare("UPDATE shop_orders SET item = 'supporter' WHERE id = ?").run(row.id);
+    if (state === 'missing') {
+      s.stripe.behave.error = { status: 404, code: 'resource_missing' };
+      const { reconcileOrders } = await import('../worker/shop.mjs');
+      await reconcileOrders(s.env, { items: [] }, p.id);
+    } else if (state === 'released') {
+      const owner = s.player();
+      s.DB.sql.prepare('UPDATE players SET owner = 1 WHERE id = ?').run(owner.id);
+      assert.equal((await s.post('/_studio/api/shop/release', { order: row.id, by: 'forged' }, s.as(owner))).status, 200);
+      assert.match(s.DB.sql.prepare('SELECT note FROM shop_orders WHERE id = ?').get(row.id).note, new RegExp(owner.id));
+    } else s.DB.sql.prepare('UPDATE shop_orders SET status = ? WHERE id = ?').run(state, row.id);
+    assert.equal(await spentThisMonth(s.env, p.id), 0);
+    if (['missing', 'released'].includes(state)) {
+      const mine = await (await s.fetchSite('/api/shop/mine', { headers: s.as(p) })).json();
+      assert.equal(mine.orders[0].status, 'processing');
+      assert.equal('note' in mine.orders[0], false);
+      assert.equal((await shopDataOf(s.env, p.id)).orders[0].status, 'processing');
+      assert.equal((await (await s.fetchSite(`/api/shop/order?session=${row.session}`, { headers: s.as(p) })).json()).status, 'processing');
+      const office = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
+      assert.equal(office.orders[0].status, state);
+      assert.ok(office.orders[0].note);
+    }
+    const paid = { ...row.truth, payment_intent: 'pi_late', ...(type.endsWith('completed') ? { payment_status: 'paid' } : {}) };
+    const event = { id: 'evt_late_payment' };
+    assert.equal((await (await s.hook(type, paid, event)).json()).did, 'paid');
+    const before = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(row.id);
+    const owns = await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json();
+    assert.ok(owns.owns.length > 0);
+    assert.equal(await spentThisMonth(s.env, p.id), 500);
+    assert.equal((await (await s.hook(type, paid, event)).json()).duplicate, true);
+    assert.equal((await (await s.hook(type, paid)).json()).did, 'already');
+    assert.deepEqual(s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(row.id), before);
+    assert.equal(await spentThisMonth(s.env, p.id), 500);
+    assert.equal((await s.post('/_studio/api/shop/refund', { order: row.id }, s.owner)).status, 200);
+    assert.equal(await spentThisMonth(s.env, p.id), 0);
+    assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, []);
+    assert.equal((await (await s.hook(type, paid)).json()).did, 'already', 'a duplicate cannot undo a refund');
+    s.stripe.close();
+  }
+});
+
+test('failed Stripe reads log their order and reason, retry soon, then use the successful interval', async () => {
+  const { reconcileOrders } = await import('../worker/shop.mjs');
+  const originalNow = Date.now, originalWarn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  try {
+    for (const error of [{ status: 500, code: 'api_error' }, { status: 429, code: 'rate_limit' }, { disconnect: true }, { delay: 10000 }]) {
+      const s = await site();
+      const p = s.player();
+      const [row] = unresolved(s, p, 1, { age: 3 * DAY });
+      let now = originalNow();
+      Date.now = () => now;
+      s.stripe.behave.error = error.status ? error : null;
+      s.stripe.behave.disconnect = error.disconnect;
+      s.stripe.behave.delay = error.delay;
+      await reconcileOrders(s.env, { items: [] }, p.id);
+      assert.ok(warnings.some((args) => args[1]?.order === row.id && args[1]?.status === (error.status ?? null) && args[1]?.reason));
+      s.stripe.behave.error = null;
+      s.stripe.behave.disconnect = false;
+      s.stripe.behave.delay = 0;
+      now += 30000;
+      await reconcileOrders(s.env, { items: [] }, p.id);
+      assert.equal(stripeReads(s).length, 1);
+      now += 31000;
+      await reconcileOrders(s.env, { items: [] }, p.id);
+      assert.equal(stripeReads(s).length, 2);
+      now += 61000;
+      await reconcileOrders(s.env, { items: [] }, p.id);
+      assert.equal(stripeReads(s).length, 2, 'successful read restores the hour interval');
+      Date.now = originalNow;
+      s.stripe.close();
+    }
+  } finally { Date.now = originalNow; console.warn = originalWarn; }
 });

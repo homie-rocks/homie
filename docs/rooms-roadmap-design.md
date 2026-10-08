@@ -391,32 +391,43 @@ studio picks and can edit. Homie ships presets (`general`, `teens`, `kids`, `beg
 Legal and store obligations are shown as information beside the setting they concern. They
 are not legal advice, and Homie does not enforce them.
 
-**The shop** (`worker/shop-rules.mjs`, `worker/shop.mjs`, `shop/SHOP.md`). Milestone 6. These changes need nothing but milestone 1 and can be built at any time after it.
+**The shop** (`worker/shop-rules.mjs`, `worker/shop.mjs`, `shop/SHOP.md`). The limit removal
+ships independently in 0.33.0. The studio chooses prices, kinds, catalogue size, entitlement
+keys and optional spending, refund and referral terms without a Homie ceiling. Stripe's
+currency units and documented minimum charges remain; currencies without minor units work.
+Purchase attempts have separate per-account and per-address rates the studio can change.
+
+The implemented presets are `protective`, `adults-only` and `custom`, each with editable
+account, age, child, teen, server and content rules. New shops start protective; existing
+written settings remain their settings. See [the shop reference](../packages/studio/shop/SHOP.md)
+for the exact fields and defaults. Guest purchases are a studio choice, with cookie loss
+explained. Arbitrary item kinds do not add recurring billing, conserved inventory, other
+tills or multi-currency prices; those remain separate proposals later in this design.
 
 | Today | Where | Kind | After |
 |---|---|---|---|
-| A player may spend at most US$50 a month. "A studio may lower it, never remove it" | `shop-rules.mjs:35,118` | Homie's choice | `policy.spendCapPerPlayerMonth`: any amount, or none. No default outside the presets. One cap is counted on the Player object across every till (web, Steam, Apple, Google) |
-| No item over US$500 | `shop-rules.mjs:41` | Homie's choice | Removed. The payment provider's own maximum applies and is stated |
-| No item under 50 cents | `shop-rules.mjs:147` | Technical | Kept as the provider's minimum charge for the currency, read from the provider, with the reason shown. The warning under US$3 (fees) stays a warning |
-| At most 60 items | `shop-rules.mjs:42` | Homie's choice | Removed. The catalogue is rows in the game's index database |
-| Five kinds: cosmetic, supporter, pass, unlock, tip | `shop-rules.mjs:26` | Homie's choice | Adds `consumable` (used up in play), `currency` (a pack of a game's own conserved currency), `bundle`, `subscription` and `service`. A studio may add kinds of its own |
-| No currency of the studio's own | `shop-rules.mjs:27-33,57` | Homie's choice | Allowed. A pack grants a `conserved` item through the purchase path of section 14.2. Information shown: consumer rules on in-game currencies, and that prices must also be shown in real money where the law asks |
+| A player may spend at most US$50 a month. "A studio may lower it, never remove it" | `shop-rules.mjs:35,118` | Homie's choice | Delivered: optional `capPerPlayerMonth`, without a ceiling. Atomic reservations retain unresolved Stripe sessions, including bank payments, until Stripe confirms their outcome, its key cannot find the session, or the owner releases them. Missing marks and releases free the reservation; a later verified payment still grants the item, counts toward spending and remains refundable. Shop GETs never read Stripe. A refused purchase reconciles up to three rows in parallel with a two-second timeout and atomic claims; successful reads back off from one minute (five for bank payments) to an hour; failed reads log the order and reason and retry after about one minute. Successful purchases continue in the background. Test rows never consume a live cap. Counting across other tills remains proposed. |
+| No item over US$500 | `shop-rules.mjs:41` | Homie's choice | Delivered: no toolkit price ceiling; the provider decides its own maximum. |
+| No item under 50 cents | `shop-rules.mjs:147` | Technical | Delivered: documented settlement minimums warn; Stripe decides the actual minimum at checkout. |
+| At most 60 items | `shop-rules.mjs:42` | Homie's choice | Delivered: no item-count cap; the current catalogue is paged. Database catalogue storage remains proposed. |
+| Five kinds: cosmetic, supporter, pass, unlock, tip | `shop-rules.mjs:26` | Homie's choice | Delivered: studios may choose any kind label, including services. Fulfillment for consumables, bundles and subscriptions remains proposed. |
+| No currency of the studio's own | `shop-rules.mjs:27-33,57` | Homie's choice | Delivered: `policy.virtualCurrency` allows currency labels and entitlement keys. The conserved inventory and consumer information below remain proposed. |
 | No subscriptions | `shop-rules.mjs:31` | Homie's choice | Allowed through Stripe Billing and the stores' subscription products. Information shown: terms before billing, clear consent, easy cancelling |
-| No paid services | `shop-rules.mjs:32` | Homie's choice | Allowed |
-| Anything random is refused (words and fields) | `shop-rules.mjs:52-54,103-106` | Homie's choice | `policy.randomItems`: `off` or `on`. With `on`, the build requires the odds to be declared, and the shop shows them. Off in every preset. Information shown: where paid random items are restricted or need odds shown, and the stores' rules |
-| Countdown and "hurry" fields are refused | `shop-rules.mjs:56,107` | Homie's choice | `policy.countdowns`: `off` or `on`. Off in every preset. Information shown: rules on pressure selling |
-| Refund window 14 to 60 days | `shop-rules.mjs:36-37,116` | Homie's choice | `policy.refundDays`: any. Information shown: withdrawal rights in the EU and UK |
-| A tip is 100 cents to US$500 | `shop-rules.mjs:144` | Homie's choice | Any range above the provider's minimum |
-| At most 8 entitlement keys an item | `shop-rules.mjs:154` | Homie's choice | Removed |
-| An item lasts at most 3,650 days | `shop-rules.mjs:162` | Homie's choice | Any |
-| One currency a shop; currencies without cents refused | `shop-rules.mjs:49,114` | A gap, not a need | Prices per currency on each item. Currencies without minor units supported |
+| No paid services | `shop-rules.mjs:32` | Homie's choice | Delivered: service labels use one-time Checkout. |
+| Anything random is refused (words and fields) | `shop-rules.mjs:52-54,103-106` | Homie's choice | Delivered: `policy.paidRandomRewards` makes refusal editable; unsupported odds fields warn. The declared-odds protocol and store information below remain proposed. |
+| Countdown and "hurry" fields are refused | `shop-rules.mjs:56,107` | Homie's choice | Delivered: `policy.countdownOffers` makes refusal editable; unsupported countdown fields warn. The countdown display and pressure-selling information below remain proposed. |
+| Refund window 14 to 60 days | `shop-rules.mjs:36-37,116` | Homie's choice | Delivered: optional `refundDays`, without bounds beyond valid timestamps; fractional days work. |
+| A tip is 100 cents to US$500 | `shop-rules.mjs:144` | Homie's choice | Delivered: studio-chosen optional range; provider currency units apply. |
+| At most 8 entitlement keys an item | `shop-rules.mjs:154` | Homie's choice | Delivered: no toolkit entitlement-key count limit. |
+| An item lasts at most 3,650 days | `shop-rules.mjs:162` | Homie's choice | Delivered: any positive duration within valid timestamps. |
+| One currency a shop; currencies without cents refused | `shop-rules.mjs:49,114` | A gap, not a need | Prices per currency on each item. Delivered: currencies without minor units. Per-item multi-currency prices remain proposed |
 | Tills: Stripe, Stripe Managed Payments, off | `shop-rules.mjs:24` | Scope | Adds Steam, Apple and Google in milestone 9, and another merchant of record as a link-out till |
-| 6 purchases a minute per player, counted in memory | `shop.mjs:53` | Flood control | The rate limiting binding keyed by account, at `policy.buysPerMinute` (default 30, any value) |
-| A guest cannot buy | `shop-rules.mjs:274` | Technical | Kept. A purchase must attach to an account, or it is lost with a cookie |
-| The age question; under 13 never buys; 13 to 17 buy through a parent's own checkout | `shop-rules.mjs:244-279` | Homie's choice | `policy.minors`: the `general` and `teens` presets keep today's behaviour. A studio can read and change it. Information shown: child-protection law where the studio sells, and the payment provider's terms on who may pay |
-| A studio marked for kids sells nothing | `shop-rules.mjs:216-217` | Homie's choice | The `kids` preset. A preset, not a lock |
-| A kids server shows no shop; an item with a play advantage is not offered on beginner or kids servers; a supporter pack may not carry an advantage | `shop-rules.mjs:175,269-270` | Homie's choice | Per-server policy, on in the `kids` and `beginner` presets |
-| Referrals: rate at most 50%, window at most 90 days, at most US$100 per referred player (default US$10), hold at most 120 days, invoice floor at most US$1,000 | `shop-rules.mjs:192-201` | Homie's choice | Each is the studio's number with no ceiling. A hold shorter than the refund window becomes a warning, with the reason |
+| 6 purchases a minute per player, counted in memory | `shop.mjs:53` | Flood control | Delivered: configurable per-account and per-address rates, per Worker instance. A shared rate limiting binding remains proposed. |
+| A guest cannot buy | `shop-rules.mjs:274` | Technical | Delivered: `policy.requireAccount` is editable. A guest purchase can be lost with its cookie. |
+| The age question; under 13 never buys; 13 to 17 buy through a parent's own checkout | `shop-rules.mjs:244-279` | Homie's choice | Delivered: protective, adults-only and custom presets with editable account, age, child and teen policies. |
+| A studio marked for kids sells nothing | `shop-rules.mjs:216-217` | Homie's choice | Delivered: editable `policy.kidsStudio`, protective by default. |
+| A kids server shows no shop; an item with a play advantage is not offered on beginner or kids servers; a supporter pack may not carry an advantage | `shop-rules.mjs:175,269-270` | Homie's choice | Delivered: editable kids-server, beginner, kids and supporter advantage policies. |
+| Referrals: rate at most 50%, window at most 90 days, at most US$100 per referred player (default US$10), hold at most 120 days, invoice floor at most US$1,000 | `shop-rules.mjs:192-201` | Homie's choice | Delivered: each term is optional and without a toolkit ceiling. |
 
 **AI, chat and communities** (`worker/agents.mjs`, `chat.mjs`, `brain.mjs`, `servers.mjs`,
 `lounge-store.mjs`). Milestone 5 for the server and room caps; milestone 6 for the rest. The two AI budgets need no other milestone and can change at any time.

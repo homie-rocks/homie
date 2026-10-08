@@ -20,12 +20,13 @@ requests, you deal with card disputes, and the tax on your sales is yours to han
 | Card disputes (chargebacks) | yes: you answer them in Stripe and carry the loss if you lose | runs the process | |
 | Sales tax and VAT | yes, with Stripe Tax's help (or Managed Payments, below) | calculates and collects | |
 | Your players' data | yes: you are responsible for it | keeps the card and email | stores nothing |
-| The kids rules | built into the kit, and you can be stricter | | wrote the kit |
+| Who may buy | your editable shop policy; protective defaults | provider terms | supplies presets |
 
 ## Refunds
 
-- A player can refund an **unused** item themselves within your refund window (at least 14 days) from their
-  account page. Fewer people turn to card disputes when a refund is easy.
+- A player can refund an **unused** item themselves within the optional refund window you set from their
+  account page. Set `policy.refundUsedItems` to include used items. Without a window, buyers ask you for a refund.
+  Fewer people turn to card disputes when a refund is easy.
 - Anything else, you refund with **one tap** on your office's shop page. Your AI can only *ask* you to refund; it
   can never do it by itself.
 - Stripe does not give back its processing fee on a refund. That is the cost of a happy player.
@@ -34,7 +35,7 @@ requests, you deal with card disputes, and the tax on your sales is yours to han
 
 - A buyer's bank can reverse a payment. Stripe charges a dispute fee (about US$15) whether you win or lose, and
   you lose the sale's money if the bank decides for the buyer. On a US$5 item one dispute costs more than the
-  sale, which is why the kit makes refunds easy and suggests items of US$3 or more.
+  sale, so consider your costs when setting prices. Homie imposes no price or earnings ceiling.
 - **A dispute never deletes or locks the player's account.** While it is open nothing changes. If you lose it,
   that one item is taken back, as a refund would.
 
@@ -52,20 +53,17 @@ You choose who the seller is when you connect your Stripe (`homie-studio shop co
 
 ## Kids
 
-The kit keeps you out of the worst trouble, and you cannot switch these off in it (you can be stricter):
+Your shop starts with the `protective` preset in shop.json. It requires an account and a neutral age question,
+blocks purchases under 13, uses a parent's checkout for teens, closes shops on kids servers and kids studios,
+hides advantages on beginner and kids servers, refuses paid randomness, countdowns and virtual-currency items,
+and sends TV shoppers to a phone. Existing shops without a policy keep these protections.
 
-- nothing is sold on a kids server, or anywhere in a studio made for children (`"audience": "kids"`);
-- spending is off on every account until one neutral question (the year you were born) says the player is an
-  adult; the answer is kept only as "adult", "teen" or "child";
-- nothing is ever sold to an account that said it is under 13;
-- a 13 to 17 year old can only pass a link to a parent, who pays in their own name on Stripe's page;
-- no loot boxes or anything random for money, nothing that changes the game on beginner servers, no countdowns;
-- every price is in real money, every purchase goes through Stripe's own page, one at a time, with a monthly cap;
-- the television never sells: it shows a code to buy on a phone.
+These are **your settings**: read and edit `policy` in shop.json. `adults-only` also blocks teens;
+`custom` enables all policies. You can override individual rules without changing the others. SHOP.md lists
+every setting. No spending cap or refund window applies unless you set one; existing written values stay yours.
 
-Even so, if children play your games you are the one responsible to the law for them (for example COPPA in the
-US, the Children's Code in the UK, GDPR in the EU). Keep what you collect small, and keep chat with strangers off
-on kids servers.
+As the seller, you are responsible for the law and your payment provider's terms wherever you sell, including
+rules protecting children. Choosing a preset does not establish compliance. This is information, not legal advice.
 
 ## Referrals
 

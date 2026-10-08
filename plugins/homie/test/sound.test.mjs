@@ -187,8 +187,9 @@ test('sound: wired into a game, listed in the manifest, and the player starts on
   const server = createServer((req, res) => { const p = join(root, 'public', decodeURIComponent(req.url.split('?')[0])); if (!existsSync(p)) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'content-type': types[extname(p)] ?? 'application/octet-stream' }); res.end(readFileSync(p)); });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const profile = mkdtempSync(join(tmpdir(), 'homie-sound-player-'));
-  const browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, args: ['--mute-audio', '--no-first-run'] });
+  let browser;
   try {
+    browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, args: ['--mute-audio', '--no-first-run'] });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${server.address().port}/test.html`);
     await page.waitForFunction(() => window.sound && window.sound.state().loaded >= 5, { timeout: 20_000 });
@@ -203,7 +204,7 @@ test('sound: wired into a game, listed in the manifest, and the player starts on
     assert.ok(after.plays.includes('coin'));
     assert.deepEqual(after.errors, []);
   } finally {
-    await browser.close();
+    await browser?.close().catch(() => {});
     server.close();
     rmSync(profile, { recursive: true, force: true });
   }

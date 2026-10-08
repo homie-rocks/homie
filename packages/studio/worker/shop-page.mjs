@@ -14,8 +14,10 @@
  * button is never the play button. Everything a player or the owner typed is escaped or set as text.
  */
 import { esc, layout } from './site.mjs';
-import { money } from './shop-rules.mjs';
+import { money, ZERO_DECIMAL, ITEM_ID, currencyScale, amountStep, parseAmount } from './shop-rules.mjs';
 import { PRIVATE, shell } from './office-page.mjs';
+
+const refundWords = (shop) => shop.refundDays === null ? 'Ask the studio about refunds.' : `The studio offers self-service refunds for ${shop.policy?.refundUsedItems ? 'items, including used items,' : 'unused items'} within ${shop.refundDays} days from your account page.`;
 
 const NOINDEX = { 'x-robots-tag': 'noindex', 'cache-control': 'no-store, private' };
 
@@ -45,11 +47,11 @@ export const SHOP_CSS = `
 
 /** The words for each way an item may be got (shop-rules.mjs wayFor). Plain, never pressing. */
 export const WAY_LINES = Object.freeze({
-  'make-an-account': 'Make an account (a passkey) first, so what you buy stays yours on every device.',
+  'make-an-account': 'This studio requires an account (a passkey), so purchases stay yours on every device.',
   'age-question': 'One question first.',
   no: 'Not available on this account.',
-  'ask-a-parent': 'A parent or guardian can buy this for you on their own phone.',
-  cap: 'This account has reached this month\'s limit here.',
+  'ask-a-parent': 'This studio asks a parent or guardian to buy this on their own phone.',
+  cap: 'This account has reached the studio monthly spending limit.',
   'not-yet': 'Not on sale yet.',
   over: 'No longer on sale.',
   closed: 'The shop is not open yet.',
@@ -59,7 +61,7 @@ export const WAY_LINES = Object.freeze({
 export function shopPage(cat, shop, { origin = '', game = null, item = null, open = false, mode = null } = {}) {
   const studio = cat.studio?.name ?? 'Studio';
   const g = game ? (cat.games ?? []).find((x) => x.id === game) : null;
-  const boot = { game: g ? g.id : null, item: /^[a-z0-9][a-z0-9-]{0,39}$/.test(String(item ?? '')) ? item : null, studio, years: yearsList() };
+  const boot = { game: g ? g.id : null, item: ITEM_ID.test(String(item ?? '')) ? item : null, studio, years: yearsList() };
   const main = `<section class="shop" data-shop>
 <p class="kicker">${esc(studio)}</p>
 <h1>${g ? `${esc(g.name)}: shop` : 'Shop'}</h1>
@@ -69,17 +71,17 @@ ${mode === 'test' ? '<p class="test">TEST MODE: no real money moves (Stripe test
 <div data-shop-age hidden></div>
 <div class="items" data-shop-items><p>${open ? 'Reading the shop…' : 'The shop is not open yet.'}</p></div>
 <p class="msg" data-shop-msg role="status" aria-live="polite"></p>
-<p class="note">${esc(studio)} is the seller: it sets these prices, answers for refunds and receives the money through its own Stripe account. Homie takes nothing. An unused item can be refunded within ${shop.refundDays} days from your account page; <a href="/shop/refunds/">refunds</a>. Stripe keeps your card and email and sends your receipt; ${esc(studio)} never sees them.</p>
+<p class="note">${esc(studio)} is the seller: it sets these prices, answers for refunds and receives the money through its own Stripe account. Homie takes nothing. ${refundWords(shop)} <a href="/shop/refunds/">refunds</a>. Stripe keeps your card and email and sends your receipt; ${esc(studio)} never sees them.</p>
 </section>
 <script type="application/json" id="shop-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
 <script src="/_homie/shop.js" defer></script>`;
   return layout(cat, { title: `Shop · ${studio}`, description: `Things to buy from ${studio}, in real money.`, origin, path: '/shop/', page: 'shop', head: `<style>${SHOP_CSS}</style><meta name="robots" content="noindex">`, main, extraHeaders: NOINDEX });
 }
 
-/** Years for the age question: this year back 100 years, NO default selected, nothing hinting which answer opens anything. */
+/** Years for the age question: this year back 120 years, NO default selected, nothing hinting which answer opens anything. */
 function yearsList(now = new Date()) {
   const y = now.getUTCFullYear();
-  return Array.from({ length: 101 }, (_, i) => y - i);
+  return Array.from({ length: 121 }, (_, i) => y - i);
 }
 
 export function thanksPage(cat, shop, { session = null, game = null } = {}) {
@@ -91,7 +93,7 @@ export function thanksPage(cat, shop, { session = null, game = null } = {}) {
 <h1 data-thanks-title>Thank you</h1>
 <p class="lead" data-thanks-line>Stripe is confirming the payment. This page says when it is yours (a few seconds).</p>
 <p>${g ? `<a class="btn" href="/${esc(g.id)}/play">Back to ${esc(g.name)}</a>` : '<a class="btn" href="/">Back to the studio</a>'} <a href="/account/">Your account</a></p>
-<p class="note">Your receipt comes from Stripe by email. Changed your mind about an unused item? Refund it from your account page within ${shop.refundDays} days.</p>
+<p class="note">Your receipt comes from Stripe by email. ${refundWords(shop)}</p>
 </section>
 <script type="application/json" id="shop-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
 <script src="/_homie/shop.js" defer></script>`;
@@ -106,13 +108,13 @@ export function refundsPage(cat, shop) {
 <h1>Refunds</h1>
 <p class="lead">${esc(studio)} sells digital items for its games through its own Stripe account. ${esc(studio)} is the seller${shop.till === 'stripe-managed' ? ' (Stripe\'s Link, LLC is the seller of record and handles sales tax; your statement reads LINK.COM*)' : ''}.</p>
 <ul>
-<li><b>Unused items, within ${shop.refundDays} days:</b> refund them yourself from your <a href="/account/">account page</a>. The money goes back to the card you paid with in 5 to 10 days, and the item leaves your account.</li>
+<li>${refundWords(shop)} <a href="/account/">Your account</a>.</li>
 <li><b>Anything else</b> (an item you used, a problem, a purchase you did not make): ask ${esc(studio)}. The studio's owner can refund any order with one tap.</li>
 <li><b>A parent who paid for a teenager's item</b> can ask the same way.</li>
 <li><b>Disputes:</b> a card dispute never deletes or locks your account. While it is open nothing changes; if the bank decides it for you, that one item is taken back as a refund would.</li>
-<li>Items are delivered to your account at once. Buying one says you want it now, which ends the EU and UK 14-day right to withdraw; the refunds above still apply.</li>
+<li>${shop.policy.withdrawalAcknowledgement ? 'Items are delivered to your account at once. Buying one says you want it now, which ends the EU and UK 14-day right to withdraw; the refunds above still apply.' : 'Entitlements are delivered to your account at once. The studio sets its refund terms; your statutory rights still apply.'}</li>
 </ul>
-<p class="note">Prices are in ${esc(shop.currency.toUpperCase())}. Tax is added at checkout where it applies. Nothing here is random: you always see exactly what you buy.</p>
+<p class="note">Prices are in ${esc(shop.currency.toUpperCase())}. Tax is added at checkout where it applies. ${shop.policy?.paidRandomRewards ? '' : 'The studio policy does not offer paid random rewards.'}</p>
 </section>`;
   return layout(cat, { title: `Refunds · ${studio}`, page: 'shop', head: `<style>${SHOP_CSS}</style>`, main });
 }
@@ -125,12 +127,13 @@ export function parentPage(cat, shop, { gone = false, item = null, name = '', to
   else if (paid) body = `<h1>Done</h1><p class="lead">${esc(item.name)} is on ${esc(name)}'s account. Stripe sent your receipt by email.</p>`;
   else {
     body = `<h1>${esc(name)} asked you for ${esc(item.name)}</h1>
-<p class="lead">${esc(item.name)} costs <b>${esc(money(item.price, shop.currency))}</b>${item.days ? ` and lasts ${item.days} days` : ''}, from ${esc(studio)}${item.game ? ` (${esc((cat.games ?? []).find((g) => g.id === item.game)?.name ?? item.game)})` : ''}. ${item.blurb ? esc(item.blurb) : ''}</p>
+<p class="lead">${esc(item.name)} costs <b>${esc(money(item.kind === 'tip' ? item.min : item.price, shop.currency))}</b>${item.days ? ` and lasts ${item.days} days` : ''}, from ${esc(studio)}${item.game ? ` (${esc((cat.games ?? []).find((g) => g.id === item.game)?.name ?? item.game)})` : ''}. ${item.blurb ? esc(item.blurb) : ''}</p>
 <p>It goes to the player account named <b>${esc(name)}</b> on ${esc(studio)}. You pay in your own name on Stripe's page; ${esc(studio)} never sees your card. Saying no is fine: nothing happens.</p>
 ${said ? `<p class="msg" role="alert">${esc(said)}</p>` : ''}
 ${open ? `<form method="post" style="margin-top:16px"><label style="display:flex;gap:10px;align-items:flex-start;margin:0 0 14px"><input type="checkbox" name="grownup" value="yes" style="width:22px;height:22px;margin:2px 0 0"> <span>I am ${esc(name)}'s parent or guardian, and an adult.</span></label>
-<button class="btn" type="submit">Pay ${esc(money(item.price, shop.currency))} on Stripe</button></form>` : '<p>The shop is not open just now. Try this link again later.</p>'}
-<p class="note">Unused items can be refunded within ${shop.refundDays} days: <a href="/shop/refunds/">refunds</a>.</p>`;
+${item.kind === 'tip' ? `<label>Amount in ${esc(shop.currency.toUpperCase())} <input name="amount" type="number" min="${item.min / currencyScale(shop.currency)}" step="${amountStep(shop.currency) / currencyScale(shop.currency)}" value="${item.min / currencyScale(shop.currency)}"${item.max === null ? '' : ` max="${item.max / currencyScale(shop.currency)}"`}></label>` : ''}
+<button class="btn" type="submit">${item.kind === 'tip' ? 'Give' : 'Pay'} ${esc(money(item.kind === 'tip' ? item.min : item.price, shop.currency))} on Stripe</button></form>` : '<p>The shop is not open just now. Try this link again later.</p>'}
+<p class="note">${refundWords(shop)} <a href="/shop/refunds/">refunds</a>.</p>`;
   }
   const main = `<section class="shop"><p class="kicker">${esc(studio)}</p>${body}</section>`;
   return layout(cat, { title: `For ${name || 'a player'} · ${studio}`, page: 'shop', head: `<style>${SHOP_CSS}</style><meta name="robots" content="noindex">`, main, status: gone ? 410 : 200, extraHeaders: { ...NOINDEX, 'referrer-policy': 'no-referrer' } });
@@ -153,8 +156,10 @@ export const SHOP_JS = String.raw`(function () {
     if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     return fetch(path, init).then(function (r) { return r.json().catch(function () { return { ok: false, message: 'the site answered ' + r.status }; }); });
   }
+  var units = ${parseAmount.toString()};
   function say(text, bad) { var m = $('[data-shop-msg]'); if (m) { m.textContent = text || ''; m.style.color = bad ? '#ff8a80' : ''; } }
   var q = boot.game ? '?game=' + encodeURIComponent(boot.game) : '';
+  if (boot.item) q += (q ? '&' : '?') + 'item=' + encodeURIComponent(boot.item);
 
   /* ---------------- /shop/ */
   var list = $('[data-shop-items]');
@@ -188,17 +193,18 @@ export const SHOP_JS = String.raw`(function () {
       if (i.days) card.appendChild(el('p', null, 'Lasts ' + i.days + ' days.'));
       if (i.ends) card.appendChild(el('p', null, 'On sale until ' + new Date(i.ends).toISOString().slice(0, 10) + '.'));
       var act = el('div', { class: 'act' });
+      if (i.way === 'cap' && i.retryWay) { act.appendChild(el('span', { class: 'why' }, WAY.cap)); i.way = i.retryWay; }
       if (i.way === 'checkout') {
         var amount = null;
         if (i.kind === 'tip') {
-          amount = el('select', { 'aria-label': 'How much' });
-          [i.min, i.min * 2, i.min * 5].filter(function (v, k, a) { return v <= i.max && a.indexOf(v) === k; }).forEach(function (v) { amount.appendChild(el('option', { value: String(v) }, (v / 100).toFixed(2) + ' ' + s.currency.toUpperCase())); });
+          amount = el('input', { type: 'number', 'aria-label': 'How much in ' + s.currency.toUpperCase(), min: String(i.min / s.currencyScale), step: String(s.amountStep / s.currencyScale), value: String(i.min / s.currencyScale) });
+          if (i.max !== null) amount.setAttribute('max', String(i.max / s.currencyScale));
           act.appendChild(amount);
         }
         var b = el('button', { type: 'button', class: 'buy' }, i.kind === 'tip' ? 'Give on Stripe' : 'Buy on Stripe');
         b.addEventListener('click', function () {
           b.disabled = true; say('Opening Stripe…');
-          api('POST', '/api/shop/buy', { item: i.id, game: boot.game || undefined, amount: amount ? Number(amount.value) : undefined }).then(function (r) {
+          api('POST', '/api/shop/buy', { item: i.id, game: boot.game || undefined, amount: amount ? units(amount.value, s.currencyScale) : undefined }).then(function (r) {
             if (!r.ok || !r.url) throw new Error(r.message || 'That did not work.');
             location.href = r.url;
           }).catch(function (e) { b.disabled = false; say(e.message, true); });
@@ -227,10 +233,11 @@ export const SHOP_JS = String.raw`(function () {
       card.appendChild(act);
       list.appendChild(card);
     });
+    if (s.nextCursor) { var next = el('button', { type: 'button' }, 'Next items'); next.onclick = function () { load(s.nextCursor); }; list.appendChild(next); }
     if (!s.items.length) list.appendChild(el('p', null, 'Nothing for sale here right now.'));
     if (boot.item) { var at = document.getElementById('item-' + boot.item); if (at && at.scrollIntoView) at.scrollIntoView({ block: 'center' }); }
   }
-  function load() { api('GET', '/api/shop' + q).then(draw).catch(function () { draw({ ok: false }); }); }
+  function load(cursor) { api('GET', '/api/shop' + q + (q ? '&' : '?') + 'cursor=' + encodeURIComponent(cursor || '')).then(draw).catch(function () { draw({ ok: false }); }); }
   if (list) { if (/[?&]cancelled=1/.test(location.search)) say('Nothing was charged.'); load(); }
 
   /* ---------------- /shop/thanks */
@@ -269,7 +276,7 @@ export const SHOP_JS = String.raw`(function () {
         ul.appendChild(li);
       });
       body.appendChild(ul);
-      body.appendChild(el('p', { class: 'note' }, 'Unused items can be refunded within ' + r.refundDays + ' days. Receipts come from Stripe by email.'));
+      body.appendChild(el('p', { class: 'note' }, (r.refundDays === null ? 'Ask the studio about refunds.' : 'The studio offers refunds for ' + (r.refundUsedItems ? 'items' : 'unused items') + ' within ' + r.refundDays + ' days.') + ' Receipts come from Stripe by email.'));
     }).catch(function () {});
   }
 })();
@@ -302,7 +309,7 @@ export const SHOP_SHELL_CSS = `
 /**
  * The play shell's half of `@homie-rocks/studio/shop` (shop/SHOP.md): answers the game's `homie-shop` messages, only
  * from its own frame and only for THIS game, and shows the store sheet when the game (or the room button) asks. On a
- * television the sheet is only a code to scan and buy on a phone; on a kids server there is no shop at all.
+ * television or kids server, visibility and checkout follow the studio policy.
  */
 export const SHOP_SHELL_JS = String.raw`(function () {
   'use strict';
@@ -312,8 +319,8 @@ export const SHOP_SHELL_JS = String.raw`(function () {
   if (!frame) return;
   var GAME = boot.game;
   var SERVER = boot.server ? boot.server.id : 'public';
-  var kids = !!(boot.server && boot.server.kids);
-  var screen = !!boot.screen;
+  var kids = !!(boot.server && boot.server.kids && (!cfg || !cfg.policy.kidsServer));
+  var screen = !!(boot.screen && (!cfg || !cfg.policy.televisionCheckout));
   var WAY = ${JSON.stringify(WAY_LINES)};
   var owns = [];
   var lastSeen = '';
@@ -329,7 +336,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     if (!cfg || kids || screen) return Promise.resolve(owns);
     return api('GET', '/api/player/owns' + q).then(function (r) {
       var next = (r && r.owns) || [];
-      var key = next.slice().sort().join(',');
+      var key = JSON.stringify(next.slice().sort());
       if (key !== lastSeen) { var fresh = lastSeen !== '' || owns.length === 0; lastSeen = key; owns = next; post({ ev: 'owns', owns: owns, fresh: fresh }); }
       return owns;
     }).catch(function () { return owns; });
@@ -356,7 +363,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     document.body.appendChild(sheet);
     if (kids || !cfg) { box.appendChild(el('p', { class: 'sub' }, 'Nothing is sold here.')); return; }
     if (screen) {
-      // The television never sells: a code to scan and buy on a phone, in the phone's own browser.
+      // The studio's protective TV policy: a code to scan and buy on a phone, in the phone's own browser.
       box.appendChild(el('p', { class: 'sub' }, 'Buy on your phone: scan this code. Nothing is sold on this screen.'));
       if (cfg.qr) { var qr = el('div', { class: 'qr' }); qr.innerHTML = cfg.qr; box.appendChild(qr); }
       if (cfg.url) box.appendChild(el('p', { class: 'foot' }, cfg.url.replace(/^https?:\/\//, '')));
@@ -365,14 +372,17 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     box.appendChild(el('p', { class: 'sub' }, 'Real money, from the studio itself. Each purchase opens Stripe\'s own page in a new tab; your game keeps going here.'));
     var said = el('p', { class: 'said', role: 'status' });
     var listBox = el('div'); box.appendChild(listBox); box.appendChild(said);
-    var foot = el('p', { class: 'foot' }); var all = el('a', { href: '/shop/?game=' + encodeURIComponent(GAME), target: '_blank', rel: 'noopener' }, 'The whole shop'); foot.appendChild(all); foot.appendChild(document.createTextNode(' · unused items can be refunded from your account page.')); box.appendChild(foot);
-    api('GET', '/api/shop' + q).then(function (s) {
+    var foot = el('p', { class: 'foot' }); var all = el('a', { href: '/shop/?game=' + encodeURIComponent(GAME), target: '_blank', rel: 'noopener' }, 'The whole shop'); foot.appendChild(all); foot.appendChild(document.createTextNode(' · see the studio refund terms in the whole shop.')); box.appendChild(foot);
+    function loadItems(cursor) {
+    listBox.textContent = '';
+    api('GET', '/api/shop' + q + '&cursor=' + encodeURIComponent(cursor || '')).then(function (s) {
       if (!s.ok || !s.open) { listBox.appendChild(el('p', { class: 'sub' }, s.kids ? 'Nothing is sold here.' : 'The shop is not open yet.')); return; }
       s.items.forEach(function (i) {
         var row = el('div', { class: 'it' });
         row.appendChild(el('b', null, i.name)); row.appendChild(el('span', { class: 'pr' }, i.shown));
         if (i.blurb) row.appendChild(el('small', null, i.blurb));
         var go = el('div', { class: 'go' });
+        if (i.way === 'cap' && i.retryWay) { go.appendChild(el('span', null, WAY.cap)); i.way = i.retryWay; }
         if (i.way === 'checkout' && i.kind !== 'tip') {
           var b = el('button', { type: 'button', class: 'buy' }, 'Buy on Stripe');
           b.addEventListener('click', function () {
@@ -397,8 +407,11 @@ export const SHOP_SHELL_JS = String.raw`(function () {
         if (want && want === i.id) setTimeout(function () { row.scrollIntoView && row.scrollIntoView({ block: 'center' }); }, 0);
         listBox.appendChild(row);
       });
+      if (s.nextCursor) { var next = el('button', { type: 'button' }, 'Next items'); next.onclick = function () { loadItems(s.nextCursor); }; listBox.appendChild(next); }
       if (!s.items.length) listBox.appendChild(el('p', { class: 'sub' }, 'Nothing for sale here right now.'));
     }).catch(function () { listBox.appendChild(el('p', { class: 'sub' }, 'The shop did not answer.')); });
+    }
+    loadItems('');
   }
   var opener = document.querySelector('[data-shop-open]');
   if (opener) opener.addEventListener('click', function () { open(null); });
@@ -419,7 +432,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     if (m.op === 'close') { close(); return reply({ ok: true }); }
     if (m.op === 'used') {
       var key = String(m.key || '');
-      if (!/^[a-z0-9][a-z0-9_.:-]{0,63}$/.test(key) || owns.indexOf(key) < 0) return reply({ ok: false, error: 'key' });
+      if (!/^[^\u0000-\u001f\u007f]+$/.test(key) || owns.indexOf(key) < 0) return reply({ ok: false, error: 'key' });
       return api('POST', '/api/shop/used', { key: key }).then(function (r) { reply({ ok: !!r.ok }); }).catch(function () { reply({ ok: false }); });
     }
     reply({ ok: false, error: 'op' });
@@ -439,15 +452,17 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
     if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     return fetch(path, init).then(function (r) { return r.json().catch(function () { return { ok: false, message: 'the site answered ' + r.status }; }); });
   }
-  function cents(n, c) { try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: String(c || 'usd').toUpperCase() }).format(n / 100); } catch (e) { return (n / 100).toFixed(2); } }
+  var zeroDecimal = ${JSON.stringify([...ZERO_DECIMAL])};
+  function cents(n, c) { var scale = zeroDecimal.indexOf(String(c || 'usd').toLowerCase()) >= 0 ? 1 : ['bhd', 'jod', 'kwd', 'omr', 'tnd'].indexOf(String(c).toLowerCase()) >= 0 ? 1000 : 100; try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: String(c || 'usd').toUpperCase(), minimumFractionDigits: scale === 1 || ['isk', 'ugx'].indexOf(c) >= 0 ? 0 : Math.log10(scale), maximumFractionDigits: scale === 1 || ['isk', 'ugx'].indexOf(c) >= 0 ? 0 : Math.log10(scale) }).format(n / scale); } catch (e) { return (n / scale).toFixed(scale === 1 ? 0 : Math.log10(scale)); } }
   function toast(t) { var x = $('#toast'); x.textContent = t; x.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { x.hidden = true; }, 4000); }
   function link(href, text) { var a = el('a', { href: href, target: '_blank', rel: 'noopener' }, text); return a; }
-  function load() {
-    api('GET', '/_studio/api/shop').then(function (s) {
+  function load(cursor, orderCursor) {
+    api('GET', '/_studio/api/shop?cursor=' + encodeURIComponent(cursor || '') + '&orderCursor=' + encodeURIComponent(orderCursor || '')).then(function (s) {
       var top = $('#state'); top.textContent = '';
       if (!s.ok) { top.appendChild(el('p', { class: 'empty' }, s.message || 'The shop did not answer.')); return; }
       top.appendChild(el('p', null, s.ready ? ('Open' + (s.mode === 'test' ? ' in TEST MODE (no real money)' : ', live') + (s.shop ? ', till: ' + s.shop.till : '')) : 'Not selling yet.'));
       if (s.missing.length) { var ul = el('ul'); s.missing.forEach(function (m) { ul.appendChild(el('li', null, m.words)); }); top.appendChild(ul); }
+      if (s.shop && s.shop.policy) top.appendChild(el('p', { class: 'dim' }, 'Studio policy: ' + s.shop.policy.preset + '. Edit policy and optional amounts in shop.json.'));
       var links = el('p', { class: 'links' });
       [['Payments', s.stripe.payments], ['Refunds', s.stripe.refunds], ['Disputes', s.stripe.disputes], ['Payouts', s.stripe.payouts], ['Balance', s.stripe.balance], ['Tax', s.stripe.tax]].concat(s.stripe.managedPayments ? [['Managed Payments', s.stripe.managedPayments]] : []).forEach(function (l) { links.appendChild(link(l[1], l[0])); });
       links.appendChild(link('/_studio/api/shop/orders.csv', 'CSV for your accountant'));
@@ -460,9 +475,18 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
         row.appendChild(el('span', null, new Date(o.createdAt).toISOString().slice(0, 16).replace('T', ' ')));
         row.appendChild(el('b', null, o.name + ' · ' + o.shown));
         row.appendChild(el('span', null, (o.player && o.player.name ? o.player.name : 'a deleted account') + (o.parent ? ' (a parent paid)' : '') + (o.via ? ' · sent by ' + o.via : '')));
-        row.appendChild(el('span', { class: 'st st-' + o.status }, o.status + (o.mode === 'test' ? ' · test' : '')));
+        row.appendChild(el('span', { class: 'st st-' + o.status }, o.status + (o.mode === 'test' ? ' · test' : '') + (o.note ? ' · ' + o.note : '')));
         if (o.stripe) row.appendChild(link(o.stripe, 'In Stripe'));
         if (o.dispute) row.appendChild(link(o.dispute, 'The dispute'));
+        if (o.releasable) {
+          var release = el('button', { type: 'button', class: 'ghost small' }, 'Release reservation');
+          release.addEventListener('click', function () {
+            if (!confirm('Release ' + o.name + ' (' + o.shown + ') from the cap? We ask Stripe to expire an open Checkout Session. This does not refund a payment. A payment that still arrives grants the item, counts toward spending and can be refunded from the office.')) return;
+            release.disabled = true;
+            api('POST', '/_studio/api/shop/release', { order: o.id }).then(function (r) { if (!r.ok) throw new Error(r.message || 'That did not work.'); toast('Reservation released.'); load(); }).catch(function (e) { release.disabled = false; toast(e.message); });
+          });
+          row.appendChild(release);
+        }
         if (o.refundable) {
           var b = el('button', { type: 'button', class: 'ghost small' }, 'Refund');
           b.addEventListener('click', function () {
@@ -474,27 +498,59 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
         }
         ord.appendChild(row);
       });
+      if (s.nextOrdersCursor) { var nextOrders = el('button', { type: 'button' }, 'Next orders'); nextOrders.onclick = function () { load('', s.nextOrdersCursor); }; ord.appendChild(nextOrders); }
       var ref = $('#referrals'); ref.textContent = '';
+      if (s.referrals.nextCursor) { var next = el('button', { type: 'button' }, 'Next referrers'); next.onclick = function () { load(s.referrals.nextCursor); }; ref.appendChild(next); }
+      (s.referrals.failures || []).forEach(function (x) { ref.appendChild(el('p', null, 'Statement failed for ' + x.via + ': ' + (x.why || x.status) + '. Start again after completion to retry.')); });
       var owe = s.referrals.owe || [];
       ref.appendChild(el('h3', null, 'You owe referrers'));
       if (!owe.length) ref.appendChild(el('p', { class: 'dim' }, 'Nothing: no sale came from another site\'s link yet.'));
       owe.forEach(function (b) {
+        var detail = el('details'); detail.appendChild(el('summary', null, 'Sales'));
+        var sales = el('div'); detail.appendChild(sales);
+        var more = el('button', { type: 'button' }, 'Show sales'); detail.appendChild(more);
+        var lineCursor = '';
+        more.onclick = function () {
+          more.disabled = true;
+          api('GET', '/_studio/api/shop/lines?via=' + encodeURIComponent(b.via) + '&currency=' + b.currency + '&cursor=' + encodeURIComponent(lineCursor)).then(function (page) {
+            sales.textContent = '';
+            page.lines.forEach(function (line) { sales.appendChild(el('p', null, line.date + ' · ' + line.item + ' · ' + cents(line.share, b.currency) + ' · ' + line.state)); });
+            lineCursor = page.nextCursor; more.hidden = !lineCursor; more.disabled = false; more.textContent = 'Next sales';
+          }).catch(function () { more.disabled = false; toast('Sales did not answer.'); });
+        };
         var row = el('div', { class: 'row' });
         row.appendChild(el('b', null, b.via));
-        row.appendChild(el('span', null, 'due ' + cents(b.due, b.currency) + ' · held ' + cents(b.pending, b.currency) + ' · ' + b.lines.length + ' sale(s)'));
+        row.appendChild(el('span', null, 'due ' + cents(b.due, b.currency) + ' · held ' + cents(b.pending, b.currency) + ' · ' + b.lineCount + ' sale(s)'));
         if (b.due > 0) {
           var m = el('button', { type: 'button', class: 'ghost small' }, 'Mark paid');
           m.addEventListener('click', function () {
             var ref0 = prompt('What paid it (an invoice number, a PayPal reference)?'); if (ref0 === null) return;
-            api('POST', '/_studio/api/shop/settle', { via: b.via, ref: ref0 }).then(function (r) { if (!r.ok) throw new Error(r.message); toast('Marked paid.'); load(); }).catch(function (e) { toast(e.message); });
+            api('POST', '/_studio/api/shop/settle', { via: b.via, currency: b.currency, ref: ref0 }).then(function (r) { if (!r.ok) throw new Error(r.message); toast('Marked paid.'); load(); }).catch(function (e) { toast(e.message); });
           });
           row.appendChild(m);
         }
-        ref.appendChild(row);
+        ref.appendChild(row); ref.appendChild(detail);
       });
       var send = el('button', { type: 'button', class: 'ghost small' }, 'Send last month\'s signed statements');
-      send.addEventListener('click', function () { api('POST', '/_studio/api/shop/statements/send', {}).then(function (r) { toast(r.ok ? 'Sent ' + r.sent.filter(function (x) { return x.ok; }).length + ' of ' + r.sent.length + '.' : (r.message || 'Not sent.')); }); });
-      if (owe.length) ref.appendChild(send);
+      send.addEventListener('click', async function () {
+        send.disabled = true; send.textContent = 'Sending; keep this tab open. Close it and press again to resume safely.';
+        var cursor = '', period = null, sent = 0, failed = [];
+        try {
+          do {
+            var r = await api('POST', '/_studio/api/shop/statements/send', { cursor: cursor, period: period });
+            if (!r.ok) throw new Error(r.message || 'Not sent.');
+            sent += r.sent.filter(function (x) { return x.ok; }).length;
+            failed = failed.concat(r.sent.filter(function (x) { return !x.ok; }).map(function (x) { return x.via + ': ' + (x.why || x.status); }));
+            send.textContent = 'Sent ' + sent + ' pages. Keep open; press again after closing to resume safely.';
+            cursor = r.nextCursor; period = r.period;
+            if (r.retryAfter) { send.textContent = 'Retrying with backoff; keep open, or press again later to resume safely.'; await new Promise(function (resolve) { setTimeout(resolve, r.retryAfter * 1000); }); }
+          } while (cursor !== null);
+          if (r.failures) failed = r.failures.map(function (x) { return x.via + ': ' + (x.why || x.status); });
+          toast('Sent ' + sent + ' statement pages; ' + failed.length + ' failed.' + (failed.length ? ' ' + failed.join('; ') : ''));
+        } catch (e) { toast(e.message); }
+        send.disabled = false; send.textContent = 'Send last month’s signed statements';
+      });
+      ref.appendChild(send);
       ref.appendChild(el('h3', null, 'Owed to you'));
       var inn = s.referrals.owedToUs || [];
       if (!inn.length) ref.appendChild(el('p', { class: 'dim' }, 'No statements yet. When another studio sells to a player you sent, it sends a signed statement here.'));
@@ -502,6 +558,7 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
         var row = el('div', { class: 'row' });
         row.appendChild(el('b', null, x.seller.replace(/^https:\/\//, '')));
         row.appendChild(el('span', null, x.period + ': due ' + cents(x.due, x.currency) + ', held ' + cents(x.pending, x.currency)));
+        row.appendChild(link('/_studio/api/shop/received?seller=' + encodeURIComponent(x.seller) + '&period=' + encodeURIComponent(x.period), 'Signed statement pages'));
         if (x.due > 0) row.appendChild(link(s.referrals.invoice, 'Invoice them in Stripe'));
         ref.appendChild(row);
       });

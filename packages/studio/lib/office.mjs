@@ -32,9 +32,16 @@ export async function withKey(root, url, fn) {
   if (!site) return { ok: false, why: 'this studio has no live site yet: `npm run deploy` first, or give --url http://127.0.0.1:8787 for `npm run dev`' };
   const local = loopback(site);
   const k = mint(root, studio, 'office', 10 * 60_000, { local });
+  let expiresAt = Date.now() + 10 * 60_000;
   if (!k.ok) return { ok: false, why: /no such table: stats_keys/.test(k.why) ? k.why : k.why };
   try {
     const call = async (path, body = null) => {
+      if (Date.now() >= expiresAt - 60_000) {
+        expiresAt = Date.now() + 10 * 60_000;
+        const w = runner(root, studio.cloudflare?.accountId && !local ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
+        const renewed = w(['d1', 'execute', studio.cloudflare.d1, local ? '--local' : '--remote', '--command', `UPDATE stats_keys SET expires_at = ${expiresAt} WHERE hash = '${k.hash}';`]);
+        if (renewed.code !== 0) throw new Error('could not renew the office key; run again to resume statements');
+      }
       const res = await fetch(`${site}${path}`, {
         method: body ? 'POST' : 'GET',
         headers: { authorization: `Bearer ${k.key}`, accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) },

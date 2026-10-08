@@ -15,10 +15,8 @@
  * answers this module by postMessage, only for THIS game. The Worker decides: an item bought with the studio's own
  * Stripe, paid (the signed webhook said so), not refunded, not ended. A game never sees a card, an email or an order.
  *
- * THE KIDS RULES (the kit's, not the game's to change): on a kids server there is no shop (`open` is false, `kids` is
- * true, `open()` shows "nothing is sold here"); on a beginner or kids server anything with a play advantage counts as
- * NOT owned; on a television `open()` shows only a code to scan and buy on a phone. A game never shows a countdown, a
- * random reward for money, or a buy button on its play button.
+ * STUDIO POLICIES: the shell follows shop.json. The protective preset closes kids shops, hides advantages on
+ * beginner and kids servers, and shows a code to buy on a phone from a TV. The studio can edit each policy.
  *
  * Without a shell (a game opened as a file, a dev server, a studio with no shop) everything is empty and `open()` does
  * nothing, so the same code runs everywhere. It has no imports and uses only erasable TypeScript.
@@ -57,14 +55,14 @@ export interface Shop {
   /** Show the store sheet, at one item if given. Call it from a button the player pressed, never on a timer. */
   open(item?: string): void;
   close(): void;
-  /** The player used something (equipped it, played with it): it leaves the player's own refund window. */
+  /** Mark an item used; the studio's refundUsedItems policy decides whether self-service refunds still apply. */
   used(key: string): Promise<boolean>;
   on(ev: 'change', fn: (owns: string[]) => void): () => void;
   on(ev: 'closed', fn: () => void): () => void;
 }
 
 type Msg = Record<string, unknown> & { t?: string; q?: number; ev?: string; ok?: boolean };
-const KEY = /^[a-z0-9][a-z0-9_.:-]{0,63}$/;
+const KEY = /^[^\u0000-\u001f\u007f]+$/;
 
 export function createShop(opts: ShopOptions = {}): Shop {
   const g = globalThis as unknown as { HOMIE_NET?: { shop?: boolean }; parent?: unknown; addEventListener?: typeof addEventListener };
@@ -87,9 +85,9 @@ export function createShop(opts: ShopOptions = {}): Shop {
   };
   const setOwns = (next: unknown): boolean => {
     const list = Array.isArray(next) ? next.map(String).filter((k) => KEY.test(k)) : [];
-    const before = owns.slice().sort().join(',');
+    const before = JSON.stringify(owns.slice().sort());
     owns = list;
-    return list.slice().sort().join(',') !== before;
+    return JSON.stringify(list.slice().sort()) !== before;
   };
   if (target && g.addEventListener) {
     g.addEventListener('message', (e: MessageEvent) => {

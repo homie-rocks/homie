@@ -575,7 +575,7 @@ export class NetRoom {
       // An agent (section 17): only the Worker's word, from a verified pass, makes one; its hello cannot.
       agentWord: conn.agent && typeof conn.agent === 'object' ? conn.agent : null, agent: null, caps: new Set(), speechAt: [],
       // A badge the studio's Worker verified (the shop: a supporter's); a hello cannot set one.
-      badge: typeof conn.badge === 'string' && conn.badge.length <= 16 ? conn.badge : null,
+      badge: typeof conn.badge === 'string' ? conn.badge : null,
       // Revision 7: the latest view the host showed this AI (what its arguments are checked against), and its pace.
       lastView: null, viewAt: 0, doAt: 0,
       // Revision 9: the game revision this socket's page was served with. The Worker's word (it is in the socket's
