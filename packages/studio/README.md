@@ -451,13 +451,14 @@ npx homie-studio lounge mod <player id>                                 # a mode
 
 A studio sells items for its games (0.24.0; Stripe's own agent tools since 0.24.3) with **its own Stripe account**: the studio is the seller, money goes
 straight from players to its Stripe, and homie.rocks never sees, holds or moves it (Homie takes no cut; no shared
-currency; not a Connect platform). Real-money prices only, nothing random, the kids rules built in (no shop on a kids
-server, spending off until a neutral age question says adult, nothing for under-13s, 13-17 through a parent's own
-checkout, a monthly cap), and the television only shows a code to buy on a phone.
+currency; not a Connect platform). The studio chooses its prices, item kinds and optional spending and refund
+settings, with no Homie ceiling. New shops start with the editable `protective` policy: accounts and an age
+question, no purchases for under-13s, parent checkout for teens, no shop on kids servers, and no paid randomness.
+The studio can inspect and change each rule in shop.json; [shop/SHOP.md](shop/SHOP.md) explains every preset.
 
 ```sh
 npx homie-studio shop init --supporter        # shop.json with a US$5 Supporter pack, and SELLING.md (the owner's plain words)
-npx homie-studio shop check                   # the kit's rules; every build checks them too
+npx homie-studio shop check                   # the studio settings and provider requirements; every build checks them too
 npx homie-studio shop catalog [--have <file>] # the items as Products in Stripe: the read, then the exact writes (Stripe's MCP)
 npx homie-studio shop connect                 # a page on THIS computer: the owner pastes one restricted key; it makes the webhook
 npx homie-studio shop                         # open (test or live) or what is missing

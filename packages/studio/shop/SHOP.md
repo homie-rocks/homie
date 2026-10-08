@@ -14,8 +14,7 @@ At the studio's root, reviewed in git. Nothing secret is ever in it.
 {
   "till": "stripe",
   "currency": "usd",
-  "refundDays": 14,
-  "capPerPlayerMonth": 5000,
+  "policy": { "preset": "protective" },
   "items": [
     { "id": "supporter", "kind": "supporter", "name": "Supporter", "price": 500, "days": 365,
       "gives": ["badge:supporter", "credits-name"], "badge": "Supporter" },
@@ -30,38 +29,78 @@ At the studio's root, reviewed in git. Nothing secret is ever in it.
 | Field | Meaning |
 |---|---|
 | `till` | `stripe`: the studio is the seller, Stripe Tax on (`automatic_tax`). `stripe-managed`: Stripe Managed Payments, Stripe's Link, LLC is the seller of record and files the tax (3.5% more; turn it on in Stripe first). `off`. |
-| `currency` | one currency with cents (`usd`, `cad`, `eur`, `gbp`, `aud`…). |
-| `refundDays` | 14 to 60: a player refunds an unused item themselves within it. |
-| `capPerPlayerMonth` | cents one player may spend here in a month: 100 to 5000. Lower it, never remove it. |
-| `items[].kind` | `cosmetic` (a look), `supporter` (a badge, thanks), `pass` (a season), `unlock` (a mode, a chapter, the full game), `tip` (pay what you want, `min` to `max`). |
-| `items[].price` | whole cents, real money. Under 300 the check warns (fees eat it). |
+| `currency` | one Stripe presentment currency, including zero-decimal currencies such as `jpy`. |
+| `refundDays` | Optional days for self-service refunds of unused items. No default or ceiling; omitted or null means ask the studio. |
+| `capPerPlayerMonth` | Optional amount one player may spend per calendar month, in Stripe currency units. No default or ceiling; omit or null for no cap. |
+| `items[].kind` | Any nonempty label chosen by the studio. `tip` uses a buyer-chosen amount, with an optional studio `max`. Other kinds use a fixed price; a label does not add recurring billing or fulfillment. |
+| `items[].price` | whole Stripe currency units. No Homie maximum. Stripe minimums and currency rules apply. |
 | `items[].gives` | the entitlement keys the game reads: `skin:ember`, `badge:supporter`. A `badge:` key shows beside the player's name in rooms and on their account page. |
-| `items[].days` / `starts` / `ends` | how long it lasts; a season's dates (shown as dates, never a countdown). |
+| `items[].days` / `starts` / `ends` | Optional duration or sale dates, without a Homie duration ceiling. Fractional days are allowed; end times are rounded to whole milliseconds and must fit safe arithmetic and the JavaScript timestamp range. |
 | `items[].game` | only in that game's shop (left out: every game's). |
-| `items[].advantage` | `true` when it changes how the game plays: never offered, and never counted as owned, on a beginner or kids server. |
+| `items[].advantage` | `true` when it changes how the game plays. The studio policy decides whether it is offered or counted on beginner and kids servers. |
 | `items[].taxCode` | a Stripe product tax code. Managed Payments needs one: by default `txcd_10201000` (video games, downloaded, permanent) or `txcd_10201001` (limited time). |
 | `referrals` | what this studio pays a referrer for a new player's purchase (left out: nothing). |
 | `catalog` | where the items are Products in Stripe: `["test"]`, `["test", "live"]`. `homie-studio shop catalog` writes it once Stripe's catalog matches; the Worker's checkouts then name each item's Product (0.24.3). |
 
-`homie-studio shop check`, and every `homie-studio build`, refuse: anything that names chance, odds, random, a
-crate, a box, a mystery, loot, a gacha, a spin or a roll; fields for odds or drop pools; a countdown, timer or
-"hurry" field; gems, coins, points or any currency of the studio's own; subscriptions and paid services (later
-versions); a cap over 5000 or a refund window under 14 days. A studio whose studio.json says
-`"audience": "kids"` sells nothing at all.
+## The studio decides
 
-## Who may buy
+There is no Homie ceiling on item prices, tips, catalog size, entitlement count, text lengths, durations,
+refund days, monthly spending or referral terms. The existing amount fields keep their meaning: a cap or
+refund window already written in shop.json stays in effect until the studio edits or removes it.
+No migration or rewrite is needed. `shop init` writes an explicit protective policy and no spending cap,
+refund window or referral agreement. Settings are public, readable and editable in shop.json.
 
-The Worker decides, for every item and every player (`worker/shop-rules.mjs` `wayFor`):
+The studio is responsible for applicable law and its payment provider's terms wherever it sells. These settings
+are choices, not a statement that a sale is legal or permitted by Stripe. This is information, not legal advice.
 
-| The player | What happens |
-|---|---|
-| on a kids server, or in a kids studio | no shop at all: nothing listed, `shop.open()` says nothing is sold here |
-| a guest (no passkey) | "make an account first" (a purchase would be lost with a cookie) |
-| an account that has not answered | the one neutral age question: the year they were born, no default, nothing hinting which answer opens anything; kept only as a band |
-| an account that said under 13 | nothing, ever; the account is treated as a kids account from then on |
-| 13 to 17 | "ask a grown-up": a one-time link (a week) the teen passes on; the parent opens it on their own device, sees what and for whom, ticks that they are the parent or guardian, and pays in their own name on Stripe's page; the item lands on the teen's account |
-| an adult | Stripe's own hosted Checkout, one item at a time, with the real-money price and its own confirm |
-| over the monthly cap | not until next month |
+### Policy presets
+
+`policy.preset` selects `protective`, `adults-only` or `custom`. An absent policy uses `protective`, preserving
+the existing protections. Override any row directly in `policy`; `shop init` writes all rows so they are easy
+to read and edit. Explicit overrides take precedence when you change presets; remove an override to inherit
+the preset value. Invalid values fail validation rather than silently relaxing a rule.
+
+| Setting | protective (new shop default) | adults-only | custom |
+|---|---|---|---|
+| `withdrawalAcknowledgement` | true | true | true |
+| `childAge`, `adultAge` | 13, 18 | 13, 18 | 13, 18 |
+| `requireAccount` | true | true | false |
+| `ageQuestion` | true | true | false |
+| `children` (under 13) | deny | deny | allow |
+| `teens` (13–17) | parent | deny | allow |
+| `kidsStudio`, `kidsServer` | false | false | true |
+| `kidsAdvantages`, `beginnerAdvantages` | false | false | true |
+| `paidRandomRewards`, `countdownOffers`, `virtualCurrency` | false | false | true |
+| `supporterAdvantages`, `repeatPurchases`, `refundUsedItems`, `televisionCheckout` | false | false | true |
+
+`children` and `teens` each accept `deny`, `parent`, or `allow`. The neutral age question stores only a band,
+never the birth year. `childAge` and `adultAge` set the band thresholds (13 and 18); the neutral picker spans 120 years. A parent's link lasts a week as a security expiry. Account-free purchases use a guest
+session in this browser; clearing its cookie loses access, so buyers can add a passkey to keep their purchases.
+The protective preset hides the shop on kids servers and kids studios, blocks purchases under 13, requires
+parent checkout for teens, hides game advantages on beginner and kids servers, refuses paid randomness and
+countdowns, and sends TV shoppers to a phone. Nothing relaxes those protections without a studio setting.
+
+For example, `{ "policy": { "preset": "protective", "repeatPurchases": true } }` changes only repeat purchases.
+The custom preset deliberately enables all policies; choose it only as a considered studio decision.
+`kind` is descriptive, not a whitelist: services and subscription labels still use the existing one-time checkout.
+Virtual-currency keys and random-reward metadata do not implement a wallet or random-reward fulfillment engine.
+
+### Currency and abuse protection
+
+Amounts use Stripe's API units: `500` USD is $5; `500` JPY is ¥500. ISK and UGX retain Stripe's two-decimal API
+representation but require multiples of 100. BHD, JOD, KWD, OMR and TND use scale 1000. Stripe's current currency documentation does not state a divisible-by-ten charge rule; the toolkit does not refuse those amounts and shows Stripe's error if Stripe refuses a checkout. The check warns about the documented settlement-currency minimum where
+known; Stripe decides the actual minimum after conversion and any payment-method maximum at checkout.
+Errors name Stripe as the source. See [Stripe currencies](https://docs.stripe.com/currencies).
+Zero-price Checkout orders are supported and can be revoked without a Stripe refund. Every amount setting accepts only nonnegative whole minor units (numbers or decimal numeric strings); a fractional amount stops the build, names the setting and says what to write. No amount is rounded. All amounts must fit JavaScript safe integer arithmetic. Homie does not impose its own price ceiling or fee floor.
+
+`purchaseAttemptsPerMinute` defaults to 6 per account and `purchaseAttemptsPerAddressPerMinute` to 600 per
+address. Both accept positive whole numbers (including decimal numeric strings). The larger address rate
+allows households, schools and venues to share a connection; rotating addresses still hits the account rate.
+`guestBuyersPerAddressPerHour` defaults to 600 new guest buyers per address per hour, allowing a venue or school to arrive together. It must be a positive whole number; 0 cannot disable it accidentally. The existing `PLAYER_LIMIT_DAILY` also applies.
+Checkout, parent links and parent payments have separate counts, per Worker instance. Referral statements use
+`REFERRAL_STATEMENTS_PER_MINUTE` (30 per address), `REFERRAL_STATEMENTS_GLOBAL_PER_MINUTE` (30 globally), and
+`REFERRAL_STATEMENT_BYTES` (65536). Written values must be positive whole decimal numbers; invalid values produce a named settings error. Security
+checks for origins, sessions, signed webhooks and request sizes remain. They protect the studio's money.
 
 ## In a game
 
@@ -72,10 +111,10 @@ await shop.ready;                        // { open, kids, screen }
 if (shop.has('skin:ember')) useEmber();  // synchronous: fine in a render loop
 shop.on('change', (owns) => redraw());   // a purchase landed, or a refund took one back
 buyButton.onclick = () => shop.open('ember-skin');   // the store sheet (a code to scan on a TV)
-shop.used('skin:ember');                 // equipped: it leaves the player's own refund window
+shop.used('skin:ember');                 // marks it used; the studio refund policy applies
 ```
 
-Rules for the game: open the shop only from a button the player pressed, never from the play, start or wake
+The protective preset recommends opening the shop only from a button the player pressed, never from the play, start or wake
 button, never on a timer; show prices in real money; never draw a countdown; never sell randomness; do nothing
 differently for a supporter on a beginner server.
 
@@ -85,7 +124,7 @@ keeps running, and the shell looks again when the tab comes back: `change` fires
 
 **Badges in rooms.** A player whose account owns a `badge:` key carries it on their seat: `net.players()` gives
 `peer.badge` ("Supporter"), set by the studio's Worker from what the account owns when the player connects (a
-hello can never claim one). None on a kids server, none for an AI.
+hello can never claim one). Kids-server badges follow `policy.kidsServer`; AI seats have no purchases.
 
 ## The money path
 
@@ -96,8 +135,33 @@ Stripe ─ signed webhook ─► POST /api/shop/hook: order paid → entitlement
 homie.rocks: not involved at any step.
 ```
 
-- The order row is written before Stripe is called; the Checkout Session carries the order, the player and the
+- The order row atomically reserves against the studio monthly cap before Stripe is called. Reservations are
+  released on confirmed expiry, failure, missing session or refund, or an explicit owner release, never merely because a webhook is late; the Checkout Session carries the order, the player and the
   item in its metadata; the hook checks the session matches the order (player, price) before it grants anything.
+- A sessionless reservation stops counting after its 31-minute creation window plus a one-minute margin.
+  A session with no final result, including a bank payment still processing, keeps counting even past expiry.
+  Shop GETs never call Stripe. With a cap configured, only a purchase refused by the atomic cap check waits
+  for reconciliation: up to three rows in parallel, each with a two-second timeout. Successful purchases continue
+  reconciliation in `waitUntil` (the shop has no scheduled handler). Rows are atomically claimed before reading
+  [Stripe's session and expanded payment](https://docs.stripe.com/api/checkout/sessions/retrieve).
+  Successful reads set a per-row interval of one minute (five minutes for processing bank payments),
+  growing with age to one hour. Failed reads retry after a short backoff of about one minute and log the order and reason. With more than three lost rows, a refusal may need another purchase attempt.
+  Paid counts in the month of [the Stripe charge's creation time](https://docs.stripe.com/api/charges/object#charge_object-created);
+  missing payment time, pending or unreachable keeps counting. Confirmed expiry or failure releases it.
+  Stripe's [404 resource_missing](https://docs.stripe.com/error-codes#resource-missing) means this key's account
+  has no such session, not that no payment can follow: the row stops reserving the cap and is shown as `missing` in the office.
+  The office lists unresolved orders first, with Next orders for more. Release reservation records the confirming
+  owner's account (or a fingerprint of the owner's office sign-in session) and time in the office-only note, and asks Stripe to
+  [expire an open Checkout Session](https://docs.stripe.com/api/checkout/sessions/expire). It does not refund a payment.
+  A verified payment still grants the item and counts toward spending, including after a missing mark or release,
+  and can be refunded from the office. Duplicate events change nothing. Players see their previous unfinished
+  order state, never the internal mark or note.
+  An owner release or missing mark can free space for another purchase before a late payment counts again;
+  new reservations still obey the configured cap. Test orders never count toward a live
+  cap. Free orders remain available if an owner lowers a cap below prior spending. Partial refunds keep the whole
+  price counted; full refunds and lost disputes release it. No spending SUM runs when the cap is absent.
+  Deploy applies `0010_shop_reservations.sql` and `0011_shop_statements.sql`; readiness names these migrations
+  if the required schema is absent.
 - The webhook's `Stripe-Signature` is checked (HMAC-SHA256 of `<t>.<payload>` with the endpoint's `whsec_`
   secret, within five minutes); each event id is handled once; a test event never touches a live shop.
 - Paid: the entitlements are granted. Refunded: that one order's entitlements are revoked. A dispute: nothing
@@ -107,7 +171,7 @@ homie.rocks: not involved at any step.
   page lists the player's orders and badges; `/api/player/export` includes them; deleting an account asks first
   when it owns things, and keeps the order rows without the player.
 - Each Checkout Session says beside the pay button that the item is delivered at once (the EU and UK withdrawal
-  acknowledgement) and that an unused item can still be refunded.
+  acknowledgement) and the studio's configured refund terms. `policy.withdrawalAcknowledgement` is true in every preset, restoring the existing wording, and is editable. Stripe caps product names at 5000 characters, descriptions at 40000 and submit wording at 1200; the build reports these provider constraints without truncation.
 
 ## Setting it up (the AI does the commands; the owner only uses Stripe's pages and one page here)
 
@@ -180,7 +244,32 @@ Approvals), and the webhook finishes it. Reconnect with a plain restricted key t
 "How are sales?": `homie-studio shop` and `shop orders` (the studio's own books, no names), and through Stripe's MCP,
 read-only, `stripe_analytics` or `stripe_api_read` on the balance, payouts and checkout sessions.
 
+## Referral pages
+
+`/api/shop?cursor=...` serves 100 items per page and returns `nextCursor`. The shop page and in-game sheet offer the next page.
+The office's `/_studio/api/shop?cursor=...` pages by referrer, with exact SQL totals and sale counts shown once per referrer and currency.
+`/_studio/api/shop/lines?via=...&currency=...&cursor=...` pages the sales inside that book without repeating its totals.
+Statement pages use `/_studio/api/shop/statements?period=YYYY-MM&cursor=...`; `shop statements --cursor ...` reads the next page.
+One signed statement per referrer and currency has its totals on the first page only; continuation pages carry lines. A new first page replaces all previously received pages for that period and currency.
+Read-only statement views read the current lines without making stored editions.
+`shop statements --send` and the office's Send statements button save their progress and immutable lines in D1.
+Keep the command or tab open to continue; close midway and start again to resume safely, without doubles or skipped
+pages. After completion, starting again sends a fresh edition safely. Failed pages retry three times with exponential
+backoff (at least a minute for rate refusals). Persistent failures name the referrer, stop its remaining pages and
+continue the rest; starting a fresh run retries those referrers. The CLI reuses one office key, renewing its expiry
+near ten minutes. Mark paid applies only to the selected currency and cannot change the edition being sent.
+Received signed pages are available at `/_studio/api/shop/received?seller=...&period=...&cursor=...`. No row is hidden by a row cap.
+
+
+
 ## Referrals
+
+The studio sets `rate` (a nonnegative share, including values over 100%), `windowDays`, `capPerPlayer`,
+`holdDays`, `minimumInvoice` and accepted invoice methods. No ceilings or forced relation between hold and
+refund days. Omitted window and per-player cap impose neither; omitted hold means no hold and omitted minimum
+invoice imposes no minimum. `rate` keeps the existing 10% suggestion when referrals are explicitly enabled.
+An absent `referrals` pays nothing. Published invoice terms are settled by the studio, outside Homie.
+
 
 - A link with `?via=<host>` (another studio, homie.rocks, anywhere) opened by a person whose browser has never
   been to this studio leaves a signed cookie with the host and the time (only on a studio that pays referrals;

@@ -156,7 +156,7 @@
         "docs": "https://docs.stripe.com/projects"
       },
       "homieKeeps": [
-        "the shop's money rules: the studio's own Stripe, shop.json's checked prices, the kids rules and the monthly cap; homie.rocks never holds money",
+        "the studio's own Stripe and editable shop settings, with protective policy defaults; homie.rocks never holds money",
         "one restricted key the owner makes in Stripe's Dashboard and pastes on a page on their own computer, straight to the Worker secret; the webhook made there with it, its signing secret never in the chat",
         "refunds are the owner's one tap; Stripe's own confirmation link for anything Stripe holds",
         "Stripe Projects on free plans only: no payment method, no paid tier, never a credential's value in output"

@@ -727,7 +727,9 @@ async function film(root) {
   const frames = join(dir, 'work', `film-${mode}`);
   rmSync(frames, { recursive: true, force: true }); mkdirSync(frames, { recursive: true });
   const { server, port } = await serve(dir);
-  const { browser, close } = await launch(root, { width: W, height: H });
+  let browser, close;
+  try { ({ browser, close } = await launch(root, { width: W, height: H })); }
+  catch (error) { server.close(); throw error; }
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });

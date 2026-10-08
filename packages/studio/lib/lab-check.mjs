@@ -111,10 +111,11 @@ export async function labCheck(root, id, { take = null, today = 'HEAD', device =
   const dir = out ?? join(labDir(root, game), `check-${stamp}`);
   mkdirSync(dir, { recursive: true });
   const server = await startLabServer(root, { port: 0, today, watchFiles: false, log: () => {} });
-  const browser = await puppeteer.launch({
+  let browser;
+  try { browser = await puppeteer.launch({
     executablePath: chrome, headless: true, timeout: 150_000, protocolTimeout: 240_000,
     args: [...chromeArgs(), '--mute-audio', '--window-size=1600,1000', '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb'],
-  });
+  }); } catch (error) { await server.close(); throw error; }
   const t0 = Date.now();
   try {
     const page = await browser.newPage();

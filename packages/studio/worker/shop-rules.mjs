@@ -1,54 +1,61 @@
-/**
- * THE SHOP'S RULES (@homie-rocks/studio 0.24.0): what a studio's shop.json may sell, checked the same way by the
- * build, `homie-studio shop check` and the Worker (shop/SHOP.md is the guide). Pure: no Node, no Worker APIs.
- *
- * The kit's kids and fairness rules live HERE, not in docs, so a studio cannot switch them off by editing a file:
- *
- *   - real-money prices only, in one currency; no gems, coins or any currency of the studio's own (version 1);
- *   - nothing random: an item that names chance, odds, random, a crate, a box, a mystery, loot, a gacha, a spin or a
- *     roll (in its kind, id, name, words or fields) is refused, and the kit has no loot-box primitive;
- *   - no countdown offers: a countdown, timer or "hurry" field is refused (a season pass may END on a date; the kit
- *     shows the date, never a clock);
- *   - an item that gives a play advantage (`"advantage": true`) is never offered, nor counted as owned, on a beginner
- *     or kids server;
- *   - a monthly cap per player that a studio may lower, never raise past the ceiling or remove;
- *   - a refund window for unused items of at least 14 days;
- *   - a studio made for children (`studio.json "audience": "kids"`) sells nothing: its till is off.
- *
- * Who may buy (an adult account; 13-17 through a parent's own checkout; under 13 never) is enforced by the Worker
- * (worker/shop.mjs); a kids server shows no shop; a television never sells (it shows a code to buy on a phone).
- */
-
+/** Shop validation and the studio's editable policies. Pure: shared by the build and Worker. */
 export const SHOP_FILE = 'shop.json';
-/** The tills this version ships. `link` (another merchant of record) and gems come later, one at a time. */
+/** Implemented payment adapters; item kinds do not select a billing integration. */
 export const TILLS = Object.freeze(['stripe', 'stripe-managed', 'off']);
-/** What an item can be. All directly priced, all deterministic. */
-export const KINDS = Object.freeze(['cosmetic', 'supporter', 'pass', 'unlock', 'tip']);
-const LATER = Object.freeze({
-  gems: 'gems are not in version 1: price items in real money (a studio\'s own currency brings the EU consumer authorities\' currency rules)',
-  coins: 'a currency of the studio\'s own is not in version 1: price items in real money',
-  currency: 'a currency of the studio\'s own is not in version 1: price items in real money',
-  subscription: 'subscriptions come in a later version (terms before billing, express consent, and one-click cancel)',
-  service: 'paid services (an AI filling a spot) come in a later version',
+export const POLICY_PRESETS = Object.freeze({
+  protective: Object.freeze({ withdrawalAcknowledgement: true, childAge: 13, adultAge: 18, requireAccount: true, ageQuestion: true, children: 'deny', teens: 'parent',
+    kidsStudio: false, kidsServer: false, beginnerAdvantages: false, kidsAdvantages: false,
+    paidRandomRewards: false, countdownOffers: false, virtualCurrency: false, supporterAdvantages: false,
+    repeatPurchases: false, refundUsedItems: false, televisionCheckout: false }),
+  'adults-only': Object.freeze({ withdrawalAcknowledgement: true, childAge: 13, adultAge: 18, requireAccount: true, ageQuestion: true, children: 'deny', teens: 'deny',
+    kidsStudio: false, kidsServer: false, beginnerAdvantages: false, kidsAdvantages: false,
+    paidRandomRewards: false, countdownOffers: false, virtualCurrency: false, supporterAdvantages: false,
+    repeatPurchases: false, refundUsedItems: false, televisionCheckout: false }),
+  custom: Object.freeze({ withdrawalAcknowledgement: true, childAge: 13, adultAge: 18, requireAccount: false, ageQuestion: false, children: 'allow', teens: 'allow',
+    kidsStudio: true, kidsServer: true, beginnerAdvantages: true, kidsAdvantages: true,
+    paidRandomRewards: true, countdownOffers: true, virtualCurrency: true, supporterAdvantages: true,
+    repeatPurchases: true, refundUsedItems: true, televisionCheckout: true }),
 });
-/** The template's ceiling on what one player may spend here in a month, in the currency's minor units (US$50). */
-export const CAP_CEILING = 5000;
-export const REFUND_DAYS_MIN = 14;
-export const REFUND_DAYS_MAX = 60;
-/** Below this an item mostly pays fees: the fixed 30 cents and a never-returned dispute fee. A warning, not a refusal. */
-export const PRICE_FLOOR_WARN = 300;
-/** The most a single item may cost (US$500): a shop in a game, not a till for anything. */
-export const PRICE_MAX = 50_000;
-export const ITEMS_MAX = 60;
-export const ITEM_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-export const ENTITLEMENT_KEY = /^[a-z0-9][a-z0-9_.:-]{0,63}$/;
+export const ITEM_ID = /^[^\u0000-\u001f\u007f]+$/;
+export const ENTITLEMENT_KEY = /^[^\u0000-\u001f\u007f]+$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const TAX_CODE = /^txcd_\d{8}$/;
 const CURRENCY = /^[a-z]{3}$/;
-/** Currencies without minor units: the cap and the floor would read 100x too high, so they are refused in v1. */
-const ZERO_DECIMAL = new Set(['bif', 'clp', 'djf', 'gnf', 'jpy', 'kmf', 'krw', 'mga', 'pyg', 'rwf', 'ugx', 'vnd', 'vuv', 'xaf', 'xof', 'xpf']);
+// Stripe currency units, special cases and settlement-currency minimums, fetched 2026-10-08:
+// https://docs.stripe.com/currencies#zero-decimal
+// https://docs.stripe.com/currencies#special-cases
+// https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts
+// Free Checkout orders: https://docs.stripe.com/payments/checkout/no-cost-orders (fetched 2026-10-08).
+// Actual minimums after conversion and payment-method maximums are enforced by Stripe at checkout.
+export const ZERO_DECIMAL = new Set(['bif', 'clp', 'djf', 'gnf', 'jpy', 'kmf', 'krw', 'mga', 'pyg', 'rwf', 'vnd', 'vuv', 'xaf', 'xof', 'xpf']);
+export const THREE_DECIMAL = new Set(['bhd', 'jod', 'kwd', 'omr', 'tnd']);
+export const currencyScale = (currency) => ZERO_DECIMAL.has(String(currency).toLowerCase()) ? 1 : THREE_DECIMAL.has(String(currency).toLowerCase()) ? 1000 : 100;
+// No three-decimal divisibility refusal: https://docs.stripe.com/currencies does not document one (2026-10-08).
+export const amountStep = (currency) => ['isk', 'ugx'].includes(String(currency).toLowerCase()) ? 100 : 1;
+const MINIMUMS = { usd: 50, aed: 200, ars: 50, aud: 50, brl: 50, cad: 50, chf: 50, cop: 50, czk: 1500, dkk: 250, eur: 50, gbp: 30, hkd: 400, huf: 17500, idr: 50, ils: 50, inr: 50, jpy: 50, krw: 50, mxn: 1000, myr: 200, nok: 300, nzd: 50, php: 50, pln: 200, ron: 200, rub: 50, sek: 300, sgd: 50, thb: 1000, zar: 50 };
+export const minimumCharge = (currency) => MINIMUMS[currency] ?? amountStep(currency);
+/** Parse the buyer's decimal text without rounding a fractional currency unit. */
+export function parseAmount(value, scale = 100) {
+  const digits = Math.log10(scale);
+  if (!new RegExp(`^\\d+(?:\\.\\d{0,${digits}})?$`).test(String(value))) return NaN;
+  const parts = String(value).split('.');
+  if (scale === 1 && parts[1] && Number(parts[1]) !== 0) return NaN;
+  const n = Number(BigInt(parts[0]) * BigInt(scale) + (scale === 1 ? 0n : BigInt((parts[1] || '').padEnd(digits, '0'))));
+  return Number.isSafeInteger(n) ? n : NaN;
+}
+export function amountError(amount, currency) {
+  if (!Number.isSafeInteger(amount) || amount < 0) return 'Stripe amounts must be nonnegative whole numbers of its currency unit, within JavaScript safe integer arithmetic.';
+  if (amount % amountStep(currency)) return `Stripe requires ${currency.toUpperCase()} amounts divisible by ${amountStep(currency)} in its API minor units.`;
 
-/** Paid randomness, in any wording a shop file might use. Whole words, so "Jukebox" is fine and "Mystery Box" is not. */
+  return null;
+}
+
+/** Checkout wording is shared by validation and the request path. */
+export function checkoutMessage(shop, studio = 'this studio', parent = false) {
+  return `${parent ? "This is for your child's account. " : ''}Delivered at once to the player's account on ${studio}. ${shop.policy.withdrawalAcknowledgement ? 'By paying you ask for it now, which ends the 14-day withdrawal right;' : 'Your statutory rights still apply.'} ${shop.refundDays === null ? (shop.policy.withdrawalAcknowledgement ? 'ask the studio about refunds.' : 'Ask the studio about refunds.') : `${shop.policy.refundUsedItems ? 'an item' : 'an unused item'} can still be refunded within ${shop.refundDays} days.`}`;
+}
+
+/** Content patterns used only when the studio's paidRandomRewards policy refuses them. */
 const RANDOM_WORDS = /\b(?:chance|chances|odds|random|randomi[sz]ed|randomly|crates?|box|boxes|lootbox(?:es)?|loot|mystery|gacha|spins?|roll|rolls|lottery|raffle|sweepstakes?|jackpot|surprise|blind ?bag|drop ?rate|pity)\b/i;
 /** Fields that only exist to make an item random. */
 const RANDOM_FIELDS = new Set(['odds', 'chance', 'chances', 'random', 'pool', 'drops', 'droptable', 'loottable', 'weights', 'rarityweights', 'probability', 'probabilities']);
@@ -56,8 +63,10 @@ const RANDOM_FIELDS = new Set(['odds', 'chance', 'chances', 'random', 'pool', 'd
 const PRESSURE_FIELDS = new Set(['countdown', 'timer', 'hurry', 'limitedtime', 'flash', 'flashsale', 'expiresin', 'urgency', 'scarcity', 'onlyleft']);
 const CURRENCY_KEYS = /^(?:gems?|coins?|currency|credits?|points|tokens|bucks|diamonds|crystals|vbucks|robux):/i;
 
+const numeric = (value) => typeof value === 'number' ? value : typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value) ? Number(value) : NaN;
+
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const oneLine = (v, max) => String(v ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+const oneLine = (v, max = Infinity) => String(v ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 
 /** Every string in a value, with the key path it sits at (to name where a forbidden word is). */
 function strings(v, at = '', out = []) {
@@ -82,84 +91,114 @@ function dateOf(v) {
 
 /** A badge's words from an entitlement key: badge:supporter → Supporter. */
 export function badgeWord(key, item = null) {
-  const given = oneLine(item?.badge, 16);
+  const given = oneLine(item?.badge);
   if (given) return given;
   const word = String(key ?? '').replace(/^badge:/, '').replace(/[-_.:]+/g, ' ').trim();
-  return word ? word.charAt(0).toUpperCase() + word.slice(1, 16) : '';
+  return word ? word.charAt(0).toUpperCase() + word.slice(1) : '';
 }
 
 /**
  * Check a shop.json. `{ ok, shop, errors, warnings }`: `shop` is the public, normalised shop the Worker sells from
  * (nothing secret is ever in shop.json). `games`: the studio's game ids, when known (the build), to check `game`.
- * `audience`: studio.json "audience" ("kids" closes the till, whatever shop.json says).
+ * `audience`: studio.json "audience" (the studio policy decides whether a kids studio sells).
  */
-export function checkShop(raw, { games = null, audience = 'general' } = {}) {
+export function checkShop(raw, { games = null, audience = 'general', studioName = 'this studio' } = {}) {
   const errors = [];
   const warnings = [];
   const err = (at, message) => errors.push({ at, message });
   if (!isObj(raw)) return { ok: false, shop: null, errors: [{ at: '', message: 'shop.json is a JSON object: { "till": "stripe", "currency": "usd", "items": [...] }' }], warnings };
-  // Randomness and pressure anywhere in the file, before anything else: the kit has no way to sell either.
-  for (const [at, text] of strings(raw)) {
-    if (RANDOM_WORDS.test(text)) err(at, `"${oneLine(text, 40)}" names paid randomness (chance, odds, random, a crate, a box, a mystery, loot…). The kit sells only items the buyer can see, at a fixed price.`);
+  const preset = raw.policy?.preset ?? 'protective';
+  if (!Object.hasOwn(POLICY_PRESETS, preset)) err('policy.preset', 'choose protective, adults-only or custom');
+  if (raw.policy !== undefined && !isObj(raw.policy)) err('policy', 'policy is an object with a named preset and editable rules');
+  const policy = { preset, ...(Object.hasOwn(POLICY_PRESETS, preset) ? POLICY_PRESETS[preset] : POLICY_PRESETS.protective) };
+  for (const key of Object.keys(POLICY_PRESETS.protective)) {
+    if (raw.policy?.[key] === undefined) continue;
+    const value = raw.policy[key];
+    if (['childAge', 'adultAge'].includes(key)) {
+      if (!Number.isSafeInteger(value) || value < 1) err(`policy.${key}`, 'use a positive whole age in years');
+      else policy[key] = value;
+      continue;
+    }
+    if (['children', 'teens'].includes(key) ? !['deny', 'parent', 'allow'].includes(value) : typeof value !== 'boolean') err(`policy.${key}`, 'use a boolean, or deny / parent / allow for children and teens');
+    else policy[key] = value;
   }
-  for (const [at, k] of keys(raw)) {
-    if (RANDOM_FIELDS.has(k)) err(at, 'a field for odds, drops or a random pool: the kit never sells paid randomness');
-    if (PRESSURE_FIELDS.has(k)) err(at, 'a countdown, timer or "hurry" field: the kit never shows a clock on an offer (a pass may end on a date; the date is shown, not a countdown)');
+  if (policy.childAge >= policy.adultAge) err('policy.adultAge', 'adultAge must be greater than childAge');
+  for (const [at, text] of strings(raw.items)) {
+    if (!policy.paidRandomRewards && RANDOM_WORDS.test(text)) err(`items.${at}`, `The studio's policy.paidRandomRewards setting refuses paid randomness: "${oneLine(text, 40)}".`);
+  }
+  for (const [at, k] of keys(raw.items)) {
+    if (!policy.paidRandomRewards && RANDOM_FIELDS.has(k)) err(`items.${at}`, "The studio's policy.paidRandomRewards setting refuses odds, drops or a random pool.");
+    if (!policy.countdownOffers && PRESSURE_FIELDS.has(k)) err(`items.${at}`, "The studio's policy.countdownOffers setting refuses countdown fields.");
   }
   const till = raw.till === undefined ? 'stripe' : String(raw.till);
-  if (till === 'link') err('till', 'the "link" till (another merchant of record) comes in a later version: use "stripe" or "stripe-managed"');
-  else if (!TILLS.includes(till)) err('till', 'till is "stripe" (your own Stripe: you are the seller), "stripe-managed" (Stripe Managed Payments: Stripe is the seller of record and files the tax, for 3.5% more) or "off"');
+  if (!TILLS.includes(till)) err('till', 'till is "stripe" (your own Stripe: you are the seller), "stripe-managed" (Stripe Managed Payments: Stripe is the seller of record and files the tax, for 3.5% more) or "off"');
   const currency = raw.currency === undefined ? 'usd' : String(raw.currency).toLowerCase();
   if (!CURRENCY.test(currency)) err('currency', 'currency is a three-letter code such as "usd", "cad", "eur" or "gbp"');
-  else if (ZERO_DECIMAL.has(currency)) err('currency', `${currency.toUpperCase()} has no minor units; version 1 sells in a currency with cents (usd, cad, eur, gbp, aud…)`);
-  let refundDays = raw.refundDays === undefined ? REFUND_DAYS_MIN : Math.floor(Number(raw.refundDays));
-  if (!(refundDays >= REFUND_DAYS_MIN && refundDays <= REFUND_DAYS_MAX)) { err('refundDays', `refundDays is ${REFUND_DAYS_MIN} to ${REFUND_DAYS_MAX}: a player can always get an unused item refunded for at least 14 days`); refundDays = REFUND_DAYS_MIN; }
-  let cap = raw.capPerPlayerMonth === undefined ? CAP_CEILING : Math.floor(Number(raw.capPerPlayerMonth));
-  if (!(cap >= 100 && cap <= CAP_CEILING)) { err('capPerPlayerMonth', `capPerPlayerMonth is what one player may spend here in a month, in cents: 100 to ${CAP_CEILING} (US$50). A studio may lower it, never remove it.`); cap = CAP_CEILING; }
-  if (raw.supportHomie !== undefined && Number(raw.supportHomie) !== 0) err('supportHomie', 'a voluntary "support Homie" share comes in a later version; leave it out (0 is the default, and Homie takes no cut)');
-  if (raw.gems !== undefined || raw.coins !== undefined) err('gems', LATER.gems);
+  const optionalNumber = (value, at, { integer = true } = {}) => {
+    if (value === undefined || value === null) return null;
+    value = numeric(value); // Decimal numeric strings remain accepted; booleans and containers do not.
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (integer && !at.endsWith('Days') && !Number.isSafeInteger(value))) err(at, `write a nonnegative ${integer && !at.endsWith('Days') ? 'whole number of minor units (for example 2500, not 2500.7)' : 'finite number'}, or omit the setting.${integer && !at.endsWith('Days') ? ' Amounts are never rounded.' : ''}`);
+    if (at.endsWith('Days') && value !== null && (!Number.isSafeInteger(Math.round(value * 86400000)) || !Number.isSafeInteger(Math.round(value * 86400000) + Date.now()) || !Number.isFinite(new Date(Math.round(value * 86400000) + Date.now()).getTime()))) err(at, 'duration rounded to milliseconds must remain within safe arithmetic and the JavaScript timestamp range');
+    return value;
+  };
+  const refundDays = optionalNumber(raw.refundDays, 'refundDays');
+  const cap = optionalNumber(raw.capPerPlayerMonth, 'capPerPlayerMonth');
+  // 600 new buyers per hour allows a school or venue to arrive together without disabling flood protection.
+  const guestBuyersPerAddressPerHour = numeric(raw.guestBuyersPerAddressPerHour ?? 600);
+  if (!Number.isSafeInteger(guestBuyersPerAddressPerHour) || guestBuyersPerAddressPerHour < 1) err('guestBuyersPerAddressPerHour', 'use a positive whole number for new guest flood protection');
+  const purchaseAttemptsPerMinute = numeric(raw.purchaseAttemptsPerMinute ?? 6);
+  // A school or venue can share an address; its aggregate bucket must allow many independent accounts.
+  const purchaseAttemptsPerAddressPerMinute = numeric(raw.purchaseAttemptsPerAddressPerMinute ?? 600);
+  if (!Number.isSafeInteger(purchaseAttemptsPerAddressPerMinute) || purchaseAttemptsPerAddressPerMinute < 1) err('purchaseAttemptsPerAddressPerMinute', 'use a positive whole number for address flood protection');
+  if (!Number.isSafeInteger(purchaseAttemptsPerMinute) || purchaseAttemptsPerMinute < 1) err('purchaseAttemptsPerMinute', 'use a positive whole number for the studio account rate limit');
+  if (raw.supportHomie !== undefined && Number(raw.supportHomie) !== 0) err('supportHomie', 'Homie takes no cut; this adapter does not transfer a share to Homie');
 
   const items = [];
   const list = Array.isArray(raw.items) ? raw.items : [];
   if (raw.items !== undefined && !Array.isArray(raw.items)) err('items', 'items is a list');
-  if (list.length > ITEMS_MAX) err('items', `at most ${ITEMS_MAX} items`);
   const seen = new Set();
-  list.slice(0, ITEMS_MAX).forEach((it, i) => {
+  list.forEach((it, i) => {
     const at = `items[${i}]`;
     if (!isObj(it)) { err(at, 'an item is an object'); return; }
     const id = String(it.id ?? '');
-    if (!ITEM_ID.test(id)) err(`${at}.id`, 'id is 1 to 40 lowercase letters, digits or -');
+    if (!id.trim() || !ITEM_ID.test(id)) err(`${at}.id`, 'id is nonempty text without control characters');
     else if (seen.has(id)) err(`${at}.id`, `two items are called "${id}"`);
     seen.add(id);
     const kind = String(it.kind ?? '');
-    if (LATER[kind]) { err(`${at}.kind`, LATER[kind]); return; }
-    if (!KINDS.includes(kind)) { err(`${at}.kind`, `kind is one of ${KINDS.join(', ')}`); return; }
-    const name = oneLine(it.name, 60);
+    if (!kind.trim()) err(`${at}.kind`, 'an item needs a kind chosen by the studio');
+    if (!policy.virtualCurrency && ['gems', 'coins', 'currency'].includes(kind)) err(`${at}.kind`, "The studio's policy.virtualCurrency setting refuses currency items.");
+    const name = oneLine(it.name);
     if (!name) err(`${at}.name`, 'an item needs a name the buyer reads');
-    const blurb = oneLine(it.blurb ?? it.description, 200);
+    const blurb = oneLine(it.blurb ?? it.description);
+    // Stripe Product text constraints: https://docs.stripe.com/api/products/create
+    if ([...name].length > 5000) err(`${at}.name`, 'Stripe product names allow at most 5000 characters. Shorten the name.');
+    if ([...blurb].length > 40000) err(`${at}.blurb`, 'Stripe product descriptions allow at most 40000 characters. Shorten the description.');
     let price = null; let min = null; let max = null;
     if (kind === 'tip') {
       if (it.price !== 'choose' && it.price !== undefined) err(`${at}.price`, 'a tip\'s price is "choose" (pay what you want between min and max)');
-      min = Math.floor(Number(it.min ?? 200)); max = Math.floor(Number(it.max ?? 5000));
-      if (!(min >= 100 && max >= min && max <= PRICE_MAX)) err(`${at}.min`, 'a tip has min and max in cents (min at least 100, max at most 50000)');
+      min = numeric(it.min ?? 0); max = optionalNumber(it.max, `${at}.max`);
+      const why = amountError(min, currency);
+      if (why) err(`${at}.min`, why);
+      if (max !== null && (max < min || amountError(max, currency))) err(`${at}.max`, 'the studio tip maximum must be at least its minimum and use valid Stripe currency units');
     } else {
-      if (typeof it.price !== 'number' || !Number.isInteger(it.price)) err(`${at}.price`, 'price is a whole number of cents in the shop\'s currency (500 is $5.00): real money only, never gems or points');
-      else if (!(it.price >= 50 && it.price <= PRICE_MAX)) err(`${at}.price`, 'price is 50 to 50000 cents');
-      else { price = it.price; if (price < PRICE_FLOOR_WARN) warnings.push({ at: `${at}.price`, message: `${name || id} costs under ${PRICE_FLOOR_WARN / 100} ${currency.toUpperCase()}: fees (about 30 cents a sale, and a dispute fee that is never returned) eat most of it. Bundle it with something.` }); }
+      const why = amountError(numeric(it.price), currency);
+      if (why) err(`${at}.price`, why);
+      else price = numeric(it.price);
     }
-    if (price !== null && price > cap) err(`${at}.price`, `costs more than the monthly cap (${cap} cents): nobody could buy it`);
+    const charge = kind === 'tip' ? min : price;
+    if (currencyScale(currency) === 1000 && charge % 10) warnings.push({ at: `${at}.price`, message: 'This three-decimal amount uses the smallest minor unit. Confirm support with your Stripe payment method; Stripe decides acceptance (https://docs.stripe.com/currencies).' });
+    if (charge > 0 && charge < minimumCharge(currency)) warnings.push({ at: `${at}.price`, message: `Stripe's minimum for settlement in ${currency.toUpperCase()} is ${money(minimumCharge(currency), currency)}. Your settlement currency and payment method determine the actual minimum at checkout.` });
+    if (cap !== null && price !== null && price > cap) warnings.push({ at: `${at}.price`, message: 'This price exceeds the studio capPerPlayerMonth setting; raise or remove that setting to allow a purchase.' });
     const gives = Array.isArray(it.gives) ? it.gives.map(String) : [];
     if (it.gives !== undefined && !Array.isArray(it.gives)) err(`${at}.gives`, 'gives is a list of entitlement keys the game reads: ["skin:ember"]');
-    if (kind !== 'tip' && !gives.length) err(`${at}.gives`, 'an item gives something: the keys the game reads with shop.has("skin:ember")');
-    if (gives.length > 8) err(`${at}.gives`, 'at most 8 keys an item');
     for (const g of gives) {
-      if (!ENTITLEMENT_KEY.test(g)) err(`${at}.gives`, `"${oneLine(g, 40)}" is not a key: lowercase letters, digits and _ . : - (skin:ember, badge:supporter)`);
-      else if (CURRENCY_KEYS.test(g)) err(`${at}.gives`, `"${g}" is a currency: version 1 sells items, never gems, coins or points`);
+      if (!g.trim() || !ENTITLEMENT_KEY.test(g)) err(`${at}.gives`, `"${oneLine(g, 40)}" is not a key: use nonempty text without control characters`);
+      else if (!policy.virtualCurrency && CURRENCY_KEYS.test(g)) err(`${at}.gives`, `"${g}" is a currency refused by the studio policy.virtualCurrency setting`);
     }
     let days = null;
     if (it.days !== undefined && it.days !== null) {
-      days = Math.floor(Number(it.days));
-      if (!(days >= 1 && days <= 3650)) { err(`${at}.days`, 'days is how long it lasts, 1 to 3650 (leave it out for ever)'); days = null; }
+      days = numeric(it.days);
+      if (!(days > 0 && Number.isFinite(days) && Number.isSafeInteger(Math.round(days * 86400000)) && Number.isSafeInteger(Math.round(days * 86400000) + Date.now()) && Number.isFinite(new Date(Math.round(days * 86400000) + Date.now()).getTime()))) { err(`${at}.days`, 'days is a positive duration with whole milliseconds within safe arithmetic and the JavaScript timestamp range (omit for forever)'); days = null; }
     }
     const starts = dateOf(it.starts);
     const ends = dateOf(it.ends);
@@ -172,15 +211,18 @@ export function checkShop(raw, { games = null, audience = 'general' } = {}) {
     }
     if (it.taxCode !== undefined && !TAX_CODE.test(String(it.taxCode))) err(`${at}.taxCode`, 'taxCode is a Stripe product tax code such as "txcd_10000000"');
     const advantage = it.advantage === true;
-    if (advantage && kind === 'supporter') err(`${at}.advantage`, 'a supporter pack never changes how the game plays');
+    if (advantage && kind === 'supporter' && !policy.supporterAdvantages) err(`${at}.advantage`, 'the studio policy.supporterAdvantages setting refuses an advantage in a supporter pack');
     const badge = gives.find((g) => g.startsWith('badge:'));
+    for (const key of Object.keys(it)) {
+      if (!['id', 'kind', 'name', 'blurb', 'description', 'price', 'min', 'max', 'gives', 'badge', 'days', 'starts', 'ends', 'game', 'taxCode', 'advantage'].includes(key)) warnings.push({ at: `${at}.${key}`, message: 'This field is not published by the shop. Describe any buyer-facing meaning in blurb so buyers can read it.' });
+    }
     items.push({
       id, kind, name, ...(blurb ? { blurb } : {}),
       ...(kind === 'tip' ? { price: 'choose', min, max } : { price }),
       gives, ...(badge ? { badge: badgeWord(badge, it) } : {}),
       ...(days ? { days } : {}), ...(Number.isFinite(starts) ? { starts: new Date(starts).toISOString() } : {}), ...(Number.isFinite(ends) ? { ends: new Date(ends).toISOString() } : {}),
       ...(it.game ? { game: String(it.game) } : {}), ...(it.taxCode ? { taxCode: String(it.taxCode) } : {}),
-      ...(advantage ? { advantage: true } : {}),
+      advantage,
     });
   });
 
@@ -189,20 +231,15 @@ export function checkShop(raw, { games = null, audience = 'general' } = {}) {
     const r = raw.referrals;
     if (!isObj(r)) err('referrals', 'referrals is { "rate": 0.10, "windowDays": 30, "capPerPlayer": 1000, "holdDays": 30, "minimumInvoice": 2500 } (or leave it out: nobody is paid for sending players)');
     else {
-      const rate = Number(r.rate ?? 0.10);
-      const windowDays = Math.floor(Number(r.windowDays ?? 30));
-      const capPerPlayer = Math.floor(Number(r.capPerPlayer ?? 1000));
-      const holdDays = Math.floor(Number(r.holdDays ?? 30));
-      const minimumInvoice = Math.floor(Number(r.minimumInvoice ?? 2500));
-      if (!(rate >= 0 && rate <= 0.5)) err('referrals.rate', 'rate is a share of the pre-tax price, 0 to 0.5 (0.10 is 10%)');
-      if (!(windowDays >= 1 && windowDays <= 90)) err('referrals.windowDays', 'windowDays is 1 to 90');
-      if (!(capPerPlayer >= 0 && capPerPlayer <= 10_000)) err('referrals.capPerPlayer', 'capPerPlayer is 0 to 10000 cents');
-      if (!(holdDays >= refundDays && holdDays <= 120)) err('referrals.holdDays', `holdDays is ${refundDays} (the refund window) to 120, so a refund never follows a payout`);
-      if (!(minimumInvoice >= 0 && minimumInvoice <= 100_000)) err('referrals.minimumInvoice', 'minimumInvoice is 0 to 100000 cents');
-      const accept = Array.isArray(r.accept) ? r.accept.map(String).filter((x) => ['stripe-invoice', 'paypal', 'wise', 'gift-codes'].includes(x)) : ['stripe-invoice'];
+      const rate = optionalNumber(r.rate ?? 0.10, 'referrals.rate', { integer: false });
+      const windowDays = optionalNumber(r.windowDays, 'referrals.windowDays');
+      const capPerPlayer = optionalNumber(r.capPerPlayer, 'referrals.capPerPlayer');
+      const holdDays = optionalNumber(r.holdDays, 'referrals.holdDays');
+      const minimumInvoice = optionalNumber(r.minimumInvoice, 'referrals.minimumInvoice');
+      const accept = Array.isArray(r.accept) ? r.accept.map(String) : ['stripe-invoice'];
       const billing = r.billingEmail === undefined ? null : String(r.billingEmail);
       if (billing !== null && !/^[^\s@<>()",;:]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$/.test(billing)) err('referrals.billingEmail', 'billingEmail is where referrers send their invoices (an address the studio reads)');
-      referrals = { rate: Math.round(rate * 1000) / 1000, windowDays, capPerPlayer, holdDays, minimumInvoice, basis: 'pre-tax', accept, ...(billing ? { billingEmail: billing } : {}) };
+      referrals = { rate, windowDays, capPerPlayer, holdDays, minimumInvoice, basis: 'pre-tax', accept, ...(billing ? { billingEmail: billing } : {}) };
     }
   }
 
@@ -213,13 +250,15 @@ export function checkShop(raw, { games = null, audience = 'general' } = {}) {
     else catalog = [...new Set(raw.catalog)].sort();
   }
 
-  const kids = audience === 'kids';
+  const kids = audience === 'kids' && !policy.kidsStudio;
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
-  if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off whatever shop.json says).' });
+  if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off under policy.kidsStudio).' });
   const shop = {
-    v: 1, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
+    v: 1, policy, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
     open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };
+  // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-custom_text-submit-message
+  if ([...checkoutMessage(shop, studioName, true)].length > 1200) err('studio.name / refundDays', 'Stripe submit messages allow at most 1200 characters. Shorten the studio name or refund wording.');
   return { ok: errors.length === 0, shop, errors, warnings };
 }
 
@@ -241,53 +280,53 @@ export function audienceOf(studio) {
 /* ------------------------------------------------------------------ who may buy */
 
 /** The neutral age question's answer as a band (never stored as a date): child (under 13), teen (13-17), adult. */
-export function bandOf(year, now = new Date()) {
+export function bandOf(year, now = new Date(), policy = POLICY_PRESETS.protective) {
   const y = Math.floor(Number(year));
   const thisYear = now.getUTCFullYear();
-  if (!(y >= 1900 && y <= thisYear)) return null;
+  if (!(Number.isSafeInteger(y) && y >= thisYear - 120 && y <= thisYear)) return null;
   // The youngest a person born that year can be: a year of birth alone never makes a child look older.
   const age = thisYear - y - 1;
-  return age < 13 ? 'child' : age < 18 ? 'teen' : 'adult';
+  return age < policy.childAge ? 'child' : age < policy.adultAge ? 'teen' : 'adult';
 }
 
 /**
- * How this player may get an item, the one place the kids rules decide it:
+ * How this player may get an item under the studio policy (descriptions below use protective):
  *   'closed'        the shop is not open (no till, no key, a kids studio)
  *   'kids'          a kids server: nothing is shown at all
  *   'beginner'      an item with a play advantage, on a beginner server: not offered there
  *   'owned'         they have it (and it lasts)
  *   'make-an-account'  a guest (a purchase would be lost with a cookie)
- *   'age-question'  the account has not answered the neutral age question (spending is off until it says adult)
- *   'no'            under 13: never
+ *   'age-question'  the studio requires an age band before checkout
+ *   'no'            the studio denies this age band
  *   'ask-a-parent'  13-17: a link a parent opens on their own device and pays in their own name
  *   'checkout'      an adult: Stripe's own page, one purchase at a time
  *   'not-yet' / 'over'  a season pass before it starts or after it ends
  *   'cap'           this month's cap is reached
  */
-export function wayFor(item, { open = true, kids = false, beginner = false, player = null, band = null, owned = false, spent = 0, cap = CAP_CEILING, now = Date.now() } = {}) {
+export function wayFor(item, { open = true, kids = false, beginner = false, player = null, band = null, owned = false, spent = 0, cap = null, policy = POLICY_PRESETS.protective, now = Date.now() } = {}) {
   if (!open) return 'closed';
-  if (kids) return 'kids';
-  if (item.advantage && beginner) return 'beginner';
-  if (owned && item.kind !== 'tip') return 'owned';
+  if (kids && !policy.kidsServer) return 'kids';
+  if (item.advantage && ((beginner && !policy.beginnerAdvantages) || (kids && !policy.kidsAdvantages))) return 'beginner';
+  if (owned && item.kind !== 'tip' && !policy.repeatPurchases) return 'owned';
   if (item.starts && Date.parse(item.starts) > now) return 'not-yet';
   if (item.ends && Date.parse(item.ends) <= now) return 'over';
-  if (!player || player.guest) return 'make-an-account';
-  if (!band) return 'age-question';
-  if (band === 'child') return 'no';
+  if (policy.requireAccount && (!player || player.guest)) return 'make-an-account';
+  if (policy.ageQuestion && !band) return 'age-question';
+  if ((band === 'child' && policy.children === 'deny') || (band === 'teen' && policy.teens === 'deny')) return 'no';
   const price = item.kind === 'tip' ? item.min : item.price;
-  if (spent + price > cap) return 'cap';
-  if (band === 'teen') return 'ask-a-parent';
+  if (price > 0 && cap !== null && spent + price > cap) return 'cap';
+  if ((band === 'teen' && policy.teens === 'parent') || (band === 'child' && policy.children === 'parent')) return 'ask-a-parent';
   return 'checkout';
 }
 
 /** The public face of a shop (for the directory manifest and the shop page): never a secret, never a person. */
 export function publicShop(shop) {
   if (!shop) return null;
-  return { till: shop.till, currency: shop.currency, refundDays: shop.refundDays, capPerPlayerMonth: shop.capPerPlayerMonth, open: Boolean(shop.open), items: shop.items.length, ...(shop.referrals ? { referrals: shop.referrals } : {}) };
+  return { policy: shop.policy, till: shop.till, currency: shop.currency, refundDays: shop.refundDays, capPerPlayerMonth: shop.capPerPlayerMonth, open: Boolean(shop.open), items: shop.items.length, ...(shop.referrals ? { referrals: shop.referrals } : {}) };
 }
 
 /** A price for people: 500 usd → "$5.00", 300 eur → "€3.00", 1250 cad → "CA$12.50". */
 export function money(cents, currency = 'usd') {
   const c = String(currency).toUpperCase();
-  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: c, currencyDisplay: 'symbol' }).format(Number(cents) / 100); } catch { return `${(Number(cents) / 100).toFixed(2)} ${c}`; }
+  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: c, currencyDisplay: 'symbol', minimumFractionDigits: currencyScale(currency) === 1 || amountStep(currency) === 100 ? 0 : Math.log10(currencyScale(currency)), maximumFractionDigits: currencyScale(currency) === 1 || amountStep(currency) === 100 ? 0 : Math.log10(currencyScale(currency)) }).format(Number(cents) / currencyScale(currency)); } catch { return `${(Number(cents) / currencyScale(currency)).toFixed(2)} ${c}`; }
 }

@@ -76,14 +76,17 @@ export const isPermissionError = (error) => error instanceof StripeError && (err
  * The catalog Product a shop item is, the same id in a sandbox and in live mode: `homie_<studio slug>_<item id>`
  * (Stripe takes a product id of our choosing). Null without a slug or an item id.
  */
-export function productIdOf(slug, item) {
-  const s = String(slug ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48);
-  const i = String(item ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
-  return s && i ? `homie_${s}_${i}` : null;
+export async function productIdOf(slug, item) {
+  if (!slug || !item) return null;
+  const s = String(slug).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48);
+  if (!s) return null;
+  if (/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(item))) return `homie_${s}_${String(item).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(item)));
+  return `homie_${s}_item_${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
 /** One call with the studio's key. `idempotencyKey` makes a retried POST do the work once (Stripe keeps it 24 h). */
-export async function stripeCall(env, method, path, params = null, { idempotencyKey = null, fetcher = fetch } = {}) {
+export async function stripeCall(env, method, path, params = null, { idempotencyKey = null, fetcher = fetch, timeout = 15_000 } = {}) {
   const key = String(env?.STRIPE_KEY ?? '');
   if (!KEY_SHAPE.test(key)) throw new StripeError(0, { error: { message: 'no Stripe key on this Worker', code: 'no-key' } });
   const body = params && method !== 'GET' ? formEncode(params).toString() : null;
@@ -97,7 +100,7 @@ export async function stripeCall(env, method, path, params = null, { idempotency
       ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
     },
     ...(body !== null ? { body } : {}),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(timeout),
   });
   let json = null;
   try { json = await res.json(); } catch { json = null; }

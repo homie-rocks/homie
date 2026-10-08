@@ -22,6 +22,7 @@
  * win, and `aggregateRating`, `review` and `offers` are refused (lib/build.mjs warns). A page of the studio's own
  * (site/pages) takes `<!-- homie:schema -->` where it wants these blocks.
  */
+import { currencyScale } from './shop-rules.mjs';
 import { licenseOf } from './license.mjs';
 
 const CONTEXT = 'https://schema.org';
@@ -138,14 +139,14 @@ export function shopOffers(shop, g, origin) {
   if (!/^[A-Z]{3}$/.test(currency)) return [];
   const now = Date.now();
   return shop.items
-    .filter((i) => (!i.game || i.game === g.id) && Number.isInteger(i.price) && i.price > 0)
+    .filter((i) => (!i.game || i.game === g.id) && Number.isInteger(i.price) && i.price >= 0)
     .filter((i) => !(i.ends && Date.parse(i.ends) < now))
     .map((i) => ({
       '@type': 'Offer',
       name: String(i.name ?? i.id),
-      ...(text(i.blurb, 300) ? { description: text(i.blurb, 300) } : {}),
+      ...(text(i.blurb, Infinity) ? { description: text(i.blurb, Infinity) } : {}),
       category: String(i.kind ?? 'item'),
-      price: Number((i.price / 100).toFixed(2)),
+      price: Number((i.price / currencyScale(currency)).toFixed(2)),
       priceCurrency: currency,
       url: `${origin}/shop/?game=${encodeURIComponent(g.id)}&item=${encodeURIComponent(i.id)}`,
       availability: 'https://schema.org/OnlineOnly',

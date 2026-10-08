@@ -169,7 +169,7 @@
  *                                          spent from the guides' day; --model compares a model before setting it)
  *   homie-studio shop                     is the studio's shop selling (its own Stripe), and if not, what is missing
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]   shop.json and SELLING.md
- *   homie-studio shop check               shop.json against the kit's rules (real money, nothing random, the kids rules)
+ *   homie-studio shop check               shop.json against studio settings and provider requirements
  *   homie-studio shop connect [--managed] [--live]   a page on THIS computer where the owner pastes the studio's
  *                                         restricted Stripe key; with it this makes the webhook (0.24.3), and the key
  *                                         and the webhook's secret go straight to the Worker secrets, never a chat or a
@@ -810,7 +810,7 @@ const OUTWARD_FLAGS = {
   'lounge mod': ['url', 'remove'], 'lounge remove': ['url', 'all'],
   'chat remove': ['url', 'all'], 'chat budget': ['url'],
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
-  'shop connect': ['url', 'managed', 'live'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note'], 'shop statements': ['url', 'period', 'send'],
+  'shop connect': ['url', 'managed', 'live'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note'], 'shop statements': ['url', 'period', 'send', 'cursor'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   // With --device it adds a phone to the person's Apple team and installs on it: a flag it does not know stops it.
@@ -1055,7 +1055,7 @@ async function main() {
     }
     if (sub === 'orders') return shopOrders(root, { url });
     if (sub === 'refund') return shopRefund(root, positional[2], { url, reason: flags.get('reason'), note: flags.get('note') });
-    if (sub === 'statements') return shopStatements(root, { url, period: flags.get('period'), send: flags.has('send') });
+    if (sub === 'statements') return shopStatements(root, { url, period: flags.get('period'), cursor: flags.get('cursor') ?? '', send: flags.has('send') });
     return { ok: false, command: 'shop', why: `unknown: shop ${sub} (init, check, connect, disconnect, catalog, orders, refund, statements)` };
   }
   if (cmd === 'agents') {

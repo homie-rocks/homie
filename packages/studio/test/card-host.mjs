@@ -26,9 +26,10 @@ export function mcpServer(cmd, args, { cwd, env = {} } = {}) {
     }
   });
   const request = (method, params) => new Promise((resolve, reject) => {
-    const id = ++seq; waiting.set(id, resolve);
+    const id = ++seq;
+    const timer = setTimeout(() => { if (waiting.delete(id)) reject(new Error(`no answer to ${method}\n${err.slice(-1500)}`)); }, Number(process.env.HOMIE_MCP_TEST_WAIT_MS ?? 120_000));
+    waiting.set(id, (answer) => { clearTimeout(timer); resolve(answer); });
     child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-    setTimeout(() => { if (waiting.has(id)) reject(new Error(`no answer to ${method}\n${err.slice(-1500)}`)); }, Number(process.env.HOMIE_MCP_TEST_WAIT_MS ?? 120_000));
   });
   const close = () => new Promise((r) => { if (child.exitCode !== null) r(); else { child.on('close', r); child.stdin.end(); } });
   return { request, close, stderr: () => err };
@@ -64,7 +65,9 @@ window.addEventListener('message', async (ev) => {
 export async function cardHost({ puppeteer, chrome, args = [], server, uri, result, viewport = { width: 760, height: 900, deviceScaleFactor: 1 }, theme = 'light' }) {
   const http = createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(HOST_PAGE); });
   await new Promise((r) => http.listen(0, '127.0.0.1', r));
-  const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args });
+  let browser;
+  try { browser = await puppeteer.launch({ executablePath: chrome, headless: true, args }); }
+  catch (error) { await new Promise((resolve) => http.close(resolve)); throw error; }
   const page = await browser.newPage();
   await page.setViewport(viewport);
   const errors = [];

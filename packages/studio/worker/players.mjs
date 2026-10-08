@@ -30,7 +30,7 @@ import { cookieValue } from './stats.mjs';
 import { adoptStatements, bumpPlayerStats, dropPlayerData, fall, fallenList, getSave, listSaves, playerData, readPlayerStats, SAVE_LIMITS, savesSummary, wipeSaves, writeSaves } from './saves.mjs';
 import { bytesToB64url, randomToken, sha256Hex, verifyAssertion, verifyRegistration } from './webauthn.mjs';
 import { ACCOUNT_JS, accountPage } from './account-page.mjs';
-import { forgetPlayerShop, livePurchases, shopDataOf } from './shop-store.mjs';
+import { adoptShopStatements, migrated as shopMigrated, forgetPlayerShop, livePurchases, shopDataOf } from './shop-store.mjs';
 import { forgetPlayerHistory, playerHistory } from './lounge-store.mjs';
 
 export const PLAYERS_MIGRATION_FILE = '0004_players.sql';
@@ -234,9 +234,9 @@ async function sessionOf(request, env, url = new URL(request.url)) {
 }
 
 /** A guest for a request with no player yet (the first save). Refused past the address's or the day's limit. */
-async function newGuest(request, env, url) {
+async function newGuest(request, env, url, addressLimit = PLAYER_LIMITS.newPlayersPerHour, counter = 'new') {
   const ip = addressOf(request);
-  if (limited(`new:${ip}`, PLAYER_LIMITS.newPlayersPerHour, HOUR)) return { error: fail(429, 'rate', 'too many new players from this address; try again later') };
+  if (limited(`${counter}:${ip}`, addressLimit, HOUR)) return { error: fail(429, 'rate', 'too many new players from this address; try again later') };
   const capped = await dailyCapReached(env);
   if (capped) return { error: fail(503, 'busy', 'this studio has taken all the new players it takes in one day; try again tomorrow') };
   const id = newPlayerId();
@@ -258,8 +258,10 @@ async function dailyCapReached(env) {
 }
 
 /** Guests nobody has used for guestIdleDays are forgotten (a few at a time), with everything they kept. */
-async function pruneGuests(env) {
-  const old = (await env.DB.prepare('SELECT id FROM players WHERE guest = 1 AND seen_at < ?1 LIMIT 25').bind(Date.now() - PLAYER_LIMITS.guestIdleDays * DAY).all()).results ?? [];
+export async function pruneGuests(env) {
+  const now = Date.now();
+  const ownership = await shopMigrated(env, { complete: false }) ? "AND NOT EXISTS (SELECT 1 FROM entitlements e WHERE e.player = players.id AND e.state = 'active' AND (e.ends_at IS NULL OR e.ends_at > ?2))" : 'AND ?2 > 0';
+  const old = (await env.DB.prepare(`SELECT id FROM players WHERE guest = 1 AND seen_at < ?1 ${ownership} LIMIT 25`).bind(now - PLAYER_LIMITS.guestIdleDays * DAY, now).all()).results ?? [];
   for (const { id } of old) await removePlayer(env, id);
   await env.DB.prepare('DELETE FROM player_challenges WHERE expires_at < ?1').bind(Date.now()).run();
   await env.DB.prepare('DELETE FROM player_sessions WHERE expires_at < ?1').bind(Date.now()).run();
@@ -383,6 +385,8 @@ export const players = Object.freeze({
   async of(request, env) {
     try { const s = await sessionOf(request, env); return s ? { id: s.player.id, name: s.player.name, guest: s.player.guest, owner: s.player.owner } : null; } catch { return null; }
   },
+  /** Shop guest creation uses the studio's new-guest address rate and the daily player limit. */
+  async shopGuest(request, env, url, addressLimit) { return newGuest(request, env, url, addressLimit, 'shop-new'); },
   /** True when the request carries the session of an account its owner marked (`homie-studio players owner`). */
   async isOwner(request, env) { return Boolean((await players.of(request, env))?.owner); },
   /** A short-lived pass naming a player (for a room to recognise them): 'pp_…'. */
@@ -689,7 +693,7 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
       // A guest signing in to their account: what only the guest had moves over, then the guest is gone.
       if (current.player.guest) {
         adopted = await adoptStatements(env, current.player.id, key.player);
-        writes.push(...adopted.statements,
+        writes.push(...adopted.statements, ...(await adoptShopStatements(env, current.player.id, key.player)),
           env.DB.prepare('DELETE FROM player_sessions WHERE player = ?1').bind(current.player.id),
           env.DB.prepare('DELETE FROM player_challenges WHERE player = ?1').bind(current.player.id),
           env.DB.prepare('DELETE FROM players WHERE id = ?1 AND guest = 1').bind(current.player.id));

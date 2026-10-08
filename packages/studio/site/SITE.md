@@ -398,8 +398,7 @@ A studio with a `shop.json` ([../shop/SHOP.md](../shop/SHOP.md)) has `/shop/` (i
 one neutral age question, Buy on Stripe's own page, or a link for a parent), `/shop/thanks`, `/shop/refunds/` (the
 refund policy every seller publishes) and `/shop/parent/<link>` (what a parent opens). The account page lists the
 player's purchases and badges, with the self-serve refund of an unused item. A play page whose game the studio
-sells something for carries the store sheet (the game's `shop.open()`, and Shop in the room sheet); on a kids server
-there is none, and the big screen's sheet is a code to buy on a phone. With a `shop.json`, `/shop/` belongs to the
+sells something for carries the store sheet (the game's `shop.open()`, and Shop in the room sheet); the protective shop policy hides it on kids servers and sends big-screen shoppers to a phone. The studio can edit these policies in shop.json. With a `shop.json`, `/shop/` belongs to the
 shop (a `site/pages/shop/` is not served); without one it is the studio's own. The directory manifest says only
 whether the shop is open and its till.
 

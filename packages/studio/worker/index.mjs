@@ -149,11 +149,17 @@ const json = (body, status = 200, extra = {}) => new Response(`${JSON.stringify(
 });
 
 /** The catalogue `homie-studio build` writes into the site (games.json). */
+const catalogueCache = new WeakMap();
 async function catalogue(env, origin) {
   try {
     const res = await env.ASSETS.fetch(new Request(`${origin}/games.json`));
     if (!res.ok) return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] };
-    return await res.json();
+    const tag = res.headers.get('etag');
+    const hit = catalogueCache.get(env.ASSETS);
+    if (tag && hit?.tag === tag && hit.origin === origin) { await res.body?.cancel(); return hit.value; }
+    const value = await res.json();
+    if (tag) catalogueCache.set(env.ASSETS, { tag, origin, value });
+    return value;
   } catch { return { studio: { name: env.STUDIO_NAME || 'Studio' }, games: [] }; }
 }
 
@@ -500,7 +506,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     // game.json "saves": the play shell around this frame answers @homie-rocks/studio/saves (saves/SAVES.md).
     ...(meta?.saves && want === 'play' ? { saves: true } : {}),
     // The studio sells something in this game (shop/SHOP.md): the play shell answers @homie-rocks/studio/shop. A
-    // watcher has no shop; the shell itself says "kids" on a kids server and shows only a code on a television.
+    // watcher has no shop; the shell follows the studio shop policy for kids servers and television checkout.
     ...(!agent && !watching && shellShop(cat, game) ? { shop: true } : {}),
   };
   let html = await res.text();
@@ -981,7 +987,7 @@ async function route(request, env, ctx) {
         const local = isLocalOrigin(url.origin);
         let qr = null;
         if (!local) try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
-        // The shop on a television is a code to buy on a phone (the TV never sells; never on a kids server).
+        // Television checkout and kids-server visibility follow the studio shop policy.
         const sh = shellShop(cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }

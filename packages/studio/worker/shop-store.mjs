@@ -97,6 +97,33 @@ CREATE TABLE IF NOT EXISTS referral_statements (
 ) WITHOUT ROWID;
 `;
 
+export const SHOP_RESERVATIONS_FILE = '0010_shop_reservations.sql';
+export const SHOP_RESERVATIONS = `-- Checkout expiry in milliseconds; only sessionless rows age out after a one-minute margin.
+ALTER TABLE shop_orders ADD COLUMN expires_at INTEGER;
+-- Previously opened sessions used the same explicit 31-minute lifetime.
+UPDATE shop_orders SET expires_at = (CAST(created_at / 1000 AS INTEGER) + 31 * 60) * 1000 WHERE status IN ('started', 'processing');
+CREATE INDEX IF NOT EXISTS referral_lines_book ON referral_lines (via, currency, order_id);
+`;
+
+export const SHOP_STATEMENTS_FILE = '0011_shop_statements.sql';
+export const SHOP_STATEMENTS = `-- Statements retain independent currencies and an immutable edition while sending.
+ALTER TABLE referral_statements RENAME TO referral_statements_old;
+CREATE TABLE referral_statements (
+  seller TEXT NOT NULL, period TEXT NOT NULL, owed INTEGER NOT NULL, pending INTEGER NOT NULL,
+  currency TEXT NOT NULL, body TEXT NOT NULL, received_at INTEGER NOT NULL,
+  PRIMARY KEY (seller, period, currency)
+) WITHOUT ROWID;
+INSERT INTO referral_statements SELECT * FROM referral_statements_old;
+DROP TABLE referral_statements_old;
+CREATE TABLE referral_editions (id TEXT PRIMARY KEY, period TEXT NOT NULL, issued INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE referral_edition_lines (
+  edition TEXT NOT NULL, order_id TEXT NOT NULL, via TEXT NOT NULL, currency TEXT NOT NULL,
+  net INTEGER NOT NULL, rate REAL NOT NULL, share INTEGER NOT NULL, state TEXT NOT NULL,
+  period TEXT NOT NULL, hold_until INTEGER NOT NULL, created_at INTEGER NOT NULL, item TEXT, paid_at INTEGER,
+  PRIMARY KEY (edition, via, currency, order_id)
+) WITHOUT ROWID;
+`;
+
 const DAY = 86_400_000;
 export const ORDER_ID = /^ord_[A-Za-z0-9]{20}$/;
 const PLAYER_ID = /^pl_[A-Za-z0-9_-]{22}$/;
@@ -107,8 +134,26 @@ export function newOrderId() {
   return `ord_${btoa(String.fromCharCode(...raw)).replace(/[^A-Za-z0-9]/g, '').padEnd(20, '0').slice(0, 20)}`;
 }
 
-/** Whether the shop's tables are in this D1 (a studio deployed before 0.24.0 has none until `npm run deploy`). */
-export async function migrated(env) {
+const completeSchemas = new WeakSet();
+
+/** Name the first missing schema migration, including a present table with an older shape. */
+export async function migrationNeeded(env) {
+  if (!env?.DB) return SHOP_MIGRATION_FILE;
+  if (completeSchemas.has(env.DB)) return null;
+  for (const [file, query] of [
+    [SHOP_MIGRATION_FILE, 'SELECT 1 FROM shop_orders LIMIT 1'],
+    [SHOP_RESERVATIONS_FILE, 'SELECT expires_at FROM shop_orders LIMIT 1'],
+    [SHOP_STATEMENTS_FILE, 'SELECT issued FROM referral_editions LIMIT 1'],
+    [SHOP_STATEMENTS_FILE, 'SELECT edition FROM referral_edition_lines LIMIT 1'],
+  ]) {
+    try { await env.DB.prepare(query).first(); } catch { return file; }
+  }
+  completeSchemas.add(env.DB);
+  return null;
+}
+
+export async function migrated(env, { complete = true } = {}) {
+  if (complete) return !(await migrationNeeded(env));
   if (!env?.DB) return false;
   try { await env.DB.prepare('SELECT 1 FROM shop_orders LIMIT 1').first(); return true; } catch { return false; }
 }
@@ -143,12 +188,11 @@ export async function ownsOf(env, player, now = Date.now()) {
 
 /** What a player spent here this calendar month (paid, and checkouts still open), in minor units. */
 export async function spentThisMonth(env, player, now = Date.now()) {
+  // A Stripe session remains reserved until Stripe confirms its outcome. Test rows never consume a live cap.
   const d = new Date(now);
   const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-  try {
-    const r = await env.DB.prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM shop_orders WHERE player = ?1 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status = 'started' AND created_at >= ?3))").bind(player, start, now - 31 * 60_000).first();
-    return Number(r?.n) || 0;
-  } catch { return 0; }
+  const r = await env.DB.prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM shop_orders WHERE player = ?1 AND mode = ?4 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?3)))").bind(player, start, now, String(env.STRIPE_KEY).includes('_live_') ? 'live' : 'test').first();
+  return Number(r?.n) || 0;
 }
 
 export async function orderById(env, id) {
@@ -168,10 +212,15 @@ export function orderView(r) {
   };
 }
 
+/** Internal reservation decisions leave the player's unfinished order as it was. */
+export function playerOrderStatus(row) {
+  return ['missing', 'released'].includes(row.status) ? (/; previous status: processing$/.test(row.note ?? '') ? 'processing' : 'started') : row.status;
+}
+
 /** Everything of a player's in the shop, for their own export (worker/players.mjs). */
 export async function shopDataOf(env, player) {
   try {
-    const orders = ((await env.DB.prepare("SELECT * FROM shop_orders WHERE player = ?1 AND status != 'started' ORDER BY created_at").bind(player).all()).results ?? []).map(orderView);
+    const orders = ((await env.DB.prepare("SELECT * FROM shop_orders WHERE player = ?1 AND status != 'started' ORDER BY created_at").bind(player).all()).results ?? []).filter((r) => playerOrderStatus(r) !== 'started').map((r) => orderView({ ...r, status: playerOrderStatus(r) }));
     const owns = await ownsOf(env, player);
     const band = await bandOfPlayer(env, player);
     return { orders, owns, ageBand: band };
@@ -199,7 +248,7 @@ export function forgetPlayerShop(env, player) {
 /** Grant an order's entitlements (idempotent on player, key and order). */
 export function grantStatements(env, order, item, now = Date.now()) {
   const starts = item.starts ? Math.max(now, Date.parse(item.starts)) : now;
-  const ends = item.ends ? Date.parse(item.ends) : item.days ? starts + item.days * DAY : null;
+  const ends = item.ends ? Date.parse(item.ends) : item.days ? starts + Math.round(item.days * DAY) : null;
   return (item.gives ?? []).map((key) => env.DB.prepare("INSERT INTO entitlements (player, key, item, order_id, starts_at, ends_at, state, used_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', NULL) ON CONFLICT(player, key, order_id) DO UPDATE SET state = 'active'")
     .bind(order.player, key, item.id, order.id, starts, ends));
 }
@@ -213,5 +262,17 @@ export async function badgeOf(env, player, shop) {
   const key = owns.find((o) => o.key.startsWith('badge:'));
   if (!key) return null;
   const item = (shop?.items ?? []).find((i) => i.id === key.item);
-  return item?.badge ?? key.key.slice(6, 22);
+  return item?.badge ?? key.key.slice(6);
+}
+
+/** Guest purchases move with their player when they sign into an existing account. */
+export async function adoptShopStatements(env, guest, player) {
+  if (!(await migrated(env, { complete: false }))) return [];
+  return [
+    env.DB.prepare('UPDATE shop_orders SET player = ?2 WHERE player = ?1').bind(guest, player),
+    env.DB.prepare('UPDATE entitlements SET player = ?2 WHERE player = ?1').bind(guest, player),
+    env.DB.prepare('UPDATE shop_parent_links SET player = ?2 WHERE player = ?1').bind(guest, player),
+    env.DB.prepare('INSERT INTO player_age (player, band, asked_at) SELECT ?2, band, asked_at FROM player_age WHERE player = ?1 ON CONFLICT(player) DO NOTHING').bind(guest, player),
+    env.DB.prepare('DELETE FROM player_age WHERE player = ?1').bind(guest),
+  ];
 }
