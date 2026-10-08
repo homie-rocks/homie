@@ -1,6 +1,6 @@
 import * as nav from 'navcat';
 import type { BakeConfig, Obstacle } from '../Bake.ts';
-import { axes } from '../Query.ts';
+import { axisBounds } from '../Query.ts';
 import { pack, unpack } from '../State.ts';
 export interface TileData {
   config: BakeConfig;
@@ -83,8 +83,7 @@ export function finishTile(data: TileData, obstacles: readonly Obstacle[]): nav.
   const c = data.config,
     compact = cloneCompact(data.compact);
   for (const region of c.doorRegions ?? []) {
-    const min = axes(region.min, c.up),
-      max = axes(region.max, c.up);
+    const { min, max } = axisBounds(region.min, region.max, c.up);
     nav.markBoxArea([...min, ...max], 2, compact);
   }
   for (const o of obstacles) {

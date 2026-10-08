@@ -4,6 +4,9 @@ import * as nav from 'navcat';
 import { checkConfig, checkObstacle, type BakeConfig, type Obstacle } from './Bake.ts';
 import {
   axes,
+  fromAxes,
+  axisExtents,
+  axisBounds,
   vector,
   distance,
   draw,
@@ -54,7 +57,7 @@ export class Mesh implements NavigationQuery {
     n.tileWidth = n.tileHeight = config.cellSize * config.tileCells;
     this.#state = {
       config: copyConfig(config),
-      extent: axes(queryHalfExtents, config.up),
+      extent: axisExtents(queryHalfExtents, config.up),
       nav: n,
       tiles: {},
       hashes: {},
@@ -147,7 +150,7 @@ export class Mesh implements NavigationQuery {
   addObstacles(obstacles: readonly Obstacle[]): number[] {
     const changes = obstacles.map(obstacle => {
       checkObstacle(obstacle);
-      return { ...obstacle, min: axes(obstacle.min, this.up), max: axes(obstacle.max, this.up) };
+      return { ...obstacle, ...axisBounds(obstacle.min, obstacle.max, this.up) };
     });
     for (const tile of Object.values(this.#state.tiles))
       if (!tile.compact && changes.some(obstacle => this.overlaps(tile, obstacle)))
@@ -232,7 +235,7 @@ export class Mesh implements NavigationQuery {
     point(p);
     if (!from) {
       const a = locate(this, axes(p, this.up));
-      return a.success ? axes(a.position, this.up) : null;
+      return a.success ? fromAxes(a.position, this.up) : null;
     }
     let best: Vector | null = null,
       d = Infinity;
@@ -245,9 +248,9 @@ export class Mesh implements NavigationQuery {
         ref,
         axes(p, this.up),
       );
-      const nd = distance(p, axes(r.position, this.up));
+      const nd = distance(p, fromAxes(r.position, this.up));
       if (r.success && nd < d) {
-        best = axes(r.position, this.up);
+        best = fromAxes(r.position, this.up);
         d = nd;
       }
     }
@@ -265,7 +268,7 @@ export class Mesh implements NavigationQuery {
     );
     return {
       complete: r.success && !!(r.flags & nav.FindPathResultFlags.COMPLETE_PATH),
-      points: r.path.map((p) => axes(p.position, this.up)),
+      points: r.path.map((p) => fromAxes(p.position, this.up)),
       links: r.path.map((p) =>
         p.flags & nav.StraightPathPointFlags.OFFMESH ? this.linkId(p.nodeRef ?? -1) : 0,
       ),
@@ -279,7 +282,7 @@ export class Mesh implements NavigationQuery {
       { ...nav.DEFAULT_QUERY_FILTER, passFilter: (ref) => refs.has(ref) },
       () => draw(random),
     );
-    return r.success ? axes(r.position, this.up) : null;
+    return r.success ? fromAxes(r.position, this.up) : null;
   }
   raycast(from: Point, to: Point): Ray {
     point(from);
@@ -312,7 +315,7 @@ export class Mesh implements NavigationQuery {
     }
     // Upstream rays ignore Y. A roof directly above a room is not reachable by walking straight.
     const clear = t === 1 && Math.abs(p[1] - target[1]) <= this.#state.config.cellHeight * 2;
-    return { clear, fraction: t, point: axes(p, this.up) };
+    return { clear, fraction: t, point: fromAxes(p, this.up) };
   }
   private changed(): void {
     this.#state.revision++;
@@ -364,13 +367,13 @@ export class Mesh implements NavigationQuery {
       ) ?? 0,
     );
   }
-  addCylinder(center: Point, radius: number, height: number): number {
+  addCylinder(baseCenter: Point, radius: number, height: number): number {
     positive(radius, 'cylinder radius');
     positive(height, 'cylinder height');
-    const p = axes(center, this.up);
+    const p = axes(baseCenter, this.up);
     return this.addObstacle({
-      min: axes([p[0] - radius, p[1], p[2] - radius], this.up),
-      max: axes([p[0] + radius, p[1] + height, p[2] + radius], this.up),
+      ...axisBounds([p[0] - radius, p[1], p[2] - radius],
+        [p[0] + radius, p[1] + height, p[2] + radius], this.up, true),
       radius,
     });
   }
@@ -388,7 +391,7 @@ export class Mesh implements NavigationQuery {
       throw new Error('nav: bake a matching doorRegions box before adding a door');
     const id = this.#state.nextId++;
     this.#state.doors[id] = {
-      box: { min: axes(box.min, this.up), max: axes(box.max, this.up) },
+      box: { ...axisBounds(box.min, box.max, this.up) },
       enabled,
     };
     this.applyDoors();
@@ -443,14 +446,14 @@ export class Mesh implements NavigationQuery {
       for (const poly of tile.polys)
         for (let i = 1; i + 1 < poly.vertices.length; i++) {
           for (const index of [poly.vertices[0]!, poly.vertices[i]!, poly.vertices[i + 1]!])
-            triangles.push(...axes(tile.vertices.slice(index * 3, index * 3 + 3), this.up));
+            triangles.push(...fromAxes(tile.vertices.slice(index * 3, index * 3 + 3), this.up));
         }
     }
     for (const data of Object.values(this.#state.tiles))
       seams.push(...this.seamsAt(data.x, data.z, true));
     const links = Object.entries(this.#state.links).map(([id, backend]) => {
       const link = this.#state.nav.offMeshConnections[backend]!;
-      return { id: Number(id), from: axes(link.start, this.up), to: axes(link.end, this.up) };
+      return { id: Number(id), from: fromAxes(link.start, this.up), to: fromAxes(link.end, this.up) };
     });
     return { triangles, links, seams };
   }
@@ -519,7 +522,7 @@ export class Mesh implements NavigationQuery {
   }
   private static restoreData(bytes: Uint8Array, assets: Iterable<Uint8Array>): Mesh {
     const saved = unpack<MeshState>('mesh', bytes),
-      mesh = new Mesh(saved.config, axes(saved.extent, saved.config.up));
+      mesh = new Mesh(saved.config, axisExtents(saved.extent, saved.config.up));
     const runtimeHeaders = saved.nav.tiles;
     Object.assign(mesh.#state, saved, { tiles: {}, nav: { ...saved.nav, tiles: {} } });
     for (const bytes of assets) {

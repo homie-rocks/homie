@@ -1,6 +1,7 @@
 /** Eight-neighbour octile paths, no corner cutting, with optional JPS. */
 import {
   axes,
+  fromAxes,
   distance,
   draw,
   point,
@@ -89,7 +90,7 @@ export class Grid implements NavigationQuery {
   }
   private center(i: number): Vector {
     const s = this.#state;
-    return axes(
+    return fromAxes(
       [
         s.origin[0] + ((i % s.width) + 0.5) * s.cell,
         s.origin[1],
@@ -360,7 +361,7 @@ export class Grid implements NavigationQuery {
     const hit = (t: number, clear: boolean): Ray => ({
       clear,
       fraction: t,
-      point: axes(
+      point: fromAxes(
         [from[0]! + (to[0]! - from[0]!) * t, s.origin[1], from[2]! + (to[2]! - from[2]!) * t],
         this.up,
       ),
@@ -410,6 +411,6 @@ export class Grid implements NavigationQuery {
   }
   private static restoreData(bytes: Uint8Array): Grid {
     const { state: s, options } = unpack<{ state: GridState; options: GridOptions }>('grid', bytes);
-    return new Grid(s.width, s.depth, s.cell, axes(s.origin, s.up), s.blocked, options);
+    return new Grid(s.width, s.depth, s.cell, fromAxes(s.origin, s.up), s.blocked, options);
   }
 }

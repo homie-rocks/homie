@@ -3,7 +3,7 @@ import * as nav from 'navcat';
 import type { HeightField } from '@homie-rocks/heightfield/Field.js';
 import { encodeTile, finishTile, type TileData } from './internal/Tile.ts';
 import { deterministicCos, deterministicSin } from './internal/Math.ts';
-import { axes, vector, point, positive, type Point, type Up } from './Query.ts';
+import { axes, fromAxes, vector, point, positive, type Point, type Up } from './Query.ts';
 export interface Triangles {
   positions: ArrayLike<number>;
   indices?: ArrayLike<number>;
@@ -94,13 +94,9 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
     for (let i = 0; i < positions.length; i += 3) {
       const y = positions[i + 1]!;
       positions[i + 1] = positions[i + 2]!;
-      positions[i + 2] = y;
+      positions[i + 2] = -y;
     }
-    for (let i = 0; i < indices.length; i += 3) {
-      const a = indices[i + 1]!;
-      indices[i + 1] = indices[i + 2]!;
-      indices[i + 2] = a;
-    }
+
   }
   const c = { ...config, origin: axes(config.origin, config.up) },
     border = Math.ceil(c.radius / c.cellSize) + 3,
@@ -203,18 +199,12 @@ export function heightfieldTriangles(
     for (let x = 0; x < nx; x++) {
       const px = minX + x * step,
         pz = minZ + z * step;
-      positions.set(axes([px, field.heightAt(px, pz), pz], up), (z * nx + x) * 3);
+      positions.set(fromAxes([px, field.heightAt(px, pz), pz], up), (z * nx + x) * 3);
       if (x < nx - 1 && z < nz - 1) {
         const a = z * nx + x;
         indices.set([a, a + nx, a + nx + 1, a, a + nx + 1, a + 1], k);
         k += 6;
       }
-    }
-  if (up === 'z')
-    for (let i = 0; i < indices.length; i += 3) {
-      const v = indices[i + 1]!;
-      indices[i + 1] = indices[i + 2]!;
-      indices[i + 2] = v;
     }
   return { positions, indices };
 }
@@ -251,8 +241,8 @@ export function bakeLevel(input: Triangles, config: BakeConfig): BakedTile[] {
   for (const i of indices) {
     minX = Math.min(minX, positions[i * 3]!);
     maxX = Math.max(maxX, positions[i * 3]!);
-    minZ = Math.min(minZ, positions[i * 3 + horizontal]!);
-    maxZ = Math.max(maxZ, positions[i * 3 + horizontal]!);
+    minZ = Math.min(minZ, positions[i * 3 + horizontal]! * (config.up === 'z' ? -1 : 1));
+    maxZ = Math.max(maxZ, positions[i * 3 + horizontal]! * (config.up === 'z' ? -1 : 1));
   }
   const firstX = Math.floor((minX - origin[0]) / size),
     lastX = Math.ceil((maxX - origin[0]) / size) - 1;
@@ -264,7 +254,7 @@ export function bakeLevel(input: Triangles, config: BakeConfig): BakedTile[] {
   for (let i = 0; i < indices.length; i += 3) {
     const triangle = indices.slice(i, i + 3);
     const xs = triangle.map((v) => positions[v * 3]!),
-      zs = triangle.map((v) => positions[v * 3 + horizontal]!);
+      zs = triangle.map((v) => positions[v * 3 + horizontal]! * (config.up === 'z' ? -1 : 1));
     const x0 = Math.max(firstX, Math.floor((Math.min(...xs) - halo - origin[0]) / size));
     const x1 = Math.min(lastX, Math.floor((Math.max(...xs) + halo - origin[0]) / size));
     const z0 = Math.max(firstZ, Math.floor((Math.min(...zs) - halo - origin[2]) / size));

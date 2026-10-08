@@ -28,7 +28,7 @@ export function trianglesFromObject3D(root: THREE.Object3D, options: { up?: Up }
         object.getMatrixAt(n, instance);
         world.multiply(instance);
       }
-      const mirrored = world.determinant() < 0 !== (options.up === 'z');
+      const mirrored = world.determinant() < 0;
       for (let i = first; i + 2 < last; i += 3)
         for (const offset of mirrored ? [0, 2, 1] : [0, 1, 2]) {
           point
@@ -36,7 +36,7 @@ export function trianglesFromObject3D(root: THREE.Object3D, options: { up?: Up }
             .applyMatrix4(world);
           positions.push(
             point.x,
-            options.up === 'z' ? point.z : point.y,
+            options.up === 'z' ? -point.z : point.y,
             options.up === 'z' ? point.y : point.z,
           );
         }
@@ -50,7 +50,7 @@ export function debugMesh(mesh: Mesh, crowd?: Crowd): THREE.Group {
   const group = new THREE.Group(),
     data = mesh.debug();
   const display = (p: ArrayLike<number>): number[] =>
-    mesh.up === 'z' ? [p[0]!, p[2]!, p[1]!] : [p[0]!, p[1]!, p[2]!];
+    mesh.up === 'z' ? [p[0]!, p[2]!, -p[1]!] : [p[0]!, p[1]!, p[2]!];
   const positions: number[] = [];
   for (let i = 0; i < data.triangles.length; i += 3)
     positions.push(...display(data.triangles.slice(i, i + 3)));

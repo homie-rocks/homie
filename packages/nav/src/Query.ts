@@ -29,11 +29,26 @@ export function vector(p: Point): Vector {
   point(p);
   return [p[0]!, p[1]!, p[2]!];
 }
-/** Swapping the two vertical conventions is its own inverse. Geometry winding
- * is reversed by the bake adapter, so upward normals remain upward. */
+/** Rotate world coordinates into the internal Y-up frame: (x,y,z) -> (x,z,-y). */
 export function axes(p: Point, up: Up = 'y'): Vector {
   point(p);
-  return up === 'z' ? [p[0]!, p[2]!, p[1]!] : vector(p);
+  return up === 'z' ? [p[0]!, p[2]!, -p[1]!] : vector(p);
+}
+/** Inverse rotation, from internal Y-up to world coordinates. */
+export function fromAxes(p: Point, up: Up = 'y'): Vector {
+  point(p);
+  return up === 'z' ? [p[0]!, -p[2]!, p[1]!] : vector(p);
+}
+/** Extents have no direction; rotations permute their positive magnitudes. */
+export function axisExtents(p: Point, up: Up = 'y'): Vector {
+  return axes(p, up).map(Math.abs) as Vector;
+}
+/** Rotating a box also changes which corner is its minimum. */
+export function axisBounds(min: Point, max: Point, up: Up = 'y', inverse = false): { min: Vector; max: Vector } {
+  const a = inverse ? fromAxes(min, up) : axes(min, up);
+  const b = inverse ? fromAxes(max, up) : axes(max, up);
+  return { min: a.map((v, i) => Math.min(v, b[i]!)) as Vector,
+    max: a.map((v, i) => Math.max(v, b[i]!)) as Vector };
 }
 export function positive(n: number, name: string): void {
   if (!Number.isFinite(n) || n <= 0) throw new Error(`nav: ${name} must be positive and finite`);

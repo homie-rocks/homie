@@ -9,19 +9,19 @@ import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { Grid } from '@homie-rocks/nav/Grid.js';
 import { Random } from '@homie-rocks/nav/Random.js';
 import { pack, unpack, chunks, joinChunks } from '@homie-rocks/nav/State.js';
-import { axes } from '@homie-rocks/nav/Query.js';
+import { fromAxes as axes, axisBounds } from '@homie-rocks/nav/Query.js';
 import { config, field, flat, tune } from './fixtures.mjs';
 
 for (const up of ['y', 'z']) {
   const p = point => axes(point, up);
-  const make = () => { const cfg = { ...config, up }; const tile = bakeTile(heightfieldTriangles({ heightAt: () => 0 }, -2, -2, 57, 57, .25, up), cfg, 0, 0); const mesh = new Mesh(cfg, p([2, 2, 2])); mesh.loadTile(tile); return { mesh, tile }; };
+  const make = () => { const cfg = { ...config, up }; const tile = bakeTile(heightfieldTriangles({ heightAt: () => 0 }, -2, -2, 57, 57, .25, up), cfg, 0, 0); const mesh = new Mesh(cfg, [2, 2, 2]); mesh.loadTile(tile); return { mesh, tile }; };
   test(`${up}-up: floor unload/reload and enclosing obstacle removal recover a kept target`, () => {
     const { mesh, tile } = make(), c = new Crowd(mesh, .05, .3), id = c.add(p([5, .1, 5]), tune);
     c.target(id, p([9, .1, 9])); mesh.unloadTile(0, 0);
     for (let i = 0; i < 40; i++) c.step();
     assert.equal(c.agent(id).status, 'stranded');
     mesh.loadTile(tile); for (let i = 0; i < 200; i++) c.step(); assert.ok(c.arrived(id, .3));
-    c.place(id, p([5, .1, 5])); const obstacle = mesh.addObstacle({ min: p([1, -1, 1]), max: p([9, 3, 9]) });
+    c.place(id, p([5, .1, 5])); const obstacle = mesh.addObstacle(axisBounds([1, -1, 1], [9, 3, 9], up, true));
     for (let i = 0; i < 20; i++) c.step(); assert.equal(c.agent(id).status, 'stranded');
     mesh.removeObstacle(obstacle); for (let i = 0; i < 200; i++) c.step(); assert.ok(c.arrived(id, .3));
     assert.equal(c.place(id, p([100, 0, 100])), false);
@@ -40,7 +40,7 @@ for (const up of ['y', 'z']) {
     } finally { Object.assign(Math, saved); }
   });
   test(`${up}-up: heightfield level bake, slopes, queries, cylinders and grid agree`, () => {
-    const cfg = { ...config, up }, mesh = new Mesh(cfg, p([2, 2, 2]));
+    const cfg = { ...config, up }, mesh = new Mesh(cfg, [2, 2, 2]);
     for (const tile of bakeHeightfield({ heightAt: x => x * .1 }, cfg, { min: [0, 0], max: [20, 10] })) mesh.loadTile(tile.bytes);
     assert.equal(mesh.path(p([2, .2, 5]), p([18, 1.8, 5])).complete, true);
     const nearest = mesh.nearest(p([5, .5, 5])); assert.ok(Math.abs(nearest[up === 'z' ? 2 : 1] - .6) < .2);

@@ -12,7 +12,7 @@ import { reachable } from './internal/Reachability.ts';
 import { Mesh } from './Mesh.ts';
 import { meshData, locate } from './internal/MeshData.ts';
 import { pack, unpack } from './State.ts';
-import { axes, positive, distance, type Point, type Vector } from './Query.ts';
+import { axes, fromAxes, positive, distance, type Point, type Vector } from './Query.ts';
 export interface AgentTune {
   radius: number;
   height: number;
@@ -186,8 +186,8 @@ export class Crowd {
         ? null
         : Number(Object.keys(m.links).find((key) => m.links[key] === backend) ?? 0) || null);
     return {
-      position: axes(a.position, this.mesh.up),
-      velocity: axes(a.velocity, this.mesh.up),
+      position: fromAxes(a.position, this.mesh.up),
+      velocity: fromAxes(a.velocity, this.mesh.up),
       status:
         a.state === crowd.AgentState.INVALID
           ? 'stranded'
@@ -228,7 +228,7 @@ export class Crowd {
           !DEFAULT_QUERY_FILTER.passFilter(floor, m.nav)
         )
           a.state = crowd.AgentState.INVALID;
-        if (a.state === crowd.AgentState.INVALID) this.place(id, axes(a.position, this.mesh.up));
+        if (a.state === crowd.AgentState.INVALID) this.place(id, fromAxes(a.position, this.mesh.up));
         const target = s.targets[id];
         if (target) {
           const p = locate(this.mesh, target);
