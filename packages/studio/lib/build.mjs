@@ -30,6 +30,10 @@
  *                                          fits, for `dev` (whose R2 is empty). Workers Builds (WORKERS_CI=1) builds
  *                                          as a deploy.
  *
+ *   site/src/rules/<id>.mjs, index.mjs     for a game written as rules plus view (games/<id>/src/rules.ts): its rules as
+ *                                          one checked, guarded module for the Worker (lib/rules-build.mjs,
+ *                                          lib/rules-guard.mjs). The Table runs them: the server is the room's host.
+ *
  * game.json "build" picks how a game becomes files (a ported game keeps its own shape):
  *   (absent) / { "mode": "bundle" }   src/main.ts (or "entry") bundled by esbuild — new games and ES-module ports
  *   { "mode": "static" }              the folder copied as it is (plain <script> games), plus homie-port.js,
@@ -49,7 +53,12 @@ import { buildMedia } from './media.mjs';
 import { buildSiteFiles, isoDate, landingOf, readPosts, readTheme } from './site.mjs';
 import { checkJsonLd } from './schema-check.mjs';
 import { SCHEMA_REFUSED } from '../worker/schema.mjs';
-import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
+import { PACKAGE_ROOT, isRulesGame, listGames, readStudio } from './studio.mjs';
+
+// The rules build brings a JavaScript parser with it. It is loaded when a build first needs it, never when this
+// module is: Homie for Claude Desktop starts the toolkit with no node_modules beside it (scripts/desktop.mjs).
+let rulesBuildModule = null;
+const rulesBuild = () => (rulesBuildModule ??= import('./rules-build.mjs'));
 import { SEAT_MAX, netplayRow } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { basedOnRow, licenseOf, retiredKeys } from '../worker/license.mjs';
@@ -64,6 +73,7 @@ import { audienceOf } from '../worker/shop-rules.mjs';
 import { loungeConfig, loungeProblems } from '../worker/lounge-store.mjs';
 // GAME PARTS (parts/PARTS.md): the three call-outs below are all the build knows of them.
 import { buildParts, partsPlugin } from './parts-build.mjs';
+// RULES ON THE SERVER (NETPLAY.md section 29): a game with a src/rules.ts is built as a view bundle plus a rules module.
 
 /** Never copied into a static game's served folder. */
 const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);
@@ -356,7 +366,8 @@ function pointAtBundle(html, bundle) {
  * its public/ folder. What `build` serves at /games/<id>/, and what the Game Lab (lib/lab.mjs) builds New and Today
  * with. `sourcemap` is esbuild's (the lab keeps a linked map beside its builds); `maps` keeps the site build's map in
  * .studio/maps/<id>/. Returns { mode, warnings, metafile, bundle, chunks } (metafile: the bundle's inputs, null for
- * other modes; bundle: its path in `out`, null when the game has none; chunks: what it loads later).
+ * other modes; bundle: its path in `out`, null when the game has none; chunks: what it loads later; rules: for a game
+ * written as rules plus view, what lib/rules-build.mjs made of its rules, else null).
  *
  * The bundle is ES modules with code splitting: every `await import('./later')` in the game becomes a chunk of its
  * own (assets/chunk-<HASH>.js) that the browser fetches when the game asks, from beside the bundle, wherever the
@@ -372,18 +383,28 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   let bundled = null;
   let chunks = [];
   const budgets = modelBudgetsOf(g, log);
+  // RULES PLUS VIEW (rooms on the server). A game with a src/rules.ts has its rules checked, guarded and loaded first:
+  // a rule the wall refuses stops the build here, with the line named. A game without one is hosted by a player's
+  // browser exactly as before, and cannot ask for the server.
+  const ruled = isRulesGame(g);
+  if (!ruled && g.room?.host === 'server') {
+    throw new Error(`games/${g.id}/game.json asks for "room": { "host": "server" }, but ${mode === 'bundle' ? 'this game has no src/rules.ts: its rules are inside its own code and run in a player\'s browser. Ask for it to be rewritten as rules plus view' : 'a ported game is someone else\'s browser code, which the server cannot run. It stays hosted by a player\'s browser'}.`);
+  }
+  if (ruled && mode !== 'bundle') throw new Error(`games/${g.id} has a src/rules.ts and game.json "build": { "mode": "${mode}" }. A game written as rules plus view is built by Homie itself: take the "build" setting out.`);
+  const { prepareRules, viewPlugin } = ruled ? await rulesBuild() : {};
+  const rules = ruled ? await prepareRules(esbuild, root, g, { log }) : null;
   const bundle = async (entryRel) => {
     const entry = join(g.dir, entryRel);
     if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
     const options = {
-      entryPoints: [entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: sourcemap ?? false,
+      entryPoints: [rules ? 'homie:view' : entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: sourcemap ?? false,
       outdir: join(out, 'assets'), splitting: true, entryNames: hashed ? 'main-[hash]' : 'main', chunkNames: 'chunk-[hash]',
       absWorkingDir: root, logLevel: 'silent', metafile: true,
       loader: LOADERS, assetNames: '[name]-[hash]',
       // game.json assets.budgets, read by createModels() (assets/assets.ts): a constant in the bundle, never a fetch.
       define: { __HOMIE_MODEL_BUDGETS__: JSON.stringify(budgets ?? {}) },
       // GAME PARTS: `@parts/<host>/<id>` and `@parts/<id>` resolve to the part's entry, and the game is credited.
-      plugins: [partsPlugin(root, g.id)],
+      plugins: [partsPlugin(root, g.id), ...(rules ? [viewPlugin(g, rules, entry)] : [])],
     };
     const failed = (error) => {
       const first = error.errors?.[0];
@@ -429,7 +450,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     cpSync(built, out, { recursive: true });
     writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
   } else {
-    await bundle(g.entry ?? 'src/main.ts');
+    await bundle(g.entry ?? (rules ? 'src/view.ts' : 'src/main.ts'));
     const html = join(g.dir, 'index.html');
     if (!existsSync(html)) throw new Error(`games/${g.id}/index.html is missing`);
     const text = readFileSync(html, 'utf8');
@@ -437,7 +458,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   }
   if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
   if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
-  return { mode, warnings, metafile, bundle: bundled, chunks };
+  return { mode, warnings, metafile, bundle: bundled, chunks, rules };
 }
 
 /**
@@ -483,10 +504,13 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   const built = [];
   const retired = [];
   const cache = {};
+  const ruled = [];
+  const browserHosted = [];
   for (const g of games) {
     const out = join(dist, 'games', g.id);
     const started = Date.now();
-    const { mode, warnings, bundle, chunks } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log, hashed: true });
+    const { mode, warnings, bundle, chunks, rules } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log, hashed: true });
+    if (rules) ruled.push({ id: g.id, ...rules }); else browserHosted.push(g.id);
     // The guides' vocabulary (NETPLAY.md section 18): checked here, so a room never meets a line it cannot say.
     vocabFor(g, out);
     // Room chat (NETPLAY.md section 19): game.json "chat", checked here (its quick lines pass the chat floor too).
@@ -509,7 +533,10 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
     });
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} ${chunks.length === 1 ? 'chunk' : 'chunks'} loaded later, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
+    if (rules) log(`  ${g.id}: its rules run on the server (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; three seconds with bots: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler)`);
   }
+  // A game written before rules (its own code is the host) builds and runs exactly as it did. Said in one line.
+  if (browserHosted.length) log(`hosted by a player's browser, as before (no src/rules.ts; nothing to do): ${browserHosted.join(', ')}`);
   const all = listGames(root);
   // No game is handed over whole any more (remix was retired; worker/license.mjs). A one-game build starts from the
   // site as it is, which an older toolkit may have built: what that wrote for remixers (a game's whole source, and
@@ -533,6 +560,9 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   const s = studio.site && typeof studio.site === 'object' ? studio.site : {};
   // studio.json site.order: the catalogue's order is every listing's order.
   const shown = orderGames(all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))), s.order, log);
+  // Server-hosted games: what this build made, and for a one-game build what the catalogue before it said of the others.
+  const rulesOf = new Map(ruled.map((r) => [r.id, { host: 'server', tickHz: r.settings.tickHz, inputHz: r.settings.inputHz, contract: r.schema.contract, build: r.build, rounds: r.rounds }]));
+  if (only) for (const row of readJson(join(dist, 'games.json'))?.games ?? []) if (row?.room?.host === 'server' && row.id !== only && !rulesOf.has(row.id)) rulesOf.set(row.id, row.room);
   // What each game's build is (its landing's own pictures are not part of it): the digest the manifest names.
   const builds = {};
   const rows = shown.map((g) => {
@@ -558,7 +588,10 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     return {
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
       ...(ui ? { ui } : {}),
-      roundSeconds: g.roundSeconds ?? net.roundSeconds ?? null, movement: net.movement ?? null, cover: g.cover ?? null,
+      // A rules game's round is its rules' own (`room.rounds`), and its movement a per-kind choice there: game.json's
+      // `roundSeconds` and `netplay.movement` are not read for it. `room` says where its rules run, to the Worker.
+      roundSeconds: rulesOf.has(g.id) ? rulesOf.get(g.id).rounds?.seconds ?? null : g.roundSeconds ?? net.roundSeconds ?? null, movement: rulesOf.has(g.id) ? null : net.movement ?? null, cover: g.cover ?? null,
+      ...(rulesOf.has(g.id) ? { room: rulesOf.get(g.id) } : {}),
       // game.json "netplay": { "version", "stallMs", "params" } (NETPLAY.md sections 22 to 24): the game's revision (a
       // room runs one build at a time), its own host stall time, and the address's switches its frame is handed.
       ...(netRow.row ? { netplay: netRow.row } : {}),
@@ -660,11 +693,14 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   // A deploy builds first and prints its own result, not the build's: so the build a deploy is about to ship says
   // here which games it changes and which build each is (`homie-studio build` prints the same from its result).
   if (deploy) for (const b of built) log(`  ${b.id}: ${b.changed}${b.changed === 'new' ? '' : ' since the last build here'}, build ${b.hash}`);
+  // The rules of the server-hosted games, where the studio's Worker imports them (site/src/rules/). Written with the
+  // site, never before: a game that did not build has left both as they were.
+  const hosted = (await rulesBuild()).writeRules(root, ruled, all.filter((g) => rulesOf.has(g.id)).map((g) => g.id));
   // All of it is there: now, and only now, it becomes site/dist (lib/stage.mjs).
   const swapped = swapIn(dist, live);
   return {
     ok: true, command: 'build', dist: live, games: built, catalogue: catalogue.games.map((g) => g.id),
-    builds: report, swapped, ...(typed ? { types: typed } : {}),
+    builds: report, swapped, ...(typed ? { types: typed } : {}), ...(hosted.length ? { hosted } : {}),
     // One plain note for the whole build, however many games and keys it is about (never one a key).
     ...(retired.length ? { retired: `Remix was retired, and games now build on each other through parts (pieces a studio shares; ask for a part, or see parts/PARTS.md). These settings no longer do anything and can be deleted: ${retired.join('; ')}. No game's source is served whole; a game made from another keeps its credit.` } : {}),
     songs: catalogue.songs.map((e) => e.slug), videos: catalogue.videos.map((e) => e.slug), mediaSkipped: media.skipped, mediaNotes: media.notes ?? [],

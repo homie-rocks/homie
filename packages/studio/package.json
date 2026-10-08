@@ -1,6 +1,6 @@
 {
   "name": "@homie-rocks/studio",
-  "version": "0.32.1",
+  "version": "0.33.0",
   "description": "A studio for games, music and video on its own Cloudflare: scaffold, multiplayer starters on the netplay contract, a port toolkit that makes existing single-player web games multiplayer, the site Worker with public rooms (Table/Lobby Durable Objects and D1, all on the free Workers plan, no payment method), a site with the hub's sections (Home, Games, Music, Videos, Rooms, Posts with feeds) in the studio's own look, an epic landing page for every game, big songs and videos in the studio's own R2 once it has storage (uploaded, checked by SHA-256, served at the same addresses), deploy, and the homie.rocks directory.",
   "type": "module",
   "license": "Apache-2.0",
@@ -58,6 +58,22 @@
       "types": "./port/powerups.ts",
       "default": "./port/powerups.ts"
     },
+    "./rules": {
+      "types": "./rules/rules.ts",
+      "default": "./rules/rules.ts"
+    },
+    "./rules/view": {
+      "types": "./rules/view.ts",
+      "default": "./rules/view.ts"
+    },
+    "./rules/guard": {
+      "types": "./rules/guard.ts",
+      "default": "./rules/guard.ts"
+    },
+    "./rules/host": {
+      "types": "./rules/host.ts",
+      "default": "./rules/host.ts"
+    },
     "./worker": "./worker/index.mjs",
     "./package.json": "./package.json"
   },
@@ -66,6 +82,7 @@
     "lib/",
     "netplay/",
     "port/",
+    "rules/",
     "worker/",
     "mcp/",
     "saves/",
@@ -89,9 +106,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
+    "@babel/generator": "8.0.6",
+    "@babel/parser": "8.0.7",
+    "@babel/traverse": "8.0.7",
+    "@babel/types": "8.0.6",
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/extensions": "4.5.1",
     "@gltf-transform/functions": "4.5.1",
+    "@jridgewell/trace-mapping": "0.3.31",
     "esbuild": "0.28.1",
     "gltf-validator": "2.0.0-dev.3.10",
     "meshoptimizer": "1.3.0",

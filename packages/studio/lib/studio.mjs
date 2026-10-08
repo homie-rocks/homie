@@ -94,11 +94,31 @@ export function listGames(root) {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
+/**
+ * RULES ON THE SERVER (NETPLAY.md section 29). A game written as rules plus view has a src/rules.ts; its settings are
+ * game.json `"room"` (where its rules run, its tick rate…; rules/rules.ts `roomSettings` checks them at build). Any
+ * other game is hosted by a player's browser, as before.
+ */
+export const isRulesGame = (g) => existsSync(join(g.dir, 'src', 'rules.ts'));
+
+const RULES_HEADER = '// Written by `homie-studio build` from this studio\'s games. Do not edit: the next build writes it again.\n';
+/**
+ * site/src/rules/index.mjs: the table of this studio's server-hosted games as site/src/worker.mjs imports it (an
+ * empty one for a studio with none, which is what a new studio starts with). lib/rules-build.mjs writes the rest.
+ */
+export function rulesIndex(ids = []) {
+  const lines = [`${RULES_HEADER}// The rules of this studio's server-hosted games, for the Worker (site/src/worker.mjs hands them to hostRules).`];
+  ids.forEach((id, i) => lines.push(`import rules${i} from './${id}.mjs';`, `import data${i} from './${id}.data.mjs';`));
+  lines.push(`export default {${ids.map((id, i) => `\n  ${JSON.stringify(id)}: { rules: rules${i}, ...data${i} },`).join('')}${ids.length ? '\n' : ''}};`);
+  return `${lines.join('\n')}\n`;
+}
+
 export function starters() {
   const dir = join(PACKAGE_ROOT, 'starters');
   return readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => {
     const meta = JSON.parse(readFileSync(join(dir, d.name, 'game.json'), 'utf8'));
-    return { id: d.name, name: meta.name, blurb: meta.blurb, players: meta.players, roundSeconds: meta.roundSeconds };
+    // `example`: a starter that shows how something is written (coin-dash: rules on the server) and is not yet offered as the start of a new game.
+    return { id: d.name, name: meta.name, blurb: meta.blurb, players: meta.players, roundSeconds: meta.roundSeconds, ...(meta.example === true ? { example: true } : {}) };
   });
 }
 

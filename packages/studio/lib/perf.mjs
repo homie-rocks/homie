@@ -477,8 +477,10 @@ async function oneRun({ puppeteer, chrome, root, url, game, device, k, seconds, 
       const win = await windowOf(h, a[i], b[i], seconds);
       win.heap.afterGcMb = round((after[i].m.JSHeapUsedSize ?? NaN) / 1048576, 2);
       win.heap.gcGrowthMbPerMin = round((((after[i].m.JSHeapUsedSize ?? NaN) - (a[i].m.JSHeapUsedSize ?? NaN)) / 1048576) / (win.seconds / 60), 2);
-      const shell = await T(h.page.evaluate(() => { const s = window.__shell; if (!s) return null; const t = s.stats ?? {}; return { role: t.role ?? null, seat: s.seat ?? null, peers: t.peers ?? null, snapHzOut: t.snapHzOut ?? null, snapHzIn: t.snapHzIn ?? null, inputHzOut: t.inputHzOut ?? null, inputHzIn: t.inputHzIn ?? null, lastSnapBytes: t.lastSnapBytes ?? null, maxSnapBytes: t.maxSnapBytes ?? null, bytesOutPerS: t.bytesOutPerS ?? null, bytesInPerS: t.bytesInPerS ?? null, rtt: t.rtt ?? null, interpDelay: t.interpDelay ?? null, starvedPct: t.starvedPct ?? null, reconnects: t.reconnects ?? null, link: s.link && typeof s.link === 'object' ? s.link.state ?? null : null, stale: s.stale ? s.stale.ver ?? true : null, reloaded: s.reloaded ?? 0 }; }), 5000);
-      const role = shell?.role === 'host' ? 'host' : 'replica';
+      const shell = await T(h.page.evaluate(() => { const s = window.__shell; if (!s) return null; const t = s.stats ?? {}; return { role: t.role ?? null, seat: s.seat ?? null, peers: t.peers ?? null, snapHzOut: t.snapHzOut ?? null, snapHzIn: t.snapHzIn ?? null, inputHzOut: t.inputHzOut ?? null, inputHzIn: t.inputHzIn ?? null, lastSnapBytes: t.lastSnapBytes ?? null, maxSnapBytes: t.maxSnapBytes ?? null, bytesOutPerS: t.bytesOutPerS ?? null, bytesInPerS: t.bytesInPerS ?? null, rtt: t.rtt ?? null, interpDelay: t.interpDelay ?? null, starvedPct: t.starvedPct ?? null, reconnects: t.reconnects ?? null, link: s.link && typeof s.link === 'object' ? s.link.state ?? null : null, stale: s.stale ? s.stale.ver ?? true : null, reloaded: s.reloaded ?? 0, hosted: s.facts?.hosted ?? null, ticks: s.facts?.ticks ?? null }; }), 5000);
+      // A room whose rules run on the server (NETPLAY.md section 29) has no browser host: both browsers are replicas,
+      // and the second is named apart so its numbers and pictures do not land on the first's.
+      const role = shell?.role === 'host' ? 'host' : run.browsers.some((b) => b.role === 'replica') ? 'replica-2' : 'replica';
       // A browser that ended the window cut off from its room (the helper's link: reconnecting, alone, offline,
       // closed) was not measured playing with the other one: the run is labelled and left out, never judged.
       if (shell) shell.link = linkOf(shell.link);
@@ -492,7 +494,10 @@ async function oneRun({ puppeteer, chrome, root, url, game, device, k, seconds, 
       await T(h.page.screenshot({ path: shot, type: 'png', clip: { x: 0, y: 0, width: vp.width, height: vp.height, scale } }), 15_000);
       run.browsers.push({ role, seat: shell?.seat ?? null, load: h.loadInfo, ...win, render: renderCostOf(cost[i]) ?? { samples: 0, drawCalls: null, triangles: null, note: 'not exposed by the game (exposePort extra: drawCalls, triangles): runtime scene cost was not measured' }, netplay: shell, errors: h.errors.slice(0, 10), screenshot: existsSync(shot) ? relative(out, shot) : null });
     }
-    if (!run.browsers.some((x) => x.role === 'host')) run.blocked ??= 'neither browser became the room\'s host';
+    // The server is such a room's host, and that is a valid room: its tick figures come from the room's watch feed.
+    const hosted = run.browsers.find((x) => x.netplay?.hosted === 'server');
+    if (hosted) run.room = { hosted: 'server', ticks: hosted.netplay.ticks ?? null };
+    else if (!run.browsers.some((x) => x.role === 'host')) run.blocked ??= 'neither browser became the room\'s host';
     if (profile) {
       // A window of its own, still playing: a profiler slows what it watches, so the measured window above never has one.
       const maps = mapsFor(root, game);

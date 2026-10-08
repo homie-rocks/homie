@@ -73,6 +73,13 @@
  *     with `net.prefs.number(key, fallback)`, never a `null` to multiply by), `net.params`
  *     (the address's switches the page passed in), `net.shell` (where the page's
  *     own buttons sit over the game), and `guardGestures()` for a touch game.
+ *   - Rules on the server (revision 10, NETPLAY.md section 29): a game written as
+ *     rules plus view has no browser host. `createNetplay({ rules: true })` is what
+ *     its view library (`@homie-rocks/studio/rules/view`) starts: this browser never
+ *     hosts, its input goes out as steps stamped with the room's tick
+ *     (`net.steps(e, k, entries, r)`), and each snapshot names the room's epoch
+ *     (`snapshot.e`) and carries one row a seat, `[seat, r, ack, lead]`. A game
+ *     written the old way uses none of it and runs exactly as before.
  *
  * WHAT IT DOES NOT DO: rendering, physics, input devices, bots. `Roster` below
  * is the bot-yield bookkeeping a host needs; the bots themselves are the game's.
@@ -81,9 +88,9 @@
 
 export const NETPLAY_VERSION = 1;
 /** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
-export const NETPLAY_REVISION = 9;
+export const NETPLAY_REVISION = 10;
 /** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
-export const NETPLAY_MARK = 'homie-netplay-rev:9';
+export const NETPLAY_MARK = 'homie-netplay-rev:10';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -416,7 +423,13 @@ export interface Peer {
 
 /** One seat's entry in the body-control table: [seat, rs, own (1|0), ack]. */
 export type ControlWire = [seat: number, rs: number, own: number, ack: number];
-export interface Snapshot<D = unknown> { k: number; st: number; d: D; from?: number | null; c?: ControlWire[]; /** Revision 9: a heartbeat: the host's last state again, while its frames hitch. */ hb?: 1 }
+export interface Snapshot<D = unknown> {
+  k: number; st: number; d: D; from?: number | null; c?: ControlWire[]; /** Revision 9: a heartbeat: the host's last state again, while its frames hitch. */ hb?: 1;
+  /** Revision 10, a rules game: the room's epoch. Its `c` rows are `[seat, r, ack, lead]` (the placement counter, the newest input stamp the server had, and how early this seat's input arrived, in sixteenths of a tick; -128: none arrived). */
+  e?: number;
+}
+/** Revision 10: one input entry of a rules game, `[o, ...fields]`: a tick offset from the frame's first tick, then the kind's declared input fields in order (and, for an owner-moved body, its claimed position, velocity and heading: nine numbers). */
+export type StepEntry = number[];
 export interface Checkpoint<D = unknown> { k: number; st: number; d: D; c?: ControlWire[] }
 export interface InputFrame<A = unknown> {
   /** Sequence number per sender. */
@@ -568,6 +581,12 @@ export interface NetplayOptions<C = unknown> {
   watchKeys?: boolean;
   /** May this browser be elected host? Default true. */
   canHost?: boolean;
+  /**
+   * Revision 10: this game is written as rules plus view, and its room's host is the server (NETPLAY.md section 29).
+   * This browser is never elected host, sends its input with `net.steps`, and reads the control table as rows of
+   * `[seat, r, ack, lead]`. Set by the view library (`openRoom`), not by a game.
+   */
+  rules?: boolean;
   /** Game id, for the relay's logs. */
   game?: string;
   /** Seats in a room (the manifest's players.max). The relay takes it from the first visitor of an empty room. */
@@ -897,6 +916,12 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   input(a: A, held?: Iterable<string> | Record<string, boolean>): void;
   /** Player: an explicit press edge (for buttons you do not report as held). */
   press(id: string): void;
+  /**
+   * Revision 10, a rules game: one input frame. `e` is the room's epoch this browser has adopted, `k` the first room
+   * tick the frame covers, `entries` its steps (`[o, ...fields]`, offsets rising) and `r` the placement counter it has
+   * adopted. False when not sent (not seated, not connected). The view library calls it; a game calls `room.input`.
+   */
+  steps(e: number, k: number, entries: StepEntry[], r: number): boolean;
   /** Event. Host: to everyone, or to one seat (number) or one peer id (string, e.g. a screen). Others: to the host. */
   send(kind: string, data?: unknown, to?: number | string): void;
   /** Host: latest input frame from a seat (intents, buttons) whatever the body's control. */
@@ -1454,7 +1479,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   // A watcher (section 16) is a screen that never takes a seat, whatever else it is told.
   const watching = Boolean(opts.watch ?? cfg?.watch);
   const want: Want = watching ? 'screen' : (opts.want ?? cfg?.want ?? 'play');
-  const canHost = opts.canHost ?? true;
+  const rulesGame = opts.rules === true;
+  const canHost = rulesGame ? false : opts.canHost ?? true;
   const defaultOwn = (opts.movement ?? 'owner') === 'owner';
 
   // Where parent notifications go: the shell page around a framed game.
@@ -2498,7 +2524,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   /** Seated replica: read my entry of the control table in the newest snapshot. */
   function controlFrom(s: Snapshot<S>): void {
-    if (seat === null || role === 'host' || !Array.isArray(s.c)) return;
+    // A rules game's rows are [seat, r, ack, lead], read by the view library from the snapshot itself.
+    if (seat === null || role === 'host' || rulesGame || !Array.isArray(s.c)) return;
     const e = s.c.find((x) => x[0] === seat);
     if (!e) return;
     const [, rs, own, ack] = e;
@@ -2516,6 +2543,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const s: Snapshot<S> = { k: Number(m['k']) || 0, st: Number(m['st']), d: m['d'] as S, from: typeof m['from'] === 'number' ? m['from'] : null };
     if (Array.isArray(m['c'])) s.c = m['c'] as ControlWire[];
     if (m['hb'] === 1) s.hb = 1;
+    if (typeof m['e'] === 'number') s.e = m['e'];
     if (acceptSnap(s, bytes, true)) { emit('snapshot', s); if (!snapSeen) { snapSeen = true; autoPlayable(); } }
   }
 
@@ -3136,6 +3164,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       pendingHeld = list;
       if (role === 'host' || seat === null || offline || !connected) { pendingPresses = {}; return; }
       scheduleInput(edge);
+    },
+    steps(e, k, entries, r) {
+      if (role === 'host' || seat === null || offline || !connected || !entries.length) return false;
+      if (!raw({ t: 'in', e, k, s: entries, r })) return false;
+      inputOut.hit(wall());
+      return true;
     },
     press(idp) {
       if (role === 'host' || seat === null || offline || !connected) return;
