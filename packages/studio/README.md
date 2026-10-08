@@ -207,6 +207,24 @@ the owner's session), so `localStorage` throws inside it: a setting or a persona
 `net.link` says whether the browser is in its room, reconnecting, or playing alone because the room
 never answered; `guardGestures()` stops a long press on a phone from selecting text in a touch game.
 
+## A game's rules on the server (an example, 0.33.0)
+
+A game can be written as **rules plus view**: `src/rules.ts` and `src/move.ts` say what is true in the game and run
+in the room's own server object on the studio's Cloudflare; `src/view.ts` draws what it is told and sends what the
+player presses. No player's browser is the room's host, so a changed browser cannot change a score, a pickup or a
+round. `homie-studio build` checks the rules first and refuses anything outside a short list of safe operations,
+naming the line, then guards them so a rule that never ends is stopped while the room carries on
+(`netplay/NETPLAY.md` section 29).
+
+```sh
+npx --no-install homie-studio game new coin-dash --from coin-dash   # the example
+npx --no-install homie-studio dev                                   # its rules run in the local room object
+```
+
+`coin-dash` is an example, not yet a starter to build your own game on: a server-hosted room has no save in this
+version, so a deploy of the site restarts its match. A game with no `src/rules.ts` is not touched by any of this and
+runs in a player's browser exactly as before. So far this has run on a local Cloudflare runtime only.
+
 ## Player accounts and cloud saves
 
 A game whose progress must last (a character that levels up for days, unlocks, a collection, a hardcore mode)

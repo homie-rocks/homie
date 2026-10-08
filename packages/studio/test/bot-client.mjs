@@ -61,6 +61,7 @@ export function botClient({ url, name = 'Bot', steer = null, lead = 2, tickHz = 
     },
   };
   let lastAt = 0;
+  let lastSendAt = 0;
   let pings = null;
   bot.ready = new Promise((resolve, reject) => {
     ws.onerror = (e) => { if (!bot.welcome) reject(new Error(`socket error: ${e?.message ?? 'could not connect'}`)); };
@@ -91,6 +92,10 @@ export function botClient({ url, name = 'Bot', steer = null, lead = 2, tickHz = 
       if (row && row[3] !== -128) bot.leads.push(row[3]);
       const me = bot.me();
       if (!steer || !me) return;
+      // At most one input frame a tick of this client's own time, as a view sends: a client that was held up and
+      // finds a backlog of snapshots answers the newest, never each of them at once.
+      if (now - lastSendAt < 0.8 * (1000 / tickHz)) return;
+      lastSendAt = now;
       const s = steer(me, m, bot);
       if (!s) return;
       const claim = s.pos ? [s.pos.x, s.pos.y, 0, s.vel?.x ?? 0, s.vel?.y ?? 0, 0, s.heading?.x ?? 1, s.heading?.y ?? 0, 0] : [];

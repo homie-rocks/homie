@@ -95,8 +95,20 @@ interface SeatIn {
 /** What a bot is called on the scoreboard, by its seat. */
 export const BOT_NAMES = Object.freeze(['Pip', 'Juno', 'Moss', 'Rook', 'Fern', 'Dash', 'Echo', 'Wren', 'Zed', 'Nova', 'Bix', 'Tam', 'Lark', 'Odo', 'Kit', 'Sol']);
 const SPEECH = /^(?:say|chat|emote)/i;
-/** The tick that ran just before this one in this isolate, whichever room's it was (the overrun check). */
-let lastTick: { blame(): void } | null = null;
+/**
+ * The overrun check's memory: the last few ticks that started in this isolate, whichever rooms' they were, each with
+ * when it started. Time inside a Worker stands still while code runs, so a tick cannot time itself; but the start of
+ * the next tick, in any room, shows how long it took. A tick that starts more than a period late blames the newest
+ * tick here that took more than a period: the one just before it, or, when that one was quick and was itself held up,
+ * the one before that.
+ */
+const recent: { who: { blame(): void }; at: number }[] = [];
+function blameLate(now: number, period: number): void {
+  for (let i = recent.length - 1; i >= 0; i -= 1) {
+    const ended = i + 1 < recent.length ? recent[i + 1].at : now;
+    if (ended - recent[i].at > period) { recent[i].who.blame(); return; }
+  }
+}
 
 export function createHost(o: HostOptions): Host {
   const c = o.compiled;
@@ -297,8 +309,9 @@ export function createHost(o: HostOptions): Host {
       rows.push([b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128]);
       if (q) q.lead = 127;
     }
-    // A snapshot's time stamp always rises: a replica drops one that does not.
-    lastSt = Math.max(now, lastSt + 1);
+    // A snapshot is stamped with the moment its tick was due, so ticks run in a burst to catch up are still a tick
+    // apart to whoever interpolates between them. The stamp always rises: a replica drops one that does not.
+    lastSt = Math.max(lastSt + 1, Math.round(Math.min(now, dueOf(core.tick))));
     const snap = { t: 'snap', from: null, e: epoch, k: core.tick, st: lastSt, d: core.snapshot(), c: rows };
     o.send(snap, JSON.stringify(snap));
     stats.ticks += 1;
@@ -323,12 +336,14 @@ export function createHost(o: HostOptions): Host {
       const now = o.clock.now();
       const due = dueOf(core.tick + 1);
       if (now + 0.5 < due) break;
-      // The overrun check: a tick that starts more than a period late blames the tick that ran just before it here.
-      if (now - due > period) { stats.late += 1; lastTick?.blame(); }
+      // The overrun check: a tick that starts more than a period late blames the tick that held it up.
+      if (now - due > period) { stats.late += 1; blameLate(now, period); }
       streak = blamed ? streak + 1 : 0;
       blamed = false;
+      // A room blamed on every tick for five seconds ends, and the log names the handler that used the most units.
       if (streak >= 5 * tickHz) { end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits }); return; }
-      lastTick = self;
+      recent.push({ who: self, at: now });
+      if (recent.length > 8) recent.shift();
       tickOnce();
       n += 1;
     }
@@ -368,7 +383,7 @@ export function createHost(o: HostOptions): Host {
   function stop(): void {
     running = false; paused = false; ended = true;
     if (timer !== null) { o.clock.clearTimer(timer); timer = null; }
-    if (lastTick === self) lastTick = null;
+    for (let i = recent.length - 1; i >= 0; i -= 1) if (recent[i].who === self) recent.splice(i, 1);
   }
   function end(why: string, facts: Record<string, unknown>): void {
     if (ended) return;

@@ -1336,13 +1336,16 @@ export class Table {
     const now = Date.now();
     const room = this.room;
     if (!room) {
-      if (this.saved?.hosted === 'server') { this.saved = null; await this.ctx.storage.delete('net').catch(() => {}); this.say({ ev: 'host-over', why: 'nobody-returned' }); }
+      if (this.saved?.hosted === 'server') { const was = this.saved.room ?? null; this.saved = null; await this.ctx.storage.delete('net').catch(() => {}); this.say({ ev: 'host-over', why: 'nobody-returned', room: was }); }
       return;
     }
     if (!this.hostRt) return;
     if (this.hostRt.people > 0) { if (now >= this.roomAlarmAt - 1000) this.armRoom(now + ROOM_ALARM_MS); else this.armRoom(this.roomAlarmAt); return; }
     if (now < this.roomAlarmAt - 1000) { this.armRoom(this.roomAlarmAt); return; }
-    // Nobody returned: the room ends. Watchers and AI seats never keep it.
+    // A watcher's open socket keeps the paused room for it to look at, as it keeps a browser-hosted room from being
+    // forgotten today: the room ends a minute after the last one has gone too.
+    if ([...room.clients.values()].some((c) => c.helloed && !c.agent) || room.watchers.size) { this.armRoom(now + ROOM_PAUSE_MS); return; }
+    // Nobody returned: the room ends. An AI seat never keeps it.
     for (const c of [...room.clients.values()]) { if (c.helloed) room.error(c, 'room-over', 'Everyone left, so this room ended.'); room.clients.delete(c.id); try { c.conn.close(1000, 'room-over'); } catch { /* gone */ } }
     room.forget();
     this.report();

@@ -25,14 +25,14 @@
  * named and left alone.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { dirname, join, sep } from 'node:path';
 import { detectLocalAi, localAiVars } from './local-ai.mjs';
 import { projectsCloudflareEnv } from './projects-env.mjs';
 import { routesOf } from './routes.mjs';
 import { ensureMigrations, migrationWord } from './scaffold.mjs';
-import { listGames, workerDir } from './studio.mjs';
+import { isRulesGame, listGames, workerDir } from './studio.mjs';
 
 export const devFile = (root) => join(workerDir(root), '.wrangler', 'homie-dev.json');
 
@@ -281,6 +281,25 @@ function passLines(stream, to, opts) {
   stream.on('end', () => { if (rest) to.write(relayLines(rest, opts).join('\n')); });
 }
 
+/**
+ * RULES ON THE SERVER, WHILE DEV RUNS (NETPLAY.md section 29). A game whose rules run in the Table is in the Worker's
+ * own bundle (site/src/rules/), so a change to its rules, its movement, its tunables, its map or its settings is live
+ * only after a build: the build checks and guards the rules again and writes the module, and Wrangler, which watches
+ * the Worker's files, restarts the local Worker with it. dev does that build by itself when one of those files is
+ * saved. `rulesStamp` is what it compares: the newest change among them, and how many there are.
+ */
+export function rulesStamp(g) {
+  const files = [join(g.dir, 'game.json'), join(g.dir, 'tunables.json')];
+  for (const sub of ['src', 'map']) {
+    const dir = join(g.dir, sub);
+    if (existsSync(dir)) for (const name of readdirSync(dir, { recursive: true })) files.push(join(dir, String(name)));
+  }
+  let newest = 0;
+  let n = 0;
+  for (const f of files) { try { const st = statSync(f); if (st.isFile()) { n += 1; newest = Math.max(newest, st.mtimeMs); } } catch { /* gone */ } }
+  return `${n}:${Math.round(newest)}`;
+}
+
 const builtIds = (root) => { try { return JSON.parse(readFileSync(join(root, 'site', 'dist', 'games.json'), 'utf8')).games.map((g) => g.id); } catch { return null; } };
 
 /**
@@ -391,7 +410,27 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
       }
     } finally { busy = false; }
   };
-  const timer = setInterval(() => { look().catch(() => {}); }, watchMs);
+  // A rules game saved while dev runs is built again (see rulesStamp), one game at a time.
+  const stamps = new Map(listGames(root).filter(isRulesGame).map((g) => [g.id, rulesStamp(g)]));
+  let rebuilding = false;
+  const rulesLook = async () => {
+    if (rebuilding || ending) return;
+    for (const g of listGames(root).filter(isRulesGame)) {
+      const now = rulesStamp(g);
+      if (stamps.get(g.id) === now) continue;
+      stamps.set(g.id, now);
+      rebuilding = true;
+      try {
+        log(`games/${g.id} changed: checking its rules and building it again…`);
+        await build(root, { only: g.id, log });
+        log(`games/${g.id} is rebuilt. The local site restarts with its rules; rooms that were open start a fresh match, and their pages reconnect.`);
+      } catch (error) {
+        log(`games/${g.id} did not build, so the local site still runs what it had:\n${String(error?.message ?? error)}`);
+      } finally { rebuilding = false; }
+      return;
+    }
+  };
+  const timer = setInterval(() => { look().catch(() => {}); rulesLook().catch(() => {}); }, watchMs);
   timer.unref?.();
 
   /** Wait for the local site, then hold it to its own address (socketOriginProblem); a mismatch ends dev. */

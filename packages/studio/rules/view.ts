@@ -145,7 +145,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
 
   /* ---------------------------------------------------------------- the own body, on this browser's copy of the clock */
 
-  interface Mine { id: string; kind: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown>; prev: Vec3 }
+  interface Mine { id: string; kind: string; r: number; pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }
   let mine: Mine | null = null;
   /** The clock: the room tick this browser is on at `at` (ms), and the newest step it has run. */
   let base: { tick: number; at: number } | null = null;
@@ -156,14 +156,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let pressed = new Set<string>();
   let lastSent = '';
   let lastSendAt = 0;
-  let entries: StepEntry[] = [];
-  let periodStart = 0;
+  let entries: { t: number; row: number[] }[] = [];
   let hiddenSent = false;
   const TARGET_LEAD = 1;
   const myKind = (): (typeof schema.kinds)[number] | null => (mine ? kindOf.get(mine.kind) ?? null : null);
   const tickAt = (now: number): number => (base ? base.tick + (now - base.at) / period : 0);
+  /** The tick `move` is being run for: the step just taken, or the one after it while the own body is drawn between ticks. */
+  let moveTick = 0;
   const moveCtx = brand(Object.freeze({
-    get tick() { return stepped; }, dt: 1 / tickHz, tune, math,
+    get tick() { return moveTick; }, dt: 1 / tickHz, tune, math,
     ticks: (seconds: number): number => { const n = Math.round(Number(seconds) * tickHz); return Number(seconds) > 0 ? Math.max(1, n) : 0; },
     map: brand(Object.freeze({ name: game.map.name ?? 'main', spot: (name: string) => spots[name]?.[0], spots: (name: string) => spots[name] ?? Object.freeze([]), sweep: (body: any, delta: unknown) => sweepMap(map, body, delta, myKind()?.radius ?? 0, dims) })),
   }));
@@ -171,12 +172,25 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const rtt = net.stats().rtt ?? 100;
     base = { tick: k + Math.ceil(rtt / period + TARGET_LEAD) + sendEvery - 1, at: clock() };
     stepped = Math.floor(base.tick) - 1;
-    entries = []; periodStart = stepped + 1; lastSent = ''; leads.length = 0; pressed = new Set();
+    entries = []; lastSent = ''; leads.length = 0; pressed = new Set();
   }
   function adopt(u: Unpacked): void {
-    mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: { ...u.motion }, prev: u.pos };
+    mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: { ...u.motion } };
     lastSent = '';
   }
+  /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
+  function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body {
+    const fn = moves[kindName];
+    if (!fn) return body;
+    moveTick = t;
+    G.left = Math.max(1, Math.floor(schema.settings.budget.tick / 4));
+    try { fn(body, input, moveCtx); } catch (err) { if (!(err instanceof BudgetError)) console.warn('[room] move', err); }
+    G.left = Infinity;
+    // Rounded to 32-bit floats, as the server rounds: both hold the same numbers.
+    return { pos: vec3(body.pos, dims), vel: vec3(body.vel, dims), heading: dir(body.heading, dims), grounded: body.grounded === true, motion: body.motion };
+  }
+  /** The input values the last step held (a press is never held). */
+  let held: Readonly<Record<string, unknown>> = Object.freeze({});
   /** One step of the own body on tick `t`: the input step, `move`, and an entry when the sample or the claim changed. */
   function step(t: number): void {
     const kind = myKind();
@@ -188,44 +202,49 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (fd.t === 'press') { const on = pressed.has(name); input[name] = on; values.push(on ? 1 : 0); if (on) press = true; } else { const v = coerce(fd, sample[name] ?? fd.init, dims); input[name] = v; values.push(v === true ? 1 : v === false ? 0 : v as number); }
     }
     pressed = new Set();
-    mine.prev = mine.pos;
-    const fn = kind.owner ? moves[kind.name] : null;
-    if (fn) {
-      const body = { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion };
-      G.left = Math.max(1, Math.floor(schema.settings.budget.tick / 4));
-      try { fn(body, Object.freeze(input), moveCtx); } catch (err) { if (!(err instanceof BudgetError)) console.warn('[room] move', err); }
-      G.left = Infinity;
-      // Rounded to 32-bit floats, as the server rounds: both hold the same numbers.
-      mine.pos = vec3(body.pos, dims); mine.vel = vec3(body.vel, dims); mine.heading = dir(body.heading, dims); mine.grounded = body.grounded === true;
+    held = Object.freeze({ ...input });
+    if (kind.owner) {
+      const body = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
+      mine.pos = body.pos; mine.vel = body.vel; mine.heading = body.heading; mine.grounded = body.grounded;
     }
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
     const sig = JSON.stringify([values, claim]);
-    if (sig !== lastSent || press) { entries.push([t - periodStart, ...values, ...claim]); lastSent = sig; }
+    if (sig !== lastSent || press) { entries.push({ t, row: [...values, ...claim] }); lastSent = sig; }
   }
+  /**
+   * The end of a send period (`sendEvery` ticks, counted from tick 0): one frame with the entries made in it, `k` the
+   * period's first tick. A period with no entry sends nothing; after 250 ms without a frame the held values are sent
+   * again as an ordinary entry on the current tick.
+   */
   function flush(now: number, t: number): void {
-    // After 250 ms without a frame the held values are sent again as an ordinary entry on the current tick.
-    if (!entries.length && now - lastSendAt >= 250 && mine) { lastSent = ''; step0(t); }
-    if (!entries.length || !mine) return;
-    if (net.steps(epoch, periodStart, entries, mine.r)) lastSendAt = now;
+    if (!mine) { entries = []; return; }
+    if (!entries.length && now - lastSendAt >= 250) keepalive(t);
+    if (!entries.length) return;
+    const k = Math.min(entries[0].t, t - (t % sendEvery));
+    const rows: StepEntry[] = entries.map((e) => [e.t - k, ...e.row]);
     entries = [];
+    if (net.steps(epoch, k, rows, mine.r)) lastSendAt = now;
   }
-  /** The held values as an entry on tick `t`, without stepping the body again (the keepalive). */
-  function step0(t: number): void {
+  /** The held values as an entry on tick `t`, without stepping the body again. */
+  function keepalive(t: number): void {
     const kind = myKind();
     if (!mine || !kind) return;
     const values = kind.input.map(([name, fd]) => (fd.t === 'press' ? 0 : Number(coerce(fd, sample[name] ?? fd.init, dims))));
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
-    periodStart = t; entries = [[0, ...values, ...claim]]; lastSent = JSON.stringify([values, claim]);
+    entries = [{ t, row: [...values, ...claim] }]; lastSent = JSON.stringify([values, claim]);
   }
   function pump(): void {
     if (closed) return;
     if (net.offline) setStatus(net.closedWhy ? 'closed' : 'offline');
     const now = clock();
     const hidden = typeof document !== 'undefined' && document.hidden === true;
+    // Effects play for everyone who draws the room: a watcher has no body and still sees them.
+    fire();
     if (!mine || !base || net.seat === null || !net.connected) return;
     if (hidden) {
-      // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player.
-      if (!hiddenSent) { hiddenSent = true; const kind = myKind(); if (kind) { sample = {}; lastSent = ''; step0(Math.floor(tickAt(now)) + 1); flush(now, periodStart); } }
+      // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player:
+      // one neutral entry at once (every field at its init, no press), then no more steps until the tab shows again.
+      if (!hiddenSent) { hiddenSent = true; sample = {}; pressed = new Set(); const t = Math.floor(tickAt(now)) + 1; keepalive(t); lastSendAt = 0; flush(now, t); }
       base = null;
       return;
     }
@@ -235,12 +254,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (t - stepped > Math.ceil(tickHz / 4) && latest) { rebase(latest.k); t = Math.floor(tickAt(now)); }
     while (stepped < t) {
       stepped += 1;
-      if (!entries.length) periodStart = stepped;
       step(stepped);
-      if (stepped - periodStart + 1 >= sendEvery) flush(now, stepped);
+      if (stepped % sendEvery === sendEvery - 1) flush(now, stepped);
     }
-    flush(now, stepped);
-    fire();
   }
 
   function onSnapshot(s: Snapshot<unknown>): void {
@@ -257,7 +273,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // The server placed the body (a spawn, a round reset, a seat taken over), or the room began again: jump there.
       const placed = !mine || mine.id !== me.id || mine.r !== me.r || changedEpoch;
       if (placed) { adopt(me); emit('placed', entityOf(me, true)); }
-      else if (mine) { mine.motion = { ...me.motion }; if (!kindOf.get(me.kind)?.owner) { mine.prev = mine.pos; mine.pos = me.pos; mine.vel = me.vel; mine.heading = me.heading; mine.grounded = me.grounded; } }
+      else if (mine) { mine.motion = { ...me.motion }; if (!kindOf.get(me.kind)?.owner) { mine.pos = me.pos; mine.vel = me.vel; mine.heading = me.heading; mine.grounded = me.grounded; } }
       if (!base || changedEpoch) rebase(f.k);
       const row = f.rows.find((x) => x[0] === seat);
       if (row && row[3] !== -128 && base) {
@@ -318,15 +334,28 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
 
   /* ---------------------------------------------------------------- what the view reads */
 
-  /** The own body between ticks: where the last whole step left it, moved on by how much of the next tick has passed. */
+  /**
+   * The own body between ticks (section 6.3 of the design): the body as of the last whole step, and `move` run once
+   * more on a copy for the whole next tick with the input as it is right now. What is drawn is the point between
+   * the two, by how much of the tick has passed, and the copy is thrown away. So the stick answers on the next
+   * drawn frame, not on the next tick.
+   */
   function meNow(): Entity | null {
     if (!mine || !latest) return null;
     const server = latest.ents.get(mine.id);
     if (!server) return null;
     const kind = kindOf.get(mine.kind);
     let pos = mine.pos;
-    if (kind?.owner && base) { const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped)); pos = vec3({ x: lerp(mine.prev.x, mine.pos.x, a), y: lerp(mine.prev.y, mine.pos.y, a), z: lerp(mine.prev.z, mine.pos.z, a) }, dims); }
-    return entityOf({ ...server, pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, true);
+    let heading = mine.heading;
+    if (kind?.owner && base) {
+      const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
+      const now: Record<string, unknown> = {};
+      for (const [name, fd] of kind.input) now[name] = fd.t === 'press' ? pressed.has(name) : coerce(fd, sample[name] ?? fd.init, dims);
+      const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: { ...mine.motion } }, Object.freeze(now), stepped + 1);
+      pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
+      heading = next.heading;
+    }
+    return entityOf({ ...server, pos, vel: mine.vel, heading, grounded: mine.grounded, motion: mine.motion }, true);
   }
   function drawn(id: string): Entity | null {
     if (mine && id === mine.id) return meNow();

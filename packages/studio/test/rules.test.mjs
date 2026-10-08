@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ARRAY_METHODS, MAPSET_METHODS, MATH_METHODS, REFUSED_NAMES, STRING_METHODS, WORLD_METHODS } from '../lib/rules-guard.mjs';
-import { COIN_DASH, COIN_MAP, hostRig, loadGame, roomRig, writeGame } from './rules-kit.mjs';
+import { COIN_DASH, COIN_MAP, fakeClock, hostRig, loadGame, roomRig, writeGame } from './rules-kit.mjs';
 
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-rules-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -391,6 +391,19 @@ test('the wall at run time: a slow handler and one that grabs memory are stopped
   const method = await wallGame('method', 'const list = [3, 1, 2]; const k = "so" + "rt"; self.n = 1; const fn = list[k]; self.n = 2;');
   method.rig.ticks(3);
   assert.match(method.rig.host.core.stats.lastError, /"sort" is a function: a method may be called, never read as a value/);
+  // The same through an optional computed key.
+  const opt = await wallGame('opt', 'const k = "proto" + "type"; self.n = 1; const p = self?.[k]; self.n = 2;');
+  opt.rig.ticks(3);
+  assert.match(opt.rig.host.core.stats.lastError, /^trouble\.tick: the key "prototype" is not allowed in rules/);
+  // A query result is a frozen copy: a write to it throws, whatever the types said.
+  const frozen = await wallGame('frozen', 'self.n = 1; const found = world.near(self.pos, 8); found[0].n = 99; self.n = 2;');
+  frozen.rig.ticks(3);
+  assert.match(frozen.rig.host.core.stats.lastError, /^trouble\.tick: .*(read only|read-only|not extensible|frozen)/i);
+  assert.equal(frozen.rig.ents(1)[0].fields[0], 1);
+  // An event sent without being declared is named.
+  const undeclared = await wallGame('undeclared', 'self.n = 1; world.send(self.id, "bonus", {}); self.n = 2;');
+  undeclared.rig.ticks(3);
+  assert.equal(undeclared.rig.host.core.stats.lastError, 'trouble.tick: the event "bonus" is not declared in shapes');
   // When a tick has used budget.tick, handlers not yet run are skipped and events not yet run stay queued.
   const greedy = await wallGame('greedy', 'world.send(self.id, "ping", {}); world.send(self.id, "ping", {}); world.send(self.id, "ping", {}); world.send(self.id, "ping", {}); world.send(self.id, "ping", {}); world.send(self.id, "ping", {});', ', on: { ping(world, self) { self.n += 1; for (let i = 0; i < 9000; i += 1) { self.n += 0; } } }');
   greedy.rig.ticks(12);
@@ -399,6 +412,39 @@ test('the wall at run time: a slow handler and one that grabs memory are stopped
   const ran = greedy.rig.ents(1)[0].fields[0];
   greedy.rig.host.core.setPolicy({});
   assert.ok(ran > 10 && ran < 6 * 10, `${ran} of the queued events have run so far, four a tick, and none was lost`);
+});
+
+test('the overrun check: a room whose ticks keep starting late ends, and a room that only ran after a slow one does not', async () => {
+  const { L, compile } = await coinDash();
+  const c = compile({});
+  // One isolate, one clock: a slow room's tick takes 120 ms of it, so the tick after it starts late, whichever room's it is.
+  const clock = fakeClock();
+  const fast = hostRig(L, c, { clock });
+  const slow = hostRig(L, c, { clock, host: { send: (m) => { if (m.t === 'snap') clock.t += 120; } } });
+  slow.join(0); fast.join(0);
+  assert.ok(slow.host.running && fast.host.running);
+  clock.advance(4000);
+  assert.equal(slow.ended.length, 0, 'not yet: five seconds of it');
+  clock.advance(12_000);
+  assert.equal(slow.ended.length, 1);
+  assert.equal(slow.ended[0].why, 'overrun');
+  assert.ok(slow.lines.some((l) => l.ev === 'host-ended' && l.why === 'overrun' && typeof l.worst === 'string'), 'the log names the handler that used the most');
+  assert.equal(fast.ended.length, 0, 'the room that ran after it was slowed, not ended');
+  assert.equal(fast.host.running, true);
+  // With the slow room gone the other keeps its beat: no tick starts late any more.
+  const before = fast.host.facts().late;
+  const tick = fast.host.tick;
+  clock.advance(2000);
+  assert.equal(fast.host.tick, tick + 40);
+  assert.equal(fast.host.facts().late, before === 0 ? 0 : fast.host.facts().late);
+  // A room that hitches once is not ended: lateness does not add up, and the clock never jumps.
+  const one = hostRig(L, c);
+  one.join(0);
+  one.clock.advance(1000);
+  one.clock.t += 1500;
+  one.clock.advance(3000);
+  assert.equal(one.ended.length, 0);
+  assert.ok(one.host.tick >= 20 + 60 && one.host.tick <= 20 + 60 + 4, `after a 1.5 s hitch it is on tick ${one.host.tick}: the gap was not run again`);
 });
 
 test('world has no way out: everything reachable from it is plain frozen data and functions the runtime made', async () => {
