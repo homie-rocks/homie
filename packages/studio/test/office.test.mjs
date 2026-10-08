@@ -634,3 +634,13 @@ test('a new studio has the back office\'s migration, after the players one, and 
   sql.exec(OFFICE_MIGRATION);
   assert.ok(sql.prepare("SELECT name FROM sqlite_master WHERE name = 'office_invites'").get());
 });
+
+test('the office tells the owner that room saves are failing while play continues', async () => {
+  const { fetchSite, owner, seat } = await site();
+  const player = await seat('owl-run', 'pub-1', { name: 'Player' });
+  player.table.storageHealth = { ok: false, message: 'SQLITE_FULL', since: 1000 };
+  const office = await (await fetchSite('/_studio/api/office', { headers: owner })).json();
+  const room = office.games.find((g) => g.id === 'owl-run').rooms.find((r) => r.room === 'pub-1');
+  assert.equal(room.durability?.ok, false);
+  assert.match(room.durability.message, /SQLITE_FULL/);
+});

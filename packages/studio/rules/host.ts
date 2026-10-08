@@ -47,7 +47,7 @@ import { useAgents, type Agents, type AgentsSaved, type Vocabulary } from '../ag
 import { DEFAULT_POLICY, type Netplay, type Peer, type Policy, type Slot } from '../netplay/netplay.ts';
 import { createCore } from './core.ts';
 import type { Core, CoreOut, Driver, SavedCore, StepInput } from './core.ts';
-import { coerce, coerceFields, fromBytes, initFields, toBytes, unpackVec } from './pack.ts';
+import { coerce, coerceFields, num, own, fromBytes, initFields, toBytes, unpackVec } from './pack.ts';
 import type { Compiled, KindTable, Vec3 } from './rules.ts';
 
 export interface HostClock {
@@ -66,8 +66,12 @@ export interface HostOptions {
   /** One outgoing frame, for the relay to fan out. `text` is the frame already encoded, when the runtime encoded it. */
   send(frame: Record<string, unknown>, text?: string): void;
   clock: HostClock;
-  /** Where a room is saved. Nothing is written in this release: the save in storage arrives with the next. */
-  store?: unknown;
+  /** Synchronous save: the caller's storage output gate holds this tick's outgoing frames until confirmed. */
+  store?: { save(bytes: Uint8Array): void };
+  /** Table recovery reserves this epoch in storage before starting this host. Ordinary deterministic restores omit it. */
+  restoreEpoch?: number;
+  startDelayMs?: number;
+  onTick?(): void;
   log?(line: Record<string, unknown>): void;
   /** A number in [0, 1) for a fresh epoch and seed. */
   random?(): number;
@@ -148,10 +152,47 @@ export function createHost(o: HostOptions): Host {
   // A log that throws takes nothing down with it.
   const log = (line: Record<string, unknown>): void => { try { o.log?.(line); } catch { /* nothing to say it with */ } };
   const random = o.random ?? Math.random;
-  const saved = o.restore ? fromBytes(o.restore) as { v: number; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][] } : null;
+  const saved = o.restore ? fromBytes(o.restore) as { v: number; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][]; inputs?: [number, SeatIn][] } : null;
+  if (o.restore && (!saved || typeof saved !== 'object' || Array.isArray(saved))) throw new Error('saved host is not an object');
+  if (saved) {
+    const check = (ok: unknown): void => { if (!ok) throw new Error('saved host inputs are invalid'); };
+    const uint = (n: unknown): boolean => Number.isSafeInteger(n) && (n as number) >= 0;
+    check(saved.core && Array.isArray(saved.names) && Array.isArray(saved.queues));
+    check(saved.names.length <= c.seats && saved.queues.length <= c.seats);
+    for (const rows of [saved.names, saved.queues, ...(saved.inputs === undefined ? [] : [saved.inputs])]) {
+      check(Array.isArray(rows) && rows.every((row) => Array.isArray(row)));
+      check(new Set(rows.map((row) => row[0])).size === rows.length);
+    }
+    for (const [seat, name] of saved.names) check(uint(seat) && seat < c.seats && typeof name === 'string' && name.length <= 40 && !saved.core.seats?.some(s => s[0] === seat && s[2] === 'reserved'));
+    const claimOk = (claim: StepInput['claim']): boolean => claim === null || Boolean(claim && uint(claim.r) && ['pos', 'vel', 'heading'].every((key) => {
+      const v = own(claim, key); return v && ['x', 'y', 'z'].every((axis) => typeof own(v, axis) === 'number' && Number.isFinite(own(v, axis)));
+    }));
+    const valuesOk = (seat: number, values: unknown): boolean => {
+      const ent = saved.core.ents.find((w) => w[11] === seat);
+      const kind = ent && c.kinds[ent[2] as number];
+      return Boolean(kind && JSON.stringify(values) === JSON.stringify(coerceFields(kind.input, values, c.dims)));
+    };
+    for (const [seat, held, claim, newest, ack] of saved.queues) check(uint(seat) && seat < c.seats && valuesOk(seat, held) && claimOk(claim) && uint(newest) && uint(ack));
+    if (saved.inputs !== undefined) {
+      check(Array.isArray(saved.inputs) && saved.inputs.length <= c.seats);
+      for (const [seat, q] of saved.inputs) {
+        check(uint(seat) && seat < c.seats && q && valuesOk(seat, q.held) && claimOk(q.claim) && uint(q.newest) && uint(q.ack) && uint(q.lastFrameTick) && Number.isInteger(q.lead) && q.lead >= -127 && q.lead <= 127);
+        check(Array.isArray(q.stamps) && q.stamps.length <= 256 && q.stamps.every(uint) && Array.isArray(q.entries) && q.entries.length <= c.settings.tickHz + 1);
+        for (const e of q.entries) check(uint(e.at) && valuesOk(seat, e.values) && claimOk(e.claim) && Array.isArray(e.presses) && e.presses.every((p) => c.kinds.some((k) => k.input.some(([name, fd]) => name === p && fd.t === 'press'))));
+      }
+    }
+  }
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
-  const core = createCore(c, { seed: Math.floor(random() * 4294967296) >>> 0, epoch: (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, stage: o.stage, decisions: !o.check });
+  const core = createCore(c, { seed: Math.floor(random() * 4294967296) >>> 0, epoch: (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
+  if (saved && o.restoreEpoch !== undefined) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
+  let lastSaveAt = o.clock.now();
+  let saveTick = core.tick;
+  let forceSave = false;
+  let saveFailures = 0;
+  let retrySaveAt = 0;
+  let roundPhase = saved?.core.round[1] ?? 1;
+  let firstTick = true;
   const names = new Map<number, string>(saved?.names ?? []);
   /** Seats whose holder is here now, by seat, with whether it is a person (an AI never keeps the world ticking). */
   const present = new Map<number, boolean>();
@@ -228,7 +269,7 @@ export function createHost(o: HostOptions): Host {
     }
   }
   let running = false;
-  let paused = false;
+  let paused = Boolean(saved && o.restoreEpoch !== undefined);
   let ended = false;
   /** The pending timer, and whether there is one. `armed` is the truth: a clock may hand back any value as its handle. */
   let timer: unknown = null;
@@ -266,6 +307,7 @@ export function createHost(o: HostOptions): Host {
 
   // A restored room keeps each seat's held input, its newest stamp and its acknowledgement.
   for (const [seat, held, claim, newest, ack] of saved?.queues ?? []) queues.set(seat, { held, claim, entries: [], newest, stamps: [], ack, lead: 127, lastFrameTick: core.tick });
+  for (const [seat, q] of saved?.inputs ?? []) queues.set(seat, q);
   const neutral = (kind: KindTable): Record<string, unknown> => { const v = initFields(kind.input, c.dims); for (const [name, fd] of kind.input) if (fd.t === 'press') v[name] = false; return v; };
   function queueOf(seat: number, kind: KindTable): SeatIn {
     let q = queues.get(seat);
@@ -278,23 +320,23 @@ export function createHost(o: HostOptions): Host {
 
   function onIn(m: Record<string, unknown>): void {
     const seat = m.from;
-    if (!Number.isInteger(seat) || (Number(m.e) >>> 0) !== epoch || !Array.isArray(m.s)) { stats.dropped += 1; return; }
+    if (!Number.isInteger(seat) || m.e !== epoch || !Array.isArray(m.s)) { stats.dropped += 1; return; }
     const body = core.bodyOf(seat as number);
     if (!body || !hasHands(seat as number, body.driver)) return;
     const kind = body.kind;
     const q = queueOf(seat as number, kind);
     const K = core.tick;
-    const k = Number(m.k) >>> 0;
+    const k = num(m.k) >>> 0;
     stats.ins += 1;
     q.lastFrameTick = K;
     // Lead: from this frame's arrival to the moment its first tick was due, in sixteenths of a tick. Negative is late.
     const lead = Math.max(-127, Math.min(126, Math.round(((base.ms + (k - base.tick) * period - o.clock.now()) / period) * 16)));
     if (lead < q.lead) q.lead = lead;
-    const r = Number(m.r) & 0xffff;
+    const r = num(m.r) & 0xffff;
     let before = -1;
     for (const raw of (m.s as unknown[]).slice(0, 64)) {
       if (!Array.isArray(raw)) break;
-      const off = Number(raw[0]);
+      const off = num(raw[0]);
       if (!Number.isInteger(off) || off <= before || off > 4096) break;
       before = off;
       const j = (k + off) >>> 0;
@@ -401,7 +443,7 @@ export function createHost(o: HostOptions): Host {
             speech: raw.speech === 'off' || raw.speech === 'lines' ? raw.speech : 'game' };
           if (previous.kind !== policy.kind || previous.aiSeats !== policy.aiSeats || previous.guides !== policy.guides) rosterText = '';
         }
-        if (p) core.setPolicy({ bots: p.bots === 'off' ? 'off' : 'fill', level: Number(p.skill?.level ?? p.level), levelMax: Number(p.levelMax), reserved: policy.kind === 'hybrid' || policy.kind === 'beginner' ? policy.aiSeats + policy.guides : 0 });
+        if (p) core.setPolicy({ bots: p.bots === 'off' ? 'off' : 'fill', level: num(own(own(p, 'skill'), 'level') ?? own(p, 'level')), levelMax: num(own(p, 'levelMax')), reserved: policy.kind === 'hybrid' || policy.kind === 'beginner' ? policy.aiSeats + policy.guides : 0 });
         return;
       }
       default: return;
@@ -424,6 +466,7 @@ export function createHost(o: HostOptions): Host {
     let roster = false;
     for (const x of out) {
       if (x.t === 'round') {
+        if (x.phase === 'over') forceSave = true;
         const ms = (t: number): number => Math.round(now + (t - core.tick) * period);
         const drivers = new Map(core.bodies().map((b) => [b.seat, b.driver]));
         o.send({ t: 'round', round: {
@@ -435,7 +478,7 @@ export function createHost(o: HostOptions): Host {
       else if (x.t === 'fx') o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, x.list] });
       else if (x.t === 'seats') roster = true;
       else if (x.t === 'shared') o.send({ t: 'state', k: 'shared', d: core.shared() });
-      else if (x.t === 'epoch') { epoch = x.epoch; queues.clear(); roster = true; } else if (x.t === 'fail') end('budget', { kind: x.kind, handler: x.handler });
+      else if (x.t === 'epoch') { forceSave = true; epoch = x.epoch; queues.clear(); roster = true; } else if (x.t === 'fail') end('budget', { kind: x.kind, handler: x.handler });
     }
     if (roster || !rosterText) sendRoster();
   }
@@ -443,6 +486,8 @@ export function createHost(o: HostOptions): Host {
   /* ---------------------------------------------------------------- the tick */
 
   function tickOnce(): void {
+    if (firstTick) firstTick = false;
+    o.onTick?.();
     phase = 'inputs';
     const now = o.clock.now();
     const t = (core.tick + 1) >>> 0;
@@ -466,9 +511,15 @@ export function createHost(o: HostOptions): Host {
     phase = 'step';
     core.step(inputs, guideBeat);
     phase = 'frames';
-    handle(core.drain(), now);
+    const out = core.drain();
+    handle(out, now);
     if (ended) return;
     phase = 'snapshot';
+    const data = core.snapshot();
+    const nextPhase = (data[0] as number[])[1];
+    if (roundPhase === 1 && nextPhase === 0) forceSave = true;
+    roundPhase = nextPhase;
+    checkpoint(forceSave);
     // The control table: one row a seat, [seat, r, ack, lead].
     const rows: number[][] = [];
     for (const b of core.bodies()) {
@@ -480,7 +531,7 @@ export function createHost(o: HostOptions): Host {
     // A snapshot is stamped with the moment its tick was due, so ticks run in a burst to catch up are still a tick
     // apart to whoever interpolates between them. The stamp always rises: a replica drops one that does not.
     lastSt = Math.max(lastSt + 1, Math.round(Math.min(now, dueOf(core.tick))));
-    const snap = { t: 'snap', from: null, e: epoch, k: core.tick, st: lastSt, d: core.snapshot(), c: rows };
+    const snap = { t: 'snap', from: null, e: epoch, k: core.tick, st: lastSt, d: data, c: rows };
     o.send(snap, JSON.stringify(snap));
     stats.ticks += 1;
     stats.since += 1;
@@ -573,7 +624,7 @@ export function createHost(o: HostOptions): Host {
     if (running || ended) return;
     running = true; paused = false;
     try {
-      base = { ms: o.clock.now(), tick: core.tick };
+      base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
       overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
       const caps = c.kinds.some((k) => k.think) ? ['skill'] : [];
       if (c.kinds.some((k) => k.guide && k.think)) caps.push('agents');
@@ -587,14 +638,14 @@ export function createHost(o: HostOptions): Host {
     // A pending timer would keep the object in memory and billed: the pause clears it.
     disarm();
     log({ ev: 'host-pause', game: o.game, tick: core.tick });
-    try { o.onPause?.(); } catch (error) { fault('onPause', error); }
+    try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); }
   }
   function resume(): void {
     if (running || ended || !paused) return;
     running = true; paused = false;
     try {
       // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
-      base = { ms: o.clock.now(), tick: core.tick };
+      base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
       overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
       for (const q of queues.values()) q.lastFrameTick = core.tick;
       log({ ev: 'host-resume', game: o.game, tick: core.tick });
@@ -615,6 +666,25 @@ export function createHost(o: HostOptions): Host {
     try { o.onEnd?.(why, facts); } catch (error) { fault('onEnd', error); }
   }
 
+  function save(): Uint8Array {
+    return toBytes({ v: 1, core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !core.bodies().some(b => b.seat === seat && b.owner === 'reserved')), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
+  }
+  function checkpoint(force = false): void {
+    const seconds = c.settings.durability.movementSeconds;
+    // Catch-up ticks can cover a second of play in less than a second of wall time. Bound both clocks.
+    if (!o.store || !force && (core.tick === saveTick || o.clock.now() - lastSaveAt < seconds * 1000 && core.tick - saveTick < seconds * tickHz)) return;
+    if (o.clock.now() < retrySaveAt) return;
+    try { o.store.save(save()); }
+    catch (error) {
+      saveFailures += 1;
+      retrySaveAt = o.clock.now() + Math.min(60_000, 1000 * 2 ** Math.min(saveFailures - 1, 6));
+      log({ ev: 'persist-failed', game: o.game, build: o.build, error: thrown(error), retryAt: retrySaveAt });
+      return;
+    }
+    saveFailures = 0; retrySaveAt = 0;
+    saveTick = core.tick; lastSaveAt = o.clock.now(); forceSave = false;
+  }
+
   return {
     get tick() { return core.tick; },
     get epoch() { return epoch; },
@@ -627,7 +697,7 @@ export function createHost(o: HostOptions): Host {
       let now = lastStart;
       try { now = o.clock.now(); tick(now); } catch (error) { fault('tickNow', error); } finally { keepTime(); }
     },
-    save: () => toBytes({ v: 1, core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : {}), names: [...names], queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]) }),
+    save,
     facts: () => ({ tick: core.tick, epoch, running, paused, ended, armed, people: people(), tickHz, ...stats, core: { ...core.stats } }),
     core,
   };

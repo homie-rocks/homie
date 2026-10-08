@@ -21,9 +21,9 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import vm from 'node:vm';
+import { shell } from './fixtures/page-shell.mjs';
 import { NetRoom, HANDLE_WORDS, handleFor } from '../worker/room.mjs';
-import { playPage, sharePlaces } from '../worker/pages.mjs';
+import { playPage, watchPage, sharePlaces } from '../worker/pages.mjs';
 // The far sides of the seam: the instruments that read what this page says (the studio's check and perf, and the
 // playtest skill's judge, which is a separate program that reads the same names).
 import { CUT_OFF, LINK_STATES, arrivalFacts, connectionSummary, linkOf } from '../lib/check.mjs';
@@ -38,57 +38,6 @@ test('the game frame delegates fullscreen, autoplay and gamepad to its opaque or
   assert.match(html, /<iframe class="game"[^>]* sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen \*; autoplay \*; gamepad \*"><\/iframe>/);
   assert.doesNotMatch(html, /allow="fullscreen; autoplay; gamepad"/);
 });
-
-/** The play page's shell script, run against a stand-in page at `search`. */
-async function shell(search, { lobby = 'pub-3', screen = false, room = null, g = game, width = 1280, height = 800, server = null, storage = null, rects = {} } = {}) {
-  const res = playPage(cat, g, { screen, room, server });
-  const html = await res.text();
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-  const els = new Map();
-  const el = (sel) => {
-    if (sel === '[data-join]') return null;
-    if (!els.has(sel)) {
-      els.set(sel, {
-        sel, textContent: '', hidden: /sheet|toast|results|screen/.test(sel), attrs: {}, listeners: {}, href: '', src: '', className: '',
-        style: { props: {}, setProperty(k, v) { this.props[k] = String(v); } },
-        classList: { set: new Set(), add(c) { this.set.add(c); }, remove(c) { this.set.delete(c); }, contains(c) { return this.set.has(c); } },
-        setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] ?? null; },
-        addEventListener(t, fn) { (this.listeners[t] ??= []).push(fn); }, querySelector: (s) => el(s), contains: () => false,
-        append() {}, focus() {}, contentWindow: { focus() {}, postMessage: (m) => posted.push(JSON.parse(JSON.stringify(m))) },
-        // Where the stand-in page draws this control (the shell tells the game's frame; nothing is drawn where none is given).
-        getBoundingClientRect: () => { const r = rects[sel]; return r ? { left: r[0], top: r[1], width: r[2], height: r[3] } : { left: 0, top: 0, width: 0, height: 0 }; },
-        // Room chat's component (0.23.0) builds its pill and sheet into the band: a stand-in takes them.
-        appendChild(c) { return c; }, insertBefore(c) { return c; }, remove() {},
-      });
-    }
-    return els.get(sel);
-  };
-  const replaced = [];
-  const fetched = [];
-  const posted = [];
-  /** Every element the page made itself (a notice's heading, its links), in order. */
-  const drawn = [];
-  const heard = {};
-  const ctx = {
-    document: { querySelector: el, createElement: () => { const made = el(`new-${Math.random()}`); drawn.push(made); return made; }, addEventListener() {}, body: { appendChild(c) { return c; } } },
-    location: { search, origin: 'https://owls.example', pathname: `/${game.id}/${screen ? 'tv' : 'play'}`, hash: '', host: 'owls.example', protocol: 'https:' },
-    history: { state: null, replaceState: (s, t, u) => replaced.push(u) },
-    sessionStorage: { getItem: () => null, setItem() {} },
-    navigator: {},
-    WebSocket: class { constructor(u) { this.url = u; } },
-    fetch: async (u, o) => { fetched.push([u, o?.method]); return { json: async () => ({ room: lobby }) }; },
-    URLSearchParams, setTimeout, clearTimeout, innerWidth: width, innerHeight: height,
-    addEventListener(type, fn) { (heard[type] ??= []).push(fn); },
-    ...(storage ? { localStorage: storage } : {}),
-  };
-  ctx.window = ctx;
-  vm.createContext(ctx);
-  for (const s of scripts) vm.runInContext(s, ctx);
-  await new Promise((r) => setTimeout(r, 10));
-  /** What the game's helper says to the page (postMessage from the frame). */
-  const fromGame = (m) => { for (const fn of heard.message ?? []) fn({ source: el('iframe.game').contentWindow, data: { t: 'homie-net', ...m } }); };
-  return { html, ctx, el, replaced, fetched, posted, heard, fromGame, drawn };
-}
 
 test('the room goes into the address, and the room button shares it: Invite, Big screen and the code', async () => {
   const html = await playPage(cat, game).text();
@@ -412,13 +361,14 @@ test('the link and a newer build: the page says "reconnecting", and loads the ga
   h.fromGame({ what: 'round', round: { n: 3, phase: 'live', startedAt: 1, endsAt: 2 } });
   assert.equal(frame.src, 'the-old-build');
   h.fromGame({ what: 'round', round: { n: 3, phase: 'over', startedAt: 1, endsAt: 2, results: [] } });
-  assert.equal(frame.src, first, 'at the break: the same frame address, served again by the Worker with the live build');
+  const expected = new URL(first, 'https://example.test'); expected.searchParams.set('k', 'seat-word');
+  assert.deepEqual([...new URL(frame.src, expected).searchParams].sort(), [...expected.searchParams].sort(), 'the reload keeps the room and the seat token');
   assert.equal(h.ctx.__shell.reloaded, 1);
   // Kept out of a room for running the old build: loaded again at once, but never in a loop.
   const k = await shell('?room=owl-party');
   const kf = k.el('iframe.game');
   for (let i = 0; i < 5; i += 1) { kf.src = `old-${i}`; k.fromGame({ what: 'stale', ver: '2', mine: '1', final: true }); }
-  assert.equal(k.ctx.__shell.reloaded, 2, 'twice a minute at most');
+  assert.equal(k.ctx.__shell.reloaded, 2, 'at most twice a minute');
   assert.match(k.el('[data-toast]').textContent, /Reload the page to play the new version/);
   // The big screen has nothing to lose: at once.
   const tv = await shell('', { screen: true, room: 'pub-5' });
@@ -429,6 +379,27 @@ test('the link and a newer build: the page says "reconnecting", and loads the ga
 });
 
 /* ------------------------------------------------------------------ across the seam: the page says, the instruments read */
+
+test('a rules deploy reloads immediately with the seat token, or rematches an incompatible room', async () => {
+  const h = await shell('?room=owl-party&cam=wide');
+  const frame = h.el('iframe.game');
+  const kept = new Map();
+  h.ctx.sessionStorage.getItem = (key) => kept.get(key) ?? null;
+  h.ctx.sessionStorage.setItem = (key, value) => kept.set(key, value);
+  h.fromGame({ what: 'token', token: 'seat-word', seat: 1, room: 'owl-party' });
+  frame.src = 'old';
+  h.fromGame({ what: 'stale', immediate: true, final: false, ver: 'new' });
+  assert.notEqual(frame.src, 'old'); assert.match(frame.src, /k=seat-word/);
+  const redirects = [];
+  h.ctx.location.href = 'https://owls.example/rock-race/play?room=owl-party&cam=wide';
+  h.ctx.location.replace = (url) => redirects.push(url);
+  h.fromGame({ what: 'rematch', room: 'another-room' }); assert.equal(redirects.length, 0);
+  h.fromGame({ what: 'rematch', room: 'owl-party' });
+  assert.equal(redirects.length, 1);
+  const next = new URL(redirects[0]);
+  assert.equal(next.searchParams.has('room'), false); assert.equal(next.searchParams.get('not'), 'owl-party');
+  assert.equal(next.searchParams.get('cam'), 'wide');
+});
 
 test('a page that stopped for good never says "reconnecting": what is true, and for a room with no place left, a way out', async () => {
   const says = async (why) => { const h = await shell('?room=owl-party'); h.fromGame({ what: 'attached', v: 1, rev: 9 }); h.fromGame({ what: 'closed', why }); return h; };
@@ -546,4 +517,96 @@ test('what the play page says about its link, its arrival and its own controls i
   const none = playtest.shellOverlaps(null, hud);
   assert.equal(none.known, false);
   assert.match(playtest.judgeUi(clear, { before: onlineNow, after: onlineNow, overlaps: none }).qualifier, /reported no layout of its own controls/);
+});
+
+
+for (const watch of [false, true]) for (const scenario of ['ideal', 'newer', 'missing-welcome-id', 'unnamed', 'wait', 'room-stale', 'slow3', 'slow6', 'slow17', 'loading', 'failed', 'bounded', 'legacy']) test(`the ${watch ? 'watch' : 'play'} update handles ${scenario}`, async () => {
+  let now = 0, id = 0, loads = 0; const jobs = new Map();
+  const timers = { Date: class extends Date { static now() { return now; } }, setTimeout(fn, ms) { jobs.set(++id, { fn, at: now + ms }); return id; }, clearTimeout(id) { jobs.delete(id); } };
+  const h = await shell('?room=friends', { timers, watch }); const frame = h.el('iframe.game');
+  let src = frame.src;
+  Object.defineProperty(frame, 'src', { get: () => src, set(v) { src = v; loads++; } });
+  const event = (name) => { for (const fn of frame.listeners[name] ?? []) fn(); };
+  const advance = (end) => { while (true) { const next = [...jobs].sort((a,b) => a[1].at - b[1].at).find(x => x[1].at <= end); if (!next) break; now = next[1].at; jobs.delete(next[0]); next[1].fn(); } now = end; };
+  const stale = () => h.fromGame({ what: 'stale', final: true, immediate: scenario !== 'legacy', mine: 'v0', ver: scenario === 'unnamed' ? null : 'v1' });
+  stale(); assert.equal(loads, 1);
+  if (scenario === 'loading') { advance(600000); assert.equal(loads, 1); return; }
+  if (scenario === 'failed' || scenario === 'bounded') {
+    event('error'); advance(1999); assert.equal(loads, 1); advance(2000); assert.equal(loads, 2);
+    if (scenario === 'failed') { event('load'); h.fromGame({ what: 'build', ver: 'v2' }); }
+    else for (let n = 0; n < 50; n++) { stale(); event('load'); advance(now + 20000); }
+    const count = loads; advance(now + 600000); assert.equal(loads, count); assert.ok(count <= 6); return;
+  }
+  event('load'); h.fromGame({ what: 'attached' });
+  if (scenario === 'room-stale') h.fromGame({ what: 'wait', final: false });
+  else if (scenario === 'wait') h.fromGame({ what: 'stale', final: false, mine: 'v1', ver: 'v0' });
+  else if (scenario !== 'legacy') {
+    advance(scenario.startsWith('slow') ? Number(scenario.slice(4)) * 1000 : 300);
+    assert.equal(loads, 1, 'never replace a frame awaiting its welcome');
+    h.fromGame({ what: 'build', ver: scenario === 'missing-welcome-id' ? null : scenario === 'newer' ? 'v2' : 'v1' });
+  }
+  advance(600000); assert.equal(loads, 1);
+  // What the watch page says while it waits: told to wait for its room, it says so; shown a newer build that loads
+  // after this round, it is still watching its room live and says nothing.
+  if (watch && scenario === 'room-stale') assert.match(h.el('[data-update]').textContent, /Waiting for the room/);
+  if (watch && scenario === 'wait') { assert.equal(h.el('[data-update]').textContent, ''); assert.equal(h.el('[data-update]').hidden, true); }
+});
+
+for (const watch of [false, true]) test(`the ${watch ? 'watch' : 'play'} script recovers from thirty acknowledged updates`, async () => {
+  let now = 0; let id = 0; const jobs = new Map();
+  const timers = { Date: class extends Date { static now() { return now; } }, setTimeout(fn, ms) { jobs.set(++id, { fn, at: now + ms }); return id; }, clearTimeout(id) { jobs.delete(id); } };
+  const h = await shell('?room=friends', { timers, watch });
+  for (let n = 0; n < 30; n++) {
+    const frame = h.el('iframe.game'); frame.src = 'old';
+    h.fromGame({ what: 'stale', immediate: true, ver: `v${n}` });
+    assert.match(frame.src, /room=friends/);
+    h.fromGame({ what: 'build', ver: `v${n}` });
+    now += 5000;
+  }
+});
+
+
+test('an older game on the big screen reloads once and waits outside its old room', async () => {
+  const jobs = new Map(); let id = 0, loads = 0;
+  const h = await shell('?room=friends', { screen: true, timers: { setTimeout(fn) { jobs.set(++id, fn); return id; }, clearTimeout(id) { jobs.delete(id); } } });
+  const frame = h.el('iframe.game'); let src = frame.src;
+  Object.defineProperty(frame, 'src', { get: () => src, set(v) { src = v; loads++; } });
+  h.fromGame({ what: 'stale', final: false, ver: '2', mine: '1' }); assert.equal(loads, 1);
+  for (const fn of frame.listeners.load ?? []) fn();
+  h.fromGame({ what: 'wait', final: false });
+  for (let n = 0; n < 50 && jobs.size; n++) { const current = [...jobs.values()]; jobs.clear(); current.forEach(fn => fn()); }
+  assert.equal(loads, 1);
+});
+
+for (const watch of [false, true]) for (const failure of ['silent', 'status', 'reset']) test(`the ${watch ? 'watch' : 'play'} frame recovers after ${failure}`, async () => {
+  let now = 0, id = 0, loads = 0; const jobs = new Map();
+  const timers = { Date: class extends Date { static now() { return now; } }, setTimeout(fn, ms) { jobs.set(++id, { fn, at: now + ms }); return id; }, clearTimeout(id) { jobs.delete(id); } };
+  const h = await shell('?room=friends', { timers, watch }); const frame = h.el('iframe.game');
+  let src = frame.src; Object.defineProperty(frame, 'src', { get: () => src, set(v) { src = v; loads++; } });
+  const advance = end => { for (;;) { const job = [...jobs].sort((a,b) => a[1].at-b[1].at).find(x => x[1].at <= end); if (!job) break; now=job[1].at; jobs.delete(job[0]); job[1].fn(); } now=end; };
+  const loaded = () => { for (const fn of frame.listeners.load ?? []) fn(); };
+  h.fromGame({ what: 'stale', final: true, immediate: true, ver: 'new' });
+  // HTTP errors and reset error documents both emit load, with no helper message.
+  loaded(); advance(10000); assert.equal(loads, 2);
+  if (failure !== 'silent') { loaded(); h.fromGame({ what: 'attached' }); h.fromGame({ what: 'build', ver: 'new' }); }
+  else for (let n=0;n<10;n++) { loaded(); advance(now+30000); }
+  const count=loads; advance(now+600000); assert.equal(loads,count);
+  assert.equal(count, failure === 'silent' ? 6 : 2);
+  if (!watch) assert.equal(h.el('[data-toast]').hidden, failure !== 'silent');
+  if (!watch && failure === 'silent') assert.match(h.el('[data-toast]').textContent, /Reload the page/);
+});
+
+for (const screen of [false, true]) test(`old games keep the two reload guard on ${screen ? 'the big screen' : 'play'}`, async () => {
+  let now=0, id=0, loads=0; const jobs=new Map();
+  const h=await shell('?room=friends', { screen, timers: { Date: class extends Date { static now() { return now; } }, setTimeout(fn,ms) { jobs.set(++id,{fn,at:now+ms});return id; }, clearTimeout(i) { jobs.delete(i); } } });
+  const frame=h.el('iframe.game'); let src=frame.src;
+  Object.defineProperty(frame,'src',{get:()=>src,set(v){src=v;loads++;}});
+  const stale=()=>h.fromGame({what:'stale',ver:'new',final:!screen});
+  for(let n=0;n<1200;n++) {
+    stale(); for(const fn of frame.listeners.load ?? []) fn();
+    h.fromGame({what:'attached'}); now+=500;
+    for(const [i,job] of [...jobs]) if(job.at<=now) { jobs.delete(i);job.fn(); }
+  }
+  assert.equal(loads,2); assert.match(h.el('[data-toast]').textContent,/Reload the page to play the new version/);
+  h.fromGame({what:'build',ver:'new'}); assert.equal(h.el('[data-toast]').hidden,true);
 });

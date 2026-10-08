@@ -1096,7 +1096,7 @@ export function toolDefs(ctx, avail = {}) {
           if (!r.ended) return stillRunning(r.job, 'The deploy plan');
           if (r.job.code !== 0) return fail(whyOf(r.job));
           const p = r.result;
-          return ok([`What going online does for ${p.studio}:`, ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`, ...(p.parts ? partsPlanLines(p.parts) : []), ...(p.zone?.warning ? [`Warning (say this to the person as it is): ${p.zone.warning}`] : p.zone?.why ? [p.zone.why] : []), 'The card on screen shows this plan (nothing is made yet): tell the person its gist in two or three lines, then go on.'].join('\n'), { kind: 'deploy-plan', ...p });
+          return ok([`What going online does for ${p.studio}:`, 'Rules rooms resume when their stored shape matches. Changes to fields, declaration order or maximum seats start a fresh match.', ...p.cloudflare.map((x) => `  ${x.kind}${x.name ? ` ${x.name}` : ''}: ${x.what} [${x.state}]`), `Cost: ${p.cost}`, `Sign-in: ${p.login}`, `The directory stores: ${p.directory?.stores ?? ''}`, ...(p.parts ? partsPlanLines(p.parts) : []), ...(p.zone?.warning ? [`Warning (say this to the person as it is): ${p.zone.warning}`] : p.zone?.why ? [p.zone.why] : []), 'The card on screen shows this plan (nothing is made yet): tell the person its gist in two or three lines, then go on.'].join('\n'), { kind: 'deploy-plan', ...p });
         }
         const studio = readStudio(root);
         return startRun(ctx, root, { kind: 'deploy', game: null, title: `${studio.name}: online`, steps: [{ label: 'deploy', args: ['deploy', ...(a.ownRoute === true ? ['--own-route'] : [])] }] });

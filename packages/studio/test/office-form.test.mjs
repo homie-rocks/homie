@@ -176,3 +176,12 @@ test('the New server form: labelled, its policy\'s own words, only what applies,
   assert.deepEqual(s.posts, [['/_studio/api/servers', { game: 'gem-rush', name: 'Night Owls', policy: 'beginner', door: 'open', level: 2, levelMax: 3, speech: 'lines', rooms: 4, listed: true, guides: 3, kids: true }]]);
   assert.equal(s.root.querySelector('form.newsrv'), null, 'the form closes once the server is open');
 });
+
+test('the office draws servers and reports a failed save on its room', async () => {
+  const data = office();
+  data.games[0].rooms = [{ room: 'friends', label: 'Friends', players: 0, screens: 1, clients: [], slots: [], durability: { ok: false, message: 'storage unavailable' } }];
+  const s = stage(() => data); await s.settle();
+  assert.ok(s.root.querySelector('section.game'));
+  assert.match(s.root.textContent, /Room saves are unavailable/);
+  assert.match(s.root.textContent, /storage unavailable/);
+});

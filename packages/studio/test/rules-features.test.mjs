@@ -397,7 +397,10 @@ test('saved goals, asks and policy are validated before a rules callback reads t
   saved.agents.asks = [[3, [{ k: 'constructor', args: {}, from: 0, at: 0 }]]];
   saved.core.ents.find(e => e[11] === 3)[15] = { goal: 'constructor', args: {} };
   saved.core.asks[0].state = { danger: { bad: true } };
+  const validPolicy = saved.core.policy;
   saved.core.policy = { reserved: 999999999, level: 999, levelMax: 999, bots: 'invalid' };
+  assert.throws(() => hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }), /saved rules state is invalid/);
+  saved.core.policy = validPolicy;
   const back = hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }); back.host.frame({ t: 'vocabulary', vocab }); back.host.frame({ t: 'policy', policy: policy() }); back.join(0); back.ticks(22);
   assert.equal(back.host.core.goal(3).goal, 'guard'); assert.equal(back.host.core.stats.errors, 0); assert.equal(back.host.facts().faults, 0);
 });
@@ -473,4 +476,22 @@ test('server capacity comes from the build even after an older room save', async
   const saved = r.room.saved(); saved.maxPlayers = 2;
   r.room.restore(saved); assert.equal(r.room.maxPlayers, 4);
   r.room.askedMax = 2; r.room.setSeats(4); assert.equal(r.room.maxPlayers, 4);
+});
+
+test('whole host saves preserve pending decisions, companion pacing and reserved names', async () => {
+  const { L, c } = await game(); const h = hostRig(L, c);
+  h.host.frame({ t: 'vocabulary', vocab }); h.host.frame({ t: 'policy', policy: policy({ kind: 'beginner', guides: 1, aiSeats: 1 }) });
+  h.join(0); h.ticks(2);
+  h.host.frame({ t: 'ev', from: 0, k: 'ask:follow', d: { slot: 3, args: { seat: 0 } } }); h.ticks();
+  const saved = L.P.fromBytes(h.host.save()); assert.ok(saved.core.asks.length); assert.ok(saved.agents.sayAt.length); assert.ok(saved.guideViews.length);
+  const back = hostRig(L, c, { host: { restore: h.host.save(), restoreEpoch: h.host.epoch + 1 } });
+  assert.deepEqual(L.P.fromBytes(back.host.save()).core.ents.map(e => e[15]), saved.core.ents.map(e => e[15]), 'saving before vocabulary arrives retains the deferred goals');
+  back.host.frame({ t: 'vocabulary', vocab }); back.host.frame({ t: 'policy', policy: policy({ kind: 'beginner', guides: 1, aiSeats: 1 }) });
+  const restored = L.P.fromBytes(back.host.save());
+  assert.deepEqual(restored.agents, saved.agents); assert.deepEqual(restored.core.asks, saved.core.asks); assert.deepEqual(restored.guideViews, saved.guideViews);
+  assert.deepEqual(restored.core.ents.filter(e => e[13] === 'reserved'), saved.core.ents.filter(e => e[13] === 'reserved'));
+  back.join(0); back.ticks(); h.ticks();
+  assert.deepEqual(back.host.core.save().ents.filter(e => e[13] === 'reserved'), h.host.core.save().ents.filter(e => e[13] === 'reserved'));
+  assert.deepEqual(back.sent.filter(m => m.t === 'roster').at(-1).slots, h.sent.filter(m => m.t === 'roster').at(-1).slots);
+  h.host.stop(); back.host.stop();
 });

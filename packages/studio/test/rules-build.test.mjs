@@ -50,6 +50,41 @@ test('a new studio\'s Worker imports the table of its server-hosted games, and i
   assert.equal(list.find((s) => s.id === 'gem-rush').example, undefined);
 });
 
+test('game hashes are reproducible, isolate unrelated builds, and distinguish code from state shape', () => {
+  const dir = studio('hashes');
+  assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
+  assert.equal(run(['game', 'new', 'gems', '--from', 'gem-rush'], dir).status, 0);
+  const build = () => {
+    const r = run(['build'], dir); assert.equal(r.status, 0, r.stdout + r.stderr);
+    return JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash');
+  };
+  const first = build();
+  assert.deepEqual(build().room, first.room);
+  assert.equal(first.netplay.version, first.room.build);
+  const unrelated = 'games/gems/src/main.ts';
+  writeFileSync(join(dir, unrelated), read(dir, unrelated) + '\nconsole.log("other game changed");\n');
+  assert.deepEqual(build().room, first.room, 'another game does not reload this one');
+  const view = 'games/coin-dash/src/view.ts';
+  writeFileSync(join(dir, view), read(dir, view) + '\nconsole.log("view changed");\n');
+  const viewed = build();
+  assert.notEqual(viewed.room.build, first.room.build); assert.equal(viewed.room.stateHash, first.room.stateHash);
+  const tunePath = 'games/coin-dash/tunables.json'; const tune = JSON.parse(read(dir, tunePath));
+  tune.public.speed.value = 5;
+  writeFileSync(join(dir, tunePath), JSON.stringify(tune));
+  const tuned = build();
+  assert.notEqual(tuned.room.build, viewed.room.build); assert.equal(tuned.room.stateHash, first.room.stateHash);
+  const path = 'games/coin-dash/src/rules.ts'; const src = read(dir, path);
+  writeFileSync(join(dir, path), src.replace('self.score += 1;', 'self.score += 2;'));
+  const coded = build();
+  assert.notEqual(coded.room.build, tuned.room.build); assert.equal(coded.room.stateHash, first.room.stateHash);
+  writeFileSync(join(dir, path), src.replace('score: f.u16({ score: true })', 'score: f.u32({ score: true })'));
+  const shaped = build(); assert.notEqual(shaped.room.stateHash, first.room.stateHash);
+  const mapPath = 'games/coin-dash/map/main.json'; const map = JSON.parse(read(dir, mapPath));
+  map.spots.start[0][0] += 1;
+  writeFileSync(join(dir, mapPath), JSON.stringify(map));
+  const mapped = build(); assert.notEqual(mapped.room.stateHash, shaped.room.stateHash); assert.notEqual(mapped.room.build, shaped.room.build);
+});
+
 test('coin-dash builds as a view bundle and a rules module; gem-rush builds as it always did, and says so', async () => {
   const dir = studio('both');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
@@ -57,7 +92,7 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   const built = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;
-  assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{16}; three seconds with bots: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler\)/);
+  assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{32}; three seconds with bots: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler\)/);
   assert.match(said, /hosted by a player's browser, as before \(no src\/rules\.ts; nothing to do\): gems\n/);
   // The rules module: one file, importing only Homie's rules module and the guard.
   const rules = read(dir, 'site/src/rules/coin-dash.mjs');
@@ -66,7 +101,7 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   assert.match(rules, /__homie\d*\.t\(\);/);
   assert.equal(read(dir, 'site/src/rules/index.mjs'), `// Written by \`homie-studio build\` from this studio's games. Do not edit: the next build writes it again.\n// The rules of this studio's server-hosted games, for the Worker (site/src/worker.mjs hands them to hostRules).\nimport rules0 from './coin-dash.mjs';\nimport data0 from './coin-dash.data.mjs';\nexport default {\n  "coin-dash": { rules: rules0, ...data0 },\n};\n`);
   const data = (await import(pathToFileURL(join(dir, 'site/src/rules/coin-dash.data.mjs')).href)).default;
-  assert.deepEqual(Object.keys(data), ['tune', 'map', 'settings', 'seats', 'build']);
+  assert.deepEqual(Object.keys(data), ['tune', 'map', 'settings', 'seats', 'build', 'stateHash']);
   assert.equal(data.settings.host, 'server');
   assert.equal(data.settings.tickHz, 20);
   assert.equal(data.seats, 8);
@@ -76,7 +111,7 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   // The view's bundle: the game's declarations as data and the guarded move, and none of the rules' own code.
   const cat = JSON.parse(read(dir, 'site/dist/games.json'));
   const row = cat.games.find((g) => g.id === 'coin-dash');
-  assert.deepEqual(row.room, { host: 'server', tickHz: 20, inputHz: 20, contract: 2, build: data.build, rounds: { seconds: 60, breakSeconds: 8 } });
+  assert.deepEqual(row.room, { host: 'server', tickHz: 20, inputHz: 20, contract: 2, build: data.build, stateHash: data.stateHash, rounds: { seconds: 60, breakSeconds: 8 } });
   assert.equal(row.roundSeconds, 60, 'the round is the rules\' own');
   assert.equal(row.netplayRev, 10);
   const view = read(dir, `site/dist/games/coin-dash/${row.built.bundle}`);

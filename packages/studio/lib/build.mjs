@@ -458,6 +458,14 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   }
   if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
   if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
+  if (rules) {
+    // Only this game's executable view and rules data: buildInfo, the site and other games cannot reload its players.
+    const digest = createHash('sha256').update(rules.build);
+    for (const file of [bundled, ...chunks].filter(Boolean)) digest.update(readFileSync(join(out, file)));
+    digest.update(readFileSync(join(out, 'index.html')));
+    rules.build = digest.digest('hex').slice(0, 32);
+    if (g.netplay?.version !== undefined) log(`  ${g.id}: rules games use their build hash as the revision; netplay.version is not read`);
+  }
   return { mode, warnings, metafile, bundle: bundled, chunks, rules };
 }
 
@@ -561,7 +569,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   // studio.json site.order: the catalogue's order is every listing's order.
   const shown = orderGames(all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))), s.order, log);
   // Server-hosted games: what this build made, and for a one-game build what the catalogue before it said of the others.
-  const rulesOf = new Map(ruled.map((r) => [r.id, { host: 'server', tickHz: r.settings.tickHz, inputHz: r.settings.inputHz, contract: r.schema.contract, build: r.build, rounds: r.rounds }]));
+  const rulesOf = new Map(ruled.map((r) => [r.id, { host: 'server', tickHz: r.settings.tickHz, inputHz: r.settings.inputHz, contract: r.schema.contract, build: r.build, stateHash: r.stateHash, rounds: r.rounds }]));
   if (only) for (const row of readJson(join(dist, 'games.json'))?.games ?? []) if (row?.room?.host === 'server' && row.id !== only && !rulesOf.has(row.id)) rulesOf.set(row.id, row.room);
   // What each game's build is (its landing's own pictures are not part of it): the digest the manifest names.
   const builds = {};
@@ -570,6 +578,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     const net = netplayOf(g, join(dist, 'games', g.id));
     const { min, max } = seatsFor(g, net);
     const netRow = netplayRow(net);
+    if (rulesOf.has(g.id)) netRow.row = { ...netRow.row, version: rulesOf.get(g.id).build };
     for (const p of netRow.problems) log(`warning: games/${g.id}/game.json: ${p}`);
     const seeds = serverSeeds(g, log);
     // The game's own palette (style.json, its art direction): the play page's buttons wear its paper and ink, so the

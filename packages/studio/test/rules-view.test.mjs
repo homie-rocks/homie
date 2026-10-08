@@ -45,10 +45,10 @@ async function coinDashKit() {
 }
 
 /** A relay with the server as host, on the test's clock, and sockets to it. */
-function rig(L, compiled) {
+function rig(L, compiled, extra = {}) {
   const lines = [];
   const room = new NetRoom({ code: 'r', maxPlayers: 8, log: (l) => lines.push(l) });
-  const host = L.H.createHost({ game: 'coin-dash', compiled, send: (m, text) => room.hostFrame(m, text), log: (l) => lines.push(l), random: () => 0.37, clock: { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h) } });
+  const host = L.H.createHost({ game: 'coin-dash', compiled, send: (m, text) => room.hostFrame(m, text), log: (l) => lines.push(l), random: () => 0.37, clock: { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h) }, ...extra });
   room.setServerHost(host);
   const beat = setInterval(() => room.tick(), 250);
   const sockets = [];
@@ -211,4 +211,16 @@ test('a watcher follows server bodies, returns to Auto on leave and follows the 
   assert.equal(back.me.id, id);
   assert.equal(w.net.viewSeat, back.seat);
   w.follow(null); assert.equal(w.net.viewSeat, null);
+});
+
+test('a restored epoch past 32 bits reaches the view and its input reaches the host unchanged', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit(); const clock = virtualTime(t);
+  const seed = rig(L, compiled); const saved = seed.host.save(); seed.stop();
+  const r = rig(L, compiled, { restore: saved, restoreEpoch: 4294967296 });
+  const view = openRoom({ net: { config: cfg('Player'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { view.close(); r.stop(); });
+  await clock.wait(600); view.input({ ax: 127, ay: 0 }); await clock.wait(300);
+  const inputs = r.sockets[0].sent.filter((m) => m.t === 'in');
+  assert.ok(inputs.length > 0); assert.ok(inputs.every((m) => m.e === 4294967296));
+  assert.ok(r.host.facts().ins > 0, 'the host accepts the untruncated epoch');
 });

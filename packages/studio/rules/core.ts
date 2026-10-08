@@ -166,7 +166,7 @@ export interface Core {
   stats: { handlers: number; errors: number; budgetStops: number; skipped: number; ticksCut: number; maxUnits: number; worst: string; lastError: string; failing: string; lost: number; tickUnits: number; maxTickUnits: number };
 }
 
-export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; restore?: SavedCore | null; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   if (c.dims !== 2) throw new Error('this release runs rules with space.dims: 2; bodies with height (dims: 3) arrive in a later one');
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
@@ -179,7 +179,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
 
   let tick = 0;
   let pendingAsks: PendingAsk[] = [];
-  let epoch = (opts.epoch ?? 1) >>> 0;
+  let epoch = opts.epoch ?? 1;
   let rng = (opts.seed ?? 1) >>> 0;
   let nextId = 1;
   let seq = 1;
@@ -202,8 +202,8 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   const guideViews = new Map<number, Record<string, unknown>>();
   let policy: CorePolicy = { reserved: 0, bots: 'fill', level: 3, levelMax: 5 };
   function normalizeCorePolicy(p: Partial<CorePolicy>): CorePolicy {
-    const levelMax = Math.max(1, Math.min(5, Math.floor(num(p.levelMax ?? policy.levelMax)) || 5));
-    return { reserved: Math.max(0, Math.min(c.seats - 1, Math.floor(num(p.reserved ?? policy.reserved)) || 0)), bots: p.bots === 'off' ? 'off' : p.bots === 'fill' ? 'fill' : policy.bots, levelMax, level: Math.max(1, Math.min(levelMax, Math.floor(num(p.level ?? policy.level)) || 3)) };
+    const levelMax = Math.max(1, Math.min(5, Math.floor(num(own(p, 'levelMax') ?? policy.levelMax)) || 5));
+    return { reserved: Math.max(0, Math.min(c.seats - 1, Math.floor(num(own(p, 'reserved') ?? policy.reserved)) || 0)), bots: p.bots === 'off' ? 'off' : p.bots === 'fill' ? 'fill' : policy.bots, levelMax, level: Math.max(1, Math.min(levelMax, Math.floor(num(own(p, 'level') ?? policy.level)) || 3)) };
   }
   let shared: Record<string, unknown> = initFields(c.shared, dims);
   let sharedRO: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -843,7 +843,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     ents.clear(); spawns = []; queue = []; pendingAsks = []; areas = []; fx = [];
     for (const s of seats.values()) s.id = null;
     shared = initFields(c.shared, dims); sharedChanged();
-    epoch = (epoch + 1) >>> 0;
+    epoch += 1;
     playing = 0;
     restartAt = tick + Math.max(3, ticks(c.rounds ? c.rounds.breakSeconds : 0));
     round = { ...round, phase: 'over', endsAt: restartAt };
@@ -929,7 +929,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
           const driven = (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && !e.away;
           if (driven) {
             const s = inputs.get(e.seat);
-            e.input = Object.freeze(s ? { ...s.values } : initFields(k.input, dims));
+            e.input = Object.freeze(s ? coerceFields(k.input, s.values, dims) : initFields(k.input, dims));
             claim = s?.claim ?? null;
           } else if (k.think && (e.driver !== 'person' || k.player.away === 'think')) {
             // `think` returns the step. It is held to the declared input inside the handler's own try and budget; a `think` that throws leaves the input neutral.
@@ -1021,7 +1021,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
 
   /* ---------------------------------------------------------------- the save */
 
-  const saveEnt = (e: Ent): unknown[] => [e.id, e.n, e.kind.index, e.r, e.born, e.arrived ? 1 : 0, e.why, packVec(e.pos, 3), packVec(e.vel, 3), packVec(e.heading, 3), e.grounded ? 1 : 0, e.seat, e.driver, e.owner, e.away ? 1 : 0, e.goal ?? null, e.allow,
+  const saveEnt = (e: Ent): unknown[] => [e.id, e.n, e.kind.index, e.r, e.born, e.arrived ? 1 : 0, e.why, packVec(e.pos, 3), packVec(e.vel, 3), packVec(e.heading, 3), e.grounded ? 1 : 0, e.seat, e.driver, e.owner, e.away ? 1 : 0, e.goal ?? (e.driver === 'ai' ? restoredGoals.get(e.seat) : null) ?? null, e.allow,
     packFields(e.kind.fields, e.f, dims), packFields(e.kind.motion, e.m, dims), packFields(e.kind.input, e.input as Record<string, unknown>, dims), e.cmds];
   function loadEnt(w: any[]): Ent {
     const kind = c.kinds[w[2]];
@@ -1045,15 +1045,117 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       ops: JSON.parse(JSON.stringify(ops)),
     };
   }
+  // A persisted value is untrusted too. Reject structural damage instead of silently making a different match.
+  function validateSave(r: SavedCore): void {
+    const check = (ok: unknown): void => { if (!ok) throw new Error('saved rules state is invalid'); };
+    const uint = (v: unknown): boolean => Number.isSafeInteger(v) && (v as number) >= 0;
+    const bit = (v: unknown): boolean => v === 0 || v === 1;
+    const fields = (list: FieldList, value: unknown): void => {
+      check(Array.isArray(value) && JSON.stringify(value) === JSON.stringify(packFields(list, unpackFields(list, value, dims), dims)));
+    };
+    check(r.v === 1);
+    for (const v of [r.tick, r.epoch, r.rng, r.nextId, r.seq, r.overAt, r.trips]) check(uint(v));
+    check(r.rng <= 4294967295 && r.epoch > 0 && r.nextId > 0 && r.seq > 0);
+    check(Array.isArray(r.round) && r.round.length === 4 && r.round.every(uint) && bit(r.round[1]));
+    check(Array.isArray(r.match) && r.match.length === 2 && r.match.every(uint));
+    check(r.policy && ['fill', 'off'].includes(r.policy.bots) && Number.isInteger(r.policy.level) && Number.isInteger(r.policy.levelMax) && r.policy.level >= 1 && r.policy.level <= r.policy.levelMax && r.policy.levelMax <= 5);
+    check(Object.keys(r.policy).every((key) => ['bots', 'level', 'levelMax', 'reserved'].includes(key)));
+    check(r.policy.reserved === undefined || uint(r.policy.reserved) && r.policy.reserved < c.seats);
+    fields(c.shared, r.shared);
+    check(Array.isArray(r.ents) && Array.isArray(r.spawns) && r.ents.length + r.spawns.length <= ENTITY_MAX);
+    const ids = new Set();
+    for (const w of [...r.ents, ...r.spawns]) {
+      check(Array.isArray(w) && w.length === 21);
+      const k = c.kinds[w[2] as number];
+      check(k && uint(w[2]) && typeof w[0] === 'string' && !ids.has(w[0])); ids.add(w[0]);
+      for (const i of [1, 3, 4]) check(uint(w[i]));
+      check((w[1] as number) > 0 && (w[1] as number) < r.nextId && w[0] === `e${(w[1] as number).toString(36)}` && (w[3] as number) <= 65535 && (w[4] as number) <= r.tick);
+      check(typeof w[16] === 'number' && Number.isFinite(w[16]) && w[16] >= 0);
+      for (const i of [5, 10, 14]) check(bit(w[i]));
+      for (const i of [7, 8, 9]) check(Array.isArray(w[i]) && (w[i] as unknown[]).length === 3 && (w[i] as unknown[]).every((n) => typeof n === 'number' && Number.isFinite(n)));
+      const pos = unpackVec(w[7] as number[], 3), bounds = c.map.bounds;
+      check(pos.x >= bounds.min.x && pos.x <= bounds.max.x && pos.y >= bounds.min.y && pos.y <= bounds.max.y && pos.z === 0);
+      check(Number.isInteger(w[11]) && (w[11] as number) >= -1 && (w[11] as number) < c.seats && ['person', 'bot', 'ai'].includes(w[12] as string) && typeof w[13] === 'string' && w[13].length <= 128);
+      fields(k.fields, w[17]); fields(k.motion, w[18]); fields(k.input, w[19]);
+      check(w[6] === 'join' || w[6] === 'spawn');
+      check(JSON.stringify(w[15]) === JSON.stringify(plainData(w[15], { n: ANSWER_MAX })));
+      check(Array.isArray(w[20]));
+      for (const cmd of w[20] as { name: string; data: unknown }[]) {
+        check(cmd && typeof cmd.name === 'string' && Object.hasOwn(c.commands, cmd.name)); const shape = c.commands[cmd.name];
+        check(JSON.stringify(cmd.data) === JSON.stringify(coerceFields(shape, cmd.data, dims)));
+      }
+    }
+    check(Array.isArray(r.seats) && r.seats.length <= c.seats);
+    const seatIds = new Set();
+    const heldIds = new Set();
+    for (const [seat, driver, owner, id, away] of r.seats) {
+      check(uint(seat) && seat < c.seats && !seatIds.has(seat)); seatIds.add(seat);
+      check(['person', 'bot', 'ai'].includes(driver) && typeof owner === 'string' && owner.length <= 128 && (id === null || ids.has(id)) && bit(away));
+      if (id !== null) {
+        const body = r.ents.find((e) => e[0] === id);
+        check(!heldIds.has(id) && body && c.kinds[body[2] as number].player && body[11] === seat && body[12] === driver && body[13] === owner && body[14] === away);
+        heldIds.add(id);
+      }
+    }
+    for (const body of r.ents) if (c.kinds[body[2] as number].player) check(heldIds.has(body[0]));
+    check(Array.isArray(r.queue) && r.queue.length <= QUEUE_MAX && Array.isArray(r.areas) && r.areas.length <= QUEUE_MAX && Array.isArray(r.ops));
+    for (const q of r.queue) {
+      check(q.length === 10 && uint(q[0]) && uint(q[1]) && typeof q[2] === 'string' && uint(q[3]) && typeof q[4] === 'string' && ['ev', 'room', 'all'].includes(q[5] as string) && typeof q[6] === 'string' && uint(q[8]) && bit(q[9]));
+      check((q[3] as number) < r.seq);
+      if (!q[9]) { check(Object.hasOwn(c.events, q[6] as string)); const shape = c.events[q[6] as string]; check(JSON.stringify(q[7]) === JSON.stringify(coerceFields(shape, q[7], dims))); }
+      else {
+        check(['answer', 'roundStart', 'roundOver'].includes(q[6] as string));
+        const d = q[7] as Record<string, unknown>; check(d && typeof d === 'object');
+        if (q[6] === 'answer') {
+          check(typeof d.ask === 'string' && Object.hasOwn(c.asks, d.ask) && ['ai', 'local', 'floor'].includes(d.by as string) && (d.why === undefined || typeof d.why === 'string' && d.why.length <= 256));
+          check(JSON.stringify(d.picks) === JSON.stringify(plainData(d.picks, { n: ANSWER_MAX })));
+        } else {
+          check(uint(d.n));
+          if (q[6] === 'roundOver') {
+            check(Array.isArray(d.results) && d.results.length <= c.seats);
+            for (const row of d.results as ResultRow[]) check(uint(row.seat) && row.seat < c.seats && typeof row.id === 'string' && ['person', 'bot', 'ai'].includes(row.driver) && Number.isFinite(row.score) && uint(row.place));
+          }
+        }
+      }
+    }
+    for (const a of r.areas) {
+      check(a.length === 6 && uint(a[0]) && typeof a[1] === 'string' && uint(a[2]));
+      check((a[2] as number) < r.seq);
+      const shape = a[3] as Record<string, unknown>; check(shape && ['s', 'b', 'c'].includes(shape.k as string));
+      for (const key of shape.k === 'b' ? ['min', 'max'] : shape.k === 'c' ? ['at', 'dir'] : ['at']) {
+        const v = shape[key] as Vec3; check(v && [v.x, v.y, v.z].every((n) => typeof n === 'number' && Number.isFinite(n)));
+      }
+      if (shape.k !== 'b') check(typeof shape.r === 'number' && shape.r >= 0 && shape.r <= REACH_M);
+      if (shape.k === 'c') check(typeof shape.half === 'number' && shape.half >= 0 && shape.half <= Math.PI);
+      check(typeof a[4] === 'string' && Object.hasOwn(c.events, a[4] as string));
+      const fields = c.events[a[4] as string]; check(fields && JSON.stringify(a[5]) === JSON.stringify(coerceFields(fields, a[5], dims)));
+    }
+    const occupants = new Map(r.seats.map(([seat, driver, owner]) => [seat, { driver, owner }]));
+    for (const op of r.ops as { op: string; seat: number; away: boolean; info: SeatInfo }[]) {
+      check(['join', 'away', 'leave'].includes(op.op));
+      const seat = op.op === 'join' ? op.info?.seat : op.seat;
+      check(uint(seat) && seat < c.seats);
+      if (op.op === 'join') {
+        check(['person', 'bot', 'ai'].includes(op.info.driver) && typeof op.info.owner === 'string' && op.info.owner.length <= 128);
+        const held = occupants.get(seat);
+        check(!held || held.driver === 'bot' || held.owner === 'reserved' || held.owner === op.info.owner && held.driver === op.info.driver);
+        occupants.set(seat, op.info);
+      }
+      if (op.op === 'leave') occupants.delete(seat);
+      if (op.op === 'away') check(typeof op.away === 'boolean');
+    }
+  }
   const r = opts.restore;
   if (r) {
+    validateSave(r);
     if (r.v !== 1) throw new Error('this save was written by another version of the runtime');
     const askNames = new Set<string>();
     pendingAsks = (Array.isArray(r.asks) ? r.asks : []).filter((a) => {
       if (!a || typeof a.name !== 'string' || !Object.hasOwn(c.asks, a.name) || askNames.has(a.name) || typeof a.n !== 'string' || a.n.length > 128 || typeof a.who !== 'string' || a.who.length > 128 || !Number.isSafeInteger(a.at) || a.at < 0 || a.at > r.tick) return false;
       askNames.add(a.name); return true;
     }).slice(0, Object.keys(c.asks).length).map((a) => ({ n: a.n, name: a.name, who: a.who, at: a.at, state: deepFreeze(coerceFields(c.asks[a.name].stateFields, a.state, dims)), ...(a.result ? { result: decisionResult(a.result) } : {}) }));
-    tick = r.tick; epoch = r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;
+    if (opts.restoreEpoch !== undefined && (!Number.isSafeInteger(opts.restoreEpoch) || opts.restoreEpoch <= 0)) throw new Error('restored epoch is invalid');
+    tick = r.tick; epoch = opts.restoreEpoch ?? r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;
     round = { n: r.round[0], phase: r.round[1] === 1 ? 'live' : 'over', endsAt: r.round[2], startedAt: r.round[3] };
     refreshRound();
     shared = unpackFields(c.shared, r.shared, dims); sharedChanged();
@@ -1119,7 +1221,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       if (!floorCall && value) guideViews.set(seat, value);
       return value;
     },
-    seatJoin: (info) => { ops.push({ op: 'join', info: { seat: info.seat, driver: info.driver, owner: String(info.owner ?? '') } }); },
+    seatJoin: (info) => { ops.push({ op: 'join', info: { seat: info.seat, driver: info.driver, owner: String(info.owner ?? '').slice(0, 128) } }); },
     seatAway: (seat, away) => { ops.push({ op: 'away', seat, away }); },
     seatLeave: (seat) => { ops.push({ op: 'leave', seat }); },
     setPolicy: (p) => { policy = normalizeCorePolicy(p); },

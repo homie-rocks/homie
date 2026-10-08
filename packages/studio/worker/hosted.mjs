@@ -31,6 +31,7 @@ export function hostRules(table) {
 
 /** Whether this Worker holds rules for a game. */
 export const hostedGame = (id) => games.has(id);
+export const hostedBuild = (id) => games.get(id);
 
 /** A game's rules, compiled once per isolate. Throws, naming the declaration, when they do not fit the contract. */
 export function compiledFor(id) {
@@ -44,12 +45,12 @@ export function compiledFor(id) {
 
 /**
  * The host runtime for one room. `send(frame, text)` is the relay's `hostFrame`; the clock is the Worker's own, and the
- * tick loop a timer chain inside the object. Nothing is stored yet: the room's save arrives with the next release.
+ * tick loop a timer chain inside the object. The Table supplies its synchronous store and recovery settings.
  */
-export function startHost(game, { send, log, onPause, onResume, onEnd }) {
+export function startHost(game, { send, log, onPause, onResume, onEnd, ...recovery }) {
   return createHost({
     game, build: games.get(game)?.build ?? undefined, compiled: compiledFor(game), send, log, onPause, onResume, onEnd,
     clock: { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h) },
-    store: null,
+    ...recovery,
   });
 }

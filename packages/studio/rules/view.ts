@@ -140,7 +140,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (Array.isArray(d) && Array.isArray(d[0]) && Array.isArray(d[1])) {
       const ents = new Map<string, Unpacked>();
       for (const w of d[1] as unknown[]) { const e = unpackEntity(schema.kinds, w, dims); if (e) ents.set(e.id, e); }
-      f = { k: s.k, e: Number(s.e) >>> 0, at: clock(), round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
+      f = { k: s.k, e: Number(s.e) || 0, at: clock(), round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
     }
     frames.set(s, f);
     return f;

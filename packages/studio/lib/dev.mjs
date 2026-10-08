@@ -422,8 +422,10 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
       rebuilding = true;
       try {
         log(`games/${g.id} changed: checking its rules and building it again…`);
+        const hash = () => { try { return JSON.parse(readFileSync(join(root, 'site/dist/games.json'), 'utf8')).games.find((x) => x.id === g.id)?.room?.stateHash; } catch { return null; } };
+        const before = hash();
         await build(root, { only: g.id, log });
-        log(`games/${g.id} is rebuilt. The local site restarts with its rules; rooms that were open start a fresh match, and their pages reconnect.`);
+        log(`games/${g.id} is rebuilt. ${before && before === hash() ? 'Local rooms resume their saved match; pages reconnect.' : 'The stored shape changed: local rooms reset to a fresh match; pages reconnect.'}`);
       } catch (error) {
         log(`games/${g.id} did not build, so the local site still runs what it had:\n${String(error?.message ?? error)}`);
       } finally { rebuilding = false; }

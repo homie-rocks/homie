@@ -456,6 +456,7 @@ async function roomRow(env, meta, room, max) {
   }));
   const slots = Array.isArray(f.roster) ? f.roster : [];
   return {
+    ...(f.durability ? { durability: { ok: f.durability.ok === true, message: oneLine(f.durability.message ?? '', 160), since: Number(f.durability.since) || null } } : {}),
     room, label: roomLabel(room), public: /^pub-\d+$/.test(room), server: roomServer(room),
     players: f.counts?.players ?? 0, screens: f.counts?.screens ?? 0, waiting: f.counts?.waiting ?? 0,
     humans: f.counts?.humans ?? 0, bots: f.counts?.bots ?? 0, max: f.counts?.maxPlayers ?? max,
