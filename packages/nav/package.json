@@ -15,9 +15,37 @@
   },
   "exports": {
     "./package.json": "./package.json",
-    "./*.js": {
-      "types": "./dist/*.d.ts",
-      "default": "./dist/*.js"
+    "./Bake.js": {
+      "types": "./dist/Bake.d.ts",
+      "default": "./dist/Bake.js"
+    },
+    "./Crowd.js": {
+      "types": "./dist/Crowd.d.ts",
+      "default": "./dist/Crowd.js"
+    },
+    "./Grid.js": {
+      "types": "./dist/Grid.d.ts",
+      "default": "./dist/Grid.js"
+    },
+    "./Mesh.js": {
+      "types": "./dist/Mesh.d.ts",
+      "default": "./dist/Mesh.js"
+    },
+    "./Query.js": {
+      "types": "./dist/Query.d.ts",
+      "default": "./dist/Query.js"
+    },
+    "./Random.js": {
+      "types": "./dist/Random.d.ts",
+      "default": "./dist/Random.js"
+    },
+    "./State.js": {
+      "types": "./dist/State.d.ts",
+      "default": "./dist/State.js"
+    },
+    "./Three.js": {
+      "types": "./dist/Three.d.ts",
+      "default": "./dist/Three.js"
     }
   },
   "files": [
@@ -28,16 +56,21 @@
     "NOTICE"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "prepack": "tsc --build"
+    "build": "node scripts/runtime.mjs && tsc --build",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@homie-rocks/heightfield": "0.2.0",
-    "navcat": "0.4.1"
+    "navcat": "0.4.1",
+    "pathfinding": "0.4.18",
+    "mathcat": "0.0.12"
   },
-  "devDependencies": {
-    "esbuild": "0.28.1",
-    "puppeteer-core": "25.8.0",
-    "workerd": "1.20261007.1"
+  "peerDependencies": {
+    "three": "0.185.1"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
   }
 }

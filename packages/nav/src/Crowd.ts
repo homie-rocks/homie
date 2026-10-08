@@ -1,68 +1,257 @@
-/** Fixed steps over Detour-style corridor following and sampled local avoidance. */
-import { crowd } from 'navcat/blocks';
-import { DEFAULT_QUERY_FILTER } from 'navcat';
+/** Fixed-step navigation. Only persistent fields are saved; avoidance candidates,
+ * neighbour lists and steering scratch are rebuilt at the next tick. */
+import { crowd, pathCorridor, localBoundary, obstacleAvoidance } from './internal/Backend.ts';
+import type { crowd as CrowdTypes } from 'navcat/blocks';
+import { DEFAULT_QUERY_FILTER, getNodeByRef, isValidNodeRef } from 'navcat';
 import { Mesh } from './Mesh.ts';
+import { meshData, locate } from './internal/MeshData.ts';
 import { pack, unpack } from './State.ts';
-import { point, positive, distance, type Point } from './Query.ts';
+import { axes, positive, distance, type Point, type Vector } from './Query.ts';
 export interface AgentTune {
-  radius: number; height: number; speed: number; acceleration: number;
-  /** Neighbour search distance, metres. */
-  neighbours: number; separation: number;
+  radius: number;
+  height: number;
+  speed: number;
+  acceleration: number;
+  neighbours: number;
+  separation: number;
+  /** Manual links pause until completeLink(id), including across save/restore. */
+  manualLinks?: boolean;
 }
-interface CrowdState { data: crowd.Crowd; dt: number; tick: number; revision: number }
+export interface Agent {
+  position: Vector;
+  velocity: Vector;
+  status: 'walking' | 'link' | 'stranded';
+  link: number | null;
+  offMesh: boolean;
+  partial: boolean;
+}
+export interface CrowdOptions {
+  searchIterations?: number;
+}
+interface CrowdState {
+  data: CrowdTypes.Crowd;
+  dt: number;
+  tick: number;
+  revision: number;
+  targets: Record<string, Vector>;
+}
+const scratch = new Set([
+  'obstacleAvoidanceQuery',
+  'obstacleAvoidanceDebugData',
+  'neis',
+  'corners',
+  'desiredSpeed',
+  'desiredVelocity',
+  'newVelocity',
+  'displacement',
+]);
 export class Crowd {
-  readonly state: CrowdState;
-  constructor(readonly mesh: Mesh, dt: number, maxRadius: number) {
-    positive(dt, 'fixed dt'); positive(maxRadius, 'maximum radius');
+  #state: CrowdState;
+  constructor(
+    readonly mesh: Mesh,
+    dt: number,
+    maxRadius: number,
+    options: CrowdOptions = {},
+  ) {
+    positive(dt, 'fixed dt');
+    positive(maxRadius, 'maximum radius');
     if (dt > 0.1) throw new Error('nav: fixed dt must be at most 0.1 seconds');
-    if (maxRadius > mesh.state.config.radius) throw new Error('nav: crowd radius exceeds baked clearance');
-    this.state = { data: crowd.create(maxRadius), dt, tick: 0, revision: mesh.revision };
-    this.state.data.agentPlacementHalfExtents = [...mesh.state.extent];
+    const m = meshData(mesh);
+    if (maxRadius > m.config.radius) throw new Error('nav: crowd radius exceeds baked clearance');
+    const data = crowd.create(maxRadius);
+    data.agentIdCounter = 1;
+    data.agentPlacementHalfExtents = [...m.extent];
+    if (options.searchIterations !== undefined) {
+      positive(options.searchIterations, 'search iterations');
+      if (!Number.isSafeInteger(options.searchIterations) || options.searchIterations > 8192)
+        throw new Error('nav: search iterations must be an integer up to 8192');
+      data.quickSearchIterations =
+        data.maxIterationsPerAgent =
+        data.maxIterationsPerUpdate =
+          options.searchIterations;
+    }
+    this.#state = { data, dt, tick: 0, revision: mesh.revision, targets: {} };
   }
-  add(at: Point, t: AgentTune): string {
-    point(at);
-    for (const k of ['radius', 'height', 'speed', 'acceleration', 'neighbours'] as const) positive(t[k], k);
-    if (!Number.isFinite(t.separation) || t.separation < 0 || t.radius > this.state.data.maxAgentRadius || t.height > this.mesh.state.config.height) throw new Error('nav: agent exceeds baked dimensions or has invalid separation');
-    if (!this.mesh.locate(at).success) throw new Error('nav: agent has no floor');
-    return crowd.addAgent(this.state.data, this.mesh.state.nav, [...at], { radius: t.radius, height: t.height, maxSpeed: t.speed, maxAcceleration: t.acceleration, collisionQueryRange: t.neighbours, separationWeight: t.separation, updateFlags: 31, queryFilter: DEFAULT_QUERY_FILTER, autoTraverseOffMeshConnections: true });
+  get tick(): number {
+    return this.#state.tick;
   }
-  remove(id: string): boolean { return crowd.removeAgent(this.state.data, id); }
-  target(id: string, to: Point): boolean {
-    const p = this.mesh.locate(to);
-    return p.success && crowd.requestMoveTarget(this.state.data, id, p.nodeRef, p.position);
+  ids(): number[] {
+    return Object.keys(this.#state.data.agents).map(Number);
   }
-  stop(id: string): boolean { return crowd.resetMoveTarget(this.state.data, id); }
-  /** Copies for rendering or game state; no backend object can be changed through them. */
-  agent(id: string): { position: Float64Array; velocity: Float64Array; offMesh: boolean; partial: boolean } | null {
-    const a = this.state.data.agents[id];
-    return a ? { position: new Float64Array(a.position), velocity: new Float64Array(a.velocity), offMesh: a.state === crowd.AgentState.OFFMESH, partial: a.targetPathIsPartial } : null;
+  add(at: Point, tune: AgentTune): number {
+    for (const key of ['radius', 'height', 'speed', 'acceleration', 'neighbours'] as const)
+      positive(tune[key], key);
+    const m = meshData(this.mesh),
+      position = axes(at, this.mesh.up);
+    if (
+      !Number.isFinite(tune.separation) ||
+      tune.separation < 0 ||
+      tune.radius > this.#state.data.maxAgentRadius ||
+      tune.height > m.config.height
+    )
+      throw new Error('nav: agent exceeds baked dimensions or has invalid separation');
+    if (!locate(this.mesh, position).success) throw new Error('nav: agent has no floor');
+    return Number(
+      crowd.addAgent(this.#state.data, m.nav, position, {
+        radius: tune.radius,
+        height: tune.height,
+        maxSpeed: tune.speed,
+        maxAcceleration: tune.acceleration,
+        collisionQueryRange: tune.neighbours,
+        separationWeight: tune.separation,
+        updateFlags: 31,
+        queryFilter: DEFAULT_QUERY_FILTER,
+        autoTraverseOffMeshConnections: !tune.manualLinks,
+      }),
+    );
   }
-  arrived(id: string, tolerance: number): boolean {
+  remove(id: number): boolean {
+    delete this.#state.targets[id];
+    return crowd.removeAgent(this.#state.data, String(id));
+  }
+  target(id: number, to: Point): boolean {
+    const target = axes(to, this.mesh.up),
+      result = locate(this.mesh, target);
+    const agent = this.#state.data.agents[id];
+    if (
+      !agent ||
+      !result.success ||
+      !this.mesh.path(axes(agent.position, this.mesh.up), to).complete
+    )
+      return false;
+    this.#state.targets[id] = target;
+    return crowd.requestMoveTarget(this.#state.data, String(id), result.nodeRef, result.position);
+  }
+  stop(id: number): boolean {
+    delete this.#state.targets[id];
+    return crowd.resetMoveTarget(this.#state.data, String(id));
+  }
+  setSpeed(id: number, speed: number): boolean {
+    positive(speed, 'speed');
+    const agent = this.#state.data.agents[id];
+    if (!agent) return false;
+    agent.maxSpeed = speed;
+    return true;
+  }
+  /** Explicit placement keeps identity, tune and requested destination. */
+  place(id: number, at: Point): boolean {
+    const a = this.#state.data.agents[id];
+    if (!a) return false;
+    const p = locate(this.mesh, axes(at, this.mesh.up));
+    if (!p.success) return false;
+    a.position = [...p.position];
+    a.velocity = [0, 0, 0];
+    a.state = crowd.AgentState.WALKING;
+    a.offMeshAnimation = null;
+    pathCorridor.reset(a.corridor, p.nodeRef, p.position);
+    localBoundary.resetLocalBoundary(a.boundary);
+    const target = this.#state.targets[id];
+    if (target) {
+      const goal = locate(this.mesh, target);
+      if (goal.success)
+        crowd.requestMoveTarget(this.#state.data, String(id), goal.nodeRef, goal.position);
+    }
+    return true;
+  }
+  completeLink(id: number): boolean {
+    return crowd.completeOffMeshConnection(this.#state.data, String(id));
+  }
+  agent(id: number): Agent | null {
+    const a = this.#state.data.agents[id];
+    if (!a) return null;
+    const m = meshData(this.mesh),
+      ref = a.offMeshAnimation?.nodeRef;
+    const backend =
+      ref !== undefined && isValidNodeRef(m.nav, ref)
+        ? getNodeByRef(m.nav, ref).offMeshConnectionId
+        : undefined;
+    const link =
+      backend === undefined
+        ? null
+        : Number(Object.keys(m.links).find((key) => m.links[key] === backend) ?? 0) || null;
+    return {
+      position: axes(a.position, this.mesh.up),
+      velocity: axes(a.velocity, this.mesh.up),
+      status:
+        a.state === crowd.AgentState.INVALID
+          ? 'stranded'
+          : a.state === crowd.AgentState.OFFMESH
+            ? 'link'
+            : 'walking',
+      link,
+      offMesh: a.state === crowd.AgentState.OFFMESH,
+      partial: a.targetPathIsPartial,
+    };
+  }
+  arrived(id: number, tolerance: number): boolean {
     positive(tolerance, 'arrival tolerance');
-    const a = this.state.data.agents[id];
-    return !!a && !a.targetPathIsPartial && a.targetState === crowd.AgentTargetState.VALID && a.state === crowd.AgentState.WALKING && distance(a.position, a.targetPosition) <= tolerance;
+    const a = this.#state.data.agents[id],
+      target = this.#state.targets[id];
+    return (
+      !!a &&
+      !!target &&
+      !a.targetPathIsPartial &&
+      a.targetState === crowd.AgentTargetState.VALID &&
+      a.state === crowd.AgentState.WALKING &&
+      distance(a.position, a.targetPosition) <= tolerance
+    );
   }
-  /** Exactly one tick; there is no elapsed-time accumulator or wall clock. */
   step(): void {
-    if (this.state.revision !== this.mesh.revision) {
-      // Re-acquire targets after tile replacement. Old polygon refs have expired.
-      for (const id of Object.keys(this.state.data.agents)) {
-        const a = this.state.data.agents[id]!;
-        if (a.targetState !== crowd.AgentTargetState.NONE) {
-          const p = this.mesh.locate(a.targetPosition);
-          if (p.success) crowd.requestMoveTarget(this.state.data, id, p.nodeRef, p.position);
-          else crowd.resetMoveTarget(this.state.data, id);
+    const s = this.#state,
+      m = meshData(this.mesh);
+    if (s.revision !== this.mesh.revision) {
+      // Only recover stranded agents and lost requests. The backend validates
+      // each live corridor itself; distant edits do not reset valid searches.
+      for (const id of this.ids()) {
+        const a = s.data.agents[id]!;
+        const floor = a.corridor.path[0];
+        if (
+          a.state === crowd.AgentState.WALKING &&
+          floor !== undefined &&
+          isValidNodeRef(m.nav, floor) &&
+          !DEFAULT_QUERY_FILTER.passFilter(floor, m.nav)
+        )
+          a.state = crowd.AgentState.INVALID;
+        if (a.state === crowd.AgentState.INVALID) this.place(id, axes(a.position, this.mesh.up));
+        const target = s.targets[id];
+        if (target) {
+          const p = locate(this.mesh, target);
+          if (p.success && (a.targetState === crowd.AgentTargetState.NONE || distance(p.position, a.targetPosition) > 1e-9)) crowd.requestMoveTarget(s.data, String(id), p.nodeRef, p.position);
         }
       }
-      this.state.revision = this.mesh.revision;
+      s.revision = this.mesh.revision;
     }
-    crowd.update(this.state.data, this.mesh.state.nav, this.state.dt); this.state.tick++;
+    crowd.update(s.data, m.nav, s.dt);
+    s.tick++;
   }
-  /** Includes mesh, obstacles, tile salts, sliced searches, avoidance and link progress. */
-  save(): Uint8Array { return pack('crowd', { mesh: this.mesh.save(), state: this.state }); }
-  static restore(bytes: Uint8Array): Crowd {
-    const s = unpack<{ mesh: Uint8Array; state: CrowdState }>('crowd', bytes);
-    const c = new Crowd(Mesh.restore(s.mesh), s.state.dt, s.state.data.maxAgentRadius);
-    Object.assign(c.state, s.state); return c;
+  /** No tiles or mesh payload. Restore deliberately requires the shared mesh. */
+  save(): Uint8Array {
+    const agents: Record<string, unknown> = {};
+    for (const [id, agent] of Object.entries(this.#state.data.agents))
+      agents[id] = Object.fromEntries(Object.entries(agent).filter(([key]) => !scratch.has(key)));
+    return pack('crowd', {
+      identity: unpack('identity', this.mesh.identity()),
+      state: { ...this.#state, data: { ...this.#state.data, agents } },
+    });
+  }
+  static restore(bytes: Uint8Array, mesh: Mesh): Crowd {
+    const saved = unpack<{ identity: unknown; state: CrowdState }>('crowd', bytes);
+    const identity = mesh.identity(),
+      expected = pack('identity', saved.identity);
+    if (identity.length !== expected.length || identity.some((v, i) => v !== expected[i]))
+      throw new Error('nav: crowd mesh identity differs');
+    const s = saved.state,
+      result = new Crowd(mesh, s.dt, s.data.maxAgentRadius);
+    for (const a of Object.values(s.data.agents)) {
+      a.obstacleAvoidanceQuery = obstacleAvoidance.createObstacleAvoidanceQuery(32, 32);
+      a.neis = [];
+      a.corners = [];
+      a.desiredSpeed = 0;
+      a.desiredVelocity = [0, 0, 0];
+      a.newVelocity = [0, 0, 0];
+      a.displacement = [0, 0, 0];
+    }
+    result.#state = s;
+    return result;
   }
 }

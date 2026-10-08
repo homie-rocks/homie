@@ -6,22 +6,22 @@ import { flat, doorway, tune } from './fixtures.mjs';
 
 test('seeded inputs produce identical whole state, including a mid-search restore', () => {
   const make = () => {
-    const c = new Crowd(flat(), 1/30, .3), rng = new Random(872);
+    const c = new Crowd(flat(), 1/30, .3, { searchIterations: 1 }), rng = new Random(872);
     c.mesh.addObstacle({ min: [4, -1, 2], max: [6, 3, 8] });
     for (let i = 0; i < 6; i++) {
       const id = c.add([1 + rng.next(), .1, 1 + i], tune); c.target(id, [8 + rng.next(), .1, 8 - i]);
     }
     // Force sliced searches to span steps, so the heap and pool aliases matter.
-    c.state.data.quickSearchIterations = 1; c.state.data.maxIterationsPerAgent = 1; c.state.data.maxIterationsPerUpdate = 2;
+
     return c;
   };
   const a = make(), b = make();
   for (let i = 0; i < 20; i++) { a.step(); b.step(); }
   assert.deepEqual(a.save(), b.save());
-  let resumed = Crowd.restore(a.save());
+  let resumed = Crowd.restore(a.save(), a.mesh);
   for (let i = 0; i < 12; i++) {
     a.step(); resumed.step(); assert.deepEqual(resumed.save(), a.save(), `tick ${i}`);
-    resumed = Crowd.restore(resumed.save());
+    resumed = Crowd.restore(resumed.save(), resumed.mesh);
   }
   for (let i = 0; i < 80; i++) { a.step(); resumed.step(); }
   assert.deepEqual(a.save(), resumed.save());
@@ -63,7 +63,7 @@ test('restore during an off-mesh traversal is exact and finishes on the other is
   let found = false;
   for (let i = 0; i < 180; i++) {
     c.step(); if (c.agent(id).offMesh) {
-      const restored = Crowd.restore(c.save());
+      const restored = Crowd.restore(c.save(), c.mesh);
       for (let j = 0; j < 120; j++) { c.step(); restored.step(); }
       assert.deepEqual(c.save(), restored.save()); found = true; break;
     }
@@ -75,8 +75,8 @@ test('an obstacle edit invalidates corridors and a restored crowd replans identi
   const c = new Crowd(flat(), 1/30, .3), id = c.add([1, .1, 5], tune); c.target(id, [9, .1, 5]);
   for (let i = 0; i < 10; i++) c.step();
   const obs = c.mesh.addObstacle({ min: [4, -1, 3], max: [6, 3, 7] });
-  const r = Crowd.restore(c.save());
+  const r = Crowd.restore(c.save(), c.mesh);
   for (let i = 0; i < 150; i++) { c.step(); r.step(); }
   assert.deepEqual(c.save(), r.save()); assert.ok(c.agent(id).position[0] > 7);
-  c.mesh.removeObstacle(obs); r.mesh.removeObstacle(obs); c.step(); r.step(); assert.deepEqual(c.save(), r.save());
+  c.mesh.removeObstacle(obs);  c.step(); r.step(); assert.deepEqual(c.save(), r.save());
 });
