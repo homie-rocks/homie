@@ -513,6 +513,13 @@ export class Mesh implements NavigationQuery {
   /** Supply the original assets for every saved tile, in any order. Polygon
    * allocations and salts are restored, so saved crowds retain valid corridors. */
   static restore(bytes: Uint8Array, assets: Iterable<Uint8Array>): Mesh {
+    try { return Mesh.restoreData(bytes, assets); }
+    catch (error) {
+      if (error instanceof Error && error.message.startsWith('nav:')) throw error;
+      throw new Error('nav: malformed mesh snapshot');
+    }
+  }
+  private static restoreData(bytes: Uint8Array, assets: Iterable<Uint8Array>): Mesh {
     const saved = unpack<MeshState>('mesh', bytes),
       mesh = new Mesh(saved.config, axes(saved.extent, saved.config.up));
     const runtimeHeaders = saved.nav.tiles;

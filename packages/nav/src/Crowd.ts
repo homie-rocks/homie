@@ -235,6 +235,13 @@ export class Crowd {
     });
   }
   static restore(bytes: Uint8Array, mesh: Mesh): Crowd {
+    try { return Crowd.restoreData(bytes, mesh); }
+    catch (error) {
+      if (error instanceof Error && error.message.startsWith('nav:')) throw error;
+      throw new Error('nav: malformed crowd snapshot');
+    }
+  }
+  private static restoreData(bytes: Uint8Array, mesh: Mesh): Crowd {
     const saved = unpack<{ identity: unknown; state: CrowdState }>('crowd', bytes);
     const identity = mesh.identity(),
       expected = pack('identity', saved.identity);

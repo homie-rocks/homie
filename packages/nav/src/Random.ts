@@ -2,7 +2,8 @@
 export class Random {
   readonly state: Uint32Array;
   constructor(seed: number) {
-    if (!Number.isInteger(seed)) throw new Error('nav: seed must be an integer');
+    if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)
+      throw new Error('nav: seed must be a uint32');
     this.state = new Uint32Array([seed]);
   }
   next = (): number => {

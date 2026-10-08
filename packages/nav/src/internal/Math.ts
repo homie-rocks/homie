@@ -11,8 +11,14 @@ export function deterministicSin(angle: number): number {
   if (x > PI / 2) x = PI - x;
   if (x < -PI / 2) x = -PI - x;
   const squared = x * x;
-  let term = x, result = x;
-  for (let n = 1; n <= 8; n++) { term *= -squared / ((2 * n) * (2 * n + 1)); result += term; }
+  let term = x,
+    result = x;
+  for (let n = 1; n <= 8; n++) {
+    term *= -squared / (2 * n * (2 * n + 1));
+    result += term;
+  }
   return result;
 }
-export function deterministicCos(angle: number): number { return deterministicSin(angle + PI / 2); }
+export function deterministicCos(angle: number): number {
+  return deterministicSin(angle + PI / 2);
+}
