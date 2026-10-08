@@ -123,7 +123,7 @@ const restored = Grid.restore(grid.save());
 | `crowd.add(at, tune)` | Add an agent using baked clearance; return its id. |
 | `crowd.remove(id)` | Remove an agent. |
 | `crowd.ids()` | Return live ids in simulation order. |
-| `crowd.target(id, to)` | Check cached reachability and enqueue a path request; false means no route/floor/id. |
+| `crowd.target(id, to)` | Check cached reachability and enqueue a path request; false means no route/floor/id; stranded or mid-link agents remember the request. |
 | `crowd.stop(id)` | Clear the requested destination. |
 | `crowd.setSpeed(id, speed)` | Change a live agent's maximum speed. |
 | `crowd.place(id, at)` | Move to a valid floor, retaining identity, tuning and destination. |
@@ -151,16 +151,29 @@ const restored = Grid.restore(grid.save());
 | `debugMesh(mesh, crowd?)` | Build a disposable three.js diagnostic group. |
 | `disposeDebugMesh(group)` | Dispose its geometry/materials and clear the group. |
 
+For paths over a heightfield without runtime topology edits or crowd avoidance,
+`@homie-rocks/heightfield/Route.js` provides the existing waypoint router. Use nav
+for tiled polygon meshes, streamed floors, runtime carving, links and crowds.
+
 ## Limits
 
 - `up: 'z'` is a rotation: world `(x,y,z)` maps to internal `(x,z,-y)`.
   Positive tile/grid depth follows internal +z, hence world −y in z-up.
   Heightfield rectangles and sample coordinates use this internal horizontal
-  frame. Three.js helpers use the same rotation. Box bounds must remain ordered.
+  frame. For example, `bakeHeightfield(field, { ...config, up: 'z' },
+  { min: [0, 0], max: [20, 20] })` covers world x = 0…20, y = −20…0;
+  world `(x, y, z)` samples `field.heightAt(x, -y)` for z. A z-up grid at
+  `[0, 0, 0]` likewise grows toward negative world y.
+  Three.js helpers use the same rotation. Box bounds must remain ordered.
 - Slope is checked from triangle normals. The ledge filter accounts for slope
   voxel variation; adjacent compact spans still obey `stepHeight`. Incompatible
   cell size/height, climb and slope configurations throw. Reduce cell size or
-  increase step height; coarse sampling can also miss terrain features.
+  increase step height; the error reports the maximum supported slope and required
+  minimum step height. Coarse sampling can also miss terrain features. Recast's
+  voxel surface is approximate: on steep ramps returned `nearest` and agent
+  positions can differ from the source surface by about two horizontal cells
+  (observed 0.40 m at 40°/0.25 m cells and 0.72 m at 55°/0.4 m cells).
+  Sample the original terrain separately when render/contact height must match.
 - Tile width is `tileCells * cellSize`. Independent tile input needs a halo of
   `(ceil(radius / cellSize) + 3) * cellSize`. A whole level with no walkable output
   throws a winding/slope/clearance diagnostic. A border warning can also describe
@@ -174,7 +187,11 @@ const restored = Grid.restore(grid.save());
   requires the game to call `completeLink`.
 - Crowd avoidance is local, not a collision solver or a traffic scheduler.
   Dense opposing traffic can overlap or jam. Unloaded floors report `stranded`;
-  reloading or `place` can recover them. Fixed `dt` must be at most 0.1 seconds.
+  reloading or `place` can recover them. Targets submitted while stranded or on
+  a link are remembered even when `target` returns false. Every mesh edit clears
+  active searches, validates boundary caches and repairs invalid corridors before it
+  returns. Valid completed corridors continue moving; active traversals retain
+  their endpoint coordinates and public link ID even if the link is removed. Fixed `dt` must be at most 0.1 seconds.
   Apply inputs in a stable order and save random state separately.
 - Grid capacity is 4,000,000 cells, not a per-tick performance guarantee. Large
   obstructed searches and initial component labelling belong outside a 20 Hz
@@ -182,7 +199,7 @@ const restored = Grid.restore(grid.save());
   an unobstructed octile route bypasses either search. Components cache until an edit.
 - Snapshots are data graphs with explicit little-endian typed sections and an
   exact backend-version check. They are trusted assets/saves, not player input.
-  Format 3 is incompatible with earlier formats. Persist all chunks atomically;
+  Persist all chunks atomically;
   one large blob may exceed a storage system's per-value limit.
 
 ## Measurements
@@ -200,12 +217,27 @@ Bake/load is a single observation; save/restore medians use seven runs.
 | Pillars 80 × 80 m | 16 | 174,075 / 11,782 B | 3,180,879 / 206,758 B | 103,048 B |
 | Pillars 160 × 160 m | 64 | 726,059 / 11,868 B | 12,977,471 / 206,844 B | 428,827 B |
 
-| Scene | Bake + load ms | Mesh save / restore ms | Across-map path median ms | 300-agent save bytes | Crowd save / restore ms |
+| Static scene | Bake + load ms | Mesh save / restore ms | Across-map path median ms | 300-agent save bytes | Crowd save / restore ms |
 |---|---:|---:|---:|---:|---:|
-| Flat 20 m | 38.5 | 0.07 / 0.16 | 0.021 | 111,767 | 4.66 / 2.37 |
-| Pillars 20 m | 21.0 | 0.14 / 0.21 | 0.027 | 200,296 | 5.53 / 2.75 |
-| Pillars 80 m | 92.9 | 3.55 / 3.97 | 0.110 | 258,626 | 6.58 / 4.18 |
-| Pillars 160 m | 284.3 | 13.45 / 15.99 | 0.470 | 282,814 | 7.29 / 3.51 |
+| Flat 20 m | 36.4 | 0.06 / 0.16 | 0.020 | 128,212 | 4.94 / 3.20 |
+| Pillars 20 m | 18.4 | 0.14 / 0.28 | 0.028 | 216,741 | 6.36 / 3.66 |
+| Pillars 80 m | 93.4 | 2.74 / 5.44 | 0.104 | 275,071 | 7.30 / 5.55 |
+| Pillars 160 m | 276.8 | 12.70 / 18.47 | 0.458 | 299,259 | 8.04 / 6.27 |
+
+Wake costs below include topology validation and use seven warm samples with
+300 agents; full room wake restores both mesh and crowd. Reproduce separately
+with `node packages/nav/test/measure-wake.mjs`; raw values are in
+`test/wake-measurements.json`. Editable worlds retain voxel spans, so restoring
+and reapplying live obstacles is substantially more expensive than static tiles.
+
+| World | Tiles | Live obstacles | Mesh save / restore ms | Full room wake ms |
+|---|---:|---:|---:|---:|
+| Static 80 m | 16 | 0 | 6.65 / 11.63 | 26.68 |
+| Editable 80 m | 16 | 0 | 5.08 / 35.85 | 43.16 |
+| Editable 80 m | 16 | 20 | 6.30 / 103.97 | 110.62 |
+| Static 160 m | 64 | 0 | 15.73 / 21.26 | 30.15 |
+| Editable 160 m | 64 | 0 | 13.07 / 128.71 | 134.91 |
+| Editable 160 m | 64 | 20 | 13.45 / 216.23 | 225.23 |
 
 Every agent retargets every tick on the 80 m pillar scene. Timings are milliseconds,
 100 samples after 30 warm-up ticks; topology and reachability caches are warm.
@@ -213,12 +245,13 @@ Worker measurements include one local HTTP round trip per operation.
 
 | Agents | Node target loop median | Node whole tick median / p95 | Worker target loop median | Worker whole tick median / p95 |
 |---|---:|---:|---:|---:|
-| 100 | 0.28 | 2.12 / 2.87 | 0.61 | 3.01 / 3.58 |
-| 400 | 1.16 | 8.95 / 9.95 | 1.56 | 10.06 / 10.77 |
-| 1,000 | 2.82 | 24.99 / 36.97 | 3.32 | 26.11 / 30.12 |
+| 100 | 0.25 | 1.94 / 2.52 | 0.51 | 2.67 / 3.16 |
+| 400 | 1.11 | 9.24 / 10.70 | 1.62 | 9.92 / 10.63 |
+| 1,000 | 2.72 | 26.58 / 31.15 | 3.30 | 24.98 / 29.40 |
 
 At 400 agents this leaves room inside a 50 ms tick. At 1,000 the observed Node
-maximum was 40.00 ms: capacity depends on geometry, density and other room work.
+maximum was 53.86 ms, exceeding a 50 ms tick even without edits.
+Capacity depends on geometry, density and other room work.
 These timings exclude persistence. Reachability components rebuild after topology
 changes; ordinary target requests then use cached set membership and queued searches.
 
@@ -226,16 +259,16 @@ For 2,000 × 2,000 obstructed grids, median query milliseconds over three runs:
 
 | Mask | A* | JPS option |
 |---|---:|---:|
-| One blocked centre cell | 23.3 | 13.3 |
-| 10% seeded random obstacles | 287.7 | 263.4 |
-| Alternating long walls | 1,325.1 | 237.7 |
-| Unreachable across a full wall | 900.4 | 891.3 |
+| One blocked centre cell | 26.4 | 13.5 |
+| 10% seeded random obstacles | 304.5 | 302.8 |
+| Alternating long walls | 1,387.1 | 230.6 |
+| Unreachable across a full wall | 1,177.1 | 1,127.1 |
 
-Initial component labelling took 75–120 ms; repeated nearby blocked-cell nearest
-queries took about 0.002 ms. A 4,000,113-byte grid restored in 21–23 ms. Large
+Initial component labelling took 72–119 ms; repeated nearby blocked-cell nearest
+queries took about 0.002 ms. A 4,000,113-byte grid restored in 20–24 ms. Large
 obstructed grids therefore need a different scheduling budget from crowds.
 
-Grid alone bundles to 20,524 bytes minified (8,099 gzip) with esbuild, neutral
+Grid alone bundles to 20,659 bytes minified (8,180 gzip) with esbuild, neutral
 platform and ESM output. It imports neither navcat nor three.js.
 
 ## License

@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib';
 // Run separately from the test suite to avoid competing CPU work.
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
@@ -218,6 +219,13 @@ try {
   }
   await rm(dir, { recursive: true, force: true });
 }
+const gridBundle = await build({
+  stdin: { contents: "export { Grid } from '@homie-rocks/nav/Grid.js';",
+    resolveDir: fileURLToPath(new URL('.', import.meta.url)) },
+  bundle: true, minify: true, platform: 'neutral', format: 'esm', write: false,
+});
+const gridBytes = gridBundle.outputFiles[0].contents;
+report.gridBundle = { minified: gridBytes.length, gzip: gzipSync(gridBytes).length };
 const output = JSON.stringify(report, null, 2) + '\n';
 await writeFile(new URL('measurements.json', import.meta.url), output);
 console.log(output);
