@@ -566,6 +566,22 @@ const CASES = [
   ['timers set far off, on every tick, by everyone', { tick: `for (let i = 0; i < 9000000; i += 1) world.after(100000, 'poke', { n: 1 });` }, /^runner\.tick: this room already holds 16384 events and timers that are waiting: send fewer, or set fewer timers that are far off$/],
   ['area events without end', { tick: `for (let i = 0; i < 9000000; i += 1) world.sendArea({ sphere: { at: self.pos, r: 60 } }, 'poke', { n: 1 });`, kinds: `rock: { fields: { n: f.u8() } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); },` }, /^runner\.tick: a tick takes 64 area events at most$/],
   ['spawns without end', { tick: `for (let i = 0; i < 9000000; i += 1) world.spawn('rock', self.pos, {});`, kinds: `rock: { fields: { n: f.u8() } }` }, /^runner\.tick: a room holds at most 2048 entities$/],
+  ['a Map\'s keys read out with a spread, in a loop', { tick: `const m = new Map(); for (let i = 0; i < 30000; i += 1) m.set(i, i); for (let i = 0; i < 9000000; i += 1) { const a = [...m.keys()]; }` }, /this handler ran too long/],
+  ['a Map made from a long list, in a loop', { tick: `const a = []; for (let i = 0; i < 30000; i += 1) a.push([i, i]); for (let i = 0; i < 9000000; i += 1) { const m = new Map(a); }` }, /this handler ran too long/],
+  ['the keys of a large constant, in a loop', { top: `const BIG = { ${Array.from({ length: 20000 }, (_, i) => `k${i}: ${i}`).join(', ')} };`, tick: `for (let i = 0; i < 9000000; i += 1) { const k = Object.keys(BIG); }` }, /this handler ran too long/],
+  ['a large constant gone through with for…in, in a loop', { top: `const BIG = { ${Array.from({ length: 20000 }, (_, i) => `k${i}: ${i}`).join(', ')} };`, tick: `let n = 0; for (let i = 0; i < 9000000; i += 1) { for (const k in BIG) { n += 1; break; } }` }, /this handler ran too long/],
+  ['a large constant copied by a spread, in a loop', { top: `const BIG = { ${Array.from({ length: 20000 }, (_, i) => `k${i}: ${i}`).join(', ')} };`, tick: `for (let i = 0; i < 9000000; i += 1) { const o = { ...BIG }; }` }, /this handler ran too long/],
+  ['a constant list written out past the size cap', { top: `const BIG = [${Array.from({ length: 65537 }, () => 1).join(',')}];`, tick: `self.score = BIG.length;` }, { refused: /src\/rules\.ts:3 a list holds 65536 entries at most: this one is written out with 65537/ }],
+  ['an iterator spread into a list', { tick: `const m = new Map([[1, 2]]); const it = m.entries(); const o = { ...it }; self.score = it.length;` }, null],
+  ['thousands of announcements for every entity to hear', { kinds: `rock: { fields: { n: f.u8() }, onRoom: { poke(world, self) { self.n += 1; } } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); }, on: { roundStart(world) { for (let i = 0; i < 9000000; i += 1) world.announce('poke', { n: 1 }); } },` }, /^room\.on\.roundStart: (this room already holds 16384 events and timers that are waiting|this handler ran too long)/],
+  ['thousands of announcements nobody hears', { kinds: `rock: { fields: { n: f.u8() } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); }, on: { roundStart(world) { for (let i = 0; i < 9000000; i += 1) world.announce('poke', { n: 1 }); } },` }, /^room\.on\.roundStart: (this room already holds 16384 events|this handler ran too long)/],
+  // --- a long text is read end to end by whatever compares it: that is charged too
+  ['two long texts compared with ===, in a loop', { tick: `let a = 'ab'; for (let i = 0; i < 13; i += 1) a = a + a; let b = 'ab'; for (let i = 0; i < 13; i += 1) b = b + b; let n = 0; for (let i = 0; i < 9000000; i += 1) { if (a === b) n += 1; }` }, /this handler ran too long/],
+  ['two long texts compared with <, in a loop', { tick: `let a = 'ab'; for (let i = 0; i < 13; i += 1) a = a + a; let b = 'ab'; for (let i = 0; i < 13; i += 1) b = b + b; let n = 0; for (let i = 0; i < 9000000; i += 1) { if (a < b) n += 1; }` }, /this handler ran too long/],
+  ['a switch on a long text, in a loop', { tick: `let a = 'ab'; for (let i = 0; i < 13; i += 1) a = a + a; let b = 'ab'; for (let i = 0; i < 13; i += 1) b = b + b; let n = 0; for (let i = 0; i < 9000000; i += 1) { switch (a) { case b: n += 1; break; default: n += 2; } }` }, /this handler ran too long/],
+  ['a long text turned into a number, in a loop', { tick: `let a = '12'; for (let i = 0; i < 13; i += 1) a = a + a; let n = 0; for (let i = 0; i < 9000000; i += 1) { n = a - 1; }` }, /this handler ran too long/],
+  ['a long text as a Map\'s key, in a loop', { tick: `let a = 'ab'; for (let i = 0; i < 13; i += 1) a = a + a; let b = 'ab'; for (let i = 0; i < 13; i += 1) b = b + b; const m = new Map(); m.set(a, 1); let n = 0; for (let i = 0; i < 9000000; i += 1) { n += m.get(b); }` }, /this handler ran too long/],
+  ['a long text looked for in a long text, in a loop', { tick: `let a = 'a'; for (let i = 0; i < 15; i += 1) a = a + a; let b = 'a'; for (let i = 0; i < 12; i += 1) b = b + b; b = 'b' + b; let n = 0; for (let i = 0; i < 9000000; i += 1) { if (a.includes(b)) n += 1; }` }, /this handler ran too long/],
   // --- the review's own budget cases, still stopped
   ['a loop that never ends', { tick: `while (true) { self.score += 0; }` }, /this handler ran too long/],
   ['a million queries', { tick: `for (let i = 0; i < 1000000; i += 1) world.near(self.pos, 1);` }, /this handler ran too long/],
@@ -627,6 +643,27 @@ test('move, think and join always run, and once the tick\'s budget is gone each 
   // And such a room ends: its budget trips on every tick.
   rig.ticks(60);
   assert.deepEqual(rig.ended.map((e) => [e.why, e.kind, e.handler]), [['budget', 'rock', 'move']]);
+});
+
+test('once the tick\'s budget is gone, a body\'s small share buys nothing large: a constant\'s keys are paid for before they are read', async () => {
+  // Two thousand bodies, each with a `move` that is run on every tick whatever is left. A call that charged for its
+  // work after doing it could be made once by each of them for nothing. Every call charges first, so with the budget
+  // gone none of them gets as far as the work.
+  const BIG = `const BIG = { ${Array.from({ length: 30000 }, (_, i) => `k${i}: ${i}`).join(', ')} };`;
+  for (const [what, line] of [['Object.keys', 'const k = Object.keys(BIG);'], ['for…in', 'for (const k in BIG) { break; }'], ['a spread', 'const o = { ...BIG };'], ['a map field', 'body.motion.table = BIG;'], ['Object.values', 'const v = Object.values(BIG);']]) {
+    const move = `import { defineMove } from '@homie-rocks/studio/rules';\n${BIG}\nexport const move = defineMove({ runner(body, input, ctx) {}, rock(body, input, ctx) { ${line} } });`;
+    made += 1;
+    const dir = writeGame(scratch, `floor${made}`, { ...game({ kinds: `rock: { body: { shape: 'circle', radius: 0.2, maxSpeed: 1 }, motion: { table: f.map(f.u16(), 8) } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 5, y: 5, z: 0 }, {}); },`, tick: `while (true) { self.score += 0; }` }), move });
+    const L = await loadGame(scratch, dir, `floor${made}`);
+    const c = L.R.compileRules(L.def, { map: L.R.compileMap(MAP, 'main'), seats: 4, settings: L.R.ROOM_DEFAULTS });
+    const rig = hostRig(L, c);
+    rig.join(0);
+    const ran = drive(rig, 6);
+    assert.equal(ran.escaped, null, what);
+    assert.ok(ran.slowest < SLOW_MS, `${what}: with 2,000 bodies trying it on every tick, the slowest tick took ${ran.slowest.toFixed(0)} ms`);
+    assert.ok(stats(rig).budgetStops > 2000, `${what}: they were stopped (${stats(rig).budgetStops} times)`);
+    assert.ok(stats(rig).maxTickUnits <= 1.75 * c.settings.budget.tick, what);
+  }
 });
 
 test('a room that holds more than a tick can send is charged for it, and ends', async () => {

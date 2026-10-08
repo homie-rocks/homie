@@ -74,8 +74,10 @@ const refusedName = (k) => REFUSED_NAMES.includes(k) || k.startsWith('toLocale')
 /** Operators that turn each operand into a number or a text. (`+` is handled beside them; `==` and `!=` are refused.) */
 const CONVERTING = new Set(['-', '*', '/', '%', '&', '|', '^', '<<', '>>', '>>>', '<', '>', '<=', '>=']);
 const LOGICAL_ASSIGN = ['||=', '&&=', '??='];
-/** The guard's functions whose result is always a number, a text, true, false or nothing. */
-const PLAIN_GUARDS = ['p', 'add', 'tpl'];
+/** rules/guard.ts `SIZE_CAP`: no list, text, Map, Set or object in rules passes it. */
+export const SIZE_CAP = 65_536;
+/** A text shorter than this is compared or converted for nothing worth charging. */
+const SHORT = 64;
 const GLOBAL_MEMBERS = {
   Math: { call: MATH_FNS, read: [] },
   Number: { call: ['isFinite', 'isInteger', 'isNaN'], read: ['MAX_SAFE_INTEGER', 'EPSILON'] },
@@ -118,63 +120,61 @@ function rootOf(node) {
 const isGuard = (node) => t.isIdentifier(node) && /^__homie\d*$/.test(node.name);
 const isGuardCall = (node) => t.isCallExpression(node) && t.isMemberExpression(node.callee) && isGuard(node.callee.object);
 /**
- * Whether an expression is a number, a text, true, false, null or undefined whatever runs: never a list, an object or
- * a function. Such an operand needs no check. A variable is one when it is declared with such a value (or by a
- * `for…in`) and everything ever assigned to it is one too. `scope` is where the expression stands.
+ * Whether an expression is a number, true, false, null or undefined whatever runs: never a text, a list, an object or a
+ * function. An operator can use such a value for nothing (a list would be turned into a text first, a long text read end
+ * to end), so it needs no check; and `+` between two of them makes a number, never a text. A variable is one when it is
+ * declared with such a value and everything ever assigned to it is one too. `scope` is where the expression stands.
+ * After the rewrite has begun a name is judged by what was read of it before (`ids`), never by a scope that has since
+ * changed.
  */
-function plain(n, scope, seen = new Set(), ids = null) {
+function num(n, scope, seen = new Set(), ids = null) {
   if (!n) return true;
-  if (t.isNumericLiteral(n) || t.isStringLiteral(n) || t.isBooleanLiteral(n) || t.isNullLiteral(n) || t.isTemplateLiteral(n)) return true;
-  if (t.isUnaryExpression(n)) return ['-', '+', '~', '!', 'typeof', 'void'].includes(n.operator);
-  if (t.isUpdateExpression(n) || t.isBinaryExpression(n)) return true;
-  if (t.isLogicalExpression(n)) return plain(n.left, scope, seen, ids) && plain(n.right, scope, seen, ids);
-  if (t.isConditionalExpression(n)) return plain(n.consequent, scope, seen, ids) && plain(n.alternate, scope, seen, ids);
-  if (t.isParenthesizedExpression(n)) return plain(n.expression, scope, seen, ids);
-  if (t.isSequenceExpression(n)) return plain(n.expressions[n.expressions.length - 1], scope, seen, ids);
-  if (t.isAssignmentExpression(n)) return n.operator === '=' || LOGICAL_ASSIGN.includes(n.operator) ? plain(n.right, scope, seen, ids) && (n.operator === '=' || plain(n.left, scope, seen, ids)) : true;
-  if (isGuardCall(n)) return PLAIN_GUARDS.includes(n.callee.property.name);
+  if (t.isNumericLiteral(n) || t.isBooleanLiteral(n) || t.isNullLiteral(n)) return true;
+  if (t.isUnaryExpression(n)) return ['-', '+', '~', '!', 'void'].includes(n.operator);
+  if (t.isUpdateExpression(n)) return true;
+  if (t.isBinaryExpression(n)) return n.operator !== '+' || (num(n.left, scope, seen, ids) && num(n.right, scope, seen, ids));
+  if (t.isLogicalExpression(n)) return num(n.left, scope, seen, ids) && num(n.right, scope, seen, ids);
+  if (t.isConditionalExpression(n)) return num(n.consequent, scope, seen, ids) && num(n.alternate, scope, seen, ids);
+  if (t.isParenthesizedExpression(n)) return num(n.expression, scope, seen, ids);
+  if (t.isSequenceExpression(n)) return num(n.expressions[n.expressions.length - 1], scope, seen, ids);
+  if (t.isAssignmentExpression(n)) return n.operator === '=' ? num(n.right, scope, seen, ids) : n.operator === '+=' || LOGICAL_ASSIGN.includes(n.operator) ? num(n.left, scope, seen, ids) && num(n.right, scope, seen, ids) : true;
+  if (isGuardCall(n)) return n.callee.property.name === 'eq';
   if (t.isCallExpression(n)) {
     const c = n.callee;
-    if (t.isIdentifier(c) && ['Number', 'String', 'Boolean'].includes(c.name) && !scope.getBinding(c.name)) return true;
+    if (t.isIdentifier(c) && ['Number', 'Boolean'].includes(c.name) && !scope.getBinding(c.name)) return true;
     return t.isMemberExpression(c) && !c.computed && t.isIdentifier(c.object, { name: 'Math' }) && !scope.getBinding('Math');
   }
   if (t.isIdentifier(n)) {
-    // After the rewrite has begun a name is judged by what was read of it before (`ids`), never by a scope that has since changed.
     if (ids) return ids.has(n);
     const b = scope.getBinding(n.name);
     if (!b) return ['undefined', 'NaN', 'Infinity'].includes(n.name);
-    return plainBinding(b, seen);
+    return numBinding(b, seen);
   }
   return false;
 }
-/** Whether a member expression is written to: the left of an assignment, the operand of `++`, a loop's variable, or a place in a pattern. */
-const isTarget = (path) => (path.parentPath.isAssignmentExpression() && path.parent.left === path.node) || (path.parentPath.isUpdateExpression()) || (path.parentPath.isForXStatement() && path.parent.left === path.node)
-  || path.parentPath.isArrayPattern() || (path.parentPath.isObjectProperty() && path.parentPath.parentPath.isObjectPattern()) || path.parentPath.isRestElement() || (path.parentPath.isAssignmentPattern() && path.parent.left === path.node);
-function plainBinding(b, seen) {
+function numBinding(b, seen) {
   if (seen.has(b)) return true;
   seen.add(b);
   if (!['let', 'const', 'var'].includes(b.kind) || !b.path.isVariableDeclarator() || !t.isIdentifier(b.path.node.id)) return false;
   const loop = b.path.parentPath.parentPath;
-  if (loop.isForXStatement() && loop.node.left === b.path.parent) return loop.isForInStatement();
-  if (!plain(b.path.node.init, b.path.scope, seen)) return false;
+  // A loop's own variable is whatever the loop hands it: a key (a text) or an entry (anything).
+  if (loop.isForXStatement() && loop.node.left === b.path.parent) return false;
+  if (!num(b.path.node.init, b.path.scope, seen)) return false;
   for (const v of b.constantViolations) {
     const n = v.node;
     if (t.isUpdateExpression(n) && t.isIdentifier(n.argument)) continue;
     if (!(t.isAssignmentExpression(n) && t.isIdentifier(n.left))) return false;
-    if ((n.operator === '=' || LOGICAL_ASSIGN.includes(n.operator)) && !plain(n.right, v.scope, seen)) return false;
+    if ((n.operator === '=' || n.operator === '+=' || LOGICAL_ASSIGN.includes(n.operator)) && !num(n.right, v.scope, seen)) return false;
   }
   return true;
 }
-/** Whether an expression is a number whatever runs (so `+` on it makes no text worth charging). */
-function numeric(n) {
-  if (t.isNumericLiteral(n)) return true;
-  if (t.isUnaryExpression(n) && ['-', '+', '~'].includes(n.operator)) return true;
-  if (t.isUpdateExpression(n)) return true;
-  if (t.isBinaryExpression(n)) return ['-', '*', '/', '%', '&', '|', '^', '<<', '>>', '>>>'].includes(n.operator) || (n.operator === '+' && numeric(n.left) && numeric(n.right));
-  if (t.isCallExpression(n) && t.isMemberExpression(n.callee) && t.isIdentifier(n.callee.object, { name: 'Math' })) return true;
-  if (t.isParenthesizedExpression(n)) return numeric(n.expression);
-  return false;
-}
+/** An operand that needs no check: a number (above), a short text written out, or what the guard's `p` has already checked. */
+const light = (n, scope, ids = null) => num(n, scope, new Set(), ids) || (t.isStringLiteral(n) && n.value.length < SHORT) || (isGuardCall(n) && n.callee.property.name === 'p');
+/** One side of `===` that makes the comparison cheap whatever the other is: a number, a short text written out, or what `typeof` says. */
+const cheapSide = (n, scope, ids = null) => num(n, scope, new Set(), ids) || (t.isStringLiteral(n) && n.value.length < SHORT) || t.isUnaryExpression(n, { operator: 'typeof' });
+/** Whether a member expression is written to: the left of an assignment, the operand of `++`, a loop's variable, or a place in a pattern. */
+const isTarget = (path) => (path.parentPath.isAssignmentExpression() && path.parent.left === path.node) || (path.parentPath.isUpdateExpression()) || (path.parentPath.isForXStatement() && path.parent.left === path.node)
+  || path.parentPath.isArrayPattern() || (path.parentPath.isObjectProperty() && path.parentPath.parentPath.isObjectPattern()) || path.parentPath.isRestElement() || (path.parentPath.isAssignmentPattern() && path.parent.left === path.node);
 
 /**
  * One file of rules, checked and (when it has no problem) rewritten.
@@ -331,6 +331,11 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     },
     ForOfStatement(path) { if (path.node.await) bad(path.node, 'await is refused: a handler finishes inside its tick'); if (!t.isVariableDeclaration(path.node.left)) checkWrite(path, path.node.left); },
     ForInStatement(path) { if (!t.isVariableDeclaration(path.node.left)) checkWrite(path, path.node.left); },
+    // Nothing in rules passes the size cap, a constant written out in full no more than a list built in a loop.
+    ArrayExpression(path) { if (path.node.elements.length > SIZE_CAP) bad(path.node, `a list holds ${SIZE_CAP} entries at most: this one is written out with ${path.node.elements.length}`); },
+    ObjectExpression(path) { if (path.node.properties.length > SIZE_CAP) bad(path.node, `an object holds ${SIZE_CAP} keys at most: this one is written out with ${path.node.properties.length}`); },
+    StringLiteral(path) { if (path.node.value.length > SIZE_CAP) bad(path.node, `a text holds ${SIZE_CAP} characters at most`); },
+    TemplateElement(path) { if ((path.node.value.cooked ?? path.node.value.raw).length > SIZE_CAP) bad(path.node, `a text holds ${SIZE_CAP} characters at most`); },
     BinaryExpression(path) {
       const n = path.node;
       if (n.operator === '**') bad(n, 'the ** operator is refused, because browsers and servers may disagree on its last digits: use world.math.pow (ctx.math.pow in move.ts)');
@@ -391,11 +396,12 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     return { code: linked && !problems.length ? code : null, problems };
   }
 
-  /* ------------------------------------------------------------ which names are plain, read before anything is rewritten */
-  const plainIds = new WeakSet();
-  traverse(ast, { ReferencedIdentifier(path) { if (plain(path.node, path.scope)) plainIds.add(path.node); } });
+  /* ------------------------------------------------------------ which names always hold a number, read before anything is rewritten */
+  const numIds = new WeakSet();
+  // Every place a name stands, as a value read or as the target of an assignment.
+  traverse(ast, { Identifier(path) { if ((path.isReferencedIdentifier() || path.parentPath.isAssignmentExpression() || path.parentPath.isUpdateExpression()) && num(path.node, path.scope)) numIds.add(path.node); } });
   /** At rewrite time: an operand that needs no check. A name is judged by the reading above; everything else by its shape. */
-  const isPlain = (n, scope) => plain(n, scope, new Set(), plainIds);
+  const isNum = (n, scope) => num(n, scope, new Set(), numIds);
 
   /* ------------------------------------------------------------ the rewrite */
   const line = (node) => t.numericLiteral(lineOf(node));
@@ -411,7 +417,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
   const frozen = new Set();
   const computedKey = (path) => { if (path.node.computed && !t.isNumericLiteral(path.node.key) && !isGuardCall(path.node.key)) path.node.key = call('k', [path.node.key, line(path.node)]); };
   /** An operand, checked to be a number or a text unless the pass can see that it is. */
-  const P = (n, at, scope) => (isPlain(n, scope) ? n : call('p', [n, line(at ?? n)]));
+  const P = (n, at, scope) => (light(n, scope, numIds) ? n : call('p', [n, line(at ?? n)]));
   /** A write's target as it reads: the same place, without the write's own check. `a.b` and names only, so reading it twice runs nothing twice. */
   const unW = (x) => (t.isMemberExpression(x) && isGuardCall(x.object) && x.object.callee.property.name === 'w' ? t.memberExpression(x.object.arguments[0], x.property) : x);
   const plainTarget = (x) => t.isIdentifier(x) || (t.isMemberExpression(unW(x)) && !x.computed && plainTarget(unW(x).object));
@@ -419,6 +425,8 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
   const TWICE = 'this changes a place that is reached through a call or a computed key: take the object into a const first, then change its field';
   traverse(ast, {
     Loop(path) { block(path, 'body'); },
+    // `for (k in o)` lists every key of `o` before its first turn: the guard charges a constant's first.
+    ForInStatement: { exit(path) { if (!isGuardCall(path.node.right)) path.node.right = call('fi', [path.node.right, line(path.node)]); } },
     Function(path) { if (!path.node._homie) block(path, 'body'); },
     VariableDeclaration: {
       exit(path) {
@@ -442,7 +450,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         computedKey(path);
         // A value under `valueOf`, `toString` or `toJSON` that the pass cannot see is not a function is checked when it is made.
         const n = path.node;
-        if (path.parentPath.isObjectExpression() && hookName(n) && !isPlain(n.value, path.scope) && !isGuardCall(n.value)) { n.value = call('nh', [n.value, line(n)]); n.shorthand = false; }
+        if (path.parentPath.isObjectExpression() && hookName(n) && !isNum(n.value, path.scope) && !t.isStringLiteral(n.value) && !isGuardCall(n.value)) { n.value = call('nh', [n.value, line(n)]); n.shorthand = false; }
       },
     },
     ObjectMethod: { exit(path) { computedKey(path); } },
@@ -470,8 +478,16 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     BinaryExpression: {
       exit(path) {
         const n = path.node;
-        if (CONVERTING.has(n.operator) || (n.operator === '+' && (numeric(n.left) || numeric(n.right)))) { n.left = P(n.left, n, path.scope); n.right = P(n.right, n, path.scope); return; }
+        if (CONVERTING.has(n.operator) || (n.operator === '+' && (isNum(n.left, path.scope) || isNum(n.right, path.scope)))) { n.left = P(n.left, n, path.scope); n.right = P(n.right, n, path.scope); return; }
         if (n.operator === 'in') { n.left = P(n.left, n, path.scope); return; }
+        // `a === b` between two values that may both be long texts is charged for what it compares.
+        if (n.operator === '===' || n.operator === '!==') {
+          if (cheapSide(n.left, path.scope, numIds) || cheapSide(n.right, path.scope, numIds)) return;
+          const same = call('eq', [n.left, n.right]);
+          path.replaceWith(n.operator === '===' ? same : t.unaryExpression('!', same));
+          path.skip();
+          return;
+        }
         if (n.operator !== '+') return;
         path.replaceWith(call('add', [n.left, n.right, line(n)]));
         path.skip();
@@ -479,6 +495,9 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     },
     UnaryExpression: {
       exit(path) { if (['-', '+', '~'].includes(path.node.operator)) path.node.argument = P(path.node.argument, path.node, path.scope); },
+    },
+    SwitchStatement: {
+      exit(path) { if (!isGuardCall(path.node.discriminant)) path.node.discriminant = call('sw', [path.node.discriminant, t.numericLiteral(path.node.cases.length)]); },
     },
     NewExpression: {
       exit(path) {
@@ -498,7 +517,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         if (t.isMemberExpression(left) && left.computed && !t.isNumericLiteral(left.property)) {
           if (n.operator === '=') { path.replaceWith(call('s', [left.object, left.property, n.right, line(n)])); path.skip(); return; }
           const old = t.identifier(`${G}V`);
-          const next = logical ? t.logicalExpression(op, old, n.right) : op === '+' && !numeric(n.right) ? call('add', [old, n.right, line(n)]) : t.binaryExpression(op, call('p', [old, line(n)]), P(n.right, n, path.scope));
+          const next = logical ? t.logicalExpression(op, old, n.right) : op === '+' && !isNum(n.right, path.scope) ? call('add', [old, n.right, line(n)]) : t.binaryExpression(op, call('p', [old, line(n)]), P(n.right, n, path.scope));
           const fn = t.arrowFunctionExpression([t.identifier(`${G}V`)], next);
           fn._homie = true;
           path.replaceWith(call('u', [left.object, left.property, fn, t.booleanLiteral(false), line(n)]));
@@ -507,16 +526,16 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         }
         if (n.operator === '=') {
           // `o.toString = v`: never a function under a name JavaScript calls by itself.
-          if (t.isMemberExpression(left) && !left.computed && HOOK_NAMES.includes(left.property.name) && !isPlain(n.right, path.scope)) n.right = call('nh', [n.right, line(n)]);
+          if (t.isMemberExpression(left) && !left.computed && HOOK_NAMES.includes(left.property.name) && !isNum(n.right, path.scope) && !t.isStringLiteral(n.right)) n.right = call('nh', [n.right, line(n)]);
           return;
         }
         if (logical || t.isObjectPattern(left) || t.isArrayPattern(left)) return;
-        // `x op= v` on a name the pass knows is a number or a text: only the right side needs its check.
-        if (t.isIdentifier(left) && plainIds.has(left) && (op !== '+' || numeric(n.right))) { n.right = P(n.right, n, path.scope); return; }
+        // `x op= v` on a name the pass knows always holds a number: only the right side needs its check.
+        if (t.isIdentifier(left) && numIds.has(left)) { n.right = P(n.right, n, path.scope); return; }
         // Everything else is written out as `x = x op v`, so the old value is checked (and a text made by `+` is charged and
         // capped). The target is then read twice, so it must be a plain name or a dotted one.
         if (!plainTarget(left)) { bad(n, TWICE); return; }
-        const next = op === '+' && !numeric(n.right) ? call('add', [readOf(left), n.right, line(n)]) : t.binaryExpression(op, call('p', [readOf(left), line(n)]), P(n.right, n, path.scope));
+        const next = op === '+' && !isNum(n.right, path.scope) ? call('add', [readOf(left), n.right, line(n)]) : t.binaryExpression(op, call('p', [readOf(left), line(n)]), P(n.right, n, path.scope));
         path.replaceWith(t.assignmentExpression('=', left, next));
         path.skip();
       },
@@ -531,7 +550,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
           path.skip();
           return;
         }
-        if (path.node._homie || (t.isIdentifier(a) && plainIds.has(a))) return;
+        if (path.node._homie || (t.isIdentifier(a) && numIds.has(a))) return;
         // `x++` on anything else: the old value is checked first, then the update runs as written.
         if (!plainTarget(a)) { bad(path.node, TWICE); return; }
         path.node._homie = true;
@@ -610,9 +629,10 @@ function verifyLinked(ast, bad) {
   };
   const OPERATOR = 'the linked module holds an operator whose operand the guard did not check';
   const WRITE = 'the linked module holds a write to a property the guard did not check';
-  const ok = (n, path) => plain(n, path.scope);
+  const ok = (n, path) => light(n, path.scope);
   traverse(ast, {
     Loop(path) { if (!counts(path.node.body)) bad(path.node, 'the linked module holds a loop the guard did not count'); },
+    ForInStatement(path) { if (!isGuardCall(path.node.right)) bad(path.node, 'the linked module holds a loop the guard did not count'); },
     Function(path) {
       const own = path.node.params.length === 1 && t.isIdentifier(path.node.params[0]) && path.node.params[0].name.startsWith(G);
       if (!own && !counts(path.node.body)) bad(path.node, 'the linked module holds a function the guard did not count');
@@ -620,7 +640,9 @@ function verifyLinked(ast, bad) {
     BinaryExpression(path) {
       const n = path.node;
       if (CONVERTING.has(n.operator) || n.operator === '+') { if (!ok(n.left, path) || !ok(n.right, path)) bad(n, OPERATOR); } else if (n.operator === 'in' && !ok(n.left, path)) bad(n, OPERATOR);
+      else if ((n.operator === '===' || n.operator === '!==') && !cheapSide(n.left, path.scope) && !cheapSide(n.right, path.scope)) bad(n, OPERATOR);
     },
+    SwitchStatement(path) { if (!isGuardCall(path.node.discriminant)) bad(path.node, OPERATOR); },
     UnaryExpression(path) { if (['-', '+', '~'].includes(path.node.operator) && !ok(path.node.argument, path)) bad(path.node, OPERATOR); },
     TemplateLiteral(path) { if (!path.node.expressions.every((e) => ok(e, path))) bad(path.node, OPERATOR); },
     MemberExpression(path) { if (isTarget(path) && !isGuardCall(path.node.object)) bad(path.node, WRITE); },

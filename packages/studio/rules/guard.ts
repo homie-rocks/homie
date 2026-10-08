@@ -90,7 +90,19 @@ const sized = (n: number, line?: number): void => { if (n > SIZE_CAP) refuse(`a 
  */
 export function p<T>(x: T, line?: number): T {
   const kind = typeof x;
+  // A long text is read end to end by whatever uses it here (a comparison, a conversion): a unit for every 64 characters.
+  if (kind === 'string') { if ((x as string).length >= 64) charge((x as string).length >> 6); return x; }
   if ((kind === 'object' && x !== null) || kind === 'function' || kind === 'bigint' || kind === 'symbol') refuse(`${Array.isArray(x) ? 'a list' : kind === 'object' ? 'an object' : `a ${kind}`} was used where a number or a text belongs: name the entry or the field you mean`, line);
+  return x;
+}
+/** `a === b`: two long texts of one length are compared character by character, so that is charged, a unit for every 64. */
+export function eq(a: unknown, b: unknown): boolean {
+  if (typeof a === 'string' && typeof b === 'string' && a.length === b.length && a.length >= 64) charge(a.length >> 6);
+  return a === b;
+}
+/** What a `switch` turns on: a long text is compared with each case in turn, and charged for each. */
+export function sw<T>(x: T, cases: number): T {
+  if (typeof x === 'string' && x.length >= 64) charge((x.length >> 6) * cases);
   return x;
 }
 /** The value of a property named `valueOf`, `toString` or `toJSON`: never a function. */
@@ -170,6 +182,8 @@ function plainArgs(name: string, args: unknown[], from: number, to: number, line
 /** How many entries `flat(depth)` would read, stopping as soon as it is past `cap`: a list reached twice is read twice, as `flat` would. */
 function flatSteps(a: unknown[], depth: number, cap: number): number {
   let n = 0;
+  // Each list is paid for before it is read.
+  charge(a.length);
   for (let i = 0; i < a.length; i += 1) {
     const e = a[i];
     n += 1;
@@ -187,7 +201,7 @@ export function c(o: any, name: string, args: unknown[], line?: number): unknown
     if (!ARRAY_METHODS.has(name)) refuse(`a list has no method "${name}" that rules may call`, line);
     const n = o.length;
     // Every cost below is charged before the method runs, so a handler on its last unit starts nothing it cannot pay for.
-    if (name === 'push' || name === 'unshift') { charge(1 + args.length); sized(n + args.length, line); } else if (name === 'splice') { plainArgs(name, args, 0, 2, line); charge(1 + n + args.length); sized(n + args.length, line); } else if (name === 'concat') {
+    if (name === 'push') { charge(1 + args.length); sized(n + args.length, line); } else if (name === 'unshift') { charge(1 + n + args.length); sized(n + args.length, line); } else if (name === 'splice') { plainArgs(name, args, 0, 2, line); charge(1 + n + args.length); sized(n + args.length, line); } else if (name === 'concat') {
       let total = n;
       for (const a of args) total += Array.isArray(a) ? a.length : 1;
       charge(1 + total); sized(total, line);
@@ -210,14 +224,14 @@ export function c(o: any, name: string, args: unknown[], line?: number): unknown
         // What the comparison returns is turned into a number by the sort itself: it must be one.
         return o.sort((a: unknown, b: unknown) => { const r = cmp(a, b); if (typeof r !== 'number') refuse('the function handed to sort() returns a number: below zero, zero or above', line); return r; });
       }
-      // With no comparison the sort compares entries as texts: each must be a text or a number already.
-      for (let i = 0; i < n; i += 1) if (!plainArg(o[i])) refuse('sort() with no comparison takes a list of texts and numbers: hand it a function that compares two entries', line);
+      // With no comparison the sort compares entries as texts: each must be a text or a number already, and long texts are paid for by their length.
+      let chars = 0;
+      for (let i = 0; i < n; i += 1) { const e = o[i]; if (!plainArg(e)) refuse('sort() with no comparison takes a list of texts and numbers: hand it a function that compares two entries', line); if (typeof e === 'string') chars += e.length; }
+      charge((chars >> 6) * 16);
     } else if (name === 'flat') {
       plainArgs(name, args, 0, 1, line);
       const depth = args[0] === undefined ? 1 : Number(args[0]);
-      const steps = flatSteps(o, depth >= 1 ? depth : 0, SIZE_CAP);
-      sized(steps, line);
-      charge(1 + steps);
+      sized(flatSteps(o, depth >= 1 ? depth : 0, SIZE_CAP), line);
     } else if (name === 'flatMap') {
       // Done here, entry by entry, so the list being made is charged and capped as it grows.
       const fn = args[0];
@@ -232,7 +246,11 @@ export function c(o: any, name: string, args: unknown[], line?: number): unknown
     } else if (name === 'pop') charge(1);
     else if (name === 'at') { plainArgs(name, args, 0, 1, line); charge(1); } else {
       if (name === 'slice') plainArgs(name, args, 0, 2, line);
-      else if (name === 'indexOf' || name === 'lastIndexOf' || name === 'includes') plainArgs(name, args, 1, 2, line);
+      else if (name === 'indexOf' || name === 'lastIndexOf' || name === 'includes') {
+        plainArgs(name, args, 1, 2, line);
+        // Looking for a long text compares it with every entry.
+        if (typeof args[0] === 'string' && args[0].length >= 64) charge(n * (args[0].length >> 6));
+      }
       charge(1 + n);
     }
     return (o as any)[name](...args);
@@ -240,16 +258,20 @@ export function c(o: any, name: string, args: unknown[], line?: number): unknown
   if (typeof o === 'string') {
     if (!STRING_METHODS.has(name)) refuse(`a text has no method "${name}" that rules may call`, line);
     plainArgs(name, args, 0, args.length, line);
-    charge(name === 'at' || name === 'charCodeAt' ? 1 : 1 + o.length);
+    // A search for a long text inside a long text can compare every character of one at every place in the other.
+    const needle = typeof args[0] === 'string' && (name === 'indexOf' || name === 'includes' || name === 'split') ? args[0].length : 0;
+    charge(name === 'at' || name === 'charCodeAt' ? 1 : 1 + o.length + Math.floor((o.length * needle) / 16));
     return (o as any)[name](...args);
   }
   if (o instanceof Map || o instanceof Set) {
     if (!MAPSET_METHODS.has(name)) refuse(`a Map or Set has no method "${name}" that rules may call`, line);
+    // keys, values and entries hand back a list, paid for by its length: no iterator reaches rules, so nothing can read one out uncounted.
+    if (name === 'keys' || name === 'values' || name === 'entries') { charge(1 + o.size); return Array.from((o as any)[name]()); }
     if (name === 'set' || name === 'add') { charge(1); sized(o.size + 1, line); } else if (name === 'forEach' || name === 'clear') charge(1 + o.size);
     else charge(1);
-    const out = (o as any)[name](...args);
-    // An iterator (keys, values, entries) is read by a loop, which is charged a unit a turn.
-    return out;
+    // A long text as a key is compared, character by character, with the key it finds.
+    if (typeof args[0] === 'string' && args[0].length >= 64) charge(args[0].length >> 6);
+    return (o as any)[name](...args);
   }
   if (HOST.has(o) && Object.hasOwn(o, name) && typeof o[name] === 'function') return o[name](...args);
   return refuse(`"${name}" is not a method rules may call on this value`, line);
@@ -270,7 +292,9 @@ export function sp<T>(x: T, line?: number): T {
     // An object spread (`{ ...o }`) copies own keys; anything else has no business being spread.
     if (x === null || typeof x !== 'object') refuse('only a list, a text, a Map, a Set or a plain object can be spread', line);
     hostless(x, line);
-    charge(1 + Object.keys(x as object).length);
+    const proto = Object.getPrototypeOf(x);
+    if (proto !== Object.prototype && proto !== null) refuse('only a list, a text, a Map, a Set or a plain object can be spread', line);
+    if (!prepaid(x)) charge(1 + Object.keys(x as object).length);
     return x;
   }
   const n = lengthOf(x);
@@ -297,20 +321,48 @@ export function add(a: any, b: any, line?: number): any {
 /** A template literal's text, charged and capped like `+`. */
 export function tpl(text: string, line?: number): string { charge(text.length); sized(text.length, line); return text; }
 /** `Object.keys`, `values` and `entries`, charged a unit a key. */
-export function keys(o: object): string[] { const out = Object.keys(o); charge(1 + out.length); return out; }
-export function values(o: object): unknown[] { hostless(o); const out = Object.values(o); charge(1 + out.length); return out; }
-export function entries(o: object): [string, unknown][] { hostless(o); const out = Object.entries(o); charge(1 + out.length); return out; }
+export function keys(o: object): string[] { const paid = prepaid(o); const out = Object.keys(o); if (!paid) charge(1 + out.length); return out; }
+export function values(o: object): unknown[] { hostless(o); const paid = prepaid(o); const out = Object.values(o); if (!paid) charge(1 + out.length); return out; }
+export function entries(o: object): [string, unknown][] { hostless(o); const paid = prepaid(o); const out = Object.entries(o); if (!paid) charge(1 + out.length); return out; }
+/**
+ * How many keys a value has, when that is known without counting them: a list or a text by its length, and a
+ * module-level constant by the count taken when it was frozen at load.
+ */
+const KEYS = new WeakMap<object, number>();
+export function keyCount(o: unknown): number | undefined {
+  if (typeof o === 'string' || Array.isArray(o)) return o.length;
+  return o !== null && typeof o === 'object' ? KEYS.get(o) : undefined;
+}
+/**
+ * Going through all of a value's keys, charged BEFORE it is done when the count is known (16 units a key for a
+ * constant, whose keys cost the handler nothing to make). True when it was. A value whose count is not known was made
+ * by the running handler, which paid a unit and more for every key it has: that one is charged after.
+ */
+export function prepaid(o: unknown): boolean {
+  const n = keyCount(o);
+  if (n === undefined) return false;
+  charge(1 + (typeof o === 'string' || Array.isArray(o) ? n : 16 * n));
+  return true;
+}
+/** `for (const k in o)`: JavaScript lists every key before the first turn, so a constant's are paid for here. */
+export function fi<T>(o: T, line?: number): T {
+  if (o !== null && typeof o === 'object') { hostless(o, line); prepaid(o); }
+  return o;
+}
 /** `world`, `ctx` and what hangs from them hold functions: their values are not taken out in a list or copied by a spread, so no host function is ever held as a value. */
 function hostless(o: unknown, line?: number): void {
   if (typeof o === 'object' && o !== null && HOST.has(o)) refuse('world and ctx are not lists of values: call what they offer by name', line);
 }
 /** `new Map(...)` and `new Set(...)`, inside a handler only (the build checks where). */
-export function map(init?: Iterable<readonly [unknown, unknown]>): Map<unknown, unknown> { const m = new Map(init); charge(1 + m.size); sized(m.size); return m; }
-export function set(init?: Iterable<unknown>): Set<unknown> { const m = new Set(init); charge(1 + m.size); sized(m.size); return m; }
+export function map(init?: Iterable<readonly [unknown, unknown]>): Map<unknown, unknown> { charge(1 + (init === undefined ? 0 : lengthOf(init))); const m = new Map(init); sized(m.size); return m; }
+export function set(init?: Iterable<unknown>): Set<unknown> { charge(1 + (init === undefined ? 0 : lengthOf(init))); const m = new Set(init); sized(m.size); return m; }
 
 /** A value frozen all the way down (module-level constants, event data, query results). Functions are left alone. */
 export function deepFreeze<T>(v: T): T {
   if (v === null || typeof v !== 'object' || Object.isFrozen(v)) return v;
-  for (const key of Object.keys(v as object)) deepFreeze((v as Record<string, unknown>)[key]);
+  const list = Object.keys(v as object);
+  // The count is kept (`keyCount`): a handler that goes through a constant's keys is charged for them before it starts.
+  if (!Array.isArray(v)) KEYS.set(v, list.length);
+  for (const key of list) deepFreeze((v as Record<string, unknown>)[key]);
   return Object.freeze(v);
 }

@@ -38,7 +38,7 @@
  * that is held to its shape, and paid for, before the handler's budget is closed.
  * =============================================================================
  */
-import { BudgetError, G, brand, charge, deepFreeze } from './guard.ts';
+import { BudgetError, G, brand, charge, deepFreeze, keyCount } from './guard.ts';
 import { SKIN, castMap, exact, math, rayCircle, sweepMap } from './math.ts';
 import type { Hit } from './math.ts';
 import { AHEAD, ZERO, coerce, coerceFields, dir, est, estFields, initFields, mutable, num, own, packEntity, packFields, packVec, packed, said, thaw, unpackFields, unpackVec, vec3 } from './pack.ts';
@@ -58,6 +58,8 @@ export const VIEW = 16;
 export const SET = 3;
 /** One value packed into the tick's snapshot: the whole public state is sent every tick, and the tick that sends it pays. */
 export const SNAP = 4;
+/** One event or timer put on the room's queue (`world.send`, `sendRoom`, `announce`, `after`): it is sorted and delivered on a later tick, and the sender pays for that too. */
+export const SEND = 16;
 /** The most area events (`world.sendArea`) one tick takes. */
 export const AREAS_MAX = 64;
 /** The most ids `world.sweep`'s `ignore` reads. */
@@ -125,6 +127,9 @@ function plainData(v: unknown, left: { n: number }, depth = 0): unknown {
   }
   const out: Record<string, unknown> = {};
   let seen = 0;
+  // A constant's keys are all listed before the first is read: they are paid for first. (Anything else the handler made, and paid for.)
+  const known = keyCount(v);
+  if (known !== undefined) charge(known);
   for (const key in v) {
     // Keys are counted as they are met, so an object with very many is left after the first few.
     if ((seen += 1) > 64 || left.n <= 0) break;
@@ -356,8 +361,11 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     cx = { scope, ent };
     G.left = quota;
     try {
-      try { fn(); } catch (error) { failed(kind, handler, error); }
-      try { settle(); } catch (error) { failed(kind, handler, error); }
+      let bad = false; let thrown: unknown;
+      try { fn(); } catch (error) { bad = true; thrown = error; }
+      // Settled whether or not the handler threw: what it changed in place before it stopped is kept, when it can still pay for it.
+      try { settle(); } catch (error) { if (!bad) { bad = true; thrown = error; } }
+      if (bad) failed(kind, handler, thrown);
     } finally {
       const used = quota - (G.left > 0 ? G.left : 0);
       G.left = Infinity;
@@ -448,17 +456,17 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
     },
     send: (target: unknown, ev: unknown, data?: unknown): void => {
-      charge(10);
+      charge(SEND);
       if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.send is for handlers');
       push({ due: tick + 1, to: typeof target === 'string' ? target.slice(0, 24) : '', kind: 'ev', ev: ev as string, data: shapeData(c.events, ev, 'the event', data), at: tick });
     },
     sendRoom: (ev: unknown, data?: unknown): void => {
-      charge(10);
+      charge(SEND);
       if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.sendRoom is for handlers');
       push({ due: tick + 1, to: '', kind: 'room', ev: ev as string, data: shapeData(c.events, ev, 'the event', data), at: tick });
     },
     announce: (ev: unknown, data?: unknown): void => {
-      charge(10);
+      charge(SEND);
       need('room', 'world.announce');
       push({ due: tick + 1, to: '', kind: 'all', ev: ev as string, data: shapeData(c.events, ev, 'the event', data), at: tick });
     },
@@ -476,7 +484,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       areas.push({ ...sender(), seq, shape: area, ev: ev as string, data: shapeData(c.events, ev, 'the event', data) }); seq += 1;
     },
     after: (n: unknown, ev: unknown, data?: unknown): void => {
-      charge(10);
+      charge(SEND);
       if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.after is for handlers');
       const w = Math.round(num(n));
       const wait = w >= 1 ? Math.min(w, 0x7fffffff) : 1;
@@ -621,7 +629,14 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       return fn ? run('room', `on.${item.ev}`, null, 'room', () => fn(world, item.data)) : true;
     }
     if (item.kind === 'all') {
-      if (item.builtIn) { const fn = c.roomOn[item.ev]; if (fn && !run('room', `on.${item.ev}`, null, 'room', () => fn(world, item.data))) return false; }
+      const roomFn = item.builtIn ? c.roomOn[item.ev] : undefined;
+      const heard = hears(item.ev);
+      if (!roomFn && !heard) return true;
+      if (left <= 0) { cut = true; stats.skipped += 1; return false; }
+      if (roomFn) run('room', `on.${item.ev}`, null, 'room', () => roomFn(world, item.data));
+      if (!heard) return true;
+      // Going round every entity is the tick's own work, a unit an entity: thousands of announcements cannot be gone round for nothing.
+      left -= ents.size;
       for (const e of [...ents.values()]) {
         const fn = e.kind.onRoom[item.ev];
         // An announcement made before an entity existed never reaches it.
@@ -641,6 +656,13 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     }
     const fn = e.kind.on[item.ev];
     return fn ? run(e.kind.name, `on.${item.ev}`, e, 'ent', () => fn(world, e.self, item.data)) : true;
+  }
+  /** Whether any kind of entity hears an announcement of this event. */
+  const heardBy = new Map<string, boolean>();
+  function hears(ev: string): boolean {
+    let h = heardBy.get(ev);
+    if (h === undefined) { h = c.kinds.some((k) => Boolean(k.onRoom[ev])); heardBy.set(ev, h); }
+    return h;
   }
   const announce = (ev: string, data: unknown, due: number): void => push({ due, to: '', kind: 'all', ev, data, at: tick, builtIn: true, from: 0, fromId: '' }, true);
 

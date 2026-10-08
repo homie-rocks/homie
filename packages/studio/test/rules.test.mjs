@@ -25,7 +25,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { ARRAY_METHODS, MAPSET_METHODS, MATH_METHODS, REFUSED_NAMES, STRING_METHODS, WORLD_METHODS } from '../lib/rules-guard.mjs';
+import { ARRAY_METHODS, HOOK_NAMES, MAPSET_METHODS, MATH_METHODS, REFUSED_NAMES, SIZE_CAP, STRING_METHODS, WORLD_METHODS } from '../lib/rules-guard.mjs';
 import { COIN_DASH, COIN_MAP, fakeClock, hostRig, loadGame, roomRig, writeGame } from './rules-kit.mjs';
 
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-rules-')));
@@ -92,6 +92,8 @@ test('the maths rules are handed agrees with Math, and is the list the wall know
   assert.deepEqual([...STRING_METHODS], [...L.W.STRING_METHODS]);
   assert.deepEqual([...MAPSET_METHODS], [...L.W.MAPSET_METHODS]);
   assert.deepEqual([...REFUSED_NAMES], [...L.W.REFUSED_NAMES]);
+  assert.deepEqual([...HOOK_NAMES], [...L.W.HOOK_NAMES]);
+  assert.equal(SIZE_CAP, L.W.SIZE_CAP);
 });
 
 test('a declaration that does not fit the contract is named', async () => {

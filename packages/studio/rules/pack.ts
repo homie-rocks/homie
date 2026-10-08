@@ -19,7 +19,7 @@
  */
 import { cellsOf } from './rules.ts';
 import type { Field, FieldList, Vec3 } from './rules.ts';
-import { charge, own, refusedName } from './guard.ts';
+import { charge, keyCount, own, refusedName } from './guard.ts';
 
 const RANGE: Record<string, [number, number]> = { u8: [0, 255], u16: [0, 65535], u32: [0, 4294967295], i8: [-128, 127], i16: [-32768, 32767], i32: [-2147483648, 2147483647], tick: [0, 4294967295], ticks: [0, 4294967295] };
 /** `f.fix`: steps of 1/4096, to plus or minus 2^31 (a tick count with a fraction fits for the life of any room). */
@@ -117,9 +117,13 @@ export function coerce(fd: Field, v: unknown, dims: number): unknown {
       const out: Record<string, unknown> = Object.create(null);
       if (v === null || typeof v !== 'object') return made(fd, out);
       if (MADE.get(v) === fd) return v;
+      // The one cost here that the declaration does not bound: how many keys the value handed in has. The running handler
+      // pays for each: before they are listed when the count is known (a module's constant), after when the handler made
+      // the value itself (and so has already paid a unit and more for every key).
+      const known = Array.isArray(v) ? undefined : keyCount(v);
+      if (known !== undefined) charge(16 * known);
       const keys = Object.keys(v);
-      // The one cost here that the declaration does not bound: how many keys the value handed in has. The running handler pays for each.
-      charge(16 * keys.length);
+      if (known === undefined) charge(16 * keys.length);
       let n = 0;
       for (const key of keys) {
         if (n >= (fd.max as number)) break;
