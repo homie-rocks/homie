@@ -3,7 +3,10 @@
  * are copied as raw sections; no numeric text or recursively encoded byte blobs.
  * Object references preserve the sliced search heap's aliases.
  */
-import { DEFAULT_QUERY_FILTER } from 'navcat';
+import { queryFilter } from './internal/FilterValue.ts';
+// The graph layout is tied to this exact backend version as well as our schema.
+const VERSION = 3;
+const BACKEND = 'navcat@0.4.1';
 const arrays = [
   Uint8Array,
   Uint16Array,
@@ -14,6 +17,32 @@ const arrays = [
   Float32Array,
   Float64Array,
 ] as const;
+function writeElement(v: DataView, type: number, i: number, n: number): void {
+  const o = i * arrays[type]!.BYTES_PER_ELEMENT;
+  switch (type) {
+    case 0: v.setUint8(o, n); break;
+    case 1: v.setUint16(o, n, true); break;
+    case 2: v.setUint32(o, n, true); break;
+    case 3: v.setInt8(o, n); break;
+    case 4: v.setInt16(o, n, true); break;
+    case 5: v.setInt32(o, n, true); break;
+    case 6: v.setFloat32(o, n, true); break;
+    case 7: v.setFloat64(o, n, true); break;
+  }
+}
+function readElement(v: DataView, type: number, i: number): number {
+  const o = i * arrays[type]!.BYTES_PER_ELEMENT;
+  switch (type) {
+    case 0: return v.getUint8(o);
+    case 1: return v.getUint16(o, true);
+    case 2: return v.getUint32(o, true);
+    case 3: return v.getInt8(o);
+    case 4: return v.getInt16(o, true);
+    case 5: return v.getInt32(o, true);
+    case 6: return v.getFloat32(o, true);
+    default: return v.getFloat64(o, true);
+  }
+}
 const MAGIC = 0x324e4d48;
 export function hash(bytes: Uint8Array): number {
   let value = 2166136261;
@@ -67,7 +96,7 @@ export function pack(kind: string, value: unknown): Uint8Array {
       byte(v ? 3 : 2);
       return;
     }
-    if (v === DEFAULT_QUERY_FILTER) {
+    if (v === queryFilter) {
       byte(4);
       return;
     }
@@ -108,7 +137,9 @@ export function pack(kind: string, value: unknown): Uint8Array {
       byte(11 + type);
       uint(v.byteLength);
       reserve(v.byteLength);
-      bytes.set(new Uint8Array(v.buffer, v.byteOffset, v.byteLength), offset);
+      const input = v as unknown as ArrayLike<number>;
+      const section = new DataView(bytes.buffer, offset, v.byteLength);
+      for (let i = 0; i < input.length; i++) writeElement(section, type, i, input[i]!);
       offset += v.byteLength;
       return;
     }
@@ -127,11 +158,12 @@ export function pack(kind: string, value: unknown): Uint8Array {
     for (const key of keys) write((v as Record<string, unknown>)[key]);
   };
   string(kind);
+  string(BACKEND);
   write(value);
   const result = bytes.slice(0, offset),
     header = new DataView(result.buffer);
   header.setUint32(0, MAGIC, true);
-  header.setUint32(4, 2, true);
+  header.setUint32(4, VERSION, true);
   header.setUint32(8, offset, true);
   header.setUint32(12, hash(result.subarray(16)), true);
   return result;
@@ -143,7 +175,7 @@ export function unpack<T>(kind: string, bytes: Uint8Array): T {
     if (
       bytes.length < 16 ||
       view.getUint32(0, true) !== MAGIC ||
-      view.getUint32(4, true) !== 2 ||
+      view.getUint32(4, true) !== VERSION ||
       view.getUint32(8, true) !== bytes.length ||
       view.getUint32(12, true) !== hash(bytes.subarray(16))
     )
@@ -184,7 +216,8 @@ export function unpack<T>(kind: string, bytes: Uint8Array): T {
     const read = (depth = 0): unknown => {
       if (depth > 256) throw Error();
       const tag = byte();
-      if (tag < 5) return [null, undefined, false, true, DEFAULT_QUERY_FILTER][tag];
+      if (tag === 4 && !queryFilter) throw Error();
+      if (tag < 5) return [null, undefined, false, true, queryFilter][tag];
       if (tag === 5) return uint();
       if (tag === 6) {
         const n = view.getFloat64(offset, true);
@@ -230,12 +263,14 @@ export function unpack<T>(kind: string, bytes: Uint8Array): T {
       if (!ctor) throw Error();
       const n = uint();
       if (n % ctor.BYTES_PER_ELEMENT || n > bytes.length - offset) throw Error();
-      const a = new ctor(bytes.slice(offset, offset + n).buffer);
+      const a = new ctor(n / ctor.BYTES_PER_ELEMENT);
+      const section = new DataView(bytes.buffer, bytes.byteOffset + offset, n);
+      for (let i = 0; i < a.length; i++) a[i] = readElement(section, tag - 11, i);
       offset += n;
       objects.push(a);
       return a;
     };
-    if (string() !== kind) throw Error();
+    if (string() !== kind || string() !== BACKEND) throw Error();
     const out = read();
     if (offset !== bytes.length) throw Error();
     return out as T;

@@ -1,7 +1,7 @@
 /** Recast's voxel pipeline, one independently buildable tile with a geometry halo. */
 import * as nav from 'navcat';
 import type { HeightField } from '@homie-rocks/heightfield/Field.js';
-import { encodeTile, finishTile, type TileData } from './internal/Tile.ts';
+import { encodeTile, decodeTile, finishTile, type TileData } from './internal/Tile.ts';
 import { deterministicCos, deterministicSin } from './internal/Math.ts';
 import { axes, fromAxes, vector, point, positive, type Point, type Up } from './Query.ts';
 export interface Triangles {
@@ -271,12 +271,15 @@ export function bakeLevel(input: Triangles, config: BakeConfig): BakedTile[] {
           bucket.push(positions[v * 3]!, positions[v * 3 + 1]!, positions[v * 3 + 2]!);
       }
   }
-  return [...buckets]
+  const result = [...buckets]
     .map(([key, values]) => {
       const [x, z] = key.split(',').map(Number) as [number, number];
       return { x, z, bytes: bakeTile({ positions: values }, config, x, z) };
     })
     .sort((a, b) => a.z - b.z || a.x - b.x);
+  if (result.length && result.every(tile => !decodeTile(tile.bytes).baked))
+    throw new Error('nav: no walkable triangles; check winding, slope, clearance and region size');
+  return result;
 }
 /** Rectangle uses horizontal coordinates, independent of the selected up axis. */
 export function bakeHeightfield(
@@ -290,14 +293,28 @@ export function bakeHeightfield(
     [x1, z1] = Array.from(rectangle.max);
   if (![x0, z0, x1, z1].every(Number.isFinite) || x1! <= x0! || z1! <= z0!)
     throw new Error('nav: invalid world rectangle');
-  const triangles = heightfieldTriangles(
-    field,
-    x0!,
-    z0!,
-    Math.ceil((x1! - x0!) / sampleStep) + 1,
-    Math.ceil((z1! - z0!) / sampleStep) + 1,
-    sampleStep,
-    config.up,
-  );
-  return bakeLevel(triangles, config);
+  checkConfig(config);
+  const origin = axes(config.origin, config.up);
+  const size = config.tileCells * config.cellSize;
+  const halo = (Math.ceil(config.radius / config.cellSize) + 3) * config.cellSize;
+  const firstX = Math.floor((x0! - origin[0]) / size);
+  const lastX = Math.ceil((x1! - origin[0]) / size) - 1;
+  const firstZ = Math.floor((z0! - origin[2]) / size);
+  const lastZ = Math.ceil((z1! - origin[2]) / size) - 1;
+  if ((lastX - firstX + 1) * (lastZ - firstZ + 1) > 1_000_000)
+    throw new Error('nav: level covers too many tiles');
+  const tiles: BakedTile[] = [];
+  for (let z = firstZ; z <= lastZ; z++) {
+    for (let x = firstX; x <= lastX; x++) {
+      // Align every tile's samples to the same lattice, including its halo.
+      const loX = Math.max(0, Math.floor((origin[0] + x * size - halo - x0!) / sampleStep));
+      const loZ = Math.max(0, Math.floor((origin[2] + z * size - halo - z0!) / sampleStep));
+      const hiX = Math.min(Math.ceil((x1! - x0!) / sampleStep), Math.ceil((origin[0] + (x + 1) * size + halo - x0!) / sampleStep));
+      const hiZ = Math.min(Math.ceil((z1! - z0!) / sampleStep), Math.ceil((origin[2] + (z + 1) * size + halo - z0!) / sampleStep));
+      const input = heightfieldTriangles(field, x0! + loX * sampleStep, z0! + loZ * sampleStep,
+        hiX - loX + 1, hiZ - loZ + 1, sampleStep, config.up);
+      tiles.push({ x, z, bytes: bakeTile(input, config, x, z) });
+    }
+  }
+  return tiles;
 }

@@ -37,8 +37,14 @@ function copyConfig(config: BakeConfig): BakeConfig {
       : {}),
   };
 }
+export interface MeshOptions {
+  /** Retained packed voxel budgets; increase for large editable worlds. */
+  maxRetainedCells?: number;
+  maxRetainedSpans?: number;
+}
 export class Mesh implements NavigationQuery {
   #state: MeshState;
+  #limits: Required<MeshOptions>;
   #retainedSpans = 0;
   #retainedCells = 0;
   #identity: { revision: number; bytes: Uint8Array } | undefined;
@@ -48,7 +54,11 @@ export class Mesh implements NavigationQuery {
   get config(): BakeConfig {
     return copyConfig(this.#state.config);
   }
-  constructor(config: BakeConfig, queryHalfExtents: Point) {
+  constructor(config: BakeConfig, queryHalfExtents: Point, options: MeshOptions = {}) {
+    this.#limits = { maxRetainedCells: options.maxRetainedCells ?? 1_000_000,
+      maxRetainedSpans: options.maxRetainedSpans ?? 1_000_000 };
+    for (const value of Object.values(this.#limits))
+      if (!Number.isSafeInteger(value) || value < 1) throw new Error('nav: invalid retention budget');
     checkConfig(config);
     point(queryHalfExtents);
     vector(queryHalfExtents).forEach((v) => positive(v, 'query half extent'));
@@ -458,7 +468,7 @@ export class Mesh implements NavigationQuery {
     return { triangles, links, seams };
   }
   private checkRetention(spans: number, cells: number): void {
-    if (spans > 200_000 || cells > 250_000)
+    if (spans > this.#limits.maxRetainedSpans || cells > this.#limits.maxRetainedCells)
       throw new Error('nav: loaded carve tiles exceed room memory budget; unload distant tiles');
   }
   private seamsAt(x: number, z: number, forwardOnly = false): string[] {
@@ -508,7 +518,7 @@ export class Mesh implements NavigationQuery {
         },
       ]),
     );
-    return pack('mesh', { ...state, nav: { ...backend, tiles } });
+    return pack('mesh', { ...state, retention: this.#limits, nav: { ...backend, tiles } });
   }
   /** Supply the original assets for every saved tile, in any order. Polygon
    * allocations and salts are restored, so saved crowds retain valid corridors. */
@@ -521,8 +531,8 @@ export class Mesh implements NavigationQuery {
     }
   }
   private static restoreData(bytes: Uint8Array, assets: Iterable<Uint8Array>): Mesh {
-    const saved = unpack<MeshState>('mesh', bytes),
-      mesh = new Mesh(saved.config, axisExtents(saved.extent, saved.config.up));
+    const saved = unpack<MeshState & { retention: MeshOptions }>('mesh', bytes),
+      mesh = new Mesh(saved.config, axisExtents(saved.extent, saved.config.up), saved.retention);
     const runtimeHeaders = saved.nav.tiles;
     Object.assign(mesh.#state, saved, { tiles: {}, nav: { ...saved.nav, tiles: {} } });
     for (const bytes of assets) {

@@ -1,3 +1,4 @@
+import { requireState, numbers, record } from './internal/Validate.ts';
 /** Fixed-step navigation. Only persistent fields are saved; avoidance candidates,
  * neighbour lists and steering scratch are rebuilt at the next tick. */
 import { crowd, pathCorridor, localBoundary, obstacleAvoidance } from './internal/Backend.ts';
@@ -288,7 +289,49 @@ export class Crowd {
       throw new Error('nav: crowd mesh identity differs');
     const s = saved.state,
       result = new Crowd(mesh, s.dt, s.data.maxAgentRadius);
+    requireState(Number.isSafeInteger(s.tick) && s.tick >= 0 && Number.isSafeInteger(s.revision));
+    record(s.targets); record(s.traversals); record(s.data.agents);
+    numbers(s.data.agentPlacementHalfExtents, 3);
+    for (const n of [s.data.agentIdCounter, s.data.maxIterationsPerUpdate,
+      s.data.maxIterationsPerAgent, s.data.quickSearchIterations])
+      requireState(Number.isSafeInteger(n) && n > 0);
+    for (const target of Object.values(s.targets)) numbers(target, 3);
     for (const a of Object.values(s.data.agents)) {
+      record(a);
+      for (const p of [a.position, a.velocity, a.desiredVelocity, a.newVelocity,
+        a.displacement, a.targetPosition]) numbers(p, 3);
+      for (const n of [a.radius, a.height, a.maxAcceleration, a.maxSpeed,
+        a.collisionQueryRange, a.pathOptimizationRange, a.separationWeight,
+        a.desiredSpeed, a.targetPathfindingTime, a.topologyOptTime]) requireState(Number.isFinite(n));
+      requireState([0, 1, 2].includes(a.state) && Number.isSafeInteger(a.targetState) &&
+        a.targetState >= 0 && a.targetState <= 6 && a.queryFilter === DEFAULT_QUERY_FILTER);
+      requireState(typeof a.autoTraverseOffMeshConnections === 'boolean' &&
+        typeof a.targetReplan === 'boolean' && typeof a.targetPathIsPartial === 'boolean');
+      record(a.corridor); numbers(a.corridor.position, 3); numbers(a.corridor.target, 3);
+      numbers(a.corridor.path);
+      record(a.boundary); numbers(a.boundary.center, 3); numbers(a.boundary.polys);
+      requireState(Array.isArray(a.boundary.segments) && Array.isArray(a.corners));
+      for (const seg of a.boundary.segments) { numbers(seg.s, 6); requireState(Number.isFinite(seg.d)); }
+      for (const corner of a.corners) { numbers(corner.position, 3); requireState(Number.isSafeInteger(corner.flags)); }
+      record(a.obstacleAvoidance);
+      for (const name of ['velBias', 'weightDesVel', 'weightCurVel', 'weightSide', 'weightToi',
+        'horizTime', 'gridSize', 'adaptiveDivs', 'adaptiveRings', 'adaptiveDepth'] as const)
+        requireState(Number.isFinite(a.obstacleAvoidance[name]));
+      if (a.offMeshAnimation) {
+        const anim = a.offMeshAnimation;
+        numbers(anim.startPosition, 3); numbers(anim.endPosition, 3);
+        requireState(Number.isFinite(anim.t) && Number.isFinite(anim.duration));
+      }
+      if (a.slicedQuery) {
+        const q = a.slicedQuery;
+        requireState(Number.isInteger(q.status) && q.filter === DEFAULT_QUERY_FILTER);
+        numbers(q.startPosition, 3); numbers(q.endPosition, 3); record(q.nodes);
+        requireState(Array.isArray(q.openList));
+        for (const nodes of Object.values(q.nodes)) {
+          requireState(Array.isArray(nodes));
+          for (const node of nodes) { numbers(node.position, 3); requireState(Number.isFinite(node.cost)); }
+        }
+      }
       if (!a.slicedQuery) a.slicedQuery = createSlicedNodePathQuery();
       a.obstacleAvoidanceQuery = obstacleAvoidance.createObstacleAvoidanceQuery(32, 32);
       a.neis = [];

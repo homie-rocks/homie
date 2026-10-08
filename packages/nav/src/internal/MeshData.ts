@@ -1,3 +1,4 @@
+import { registerQueryFilter } from './FilterValue.ts';
 import * as nav from 'navcat';
 import type { BakeConfig, Obstacle } from '../Bake.ts';
 import type { TileData } from './Tile.ts';
@@ -30,3 +31,5 @@ export function locate(mesh: object, point: Vector): nav.FindNearestPolyResult {
     nav.DEFAULT_QUERY_FILTER,
   );
 }
+
+registerQueryFilter(nav.DEFAULT_QUERY_FILTER);

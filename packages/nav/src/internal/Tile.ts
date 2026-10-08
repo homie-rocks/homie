@@ -1,12 +1,18 @@
+import { requireState, numbers } from './Validate.ts';
 import * as nav from 'navcat';
 import type { BakeConfig, Obstacle } from '../Bake.ts';
 import { axisBounds } from '../Query.ts';
 import { pack, unpack } from '../State.ts';
+export interface PackedCompact extends Omit<nav.CompactHeightfield, 'cells' | 'spans' | 'areas'> {
+  cells: Uint32Array;
+  spans: Uint32Array;
+  areas: Uint8Array;
+}
 export interface TileData {
   config: BakeConfig;
   x: number;
   z: number;
-  compact: nav.CompactHeightfield | null;
+  compact: nav.CompactHeightfield | PackedCompact | null;
   baked: nav.NavMeshTile | null;
 }
 /** Each retained cell: two uint32s. Each span: four uint32s + uint8 area.
@@ -14,11 +20,12 @@ export interface TileData {
  */
 export function encodeTile(data: TileData): Uint8Array {
   const c = data.compact;
-  if (!c) return pack('tile', data);
+  if (!c || c.cells instanceof Uint32Array) return pack('tile', data);
+  const expanded = c as nav.CompactHeightfield;
   const cells = new Uint32Array(c.cells.length * 2),
     spans = new Uint32Array(c.spanCount * 4);
-  c.cells.forEach((v, i) => cells.set([v.index, v.count], i * 2));
-  c.spans.forEach((v, i) => spans.set([v.y, v.region, v.con, v.h], i * 4));
+  expanded.cells.forEach((v, i) => cells.set([v.index, v.count], i * 2));
+  expanded.spans.forEach((v, i) => spans.set([v.y, v.region, v.con, v.h], i * 4));
   return pack('tile', {
     ...data,
     compact: { ...c, cells, spans, areas: Uint8Array.from(c.areas), distances: [] },
@@ -38,8 +45,6 @@ export function decodeTile(bytes: Uint8Array): TileData {
   const c = data.compact;
   if (c === null && data.config.retainSpans) throw new Error('nav: missing retained spans');
   if (c) {
-    if (c.width * c.height > 250_000 || c.spanCount > 200_000)
-      throw new Error('nav: retained tile exceeds room memory budget; bake smaller tiles');
     const cells = c.cells as unknown as Uint32Array,
       spans = c.spans as unknown as Uint32Array;
     if (
@@ -50,30 +55,51 @@ export function decodeTile(bytes: Uint8Array): TileData {
       c.areas.length !== c.spanCount
     )
       throw new Error('nav: invalid compact spans');
-    c.cells = Array.from({ length: cells.length / 2 }, (_, i) => ({
-      index: cells[i * 2]!,
-      count: cells[i * 2 + 1]!,
-    }));
-    c.spans = Array.from({ length: c.spanCount }, (_, i) => ({
-      y: spans[i * 4]!,
-      region: spans[i * 4 + 1]!,
-      con: spans[i * 4 + 2]!,
-      h: spans[i * 4 + 3]!,
-    }));
-    c.areas = Array.from(c.areas);
-    if (c.cells.some((v) => v.index + v.count > c.spanCount))
-      throw new Error('nav: invalid span range');
+    for (let i = 0; i < cells.length; i += 2)
+      if (cells[i]! + cells[i + 1]! > c.spanCount) throw new Error('nav: invalid span range');
+
   }
   if (data.baked && (!Array.isArray(data.baked.polys) || !Array.isArray(data.baked.vertices)))
     throw new Error('nav: invalid tile polygons');
+  if (data.baked) {
+    const t = data.baked;
+    numbers(t.vertices);
+    numbers(t.bounds, 6);
+    numbers(t.detailVertices);
+    numbers(t.detailTriangles);
+    requireState(t.vertices.length % 3 === 0 && t.detailVertices.length % 3 === 0 &&
+      t.detailTriangles.length % 4 === 0 && Array.isArray(t.detailMeshes) &&
+      t.detailMeshes.length === t.polys.length && Array.isArray(t.polyNodes));
+    for (const p of t.polys) {
+      requireState(p && typeof p === 'object');
+      numbers(p.vertices);
+      numbers(p.neis, p.vertices.length);
+      requireState(p.vertices.length >= 3 && p.vertices.every(i => Number.isInteger(i) && i >= 0 && i * 3 < t.vertices.length) &&
+        Number.isSafeInteger(p.flags) && Number.isSafeInteger(p.area));
+    }
+    for (const d of t.detailMeshes) {
+      requireState(d && [d.verticesBase, d.verticesCount, d.trianglesBase, d.trianglesCount].every(n => Number.isSafeInteger(n) && n >= 0));
+      requireState((d.verticesBase + d.verticesCount) * 3 <= t.detailVertices.length &&
+        (d.trianglesBase + d.trianglesCount) * 4 <= t.detailTriangles.length);
+    }
+    requireState(t.bvTree && Array.isArray(t.bvTree.nodes) && Number.isFinite(t.bvTree.quantFactor));
+    for (const node of t.bvTree.nodes) { numbers(node.bounds, 6); requireState(Number.isSafeInteger(node.i)); }
+  }
   return data;
 }
-export function cloneCompact(c: nav.CompactHeightfield): nav.CompactHeightfield {
+export function cloneCompact(c: nav.CompactHeightfield | PackedCompact): nav.CompactHeightfield {
   return {
     ...c,
     bounds: [...c.bounds],
-    cells: c.cells,
-    spans: c.spans.map((s) => ({ ...s })),
+    cells: c.cells instanceof Uint32Array
+      ? Array.from({ length: c.cells.length / 2 }, (_, i) => ({
+          index: (c.cells as Uint32Array)[i * 2]!, count: (c.cells as Uint32Array)[i * 2 + 1]!,
+        })) : c.cells,
+    spans: c.spans instanceof Uint32Array
+      ? Array.from({ length: c.spanCount }, (_, i) => ({
+          y: (c.spans as Uint32Array)[i * 4]!, region: (c.spans as Uint32Array)[i * 4 + 1]!,
+          con: (c.spans as Uint32Array)[i * 4 + 2]!, h: (c.spans as Uint32Array)[i * 4 + 3]!,
+        })) : c.spans.map((s) => ({ ...s })),
     areas: Array.from(c.areas),
     distances: new Array(c.spanCount).fill(0),
   };
