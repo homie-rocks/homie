@@ -5,7 +5,7 @@ import { cpus } from 'node:os';
 import { bakeTile } from '@homie-rocks/nav/Bake.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
-import { config, field, tune } from './fixtures.mjs';
+import { config, field, tune } from '../fixtures.mjs';
 
 test('micro-performance: full bake, queries, and 300 moving agents', () => {
   const c = { ...config, tileCells: 160 }, triangles = field(() => 0, -2, -2, 177, 177);
@@ -14,7 +14,7 @@ test('micro-performance: full bake, queries, and 300 moving agents', () => {
   const mesh = new Mesh(c, [2, 2, 2]);mesh.loadTile(bytes);
   mesh.addObstacle({ min: [18, -1, 5], max: [22, 4, 35] });
   for (let i = 0; i < 1100; i++) { const start = performance.now(), path = mesh.path([2, .1, 2 + i % 35], [38, .1, 38 - i % 35]);assert.ok(path.complete);if (i >= 100) queryTimes.push(performance.now() - start); }
-  const crowd = new Crowd(mesh, 1/30, .3), ids = [];
+  const crowd = new Crowd(mesh, 1/20, .3), ids = [];
   for (let i = 0; i < 300; i++) { const x = 1 + (i % 15), z = 1 + Math.floor(i / 15) * 1.8; const id = crowd.add([x, .1, z], tune);ids.push(id);crowd.target(id, [40 - x, .1, z]); }
   for (let i = 0; i < 150; i++) { const start = performance.now();crowd.step();if (i >= 30) stepTimes.push(performance.now() - start); }
   assert.ok(ids.every(id => [...crowd.agent(id).position].every(Number.isFinite)));
