@@ -2,4 +2,6 @@
 // built and loading in Node, and every import declared and pinned.
 import { testEnginePackage } from '../../../scripts/test/engine-package.mjs';
 
-testEnginePackage(new URL('..', import.meta.url));
+testEnginePackage(new URL('..', import.meta.url), {
+  publicModules: ['Bake', 'Crowd', 'Grid', 'Mesh', 'Query', 'Random', 'State', 'Three'],
+});

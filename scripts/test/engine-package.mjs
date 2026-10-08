@@ -59,7 +59,7 @@ function typeOnly(dts) {
     || ts.isImportDeclaration(s) || (ts.isExportDeclaration(s) && (s.isTypeOnly || !s.exportClause || (ts.isNamedExports(s.exportClause) && s.exportClause.elements.length === 0))));
 }
 
-export function testEnginePackage(packageUrl) {
+export function testEnginePackage(packageUrl, { publicModules } = {}) {
   const dir = fileURLToPath(packageUrl);
   const folder = basename(dir.replace(/\/$/, ''));
   const pj = json(join(dir, 'package.json'));
@@ -72,14 +72,14 @@ export function testEnginePackage(packageUrl) {
     assert.equal(pj.type, 'module');
     assert.match(pj.version, /^\d+\.\d+\.\d+$/);
     assert.equal(pj.private, undefined, 'an engine package is published');
-    if (pj.exports['./*.js']) assert.deepEqual(pj.exports, { './package.json': './package.json', './*.js': { types: './dist/*.d.ts', default: './dist/*.js' } });
-    else {
-      assert.equal(pj.exports['./package.json'], './package.json');
-      for (const [key, value] of Object.entries(pj.exports)) if (key !== './package.json') {
-        assert.match(key, /^\.\/[A-Z][A-Za-z]*\.js$/);
-        assert.deepEqual(value, { types: key.replace('./', './dist/').replace(/\.js$/, '.d.ts'), default: key.replace('./', './dist/') });
-      }
-    }
+    const expectedExports = { './package.json': './package.json' };
+    if (publicModules) {
+      // Explicit opt-in for a package with private implementation modules.
+      for (const mod of publicModules) expectedExports[`./${mod}.js`] = {
+        types: `./dist/${mod}.d.ts`, default: `./dist/${mod}.js`,
+      };
+    } else expectedExports['./*.js'] = { types: './dist/*.d.ts', default: './dist/*.js' };
+    assert.deepEqual(pj.exports, expectedExports);
     assert.deepEqual(pj.files, ['dist', 'src/**/*.ts', 'README.md', 'LICENSE', 'NOTICE']);
     assert.equal(pj.repository?.url, 'git+https://github.com/homie-rocks/homie.git');
     assert.equal(pj.repository?.directory, `packages/${folder}`);
@@ -101,7 +101,7 @@ export function testEnginePackage(packageUrl) {
       assert.ok(existsSync(js), `dist/${mod}.js was built from src/${file}`);
       assert.ok(existsSync(dts), `dist/${mod}.d.ts was built from src/${file}`);
       assert.ok(statSync(js).mtimeMs >= statSync(join(dir, 'src', file)).mtimeMs - 1000, `dist/${mod}.js is older than src/${file}: rebuild`);
-      const exports = await import(pj.exports['./*.js'] || pj.exports[`./${mod}.js`] ? `${name}/${mod}.js` : new URL(js, 'file:').href);
+      const exports = await import(!publicModules || publicModules.includes(mod) ? `${name}/${mod}.js` : new URL(js, 'file:').href);
       if (Object.keys(exports).length === 0) assert.ok(typeOnly(read(dts)), `${name}/${mod}.js has no runtime exports, so its .d.ts must declare only types`);
       loaded++;
     }
