@@ -2,7 +2,7 @@
 import * as nav from 'navcat';
 import type { HeightField } from '@homie-rocks/heightfield/Field.js';
 import { encodeTile, finishTile, type TileData } from './internal/Tile.ts';
-import { deterministicCos } from './internal/Math.ts';
+import { deterministicCos, deterministicSin } from './internal/Math.ts';
 import { axes, vector, point, positive, type Point, type Up } from './Query.ts';
 export interface Triangles {
   positions: ArrayLike<number>;
@@ -55,6 +55,10 @@ export function checkConfig(c: BakeConfig): void {
     c.slopeDegrees >= 90
   )
     throw new Error('nav: invalid agent or vertical bounds');
+  const angle = c.slopeDegrees * (Math.PI / 180);
+  const rise = c.cellSize * deterministicSin(angle) / deterministicCos(angle);
+  if (Math.ceil(rise / c.cellHeight - 1e-9) > Math.floor(c.stepHeight / c.cellHeight + 1e-9))
+    throw new Error('nav: slope cannot be honoured at this cell size, cell height and step height; reduce cellSize/cellHeight or increase stepHeight');
   if ((c.maxY - c.minY) / c.cellHeight > 65535)
     throw new Error('nav: vertical bounds exceed voxel range');
   if (c.tileCells + 2 * (Math.ceil(c.radius / c.cellSize) + 3) > 2048)
@@ -131,10 +135,10 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
     const nx = uy * vz - uz * vy,
       ny = uz * vx - ux * vz,
       nz = ux * vy - uy * vx;
-    if (ny > threshold * Math.sqrt(nx * nx + ny * ny + nz * nz)) areas[i / 3] = nav.WALKABLE_AREA;
+    if (ny >= threshold * Math.sqrt(nx * nx + ny * ny + nz * nz)) areas[i / 3] = nav.WALKABLE_AREA;
   }
   const ctx = nav.BuildContext.create(),
-    climb = Math.floor(c.stepHeight / c.cellHeight),
+    climb = Math.floor(c.stepHeight / c.cellHeight + 1e-9),
     height = Math.ceil(c.height / c.cellHeight);
   // navcat 0.4.1's only rasterizer clock reads are these two profiling hooks.
   // The call is synchronous, has no external callbacks, and restores even on error.
@@ -151,7 +155,13 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
     nav.BuildContext.end = end;
   }
   nav.filterLowHangingWalkableObstacles(hf, climb);
-  nav.filterLedgeSpans(hf, height, climb);
+  // The ledge filter compares the complete range of neighbouring spans.
+  // A slope can cover two cells plus one rounding voxel, independently of
+  // the maximum step between adjacent compact spans (still `climb`).
+  const angle = c.slopeDegrees * (Math.PI / 180);
+  const ledge = Math.max(climb, Math.ceil(2 * c.cellSize *
+    deterministicSin(angle) / deterministicCos(angle) / c.cellHeight) + 1);
+  nav.filterLedgeSpans(hf, height, ledge);
   nav.filterWalkableLowHeightSpans(hf, height);
   const compact = nav.buildCompactHeightfield(ctx, height, climb, hf);
   const data: TileData = {
