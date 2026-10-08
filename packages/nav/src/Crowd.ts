@@ -8,6 +8,7 @@ import {
   isValidNodeRef,
   createSlicedNodePathQuery,
 } from 'navcat';
+import { reachable } from './internal/Reachability.ts';
 import { Mesh } from './Mesh.ts';
 import { meshData, locate } from './internal/MeshData.ts';
 import { pack, unpack } from './State.ts';
@@ -41,15 +42,19 @@ interface CrowdState {
   targets: Record<string, Vector>;
   traversals: Record<string, number>;
 }
+/** Audited against pinned blocks.js update order:
+ * - neighbours are cleared for ALL states by updateNeighbours before any read;
+ * - avoidance query counts reset in updateVelocityPlanning before WALKING reads;
+ *   other states never sample it; debug data only records samples (not enabled).
+ * Every other agent field is retained, including corners and steering vectors:
+ * updateCorners skips pending requests, while updateSteering still reads corners.
+ * Crowd-level counters, ordering, query budgets and all boundary/corridor state
+ * are saved unfiltered. Active sliced-query pools retain object aliases.
+ */
 const scratch = new Set([
   'obstacleAvoidanceQuery',
   'obstacleAvoidanceDebugData',
   'neis',
-  'corners',
-  'desiredSpeed',
-  'desiredVelocity',
-  'newVelocity',
-  'displacement',
 ]);
 export class Crowd {
   #state: CrowdState;
@@ -123,7 +128,7 @@ export class Crowd {
     if (
       !agent ||
       !result.success ||
-      !this.mesh.path(axes(agent.position, this.mesh.up), to).complete
+      !reachable(this.mesh, locate(this.mesh, agent.position).nodeRef).has(result.nodeRef)
     )
       return false;
     this.#state.targets[id] = target;
@@ -287,11 +292,6 @@ export class Crowd {
       if (!a.slicedQuery) a.slicedQuery = createSlicedNodePathQuery();
       a.obstacleAvoidanceQuery = obstacleAvoidance.createObstacleAvoidanceQuery(32, 32);
       a.neis = [];
-      a.corners = [];
-      a.desiredSpeed = 0;
-      a.desiredVelocity = [0, 0, 0];
-      a.newVelocity = [0, 0, 0];
-      a.displacement = [0, 0, 0];
     }
     result.#state = s;
     return result;

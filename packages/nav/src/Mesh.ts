@@ -1,4 +1,5 @@
 /** Loaded tiles, runtime carving and the common query interface. No renderer. */
+import { reachable } from './internal/Reachability.ts';
 import * as nav from 'navcat';
 import { checkConfig, checkObstacle, type BakeConfig, type Obstacle } from './Bake.ts';
 import {
@@ -37,7 +38,6 @@ export class Mesh implements NavigationQuery {
   #state: MeshState;
   #retainedSpans = 0;
   #retainedCells = 0;
-  #reachable = new Map<number, Set<number>>();
   #identity: { revision: number; bytes: Uint8Array } | undefined;
   get up(): Up {
     return this.#state.config.up ?? 'y';
@@ -224,31 +224,10 @@ export class Mesh implements NavigationQuery {
     return true;
   }
   private reachable(from: Point): Set<number> {
-    const a = locate(this, axes(from, this.up)),
-      found = new Set<number>();
-    if (!a.success) return found;
-    const cached = this.#reachable.get(a.nodeRef);
-    if (cached) return cached;
-    const queue = [a.nodeRef];
-    found.add(a.nodeRef);
-    for (let i = 0; i < queue.length; i++) {
-      const n = nav.getNodeByRef(this.#state.nav, queue[i]!);
-      for (const index of n.links) {
-        const link = this.#state.nav.links[index]!;
-        if (
-          link.allocated &&
-          !found.has(link.toNodeRef) &&
-          nav.DEFAULT_QUERY_FILTER.passFilter(link.toNodeRef, this.#state.nav)
-        ) {
-          found.add(link.toNodeRef);
-          queue.push(link.toNodeRef);
-        }
-      }
-    }
-    if (this.#reachable.size >= 16) this.#reachable.delete(this.#reachable.keys().next().value!);
-    this.#reachable.set(a.nodeRef, found);
-    return found;
+    const a = locate(this, axes(from, this.up));
+    return a.success ? reachable(this, a.nodeRef) : new Set();
   }
+
   nearest(p: Point, from?: Point): Vector | null {
     point(p);
     if (!from) {
@@ -337,7 +316,6 @@ export class Mesh implements NavigationQuery {
   }
   private changed(): void {
     this.#state.revision++;
-    this.#reachable.clear();
     this.#identity = undefined;
   }
   private overlaps(tile: TileData, box: Obstacle): boolean {
