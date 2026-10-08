@@ -1,4 +1,4 @@
-// Run against the original dist directory to reproduce the review before fixes.
+// Run against the original dist directory to exercise topology and storage boundaries.
 import { pathToFileURL } from 'node:url';
 const source = pathToFileURL(process.argv[2].replace(/\/$/, '') + '/');
 const { bakeTile, heightfieldTriangles } = await import(new URL('Bake.js', source));
@@ -17,7 +17,14 @@ const config = {
   stepHeight: 0.3,
   slopeDegrees: 45,
 };
-const tune = { radius: 0.3, height: 1.8, speed: 3, acceleration: 8, neighbours: 2, separation: 2 };
+const tune = {
+  radius: 0.3,
+  height: 1.8,
+  speed: 3,
+  acceleration: 8,
+  neighbours: 2,
+  separation: 2,
+};
 const field = (f = () => 0, x = -2, z = -2, nx = 57, nz = 57) =>
   heightfieldTriangles({ heightAt: f }, x, z, nx, nz, 0.25);
 const flat = () => {
@@ -61,7 +68,11 @@ const obstacle = large.addObstacle({ min: [18, -1, 18], max: [19, 3, 19] });
 const addMs = performance.now() - start;
 start = performance.now();
 large.removeObstacle(obstacle);
-result.M2 = { addMs, removeMs: performance.now() - start, door: typeof large.addDoor };
+result.M2 = {
+  addMs,
+  removeMs: performance.now() - start,
+  door: typeof large.addDoor,
+};
 const walking = new Crowd(flat(), 0.05, 0.3),
   id = walking.add([1, 0.1, 1], tune);
 walking.target(id, [9, 0.1, 9]);
@@ -104,7 +115,9 @@ broken.loadTile(
     0,
   ),
 );
-result.M6 = { missingHaloComplete: broken.path([5, 0.1, 5], [15, 0.1, 5]).complete };
+result.M6 = {
+  missingHaloComplete: broken.path([5, 0.1, 5], [15, 0.1, 5]).complete,
+};
 const linked = flat();
 linked.addObstacle({ min: [4, -1, -1], max: [6, 3, 11] });
 const link = linked.addLink([3, 0.1, 5], [7, 0.1, 5], 0.6, true);
@@ -116,7 +129,9 @@ result.M7 = {
 };
 const overhead = flat();
 overhead.addObstacle({ min: [4, 1.95, 0], max: [6, 4, 10] });
-result.minor5 = { overheadComplete: overhead.path([2, 0.1, 5], [8, 0.1, 5]).complete };
+result.minor5 = {
+  overheadComplete: overhead.path([2, 0.1, 5], [8, 0.1, 5]).complete,
+};
 result.minor6 = { floor: flat().nearest([5, 0, 5]) };
 const rampConfig = { ...config, maxY: 80, slopeDegrees: 80 },
   ramp = new Mesh(rampConfig, [2, 2, 2]);
@@ -134,5 +149,7 @@ try {
 } catch (error) {
   result.minor9 = error.message;
 }
-result.minor10 = { shared: Crowd.restore(walking.save()).mesh === walking.mesh };
+result.minor10 = {
+  shared: Crowd.restore(walking.save()).mesh === walking.mesh,
+};
 console.log(JSON.stringify(result, null, 2));

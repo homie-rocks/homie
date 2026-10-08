@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { bakeTile, bakeLevel, bakeHeightfield } from '@homie-rocks/nav/Bake.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
-import { pack, unpack, hash } from '@homie-rocks/nav/State.js';
+import { pack, unpack, hash } from '../dist/internal/Binary.js';
 import { meshData } from '../dist/internal/MeshData.js';
 import { deterministicSin, deterministicCos } from '../dist/internal/Math.js';
 import { config, field, flat, tune } from './fixtures.mjs';
@@ -38,7 +38,9 @@ test('heightfield sampling starts per tile even beyond four million total sample
 });
 
 test('downward geometry reports a winding diagnostic', () => {
-  const input = { positions: [0, 0, 0, 10, 0, 0, 10, 0, 10, 0, 0, 0, 10, 0, 10, 0, 0, 10] };
+  const input = {
+    positions: [0, 0, 0, 10, 0, 0, 10, 0, 10, 0, 0, 0, 10, 0, 10, 0, 0, 10],
+  };
   assert.throws(() => bakeLevel(input, config), /no walkable triangles; check winding/);
 });
 
@@ -73,12 +75,12 @@ test('checksum-valid but structurally invalid saves fail at the boundary', () =>
 test('runtime guards both upstream files and state pins the backend version', async () => {
   const script = await readFile(new URL('../scripts/runtime.mjs', import.meta.url), 'utf8');
   assert.match(script, /index\.js/);
-  const state = await readFile(new URL('../src/State.ts', import.meta.url), 'utf8');
+  const state = await readFile(new URL('../src/internal/Binary.ts', import.meta.url), 'utf8');
   assert.match(state, /0\.4\.1/);
 });
 
 test('typed sections explicitly encode little endian values', async () => {
-  const state = await readFile(new URL('../src/State.ts', import.meta.url), 'utf8');
+  const state = await readFile(new URL('../src/internal/Binary.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(state, /bytes\.set\(new Uint8Array\(v\.buffer/);
   const value = new Uint32Array([0x10203040]);
   const bytes = pack('array', value);

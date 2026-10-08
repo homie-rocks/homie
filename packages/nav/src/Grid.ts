@@ -1,11 +1,5 @@
 /** Eight-neighbour octile paths, no corner cutting, with optional JPS. */
 import {
-  axes,
-  fromAxes,
-  distance,
-  draw,
-  point,
-  positive,
   type Up,
   type Vector,
   type NavigationQuery,
@@ -13,7 +7,8 @@ import {
   type Point,
   type Ray,
 } from './Query.ts';
-import { pack, unpack } from './State.ts';
+import { axes, fromAxes, distance, draw, point, positive } from './internal/Coordinates.ts';
+import { pack, unpack } from './internal/Binary.ts';
 import { jumpPath, octile } from './internal/Jump.ts';
 interface GridState {
   width: number;

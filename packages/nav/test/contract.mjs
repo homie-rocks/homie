@@ -19,7 +19,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
-const ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const read = (p) => readFileSync(p, 'utf8');
 const json = (p) => JSON.parse(read(p));
 const jsonc = (p) => ts.parseConfigFileTextToJson(p, read(p)).config;
@@ -37,7 +37,13 @@ function tsFiles(dir, rel = '') {
 
 /** The package a bare specifier names (`@scope/name/sub.js` -> `@scope/name`), or null for a relative or node: one. */
 function packageOf(spec) {
-  if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('node:') || builtinModules.includes(spec.split('/')[0])) return null;
+  if (
+    spec.startsWith('.') ||
+    spec.startsWith('/') ||
+    spec.startsWith('node:') ||
+    builtinModules.includes(spec.split('/')[0])
+  )
+    return null;
   const parts = spec.split('/');
   return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
@@ -55,11 +61,19 @@ function workspaceVersions() {
 /** Does a .d.ts declare only types (nothing that exists at run time)? */
 function typeOnly(dts) {
   const sf = ts.createSourceFile('x.d.ts', dts, ts.ScriptTarget.ES2022, false, ts.ScriptKind.TS);
-  return sf.statements.every((s) => ts.isInterfaceDeclaration(s) || ts.isTypeAliasDeclaration(s)
-    || ts.isImportDeclaration(s) || (ts.isExportDeclaration(s) && (s.isTypeOnly || !s.exportClause || (ts.isNamedExports(s.exportClause) && s.exportClause.elements.length === 0))));
+  return sf.statements.every(
+    (s) =>
+      ts.isInterfaceDeclaration(s) ||
+      ts.isTypeAliasDeclaration(s) ||
+      ts.isImportDeclaration(s) ||
+      (ts.isExportDeclaration(s) &&
+        (s.isTypeOnly ||
+          !s.exportClause ||
+          (ts.isNamedExports(s.exportClause) && s.exportClause.elements.length === 0))),
+  );
 }
 
-export function testEnginePackage(packageUrl) {
+export function testEnginePackage(packageUrl, { publicModules } = {}) {
   const dir = fileURLToPath(packageUrl);
   const folder = basename(dir.replace(/\/$/, ''));
   const pj = json(join(dir, 'package.json'));
@@ -72,12 +86,29 @@ export function testEnginePackage(packageUrl) {
     assert.equal(pj.type, 'module');
     assert.match(pj.version, /^\d+\.\d+\.\d+$/);
     assert.equal(pj.private, undefined, 'an engine package is published');
-    assert.deepEqual(pj.exports, { './package.json': './package.json', './*.js': { types: './dist/*.d.ts', default: './dist/*.js' } });
+    const expectedExports = { './package.json': './package.json' };
+    if (publicModules) {
+      // Explicit opt-in for a package with private implementation modules.
+      for (const mod of publicModules)
+        expectedExports[`./${mod}.js`] = {
+          types: `./dist/${mod}.d.ts`,
+          default: `./dist/${mod}.js`,
+        };
+    } else
+      expectedExports['./*.js'] = {
+        types: './dist/*.d.ts',
+        default: './dist/*.js',
+      };
+    assert.deepEqual(pj.exports, expectedExports);
     assert.deepEqual(pj.files, ['dist', 'src/**/*.ts', 'README.md', 'LICENSE', 'NOTICE']);
     assert.equal(pj.repository?.url, 'git+https://github.com/homie-rocks/homie.git');
     assert.equal(pj.repository?.directory, `packages/${folder}`);
-    assert.equal(read(join(dir, 'LICENSE')), read(join(ROOT, 'LICENSE')), 'LICENSE is the repository\'s Apache-2.0 text');
-    assert.equal(read(join(dir, 'NOTICE')), read(join(ROOT, 'NOTICE')), 'NOTICE is the repository\'s');
+    assert.equal(
+      read(join(dir, 'LICENSE')),
+      read(join(ROOT, 'LICENSE')),
+      "LICENSE is the repository's Apache-2.0 text",
+    );
+    assert.ok(read(join(dir, 'NOTICE')).startsWith(read(join(ROOT, 'NOTICE'))));
     const readme = read(join(dir, 'README.md'));
     assert.ok(readme.includes(name), 'README.md names the package');
     assert.ok(src.length > 0, 'src/ has modules');
@@ -93,9 +124,20 @@ export function testEnginePackage(packageUrl) {
       const dts = join(dist, `${mod}.d.ts`);
       assert.ok(existsSync(js), `dist/${mod}.js was built from src/${file}`);
       assert.ok(existsSync(dts), `dist/${mod}.d.ts was built from src/${file}`);
-      assert.ok(statSync(js).mtimeMs >= statSync(join(dir, 'src', file)).mtimeMs - 1000, `dist/${mod}.js is older than src/${file}: rebuild`);
-      const exports = await import(`${name}/${mod}.js`);
-      if (Object.keys(exports).length === 0) assert.ok(typeOnly(read(dts)), `${name}/${mod}.js has no runtime exports, so its .d.ts must declare only types`);
+      assert.ok(
+        statSync(js).mtimeMs >= statSync(join(dir, 'src', file)).mtimeMs - 1000,
+        `dist/${mod}.js is older than src/${file}: rebuild`,
+      );
+      const exports = await import(
+        !publicModules || publicModules.includes(mod)
+          ? `${name}/${mod}.js`
+          : new URL(js, 'file:').href
+      );
+      if (Object.keys(exports).length === 0)
+        assert.ok(
+          typeOnly(read(dts)),
+          `${name}/${mod}.js has no runtime exports, so its .d.ts must declare only types`,
+        );
       loaded++;
     }
     assert.equal(loaded, src.length);
@@ -116,17 +158,31 @@ export function testEnginePackage(packageUrl) {
       }
     }
     assert.deepEqual([...missing], [], 'imported but not in dependencies or peerDependencies');
-    const refs = new Set((jsonc(join(dir, 'tsconfig.json')).references ?? []).map((r) => `@homie-rocks/${basename(r.path)}`));
+    const refs = new Set(
+      (jsonc(join(dir, 'tsconfig.json')).references ?? []).map(
+        (r) => `@homie-rocks/${basename(r.path)}`,
+      ),
+    );
     for (const field of ['dependencies', 'peerDependencies', 'devDependencies']) {
       for (const [dep, spec] of Object.entries(pj[field] ?? {})) {
         assert.ok(!dep.startsWith('@homie/'), `${field} names ${dep}: the scope is @homie-rocks`);
         if (!dep.startsWith('@homie-rocks/')) continue;
         assert.ok(versions.has(dep), `${field} names ${dep}, which is not in this repository`);
-        assert.equal(spec, versions.get(dep), `${field} ${dep} is pinned exactly to this repository's version`);
-        if (field !== 'devDependencies' || used.has(dep)) assert.ok(refs.has(dep), `tsconfig.json references ../${dep.split('/')[1]} (${field})`);
+        assert.equal(
+          spec,
+          versions.get(dep),
+          `${field} ${dep} is pinned exactly to this repository's version`,
+        );
+        if (field !== 'devDependencies' || used.has(dep))
+          assert.ok(refs.has(dep), `tsconfig.json references ../${dep.split('/')[1]} (${field})`);
       }
     }
-    for (const dep of used) if (dep.startsWith('@homie-rocks/')) assert.ok(dep in (pj.dependencies ?? {}), `${dep} is imported, so it is a dependency (not only a peer)`);
+    for (const dep of used)
+      if (dep.startsWith('@homie-rocks/'))
+        assert.ok(
+          dep in (pj.dependencies ?? {}),
+          `${dep} is imported, so it is a dependency (not only a peer)`,
+        );
   });
 }
 

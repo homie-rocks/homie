@@ -4,7 +4,7 @@ import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { Random } from '@homie-rocks/nav/Random.js';
 import { Grid } from '@homie-rocks/nav/Grid.js';
-import { fromAxes as axes, axisBounds } from '@homie-rocks/nav/Query.js';
+import { fromAxes as axes, axisBounds } from '../dist/internal/Coordinates.js';
 
 export function scenario(up = 'y') {
   const p = (v) => axes(v, up);

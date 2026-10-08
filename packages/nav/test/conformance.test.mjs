@@ -13,8 +13,9 @@ import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { Grid } from '@homie-rocks/nav/Grid.js';
 import { Random } from '@homie-rocks/nav/Random.js';
-import { pack, unpack, chunks, joinChunks } from '@homie-rocks/nav/State.js';
-import { fromAxes as axes, axisBounds } from '@homie-rocks/nav/Query.js';
+import { chunks, joinChunks } from '@homie-rocks/nav/State.js';
+import { pack, unpack } from '../dist/internal/Binary.js';
+import { fromAxes as axes, axisBounds } from '../dist/internal/Coordinates.js';
 import { config, field, flat, tune } from './fixtures.mjs';
 
 for (const up of ['y', 'z']) {
@@ -95,7 +96,10 @@ for (const up of ['y', 'z']) {
     const obstacle = mesh.addCylinder(p([5, 0, 5]), 1, 3);
     assert.equal(mesh.raycast(p([2, 0.3, 5]), p([8, 0.9, 5])).clear, false);
     mesh.removeObstacle(obstacle);
-    const grid = new Grid(10, 10, 1, p([0, 3, 0]), undefined, { up, search: 'jps' });
+    const grid = new Grid(10, 10, 1, p([0, 3, 0]), undefined, {
+      up,
+      search: 'jps',
+    });
     const route = grid.path(p([0.5, 3, 0.5]), p([9.5, 3, 9.5]));
     assert.equal(route.points.length, 2);
     assert.equal(route.points[1][up === 'z' ? 2 : 1], 3);
@@ -480,7 +484,7 @@ test('an in-progress manual traversal keeps its public id after a link is remove
 
 test('twenty agents arrive while their destination tile is reloaded every fifteen ticks', () => {
   execFileSync(process.execPath, [
-    fileURLToPath(new URL('./review/streaming.mjs', import.meta.url)),
+    fileURLToPath(new URL('./diagnostics/streaming.mjs', import.meta.url)),
   ]);
 });
 

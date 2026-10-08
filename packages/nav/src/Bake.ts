@@ -3,7 +3,8 @@ import * as nav from 'navcat';
 import type { HeightField } from '@homie-rocks/heightfield/Field.js';
 import { encodeTile, decodeTile, finishTile, type TileData } from './internal/Tile.ts';
 import { deterministicCos, deterministicSin } from './internal/Math.ts';
-import { axes, fromAxes, vector, point, positive, type Point, type Up } from './Query.ts';
+import { type Point, type Up } from './Query.ts';
+import { axes, fromAxes, vector, point, positive } from './internal/Coordinates.ts';
 export interface Triangles {
   positions: ArrayLike<number>;
   indices?: ArrayLike<number>;

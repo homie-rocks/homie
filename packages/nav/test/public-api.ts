@@ -18,3 +18,8 @@ mesh.state;
 mesh.locate(home);
 // @ts-expect-error Backend state is deliberately inaccessible.
 crowd.state;
+
+// @ts-expect-error Coordinate validators are implementation details.
+import { point } from '@homie-rocks/nav/Query.js';
+// @ts-expect-error The graph codec is private.
+import { pack } from '@homie-rocks/nav/State.js';

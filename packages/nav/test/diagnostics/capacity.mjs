@@ -51,7 +51,12 @@ m.loadTile(
 const door = m.addDoor(box);
 const edits = [];
 for (let i = 0; i < 200; i++) edits.push(timed(() => m.setDoorEnabled(door, !(i % 2))).ms);
-console.log(JSON.stringify({ doorMedianMs: median(edits), doorMaxMs: Math.max(...edits) }));
+console.log(
+  JSON.stringify({
+    doorMedianMs: median(edits),
+    doorMaxMs: Math.max(...edits),
+  }),
+);
 const grid = new Grid(2000, 2000, 1, [0, 0, 0]);
 console.log(
   JSON.stringify({

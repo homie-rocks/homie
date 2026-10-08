@@ -1,8 +1,8 @@
 import { requireState, numbers } from './Validate.ts';
 import * as nav from 'navcat';
 import type { BakeConfig, Obstacle } from '../Bake.ts';
-import { axisBounds } from '../Query.ts';
-import { pack, unpack } from '../State.ts';
+import { axisBounds } from './Coordinates.ts';
+import { pack, unpack } from './Binary.ts';
 export interface PackedCompact extends Omit<nav.CompactHeightfield, 'cells' | 'spans' | 'areas'> {
   cells: Uint32Array;
   spans: Uint32Array;

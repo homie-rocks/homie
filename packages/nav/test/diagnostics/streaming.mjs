@@ -17,7 +17,14 @@ const config = {
   stepHeight: 0.3,
   slopeDegrees: 45,
 };
-const tune = { radius: 0.3, height: 1.8, speed: 3, acceleration: 8, neighbours: 2, separation: 2 };
+const tune = {
+  radius: 0.3,
+  height: 1.8,
+  speed: 3,
+  acceleration: 8,
+  neighbours: 2,
+  separation: 2,
+};
 const tiles = [];
 for (let z = 0; z < 3; z++)
   for (let x = 0; x < 3; x++)

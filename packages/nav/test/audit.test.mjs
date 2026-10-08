@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
-import { pack, unpack } from '@homie-rocks/nav/State.js';
-import { point } from '@homie-rocks/nav/Query.js';
+import { pack, unpack } from '../dist/internal/Binary.js';
+import { point } from '../dist/internal/Coordinates.js';
 import { crowd as backend, obstacleAvoidance } from '../dist/internal/Backend.js';
 import { meshData, locate } from '../dist/internal/MeshData.js';
 import { createSlicedNodePathQuery } from 'navcat';
@@ -126,11 +126,15 @@ test('array-like points intentionally validate dimensions at runtime and ids rej
   assert.equal(mesh.removeObstacle(id), true);
 });
 
-test('shared package export exceptions require an explicit package opt-in', async () => {
+test('private helpers stay inside the package contract', async () => {
   const source = await readFile(
     new URL('../../../scripts/test/engine-package.mjs', import.meta.url),
     'utf8',
   );
-  assert.match(source, /publicModules/);
+  assert.doesNotMatch(source, /publicModules/);
+  const local = await readFile(new URL('./contract.mjs', import.meta.url), 'utf8');
+  assert.match(local, /publicModules/);
+  assert.deepEqual(Object.keys(await import('@homie-rocks/nav/Query.js')), []);
+  assert.deepEqual(Object.keys(await import('@homie-rocks/nav/State.js')).sort(), ['chunks', 'joinChunks']);
   assert.doesNotMatch(source, /if \(pj\.exports\['\.\/\*\.js'\]\)/);
 });

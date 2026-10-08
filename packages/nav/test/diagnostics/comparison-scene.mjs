@@ -3,7 +3,7 @@ import { generateSoloNavMesh } from 'recast-navigation/generators';
 import { bakeTile, heightfieldTriangles } from '@homie-rocks/nav/Bake.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
-import { hash } from '@homie-rocks/nav/State.js';
+import { hash } from '../../dist/internal/Binary.js';
 export { init };
 const config = {
   origin: [0, 0, 0],
@@ -18,7 +18,14 @@ const config = {
   slopeDegrees: 45,
 };
 const triangles = heightfieldTriangles({ heightAt: () => 0 }, -2, -2, 177, 177, 0.25);
-const tune = { radius: 0.3, height: 1.8, speed: 3, acceleration: 8, neighbours: 2, separation: 2 };
+const tune = {
+  radius: 0.3,
+  height: 1.8,
+  speed: 3,
+  acceleration: 8,
+  neighbours: 2,
+  separation: 2,
+};
 const xyz = (p) => ({ x: p[0], y: p[1], z: p[2] });
 const recastConfig = {
   cs: 0.25,

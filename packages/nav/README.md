@@ -146,18 +146,7 @@ const restored = Grid.restore(grid.save());
 | `random.next()` | Return a number in `[0,1)`; `state` holds the writable uint32 continuation. |
 | `State.js` — `chunks(bytes, limit?)` | Split into zero-copy views, default 1 MiB each. |
 | `joinChunks(parts)` | Copy ordered chunks into a single blob. |
-| `hash(bytes)` | Compute a deterministic 32-bit checksum, not a security hash. |
-| `pack(kind, value)` | Encode a data graph with aliases and typed sections; advanced use. |
-| `unpack(kind, bytes)` | Check schema/backend version, kind, length and checksum, then decode. |
-| `Query.js` — `point(p)` | Validate three finite coordinates. |
-| `vector(p)` | Copy a point into a three-number tuple. |
-| `axes(p, up?)` | Rotate world coordinates into the internal y-up frame. |
-| `fromAxes(p, up?)` | Apply the inverse rotation. |
-| `axisExtents(p, up?)` | Convert positive extent magnitudes. |
-| `axisBounds(min, max, up?, inverse?)` | Rotate a box and reorder its extrema. |
-| `positive(n, name)` | Validate a positive finite scalar. |
-| `distance(a, b)` | Calculate Euclidean distance. |
-| `draw(random)` | Validate a random draw in `[0,1)`. |
+| `Query.js` — types only | `Point`, `Vector`, `Up`, `Path`, `Ray`, `NavigationQuery`. |
 | `Three.js` — `trianglesFromObject3D(root, options?)` | Apply world transforms, instancing, draw ranges and mirrored winding. |
 | `debugMesh(mesh, crowd?)` | Build a disposable three.js diagnostic group. |
 | `disposeDebugMesh(group)` | Dispose its geometry/materials and clear the group. |

@@ -3,6 +3,14 @@ import { reachable } from './internal/Reachability.ts';
 import * as nav from 'navcat';
 import { checkConfig, checkObstacle, type BakeConfig, type Obstacle } from './Bake.ts';
 import {
+  type Vector,
+  type Up,
+  type Point,
+  type Path,
+  type Ray,
+  type NavigationQuery,
+} from './Query.ts';
+import {
   axes,
   fromAxes,
   axisExtents,
@@ -12,14 +20,8 @@ import {
   draw,
   point,
   positive,
-  type Vector,
-  type Up,
-  type Point,
-  type Path,
-  type Ray,
-  type NavigationQuery,
-} from './Query.ts';
-import { hash, pack, unpack } from './State.ts';
+} from './internal/Coordinates.ts';
+import { hash, pack, unpack } from './internal/Binary.ts';
 import { meshStates, locate, type MeshState } from './internal/MeshData.ts';
 import { decodeTile, finishTile, type TileData } from './internal/Tile.ts';
 function copyConfig(config: BakeConfig): BakeConfig {

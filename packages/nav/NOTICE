@@ -6,3 +6,7 @@ Copyright 2026 1243116 B.C. Ltd.
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 The names "Homie" and "homie.rocks" are not licensed by it (section 6 of the
 License).
+
+This product bundles a modified navcat 0.4.1 backend and uses mathcat 0.0.12,
+both licensed under MIT. Deterministic trigonometry replaces backend sine and
+cosine calls. See dist/internal/NAVCAT-LICENSE and MATHCAT-LICENSE.

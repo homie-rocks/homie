@@ -12,8 +12,9 @@ import {
 import { reachable } from './internal/Reachability.ts';
 import { Mesh } from './Mesh.ts';
 import { meshData, locate } from './internal/MeshData.ts';
-import { pack, unpack } from './State.ts';
-import { axes, fromAxes, positive, distance, type Point, type Vector } from './Query.ts';
+import { pack, unpack } from './internal/Binary.ts';
+import { type Point, type Vector } from './Query.ts';
+import { axes, fromAxes, positive, distance } from './internal/Coordinates.ts';
 export interface AgentTune {
   radius: number;
   height: number;

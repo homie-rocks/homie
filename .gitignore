@@ -11,5 +11,3 @@ plugins/homie/tsconfig.json
 
 # Local review handoff; never part of a release.
 /SUMMARY-FOR-REVIEW.md
-
-packages/nav/src/internal/Generated.ts

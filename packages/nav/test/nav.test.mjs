@@ -3,7 +3,7 @@ import test from 'node:test';
 import { bakeTile, heightfieldTriangles } from '@homie-rocks/nav/Bake.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Random } from '@homie-rocks/nav/Random.js';
-import { pack, unpack } from '@homie-rocks/nav/State.js';
+import { pack, unpack } from '../dist/internal/Binary.js';
 import { config, field, flat } from './fixtures.mjs';
 
 test('triangle bake repeats exactly, loads from bytes, and follows the heightfield', () => {

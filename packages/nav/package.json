@@ -57,7 +57,8 @@
   ],
   "scripts": {
     "build": "node scripts/runtime.mjs && tsc --build",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "prepare": "node scripts/runtime.mjs"
   },
   "dependencies": {
     "@homie-rocks/heightfield": "0.2.0",
@@ -72,5 +73,9 @@
     "three": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "recast-navigation": "0.43.1",
+    "workerd": "1.20261007.1"
   }
 }
