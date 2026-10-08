@@ -2,7 +2,12 @@
  * neighbour lists and steering scratch are rebuilt at the next tick. */
 import { crowd, pathCorridor, localBoundary, obstacleAvoidance } from './internal/Backend.ts';
 import type { crowd as CrowdTypes } from 'navcat/blocks';
-import { DEFAULT_QUERY_FILTER, getNodeByRef, isValidNodeRef } from 'navcat';
+import {
+  DEFAULT_QUERY_FILTER,
+  getNodeByRef,
+  isValidNodeRef,
+  createSlicedNodePathQuery,
+} from 'navcat';
 import { Mesh } from './Mesh.ts';
 import { meshData, locate } from './internal/MeshData.ts';
 import { pack, unpack } from './State.ts';
@@ -34,6 +39,7 @@ interface CrowdState {
   tick: number;
   revision: number;
   targets: Record<string, Vector>;
+  traversals: Record<string, number>;
 }
 const scratch = new Set([
   'obstacleAvoidanceQuery',
@@ -70,7 +76,7 @@ export class Crowd {
         data.maxIterationsPerUpdate =
           options.searchIterations;
     }
-    this.#state = { data, dt, tick: 0, revision: mesh.revision, targets: {} };
+    this.#state = { data, dt, tick: 0, revision: mesh.revision, targets: {}, traversals: {} };
   }
   get tick(): number {
     return this.#state.tick;
@@ -107,6 +113,7 @@ export class Crowd {
   }
   remove(id: number): boolean {
     delete this.#state.targets[id];
+    delete this.#state.traversals[id];
     return crowd.removeAgent(this.#state.data, String(id));
   }
   target(id: number, to: Point): boolean {
@@ -143,6 +150,7 @@ export class Crowd {
     a.velocity = [0, 0, 0];
     a.state = crowd.AgentState.WALKING;
     a.offMeshAnimation = null;
+    delete this.#state.traversals[id];
     pathCorridor.reset(a.corridor, p.nodeRef, p.position);
     localBoundary.resetLocalBoundary(a.boundary);
     const target = this.#state.targets[id];
@@ -154,7 +162,9 @@ export class Crowd {
     return true;
   }
   completeLink(id: number): boolean {
-    return crowd.completeOffMeshConnection(this.#state.data, String(id));
+    const completed = crowd.completeOffMeshConnection(this.#state.data, String(id));
+    if (completed) delete this.#state.traversals[id];
+    return completed;
   }
   agent(id: number): Agent | null {
     const a = this.#state.data.agents[id];
@@ -166,9 +176,10 @@ export class Crowd {
         ? getNodeByRef(m.nav, ref).offMeshConnectionId
         : undefined;
     const link =
-      backend === undefined
+      this.#state.traversals[id] ??
+      (backend === undefined
         ? null
-        : Number(Object.keys(m.links).find((key) => m.links[key] === backend) ?? 0) || null;
+        : Number(Object.keys(m.links).find((key) => m.links[key] === backend) ?? 0) || null);
     return {
       position: axes(a.position, this.mesh.up),
       velocity: axes(a.velocity, this.mesh.up),
@@ -216,27 +227,50 @@ export class Crowd {
         const target = s.targets[id];
         if (target) {
           const p = locate(this.mesh, target);
-          if (p.success && (a.targetState === crowd.AgentTargetState.NONE || distance(p.position, a.targetPosition) > 1e-9)) crowd.requestMoveTarget(s.data, String(id), p.nodeRef, p.position);
+          if (
+            p.success &&
+            (a.targetState === crowd.AgentTargetState.NONE ||
+              distance(p.position, a.targetPosition) > 1e-9)
+          )
+            crowd.requestMoveTarget(s.data, String(id), p.nodeRef, p.position);
         }
       }
       s.revision = this.mesh.revision;
     }
     crowd.update(s.data, m.nav, s.dt);
+    for (const id in s.data.agents) {
+      const agent = s.data.agents[id]!;
+      if (agent.state !== crowd.AgentState.OFFMESH) {
+        delete s.traversals[id];
+        continue;
+      }
+      const ref = agent.offMeshAnimation?.nodeRef;
+      if (s.traversals[id] === undefined && ref !== undefined && isValidNodeRef(m.nav, ref)) {
+        const backend = getNodeByRef(m.nav, ref).offMeshConnectionId;
+        const link = Object.keys(m.links).find((key) => m.links[key] === backend);
+        if (link !== undefined) s.traversals[id] = Number(link);
+      }
+    }
     s.tick++;
   }
   /** No tiles or mesh payload. Restore deliberately requires the shared mesh. */
   save(): Uint8Array {
     const agents: Record<string, unknown> = {};
-    for (const [id, agent] of Object.entries(this.#state.data.agents))
-      agents[id] = Object.fromEntries(Object.entries(agent).filter(([key]) => !scratch.has(key)));
+    for (const [id, agent] of Object.entries(this.#state.data.agents)) {
+      const fields = Object.fromEntries(Object.entries(agent).filter(([key]) => !scratch.has(key)));
+      // A finalized query's old node pool is scratch. Active heaps retain aliases.
+      fields.slicedQuery = agent.slicedQuery.status === 0 ? null : agent.slicedQuery;
+      agents[id] = fields;
+    }
     return pack('crowd', {
       identity: unpack('identity', this.mesh.identity()),
       state: { ...this.#state, data: { ...this.#state.data, agents } },
     });
   }
   static restore(bytes: Uint8Array, mesh: Mesh): Crowd {
-    try { return Crowd.restoreData(bytes, mesh); }
-    catch (error) {
+    try {
+      return Crowd.restoreData(bytes, mesh);
+    } catch (error) {
       if (error instanceof Error && error.message.startsWith('nav:')) throw error;
       throw new Error('nav: malformed crowd snapshot');
     }
@@ -250,6 +284,7 @@ export class Crowd {
     const s = saved.state,
       result = new Crowd(mesh, s.dt, s.data.maxAgentRadius);
     for (const a of Object.values(s.data.agents)) {
+      if (!a.slicedQuery) a.slicedQuery = createSlicedNodePathQuery();
       a.obstacleAvoidanceQuery = obstacleAvoidance.createObstacleAvoidanceQuery(32, 32);
       a.neis = [];
       a.corners = [];

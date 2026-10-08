@@ -401,8 +401,9 @@ export class Grid implements NavigationQuery {
     return pack('grid', { state: this.#state, options: this.#options });
   }
   static restore(bytes: Uint8Array): Grid {
-    try { return Grid.restoreData(bytes); }
-    catch (error) {
+    try {
+      return Grid.restoreData(bytes);
+    } catch (error) {
       if (error instanceof Error && error.message.startsWith('nav:')) throw error;
       throw new Error('nav: malformed grid snapshot');
     }

@@ -18,6 +18,21 @@ import {
 import { hash, pack, unpack } from './State.ts';
 import { meshStates, locate, type MeshState } from './internal/MeshData.ts';
 import { decodeTile, finishTile, type TileData } from './internal/Tile.ts';
+function copyConfig(config: BakeConfig): BakeConfig {
+  return {
+    ...config,
+    origin: vector(config.origin),
+    ...(config.doorRegions
+      ? {
+          doorRegions: config.doorRegions.map((box) => ({
+            ...box,
+            min: vector(box.min),
+            max: vector(box.max),
+          })),
+        }
+      : {}),
+  };
+}
 export class Mesh implements NavigationQuery {
   #state: MeshState;
   #retainedSpans = 0;
@@ -28,7 +43,7 @@ export class Mesh implements NavigationQuery {
     return this.#state.config.up ?? 'y';
   }
   get config(): BakeConfig {
-    return { ...this.#state.config, origin: vector(this.#state.config.origin) };
+    return copyConfig(this.#state.config);
   }
   constructor(config: BakeConfig, queryHalfExtents: Point) {
     checkConfig(config);
@@ -38,7 +53,7 @@ export class Mesh implements NavigationQuery {
     n.origin = axes(config.origin, config.up);
     n.tileWidth = n.tileHeight = config.cellSize * config.tileCells;
     this.#state = {
-      config: { ...config, origin: vector(config.origin) },
+      config: copyConfig(config),
       extent: axes(queryHalfExtents, config.up),
       nav: n,
       tiles: {},
@@ -64,6 +79,7 @@ export class Mesh implements NavigationQuery {
       up: c.up ?? 'y',
       minRegionCells: c.minRegionCells ?? 8,
       mergeRegionCells: c.mergeRegionCells ?? 20,
+      doorRegions: c.doorRegions ?? [],
     });
     const a = normalized(expected),
       b = normalized(t.config);
@@ -113,47 +129,50 @@ export class Mesh implements NavigationQuery {
     this.changed();
     return true;
   }
-  private rebuild(obstacle: Obstacle): void {
-    const c = this.#state.config,
-      size = c.cellSize * c.tileCells,
-      pad = (Math.ceil(c.radius / c.cellSize) + 3) * c.cellSize;
-    for (const key of Object.keys(this.#state.tiles)) {
-      const [x, z] = key.split(',').map(Number) as [number, number];
-      const x0 = axes(c.origin, c.up)[0] + x * size,
-        z0 = axes(c.origin, c.up)[2] + z * size;
-      if (
-        obstacle.max[0]! < x0 - pad ||
-        obstacle.min[0]! > x0 + size + pad ||
-        obstacle.max[2]! < z0 - pad ||
-        obstacle.min[2]! > z0 + size + pad
-      )
-        continue;
-      const data = this.#state.tiles[key]!;
+  private rebuild(changes: readonly Obstacle[]): void {
+    for (const data of Object.values(this.#state.tiles)) {
+      if (!changes.some(obstacle => this.overlaps(data, obstacle))) continue;
       const obstacles = this.overlapping(data);
       const tile = obstacles.length ? finishTile(data, obstacles) : data.baked;
-      nav.removeTile(this.#state.nav, x, z, 0);
+      nav.removeTile(this.#state.nav, data.x, data.z, 0);
       if (tile) nav.addTile(this.#state.nav, tile);
-      this.applyDoors();
     }
+    this.applyDoors();
   }
   /** Synchronous carving of affected loaded tiles; call between fixed steps. */
   addObstacle(obstacle: Obstacle): number {
-    checkObstacle(obstacle);
-    const o = { ...obstacle, min: axes(obstacle.min, this.up), max: axes(obstacle.max, this.up) };
+    return this.addObstacles([obstacle])[0]!;
+  }
+  /** Validate the whole batch, then rebuild each affected tile once. */
+  addObstacles(obstacles: readonly Obstacle[]): number[] {
+    const changes = obstacles.map(obstacle => {
+      checkObstacle(obstacle);
+      return { ...obstacle, min: axes(obstacle.min, this.up), max: axes(obstacle.max, this.up) };
+    });
     for (const tile of Object.values(this.#state.tiles))
-      if (this.overlaps(tile, o) && !tile.compact)
+      if (!tile.compact && changes.some(obstacle => this.overlaps(tile, obstacle)))
         throw new Error('nav: obstacle touches a tile without carve spans');
-    const id = this.#state.nextId++;
-    this.#state.obstacles[id] = o;
-    this.rebuild(o);
+    if (!changes.length) return [];
+    const ids = changes.map(obstacle => {
+      const id = this.#state.nextId++;
+      this.#state.obstacles[id] = obstacle;
+      return id;
+    });
+    this.rebuild(changes);
     this.changed();
-    return id;
+    return ids;
   }
   removeObstacle(id: number): boolean {
-    const o = this.#state.obstacles[id];
-    if (!o) return false;
-    delete this.#state.obstacles[id];
-    this.rebuild(o);
+    return this.removeObstacles([id]);
+  }
+  /** An unknown id rejects the entire batch without changing the mesh. */
+  removeObstacles(ids: readonly number[]): boolean {
+    const unique = [...new Set(ids)];
+    if (unique.some(id => !this.#state.obstacles[id])) return false;
+    if (!unique.length) return true;
+    const changes = unique.map(id => this.#state.obstacles[id]!);
+    for (const id of unique) delete this.#state.obstacles[id];
+    this.rebuild(changes);
     this.changed();
     return true;
   }
@@ -513,8 +532,9 @@ export class Mesh implements NavigationQuery {
   /** Supply the original assets for every saved tile, in any order. Polygon
    * allocations and salts are restored, so saved crowds retain valid corridors. */
   static restore(bytes: Uint8Array, assets: Iterable<Uint8Array>): Mesh {
-    try { return Mesh.restoreData(bytes, assets); }
-    catch (error) {
+    try {
+      return Mesh.restoreData(bytes, assets);
+    } catch (error) {
       if (error instanceof Error && error.message.startsWith('nav:')) throw error;
       throw new Error('nav: malformed mesh snapshot');
     }

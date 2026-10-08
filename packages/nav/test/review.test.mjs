@@ -199,3 +199,40 @@ test('structurally invalid snapshots fail at the public boundary with nav errors
   assert.throws(()=>Grid.restore(pack('grid',{})),/^Error: nav:/);
   assert.throws(()=>Crowd.restore(pack('crowd',{}),mesh),/^Error: nav:/);
 });
+
+
+test('configuration getters and caller arrays cannot mutate the live mesh', () => {
+  const region={min:[4,-1,-1],max:[6,3,11]},cfg={...config,doorRegions:[region]},tile=bakeTile(field(),cfg,0,0),mesh=new Mesh(cfg,[2,2,2]);mesh.loadTile(tile);
+  const bytes=mesh.save();region.min[0]=100;mesh.config.doorRegions[0].max[0]=100;assert.deepEqual(mesh.save(),bytes);
+  assert.throws(()=>new Mesh(config,[2,2,2]).loadTile(tile),/configuration/);
+});
+
+
+test('an in-progress manual traversal keeps its public id after a link is removed', () => {
+  const mesh=flat();mesh.addObstacle({min:[4,-1,-1],max:[6,3,11]});const link=mesh.addLink([3,.1,5],[7,.1,5],.6,true);
+  const crowd=new Crowd(mesh,.05,.3),id=crowd.add([2,.1,5],{...tune,manualLinks:true});crowd.target(id,[8,.1,5]);
+  for(let i=0;i<100&&crowd.agent(id).status!=='link';i++)crowd.step();assert.equal(crowd.agent(id).link,link);
+  mesh.removeLink(link);assert.equal(crowd.agent(id).link,link);const restored=Crowd.restore(crowd.save(),mesh);assert.equal(restored.agent(id).link,link);
+  restored.completeLink(id);assert.equal(restored.agent(id).link,null);
+});
+
+test('twenty agents arrive while their destination tile is reloaded every fifteen ticks', () => {
+  execFileSync(process.execPath,[fileURLToPath(new URL('./review/streaming.mjs',import.meta.url))]);
+});
+
+test('obstacle batches rebuild once and reject invalid batches without partial edits', () => {
+  const tile = bakeTile(field(), config, 0, 0);
+  const mesh = new Mesh(config, [2,2,2]), sequential = new Mesh(config, [2,2,2]);
+  mesh.loadTile(tile); sequential.loadTile(tile);
+  const boxes = [{min:[3,-1,3],max:[4,3,4]}, {min:[6,-1,6],max:[7,3,7]}];
+  const ids = mesh.addObstacles(boxes);
+  for (const box of boxes) sequential.addObstacle(box);
+  assert.deepEqual(mesh.debug().triangles, sequential.debug().triangles);
+  const saved = mesh.save();
+  assert.equal(mesh.removeObstacles([ids[0], 999]), false);
+  assert.deepEqual(mesh.save(), saved);
+  assert.throws(() => mesh.addObstacles([boxes[0], {min:[NaN,0,0],max:[1,1,1]}]), /nav:/);
+  assert.deepEqual(mesh.save(), saved);
+  assert.equal(mesh.removeObstacles(ids), true);
+  assert.equal(mesh.raycast([1,.1,1],[9,.1,9]).clear, true);
+});
