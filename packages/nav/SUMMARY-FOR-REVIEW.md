@@ -1,161 +1,56 @@
-# Navigation 0.1.0 review
+# Navigation review disposition
 
-Implemented `@homie-rocks/nav` in `packages/nav`. Outside this package, only the
-root workspace list, TypeScript reference list and dependency lockfile changed.
-Other package versions and CHANGELOG.md were not changed. Work is committed on
-the current branch with sign-offs; nothing was pushed and no pull request opened.
+Measured on Apple M4, Node 22.22.2, 2026-10-07, with concurrent desktop/test activity; ranges describe observed runs, not production guarantees. Reproduction scripts and repeatable comparisons are in test/review/. Original code was rebuilt from 8bc05d2; the reviewer's scratchpad scripts are absent from this checkout, so equivalent fixtures are identified below.
 
-## Decisions
+B1 — Closed: reproduced 380,950-byte 10 m tile, 172,297-byte empty tile and 3,914,795-byte one-agent snapshot; versioned/checksummed binary sections now give 739-byte static tile, 222-byte empty tile, 60,135-byte editable tile, and 79,777-byte four-tile/300-agent state; static assets never enter crowd saves, restore takes the shared mesh, chunks default to 1 MiB, active query state survives exactly, and finalized query pools are omitted.
+M1 — Closed: reproduced permanent invalid state after floor reload; status, place(), retained targets, automatic recovery, speed changes and agent enumeration are implemented; unload/reload and enclosing-obstacle add/remove tests pass in both axes.
+M2 — Closed: reproduced 107.98/51.38 ms add/remove on a 40 m tile and blanket target resets; decoded spans are cached, only overlapping tiles/obstacles rebuild, irrelevant edits preserve agent motion, authored doors toggle flags, and batches rebuild each tile once (200 boxes: 14.55 ms add/0.26 ms remove); equivalent destination-streaming fixture arrives at tick 203 with or without edits, whereas the original equivalent fixture measured 203/204, so the review's exact 1,594-tick scene was not independently reproduced without its missing script.
+M3 — Closed: installed exact recast-navigation 0.43.1 and tested both engines in Node, Safari and workerd on the same 40 m scene/300 agents; Node navcat bake 32–55 ms/query .0030 ms/step median 3.29 ms versus Recast 6.0–7.6/.0082/.983; workerd 35–42/.0038/2.62 versus 12.6–18.3/.0066/.994; Safari 22–34/.001/2–3 versus 5–8/.001–.004/1 in the final observed run; exported static assets 729 versus 424 bytes; repeated asset/position hashes agree across environments, default Worker WASM compilation rejection is tested, imported WASM succeeds, and exact sliced-crowd persistence motivates retaining navcat.
+M4 — Closed: reproduced two sin and two cos calls in a walking step; pinned generated backend replaces them with deterministic arithmetic, slope classification does likewise, all prohibited maths throw during tested bake/edit/query/step/restore paths, both Y-up and Z-up match Node/workerd/JavaScriptCore bytes, and README defines static-build assets plus declared binary room state.
+M5 — Closed: reproduced 547.92 ms/3,999-waypoint 2,000² grid path; eight directions, octile costs, no corner cutting, optional proven PathFinding.js JPS, iterative jumps, raycast smoothing, reusable arrays and component caches now yield two points in .65–9.31 ms, nearest .010–.023 ms and random .036–.079 ms; independent Dijkstra checks A*/JPS costs on 150 random maps.
+M6 — Closed: reproduced disconnected adjacent tiles with missing halos; bakeLevel buckets geometry with internal halos, bakeHeightfield accepts a world rectangle, and loadTile reports unstitched neighbouring borders; integration tests cross automatically baked tiles in both axes.
+M7 — Closed: reproduced all three strict TypeScript point errors, id-zero links and public backend state; all point inputs accept ArrayLike, outputs feed inputs, IDs are positive numbers, unknown IDs consistently return false, endpoints validate placement, paths and agents expose public link IDs, in-flight IDs survive link removal/save, and backend state/types are private with declaration and compiler tests.
+M8 — Closed: added optional Three.js module with transformed/indexed/mirrored/instanced geometry import, debug tiles/links/agents, Z-up conversion and disposal; optional exact Three peer, import-graph test and no DOM library in core compilation.
+MINOR 1 — Closed: published measured ranges and desktop load conditions instead of one apparently universal timing; standalone reproducible performance scripts stay outside normal unit tests.
+MINOR 2 — Closed: fixed-step comparisons use .05 seconds, include real workerd, and label Worker step timings as host-observed ten-step batch means; room workload/save measurements are separate from flat-scene throughput.
+MINOR 3 — Accepted limitation, documented and measured: soft avoidance is not collision enforcement; 300 agents at a 1.5 m door reached .077 m minimum spacing/658 deep-overlap samples and 223 crossings in 1,000 ticks; 400 at 4 m reached .191 m/45 samples/all crossed; no claim of rigid separation or universal doorway throughput remains.
+MINOR 4 — Closed: synchronous profiling suppression retains try/finally restoration and comments describing the pinned dependency assumption; clock-throwing tests guard all reached core paths, and source hashing makes backend upgrades explicit.
+MINOR 5 — Closed: reproduced overhead y=1.95 blocking a 1.8 m agent; corrected voxel-floor offset in carving, with headroom regression coverage.
+MINOR 6 — Closed: reproduced returned floor .10000000000000009; README explains raster navigation height and projecting render positions to the actual ground.
+MINOR 7 — Closed by documenting independent step-per-cell and slope constraints; reproduced 78-degree ramp rejection with stepHeight .3/cellSize .25 despite slopeDegrees 80, and tested both axes rather than promising slope overrides ledge clearance.
+MINOR 8 — Closed: configurable positive region thresholds remove specks by default, disconnected targets are rejected, and tests distinguish reachable goals from merely nearby floor.
+MINOR 9 — Closed: reproduced raw malformed-JSON error; binary header/checksum/shape validation and restore guards now produce nav-prefixed errors for truncation, corruption and invalid retained-span records.
+MINOR 10 — Closed: reproduced private restored mesh; Crowd.restore(bytes, mesh) preserves shared identity and rejects mismatches; Mesh.restore(bytes, assets) restores topology/node allocations without embedding asset bytes.
+MINOR 11 — Closed: uint32 seed validation rejects silent high-bit truncation; README restricts the LCG to deterministic sampling, not security or statistical simulation.
+MINOR 12 — Closed: mesh reachable sets use a bounded revision-invalidated cache; grid component labels/members are cached and repeated nearest/random tests exercise reuse.
+MINOR 13 — Closed within requested scope: heavy tools moved to root development dependencies, versions pinned, standalone performance separated, core excludes DOM types, licences ship with generated code; this requested summary is intentionally retained and the root package table remains a merge-time action per the original brief.
+MINOR 14 — Closed: main implementation expanded into documented methods and private codec/tile/math/backend/search modules, explicit public types and validation; generated upstream code remains generated, while small test fixtures use compact notation.
 
-- Wrap MIT-licensed navcat 0.4.1, with its exact mathcat 0.0.12 dependency, for
-  Recast/Detour-style baking, polygon queries and crowds. Compatible with this
-  Apache-2.0 package. TypeScript permits synchronous loading and complete
-  inspectable snapshots in all three runtimes. Recast WASM was considered but
-  not installed or runtime-tested; its loader and opaque simulation state add
-  complexity that this implementation avoids.
-- Use world metres and Y up, matching heightfield/walk. Triangles support stacked
-  floors; a heightfield adapter samples its actual height function with no skirts.
-- Bake independent XZ tiles with a clearance halo and shared configuration.
-  Store finished polygons and pristine compact spans as versioned bytes. Static
-  loading decodes polygons; obstacle edits rebuild affected tiles from spans.
-- Keep all state in plain numeric records/arrays. A graph codec retains aliases
-  in search heaps, special IEEE values and typed arrays. Complete crowd snapshots
-  include mesh, links, obstacles, queued searches and off-mesh traversal progress.
-- Caller owns fixed ticks and seeded random choices. No DOM, renderer, native
-  addon or I/O in core. Temporarily disable upstream rasterizer profiling hooks
-  synchronously to prevent clock access, restoring in finally. This workaround
-  and the byte format are pinned to the backend version.
-- Flat games get deterministic four-neighbour A* with uniform costs and exact
-  shortest grid routes. Optional JPS is omitted to avoid another unneeded search
-  implementation. Mesh routes use polygon A* and funnel straightening, with the
-  usual corridor approximation rather than a global continuous-geodesic proof.
-- Runtime obstacles are boxes; directed/bidirectional links represent jumps and
-  doors. Local avoidance uses the upstream sampled velocity solver. Navigation
-  does not replace collision, jump physics or gameplay permissions.
+MISSING 1, triangle/heightfield bake — Closed by whole-level halo bucketing and rectangular heightfield bake, retaining radius/height/step/slope controls and explicit axes.
+MISSING 1, shippable bytes — Closed by binary static tiles (739 bytes for 100 m², 742 for 1,600 m²) and optional editable spans (60,135/197,415/711,982 bytes at 10/20/40 m); cells use 8 packed bytes and spans 17 before section/header metadata.
+MISSING 2, queries — Preserved nearest reachable, seeded random, raycast and funnel paths; independent small-mesh geodesic oracle and fixed-fixture polygon/golden-byte assertions protect backend assumptions.
+MISSING 3, crowds — Closed by .05-second room tests, recoverable placement/status and exact active-query continuation at 300 agents; snapshot state averages roughly 258–266 bytes/agent in measured rooms, variable with corridors/frontiers.
+MISSING 4, streamed tiles — Closed by compact static assets, cached editable assets, seam diagnostics, recoverable floor disappearance and selective corridor invalidation; no full-crowd reset on irrelevant edits.
+MISSING 4, links — Closed by stable positive public IDs, bidirectionality/toggles and manualLinks/completeLink traversal control so game rules can implement jumps/doors without arbitrary callbacks inside deterministic stepping.
+MISSING 5, obstacles — Closed by box/cylinder carving, bounded retained-span memory, batch changes and authored non-rebaking door regions; large arbitrary carves remain synchronous and must be scheduled between ticks.
+MISSING 6, grid JPS — Closed with exact pinned MIT PathFinding.js, eight directions, smoothing and independent cost/conformance tests.
+MISSING, separate three helpers — Closed by optional Three.js export, core import isolation and renderer disposal tests.
+MISSING, rooms design — Closed by explicit up option defaulting to y, tested z ground coordinates in metres, arithmetic-only stepped path and documented static asset/declared binary state integration; no rooms compiler integration is claimed.
+MISSING, typed binary state — Closed by one versioned buffer with typed payloads, content identities instead of nested asset snapshots, checksums and chunked storage/reassembly tests.
+MISSING, library experiment — Closed by actual exact-version Node/browser/workerd Recast runs, default-loader negative test and measured comparison; npm-installed licences were checked for Apache-2.0 compatibility (MIT dependencies and zlib Recast), with bundled backend licence texts included.
+MISSING, examples — Preserved heightfield walk and fifty-agent doorway examples, updated for whole-level baking, binary persistence, axis selection and public IDs.
+MISSING, measured performance — Closed by standalone comparison/capacity/memory/crowding/streaming scripts and README ranges; not a claim that desktop timings guarantee a hosted 50 ms room budget.
+MISSING, determinism — Closed by same-state repeats, cross-process/runtime hashes, restore-before-every-tick tests and forbidden-host-call guards, including both up modes.
+MISSING, green repository checks — Partially blocked: npm ci with temporary cache and npm run build pass; navigation suite passes; npm test was run but studio Chrome/process tests fail under this sandbox, and a bounded full-suite rerun reports 730 passed, 11 failed, 4 cancelled, 3 skipped out of 748; reviewer results on an unrestricted machine are accepted, not disputed.
+MISSING, brush context — Read Collide.ts and accounted for box/cylinder geometry; dedicated brush adapter was not required by the brief, while transformed scene import and generic box/cylinder APIs cover the specified inputs.
 
-The README explains the reasons, tuning, tile halo contract, loading in Node,
-browsers and Workers, snapshot semantics and limits in detail. It includes
-executable heightfield/walker and fifty-agent doorway examples; both ran to
-completion on this machine.
+LIBRARY CHOICE 1 — Closed by the measured three-runtime alternative experiment, including the required imported WASM Worker path.
+LIBRARY CHOICE 2 — Closed by private backend storage and public declaration checks: swapping the engine no longer exposes navcat types as package contracts.
+LIBRARY CHOICE 3 — Closed by independent Dijkstra/geodesic checks, known polygon fixtures and a 739-byte golden tile/checksum 2290920047 that fails on backend drift.
+LIBRARY CHOICE 4 — Closed by source-hash-guarded generated deterministic backend and authored area/flag doors; generated licence files are included in the distributable and installation files are never patched.
+LIBRARY CHOICE 5 — No conversion project needed: no evidence requires offline C++ baking; Recast interoperability is not claimed and the format remains explicitly versioned package data.
+MEMORY — Four-tile/300-agent process: resident JS heap 17.9 MB, save transient 9.2–9.5 MB, sampled post-restore heap 24.4–37.2 MB plus about 1 MB array buffers; save 5.4–12.7 ms/restore 5.3–5.6 ms; tests assert sampled heap+buffers below 64 MiB and snapshot below 300 KB, while retained editable cells/spans are capped at 250,000/200,000 per mesh.
+TIMING — Separate 300-agent door-region snapshot is 78,770 bytes; observed save medians 3.99–14.75 ms, maximum 37.47 ms; restore medians 1.51–5.09 ms, maximum 12.73 ms; CI assertions enforce 50 ms for the room fixture, not arbitrary worst-case searches.
+REMAINING — Full repository green validation needs an environment that permits Chrome's Mach bootstrap and process inspection; no tests were disabled to hide those failures, automated Chrome is optional here, actual Safari plus automated JavaScriptCore/workerd passed, hard crowd collision is intentionally outside soft steering, root README registration is deferred to merge, and nothing was pushed or submitted as a pull request.
 
-## API
-
-- `Bake.js`: `BakeConfig`, `Triangles`, `Obstacle`, `heightfieldTriangles`, `bakeTile`.
-- `Mesh.js`: tile load/unload; path, nearest reachable, seeded random reachable and
-  nav ray queries; obstacle add/remove; link add/remove/enable; save/restore.
-- `Crowd.js`: fixed-step crowd; add/remove, target/stop, agent position/velocity,
-  arrival check, step, save/restore including the associated mesh.
-- `Grid.js`: same query interface, mutable blocked cells and save/restore.
-- `Query.js`: `NavigationQuery`, `Point`, `Path`, `Ray`.
-- `Random.js`: integer seeded generator with a one-word typed-array state.
-- `State.js`: internal versioned graph codec, normally used through class methods.
-
-## Verification and output
-
-Commands ran from the repository root. npm used a writable temporary cache
-because the default cache is outside the sandbox's writable locations.
-
-```text
-npm ci
-added 101 packages, and audited 126 packages in 9s
-found 0 vulnerabilities
-
-npm run build
-> build
-> tsc --build
-(exit 0)
-
-node --test packages/nav/test/*.test.mjs
-# tests 28
-# pass 27
-# fail 0
-# skipped 1
-
-node --test [all engine packages' test/*.test.mjs]
-# tests 174
-# pass 173
-# fail 0
-# skipped 1
-
-npm pack --workspace=@homie-rocks/nav --dry-run --json
-name: @homie-rocks/nav, version: 0.1.0
-39 files, 146738 unpacked bytes
-
-npm run leaks
-LEAK AUDIT — CLEAN
-```
-
-The skipped test is automated Chrome, opt-in through CHROME_PATH. The portable
-fixture also ran in the existing Safari browser via `test/browser-check.mjs`:
-
-```text
-PASS: browser matches Node, 1565773 characters including baked bytes and restored crowd state
-workerd: exact state match
-README examples: PASS
-```
-
-The same workload bakes, carves, queries, samples from a seed, steps eight agents
-and saves/restores while Math.random, Date.now and performance.now throw. Local
-workerd runs without Node compatibility. Safari and Node produced the same full
-serialized output. This proves the tested fixture, not every engine/version.
-
-Behaviour tests cover dimensions, radius clearance, step and slope limits,
-headroom, stacked floors, tile stitching/unloading/reloading, links reconnecting
-on tile reload, directed and disabled links, overlapping obstacles and removal,
-reachable components, floor-aware rays, grid A* against a BFS oracle, walking to
-a target, fifty agents crossing a doorway with separation, exact repeated seeded
-runs, and restore during sliced searches, off-mesh traversal and replanning.
-
-**The full repository `npm test` is not green in this environment.** It was run
-and reached the existing studio browser tests, where Chrome cannot launch from
-the sandbox. Its browser harness leaves an open handle, so the aggregate run
-stops reporting results and was interrupted. A focused reproduction reported:
-
-```text
-node --test --test-timeout=30000 packages/studio/test/art-mcp.test.mjs
-ok 1 - art tools: listed with their cards; ...
-not ok 2 - the style board card in a browser: ...
-error: Failed to launch the browser process: Code: null
-code: ERR_TEST_FAILURE
-```
-
-Repeating the aggregate run with timeout/force-exit flags did not close that
-existing harness. No other package was edited to change its tests or skip logic.
-The separate complete engine-package run above is green. A host able to launch
-Chrome is still needed for the full repository suite.
-
-## Performance
-
-Apple M4, Node v22.22.2, 2026-10-07; standalone
-`node --test packages/nav/test/performance.test.mjs`:
-
-| measurement | result |
-|---|---:|
-| 61,952-triangle full tile bake median | 137.03 ms |
-| path query median / p95 | 0.0129 / 0.0357 ms |
-| 300 moving agents, step median / p95 | 2.876 / 3.405 ms |
-| baked tile size | 4,604,150 bytes |
-
-The README gives warm-up/sample counts. These measurements include real work and
-have no hardware-dependent pass threshold. They do not promise production
-Worker CPU budgets or mobile frame rates.
-
-## Not done and known limits
-
-No cloud deployment, rooms-rule adapter, Z-up conversion, three.js importer or
-debug renderer, asynchronous scheduler, asset compression, custom area costs,
-cylinder obstacles, grid crowd steering, JPS, moving platforms or custom link
-callbacks. Application code must load destination tiles, schedule fixed ticks,
-manage assets and animate/validate link traversal.
-
-Box carving is synchronous and relatively expensive. Avoid inserting boxes on
-standing agents; there is no physical push-out guarantee. Crowd avoidance is
-local and may overlap or congest, especially in opposing flows. Paths depend on
-voxel resolution, contour simplification and snapping. Snapshots contain trusted
-build/server data and are large; there is no untrusted-input schema or migration
-promise across backend versions. Exposed state should be treated as read-only.
-
-Backend floating-point/trigonometric operations mean cross-engine lockstep is
-not universally guaranteed despite matching the tested Node, Safari and workerd
-fixture. Keep server authority and client reconciliation. No production Worker
-CPU/memory soak, mobile throughput study or broad browser-version matrix was run.
+FINAL CHECKS — npm ci --cache /tmp/nav-npm-cache passed with zero vulnerabilities; npm run build passed; final navigation tests: 56 total, 55 passed, zero failed, one optional Chrome skip, 4.65 seconds; npm run leaks: CLEAN, 1,135 tracked/new files; git diff --check passed; full-repository limitations remain as recorded above.
