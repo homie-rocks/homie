@@ -1,73 +1,128 @@
-/**
- * Versioned bytes for numeric object graphs. References matter: a sliced search's
- * heap and node pool point at the SAME nodes. JSON alone silently breaks that.
- * This codec keeps references, IEEE special values and typed arrays. No executable
- * content is stored; the one query filter is rebound by identity on load.
+/** Binary graph format, little endian, with shared object shapes and references.
+ * The 16-byte header is magic, version, payload length, and checksum. Typed arrays
+ * are copied as raw sections; no numeric text or recursively encoded byte blobs.
+ * Object references preserve the sliced search heap's aliases.
  */
 import { DEFAULT_QUERY_FILTER } from 'navcat';
-const constructors = { Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array, Float32Array, Float64Array };
-type Token = null | boolean | string | number | { r: number } | { n: string };
-type RecordData = { kind: string; values: Token[]; keys?: string[] };
-export function pack(kind: string, value: unknown): Uint8Array {
-  const seen = new Map<object, number>(), records: RecordData[] = [];
-  function visit(v: unknown): Token {
-    if (v === undefined) return { n: 'undefined' };
-    if (v === DEFAULT_QUERY_FILTER) return { n: 'filter' };
-    if (typeof v === 'number') return Number.isFinite(v) && !Object.is(v, -0) ? v : { n: String(Object.is(v, -0) ? '-0' : v) };
-    if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
-    if (typeof v !== 'object') throw new Error('nav: state must contain data only');
-    const old = seen.get(v); if (old !== undefined) return { r: old };
-    const id = records.length; seen.set(v, id);
-    const rec: RecordData = { kind: 'object', values: [] }; records.push(rec);
-    if (Array.isArray(v)) { rec.kind = 'array'; rec.values = Array.from(v, visit); }
-    else if (ArrayBuffer.isView(v) && !(v instanceof DataView)) {
-      rec.kind = v.constructor.name;
-      if (!(rec.kind in constructors)) throw new Error('nav: unsupported typed array');
-      rec.values = Array.from(v as unknown as ArrayLike<number>, visit);
-    } else {
-      if (Object.getPrototypeOf(v) !== Object.prototype && Object.getPrototypeOf(v) !== null) throw new Error('nav: unsupported state object');
-      rec.keys = Object.keys(v); rec.values = rec.keys.map(k => visit((v as Record<string, unknown>)[k]));
-    }
-    return { r: id };
-  }
-  const root = visit(value);
-  return new TextEncoder().encode(JSON.stringify({ format: 'homie-nav', version: 1, backend: 'navcat-0.4.1', kind, root, records }));
+const arrays = [Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array, Float32Array, Float64Array] as const;
+const MAGIC = 0x324e4d48;
+export function hash(bytes: Uint8Array): number {
+  let value = 2166136261;
+  for (const byte of bytes) value = Math.imul(value ^ byte, 16777619);
+  return value >>> 0;
 }
-/** Read trusted game assets/saves, never arbitrary player input. */
+export function pack(kind: string, value: unknown): Uint8Array {
+  let bytes = new Uint8Array(4096), offset = 16;
+  const objects = new Map<object, number>(), strings = new Map<string, number>(), shapes = new Map<string, number>();
+  const reserve = (count: number): void => {
+    if (offset + count <= bytes.length) return;
+    const next = new Uint8Array(Math.max(bytes.length * 2, offset + count));
+    next.set(bytes); bytes = next;
+  };
+  const byte = (n: number): void => { reserve(1); bytes[offset++] = n; };
+  const uint = (n: number): void => { while (n > 127) { byte((n & 127) | 128); n = Math.floor(n / 128); } byte(n); };
+  const string = (s: string): void => {
+    const id = strings.get(s);
+    if (id !== undefined) { uint(id * 2); return; }
+    strings.set(s, strings.size);
+    uint(s.length * 2 + 1);
+    // UTF-16 code units preserve every JavaScript string, without platform codecs.
+    for (let i = 0; i < s.length; i++) uint(s.charCodeAt(i));
+  };
+  const write = (v: unknown): void => {
+    if (v === null) { byte(0); return; }
+    if (v === undefined) { byte(1); return; }
+    if (v === false || v === true) { byte(v ? 3 : 2); return; }
+    if (v === DEFAULT_QUERY_FILTER) { byte(4); return; }
+    if (typeof v === 'number') {
+      if (Number.isSafeInteger(v) && v >= 0 && v <= 0xffffffff && !Object.is(v, -0)) { byte(5); uint(v); }
+      else { byte(6); reserve(8); new DataView(bytes.buffer).setFloat64(offset, v, true); offset += 8; }
+      return;
+    }
+    if (typeof v === 'string') { byte(7); string(v); return; }
+    if (typeof v !== 'object') throw new Error('nav: state must contain data only');
+    const ref = objects.get(v);
+    if (ref !== undefined) { byte(8); uint(ref); return; }
+    objects.set(v, objects.size);
+    if (Array.isArray(v)) { byte(9); uint(v.length); for (const item of v) write(item); return; }
+    if (ArrayBuffer.isView(v)) {
+      const type = arrays.findIndex(c => v instanceof c);
+      if (type < 0) throw new Error('nav: unsupported typed array');
+      byte(11 + type); uint(v.byteLength); reserve(v.byteLength);
+      bytes.set(new Uint8Array(v.buffer, v.byteOffset, v.byteLength), offset); offset += v.byteLength;
+      return;
+    }
+    if (Object.getPrototypeOf(v) !== Object.prototype && Object.getPrototypeOf(v) !== null) throw new Error('nav: unsupported state object');
+    byte(10);
+    const keys = Object.keys(v), signature = keys.map(k => `${k.length}:${k}`).join('');
+    const shape = shapes.get(signature);
+    if (shape !== undefined) uint(shape * 2);
+    else { shapes.set(signature, shapes.size); uint(keys.length * 2 + 1); for (const key of keys) string(key); }
+    for (const key of keys) write((v as Record<string, unknown>)[key]);
+  };
+  string(kind); write(value);
+  const result = bytes.slice(0, offset), header = new DataView(result.buffer);
+  header.setUint32(0, MAGIC, true); header.setUint32(4, 2, true);
+  header.setUint32(8, offset, true); header.setUint32(12, hash(result.subarray(16)), true);
+  return result;
+}
+/** Assets and room saves, not player input. Invalid or truncated data fails here. */
 export function unpack<T>(kind: string, bytes: Uint8Array): T {
-  const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-  if (data.format !== 'homie-nav' || data.version !== 1 || data.backend !== 'navcat-0.4.1' || data.kind !== kind || !Array.isArray(data.records)) throw new Error('nav: incompatible state bytes');
-  const records = data.records as RecordData[];
-  const objects = records.map(r => {
-    if (!Array.isArray(r.values)) throw new Error('nav: invalid state record');
-    if (r.kind === 'object') return {};
-    if (r.kind === 'array') return [];
-    if (!Object.hasOwn(constructors, r.kind)) throw new Error('nav: invalid state array');
-    return new constructors[r.kind as keyof typeof constructors](r.values.length);
-  });
-  function read(t: Token): unknown {
-    if (t === null || typeof t !== 'object') return t;
-    if ('r' in t) {
-      if (!Number.isInteger(t.r) || t.r < 0 || t.r >= objects.length) throw new Error('nav: invalid state reference');
-      return objects[t.r];
-    }
-    switch (t.n) {
-      case 'undefined': return undefined;
-      case 'filter': return DEFAULT_QUERY_FILTER;
-      case '-0': return -0;
-      case 'NaN': return NaN;
-      case 'Infinity': return Infinity;
-      case '-Infinity': return -Infinity;
-      default: throw new Error('nav: invalid state number');
-    }
-  }
-  records.forEach((r, i) => {
-    const out = objects[i] as Record<string, unknown>;
-    r.values.forEach((v, j) => {
-      const key = r.kind === 'object' ? r.keys?.[j] : String(j);
-      if (key === undefined || key === '__proto__' || key === 'constructor' || key === 'prototype') throw new Error('nav: invalid state key');
-      out[key] = read(v);
-    });
-  });
-  return read(data.root) as T;
+  try {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (bytes.length < 16 || view.getUint32(0, true) !== MAGIC || view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== bytes.length || view.getUint32(12, true) !== hash(bytes.subarray(16))) throw Error();
+    let offset = 16;
+    const objects: unknown[] = [], strings: string[] = [], shapes: string[][] = [];
+    const byte = (): number => { if (offset >= bytes.length) throw Error(); return bytes[offset++]!; };
+    const uint = (): number => {
+      let result = 0, factor = 1;
+      for (let n = 0; n < 5; n++) { const b = byte(); result += (b & 127) * factor; if (b < 128) return result; factor *= 128; }
+      throw Error();
+    };
+    const string = (): string => {
+      const code = uint();
+      if (!(code & 1)) { const s = strings[code / 2]; if (s === undefined) throw Error(); return s; }
+      const length = Math.floor(code / 2); if (length > bytes.length - offset) throw Error();
+      let s = ''; for (let i = 0; i < length; i++) s += String.fromCharCode(uint()); strings.push(s); return s;
+    };
+    const read = (depth = 0): unknown => {
+      if (depth > 256) throw Error();
+      const tag = byte();
+      if (tag < 5) return [null, undefined, false, true, DEFAULT_QUERY_FILTER][tag];
+      if (tag === 5) return uint();
+      if (tag === 6) { const n = view.getFloat64(offset, true); offset += 8; return n; }
+      if (tag === 7) return string();
+      if (tag === 8) { const id = uint(); if (id >= objects.length) throw Error(); return objects[id]; }
+      if (tag === 9) {
+        const n = uint(); if (n > bytes.length - offset) throw Error();
+        const a: unknown[] = []; objects.push(a); for (let i = 0; i < n; i++) a.push(read(depth + 1)); return a;
+      }
+      if (tag === 10) {
+        const out: Record<string, unknown> = {}; objects.push(out);
+        const code = uint(); let keys: string[];
+        if (code & 1) { keys = []; const n = Math.floor(code / 2); if (n > bytes.length - offset) throw Error(); for (let i = 0; i < n; i++) keys.push(string()); shapes.push(keys); }
+        else { keys = shapes[code / 2]!; if (!keys) throw Error(); }
+        for (const key of keys) { if (['__proto__', 'constructor', 'prototype'].includes(key)) throw Error(); out[key] = read(depth + 1); }
+        return out;
+      }
+      const ctor = arrays[tag - 11]; if (!ctor) throw Error();
+      const n = uint(); if (n % ctor.BYTES_PER_ELEMENT || n > bytes.length - offset) throw Error();
+      const a = new ctor(bytes.slice(offset, offset + n).buffer); offset += n; objects.push(a); return a;
+    };
+    if (string() !== kind) throw Error();
+    const out = read(); if (offset !== bytes.length) throw Error(); return out as T;
+  } catch { throw new Error('nav: invalid or incompatible state bytes'); }
+}
+/** Zero-copy views of a save, suitable for SQLite values under the 2 MiB limit.
+ * Store the count and all chunks atomically; reassemble before restore.
+ */
+export function chunks(bytes: Uint8Array, limit = 1_048_576): Uint8Array[] {
+  if (!Number.isInteger(limit) || limit < 16 || limit > 2_000_000) throw new Error('nav: invalid chunk size');
+  const result: Uint8Array[] = [];
+  for (let i = 0; i < bytes.length; i += limit) result.push(bytes.subarray(i, i + limit));
+  return result;
+}
+export function joinChunks(parts: readonly Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let offset = 0; for (const part of parts) { out.set(part, offset); offset += part.length; } return out;
 }
