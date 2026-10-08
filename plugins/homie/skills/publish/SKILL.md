@@ -127,11 +127,11 @@ licence that forbids a web game, or a credit it owes but does not show (`npx --n
 <id>` names each one and its fix; the `models` skill has the rules). Fix them, deploy, then publish.
 
 Call the Homie MCP tool `studio_publish` with the live site (or run
-`npx --no-install homie-studio publish`). It answers with each listed game's Play link. A game
-refused for a protected name stays on the studio's site but is not listed. The directory
-is in beta: at most 12 games per studio are listed, names and blurbs are checked (plain
-text, no links), and its owner can unlist a listing. Anyone can report a listing; only
-the directory's owner acts on reports, never an AI.
+`npx --no-install homie-studio publish`). It answers with each listed game's Play link, and
+with anything it did not list and why. The directory is in beta: at most 12 games per
+studio are listed, names and blurbs are checked (plain text, no links), and its owner can
+unlist a listing. Anyone can report a listing; only the directory's owner acts on
+reports, never an AI.
 
 The beta also caps how many times a studio may publish in a day. `publish` (and `studio_publish`) says how many are
 left when the directory gives the number, and before it sends, how many this computer has sent today; the local
@@ -187,15 +187,6 @@ identified, nothing sent anywhere; prefetches, crawlers and house QA are not cou
 - Who is playing right now, talking to players, kicking or muting one, an invite-only beta
   or a private game: the `office` skill (`npx --no-install homie-studio office`). An office
   key (`office key`) also reads these stats.
-
-## Grants (protected names)
-
-To publish under a protected name (one of the homie.rocks house games) call
-`studio_request_grant` { site, game, reason }. It returns a link for the OWNER. Show it
-to the person; the owner approves with one tap in their own browser after a one-time
-sign-in link reaches the owner's address. You cannot approve it and must never try
-(no tool can; the approval page needs the owner's own browser session). Check with
-`studio_grant_status`, then `studio_publish` again once approved.
 
 ## Tell Homie
 

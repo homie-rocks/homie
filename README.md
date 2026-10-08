@@ -321,12 +321,6 @@ repository:
   yes to, kept privately with the website's feedback. It holds the note's kind, words, step, the studio's and
   plugin's versions and the app, and a reply address only when typed; never files, logs or keys
   ([privacy](https://homie.rocks/privacy/)).
-- **Protected names.** Homie's own games' names are protected: a studio that wants one
-  asks with `studio_request_grant`, and only the name's owner can approve it.
-- **Release tarballs.** homie.rocks serves every published `@homie-rocks/studio` version
-  at `https://homie.rocks/npm/homie-studio-<version>.tgz`, the same bytes as the npm
-  registry's. Studios made before 0.10.0 pin those; a new studio pins the registry's
-  exact version, which Workers Builds and Claude Code cloud sessions reach by default.
 
 homie.rocks itself and Homie's own games (their
 code, art, music and names) are not open source; the engine they are built on is.
@@ -360,8 +354,6 @@ The friends beta, as of this version:
 - **The Homie MCP server allows about 60 requests a minute per address**, and the
   directory about 10 writes a minute per address and per studio. An agent that loops
   gets "too many requests" and should wait a minute.
-- **Protected names.** Homie's own games' names, their look-alikes and longer forms
-  ("… Remix") are refused in the directory unless their owner grants them.
 
 Something else? [Open an issue](https://github.com/homie-rocks/homie/issues/new/choose):
 a bug, a port request or a question. Or tell Claude: it can send the people who make Homie a short note,

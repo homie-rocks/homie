@@ -35,6 +35,8 @@ A game's rules can run on your own Cloudflare instead of in a player's browser. 
 
 ### Changed
 
+- **Any name is yours to use in the directory.** The directory no longer keeps a list of Homie's own games' names. A studio, game, song, video or part is listed under whatever plain-text name you gave it, and `studio_request_grant` and `studio_grant_status` are gone from the Homie MCP server.
+- **The toolkit comes from npm only.** homie.rocks no longer serves `homie-studio-<version>.tgz`. A studio pins the npm registry's exact version, as every studio made since 0.10.0 already does.
 - A room of such a game pauses when the last person leaves and ends a minute later if nobody returns. An empty room uses nothing.
 - `homie-studio perf` accepts a room with no browser host.
 - A new studio's `site/src/worker.mjs` hands the Worker the rules of its server-hosted games (`site/src/rules/`, written by every build and committed with the studio), and its `wrangler.jsonc` turns off code made from text while the Worker starts.
@@ -47,6 +49,7 @@ A game's rules can run on your own Cloudflare instead of in a player's browser. 
 
 ### Upgrade notes
 
+- A studio made before 0.10.0 pins an address on homie.rocks that no longer answers, so `npm install` in it fails until it is upgraded. Run `npx -y @homie-rocks/studio@latest upgrade --apply`, then `npm install`: the upgrade replaces the address with the registry's exact version. Nothing else about the studio changes.
 - **Nothing to do for the games you have.** A game with no `src/rules.ts` builds and runs exactly as before, in a player's browser. The build says so in one line. Asking for the server on such a game (`"room": { "host": "server" }`) stops the build with the reason.
 - **Do not put a game of your own on this yet.** A server-hosted room has no save in this version: a restart of the room, or any deploy of your site, starts its match again, where today's rooms carry on. That arrives in a later version, and `coin-dash` is offered as a starter only then.
 - In this version a player's own character still moves as today: their browser says where it is and the server holds it to its top speed. A changed browser cannot move faster than that, but it can walk through a wall. Scores and pickups are decided on the server either way.

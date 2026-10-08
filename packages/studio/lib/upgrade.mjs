@@ -15,8 +15,9 @@
  *              `--diff` prints the difference, so the person can take the template's words by hand.
  *
  * Plus the pin: when this CLI is newer than the version package.json pins (run through
- * `npx -y --package=<the new tarball> homie-studio upgrade`), --apply pins this version (then `npm install`), and
- * studio.json's `homie.studio` says the version the studio is on.
+ * `npx -y @homie-rocks/studio@<the new version> upgrade`), --apply pins this version (then `npm install`), and
+ * studio.json's `homie.studio` says the version the studio is on. The pin it writes is always the npm registry's:
+ * a studio made before 0.10.0 pinned an address on homie.rocks, and its first upgrade moves it to the registry.
  *
  * Without --apply it changes nothing and says what --apply would do: the person agrees first. It never touches
  * studio.json beyond `homie.studio`, the studio's look (site/theme.json), its Worker config (deploy's), its games,
@@ -124,19 +125,21 @@ function known(history, who = {}) {
 const semver = (v) => (/^(\d+)\.(\d+)\.(\d+)$/.exec(String(v ?? '')) ?? []).slice(1).map(Number);
 const newer = (a, b) => { const x = semver(a); const y = semver(b); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
 
-/** The @homie-rocks/studio version a package.json spec pins: a homie.rocks tarball, an exact version, or npm:… of one. */
+/**
+ * The version in the address a studio made before 0.10.0 pinned (https://<directory>/npm/homie-studio-<version>.tgz),
+ * or null. Read for one thing only: so that studio's upgrade knows which version it is leaving. Nothing writes
+ * such an address; its upgrade writes the npm registry's exact version.
+ */
+const addressPin = (spec) => /^https?:\/\/.+\/homie-studio-(\d+\.\d+\.\d+)\.tgz(?:[?#].*)?$/.exec(String(spec ?? ''))?.[1] ?? null;
+
+/** The @homie-rocks/studio version a package.json spec pins: an exact version, npm:… of one, or an older studio's address. */
 export function pinnedVersion(spec) {
   const s = String(spec ?? '');
-  return /homie-studio-(\d+\.\d+\.\d+)\.tgz(?:[?#].*)?$/.exec(s)?.[1] ?? /^(?:npm:@homie-rocks\/studio@)?=?(\d+\.\d+\.\d+)$/.exec(s)?.[1] ?? null;
+  return /^(?:npm:@homie-rocks\/studio@)?=?(\d+\.\d+\.\d+)$/.exec(s)?.[1] ?? addressPin(s);
 }
-/** The same kind of spec, for this version. */
-function specFor(spec, directory) {
-  const s = String(spec ?? '');
-  const tar = /^(https?:\/\/.+\/)homie-studio-\d+\.\d+\.\d+\.tgz$/.exec(s);
-  if (tar) return `${tar[1]}homie-studio-${STUDIO_VERSION}.tgz`;
-  if (/^npm:@homie-rocks\/studio@/.test(s)) return `npm:@homie-rocks/studio@${STUDIO_VERSION}`;
-  if (/^=?\d+\.\d+\.\d+$/.test(s)) return STUDIO_VERSION;
-  return packageSpec(directory);
+/** The pin for this version: the npm registry's exact version (an npm: alias stays an alias). */
+function specFor(spec) {
+  return /^npm:@homie-rocks\/studio@/.test(String(spec ?? '')) ? `npm:@homie-rocks/studio@${STUDIO_VERSION}` : packageSpec();
 }
 
 /** A line diff (the longest common run kept), for the plan: `  ` same, `- ` the studio's, `+ ` the template's. */
@@ -183,8 +186,9 @@ export function upgradePlan(root, { history = readHistory() } = {}) {
   if (pinned && newer(pinned, STUDIO_VERSION)) {
     return { ok: false, command: 'upgrade', from: pinned, to: STUDIO_VERSION, why: `this studio pins @homie-rocks/studio ${pinned}, newer than this ${STUDIO_VERSION}: run its own copy (npx --no-install homie-studio upgrade)` };
   }
-  if (pkg && where && pinned && newer(STUDIO_VERSION, pinned)) {
-    changes.push({ file: 'package.json', kind: 'pin', what: `pin @homie-rocks/studio ${STUDIO_VERSION} (was ${pinned}); then npm install`, from: spec, to: specFor(spec, studio.homie?.directory) });
+  // An older studio's address is moved to the registry even when it names this very version: it is no longer served.
+  if (pkg && where && pinned && (newer(STUDIO_VERSION, pinned) || addressPin(spec))) {
+    changes.push({ file: 'package.json', kind: 'pin', what: `pin @homie-rocks/studio ${STUDIO_VERSION}${addressPin(spec) ? ' from the npm registry' : ''} (was ${pinned}${addressPin(spec) ? ', at an address that is no longer served' : ''}); then npm install`, from: spec, to: specFor(spec) });
   } else if (pkg && where && !pinned) {
     kept.push({ file: 'package.json', what: `@homie-rocks/studio is "${String(spec).slice(0, 80)}" (not a published version): left as it is` });
   }

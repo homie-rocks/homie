@@ -1,7 +1,7 @@
 /**
  * `homie-studio mcp` — the studio toolkit as a LOCAL MCP server (stdio), so the chat that shows Homie's cards also
  * does the building: in the Claude desktop app through the Homie extension (.mcpb, desktop/ in this repository), in
- * Claude Code, Codex or any MCP client. The remote Homie MCP (homie.rocks/mcp) coordinates (directory, grants, hub,
+ * Claude Code, Codex or any MCP client. The remote Homie MCP (homie.rocks/mcp) coordinates (directory, hub,
  * progress relay for phones); this one does the work on this computer: studios, games, builds, checks with real
  * browsers, deploys. Tools that overlap the remote ones keep their names and input shapes (lib/mcp-tools.mjs).
  *
