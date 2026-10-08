@@ -9,10 +9,10 @@
  * what matters is that every engine gets the same bits.
  *
  * Vectors are `{ x, y, z }` in metres, `z` up. A helper returns a new frozen vector and never changes its arguments.
- * Every call is charged 2 units to the running handler's budget (guard.ts).
+ * Every call is charged 4 units to the running handler's budget (guard.ts), beside what any guarded call costs.
  * =============================================================================
  */
-import { brand, charge } from './guard.ts';
+import { brand, charge, own, put } from './guard.ts';
 
 export interface Vec3 { readonly x: number; readonly y: number; readonly z: number }
 
@@ -117,40 +117,60 @@ function pow(x: number, y: number): number {
 const clamp = (x: number, lo: number, hi: number): number => (x < lo ? lo : x > hi ? hi : x);
 const len = (a: Vec3): number => Math.sqrt(a.x * a.x + a.y * a.y + zOf(a) * zOf(a));
 
-/** One function of the table, charged 2 units a call. */
-const paid = <A extends unknown[], R>(fn: (...a: A) => R) => (...a: A): R => { charge(2); return fn(...a); };
+/**
+ * One function of the table, charged 4 units a call. `sig` names what each argument is: `n` a number, `o` a number
+ * that may be left out, `v` a vector. Anything else is refused before the function runs: arithmetic on a text would
+ * join texts (and grow one without limit), and arithmetic on a list or an object would have JavaScript turn it into a
+ * text first, at a cost the budget never sees.
+ */
+function paid<A extends unknown[], R>(name: string, sig: string, fn: (...a: A) => R): (...a: A) => R {
+  const wrong = (): never => { throw new TypeError(`math.${name} takes ${sig.split('').map((s) => (s === 'v' ? 'a vector' : 'a number')).join(', ')}: a vector is { x, y, z } of numbers`); };
+  return (...a: A): R => {
+    charge(4);
+    for (let i = 0; i < sig.length; i += 1) {
+      const arg = a[i] as any;
+      if (sig[i] !== 'v') { if (typeof arg !== 'number' && !(sig[i] === 'o' && arg === undefined)) wrong(); continue; }
+      if (arg === null || typeof arg !== 'object') wrong();
+      // Each part is read once and checked, and the function is handed a vector of those very numbers: nothing it reads can be anything else.
+      const x = arg.x; const y = arg.y; const z = arg.z;
+      if (typeof x !== 'number' || typeof y !== 'number' || (z !== undefined && typeof z !== 'number')) wrong();
+      a[i] = { x, y, z: z ?? 0 };
+    }
+    return fn(...a);
+  };
+}
 
 /** `world.math` and `ctx.math`. Frozen; the same object for every room. */
 export const math = brand(Object.freeze({
   PI, TAU,
-  sin: paid(sin), cos: paid(cos), tan: paid((x: number) => sin(x) / cos(x)),
-  atan: paid(atan), atan2: paid(atan2),
-  asin: paid((x: number) => (x < -1 || x > 1 ? NaN : atan2(x, Math.sqrt(1 - x * x)))),
-  acos: paid((x: number) => (x < -1 || x > 1 ? NaN : atan2(Math.sqrt(1 - x * x), x))),
-  exp: paid(exp), log: paid(log), pow: paid(pow),
-  hypot: paid((x: number, y: number, z = 0) => Math.sqrt(x * x + y * y + z * z)),
+  sin: paid('sin', 'n', sin), cos: paid('cos', 'n', cos), tan: paid('tan', 'n', (x: number) => sin(x) / cos(x)),
+  atan: paid('atan', 'n', atan), atan2: paid('atan2', 'nn', atan2),
+  asin: paid('asin', 'n', (x: number) => (x < -1 || x > 1 ? NaN : atan2(x, Math.sqrt(1 - x * x)))),
+  acos: paid('acos', 'n', (x: number) => (x < -1 || x > 1 ? NaN : atan2(Math.sqrt(1 - x * x), x))),
+  exp: paid('exp', 'n', exp), log: paid('log', 'n', log), pow: paid('pow', 'nn', pow),
+  hypot: paid('hypot', 'nno', (x: number, y: number, z: number = 0) => Math.sqrt(x * x + y * y + z * z)),
   /** Degrees to radians, and back. */
-  rad: paid((deg: number) => (deg * PI) / 180),
-  deg: paid((rad: number) => (rad * 180) / PI),
-  clamp: paid(clamp),
-  lerp: paid((a: number, b: number, t: number) => a + (b - a) * t),
-  vec: paid((x = 0, y = 0, z = 0) => v(x, y, z)),
-  add: paid((a: Vec3, b: Vec3) => v(a.x + b.x, a.y + b.y, zOf(a) + zOf(b))),
-  sub: paid((a: Vec3, b: Vec3) => v(a.x - b.x, a.y - b.y, zOf(a) - zOf(b))),
-  scale: paid((a: Vec3, k: number) => v(a.x * k, a.y * k, zOf(a) * k)),
-  dot: paid((a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + zOf(a) * zOf(b)),
-  cross: paid((a: Vec3, b: Vec3) => v(a.y * zOf(b) - zOf(a) * b.y, zOf(a) * b.x - a.x * zOf(b), a.x * b.y - a.y * b.x)),
-  len: paid(len),
-  dist: paid((a: Vec3, b: Vec3) => len(v(a.x - b.x, a.y - b.y, zOf(a) - zOf(b)))),
+  rad: paid('rad', 'n', (deg: number) => (deg * PI) / 180),
+  deg: paid('deg', 'n', (rad: number) => (rad * 180) / PI),
+  clamp: paid('clamp', 'nnn', clamp),
+  lerp: paid('lerp', 'nnn', (a: number, b: number, t: number) => a + (b - a) * t),
+  vec: paid('vec', 'ooo', (x: number = 0, y: number = 0, z: number = 0) => v(x, y, z)),
+  add: paid('add', 'vv', (a: Vec3, b: Vec3) => v(a.x + b.x, a.y + b.y, zOf(a) + zOf(b))),
+  sub: paid('sub', 'vv', (a: Vec3, b: Vec3) => v(a.x - b.x, a.y - b.y, zOf(a) - zOf(b))),
+  scale: paid('scale', 'vn', (a: Vec3, k: number) => v(a.x * k, a.y * k, zOf(a) * k)),
+  dot: paid('dot', 'vv', (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + zOf(a) * zOf(b)),
+  cross: paid('cross', 'vv', (a: Vec3, b: Vec3) => v(a.y * zOf(b) - zOf(a) * b.y, zOf(a) * b.x - a.x * zOf(b), a.x * b.y - a.y * b.x)),
+  len: paid('len', 'v', len),
+  dist: paid('dist', 'vv', (a: Vec3, b: Vec3) => len(v(a.x - b.x, a.y - b.y, zOf(a) - zOf(b)))),
   /** A unit vector the same way; a zero vector stays zero. */
-  norm: paid((a: Vec3) => { const l = len(a); return l > 0 ? v(a.x / l, a.y / l, zOf(a) / l) : v(0, 0, 0); }),
+  norm: paid('norm', 'v', (a: Vec3) => { const l = len(a); return l > 0 ? v(a.x / l, a.y / l, zOf(a) / l) : v(0, 0, 0); }),
   /** The same direction, no longer than `max`. */
-  clampLen: paid((a: Vec3, max: number) => { const l = len(a); return l > max && l > 0 ? v((a.x / l) * max, (a.y / l) * max, (zOf(a) / l) * max) : v(a.x, a.y, zOf(a)); }),
-  lerpVec: paid((a: Vec3, b: Vec3, t: number) => v(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, zOf(a) + (zOf(b) - zOf(a)) * t)),
+  clampLen: paid('clampLen', 'vn', (a: Vec3, max: number) => { const l = len(a); return l > max && l > 0 ? v((a.x / l) * max, (a.y / l) * max, (zOf(a) / l) * max) : v(a.x, a.y, zOf(a)); }),
+  lerpVec: paid('lerpVec', 'vvn', (a: Vec3, b: Vec3, t: number) => v(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, zOf(a) + (zOf(b) - zOf(a)) * t)),
   /** A unit vector on the ground plane at this angle (radians, from +x towards +y). */
-  dir: paid((angle: number) => v(cos(angle), sin(angle), 0)),
+  dir: paid('dir', 'n', (angle: number) => v(cos(angle), sin(angle), 0)),
   /** The angle of a vector on the ground plane. */
-  angle: paid((a: Vec3) => atan2(a.y, a.x)),
+  angle: paid('angle', 'v', (a: Vec3) => atan2(a.y, a.x)),
 }));
 export type RulesMath = typeof math;
 
@@ -223,20 +243,24 @@ export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: 
 /**
  * `ctx.map.sweep(body, delta)`: move `body.pos` along `delta` and stop at the first static shape in the way. The server
  * and a browser both move a body with this, so they agree to the last bit. Returns nothing, or `{ at, normal }`.
- * Charged 20 units and 4 for each shape tested. With `dims` 2 a body always rests on the ground.
+ * Charged 20 units and 4 for each shape of the map. With `dims` 2 a body always rests on the ground.
  */
-export function sweepMap(map: MapShapes, body: { pos: Vec3; grounded: boolean }, delta: Vec3 | unknown, radius: number, _dims: number): unknown {
+export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, _dims: number): unknown {
+  // Charged before the cast, for every shape of the map it may test.
+  charge(20 + 4 * (4 + map.boxes.length + map.circles.length));
   const fr = Math.fround;
-  const num = (a: unknown): number => { const x = fr(Number(a)); return Number.isFinite(x) ? x : 0; };
-  const d = delta as Vec3 | null;
-  const dx = num(d?.x); const dy = num(d?.y);
-  const px = num(body.pos?.x); const py = num(body.pos?.y);
-  const { hit: h, tested } = castMap(map, px, py, dx, dy, radius);
-  charge(20 + 4 * tested);
-  body.grounded = true;
-  if (!h) { body.pos = v(fr(px + dx), fr(py + dy), 0); return undefined; }
+  // Both are whatever `move` handed over: each is read as a plain number or as nothing, and nothing is called to convert it.
+  const num = (a: unknown): number => { const x = typeof a === 'number' ? fr(a) : 0; return Number.isFinite(x) ? x : 0; };
+  if (body === null || typeof body !== 'object') throw new TypeError('ctx.map.sweep(body, delta) takes the body move was handed');
+  const pos = own(body, 'pos');
+  const dx = num(own(delta, 'x')); const dy = num(own(delta, 'y'));
+  const px = num(own(pos, 'x')); const py = num(own(pos, 'y'));
+  const { hit: h } = castMap(map, px, py, dx, dy, radius);
+  put(body, 'grounded', true);
+  if (!h) { put(body, 'pos', v(fr(px + dx), fr(py + dy), 0)); return undefined; }
   const l = Math.sqrt(dx * dx + dy * dy);
   const t = l > 0 ? Math.max(0, h.t - SKIN / l) : 0;
-  body.pos = v(fr(px + dx * t), fr(py + dy * t), 0);
-  return Object.freeze({ at: body.pos, normal: v(h.nx, h.ny, 0) });
+  const at = v(fr(px + dx * t), fr(py + dy * t), 0);
+  put(body, 'pos', at);
+  return Object.freeze({ at, normal: v(h.nx, h.ny, 0) });
 }

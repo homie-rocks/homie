@@ -40,7 +40,7 @@ import type { Netplay, NetplayOptions, RoundInfo, Snapshot, StepEntry } from '..
 import { exposePort } from '../port/probe.ts';
 import { BudgetError, G, brand } from './guard.ts';
 import { math, sweepMap } from './math.ts';
-import { coerce, dir, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
+import { coerce, coerceFields, dir, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
 import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
 
@@ -174,8 +174,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     stepped = Math.floor(base.tick) - 1;
     entries = []; lastSent = ''; leads.length = 0; pressed = new Set();
   }
+  /** `motion` as this browser's own `move` may change it in place: what a snapshot carries is frozen, so every list, map and struct in it is copied. */
+  const motionOf = (kindName: string, motion: Record<string, unknown>): Record<string, unknown> => thawFields(kindOf.get(kindName)?.motion ?? [], motion);
   function adopt(u: Unpacked): void {
-    mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: { ...u.motion } };
+    mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion) };
     lastSent = '';
   }
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
@@ -186,8 +188,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     G.left = Math.max(1, Math.floor(schema.settings.budget.tick / 4));
     try { fn(body, input, moveCtx); } catch (err) { if (!(err instanceof BudgetError)) console.warn('[room] move', err); }
     G.left = Infinity;
-    // Rounded to 32-bit floats, as the server rounds: both hold the same numbers.
-    return { pos: vec3(body.pos, dims), vel: vec3(body.vel, dims), heading: dir(body.heading, dims), grounded: body.grounded === true, motion: body.motion };
+    // Rounded to 32-bit floats and held to the declared shapes, as the server does it: both hold the same numbers.
+    const list = kindOf.get(kindName)?.motion ?? [];
+    return { pos: vec3(body.pos, dims), vel: vec3(body.vel, dims), heading: dir(body.heading, dims), grounded: body.grounded === true, motion: thawFields(list, coerceFields(list, body.motion, dims)) };
   }
   /** The input values the last step held (a press is never held). */
   let held: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -205,7 +208,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     held = Object.freeze({ ...input });
     if (kind.owner) {
       const body = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
-      mine.pos = body.pos; mine.vel = body.vel; mine.heading = body.heading; mine.grounded = body.grounded;
+      mine.pos = body.pos; mine.vel = body.vel; mine.heading = body.heading; mine.grounded = body.grounded; mine.motion = body.motion;
     }
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
     const sig = JSON.stringify([values, claim]);
@@ -273,7 +276,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       // The server placed the body (a spawn, a round reset, a seat taken over), or the room began again: jump there.
       const placed = !mine || mine.id !== me.id || mine.r !== me.r || changedEpoch;
       if (placed) { adopt(me); emit('placed', entityOf(me, true)); }
-      else if (mine) { mine.motion = { ...me.motion }; if (!kindOf.get(me.kind)?.owner) { mine.pos = me.pos; mine.vel = me.vel; mine.heading = me.heading; mine.grounded = me.grounded; } }
+      else if (mine) { mine.motion = motionOf(me.kind, me.motion); if (!kindOf.get(me.kind)?.owner) { mine.pos = me.pos; mine.vel = me.vel; mine.heading = me.heading; mine.grounded = me.grounded; } }
       if (!base || changedEpoch) rebase(f.k);
       const row = f.rows.find((x) => x[0] === seat);
       if (row && row[3] !== -128 && base) {
@@ -351,7 +354,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
       const now: Record<string, unknown> = {};
       for (const [name, fd] of kind.input) now[name] = fd.t === 'press' ? pressed.has(name) : coerce(fd, sample[name] ?? fd.init, dims);
-      const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: { ...mine.motion } }, Object.freeze(now), stepped + 1);
+      const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
       pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
       heading = next.heading;
     }

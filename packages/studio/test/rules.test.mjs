@@ -122,7 +122,7 @@ test('a declaration that does not fit the contract is named', async () => {
   assert.equal(s.settings.tickHz, 20);
   assert.equal(s.settings.host, 'server');
   assert.equal(s.problems.length, 3);
-  assert.deepEqual(L.R.roomSettings(undefined), { settings: { host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: 2_000_000 }, predict: { catchM: null, catchUp: 1.25, snapM: null, blendMs: 100, interpMs: null } }, problems: [] });
+  assert.deepEqual(L.R.roomSettings(undefined), { settings: { host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: 1_000_000 }, predict: { catchM: null, catchUp: 1.25, snapM: null, blendMs: 100, interpMs: null } }, problems: [] });
   assert.throws(() => L.R.compileMap({}), /needs "bounds"/);
 });
 

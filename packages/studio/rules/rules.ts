@@ -32,6 +32,11 @@ export const REACH_M = 64;
 export const ENTITY_MAX = 2048;
 /** The most seats one room holds (worker/seats.mjs `SEAT_MAX`). */
 export const SEATS_MAX = 32;
+/** The most values one declared field may hold when it is full (`cellsOf`), and the most all the fields of one kind of entity may. */
+export const FIELD_CELLS_MAX = 16_384;
+export const KIND_CELLS_MAX = 65_536;
+/** The most events and timers one room holds waiting. A send past it throws in the handler that asked. */
+export const QUEUE_MAX = 16_384;
 
 /* ------------------------------------------------------------------ field types */
 
@@ -72,6 +77,28 @@ export const f = brand(Object.freeze({
   struct: (fields: Fields, o?: FieldOptions): Field => made('struct', o, { fields: Object.freeze({ ...fields }) }),
   press: (): Field => made('press', undefined),
 }));
+
+/**
+ * How many values a field holds when it is full: 1 for a number, a bit or a ref, 4 for a vector, 1 and one more for
+ * every 64 characters of a text, and for a list, a map or a struct, itself and everything it may hold. It is what
+ * copying, checking or sending the field costs at most, so the runtime charges by it (core.ts) and the contract bounds
+ * it (`FIELD_CELLS_MAX`): a list of lists multiplies.
+ */
+const CELLS = new WeakMap<object, number>();
+export function cellsOf(fd: Field): number {
+  const hit = CELLS.get(fd);
+  if (hit !== undefined) return hit;
+  let n = 1;
+  if (fd.t === 'vec3' || fd.t === 'dir') n = 4;
+  else if (fd.t === 'text') n = 1 + Math.ceil((fd.max ?? 0) / 64);
+  else if (fd.t === 'list') n = 1 + (fd.max ?? 0) * cellsOf(fd.of as Field);
+  else if (fd.t === 'map') n = 1 + (fd.max ?? 0) * (1 + cellsOf(fd.of as Field));
+  else if (fd.t === 'struct') for (const sub of Object.values(fd.fields ?? {})) n += cellsOf(sub);
+  CELLS.set(fd, n);
+  return n;
+}
+/** `cellsOf` for a list of declared fields. */
+export const cellsOfList = (list: FieldList): number => { let n = 0; for (const [, fd] of list) n += cellsOf(fd); return n; };
 
 /* ------------------------------------------------------------------ what a module declares */
 
@@ -143,8 +170,18 @@ export interface RoomSettings {
   budget: { tick: number };
   predict: { catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
 }
+/**
+ * The default `budget.tick`: 1,000,000 units at 20 ticks a second or fewer, and less at a faster rate, so a second of
+ * ticks never has more than 20,000,000. The figure is derived from a measurement (rooms-slice-1-notes.md, "The
+ * budget, measured"): the dearest charged work costs about 12 ns a unit on the computer it was measured on, so a tick
+ * that uses its whole budget takes about 12 ms there, and 21 ms at the very worst (a full room in which every `move`
+ * and `think` also takes its floor). That is under half a 50 ms period, with as much again to spare for a slower server.
+ */
+export const BUDGET_TICK = 1_000_000;
+export const BUDGET_SECOND = 20_000_000;
+export const budgetFor = (tickHz: number): number => Math.min(BUDGET_TICK, Math.floor(BUDGET_SECOND / tickHz));
 export const ROOM_DEFAULTS: RoomSettings = deepFreeze({
-  host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: 2_000_000 },
+  host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: BUDGET_TICK },
   predict: { catchM: null, catchUp: 1.25, snapM: null, blendMs: 100, interpMs: null },
 });
 
@@ -178,7 +215,7 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     settings: {
       host, offline, tickHz, inputHz,
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, 1) },
-      budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, 2_000_000) as number)) },
+      budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
       predict: { catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
     },
     problems,
@@ -305,6 +342,8 @@ function fieldList(obj: unknown, where: string, { input = false, builtIns = fals
     if (!NAME.test(key)) throw new Error(`${where}.${key} is not a field name (a letter, then letters, digits or _)`);
     if (builtIns && BUILT_IN_FIELDS.includes(key)) throw new Error(`${where}.${key}: every entity already has "${key}"; give this field another name`);
     checkField(fd, `${where}.${key}`, input);
+    const cells = cellsOf(fd as Field);
+    if (cells > FIELD_CELLS_MAX) throw new Error(`${where}.${key} may hold ${cells} values when it is full, and one field holds ${FIELD_CELLS_MAX} at most (a list of lists multiplies: give the lists smaller sizes)`);
     out.push([key, fd as Field]);
   }
   return Object.freeze(out);
@@ -417,6 +456,8 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     if (e.tick !== undefined && typeof e.tick !== 'function') throw new Error(`${at}.tick is a function`);
     if (e.think !== undefined && typeof e.think !== 'function') throw new Error(`${at}.think is a function`);
     if (e.guide !== undefined && (typeof e.guide !== 'object' || typeof e.guide?.view !== 'function')) throw new Error(`${at}.guide needs view(world, self)`);
+    const cells = cellsOfList(fields) + cellsOfList(motion);
+    if (cells > KIND_CELLS_MAX) throw new Error(`${at}: its fields and motion may hold ${cells} values when they are full, and one entity holds ${KIND_CELLS_MAX} at most`);
     const k: KindTable = { name, index: kinds.length, player, fields, motion, input, body, score: scores[0]?.[0] ?? null, tick: e.tick ?? null, think: e.think ?? null, on, commands: cmds, onRoom, guide: e.guide ?? null, move: moveFn };
     kinds.push(k);
     kindOf[name] = k;
