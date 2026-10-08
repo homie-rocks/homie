@@ -17,8 +17,8 @@ browser; nothing here changes a frame such a game sends or receives):
   and `snap` carries `e` and one control row a seat, `[seat, r, ack, lead]`. There is no separate
   sequence number: an entry is named by its tick.
 - **The life of a server-hosted room** (section 29): it pauses when the last person's socket closes,
-  resumes on the tick it paused on, and ends when nobody returns within a minute. It has no save yet:
-  a restart or a deploy starts a fresh match.
+  resumes on the tick it paused on, and ends when nobody returns within a minute. The whole room is
+  saved once a second by default and restored after a restart, under a new epoch (section 29.6).
 - The refusal `host-failed` (the rules could not start: the room says why and lets nobody in) and
   the error `room-over` (the room ended because its rules kept failing); `welcome.host` and the watch
   feed's `host` are `{ id: 'server', seat: null }` for such a room, and the feed says `hosted: 'server'`
@@ -2162,7 +2162,7 @@ rounds and placements are the server's in either case.
 | The last person's socket closes | **The room pauses.** The tick timer is cleared and the clock stops. Watchers and AI seats never keep it ticking |
 | A person returns within 60 s | The room resumes at the tick it paused on. No tick is skipped and none runs for the gap |
 | Nobody returns within 60 s | **The room ends.** The relay forgets it and its stored seats are deleted (`office` and `recorded` are kept). The next visitor gets a fresh room, with a new epoch |
-| A restart or a deploy | There is no save yet. Seats keep their tokens (the relay's `net`, as today); the room starts a fresh match under a new epoch and players reconnect into it. The round in progress is lost |
+| A restart or a deploy | The whole room restores at its saved tick, under a new epoch. Seats keep their tokens. A deploy that changed the state shape ends the match instead (section 29.6) |
 | The rules fail again and again | Every tick failing for two seconds of the clock (a handler that used its whole share, or a fault in the runtime itself), or ticks that ran slow for five: the room ends, its players get the error `room-over`, and the log names the game, its build, the kind and the handler (`why`: `budget`, `fault`, `overrun`). Both are seconds on the clock, not a count of ticks |
 | Anything is thrown in a tick | It is caught where the tick began, written to the log as `host-fault` (game, build, tick, the part of the tick, at most once a second) and counted. The tick after it runs: a room that is running always has exactly one timer pending, and a room that is paused or ended has none |
 
@@ -2221,3 +2221,41 @@ from outside the studio run on its server.
   values, four levels deep. `world.math` takes numbers and vectors of numbers.
 - The view's bundle holds the same guarded `move` code the server runs, and the rules'
   declarations as data. It holds none of the rules' handlers.
+
+### 29.6 Saves, restarts and deploys
+
+The Table writes the whole room to its SQLite `save` table in one synchronous transaction:
+entities, motion, shared state, rounds, seats and their tokens, pending events, timers and
+inputs, RNG state, tick, epoch, state hash and build hash. Saves larger than 2 MB use several
+rows in that transaction. The default interval is `room.durability.movementSeconds: 1`;
+round end, `world.finish()` and pause save immediately. Both elapsed ticks and elapsed wall
+time bound the interval, including ticks that catch up after a delay. Cloudflare's output
+gate holds outgoing frames until preceding writes are confirmed.
+
+A restore starts paused at the saved tick. No ticks run for the outage. Its epoch is one
+more than the larger of the saved epoch and the separately stored `boots.epoch`; that epoch
+is stored before ticking. Clients reconnect with their seat tokens and jitter capped at two
+seconds. An unreconnected player's body is away when ticking resumes.
+
+| Deploy | Room | Page |
+|---|---|---|
+| This game's build hash is unchanged | Restore and resume | Reconnect without reloading |
+| Build changed, state hash unchanged | Restore under the new rules | Refuse the old build with `stale`, `immediate: true`; reload the game and reclaim the seat |
+| State hash changed | Delete the save and end the room | `room-over`, `rematch: true`; load a fresh game in another room |
+
+The state hash includes ordered declarations and handler names/presence, body/player settings,
+field options, shared state, shapes, bots, asks, map, dimensions, tick rate, rounds and contract.
+Handler implementations, tunables and view code do not change it. The build hash includes
+built rules, view, tunables and map, excluding build time, commit and other games. It replaces
+`netplay.version` for rules games. Browser-hosted games keep the existing version and checkpoint
+behaviour. An old standalone app must update before joining a rules game's live room.
+
+A restored run increments `boots.count` at its first tick and clears it after ten seconds of
+ticking. The second successive restored run waits a deterministic room-specific delay of up
+to thirty seconds. The third ends instead of restoring and logs `restore loop`, the game and
+build, and that another room sharing the isolate may have caused the resets.
+
+After sixty seconds paused without a returning person, the room ends even if watchers remain.
+Ending deletes `save`, `boots` and `net`, preserves `office` and `recorded`, and keeps an `ended`
+marker so a late reconnect cannot reopen that room. The Lobby forgets it. The stored alarm
+also cleans up a room whose object restarted with nobody returning.

@@ -104,6 +104,12 @@ export function smokeRun(H, compiled, id, { timer = () => performance.now(), voc
   return { ...s, slowestMs: slowest };
 }
 
+/** The ordered declarations a save depends on. Functions contribute their presence, never their implementation. */
+export function stateHash(c) {
+  const { kinds, events, commands, effects, shared, rounds, bots, roomOn, asks, map, dims, contract, seats } = c;
+  return createHash('sha256').update(JSON.stringify({ kinds, events, commands, effects, shared, rounds, bots, roomOn, asks, map, dims, contract, seats, tickHz: c.settings.tickHz }, (k, v) => typeof v === 'function' ? true : v)).digest('hex').slice(0, 32);
+}
+
 /**
  * Everything a rules game's build needs, or an Error that says what to fix (each refused line named).
  * Returns { code, tune, map, settings, seats, schema, publicTune, build, files, rounds, problems, units, tickUnits, slowestMs }.
@@ -127,8 +133,8 @@ export async function prepareRules(esbuild, root, g, { log = () => {} } = {}) {
   const stats = smokeRun(H, compiled, g.id, { vocab: readJson(join(g.dir, 'agents.json')) });
   const data = { tune, map, settings, seats };
   return {
-    code: guarded.code, ...data, schema: R.schemaOf(compiled), publicTune: compiled.publicTune, files: guarded.files, rounds: compiled.rounds,
-    build: createHash('sha256').update(guarded.code).update(JSON.stringify(data)).digest('hex').slice(0, 16), units: stats.maxUnits, tickUnits: stats.maxTickUnits, slowestMs: stats.slowestMs,
+    code: guarded.code, ...data, stateHash: stateHash(compiled), schema: R.schemaOf(compiled), publicTune: compiled.publicTune, files: guarded.files, rounds: compiled.rounds,
+    build: createHash('sha256').update(guarded.code).update(JSON.stringify(data)).digest('hex'), units: stats.maxUnits, tickUnits: stats.maxTickUnits, slowestMs: stats.slowestMs,
   };
 }
 
@@ -166,7 +172,7 @@ export function writeRules(root, built, ids) {
   mkdirSync(dir, { recursive: true });
   for (const r of built) {
     writeFileSync(join(dir, `${r.id}.mjs`), `${HEADER}// The rules of games/${r.id}, checked and guarded (build ${r.build}).\n${r.code}`);
-    writeFileSync(join(dir, `${r.id}.data.mjs`), `${HEADER}export default ${JSON.stringify({ tune: r.tune, map: r.map, settings: r.settings, seats: r.seats, build: r.build }, null, 2)};\n`);
+    writeFileSync(join(dir, `${r.id}.data.mjs`), `${HEADER}export default ${JSON.stringify({ tune: r.tune, map: r.map, settings: r.settings, seats: r.seats, build: r.build, stateHash: r.stateHash }, null, 2)};\n`);
   }
   const have = ids.filter((id) => existsSync(join(dir, `${id}.mjs`)) && existsSync(join(dir, `${id}.data.mjs`)));
   for (const name of readdirSync(dir)) {

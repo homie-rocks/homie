@@ -744,6 +744,7 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       add(el('div', 'stat'), el('span', '', 'up'), document.createTextNode(r.closedUntil ? 'closed ' + dur(r.closedUntil - now) : dur(now - r.openedAt))),
       acts);
     box.appendChild(head);
+    if (r.durability && !r.durability.ok) box.appendChild(el('div', 'held', 'Room saves are unavailable. Play continues; saves retry automatically. A restart may lose recent progress.' + (r.durability.message ? ' ' + r.durability.message : '')));
     if (r.announce && r.announce.text) box.appendChild(el('div', 'held', '📣 "' + r.announce.text + '" (' + dur(r.announce.until - now) + ' left)'));
     if (r.regate) box.appendChild(el('div', 'held', 'After this round (at the latest in ' + dur(r.regate.until - now) + '), players the new launch state leaves out are sent out with a thank-you.'));
     if (S.open[key] !== false && (S.open[key] || r.players + r.screens <= 12)) {

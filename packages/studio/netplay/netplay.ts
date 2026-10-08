@@ -176,7 +176,7 @@ export interface LinkChange {
   downMs: number;
 }
 /** A newer build of the game is live (`on('stale')`): this tab still runs `mine`; `final`: it was kept out of a room for it. */
-export interface StaleNotice { ver: string | null; mine: string | null; final: boolean }
+export interface StaleNotice { ver: string | null; mine: string | null; final: boolean; immediate?: boolean }
 /** One of the play page's own controls drawn over the game, in CSS pixels of the game's own viewport. */
 export interface ShellRect {
   /** `room` (the room button), `server` (the server pill), `chip` (the "3 playing" line), `chat`, `join` (the big screen's QR card), `banner`, `results`. */
@@ -1793,14 +1793,14 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     emit('link', e);
   }
   /** A newer build is live (section 23): the relay's `stale` frame (still playing) or its `stale` refusal (kept out). */
-  function noteStale(ver: unknown, final: boolean): void {
+  function noteStale(ver: unknown, final: boolean, immediate = false): void {
     const next = cleanVersion(ver) ?? '';
     const first = staleVer === null;
     staleVer = next;
     if (!first && !final) return;
-    post?.({ what: 'stale', ver: next || null, mine: version, final });
+    post?.({ what: 'stale', ver: next || null, mine: version, final, ...(immediate ? { immediate: true } : {}) });
     if (!final) showOverlay('stale', inApp ? APP_STALE_LINE : 'A new version is ready. Tap to reload.', 10_000);
-    emit('stale', { ver: next || null, mine: version, final });
+    emit('stale', { ver: next || null, mine: version, final, ...(immediate ? { immediate: true } : {}) });
   }
 
   /* ------------------------------------------------------------ the page around the frame (revision 9, section 24) */
@@ -2292,7 +2292,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       }
       case 'stale': {
         // A newer build of the game is live (section 23): this tab keeps playing in its own room, and is told.
-        noteStale(m['ver'], false);
+        noteStale(m['ver'], false, m['immediate'] === true);
         return;
       }
       case 'watch': {
@@ -2327,6 +2327,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       }
       case 'error': {
         const code = String(m['code'] ?? '');
+        if (code === 'room-over' && m['rematch'] === true) {
+          closed = true; closedWhy = code;
+          post?.({ what: 'rematch', room: cfg?.room ?? null });
+          setLink('closed', code);
+          return;
+        }
         // Inputs over the relay's cap were dropped: send fewer for a while (the newest frame still goes out).
         if ((code === 'rate' && m['of'] === 'in') || code === 'flood') inSlowUntil = wall() + IN_SLOW_MS;
         // An AI alone in a room (nobody seated): it knocks again only after a while (section 17).
@@ -2335,7 +2341,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (code === 'rate' || code === 'state-full') { warnOnce(`${code}:${String(m['of'] ?? '')}`, m['message']); return; }
         // The room still runs another build of the game (section 23): not final. Its players were told to reload; this
         // browser keeps knocking and is let in when they have. Said once, not at every knock.
-        if (code === 'room-stale') { lastRefusal = code; warnOnce('room-stale', m['message']); if (link === 'alone') paintLink(); return; }
+        if (code === 'room-stale') { post?.({ what: 'wait', final: false }); lastRefusal = code; warnOnce('room-stale', m['message']); if (link === 'alone') paintLink(); return; }
         console.warn('[netplay] relay refused:', code, m['message']);
         // The same seat opened in another tab, a full room, a version the relay does not speak: reconnecting
         // would repeat the refusal (or, for 'replaced', make the two tabs evict each other for ever).
@@ -2344,7 +2350,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
           closedWhy = code;
           post?.({ what: 'closed', why: code, room: cfg?.room ?? null, ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}), ...(typeof m['message'] === 'string' ? { message: String(m['message']).slice(0, 200) } : {}) });
           // Kept out of a room for running an older build (section 23): the page reloads the game; the game may too.
-          if (code === 'stale') noteStale(m['ver'], true);
+          if (code === 'stale') noteStale(m['ver'], true, m['immediate'] === true);
           setLink('closed', code);
         }
         return;
@@ -2361,6 +2367,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   function onWelcome(m: Record<string, unknown>): void {
+    post?.({ what: 'build', ver: version });
     clearTimeout(connectTimer);
     const next = m['role'] as Role;
     const wasOffline = offline;
@@ -2479,6 +2486,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       rebase = false;
       lastArrival = 0;
     }
+    if (rulesGame && buf.length && buf[buf.length - 1].e !== s.e) { buf.length = 0; ages.length = 0; lastArrival = 0; }
     const newest = buf[buf.length - 1];
     if (newest && s.st <= newest.st) return false;
     const arrival = wall();
@@ -2797,7 +2805,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (closed) return;
     // A hidden tab does not play and its timers crawl: reconnect when it is looked at again.
     if (hidden()) { waitingVisible = true; return; }
-    const wait = Math.max(LADDER[Math.min(attempt, LADDER.length - 1)] as number, aloneUntil - wall());
+    const wait = Math.max(rulesGame ? (attempt < 3 ? Math.random() * Math.min(2000, 500 * 2 ** attempt) : (0.5 + Math.random() * 0.5) * Math.min(60_000, 2000 * 2 ** Math.min(attempt - 2, 5))) : LADDER[Math.min(attempt, LADDER.length - 1)] as number, aloneUntil - wall());
     attempt += 1;
     reconnects += 1;
     setTimeout(open, wait);

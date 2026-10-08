@@ -80,6 +80,23 @@ function rig(roomOpts = {}) {
   return { room, lines, sockets, socket, stop: () => clearInterval(beat) };
 }
 const cfg = (who, extra = {}) => ({ v: 1, url: 'ws://relay/x/__net?room=r', room: 'r', device: 'desk', want: 'play', name: who, ...extra });
+
+test('a rules client asks its page to reload an old build and rematch an ended room', async (t) => {
+  const { createNetplay } = await netplayKit(); const clock = virtualTime(t);
+  const r = rig(); r.room.setServerHost({ frame() {}, facts: () => ({}) }); r.room.setCurrent('new');
+  const posts = [];
+  const old = createNetplay({ rules: true, config: cfg('old', { ver: 'old' }), WebSocketImpl: r.socket(), post: (m) => posts.push(m), game: 'x' });
+  await clock.wait(100);
+  assert.equal(old.closedWhy, 'stale');
+  assert.ok(posts.some((m) => m.what === 'stale' && m.immediate === true && m.final === true));
+  r.room.ended = { why: 'state-changed', ver: 'new' };
+  const fresh = createNetplay({ rules: true, config: cfg('fresh', { ver: 'new' }), WebSocketImpl: r.socket(), post: (m) => posts.push(m), game: 'x' });
+  await clock.wait(100);
+  assert.ok(posts.some((m) => m.what === 'rematch' && m.room === 'r'));
+  assert.equal(fresh.closedWhy, 'room-over');
+  const count = r.sockets.length; await clock.wait(5000); assert.equal(r.sockets.length, count, 'the page owns rematching; the old socket cannot reopen the ended room');
+  fresh.close(); old.close(); r.stop();
+});
 /** A createRoom game small enough to read: a body is a place, a score and whether it is alive. */
 const bodyGame = (extra = {}) => ({
   game: 'x', maxPlayers: 4, minBodies: 3, roundSeconds: 600,
@@ -1767,4 +1784,19 @@ test('the Worker: a room\'s lines carry the game and the room, a lost socket is 
   const broke = await site('/cave-run/__net?room=r&gv=7', { headers: { upgrade: 'websocket' } });
   assert.equal(broke.status, 503);
   assert.deepEqual([errors.at(-1).ev, errors.at(-1).game, errors.at(-1).room], ['room-unreachable', 'cave-run', 'r']);
+});
+
+test('rules reconnects spread the first attempts and back off through a prolonged outage', async (t) => {
+  const { createNetplay } = await netplayKit(); const clock = virtualTime(t); const starts = [];
+  t.mock.method(Math, 'random', () => 0.5);
+  class Unavailable {
+    constructor() { starts.push(Date.now()); queueMicrotask(() => this.onerror?.({})); }
+    close() {} send() {}
+  }
+  const net = createNetplay({ rules: true, config: cfg('retry'), WebSocketImpl: Unavailable, post: null, game: 'x', linkOverlay: false });
+  try {
+    await clock.wait(45_000);
+    assert.ok(starts.length >= 5 && starts.length <= 9, `${starts.length} attempts`);
+    assert.ok(starts.slice(1).some((at, i) => at - starts[i] >= 8000));
+  } finally { net.close(); }
 });

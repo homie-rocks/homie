@@ -404,6 +404,8 @@ export class NetRoom {
     this.hosted.clear();
     if (!h) return;
     this.askedMax = null; this.maxPlayers = this.seatCap;
+    // Restored holders also need a later free frame, even if their socket never returns.
+    for (const [seat, s] of this.seats) this.hosted.set(seat, s.occ ?? null);
     this.toServer({ t: 'policy', policy: this.policyOut() });
     if (this.rawVocab) this.toServer({ t: 'vocabulary', vocab: this.rawVocab });
     for (const c of this.live()) if (c.seat !== null && !c.watch) this.joinServer(c);
@@ -901,6 +903,9 @@ export class NetRoom {
       try { c.conn.close(1008, code); } catch { /* gone */ }
     };
     // Revision 10: this game's rules run on the server and could not start. Nobody is let in, and the reason is said.
+    if (this.endedMatch?.until <= this.now()) this.endedMatch = null;
+    if (this.endedMatch?.tokens.has(m.token)) return refuse('room-over', 'This match ended. Joining a fresh room.', { rematch: true, ver: this.endedMatch.ver });
+    if (this.ended) return refuse('room-over', 'This room ended. Joining a fresh room.', { rematch: true, ver: this.ended.ver });
     if (this.hostFailed) return refuse('host-failed', this.hostFailed);
     // The owner closed this room, or held this player out of it (section 15): refused, with when it ends.
     if (this.closedUntil > this.now()) return refuse('room-closed', this.closedWhy || 'The studio closed this room.', { until: this.closedUntil });
@@ -928,7 +933,8 @@ export class NetRoom {
     c.ver = c.verWord !== undefined ? c.verWord : versionOf(m.ver);
     c.feat = featuresOf(m.feat);
     const lite = Boolean(c.agentWord && c.agentWord.hands === 'host');
-    if (!lite) {
+    if (!lite && this.server && this.currentVer !== undefined && c.ver !== this.currentVer) return refuse('stale', 'This game was updated. Loading it again.', { ver: this.currentVer, immediate: true });
+    if (!lite && !this.server) {
       const here = live.filter((o) => !this.lite(o));
       const cur = this.currentVer;
       if (here.length && (this.gameVer ?? null) !== c.ver) {
@@ -1866,7 +1872,7 @@ export class NetRoom {
   /** Seats, the policy and the party's dial on change; checkpoint/round/roster/state at most every persistMs. Never per frame. */
   persist(now = this.now(), force = false) {
     if (!this.store) return;
-    const due = this.seatsDirty || (this.persistDirty && now - this.lastPersistAt >= this.persistMs);
+    const due = this.seatsDirty || (!this.server && this.persistDirty && now - this.lastPersistAt >= this.persistMs);
     if (!force && !due) return;
     this.seatsDirty = false;
     this.persistDirty = false;
@@ -1878,12 +1884,12 @@ export class NetRoom {
   saved(now = this.now()) {
     return {
       v: NET_VERSION, room: this.code, savedAt: now, maxPlayers: this.maxPlayers, hostSeat: this.host()?.seat ?? null, openedAt: this.openedAt || null,
-      seats: [...this.seats].map(([seat, s]) => [seat, s.token, s.name, s.agent ?? null, s.occ ?? null]),
+      seats: [...this.seats].map(([seat, s]) => [seat, s.token, s.name, s.agent ?? null, s.occ ?? null, ...(this.server ? [s.present ? null : s.since] : [])]),
       occSeq: this.occSeq, ...(this.gameVer !== undefined ? { gameVer: this.gameVer } : {}),
       ckpt: this.lastCkpt, round: this.lastRound, roster: this.lastRoster, state: this.stateObject(),
       // Section 17: a deploy keeps the room's policy, the party's dial and what its game reads.
       policy: this.policy, level: this.level, levelBy: this.levelBy, caps: [...this.caps],
-      // Revision 10: a server-hosted room keeps its seats through a restart; its match starts fresh until the save ships.
+      // The Table saves this seat map and the server's whole world in one transaction.
       ...(this.server ? { hosted: 'server' } : {}),
     };
   }
@@ -1898,7 +1904,7 @@ export class NetRoom {
     if (!saved || saved.v !== NET_VERSION || !(now - Number(saved.savedAt) < 120_000)) return false;
     if (!this.server && saved.hosted !== 'server' && Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
     if (Number.isFinite(saved.openedAt) && saved.openedAt > 0) this.openedAt = saved.openedAt;
-    for (const [seat, token, name, agent, occ] of saved.seats ?? []) this.seats.set(seat, { token, name, since: now, present: false, agent: agent && typeof agent === 'object' ? agent : null, ...(Number.isInteger(occ) ? { occ } : {}) });
+    for (const [seat, token, name, agent, occ, since] of saved.seats ?? []) this.seats.set(seat, { token, name, since: saved.durable && Number.isFinite(since) ? since : now, present: false, agent: agent && typeof agent === 'object' ? agent : null, ...(Number.isInteger(occ) ? { occ } : {}) });
     // A stay's number is never given twice while a checkpoint may still name it.
     this.occSeq = Math.max(this.occSeq, Number.isInteger(saved.occSeq) ? saved.occSeq : 0, ...[...this.seats.values()].map((x) => x.occ ?? 0));
     if ('gameVer' in saved) this.gameVer = versionOf(saved.gameVer);
@@ -1909,7 +1915,7 @@ export class NetRoom {
     // The people coming back get the agents' grace too (an AI is not "alone" in a room a deploy just emptied).
     if ((saved.seats ?? []).some((s) => !s[3])) this.lastHumanAt = now;
     // A server-hosted room has no browser host to hand a checkpoint to, and what its last match showed is not this one's.
-    const fresh = saved.hosted === 'server';
+    const fresh = saved.hosted === 'server' && !saved.durable;
     this.lastCkpt = fresh ? null : saved.ckpt ?? null;
     this.lastRound = fresh ? null : saved.round ?? null;
     this.lastRoster = fresh ? null : saved.roster ?? null;
@@ -1918,7 +1924,7 @@ export class NetRoom {
       this.state.set(k, { d, bytes });
       this.stateBytes += bytes;
     }
-    if (Number.isInteger(saved.hostSeat) && !fresh) this.preferHost = { seat: saved.hostSeat, until: now + graceMs };
+    if (Number.isInteger(saved.hostSeat) && saved.hosted !== 'server') this.preferHost = { seat: saved.hostSeat, until: now + graceMs };
     this.emptySince = now;
     this.stats.restoredFrom = now - saved.savedAt;
     this.log({ ev: 'restored', room: this.code, seats: this.seats.size, ageMs: now - saved.savedAt, hostSeat: saved.hostSeat });

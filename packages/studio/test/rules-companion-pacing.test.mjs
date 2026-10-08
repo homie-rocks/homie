@@ -157,6 +157,7 @@ async function site() {
 
 async function rulesSockets(t) {
   const s = await site(); const ends = [];
+  const ver = JSON.parse(readFileSync(join(s.dir, 'site/dist/games.json'), 'utf8')).games.find(g => g.id === 'rules-run').room.build;
   class Socket {
     constructor() { this.listeners = {}; this.sent = []; } accept() {} send(v) { this.sent.push(JSON.parse(v)); } close(code, why) { this.closed = [code, why]; }
     addEventListener(k, fn) { (this.listeners[k] ??= []).push(fn); }
@@ -168,9 +169,9 @@ async function rulesSockets(t) {
   t.after(() => { globalThis.WebSocketPair = previous; for (const table of s.env.TABLE.objs.values()) { table.hostRt?.stop(); if (table.timer) clearInterval(table.timer); } });
   const socket = async (room, ticket = '', hello = {}) => {
     const n = ends.length;
-    const res = await s.fetchSite(`/rules-run/__net?room=${room}${ticket ? `&t=${encodeURIComponent(ticket)}` : ''}`, { headers: { upgrade: 'websocket' } }).catch(e => { if (!/status/.test(String(e))) throw e; });
+    const res = await s.fetchSite(`/rules-run/__net?room=${room}&gv=${ver}${ticket ? `&t=${encodeURIComponent(ticket)}` : ''}`, { headers: { upgrade: 'websocket' } }).catch(e => { if (!/status/.test(String(e))) throw e; });
     if (ends.length === n) return res;
-    const end = ends.at(-1); end.say({ t: 'hello', v: 1, rev: 10, want: 'play', name: 'Player', ...hello }); return end;
+    const end = ends.at(-1); end.say({ t: 'hello', v: 1, rev: 10, ver, want: 'play', name: 'Player', ...hello }); return end;
   };
   const settle = async () => { await Promise.all(s.waits.splice(0)); };
   return { ...s, socket, settle };

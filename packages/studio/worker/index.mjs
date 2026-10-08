@@ -84,7 +84,8 @@
  * it when a server uses it), or the owner's own key (secret HOMIE_BRAIN_KEY).
  */
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
-import { hostedGame, startHost } from './hosted.mjs';
+import { hostedGame, hostedBuild, startHost } from './hosted.mjs';
+import { roomStore, restoreDelay } from './room-store.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
 import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
 import {
@@ -839,6 +840,12 @@ async function route(request, env, ctx) {
     if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
     const cat = await getCat();
     let sub = parts.slice(1).join('/');
+    if (sub === '__restart') {
+      if (env.HOMIE_PREVIEW !== '1' || request.method !== 'POST' || !hostedGame(game)) return new Response('not found', { status: 404 });
+      const room = url.searchParams.get('room') ?? '';
+      if (!ROOM_ID.test(room)) return new Response('invalid room', { status: 400 });
+      return env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`)).fetch(`https://table/__restart?game=${game}&room=${room}`, { method: 'POST' });
+    }
     // Read now, not from a Worker instance's 5 s cache: a game the owner just made private shuts at once everywhere.
     const settings = await settingsOf(env, { fresh: true });
     // The owner's launch state and room size (worker/office.mjs): a private or invite-only game lets in only those
@@ -1033,6 +1040,7 @@ async function route(request, env, ctx) {
       // game that named none then) and is matched with copies of that build. What it says is its own word, so the
       // Lobby is told it came from an app (`app=1`) and keeps only a few such builds' rooms (LOBBY_APP_VERSIONS).
       const ver = app ? versionOf(url.searchParams.get('gv')) : versionOf(meta?.netplay?.version);
+      if (app && meta?.room?.host === 'server' && ver !== meta.room.build) return json({ ok: false, error: 'stale', message: 'Update the app to play online.' }, 409);
       return lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${not ? `&not=${encodeURIComponent(not)}` : ''}${ver ? `&ver=${encodeURIComponent(ver)}` : ''}${app ? '&app=1' : ''}`, { method: 'POST' });
     }
     if (sub === 'api/agent') {
@@ -1189,6 +1197,14 @@ async function fallback(request, env, url, getCat) {
 const ROOM_ALARM_MS = 10 * 60_000;
 const ROOM_PAUSE_MS = 60_000;
 
+/** Watchers, AI seats and restoration never extend an absence. */
+export function roomEndAt({ people, pausedAt, createdAt, restoredAt = null, savedAt = null, alarmAt = null }) {
+  // Only people keep play alive. With no durable alarm, the last save bounds an unrecorded departure.
+  const absence = pausedAt ?? (restoredAt !== null && alarmAt === null ? savedAt : null) ?? restoredAt ?? createdAt;
+  return people > 0 ? Infinity : absence + ROOM_PAUSE_MS;
+}
+
+
 /**
  * TABLE — one public room: the netplay relay (room.mjs) for every browser in it.
  * It keeps nothing per frame; seats and a checkpoint go to storage (a deploy
@@ -1231,8 +1247,17 @@ export class Table {
      */
     this.hostRt = null;
     this.roomAlarmAt = 0;
+    this.durable = null;
+    this.roomSave = null;
+    this.endedRoom = null;
+    this.pausedAt = null;
     ctx.blockConcurrencyWhile(async () => {
+      // Only a confirmed missing alarm permits the save-age fallback. A read failure is not evidence of absence.
+      this.recoveredAlarmAt = Infinity;
+      try { this.recoveredAlarmAt = (await ctx.storage.getAlarm?.()) ?? null; }
+      catch (error) { this.storageProblem(error); }
       this.saved = (await ctx.storage.get('net')) ?? null;
+      if (this.saved?.retired === true) this.cleanupPending = true;
       this.recorded = (await ctx.storage.get('recorded')) ?? 0;
       this.officeSaved = (await ctx.storage.get('office')) ?? null;
     });
@@ -1248,15 +1273,15 @@ export class Table {
       maxPlayers: max,
       perIp: perAddress(max),
       store: {
-        save: (o) => { storage.put('net', o).catch(() => {}); },
-        clear: () => { storage.delete('net').catch(() => {}); },
+        save: (o) => { if (this.hostRt) this.saveRoom(this.hostRt.save()); else if (!hostedGame(game)) storage.put('net', o).catch(() => {}); },
+        clear: () => { this.clearRoom(); },
       },
       // The room's lifecycle, one line each with its time and room (worker/room.mjs `log`): a hello, a leave, an
       // election, a build change, and `failed` (a room operation that threw). A departure and a failure seconds apart
       // are told apart by these. HOMIE_ROOM_LOG=0 keeps only the failures.
       log: (line) => this.say(line),
     });
-    if (this.saved) this.room.restore(this.saved);
+    if (this.saved && !hostedGame(game)) this.room.restore(this.saved);
     if (this.officeSaved) this.room.restoreOffice(this.officeSaved);
     this.vocabRead = this.readVocab(game).catch(() => false);
     // Room chat (section 19): typed text the floor let through waits for the studio's own Workers AI.
@@ -1268,7 +1293,7 @@ export class Table {
     // A game's own decisions (section 20): the host's typed questions, for a game whose game.json opts in.
     this.room.decider = (state, questions, opts) => this.decide(state, questions, opts);
     // A server-hosted room that forgets everything (nobody came back, or the owner closed it) ends its host runtime.
-    this.room.onForget = () => { if (this.hostRt) { this.hostRt.stop(); this.hostRt = null; this.say({ ev: 'host-over', why: 'forgotten' }); } };
+    this.room.onForget = () => { if (this.hostRt) this.finishRoom('forgotten'); };
     return this.room;
   }
 
@@ -1285,26 +1310,244 @@ export class Table {
       if (hosted) room.failServerHost('This game runs its rules on the server, and this build of the site does not hold them. Build and deploy it again.');
       return;
     }
+    let restoring = false;
+    let pauseWriteFailed = false;
     try {
+      const build = hostedBuild(this.game);
+      try { this.durable ??= roomStore(this.ctx.storage); } catch (error) { this.storageProblem(error); }
+      let saved = this.cleanupPending ? null : this.readRoom();
+      restoring = Boolean(saved);
+      let boot = { epoch: 0, count: 0 };
+      try { boot = this.durable?.boots() ?? boot; } catch (error) { if (saved) throw error; this.storageProblem(error); }
+      if (!Number.isSafeInteger(boot.epoch) || boot.epoch < 0 || !Number.isInteger(boot.count) || boot.count < 0) {
+        const error = new Error('saved boot counter is invalid');
+        if (saved) throw error;
+        this.storageProblem(error); this.clearRoom(); boot = { epoch: 0, count: 0 };
+      }
+      if (saved && saved.buildHash !== build.build) boot.count = 0;
+      // A restore's provisional pause is not a recorded departure. A stored alarm,
+      // even one now due, has not yet confirmed expiry. The alarm handler owns that decision.
+      const restorePause = saved?.pauseFromRestore === true && Date.now() >= saved.pausedAt + ROOM_PAUSE_MS && this.recoveredAlarmAt !== null ? null : saved?.pausedAt;
+      const restoredEnd = saved ? roomEndAt({ people: 0, pausedAt: restorePause, restoredAt: Date.now(), savedAt: saved.at, alarmAt: this.recoveredAlarmAt }) : Infinity;
+      const expired = Date.now() >= restoredEnd;
+      if (saved && (saved.stateHash !== build.stateHash || boot.count >= 2 || expired)) {
+        const why = saved.stateHash !== build.stateHash ? 'state-changed' : boot.count >= 2 ? 'restore loop' : 'nobody-returned';
+        const tokens = new Set((saved.net.seats ?? []).map((s) => s[1]));
+        this.finishRoom(why);
+        room.forget(); room.ended = null;
+        // Only a holder returning to the old match is rematched. A new visitor uses this name immediately.
+        if (!expired) room.endedMatch = { why, ver: build.build, tokens, until: Date.now() + ROOM_PAUSE_MS };
+        this.room = room; saved = null; restoring = false; boot = { epoch: 0, count: 0 };
+      }
+      this.roomSave = saved;
+      if (saved) {
+        // The seat map and the world came from one transaction. No unrelated net write can take a body from its token.
+        room.seats.clear(); room.state.clear(); room.stateBytes = 0;
+        room.restore({ ...saved.net, savedAt: Date.now(), durable: true });
+        this.pausedAt = restoredEnd - ROOM_PAUSE_MS;
+        this.pauseFromRestore = saved.pauseFromRestore = saved.pausedAt === null || saved.pauseFromRestore === true;
+        saved.pausedAt = this.pausedAt;
+        // A failed pause write must never be mistaken for an invalid host save.
+        try { this.durable.write(saved); } catch (error) { pauseWriteFailed = true; this.storageProblem(error); }
+      }
+      const epoch = saved ? Math.max(saved.host.core.epoch, boot.epoch) + 1 : undefined;
+      if (saved) this.durable.boot({ epoch, count: boot.count });
+      this.hostCreatedAt = Date.now();
+      let ticks = 0;
       this.hostRt = startHost(this.game, {
+        ...(saved ? { restore: new TextEncoder().encode((saved.hostText ?? JSON.stringify(saved.host))), restoreEpoch: epoch, startDelayMs: boot.count === 1 ? restoreDelay(`${this.game}/${this.code}`) : 0 } : {}),
+        store: { save: (bytes) => this.saveRoom(bytes) },
+        onTick: () => {
+          if (!saved) return;
+          ticks += 1;
+          if (ticks === 1) this.pendingBoot = { epoch, count: saved.buildHash !== build.build ? 0 : boot.count + 1 };
+          if (ticks === 10 * build.settings.tickHz) this.pendingBoot = { epoch, count: 0 };
+          if (this.pendingBoot && Date.now() >= (this.bootRetryAt ?? 0)) { try { this.durable.boot(this.pendingBoot); this.pendingBoot = null; this.bootFailures = 0; } catch (error) { this.bootRetryAt = Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(this.bootFailures ?? 0, 6)); this.bootFailures = (this.bootFailures ?? 0) + 1; this.storageProblem(error); } }
+        },
         send: (m, text) => room.hostFrame(m, text),
-        log: (line) => this.say(line),
-        onPause: () => this.armRoom(Date.now() + ROOM_PAUSE_MS),
-        onResume: () => this.armRoom(Date.now() + ROOM_ALARM_MS),
+        log: (line) => { if (line.ev === 'persist-failed') this.storageProblem(new Error(line.error)); else this.say(line); },
+        onPause: () => { this.pauseFromRestore = false; this.pausedAt ??= Date.now(); this.armRoom(this.pausedAt + ROOM_PAUSE_MS); },
+        onResume: () => { this.pauseFromRestore = false; this.pausedAt = null; if (this.hostRt) { try { this.saveRoom(this.hostRt.save()); } catch { /* retry already scheduled */ } } this.retimeRound(); this.armRoom(Date.now() + ROOM_ALARM_MS); },
         onEnd: (why) => this.endHosted(why),
       });
       room.setServerHost(this.hostRt);
-      this.armRoom(Date.now() + ROOM_ALARM_MS);
+      room.gameVer = build.build;
+      room.setCurrent(build.build);
+      if (pauseWriteFailed) { try { this.saveRoom(this.hostRt.save()); } catch { /* the save retry retains the original absence */ } }
+      if (saved) {
+        this.retimeRound();
+        room.hostFrame({ t: 'state', k: 'shared', d: this.hostRt.core.shared() });
+        room.hostFrame({ t: 'snap', from: null, e: epoch, k: this.hostRt.tick, st: Date.now(), d: this.hostRt.core.snapshot(), c: [] });
+      }
+      this.armRoom(roomEndAt({ people: 0, pausedAt: this.pausedAt, createdAt: this.hostCreatedAt }));
     } catch (error) {
-      this.hostRt = null;
+      this.hostRt?.stop(); this.hostRt = null;
+      if (restoring) {
+        this.storageProblem(error);
+        room.forget(); this.clearRoom();
+        this.skipSave = true;
+        this.ensureHost(room, hosted);
+        return;
+      }
       room.failServerHost(`This game's rules could not start: ${String(error?.message ?? error).slice(0, 160)}`);
     }
+  }
+
+  saveRoom(bytes) {
+    const now = Date.now();
+    if (now < (this.saveRetryAt ?? 0)) throw this.saveError ?? new Error('room save retry is waiting');
+    try {
+      this.durable ??= roomStore(this.ctx.storage);
+      const build = hostedBuild(this.game);
+      const host = new TextDecoder().decode(bytes);
+      const saved = { v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, stateHash: build.stateHash, buildHash: build.build, host, net: this.room.saved() };
+      const clearing = this.cleanupPending;
+      if (clearing) this.durable.clear();
+      this.durable.write(saved);
+      if (clearing) { this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1; this.queueNetCleanup(false); }
+      this.roomSave = saved; this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null;
+      this.saveFailures = 0; this.saveRetryAt = 0; this.saveError = null;
+      clearTimeout(this.saveRetry); this.saveRetry = null;
+      this.storageHealth = { ok: !this.pendingBoot };
+    } catch (error) {
+      this.saveError = error;
+      const delay = Math.min(60_000, 1000 * 2 ** Math.min(this.saveFailures ?? 0, 6));
+      this.saveFailures = (this.saveFailures ?? 0) + 1; this.saveRetryAt = now + delay;
+      this.storageProblem(error);
+      if (!this.saveRetry) {
+        this.saveRetry = setTimeout(() => {
+          this.saveRetry = null;
+          if (this.hostRt) { try { this.saveRoom(this.hostRt.save()); } catch { /* saveRoom scheduled the next attempt */ } }
+        }, delay);
+        this.saveRetry?.unref?.();
+      }
+      throw error;
+    }
+  }
+
+  retimeRound() {
+    if (!this.hostRt) return;
+    const r = this.hostRt.core.save().round;
+    const period = 1000 / hostedBuild(this.game).settings.tickHz;
+    this.room.hostFrame({ t: 'round', round: { ...this.room.lastRound, n: r[0], phase: r[1] ? 'live' : 'over', endsAt: Date.now() + (r[2] - this.hostRt.tick) * period, startedAt: Date.now() + (r[3] - this.hostRt.tick) * period } });
+  }
+
+  storageProblem(error) {
+    this.storageHealth = { ok: false, message: String(error?.message ?? error).slice(0, 160), since: this.storageHealth?.ok === false ? this.storageHealth.since : Date.now() };
+    if (Date.now() < (this.storageLogAt ?? 0)) return;
+    this.storageLogAt = Date.now() + 1000;
+    this.say({ ev: 'persist-failed', build: hostedBuild(this.game)?.build, error: this.storageHealth.message });
+  }
+
+  readRoom(validateHost = false) {
+    if (this.skipSave) { this.skipSave = false; return null; }
+    try {
+      if (this.durable?.boots()?.retired === true) { this.clearRoom(); return null; }
+      const saved = this.durable?.read();
+      if (!saved) return null;
+      if (saved.v !== 1 || typeof saved.game !== 'string' || typeof saved.room !== 'string' ||
+          this.game && saved.game !== this.game || this.code && saved.room !== this.code ||
+          !Number.isFinite(saved.at) || saved.at < 0 || saved.at > Date.now() + 5000 || saved.pausedAt !== null && (!Number.isFinite(saved.pausedAt) || saved.pausedAt < 0 || saved.pausedAt > Date.now() + 5000) ||
+          saved.pauseFromRestore !== undefined && typeof saved.pauseFromRestore !== 'boolean' ||
+          saved.host?.v !== 1 || !saved.net || typeof saved.stateHash !== 'string' || typeof saved.buildHash !== 'string') throw new Error('save envelope does not fit this room');
+      saved.at = Math.min(saved.at, Date.now());
+      if (saved.pausedAt !== null) saved.pausedAt = Math.min(saved.pausedAt, Date.now());
+      if (hostedGame(saved.game) && saved.stateHash !== hostedBuild(saved.game).stateHash) return saved;
+      this.game ??= saved.game; this.code ??= saved.room;
+      const seats = saved.net.seats;
+      const cap = hostedBuild(saved.game)?.seats ?? 32;
+      if (saved.net.v !== 1 || saved.net.room !== saved.room || !Array.isArray(seats) || seats.length > cap ||
+          new Set(seats.map((s) => s?.[0])).size !== seats.length || new Set(seats.map((s) => s?.[1])).size !== seats.length ||
+          seats.some((s) => !Array.isArray(s) || !Number.isInteger(s[0]) || s[0] < 0 || s[0] >= cap || typeof s[1] !== 'string' || s[1].length > 128 || typeof s[2] !== 'string' || s[2].length > 40 || s[4] !== null && (!Number.isSafeInteger(s[4]) || s[4] < 0) || s[5] !== null && !Number.isFinite(s[5]))) throw new Error('saved seats do not fit this room');
+      if (validateHost && hostedGame(saved.game) && saved.stateHash === hostedBuild(saved.game).stateHash) {
+        const probe = startHost(saved.game, { restore: new TextEncoder().encode(saved.hostText ?? JSON.stringify(saved.host)), send() {} });
+        probe.stop();
+      } else if (!hostedGame(saved.game)) throw new Error('saved game is not in this build');
+      return saved;
+    } catch (error) { this.storageProblem(error); this.clearRoom(); return null; }
+  }
+
+  clearRoom() {
+    this.cleanupGeneration = (this.cleanupGeneration ?? 0) + 1;
+    this.roomSave = null; this.saved = null; this.pendingBoot = null;
+    try { this.durable?.retire(); this.durable?.clear(); this.cleanupPending = false; clearTimeout(this.cleanupRetry); this.cleanupRetry = null; }
+    catch (error) { this.retryCleanup(error); }
+    this.queueNetCleanup(this.cleanupPending);
+  }
+
+  queueNetCleanup(retired) {
+    // The key-value record can preserve retirement when SQL writes, not just deletes, are unavailable.
+    // Serialize it with a later successful save so an older failure cannot retire the new match.
+    const generation = this.cleanupGeneration;
+    this.netCleanup = (this.netCleanup ?? Promise.resolve()).then(() => {
+      if (generation !== this.cleanupGeneration) return;
+      return retired ? this.ctx.storage.put('net', { retired: true }) : this.ctx.storage.delete('net');
+    }).then(() => {
+      if (generation !== this.cleanupGeneration) return;
+      this.netCleanupFailed = false;
+      clearTimeout(this.netCleanupRetry); this.netCleanupRetry = null;
+      if (!this.cleanupPending) this.cleanupFailures = 0;
+    }).catch((error) => {
+      if (generation !== this.cleanupGeneration) return;
+      if (retired) { this.retryCleanup(error); return; }
+      // Removing an old key marker is not permission to delete a newer SQL match.
+      this.netCleanupFailed = true; this.storageProblem(error);
+      const delay = Math.min(60_000, 1000 * 2 ** Math.min(this.cleanupFailures ?? 0, 6));
+      this.cleanupFailures = (this.cleanupFailures ?? 0) + 1;
+      this.armRoom(Date.now() + delay);
+      if (!this.netCleanupRetry) {
+        this.netCleanupRetry = setTimeout(() => { this.netCleanupRetry = null; if (generation === this.cleanupGeneration) this.queueNetCleanup(false); }, delay);
+        this.netCleanupRetry?.unref?.();
+      }
+    });
+    this.ctx.waitUntil(this.netCleanup);
+  }
+
+  retryCleanup(error) {
+    this.cleanupPending = true; this.storageProblem(error);
+    const delay = Math.min(60_000, 1000 * 2 ** Math.min(this.cleanupFailures ?? 0, 6));
+    this.cleanupFailures = (this.cleanupFailures ?? 0) + 1;
+    this.armRoom(Date.now() + delay);
+    // An alarm write can fail as well. Keep the end pending for this object's lifetime.
+    if (!this.cleanupRetry) {
+      this.cleanupRetry = setTimeout(() => { this.cleanupRetry = null; if (this.cleanupPending) this.clearRoom(); }, delay);
+      this.cleanupRetry?.unref?.();
+    }
+  }
+
+  finishRoom(why) {
+    this.hostRt?.stop(); this.hostRt = null;
+    clearInterval(this.timer); this.timer = null;
+    clearTimeout(this.saveRetry); this.saveRetry = null; this.saveRetryAt = 0;
+    this.clearRoom();
+    const room = this.room;
+    if (room) {
+      this.officeSaved = room.officeSaved();
+      room.ended = { why, ver: hostedBuild(this.game)?.build ?? null };
+      for (const w of room.watchers) { try { w.close(1000, 'room-over'); } catch { /* gone */ } }
+      room.watchers.clear();
+    }
+    this.tellLobby({ ended: true });
+    this.say({ ev: 'host-over', why, build: hostedBuild(this.game)?.build, ...(why === 'restore loop' ? { message: 'This room shares its isolate and may not be the cause.' } : {}) });
+    this.room = null; this.endedRoom = null; this.pausedAt = null;
   }
 
   /** The room wants the alarm at `at` (ms): set it unless an earlier one is already waiting. */
   armRoom(at) {
     this.roomAlarmAt = at;
-    this.ctx.waitUntil((async () => { const cur = await this.ctx.storage.getAlarm(); if (cur === null || cur > at) await this.ctx.storage.setAlarm(at); })().catch(() => {}));
+    this.alarmWrite = (this.alarmWrite ?? Promise.resolve()).then(async () => {
+      const cur = await this.ctx.storage.getAlarm();
+      if (cur === null || cur > at) await this.ctx.storage.setAlarm(at);
+      this.alarmFailures = 0;
+    }).catch((error) => {
+      this.storageProblem(error);
+      if (this.alarmRetry) return;
+      const delay = Math.min(60_000, 1000 * 2 ** Math.min(this.alarmFailures ?? 0, 6));
+      this.alarmFailures = (this.alarmFailures ?? 0) + 1;
+      this.alarmRetry = setTimeout(() => { this.alarmRetry = null; this.armRoom(this.roomAlarmAt); }, delay);
+      this.alarmRetry?.unref?.();
+    });
+    this.ctx.waitUntil(this.alarmWrite);
   }
 
   /**
@@ -1313,16 +1556,16 @@ export class Table {
    */
   endHosted(why) {
     const room = this.room;
-    this.hostRt = null;
     if (!room) return;
+    this.finishRoom(why);
+    this.hostRt = null;
     for (const c of [...room.clients.values()]) {
-      if (c.helloed) room.error(c, 'room-over', 'This room ended because its game stopped working. Join again for a fresh one.');
+      if (c.helloed) room.error(c, 'room-over', 'This room ended. Joining a fresh room.', { rematch: true, ver: room.ended.ver });
       room.clients.delete(c.id);
       try { c.conn.close(1011, 'room-over'); } catch { /* gone */ }
     }
     room.emptySince = Date.now();
     room.forget();
-    this.say({ ev: 'host-over', why });
     this.report();
   }
 
@@ -1333,20 +1576,46 @@ export class Table {
    * is no room in memory: stored seats of a server-hosted room that nobody reconnected to are deleted.
    */
   async roomAlarm() {
+    try { await this.runRoomAlarm(); this.roomAlarmFailures = 0; }
+    catch (error) {
+      this.storageProblem(error);
+      const delay = Math.min(60_000, 1000 * 2 ** Math.min(this.roomAlarmFailures ?? 0, 6));
+      this.roomAlarmFailures = (this.roomAlarmFailures ?? 0) + 1;
+      this.armRoom(Date.now() + delay);
+    }
+  }
+
+  async runRoomAlarm() {
+    if (this.netCleanupFailed) this.queueNetCleanup(false);
+    if (this.cleanupPending) this.clearRoom();
     const now = Date.now();
     const room = this.room;
-    if (!room) {
+    if (!room || !this.hostRt) {
+      if (this.ctx.storage.sql?.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'save'").toArray().length) {
+        this.durable ??= roomStore(this.ctx.storage);
+        const saved = this.cleanupPending ? null : this.readRoom(true);
+        if (saved) {
+          this.game = saved.game; this.code = saved.room;
+          if (saved.stateHash !== hostedBuild(saved.game)?.stateHash) { this.finishRoom('state-changed'); return; }
+          // No saved pause means people were present. The first cold wake starts the absence period.
+          if (saved.pausedAt === null) {
+            this.pausedAt ??= now; saved.pausedAt = this.pausedAt; this.durable.write(saved);
+          }
+          const endAt = roomEndAt({ people: 0, pausedAt: saved.pausedAt, createdAt: now });
+          if (now < endAt) { this.armRoom(endAt); return; }
+          this.finishRoom('nobody-returned');
+        }
+      }
       if (this.saved?.hosted === 'server') { const was = this.saved.room ?? null; this.saved = null; await this.ctx.storage.delete('net').catch(() => {}); this.say({ ev: 'host-over', why: 'nobody-returned', room: was }); }
       return;
     }
     if (!this.hostRt) return;
-    if (this.hostRt.people > 0) { if (now >= this.roomAlarmAt - 1000) this.armRoom(now + ROOM_ALARM_MS); else this.armRoom(this.roomAlarmAt); return; }
-    if (now < this.roomAlarmAt - 1000) { this.armRoom(this.roomAlarmAt); return; }
-    // A watcher's open socket keeps the paused room for it to look at, as it keeps a browser-hosted room from being
-    // forgotten today: the room ends a minute after the last one has gone too.
-    if ([...room.clients.values()].some((c) => c.helloed && !c.agent) || room.watchers.size) { this.armRoom(now + ROOM_PAUSE_MS); return; }
-    // Nobody returned: the room ends. An AI seat never keeps it.
-    for (const c of [...room.clients.values()]) { if (c.helloed) room.error(c, 'room-over', 'Everyone left, so this room ended.'); room.clients.delete(c.id); try { c.conn.close(1000, 'room-over'); } catch { /* gone */ } }
+    const endAt = roomEndAt({ people: this.hostRt.people, pausedAt: this.pausedAt, createdAt: this.hostCreatedAt });
+    if (endAt === Infinity) { if (now >= this.roomAlarmAt - 1000) this.armRoom(now + ROOM_ALARM_MS); else this.armRoom(this.roomAlarmAt); return; }
+    if (now < endAt) { this.armRoom(endAt); return; }
+    // Nobody returned: neither watchers nor AI seats keep the paused room.
+    this.finishRoom('nobody-returned');
+    for (const c of [...room.clients.values()]) { if (c.helloed) room.error(c, 'room-over', 'Everyone left, so this room ended.', { rematch: true }); room.clients.delete(c.id); try { c.conn.close(1000, 'room-over'); } catch { /* gone */ } }
     room.forget();
     this.report();
   }
@@ -1588,10 +1857,16 @@ export class Table {
     const game = url.searchParams.get('game');
     const code = url.searchParams.get('room');
     const max = Math.max(1, Math.min(SEAT_MAX, Math.floor(Number(url.searchParams.get('max'))) || 8));
+    if (url.pathname === '/__restart') {
+      if (this.env.HOMIE_PREVIEW !== '1' || request.method !== 'POST') return new Response('not found', { status: 404 });
+      // No last-chance save: this measures exactly what a real abrupt restart can lose.
+      setTimeout(() => this.ctx.abort('Preview forced restart'), 25);
+      return json({ ok: true });
+    }
     const room = this.roomFor(game, code, max);
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
-    if (url.pathname === '/__facts') return json({ ...room.officeFacts(), ...(this.house ? { brains: this.house.facts() } : {}) });
+    if (url.pathname === '/__facts') return json({ ...room.officeFacts(), durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
     // A chat line as the room keeps it (section 19), for a report: the Worker files the room's own copy, never a reporter's.
     if (url.pathname === '/__chat') {
       const id = url.searchParams.get('id');
@@ -1617,6 +1892,8 @@ export class Table {
     // Revision 9: the game's own stall time and the build that is live now, the Worker's word with every socket.
     const said = url.searchParams.has('cur');
     if (said) { room.setStall(url.searchParams.get('stall')); room.setCurrent(url.searchParams.get('cur') || null); }
+    // Restore before applying the Worker's current policy: a save must not replace a newer policy.
+    this.ensureHost(room, url.searchParams.get('host') === 'server');
     // The room's policy (section 17), composed by the Worker for every socket: a newer one than the room's applies.
     const pol = decodeFacts(url.searchParams.get('pol'));
     // The room's chat rules ride beside it (they may be longer than a policy): section 19.
@@ -1624,8 +1901,6 @@ export class Table {
     if (pol && chatRules && typeof chatRules === 'object') pol.chat = chatRules;
     if (pol) room.setPolicy(pol);
     if (this.house) this.house.sync();
-    // Revision 10: a server-hosted game's room has its host before anybody is let in.
-    this.ensureHost(room, url.searchParams.get('host') === 'server');
     const agent = decodeFacts(url.searchParams.get('ag'));
     // Kept chat (0.29.0): the room's history is back in its window before this page hears it.
     await this.hydrateHistory(room);
@@ -1765,7 +2040,7 @@ export class Table {
   /** Tell the Lobby how many players this room has, when it changes. */
   report() {
     const room = this.room;
-    if (!room || !this.game) return;
+    if (!room || !this.game || this.endedRoom) return;
     const counts = room.facts().counts;
     // Players are people (an agent never counts as one, DESIGN D9); agents and AI bodies are reported apart.
     const players = counts.players;
@@ -1968,6 +2243,7 @@ export class Lobby {
     if (url.pathname === '/report' && request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
       if (typeof body.room !== 'string' || !ROOM_ID.test(body.room)) return json({ ok: false }, 400);
+      if (body.ended === true) { this.rooms.delete(body.room); this.seen.delete(body.room); this.save(); return json({ ok: true }); }
       // The owner closed this room: matched with nobody until then (and forgotten as a public room).
       if (Number.isFinite(body.closed)) {
         if (body.closed > now) { this.closed.set(body.room, body.closed); this.rooms.delete(body.room); } else this.closed.delete(body.room);

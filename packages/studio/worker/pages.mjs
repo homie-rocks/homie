@@ -280,7 +280,55 @@ function layoutless(title, body, css, ancestors = "'self'") {
 }
 
 /* The shell script (runs on the site's own origin; the game runs in the sandboxed frame). */
-const SHELL_JS = String.raw`(function () {
+// Included separately in each page: a successful welcome acknowledges the actual frame build.
+const BUILD_RETRY_JS = String.raw`
+  function buildRetry(load, note) {
+    var active = false, loading = false, reported = false, failed = false, rules = false;
+    var attempt = 0, timer = null, probe = null, target = null, exhausted = false, legacy = [];
+    function cancel() { clearTimeout(timer); clearTimeout(probe); timer = probe = null; }
+    function done() { cancel(); active = false; failed = false; }
+    function giveUp() { exhausted = true; done(); note('Reload the page to play the new version.'); }
+    function run() {
+      cancel();
+      legacy = legacy.filter(function (at) { return Date.now() - at < 60000; });
+      if (rules ? attempt >= 6 : legacy.length >= 2) { giveUp(); return; }
+      if (!rules) legacy.push(Date.now());
+      active = true; loading = true; reported = false; failed = false; attempt++;
+      note('Updating the game. Loading…'); load();
+    }
+    function wait() {
+      if (!active || loading || !failed || timer !== null) return;
+      clearTimeout(probe); probe = null;
+      if (rules ? attempt >= 6 : legacy.length >= 2) { giveUp(); return; }
+      var delay = [2000, 5000, 15000][Math.min(attempt - 1, 2)];
+      note('Updating the game. Retrying in ' + delay / 1000 + ' s.');
+      timer = setTimeout(run, delay);
+    }
+    return {
+      request: function (ver, immediate) {
+        if (exhausted && ver === target) return;
+        if (!active) { target = ver; rules = immediate === true; attempt = 0; exhausted = false; run(); }
+        else if (!rules) run();
+        else { failed = true; wait(); }
+      },
+      loaded: function () {
+        loading = false;
+        if (!active) return;
+        if (failed) { wait(); return; }
+        // A browser error document emits load too. Only the helper can confirm this document.
+        if (!reported && probe === null) probe = setTimeout(function () { probe = null; failed = true; wait(); }, 5000);
+      },
+      reported: function () { reported = true; clearTimeout(probe); probe = null; },
+      failed: function () { loading = false; failed = true; wait(); },
+      // Told to wait for its room, the page says so. A newer build that loads after this round is not a wait: the
+      // page is still in its room, live, and says nothing here.
+      stop: function (quiet) { done(); note(quiet === true ? '' : 'Waiting for the room.'); },
+      acknowledge: function () { var was = active; exhausted = false; done(); loading = false; note(''); return was; }
+    };
+  }
+`;
+
+const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   'use strict';
   var boot = window.__HOMIE_PLAY;
   var params = new URLSearchParams(location.search);
@@ -431,27 +479,24 @@ const SHELL_JS = String.raw`(function () {
     }
     state.params = {};
     (boot.params || []).forEach(function (k) { var v = params.get(k); if (v !== null && new RegExp(boot.paramValue || '^$').test(v)) state.params[k] = v; });
-    // A newer build of the game is live (section 23): load the frame again, at most twice a minute (a build whose
-    // files are still the old ones at the edge would otherwise reload for ever).
-    var reloads = [];
-    function reloadGame() {
-      var t = Date.now();
-      reloads = reloads.filter(function (x) { return t - x < 60000; });
-      if (reloads.length >= 2) { flash('This game was updated. Reload the page to play the new version.'); return false; }
-      reloads.push(t);
+    var updating = buildRetry(function () {
       state.stale = null; state.closed = null; state.reloaded = (state.reloaded || 0) + 1;
-      try { frame.src = frameUrl(); } catch (e) {}
-      return true;
-    }
+      frame.src = frameUrl();
+    }, function (text) { clearTimeout(flash.t); if (toast) { toast.textContent = text; toast.hidden = !text; } });
+    function reloadGame() { updating.request(state.stale && state.stale.ver, state.stale && state.stale.immediate); }
     frame.src = frameUrl();
     A.room(labelOf(room));
-    frame.addEventListener('load', function () { A.frameLoaded(); try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
+    frame.addEventListener('error', updating.failed);
+    frame.addEventListener('load', function () { updating.loaded(); A.frameLoaded(); try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
     window.addEventListener('pointerdown', function (e) { if ((ui && ui.contains(e.target)) || (e.target.closest && e.target.closest('[data-keep-focus]'))) return; try { frame.focus(); } catch (e2) {} }, { passive: true });
     window.addEventListener('message', function (ev) {
       if (ev.source !== frame.contentWindow) return;
       var m = ev.data;
       if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
       A.message(m);
+      if (m.what === 'wait') updating.stop();
+      if (m.what === 'build' && updating.acknowledge(m.ver) && toast) toast.hidden = true;
+      if (m.what === 'attached' || m.what === 'ready') updating.reported();
       if (m.what === 'attached') { state.attached = true; lastRects = ''; tellRects(); }
       // The link (section 22): in the room, knocking again, or playing alone because the room never answered.
       if (m.what === 'link' && typeof m.state === 'string') state.link = { state: m.state, why: String(m.why || ''), hosting: m.hosting === true, at: Date.now() };
@@ -467,9 +512,16 @@ const SHELL_JS = String.raw`(function () {
       if (m.what === 'prefs') answerPrefs(m);
       // A newer build of the game is live. Kept out of a room for it (final): the game loads again now. Still
       // playing in its own room: it loads again at the round's break, or at once on a big screen (nothing to lose).
+      if (m.what === 'rematch' && m.room === room) {
+        var fresh = new URL(location.href);
+        fresh.searchParams.delete('room'); fresh.searchParams.set('not', room);
+        location.replace(fresh.href);
+        return;
+      }
       if (m.what === 'stale') {
-        state.stale = { ver: typeof m.ver === 'string' ? m.ver : null, final: m.final === true };
-        if (m.final === true || screenMode) reloadGame();
+        state.stale = { ver: typeof m.ver === 'string' ? m.ver : null, final: m.final === true, immediate: m.immediate === true };
+        if (m.final !== true && m.immediate !== true && !screenMode) updating.stop(true);
+        if (m.final === true || m.immediate === true || screenMode) reloadGame();
         else flash('A new version of ' + boot.name + ' is ready: it loads after this round.');
       }
       if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; if (typeof m.seat === 'number') state.full = false; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
@@ -998,6 +1050,7 @@ export function watchPage(cat, g, { room = null, ticket = null, policy = 'follow
   return layoutless(`Watch ${g.name}`, `
 <header class="wtop" data-top>
   <span class="live" data-live><i aria-hidden="true"></i><b>Live</b></span>
+  <span data-update role="status" hidden></span>
   <span class="what"><b>${esc(g.name)}</b><span data-room-label>finding a room…</span></span>
   <span class="clock" data-clock hidden></span>
   <span class="grow"></span>
@@ -1094,7 +1147,7 @@ body.idle { cursor: none; }
 [hidden] { display: none !important; }`;
 
 /* The watch page's script (the site's own origin; the game runs in the sandboxed frame as a watcher). */
-const WATCH_JS = String.raw`(function () {
+const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
   'use strict';
   var boot = window.__HOMIE_WATCH;
   var params = new URLSearchParams(location.search);
@@ -1175,10 +1228,22 @@ const WATCH_JS = String.raw`(function () {
     if (params.get('debug') === '1') q.set('debug', '1');
     ['cam', 'view'].forEach(function (k) { var v = params.get(k); if (v && /^[A-Za-z0-9_-]{1,16}$/.test(v)) q.set(k, v); });
     frame.src = '/' + boot.game + '/__game/?' + q.toString();
+    var updating = buildRetry(function () { frame.src = '/' + boot.game + '/__game/?' + q.toString(); }, function (text) { var el = q1('[data-update]'); if (el) { el.textContent = text; el.hidden = !text; } });
+    frame.addEventListener('load', updating.loaded);
+    frame.addEventListener('error', updating.failed);
     addEventListener('message', function (ev) {
       if (ev.source !== frame.contentWindow) return;
       var m = ev.data;
       if (!m || typeof m !== 'object' || m.t !== 'homie-net') return;
+      if (m.what === 'rematch' && m.room === room) {
+        var fresh = new URL(location.href); fresh.searchParams.delete('room'); fresh.searchParams.set('not', room);
+        location.replace(fresh.href); return;
+      }
+      if (m.what === 'wait') updating.stop();
+      else if (m.what === 'stale' && m.final !== true && m.immediate !== true) updating.stop(true);
+      if (m.what === 'stale' && (m.final === true || m.immediate === true)) updating.request(m.ver, m.immediate);
+      if (m.what === 'build') updating.acknowledge(m.ver);
+      if (m.what === 'attached' || m.what === 'ready') updating.reported();
       if (m.what === 'attached') {
         state.attached = true;
         // A helper from before revision 5 never says what it renders: after a moment, the room's overview it is.
