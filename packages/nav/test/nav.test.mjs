@@ -12,13 +12,13 @@ test('triangle bake repeats exactly, loads from bytes, and follows the heightfie
   const m = new Mesh(config, [2, 2, 2]); m.loadTile(a);
   const path = m.path([1, .2, 1], [9, 1.8, 9]);
   assert.equal(path.complete, true); assert.ok(path.points.at(-1)[1] > 1.7);
-  assert.deepEqual(Mesh.restore(m.save()).path([1, .2, 1], [9, 1.8, 9]), path);
+  assert.deepEqual(Mesh.restore(m.save(), [a]).path([1, .2, 1], [9, 1.8, 9]), path);
   assert.equal(m.raycast([1, .3, 1], [9, 1.9, 9]).clear, true);
 });
 
 test('slope and headroom reject unsuitable surfaces and radius closes a narrow passage', () => {
   const steep = new Mesh({ ...config, slopeDegrees: 10 }, [1, 1, 1]);
-  steep.loadTile(bakeTile(field(x => x * .4), steep.state.config, 0, 0));
+  steep.loadTile(bakeTile(field(x => x * .4), steep.config, 0, 0));
   assert.equal(steep.nearest([5, 2, 5]), null);
   const floor = field(), roof = field(() => 1.2);
   const positions = [...floor.positions, ...roof.positions], indices = [...floor.indices, ...Array.from(roof.indices, i => i + floor.positions.length / 3)];
@@ -53,7 +53,7 @@ test('obstacles carve routes, overlap correctly, survive restore, and remove cle
   const box = { min: [4, -1, 3], max: [6, 3, 7] }, id = m.addObstacle(box), other = m.addObstacle(box);
   const p = m.path(from, to); assert.equal(p.complete, true); assert.ok(p.points.length > 2);
   const ray = m.raycast(from, to); assert.equal(ray.clear, false); assert.ok(ray.fraction > .2 && ray.fraction < .5);
-  const r = Mesh.restore(m.save()); assert.deepEqual(r.path(from, to), p);
+  const r = Mesh.restore(m.save(), [bakeTile(field(), config, 0, 0)]); assert.deepEqual(r.path(from, to), p);
   r.removeObstacle(id); assert.equal(r.raycast(from, to).clear, false);
   r.removeObstacle(other); assert.equal(r.raycast(from, to).clear, true);
 });

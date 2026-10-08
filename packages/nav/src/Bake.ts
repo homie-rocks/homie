@@ -1,25 +1,25 @@
 /** Recast's voxel pipeline, one independently buildable tile with a geometry halo. */
 import * as nav from 'navcat';
 import type { HeightField } from '@homie-rocks/heightfield/Field.js';
-import { pack, unpack } from './State.ts';
-import { point, positive, type Point } from './Query.ts';
+import { encodeTile, finishTile, type TileData } from './internal/Tile.ts';
+import { deterministicCos } from './internal/Math.ts';
+import { axes, vector, point, positive, type Point, type Up } from './Query.ts';
 export interface Triangles { positions: ArrayLike<number>; indices?: ArrayLike<number> }
 export interface BakeConfig {
   origin: Point;
+  up?: Up;
+  /** Keep packed spans only for tiles that will be carved. Default false. */
+  retainSpans?: boolean;
+  minRegionCells?: number; mergeRegionCells?: number;
   /** Global vertical bounds, shared by every tile, in world metres. */
   minY: number; maxY: number;
   cellSize: number; cellHeight: number; tileCells: number;
   radius: number; height: number; stepHeight: number; slopeDegrees: number;
 }
-export interface Obstacle { min: Point; max: Point }
-export interface TileData {
-  config: BakeConfig; x: number; z: number;
-  /** Compact spans retained so obstacles can be carved without original triangles. */
-  compact: nav.CompactHeightfield;
-  baked: nav.NavMeshTile | null;
-}
+export interface Obstacle { min: Point; max: Point; radius?: number }
 export function checkConfig(c: BakeConfig): void {
   point(c.origin);
+  if (c.up !== undefined && c.up !== 'y' && c.up !== 'z') throw new Error('nav: up must be y or z');
   for (const k of ['cellSize', 'cellHeight', 'height'] as const) positive(c[k], k);
   if (!Number.isInteger(c.tileCells) || c.tileCells < 4 || c.tileCells > 1024) throw new Error('nav: tileCells must be an integer from 4 to 1024');
   if (![c.minY, c.maxY, c.radius, c.stepHeight, c.slopeDegrees].every(Number.isFinite) || c.maxY <= c.minY || c.radius < 0 || c.stepHeight < 0 || c.stepHeight >= c.height || c.slopeDegrees < 0 || c.slopeDegrees >= 90) throw new Error('nav: invalid agent or vertical bounds');
@@ -28,7 +28,7 @@ export function checkConfig(c: BakeConfig): void {
 }
 export function checkObstacle(o: Obstacle): void {
   point(o.min); point(o.max);
-  if (o.min.some((v, i) => v >= o.max[i]!)) throw new Error('nav: obstacle bounds must have positive volume');
+  if (vector(o.min).some((v, i) => v >= o.max[i]!)) throw new Error('nav: obstacle bounds must have positive volume');
 }
 /** Bake one tile; triangles must include the radius + three-cell halo on every side. */
 export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: number): Uint8Array {
@@ -39,14 +39,26 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
   const indices = input.indices ? Uint32Array.from(input.indices) : Uint32Array.from({ length: positions.length / 3 }, (_, i) => i);
   if (positions.length % 3 || indices.length % 3 || !positions.every(Number.isFinite)) throw new Error('nav: malformed triangles');
   if (input.indices && Array.from(input.indices).some(i => !Number.isInteger(i) || i < 0 || i >= positions.length / 3)) throw new Error('nav: invalid triangle index');
-  const c = config, border = Math.ceil(c.radius / c.cellSize) + 3, size = c.tileCells * c.cellSize;
+  if (config.up === 'z') {
+    for (let i = 0; i < positions.length; i += 3) { const y = positions[i + 1]!; positions[i + 1] = positions[i + 2]!; positions[i + 2] = y; }
+    for (let i = 0; i < indices.length; i += 3) { const a = indices[i + 1]!; indices[i + 1] = indices[i + 2]!; indices[i + 2] = a; }
+  }
+  const c = { ...config, origin: axes(config.origin, config.up) }, border = Math.ceil(c.radius / c.cellSize) + 3, size = c.tileCells * c.cellSize;
   const bounds: [number, number, number, number, number, number] = [c.origin[0] + x * size - border * c.cellSize, c.minY, c.origin[2] + z * size - border * c.cellSize, c.origin[0] + (x + 1) * size + border * c.cellSize, c.maxY, c.origin[2] + (z + 1) * size + border * c.cellSize];
   const hf = nav.createHeightfield(c.tileCells + border * 2, c.tileCells + border * 2, bounds, c.cellSize, c.cellHeight);
   const areas = new Uint8Array(indices.length / 3);
-  nav.markWalkableTriangles(positions, indices, areas, c.slopeDegrees);
+  const threshold = deterministicCos(c.slopeDegrees * (Math.PI / 180));
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i]! * 3, b = indices[i + 1]! * 3, d = indices[i + 2]! * 3;
+    const ux = positions[b]! - positions[a]!, uy = positions[b + 1]! - positions[a + 1]!, uz = positions[b + 2]! - positions[a + 2]!;
+    const vx = positions[d]! - positions[a]!, vy = positions[d + 1]! - positions[a + 1]!, vz = positions[d + 2]! - positions[a + 2]!;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    if (ny > threshold * Math.sqrt(nx * nx + ny * ny + nz * nz)) areas[i / 3] = nav.WALKABLE_AREA;
+  }
   const ctx = nav.BuildContext.create(), climb = Math.floor(c.stepHeight / c.cellHeight), height = Math.ceil(c.height / c.cellHeight);
   // navcat 0.4.1's only rasterizer clock reads are these two profiling hooks.
   // The call is synchronous, has no external callbacks, and restores even on error.
+  // The runtime clock-throwing test guards this version-specific workaround.
   const start = nav.BuildContext.start, end = nav.BuildContext.end;
   try {
     nav.BuildContext.start = () => {}; nav.BuildContext.end = () => {};
@@ -56,48 +68,67 @@ export function bakeTile(input: Triangles, config: BakeConfig, x: number, z: num
   nav.filterLedgeSpans(hf, height, climb);
   nav.filterWalkableLowHeightSpans(hf, height);
   const compact = nav.buildCompactHeightfield(ctx, height, climb, hf);
-  const data: TileData = { config: { ...c, origin: [...c.origin] }, x, z, compact, baked: null };
+  const data: TileData = { config: { ...config, origin: vector(config.origin) }, x, z, compact, baked: null };
   // Polygon generation edits its compact input. Retain pristine spans for later carving.
-  data.baked = finishTile(unpack<TileData>('tile', pack('tile', data)), []);
-  return pack('tile', data);
-}
-/** Build polygons from saved spans. Obstacles are carved BEFORE radius erosion. */
-export function tilePolygons(bytes: Uint8Array, obstacles: readonly Obstacle[]): nav.NavMeshTile | null {
-  const data = unpack<TileData>('tile', bytes);
-  checkConfig(data.config);
-  return obstacles.length ? finishTile(data, obstacles) : data.baked;
-}
-function finishTile(data: TileData, obstacles: readonly Obstacle[]): nav.NavMeshTile | null {
-  const c = data.config;
-  const compact = data.compact;
-  for (const o of obstacles) {
-    // Mark spans whose standing body overlaps the box vertically. Erosion handles XZ radius.
-    nav.markBoxArea([o.min[0], o.min[1] - c.height, o.min[2], o.max[0], o.max[1], o.max[2]], nav.NULL_AREA, compact);
-  }
-  nav.erodeWalkableArea(Math.ceil(c.radius / c.cellSize), compact);
-  nav.buildDistanceField(compact);
-  const ctx = nav.BuildContext.create(), border = Math.ceil(c.radius / c.cellSize) + 3;
-  nav.buildRegions(ctx, compact, border, 0, 0);
-  const contours = nav.buildContours(ctx, compact, 1.3, 12 / c.cellSize, nav.ContourBuildFlags.CONTOUR_TESS_WALL_EDGES);
-  const poly = nav.buildPolyMesh(ctx, contours, 6);
-  if (!poly.nPolys) return null;
-  for (let i = 0; i < poly.nPolys; i++) { poly.flags[i] = 1; poly.areas[i] = 0; }
-  const detail = nav.buildPolyMeshDetail(ctx, poly, compact, c.cellSize * 6, c.cellHeight);
-  const p = nav.polyMeshToTilePolys(poly);
-  return nav.buildTile({ ...p, ...nav.polyMeshDetailToTileDetailMesh(p.polys, detail), bounds: poly.bounds,
-    tileX: data.x, tileY: data.z, tileLayer: 0, cellSize: c.cellSize, cellHeight: c.cellHeight,
-    walkableHeight: c.height, walkableRadius: c.radius, walkableClimb: c.stepHeight });
+  data.baked = finishTile(data, []);
+  if (!config.retainSpans) data.compact = null;
+  return encodeTile(data);
 }
 /** Sample the heightfield's actual function, with upward triangle winding and no skirts. */
-export function heightfieldTriangles(field: HeightField, minX: number, minZ: number, nx: number, nz: number, step: number): Triangles {
+export function heightfieldTriangles(field: HeightField, minX: number, minZ: number, nx: number, nz: number, step: number, up: Up = 'y'): Triangles {
   positive(step, 'sample step');
   if (![minX, minZ].every(Number.isFinite) || !Number.isInteger(nx) || !Number.isInteger(nz) || nx < 2 || nz < 2 || nx * nz > 4_000_000) throw new Error('nav: invalid heightfield dimensions');
   const positions = new Float64Array(nx * nz * 3), indices = new Uint32Array((nx - 1) * (nz - 1) * 6);
   let k = 0;
   for (let z = 0; z < nz; z++) for (let x = 0; x < nx; x++) {
     const px = minX + x * step, pz = minZ + z * step;
-    positions.set([px, field.heightAt(px, pz), pz], (z * nx + x) * 3);
+    positions.set(axes([px, field.heightAt(px, pz), pz], up), (z * nx + x) * 3);
     if (x < nx - 1 && z < nz - 1) { const a = z * nx + x; indices.set([a, a + nx, a + nx + 1, a, a + nx + 1, a + 1], k); k += 6; }
   }
+  if (up === 'z') for (let i = 0; i < indices.length; i += 3) { const v = indices[i + 1]!; indices[i + 1] = indices[i + 2]!; indices[i + 2] = v; }
   return { positions, indices };
+}
+
+export interface BakedTile { x: number; z: number; bytes: Uint8Array }
+/** Bucket triangles once, including every tile's erosion halo. Coordinates x/z
+ * here name the two tile-grid dimensions; for Z-up these are world x/y. */
+export function bakeLevel(input: Triangles, config: BakeConfig): BakedTile[] {
+  checkConfig(config);
+  const positions = Float64Array.from(input.positions);
+  const indices = input.indices ? Array.from(input.indices) : Array.from({ length: positions.length / 3 }, (_, i) => i);
+  if (positions.length % 3 || indices.length % 3 || !positions.every(Number.isFinite) || indices.some(i => !Number.isInteger(i) || i < 0 || i * 3 >= positions.length)) throw new Error('nav: malformed triangles');
+  if (!indices.length) return [];
+  const horizontal = config.up === 'z' ? 1 : 2, origin = axes(config.origin, config.up);
+  const size = config.tileCells * config.cellSize, halo = (Math.ceil(config.radius / config.cellSize) + 3) * config.cellSize;
+  let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+  for (const i of indices) { minX = Math.min(minX, positions[i * 3]!); maxX = Math.max(maxX, positions[i * 3]!); minZ = Math.min(minZ, positions[i * 3 + horizontal]!); maxZ = Math.max(maxZ, positions[i * 3 + horizontal]!); }
+  const firstX = Math.floor((minX - origin[0]) / size), lastX = Math.ceil((maxX - origin[0]) / size) - 1;
+  const firstZ = Math.floor((minZ - origin[2]) / size), lastZ = Math.ceil((maxZ - origin[2]) / size) - 1;
+  if ((lastX - firstX + 1) * (lastZ - firstZ + 1) > 1_000_000) throw new Error('nav: level covers too many tiles');
+  const buckets = new Map<string, number[]>();
+  for (let i = 0; i < indices.length; i += 3) {
+    const triangle = indices.slice(i, i + 3);
+    const xs = triangle.map(v => positions[v * 3]!), zs = triangle.map(v => positions[v * 3 + horizontal]!);
+    const x0 = Math.max(firstX, Math.floor((Math.min(...xs) - halo - origin[0]) / size));
+    const x1 = Math.min(lastX, Math.floor((Math.max(...xs) + halo - origin[0]) / size));
+    const z0 = Math.max(firstZ, Math.floor((Math.min(...zs) - halo - origin[2]) / size));
+    const z1 = Math.min(lastZ, Math.floor((Math.max(...zs) + halo - origin[2]) / size));
+    for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
+      const key = `${x},${z}`;
+      let bucket = buckets.get(key); if (!bucket) { bucket = []; buckets.set(key, bucket); }
+      for (const v of triangle) bucket.push(positions[v * 3]!, positions[v * 3 + 1]!, positions[v * 3 + 2]!);
+    }
+  }
+  return [...buckets].map(([key, values]) => {
+    const [x, z] = key.split(',').map(Number) as [number, number];
+    return { x, z, bytes: bakeTile({ positions: values }, config, x, z) };
+  }).sort((a, b) => a.z - b.z || a.x - b.x);
+}
+/** Rectangle uses horizontal coordinates, independent of the selected up axis. */
+export function bakeHeightfield(field: HeightField, config: BakeConfig, rectangle: { min: ArrayLike<number>; max: ArrayLike<number> }, sampleStep = config.cellSize): BakedTile[] {
+  positive(sampleStep, 'sample step');
+  const [x0, z0] = Array.from(rectangle.min), [x1, z1] = Array.from(rectangle.max);
+  if (![x0, z0, x1, z1].every(Number.isFinite) || x1! <= x0! || z1! <= z0!) throw new Error('nav: invalid world rectangle');
+  const triangles = heightfieldTriangles(field, x0!, z0!, Math.ceil((x1! - x0!) / sampleStep) + 1, Math.ceil((z1! - z0!) / sampleStep) + 1, sampleStep, config.up);
+  return bakeLevel(triangles, config);
 }
