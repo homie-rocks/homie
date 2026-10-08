@@ -104,6 +104,22 @@ test('parseDecision takes only a decision of the vocabulary: no prose, no unknow
   assert.equal(parseDecision(good, null).why, 'no vocabulary');
 });
 
+test('names every object inherits are not ids or arguments: a decision, an ask and a table lookup all refuse them', () => {
+  const ctx = { view: VIEW, players: [0, 1] };
+  const inherited = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'];
+  for (const table of [VOCAB.goals, VOCAB.lines, VOCAB.asks, ...Object.values(VOCAB.goals).map((g) => g.args), ...Object.values(VOCAB.lines).map((l) => l.args)]) {
+    assert.equal(Object.getPrototypeOf(table), null, 'a vocabulary table has no prototype');
+    for (const id of inherited) assert.equal(table[id], undefined, id);
+  }
+  for (const id of inherited) {
+    assert.equal(parseDecision({ goal: id, args: {}, say: null, sayArgs: {} }, VOCAB, ctx).ok, false, `goal ${id}`);
+    assert.equal(parseDecision({ goal: 'guard', args: {}, say: id, sayArgs: {} }, VOCAB, ctx).ok, false, `say ${id}`);
+    assert.equal(parseDecision(JSON.parse(`{"goal":"quest","args":{"quest":"king-slime","${id}":1},"say":null,"sayArgs":{}}`), VOCAB, ctx).ok, false, `argument ${id}`);
+    assert.equal(renderLine(VOCAB, id, {}, { kind: 'asks', nameOf: (x) => `seat ${x}` }), null, `ask ${id}`);
+    assert.equal(scripted(VOCAB, { asks: [{ k: id, from: 0, args: {} }], view: VIEW, players: [0, 1] }), null, `an ask named ${id} is answered by nothing`);
+  }
+});
+
 test('the scripted floor answers asks the way agents.json says, and nothing without one', () => {
   const ask = (k, args, from = 0, at = 1) => ({ k, args, from, at });
   assert.deepEqual(scripted(VOCAB, { asks: [ask('ask_help', { quest: 'king-slime' })], view: VIEW, players: [0, 1] }),

@@ -53,7 +53,8 @@ function argSpec(raw) {
 }
 
 function argsOf(raw, where, problems) {
-  const out = {};
+  // No prototype: an argument name comes from outside (a model's answer, a person's ask), and "constructor" is not one.
+  const out = Object.create(null);
   if (raw === undefined || raw === null) return out;
   if (typeof raw !== 'object' || Array.isArray(raw)) { problems.push(`${where}: args is an object of name: type`); return null; }
   const names = Object.keys(raw);
@@ -96,7 +97,7 @@ export function vocabularyOf(raw) {
     }
   }
   const section = (key, max, each) => {
-    const out = {};
+    const out = Object.create(null);
     const src = raw[key];
     if (src === undefined) return out;
     if (!src || typeof src !== 'object' || Array.isArray(src)) { problems.push(`${key} is an object of id: entry`); return out; }
@@ -173,7 +174,7 @@ export function checkArgs(specs, args, ctx = {}) {
 /** How a value reads aloud: its label in agents.json, else the value with dashes as spaces. */
 export function labelOf(vocab, value) {
   const v = String(value ?? '');
-  return vocab?.labels?.[v] ?? v.replace(/[-_]+/g, ' ');
+  return vocab?.labels && Object.hasOwn(vocab.labels, v) ? vocab.labels[v] : v.replace(/[-_]+/g, ' ');
 }
 
 /**
@@ -181,7 +182,7 @@ export function labelOf(vocab, value) {
  * the guide's own name for {me}. Null when the id or its arguments do not fit.
  */
 export function renderLine(vocab, id, args = {}, { nameOf = (seat) => `Player ${Number(seat) + 1}`, me = 'Guide', view = null, players = null, kind = 'lines' } = {}) {
-  const entry = vocab?.[kind]?.[id];
+  const entry = vocab?.[kind] && typeof id === 'string' && Object.hasOwn(vocab[kind], id) ? vocab[kind][id] : null;
   if (!entry) return null;
   if (checkArgs(entry.args, args, { view, players })) return null;
   return entry.text.replace(SLOT_IN_TEXT, (m, k) => (k === 'me' ? String(me) : entry.args[k]?.kind === 'player' ? String(nameOf(args[k]) ?? '') : labelOf(vocab, args[k])));
@@ -304,14 +305,14 @@ export function parseDecision(out, vocab, { view = null, players = null, avoid =
   }
   if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('not an object');
   for (const k of Object.keys(o)) if (!['goal', 'args', 'say', 'sayArgs'].includes(k)) return bad(`extra field ${String(k).slice(0, 16)}`);
-  const goal = vocab.goals[o.goal];
+  const goal = (typeof o.goal === 'string' && Object.hasOwn(vocab.goals, o.goal) ? vocab.goals[o.goal] : null);
   if (typeof o.goal !== 'string' || !goal) return bad('goal is not one of the vocabulary\'s');
   const ga = o.args ?? {};
   const gw = checkArgs(goal.args, ga, { view, players });
   if (gw) return bad(`goal ${o.goal}: ${gw}`);
   let say = null; let sayArgs = {};
   if (o.say !== null && o.say !== undefined && o.say !== '') {
-    const line = vocab.lines[o.say];
+    const line = (typeof o.say === 'string' && Object.hasOwn(vocab.lines, o.say) ? vocab.lines[o.say] : null);
     if (typeof o.say !== 'string' || !line) return bad('say is not one of the vocabulary\'s lines');
     sayArgs = o.sayArgs ?? {};
     const lw = checkArgs(line.args, sayArgs, { view, players });
@@ -332,7 +333,7 @@ export function scripted(vocab, { asks = [], view = null, players = null, avoid 
   const ctx = { view, players };
   const near = (specs, a) => Object.entries(specs).some(([k, s]) => s.kind === 'player' && avoid.includes(a[k]));
   for (const a of [...asks].sort((x, y) => (y.at ?? 0) - (x.at ?? 0))) {
-    const ask = vocab.asks[a.k];
+    const ask = typeof a.k === 'string' && Object.hasOwn(vocab.asks, a.k) ? vocab.asks[a.k] : null;
     if (!ask || (!ask.goal && !ask.say)) continue;
     // Arguments carry over by name; a player argument is the player who asked.
     const fill = (specs) => Object.fromEntries(Object.entries(specs).map(([k, s]) => [k, s.kind === 'player' ? a.from : a.args?.[k]]));

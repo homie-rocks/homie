@@ -43,9 +43,11 @@
  * after five of them, not after five seconds' worth of ticks at its rate.
  * =============================================================================
  */
+import { useAgents, type Agents, type AgentsSaved, type Vocabulary } from '../agents/agents.ts';
+import { DEFAULT_POLICY, type Netplay, type Peer, type Policy, type Slot } from '../netplay/netplay.ts';
 import { createCore } from './core.ts';
 import type { Core, CoreOut, Driver, SavedCore, StepInput } from './core.ts';
-import { coerce, fromBytes, initFields, toBytes, unpackVec } from './pack.ts';
+import { coerce, coerceFields, fromBytes, initFields, toBytes, unpackVec } from './pack.ts';
 import type { Compiled, KindTable, Vec3 } from './rules.ts';
 
 export interface HostClock {
@@ -59,6 +61,8 @@ export interface HostOptions {
   /** The game's build, for the log. */
   build?: string;
   compiled: Compiled;
+  /** The deterministic build check answers asks with their floors on the next tick. */
+  check?: boolean;
   /** One outgoing frame, for the relay to fan out. `text` is the frame already encoded, when the runtime encoded it. */
   send(frame: Record<string, unknown>, text?: string): void;
   clock: HostClock;
@@ -144,14 +148,85 @@ export function createHost(o: HostOptions): Host {
   // A log that throws takes nothing down with it.
   const log = (line: Record<string, unknown>): void => { try { o.log?.(line); } catch { /* nothing to say it with */ } };
   const random = o.random ?? Math.random;
-  const saved = o.restore ? fromBytes(o.restore) as { v: number; core: SavedCore; names: [number, string][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][] } : null;
+  const saved = o.restore ? fromBytes(o.restore) as { v: number; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][] } : null;
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
-  const core = createCore(c, { seed: Math.floor(random() * 4294967296) >>> 0, epoch: (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, stage: o.stage });
+  const core = createCore(c, { seed: Math.floor(random() * 4294967296) >>> 0, epoch: (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   const names = new Map<number, string>(saved?.names ?? []);
   /** Seats whose holder is here now, by seat, with whether it is a person (an AI never keeps the world ticking). */
   const present = new Map<number, boolean>();
   const queues = new Map<number, SeatIn>();
+  const peers = new Map<string, Peer>();
+  let policy: Policy = DEFAULT_POLICY;
+  let agents: Agents | null = null;
+  let savedAgents = saved?.agents;
+  const guideOwners = new Map(core.bodies().map((b) => [b.seat, `${b.id}/${b.owner}/${b.driver}`]));
+  const guideViews = new Map<number, { id: string; at: number; value: Record<string, unknown> }>();
+  for (const [seat, v] of (Array.isArray(saved?.guideViews) ? saved.guideViews : []).filter((v) => Array.isArray(v) && v.length === 2).slice(0, c.seats)) if (v && core.bodyOf(seat)?.id === v.id) guideViews.set(seat, { id: v.id, at: typeof v.at === 'number' && Number.isFinite(v.at) ? Math.max(0, Math.min(core.tick, v.at)) : 0, value: coerceFields(c.view, v.value, c.dims) });
+  const agentEvents = new Set<(m: any) => void>();
+  let agentInbox: Record<string, unknown>[] = [];
+  function agentSlots(brainsOnly = false): Slot[] {
+    if (policy.kind === 'humans-only') return [];
+    return core.bodies().filter((b) => { const k = c.kindOf[b.kind]; return b.driver === 'ai' && (!brainsOnly || Boolean(k.guide && k.think)); }).map((b) => {
+      const peer = [...peers.values()].find((p) => p.seat === b.seat && p.agent);
+      return { slot: b.seat, seat: peer ? b.seat : null, name: nameOf(b.seat, b.driver), bot: !peer,
+        agent: { seat: peer ? b.seat : null, role: peer?.agent?.role ?? (b.seat >= c.seats - policy.guides ? 'guide' : 'party'), hands: peer?.agent?.hands ?? 'host' } };
+    });
+  }
+  function agentView(seat: number): Record<string, unknown> {
+    const body = core.bodyOf(seat);
+    const old = guideViews.get(seat);
+    if (body && old?.id === body.id && core.tick - old.at < 2 * tickHz) return old.value;
+    const value = core.guide(seat) ?? {};
+    if (body) {
+      guideViews.set(seat, { id: body.id, at: core.tick, value });
+      o.send({ t: 'ev', k: 'agent:offer', d: { slot: seat, view: value } });
+    }
+    return value;
+  }
+  function setAgents(vocab: Vocabulary | null): void {
+    core.vocabulary(vocab);
+    agents?.stop();
+    agents = null;
+    if (!vocab) return;
+    const net = {
+      isHost: true, offline: false, hushed: false, get policy() { return policy; }, peers,
+      get slots() { return agentSlots(true); },
+      isAgent: (seat: number) => present.get(seat) === false,
+      on: (_kind: string, fn: (m: any) => void) => { agentEvents.add(fn); return () => agentEvents.delete(fn); },
+      send: (k: string, d: unknown, to?: number) => o.send({ t: 'ev', k, d, ...(to !== undefined ? { to } : {}) }),
+    } as unknown as Netplay;
+    agents = useAgents(net, vocab, { roles: ['guide', 'party'], manual: true, carryFloor: true, now: () => core.tick * period, restore: savedAgents,
+      view: agentView, decide: (v, ctx) => core.guide(ctx.slot, v),
+    });
+    savedAgents = undefined;
+    agents.on('goal', (d) => o.send({ t: 'ev', k: 'agent:goal', d }));
+    agents.on('ask', (d) => o.send({ t: 'ev', k: 'agent:ask', d }));
+  }
+  function guideBeat(): void {
+    if (!agents) return;
+    const bodies = core.bodies();
+    for (const b of bodies) {
+      const key = `${b.id}/${b.owner}/${b.driver}`;
+      if (guideOwners.has(b.seat) && guideOwners.get(b.seat) !== key) { agents.forget(b.seat); guideViews.delete(b.seat); }
+      guideOwners.set(b.seat, key);
+    }
+    for (const seat of guideOwners.keys()) if (!bodies.some((b) => b.seat === seat)) { agents.forget(seat); guideOwners.delete(seat); guideViews.delete(seat); }
+    for (const slot of agentSlots(true)) {
+      agentView(slot.slot);
+      const g = agents.goalOf(slot.slot);
+      // A saved or stale helper goal must pass the same boundary before it can delay the floor. Only the goal goes:
+      // the quiet rule, the open asks and a player's "leave me alone" belong to the companion, not to this goal.
+      if (g?.state === 'active' && !core.goal(slot.slot, { ...g, at: Math.round(g.at / period) })) agents.dropGoal(slot.slot);
+    }
+    const inbox = agentInbox; agentInbox = [];
+    for (const m of inbox) for (const fn of agentEvents) fn(m);
+    agents.tick();
+    for (const b of core.bodies()) {
+      const g = agents.goalOf(b.seat);
+      core.goal(b.seat, g?.state === 'active' ? { goal: g.goal, args: g.args, from: g.from, at: Math.round(g.at / period), asked: g.asked === true } : null);
+    }
+  }
   let running = false;
   let paused = false;
   let ended = false;
@@ -205,7 +280,7 @@ export function createHost(o: HostOptions): Host {
     const seat = m.from;
     if (!Number.isInteger(seat) || (Number(m.e) >>> 0) !== epoch || !Array.isArray(m.s)) { stats.dropped += 1; return; }
     const body = core.bodyOf(seat as number);
-    if (!body || body.driver !== 'person') return;
+    if (!body || !hasHands(seat as number, body.driver)) return;
     const kind = body.kind;
     const q = queueOf(seat as number, kind);
     const K = core.tick;
@@ -254,13 +329,22 @@ export function createHost(o: HostOptions): Host {
     // A frame that throws is dropped and counted; the room goes on, and its timer is as it should be on the way out.
     try { onFrame(m); } catch (error) { fault(`frame ${m.t}`, error); } finally { keepTime(); }
   }
+  function cleanSpeech(data: unknown): unknown {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return data ?? null;
+    const { ai, slot, seat, ...rest } = data as Record<string, unknown>;
+    return rest;
+  }
   function onFrame(m: Record<string, unknown>): void {
     switch (m.t) {
+      case 'vocabulary': setAgents((m.vocab ?? null) as Vocabulary | null); return;
+      case 'decided': core.answer(String(m.n ?? ''), m); return;
       case 'in': return onIn(m);
       case 'join': {
         const p = m.peer as { seat?: unknown; name?: unknown; agent?: unknown; occ?: unknown; id?: unknown } | null;
         if (!p || !Number.isInteger(p.seat)) return;
         const seat = p.seat as number;
+        for (const [id, old] of peers) if (old.seat === seat) peers.delete(id);
+        peers.set(String(p.id), p as Peer);
         const driver: Driver = p.agent ? 'ai' : 'person';
         names.set(seat, typeof p.name === 'string' ? p.name.slice(0, 40) : '');
         present.set(seat, driver === 'person');
@@ -274,6 +358,7 @@ export function createHost(o: HostOptions): Host {
       }
       case 'leave': {
         if (!Number.isInteger(m.seat) || !present.has(m.seat as number)) return;
+        for (const [id, p] of peers) if (p.seat === m.seat) peers.delete(id);
         present.delete(m.seat as number);
         queues.delete(m.seat as number);
         core.seatAway(m.seat as number, true);
@@ -282,6 +367,8 @@ export function createHost(o: HostOptions): Host {
       }
       case 'free': {
         if (!Number.isInteger(m.seat)) return;
+        names.delete(m.seat as number);
+        for (const [id, p] of peers) if (p.seat === m.seat) peers.delete(id);
         present.delete(m.seat as number);
         queues.delete(m.seat as number);
         core.seatLeave(m.seat as number);
@@ -291,15 +378,30 @@ export function createHost(o: HostOptions): Host {
       case 'ev': {
         // What a player sends is read as what it is: a kind or a command's name that is not a text is no kind and no command.
         const kind = typeof m.k === 'string' ? m.k : '';
-        if (!Number.isInteger(m.from)) return;
+        if (!Number.isInteger(m.from)) {
+          if (m.from === null && SPEECH.test(kind)) o.send({ t: 'ev', from: null, k: kind, d: cleanSpeech(m.d) });
+          return;
+        }
+        if (agents && (kind === 'agent:do' || /^ask:/.test(kind) || (SPEECH.test(kind) && present.get(m.from as number) === false))) { if (agentInbox.length < 128) agentInbox.push(m); return; }
         if (kind === 'cmd') { const d = m.d as unknown[]; if (Array.isArray(d) && typeof d[0] === 'string') core.command(m.from as number, d[0], d[1]); return; }
-        // A seat's speech and emotes reach everyone unchanged, as a browser host relays them today.
-        if (SPEECH.test(kind)) o.send({ t: 'ev', from: m.from, k: kind, d: m.d ?? null });
+        // Speech keeps its payload, except the identity fields only the host may attach.
+        if (SPEECH.test(kind)) o.send({ t: 'ev', from: m.from, k: kind, d: cleanSpeech(m.d) });
         return;
       }
       case 'policy': {
         const p = m.policy as { bots?: unknown; level?: unknown; levelMax?: unknown; skill?: { level?: unknown } } | null;
-        if (p) core.setPolicy({ bots: p.bots === 'off' ? 'off' : 'fill', level: Number(p.skill?.level ?? p.level), levelMax: Number(p.levelMax) });
+        if (p) {
+          const raw = m.policy as Partial<Policy>;
+          const previous = policy;
+          const count = (v: unknown): number => typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(c.seats - 1, Math.floor(v))) : 0;
+          const kind = raw.kind === 'hybrid' || raw.kind === 'beginner' || raw.kind === 'humans-only' ? raw.kind : 'open';
+          policy = { ...DEFAULT_POLICY, kind, bots: raw.bots === 'off' ? 'off' : 'fill',
+            aiSeats: kind === 'hybrid' || kind === 'beginner' ? count(raw.aiSeats) : 0, guides: kind === 'beginner' ? count(raw.guides) : 0,
+            brain: typeof raw.brain === 'string' && ['script', 'off', 'workers-ai', 'owner-key'].includes(raw.brain) ? raw.brain : 'script',
+            speech: raw.speech === 'off' || raw.speech === 'lines' ? raw.speech : 'game' };
+          if (previous.kind !== policy.kind || previous.aiSeats !== policy.aiSeats || previous.guides !== policy.guides) rosterText = '';
+        }
+        if (p) core.setPolicy({ bots: p.bots === 'off' ? 'off' : 'fill', level: Number(p.skill?.level ?? p.level), levelMax: Number(p.levelMax), reserved: policy.kind === 'hybrid' || policy.kind === 'beginner' ? policy.aiSeats + policy.guides : 0 });
         return;
       }
       default: return;
@@ -308,9 +410,11 @@ export function createHost(o: HostOptions): Host {
 
   /* ---------------------------------------------------------------- frames out */
 
-  const nameOf = (seat: number, driver: Driver): string => (driver === 'bot' ? BOT_NAMES[seat % BOT_NAMES.length] : names.get(seat) || `Player ${seat + 1}`);
+  const hasHands = (seat: number, driver: Driver): boolean => driver === 'person' || (driver === 'ai' && [...peers.values()].some((p) => p.seat === seat && p.agent?.hands === 'self'));
+  const nameOf = (seat: number, driver: Driver): string => (driver === 'bot' || (driver === 'ai' && (core.bodies().find((b) => b.seat === seat)?.owner === 'reserved' || !names.has(seat))) ? BOT_NAMES[seat % BOT_NAMES.length] : names.get(seat) || `Player ${seat + 1}`);
   function sendRoster(): void {
-    const slots = core.bodies().sort((a, b) => a.seat - b.seat).map((b) => ({ slot: b.seat, seat: b.driver === 'bot' ? null : b.seat, name: nameOf(b.seat, b.driver), bot: b.driver === 'bot' }));
+    const guides = new Map(agentSlots().map((s) => [s.slot, s.agent]));
+    const slots = core.bodies().sort((a, b) => a.seat - b.seat).map((b) => ({ slot: b.seat, seat: b.driver === 'bot' ? null : b.seat, name: nameOf(b.seat, b.driver), bot: b.driver === 'bot', ...(guides.has(b.seat) ? { agent: guides.get(b.seat) } : {}) }));
     const text = JSON.stringify(slots);
     if (text === rosterText) return;
     rosterText = text;
@@ -324,9 +428,11 @@ export function createHost(o: HostOptions): Host {
         const drivers = new Map(core.bodies().map((b) => [b.seat, b.driver]));
         o.send({ t: 'round', round: {
           n: x.n, phase: x.phase, startedAt: ms(x.startedAt), endsAt: x.endsAt ? ms(x.endsAt) : ms(core.tick + 86_400 * tickHz),
-          ...(x.results ? { results: x.results.map((r) => ({ slot: r.seat, seat: r.driver === 'bot' ? null : r.seat, name: nameOf(r.seat, drivers.get(r.seat) ?? r.driver), score: r.score, bot: r.driver === 'bot', place: r.place })) } : {}),
+          ...(x.results ? { results: x.results.map((r) => ({ slot: r.seat, seat: r.driver === 'bot' ? null : r.seat, name: nameOf(r.seat, drivers.get(r.seat) ?? r.driver), score: r.score, bot: r.driver === 'bot', ...(r.driver === 'ai' ? { agent: true } : {}), place: r.place })) } : {}),
         } });
-      } else if (x.t === 'fx') o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, x.list] });
+      } else if (x.t === 'ask') o.send({ t: 'decide', n: x.n, state: x.state, questions: x.questions });
+      else if (x.t === 'goalDone') agents?.done(x.seat, x.ok);
+      else if (x.t === 'fx') o.send({ t: 'ev', from: null, k: 'fx', d: [x.tick, x.list] });
       else if (x.t === 'seats') roster = true;
       else if (x.t === 'shared') o.send({ t: 'state', k: 'shared', d: core.shared() });
       else if (x.t === 'epoch') { epoch = x.epoch; queues.clear(); roster = true; } else if (x.t === 'fail') end('budget', { kind: x.kind, handler: x.handler });
@@ -358,7 +464,7 @@ export function createHost(o: HostOptions): Host {
       inputs.set(seat, { values, claim: q.claim });
     }
     phase = 'step';
-    core.step(inputs);
+    core.step(inputs, guideBeat);
     phase = 'frames';
     handle(core.drain(), now);
     if (ended) return;
@@ -366,7 +472,7 @@ export function createHost(o: HostOptions): Host {
     // The control table: one row a seat, [seat, r, ack, lead].
     const rows: number[][] = [];
     for (const b of core.bodies()) {
-      if (b.driver !== 'person') continue;
+      if (!hasHands(b.seat, b.driver)) continue;
       const q = queues.get(b.seat);
       rows.push([b.seat, b.r, q ? q.ack : 0, q && q.lead !== 127 ? q.lead : -128]);
       if (q) q.lead = 127;
@@ -470,6 +576,7 @@ export function createHost(o: HostOptions): Host {
       base = { ms: o.clock.now(), tick: core.tick };
       overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
       const caps = c.kinds.some((k) => k.think) ? ['skill'] : [];
+      if (c.kinds.some((k) => k.guide && k.think)) caps.push('agents');
       if (caps.length) o.send({ t: 'caps', caps });
       log({ ev: 'host-start', game: o.game, tick: core.tick, epoch, tickHz });
     } catch (error) { fault('start', error); } finally { keepTime(); }
@@ -497,6 +604,7 @@ export function createHost(o: HostOptions): Host {
   function stop(): void {
     running = false; paused = false; ended = true;
     disarm();
+    agents?.stop();
     for (let i = recent.length - 1; i >= 0; i -= 1) if (recent[i].who === self) recent.splice(i, 1);
   }
   function end(why: string, facts: Record<string, unknown>): void {
@@ -519,7 +627,7 @@ export function createHost(o: HostOptions): Host {
       let now = lastStart;
       try { now = o.clock.now(); tick(now); } catch (error) { fault('tickNow', error); } finally { keepTime(); }
     },
-    save: () => toBytes({ v: 1, core: core.save(), names: [...names], queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]) }),
+    save: () => toBytes({ v: 1, core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : {}), names: [...names], queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]) }),
     facts: () => ({ tick: core.tick, epoch, running, paused, ended, armed, people: people(), tickHz, ...stats, core: { ...core.stats } }),
     core,
   };

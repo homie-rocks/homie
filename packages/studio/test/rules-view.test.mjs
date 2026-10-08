@@ -185,3 +185,30 @@ test('two views in one server-hosted room: own bodies, the roster and the round,
   assert.equal(r.host.core.stats.errors, 0);
   assert.equal(r.lines.filter((l) => l.ev === 'failed').length, 0);
 });
+
+test('a watcher follows server bodies, returns to Auto on leave and follows the same seat on reconnect', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit();
+  const clock = virtualTime(t);
+  const r = rig(L, compiled);
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  let token;
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: (m) => { if (m.what === 'token') token = m.token; } } });
+  const w = openRoom({ net: { config: { ...cfg('Watcher'), watch: true, follow: 'auto' }, WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); w.close(); });
+  await clock.wait(600);
+  assert.equal(w.seat, null);
+  assert.equal(w.net.isHost, false);
+  const id = b.me.id;
+  w.follow(id);
+  assert.equal(w.net.viewSeat, b.seat);
+  assert.ok(w.get(id));
+  b.close(); await clock.wait(100);
+  assert.equal(w.net.following, 'auto');
+  const back = openRoom({ net: { config: { ...cfg('Second'), token }, WebSocketImpl: r.socket(), post: null } });
+  t.after(() => back.close());
+  await clock.wait(600);
+  assert.equal(back.me.id, id);
+  assert.equal(w.net.viewSeat, back.seat);
+  w.follow(null); assert.equal(w.net.viewSeat, null);
+});

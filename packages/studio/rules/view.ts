@@ -35,6 +35,9 @@
  * the shell, as today.
  * =============================================================================
  */
+import type { useAgents, Vocabulary, AskButton } from '../agents/agents.ts';
+let agentFactory: typeof useAgents | null = null;
+export function setAgentFactory(factory: typeof useAgents): void { agentFactory = factory; }
 import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { exposePort } from '../port/probe.ts';
@@ -45,7 +48,7 @@ import type { Unpacked } from './pack.ts';
 import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
 
 /** What the build hands the view library for one game: its declarations, its public tunables and its map. No code. */
-export interface GameData { id: string; schema: Schema; tune: Record<string, unknown>; map: { name?: string; bounds: { min: unknown; max: unknown }; boxes?: unknown[]; circles?: unknown[]; spots?: Record<string, unknown[]> } }
+export interface GameData { vocab?: Vocabulary; id: string; schema: Schema; tune: Record<string, unknown>; map: { name?: string; bounds: { min: unknown; max: unknown }; boxes?: unknown[]; circles?: unknown[]; spots?: Record<string, unknown[]> } }
 let current: { game: GameData; move: Record<string, MoveFn> } | null = null;
 /** Called by the build's own two lines at the top of a view's bundle, before the view's code runs. */
 export function setGame(game: GameData, move: Record<string, MoveFn> = {}): void { current = { game, move }; }
@@ -53,7 +56,7 @@ export function setGame(game: GameData, move: Record<string, MoveFn> = {}): void
 /** An entity as a view reads it: the built-in fields, the kind's declared fields by name, and its `motion`. */
 export interface Entity {
   readonly id: string; readonly kind: string; readonly pos: Vec3; readonly vel: Vec3; readonly heading: Vec3; readonly grounded: boolean;
-  readonly seat?: number; readonly owner?: string; readonly driver?: string; readonly away?: boolean;
+  readonly seat?: number; readonly owner?: string; readonly driver?: string; readonly away?: boolean; readonly goal?: unknown;
   /** This is the player's own body. */
   readonly mine?: boolean;
   readonly motion: Readonly<Record<string, unknown>>;
@@ -81,7 +84,7 @@ export interface Room<R = unknown> {
   probe(extra: Record<string, () => unknown>): void;
   /** A guide's ask buttons and a person's ask (today's relay frames; guides are driven by the server in a later release). */
   ask(id: string, askId: string, args?: Record<string, unknown>): void;
-  askButtons(id: string): string[];
+  askButtons(id: string, offer?: Record<string, unknown>): AskButton[];
   readonly tune: Readonly<Record<string, unknown>>;
   /** The game's static map: its edges, its solid shapes and its named spots, in metres. */
   readonly map: { readonly bounds: { min: Vec3; max: Vec3 }; readonly boxes: readonly { min: Vec3; max: Vec3 }[]; readonly circles: readonly { at: Vec3; r: number }[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> };
@@ -108,6 +111,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const sendEvery = Math.ceil(tickHz / Math.max(1, schema.settings.inputHz));
   const clock = opts.now ?? ((): number => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
   const net = createNetplay<unknown, unknown, unknown>({ game: game.id, maxPlayers: schema.seats, snapshotHz: tickHz, ...opts.net, rules: true });
+  const agents = game.vocab && agentFactory ? agentFactory(net, game.vocab, { roles: ['guide', 'party'], view: () => ({}), manual: true }) : null;
   const kindOf = new Map(schema.kinds.map((k) => [k.name, k]));
   const listeners = new Map<string, Set<(e: any) => void>>();
   const emit = (name: string, e: unknown): void => { for (const fn of listeners.get(name) ?? []) { try { fn(e); } catch (err) { console.warn(`[room] on('${name}')`, err); } } };
@@ -141,7 +145,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     frames.set(s, f);
     return f;
   }
-  const entityOf = (u: Unpacked, mine = false): Entity => Object.freeze({ id: u.id, kind: u.kind, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, ...(u.seat !== undefined ? { seat: u.seat, owner: u.owner, driver: u.driver, away: u.away } : {}), ...(mine ? { mine: true } : {}), ...u.fields, motion: Object.freeze({ ...u.motion }) }) as Entity;
+  const entityOf = (u: Unpacked, mine = false): Entity => Object.freeze({ id: u.id, kind: u.kind, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, ...(u.seat !== undefined ? { seat: u.seat, owner: u.owner, driver: u.driver, away: u.away, goal: u.goal } : {}), ...(mine ? { mine: true } : {}), ...u.fields, motion: Object.freeze({ ...u.motion }) }) as Entity;
 
   /* ---------------------------------------------------------------- the own body, on this browser's copy of the clock */
 
@@ -331,10 +335,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       return;
     }
     // A player's speech and emotes, and a guide's lines and goals, as the relay carries them today.
-    if (/^(?:say|chat|emote)/i.test(e.k)) emit('say', { kind: e.k, seat: e.from, ...(e.d && typeof e.d === 'object' ? e.d as object : { text: e.d }) });
-    else if (e.k === 'agent:goal') emit('goal', e.d);
+    if (/^(?:say|chat|emote)/i.test(e.k) && !(agents && (e.d as { ai?: boolean })?.ai)) emit('say', { kind: e.k, seat: e.from, ...(e.d && typeof e.d === 'object' ? e.d as object : { text: e.d }) });
+    else if (e.k === 'agent:goal' && e.from === net.host?.seat) emit('goal', e.d);
+    else if (e.k === 'agent:ask' && e.from === net.host?.seat) emit('ask', e.d);
     else if (/^ask:/.test(e.k)) emit('ask', { ask: e.k.slice(4), ...(e.d && typeof e.d === 'object' ? e.d as object : {}) });
   });
+
+  agents?.on('say', (e) => emit('say', e));
 
   /* ---------------------------------------------------------------- what the view reads */
 
@@ -431,10 +438,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     get roster() { return roster(); },
     follow(id) { const e = id ? latest?.ents.get(id) : null; net.follow(e && e.seat !== undefined ? e.seat : null); },
     probe(x) { extra = { ...extra, ...x }; },
-    ask(id, askId, args = {}) { const e = latest?.ents.get(id); if (e && e.seat !== undefined) net.send(`ask:${askId}`, { seat: e.seat, args }); },
-    askButtons() { return []; },
+    ask(id, askId, args = {}) { const e = latest?.ents.get(id); if (e && e.seat !== undefined) agents?.ask(e.seat, askId, args); },
+    askButtons(id, offer = {}) { const e = latest?.ents.get(id); return e && e.seat !== undefined ? agents?.askButtons(e.seat, offer) ?? [] : []; },
     tune, map: Object.freeze({ ...map, spots: Object.freeze(spots) }), net: net as Netplay,
     pump,
-    close() { closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); net.close(); setStatus('closed'); },
+    close() { closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
   };
 }

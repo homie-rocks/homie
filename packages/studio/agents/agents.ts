@@ -24,7 +24,7 @@
  * vocabulary line with arguments that fit, on a server whose AI may talk).
  * =============================================================================
  */
-import { aiName, stripAi, type Netplay, type NetEvent, type Policy, type Slot } from '../netplay/netplay';
+import { aiName, stripAi, type Netplay, type NetEvent, type Policy, type Slot } from '../netplay/netplay.ts';
 
 /* ------------------------------------------------------------------ the vocabulary (agents.json) */
 
@@ -56,6 +56,13 @@ export interface GoalEvent { slot: number; goal: Goal; prev: Goal | null; askAt:
 export interface AskButton { k: string; args: Record<string, unknown>; text: string }
 
 export interface AgentsOptions {
+  /** Runtime integration: a room clock and an explicit beat replace the browser timer. */
+  now?: () => number;
+  manual?: boolean;
+  /** Keep an asked-for goal through scripted floor decisions until completion or sixty seconds. */
+  carryFloor?: boolean;
+  restore?: AgentsSaved;
+
   /** Host: what a guide in this slot sees. Game state only: never an account, an address or typed text. Under 2 KB. */
   view: (slot: number) => Record<string, unknown>;
   /** The scripted floor: runs with no AI, over budget, and between AI decisions. Synchronous; never waits. */
@@ -70,7 +77,14 @@ export interface AgentsOptions {
 
 export interface AgentsStats { views: number; dos: number; says: number; asks: number; drops: number; floors: number; viewBytes: number }
 
+export interface AgentsSaved { goals: [number, Goal][]; asks: [number, Ask[]][]; avoid: [number, [number, number][]][]; sayAt: [number, number][]; viewAt: [number, number][]; floorAt: [number, number][]; askAt: [number, number][] }
 export interface Agents {
+  tick(): void;
+  save(): AgentsSaved;
+  forget(slot: number): void;
+  /** Drop one slot's goal so its floor may run at once. Its pacing, its asks and who asked to be left alone all stay. */
+  dropGoal(slot: number): void;
+
   readonly vocab: Vocabulary;
   /** Whether this server's AI may talk (its brain is workers-ai or owner-key, and speech is not off). */
   readonly talking: boolean;
@@ -95,6 +109,7 @@ export interface Agents {
   stop(): void;
 }
 
+const own = <T>(table: Record<string, T> | undefined, key: unknown): T | undefined => table && typeof key === 'string' && Object.hasOwn(table, key) ? table[key] : undefined;
 const TALK = ['workers-ai', 'owner-key'];
 export const AGENT_RULES = Object.freeze({ viewMs: 2050, floorMs: 1000, quietMs: 8000, leaveMs: 10 * 60_000, askMs: 30_000, holdMs: 45_000, askWaitMs: 4000, carryMs: 60_000, viewBytes: 1900 });
 const VIEW_ARG = /^view\.([A-Za-z][A-Za-z0-9_]{0,23})$/;
@@ -127,7 +142,7 @@ export function argsWhy(types: Record<string, ArgType> | undefined, args: unknow
   return null;
 }
 
-export const labelOf = (vocab: Vocabulary, value: unknown): string => vocab.labels?.[String(value)] ?? String(value ?? '').replace(/[-_]+/g, ' ');
+export const labelOf = (vocab: Vocabulary, value: unknown): string => own(vocab.labels, String(value)) ?? String(value ?? '').replace(/[-_]+/g, ' ');
 
 /* ------------------------------------------------------------------ useAgents */
 
@@ -145,7 +160,15 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
   const askAt = new Map<number, number>();
   const handlers = { say: new Set<(e: SayEvent) => void>(), goal: new Set<(e: GoalEvent) => void>(), ask: new Set<(e: Ask & { slot: number }) => void>() };
   const st: AgentsStats = { views: 0, dos: 0, says: 0, asks: 0, drops: 0, floors: 0, viewBytes: 0 };
-  const wall = (): number => Date.now();
+  const wall = opts.now ?? (() => Date.now());
+  if (opts.restore) {
+    const entries = (v: unknown): [number, any][] => Array.isArray(v) ? v.slice(0, 256).filter((e) => Array.isArray(e) && e.length === 2 && Number.isSafeInteger(e[0]) && e[0] >= 0) : [];
+    const stamp = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= wall();
+    for (const [k, v] of entries(opts.restore.goals)) if (v && own(vocab.goals, v.goal) && stamp(v.at) && v.args && typeof v.args === 'object' && !Array.isArray(v.args)) goals.set(k, { ...v });
+    for (const [k, v] of entries(opts.restore.asks)) if (Array.isArray(v)) asks.set(k, v.slice(0, 3).filter((a) => a && own(vocab.asks, a.k) && stamp(a.at) && Number.isSafeInteger(a.from) && a.from >= 0 && a.args && typeof a.args === 'object' && !Array.isArray(a.args)));
+    for (const [k, v] of entries(opts.restore.avoid)) avoid.set(k, new Map(entries(v).filter(([, until]) => typeof until === 'number' && Number.isFinite(until) && until > wall() && until <= wall() + AGENT_RULES.leaveMs)));
+    for (const [dst, src] of [[sayAt, opts.restore.sayAt], [viewAt, opts.restore.viewAt], [floorAt, opts.restore.floorAt], [askAt, opts.restore.askAt]] as const) for (const [k, v] of entries(src)) if (stamp(v)) dst.set(k, v);
+  }
 
   const guides = (): Slot[] => (net.slots ?? []).filter((s) => s.agent && roles.includes(s.agent.role as 'guide' | 'party'));
   const slotOf = (slot: number): Slot | undefined => guides().find((s) => s.slot === slot);
@@ -171,7 +194,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
   };
 
   function render(id: string, args: Record<string, unknown>, slot: number | null, kind: 'lines' | 'asks' = 'lines'): string | null {
-    const def = kind === 'asks' ? vocab.asks?.[id] : vocab.lines?.[id];
+    const def = kind === 'asks' ? own(vocab.asks, id) : own(vocab.lines, id);
     if (!def) return null;
     const s = slot === null ? undefined : (net.slots ?? []).find((x) => x.slot === slot);
     const me = s ? stripAi(s.name) : 'Guide';
@@ -180,7 +203,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
 
   /** A line the host lets a guide say: from the vocabulary, its arguments fit, not within 8 s of its last. */
   function say(slot: number, line: string, args: Record<string, unknown>): boolean {
-    const def = vocab.lines?.[line];
+    const def = own(vocab.lines, line);
     const now = wall();
     if (!def || !talksOn(net.policy) || now - (sayAt.get(slot) ?? -Infinity) < AGENT_RULES.quietMs) { st.drops += 1; return false; }
     if (argsWhy(def.args, args, lastView.get(slot) ?? null, people()) || touchesAvoided(def.args, args, slot)) { st.drops += 1; return false; }
@@ -197,7 +220,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
 
   function setGoal(slot: number, d: Decision, from: 'brain' | 'floor', answering = true): boolean {
     if (!d.goal) return false;
-    const def = vocab.goals[d.goal];
+    const def = own(vocab.goals, d.goal);
     const args = (d.args ?? {}) as Record<string, unknown>;
     if (!def || argsWhy(def.args, args, lastView.get(slot) ?? opts.view(slot), people()) || touchesAvoided(def.args, args, slot)) { st.drops += 1; return false; }
     const prev = goals.get(slot) ?? null;
@@ -216,13 +239,13 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
     // A person's ask is answered the way agents.json says (its `goal`): a brain's decision that does something else
     // leaves the ask open, and the floor answers it once the brain has had askWaitMs (a fixed rule, not the model's).
     const open = askAt.has(slot) ? (asks.get(slot) ?? []).at(-1) ?? null : null;
-    const want = open ? vocab.asks?.[open.k]?.goal : undefined;
-    const answering = !open || from === 'floor' || !want || want === d.goal;
+    const want = open ? own(vocab.asks, open.k)?.goal : undefined;
+    const answering = !open || !want || (want === d.goal && Object.entries(open.args).every(([k, v]) => !own(own(vocab.goals, want)?.args, k) || d.args?.[k] === v));
     // What a person asked for is carried through until it is done (or 60 s): a brain's other goal waits.
     const cur = goals.get(slot);
-    if (!open && from === 'brain' && cur && cur.asked && cur.state === 'active' && wall() - cur.at < AGENT_RULES.carryMs && d.goal !== cur.goal) { st.drops += 1; if (speak && d.say) say(slot, d.say, (d.sayArgs ?? {}) as Record<string, unknown>); return; }
+    if (!open && from === 'brain' && cur && cur.asked && cur.state === 'active' && wall() - cur.at < AGENT_RULES.carryMs && (d.goal !== cur.goal || JSON.stringify(d.args ?? {}) !== JSON.stringify(cur.args))) { st.drops += 1; if (speak && d.say) say(slot, d.say, (d.sayArgs ?? {}) as Record<string, unknown>); return; }
     setGoal(slot, d, from, answering);
-    if (open && answering) { askAt.delete(slot); asks.set(slot, []); const g = goals.get(slot); if (g && d.goal === g.goal) g.asked = true; }
+    if (open && answering && goals.get(slot)?.goal === d.goal && JSON.stringify(goals.get(slot)?.args) === JSON.stringify(d.args ?? {})) { askAt.delete(slot); asks.set(slot, []); const g = goals.get(slot); if (g && d.goal === g.goal) { g.asked = true; g.at = wall(); } }
     if (speak && d.say) say(slot, d.say, (d.sayArgs ?? {}) as Record<string, unknown>);
   }
 
@@ -242,21 +265,23 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
 
   /** The floor for one slot: the game's own decide, on its view. */
   function floor(slot: number, held: boolean): void {
-    if (!opts.decide) return;
+    if (!opts.decide) { floorAt.set(slot, wall()); askAt.delete(slot); asks.set(slot, []); return; }
     const v = viewOf(slot);
     lastView.set(slot, v);
     let d: Decision | null = null;
     try { d = opts.decide(v, { slot, goal: goals.get(slot) ?? null, asks: asksFor(slot) }); } catch { d = null; }
     floorAt.set(slot, wall());
-    if (!d) return;
+    // One floor attempt settles an ask, even if it declines or fails.
+    if (!d) { askAt.delete(slot); asks.set(slot, []); return; }
     st.floors += 1;
     // The floor speaks only for a guide no AI holds (a held guide's own brain speaks for it).
     apply(slot, d, 'floor', !held);
+    askAt.delete(slot); asks.set(slot, []);
   }
 
   /** A person's ask reached the host (theirs, or its own player's). */
   function onAsk(slot: number, k: string, args: Record<string, unknown>, from: number): void {
-    const def = vocab.asks?.[k];
+    const def = own(vocab.asks, k);
     const s = slotOf(slot);
     if (!def || !s || argsWhy(def.args, args, lastView.get(slot) ?? viewOf(slot), null)) { st.drops += 1; return; }
     const now = wall();
@@ -267,7 +292,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
     emit('ask', { slot, k, args, from, at: now });
     const held = s.agent?.seat !== null && s.agent?.seat !== undefined;
     // No AI holds this guide: the floor answers at once. Held: its brain has askWaitMs to answer first.
-    if (!held) floor(slot, false);
+    if (!held) { if (opts.manual) floorAt.delete(slot); else floor(slot, false); }
   }
 
   const offEvent = net.on('event', (e: NetEvent) => {
@@ -286,12 +311,13 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
       if (ask && e.from !== null && !net.isAgent(e.from) && Number.isInteger(d['slot'])) { onAsk(d['slot'] as number, ask, (d['args'] ?? {}) as Record<string, unknown>, e.from); return; }
       return;
     }
+    if (k === 'agent:offer' && e.from === net.host?.seat && Number.isInteger(d['slot']) && d['view'] && typeof d['view'] === 'object') { lastView.set(d['slot'] as number, d['view'] as Record<string, unknown>); return; }
     // Every other browser: a guide's line the host relayed (Quiet AI already dropped it in the helper). Its words are
     // this browser's own copy of the vocabulary; an argument is a seat, a value of the line's list, or an id.
     const line = /^say:([a-z][a-z0-9_]{0,31})$/.exec(k)?.[1];
-    if (line && d['ai'] === true && Number.isInteger(d['slot'])) {
+    if (e.from === net.host?.seat && line && d['ai'] === true && Number.isInteger(d['slot'])) {
       const args = (d['args'] ?? {}) as Record<string, unknown>;
-      const def = vocab.lines?.[line];
+      const def = own(vocab.lines, line);
       const ids = Object.fromEntries(Object.entries(def?.args ?? {}).map(([n, t]) => [n, t]).filter(([, t]) => typeof t === 'string' && VIEW_ARG.test(t)).map(([n, t]) => [VIEW_ARG.exec(t as string)![1], /^[a-z0-9][a-z0-9_-]{0,39}$/.test(String(args[n as string] ?? '')) ? [args[n as string]] : []]));
       if (!def || argsWhy(def.args, args, ids, null)) { st.drops += 1; return; }
       const text = render(line, args, d['slot'] as number);
@@ -300,7 +326,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
   });
 
   // The host's beat: views to the guides an AI holds (at most one every 2 s each), the floor for the rest.
-  const timer = setInterval(() => {
+  const beat = (): void => {
     if (!net.isHost || net.offline) return;
     const now = wall();
     for (const s of guides()) {
@@ -322,21 +348,27 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
       const waiting = held && askAt.has(s.slot) && now - (askAt.get(s.slot) as number) < askWaitMs;
       // The floor decides for a guide with no AI's decision in force, at most once a second; an ask an AI left
       // unanswered for askWaitMs is answered by the floor (silently: a held guide's lines are its brain's).
-      if ((!brainFresh && !waiting && now - (floorAt.get(s.slot) ?? -Infinity) >= AGENT_RULES.floorMs) || (held && askAt.has(s.slot) && !waiting)) floor(s.slot, held);
+      const carried = opts.carryFloor && g?.asked && g.state === 'active' && now - g.at < AGENT_RULES.carryMs && !askAt.has(s.slot);
+      if (!carried && ((!brainFresh && !waiting && now - (floorAt.get(s.slot) ?? -Infinity) >= AGENT_RULES.floorMs) || (held && askAt.has(s.slot) && !waiting))) floor(s.slot, held);
     }
     // Slots no longer an AI's: forget them.
     const live = new Set(guides().map((s) => s.slot));
-    for (const k of [...goals.keys()]) if (!live.has(k)) goals.delete(k);
-  }, 250);
+    for (const map of [goals, asks, avoid, sayAt, viewAt, floorAt, askAt, lastView]) for (const k of [...map.keys()]) if (!live.has(k)) map.delete(k);
+  };
+  const timer = opts.manual ? null : setInterval(beat, 250);
 
   const agents: Agents = {
+    tick: beat,
+    forget: (slot) => { for (const map of [goals, asks, avoid, sayAt, viewAt, floorAt, askAt, lastView]) map.delete(slot); },
+    dropGoal: (slot) => { goals.delete(slot); floorAt.delete(slot); },
+    save: () => ({ goals: [...goals], asks: [...asks], avoid: [...avoid].map(([k, v]) => [k, [...v]]), sayAt: [...sayAt], viewAt: [...viewAt], floorAt: [...floorAt], askAt: [...askAt] }),
     vocab,
     get talking() { return talksOn(net.policy); },
     guides,
     goalOf: (slot) => goals.get(slot) ?? null,
     asksFor,
     ask(slot, k, args = {}) {
-      const def = vocab.asks?.[k];
+      const def = own(vocab.asks, k);
       const s = slotOf(slot);
       if (!def || !s) return false;
       const seat = s.agent?.seat ?? null;
@@ -353,6 +385,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
       return true;
     },
     askButtons(slot, offer = {}) {
+      if (!slotOf(slot)) return [];
       const out: AskButton[] = [];
       const view = { ...(lastView.get(slot) ?? {}), ...offer };
       for (const [k, def] of Object.entries(vocab.asks ?? {})) {
@@ -362,7 +395,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
         const name = names[0] as string;
         const type = (def.args as Record<string, ArgType>)[name];
         const m = typeof type === 'string' ? VIEW_ARG.exec(type) : null;
-        const values = Array.isArray(type) ? [...type] : m ? (Array.isArray(view[m[1] as string]) ? (view[m[1] as string] as unknown[]) : []) : [];
+        const values = Array.isArray(type) ? [...type] : type === 'player' ? (net.seat === null ? [] : [net.seat]) : m ? (Array.isArray(view[m[1] as string]) ? (view[m[1] as string] as unknown[]) : []) : [];
         for (const v of values.slice(0, 4)) {
           const value = v && typeof v === 'object' ? (v as { id?: unknown }).id : v;
           const text = render(k, { [name]: value }, slot, 'asks');
@@ -378,7 +411,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
       g.at = wall();
       const s = slotOf(slot);
       // A guide no AI holds decides again at once; one an AI holds hears it in its next view.
-      if (s && (s.agent?.seat ?? null) === null) floor(slot, false);
+      if (s && (s.agent?.seat ?? null) === null) { if (opts.manual) floorAt.delete(slot); else floor(slot, false); }
     },
     render,
     on(kind: 'say' | 'goal' | 'ask', fn: (e: never) => void) {
@@ -386,7 +419,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
       return () => { (handlers[kind] as Set<unknown>).delete(fn); };
     },
     stats: () => ({ ...st }),
-    stop() { clearInterval(timer); offEvent(); },
+    stop() { if (timer) clearInterval(timer); offEvent(); },
   } as Agents;
   return agents;
 }

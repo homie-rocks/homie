@@ -57,7 +57,7 @@ async function plant(parts, { budget = 1_000_000, seats = 4, host = {}, clock = 
   let L;
   try { L = await loadGame(scratch, writeGame(scratch, `g${made}`, game(parts)), `g${made}`); } catch (error) { return { refused: String(error.message), L: null, rig: null, c: null }; }
   const c = L.R.compileRules(L.def, { map: L.R.compileMap(MAP, 'main'), seats, settings: L.R.roomSettings(budget ? { budget: { tick: budget } } : {}).settings });
-  const rig = hostRig(L, c, { host, clock });
+  const rig = hostRig(L, c, { host: { ...host }, clock });
   rig.join(0);
   return { refused: null, L, rig, c };
 }
@@ -337,7 +337,7 @@ test('the runtime runs no code of the rules when it reads a value, even for rule
       rock: { fields: { n: f.u8(), bag: f.list(f.u8(), 4) } },
     },
     shared: { n: f.u8(), list: f.list(f.u8(), 4) },
-    asks: { pick: { state: { n: f.u8() }, questions: { q: 1 }, floor() { return evil({ deep: evilList() }); } } },
+    asks: { pick: { state: { n: f.u8() }, questions: { n: { type: 'score', instructions: 'Choose a number', criteria: ['zero', 'one', 'two', 'three', 'four', 'five'] } }, floor() { return evil({ deep: evilList() }); } } },
     room: {
       bots: { keep: 1 },
       start(world) { world.shared.n = evil(); world.shared.list = evilList(); world.shared.list.push(evil()); world.announce('poke', evil()); },
@@ -603,7 +603,7 @@ const CASES = [
   ['an object of sixty thousand keys handed to a map, again and again', { fields: 'table: f.map(f.u16(), 8)', tick: `const o = {}; for (let i = 0; i < 20000; i += 1) o['k' + i] = i; for (let i = 0; i < 9000000; i += 1) self.table = o;` }, /this handler ran too long/, 4_000_000],
   ['a vector written on every turn of a loop', { tick: `for (let i = 0; i < 9000000; i += 1) self.vel = { x: 1, y: 2, z: 0 };` }, /this handler ran too long/],
   ['an event with a long list, sent in a loop', { shapes: `events: { poke: { path: f.list(f.vec3(), 64) } }, commands: {}, effects: {}`, tick: `const path = []; for (let i = 0; i < 64; i += 1) path.push({ x: i, y: i, z: 0 }); for (let i = 0; i < 9000000; i += 1) world.sendRoom('poke', { path });` }, /this handler ran too long|already holds 16384 events/],
-  ['an answer to world.ask that is very large', { asks: `asks: { pick: { state: {}, questions: { q: 1 }, floor(state) { const a = []; for (let i = 0; i < 20000; i += 1) a.push([i, i, i]); return { a, b: a, c: a, d: a }; } } },`, tick: `world.ask('pick', {});` }, null, 4_000_000],
+  ['an answer to world.ask that is very large', { asks: `asks: { pick: { state: {}, questions: { n: { type: 'score', instructions: 'Choose a number', criteria: ['zero', 'one', 'two', 'three', 'four', 'five'] } }, floor(state) { const a = []; for (let i = 0; i < 20000; i += 1) a.push([i, i, i]); return { n: 0, a, b: a, c: a, d: a }; } } },`, tick: `world.ask('pick', {});` }, null, 4_000_000],
   ['timers set far off, on every tick, by everyone', { tick: `for (let i = 0; i < 9000000; i += 1) world.after(100000, 'poke', { n: 1 });` }, /^runner\.tick: this room already holds 16384 events and timers that are waiting: send fewer, or set fewer timers that are far off$/],
   ['area events without end', { tick: `for (let i = 0; i < 9000000; i += 1) world.sendArea({ sphere: { at: self.pos, r: 60 } }, 'poke', { n: 1 });`, kinds: `rock: { fields: { n: f.u8() } }`, room: `start(world) { for (let i = 0; i < 2000; i += 1) world.spawn('rock', { x: 1, y: 1, z: 0 }, {}); },` }, /^runner\.tick: a tick takes 64 area events at most$/],
   ['spawns without end', { tick: `for (let i = 0; i < 9000000; i += 1) world.spawn('rock', self.pos, {});`, kinds: `rock: { fields: { n: f.u8() } }` }, /^runner\.tick: a room holds at most 2048 entities$/],
@@ -642,14 +642,14 @@ test('every planted way of making a tick slow, holding the isolate or keeping so
     const r = await plant(parts, { budget });
     if (want && want.refused) { assert.match(r.refused ?? '(it built)', want.refused, name); continue; }
     assert.equal(r.refused, null, `${name}: ${r.refused}`);
-    const ran = drive(r.rig, 4);
+    const ran = drive(r.rig, parts.asks ? 105 : 4);
     assert.equal(ran.escaped, null, `${name}: nothing escapes a tick`);
     assert.ok(ran.slowest < SLOW_MS, `${name}: the slowest tick took ${ran.slowest.toFixed(0)} ms`);
     assert.equal(r.rig.host.facts().faults, 0, `${name}: the runtime itself did not fault`);
     assert.equal(r.L.W.G.left, Infinity, `${name}: the counter is put back`);
     if (want) assert.match(stats(r.rig).lastError, want, name);
     else assert.equal(stats(r.rig).lastError, '', name);
-    assert.equal(r.rig.host.tick, 4, `${name}: the room went on`);
+    assert.equal(r.rig.host.tick, parts.asks ? 105 : 4, `${name}: the room went on`);
   }
   // Nothing was left on a built-in function by any of them.
   assert.equal(Object.hasOwn(Object.prototype.hasOwnProperty, 'count'), false);
@@ -659,11 +659,11 @@ test('every planted way of making a tick slow, holding the isolate or keeping so
 test('what world.ask is answered with is plain data of a bounded size', async () => {
   const r = await plant({
     fields: 'got: f.u16(), deep: f.u8()',
-    asks: `asks: { pick: { state: { n: f.u8() }, questions: { q: 1 }, floor(state) { const a = []; for (let i = 0; i < 5000; i += 1) a.push(i); return { n: state.n + 1, text: 'hello', nested: { a: { b: { c: { d: { e: 1 } } } } }, yes: true, list: a }; } } },`,
+    asks: `asks: { pick: { state: { n: f.u8() }, questions: { n: { type: 'score', instructions: 'Choose a number', criteria: ['zero', 'one', 'two', 'three', 'four', 'five'] } }, floor(state) { const a = []; for (let i = 0; i < 5000; i += 1) a.push(i); return { n: state.n + 1, text: 'hello', nested: { a: { b: { c: { d: { e: 1 } } } } }, yes: true, list: a }; } } },`,
     on: `answer(world, self, e) { self.got = e.picks.list.length; self.deep = e.picks.n; self.score = e.picks.nested.a.b.c === null ? 7 : 1; }`,
     tick: `if (world.tick === 2) world.ask('pick', { n: 4 });`,
   });
-  drive(r.rig, 5);
+  drive(r.rig, 105);
   assert.equal(stats(r.rig).lastError, '');
   const me = r.rig.ents(0).find((e) => e.seat === 0).fields;
   assert.equal(me[2], 5, 'the game\'s own floor answered, from the state it was handed');

@@ -81,6 +81,7 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   assert.equal(row.netplayRev, 10);
   const view = read(dir, `site/dist/games/coin-dash/${row.built.bundle}`);
   assert.doesNotMatch(view, /"take"|roundStart\(|world\.spawn|\.despawn\(/, 'no handler of the rules is in the view');
+  assert.doesNotMatch(view, /agent:offer|carryMs|floorMs/, 'a game without a vocabulary excludes the optional agents helper');
   assert.match(view, /frozenUntil/, 'the move code is');
   assert.match(view, /this handler ran too long/, 'with the guard that counts it');
   assert.match(view, /"effectNames":\["ding"\]|effectNames:\["ding"\]/, 'and the declarations, as data');

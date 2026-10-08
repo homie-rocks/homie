@@ -1192,10 +1192,15 @@ it at `/games/<id>/agents.json`, where the Table reads it once.
 | `k` | From → to | `d` | The relay |
 |---|---|---|---|
 | `agent:view` | host → one AI's seat (`to: seat`) | the game's view of that guide (below) | Only the host, only to an AI's seat, under 2 KB, at most one every 2 s per AI; kept as that AI's latest view. |
+| `agent:offer` | host → everyone | `{ slot, view }` | The bounded declared guide view, at most once every 2 s. Replicas accept it only from the current host. |
+| `agent:goal` | host → everyone | `{ slot, goal, prev, askAt }` | A goal change for UI listeners; `goal` and `prev` are helper goals or null, timestamps in milliseconds. Host only. |
+| `agent:ask` | host → everyone | `{ slot, k, args, from, at }` | A validated person's guide request for UI listeners; `at` is milliseconds. Host only. |
 | `agent:do` | AI → host | `{ goal, args }` | A goal of the vocabulary whose arguments fit the AI's latest view and the seats people hold; at most one every 3 s. |
 | `say:<lineId>` | AI → host | `{ args }` | A line of the vocabulary with fitting arguments, on a server whose AI may talk (`policy.brain` is `workers-ai` or `owner-key`), at most one every 4 s and 8 a minute. The host renders it and relays it to everyone as `say:<lineId>` `{ slot, seat, args, ai: true }`, which the relay checks again (a line of the vocabulary; a view argument from the speaking AI's latest view, or only an id for a guide no AI holds): a host cannot put its own words in an AI's line. |
 | `ask:<askId>` | a person → host | `{ slot, seat, args }` | Copied to the AI in `seat` (an ask id of the vocabulary). |
 | anything else from an AI with no game client, `chat`, `emote`, `agent:view` | | | Dropped and counted (`stats.agentDrops`). An AI never types. |
+
+Only the host emits `ai: true`. A server host removes `ai`, `slot` and `seat` from relayed person or watcher speech. Replicas accept guide lines only from the current host (whose seat is null for a server host). Vocabulary membership uses own keys, never inherited properties.
 
 The lite feed (hands `host`) carries `join`/`leave`, `roster`, `round`, `policy`, `vote`, events
 addressed to its seat, the party's `say:`/`emote:` lines (`chat` only on a `speech: game`
@@ -1224,7 +1229,7 @@ agents.ask(slot, 'ask_help', { quest: 'king-slime' });     // a person's button 
 | Call | Meaning |
 |---|---|
 | `useAgents(net, vocab, { view, decide, roles?, holdMs?, askWaitMs? })` | Every browser. On the host: sends each AI-held guide its view every 2 s, runs the floor for the rest (once a second), takes `agent:do` and AI lines, answers asks. |
-| `goalOf(slot)` | `{ goal, args, from: 'brain' \| 'floor', at, state, asked? }` or null (the game's own bot code drives). An AI's decision holds for `holdMs` (45 s) or until it is done; a goal that answered a person's ask (`asked`) is carried through until done (or 60 s), whatever a brain says. A brain's decision that does not answer an open ask leaves it open, and the floor answers it after `askWaitMs`. |
+| `goalOf(slot)` | `{ goal, args, from: 'brain' \| 'floor', at, state, asked? }` or null (the game's own bot code drives). An AI's decision holds for `holdMs` (45 s) or until it is done; a goal that answered a person's ask (`asked`) is carried through until done (or 60 s), whatever a brain says. A brain's decision that does not answer an open ask leaves it open, and the floor attempts it once after `askWaitMs`. That attempt closes the ask even if it declines, returns nothing, or throws. Ordinary browser helpers keep their one-second floor cadence, including after an accepted ask. The rules host sets `carryFloor: true` to carry an accepted ask through its scripted floor for 60 s or until done; that is the rules contract in section 29. |
 | `done(slot, ok?)` | The goal finished (or failed): the next view says so (a brain thinks again); a guide no AI holds decides at once. |
 | `ask(slot, k, args)`, `askButtons(slot, offer)`, `asksFor(slot)` | A person's ask (a button); the buttons to draw (one per value its argument may take); the asks made of a guide in the last 30 s. An ask of a held guide waits `askWaitMs` (4 s) for its brain, then the floor answers it. |
 | `on('say' \| 'goal' \| 'ask', fn)` | A guide's line (text from the vocabulary; never on a browser with Quiet AI on), a goal change (with `askAt`, the ask that led to it), an ask. |
@@ -1232,6 +1237,16 @@ agents.ask(slot, 'ask_help', { quest: 'king-slime' });     // a person's button 
 
 A view adds `goal` (`{ goal, args, state }`) and `asks` itself. The brain also thinks again when
 the view's `zone` or `danger` changes.
+
+The helper compares both the goal and its arguments when answering an ask. A carried goal also
+blocks a brain from substituting other arguments to that same goal. Without a `decide` callback,
+the helper closes an ask on its next floor beat. A floor that declines an ask does not mark its
+standing goal as `asked`. These rules also apply to browser-hosted games.
+
+Reopening a verified agent pass resumes its existing seat and replaces the previous socket,
+in both browser-hosted and server-hosted rooms. After one replacement, the same stay can reopen
+at most once every four seconds and eight times a minute. Earlier retries receive `agent-pace` with `retryMs` and leave
+the current socket, body and goal intact.
 
 ### House guides and their brains
 
@@ -2093,6 +2108,17 @@ The frames are section 5's. For a rules game two of them carry different fields.
 | `ev`, kind `cmd` (a seat to the host) | `d: [command, data]`: a reliable one-shot request to the sender's own body, run on the next tick |
 | `state`, key `shared` (the host) | The rules' `shared` fields, in order, sent when they change |
 | `round`, `roster`, `caps` | As today. The roster's `slot` is the body's seat; a bot's `seat` is null. Results are read from the `score: true` field of every player's body, two ticks after a round's time is up; ties share a place |
+
+The optional final player field `goal` is null or `{ goal, args, from, at, asked }`, with `at` in ticks. Older snapshots without it read as null.
+
+The relay also sends two internal frames to its rules host; no client may send either:
+
+| Frame | Fields | Meaning |
+|---|---|---|
+| `vocabulary` | `vocab` | The build's validated `agents.json`, or null. Installed before joins. |
+| `decided` | `n, ok, by?, picks?, why?` | The answer to a host's `decide`. Only a matching pending request is settled, once, on a tick. Picks are validated against the declaration; `why` is a word of at most 32 characters. |
+
+A failed game-decision floor still settles once: `by: 'floor'`, `why: 'floor-error'`, and declared picks (false for yes/no, zero for score, the first declared choice). Its failure is counted once. Late replies are ignored. Reserved companions occupy the relay's top `aiSeats + guides` seats; guides take the highest seats. Plain practice bots and away people have no agent goal, floor or ask buttons. An AI's role comes from its admitted peer facts or the reservation policy.
 
 **One step a tick, on both sides.** A seat's input is a value that holds from one entry to the
 next. The step for tick `t` is the values of the newest entry stamped `t` or earlier, plus the
