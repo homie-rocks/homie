@@ -3,16 +3,25 @@ import test from 'node:test';
 import { Grid } from '@homie-rocks/nav/Grid.js';
 import { Random } from '@homie-rocks/nav/Random.js';
 
-test('A* takes the shortest detour, matching an independent breadth-first oracle', () => {
+test('A* and JPS have equal octile cost against an independent Dijkstra oracle', () => {
   const rng = new Random(92);
-  for (let run = 0; run < 30; run++) {
-    const blocked = Uint8Array.from({ length: 144 }, () => rng.next() < .2 ? 1 : 0);blocked[0] = blocked[143] = 0;
-    const grid = new Grid(12, 12, 1, [0, 0, 0], blocked), route = grid.path([.5, 0, .5], [11.5, 0, 11.5]);
-    const q = [0], d = new Int32Array(144).fill(-1);d[0] = 0;
-    for (let k = 0; k < q.length; k++) { const i = q[k];for (const j of [i % 12 ? i - 1 : -1, i % 12 < 11 ? i + 1 : -1, i - 12, i + 12]) if (j >= 0 && j < 144 && !blocked[j] && d[j] === -1) { d[j] = d[i] + 1;q.push(j); } }
-    assert.equal(route.complete, d[143] >= 0);
-    if (route.complete) assert.equal(route.points.length - 1, d[143]);
-    for (const p of route.points) assert.equal(blocked[Math.floor(p[2]) * 12 + Math.floor(p[0])], 0);
+  for (let run = 0; run < 150; run++) {
+    const blocked = Uint8Array.from({ length: 144 }, () => rng.next() < .2 ? 1 : 0); blocked[0] = blocked[143] = 0;
+    const grid = new Grid(12,12,1,[0,0,0],blocked);
+    const costs = new Array(144).fill(Infinity), seen = new Set(); costs[0]=0;
+    const free=(x,z)=>x>=0&&z>=0&&x<12&&z<12&&!blocked[z*12+x];
+    for(let pass=0;pass<144;pass++) {
+      let i=-1;for(let j=0;j<144;j++)if(!seen.has(j)&&(i<0||costs[j]<costs[i]))i=j;
+      if(!Number.isFinite(costs[i]))break;seen.add(i);const x=i%12,z=Math.floor(i/12);
+      for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)if((dx||dz)&&free(x+dx,z+dz)&&(!dx||!dz||(free(x+dx,z)&&free(x,z+dz)))){const j=(z+dz)*12+x+dx;costs[j]=Math.min(costs[j],costs[i]+(dx&&dz?Math.SQRT2:1));}
+    }
+    for(const search of ['astar','jps']) {
+      const route=grid.path([.5,0,.5],[11.5,0,11.5],{search,smooth:false});
+      assert.equal(route.complete,Number.isFinite(costs[143]));
+      if(route.complete)assert.ok(Math.abs(route.cost-costs[143])<1e-10,`${search} run ${run}`);
+      const smooth=grid.path([.5,0,.5],[11.5,0,11.5],{search});
+      for(let i=1;i<smooth.points.length;i++)assert.ok(grid.raycast(smooth.points[i-1],smooth.points[i]).clear);
+    }
   }
 });
 
