@@ -576,3 +576,63 @@ test('BotBrain at the dial: it reacts reactionMs late and aims within aimNoise x
   for (let i = 0; i < 100_000; i += 1) if (engages(skillPreset(5), 0.01)) fights += 1;
   assert.ok(fights > 800 && fights < 1000, `Maxed engages about 0.9 times a second (${fights / 1000}/s over 1000 s)`);
 });
+
+async function decisionHelper() {
+  const esbuild = (await import(join(REPO_NM, 'esbuild/lib/main.js'))).default;
+  const file = join(scratch, 'decision-helper.mjs');
+  await esbuild.build({ entryPoints: [join(PKG, 'agents/agents.ts')], bundle: true, format: 'esm', platform: 'neutral', outfile: file });
+  return import(file);
+}
+const guideVocabulary = { v: 1, goals: { guard: {}, follow: { args: { seat: 'player' } } }, lines: { hello: { text: 'Hello!' } }, asks: { follow: { text: 'Follow', goal: 'follow', args: { seat: 'player' } } } };
+function guideNet(host = true) {
+  let event;
+  const net = { isHost: host, host: { seat: 0 }, seat: 0, offline: false, policy: POL({ brain: 'workers-ai' }), peers: new Map([['p', { seat: 0 }]]), slots: [{ slot: 3, name: 'Helper', agent: { seat: 3, role: 'guide' } }], isAgent: s => s === 3, send() {}, on(k, fn) { event = fn; return () => {}; } };
+  return { net, ev: (k, d, from) => event({ k, d, from }) };
+}
+for (const mode of ['decline', 'empty', 'throw', 'accept']) test(`browser guide floor ${mode} settles an ask and keeps one second cadence`, async t => {
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 100000 });
+  const { useAgents } = await decisionHelper(); const f = guideNet(); let calls = 0;
+  const a = useAgents(f.net, guideVocabulary, { view: () => ({}), decide: v => { calls++; if (mode === 'throw') throw Error('no'); if (mode === 'empty') return null; return v.asks.length && mode === 'accept' ? { goal: 'follow', args: { seat: 0 } } : { goal: 'guard' }; } });
+  t.mock.timers.tick(250); f.ev('ask:follow', { slot: 3, args: { seat: 0 } }, 0);
+  for (let i = 0; i < 40; i++) t.mock.timers.tick(250);
+  assert.equal(a.asksFor(3).length, 0); assert.ok(calls <= 8, `floor called ${calls} times`);
+  if (mode === 'accept') assert.equal(a.goalOf(3).goal, 'guard', 'ordinary browser floors retain their existing behavior');
+  a.stop();
+});
+
+test('replicas accept guide lines only from their host and reject inherited vocabulary ids', async () => {
+  const { useAgents } = await decisionHelper(); const f = guideNet(false); const a = useAgents(f.net, guideVocabulary, { manual: true, view: () => ({}) }); const heard = []; a.on('say', e => heard.push(e));
+  for (const from of [1, null]) f.ev('say:hello', { slot: 3, ai: true }, from);
+  for (const id of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf']) {
+    assert.doesNotThrow(() => f.ev(`say:${id}`, { slot: 3, ai: true }, 0));
+    assert.equal(a.render(id, {}, 3), null);
+  }
+  assert.equal(heard.length, 0); f.ev('say:hello', { slot: 3, ai: true }, 0); assert.equal(heard.length, 1); a.stop();
+});
+
+test('dropping a goal the host refused keeps the companion\'s pacing, its open asks and who asked to be left alone', async () => {
+  const { useAgents } = await decisionHelper(); const f = guideNet(false); const now = Date.now();
+  const restore = {
+    goals: [[3, { goal: 'follow', args: { seat: 1 }, at: now, state: 'active', from: 'floor' }]],
+    asks: [[3, [{ k: 'follow', from: 1, args: { seat: 1 }, at: now }]]],
+    avoid: [[3, [[1, now + 60_000]]]],
+    sayAt: [[3, now]], viewAt: [[3, now]], floorAt: [[3, now]], askAt: [[3, now]],
+  };
+  const a = useAgents(f.net, guideVocabulary, { manual: true, view: () => ({}), restore });
+  const before = a.save();
+  assert.equal(before.goals.length, 1, 'the goal was restored'); assert.equal(before.avoid.length, 1, 'so was who asked to be left alone'); assert.equal(before.sayAt.length, 1, 'and when it last spoke');
+  a.dropGoal(3);
+  const after = a.save();
+  assert.equal(a.goalOf(3), null); assert.deepEqual(after.goals, []);
+  assert.deepEqual(after.floorAt, [], 'the floor may answer at once');
+  for (const key of ['asks', 'avoid', 'sayAt', 'viewAt', 'askAt']) assert.deepEqual(after[key], before[key], key);
+  a.stop();
+});
+
+test('one admitted agent pass keeps one seat when its socket opens twice', () => {
+  const r = relay({}, POL({ kind: 'hybrid', aiSeats: 2 })); r.join({}, { caps: ['agents'] });
+  const a = r.agent({ hands: 'host' }); const seat = a.last('welcome').seat;
+  const b = r.agent({ hands: 'host' });
+  assert.equal(b.last('welcome').seat, seat); assert.equal(a.conn.closed[1], 'replaced');
+  assert.equal(r.room.live().filter(c => c.agent).length, 1);
+});

@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { GUARD_MODULE, RULES_MODULE, guardRules, guardedPlugin, problemLine } from './rules-guard.mjs';
+import { checkDecide } from '../worker/brain.mjs';
 import { PACKAGE_ROOT, isRulesGame, rulesIndex } from './studio.mjs';
 
 export { isRulesGame };
@@ -79,9 +80,10 @@ let loads = 0;
  * clock to run in. One slow tick on a busy computer proves nothing, so the line is three ticks of the run over the
  * period, or one tick over four periods: either stops the build, naming the handler that used the most.
  */
-export function smokeRun(H, compiled, id, { timer = () => performance.now() } = {}) {
+export function smokeRun(H, compiled, id, { timer = () => performance.now(), vocab = null } = {}) {
   let now = 0;
-  const host = H.createHost({ game: id, compiled, send() {}, clock: { now: () => now, setTimer: () => 0, clearTimer() {} }, random: () => 0.5 });
+  const host = H.createHost({ game: id, compiled, check: true, send() {}, clock: { now: () => now, setTimer: () => 0, clearTimer() {} }, random: () => 0.5 });
+  if (vocab) { host.frame({ t: 'vocabulary', vocab }); host.frame({ t: 'policy', policy: { kind: 'beginner', guides: 1, aiSeats: 0, bots: 'fill', brain: 'script' } }); }
   host.frame({ t: 'join', peer: { id: 'build', seat: 0, name: 'Build', occ: 1 } });
   const period = 1000 / compiled.settings.tickHz;
   let slowest = 0; let slowestTick = 0; let over = 0;
@@ -116,9 +118,13 @@ export async function prepareRules(esbuild, root, g, { log = () => {} } = {}) {
   for (const p of problems) log(`warning: games/${g.id}/game.json: ${p}`);
   if (settings.host === 'browser') throw new Error(`games/${g.id}/game.json asks for "room": { "host": "browser" }. Rules hosted by a player's browser arrive in a later release; until then a rules game is hosted by the server ("host": "server", the default).`);
   const seats = Math.max(1, Math.min(32, Math.floor(Number(g.players?.max)) || 8));
+  for (const [name, ask] of Object.entries(def.asks ?? {})) {
+    const checked = checkDecide({}, ask.questions);
+    if (!checked.ok) throw new Error(`games/${g.id}/src/rules.ts: asks.${name}.questions: ${checked.why}`);
+  }
   let compiled;
   try { compiled = R.compileRules(def, { tune, map: R.compileMap(map, map.name), settings, seats }); } catch (error) { throw new Error(`games/${g.id}/src/rules.ts: ${error.message}`); }
-  const stats = smokeRun(H, compiled, g.id);
+  const stats = smokeRun(H, compiled, g.id, { vocab: readJson(join(g.dir, 'agents.json')) });
   const data = { tune, map, settings, seats };
   return {
     code: guarded.code, ...data, schema: R.schemaOf(compiled), publicTune: compiled.publicTune, files: guarded.files, rounds: compiled.rounds,
@@ -133,7 +139,7 @@ export async function prepareRules(esbuild, root, g, { log = () => {} } = {}) {
  */
 export function viewPlugin(g, rules, entry) {
   const move = join(g.dir, 'src', 'move.ts');
-  const game = { id: g.id, schema: rules.schema, tune: rules.publicTune, map: rules.map };
+  const game = { id: g.id, schema: rules.schema, tune: rules.publicTune, map: rules.map, vocab: readJson(join(g.dir, 'agents.json')) };
   const guarded = guardedPlugin(rules.files, { stub: [join(g.dir, 'src', 'rules.ts')] });
   return {
     name: 'homie-rules-view',
@@ -141,7 +147,7 @@ export function viewPlugin(g, rules, entry) {
       b.onResolve({ filter: /^homie:(?:view|game)$/ }, (a) => ({ path: a.path, namespace: 'homie-view' }));
       b.onLoad({ filter: /.*/, namespace: 'homie-view' }, (a) => (a.path === 'homie:view'
         ? { contents: `import 'homie:game';\nimport ${JSON.stringify(entry)};\n`, resolveDir: g.dir, loader: 'js' }
-        : { contents: `${existsSync(move) ? `import { move } from ${JSON.stringify(move)};` : 'const move = {};'}\nimport { setGame } from '${RULES_MODULE}/view';\nsetGame(${JSON.stringify(game)}, move);\n`, resolveDir: g.dir, loader: 'js' }));
+        : { contents: `${existsSync(move) ? `import { move } from ${JSON.stringify(move)};` : 'const move = {};'}\nimport { setGame${game.vocab ? ', setAgentFactory' : ''} } from '${RULES_MODULE}/view';\n${game.vocab ? `import { useAgents } from ${JSON.stringify(join(PACKAGE_ROOT, 'agents/agents.ts'))}; setAgentFactory(useAgents);` : ''}\nsetGame(${JSON.stringify(game)}, move);\n`, resolveDir: g.dir, loader: 'js' }));
       rulesModulesPlugin().setup(b);
       guarded.setup(b);
     },

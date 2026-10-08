@@ -381,6 +381,7 @@ async function site() {
       const gj = join(dir, 'games', id, 'game.json');
       writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), ...extra }, null, 2));
     }
+    assert.equal(run(['game', 'new', 'rules-watch', '--from', 'coin-dash'], dir).status, 0);
     const b = run(['build'], dir);
     assert.equal(JSON.parse(b.stdout).ok, true, b.stdout + b.stderr);
     built = dir;
@@ -422,7 +423,7 @@ test('the build keeps what each game lets its watchers see', async () => {
   await site();
   const cat = JSON.parse(readFileSync(join(built, 'site', 'dist', 'games.json'), 'utf8'));
   const by = Object.fromEntries(cat.games.map((g) => [g.id, g.watch ?? 'follow']));
-  assert.deepEqual(by, { 'blind-duel': 'off', 'card-night': 'overview', 'night-vault': 'follow', 'owl-run': 'follow' });
+  assert.deepEqual(by, { 'blind-duel': 'off', 'card-night': 'overview', 'night-vault': 'follow', 'owl-run': 'follow', 'rules-watch': 'follow' });
 });
 
 test('the watch door: the game as a watcher, its frame and socket say so, and a game that says no has none', async () => {
@@ -512,4 +513,25 @@ test('/api/watch names the busiest public room and reserves nothing; every room 
   await fetchSite('/owl-run/watch?room=pub-2', { headers: { 'sec-fetch-dest': 'document' } });
   const counted = env.DB.sql.prepare("SELECT metric, n FROM stats_daily WHERE subject = 'owl-run' AND metric IN ('watch', 'play')").all();
   assert.deepEqual(counted.map((r) => [r.metric, r.n]), [['watch', 1]]);
+});
+
+test('server rules watch page and door boot a screen with no seat', async () => {
+  const { fetchSite } = await site();
+  const page = await fetchSite('/rules-watch/watch?room=pub-1'); assert.equal(page.status, 200);
+  const boot = bootOf(await page.text());
+  assert.equal(boot.game, 'rules-watch');
+  const frame = await fetchSite('/rules-watch/__game/?room=pub-1&watch=1');
+  assert.equal(frame.status, 200);
+  const net = netOf(await frame.text()); assert.equal(net.watch, true);
+});
+
+test('server host ignores watcher inputs, commands, asks, decisions and votes', async () => {
+  const { loadGame, writeGame, roomRig } = await import('./rules-kit.mjs');
+  const { source, vocab } = await import('./rules-feature-kit.mjs');
+  const L = await loadGame(scratch, writeGame(scratch, 'watch-rules', { rules: source }), 'watch-rules');
+  const r = roomRig(L, L.R.compileRules(L.def, { seats: 4 }), { maxPlayers: 4 });
+  r.room.setVocabulary(vocab); const p = r.conn(); p.hello(); const w = r.conn(); w.hello('Watcher', { watch: true, want: 'watch' }); r.run(100);
+  const state = r.host.core.save();
+  for (const m of [{ t: 'in', e: r.host.epoch, k: r.host.tick + 1, s: [[0, 127]] }, { t: 'ev', k: 'cmd', d: ['ask', {}] }, { t: 'ev', k: 'ask:follow', d: { slot: 3, args: { seat: 0 } } }, { t: 'ev', k: 'agent:do', d: { goal: 'guard' } }, { t: 'vote', level: 5 }]) w.say(m);
+  assert.deepEqual(r.host.core.save(), state); assert.equal(r.room.vote, null); r.host.stop();
 });

@@ -36,6 +36,7 @@ import {
   PUBLIC_SERVER, SERVERS_MIGRATION, SERVERS_MIGRATION_FILE, checkServer, narrows, policyOf, pooledRoom, roomCode, roomServer, serverAccess, serverOf,
 } from '../worker/servers.mjs';
 import { decodeFacts, fillSpot, passCreate, passOf, passRefusal, passRevoke } from '../worker/agents.mjs';
+import { vocab, source } from './rules-feature-kit.mjs';
 import { players } from '../worker/players.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -134,7 +135,7 @@ function namespace(Klass, envRef, waits) {
     get(id) {
       if (!objs.has(id)) {
         const store = new Map();
-        const ctx = { storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); }, delete: async (k) => { store.delete(k); }, setAlarm: async (at) => { store.set('__alarm', at); } }, blockConcurrencyWhile: async (fn) => fn(), waitUntil: (p) => waits.push(p) };
+        const ctx = { storage: { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); }, delete: async (k) => { store.delete(k); }, getAlarm: async () => store.get('__alarm') ?? null, setAlarm: async (at) => { store.set('__alarm', at); } }, blockConcurrencyWhile: async (fn) => fn(), waitUntil: (p) => waits.push(p) };
         objs.set(id, new Klass(ctx, envRef.env));
       }
       const o = objs.get(id);
@@ -149,6 +150,11 @@ async function site() {
     const dir = studio('worker');
     assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
     assert.equal(run(['game', 'new', 'vale', '--from', 'ember-vale', '--name', 'Vale'], dir).status, 0);
+    assert.equal(run(['game', 'new', 'rules-run', '--from', 'coin-dash', '--name', 'Rules Run'], dir).status, 0);
+    writeFileSync(join(dir, 'games/rules-run/src/rules.ts'), source);
+    const rulesManifest = join(dir, 'games/rules-run/game.json');
+    writeFileSync(rulesManifest, JSON.stringify({ ...JSON.parse(readFileSync(rulesManifest, 'utf8')), players: { min: 1, max: 4 } }));
+    writeFileSync(join(dir, 'games/rules-run/agents.json'), JSON.stringify(vocab));
     // A game that ships a server in its game.json (a seed; a D1 row of the same id wins).
     const gj = join(dir, 'games', 'vale', 'game.json');
     writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), servers: [{ id: 'hearth', name: 'Hearth', policy: 'hybrid', aiSeats: 1, blurb: 'A cosy server' }] }, null, 2));
@@ -157,7 +163,8 @@ async function site() {
     built = dir;
   }
   const dir = built;
-  const { default: worker, Table, Lobby } = await import('../worker/index.mjs');
+  const { default: worker, Table, Lobby, hostRules } = await import('../worker/index.mjs');
+  hostRules((await import(join(dir, 'site/src/rules/index.mjs'))).default);
   const waits = [];
   const ref = {};
   const DB = fakeD1(dir);
@@ -604,4 +611,208 @@ test('the build refuses an agents.json that is not a vocabulary, and serves a go
   b = JSON.parse(run(['build'], dir).stdout);
   assert.equal(b.ok, false);
   assert.match(b.why, /agents\.json: goals\.attack: a guide never acts against a player .*; lines\.rude: text is over 120 characters/);
+});
+
+// The socket endpoint, policy lookup, pass verification and signed controls all pass through the real Worker/Table.
+async function rulesSockets(t) {
+  const s = await site(); const ends = [];
+  class Socket {
+    constructor() { this.listeners = {}; this.sent = []; } accept() {} send(v) { this.sent.push(JSON.parse(v)); } close(code, why) { this.closed = [code, why]; }
+    addEventListener(k, fn) { (this.listeners[k] ??= []).push(fn); }
+    emit(k, e) { for (const fn of this.listeners[k] ?? []) fn(e); }
+    say(m) { this.emit('message', { data: JSON.stringify(m) }); }
+  }
+  const previous = globalThis.WebSocketPair;
+  globalThis.WebSocketPair = class { constructor() { const c = new Socket(); const server = new Socket(); ends.push(server); return { 0: c, 1: server }; } };
+  t.after(() => { globalThis.WebSocketPair = previous; for (const table of s.env.TABLE.objs.values()) { table.hostRt?.stop(); if (table.timer) clearInterval(table.timer); } });
+  const socket = async (room, ticket = '', hello = {}) => {
+    const n = ends.length;
+    const res = await s.fetchSite(`/rules-run/__net?room=${room}${ticket ? `&t=${encodeURIComponent(ticket)}` : ''}`, { headers: { upgrade: 'websocket' } }).catch(e => { if (!/status/.test(String(e))) throw e; });
+    if (ends.length === n) return res;
+    const end = ends.at(-1); end.say({ t: 'hello', v: 1, rev: 10, want: 'play', name: 'Player', ...hello }); return end;
+  };
+  const settle = async () => { await Promise.all(s.waits.splice(0)); };
+  return { ...s, socket, settle };
+}
+
+for (const kind of ['open', 'humans-only', 'hybrid', 'beginner', 'kids']) test(`server rules through Worker: ${kind}, controls, round stats and AI-only pause`, async t => {
+  const s = await rulesSockets(t);
+  const spec = { game: 'rules-run', name: `Rules ${kind}`, id: `rules-${kind}`, policy: kind === 'kids' ? 'beginner' : kind, ...(kind === 'kids' ? { kids: true } : {}), ...(kind === 'hybrid' ? { aiSeats: 2 } : {}), ...(['beginner', 'kids'].includes(kind) ? { guides: 1 } : {}) };
+  assert.equal((await s.post('/_studio/api/servers', spec)).status, 200);
+  const room = `s-rules-${kind}-1`;
+  const p = await s.socket(room); const w = p.sent.find(m => m.t === 'welcome');
+  assert.equal(w.host.id, 'server'); assert.equal(w.role, 'replica'); assert.equal(w.policy.kind, spec.policy);
+  if (kind === 'kids') { assert.equal(w.policy.kids, true); assert.equal(w.policy.levelMax, 3); }
+  const table = s.env.TABLE.objs.get(`rules-run/${room}`); await table.vocabRead;
+  const tick = n => { for (let i = 0; i < n; i++) table.hostRt.tickNow(); };
+  tick(2);
+  const reserved = kind === 'hybrid' ? 2 : ['beginner', 'kids'].includes(kind) ? 1 : 0;
+  assert.equal(table.room.lastRoster.filter(x => x.agent).length, reserved);
+  const ids = table.hostRt.core.bodies().filter(b => b.driver === 'ai').map(b => b.id);
+  for (let i = 1; i < table.room.humanCap(); i++) await s.socket(room);
+  const waiting = await s.socket(room); assert.equal(waiting.sent.find(m => m.t === 'welcome').full, true);
+  tick(2); assert.deepEqual(table.hostRt.core.bodies().filter(b => b.driver === 'ai').map(b => b.id), ids);
+  const before = table.room.policy.level;
+  p.say({ t: 'ctl', op: 'level', args: { level: 5 } }); tick(1); assert.equal(table.room.policy.level, before);
+  const bad = await s.env.TABLE.get(`rules-run/${room}`).fetch(`https://table/__office?game=rules-run&room=${room}`, { method: 'POST', body: JSON.stringify({ op: 'level', args: { level: 5 } }) }); assert.equal(bad.status, 403);
+  const { signControl } = await import('../worker/office.mjs');
+  const ctl = await signControl(s.env, { game: 'rules-run', room, op: 'level', args: { level: 2 } });
+  const good = await s.env.TABLE.get(`rules-run/${room}`).fetch(`https://table/__office?game=rules-run&room=${room}`, { method: 'POST', body: JSON.stringify(ctl) }); assert.equal(good.status, 200);
+  tick(61); table.recordRound(); await s.settle();
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM rounds WHERE game = ? AND room = ?').get('rules-run', room).n, 1);
+  for (const c of [...table.room.live()]) if (!c.agent) table.room.kick(c, 'closed');
+  assert.equal(table.hostRt.paused, true); const stopped = table.hostRt.tick;
+  assert.equal(table.hostRt.people, 0); assert.equal(table.hostRt.tick, stopped);
+});
+
+test('server rules: Worker verifies AI passes and refuses a forged identity and humans-only admission', async t => {
+  const s = await rulesSockets(t);
+  for (const [id, policy] of [['companions', 'hybrid'], ['humans', 'humans-only']]) assert.equal((await s.post('/_studio/api/servers', { game: 'rules-run', name: id, id, policy, aiSeats: 2 })).status, 200);
+  const p = await s.socket('s-companions-1'); const table = s.env.TABLE.objs.get('rules-run/s-companions-1'); await table.vocabRead; table.hostRt.tickNow(); table.report(); await s.settle();
+  const forged = await s.socket('s-companions-1', '', { agent: { role: 'guide', hands: 'host' } }); assert.equal(forged.closed[1], 'agent-pass');
+  const made = await (await s.post('/_studio/api/agents/pass', { action: 'create', game: 'rules-run', label: 'Helper', days: 1, hands: 'host' })).json();
+  const sat = await (await s.fetchSite('/rules-run/api/agent', { method: 'POST', headers: { authorization: `Bearer ${made.secret}` }, body: '{"server":"companions"}' })).json();
+  const ai = await s.socket(sat.room, sat.ticket, { name: 'Human', agent: { role: 'party', hands: 'host' } });
+  assert.equal(ai.sent.find(m => m.t === 'welcome').name, 'Helper · AI');
+  assert.equal((await s.socket('s-humans-1', sat.ticket, { agent: { role: 'party', hands: 'host' } })).status, 403);
+  p.emit('close', {}); assert.equal(table.hostRt.paused, true);
+  table.room.now = () => Date.now() + 61000;
+  for (const c of table.room.live()) if (c.agent) c.lastSeen = table.room.now();
+  table.room.tick(); assert.equal(ai.closed[1], 'agents-alone');
+});
+
+test('server rules: the Table seats a house guide with server identity', async t => {
+  const s = await rulesSockets(t);
+  assert.equal((await s.post('/_studio/api/servers', { game: 'rules-run', id: 'guided', name: 'Guided', policy: 'beginner', guides: 1 })).status, 200);
+  const asked = await (await s.post('/_studio/api/agents/brain', { game: 'rules-run', server: 'guided', mode: 'workers-ai', budget: 1000 })).json();
+  assert.ok(asked.ask);
+  assert.equal((await s.fetchSite(`/_studio/confirm/${asked.ask.id}`, { method: 'POST', headers: { ...s.owner, origin: 'https://owls.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'do=yes' })).status, 200);
+  await s.socket('s-guided-1'); const table = s.env.TABLE.objs.get('rules-run/s-guided-1'); await table.vocabRead; table.syncHouse(); await s.settle(); table.hostRt.tickNow();
+  const guide = table.room.live().find(c => c.agent); assert.ok(guide); assert.equal(guide.agent.role, 'guide'); assert.equal(table.hostRt.core.bodyOf(guide.seat).driver, 'ai');
+  assert.equal(table.room.lastRoster.find(s => s.agent?.seat === guide.seat).agent.role, 'guide');
+});
+
+async function changeRulesServer(s, fields) {
+  const r = await s.post('/_studio/api/servers/set', { game: 'rules-run', server: 'changing', ...fields });
+  if (r.status === 202) {
+    const j = await r.json();
+    assert.equal((await s.fetchSite(`/_studio/confirm/${j.ask.id}`, { method: 'POST', headers: { ...s.owner, origin: 'https://owls.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'do=yes' })).status, 200);
+  } else assert.equal(r.status, 200, await r.text());
+  await s.settle();
+}
+
+async function rulesPass(s, room) {
+  const made = await (await s.post('/_studio/api/agents/pass', { action: 'create', game: 'rules-run', label: 'Visitor', days: 1, hands: 'host' })).json();
+  const table = s.env.TABLE.objs.get(`rules-run/${room}`); table.report(); await s.settle();
+  const sat = await (await s.fetchSite('/rules-run/api/agent', { method: 'POST', headers: { authorization: `Bearer ${made.secret}` }, body: JSON.stringify({ server: 'changing' }) })).json();
+  assert.equal(sat.room, room);
+  return sat.ticket;
+}
+
+for (const kind of ['hybrid', 'beginner']) test(`server rules live ${kind} change publishes names, roles and working ask buttons without another join`, async t => {
+  const s = await rulesSockets(t);
+  await s.post('/_studio/api/servers', { game: 'rules-run', id: 'changing', name: 'Changing', policy: 'open' });
+  const { esbuildOf, PKG } = await import('./rules-kit.mjs');
+  const { pathToFileURL } = await import('node:url');
+  const file = join(scratch, `live-view-${kind}.mjs`);
+  await (await esbuildOf()).build({ stdin: { contents: `export * from './rules/view.ts'; export { useAgents } from './agents/agents.ts';`, resolveDir: PKG }, bundle: true, format: 'esm', outfile: file, logLevel: 'silent' });
+  const V = await import(pathToFileURL(file).href); V.setAgentFactory(V.useAgents);
+  class Socket {
+    constructor() { this.readyState = 0; this.bufferedAmount = 0; queueMicrotask(async () => {
+      this.end = await s.socket('s-changing-1');
+      const frames = this.end.sent.splice(0);
+      this.end.send = text => { this.end.sent.push(JSON.parse(text)); this.onmessage?.({ data: text }); };
+      this.readyState = 1; this.onopen?.({});
+      for (const m of frames) this.onmessage?.({ data: JSON.stringify(m) });
+    }); }
+    send(text) { const m = JSON.parse(text); if (m.t !== 'hello') this.end.say(m); }
+    close() { this.readyState = 3; this.end?.emit('close', {}); }
+  }
+  const { loadGame } = await import('./rules-kit.mjs');
+  const L = await loadGame(scratch, join(built, 'games/rules-run'), `view-${kind}`);
+  const manifest = { id: 'rules-run', schema: L.R.schemaOf(L.R.compileRules(L.def, { seats: 4 })), tune: {}, map: { bounds: { min: [-100, -100], max: [100, 100] } } };
+  const view = V.openRoom({ game: { ...manifest, vocab }, timers: false, net: { config: { v: 1, url: 'ws://local/rules-run/__net?room=s-changing-1', room: 's-changing-1', want: 'play' }, WebSocketImpl: Socket, post: null } });
+  t.after(() => view.close());
+  for (let i = 0; i < 30 && !s.env.TABLE.objs.get('rules-run/s-changing-1')?.hostRt; i++) await new Promise(r => setTimeout(r, 10));
+  const table = s.env.TABLE.objs.get('rules-run/s-changing-1'); await table.vocabRead;
+  table.hostRt.tickNow(); table.hostRt.tickNow();
+  await changeRulesServer(s, { policy: kind, aiSeats: kind === 'hybrid' ? 2 : 1, guides: kind === 'beginner' ? 1 : 0 });
+  for (let i = 0; i < 4; i++) table.hostRt.tickNow();
+  assert.equal(table.room.lastRoster.filter(x => x.agent).length, 2);
+  for (const b of table.hostRt.core.bodies().filter(b => b.driver === 'ai')) {
+    const slot = table.room.lastRoster.find(x => x.slot === b.seat);
+    assert.match(slot.name, / · AI$/);
+    assert.equal(slot.agent.role, kind === 'beginner' && b.seat === 3 ? 'guide' : 'party');
+    assert.ok(view.askButtons(b.id).some(x => x.k === 'follow'));
+    assert.ok(view.askButtons(b.id).some(x => x.k === 'visit' && x.args.place === 'camp'));
+    view.ask(b.id, 'follow', { seat: 0 }); table.hostRt.tickNow();
+    assert.equal(table.hostRt.core.goal(b.seat).goal, 'follow');
+  }
+  // Same reservation count, different roles must also publish a roster.
+  await changeRulesServer(s, { policy: 'beginner', aiSeats: 0, guides: 2 }); table.hostRt.tickNow();
+  assert.ok(table.room.lastRoster.filter(x => x.agent).every(x => x.agent.role === 'guide'));
+  await changeRulesServer(s, { policy: 'hybrid', aiSeats: 1, guides: 0 }); table.hostRt.tickNow();
+  assert.equal(table.room.lastRoster.filter(x => x.agent).length, 1);
+  await changeRulesServer(s, { policy: 'open', aiSeats: 0, guides: 0 }); table.hostRt.tickNow();
+  assert.equal(table.room.lastRoster.filter(x => x.agent).length, 0);
+});
+
+for (const holder of ['person', 'expired person', 'pass']) test(`server rules reserved companion forgets a departed ${holder} name`, async t => {
+  const s = await rulesSockets(t); const room = 's-changing-1';
+  await s.post('/_studio/api/servers', { game: 'rules-run', id: 'changing', name: 'Changing', policy: holder !== 'pass' ? 'open' : 'hybrid', aiSeats: 2 });
+  await s.socket(room); const table = s.env.TABLE.objs.get(`rules-run/${room}`); await table.vocabRead;
+  let seat; let leaving;
+  if (holder !== 'pass') {
+    await s.socket(room); await s.socket(room); const p = await s.socket(room, '', { name: 'Departed' }); seat = p.sent.find(m => m.t === 'welcome').seat; leaving = p;
+    await changeRulesServer(s, { policy: 'hybrid', aiSeats: 2 });
+  } else { const p = await s.socket(room, await rulesPass(s, room)); seat = p.sent.find(m => m.t === 'welcome').seat; }
+  table.hostRt.tickNow();
+  if (holder === 'expired person') {
+    leaving.emit('close', {});
+    const later = table.room.now() + table.room.holdMs + 1; table.room.now = () => later;
+    for (const c of table.room.live()) c.lastSeen = later;
+  } else {
+  const { signControl } = await import('../worker/office.mjs');
+  const ctl = await signControl(s.env, { game: 'rules-run', room, op: 'kick', args: { seat } });
+  assert.equal((await s.env.TABLE.get(`rules-run/${room}`).fetch(`https://table/__office?game=rules-run&room=${room}`, { method: 'POST', body: JSON.stringify(ctl) })).status, 200);
+  }
+  table.room.tick(); table.hostRt.tickNow(); table.hostRt.tickNow();
+  assert.equal(table.hostRt.core.bodies().find(b => b.seat === seat).owner, 'reserved');
+  const slot = table.room.lastRoster.find(x => x.slot === seat);
+  assert.doesNotMatch(slot.name, /Departed|Visitor/); assert.match(slot.name, / · AI$/);
+  for (let i = 0; i < 65; i++) table.hostRt.tickNow();
+  assert.doesNotMatch(JSON.stringify(table.room.lastRound), /Departed|Visitor/);
+});
+
+test('server rules pace a burst of one verified pass without replacing its body or flooding people', async t => {
+  const s = await rulesSockets(t); const room = 's-changing-1';
+  await s.post('/_studio/api/servers', { game: 'rules-run', id: 'changing', name: 'Changing', policy: 'hybrid', aiSeats: 2 });
+  const person = await s.socket(room); const table = s.env.TABLE.objs.get(`rules-run/${room}`); await table.vocabRead;
+  const ticket = await rulesPass(s, room); const a = await s.socket(room, ticket); const seat = a.sent.find(m => m.t === 'welcome').seat;
+  table.hostRt.tickNow(); const id = table.hostRt.core.bodyOf(seat).id;
+  person.sent.length = 0;
+  const sockets = []; for (let i = 0; i < 40; i++) sockets.push(await s.socket(room, ticket));
+  assert.equal(sockets.filter(x => x.sent.some(m => m.t === 'welcome')).length, 1);
+  assert.ok(sockets.slice(1).every(x => x.sent.some(m => m.t === 'error' && m.code === 'agent-pace')));
+  assert.equal(person.sent.filter(m => m.t === 'join').length, 1);
+  assert.equal(person.sent.filter(m => m.t === 'leave').length, 1);
+  table.hostRt.tickNow(); assert.equal(table.hostRt.core.bodyOf(seat).id, id);
+  const now = table.room.now(); table.room.now = () => now + 4001;
+  assert.equal((await s.socket(room, ticket)).sent.find(m => m.t === 'welcome').seat, seat);
+  for (let i = 2; i < 8; i++) { table.room.now = () => now + i * 4001; assert.equal((await s.socket(room, ticket)).sent.find(m => m.t === 'welcome').seat, seat); }
+  table.room.now = () => now + 8 * 4001;
+  assert.ok((await s.socket(room, ticket)).sent.some(m => m.t === 'error' && m.code === 'agent-pace'));
+  table.room.now = () => now + 60001;
+  assert.equal((await s.socket(room, ticket)).sent.find(m => m.t === 'welcome').seat, seat);
+});
+
+test('server rules ignore a first visitor capacity and keep build seat allocation', async t => {
+  const s = await rulesSockets(t); const room = 's-changing-1';
+  await s.post('/_studio/api/servers', { game: 'rules-run', id: 'changing', name: 'Changing', policy: 'hybrid', aiSeats: 2 });
+  const a = await s.socket(room, '', { max: 2 }); const table = s.env.TABLE.objs.get(`rules-run/${room}`); await table.vocabRead;
+  assert.equal(a.sent.find(m => m.t === 'welcome').max, 4);
+  assert.equal((await s.socket(room)).sent.find(m => m.t === 'welcome').seat, 1);
+  assert.equal((await s.socket(room)).sent.find(m => m.t === 'welcome').full, true);
+  const ai = await s.socket(room, await rulesPass(s, room)); assert.ok(ai.sent.find(m => m.t === 'welcome').seat >= 2);
+  table.hostRt.tickNow(); assert.equal(table.hostRt.core.bodies().filter(b => b.driver === 'ai').length, 2);
 });

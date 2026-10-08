@@ -28,6 +28,7 @@ A game's rules can run on your own Cloudflare instead of in a player's browser. 
 - **A game written as rules plus view.** The rules (`src/rules.ts`, with the movement code in `src/move.ts`) say what is true in the game: who took which coin, every score, when a round ends. The view (`src/view.ts`) draws what it is told and sends what the player presses. `@homie-rocks/studio/rules` is the format (`defineRules`, `defineMove`, `f` for the type of every piece of state) and `@homie-rocks/studio/rules/view` is what a view uses (`openRoom()`).
 - **The server is the room's host.** The rules of such a game run in the room's own server object on your Cloudflare. No player's browser is in charge, so a changed browser cannot change a score, a pickup or a round, and closing any one tab does not interrupt the others. Seats, chat, votes, watchers and the owner's controls work as before.
 - **Homie checks the rules before they go anywhere.** The build refuses rules that use anything outside a short list of safe operations and names the line (no clock, no network, no `Math.sin` that two machines may round differently, no state outside the declared fields). It then adds a guard, so a rule that never ends or grabs memory is stopped while the room carries on, and a room whose rules keep failing is closed and named in the log.
+- **Every room feature works with the server in charge.** Seats and coming back into the same body, waiting for a seat, watching, chat, votes, your owner controls, servers and their policies, AI seats with a pass, the skill dial, and a game's own decisions (`world.ask`) all behave in a server-hosted room as they do in a browser-hosted one. On a hybrid or beginner server the AI companions keep their reserved seats and their own names, and a guide in such a room follows the goals and lines in your `agents.json`.
 - **`coin-dash`, an example.** Copy it with `homie-studio game new <id> --from coin-dash` to see the two halves. It is an example, not yet a starter the chat offers: see the upgrade notes.
 - **The deploy plan says it.** For each such game: that its rules run on Cloudflare, and roughly what an hour of play in one full room uses of the free plan's daily allowances.
 - **The netplay contract is revision 10** (`netplay/NETPLAY.md`, section 29): the server as a host, input as steps stamped with the room's tick, and the life of such a room. Nothing a game written before sends or receives has changed.
@@ -37,6 +38,12 @@ A game's rules can run on your own Cloudflare instead of in a player's browser. 
 - A room of such a game pauses when the last person leaves and ends a minute later if nobody returns. An empty room uses nothing.
 - `homie-studio perf` accepts a room with no browser host.
 - A new studio's `site/src/worker.mjs` hands the Worker the rules of its server-hosted games (`site/src/rules/`, written by every build and committed with the studio), and its `wrangler.jsonc` turns off code made from text while the Worker starts.
+
+### Fixed
+
+- A goal, a line, an ask or an argument named after something every JavaScript object has (`constructor`, `toString` and the like) is no longer taken for one of your vocabulary's. Before, an AI guide could be made to "say" such a line, which threw an error in every player's browser, in browser-hosted games too.
+- Only the room's host can speak as a guide. A player or a watcher sending a line marked as the guide's is ignored.
+- An AI pass opened twice keeps one seat: the newer connection takes it, and reconnecting is paced so a copied pass cannot be used to flood a room.
 
 ### Upgrade notes
 

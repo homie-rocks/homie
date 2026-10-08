@@ -302,6 +302,7 @@ export interface Compiled {
   effects: Record<string, FieldList>;
   effectNames: string[];
   shared: FieldList;
+  view: FieldList;
   rounds: { seconds: number; breakSeconds: number } | null;
   bots: number;
   start: RoomHandler | null;
@@ -433,7 +434,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   for (const [key, shape] of Object.entries(d.shapes?.commands ?? {})) commands[key] = fieldList(shape, `shapes.commands.${key}`);
   const effects: Record<string, FieldList> = {};
   for (const [key, shape] of Object.entries(d.shapes?.effects ?? {})) effects[key] = fieldList(shape, `shapes.effects.${key}`);
-  fieldList(d.shapes?.view, 'shapes.view');
+  const view = fieldList(d.shapes?.view, 'shapes.view');
 
   const move = d.move as (Record<string, MoveFn> & Record<string, unknown>) | undefined;
   if (move !== undefined && (typeof move !== 'object' || move[MOVE] !== true)) throw new Error('move is what move.ts exports: `export const move = defineMove({ … })`');
@@ -511,7 +512,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   const seats = Math.max(1, Math.min(SEATS_MAX, Math.floor(Number(env.seats)) || 8));
   return {
     contract: RULES_CONTRACT, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
-    shared: fieldList(d.shared, 'shared'), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
+    shared: fieldList(d.shared, 'shared'), view, rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
     tune, publicTune, map, settings, seats,
   };
 }

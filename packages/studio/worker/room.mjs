@@ -403,7 +403,9 @@ export class NetRoom {
     this.preferHost = null;
     this.hosted.clear();
     if (!h) return;
+    this.askedMax = null; this.maxPlayers = this.seatCap;
     this.toServer({ t: 'policy', policy: this.policyOut() });
+    if (this.rawVocab) this.toServer({ t: 'vocabulary', vocab: this.rawVocab });
     for (const c of this.live()) if (c.seat !== null && !c.watch) this.joinServer(c);
   }
 
@@ -449,9 +451,12 @@ export class NetRoom {
       case 'round': return this.hostRound(null, m);
       case 'roster': return this.hostRoster(null, m);
       case 'caps': return this.hostCaps(null, m);
+      case 'decide': return this.onDecide(null, m, true);
       case 'ev': {
         const kind = String(m.k ?? '').slice(0, 64);
         if (SPEECH.test(kind) && (this.policy.speech === 'off' || (this.policy.speech === 'lines' && /^chat/i.test(kind)))) { this.stats.speechDrops += 1; return; }
+        if (d0(m).ai === true && !this.aiLineOk(kind, d0(m))) { this.stats.agentDrops += 1; return; }
+        if (kind === 'agent:view' && !this.agentViewOk(m, JSON.stringify(m).length, now, true)) return;
         this.stats.evs += 1;
         const out = { t: 'ev', from: Number.isInteger(m.from) ? m.from : null, k: kind, d: m.d ?? null };
         const line = JSON.stringify(out);
@@ -686,8 +691,9 @@ export class NetRoom {
    */
   onDecide(c, m, isHost) {
     const n = typeof m.n === 'string' || Number.isInteger(m.n) ? String(m.n).slice(0, 16) : '';
-    const reply = (o) => this.send(c, { t: 'decided', n, ...o });
-    if (!isHost || this.lite(c)) return reply({ ok: false, why: 'not-host' });
+    const server = this.server;
+    const reply = (o) => { const frame = { t: 'decided', n, ...o }; if (c) this.send(c, frame); else if (server && this.server === server) this.toServer(frame); };
+    if (!isHost || (c && this.lite(c))) return reply({ ok: false, why: 'not-host' });
     if (typeof this.decider !== 'function') return reply({ ok: false, why: 'off' });
     const now = this.now();
     while (this.decideTimes.length && this.decideTimes[0] <= now - 60_000) this.decideTimes.shift();
@@ -795,12 +801,7 @@ export class NetRoom {
         // A line the host relays for an AI (`d.ai`): still only a line of the vocabulary, with fitting arguments.
         if (isHost && d0(m).ai === true && !this.aiLineOk(kind, d0(m))) { this.stats.agentDrops += 1; return; }
         // The host shows one AI the game (`agent:view`): to that AI's seat only, small, at most one every 2 s.
-        if (kind === 'agent:view') {
-          const o = isHost && Number.isInteger(m.to) ? this.live().find((x) => x.seat === m.to && x.agent) : null;
-          if (!o || text.length > AGENT_FRAMES.viewBytes || now - o.viewAt < AGENT_FRAMES.viewMs - 250) { this.stats.agentDrops += 1; return; }
-          o.viewAt = now;
-          o.lastView = m.d && typeof m.d === 'object' && !Array.isArray(m.d) ? m.d : null;
-        }
+        if (kind === 'agent:view' && !this.agentViewOk(m, text.length, now, isHost)) return;
         this.stats.evs += 1;
         const out = { t: 'ev', from: c.seat, k: kind, d: m.d ?? null };
         if (isHost) {
@@ -962,10 +963,22 @@ export class NetRoom {
     c.typed = c.agent || this.policy.kids ? '' : typeof m.name === 'string' ? stripAi(m.name.replace(/\s+/g, ' ').trim()).slice(0, 24) : '';
     if (Array.isArray(m.caps)) for (const k of m.caps) if (CAPS.includes(k)) c.caps.add(k);
     // The manifest's player count, from the first visitor of an empty room (the site's Table reads the manifest).
-    if (Number.isInteger(m.max) && !this.seats.size && !live.length) { this.askedMax = m.max; this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max)); }
+    if (!this.server && Number.isInteger(m.max) && !this.seats.size && !live.length) { this.askedMax = m.max; this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max)); }
     this.reapSeats(now);
+    // The verified pass names one AI. Reopening its socket resumes that seat and replaces the old socket.
+    const agentStay = c.agent?.pass ? [...this.seats.values()].find(s => s.agent?.pass === c.agent.pass) : null;
+    const resumeToken = agentStay?.token ?? (typeof m.token === 'string' ? m.token : '');
+    const resumeBan = agentStay && this.banOf(c, resumeToken);
+    if (resumeBan) return refuse('kicked', resumeBan.message, { until: resumeBan.until });
+    // Pace the verified pass's stay, not its replaceable socket. Refusal cannot evict its current holder.
+    if (agentStay) {
+      const times = (agentStay.reopenTimes ?? []).filter(at => at > now - 60_000);
+      const retryMs = Math.max((times.at(-1) ?? -Infinity) + 4000 - now, times.length >= 8 ? times[0] + 60_000 - now : 0);
+      if (retryMs > 0) return refuse('agent-pace', 'this AI seat reopened too recently', { retryMs, final: false });
+      agentStay.reopenTimes = [...times, now];
+    }
     let full = false;
-    if (c.want === 'play' && !this.seatClient(c, typeof m.token === 'string' ? m.token : '')) {
+    if (c.want === 'play' && !this.seatClient(c, resumeToken)) {
       // The studio's own house guide (a loopback) makes way for an AI with a pass (the owner's Claude, say).
       const house = c.agent && !c.conn.loopback ? this.live().find((o) => o.agent && o.conn.loopback && o.seat !== null) : null;
       if (house) {
@@ -1142,7 +1155,18 @@ export class NetRoom {
   /** The game's agents.json (the Table reads it once from the build): the only goals and lines an AI here has. */
   setVocabulary(raw) {
     this.vocab = raw ? vocabularyOf(raw).vocab : null;
+    this.rawVocab = this.vocab ? raw : null;
+    if (this.server) this.toServer({ t: 'vocabulary', vocab: this.rawVocab });
     return Boolean(this.vocab);
+  }
+
+  /** Browser and server hosts share the same view validation and pacing. */
+  agentViewOk(m, bytes, now, isHost) {
+    const o = isHost && Number.isInteger(m.to) ? this.live().find((x) => x.seat === m.to && x.agent) : null;
+    if (!o || bytes > AGENT_FRAMES.viewBytes || now - o.viewAt < AGENT_FRAMES.viewMs - 250) { this.stats.agentDrops += 1; return false; }
+    o.viewAt = now;
+    o.lastView = m.d && typeof m.d === 'object' && !Array.isArray(m.d) ? m.d : null;
+    return true;
   }
 
   /** The seats people hold now (a "player" argument names one of them). */
@@ -1159,14 +1183,14 @@ export class NetRoom {
     const d = m.d && typeof m.d === 'object' && !Array.isArray(m.d) ? m.d : {};
     if (kind === 'agent:do') {
       if (c.id === this.hostId || !this.vocab || bytes > 1024 || now - c.doAt < AGENT_FRAMES.doMs) return false;
-      const goal = this.vocab.goals[d.goal];
+      const goal = (typeof d.goal === 'string' && Object.hasOwn(this.vocab.goals, d.goal) ? this.vocab.goals[d.goal] : null);
       if (typeof d.goal !== 'string' || !goal || checkArgs(goal.args, d.args, ctx)) return false;
       c.doAt = now;
       return true;
     }
     if (SPEECH.test(kind)) {
       const id = SAY.exec(kind)?.[1];
-      const line = id && this.vocab ? this.vocab.lines[id] : null;
+      const line = id && this.vocab ? (Object.hasOwn(this.vocab.lines, id) ? this.vocab.lines[id] : null) : null;
       return Boolean(line && talks(this.policy) && bytes <= 1024 && !checkArgs(line.args, d.args, ctx));
     }
     return !this.lite(c);
@@ -1179,7 +1203,7 @@ export class NetRoom {
    */
   aiLineOk(kind, d) {
     const id = SAY.exec(kind)?.[1];
-    const line = id && this.vocab ? this.vocab.lines[id] : null;
+    const line = id && this.vocab ? (Object.hasOwn(this.vocab.lines, id) ? this.vocab.lines[id] : null) : null;
     if (!line || !talks(this.policy)) return false;
     const speaker = Number.isInteger(d.seat) ? this.live().find((o) => o.seat === d.seat && o.agent) : null;
     if (Number.isInteger(d.seat) && !speaker) return false;
@@ -1196,7 +1220,7 @@ export class NetRoom {
     const ask = ASK.exec(kind)?.[1];
     if (ask) {
       const seat = out.d && Number.isInteger(out.d.seat) ? out.d.seat : null;
-      if (seat === null || (this.vocab && !this.vocab.asks[ask])) return;
+      if (seat === null || (this.vocab && !Object.hasOwn(this.vocab.asks, ask))) return;
       for (const o of this.live()) if (o !== c && this.lite(o) && o.seat === seat) this.send(o, out);
       return;
     }
@@ -1872,7 +1896,7 @@ export class NetRoom {
   restore(saved, graceMs = 3000) {
     const now = this.now();
     if (!saved || saved.v !== NET_VERSION || !(now - Number(saved.savedAt) < 120_000)) return false;
-    if (Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
+    if (!this.server && saved.hosted !== 'server' && Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
     if (Number.isFinite(saved.openedAt) && saved.openedAt > 0) this.openedAt = saved.openedAt;
     for (const [seat, token, name, agent, occ] of saved.seats ?? []) this.seats.set(seat, { token, name, since: now, present: false, agent: agent && typeof agent === 'object' ? agent : null, ...(Number.isInteger(occ) ? { occ } : {}) });
     // A stay's number is never given twice while a checkpoint may still name it.
@@ -2197,7 +2221,7 @@ export class NetRoom {
 
   setSeats(n, perIp = null) {
     this.seatCap = Math.max(1, Math.floor(n));
-    this.maxPlayers = Math.max(1, Math.min(this.seatCap, this.askedMax ?? this.seatCap));
+    this.maxPlayers = Math.max(1, Math.min(this.seatCap, this.server ? this.seatCap : this.askedMax ?? this.seatCap));
     if (Number.isFinite(perIp) && perIp > 0) this.perIp = perIp;
   }
 

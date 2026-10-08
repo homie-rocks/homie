@@ -445,3 +445,20 @@ test('a studio made before 0.6.0 gets the stats migration once, from deploy or d
   sql.exec(STATS_MIGRATION);
   assert.ok(sql.prepare("SELECT name FROM sqlite_master WHERE name = 'stats_daily'").get(), 'the migration is idempotent');
 });
+
+test('server rules round results reach Table stats once with reserved companions counted as AI', async () => {
+  const { loadGame, writeGame, roomRig } = await import('./rules-kit.mjs');
+  const { source, vocab } = await import('./rules-feature-kit.mjs');
+  const { DEFAULT_POLICY } = await import('../worker/room.mjs');
+  const { Table } = await import('../worker/index.mjs');
+  const L = await loadGame(scratch, writeGame(scratch, 'stats-rules', { rules: source }), 'stats-rules');
+  const r = roomRig(L, L.R.compileRules(L.def, { seats: 4 }), { maxPlayers: 4 });
+  r.room.setVocabulary(vocab); r.room.setPolicy({ ...DEFAULT_POLICY, kind: 'hybrid', aiSeats: 2 });
+  r.conn().hello('Player'); r.run(3100);
+  const dir = studio('rules-stats'); const DB = fakeD1(dir); const waits = [];
+  const table = Object.create(Table.prototype);
+  Object.assign(table, { room: r.room, recorded: 0, game: 'rules-run', code: 'pub-1', env: { DB }, ctx: { storage: { put: async () => {} }, waitUntil: p => waits.push(p) } });
+  table.recordRound(); table.recordRound(); await Promise.all(waits);
+  const rows = DB.sql.prepare('SELECT humans, bots, results FROM rounds').all(); assert.equal(rows.length, 1); assert.equal(rows[0].humans, 1); assert.equal(rows[0].bots, 2);
+  assert.equal(JSON.parse(rows[0].results).filter(x => x.agent).length, 2); r.host.stop();
+});
