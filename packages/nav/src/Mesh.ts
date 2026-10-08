@@ -1,5 +1,6 @@
+import { validateMesh } from './internal/ValidateMesh.ts';
 /** Loaded tiles, runtime carving and the common query interface. No renderer. */
-import { reachable } from './internal/Reachability.ts';
+import { reachable, invalidateReachability } from './internal/Reachability.ts';
 import * as nav from 'navcat';
 import { checkConfig, checkObstacle, type BakeConfig, type Obstacle } from './Bake.ts';
 import {
@@ -22,7 +23,7 @@ import {
   positive,
 } from './internal/Coordinates.ts';
 import { hash, pack, unpack } from './internal/Binary.ts';
-import { meshStates, locate, type MeshState } from './internal/MeshData.ts';
+import { meshStates, meshDependents, locate, type MeshState } from './internal/MeshData.ts';
 import { decodeTile, finishTile, type TileData } from './internal/Tile.ts';
 function copyConfig(config: BakeConfig): BakeConfig {
   return {
@@ -63,7 +64,9 @@ export class Mesh implements NavigationQuery {
     };
     for (const value of Object.values(this.#limits))
       if (!Number.isSafeInteger(value) || value < 1)
-        throw new Error('nav: invalid retention budget');
+        throw new Error(
+          `nav: invalid retention budget ${value}; expected an integer of at least 1`,
+        );
     checkConfig(config);
     point(queryHalfExtents);
     vector(queryHalfExtents).forEach((v) => positive(v, 'query half extent'));
@@ -131,8 +134,8 @@ export class Mesh implements NavigationQuery {
     this.#retainedCells = cellCount;
     this.#state.tiles[key] = t;
     this.#state.hashes[key] = hash(bytes);
-    this.changed();
     this.applyDoors();
+    this.changed();
     return { warnings: this.seamsAt(t.x, t.z) };
   }
   unloadTile(x: number, z: number): boolean {
@@ -165,7 +168,10 @@ export class Mesh implements NavigationQuery {
   addObstacles(obstacles: readonly Obstacle[]): number[] {
     const changes = obstacles.map((obstacle) => {
       checkObstacle(obstacle);
-      return { ...obstacle, ...axisBounds(obstacle.min, obstacle.max, this.up) };
+      return {
+        ...obstacle,
+        ...axisBounds(obstacle.min, obstacle.max, this.up),
+      };
     });
     for (const tile of Object.values(this.#state.tiles))
       if (!tile.compact && changes.some((obstacle) => this.overlaps(tile, obstacle)))
@@ -335,6 +341,14 @@ export class Mesh implements NavigationQuery {
   private changed(): void {
     this.#state.revision++;
     this.#identity = undefined;
+    invalidateReachability(this);
+    const dependents = meshDependents.get(this);
+    if (dependents)
+      for (const ref of dependents) {
+        const dependent = ref.deref();
+        if (dependent) dependent.invalidate();
+        else dependents.delete(ref);
+      }
   }
   private overlaps(tile: TileData, box: Obstacle): boolean {
     const c = this.#state.config,
@@ -482,7 +496,10 @@ export class Mesh implements NavigationQuery {
   }
   private checkRetention(spans: number, cells: number): void {
     if (spans > this.#limits.maxRetainedSpans || cells > this.#limits.maxRetainedCells)
-      throw new Error('nav: loaded carve tiles exceed room memory budget; unload distant tiles');
+      throw new Error(
+        `nav: loaded carve tiles need ${cells} cells and ${spans} spans; ` +
+          `budgets are ${this.#limits.maxRetainedCells} cells and ${this.#limits.maxRetainedSpans} spans; unload distant tiles`,
+      );
   }
   private seamsAt(x: number, z: number, forwardOnly = false): string[] {
     const backend = this.#state.nav,
@@ -531,7 +548,11 @@ export class Mesh implements NavigationQuery {
         },
       ]),
     );
-    return pack('mesh', { ...state, retention: this.#limits, nav: { ...backend, tiles } });
+    return pack('mesh', {
+      ...state,
+      retention: this.#limits,
+      nav: { ...backend, tiles },
+    });
   }
   /** Supply the original assets for every saved tile, in any order. Polygon
    * allocations and salts are restored, so saved crowds retain valid corridors. */
@@ -547,7 +568,10 @@ export class Mesh implements NavigationQuery {
     const saved = unpack<MeshState & { retention: MeshOptions }>('mesh', bytes),
       mesh = new Mesh(saved.config, axisExtents(saved.extent, saved.config.up), saved.retention);
     const runtimeHeaders = saved.nav.tiles;
-    Object.assign(mesh.#state, saved, { tiles: {}, nav: { ...saved.nav, tiles: {} } });
+    Object.assign(mesh.#state, saved, {
+      tiles: {},
+      nav: { ...saved.nav, tiles: {} },
+    });
     for (const bytes of assets) {
       const tile = decodeTile(bytes),
         key = `${tile.x},${tile.z}`;
@@ -561,6 +585,10 @@ export class Mesh implements NavigationQuery {
     }
     if (Object.keys(mesh.#state.tiles).length !== Object.keys(saved.hashes).length)
       throw new Error('nav: missing restored tile assets');
+    // hashes records the live load order, including unload/reload moves.
+    mesh.#state.tiles = Object.fromEntries(
+      Object.keys(saved.hashes).map((key) => [key, mesh.#state.tiles[key]!]),
+    );
     for (const header of Object.values(runtimeHeaders)) {
       const asset = mesh.#state.tiles[`${header.tileX},${header.tileY}`];
       if (!asset) throw new Error('nav: missing runtime tile');
@@ -570,6 +598,7 @@ export class Mesh implements NavigationQuery {
         throw new Error('nav: restored tile topology differs');
       mesh.#state.nav.tiles[header.id] = { ...tile, ...header };
     }
+    validateMesh(mesh.#state);
     return mesh;
   }
 }

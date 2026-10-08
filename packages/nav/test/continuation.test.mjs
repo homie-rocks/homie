@@ -1,14 +1,15 @@
+import { setImmediate } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bakeLevel } from '@homie-rocks/nav/Bake.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Random } from '@homie-rocks/nav/Random.js';
-import { hash, unpack } from '@homie-rocks/nav/State.js';
+import { hash, unpack } from '../dist/internal/Binary.js';
 import { config, field, tune } from './fixtures.mjs';
 
 for (let seed = 1; seed <= 24; seed++) {
-  test(`continuation with queued requests and random topology, seed ${seed}`, () => {
+  test(`continuation with queued requests and random topology, seed ${seed}`, async () => {
     const rng = new Random(seed);
     const c = { ...config, tileCells: 80 };
     const assets = bakeLevel(
@@ -22,7 +23,9 @@ for (let seed = 1; seed <= 24; seed++) {
       const z = 4 + rng.next() * 30;
       mesh.addObstacle({ min: [x, -1, z], max: [x + 1, 3, z + 1] });
     }
-    const straight = new Crowd(mesh, 0.05, 0.3, { searchIterations: (seed % 3) + 1 });
+    const straight = new Crowd(mesh, 0.05, 0.3, {
+      searchIterations: (seed % 3) + 1,
+    });
     for (let i = 0; i < 64; i++) {
       const p = mesh.nearest([1 + rng.next() * 38, 0, 1 + rng.next() * 38]);
       straight.add(p, { ...tune, manualLinks: i % 2 === 0 });
@@ -33,6 +36,7 @@ for (let seed = 1; seed <= 24; seed++) {
     let link = mesh.addLink([2, 0.1, 2], [37, 0.1, 37], 1, true);
     const restoreTick = Math.floor(rng.next() * 200);
     for (let tick = 0; tick < 320; tick++) {
+      await setImmediate();
       if (process.env.NAV_TRACE) console.error(seed, tick);
       if (tick === 0 || rng.next() < 0.08) {
         for (const id of straight.ids()) {

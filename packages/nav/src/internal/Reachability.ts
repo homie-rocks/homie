@@ -76,7 +76,13 @@ function index(mesh: object): Index {
       if (from !== to) edges[from]!.add(to);
     }
   }
-  const result = { revision: s.revision, component, members, edges, reachable: new Map() };
+  const result = {
+    revision: s.revision,
+    component,
+    members,
+    edges,
+    reachable: new Map(),
+  };
   indices.set(mesh, result);
   return result;
 }
@@ -101,4 +107,8 @@ export function reachable(mesh: object, from: number): Set<number> {
   }
   data.reachable.set(root, refs);
   return refs;
+}
+
+export function invalidateReachability(mesh: object): void {
+  indices.delete(mesh);
 }
