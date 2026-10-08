@@ -53,7 +53,12 @@ import { buildMedia } from './media.mjs';
 import { buildSiteFiles, isoDate, landingOf, readPosts, readTheme } from './site.mjs';
 import { checkJsonLd } from './schema-check.mjs';
 import { SCHEMA_REFUSED } from '../worker/schema.mjs';
-import { PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
+import { PACKAGE_ROOT, isRulesGame, listGames, readStudio } from './studio.mjs';
+
+// The rules build brings a JavaScript parser with it. It is loaded when a build first needs it, never when this
+// module is: Homie for Claude Desktop starts the toolkit with no node_modules beside it (scripts/desktop.mjs).
+let rulesBuildModule = null;
+const rulesBuild = () => (rulesBuildModule ??= import('./rules-build.mjs'));
 import { SEAT_MAX, netplayRow } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { basedOnRow, licenseOf, retiredKeys } from '../worker/license.mjs';
@@ -69,7 +74,6 @@ import { loungeConfig, loungeProblems } from '../worker/lounge-store.mjs';
 // GAME PARTS (parts/PARTS.md): the three call-outs below are all the build knows of them.
 import { buildParts, partsPlugin } from './parts-build.mjs';
 // RULES ON THE SERVER (NETPLAY.md section 29): a game with a src/rules.ts is built as a view bundle plus a rules module.
-import { isRulesGame, prepareRules, viewPlugin, writeRules } from './rules-build.mjs';
 
 /** Never copied into a static game's served folder. */
 const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);
@@ -387,6 +391,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     throw new Error(`games/${g.id}/game.json asks for "room": { "host": "server" }, but ${mode === 'bundle' ? 'this game has no src/rules.ts: its rules are inside its own code and run in a player\'s browser. Ask for it to be rewritten as rules plus view' : 'a ported game is someone else\'s browser code, which the server cannot run. It stays hosted by a player\'s browser'}.`);
   }
   if (ruled && mode !== 'bundle') throw new Error(`games/${g.id} has a src/rules.ts and game.json "build": { "mode": "${mode}" }. A game written as rules plus view is built by Homie itself: take the "build" setting out.`);
+  const { prepareRules, viewPlugin } = ruled ? await rulesBuild() : {};
   const rules = ruled ? await prepareRules(esbuild, root, g, { log }) : null;
   const bundle = async (entryRel) => {
     const entry = join(g.dir, entryRel);
@@ -690,7 +695,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   if (deploy) for (const b of built) log(`  ${b.id}: ${b.changed}${b.changed === 'new' ? '' : ' since the last build here'}, build ${b.hash}`);
   // The rules of the server-hosted games, where the studio's Worker imports them (site/src/rules/). Written with the
   // site, never before: a game that did not build has left both as they were.
-  const hosted = writeRules(root, ruled, all.filter((g) => rulesOf.has(g.id)).map((g) => g.id));
+  const hosted = (await rulesBuild()).writeRules(root, ruled, all.filter((g) => rulesOf.has(g.id)).map((g) => g.id));
   // All of it is there: now, and only now, it becomes site/dist (lib/stage.mjs).
   const swapped = swapIn(dist, live);
   return {
