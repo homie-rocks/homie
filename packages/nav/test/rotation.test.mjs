@@ -14,7 +14,7 @@ test('z-up is a proper rotation, including avoidance and three helpers', () => {
   for (let i = 0; i < input.positions.length; i += 3) {
     rotated.positions.push(...rotate(input.positions.slice(i, i + 3)));
   }
-  const crowds = ['y', 'z'].map(up => {
+  const crowds = ['y', 'z'].map((up) => {
     const c = { ...config, up };
     const mesh = new Mesh(c, [1, 1, 1]);
     for (const t of bakeLevel(up === 'y' ? input : rotated, c)) mesh.loadTile(t.bytes);
@@ -37,10 +37,14 @@ test('z-up is a proper rotation, including avoidance and three helpers', () => {
   const object = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 4));
   const y = trianglesFromObject3D(object).positions;
   const z = trianglesFromObject3D(object, { up: 'z' }).positions;
-  for (let i = 0; i < y.length; i += 3) assert.deepEqual([...z.slice(i, i + 3)], rotate(y.slice(i, i + 3)));
+  for (let i = 0; i < y.length; i += 3)
+    assert.deepEqual([...z.slice(i, i + 3)], rotate(y.slice(i, i + 3)));
   const a = debugMesh(crowds[0].mesh, crowds[0]);
   const b = debugMesh(crowds[1].mesh, crowds[1]);
-  assert.deepEqual(a.children[0].geometry.attributes.position.array, b.children[0].geometry.attributes.position.array);
+  assert.deepEqual(
+    a.children[0].geometry.attributes.position.array,
+    b.children[0].geometry.attributes.position.array,
+  );
   disposeDebugMesh(a);
   disposeDebugMesh(b);
 });

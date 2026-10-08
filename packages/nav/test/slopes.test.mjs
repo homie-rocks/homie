@@ -8,13 +8,21 @@ for (const degrees of [5, 10, 20, 25, 30, 40, 45, 50, 55, 60]) {
   test(`ramps and hills at ${degrees} degrees respect the slope limit`, () => {
     for (const minY of [-2, -1.07, -0.33]) {
       for (const hill of [false, true]) {
-        const k = Math.tan(degrees * Math.PI / 180);
+        const k = Math.tan((degrees * Math.PI) / 180);
         const heightAt = hill
           ? (x, z) => 3 * k * (Math.sin(x / 3) * Math.sin(z / 3) + 1)
-          : x => Math.max(0, x - 3) * k;
-        const c = { ...config, minY, maxY: 50, slopeDegrees: degrees + 5,
-          stepHeight: Math.max(0.3, Math.ceil(0.25 * Math.tan((degrees + 5) * Math.PI / 180) / 0.1) * 0.1),
-          tileCells: 80 };
+          : (x) => Math.max(0, x - 3) * k;
+        const c = {
+          ...config,
+          minY,
+          maxY: 50,
+          slopeDegrees: degrees + 5,
+          stepHeight: Math.max(
+            0.3,
+            Math.ceil((0.25 * Math.tan(((degrees + 5) * Math.PI) / 180)) / 0.1) * 0.1,
+          ),
+          tileCells: 80,
+        };
         const geometry = heightfieldTriangles({ heightAt }, 0, 0, 81, 81, 0.25);
         const mesh = new Mesh(c, [0.3, 1, 0.3]);
         for (const tile of bakeLevel(geometry, c)) mesh.loadTile(tile.bytes);

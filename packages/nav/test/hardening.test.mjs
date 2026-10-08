@@ -11,7 +11,10 @@ import { config, field, flat, tune } from './fixtures.mjs';
 
 test('loaded editable tiles retain packed buffers and configurable limits', () => {
   const bytes = bakeTile(field(), config, 0, 0);
-  const mesh = new Mesh(config, [1, 1, 1], { maxRetainedCells: 1_000_000, maxRetainedSpans: 1_000_000 });
+  const mesh = new Mesh(config, [1, 1, 1], {
+    maxRetainedCells: 1_000_000,
+    maxRetainedSpans: 1_000_000,
+  });
   mesh.loadTile(bytes);
   assert.ok(meshData(mesh).tiles['0,0'].compact.cells instanceof Uint32Array);
   const small = new Mesh(config, [1, 1, 1], { maxRetainedCells: 1 });
@@ -19,8 +22,19 @@ test('loaded editable tiles retain packed buffers and configurable limits', () =
 });
 
 test('heightfield sampling starts per tile even beyond four million total samples', () => {
-  assert.throws(() => bakeHeightfield({ heightAt() { throw Error('sample started'); } }, config,
-    { min: [0, 0], max: [1000, 1000] }), /sample started/);
+  assert.throws(
+    () =>
+      bakeHeightfield(
+        {
+          heightAt() {
+            throw Error('sample started');
+          },
+        },
+        config,
+        { min: [0, 0], max: [1000, 1000] },
+      ),
+    /sample started/,
+  );
 });
 
 test('downward geometry reports a winding diagnostic', () => {
@@ -32,7 +46,7 @@ test('deterministic trig has exact axes and near-ulp accuracy at sampling angles
   assert.equal(deterministicCos(0), 1);
   assert.equal(deterministicSin(Math.PI / 2), 1);
   for (let i = -4096; i <= 4096; i++) {
-    const x = i * Math.PI / 1024;
+    const x = (i * Math.PI) / 1024;
     assert.ok(Math.abs(deterministicSin(x) - Math.sin(x)) <= 1e-15, `sin ${x}`);
     assert.ok(Math.abs(deterministicCos(x) - Math.cos(x)) <= 1e-15, `cos ${x}`);
   }

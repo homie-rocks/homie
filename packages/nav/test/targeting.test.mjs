@@ -7,7 +7,9 @@ test('target reachability never performs a synchronous path query', () => {
   const mesh = flat();
   const c = new Crowd(mesh, 0.05, 0.3);
   const id = c.add([1, 0.1, 5], tune);
-  mesh.path = () => { throw new Error('synchronous path search'); };
+  mesh.path = () => {
+    throw new Error('synchronous path search');
+  };
   assert.equal(c.target(id, [9, 0.1, 5]), true);
   mesh.addObstacle({ min: [4, -1, -1], max: [6, 3, 11] });
   assert.equal(c.target(id, [9, 0.1, 5]), false);
