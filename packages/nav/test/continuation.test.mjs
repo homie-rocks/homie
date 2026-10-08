@@ -28,6 +28,7 @@ for (let seed = 1; seed <= 24; seed++) {
       straight.add(p, { ...tune, manualLinks: i % 2 === 0 });
     }
     let resumed = Crowd.restore(straight.save(), mesh);
+    let sawPending = false;
     let obstacle;
     let link = mesh.addLink([2, 0.1, 2], [37, 0.1, 37], 1, true);
     const restoreTick = Math.floor(rng.next() * 200);
@@ -66,12 +67,31 @@ for (let seed = 1; seed <= 24; seed++) {
           resumed.completeLink(id);
         }
       }
-      if (tick >= restoreTick) resumed = Crowd.restore(resumed.save(), mesh);
+      const fork =
+        tick === restoreTick
+          ? Crowd.restore(
+              straight.save(),
+              Mesh.restore(
+                mesh.save(),
+                assets.map((tile) => tile.bytes),
+              ),
+            )
+          : null;
+      resumed = Crowd.restore(resumed.save(), mesh);
       straight.step();
       resumed.step();
-      assert.equal(hash(resumed.save()), hash(straight.save()), `seed ${seed}, tick ${tick}`);
+      const bytes = straight.save();
+      if (!sawPending)
+        sawPending = Object.values(unpack('crowd', bytes).state.data.agents).some(
+          (agent) => agent.targetState === 4 || agent.targetState === 5,
+        );
+      assert.equal(hash(resumed.save()), hash(bytes), `seed ${seed}, tick ${tick}`);
+      if (fork) {
+        fork.step();
+        assert.equal(hash(fork.save()), hash(bytes), `mesh wake, seed ${seed}, tick ${tick}`);
+      }
     }
     // Pending queries really occurred; this is not only a flat one-polygon run.
-    assert.ok(unpack('crowd', straight.save()).state.data.maxIterationsPerUpdate <= 3);
+    assert.ok(sawPending, 'requests spanned ticks');
   });
 }
