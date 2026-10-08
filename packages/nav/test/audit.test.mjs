@@ -6,7 +6,7 @@ import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { pack, unpack } from '@homie-rocks/nav/State.js';
 import { point } from '@homie-rocks/nav/Query.js';
 import { crowd as backend, obstacleAvoidance } from '../dist/internal/Backend.js';
-import { meshData } from '../dist/internal/MeshData.js';
+import { meshData, locate } from '../dist/internal/MeshData.js';
 import { createSlicedNodePathQuery } from 'navcat';
 import { flat, tune } from './fixtures.mjs';
 
@@ -32,6 +32,11 @@ test('omitted buffers are overwritten before use, including stale avoidance samp
       ));
       agent.neis = poison ? [{ agentId: 'missing', dist: NaN }] : [];
       if (!poison) continue;
+      if (agent.slicedQuery.status === 0) {
+        agent.slicedQuery.nodes = { stale: [{ position: [NaN, NaN, NaN] }] };
+        agent.slicedQuery.openList = [{ position: [NaN, NaN, NaN] }];
+        agent.slicedQuery.lastBestNode = { position: [NaN, NaN, NaN] };
+      }
       q.circleCount = q.segmentCount = 32;
       q.invHorizTime = q.invVmax = q.vmax = NaN;
       q.pattern.fill(NaN);
@@ -60,9 +65,21 @@ test('omitted buffers are overwritten before use, including stale avoidance samp
     );
   for (let tick = 0; tick < 80; tick++) {
     if (tick === 15) mesh.addObstacle({ min: [4, -1, 3], max: [6, 3, 7] });
+    if (tick === 35) {
+      const goal = locate(mesh, [8, 0.1, 8]);
+      for (const data of [fresh, poisoned])
+        for (const id of Object.keys(data.agents))
+          backend.requestMoveTarget(data, id, goal.nodeRef, goal.position);
+    }
     backend.update(fresh, meshData(mesh).nav, 0.05);
     backend.update(poisoned, meshData(mesh).nav, 0.05);
-    assert.deepEqual(pack('agents', persistent(fresh)), pack('agents', persistent(poisoned)));
+    const a = persistent(fresh),
+      b = persistent(poisoned);
+    for (const agents of [a, b])
+      for (const agent of Object.values(agents)) {
+        if (agent.slicedQuery.status === 0) agent.slicedQuery = null;
+      }
+    assert.deepEqual(pack('agents', a), pack('agents', b));
   }
 });
 

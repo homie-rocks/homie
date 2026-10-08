@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { bakeTile, bakeLevel, bakeHeightfield } from '@homie-rocks/nav/Bake.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
-import { pack, unpack } from '@homie-rocks/nav/State.js';
+import { pack, unpack, hash } from '@homie-rocks/nav/State.js';
 import { meshData } from '../dist/internal/MeshData.js';
 import { deterministicSin, deterministicCos } from '../dist/internal/Math.js';
 import { config, field, flat, tune } from './fixtures.mjs';
@@ -45,10 +45,16 @@ test('downward geometry reports a winding diagnostic', () => {
 test('deterministic trig has exact axes and near-ulp accuracy at sampling angles', () => {
   assert.equal(deterministicCos(0), 1);
   assert.equal(deterministicSin(Math.PI / 2), 1);
+  const view = new DataView(new ArrayBuffer(8));
+  const ulp = (x) => {
+    view.setFloat64(0, Math.abs(x));
+    view.setBigUint64(0, view.getBigUint64(0) + 1n);
+    return view.getFloat64(0) - Math.abs(x);
+  };
   for (let i = -4096; i <= 4096; i++) {
     const x = (i * Math.PI) / 1024;
-    assert.ok(Math.abs(deterministicSin(x) - Math.sin(x)) <= 1e-15, `sin ${x}`);
-    assert.ok(Math.abs(deterministicCos(x) - Math.cos(x)) <= 1e-15, `cos ${x}`);
+    assert.ok(Math.abs(deterministicSin(x) - Math.sin(x)) <= ulp(Math.sin(x)), `sin ${x}`);
+    assert.ok(Math.abs(deterministicCos(x) - Math.cos(x)) <= ulp(Math.cos(x)), `cos ${x}`);
   }
 });
 
@@ -78,4 +84,23 @@ test('typed sections explicitly encode little endian values', async () => {
   const bytes = pack('array', value);
   assert.deepEqual(unpack('array', bytes), value);
   assert.ok(Buffer.from(bytes).includes(Buffer.from([0x40, 0x30, 0x20, 0x10])));
+});
+
+test('backend version is rejected even with a valid checksum', () => {
+  const bytes = pack('version-test', {});
+  const at = Buffer.from(bytes).indexOf('navcat@0.4.1');
+  assert.ok(at >= 16);
+  bytes[at + 'navcat@0.4.'.length] = '2'.charCodeAt(0);
+  new DataView(bytes.buffer).setUint32(12, hash(bytes.subarray(16)), true);
+  assert.throws(() => unpack('version-test', bytes), /nav: invalid or incompatible/);
+});
+
+test('argument reduction retains relative precision near quadrant boundaries', () => {
+  for (const x of [Math.PI, 2 * Math.PI, -Math.PI, 1e6]) {
+    const expected = Math.sin(x);
+    assert.ok(
+      Math.abs(deterministicSin(x) - expected) <= Math.abs(expected) * Number.EPSILON,
+      `relative sine accuracy at ${x}`,
+    );
+  }
 });

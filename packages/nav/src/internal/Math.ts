@@ -3,7 +3,12 @@
  * Coefficients are the fdlibm minimax sine/cosine coefficients. */
 function reduced(angle: number): [number, number] {
   const quadrant = Math.round(angle * 0.6366197723675814);
-  const x = angle - quadrant * 1.5707963267341256 - quadrant * 6.077100506506192e-11;
+  const x =
+    angle -
+    quadrant * 1.5707963267341256 -
+    quadrant * 6.077100506303966e-11 -
+    quadrant * 2.0222662487111665e-21 -
+    quadrant * 8.4784276603689e-32;
   return [x, ((quadrant % 4) + 4) % 4];
 }
 function sine(x: number): number {
