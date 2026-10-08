@@ -11,9 +11,19 @@
  *   2  CHECK: globals, methods and syntax are allowlists. Anything else is a problem with its file and line, in
  *      the words of this file's messages. A build with problems writes nothing;
  *   3  REWRITE: a counter at the top of every loop and function, every computed key and every method call through
- *      the guard (rules/guard.ts), every text made by `+` or a template charged and capped;
+ *      the guard (rules/guard.ts), every text made by `+` or a template charged and capped, every value an operator
+ *      would turn into a number or a text checked to be one already, and every write to a property checked not to
+ *      land on a function;
  *   4  the rewritten files are linked into one module (esbuild), which is read once more and held to the same
- *      rules: no unguarded computed key and no uncounted loop or function is left in the file that is deployed.
+ *      rules: no unguarded computed key, no uncounted loop or function, no unchecked operator and no unchecked
+ *      write is left in the file that is deployed.
+ *
+ * WHY OPERATORS ARE CHECKED. JavaScript turns a list into a text whenever an operator wants a number or a text
+ * (`list - 1`, `list < 1`, `list == 1`, a template, `String(list)`), by walking every entry of it and of every list
+ * inside it. No counter sees that walk, and for a list that holds another twice, thirty levels deep, it is a thousand
+ * million steps. So the operand of every such operator, unless the pass can see it is a number or a text, goes through
+ * the guard's `p`, which refuses a list, an object or a function there. `==` and `!=` are refused outright (except
+ * against `null`), and so are whole numbers of any size (`10n`), which grow without limit when multiplied.
  *
  * WHY THE CHECK READS EACH FILE BEFORE LINKING, NOT ONLY THE LINKED MODULE. The linker turns every top-level
  * `const` into `var`, so in the linked module a module-level variable the author declared could not be told from a
@@ -53,12 +63,19 @@ export const ARRAY_METHODS = ['push', 'pop', 'shift', 'unshift', 'slice', 'splic
 export const STRING_METHODS = ['slice', 'indexOf', 'includes', 'startsWith', 'endsWith', 'split', 'trim', 'toUpperCase', 'toLowerCase', 'charCodeAt', 'at'];
 export const MAPSET_METHODS = ['get', 'set', 'has', 'add', 'delete', 'clear', 'forEach', 'keys', 'values', 'entries'];
 export const REFUSED_NAMES = ['constructor', 'prototype', '__proto__', 'stack', 'localeCompare'];
+/** The names JavaScript calls by itself to turn an object into a number or a text: no function may sit under one. */
+export const HOOK_NAMES = ['valueOf', 'toString', 'toJSON'];
 /** What the host runtime's own objects offer: `world`, `ctx`, the round, the map (rules/core.ts) and `world.math` (rules/math.ts). */
 export const WORLD_METHODS = ['ticks', 'random', 'send', 'sendRoom', 'announce', 'sendArea', 'after', 'emit', 'spawn', 'despawn', 'place', 'near', 'inBox', 'ray', 'sweep', 'ask', 'goalDone', 'finish', 'end', 'spot', 'spots'];
 export const MATH_METHODS = ['sin', 'cos', 'tan', 'atan', 'atan2', 'asin', 'acos', 'exp', 'log', 'pow', 'hypot', 'rad', 'deg', 'clamp', 'lerp', 'vec', 'add', 'sub', 'scale', 'dot', 'cross', 'len', 'dist', 'norm', 'clampLen', 'lerpVec', 'dir', 'angle'];
 const VALUE_METHODS = new Set([...ARRAY_METHODS, ...STRING_METHODS, ...MAPSET_METHODS]);
 const CALLABLE = new Set([...VALUE_METHODS, ...WORLD_METHODS, ...MATH_METHODS]);
 const refusedName = (k) => REFUSED_NAMES.includes(k) || k.startsWith('toLocale');
+/** Operators that turn each operand into a number or a text. (`+` is handled beside them; `==` and `!=` are refused.) */
+const CONVERTING = new Set(['-', '*', '/', '%', '&', '|', '^', '<<', '>>', '>>>', '<', '>', '<=', '>=']);
+const LOGICAL_ASSIGN = ['||=', '&&=', '??='];
+/** The guard's functions whose result is always a number, a text, true, false or nothing. */
+const PLAIN_GUARDS = ['p', 'add', 'tpl'];
 const GLOBAL_MEMBERS = {
   Math: { call: MATH_FNS, read: [] },
   Number: { call: ['isFinite', 'isInteger', 'isNaN'], read: ['MAX_SAFE_INTEGER', 'EPSILON'] },
@@ -100,6 +117,54 @@ function rootOf(node) {
 /** The linker may number a second import of the guard (`__homie2`): every such name is the guard's. */
 const isGuard = (node) => t.isIdentifier(node) && /^__homie\d*$/.test(node.name);
 const isGuardCall = (node) => t.isCallExpression(node) && t.isMemberExpression(node.callee) && isGuard(node.callee.object);
+/**
+ * Whether an expression is a number, a text, true, false, null or undefined whatever runs: never a list, an object or
+ * a function. Such an operand needs no check. A variable is one when it is declared with such a value (or by a
+ * `for…in`) and everything ever assigned to it is one too. `scope` is where the expression stands.
+ */
+function plain(n, scope, seen = new Set(), ids = null) {
+  if (!n) return true;
+  if (t.isNumericLiteral(n) || t.isStringLiteral(n) || t.isBooleanLiteral(n) || t.isNullLiteral(n) || t.isTemplateLiteral(n)) return true;
+  if (t.isUnaryExpression(n)) return ['-', '+', '~', '!', 'typeof', 'void'].includes(n.operator);
+  if (t.isUpdateExpression(n) || t.isBinaryExpression(n)) return true;
+  if (t.isLogicalExpression(n)) return plain(n.left, scope, seen, ids) && plain(n.right, scope, seen, ids);
+  if (t.isConditionalExpression(n)) return plain(n.consequent, scope, seen, ids) && plain(n.alternate, scope, seen, ids);
+  if (t.isParenthesizedExpression(n)) return plain(n.expression, scope, seen, ids);
+  if (t.isSequenceExpression(n)) return plain(n.expressions[n.expressions.length - 1], scope, seen, ids);
+  if (t.isAssignmentExpression(n)) return n.operator === '=' || LOGICAL_ASSIGN.includes(n.operator) ? plain(n.right, scope, seen, ids) && (n.operator === '=' || plain(n.left, scope, seen, ids)) : true;
+  if (isGuardCall(n)) return PLAIN_GUARDS.includes(n.callee.property.name);
+  if (t.isCallExpression(n)) {
+    const c = n.callee;
+    if (t.isIdentifier(c) && ['Number', 'String', 'Boolean'].includes(c.name) && !scope.getBinding(c.name)) return true;
+    return t.isMemberExpression(c) && !c.computed && t.isIdentifier(c.object, { name: 'Math' }) && !scope.getBinding('Math');
+  }
+  if (t.isIdentifier(n)) {
+    // After the rewrite has begun a name is judged by what was read of it before (`ids`), never by a scope that has since changed.
+    if (ids) return ids.has(n);
+    const b = scope.getBinding(n.name);
+    if (!b) return ['undefined', 'NaN', 'Infinity'].includes(n.name);
+    return plainBinding(b, seen);
+  }
+  return false;
+}
+/** Whether a member expression is written to: the left of an assignment, the operand of `++`, a loop's variable, or a place in a pattern. */
+const isTarget = (path) => (path.parentPath.isAssignmentExpression() && path.parent.left === path.node) || (path.parentPath.isUpdateExpression()) || (path.parentPath.isForXStatement() && path.parent.left === path.node)
+  || path.parentPath.isArrayPattern() || (path.parentPath.isObjectProperty() && path.parentPath.parentPath.isObjectPattern()) || path.parentPath.isRestElement() || (path.parentPath.isAssignmentPattern() && path.parent.left === path.node);
+function plainBinding(b, seen) {
+  if (seen.has(b)) return true;
+  seen.add(b);
+  if (!['let', 'const', 'var'].includes(b.kind) || !b.path.isVariableDeclarator() || !t.isIdentifier(b.path.node.id)) return false;
+  const loop = b.path.parentPath.parentPath;
+  if (loop.isForXStatement() && loop.node.left === b.path.parent) return loop.isForInStatement();
+  if (!plain(b.path.node.init, b.path.scope, seen)) return false;
+  for (const v of b.constantViolations) {
+    const n = v.node;
+    if (t.isUpdateExpression(n) && t.isIdentifier(n.argument)) continue;
+    if (!(t.isAssignmentExpression(n) && t.isIdentifier(n.left))) return false;
+    if ((n.operator === '=' || LOGICAL_ASSIGN.includes(n.operator)) && !plain(n.right, v.scope, seen)) return false;
+  }
+  return true;
+}
 /** Whether an expression is a number whatever runs (so `+` on it makes no text worth charging). */
 function numeric(n) {
   if (t.isNumericLiteral(n)) return true;
@@ -241,13 +306,16 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     TaggedTemplateExpression: 'tagged templates are refused in rules',
     DebuggerStatement: '`debugger` is refused in rules',
     Super: '`super` is refused in rules',
+    BigIntLiteral: 'a whole number of any size (10n) is refused in rules: it grows without limit. Use a plain number',
   };
+  const hookName = (node) => { const name = node.computed ? null : node.key.name ?? node.key.value; return typeof name === 'string' && HOOK_NAMES.includes(name) ? name : null; };
+  const nullish = (n, path) => t.isNullLiteral(n) || (t.isIdentifier(n, { name: 'undefined' }) && !path.scope.getBinding('undefined'));
   const member = (path) => {
       const n = path.node;
       if (!n.computed) checkName(n, n.property.name);
       else if (t.isStringLiteral(n.property)) checkName(n, n.property.value);
       if (linked && n.computed && !t.isNumericLiteral(n.property)) bad(n, 'the linked module holds a computed key the guard did not rewrite');
-      if (path.isOptionalMemberExpression() && !chainTop(path) && (n.computed || VALUE_METHODS.has(n.property.name)) && !linked) bad(n, 'this optional chain is too long for the guard to follow: take the first step into a const, then go on from it');
+      if (path.isOptionalMemberExpression() && !chainTop(path) && (n.computed || CALLABLE.has(n.property.name)) && !linked) bad(n, 'this optional chain is too long for the guard to follow: take the first step into a const, then go on from it');
   };
   const visitor = {};
   for (const [type, message] of Object.entries(refuseSyntax)) visitor[type] = (path) => bad(path.node, message);
@@ -256,10 +324,18 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
       if (path.node.async) bad(path.node, 'async is refused: a handler finishes inside its tick');
       if (path.node.generator) bad(path.node, 'generators are refused: a handler finishes inside its tick');
     },
-    ObjectMethod(path) { if (path.node.kind !== 'method') bad(path.node, 'getters and setters are refused in rules'); checkName(path.node, !path.node.computed && (path.node.key.name ?? path.node.key.value)); },
+    ObjectMethod(path) {
+      if (path.node.kind !== 'method') bad(path.node, 'getters and setters are refused in rules');
+      checkName(path.node, !path.node.computed && (path.node.key.name ?? path.node.key.value));
+      if (hookName(path.node)) bad(path.node, `a function named "${hookName(path.node)}" is refused in rules: JavaScript would call it by itself whenever the object is used as a number or a text, outside any handler`);
+    },
     ForOfStatement(path) { if (path.node.await) bad(path.node, 'await is refused: a handler finishes inside its tick'); if (!t.isVariableDeclaration(path.node.left)) checkWrite(path, path.node.left); },
     ForInStatement(path) { if (!t.isVariableDeclaration(path.node.left)) checkWrite(path, path.node.left); },
-    BinaryExpression(path) { if (path.node.operator === '**') bad(path.node, 'the ** operator is refused, because browsers and servers may disagree on its last digits: use world.math.pow (ctx.math.pow in move.ts)'); },
+    BinaryExpression(path) {
+      const n = path.node;
+      if (n.operator === '**') bad(n, 'the ** operator is refused, because browsers and servers may disagree on its last digits: use world.math.pow (ctx.math.pow in move.ts)');
+      if ((n.operator === '==' || n.operator === '!=') && !nullish(n.left, path) && !nullish(n.right, path)) bad(n, `the ${n.operator} operator is refused in rules: use ${n.operator}= (a loose comparison turns a list into a text to compare it). \`x ${n.operator} null\` is allowed`);
+    },
     UnaryExpression(path) { if (path.node.operator === 'delete') bad(path.node, 'delete is refused in rules: a declared map drops a key when its value is set through the map\'s own field'); },
     AssignmentExpression(path) {
       if (path.node.operator === '**=') bad(path.node, 'the **= operator is refused: use world.math.pow');
@@ -277,6 +353,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     'ObjectProperty'(path) {
       const n = path.node;
       if (!n.computed) checkName(n, n.key.name ?? n.key.value);
+      if (path.parentPath.isObjectExpression() && hookName(n) && t.isFunction(n.value)) bad(n, `a function named "${hookName(n)}" is refused in rules: JavaScript would call it by itself whenever the object is used as a number or a text, outside any handler`);
     },
     CallExpression(path) {
       const c = path.node.callee;
@@ -303,7 +380,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
       const decl = path.parentPath.isVariableDeclarator() && path.parentPath.parentPath.isVariableDeclaration() && statementsOf(path.parentPath.parentPath);
       for (const p of path.node.properties) {
         if (t.isRestElement(p)) continue;
-        const risky = p.computed || VALUE_METHODS.has(p.key.name ?? p.key.value);
+        const risky = p.computed || CALLABLE.has(p.key.name ?? p.key.value);
         if (risky && !(decl && t.isIdentifier(p.value))) bad(p, `take "${p.computed ? 'a computed key' : p.key.name ?? p.key.value}" out with a plain \`const { … } = value\` declaration, or read it with a dot: a pattern here could take a method out of a value`);
       }
     },
@@ -313,6 +390,12 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     if (linked && !problems.length) verifyLinked(ast, bad);
     return { code: linked && !problems.length ? code : null, problems };
   }
+
+  /* ------------------------------------------------------------ which names are plain, read before anything is rewritten */
+  const plainIds = new WeakSet();
+  traverse(ast, { ReferencedIdentifier(path) { if (plain(path.node, path.scope)) plainIds.add(path.node); } });
+  /** At rewrite time: an operand that needs no check. A name is judged by the reading above; everything else by its shape. */
+  const isPlain = (n, scope) => plain(n, scope, new Set(), plainIds);
 
   /* ------------------------------------------------------------ the rewrite */
   const line = (node) => t.numericLiteral(lineOf(node));
@@ -324,11 +407,16 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
     path.node[key].body.unshift(counted());
   };
   const args = (list) => t.arrayExpression(list.map((a) => (t.isSpreadElement(a) ? t.spreadElement(call('sp', [a.argument, line(a)])) : a)));
-  const isTarget = (path) => (path.parentPath.isAssignmentExpression() && path.parent.left === path.node) || (path.parentPath.isUpdateExpression()) || (path.parentPath.isForXStatement() && path.parent.left === path.node)
-    || path.parentPath.isArrayPattern() || (path.parentPath.isObjectProperty() && path.parentPath.parentPath.isObjectPattern()) || path.parentPath.isRestElement() || (path.parentPath.isAssignmentPattern() && path.parent.left === path.node);
   const globalObject = (path, obj) => t.isIdentifier(obj) && !path.scope.getBinding(obj.name);
   const frozen = new Set();
   const computedKey = (path) => { if (path.node.computed && !t.isNumericLiteral(path.node.key) && !isGuardCall(path.node.key)) path.node.key = call('k', [path.node.key, line(path.node)]); };
+  /** An operand, checked to be a number or a text unless the pass can see that it is. */
+  const P = (n, at, scope) => (isPlain(n, scope) ? n : call('p', [n, line(at ?? n)]));
+  /** A write's target as it reads: the same place, without the write's own check. `a.b` and names only, so reading it twice runs nothing twice. */
+  const unW = (x) => (t.isMemberExpression(x) && isGuardCall(x.object) && x.object.callee.property.name === 'w' ? t.memberExpression(x.object.arguments[0], x.property) : x);
+  const plainTarget = (x) => t.isIdentifier(x) || (t.isMemberExpression(unW(x)) && !x.computed && plainTarget(unW(x).object));
+  const readOf = (x) => t.cloneNode(unW(x), true);
+  const TWICE = 'this changes a place that is reached through a call or a computed key: take the object into a const first, then change its field';
   traverse(ast, {
     Loop(path) { block(path, 'body'); },
     Function(path) { if (!path.node._homie) block(path, 'body'); },
@@ -344,12 +432,19 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         const checks = [];
         for (const d of path.node.declarations) {
           if (!t.isObjectPattern(d.id)) continue;
-          for (const p of d.id.properties) if (!t.isRestElement(p) && t.isIdentifier(p.value) && (p.computed || VALUE_METHODS.has(p.key.name ?? p.key.value))) checks.push(t.expressionStatement(call('nf', [t.identifier(p.value.name), line(p)])));
+          for (const p of d.id.properties) if (!t.isRestElement(p) && t.isIdentifier(p.value) && (p.computed || CALLABLE.has(p.key.name ?? p.key.value))) checks.push(t.expressionStatement(call('nf', [t.identifier(p.value.name), line(p)])));
         }
         if (checks.length) path.insertAfter(checks);
       },
     },
-    ObjectProperty: { exit(path) { computedKey(path); } },
+    ObjectProperty: {
+      exit(path) {
+        computedKey(path);
+        // A value under `valueOf`, `toString` or `toJSON` that the pass cannot see is not a function is checked when it is made.
+        const n = path.node;
+        if (path.parentPath.isObjectExpression() && hookName(n) && !isPlain(n.value, path.scope) && !isGuardCall(n.value)) { n.value = call('nh', [n.value, line(n)]); n.shorthand = false; }
+      },
+    },
     ObjectMethod: { exit(path) { computedKey(path); } },
     SpreadElement: {
       exit(path) { if (path.parentPath.isObjectExpression() && !isGuardCall(path.node.argument)) path.node.argument = call('sp', [path.node.argument, line(path.node)]); },
@@ -364,19 +459,31 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
       },
     },
     TemplateLiteral: {
-      exit(path) { if (!path.node.expressions.length || path.node._homie || path.parentPath.isTaggedTemplateExpression()) return; path.node._homie = true; path.replaceWith(call('tpl', [path.node, line(path.node)])); path.skip(); },
+      exit(path) {
+        if (!path.node.expressions.length || path.node._homie || path.parentPath.isTaggedTemplateExpression()) return;
+        path.node._homie = true;
+        path.node.expressions = path.node.expressions.map((e) => P(e, path.node, path.scope));
+        path.replaceWith(call('tpl', [path.node, line(path.node)]));
+        path.skip();
+      },
     },
     BinaryExpression: {
       exit(path) {
         const n = path.node;
-        if (n.operator !== '+' || numeric(n.left) || numeric(n.right)) return;
+        if (CONVERTING.has(n.operator) || (n.operator === '+' && (numeric(n.left) || numeric(n.right)))) { n.left = P(n.left, n, path.scope); n.right = P(n.right, n, path.scope); return; }
+        if (n.operator === 'in') { n.left = P(n.left, n, path.scope); return; }
+        if (n.operator !== '+') return;
         path.replaceWith(call('add', [n.left, n.right, line(n)]));
         path.skip();
       },
     },
+    UnaryExpression: {
+      exit(path) { if (['-', '+', '~'].includes(path.node.operator)) path.node.argument = P(path.node.argument, path.node, path.scope); },
+    },
     NewExpression: {
       exit(path) {
         const name = path.node.callee.name;
+        if (name === 'Error') { path.node.arguments = path.node.arguments.map((a) => (t.isSpreadElement(a) ? a : P(a, path.node, path.scope))); return; }
         if (name !== 'Map' && name !== 'Set') return;
         path.replaceWith(call(name === 'Map' ? 'map' : 'set', path.node.arguments));
         path.skip();
@@ -386,31 +493,49 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
       exit(path) {
         const n = path.node;
         const left = n.left;
+        const op = n.operator.slice(0, -1);
+        const logical = ['||', '&&', '??'].includes(op);
         if (t.isMemberExpression(left) && left.computed && !t.isNumericLiteral(left.property)) {
           if (n.operator === '=') { path.replaceWith(call('s', [left.object, left.property, n.right, line(n)])); path.skip(); return; }
           const old = t.identifier(`${G}V`);
-          const op = n.operator.slice(0, -1);
-          const next = ['||', '&&', '??'].includes(op) ? t.logicalExpression(op, old, n.right) : op === '+' && !numeric(n.right) ? call('add', [old, n.right, line(n)]) : t.binaryExpression(op, old, n.right);
+          const next = logical ? t.logicalExpression(op, old, n.right) : op === '+' && !numeric(n.right) ? call('add', [old, n.right, line(n)]) : t.binaryExpression(op, call('p', [old, line(n)]), P(n.right, n, path.scope));
           const fn = t.arrowFunctionExpression([t.identifier(`${G}V`)], next);
           fn._homie = true;
           path.replaceWith(call('u', [left.object, left.property, fn, t.booleanLiteral(false), line(n)]));
           path.skip();
           return;
         }
-        // `x += text`: the text made is charged and capped. The target is read twice, so it must be a plain name or a dotted one.
-        if (n.operator === '+=' && !numeric(n.right)) {
-          const plainTarget = (x) => t.isIdentifier(x) || (t.isMemberExpression(x) && !x.computed && plainTarget(x.object));
-          if (plainTarget(left)) { path.replaceWith(t.assignmentExpression('=', left, call('add', [t.cloneNode(left), n.right, line(n)]))); path.skip(); }
+        if (n.operator === '=') {
+          // `o.toString = v`: never a function under a name JavaScript calls by itself.
+          if (t.isMemberExpression(left) && !left.computed && HOOK_NAMES.includes(left.property.name) && !isPlain(n.right, path.scope)) n.right = call('nh', [n.right, line(n)]);
+          return;
         }
+        if (logical || t.isObjectPattern(left) || t.isArrayPattern(left)) return;
+        // `x op= v` on a name the pass knows is a number or a text: only the right side needs its check.
+        if (t.isIdentifier(left) && plainIds.has(left) && (op !== '+' || numeric(n.right))) { n.right = P(n.right, n, path.scope); return; }
+        // Everything else is written out as `x = x op v`, so the old value is checked (and a text made by `+` is charged and
+        // capped). The target is then read twice, so it must be a plain name or a dotted one.
+        if (!plainTarget(left)) { bad(n, TWICE); return; }
+        const next = op === '+' && !numeric(n.right) ? call('add', [readOf(left), n.right, line(n)]) : t.binaryExpression(op, call('p', [readOf(left), line(n)]), P(n.right, n, path.scope));
+        path.replaceWith(t.assignmentExpression('=', left, next));
+        path.skip();
       },
     },
     UpdateExpression: {
       exit(path) {
         const a = path.node.argument;
-        if (!(t.isMemberExpression(a) && a.computed && !t.isNumericLiteral(a.property))) return;
-        const fn = t.arrowFunctionExpression([t.identifier(`${G}V`)], t.binaryExpression(path.node.operator === '++' ? '+' : '-', t.identifier(`${G}V`), t.numericLiteral(1)));
-        fn._homie = true;
-        path.replaceWith(call('u', [a.object, a.property, fn, t.booleanLiteral(!path.node.prefix), line(path.node)]));
+        if (t.isMemberExpression(a) && a.computed && !t.isNumericLiteral(a.property)) {
+          const fn = t.arrowFunctionExpression([t.identifier(`${G}V`)], t.binaryExpression(path.node.operator === '++' ? '+' : '-', call('p', [t.identifier(`${G}V`), line(path.node)]), t.numericLiteral(1)));
+          fn._homie = true;
+          path.replaceWith(call('u', [a.object, a.property, fn, t.booleanLiteral(!path.node.prefix), line(path.node)]));
+          path.skip();
+          return;
+        }
+        if (path.node._homie || (t.isIdentifier(a) && plainIds.has(a))) return;
+        // `x++` on anything else: the old value is checked first, then the update runs as written.
+        if (!plainTarget(a)) { bad(path.node, TWICE); return; }
+        path.node._homie = true;
+        path.replaceWith(t.sequenceExpression([call('p', [readOf(a), line(path.node)]), path.node]));
         path.skip();
       },
     },
@@ -422,6 +547,8 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         if (t.isMemberExpression(c)) {
           if (!c.computed && globalObject(path, c.object)) {
             if (c.object.name === 'Object') { path.replaceWith(call(c.property.name, n.arguments)); path.skip(); }
+            // `Math.max(a, ...list)` turns every argument into a number: each is checked to be one.
+            if (c.object.name === 'Math') n.arguments = n.arguments.map((a) => (t.isSpreadElement(a) ? (isGuardCall(a.argument) ? a : t.spreadElement(call('spp', [a.argument, line(a)]))) : P(a, n, path.scope)));
             return;
           }
           if (!inFunction(path)) return;   // f.u16() and friends, at the top level
@@ -430,6 +557,8 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
           return;
         }
         for (let i = 0; i < n.arguments.length; i += 1) { const a = n.arguments[i]; if (t.isSpreadElement(a) && !isGuardCall(a.argument)) a.argument = call('sp', [a.argument, line(a)]); }
+        // `Number(x)`, `String(x)` and `Error(x)` turn their argument into a number or a text: it is checked to be one.
+        if (t.isIdentifier(c) && ['Number', 'String', 'Error'].includes(c.name) && !path.scope.getBinding(c.name)) n.arguments = n.arguments.map((a) => (t.isSpreadElement(a) ? a : P(a, n, path.scope)));
       },
     },
     OptionalCallExpression: {
@@ -445,9 +574,15 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         const n = path.node;
         if (isGuard(n.object)) return;
         if ((path.parentPath.isCallExpression() || path.parentPath.isOptionalCallExpression()) && path.parent.callee === n) return;
-        if (isTarget(path)) { if (n.computed && !t.isNumericLiteral(n.property) && !(path.parentPath.isAssignmentExpression() || path.parentPath.isUpdateExpression())) bad(n, 'assign to a computed key with a plain `a[k] = value`, not inside a pattern'); return; }
+        if (isTarget(path)) {
+          if (n.computed && !t.isNumericLiteral(n.property) && !(path.parentPath.isAssignmentExpression() || path.parentPath.isUpdateExpression())) bad(n, 'assign to a computed key with a plain `a[k] = value`, not inside a pattern');
+          // A write lands on a list or an object, never on a function: nothing is kept on one, and no built-in is changed.
+          if (!(n.computed && !t.isNumericLiteral(n.property)) && !isGuardCall(n.object)) n.object = call('w', [n.object, line(n)]);
+          return;
+        }
         if (n.computed) { if (t.isNumericLiteral(n.property)) return; path.replaceWith(call('g', [n.object, n.property, line(n)])); path.skip(); return; }
-        if (VALUE_METHODS.has(n.property.name) && !globalObject(path, n.object)) { path.replaceWith(call('rd', [n.object, t.stringLiteral(n.property.name), line(n)])); path.skip(); }
+        // A name that is also a method's (a list's, a text's, a Map's, world's, world.math's): the value, never the function.
+        if (CALLABLE.has(n.property.name) && !globalObject(path, n.object)) { path.replaceWith(call('rd', [n.object, t.stringLiteral(n.property.name), line(n)])); path.skip(); }
       },
     },
     OptionalMemberExpression: {
@@ -455,7 +590,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         const n = path.node;
         if (path.parentPath.isOptionalCallExpression() && path.parent.callee === n) return;
         if (n.computed) { if (t.isNumericLiteral(n.property)) return; path.replaceWith(call('go', [n.object, n.property, line(n)])); path.skip(); return; }
-        if (VALUE_METHODS.has(n.property.name)) { path.replaceWith(call('rdo', [n.object, t.stringLiteral(n.property.name), line(n)])); path.skip(); }
+        if (CALLABLE.has(n.property.name)) { path.replaceWith(call('rdo', [n.object, t.stringLiteral(n.property.name), line(n)])); path.skip(); }
       },
     },
   });
@@ -464,17 +599,42 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
   return { code: generate(ast, { comments: false }).code, problems: [] };
 }
 
-/** Step 4: the deployed file holds no loop or function the guard did not count. (Computed keys are checked while it is read.) */
+/**
+ * Step 4: the deployed file holds no loop or function the guard did not count, no operator whose operand the guard
+ * did not check, and no write to a property the guard did not check. (Computed keys are checked while it is read.)
+ */
 function verifyLinked(ast, bad) {
   const counts = (body) => {
     const first = t.isBlockStatement(body) ? body.body[0] : null;
     return Boolean(first && t.isExpressionStatement(first) && isGuardCall(first.expression) && first.expression.callee.property.name === 't');
   };
+  const OPERATOR = 'the linked module holds an operator whose operand the guard did not check';
+  const WRITE = 'the linked module holds a write to a property the guard did not check';
+  const ok = (n, path) => plain(n, path.scope);
   traverse(ast, {
     Loop(path) { if (!counts(path.node.body)) bad(path.node, 'the linked module holds a loop the guard did not count'); },
     Function(path) {
       const own = path.node.params.length === 1 && t.isIdentifier(path.node.params[0]) && path.node.params[0].name.startsWith(G);
       if (!own && !counts(path.node.body)) bad(path.node, 'the linked module holds a function the guard did not count');
+    },
+    BinaryExpression(path) {
+      const n = path.node;
+      if (CONVERTING.has(n.operator) || n.operator === '+') { if (!ok(n.left, path) || !ok(n.right, path)) bad(n, OPERATOR); } else if (n.operator === 'in' && !ok(n.left, path)) bad(n, OPERATOR);
+    },
+    UnaryExpression(path) { if (['-', '+', '~'].includes(path.node.operator) && !ok(path.node.argument, path)) bad(path.node, OPERATOR); },
+    TemplateLiteral(path) { if (!path.node.expressions.every((e) => ok(e, path))) bad(path.node, OPERATOR); },
+    MemberExpression(path) { if (isTarget(path) && !isGuardCall(path.node.object)) bad(path.node, WRITE); },
+    UpdateExpression(path) {
+      const a = path.node.argument;
+      // Either a name that only ever holds a number or a text, or the update the guard wrote: `(__homie.p(x), x++)`.
+      const seq = path.parentPath.isSequenceExpression() ? path.parent.expressions : null;
+      const guarded = seq && seq.length === 2 && seq[1] === path.node && isGuardCall(seq[0]) && seq[0].callee.property.name === 'p';
+      if (!guarded && !(t.isIdentifier(a) && ok(a, path))) bad(path.node, OPERATOR);
+    },
+    AssignmentExpression(path) {
+      const n = path.node;
+      if (n.operator === '=' || LOGICAL_ASSIGN.includes(n.operator)) return;
+      if (!(t.isIdentifier(n.left) && ok(n.left, path) && ok(n.right, path))) bad(n, OPERATOR);
     },
   });
 }

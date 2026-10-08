@@ -8,10 +8,12 @@
  *   - module-level state, a write to anything module-level, and a function of the game's called at load are refused;
  *   - rules cannot contain `try`, so they cannot catch the budget;
  *   - the line named is the line in the TypeScript the author wrote, not in what removing its types left;
- *   - coin-dash passes, its linked module holds no unguarded computed key and no uncounted loop or function, and a
- *     linked module that does is refused;
+ *   - coin-dash passes, its linked module holds no unguarded computed key, no uncounted loop or function, no operator
+ *     whose operand was not checked and no unchecked write, and a linked module that does is refused;
  *   - at run time the rewritten code is counted and guarded: a loop is charged a unit a turn, a method that is not
- *     on the list throws, a method read as a value throws, a destructured method throws.
+ *     on the list throws, a method read as a value throws, a destructured method throws;
+ *   - an operator never turns a list or an object into a text: `==`, whole numbers of any size and a function under
+ *     `valueOf`, `toString` or `toJSON` are refused with their lines, and what is left is checked as it runs.
  * Run: node --test packages/studio/test/rules-guard.test.mjs
  */
 import assert from 'node:assert/strict';
@@ -229,13 +231,19 @@ test('coin-dash passes, and its linked module is the checked one: no unguarded k
   // Every function and loop starts by counting; every method call and computed key goes through the guard.
   assert.match(code, /tick\(world, self\) \{\n\s+__homie\d*\.t\(\);/);
   assert.match(code, /for \(const coin of __homie\d*\.c\(world, "near", \[self\.pos, 1, "coin"\], \d+\)\) \{\n\s+__homie\d*\.t\(\);/);
-  assert.match(code, /__homie\d*\.g\(spots, self\.seat % spots\.length, \d+\)/);
+  const KEY = /__homie\d*\.g\(spots, (__homie\d*\.p\(self\.seat, \d+\) % __homie\d*\.p\(spots\.length, \d+\)), \d+\)/;
+  assert.match(code, KEY, 'a computed key goes through the guard, and so does each operand of the % that makes it');
+  assert.match(code, /__homie\d*\.w\(self, \d+\)\.score = __homie\d*\.p\(self\.score, \d+\) \+ 1;/, '`self.score += 1` is written out: the old value is checked, and the write is checked not to land on a function');
   assert.doesNotMatch(code, /world\.near\(|world\.send\(|\.sweep\(body/);
   // The linked module is read once more. One that holds a raw computed key, an uncounted loop or function, or an
   // import of anything else is refused, whoever made it.
   const again = (text) => guardSource(text, { file: 'linked', linked: true }).problems.map((p) => p.message);
   assert.deepEqual(again(code), []);
-  assert.deepEqual(again(code.replace(/__homie\d*\.g\(spots, self\.seat % spots\.length, \d+\)/, 'spots[self.seat % spots.length]')), ['the linked module holds a computed key the guard did not rewrite']);
+  assert.deepEqual(again(code.replace(KEY, 'spots[$1]')), ['the linked module holds a computed key the guard did not rewrite']);
+  // An operator whose operand nobody checked, and a write nobody checked, are refused in the same way.
+  assert.deepEqual(again(code.replace(/__homie\d*\.p\(self\.seat, \d+\) % /, 'self.seat % ')), ['the linked module holds an operator whose operand the guard did not check']);
+  assert.deepEqual(again(code.replace(/__homie\d*\.p\(self\.score, \d+\) \+ 1/, 'self.score + 1')), ['the linked module holds an operator whose operand the guard did not check']);
+  assert.deepEqual(again(code.replace(/__homie\d*\.w\(self, \d+\)\.score = 0;/, 'self.score = 0;')), ['the linked module holds a write to a property the guard did not check']);
   assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+)__homie\d*\.t\(\);/, '$1')), ['the linked module holds a function the guard did not count']);
   assert.deepEqual(again(code.replace(/(for \(const coin of [^\n]+\{\n\s+)__homie\d*\.t\(\);/, '$1')), ['the linked module holds a loop the guard did not count']);
   assert.match(again(`import fs from "node:fs";\n${code}`)[0], /rules import only/);
@@ -274,7 +282,8 @@ export default defineRules({
 `,
   });
   const L = await loadGame(scratch, dir, 'counted');
-  const c = L.R.compileRules(L.def, { map: L.R.compileMap({ bounds: { min: [-20, -20], max: [20, 20] } }) });
+  // A budget large enough that the size cap, not the budget, is what stops a Set of 70,000 entries.
+  const c = L.R.compileRules(L.def, { map: L.R.compileMap({ bounds: { min: [-20, -20], max: [20, 20] } }), settings: L.R.roomSettings({ budget: { tick: 4_000_000 } }).settings });
   const core = L.C.createCore(c, { seed: 1 });
   const errors = new Map();
   const run = (mode) => {
@@ -288,7 +297,7 @@ export default defineRules({
   // A loop is charged a unit a turn, a function a unit a call: 10 turns, 10 calls of total(), 3 turns in each.
   const counted = run(0);
   assert.equal(counted.out, 60);
-  assert.equal(counted.units, 1 + 10 + 10 * (1 + 3), 'the tick itself, ten turns, ten calls and thirty turns inside them');
+  assert.equal(counted.units, 1 + 2 * 3 + 10 + 10 * (1 + 3), 'the tick itself, the two writes to a field (three units each), ten turns, ten calls and thirty turns inside them');
   const keys = run(1);
   assert.equal(keys.error, '');
   assert.equal(keys.out, 6 + 3 + 2 + 4);
