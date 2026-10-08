@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.33.0] - 2026-10-07
 
-**Plugin 0.34.0** · [#56](https://github.com/homie-rocks/homie/pull/56)
+**Plugin 0.34.0** · [#57](https://github.com/homie-rocks/homie/pull/57)
 
 A game's rules can run on your own Cloudflare instead of in a player's browser. This is the first piece of it: the format, the server that runs it, and one example game. Your existing games are not touched.
 
