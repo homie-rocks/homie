@@ -32,7 +32,7 @@ export class Grid implements NavigationQuery {
   #state: GridState;
   #options: GridOptions;
   #labels?: Int32Array;
-  #components: number[][] = [];
+  #components: Int32Array[] = [];
   #blockedCount = 0;
   #scores: Float64Array;
   #previous: Int32Array;
@@ -65,12 +65,12 @@ export class Grid implements NavigationQuery {
       depth,
       cell,
       origin: axes(origin, options.up),
-      blocked: blocked
-        ? Uint8Array.from(blocked, (n) => (n ? 1 : 0))
-        : new Uint8Array(width * depth),
+      blocked: blocked ? new Uint8Array(blocked) : new Uint8Array(width * depth),
       up: options.up ?? 'y',
     };
-    this.#blockedCount = this.#state.blocked.reduce((n, b) => n + b, 0);
+    for (let i = 0; i < this.#state.blocked.length; i++) {
+      if (this.#state.blocked[i]) { this.#state.blocked[i] = 1; this.#blockedCount++; }
+    }
     // Allocated lazily for A*, retained across searches. JPS uses sparse nodes.
     this.#scores = new Float64Array(0);
     this.#previous = new Int32Array(0);
@@ -128,24 +128,33 @@ export class Grid implements NavigationQuery {
   }
   private label(): void {
     if (this.#labels) return;
-    const labels = new Int32Array(this.#state.blocked.length).fill(-1),
-      components: number[][] = [];
+    const { width: w, depth: h, blocked } = this.#state;
+    const labels = new Int32Array(blocked.length).fill(-1);
+    const queue = new Int32Array(blocked.length), components: Int32Array[] = [];
+    let tail = 0;
     for (let root = 0; root < labels.length; root++) {
-      if (this.#state.blocked[root] || labels[root] !== -1) continue;
-      const id = components.length,
-        cells = [root];
-      labels[root] = id;
-      for (let i = 0; i < cells.length; i++)
-        for (const next of this.neighbours(cells[i]!))
-          if (labels[next] === -1) {
-            labels[next] = id;
-            cells.push(next);
+      if (blocked[root] || labels[root] !== -1) continue;
+      const id = components.length, first = tail;
+      queue[tail++] = root; labels[root] = id;
+      for (let head = first; head < tail; head++) {
+        const cell = queue[head]!, x = cell % w, z = Math.floor(cell / w);
+        for (let dz = -1; dz <= 1; dz++) {
+          if (z + dz < 0 || z + dz >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            if ((!dx && !dz) || x + dx < 0 || x + dx >= w) continue;
+            const next = cell + dz * w + dx;
+            if (labels[next] !== -1 || blocked[next] ||
+              (dx && dz && (blocked[cell + dx] || blocked[cell + dz * w]))) continue;
+            labels[next] = id; queue[tail++] = next;
           }
-      components.push(cells);
+        }
+      }
+      components.push(queue.subarray(first, tail));
     }
     this.#labels = labels;
     this.#components = components;
   }
+
   setBlocked(x: number, z: number, blocked: boolean): void {
     if (
       !Number.isInteger(x) ||
@@ -171,29 +180,42 @@ export class Grid implements NavigationQuery {
     const x = Math.max(0, Math.min(s.width - 1, Math.floor((v[0] - s.origin[0]) / s.cell)));
     const z = Math.max(0, Math.min(s.depth - 1, Math.floor((v[2] - s.origin[2]) / s.cell)));
     const cell = z * s.width + x;
-    let cells: number[] | undefined;
+    let component: number | undefined;
     if (from && this.#blockedCount) {
       const start = this.nearest(from);
       if (!start) return null;
       this.label();
-      cells = this.#components[this.#labels![this.at(start)]!];
+      component = this.#labels![this.at(start)]!;
       if (!s.blocked[cell] && this.#labels![cell] === this.#labels![this.at(start)])
         return this.center(cell);
     } else if (!s.blocked[cell]) return this.center(cell);
-    let best = -1,
-      cost = Infinity;
-    const visit = (i: number): void => {
-      if (s.blocked[i]) return;
-      const d = distance(p, this.center(i));
-      if (d < cost || (d === cost && i < best)) {
-        best = i;
-        cost = d;
-      }
+    let best = -1, cost = Infinity;
+    const px = (v[0] - s.origin[0]) / s.cell, pz = (v[2] - s.origin[2]) / s.cell;
+    const visit = (xx: number, zz: number): void => {
+      if (xx < 0 || zz < 0 || xx >= s.width || zz >= s.depth) return;
+      const i = zz * s.width + xx;
+      if (s.blocked[i] || (component !== undefined && this.#labels![i] !== component)) return;
+      const dx = xx + 0.5 - px, dz = zz + 0.5 - pz, d = dx * dx + dz * dz;
+      if (d < cost || (d === cost && i < best)) { best = i; cost = d; }
     };
-    if (cells) for (const i of cells) visit(i);
-    else for (let i = 0; i < s.blocked.length; i++) visit(i);
+    // Expand only as far as the nearest eligible cell. The lower bound also
+    // handles points outside the grid and disconnected components exactly.
+    for (let r = 0; r < Math.max(s.width, s.depth); r++) {
+      for (let xx = Math.max(0, x - r); xx <= Math.min(s.width - 1, x + r); xx++) {
+        visit(xx, z - r); if (r) visit(xx, z + r);
+      }
+      for (let zz = Math.max(0, z - r + 1); zz <= Math.min(s.depth - 1, z + r - 1); zz++) {
+        visit(x - r, zz); if (r) visit(x + r, zz);
+      }
+      const lower = Math.min(x - r > 0 ? Math.abs(x - r - 0.5 - px) : Infinity,
+        x + r + 1 < s.width ? Math.abs(x + r + 1.5 - px) : Infinity,
+        z - r > 0 ? Math.abs(z - r - 0.5 - pz) : Infinity,
+        z + r + 1 < s.depth ? Math.abs(z + r + 1.5 - pz) : Infinity);
+      if (best >= 0 && cost < lower * lower) break;
+    }
     return best < 0 ? null : this.center(best);
   }
+
   random(from: Point, random: () => number): Vector | null {
     const start = this.nearest(from);
     if (!start) return null;
@@ -214,7 +236,7 @@ export class Grid implements NavigationQuery {
     const start = this.at(a),
       end = this.at(b),
       w = this.#state.width;
-    if (!this.#blockedCount) {
+    if (!this.#blockedCount || this.clearOctile(start, end)) {
       const points = [a];
       let x = start % w,
         z = Math.floor(start / w);
@@ -271,6 +293,14 @@ export class Grid implements NavigationQuery {
       links: points.map(() => 0),
       cost: cost * this.#state.cell,
     };
+  }
+  private clearOctile(start: number, end: number): boolean {
+    const w = this.#state.width;
+    const x = start % w, z = Math.floor(start / w), ex = end % w, ez = Math.floor(end / w);
+    const diagonal = Math.min(Math.abs(ex - x), Math.abs(ez - z));
+    const elbow = (z + Math.sign(ez - z) * diagonal) * w + x + Math.sign(ex - x) * diagonal;
+    return this.raycast(this.center(start), this.center(elbow)).clear &&
+      this.raycast(this.center(elbow), this.center(end)).clear;
   }
   private astar(start: number, end: number): number[] {
     const n = this.#state.blocked.length,

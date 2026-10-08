@@ -2,7 +2,7 @@
  * below replaces its recursive _jump with iteration, so million-cell corridors
  * cannot overflow the JavaScript stack. It also avoids allocating a node merely
  * to compare its coordinates with the destination. */
-import PF from 'pathfinding';
+import Finder from 'pathfinding/src/finders/JPFMoveDiagonallyIfNoObstacles.js';
 export const octile = (dx: number, dy: number): number =>
   Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
 export function jumpPath(
@@ -14,8 +14,7 @@ export function jumpPath(
 ): number[] {
   const ex = end % width,
     ey = Math.floor(end / width);
-  const finder = new PF.JumpPointFinder({
-    diagonalMovement: PF.DiagonalMovement.OnlyWhenNoObstacles,
+  const finder = new Finder({
     heuristic: octile,
   });
   finder._jump = (x, y, px, py) => {

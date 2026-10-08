@@ -1,4 +1,4 @@
-declare module 'pathfinding' {
+declare module 'pathfinding/src/finders/JPFMoveDiagonallyIfNoObstacles.js' {
   interface Node {
     x: number;
     y: number;
@@ -17,12 +17,6 @@ declare module 'pathfinding' {
     findPath(sx: number, sy: number, ex: number, ey: number, grid: SearchGrid): number[][];
     _jump(x: number, y: number, px: number, py: number): number[] | null;
   }
-  const api: {
-    JumpPointFinder: new (options: {
-      diagonalMovement: number;
-      heuristic(dx: number, dy: number): number;
-    }) => Finder;
-    DiagonalMovement: { OnlyWhenNoObstacles: number };
-  };
-  export default api;
+  const Constructor: new (options: { heuristic(dx: number, dy: number): number }) => Finder;
+  export default Constructor;
 }

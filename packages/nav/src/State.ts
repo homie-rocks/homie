@@ -139,7 +139,8 @@ export function pack(kind: string, value: unknown): Uint8Array {
       reserve(v.byteLength);
       const input = v as unknown as ArrayLike<number>;
       const section = new DataView(bytes.buffer, offset, v.byteLength);
-      for (let i = 0; i < input.length; i++) writeElement(section, type, i, input[i]!);
+      if (type === 0) bytes.set(v as Uint8Array, offset);
+      else for (let i = 0; i < input.length; i++) writeElement(section, type, i, input[i]!);
       offset += v.byteLength;
       return;
     }
@@ -265,7 +266,8 @@ export function unpack<T>(kind: string, bytes: Uint8Array): T {
       if (n % ctor.BYTES_PER_ELEMENT || n > bytes.length - offset) throw Error();
       const a = new ctor(n / ctor.BYTES_PER_ELEMENT);
       const section = new DataView(bytes.buffer, bytes.byteOffset + offset, n);
-      for (let i = 0; i < a.length; i++) a[i] = readElement(section, tag - 11, i);
+      if (tag === 11) a.set(bytes.subarray(offset, offset + n));
+      else for (let i = 0; i < a.length; i++) a[i] = readElement(section, tag - 11, i);
       offset += n;
       objects.push(a);
       return a;
