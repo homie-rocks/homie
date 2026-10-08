@@ -28,6 +28,19 @@
  * lateness does not add up. When the last person's socket closes the room pauses: the timer is cleared (a pending
  * timer would keep the `Table` in memory and billed), the clock stops, and a person who returns finds the tick it
  * paused on. Watchers and AI seats never keep the world ticking.
+ *
+ * THE CHAIN CANNOT BREAK. One rule holds whenever this module hands control back to its caller: A ROOM THAT IS RUNNING
+ * HAS EXACTLY ONE TIMER PENDING, AND A ROOM THAT IS PAUSED OR ENDED HAS NONE. A running room with no timer would stand
+ * still for good with its players connected and its object billed. So every way in (`wake`, `frame`, `start`,
+ * `resume`, `tickNow`) is wrapped: whatever is thrown inside it, by the core, by the caller's `send` or `log`, by the
+ * clock, is caught there, written to the log with the game and the build, and counted as a fault; and on the way out
+ * the timer is armed again, or, if the clock will not give one, the room is ended cleanly. A tick that faults is a
+ * failed tick, like one the budget cut short: a room whose every tick fails for two seconds ends
+ * (rooms-milestone-1-design.md, section 10), and the log says why.
+ *
+ * SECONDS ARE SECONDS. Both rules that end a failing room are measured on the clock, not in ticks: every tick failing
+ * for `FAIL_MS`, and every tick blamed for running slow for `OVERRUN_MS`. A room whose ticks take a second each ends
+ * after five of them, not after five seconds' worth of ticks at its rate.
  * =============================================================================
  */
 import { createCore } from './core.ts';
@@ -75,7 +88,7 @@ export interface Host {
   resume(): void;
   /** Stop for good: the room has ended. */
   stop(): void;
-  /** Run the next tick now, whatever the clock says (tests, and the build check's runs). */
+  /** Run the next tick now, whatever the clock says (tests, and the build check's runs). Like the timer's own tick, it never throws. */
   tickNow(): void;
   /** The whole room as bytes. */
   save(): Uint8Array;
@@ -90,6 +103,19 @@ interface SeatIn {
   newest: number; stamps: number[]; ack: number;
   /** The smallest lead since the last snapshot, in sixteenths of a tick; 127 while no frame has arrived. */
   lead: number; lastFrameTick: number;
+}
+
+/** Every tick failing (cut short by the budget, or faulted) for this long ends the room. */
+export const FAIL_MS = 2000;
+/** Every tick blamed for running longer than a period for this long ends the room. */
+export const OVERRUN_MS = 5000;
+
+/** Something thrown, as a line for the log, with nothing of the thrown value run to make it. */
+function thrown(error: unknown): string {
+  if (typeof error === 'string') return error.slice(0, 200);
+  if (!(error instanceof Error)) return 'a value that is not an Error';
+  const d = Object.getOwnPropertyDescriptor(error, 'message');
+  return d && typeof d.value === 'string' ? d.value.slice(0, 200) : 'an Error with no message';
 }
 
 /** What a bot is called on the scoreboard, by its seat. */
@@ -115,7 +141,8 @@ export function createHost(o: HostOptions): Host {
   const period = 1000 / c.settings.tickHz;
   const tickHz = c.settings.tickHz;
   const lateTicks = Math.ceil(tickHz / 4);
-  const log = o.log ?? ((): void => {});
+  // A log that throws takes nothing down with it.
+  const log = (line: Record<string, unknown>): void => { try { o.log?.(line); } catch { /* nothing to say it with */ } };
   const random = o.random ?? Math.random;
   const saved = o.restore ? fromBytes(o.restore) as { v: number; core: SavedCore; names: [number, string][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][] } : null;
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
@@ -128,13 +155,39 @@ export function createHost(o: HostOptions): Host {
   let running = false;
   let paused = false;
   let ended = false;
+  /** The pending timer, and whether there is one. `armed` is the truth: a clock may hand back any value as its handle. */
   let timer: unknown = null;
+  let armed = false;
   let base = { ms: 0, tick: 0 };
   let lastSt = 0;
   let rosterText = '';
   let blamed = false;
-  let streak = 0;
-  const stats = { ticks: 0, late: 0, slips: 0, since: 0, ins: 0, dropped: 0, lateEntries: 0, loggedAt: 0 };
+  /**
+   * The run of slow ticks this room is in: when it began (the start of the first tick blamed), and how many of the
+   * ticks since were blamed. A tick that takes a little longer than a period is not blamed every time: lateness has
+   * to pile up past a period first, and the clock's own slips take it away again. So a run goes on for as long as at
+   * least half the ticks in it were blamed, and is dropped as a passing hitch when fewer were.
+   */
+  let overSince: number | null = null;
+  let overTicks = 0;
+  let overBlamed = 0;
+  let lastStart = 0;
+  /** When the run of failed ticks this room is in began, or null. */
+  let failingSince: number | null = null;
+  /** Where in a tick the runtime is, for the log line of a fault. */
+  let phase = '';
+  let faultLoggedAt = -Infinity;
+  const stats = { ticks: 0, late: 0, slips: 0, since: 0, ins: 0, dropped: 0, lateEntries: 0, loggedAt: 0, faults: 0, lastFault: '' };
+  /** Something was thrown in the runtime itself: it is counted, and said in the log at most once a second. */
+  function fault(where: string, error: unknown): void {
+    stats.faults += 1;
+    stats.lastFault = `${where}: ${thrown(error)}`;
+    let now = 0;
+    try { now = o.clock.now(); } catch { now = faultLoggedAt + 1000; }
+    if (now - faultLoggedAt < 1000) return;
+    faultLoggedAt = now;
+    log({ ev: 'host-fault', game: o.game, ...(o.build ? { build: o.build } : {}), tick: core.tick, where, error: thrown(error), faults: stats.faults });
+  }
 
   // A restored room keeps each seat's held input, its newest stamp and its acknowledgement.
   for (const [seat, held, claim, newest, ack] of saved?.queues ?? []) queues.set(seat, { held, claim, entries: [], newest, stamps: [], ack, lead: 127, lastFrameTick: core.tick });
@@ -198,6 +251,10 @@ export function createHost(o: HostOptions): Host {
 
   function frame(m: Record<string, unknown>): void {
     if (ended || !m || typeof m.t !== 'string') return;
+    // A frame that throws is dropped and counted; the room goes on, and its timer is as it should be on the way out.
+    try { onFrame(m); } catch (error) { fault(`frame ${m.t}`, error); } finally { keepTime(); }
+  }
+  function onFrame(m: Record<string, unknown>): void {
     switch (m.t) {
       case 'in': return onIn(m);
       case 'join': {
@@ -279,6 +336,7 @@ export function createHost(o: HostOptions): Host {
   /* ---------------------------------------------------------------- the tick */
 
   function tickOnce(): void {
+    phase = 'inputs';
     const now = o.clock.now();
     const t = (core.tick + 1) >>> 0;
     const inputs = new Map<number, StepInput>();
@@ -298,9 +356,12 @@ export function createHost(o: HostOptions): Host {
       for (const p of presses) values[p] = true;
       inputs.set(seat, { values, claim: q.claim });
     }
+    phase = 'step';
     core.step(inputs);
+    phase = 'frames';
     handle(core.drain(), now);
     if (ended) return;
+    phase = 'snapshot';
     // The control table: one row a seat, [seat, r, ack, lead].
     const rows: number[][] = [];
     for (const b of core.bodies()) {
@@ -319,77 +380,130 @@ export function createHost(o: HostOptions): Host {
     if (now - stats.loggedAt >= 10_000) {
       // Tick figures, one line every ten seconds, never a line a tick.
       const s = core.stats;
-      log({ ev: 'ticks', game: o.game, ...(o.build ? { build: o.build } : {}), tick: core.tick, ticks: stats.since, late: stats.late, slips: stats.slips, ins: stats.ins, lateEntries: stats.lateEntries, dropped: stats.dropped, errors: s.errors, budgetStops: s.budgetStops, cut: s.ticksCut, maxUnits: s.maxUnits, worst: s.worst, ...(s.lastError ? { lastError: s.lastError } : {}) });
+      log({ ev: 'ticks', game: o.game, ...(o.build ? { build: o.build } : {}), tick: core.tick, ticks: stats.since, late: stats.late, slips: stats.slips, ins: stats.ins, lateEntries: stats.lateEntries, dropped: stats.dropped, errors: s.errors, budgetStops: s.budgetStops, cut: s.ticksCut, maxUnits: s.maxUnits, worst: s.worst, maxTickUnits: s.maxTickUnits, ...(s.lost ? { lost: s.lost } : {}), ...(stats.faults ? { faults: stats.faults, lastFault: stats.lastFault } : {}), ...(s.lastError ? { lastError: s.lastError } : {}) });
       stats.loggedAt = now; stats.since = 0; stats.late = 0; stats.ins = 0; stats.lateEntries = 0;
     }
   }
+  /**
+   * One tick, whatever happens in it. Anything thrown is caught here, so a tick never takes the timer chain down with
+   * it. A tick that faulted, or that the budget cut short, is a failed tick; when every tick has failed for `FAIL_MS`
+   * of the clock the room ends, and the log names the handler (or the fault).
+   */
+  function tick(now: number): void {
+    const cut = core.stats.ticksCut;
+    let faulted = false;
+    try { tickOnce(); } catch (error) { faulted = true; fault(`tick ${core.tick} (${phase})`, error); }
+    if (ended) return;
+    if (!faulted && core.stats.ticksCut === cut) { failingSince = null; return; }
+    if (failingSince === null) failingSince = now;
+    if (now - failingSince < FAIL_MS) return;
+    if (faulted) end('fault', { error: stats.lastFault, faults: stats.faults });
+    else { const f = core.stats.failing; const dot = f.indexOf('.'); end('budget', { kind: dot < 0 ? f : f.slice(0, dot), handler: dot < 0 ? '' : f.slice(dot + 1) }); }
+  }
   const dueOf = (t: number): number => base.ms + (t - base.tick) * period;
   function arm(): void {
-    if (!running || timer !== null) return;
+    if (!running || armed) return;
     timer = o.clock.setTimer(wake, Math.max(0, dueOf(core.tick + 1) - o.clock.now()));
+    armed = true;
+  }
+  function disarm(): void {
+    if (!armed) return;
+    armed = false;
+    try { o.clock.clearTimer(timer); } catch (error) { fault('clearTimer', error); }
+    timer = null;
+  }
+  /**
+   * The rule of this module, put right on every way out: a running room has a timer pending, a room that is not
+   * running has none. A clock that will not give a timer cannot keep a room: the room ends, cleanly, and says so.
+   */
+  function keepTime(): void {
+    if (!running) { disarm(); return; }
+    if (armed) return;
+    try { arm(); } catch (error) { fault('setTimer', error); end('clock', { error: stats.lastFault }); }
   }
   function wake(): void {
+    armed = false;
     timer = null;
     if (!running) return;
-    let n = 0;
-    while (running && n < 4) {
-      const now = o.clock.now();
-      const due = dueOf(core.tick + 1);
-      if (now + 0.5 < due) break;
-      // The overrun check: a tick that starts more than a period late blames the tick that held it up.
-      if (now - due > period) { stats.late += 1; blameLate(now, period); }
-      streak = blamed ? streak + 1 : 0;
-      blamed = false;
-      // A room blamed on every tick for five seconds ends, and the log names the handler that used the most units.
-      if (streak >= 5 * tickHz) { end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits }); return; }
-      recent.push({ who: self, at: now });
-      if (recent.length > 8) recent.shift();
-      tickOnce();
-      n += 1;
-    }
-    // Far behind (the isolate was busy, or the machine slept): the clock runs slow. It never jumps to catch up.
-    if (running && o.clock.now() - dueOf(core.tick + 1) > 4 * period) { base = { ms: o.clock.now(), tick: core.tick }; stats.slips += 1; }
-    arm();
+    try {
+      let n = 0;
+      while (running && n < 4) {
+        const now = o.clock.now();
+        const due = dueOf(core.tick + 1);
+        if (now + 0.5 < due) break;
+        // The overrun check: a tick that starts more than a period late blames the tick that held it up.
+        if (now - due > period) { stats.late += 1; blameLate(now, period); }
+        // Blamed since its last tick began: a run of slow ticks begins (when the tick blamed did), or goes on.
+        if (blamed) { if (overSince === null) { overSince = lastStart; overTicks = 0; overBlamed = 0; } overBlamed += 1; }
+        blamed = false;
+        if (overSince !== null) {
+          overTicks += 1;
+          if (2 * overBlamed < overTicks) overSince = null;
+          // A room whose ticks have run slow for five seconds of the clock ends, and the log names the handler that used the most units.
+          else if (now - overSince >= OVERRUN_MS) { end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits, seconds: Math.round((now - overSince) / 100) / 10 }); return; }
+        }
+        recent.push({ who: self, at: now });
+        if (recent.length > 8) recent.shift();
+        lastStart = now;
+        tick(now);
+        n += 1;
+      }
+      // Far behind (the isolate was busy, or the machine slept): the clock runs slow. It never jumps to catch up.
+      // The tick after a slip starts on time by the new clock, so the tick that ran last is judged here, before the slip hides it.
+      if (running && o.clock.now() - dueOf(core.tick + 1) > 4 * period) { const now = o.clock.now(); blameLate(now, period); base = { ms: now, tick: core.tick }; stats.slips += 1; }
+    } catch (error) {
+      // Thrown outside any tick (the clock, the blame): a failed turn of the loop, counted like a failed tick.
+      fault('wake', error);
+      if (failingSince === null) failingSince = lastStart;
+      let now = lastStart + FAIL_MS;
+      try { now = o.clock.now(); } catch { /* a clock that cannot be read: the room has failed for as long as the rule needs */ }
+      if (now - failingSince >= FAIL_MS) end('fault', { error: stats.lastFault, faults: stats.faults });
+    } finally { keepTime(); }
   }
   const self = { blame: (): void => { blamed = true; } };
 
   function start(): void {
     if (running || ended) return;
     running = true; paused = false;
-    base = { ms: o.clock.now(), tick: core.tick };
-    const caps = c.kinds.some((k) => k.think) ? ['skill'] : [];
-    if (caps.length) o.send({ t: 'caps', caps });
-    log({ ev: 'host-start', game: o.game, tick: core.tick, epoch, tickHz });
-    arm();
+    try {
+      base = { ms: o.clock.now(), tick: core.tick };
+      overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
+      const caps = c.kinds.some((k) => k.think) ? ['skill'] : [];
+      if (caps.length) o.send({ t: 'caps', caps });
+      log({ ev: 'host-start', game: o.game, tick: core.tick, epoch, tickHz });
+    } catch (error) { fault('start', error); } finally { keepTime(); }
   }
   function pause(): void {
     if (!running) return;
     running = false; paused = true;
     // A pending timer would keep the object in memory and billed: the pause clears it.
-    if (timer !== null) { o.clock.clearTimer(timer); timer = null; }
+    disarm();
     log({ ev: 'host-pause', game: o.game, tick: core.tick });
-    o.onPause?.();
+    try { o.onPause?.(); } catch (error) { fault('onPause', error); }
   }
   function resume(): void {
     if (running || ended || !paused) return;
     running = true; paused = false;
-    // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
-    base = { ms: o.clock.now(), tick: core.tick };
-    for (const q of queues.values()) q.lastFrameTick = core.tick;
-    log({ ev: 'host-resume', game: o.game, tick: core.tick });
-    o.onResume?.();
-    arm();
+    try {
+      // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
+      base = { ms: o.clock.now(), tick: core.tick };
+      overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
+      for (const q of queues.values()) q.lastFrameTick = core.tick;
+      log({ ev: 'host-resume', game: o.game, tick: core.tick });
+      o.onResume?.();
+    } catch (error) { fault('resume', error); } finally { keepTime(); }
   }
   function stop(): void {
     running = false; paused = false; ended = true;
-    if (timer !== null) { o.clock.clearTimer(timer); timer = null; }
+    disarm();
     for (let i = recent.length - 1; i >= 0; i -= 1) if (recent[i].who === self) recent.splice(i, 1);
   }
   function end(why: string, facts: Record<string, unknown>): void {
     if (ended) return;
-    log({ ev: 'host-ended', game: o.game, ...(o.build ? { build: o.build } : {}), why, tick: core.tick, ...facts });
+    // Stopped first: whatever the log or the caller's `onEnd` do, the room is over and holds no timer.
     stop();
-    o.onEnd?.(why, facts);
+    log({ ev: 'host-ended', game: o.game, ...(o.build ? { build: o.build } : {}), why, tick: core.tick, ...facts });
+    try { o.onEnd?.(why, facts); } catch (error) { fault('onEnd', error); }
   }
 
   return {
@@ -399,9 +513,13 @@ export function createHost(o: HostOptions): Host {
     get paused() { return paused; },
     get people() { return people(); },
     frame, start, pause, resume, stop,
-    tickNow: () => { if (!ended) tickOnce(); },
+    tickNow: () => {
+      if (ended) return;
+      let now = lastStart;
+      try { now = o.clock.now(); tick(now); } catch (error) { fault('tickNow', error); } finally { keepTime(); }
+    },
     save: () => toBytes({ v: 1, core: core.save(), names: [...names], queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]) }),
-    facts: () => ({ tick: core.tick, epoch, running, paused, people: people(), tickHz, ...stats, core: { ...core.stats } }),
+    facts: () => ({ tick: core.tick, epoch, running, paused, ended, armed, people: people(), tickHz, ...stats, core: { ...core.stats } }),
     core,
   };
 }
