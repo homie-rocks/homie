@@ -1,354 +1,255 @@
 # @homie-rocks/nav
 
-Tiled navigation meshes, fixed-step crowds, editable obstacles and flat-grid paths.
-Bake a level once, ship the bytes with the game, and load the nearby tiles on the
-server. Core modules have no renderer, DOM, clock, unseeded random generator or
-runtime WASM initialization. The optional `Three.js` module imports three.js.
+Tiled navigation meshes, fixed-step crowds with exact save/restore, and grid
+paths for game rules in Node, browsers and Cloudflare Workers. Bake triangle
+geometry or a heightfield, stream tiles, carve obstacles, and control doors and
+links. Queries and simulation have no renderer, clock or unseeded randomness.
+The optional three.js module imports geometry and draws diagnostics.
+
+Part of Homie's open game engine: the packages the Homie games are built on.
+
+## Install
 
 ```sh
 npm install --save-exact @homie-rocks/nav@0.1.0
+# Only for Three.js helpers:
+npm install --save-exact three@0.185.1
 ```
 
-Import individual modules; there is no barrel. Positions are metres. Set
-`up: 'y' | 'z'` in the mesh's bake configuration (default `'y'`). Y-up uses XZ
-for the ground, matching three.js and the other engine packages. Z-up uses XY
-for the ground, matching rules rooms. The crowd inherits this choice. Geometry,
-heightfields, obstacles, links, query extents, returned points and velocities
-all follow it. `minY` and `maxY` name the absolute **vertical** bounds in either
-convention; origin height is not added to them. Tile coordinates `(x,z)` name
-the two horizontal tile indices, including when the world is Z-up.
+There is no barrel file: import the module you need. The JavaScript navigation
+backend is navcat 0.4.1; JPS uses PathFinding.js 0.4.18. Neither needs WASM.
 
-## Bake a heightfield and walk across it
+## Use
+
+Bake assets outside the game tick; load them into a shared mesh. Coordinates and
+agent dimensions are metres, time is seconds. Points accept arrays or typed
+arrays containing exactly three finite coordinates.
 
 ```ts
-import { CentredGrid } from '@homie-rocks/heightfield/Field.js';
 import { bakeHeightfield, type BakeConfig } from '@homie-rocks/nav/Bake.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 
-const posts = new CentredGrid(97, 0.25, 2);
-const heights = new Float32Array(posts.n * posts.n);
-const field = { heightAt: (x: number, z: number) => posts.sample(heights, x, z) };
 const config: BakeConfig = {
-  up: 'y', origin: [0, 0, 0], minY: -2, maxY: 10,
+  origin: [0, 0, 0], minY: -2, maxY: 8,
   cellSize: 0.25, cellHeight: 0.1, tileCells: 80,
   radius: 0.3, height: 1.8, stepHeight: 0.3, slopeDegrees: 45,
-  retainSpans: true, // enable carving for these tiles; omit for static assets
+  retainSpans: true,
 };
-const tiles = bakeHeightfield(field, config, { min: [0, 0], max: [20, 20] });
-const mesh = new Mesh(config, [2, 2, 2]);
-for (const tile of tiles) mesh.loadTile(tile.bytes);
-const crowd = new Crowd(mesh, 1 / 20, 0.3);
-const tune = { radius: 0.3, height: 1.8, speed: 3, acceleration: 8,
-  neighbours: 2, separation: 2 };
-const id = crowd.add([2, 0, 2], tune);
-if (!crowd.target(id, [18, 0, 18])) throw new Error('No reachable target');
-for (let tick = 0; tick < 400; tick++) crowd.step();
-const feet = crowd.agent(id)!.position;
-const arrived = crowd.arrived(id, 0.25);
-const restored = Crowd.restore(crowd.save(), mesh);
-restored.step(); // same next state as crowd.step(); both still share mesh
-```
-
-Heightfields sample their two horizontal arguments regardless of `up`.
-`bakeHeightfield` handles orientation and winding. For arbitrary triangles use
-`bakeLevel({positions, indices?}, config)`: it buckets triangles by tile with the
-erosion halo included. Triangle winding must face upward. Stacked floors and
-ceilings require triangle geometry; a heightfield supplies one surface.
-
-`bakeTile(triangles, config, x, z)` is the low-level entry point. Its caller must
-supply `(ceil(radius/cellSize)+3)*cellSize` of geometry outside every edge.
-`loadTile` returns `{warnings}` for loaded neighbours without shared border
-polygons. A genuine gap can produce the same diagnostic. `mesh.debug().seams`
-returns these diagnostics later. Whole-level baking avoids this halo contract;
-passing the entire level independently to every low-level bake still costs a
-full input scan per tile. Rasterization belongs in the build for large scenes.
-
-Navmesh positions sit on the voxel surface: a floor at zero can return 0.1 with
-0.1 m cells. Project feet onto the game's ground/collision surface for rendering.
-Radius and height round up; climb rounds down. Slope also requires a traversable
-neighbour step at this resolution: an 80-degree slope setting does not override
-`stepHeight/cellSize`. Region filtering defaults to 8 cells, merging to 20;
-`minRegionCells` and `mergeRegionCells` control these thresholds.
-
-## Fifty agents through a doorway
-
-Continuing with the editable flat mesh and tune above:
-
-```ts
-mesh.addObstacle({ min: [9.5, -1, 0], max: [10.5, 4, 8] });
-mesh.addObstacle({ min: [9.5, -1, 12], max: [10.5, 4, 20] });
-const crossing = new Crowd(mesh, 1 / 20, 0.3);
-const agents: number[] = [];
-for (let i = 0; i < 50; i++) {
-  const z = 2 + Math.floor(i / 5) * 1.6;
-  const id = crossing.add([1 + i % 5, 0, z], tune);
-  crossing.target(id, [15 + i % 5, 0, z]);
-  agents.push(id);
+const assets = bakeHeightfield(
+  { heightAt: (x: number, _z: number) => x * 0.02 }, config,
+  { min: [0, 0], max: [40, 40] },
+);
+const mesh = new Mesh(config, [1, 2, 1]);
+for (const asset of assets) {
+  const { warnings } = mesh.loadTile(asset.bytes);
+  if (warnings.length) console.warn(warnings);
 }
-for (let tick = 0; tick < 700; tick++) crossing.step();
-const crossed = agents.every(id => crossing.agent(id)!.position[0] > 10.5);
+const crowd = new Crowd(mesh, 0.05, 0.3, { searchIterations: 200 });
+const id = crowd.add([2, 0.1, 2], {
+  radius: 0.3, height: 1.8, speed: 3, acceleration: 8,
+  neighbours: 2, separation: 2,
+});
+if (!crowd.target(id, [38, 0.8, 38])) throw new Error('Target is disconnected');
+for (let tick = 0; tick < 400; tick++) crowd.step();
+const position = crowd.agent(id)!.position;
+
+// Persist both blobs, along with the original immutable tile assets.
+const meshBytes = mesh.save();
+const crowdBytes = crowd.save();
+const restoredMesh = Mesh.restore(meshBytes, assets.map(a => a.bytes));
+const restoredCrowd = Crowd.restore(crowdBytes, restoredMesh);
+restoredCrowd.step();
 ```
 
-The caller owns fixed scheduling, inputs and interpolation. `step()` advances
-exactly one tick; maximum fixed dt is 0.1 seconds. All ids are positive numbers.
-`ids()` lists agents, `setSpeed(id, metresPerSecond)` changes speed, and `stop(id)`
-clears a target. Missing-id mutators return false; `agent(id)` returns null.
-Malformed coordinates/dimensions throw an error beginning with `nav:`.
+For a room wake you **must persist `mesh.save()`** as well as `crowd.save()`.
+The mesh blob contains polygon allocations and tile salts. Rebuilding from the
+same assets and edits is not a substitute. Store a new mesh blob after topology
+changes and pair it atomically with the crowd snapshot and loaded asset list.
+Keep immutable assets in the game build, rather than copying them into each
+crowd snapshot. `chunks()` and `joinChunks()` split/reassemble blobs for storage.
 
-`agent(id)` returns fresh arrays and `status: 'walking' | 'link' | 'stranded'`,
-`link` (public link id or null), `offMesh`, and `partial`. If the floor disappears,
-the requested destination is kept. A mesh edit that restores nearby floor
-re-places stranded agents automatically. `place(id, point)` explicitly relocates
-one without changing its id or tune. Placement can fail when no floor is nearby.
-New targets must be reachable; later edits may turn an existing route partial.
-`arrived` never treats a partial route as arrival. Normal corridor validation
-handles edits; distant edits do not restart every agent's search.
-
-Crowd avoidance is soft local steering, not rigid-body collision. Dense
-traffic can overlap substantially; a fresh 300-agent/1.5 m doorway run measured 0.077 m minimum centre
-separation for 0.3 m radii, 658 samples below 0.3 m, and 223 of 300 across after
-1,000 ticks. With 400 agents through 4 m, all crossed; minimum separation was
-0.191 m. These limits are reproduced in `test/review/crowding.mjs`. The fifty-agent test
-is an easier completion/clearance fixture, not a universal spacing guarantee.
-
-## Obstacles, doors and links
-
-`addObstacle({min,max})` carves a box; `addCylinder(base, radius, height)` carves
-a vertical cylinder. Both return ids removed by `removeObstacle(id)`. Only tiles
-baked with `retainSpans: true` can be carved. Decoded spans stay cached; an edit
-rebuilds only overlapping tiles using only their overlapping obstacles. Removing
-the last obstacle reuses the original polygons. These edits are synchronous;
-use small editable tiles and edit between steps. Use crowd agents for frequent
-moving obstacles. Box headroom accounts for the voxel surface offset.
-
-For a frequently toggled door, add its box to `config.doorRegions` **before the
-bake**. These regions create separate area polygons. Then:
-
-```ts
-const door = mesh.addDoor({ min: [9, -1, 8], max: [11, 3, 12] });
-mesh.setDoorEnabled(door, false); // close: change flags, no rasterization/rebuild
-mesh.setDoorEnabled(door, true);  // reopen
-mesh.removeDoor(door);
-```
-
-Door boxes select entire intersecting door-region polygons. Author the region
-around the passage, not the room. Multiple overlapping closed doors compose.
-Flag filtering applies to paths, placement, random points and crowd corridors.
-`addDoor` requires authored door regions; it does not silently carve a new hole.
-
-`addLink(from, to, radius, bidirectional)` connects existing floors, rejects an
-endpoint without floor, and returns a positive id. `setLinkEnabled` and
-`removeLink` use that same id. `Path.links` contains zero for walking or this
-public id, never a backend reference. Link endpoints should be near the intended
-floors; each endpoint must find floor within the link radius on all axes. Disabling a link does
-not block a parallel ordinary-floor route.
-
-Automatic link traversal interpolates over 0.5 seconds. For game-controlled
-jumps or permissions, add agents with `{...tune, manualLinks: true}`. Inspect
-`agent(id).link` to select that link's game rule, animate using declared game
-fields, then call `completeLink(id)`. Waiting traversal state survives saves;
-no callback or closure is serialized. The game owns jump physics and animation.
-
-## Queries and flat grids
-
-Mesh and Grid implement `NavigationQuery`: `path(from,to)`, `nearest(point,from?)`,
-`random(from,rng)`, and `raycast(from,to)`. Every point accepts `ArrayLike<number>`
-with exactly three finite components, including ordinary arrays and typed arrays.
-Results can be passed straight back into any query.
-
-Mesh nearest snaps within query extents; with `from`, it finds the nearest point
-in that directed reachable set. Mesh random samples polygons by area. Reachable
-sets are revision-cached, bounded to 16 source polygons. Grid random samples free
-cells uniformly. `new Random(uint32).next` supplies a reproducible 32-bit LCG;
-seeds outside 0..4294967295 throw. This generator is only for gameplay sampling,
-not security or statistical simulation. Save its one-word `state` separately.
-
-A nav ray tests walkability, not visibility or physics, and never takes a link.
-Wrong destination height can make `clear` false with `fraction === 1`. Mesh
-height tolerance is two vertical cells; grid rays stay on their horizontal plane.
-Mesh paths are polygon A* plus a funnel, not a global continuous-geodesic proof
-across all possible polygon corridors.
+A grid needs no bake. It uses eight neighbours with octile cost and forbids
+cutting blocked corners. Searches return the nearest partial path if necessary.
 
 ```ts
 import { Grid } from '@homie-rocks/nav/Grid.js';
-const grid = new Grid(32, 32, 1, [0, 0, 0], undefined,
-  { up: 'z', search: 'jps' });
-grid.setBlocked(10, 10, true);
-const route = grid.path([0.5, 0.5, 0], [25.5, 25.5, 0]);
+import { Random } from '@homie-rocks/nav/Random.js';
+
+const grid = new Grid(100, 100, 0.5, [0, 0, 0]);
+grid.setBlocked(50, 50, true);
+const path = grid.path([1, 0, 1], [48, 0, 48], { search: 'jps', smooth: true });
+const random = new Random(42);
+const destination = grid.random([1, 0, 1], random.next);
+const restored = Grid.restore(grid.save());
+// Persist random.state with the game's other state to continue the sequence.
 ```
 
-The default search is eight-neighbour A* with octile costs and no corner cutting.
-Optional JPS uses pinned PathFinding.js pruning with iterative scans to avoid
-recursive stack overflow. Both match an independent Dijkstra cost oracle.
-`path(...,{search:'astar'|'jps',smooth:false})` returns cell waypoints;
-otherwise the grid's raycast string-pulls them. `cost` reports the unsmoothed
-optimal grid cost in metres. Empty grids have an exact direct fast path. A*
-reuses arrays across requests; component labels are cached until a cell edit.
-Nearest uses direct cell indexing where possible, scanning only for blocked or
-unreachable destinations. Grid crowd steering remains the game's responsibility.
+## Modules
 
-## Binary state and rules rooms
+| Module / member | Purpose |
+|---|---|
+| `Bake.js` — `checkConfig(config)` | Validate dimensions, budgets and compatible slope/voxel settings. |
+| `checkObstacle(box)` | Validate a positive-volume world-space box. |
+| `bakeTile(triangles, config, x, z)` | Produce one tile's bytes; input must cover its erosion halo. |
+| `bakeLevel(triangles, config)` | Bucket geometry with halos and return sorted `{x,z,bytes}` assets. |
+| `heightfieldTriangles(field, minX, minZ, nx, nz, step, up?)` | Sample an explicit lattice with upward winding. |
+| `bakeHeightfield(field, config, rectangle, sampleStep?)` | Sample and bake a rectangle one tile plus halo at a time. |
+| `Mesh.js` — `new Mesh(config, queryHalfExtents, options?)` | Create an empty mesh; extents are positive world-axis search distances. |
+| `mesh.config`, `mesh.up`, `mesh.revision` | Read a copied config, axis convention and topology revision. |
+| `mesh.loadTile(bytes)` | Load/replace an asset and return `{warnings}` for missing shared borders. |
+| `mesh.unloadTile(x, z)` | Remove a tile; return false if absent. |
+| `mesh.addObstacle(box)` | Carve an axis-aligned box; return its id. |
+| `mesh.addObstacles(boxes)` | Validate a batch and rebuild each affected tile once. |
+| `mesh.removeObstacle(id)` | Remove a carve and rebuild affected tiles. |
+| `mesh.removeObstacles(ids)` | Remove a batch atomically; an unknown id rejects it. |
+| `mesh.addCylinder(baseCenter, radius, height)` | Carve a cylinder extending upward from its base centre. |
+| `mesh.addDoor(box, enabled?)` | Control a matching baked `doorRegions` portal; enabled means passable. |
+| `mesh.setDoorEnabled(id, enabled)` | Change polygon flags without rebuilding geometry. |
+| `mesh.removeDoor(id)` | Remove the door's flag override. |
+| `mesh.addLink(from, to, radius, bidirectional)` | Connect floor endpoints; return a public link id. |
+| `mesh.setLinkEnabled(id, enabled)` | Enable/disable an existing link. |
+| `mesh.removeLink(id)` | Remove a link. |
+| `mesh.nearest(point, from?)` | Project onto a floor, optionally restricted to the start's reachable set. |
+| `mesh.path(from, to)` | Return `{complete, points, links}`; zero link entries mean walking. |
+| `mesh.random(from, random)` | Pick a reachable point using a caller-supplied random function. |
+| `mesh.raycast(from, to)` | Return `{clear, fraction, point}` for walking straight along the floor. |
+| `mesh.debug()` | Return triangle positions, public links and seam diagnostics. |
+| `mesh.identity()` | Return bytes identifying assets, edits and polygon references. |
+| `mesh.save()` | Save dynamic topology; immutable asset bytes are excluded. |
+| `Mesh.restore(bytes, assets)` | Restore topology with every saved tile's original bytes, in any order. |
+| `Crowd.js` — `new Crowd(mesh, dt, maxRadius, options?)` | Create a fixed-step crowd; `searchIterations` bounds sliced search work. |
+| `crowd.tick`, `crowd.mesh` | Read tick count and shared mesh. |
+| `crowd.add(at, tune)` | Add an agent using baked clearance; return its id. |
+| `crowd.remove(id)` | Remove an agent. |
+| `crowd.ids()` | Return live ids in simulation order. |
+| `crowd.target(id, to)` | Check cached reachability and enqueue a path request; false means no route/floor/id. |
+| `crowd.stop(id)` | Clear the requested destination. |
+| `crowd.setSpeed(id, speed)` | Change a live agent's maximum speed. |
+| `crowd.place(id, at)` | Move to a valid floor, retaining identity, tuning and destination. |
+| `crowd.agent(id)` | Return position, velocity, status, link and partial-path state, or null. |
+| `crowd.arrived(id, tolerance)` | Test a complete walking route's destination tolerance. |
+| `crowd.completeLink(id)` | Finish a link traversal paused by `manualLinks: true`. |
+| `crowd.step()` | Advance exactly one configured tick. |
+| `crowd.save()` | Save continuation state, including pending searches and steering corners. |
+| `Crowd.restore(bytes, mesh)` | Restore onto the matching live or restored mesh. |
+| `Grid.js` — `new Grid(width, depth, cell, origin, blocked?, options?)` | Create a grid with optional mask, `up`, `search` and `smooth` options. |
+| `grid.up` | Read the selected axis convention. |
+| `grid.setBlocked(x, z, blocked)` | Edit a cell and invalidate cached components. |
+| `grid.nearest(point, from?)` | Find the nearest free cell, optionally in the start's component. |
+| `grid.path(from, to, options?)` | Return a path and unsmoothed octile `cost` in metres. |
+| `grid.random(from, random)` | Pick a free cell in the start's component. |
+| `grid.raycast(from, to)` | Traverse exact cells; touching a blocked corner counts as a hit. |
+| `grid.save()` | Save dimensions, mask, origin and options. |
+| `Grid.restore(bytes)` | Restore a grid; search buffers/components rebuild lazily. |
+| `Random.js` — `new Random(seed)` | Create an integer generator from a uint32 seed. |
+| `random.next()` | Return a number in `[0,1)`; `state` holds the writable uint32 continuation. |
+| `State.js` — `chunks(bytes, limit?)` | Split into zero-copy views, default 1 MiB each. |
+| `joinChunks(parts)` | Copy ordered chunks into a single blob. |
+| `hash(bytes)` | Compute a deterministic 32-bit checksum, not a security hash. |
+| `pack(kind, value)` | Encode a data graph with aliases and typed sections; advanced use. |
+| `unpack(kind, bytes)` | Check schema/backend version, kind, length and checksum, then decode. |
+| `Query.js` — `point(p)` | Validate three finite coordinates. |
+| `vector(p)` | Copy a point into a three-number tuple. |
+| `axes(p, up?)` | Rotate world coordinates into the internal y-up frame. |
+| `fromAxes(p, up?)` | Apply the inverse rotation. |
+| `axisExtents(p, up?)` | Convert positive extent magnitudes. |
+| `axisBounds(min, max, up?, inverse?)` | Rotate a box and reorder its extrema. |
+| `positive(n, name)` | Validate a positive finite scalar. |
+| `distance(a, b)` | Calculate Euclidean distance. |
+| `draw(random)` | Validate a random draw in `[0,1)`. |
+| `Three.js` — `trianglesFromObject3D(root, options?)` | Apply world transforms, instancing, draw ranges and mirrored winding. |
+| `debugMesh(mesh, crowd?)` | Build a disposable three.js diagnostic group. |
+| `disposeDebugMesh(group)` | Dispose its geometry/materials and clear the group. |
 
-Format 2 has a 16-byte little-endian header: magic, version, byte length, checksum.
-It stores binary numbers, raw typed-array sections, shared shapes and graph
-references in one buffer. There is no JSON, numeric text or recursive encoding
-of byte arrays. The reference table preserves sliced-query heap aliases. This
-format is pinned to the backend revision; there is no cross-version migration.
-Truncated/corrupt data reports a `nav:` error. Saves are server/build data, not
-an untrusted player-input protocol. The checksum is not authentication.
+## Limits
 
-Separate the build's assets from room state:
+- `up: 'z'` is a rotation: world `(x,y,z)` maps to internal `(x,z,-y)`.
+  Positive tile/grid depth follows internal +z, hence world −y in z-up.
+  Heightfield rectangles and sample coordinates use this internal horizontal
+  frame. Three.js helpers use the same rotation. Box bounds must remain ordered.
+- Slope is checked from triangle normals. The ledge filter accounts for slope
+  voxel variation; adjacent compact spans still obey `stepHeight`. Incompatible
+  cell size/height, climb and slope configurations throw. Reduce cell size or
+  increase step height; coarse sampling can also miss terrain features.
+- Tile width is `tileCells * cellSize`. Independent tile input needs a halo of
+  `(ceil(radius / cellSize) + 3) * cellSize`. A whole level with no walkable output
+  throws a winding/slope/clearance diagnostic. A border warning can also describe
+  an intentional gap. Shared origin and bake parameters are required.
+- Carving needs `retainSpans: true`. Retained cells/spans stay packed until a
+  rebuild. `MeshOptions.maxRetainedCells` and `maxRetainedSpans` each default to
+  1,000,000 and are saved with the mesh. Raise them explicitly for larger worlds;
+  edits allocate temporary expanded spans. Prefer small tiles and batched edits.
+- Doors disable whole portal polygons; author `doorRegions` during baking.
+  Links are graph connections, not physical jump animations. Manual traversal
+  requires the game to call `completeLink`.
+- Crowd avoidance is local, not a collision solver or a traffic scheduler.
+  Dense opposing traffic can overlap or jam. Unloaded floors report `stranded`;
+  reloading or `place` can recover them. Fixed `dt` must be at most 0.1 seconds.
+  Apply inputs in a stable order and save random state separately.
+- Grid capacity is 4,000,000 cells, not a per-tick performance guarantee. Large
+  obstructed searches and initial component labelling belong outside a 20 Hz
+  tick. JPS uses A* on very sparse or dense masks where jump scanning costs more;
+  an unobstructed octile route bypasses either search. Components cache until an edit.
+- Snapshots are data graphs with explicit little-endian typed sections and an
+  exact backend-version check. They are trusted assets/saves, not player input.
+  Format 3 is incompatible with earlier formats. Persist all chunks atomically;
+  one large blob may exceed a storage system's per-value limit.
 
-- **Static assets:** baked tiles in the game build, addressed by tile key/content
-  checksum. Ordinary static tiles omit compact spans. At 0.25 m cells, a flat
-  10 m tile is 739 bytes; a retained tile is 60,135 bytes. An empty static tile is
-  222 bytes. Retained cells cost 8 bytes each; spans cost 17 bytes each, plus the
-  small tile/polygon header. Stacked geometry adds spans.
-- **Mesh edits:** `mesh.save()` stores tile identities, obstacles, links, doors,
-  allocation/salt tables and runtime topology. It excludes static geometry and
-  spans. `Mesh.restore(bytes, originalTileBytes)` reconstructs the same topology;
-  missing or changed assets fail. Typical measured one-tile topology saves were
-  1.7–1.9 KB; size grows with polygons, links and edits, not baked span volume.
-- **Crowd:** `crowd.save()` stores agents, corridors, active sliced searches,
-  boundary state, tick, requested destinations, link progress and mesh identity.
-  Finalized sliced-query pools are omitted; pending searches keep their aliases.
-  It excludes mesh geometry and recomputable avoidance scratch. Restore with
-  `Crowd.restore(bytes, sharedMesh)`; multiple crowds and game queries keep sharing
-  it. A changed mesh identity fails rather than accepting stale polygon refs.
+## Measurements
 
-A rules object declares a navigation blob, mesh-edit blob when edits change,
-and its RNG word alongside its other fields. The static build/asset cache stays
-outside declared simulation state. In `think`, restore against that object's
-mesh, apply ordered inputs, call `step()` once at 20 Hz, and assign `save()` to
-the declared navigation field. Persist at tick boundaries. Prefer keeping the
-live crowd between ticks; restore is for object wake/replay, not mandatory work
-on every tick. Per-link animation progress belongs in the game's declared fields.
-This is the integration contract; this package does not change the rules compiler.
+Apple M4, Node 22.22.2, local workerd 1.20261007.1. From the repository root, reproduce with
+`node packages/nav/test/measure.mjs`; raw results are in `test/measurements.json`.
+The scenes use 20 m tiles, 0.25 m cells, 0.1 m height cells and 0.3 m agents.
+Pillars are actual 1.2 m square, 3 m high geometry on 5 m spacing.
+Bake/load is a single observation; save/restore medians use seven runs.
 
-Use `chunks(bytes)` for zero-copy 1 MiB views, and `joinChunks(parts)` to restore.
-Store the chunk count/generation and all values in one SQLite transaction; each
-value stays below 2 MB. Large-grid tests cover multi-value reassembly. Never
-persist a half-written generation. No compression is required for the measured
-300-agent rooms: 77–80 KB (roughly 258–266 bytes/agent, scene-dependent).
-Active search frontiers and complex corridors add variable state; storage is
-chunked rather than assuming a fixed maximum record per agent.
-
-The measured 40×40 m, four-tile/300-agent process used 17.9 MB of live JS heap;
-saving added 9.2–9.5 MB before GC, and sampled post-restore heap ranged from
-24.4 to 37.2 MB. Its final save was 79,777 bytes, saved in 5.4–12.7 ms
-and restored in 5.3–5.6 ms. The standalone
-`node --expose-gc test/review/memory.mjs` check asserts heap plus array buffers
-stays below 64 MiB at the sampled restore boundary. Node RSS includes its runtime and
-is not a Durable Object heap measurement. Editable tile loading caps retained
-cells at 250,000 and spans at 200,000 per mesh to bound the object expansion.
-Unload distant editable tiles. Static tiles have no span expansion. The 4-million
-cell grid is an upper API limit, not a recommendation to put a worst-case A*
-frontier and a large crowd together in a 128 MB object.
-
-## Determinism and the backend decision
-
-navcat **0.4.1**, mathcat **0.0.12**, PathFinding.js **0.4.18** and its heap
-**0.2.5** dependency use MIT licences, compatible with Apache-2.0. They are pinned
-exactly. Generated backend code ships its MIT notices. The backend stays behind
-private modules and fields; public declarations expose no navcat types.
-
-The build checks the exact upstream crowd source hash, then replaces its four
-velocity-sampling trig calls with a fixed arithmetic polynomial. No global Math
-mutation occurs. Slope classification uses the same deterministic arithmetic.
-Tests replace `sin`, `cos`, `tan`, `atan2`, `pow`, `exp`, `log`, `hypot`, clocks
-and unseeded random with throwing functions across bake/edit/query/step/restore.
-Both up conventions produce identical bytes in Node, workerd and JavaScriptCore.
-This proves the tested versions/fixtures; it does not promise backend-version
-compatibility. Fixed tick, stable input order and identical assets remain required.
-
-The bake's pinned upstream profiling hooks are suppressed synchronously and
-restored in `finally`, after copying caller arrays. This module mutation is
-version-specific; the clock-throwing test is the regression guard.
-
-**Recast Navigation 0.43.1 was installed and run**, including identical repeated
-scenes in Node, Safari and workerd. Its MIT wrapper and Recast/Detour zlib licence
-are Apache-compatible. The default base64 WASM loader works in Node/browser;
-workerd rejects its runtime byte compilation (covered by a negative test).
-The successful Worker test imports the `.wasm` module and initializes the
-`@recast-navigation/wasm/wasm` factory via `instantiateWasm`, then passes that
-factory to `init`. This requires async setup and a bundler WASM rule. The complete
-loader is in `test/review/compare.mjs`; no remote account is needed.
-
-On the same flat 40×40 m scene, 61,952 triangles and 300 agents at 20 Hz:
-
-| Runtime / engine | Bake range, ms | Query average, ms | Step median / p95, ms | Exported mesh bytes |
+| Scene | Tiles | Static assets total / largest | Retained assets total / largest | Mesh save |
 |---|---:|---:|---:|---:|
-| Node / navcat | 32–55 | .0030 | 3.29 / 5.62 | 729 |
-| Node / Recast WASM | 6–8 | .0082 | .98 / 1.62 | 424 |
-| Safari / navcat | 21–39 | .001–.002 | 3 / 4–6 | 729 |
-| Safari / Recast WASM | 5–10 | .002–.004 | 1 / 1 | 424 |
-| workerd / navcat | 35–42 | .0038 | 2.62 / 3.47 | 729 |
-| workerd / Recast WASM | 13–18 | .0066 | .99 / 1.45 | 424 |
+| Flat 20 × 20 m | 1 | 1,126 / 1,126 B | 169,582 / 169,582 B | 1,068 B |
+| Pillars 20 × 20 m | 1 | 8,755 / 8,755 B | 176,599 / 176,599 B | 5,322 B |
+| Pillars 80 × 80 m | 16 | 174,075 / 11,782 B | 3,180,879 / 206,758 B | 103,048 B |
+| Pillars 160 × 160 m | 64 | 726,059 / 11,868 B | 12,977,471 / 206,844 B | 428,827 B |
 
-Measured on Apple M4, Node 22.22.2, local workerd 1.20261007.1, 2026-10-07, with
-normal desktop applications running. One warm-up bake then three samples;
-queries 100 warm-ups/1,000 samples; crowds 30 warm-ups/120 fixed steps. Safari's
-clock is coarse. Workerd figures are **host wall time including HTTP**, reported
-as median/p95 of batch means, ten steps per HTTP request; they are not production Cloudflare CPU measurements.
-Repeated runs varied: Node navcat bake 31–213 ms, step medians 2.27–3.59 ms in
-this flat comparison. Both engines' bake and trajectory checksums matched
-across tested runtimes and repeated browser runs.
+| Scene | Bake + load ms | Mesh save / restore ms | Across-map path median ms | 300-agent save bytes | Crowd save / restore ms |
+|---|---:|---:|---:|---:|---:|
+| Flat 20 m | 38.5 | 0.07 / 0.16 | 0.021 | 111,767 | 4.66 / 2.37 |
+| Pillars 20 m | 21.0 | 0.14 / 0.21 | 0.027 | 200,296 | 5.53 / 2.75 |
+| Pillars 80 m | 92.9 | 3.55 / 3.97 | 0.110 | 258,626 | 6.58 / 4.18 |
+| Pillars 160 m | 284.3 | 13.45 / 15.99 | 0.470 | 282,814 | 7.29 / 3.51 |
 
-Recast was faster for baking and crowd stepping. We retain navcat because its
-ordinary state permits exact mid-search and mid-link saves; the tested Recast
-API exports meshes/tile caches, not complete crowds. This is an explicit tradeoff
-against Recast's longer history and mature TileCache. Source-hash checks, fixed
-polygon/byte fixtures, independent geodesic/grid oracles and hidden backend types
-are the upgrade safeguards. See the [Recast wrapper](https://github.com/isaac-mason/recast-navigation-js)
-and [navcat API](https://navcat.dev/docs/) for upstream contracts.
+Every agent retargets every tick on the 80 m pillar scene. Timings are milliseconds,
+100 samples after 30 warm-up ticks; topology and reachability caches are warm.
+Worker measurements include one local HTTP round trip per operation.
 
-## Three.js and verification
+| Agents | Node target loop median | Node whole tick median / p95 | Worker target loop median | Worker whole tick median / p95 |
+|---|---:|---:|---:|---:|
+| 100 | 0.28 | 2.12 / 2.87 | 0.61 | 3.01 / 3.58 |
+| 400 | 1.16 | 8.95 / 9.95 | 1.56 | 10.06 / 10.77 |
+| 1,000 | 2.82 | 24.99 / 36.97 | 3.32 | 26.11 / 30.12 |
 
-`Three.js` exports `trianglesFromObject3D(root, config?)`, `debugMesh(mesh,crowd?)` and
-`disposeDebugMesh(group)`. Import applies indexed geometry, draw ranges, world
-matrices, mirrored winding and instancing. Pass the same bake config for Z-up
-triangle output. Debug drawing includes tiles, links
-and agents, converting Z-up results to three.js Y-up. Dispose old groups when
-replacing them. Core import-graph tests ensure no renderer reaches a server bundle.
+At 400 agents this leaves room inside a 50 ms tick. At 1,000 the observed Node
+maximum was 40.00 ms: capacity depends on geometry, density and other room work.
+These timings exclude persistence. Reachability components rebuild after topology
+changes; ordinary target requests then use cached set membership and queued searches.
 
-From the repository root:
+For 2,000 × 2,000 obstructed grids, median query milliseconds over three runs:
 
-```sh
-npm ci --cache /tmp/nav-npm-cache
-npm run build
-npm test
-npm run leaks
-node --expose-gc packages/nav/test/review/memory.mjs
-node packages/nav/test/review/capacity.mjs
-node packages/nav/test/review/performance.mjs
-node packages/nav/test/review/compare.mjs
-# Include automated Chrome measurements where process launch is permitted:
-CHROME_PATH=/path/to/chrome node packages/nav/test/review/compare.mjs
-# Or emit a self-contained page and open it in an existing browser:
-node packages/nav/test/review/browser.mjs /tmp/nav-comparison.html
-```
+| Mask | A* | JPS option |
+|---|---:|---:|
+| One blocked centre cell | 23.3 | 13.3 |
+| 10% seeded random obstacles | 287.7 | 263.4 |
+| Alternating long walls | 1,325.1 | 237.7 |
+| Unreachable across a full wall | 900.4 | 891.3 |
 
-The obstacle-route workload measured a 300-agent 20 Hz step median of 9.97 ms,
-p95 34.22 ms in a busy run; flat-world numbers above are not doorway numbers.
-Editable 10/20/40 m tile loads measured .87/2.81/8.40 ms medians in the final
-run (earlier busy run: 1.27/6.92/27.05). Adding a box measured 7.33/3.71/13.67 ms
-(earlier: 16.43/12.61/37.83; warm-up/order matters); removing the final box
-0.015–0.03 ms. Authored door toggle medians ranged .0010–.0023 ms (maximum 3.63 ms).
-After excluding finalized query pools, a 300-agent door-region save measured
-78,770 bytes. Across runs, save medians were 3.99–14.75 ms (maximum 37.47 ms);
-restore medians were 1.51–5.09 ms (maximum 12.73 ms). Size and 50 ms room-save budgets are asserted in tests.
-The 2,000² empty grid path fell from 548 ms/3,999 points to .65–9.31 ms/two points;
-nearest .0096–.023 ms and random .036–.079 ms. First component labeling on an obstructed
-grid is still linear; repeated queries reuse it.
+Initial component labelling took 75–120 ms; repeated nearby blocked-cell nearest
+queries took about 0.002 ms. A 4,000,113-byte grid restored in 21–23 ms. Large
+obstructed grids therefore need a different scheduling budget from crowds.
 
-Tests cover corruption, chunk boundaries, shared-mesh restoration, active sliced
-searches, floor recovery, streaming, manual links, Z-up slopes/queries, headroom,
-JPS cost, smoothing, strict TypeScript usage and renderer isolation. Normal nav
-checks pass; the full repository command in this restricted session encounters
-unrelated studio Chrome-launch failures. See `SUMMARY-FOR-REVIEW.md` for the exact
-review disposition and verification results. No tests are disabled to conceal it.
+Grid alone bundles to 20,524 bytes minified (8,099 gzip) with esbuild, neutral
+platform and ESM output. It imports neither navcat nor three.js.
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+## License
 
-Batch `addObstacles(boxes)` and `removeObstacles(ids)` when changing many boxes: each affected tile is rebuilt once. Validation rejects the entire batch before changes, including any unknown removal id.
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Bundled third-party
+licenses accompany the generated backend.
