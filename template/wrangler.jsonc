@@ -8,7 +8,8 @@
   "main": "site/src/worker.mjs",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": [
-    "global_fetch_strictly_public"
+    "global_fetch_strictly_public",
+    "disallow_eval_during_startup"
   ],
   "workers_dev": true,
   "preview_urls": true,

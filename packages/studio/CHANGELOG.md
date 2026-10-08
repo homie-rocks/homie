@@ -17,9 +17,39 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.33.0] - 2026-10-07
+
+**Plugin 0.34.0** · [#56](https://github.com/homie-rocks/homie/pull/56)
+
+A game's rules can run on your own Cloudflare instead of in a player's browser. This is the first piece of it: the format, the server that runs it, and one example game. Your existing games are not touched.
+
+### Added
+
+- **A game written as rules plus view.** The rules (`src/rules.ts`, with the movement code in `src/move.ts`) say what is true in the game: who took which coin, every score, when a round ends. The view (`src/view.ts`) draws what it is told and sends what the player presses. `@homie-rocks/studio/rules` is the format (`defineRules`, `defineMove`, `f` for the type of every piece of state) and `@homie-rocks/studio/rules/view` is what a view uses (`openRoom()`).
+- **The server is the room's host.** The rules of such a game run in the room's own server object on your Cloudflare. No player's browser is in charge, so a changed browser cannot change a score, a pickup or a round, and closing any one tab does not interrupt the others. Seats, chat, votes, watchers and the owner's controls work as before.
+- **Homie checks the rules before they go anywhere.** The build refuses rules that use anything outside a short list of safe operations and names the line (no clock, no network, no `Math.sin` that two machines may round differently, no state outside the declared fields). It then adds a guard, so a rule that never ends or grabs memory is stopped while the room carries on, and a room whose rules keep failing is closed and named in the log.
+- **`coin-dash`, an example.** Copy it with `homie-studio game new <id> --from coin-dash` to see the two halves. It is an example, not yet a starter the chat offers: see the upgrade notes.
+- **The deploy plan says it.** For each such game: that its rules run on Cloudflare, and roughly what an hour of play in one full room uses of the free plan's daily allowances.
+- **The netplay contract is revision 10** (`netplay/NETPLAY.md`, section 29): the server as a host, input as steps stamped with the room's tick, and the life of such a room. Nothing a game written before sends or receives has changed.
+
+### Changed
+
+- A room of such a game pauses when the last person leaves and ends a minute later if nobody returns. An empty room uses nothing.
+- `homie-studio perf` accepts a room with no browser host.
+- A new studio's `site/src/worker.mjs` hands the Worker the rules of its server-hosted games (`site/src/rules/`, written by every build and committed with the studio), and its `wrangler.jsonc` turns off code made from text while the Worker starts.
+
+### Upgrade notes
+
+- **Nothing to do for the games you have.** A game with no `src/rules.ts` builds and runs exactly as before, in a player's browser. The build says so in one line. Asking for the server on such a game (`"room": { "host": "server" }`) stops the build with the reason.
+- **Do not put a game of your own on this yet.** A server-hosted room has no save in this version: a restart of the room, or any deploy of your site, starts its match again, where today's rooms carry on. That arrives in a later version, and `coin-dash` is offered as a starter only then.
+- In this version a player's own character still moves as today: their browser says where it is and the server holds it to its top speed. A changed browser cannot move faster than that, but it can walk through a wall. Scores and pickups are decided on the server either way.
+- Rules with 3D bodies, rules hosted by a player's browser, offline play of a rules game, and AI guides driven by the server are not in this version.
+- An existing studio gets the new `site/src/worker.mjs` and the empty `site/src/rules/index.mjs` from `homie-studio upgrade --apply` (a Worker file you changed yourself is kept, and the upgrade shows the three lines to add). The next deploy writes the new `wrangler.jsonc`.
+- This version has been run on a local Cloudflare runtime only. It has not been run or measured on Cloudflare itself.
+
 ## [0.32.1] - 2026-10-07
 
-**Plugin 0.33.1** · [#55](https://github.com/homie-rocks/homie/pull/55)
+**Plugin 0.33.1** · [#55](https://github.com/homie-rocks/homie/pull/55) · [release-2026-10-07-studio-0.32.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-07-studio-0.32.1)
 
 A standalone game can be put on your own iPhone or iPad with one command, and the guide says what has now been run on a real phone and corrects what an older site means for a copy.
 

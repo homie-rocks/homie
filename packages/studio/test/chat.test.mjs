@@ -349,8 +349,8 @@ async function netplayModule() {
 
 test('the helper: chat, say (a bubble only when its sender wants it and this browser shows chat), unchat, held, and the game\'s own chat UI', async (t) => {
   const { createNetplay, NETPLAY_REVISION, NETPLAY_MARK } = await netplayModule();
-  assert.equal(NETPLAY_REVISION, 9, 'revision 9 (NETPLAY.md sections 22 to 27); room chat is revision 8\'s');
-  assert.equal(NETPLAY_MARK, 'homie-netplay-rev:9');
+  assert.equal(NETPLAY_REVISION, 10, 'revision 10 (NETPLAY.md section 29); room chat is revision 8\'s');
+  assert.equal(NETPLAY_MARK, 'homie-netplay-rev:10');
   const { wait } = virtualTime(t);
   const room = new NetRoom({ code: 'pub-1', maxPlayers: 8 });
   const socket = (conn = {}) => class MemorySocket {

@@ -40,7 +40,7 @@ import { whyFailed } from './net.mjs';
 import { repoOf } from './repo.mjs';
 import { keptRoutes, readConfig, readZoneRoutes, routesOf, shadowedDomain, wideRouteRefusal, zoneFinding } from './routes.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
-import { LOCAL_STATE, configPath, domainOrigin, isWorkersDev, layoutOf, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
+import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layoutOf, listGames, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 import { projectsCloudflareEnv } from './projects-env.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -161,9 +161,30 @@ export async function zonePlan(root, opts = {}) {
   return z ? zoneView(z) : null;
 }
 
+/**
+ * What an hour of play in one full room of a server-hosted game uses of the free plan's three daily allowances for
+ * Durable Objects (NETPLAY.md section 29; the arithmetic is Cloudflare's published pricing): incoming socket messages
+ * are billed 20 to 1 (at most `inputHz` input frames a second a player, and a ping every two seconds); an object in
+ * memory is billed as 128 MB; and until a room is saved (a later release) it writes only its alarm, twelve times an
+ * hour. Estimates, for the plan to say. Homie limits nothing because of them.
+ */
+export function hostedUse({ seats = 8, inputHz = 20 } = {}) {
+  const requests = Math.round((seats * (inputHz * 3600 + 1800)) / 20);
+  const gbSeconds = 0.128 * 3600;
+  const pct = (n, of) => (n / of < 0.001 ? 'under 0.1%' : `${Math.round((n / of) * 1000) / 10}%`);
+  return { seats, requests, gbSeconds, rows: 12, share: { requests: pct(requests, 100_000), gbSeconds: pct(gbSeconds, 13_000), rows: pct(12, 100_000) } };
+}
+
 /** What `deploy` will create and what it costs, from studio.json alone. It calls nothing. */
 export function deployPlan(root) {
   const studio = readStudio(root);
+  // Games whose rules run on the server (a src/rules.ts, and not "room": { "host": "browser" }): one line each.
+  const hosted = listGames(root).filter((g) => isRulesGame(g) && g.room?.host !== 'browser').map((g) => {
+    const seats = Math.max(1, Math.min(32, Math.floor(Number(g.players?.max)) || 8));
+    const tickHz = Math.max(1, Math.min(60, Math.floor(Number(g.room?.tickHz)) || 20));
+    const use = hostedUse({ seats, inputHz: Math.max(1, Math.min(tickHz, Math.floor(Number(g.room?.inputHz)) || tickHz)) });
+    return { id: g.id, name: g.name ?? g.id, ...use };
+  });
   const cf = { created: [], ...studio.cloudflare };
   const created = new Set(cf.created ?? []);
   const storage = cf.r2 && created.has(`r2:${cf.r2}`) ? cf.r2 : null;
@@ -173,7 +194,8 @@ export function deployPlan(root) {
     cloudflare: [
       { kind: 'Worker', name: cf.worker, what: 'the studio\'s pages, each game\'s page and play shell, and /.well-known/homie-studio.json for the directory', state: mark(`worker:${cf.worker}`), plan: 'Workers Free' },
       { kind: 'D1 database', name: cf.d1, what: 'the directory claim, every finished round, the studio\'s own stats (daily counters of visits, plays, rooms, rounds and songs, for the owner only; nothing about a visitor), and, for games that keep saves, player accounts (a passkey\'s public key, never a password) and their saves', state: mark(`d1:${cf.d1}`), plan: 'Workers Free (500 MB per database, 5 GB per account)' },
-      { kind: 'Durable Object', name: 'Table', what: 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
+      { kind: 'Durable Object', name: 'Table', what: hosted.length ? `one per public room: the netplay relay (seats, snapshots), and for ${hosted.map((h) => h.id).join(', ')} the game's own rules, which run here and nowhere else` : 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
+      ...hosted.map((h) => ({ kind: 'Game rules', name: h.id, what: `the rules of ${h.name} run on Cloudflare, in each room's Table, not in a player's browser. An hour of play in one full room (${h.seats} players) uses about ${h.share.requests} of the free plan's 100,000 requests a day, ${h.share.gbSeconds} of its 13,000 GB-seconds of running time and ${h.share.rows} of its 100,000 rows written. A room with nobody in it uses nothing. Out of requests, every room of every game stops until 00:00 UTC; the Workers Paid plan removes the three allowances`, state: 'in the Worker', plan: 'Workers Free' })),
       { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
       storage
         ? { kind: 'R2 bucket', name: storage, what: 'the studio\'s big media: songs and videos over the size studio.json media.r2Over names (1 MiB unless set) or that git leaves out, uploaded and checked by SHA-256 before the site stops carrying them, served at their same addresses', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
@@ -189,6 +211,7 @@ export function deployPlan(root) {
       stores: 'the site\'s address and a claim token, the studio\'s name and slug, the @homie-rocks/studio version, and each game\'s id, name, blurb and Play/page links. Never code, media, keys or accounts.',
     },
     never: 'It never touches a Worker, database or bucket this studio did not create, and it never adds a payment method or buys anything.',
+    ...(hosted.length ? { hosted } : {}),
   };
 }
 

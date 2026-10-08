@@ -1,9 +1,29 @@
-# Homie netplay contract, v1 (revision 9)
+# Homie netplay contract, v1 (revision 10)
 
-Status: **v1, revision 9** (2026-10-06, `@homie-rocks/studio` 0.31.0). The wire
-version is `v: 1`. Everything revisions 2 to 9 added is either an optional field, a new message type,
+Status: **v1, revision 10** (2026-10-07, `@homie-rocks/studio` 0.33.0). The wire
+version is `v: 1`. Everything revisions 2 to 10 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
 not know. A change to the contract bumps `v` and keeps v1 working.
+
+**What revision 10 added** (a game that knows none of it plays exactly as before, hosted by a player's
+browser; nothing here changes a frame such a game sends or receives):
+- **The server as host** (section 29): a game written as rules plus view (`src/rules.ts`, `src/move.ts`,
+  `src/view.ts`) has no browser host. Its rules run in the room's `Table`, in a host runtime
+  (`rules/host.ts`) that plays the host's part on this wire. The relay gains one kind of host, the
+  server: it is not a client, it is never elected away, and stall detection, yield and the caps
+  written for a host that is somebody's phone do not apply to it.
+- **Input as steps** (section 29): for such a game `in` carries `e`, `k`, `s` and `r` (the room's epoch,
+  the first tick the frame covers, one or more entries `[o, ...fields]`, and the placement counter),
+  and `snap` carries `e` and one control row a seat, `[seat, r, ack, lead]`. There is no separate
+  sequence number: an entry is named by its tick.
+- **The life of a server-hosted room** (section 29): it pauses when the last person's socket closes,
+  resumes on the tick it paused on, and ends when nobody returns within a minute. It has no save yet:
+  a restart or a deploy starts a fresh match.
+- The refusal `host-failed` (the rules could not start: the room says why and lets nobody in) and
+  the error `room-over` (the room ended because its rules kept failing); `welcome.host` and the watch
+  feed's `host` are `{ id: 'server', seat: null }` for such a room, and the feed says `hosted: 'server'`
+  with the room's tick figures (`ticks`); `NETPLAY_REVISION` 10 and the build mark
+  `homie-netplay-rev:10`.
 
 **What revision 9 added** (a game that knows none of it plays as before; a revision-8 helper and a
 revision-8 relay ignore every new field and frame):
@@ -2014,3 +2034,141 @@ room.standing;   // { state: 'joining' | 'playing' | 'solo' | 'watching' | 'wait
   again on `leave` and at a round's rollover (`seatWaiting()`). Everyone: test
   `net.link === 'reconnecting'` for your own "Reconnecting…", read `net.full`, and say where the
   player stands with `net.line('…')`.
+
+## 29. The server as host (revision 10)
+
+Until revision 10 a room's host was always a player's browser. A game **written as rules plus
+view** moves its rules onto the server: what is true in the game (who took which coin, every score,
+when a round ends) is decided in the room's `Table` on the studio's own Cloudflare, and a browser
+sends what its player presses and draws what it is told. `@homie-rocks/studio/rules` is the format
+(`defineRules`, `defineMove`, `f`), `rules/host.ts` the runtime, and the starter `coin-dash` the
+example. This section is what the wire and the relay do for such a game. Everything else in this
+document (seats and tokens, chat, votes, watchers, the owner's controls, the arrival, the link)
+applies to it unchanged.
+
+**A game written the old way is not touched by any of this.** A game with no `src/rules.ts` builds
+and runs exactly as before, hosted by a player's browser, with the election, the yield and the
+checkpoint of sections 2 and 9. It cannot ask for the server: `"room": { "host": "server" }` on
+such a game fails the build with the reason. So does a ported game.
+
+### 29.1 Who is the host
+
+- game.json `"room": { "host": "server" }` (the default for a game that has a `src/rules.ts`). The
+  build checks the rules, guards them (section 29.5) and puts them into the studio's Worker
+  (`site/src/rules/`, imported by `site/src/worker.mjs` and handed over with `hostRules`).
+- When a room of such a game opens, its `Table` starts the host runtime **before the first socket
+  is attached**. The relay (`worker/room.mjs`) is told `setServerHost(runtime)`.
+- **The server host is not a client.** It is not in the room's clients and has no socket. The relay
+  calls it with parsed frames (`runtime.frame(m)`) and fans out each frame it hands back
+  (`room.hostFrame(m, text)`), once, already encoded. An empty room is therefore still empty.
+- **A browser never becomes host in such a room.** Every `welcome` says `role: 'replica'` (or
+  `'screen'`) and `host: { id: 'server', seat: null }`. Nobody is elected, nobody is deposed, no
+  `role` or `host` frame is sent, and `yield` does nothing. A `snap`, `state`, `round`, `roster`,
+  `caps` or `ckpt` frame from a client is dropped, as it is from any client that is not the host:
+  a changed browser cannot say what a host says.
+- Stall detection does not apply (there is no host socket to go quiet), and neither do `LIMITS` and
+  `RATES`, which were written for a host that is somebody's phone. A client's own frames are capped
+  as ever (`in`: 2 KB and 60 a second).
+- **If the rules cannot start** (this build of the site does not hold them, or they do not fit the
+  contract) the room refuses every hello with the final error `host-failed` and the reason in
+  `message`. It does not fall back to a browser by itself.
+
+### 29.2 Frames, for a rules game
+
+The frames are section 5's. For a rules game two of them carry different fields.
+
+| Frame or field | For a rules game |
+|---|---|
+| `in` (a seat to the host) | `e`, `k`, `s`, `r` |
+| `e` | The room epoch the sender has adopted (32 bits). A frame with another epoch is dropped |
+| `k` | The first room tick the frame covers (32 bits) |
+| `s` | One or more entries `[o, ...fields]`, at most 64. `o` is a tick offset from `k`, rising; the entry is stamped `k + o`. The fields are the kind's declared `input` fields in order, each a number (a `press` is 1 or 0). For an owner-moved body an entry also carries its claimed position, velocity and heading: nine numbers, `x y z` each |
+| `r` | The placement counter the sender has adopted (16 bits). A claim made with an older one is ignored |
+| `snap` (the host to everyone) | `from: null`, `e`, `k` (the tick just run), `st`, `d` (the packed state), `c` |
+| `d` | `[[round n, phase (1 live, 0 over), endsAt (a tick)], entities]`. An entity is `[id, kind, r, pos, vel, heading, grounded, fields, motion]`, and for a player's body `seat, driver (0 person, 1 bot, 2 ai), away, owner` after. `kind` is the kind's index in the rules, `fields` and `motion` its declared fields in order. A room and its players share one build, so the declarations are not on the wire |
+| `c` | One row a person's seat: `[seat, r, ack, lead]` |
+| `ack` | The stamp of the newest entry from that seat the server had when it ran tick `k`, among entries stamped `k` or earlier |
+| `lead` | How early that seat's frames arrived, in sixteenths of a tick, signed. For one frame: the time from its arrival to the moment tick `k` of that frame was due. The row carries the smallest value since the last snapshot. Negative is late. -128: no frame arrived |
+| `ev`, kind `fx` (the host to everyone) | `d: [tick, [[effect, at, data]…]]`: the effects the rules emitted on that tick. `effect` is its index in the rules' `shapes.effects`, `at` a position or an entity id, `data` its declared fields in order. Reliable, as every `ev` is; a view plays each when it draws that tick |
+| `ev`, kind `cmd` (a seat to the host) | `d: [command, data]`: a reliable one-shot request to the sender's own body, run on the next tick |
+| `state`, key `shared` (the host) | The rules' `shared` fields, in order, sent when they change |
+| `round`, `roster`, `caps` | As today. The roster's `slot` is the body's seat; a bot's `seat` is null. Results are read from the `score: true` field of every player's body, two ticks after a round's time is up; ties share a place |
+
+**One step a tick, on both sides.** A seat's input is a value that holds from one entry to the
+next. The step for tick `t` is the values of the newest entry stamped `t` or earlier, plus the
+presses of an entry stamped exactly `t`. A tick with no entry repeats the held values with every
+press cleared. What the server does with an entry stamped `j`, when the last tick it ran is `K`:
+
+| Case | Test | What happens |
+|---|---|---|
+| Other epoch | The frame's `e` is not the room's | The frame is dropped |
+| Duplicate | `j` is not above the newest stamp it has from that seat | Ignored. It still counts as the player being there |
+| On time, or early | `K < j`, and `j` is at most one second ahead | Kept, and applied on tick `j` |
+| Too early | `j` is more than one second ahead | This entry and the rest of the frame are dropped |
+| Late | `j <= K` | Its values hold from tick `K + 1`. Its presses fire on tick `K + 1` if that is at most a quarter of a second after `j`. Otherwise they are dropped. Nothing is applied in the past |
+| Missing | No entry for a tick | The held step |
+| Silence | No frame from the seat for one second | Its input is neutral until the next entry |
+
+The server runs one step for each body each tick, whatever arrives: more frames, or frames stamped
+ahead, buy no extra step. Every input value is held to its declared type.
+
+**What a browser sends** (`net.steps(e, k, entries, r)`; a view calls `room.input(sample)` and the
+view library does this). It steps on its own copy of the room's clock, a little ahead of the server,
+and holds that lead from `lead`. A step whose sample (or claim) changed, or that holds a press,
+makes an entry. A period with no entry sends nothing; after 250 ms without a frame the held values
+are sent again as an ordinary entry. A hidden tab sends one neutral entry and stops stepping.
+
+**In this release a person's body is owner-moved** (`body: { move: 'owner' }` in the rules): its
+browser runs the game's `move` code and claims a position, as `netplay.movement: 'owner'` does
+today, and the server holds each claim to the body's `maxSpeed` (a tick of it every tick, a quarter
+of a second banked at most). It does not stop a changed browser walking through a wall. Bots, and a
+body whose player is away, are moved by the server with the same `move` code. Scores, pickups,
+rounds and placements are the server's in either case.
+
+### 29.3 The life of a server-hosted room
+
+| Moment | What happens |
+|---|---|
+| The first person joins | The `Table` has made the relay room and the host runtime. The epoch is a fresh random number. `room.start` has run; the tick loop starts |
+| People are playing | A timer chain inside the object runs one tick at a time, each timed against the moment it is due. One snapshot a tick |
+| A player's socket closes | The seat is held 60 s (`holdMs`). The body stays and is `away`: its input is neutral, or its kind's `think` steers it |
+| The seat's hold runs out | The body is removed, or stays as a bot (`player: { leave: 'bot' }`) |
+| The last person's socket closes | **The room pauses.** The tick timer is cleared and the clock stops. Watchers and AI seats never keep it ticking |
+| A person returns within 60 s | The room resumes at the tick it paused on. No tick is skipped and none runs for the gap |
+| Nobody returns within 60 s | **The room ends.** The relay forgets it and its stored seats are deleted (`office` and `recorded` are kept). The next visitor gets a fresh room, with a new epoch |
+| A restart or a deploy | There is no save yet. Seats keep their tokens (the relay's `net`, as today); the room starts a fresh match under a new epoch and players reconnect into it. The round in progress is lost |
+| The rules fail again and again | A handler that used its whole share of the tick on every tick for two seconds, or ticks that kept starting late for five: the room ends, its players get the error `room-over`, and the log names the game, its build, the kind and the handler |
+
+### 29.4 What the testing tools read
+
+A room with no browser host is a valid room. `window.__homieNet` and `window.__homiePort` are
+published by the view library with the same names a game written the old way publishes (own
+position, score, `busy`), so `check`, `shoot`, `perf` and the playtest judge read a rules game as
+they read today's; every browser's role is `replica`. The watch feed (`facts()`) says
+`hosted: 'server'` and carries the room's tick figures in `ticks`: the tick it is on, ticks run,
+late ticks, input frames and late entries, handler errors, budget stops, and the handler that used
+the most units. The relay's log has the same figures as one `ticks` line every ten seconds.
+
+### 29.5 What keeps a rules module inside its room
+
+The rules of a studio's own games run in the same isolate as its site, accounts and shop. The wall
+is made of language restrictions, checked and rewritten at build (`lib/rules-guard.mjs`), plus the
+fact that rules are handed a `world` object and nothing else. It is built against a careless module
+written by the studio's own AI; it is not a sandbox against code written to attack, and no rules
+from outside the studio run on its server.
+
+- **At build**, with the line named: globals, methods and syntax are allowlists (no `Date`, no
+  `Math.sin` or `**`, no `JSON`, `fetch`, timers, `class`, `this`, `try`, `async`, regular
+  expressions, `delete`, getters; no `constructor`, `prototype`, `__proto__`); a rules module has no
+  state of its own (no module-level `let` or `var`, nothing module-level assigned to, nothing of the
+  game's run at load); it imports only `@homie-rocks/studio/rules` and the game's own files.
+- **Rewritten**: every loop and function counts a unit against the running handler's budget; every
+  computed key and method call goes through a guard that never reaches a prototype, a constructor
+  or a method read as a value; text made by `+` or a template, a spread and the list methods are
+  charged by their size; no list, text, `Map` or `Set` passes 65,536 entries.
+- **At run time**: a handler that has used a quarter of `room.budget.tick` (2,000,000 units by
+  default) is stopped and abandoned, as one that throws is. Rules cannot catch it, because rules
+  cannot contain `try`. When a tick has used all of `budget.tick` it ends early: `move` has run for
+  every body, handlers not yet run are skipped, and events not yet run stay queued in order.
+- The view's bundle holds the same guarded `move` code the server runs, and the rules'
+  declarations as data. It holds none of the rules' handlers.
