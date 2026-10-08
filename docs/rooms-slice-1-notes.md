@@ -75,7 +75,7 @@ choice, the option that does not force a rewrite of games later was taken.
 | 21 | `world.ask` runs in slice 5; "the format accepts and checks all of this from slice 1" | What `world.ask` does until then | The game's own `floor` answers on the next tick, with `by: 'floor'`, which is section 3.10's "in the check" rule. `guide` and `asks` are checked and otherwise unused. `self.goal` is always empty |
 | 22 | Space is `dims: 2` or `dims: 3` | 3D bodies are slice 7 | The format accepts `dims: 3`. The core refuses to start such a game and says why, so its room refuses joins with that reason |
 | 23 | No stated cap on entities, effects or pending commands | Something must bound them | 2,048 entities a room, 256 effects a tick, 16 pending commands a body. A spawn past the cap throws in the handler that asked. Section 8.6 adds the bounds the review's follow-up needed: events and timers waiting, area events a tick, what a field holds when full |
-| 24 | The budget: a handler stops at a quarter of `budget.tick`; a tick that has used it all ends early | Which calls are never skipped, and what each is given | A handler that runs is given a whole quarter, so a tick's last handler may take it one quarter over. `move`, `think`, `room.join` and `room.start` always run: with a quarter while the tick has budget left, and with a small share once it is gone (`budget.tick` divided by four times the most entities a room holds), so a room full of bodies cannot take a quarter each. Handlers and events are skipped once the tick's budget is gone; unrun events, commands and an entity's `arrive` wait, in order, for a later tick. (First built as "what is left of the tick when that is less", which cut a handler short for running late in a busy tick, and gave every `move` a quarter whatever was left: section 8.6) |
+| 24 | The budget: a handler stops at a quarter of `budget.tick`; a tick that has used it all ends early | Which calls are never skipped, and what each is given | A handler that runs is given a whole quarter, so a tick's last handler may take it one quarter over. `move`, `think`, `room.join` and `room.start` run all the same: with a quarter while the tick has budget left, and with a small share once it is gone (`budget.tick` divided by four times the most entities a room holds), so a room full of bodies cannot take a quarter each; a body's `move` and `think` are not run once the tick has used half its budget again. Handlers and events are skipped once the tick's budget is gone; unrun events, commands and an entity's `arrive` wait, in order, for a later tick. (First built as "what is left of the tick when that is less", which cut a handler short for running late in a busy tick, and gave every `move` a quarter whatever was left: section 8.6) |
 
 ### 2.3 The wire and the room
 
@@ -371,7 +371,7 @@ CONTAINED        B_think_result_throws
 REFUSED          C_valueOf_runs_unbudgeted
    C_valueOf_runs_unbudgeted/src/rules.ts:8 a function named "valueOf" is refused in rules: JavaScript would call it by itself whenever the object is used as a number or a text, outside any handler
 CONTAINED        D_near_cost_under_budget
-   errors=0 budgetStops=0 last=-  tick=6  41 ms for 6 ticks
+   errors=0 budgetStops=0 last=-  tick=6  34 ms for 6 ticks
 $ node slice-1-tests/wall-attack.mjs
 total=38 refused=25 runtime-stopped=12 ran-clean=1 got-through=0
 $ node slice-1-tests/room-attack.mjs
@@ -448,27 +448,32 @@ nothing escaped a timer, and that nothing was thrown to the caller.
 
 ### 8.5 The budget, measured
 
-`test/rules-cost.mjs` plants forty handlers, each burning its share of the tick one way, runs each
-through the real build and the real runtime, and prints the time a unit took: the wall time of the
-quickest of a dozen ticks, divided by the units that tick used. On the computer this was built on
-(an Apple M4, Node 22.22.2), dearest first:
+`test/rules-cost.mjs` plants fifty-odd handlers, each burning its share of the tick one way, runs
+each through the real build and the real runtime, and prints the time a unit took: the wall time
+of the quickest of a dozen ticks, divided by the units that tick used. On the computer this was
+built on (an Apple M4, Node 22.22.2), dearest first:
 
 | Planted handler | ns a unit | | Planted handler | ns a unit |
 |---|---|---|---|---|
-| The keys of an object of 1,000 | 11.6 | | A list of 1,024 read from a field | 7.2 |
-| A number written to a field | 11.2 | | `world.random` | 7.0 |
-| A `Map`: set and get | 10.3 | | `world.near`: 400 found, each with a list of 1,024 | 5.8 |
-| `world.math` | 9.7 | | An object of 20,000 keys written to a map field | 5.7 |
-| `world.near`: 2,000 found of 2,000 | 9.6 | | `world.inBox`: 2,000 found | 5.1 |
-| A list of 64 vectors written to a field | 9.4 | | A list of 4,096: a sort with no comparison | 3.9 |
-| A vector written to `vel` | 8.6 | | A list: push | 3.5 |
-| `world.send` with a list of 64 vectors | 8.2 | | `world.sweep`, `world.ray` past 2,000 | 2.8, 2.0 |
-| `world.send` | 8.0 | | An empty loop | 1.1 |
-| Arithmetic on fields | 7.9 | | Two long texts compared | 1.5 |
-| An object read and written by a computed key | 7.9 | | A function of the game's called | 0.8 |
-| A list of 1,024 written to a field | 7.3 | | The rest (a spread, `includes`, a text joined) | under 0.5 |
+| A number written to a field | 11.9 | | `world.send` with a list of 64 vectors | 7.9 |
+| The keys of an object of 1,000 | 11.5 | | A list of 1,024 written to a field | 7.5 |
+| A `Map`: set and get | 10.5 | | `world.inBox`: 2,000 found | 7.4 |
+| A `Set`: add and has | 10.0 | | An object read and written by a computed key | 7.3 |
+| The entries of an object of 1,000 | 9.9 | | `world.random` | 7.0 |
+| `world.math` | 9.9 | | `world.near`: 400 found, each with a list of 1,024 | 6.0 |
+| `world.near`: 2,000 found of 2,000 | 9.4 | | An object of 20,000 keys written to a map field | 5.9 |
+| An `Error` made | 9.4 | | A number made into a text | 5.7 |
+| A list of 64 vectors written to a field | 9.0 | | The rest of an object of 1,000 taken by a pattern | 4.5 |
+| Arithmetic on fields | 9.0 | | An object of 1,000 copied by a spread | 4.2 |
+| A vector written to `vel` | 8.6 | | A list: push | 3.4 |
+| A list of 1,024 read from a field | 8.4 | | `world.sweep`, `world.ray` past 2,000 | 2.8, 2.1 |
+| `world.send` | 8.3 | | An empty loop | 1.5 |
 
-Before the weights were set, the same table had `self.vel = { … }` at 228 ns a unit, a number
+The thirty rows below those are all under 3 ns. Across five runs the dearest row was between 11.5
+and 16.8 ns, the higher figures from runs made while the computer was busy with other work.
+
+Before the weights were set, the same table had an `Error` made at 4,116 ns a unit, `self.vel = { … }`
+at 228, a number made into a text at 60, a number with a fraction used as a key at 59, a number
 written to a field at 48, a `Map`'s set and get at 31, a computed key at 31 and `world.math` at 27.
 So the weights of section 10's table are not all the design's any more:
 
@@ -487,37 +492,41 @@ So the weights of section 10's table are not all the design's any more:
 | `ctx.map.sweep` | 20, and 4 for each shape of the map |
 | A value read while a value is held to its declared shape, or copied for a handler to change in place (`COPY`) | 6 |
 | A number, bit, ref or text written to a field (`SET`); a vector written (a field, `vel`, `heading`) | 3; 24 |
-| A key of an object handed to a map field, or of a module's constant gone through | 16 |
+| A key of an object handed to a map field | 16 |
+| A key of an object copied or gone through whole: a spread, a rest in a pattern, a module's constant (`KEY`) | 24; `Object.entries` 8 and `Object.values` 2 for a value the handler made |
 | A long text compared, searched for or turned into a number | 1 for every 64 characters; a search for one text in another, a sixteenth of the two lengths multiplied |
+| `new Error(message)`; the text `String(x)` makes | 16; 1 a character |
 | An allowed method call, a spread, `Object.keys`, `values` or `entries` | 1 for each element or character read or made, as the design has it; `sort` 16 times that. Charged before the call runs |
-| A value in the tick's snapshot (`SNAP`) | 4, taken from the tick before any handler runs |
+| A value in the tick's snapshot (`SNAP`) | 4, and 4 more for every 64 characters of a text, taken from the tick before any handler runs |
 | An announcement delivered | 1 for each entity in the room, taken from the tick |
+| A handler that threw (`THROWN`) | 512, taken from the tick |
 
-**The default budget.** The dearest unit costs about 12 ns here. The default `budget.tick` is now
-1,000,000 units at 20 ticks a second or fewer (it was 2,000,000 at any rate), and 20,000,000
-divided by the tick rate above that. A tick that uses all of it on the dearest work takes about
-12 ms on this computer; at the very worst, its last handler a quarter over and a full room's
-`move` and `think` each taking its small share, about 20 ms. That is under half a 50 ms period,
-with as much again to spare for a server half as fast. This is open point 1 of section 16,
-answered on one computer under Node: Cloudflare's own answer is still T1's to give, and the tool
-is what T1 should plant.
+**The default budget.** The dearest unit costs 12 ns here on a quiet run and 16 on a busy one, and
+a tick's worst case is a budget and a half (8.6). The default `budget.tick` is now 500,000 units at
+20 ticks a second or fewer (it was 2,000,000 at any rate), and 10,000,000 divided by the tick rate
+above that. A tick that uses all of it on the dearest work takes 6 to 8 ms on this computer, and
+the worst tick 9 to 12 ms. That is about a quarter of a 50 ms period, which leaves a server half as
+fast inside half a period, where the design wants a tick to end. With the old figure and the old
+rules the worst tick was not bounded at all. This is open point 1 of section 16, answered on one
+computer under Node: Cloudflare's own answer is still T1's to give, and the tool is what T1 should
+plant.
 
 **`coin-dash` inside it.** The example's busiest tick, in two and a half minutes of play:
 
 ```
-coin-dash, 1 of 8 seats taken (4 bodies): its busiest tick used 1421 of 1000000 units (0.14%), its busiest handler 166 (runner.think); a tick took 0.016 ms on average
-coin-dash, 8 of 8 seats taken (8 bodies): its busiest tick used 1568 of 1000000 units (0.16%), its busiest handler 96 (runner.onRoom.roundStart)
-coin-dash, 32 of 32 seats taken (32 bodies): its busiest tick used 7544 of 1000000 units (0.75%), its busiest handler 100 (runner.tick)
+coin-dash, 1 of 8 seats taken (4 bodies): its busiest tick used 1421 of 500000 units (0.28%), its busiest handler 166 (runner.think); a tick took 0.017 ms on average
+coin-dash, 8 of 8 seats taken (8 bodies): its busiest tick used 1568 of 500000 units (0.31%), its busiest handler 96 (runner.onRoom.roundStart)
+coin-dash, 32 of 32 seats taken (32 bodies): its busiest tick used 7544 of 500000 units (1.51%), its busiest handler 100 (runner.tick)
 ```
 
-A full room of 32 uses less than a hundredth of the budget. (The build's own three-second run,
-on the starter's own map, prints 2,573 units for its busiest tick.)
+A full room of 32 uses a sixty-sixth of the budget; a room of 8, a three-hundredth. (The build's
+own three-second run, on the starter's own map, prints 2,573 units for its busiest tick.)
 
 ### 8.6 What was gone through, and what it found
 
 Every place the runtime touches a value from the rules or calls back into them, and what every
 call a module can make costs. "Found" is a fault of the same kind as the review's three; each has
-a planted case in `test/rules-hostile.test.mjs` unless the row says otherwise.
+a planted case in `test/rules-hostile.test.mjs`.
 
 **Where the runtime reads a value from the rules.**
 
@@ -541,7 +550,7 @@ a planted case in `test/rules-hostile.test.mjs` unless the row says otherwise.
 | Call | Found | Changed |
 |---|---|---|
 | `world.near`, `world.inBox` | M3 | 8.5 |
-| `move`, `think`, `room.join`, `room.start` | **Each was given a quarter of the budget whatever was left**: 2,000 bodies whose `move` burns its share could take 500 budgets in a tick | A quarter while the tick has budget, a small share once it is gone: the worst tick is a budget and three quarters |
+| `move`, `think`, `room.join`, `room.start` | **Each was given a quarter of the budget whatever was left**: 2,000 bodies whose `move` burns its share could take 500 budgets in a tick | A quarter while the tick has budget and a small share once it is gone; a body's `move` and `think` are not run at all once the tick has used half its budget again. The worst tick is a budget and a half |
 | Any handler | Given "what is left of the tick" when that was less than a quarter, and abandoned when it ran out: the last handler of a busy tick lost its work, and an event it was delivering was lost with it | A whole quarter, as the design says |
 | An entity's `arrive`, a command | Marked done before it ran, so one skipped for want of budget never ran | It waits; an entity that has not arrived does nothing else until it has |
 | `world.after`, `world.send` | **State that was not declared**: timers set far off stayed in the queue for ever, at 10 units each, and every tick sorted through all of them | 16,384 events and timers waiting, at most; a send past it throws in the handler |
@@ -555,6 +564,7 @@ a planted case in `test/rules-hostile.test.mjs` unless the row says otherwise.
 | `flat`, `flatMap` | Made the list, then counted it: 400 lists of 60,000 was 24 million entries before the size cap looked | Counted and capped before anything is made |
 | `x.s += text` through a computed step (`o[0].s += o[0].s`) | Left as written, so the text doubled uncharged and uncapped | Refused with its line: take the object into a const first |
 | `unshift` | Charged for what it added, not for what it moved | Charged for the whole list |
+| A handler that throws | Catching it cost the tick 5 to 10 microseconds and the handler nothing: 2,000 handlers that throw made a tick of 20 ms from about twenty thousand units | Nothing is recorded about where an Error was made while a handler runs, which halves it; and each throw costs the tick 512 units, so a room whose handlers all throw is cut short and ends, named as that |
 
 **What the language does by itself.** This is not the runtime touching a value, but it is the same
 fault, and it was found by planting lists where numbers belong.
@@ -562,8 +572,11 @@ fault, and it was found by planting lists where numbers belong.
 | | Found | Changed |
 |---|---|---|
 | An operator on a list | JavaScript turns a list into a text whenever an operator wants a number or a text (`list - 1`, `list < 1`, `list == 1`, a template, `String(list)`, `Math.max(list)`, `key in`), walking every entry of it and of every list inside it. No counter sees that walk: 300 comparisons of a list of 60,000 made a tick of 1.5 s, and a list that holds another twice, 24 levels deep, one of 6 s from 25 units | The operand of every such operator, unless the pass can see it is always a number, goes through the guard's `p`, which refuses a list, an object or a function. `==` and `!=` are refused except against `null`. The linked module is refused when it holds such an operator unchecked |
+| A rest in a pattern | `const [first, ...others] = list` copies everything that is left, at one go, for one unit: **two such loops, over a list of 40,000 and over an object of 8,000 keys, took eighteen minutes for four ticks, every handler inside its budget** | Allowed in a declaration or an assignment of its own, where the guard charges for the copy first; refused in a parameter, a loop's head or inside another pattern |
+| `new Error(…)` | Making one has JavaScript record where it was made: 4 microseconds each, so a loop of them made a tick of 2 s | Made by the guard, with nothing recorded, and charged 16 |
 | A whole number of any size | `10n` is a literal, not a global, so it was not refused; squared in a loop it has no limit | Refused with its line |
 | Two long texts | Compared character by character by `===`, `<`, a `switch`, a list's `includes`, a `Map`'s key and a search: two texts of 32,768 characters compared in a loop made a tick of 190 ms inside its budget | A unit for every 64 characters |
+| A number made into a text, and a number with a fraction used as a key | 55 ns each for one unit | The text `String(x)` makes is charged like any other; a number used as a key is a whole number |
 | A function held as a value | **State outside any field, and a way out of the room**: `const h = self.hasOwnProperty; h.count = 1` kept a count on a built-in function, shared by every room in the isolate and by the studio's own Worker; `h.call = …` would have changed what the Worker's own code calls | A write to a property is checked not to land on a function (`w`). A host method is read as a value no more than a list's is, and the host's functions cannot be taken out with `Object.values` or a spread |
 | A list, an object or a text written out past the size cap | A constant is free to make | Refused by the build |
 
@@ -577,14 +590,16 @@ Section 2's table goes on here. Each is a decision the review's follow-up made.
 | 47 | Query results and event data are "frozen objects"; in production "read-only views" | A frozen copy of every field for every result is the cost M3 found | Stored state is frozen itself, so the stored value is the view. A handler is handed a copy of a list only when it reads the field to change it |
 | 48 | The refused names are `constructor`, `prototype`, `__proto__`, `stack`, `localeCompare` | The review asked for `valueOf`, `toString` and `toJSON` too; its own first case builds `{ toString: 1 }` | A function may not sit under those three names; a plain value may. A plain value there is harmless, because nothing calls it, and an AI may well name a field `toString` by mistake and be told nothing useful by a refusal |
 | 49 | "A method may be called, never read as a value. So no built-in function object reaches rules" | A built-in method that is on no list (`hasOwnProperty`) can still be read; only calling it is refused | A write never lands on a function, so nothing can be hung on one or changed on one. Reading one is left: it can be called only with no `this`, which every one of them refuses |
-| 50 | The budget table of section 10 | Measured, several entries cost ten to two hundred times an empty loop turn for the same unit | The weights of 8.5 |
-| 51 | `budget.tick` is 2,000,000 | Measured, that is 23 ms of the dearest work on a fast computer, and 40 at the worst | 1,000,000 at 20 ticks a second or fewer, less above (8.5) |
-| 52 | `move` "has run for every body, because it runs first" | It was given a quarter whatever was left | It always runs, with a small share once the budget is gone |
+| 50 | The budget table of section 10 | Measured, several entries cost ten to four thousand times an empty loop turn for the same unit | The weights of 8.5 |
+| 51 | `budget.tick` is 2,000,000 | Measured, that is 24 to 32 ms of the dearest work on a fast computer, and no bound on the worst | 500,000 at 20 ticks a second or fewer, less above (8.5) |
+| 52 | `move` "has run for every body, because it runs first" | It was given a quarter whatever was left | It runs with a small share once the budget is gone, and not at all once the tick has used half its budget again. A room that reaches that is ending |
 | 53 | "A room blamed on every tick for 5 s ends" | A tick a little over the period is not blamed every time, and a lone room's slips hid its last tick | 8.4: on at least half its ticks, for five seconds of the clock |
 | 54 | Nothing about a fault in the runtime itself | M1 was one | It is a failed tick; two seconds of them end the room (8.3) |
 | 55 | "All state is declared with sizes" | The queue of timers was not, and a declared size had no ceiling | 16,384 events and timers waiting; a field holds 16,384 values when it is full and a kind's fields 65,536 together; the tick pays for the state it sends, and a room that holds more than a tick's budget can send ends |
 | 56 | A `Map`'s `keys`, `values` and `entries` are allowed methods | They hand back iterators | They hand back lists |
 | 57 | `==` is not on the refused list | It is the one comparison that turns a list into a text | Refused, except against `null` and `undefined` |
+| 58 | "A handler that throws: the exception is caught, the error is counted, and the tick continues" | Catching one is work, and a room may throw in every handler | The same, and the throw costs the tick 512 units. A room where throws use up every tick ends as one whose budget trips does, with the handler named |
+| 59 | Destructuring is allowed, with the refused names refused in it | A rest in a pattern copies without a count | Allowed where the guard can charge it; refused elsewhere, with what to write instead |
 
 ### 8.8 What is not closed
 
@@ -592,14 +607,20 @@ Section 2's table goes on here. Each is a decision the review's follow-up made.
   cannot make one (8.2). If a later release hands rules an object that is one, the boundary must
   be told.
 - **Cloudflare's own clock and speed.** Every figure in 8.5 is one computer under Node. Whether
-  1,000,000 units fit half a period on Cloudflare (open point 1), and whether a timer's clock
-  there includes the time the tick before it took (open point 2, which both wall-time rules lean
-  on), are still T1's to measure. If open point 2 fails, the overrun check sees nothing and the
+  500,000 units fit half a period on Cloudflare (open point 1), and whether a timer's clock there
+  includes the time the tick before it took (open point 2, which both wall-time rules lean on),
+  are still T1's to measure. If open point 2 fails, the overrun check sees nothing and the
   weighted budget is all that bounds a tick: that is why the weights were measured.
 - **Work a tick does that no handler pays for.** It is bounded by the caps, not charged: going
   through every entity three times a tick, reading what each `move` left (about 0.3 microseconds
   a body), sorting the events that are due (16,384 at the very most, about 2 ms), settling 64
   areas against 2,048 entities. In a room at every cap at once that is a few milliseconds.
+- **What the language does that nobody has planted yet.** The operators, the patterns, the
+  conversions and `new Error` were each found by planting a case and timing it, not by a proof
+  that there are no more. The pass is an allowlist of syntax and of methods, which is what makes
+  the remaining surface small enough to go through, and `test/rules-cost.mjs` is where the next
+  one is to be planted. A tick is bounded in units whatever is found; what a find changes is how
+  long a unit can be made to take.
 - **An announcement, a seat event and `on.leave` under a spent budget.** An announcement that the
   budget cuts short has reached the entities it reached and not the rest. `seatJoined`, `seatAway`,
   `seatLeft`, `on.leave` and `on.takeover` are skipped when the tick's budget is already gone, as
@@ -610,7 +631,7 @@ Section 2's table goes on here. Each is a decision the review's follow-up made.
 - **The wall is still a wall.** Section 10 of the design says what it is: language restrictions
   and a counted budget in the studio's own isolate, against a careless module written by the
   studio's own AI. This round made it hold against every hostile case that was thought of, about
-  seventy planted lines and forty seeded rooms. It is not an isolation boundary, and milestone 3's
+  eighty planted lines and forty seeded rooms. It is not an isolation boundary, and milestone 3's
   is still the one that is.
 
 ### 8.9 Evidence
@@ -623,8 +644,8 @@ $ npm run build
 > tsc --build
 
 $ npm test
-# tests 743
-# pass 741
+# tests 744
+# pass 742
 # fail 0
 # skipped 2
 
@@ -645,7 +666,7 @@ $ npm run leaks
 [PASS] The maintainers' private terms (number and kind only)
 ```
 
-The seventeen new tests are `test/rules-hostile.test.mjs`. The skipped ones were skipped before.
+The eighteen new tests are `test/rules-hostile.test.mjs`. The skipped ones were skipped before.
 The leak audit ran without the maintainers' private terms, as in section 3.7.
 
 A fresh scratch studio, linked to this checkout, with `coin-dash` and `gem-rush` copied in:
@@ -653,7 +674,7 @@ A fresh scratch studio, linked to this checkout, with `coin-dash` and `gem-rush`
 ```
 $ homie-studio build
 built coin-dash (bundle, 77 KB)
-  coin-dash: its rules run on the server (checked and guarded, 5 KB, build 2a1bfd81420e6bd6; three seconds with bots: the busiest tick used 2573 of 1000000 budget units, 346 of them in one handler)
+  coin-dash: its rules run on the server (checked and guarded, 5 KB, build e6d5735bdaa8d4b2; three seconds with bots: the busiest tick used 2573 of 500000 budget units, 346 of them in one handler)
 built gems (bundle, 89 KB)
 hosted by a player's browser, as before (no src/rules.ts; nothing to do): gems
 
@@ -661,26 +682,28 @@ $ homie-studio dev --port 18791
 [wrangler:info] Ready on http://127.0.0.1:18791
 
 $ node packages/studio/test/rules-exit.mjs --url http://127.0.0.1:18791 --game coin-dash --bots 0
-PASS two-browsers-one-room: seats 0 and 1 in room exit-muyx3tc1
+PASS two-browsers-one-room: seats 0 and 1 in room exit-muyybn4c
 PASS no-browser-hosts: roles replica, replica; host {"id":"server","seat":null}
-PASS own-body-answers-input: holding right for 1 s moved the computer's body 6.20 m (the runner's speed is 6 m/s) while the room went from tick 15 to 35
-PASS forged-frames-change-nothing: 160 forged frames; the forger's score stayed 3, its body moved 9.87 m (held to 6 m/s), the browsers' round is still live with no forged score, name or result
-PASS closing-a-tab-interrupts-nobody: after the phone's tab closed the computer saw 81 ticks in 4 s and is playing
-PASS round-finished-with-the-servers-results: round 1: Dash 9 (bot), Turbo Mantis 3, Mallory 3, Bold Rocket 1; the same list reached the browser and the socket
+PASS own-body-answers-input: holding right for 1 s moved the computer's body 6.13 m (the runner's speed is 6 m/s) while the room went from tick 18 to 38
+PASS forged-frames-change-nothing: 160 forged frames; the forger's score stayed 3, its body moved 9.53 m (held to 6 m/s), the browsers' round is still live with no forged score, name or result
+PASS closing-a-tab-interrupts-nobody: after the phone's tab closed the computer saw 80 ticks in 4 s and is playing
+PASS round-finished-with-the-servers-results: round 1: Dash 9 (bot), Lucky Orca 3, Mallory 3, Bold Lynx 1; the same list reached the browser and the socket
 
 $ node packages/studio/test/rules-exit.mjs --url http://127.0.0.1:18791 --game coin-dash --minutes 2 --bots 8
-PASS the-room-keeps-its-beat: 8 players for 2 min: each received at least 100.00% of the ticks due (the line is 99.5%), and at least 100.00% of snapshot gaps were under 75 ms (the line is 99%); the worst 99th percentile gap was 54 ms
+PASS the-room-keeps-its-beat: 8 players for 2 min: each received at least 100.00% of the ticks due (the line is 99.5%), and at least 99.92% of snapshot gaps were under 75 ms (the line is 99%); the worst 99th percentile gap was 65.5 ms
 
 $ homie-studio check coin-dash --url http://127.0.0.1:18791
-PASS: two fresh browsers in room pub-1 finished round 1 (2 humans, 2 bots) in 62 s.
+PASS: two fresh browsers in room pub-2 finished round 1 (2 humans, 2 bots) in 62 s.
 ```
 
 The room's own log for those runs, with the two figures the log line gained (`maxTickUnits`, and
 `faults` when there are any, which there were not):
 
 ```
-{"ev":"ticks","game":"coin-dash","build":"2a1bfd81420e6bd6","tick":1004,"ticks":200,"late":0,"slips":0,"ins":224,"lateEntries":0,"dropped":0,"errors":0,"budgetStops":0,"cut":0,"maxUnits":346,"worst":"runner.think","maxTickUnits":2573,"room":"pub-1"}
+{"ev":"ticks","game":"coin-dash","build":"e6d5735bdaa8d4b2","tick":1204,"ticks":201,"late":0,"slips":0,"ins":238,"lateEntries":0,"dropped":0,"errors":0,"budgetStops":0,"cut":0,"maxUnits":346,"worst":"runner.think","maxTickUnits":2573,"room":"pub-2"}
 ```
 
-Nothing was deployed and no credentials were used. This is still a local runtime on one quiet
-computer, and section 4 still says what that does not prove.
+The two-minute beat was measured while the computer was doing other work (a backup, and another
+set of tests), which is what its 65.5 ms is; section 3.6's eight quiet minutes had 53.5. Nothing
+was deployed and no credentials were used. This is still a local runtime on one computer, and
+section 4 still says what that does not prove.
