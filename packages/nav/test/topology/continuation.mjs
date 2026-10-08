@@ -1,4 +1,4 @@
-// Randomised exact-restore test. usage: node fuzz.mjs <firstSeed> <lastSeed> [mode]
+// Seeded edited worlds replay one reproducible operation stream in live and restored branches.
 // Per seed: run "straight" and run "woken" (same op stream; at random ticks the
 // mesh and the crowd are both replaced by Mesh.restore/Crowd.restore, or the crowd
 // alone on the live mesh). Per-tick digests must be equal.
