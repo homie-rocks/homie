@@ -133,7 +133,9 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
   const bad = (node, message) => { if (problems.length < 60 && !problems.some((p) => p.line === lineOf(node) && p.message === message)) problems.push({ file, line: lineOf(node), message }); };
   let ast;
   try { ast = parse(code, { sourceType: 'module', sourceFilename: file }); } catch (error) {
-    return { code: null, problems: [{ file, line: error?.loc?.line ?? 0, message: `this file does not parse: ${String(error?.message ?? error).split('\n')[0]}` }] };
+    const said = String(error?.message ?? error).split('\n')[0];
+    // `await` outside an async function does not parse at all: said as what it is.
+    return { code: null, problems: [{ file, line: (() => { const at = error?.loc; if (!at || !tracer) return at?.line ?? 0; const o = originalPositionFor(tracer, { line: at.line, column: at.column }); return o?.line || at.line; })(), message: /'await'/.test(said) ? 'await is refused: a handler finishes inside its tick' : `this file does not parse: ${said}` }] };
   }
   const homie = new Set();   // names imported from Homie's rules module
   const own = new Set();     // names imported from the game's own files
@@ -173,7 +175,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
       continue;
     }
     const decl = t.isExportNamedDeclaration(st) || t.isExportDefaultDeclaration(st) ? st.declaration : st;
-    if (t.isExportNamedDeclaration(st) && !st.declaration) { if (st.source) bad(st, 'rules export their own declarations, not another file\'s'); continue; }
+    if (t.isExportAllDeclaration(st) || (t.isExportNamedDeclaration(st) && !st.declaration)) { if (st.source) bad(st, 'rules export their own declarations, not another file\'s'); continue; }
     if (t.isFunctionDeclaration(decl)) continue;
     if (t.isVariableDeclaration(decl)) {
       // Removing types turns `export default <expression>` into a `var` that is exported as the default: that one is the module's own.

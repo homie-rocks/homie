@@ -213,7 +213,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       stats.lastError = `${kind}.${handler}: ${String((error as Error)?.message ?? error).slice(0, 200)}`;
       if (error instanceof BudgetError) { stats.budgetStops += 1; cut = true; failing = { kind, handler }; }
     }
-    const used = quota - Math.max(G.left, 0) + (G.left < 0 ? 1 : 0);
+    const used = quota - Math.max(G.left, 0);
     G.left = Infinity;
     cx = before;
     left -= used;

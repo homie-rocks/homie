@@ -56,15 +56,16 @@ const at = (line: number | undefined): string => (line ? ` (line ${line})` : '')
 function refuse(what: string, line?: number): never { throw new GuardError(`${what}${at(line)}`); }
 const sized = (n: number, line?: number): void => { if (n > SIZE_CAP) refuse(`a list, text, Map or Set in rules holds at most ${SIZE_CAP} entries`, line); };
 
-/** A computed read, `a[k]`: a number, or a string naming an own property that is not a function. Never a prototype. */
+/** A computed read, `a[k]`: a number, or a string naming an own property that is not a function. Anything else throws. Never a prototype. */
 export function g(o: any, k: unknown, line?: number): unknown {
   if (o === null || o === undefined) throw new TypeError(`cannot read a key of ${o}${at(line)}`);
   if (typeof k === 'number') return o[k];
   if (typeof k !== 'string') refuse('a computed key is a number or a string', line);
   if (refusedName(k)) refuse(`the key "${k}" is not allowed in rules`, line);
-  if (!Object.hasOwn(o, k)) return undefined;
   const v = o[k];
   if (typeof v === 'function') refuse(`"${k}" is a function: a method may be called, never read as a value`, line);
+  // Only what the value holds itself: a key it does not have never falls through to a prototype.
+  if (!Object.hasOwn(o, k)) refuse(`there is no "${k}" on this value: a computed key names something the value holds itself (test with \`key in value\` first)`, line);
   return v;
 }
 /** An optional computed read, `a?.[k]`. */

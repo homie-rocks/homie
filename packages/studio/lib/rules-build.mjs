@@ -50,20 +50,26 @@ function readMap(g) {
   return { ...raw, name: name.replace(/\.json$/, '') };
 }
 
-/** The rules, loaded in Node: the linked module beside the runtime, as one file of its own that imports nothing. */
-async function loadRules(esbuild, root, g, code) {
+/**
+ * The rules, loaded in Node: the linked module beside the runtime, as one file of its own that imports nothing.
+ * Returns the module (`def`) and the runtime it was linked with: `R` (rules.ts), `H` (host.ts), `C` (core.ts),
+ * `W` (guard.ts, the wall), `P` (pack.ts) and `M` (math.ts). They are one instance together, apart from any other
+ * copy of the runtime in this process, so the guard's budget counter is theirs alone.
+ */
+export async function loadRules(esbuild, root, id, code) {
   const dir = join(root, '.studio', 'rules');
   mkdirSync(dir, { recursive: true });
-  const gen = join(dir, `${g.id}.linked.mjs`);
+  const gen = join(dir, `${id}.linked.mjs`);
   writeFileSync(gen, code);
-  const entry = `import def from ${JSON.stringify(gen)};\nimport * as R from ${JSON.stringify(join(PACKAGE_ROOT, 'rules', 'rules.ts'))};\nimport * as H from ${JSON.stringify(join(PACKAGE_ROOT, 'rules', 'host.ts'))};\nexport { def, R, H };\n`;
+  const lib = (name) => JSON.stringify(join(PACKAGE_ROOT, 'rules', name));
+  const entry = `import def from ${JSON.stringify(gen)};\nimport * as R from ${lib('rules.ts')};\nimport * as H from ${lib('host.ts')};\nimport * as C from ${lib('core.ts')};\nimport * as W from ${lib('guard.ts')};\nimport * as P from ${lib('pack.ts')};\nimport * as M from ${lib('math.ts')};\nexport { def, R, H, C, W, P, M };\n`;
   const res = await esbuild.build({ stdin: { contents: entry, resolveDir: root, loader: 'js' }, bundle: true, format: 'esm', target: 'es2022', platform: 'neutral', write: false, logLevel: 'silent', plugins: [rulesModulesPlugin()] });
   const text = res.outputFiles[0].text;
-  const out = join(dir, `${g.id}.check-${createHash('sha256').update(text).digest('hex').slice(0, 12)}.mjs`);
-  for (const old of readdirSync(dir)) if (old.startsWith(`${g.id}.check-`)) rmSync(join(dir, old), { force: true });
+  const out = join(dir, `${id}.check-${createHash('sha256').update(text).digest('hex').slice(0, 12)}-${process.pid}-${(loads += 1)}.mjs`);
   writeFileSync(out, text);
   try { return await import(pathToFileURL(out).href); } finally { rmSync(out, { force: true }); rmSync(gen, { force: true }); }
 }
+let loads = 0;
 
 /** Three seconds of the room's clock with bots and one seated player, on a clock of the build's own. */
 function smokeRun(H, compiled, id) {
@@ -87,7 +93,7 @@ export async function prepareRules(esbuild, root, g, { log = () => {} } = {}) {
   if (!guarded.ok) throw new Error(`games/${g.id}: its rules were refused.\n${guarded.problems.slice(0, 20).map((p) => `  ${problemLine(p)}`).join('\n')}${guarded.problems.length > 20 ? `\n  … and ${guarded.problems.length - 20} more` : ''}`);
   const tune = readJson(join(g.dir, 'tunables.json')) ?? {};
   const map = readMap(g);
-  const { def, R, H } = await loadRules(esbuild, root, g, guarded.code);
+  const { def, R, H } = await loadRules(esbuild, root, g.id, guarded.code);
   const { settings, problems } = R.roomSettings(g.room);
   for (const p of problems) log(`warning: games/${g.id}/game.json: ${p}`);
   if (settings.host === 'browser') throw new Error(`games/${g.id}/game.json asks for "room": { "host": "browser" }. Rules hosted by a player's browser arrive in a later release; until then a rules game is hosted by the server ("host": "server", the default).`);
