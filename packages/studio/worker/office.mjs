@@ -1109,7 +1109,7 @@ export async function perform(env, cat, a) {
       if (a.mode === 'off') notes.push('The guides are the game\'s plain bots.');
       return { ok: true, op: a.op, game: meta.id, server: sv.id, brain: sv.brain, budget: day.budget, note: `Saved. ${notes.join(' ')}`.trim() };
     }
-    case 'shop-release': return performRelease(env, a);
+    case 'shop-release': return performRelease(env, a, cat);
     case 'refund': return performRefund(env, cat, a);
     case 'shop-settle': return settleReferrer(env, a);
     default: return { ok: false, error: 'op' };

@@ -1,8 +1,8 @@
 /**
  * THE STUDIO'S OWN STRIPE, from its Worker (@homie-rocks/studio 0.24.0). No SDK: a few form-encoded calls with the
- * studio's restricted key (a Worker secret), and Stripe's documented webhook signature check with WebCrypto.
+ * studio's key (a Worker secret), and Stripe's documented webhook signature check with WebCrypto.
  *
- *   createCheckoutSession(env, params)   POST /v1/checkout/sessions (Stripe's hosted page; the TV never calls it)
+ *   createCheckoutSession(env, params)   POST /v1/checkout/sessions (Stripe's hosted page)
  *   createRefund(env, params)            POST /v1/refunds (only ever from the owner's tap, or a confirmed ask)
  *   webhook endpoints                    list, create and turn off: only `homie-studio shop connect` calls these, on the
  *                                        owner's computer with the key the owner pasted there (0.24.3), so a new
@@ -18,12 +18,12 @@
 /** The API version the kit is written against: the first one Managed Payments takes ("2025-03-31.basil or later"). */
 export const STRIPE_VERSION = '2025-03-31.basil';
 export const STRIPE_API = 'https://api.stripe.com';
-/** The webhook's freshness window, as Stripe's own libraries use: a replayed old event is refused. */
+/** Stripe's replay defense: https://docs.stripe.com/webhooks#preventing-replay-attacks */
 export const TOLERANCE_S = 300;
 
-/** A restricted key (rk_test_/rk_live_), or a test secret key for local tests. A live full secret key is refused. */
-export const KEY_SHAPE = /^(?:rk_(?:test|live)|sk_test)_[A-Za-z0-9]{10,247}$/;
-export const WEBHOOK_SECRET_SHAPE = /^whsec_[A-Za-z0-9+/=_-]{16,200}$/;
+/** Stripe key types: https://docs.stripe.com/keys — the studio chooses restricted or secret keys. */
+export const KEY_SHAPE = /^(?:rk|sk)_(?:test|live)_[A-Za-z0-9]+$/;
+export const WEBHOOK_SECRET_SHAPE = /^whsec_[A-Za-z0-9+/=_-]+$/;
 
 /** test or live, from the key alone (never by calling Stripe). */
 export const modeOf = (key) => (/^(?:rk|sk)_live_/.test(String(key ?? '')) ? 'live' : 'test');
@@ -51,14 +51,21 @@ export function formEncode(params, prefix = '', out = new URLSearchParams()) {
   return out;
 }
 
+/** Redact before truncating: provider errors can echo authorization or client secrets. */
+export function redactStripe(value, env = {}) {
+  let text = String(value ?? '');
+  for (const secret of [env.STRIPE_KEY, env.STRIPE_WEBHOOK_SECRET]) if (secret) text = text.replaceAll(String(secret), '[redacted]');
+  return text.replace(/(?:[rs]k_(?:test|live)_[A-Za-z0-9]+|whsec_[A-Za-z0-9+/=_-]+|[A-Za-z0-9_]+_secret_[A-Za-z0-9_-]+)/g, '[redacted]');
+}
+
 export class StripeError extends Error {
   constructor(status, body) {
     const e = body?.error ?? {};
-    super(e.message ? String(e.message).slice(0, 300) : `Stripe answered ${status}`);
+    super(e.message ? redactStripe(e.message).slice(0, 300) : `Stripe answered ${status}`);
     this.status = status;
-    this.code = e.code ?? e.type ?? 'stripe';
-    this.type = e.type ?? null;
-    this.param = typeof e.param === 'string' ? e.param.slice(0, 120) : null;
+    this.code = redactStripe(e.code ?? e.type ?? 'stripe');
+    this.type = e.type ? redactStripe(e.type) : null;
+    this.param = typeof e.param === 'string' ? redactStripe(e.param).slice(0, 120) : null;
   }
 }
 
@@ -91,7 +98,8 @@ export async function stripeCall(env, method, path, params = null, { idempotency
   if (!KEY_SHAPE.test(key)) throw new StripeError(0, { error: { message: 'no Stripe key on this Worker', code: 'no-key' } });
   const body = params && method !== 'GET' ? formEncode(params).toString() : null;
   const query = params && method === 'GET' ? `?${formEncode(params).toString()}` : '';
-  const res = await fetcher(`${apiBase(env)}${path}${query}`, {
+  let res;
+  try { res = await fetcher(`${apiBase(env)}${path}${query}`, {
     method,
     headers: {
       authorization: `Bearer ${key}`,
@@ -102,9 +110,10 @@ export async function stripeCall(env, method, path, params = null, { idempotency
     ...(body !== null ? { body } : {}),
     signal: AbortSignal.timeout(timeout),
   });
+  } catch (error) { throw new StripeError(502, { error: { message: redactStripe(error?.message ?? 'Stripe did not answer', env), code: 'network' } }); }
   let json = null;
   try { json = await res.json(); } catch { json = null; }
-  if (!res.ok) throw new StripeError(res.status, json);
+  if (!res.ok) throw new StripeError(res.status, JSON.parse(redactStripe(JSON.stringify(json), env)));
   return json;
 }
 

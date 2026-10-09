@@ -7,8 +7,8 @@
  *   await shop.ready;
  *   if (shop.has('skin:ember')) hull.material = ember;     // what the player bought, by the key shop.json gives
  *   shop.on('change', () => redrawSkins());                // a purchase landed (or a refund took one back)
- *   button.onclick = () => shop.open('ember-skin');        // the store sheet; on a TV, a code to buy on a phone
- *   shop.used('skin:ember');                               // equipped: it is no longer refundable by the player
+ *   button.onclick = () => shop.open('ember-skin');        // the store sheet
+ *   shop.used('skin:ember');                               // equipped: the studio refund policy applies
  *
  * WHERE IT COMES FROM. The game runs in a sandboxed frame that can see no cookie and send no request as the site. The
  * play shell around it (on the studio's own origin) asks the studio's Worker what the signed-in player owns and
@@ -28,9 +28,9 @@ export const SHOP_VERSION = 1;
 export interface ShopState {
   /** The studio sells something in this game, and this room may show it. */
   open: boolean;
-  /** A kids server: nothing is sold or shown. */
+  /** The studio policy hides this shop on the current kids server. */
   kids: boolean;
-  /** This is the big screen: `open()` shows a code to buy on a phone. */
+  /** The studio policy uses a phone code on this screen. */
   screen: boolean;
 }
 export type ShopEvent = 'change' | 'closed';
@@ -42,6 +42,8 @@ export interface ShopOptions {
   timeoutMs?: number;
 }
 
+export interface CartLine { item: string; quantity: number; amount?: number }
+
 export interface Shop {
   /** Resolves once the shell answered (or after `timeoutMs` with no shell: an empty, closed shop). */
   readonly ready: Promise<ShopState>;
@@ -52,9 +54,15 @@ export interface Shop {
   entitlements(): string[];
   /** Ask the shell for a fresh answer (the shell also looks again by itself after a purchase). */
   refresh(): Promise<string[]>;
-  /** Show the store sheet, at one item if given. Call it from a button the player pressed, never on a timer. */
+  /** Show the store sheet, at one item if given. The studio chooses where to open it. */
   open(item?: string): void;
   close(): void;
+  /** Add an item and quantity to the local cart. Tip amounts use Stripe currency units. */
+  add(item: string, quantity?: number, amount?: number): void;
+  cart(): CartLine[];
+  clear(): void;
+  checkout(): Promise<boolean>;
+  buy(item: string, quantity?: number, amount?: number): Promise<boolean>;
   /** Mark an item used; the studio's refundUsedItems policy decides whether self-service refunds still apply. */
   used(key: string): Promise<boolean>;
   on(ev: 'change', fn: (owns: string[]) => void): () => void;
@@ -92,6 +100,7 @@ export function createShop(opts: ShopOptions = {}): Shop {
   if (target && g.addEventListener) {
     g.addEventListener('message', (e: MessageEvent) => {
       const m = e.data as Msg;
+      if (e.source !== target) return;
       if (!m || typeof m !== 'object' || m.t !== 'homie-shop') return;
       if (typeof m.q === 'number' && waiting.has(m.q)) { const r = waiting.get(m.q)!; waiting.delete(m.q); r(m); return; }
       if (m.ev === 'owns') { if (setOwns(m.owns)) emit('change', owns.slice()); }
@@ -109,6 +118,7 @@ export function createShop(opts: ShopOptions = {}): Shop {
     ])
     : Promise.resolve({ ...state });
 
+  let cart: CartLine[] = [];
   const shop: Shop = {
     ready,
     get state() { return { ...state }; },
@@ -116,6 +126,11 @@ export function createShop(opts: ShopOptions = {}): Shop {
     entitlements: () => owns.slice(),
     refresh: async () => { const m = await send({ op: 'owns' }); if (m.ok && setOwns(m.owns)) emit('change', owns.slice()); return owns.slice(); },
     open: (item) => { void send({ op: 'open', ...(typeof item === 'string' ? { item } : {}) }); },
+    add: (item, quantity = 1, amount) => { cart.push({ item, quantity, ...(amount === undefined ? {} : { amount }) }); },
+    cart: () => cart.map((line) => ({ ...line })),
+    clear: () => { cart = []; },
+    checkout: async () => { const ok = Boolean((await send({ op: 'checkout', lines: cart })).ok); if (ok) cart = []; return ok; },
+    buy: async (item, quantity = 1, amount) => Boolean((await send({ op: 'checkout', lines: [{ item, quantity, ...(amount === undefined ? {} : { amount }) }] })).ok),
     close: () => { void send({ op: 'close' }); },
     used: async (key) => (KEY.test(String(key)) && owns.includes(String(key)) ? Boolean((await send({ op: 'used', key })).ok) : false),
     on: ((ev: ShopEvent, fn: (x: unknown) => void) => {

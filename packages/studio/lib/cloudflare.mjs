@@ -238,6 +238,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const wide = wideRouteRefusal(readConfig(root), studio);
   if (wide) return { ok: false, command: 'deploy', ...wide };
   let routes = keptRoutes(root, studio);
+  const triggers = readConfig(root)?.triggers;
   const who = whoami(root);
   if (!who) {
     if (cf.auth === 'stripe-projects') {
@@ -352,7 +353,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const r2 = storage;
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
-  writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes }));
+  writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes, triggers }));
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
@@ -360,7 +361,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   step('D1 migrations applied');
   // Workers AI (0.17.0): bound only when a server's AI guides think with it.
   if (needsWorkersAi(root, w, cf.d1)) {
-    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes }));
+    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes, triggers }));
     step('Workers AI bound (AI): a server\'s AI guides think with it and typed room chat is reviewed with it, each within its day\'s budget (free allocation: 10,000 neurons a day)');
   }
 

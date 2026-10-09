@@ -43,9 +43,9 @@ for (const compatibilityDate of ['2025-01-01', '2026-06-01']) test(`statement se
   });
   try {
     const db = await mf.getD1Database('DB');
-    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql']) {
+    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
       const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
-      for (const statement of sql.replace(/^--.*$/gm, '').split(';').filter((s) => s.trim())) await db.prepare(statement).run();
+      for (const statement of sql.replace(/^--.*$/gm, '').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g).filter((s) => s.trim())) await db.prepare(statement).run();
     }
     await db.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES ('order', 'referrer.example', 100, 1, 100, 'usd', 'owed', '2026-09', 1, 1)").run();
     for (redirect of ['', 'manifest', 'post']) {
@@ -91,7 +91,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
         return shopRoutes(request, env, {}, url, { catalogueOf: async () => cat });
       } };`,
   } });
-  let missing = true;
+  let missing = true, refundSucceeded = false;
   const expired = [];
   const mf = new Miniflare({ telemetry: { enabled: false }, workers: [{ config: { name: 'late-payment', compatibilityDate: '2025-01-01',
     manifest: { mainModule: 'worker.mjs', modules: { 'worker.mjs': { type: 'esm', contents: bundled.outputFiles[0].text } } },
@@ -100,20 +100,26 @@ test('missing and released payments grant once and refund in workerd', { timeout
     const url = new URL(request.url);
     assert.equal(url.hostname, 'api.stripe.com');
     if (url.pathname.endsWith('/expire')) { expired.push(url.pathname); return Response.json({ status: 'expired' }); }
-    if (url.pathname === '/v1/refunds') return Response.json({ id: 're_test', status: 'succeeded' });
+    if (url.pathname === '/v1/refunds') {
+      if (request.method === 'POST') refundSucceeded = true;
+      return Response.json(request.method === 'GET' ? { data: refundSucceeded ? [{ id: 're_test', status: 'succeeded', amount: 500 }] : [], has_more: false } : { id: 're_test', status: 'succeeded' });
+    }
+    if (url.pathname.startsWith('/v1/payment_intents/')) return Response.json({ id: url.pathname.split('/').pop(), latest_charge: { disputed: false } });
     if (missing) return Response.json({ error: { code: 'resource_missing' } }, { status: 404 });
     return Response.json({ id: url.pathname.split('/').pop(), status: 'open' });
   } } } }] });
   try {
     const db = await mf.getD1Database('DB');
-    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql']) {
+    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
       const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
-      for (const statement of sql.replace(/^--.*$/gm, '').split(';').filter((s) => s.trim())) await db.prepare(statement).run();
+      for (const statement of sql.replace(/^--.*$/gm, '').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g).filter((s) => s.trim())) await db.prepare(statement).run();
     }
     const get = async (path) => (await mf.dispatchFetch(`https://studio.example${path}`)).json();
     for (const state of ['missing', 'released']) {
+      refundSucceeded = false;
       const order = `ord_${state.padEnd(20, '0')}`, session = `cs_test_${state}`;
       await db.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, session, created_at, updated_at, expires_at) VALUES (?, 'pl_bbbbbbbbbbbbbbbbbbbbbb', 'badge', 500, 'usd', 'stripe', 'test', 'processing', ?, 1, 1, 1)").bind(order, session).run();
+      await db.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount) VALUES (?, ?, 0, 'badge', 1, 500, 500)").bind(order + '_0', order).run();
       if (state === 'missing') await get('/reconcile');
       else { missing = false; assert.equal((await get(`/release?order=${order}`)).ok, true); }
       assert.equal((await db.prepare('SELECT status FROM shop_orders WHERE id = ?').bind(order).first()).status, state);
@@ -142,5 +148,45 @@ test('missing and released payments grant once and refund in workerd', { timeout
       assert.equal(refunded.owns.length, 0);
     }
     assert.equal(expired.length, 1);
+  } finally { await mf.dispose(); }
+});
+
+test('50,000 paid orders cost at most three reconciliation rows for an empty buyer and a bounded scheduled pass', { timeout: 30000 }, async () => {
+  const bundled = await build({ bundle: true, write: false, format: 'esm', platform: 'browser', stdin: {
+    resolveDir: fileURLToPath(new URL('../worker/', import.meta.url)),
+    contents: `import { reconcileOrders } from './shop.mjs';
+      export default { async fetch(request, env) {
+        const reads = [];
+        const db = env.DB;
+        env.DB = { prepare(sql) {
+          const statement = db.prepare(sql);
+          if (!sql.startsWith('SELECT * FROM shop_orders')) return statement;
+          return { bind(...args) { const bound = statement.bind(...args); return { async all() {
+            const result = await bound.all(); reads.push({ rows: result.meta.rows_read, returned: result.results.length }); return result;
+          } }; } };
+        } };
+        await reconcileOrders({ ...env, STRIPE_KEY: 'rk_test_' + 'a'.repeat(32) }, { items: [] }, new URL(request.url).pathname === '/player' ? 'empty' : null);
+        return Response.json(reads);
+      } };`,
+  } });
+  const mf = new Miniflare({ telemetry: { enabled: false }, workers: [{ config: { name: 'shop-rows', compatibilityDate: '2026-06-01',
+    manifest: { mainModule: 'worker.mjs', modules: { 'worker.mjs': { type: 'esm', contents: bundled.outputFiles[0].text } } },
+    env: { DB: { type: 'd1', id: 'shop-rows' } },
+  }, dev: { outboundService: { type: 'fetcher', handler: () => { throw new Error('No Stripe reads expected'); } } } }] });
+  try {
+    const db = await mf.getD1Database('DB');
+    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
+      const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
+      for (const statement of sql.replace(/^--.*$/gm, '').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g).filter((s) => s.trim())) await db.prepare(statement).run();
+    }
+    await db.prepare("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<50000) INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) SELECT 'ord_' || x, 'buyer_' || (x%1000), 'tip', 100, 'usd', 'stripe', 'test', 'paid', 1, 1 FROM n").run();
+    for (const path of ['/player', '/scheduled']) {
+      const rows = await (await mf.dispatchFetch('https://studio.example' + path)).json();
+      assert.ok(rows.length <= 3);
+      const read = rows.reduce((n, r) => n + r.rows, 0);
+      assert.ok(read <= 6, JSON.stringify(rows));
+      assert.ok(rows.reduce((n, r) => n + r.returned, 0) <= 3);
+      console.log(path + ' with 50,000 orders: ' + read + ' D1 rows read');
+    }
   } finally { await mf.dispose(); }
 });

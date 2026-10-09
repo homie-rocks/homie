@@ -86,7 +86,9 @@ test('the style board card in a browser: Lock is the person\'s, recorded, and th
     assert.match(await host.text(), /STYLE BOARD[\s\S]*Fox Grove[\s\S]*No board yet/i);
     // The first Lock in the list is the render style's.
     await host.press(/^Lock$/);
-    await host.settle(1500);
+    // The press goes card -> host -> the MCP server -> the studio's files and back: wait for the card to say so.
+    await host.until(async () => /1 of 10 locked/.test(await host.text()), 'the card saying "1 of 10 locked" after Lock');
+    await host.until(async () => (await host.told()).some((t) => /The person locked style\.render/.test(t)), 'the model being told of the lock');
     assert.equal(readDecisions(dir, 'fox-grove').decisions['style.render'].state, 'locked');
     assert.equal(readDecisions(dir, 'fox-grove').decisions['style.render'].by, 'person');
     assert.ok((await host.calls()).some((c) => c.name === 'decision_set' && c.arguments.lock === true && c.arguments.by === 'person'));

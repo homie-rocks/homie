@@ -4,20 +4,19 @@
  *   /shop/                 the studio's shop on a phone or a computer: the items in real money, sign in, the one
  *                          neutral age question, Buy (Stripe's own page), or "ask a grown-up" for 13-17
  *   /shop/thanks           back from Stripe: "it's yours" once the webhook says paid
- *   /shop/refunds/         the refund policy every till must publish
+ *   /shop/refunds/         the studio refund settings
  *   /shop/parent/<token>   the page a parent opens on their own device: what, for whom, the price, pay on Stripe
  *   /_homie/shop.js        the one script of /shop/ and of the account page's purchases card
  *   the play shell's store sheet (SHOP_SHELL_*): a game's `shop.open()`; on a television only a code to scan
  *   the office's shop page (/_studio/office/shop)
  *
- * No countdown, no "only N left", no pressure words, nothing aimed at children; every price in real money; the buy
- * button is never the play button. Everything a player or the owner typed is escaped or set as text.
+ * Studio-authored text is escaped or set as text. Checkout follows the studio's chosen settings.
  */
 import { esc, layout } from './site.mjs';
 import { money, ZERO_DECIMAL, ITEM_ID, currencyScale, amountStep, parseAmount } from './shop-rules.mjs';
 import { PRIVATE, shell } from './office-page.mjs';
 
-const refundWords = (shop) => shop.refundDays === null ? 'Ask the studio about refunds.' : `The studio offers self-service refunds for ${shop.policy?.refundUsedItems ? 'items, including used items,' : 'unused items'} within ${shop.refundDays} days from your account page.`;
+const refundWords = (shop) => shop.refundDays === null ? 'Ask the studio about refunds.' : `The studio offers self-service refunds for ${shop.policy?.refundUsedItems ? 'items, including used items,' : 'unused items'} within ${shop.refundDays} days from your account page. Tips are refunded only by the studio.`;
 
 const NOINDEX = { 'x-robots-tag': 'noindex', 'cache-control': 'no-store, private' };
 
@@ -61,12 +60,12 @@ export const WAY_LINES = Object.freeze({
 export function shopPage(cat, shop, { origin = '', game = null, item = null, open = false, mode = null } = {}) {
   const studio = cat.studio?.name ?? 'Studio';
   const g = game ? (cat.games ?? []).find((x) => x.id === game) : null;
-  const boot = { game: g ? g.id : null, item: ITEM_ID.test(String(item ?? '')) ? item : null, studio, years: yearsList() };
+  const boot = { game: g ? g.id : null, item: ITEM_ID.test(String(item ?? '')) ? item : null, studio };
   const main = `<section class="shop" data-shop>
 <p class="kicker">${esc(studio)}</p>
 <h1>${g ? `${esc(g.name)}: shop` : 'Shop'}</h1>
 ${mode === 'test' ? '<p class="test">TEST MODE: no real money moves (Stripe test cards only)</p>' : ''}
-<p class="lead">Things you can buy here, in real money, from ${esc(studio)} itself. Every purchase goes through Stripe's own checkout page, one at a time. ${g ? `<a href="/${esc(g.id)}/">Back to ${esc(g.name)}</a>` : ''}</p>
+<p class="lead">Things you can buy here, in real money, from ${esc(studio)} itself. Paid purchases open Stripe's checkout page. Guest purchases stay in this browser; keep its cookies or sign in to keep access. ${g ? `<a href="/${esc(g.id)}/">Back to ${esc(g.name)}</a>` : ''}</p>
 <noscript><p class="lead">This page needs JavaScript.</p></noscript>
 <div data-shop-age hidden></div>
 <div class="items" data-shop-items><p>${open ? 'Reading the shop…' : 'The shop is not open yet.'}</p></div>
@@ -76,12 +75,6 @@ ${mode === 'test' ? '<p class="test">TEST MODE: no real money moves (Stripe test
 <script type="application/json" id="shop-boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
 <script src="/_homie/shop.js" defer></script>`;
   return layout(cat, { title: `Shop · ${studio}`, description: `Things to buy from ${studio}, in real money.`, origin, path: '/shop/', page: 'shop', head: `<style>${SHOP_CSS}</style><meta name="robots" content="noindex">`, main, extraHeaders: NOINDEX });
-}
-
-/** Years for the age question: this year back 120 years, NO default selected, nothing hinting which answer opens anything. */
-function yearsList(now = new Date()) {
-  const y = now.getUTCFullYear();
-  return Array.from({ length: 121 }, (_, i) => y - i);
 }
 
 export function thanksPage(cat, shop, { session = null, game = null } = {}) {
@@ -114,25 +107,27 @@ export function refundsPage(cat, shop) {
 <li><b>Disputes:</b> a card dispute never deletes or locks your account. While it is open nothing changes; if the bank decides it for you, that one item is taken back as a refund would.</li>
 <li>${shop.policy.withdrawalAcknowledgement ? 'Items are delivered to your account at once. Buying one says you want it now, which ends the EU and UK 14-day right to withdraw; the refunds above still apply.' : 'Entitlements are delivered to your account at once. The studio sets its refund terms; your statutory rights still apply.'}</li>
 </ul>
-<p class="note">Prices are in ${esc(shop.currency.toUpperCase())}. Tax is added at checkout where it applies. ${shop.policy?.paidRandomRewards ? '' : 'The studio policy does not offer paid random rewards.'}</p>
+<p class="note">Prices are in ${esc(shop.currency.toUpperCase())}. Tax is added at checkout where it applies.</p>
 </section>`;
   return layout(cat, { title: `Refunds · ${studio}`, page: 'shop', head: `<style>${SHOP_CSS}</style>`, main });
 }
 
 /** The page a parent opens: no sign-in, no script; one checkbox and one button to Stripe's page. */
-export function parentPage(cat, shop, { gone = false, item = null, name = '', token = null, open = true, paid = false, said = '' } = {}) {
+export function parentPage(cat, shop, { gone = false, item = null, lines = null, name = '', token = null, open = true, paid = false, said = '' } = {}) {
   const studio = cat.studio?.name ?? 'Studio';
+  lines ??= item ? [{ item, quantity: 1 }] : [];
   let body;
   if (gone || !item) body = '<h1>This link has ended</h1><p class="lead">Links like this last a week and work for one purchase. Ask for a new one if you still want to buy it.</p>';
   else if (paid) body = `<h1>Done</h1><p class="lead">${esc(item.name)} is on ${esc(name)}'s account. Stripe sent your receipt by email.</p>`;
   else {
     body = `<h1>${esc(name)} asked you for ${esc(item.name)}</h1>
-<p class="lead">${esc(item.name)} costs <b>${esc(money(item.kind === 'tip' ? item.min : item.price, shop.currency))}</b>${item.days ? ` and lasts ${item.days} days` : ''}, from ${esc(studio)}${item.game ? ` (${esc((cat.games ?? []).find((g) => g.id === item.game)?.name ?? item.game)})` : ''}. ${item.blurb ? esc(item.blurb) : ''}</p>
+<p class="lead">${esc(item.name)} costs <b>${esc(money(item.price === 'choose' ? item.min : item.price, shop.currency))}</b>${item.days ? ` and lasts ${item.days} days` : ''}, from ${esc(studio)}${item.game ? ` (${esc((cat.games ?? []).find((g) => g.id === item.game)?.name ?? item.game)})` : ''}. ${item.blurb ? esc(item.blurb) : ''}</p>
 <p>It goes to the player account named <b>${esc(name)}</b> on ${esc(studio)}. You pay in your own name on Stripe's page; ${esc(studio)} never sees your card. Saying no is fine: nothing happens.</p>
 ${said ? `<p class="msg" role="alert">${esc(said)}</p>` : ''}
 ${open ? `<form method="post" style="margin-top:16px"><label style="display:flex;gap:10px;align-items:flex-start;margin:0 0 14px"><input type="checkbox" name="grownup" value="yes" style="width:22px;height:22px;margin:2px 0 0"> <span>I am ${esc(name)}'s parent or guardian, and an adult.</span></label>
-${item.kind === 'tip' ? `<label>Amount in ${esc(shop.currency.toUpperCase())} <input name="amount" type="number" min="${item.min / currencyScale(shop.currency)}" step="${amountStep(shop.currency) / currencyScale(shop.currency)}" value="${item.min / currencyScale(shop.currency)}"${item.max === null ? '' : ` max="${item.max / currencyScale(shop.currency)}"`}></label>` : ''}
-<button class="btn" type="submit">${item.kind === 'tip' ? 'Give' : 'Pay'} ${esc(money(item.kind === 'tip' ? item.min : item.price, shop.currency))} on Stripe</button></form>` : '<p>The shop is not open just now. Try this link again later.</p>'}
+${lines.map((line, index) => `<p>${esc(line.item.name)} × ${line.quantity}: ${esc(money((line.item.price === 'choose' ? line.item.min : line.item.price) * line.quantity, shop.currency))}</p>${line.item.price === 'choose' ? `<label>Amount per item in ${esc(shop.currency.toUpperCase())} <input name="${lines.length === 1 ? 'amount' : `amount_${index}`}" type="number" min="${line.item.min / currencyScale(shop.currency)}" step="${amountStep(shop.currency) / currencyScale(shop.currency)}" value="${line.item.min / currencyScale(shop.currency)}"${line.item.max === null ? '' : ` max="${line.item.max / currencyScale(shop.currency)}"`}></label>` : ''}`).join('')}
+
+<button class="btn" type="submit">Pay cart on Stripe</button></form>` : '<p>The shop is not open just now. Try this link again later.</p>'}
 <p class="note">${refundWords(shop)} <a href="/shop/refunds/">refunds</a>.</p>`;
   }
   const main = `<section class="shop"><p class="kicker">${esc(studio)}</p>${body}</section>`;
@@ -152,6 +147,13 @@ export const SHOP_JS = String.raw`(function () {
   function $(s, r) { return (r || document).querySelector(s); }
   function el(tag, attrs, text) { var n = document.createElement(tag); if (attrs) Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); }); if (text !== undefined) n.textContent = text; return n; }
   function api(method, path, body) {
+    if (path === '/api/shop/buy') {
+      // A guest's purchase is tied to this browser. Check persistence before taking money.
+      document.cookie = 'shop_cookie_check=1; Path=/; SameSite=Lax';
+      var cookiesWork = /(?:^|; )shop_cookie_check=1(?:;|$)/.test(document.cookie);
+      document.cookie = 'shop_cookie_check=; Path=/; Max-Age=0; SameSite=Lax';
+      if (!cookiesWork) return Promise.resolve({ ok: false, error: 'cookies', message: 'Allow cookies for this site before buying so you can keep access to your purchases.' });
+    }
     var init = { method: method, credentials: 'same-origin', cache: 'no-store', headers: {} };
     if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     return fetch(path, init).then(function (r) { return r.json().catch(function () { return { ok: false, message: 'the site answered ' + r.status }; }); });
@@ -163,6 +165,21 @@ export const SHOP_JS = String.raw`(function () {
 
   /* ---------------- /shop/ */
   var list = $('[data-shop-items]');
+  var cart = [];
+  var cartBox = list ? el('div') : null;
+  if (cartBox) list.after(cartBox);
+  function drawCart() {
+    cartBox.textContent = '';
+    cart.forEach(function (line, index) {
+      var row = el('p', null, line.name + ' × ' + line.quantity + ' ');
+      var remove = el('button', { type: 'button' }, 'Remove'); remove.onclick = function () { cart.splice(index, 1); drawCart(); };
+      row.appendChild(remove); cartBox.appendChild(row);
+    });
+    if (!cart.length) return;
+    var checkout = el('button', { type: 'button', class: 'btn' }, 'Checkout cart');
+    checkout.onclick = function () { checkout.disabled = true; api('POST', '/api/shop/buy', { lines: cart, game: boot.game }).then(function (r) { if (!r.ok) throw new Error(r.message); location.href = r.url; }).catch(function (e) { checkout.disabled = false; say(e.message, true); }); };
+    cartBox.appendChild(checkout);
+  }
   function draw(s) {
     list.textContent = '';
     if (!s.ok) { list.appendChild(el('p', null, s.message || 'The shop did not answer.')); return; }
@@ -174,9 +191,7 @@ export const SHOP_JS = String.raw`(function () {
       if (needsAge) {
         age.className = 'age';
         age.appendChild(el('p', null, 'What year were you born? (Asked once, for this account.)'));
-        var sel = el('select', { 'aria-label': 'Year you were born' });
-        var blank = el('option', { value: '' }, 'Year'); blank.selected = true; sel.appendChild(blank);
-        (boot.years || []).forEach(function (y) { sel.appendChild(el('option', { value: String(y) }, String(y))); });
+        var sel = el('input', { type: 'number', min: '0', step: '1', 'aria-label': 'Year you were born' });
         var ok = el('button', { type: 'button', class: 'btn' }, 'Done');
         ok.addEventListener('click', function () {
           if (!sel.value) { say('Pick a year.', true); return; }
@@ -196,12 +211,12 @@ export const SHOP_JS = String.raw`(function () {
       if (i.way === 'cap' && i.retryWay) { act.appendChild(el('span', { class: 'why' }, WAY.cap)); i.way = i.retryWay; }
       if (i.way === 'checkout') {
         var amount = null;
-        if (i.kind === 'tip') {
+        if (i.price === 'choose') {
           amount = el('input', { type: 'number', 'aria-label': 'How much in ' + s.currency.toUpperCase(), min: String(i.min / s.currencyScale), step: String(s.amountStep / s.currencyScale), value: String(i.min / s.currencyScale) });
           if (i.max !== null) amount.setAttribute('max', String(i.max / s.currencyScale));
           act.appendChild(amount);
         }
-        var b = el('button', { type: 'button', class: 'buy' }, i.kind === 'tip' ? 'Give on Stripe' : 'Buy on Stripe');
+        var b = el('button', { type: 'button', class: 'buy' }, i.price === 'choose' ? 'Give on Stripe' : 'Buy on Stripe');
         b.addEventListener('click', function () {
           b.disabled = true; say('Opening Stripe…');
           api('POST', '/api/shop/buy', { item: i.id, game: boot.game || undefined, amount: amount ? units(amount.value, s.currencyScale) : undefined }).then(function (r) {
@@ -210,6 +225,10 @@ export const SHOP_JS = String.raw`(function () {
           }).catch(function (e) { b.disabled = false; say(e.message, true); });
         });
         act.appendChild(b);
+        var quantity = el('input', { type: 'number', min: '1', step: '1', value: '1', 'aria-label': 'Quantity' });
+        var add = el('button', { type: 'button', class: 'plain' }, 'Add to cart');
+        add.onclick = function () { cart.push({ item: i.id, name: i.name, quantity: Number(quantity.value), amount: amount ? units(amount.value, s.currencyScale) : undefined }); drawCart(); };
+        act.appendChild(quantity); act.appendChild(add);
       } else if (i.way === 'owned') {
         act.appendChild(el('span', { class: 'owned' }, 'Yours ✓'));
       } else if (i.way === 'make-an-account') {
@@ -238,15 +257,24 @@ export const SHOP_JS = String.raw`(function () {
     if (boot.item) { var at = document.getElementById('item-' + boot.item); if (at && at.scrollIntoView) at.scrollIntoView({ block: 'center' }); }
   }
   function load(cursor) { api('GET', '/api/shop' + q + (q ? '&' : '?') + 'cursor=' + encodeURIComponent(cursor || '')).then(draw).catch(function () { draw({ ok: false }); }); }
-  if (list) { if (/[?&]cancelled=1/.test(location.search)) say('Nothing was charged.'); load(); }
+  if (list) { if (/[?&]cancelled=1/.test(location.search)) say('Checkout cancelled. Any open reservation is released once Stripe confirms it.'); load(); }
 
+  function returnToPage(cancelled) {
+    try {
+      var saved = JSON.parse(sessionStorage.getItem('shop-return') || 'null');
+      if (!saved || typeof saved.path !== 'string' || saved.path[0] !== '/' || new URL(saved.path, location.origin).origin !== location.origin) return;
+      if (cancelled && new URLSearchParams(location.search).get('order') !== saved.order) return;
+      sessionStorage.removeItem('shop-return'); location.href = saved.path;
+    } catch (e) {}
+  }
+  if (/[?&]cancelled=1/.test(location.search)) returnToPage(true);
   /* ---------------- /shop/thanks */
   if (boot.thanks) {
     var tries = 0;
     (function poll() {
       tries += 1;
       api('GET', '/api/shop/order?session=' + encodeURIComponent(boot.thanks)).then(function (r) {
-        if (r.status === 'paid') { $('[data-thanks-title]').textContent = 'It\'s yours'; $('[data-thanks-line]').textContent = 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
+        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = 'It\'s yours'; $('[data-thanks-line]').textContent = 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
         if (tries < 40) setTimeout(poll, 1500);
         else $('[data-thanks-line]').textContent = 'Stripe has not confirmed it yet. It will be on your account as soon as it does; your receipt comes by email.';
       }).catch(function () { if (tries < 40) setTimeout(poll, 3000); });
@@ -262,14 +290,14 @@ export const SHOP_JS = String.raw`(function () {
       var body = $('[data-shop-body]', card);
       if (r.badges && r.badges.length) { var bl = el('p'); r.badges.forEach(function (b) { bl.appendChild(el('span', { class: 'badge' }, b)); }); body.appendChild(bl); }
       var ul = el('ul');
-      r.orders.forEach(function (o) {
+      r.orders.flatMap(function (order) { return order.lines.map(function (line) { return Object.assign({}, order, line, { order: order.id }); }); }).forEach(function (o) {
         var li = el('li', null, o.name + ' · ' + o.shown + ' · ' + new Date(o.createdAt).toISOString().slice(0, 10) + ' · ' + o.status + ' ');
         if (o.refundable) {
           var b = el('button', { type: 'button', class: 'ghost small' }, 'Refund');
           b.addEventListener('click', function () {
             if (!confirm('Refund ' + o.name + ' (' + o.shown + ')? It leaves your account and the money goes back to your card in 5 to 10 days.')) return;
             b.disabled = true;
-            api('POST', '/api/shop/refund', { order: o.id }).then(function (x) { if (!x.ok) throw new Error(x.message); li.textContent = o.name + ' · refunded'; }).catch(function (e) { b.disabled = false; alert(e.message); });
+            api('POST', '/api/shop/refund', { order: o.order, line: o.id }).then(function (x) { if (!x.ok) throw new Error(x.message); li.textContent = o.name + ' · refunded'; }).catch(function (e) { b.disabled = false; alert(e.message); });
           });
           li.appendChild(b);
         }
@@ -326,6 +354,13 @@ export const SHOP_SHELL_JS = String.raw`(function () {
   var owns = [];
   var lastSeen = '';
   function api(method, path, body) {
+    if (path === '/api/shop/buy') {
+      // A guest's purchase is tied to this browser. Check persistence before taking money.
+      document.cookie = 'shop_cookie_check=1; Path=/; SameSite=Lax';
+      var cookiesWork = /(?:^|; )shop_cookie_check=1(?:;|$)/.test(document.cookie);
+      document.cookie = 'shop_cookie_check=; Path=/; Max-Age=0; SameSite=Lax';
+      if (!cookiesWork) return Promise.resolve({ ok: false, error: 'cookies', message: 'Allow cookies for this site before buying so you can keep access to your purchases.' });
+    }
     var init = { method: method, credentials: 'same-origin', cache: 'no-store', headers: {} };
     if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     return fetch(path, init).then(function (r) { return r.json().catch(function () { return { ok: false, message: 'the site answered ' + r.status }; }); });
@@ -341,6 +376,11 @@ export const SHOP_SHELL_JS = String.raw`(function () {
       if (key !== lastSeen) { var fresh = lastSeen !== '' || owns.length === 0; lastSeen = key; owns = next; post({ ev: 'owns', owns: owns, fresh: fresh }); }
       return owns;
     }).catch(function () { return owns; });
+  }
+  function leaveForCheckout(tab, result) {
+    if (tab) { tab.location.href = result.url; return; }
+    try { sessionStorage.setItem('shop-return', JSON.stringify({ order: result.order, path: location.pathname + location.search + location.hash })); } catch (e) {}
+    location.href = result.url;
   }
   var watching = 0;
   /** After a checkout opens in a new tab: look again when this tab comes back, and every few seconds for two minutes. */
@@ -378,7 +418,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
       if (cfg.url) box.appendChild(el('p', { class: 'foot' }, cfg.url.replace(/^https?:\/\//, '')));
       return;
     }
-    box.appendChild(el('p', { class: 'sub' }, 'Real money, from the studio itself. Each purchase opens Stripe\'s own page in a new tab; your game keeps going here.'));
+    box.appendChild(el('p', { class: 'sub' }, 'Real money, from the studio itself. Stripe opens in a new tab when available. Otherwise checkout leaves this page and returns here after payment.'));
     var said = el('p', { class: 'said', role: 'status' });
     var listBox = el('div'); box.appendChild(listBox); box.appendChild(said);
     var foot = el('p', { class: 'foot' }); var all = el('a', { href: '/shop/?game=' + encodeURIComponent(GAME), target: '_blank', rel: 'noopener' }, 'The whole shop'); foot.appendChild(all); foot.appendChild(document.createTextNode(' · see the studio refund terms in the whole shop.')); box.appendChild(foot);
@@ -392,7 +432,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
         if (i.blurb) row.appendChild(el('small', null, i.blurb));
         var go = el('div', { class: 'go' });
         if (i.way === 'cap' && i.retryWay) { go.appendChild(el('span', null, WAY.cap)); i.way = i.retryWay; }
-        if (i.way === 'checkout' && i.kind !== 'tip') {
+        if (i.way === 'checkout' && i.price !== 'choose') {
           var b = el('button', { type: 'button', class: 'buy' }, 'Buy on Stripe');
           b.addEventListener('click', function () {
             // The new tab opens on the tap (a browser allows that), then goes to Stripe's page once it is made.
@@ -400,7 +440,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
             b.disabled = true; said.textContent = 'Opening Stripe…';
             api('POST', '/api/shop/buy', { item: i.id, game: GAME, server: SERVER }).then(function (r) {
               if (!r.ok || !r.url) throw new Error(r.message || 'That did not work.');
-              if (tab) tab.location.href = r.url; else location.assign(r.url);
+              leaveForCheckout(tab, r);
               said.textContent = 'Finish on Stripe\'s page. It shows up here once it is paid.';
               watch();
             }).catch(function (e) { if (tab) tab.close(); b.disabled = false; said.textContent = e.message; });
@@ -409,7 +449,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
         } else if (i.way === 'owned') go.appendChild(el('span', null, 'Yours ✓'));
         else {
           var a = el('a', { href: '/shop/?game=' + encodeURIComponent(GAME) + '&item=' + encodeURIComponent(i.id), target: '_blank', rel: 'noopener' }, i.way === 'make-an-account' ? 'Make an account' : i.way === 'age-question' ? 'One question first' : i.way === 'ask-a-parent' ? 'Ask a parent' : 'More');
-          if (i.way === 'make-an-account' || i.way === 'age-question' || i.way === 'ask-a-parent' || i.kind === 'tip') { go.appendChild(a); a.addEventListener('click', watch); }
+          if (i.way === 'make-an-account' || i.way === 'age-question' || i.way === 'ask-a-parent' || i.price === 'choose') { go.appendChild(a); a.addEventListener('click', watch); }
           go.appendChild(el('span', null, WAY[i.way] || ''));
         }
         row.appendChild(go);
@@ -439,6 +479,14 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     if (m.op === 'owns') return refresh().then(function () { reply({ ok: true, owns: owns }); });
     if (m.op === 'open') { open(typeof m.item === 'string' ? m.item : null); return reply({ ok: true, shown: true }); }
     if (m.op === 'close') { close(); return reply({ ok: true }); }
+    if (m.op === 'checkout') {
+      if (!cfg || kids || screen) return reply({ ok: false, error: 'policy' });
+      var checkoutTab = window.open('', '_blank');
+      return api('POST', '/api/shop/buy', { lines: m.lines, game: GAME, server: SERVER }).then(function (r) {
+        if (r.ok && r.url) { leaveForCheckout(checkoutTab, r); watch(); } else if (checkoutTab) checkoutTab.close();
+        reply(r);
+      }).catch(function () { if (checkoutTab) checkoutTab.close(); reply({ ok: false }); });
+    }
     if (m.op === 'used') {
       var key = String(m.key || '');
       if (!/^[^\u0000-\u001f\u007f]+$/.test(key) || owns.indexOf(key) < 0) return reply({ ok: false, error: 'key' });
@@ -505,6 +553,18 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
           });
           row.appendChild(b);
         }
+        (o.lines || []).forEach(function (line) {
+          var detail = el('span', null, line.name + ' × ' + line.quantity + ' · ' + cents(line.amount, o.currency) + ' · ' + line.status);
+          if (o.refundable && line.status !== 'refunded') {
+            var refundLine = el('button', { type: 'button' }, 'Refund line');
+            refundLine.onclick = function () {
+              refundLine.disabled = true;
+              api('POST', '/_studio/api/shop/refund', { order: o.id, line: line.id }).then(function (r) { if (!r.ok) throw new Error(r.message); load(); }).catch(function (e) { refundLine.disabled = false; toast(e.message); });
+            };
+            detail.appendChild(refundLine);
+          }
+          row.appendChild(detail);
+        });
         ord.appendChild(row);
       });
       if (s.nextOrdersCursor) { var nextOrders = el('button', { type: 'button' }, 'Next orders'); nextOrders.onclick = function () { load('', s.nextOrdersCursor); }; ord.appendChild(nextOrders); }
@@ -591,7 +651,7 @@ export async function officeShopPage(cat) {
 <div class="game" style="padding:6px 16px 12px"><h3>Orders</h3><div id="orders"></div></div>
 <div class="game" style="padding:6px 16px 12px" id="referrals"></div>
 <div class="toast" id="toast" role="status" hidden></div>
-<p class="note">You are the seller. Money goes from players to your own Stripe account; Homie never sees it and takes nothing. Refund is one tap here (your AI can only ask, and you confirm). A card dispute never touches the player's account: answer it in Stripe; if you lose it, that one item is taken back. Tax: Stripe Tax works out and collects tax where you told Stripe you are registered${cat.shop?.till === 'stripe-managed' ? '; with Managed Payments Stripe is the seller of record and files it for you' : ''}. Payouts, the balance and receipts are Stripe's own pages, linked above. Referrals: you pay referrers yourself (they invoice you); nothing moves through Homie. This is not legal or tax advice.</p>`;
+<p class="note">You are the seller. Money goes from players to your own Stripe account; Homie never sees it and takes nothing. Refund is one tap here (your AI can only ask, and you confirm). A card dispute never touches the player's account: answer it in Stripe; if you lose it, that one item is taken back. Tax: when enabled, Stripe Tax works out and collects tax where you told Stripe you are registered${cat.shop?.till === 'stripe-managed' ? '; with Managed Payments Stripe is the seller of record and files it for you' : ''}. Payouts, the balance and receipts are Stripe's own pages, linked above. Referrals: you pay referrers yourself (they invoice you); nothing moves through Homie. This is not legal or tax advice.</p>`;
   return new Response(shell(cat, `Shop · ${name}`, body, { script: OFFICE_SHOP_SCRIPT }), {
     headers: { ...PRIVATE, 'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src '${officeHash}'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'` },
   });

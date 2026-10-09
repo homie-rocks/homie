@@ -18,7 +18,7 @@
  *   site/dist/games.json                   { studio, games[], songs[], videos[], posts[], site, shop } from studio.json,
  *                                          game.json files, the music/ and videos/ manifests (media/MEDIA.md),
  *                                          posts/*.md, the studio's site/ folder (site/SITE.md) and shop.json (checked
- *                                          against the kit's rules: a shop that breaks them stops the build)
+ *                                          against studio settings, Stripe constraints and arithmetic correctness)
  *   site/dist/games/<id>/_landing/...      what the game's landing shows (hero footage, its cover, licence texts)
  *   site/dist/_site/                       posts.json (the posts' HTML), the studio's own pages (site/pages)
  *   site/dist/_studio/codex/<id>/          each game's Game Codex (games/<id>/CODEX.md, lib/codex.mjs): served only to
@@ -489,7 +489,7 @@ export function orderGames(games, order, log = () => {}) {
 export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
-  // The shop first (shop/SHOP.md): a shop.json that breaks the kit's rules stops the build before anything is built.
+  // The shop first (shop/SHOP.md): invalid shop settings stop the build before anything is built.
   const shop = shopForBuild(root, { log });
   const live = join(root, 'site', 'dist');
   const games = listGames(root).filter((g) => !only || g.id === only);
@@ -677,7 +677,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
         : studio.homie?.directory === false || studio.homie?.directory === null ? null : String(studio.homie?.directory ?? 'https://homie.rocks'),
       // A copy of the public template that nobody has named yet shows the name typed in Cloudflare's form.
       ...(studio.template === true ? { template: true } : {}),
-      // studio.json "audience": "kids" (a studio made for children: no shop at all) or "teens"; and "referrals": false
+      // studio.json "audience": "kids" (a studio audience label; shop policies are optional) or "teens"; and "referrals": false
       // (this studio takes no referral statements as a referrer).
       ...(audienceOf(studio) !== 'general' ? { audience: audienceOf(studio) } : {}),
       ...(studio.referrals === false ? { referrals: false } : {}),
