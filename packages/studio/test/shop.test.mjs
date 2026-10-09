@@ -1753,7 +1753,7 @@ test('the game sheet reaches item 101 and one office click drains queued stateme
   };
   const frame = { contentWindow: { postMessage() {} } };
   const ids = new Map();
-  const document = { body: element(), createElement: element, createTextNode: (text) => ({ textContent: text }), addEventListener() {}, querySelector(selector) {
+  const document = { body: element(), createElement: element, createTextNode: (text) => ({ textContent: text }), addEventListener() {}, querySelectorAll(selector) { return [this.querySelector(selector)]; }, querySelector(selector) {
     if (selector === 'iframe.game') return frame;
     if (!ids.has(selector)) ids.set(selector, element());
     return ids.get(selector);
@@ -2820,7 +2820,7 @@ test('no-popup game and TV scripts create a checkout and restore the exact page 
       nodes.push(node); return node;
     };
     const frame = { contentWindow: { postMessage() {} } };
-    const document = { cookie: '', body: element(), createElement: element, createTextNode: (textContent) => ({ textContent }), addEventListener() {}, querySelector: (q) => q === 'iframe.game' ? frame : null };
+    const document = { cookie: '', body: element(), createElement: element, createTextNode: (textContent) => ({ textContent }), addEventListener() {}, querySelectorAll: () => [], querySelector: (q) => q === 'iframe.game' ? frame : null };
     const window = { open: () => null, __HOMIE_PLAY: { game: 'owl-run', screen, shop: { policy: { televisionCheckout: true } } }, addEventListener: (k, fn) => { events[k] = fn; } };
     const location = { origin: 'https://owls.example', pathname: screen ? '/owl-run/tv' : '/owl-run/play', search: '?room=one', hash: '#shop', href: '' };
     const original = location.pathname + location.search + location.hash;
@@ -3426,7 +3426,7 @@ else { console.log(JSON.stringify({error:{type:'invalid_request_error',message:'
     assert.doesNotMatch(cli.stdout + cli.stderr, /sk_test_|rk_test_|pk_live_|whsec_/);
     const tools = toolDefs(new StudioContext({ cwd: dir, waitMs: 20000, install: false }));
     let mcp = await tools.find((t) => t.name === 'stripe_login').run({});
-    if (mcp.structuredContent.state === 'running') mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.id });
+    if (mcp.structuredContent.state === 'running') mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.job });
     assert.match(JSON.stringify(mcp), /Stripe says this product is refused/);
     assert.doesNotMatch(JSON.stringify(mcp), /sk_test_|rk_test_|pk_live_|whsec_/);
   } finally { process.env.PATH = oldPath; if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome; }
