@@ -415,3 +415,18 @@ The rebased full gate found an outdated exhaustive author-surface fixture: its
 `guideSeats`, `kids` and `levelSet`. The fixture now lists and type-checks natural
 reads of all four in both contexts. The current run is allowed to finish to
 collect any further failures; its result is not a passing release gate.
+
+The complete rebased package run finished with 2,217 passes, one fixture failure
+and three explicit optional-Wrangler skips (2,221 tests, 3,918.09 seconds). The
+corrected contract suite then passed all 12 tests. Plugin checks passed 118 with
+one skip. These are retained receipts, not the final clean package gate.
+
+While gates ran, #77 was updated to reviewed head `45dcf326`, with green CI.
+Slice 7 was rebased onto that reviewed Slice 6 head pending its main merge,
+replacing the older carried base. Its camera-axis tooling, corrected catch-up
+preview, preservation of drawn history and additional uneven-frame regressions
+were retained. The preview now carries Slice 7's full 3D velocity, grounded and
+motion data. Slice 7 retains its stricter correction fade cap and zero-speed
+floor. As in the revised Slice 6 matrix, the 3D speed assertion measures elapsed
+time on the pose's actual sampling clock; rAF timestamps still measure frame
+pacing. View checks and final rendered trials repeat before the clean gate.

@@ -53,7 +53,7 @@ test('shipped starters: predicted 3D pose through delay and loss in two Chrome c
                 const me=room.me;if(me){
                   if(pending){pending.frames++;if(Math.hypot(me.pos.x-pending.x,me.pos.y-pending.y,me.pos.z-pending.z)>.000001){responses.push({frames:pending.frames,ms:performance.now()-pending.at});pending=null;}}
                   let other=null;room.each(id==='ember-vale'?'hero':'runner',e=>{if(e.driver==='person'&&!e.mine)other={pos:e.pos,heading:e.heading,grounded:e.grounded};});
-                  if(started)samples.push({t,pos:me.pos,heading:me.heading,grounded:me.grounded,other});
+                  if(started)samples.push({t,at:performance.now(),pos:me.pos,heading:me.heading,grounded:me.grounded,other});
                   ctx.clearRect(0,0,800,600);ctx.fillStyle='#3b9061';ctx.fillRect(me.pos.x*25,me.pos.y*25-me.pos.z*30,12,12);
                 }requestAnimationFrame(frame);
               }requestAnimationFrame(frame);
@@ -71,7 +71,7 @@ test('shipped starters: predicted 3D pose through delay and loss in two Chrome c
           for(const p of pages)await p.evaluate(()=>begin());await sleep(12000);
           const results=await Promise.all(pages.map(p=>p.evaluate(()=>({samples,responses,prediction:__homieNet.probe.prediction()}))));
           const r=results[1], gaps=r.samples.slice(1).map((s,i)=>s.t-r.samples[i].t);
-          const steps=r.samples.slice(1).map((s,i)=>({distance:Math.hypot(s.pos.x-r.samples[i].pos.x,s.pos.y-r.samples[i].pos.y,s.pos.z-r.samples[i].pos.z),ms:s.t-r.samples[i].t}));
+          const steps=r.samples.slice(1).map((s,i)=>({distance:Math.hypot(s.pos.x-r.samples[i].pos.x,s.pos.y-r.samples[i].pos.y,s.pos.z-r.samples[i].pos.z),ms:s.at-r.samples[i].at}));
           const heights=r.samples.map(s=>s.pos.z), remote=r.samples.filter(s=>s.other), landings=r.samples.slice(1).filter((s,i)=>s.grounded&&!r.samples[i].grounded).length;
           const row={id,delay,loss:loss*100,responses:r.responses,inputFrames:quantile(r.responses.map(x=>x.frames),.95),inputMs:quantile(r.responses.map(x=>x.ms),.95),frameP95Ms:quantile(gaps,.95),fps:1000/quantile(gaps,.5),corrections:r.prediction.count,maxCorrectionM:r.prediction.max,snaps:r.prediction.snaps,rebases:r.prediction.rebases-startup.rebases,maxStepM:Math.max(...steps.map(s=>s.distance)),peakM:Math.max(...heights),landings,remoteSamples:remote.length,remotePeakM:Math.max(...remote.map(s=>s.other.pos.z)),host:host.facts()};
           receipts.push(row);t.diagnostic(JSON.stringify(row));if(process.env.ROOMS_3D_FEEL_RECEIPT)writeFileSync(process.env.ROOMS_3D_FEEL_RECEIPT,JSON.stringify(receipts,null,2));
