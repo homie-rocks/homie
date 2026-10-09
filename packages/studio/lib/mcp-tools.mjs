@@ -1103,6 +1103,21 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'stripe_login', title: 'Connect the studio to Stripe',
+      description: 'Connect and sync shop.json through Stripe’s official CLI with one browser approval if needed. Creates Products, Prices, Payment Links and the webhook; installs only links and signing secret, no API key in the Worker. Repeat after edits. Follow studio_job. An existing key supports fuller checkout; manual only if explicitly chosen for those features. live only when the owner says go live.',
+      inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' }, manual: { type: 'boolean' } } },
+      annotations: { title: 'Connect Stripe', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      run: async (a) => {
+        const root = ctx.root(a.studio);
+        const args = ['shop', 'connect', ...(a.live ? ['--live'] : []), ...(a.renew ? ['--renew'] : []), ...(a.manual ? ['--manual'] : [])];
+        const job = cliJob(root, 'Stripe connection', args, { cli: join(PACKAGE_ROOT, 'bin', 'homie-studio.mjs'), keep: false });
+        const ended = await waitJob(job, Math.min(ctx.waitMs, 1000));
+        ctx.status = null;
+        if (ended && job.code !== 0) return fail(whyOf(job), { kind: 'job', ...jobView(job) });
+        return ok(ended ? jobView(job).tail.join('\n') || 'Stripe connection finished; inspect the job result.' : 'Stripe connection is running. Approve Stripe in the browser when it opens. Check this job for the result and any remaining setup step.', { kind: 'job', ...jobView(job) });
+      },
+    },
+    {
       name: 'cloudflare_login', title: 'Sign in to Cloudflare',
       description: 'Open Cloudflare in the person\'s browser to approve this computer once (Wrangler\'s own sign-in; a free account, no payment method, no key pasted anywhere). Say in one line that Cloudflare opened and they should approve it.',
       inputSchema: { type: 'object', properties: { ...STUDIO_ARG } },

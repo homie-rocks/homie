@@ -92,6 +92,11 @@ test('music: the ElevenLabs key Stripe Projects keeps for a studio, read in this
 
 test('the skills: the owner\'s steps with Stripe\'s own tools; Stripe Projects is an option, never the default', () => {
   const shop = readFileSync(join(PLUGIN, 'skills', 'shop', 'SKILL.md'), 'utf8');
+  assert.match(shop, /stripe_login/);
+  assert.match(shop, /shop connect --renew/);
+  assert.match(shop, /keyless/);
+  assert.match(shop, /Payment Links/);
+  assert.match(shop, /Never silently select/);
   assert.match(shop, /stripe agent setup/);
   assert.match(shop, /https:\/\/mcp\.stripe\.com/);
   assert.match(shop, /sandbox first/);

@@ -17,9 +17,15 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+- New shops use Stripe Payment Links by default: one official CLI browser approval when needed, no human-handled key and no API key in the Worker. Connect syncs Products, fixed/custom-amount Prices, links and the webhook from shop.json; edits replace versions and removals archive them.
+- Signed events fulfill keyless purchases and chosen-amount tips, book refunds and disputes even when delivery is reordered, and reject forged events. Free orders remain local. Office refunds point to Stripe or the owner's connected AI; missing webhooks wait for Stripe redelivery.
+- Keep the existing keyed checkout for dynamic carts, spending reservations, custom expiry, provider-read recovery and office refunds. Readiness explains the next step; skills, guide, scaffold and MCP instructions follow the keyless default. No Homie service enters the money path.
+
 ## [0.34.0] - 2026-10-08
 
-**Plugin 0.35.0** · [#64](https://github.com/homie-rocks/homie/pull/64)
+**Plugin 0.35.0** · [#64](https://github.com/homie-rocks/homie/pull/64) · [release-2026-10-08-studio-0.34.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-08-studio-0.34.0)
 
 A plain shop: nothing is imposed unless you write it. A shop is open to guests by default, the protective rules 0.33.0 started with are a preset you choose, and a player can put several items in a cart and pay once.
 

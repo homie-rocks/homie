@@ -445,13 +445,20 @@ where it sells and for Stripe's terms. Homie takes no cut.
   presets, including in existing files, use the open default. Individual overrides are in SHOP.md.
 - \`createShop()\` from \`@homie-rocks/studio/shop\` supplies \`open\`, \`has\`, \`entitlements\`, \`used\`, and \`change\`.
   \`shop.add(item, quantity)\` builds a cart; \`shop.checkout()\` pays; \`shop.buy(item)\` buys directly.
-- A cart has independent lines and quantities. The office can refund a whole order or line. The optional
+- With the fuller connection, a cart has independent lines and quantities. The office can refund a whole order or line. The optional
   player refund window covers items; a tip is never taken back by the player.
 - Flood settings are configurable: buyer attempts 6/minute, address attempts 600/minute,
   new guest buyers 600/hour. Stripe constraints, integer arithmetic, ownership and signatures protect payments.
-- \`shop check\` validates settings; \`shop connect\` provides a local page for credentials, stored as Worker
-  secrets. Stripe's agent tools can manage Products through \`shop catalog\`; the connect page creates the
-  webhook so its secret stays out of chat. Both the key and signing secret are part of working payment setup.
+- \`shop check\` validates settings; \`stripe_login\` / \`shop connect\` starts Stripe browser approval.
+  Never ask a person for a key. Follow the result's next step: deploy first if needed, then rerun connect.
+  The default syncs Products, Prices, Payment Links and the webhook through the approved Stripe CLI.
+  The Worker stores only links and a signing secret; buying needs no API key or running AI.
+  Rerun \`shop connect\` after shop.json changes; use \`shop connect --renew\` if approval needs renewal.
+  Verify a test purchase, signed webhook, item grant, and a refund in Stripe or through the connected AI.
+  Never ask a person for a key. An existing Worker key selects the fuller cart/cap/refund path;
+  explain it only when those features are requested. Never silently choose \`--manual\`. Live only on request.
+  A lost webhook stays pending: ask Stripe to resend it. Free orders need no Stripe.
+  Never create secret-returning webhooks through conversation MCP tools; connect captures secrets privately.
   Stripe's approval links belong to the owner. \`checkoutMinutes\` is optional (Stripe: 30 to 1440 minutes,
   default 1440; values below 31 use 31 for transport margin); cancelling a named checkout, or replacing one at least a minute old, expires the open session on Stripe's confirmation.
 - \`shop orders\` and \`/_studio/office/shop\` show sales. \`shop refund <order>\` asks the owner to confirm.
@@ -876,7 +883,7 @@ export function ensureMigrations(root) {
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
 export function migrationWord(file) {
-  return /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (it sells nothing until shop.json and the owner\'s Stripe key are in)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
+  return /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
 }
 
 /**

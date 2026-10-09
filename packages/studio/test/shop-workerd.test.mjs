@@ -14,11 +14,16 @@ for (const compatibilityDate of ['2025-01-01', '2026-06-01']) test(`statement se
     contents: `import { sendStatements } from './referrals.mjs';
       import { productIdOf, stripeCall } from './stripe.mjs';
       import { money } from './shop-rules.mjs';
+      import { rememberMoneyEvent, rememberedMoney } from './shop-links.mjs';
       import { migrationNeeded, newOrderId } from './shop-store.mjs';
       export default { async fetch(request, env) {
         const id = await productIdOf('studio', 'item with spaces');
         const stripe = await stripeCall({ STRIPE_KEY: 'rk_test_' + 'a'.repeat(32) }, 'GET', '/v1/checkout/sessions/test', { expand: ['payment_intent.latest_charge'] }, { timeout: 2000 });
-        return Response.json({ id, order: newOrderId(), money: money(5120, 'bhd'), stripe,
+        const moneyEvent = { type: 'refund.failed', created: 2, livemode: false, data: { object: { id: 're_workerd', payment_intent: 'pi_workerd', currency: 'usd', amount: 500, status: 'failed' } } };
+        await rememberMoneyEvent(env, moneyEvent);
+        await rememberMoneyEvent(env, { ...moneyEvent, type: 'refund.created', created: 1, data: { object: { ...moneyEvent.data.object, status: 'succeeded' } } });
+        const refunds = await rememberedMoney(env, 'pi_workerd', 'test');
+        return Response.json({ refunds, id, order: newOrderId(), money: money(5120, 'bhd'), stripe,
           migration: await migrationNeeded(env),
           send: await sendStatements(env, 'https://seller.example', { referrals: { rate: 1 } }, '2026-09') });
       } };`,
@@ -57,6 +62,8 @@ for (const compatibilityDate of ['2025-01-01', '2026-06-01']) test(`statement se
       assert.match(body.id, /^homie_studio_item_[a-f0-9]{64}$/);
       assert.match(body.order, /^ord_[A-Za-z0-9]{20}$/);
       assert.equal(body.stripe.expanded, 'payment_intent.latest_charge');
+      assert.equal(body.refunds.length, 1);
+      assert.equal(body.refunds[0].status, 'failed', 'out-of-order refunds remain failed in D1');
       assert.equal(body.migration, null);
       assert.equal(body.send.sent.length, 1, JSON.stringify(body.send));
       assert.equal(body.send.sent[0].ok, !redirect, JSON.stringify(body.send));

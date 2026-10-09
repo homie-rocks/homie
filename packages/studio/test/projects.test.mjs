@@ -253,18 +253,18 @@ test('the setup status: Cloudflare and ElevenLabs through Projects; a Stripe row
   assert.match(by.elevenlabs.detail, /through Stripe Projects/);
   assert.equal(by.stripe, undefined, 'no Stripe row for a studio that sells nothing');
   assert.doesNotMatch(JSON.stringify(r), new RegExp(`${TOKEN}|${ELEVEN}|${ACCOUNT}`));
-  // A studio that sells: the row, and Stripe's own agent plugin as the fix until its MCP is set up for this AI.
+  // A studio that sells: browser connection is the next step; optional MCP setup is not payment readiness.
   writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [] }));
   r = await setupStatus({ cwd: dir, env: { HOME: home }, exec, fetchFn: reachable, chrome: () => '/x/chrome', connector: 'yes' });
   let stripe = r.rows.find((x) => x.id === 'stripe');
   assert.equal(stripe.state, 'act');
-  assert.equal(stripe.fix.run, 'npm install -g @stripe/cli@latest && stripe agent setup');
+  assert.equal(stripe.fix.run, 'npx --no-install homie-studio shop connect');
   assert.match(stripe.detail, /Stripe CLI 1\.45\.0/);
   assert.ok(r.features.some((f) => /Sell in the games/.test(f.feature)));
   writeFileSync(join(home, '.claude.json'), JSON.stringify({ mcpServers: { stripe: { type: 'http', url: 'https://mcp.stripe.com/' } } }));
   r = await setupStatus({ cwd: dir, env: { HOME: home }, exec, fetchFn: reachable, chrome: () => '/x/chrome', connector: 'yes' });
   stripe = r.rows.find((x) => x.id === 'stripe');
-  assert.equal(stripe.state, 'ok');
+  assert.equal(stripe.state, 'act', 'MCP setup cannot prove Worker payment credentials');
   assert.match(stripe.detail, /set up for Claude Code/);
   // Codex's config counts too.
   const codexHome = join(scratch, 'codex-home');

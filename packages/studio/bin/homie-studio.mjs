@@ -170,7 +170,7 @@
  *   homie-studio shop                     is the studio's shop selling (its own Stripe), and if not, what is missing
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against studio settings and provider requirements
- *   homie-studio shop connect [--managed] [--live]   a page on THIS computer where the owner pastes the studio's
+ *   homie-studio shop connect [--live] [--renew] [--manual]   sync Payment Links and webhook through Stripe browser approval; --manual chooses the local page for the studio's
  *                                         restricted Stripe key; with it this makes the webhook (0.24.3), and the key
  *                                         and the webhook's secret go straight to the Worker secrets, never a chat or a
  *                                         file (test keys only unless --live)
@@ -368,7 +368,7 @@ import { standaloneDeployNotes } from '../lib/standalone.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
+const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -810,7 +810,7 @@ const OUTWARD_FLAGS = {
   'lounge mod': ['url', 'remove'], 'lounge remove': ['url', 'all'],
   'chat remove': ['url', 'all'], 'chat budget': ['url'],
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
-  'shop connect': ['url', 'managed', 'live'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note'], 'shop statements': ['url', 'period', 'send', 'cursor'],
+  'shop connect': ['url', 'managed', 'live', 'manual', 'renew'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note'], 'shop statements': ['url', 'period', 'send', 'cursor'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   // With --device it adds a phone to the person's Apple team and installs on it: a flag it does not know stops it.
@@ -1039,7 +1039,7 @@ async function main() {
     if (!sub) return shopStatus(root, { url });
     if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), currency: flags.get('currency') ?? 'usd', price: flags.get('price') ?? 500, managed: flags.has('managed') });
     if (sub === 'check') return shopCheck(root);
-    if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), log });
+    if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
     if (sub === 'disconnect') return shopDisconnect(root);
     if (sub === 'catalog') {
       const from = flags.get('have');
