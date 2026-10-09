@@ -205,7 +205,7 @@ async function makeWebhook(env, site, { fetcher }) {
     const list = await listWebhookEndpoints(env, { fetcher });
     older = (list?.data ?? []).filter((e) => e?.url === url && e?.metadata?.homie === HOOK_MARK && e?.status !== 'disabled').map((e) => e.id).filter((id) => typeof id === 'string');
   } catch (error) {
-    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".') };
+    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".' + ` Stripe said: ${error.message}`) };
     return { ok: false, page: said(502, `Stripe did not answer the webhook list (${error instanceof StripeError ? error.message : 'no answer'}). Nothing was saved. Go back and try again.`) };
   }
   let made = null;
@@ -215,7 +215,7 @@ async function makeWebhook(env, site, { fetcher }) {
       description: 'Homie shop (made by homie-studio shop connect)', metadata: { homie: HOOK_MARK },
     }, { fetcher });
   } catch (error) {
-    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".') };
+    if (isPermissionError(error)) return { ok: false, page: said(400, 'This key cannot make webhooks: it needs Webhook Endpoints: Write. In Stripe, open the key (… → Edit key), set Webhook Endpoints to Write and save, then go back and press Save again. Or make the webhook yourself and paste its signing secret under "I made the webhook myself".' + ` Stripe said: ${error.message}`) };
     return { ok: false, page: said(502, `Stripe did not make the webhook (${error instanceof StripeError ? error.message : 'no answer'}). Nothing was saved. Go back and try again.`) };
   }
   const secret = typeof made?.secret === 'string' ? made.secret : '';
@@ -236,7 +236,7 @@ async function probeManaged(env, shop, { fetcher }) {
       line_items: [{ quantity: 1, price_data: { currency: shop?.currency ?? 'usd', unit_amount: item?.price ?? 500, tax_behavior: 'exclusive', product_data: { name: 'Homie shop check (test, expired at once)', tax_code: defaultTaxCode(item ?? {}) } } }],
       managed_payments: { enabled: true }, metadata: { homie: 'shop-check' },
     }, { fetcher, idempotencyKey: `homie-check-${randomBytes(8).toString('hex')}` });
-    if (typeof s?.id === 'string') { try { await expireCheckoutSession(env, s.id, { fetcher }); } catch { /* it expires by itself */ } }
+    if (typeof s?.id === 'string') { try { await expireCheckoutSession(env, s.id, { fetcher }); } catch (error) { return { ok: false, words: `Stripe took the test checkout but could not expire it (${error instanceof StripeError ? error.message : 'no answer'}). It will expire by itself.` }; } }
     return { ok: true, words: 'Stripe took a test checkout with Managed Payments: it is on for this account (test mode).' };
   } catch (error) {
     return { ok: false, words: `Stripe refused a test checkout with Managed Payments (${error instanceof StripeError ? error.message : 'no answer'}). Finish Managed Payments in Stripe (Settings → Managed Payments: accept the terms, pass the eligibility review), or pick "You are" the seller.` };
@@ -284,14 +284,16 @@ export async function shopConnectManual(root, { managed = null, live = false, lo
             // One read with the key, so a typo is caught here and not at the first sale. It never leaves this computer
             // except to Stripe itself.
             if (verify) {
-              try { await stripeCall(sk, 'GET', '/v1/checkout/sessions', { limit: 1 }, { fetcher }); } catch {
-                say(said(400, 'Stripe did not accept that key for reading checkouts. Check its permissions (Checkout Sessions: Write) and that it is the account you mean, then go back and paste it again.')); return;
+              try { await stripeCall(sk, 'GET', '/v1/checkout/sessions', { limit: 1 }, { fetcher }); } catch (error) {
+                const reason = error instanceof StripeError ? ` Stripe said: ${error.message}` : '';
+                log(`Stripe could not read checkouts.${reason}`);
+                say(said(400, 'Stripe did not accept that key for reading checkouts. Check its permissions (Checkout Sessions: Write) and that it is the account you mean, then go back and paste it again.' + reason)); return;
               }
             }
             let webhook = { made: false };
             if (!hook) {
               const m = await makeWebhook(sk, site, { fetcher });
-              if (!m.ok) { say(m.page); return; }
+              if (!m.ok) { log(m.page.text); say(m.page); return; }
               hook = m.secret;
               webhook = { made: true, id: m.id, older: m.older };
             }
@@ -303,10 +305,13 @@ export async function shopConnectManual(root, { managed = null, live = false, lo
             // The new secret is saved: the older endpoints this kit made for the same address stop sending (turned off,
             // not deleted: the owner can turn one back on in Stripe).
             let disabled = 0;
+            const warnings = [];
             if (okay && webhook.made) {
-              for (const id of webhook.older) { try { await updateWebhookEndpoint(sk, id, { disabled: true }, { fetcher }); disabled += 1; } catch { /* left on; Stripe retries and says so */ } }
+              for (const id of webhook.older) { try { await updateWebhookEndpoint(sk, id, { disabled: true }, { fetcher }); disabled += 1; } catch (error) { warnings.push(`Stripe could not turn off webhook ${id}: ${error instanceof StripeError ? error.message : 'no answer'}`); } }
             }
             const check = okay && !live && chosen === 'stripe-managed' ? await probeManaged(sk, shopNow.shop, { fetcher }) : null;
+            if (check && !check.ok) warnings.push(check.words);
+            for (const warning of warnings) log(warning);
             let tillNote = '';
             if (okay && shopNow.shop && !shopNow.absent && chosen !== shopNow.shop.till) {
               try {
@@ -317,13 +322,14 @@ export async function shopConnectManual(root, { managed = null, live = false, lo
               } catch { tillNote = ''; }
             }
             const narrow = webhook.made ? ' Recommended, 20 seconds: in Stripe, open this key (… → Edit key) and set Webhook Endpoints back to None. The shop never needs it again.' : '';
-            say(said(okay ? 200 : 500, okay ? `Saved to your Worker (${modeOf(key)} mode).${webhook.made ? ' Stripe made the webhook; its secret went straight to your Worker.' : ''}${check ? ` ${check.words}` : ''}${narrow} You can close this page.` : 'Wrangler could not save it (is this computer signed in to Cloudflare? npx wrangler login). Nothing was kept.'));
+            say(said(okay ? 200 : 500, okay ? `Saved to your Worker (${modeOf(key)} mode).${webhook.made ? ' Stripe made the webhook; its secret went straight to your Worker.' : ''}${check?.ok ? ` ${check.words}` : ''}${warnings.length ? ` ${warnings.join(' ')}` : ''}${narrow} You can close this page.` : 'Wrangler could not save it (is this computer signed in to Cloudflare? npx wrangler login). Nothing was kept.'));
             server.close();
             done(okay
               ? {
                 ok: true, command: 'shop connect', saved: true, mode: modeOf(key), till: chosen,
                 webhook: webhook.made ? { made: true, id: webhook.id, url: hookUrlOf(site), turnedOff: disabled } : { made: false, url: hookUrlOf(site) },
                 ...(check ? { managedPayments: check } : {}),
+                ...(warnings.length ? { warnings } : {}),
                 message: `Saved as the Worker secrets STRIPE_KEY and STRIPE_WEBHOOK_SECRET (never shown), ${modeOf(key)} mode, seller: ${chosen === 'stripe-managed' ? 'Stripe (Managed Payments)' : 'the studio'}.${webhook.made ? ` Stripe made the webhook ${webhook.id} for ${hookUrlOf(site)}${disabled ? ` and ${disabled} older one(s) were turned off` : ''}.` : ''}${tillNote}${narrow} homie-studio shop says whether anything else is missing.`,
               }
               : { ok: false, command: 'shop connect', why: 'wrangler secret put failed (sign in with npx wrangler login, then run this again)' });

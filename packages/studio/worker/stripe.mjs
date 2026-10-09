@@ -55,13 +55,13 @@ export function formEncode(params, prefix = '', out = new URLSearchParams()) {
 export function redactStripe(value, env = {}) {
   let text = String(value ?? '');
   for (const secret of [env.STRIPE_KEY, env.STRIPE_WEBHOOK_SECRET]) if (secret) text = text.replaceAll(String(secret), '[redacted]');
-  return text.replace(/(?:[rs]k_(?:test|live)_[A-Za-z0-9]+|whsec_[A-Za-z0-9+/=_-]+|[A-Za-z0-9_]+_secret_[A-Za-z0-9_-]+)/g, '[redacted]');
+  return text.replace(/(?:(?:sk|rk|pk|whsec|oak)_[A-Za-z0-9+/=_-]+|[A-Za-z0-9_]+_secret_[A-Za-z0-9_-]+)/g, '[redacted]');
 }
 
 export class StripeError extends Error {
   constructor(status, body) {
     const e = body?.error ?? {};
-    super(e.message ? redactStripe(e.message).slice(0, 300) : `Stripe answered ${status}`);
+    super(e.message ? redactStripe(e.message).slice(0, 400) : `Stripe answered ${status}`);
     this.status = status;
     this.code = redactStripe(e.code ?? e.type ?? 'stripe');
     this.type = e.type ? redactStripe(e.type) : null;

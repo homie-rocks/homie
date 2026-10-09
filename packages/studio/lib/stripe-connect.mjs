@@ -11,7 +11,7 @@ import { readStudio, siteUrl } from './studio.mjs';
 import { hookUrlOf, readShop, shopConnectManual } from './shop.mjs';
 import { syncPaymentLinks } from './shop-links.mjs';
 import { LINKS_STRIPE_VERSION, fullerReason } from '../worker/shop-links.mjs';
-import { formEncode } from '../worker/stripe.mjs';
+import { formEncode, redactStripe } from '../worker/stripe.mjs';
 
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const failure = (needs, why, extra = {}) => ({ ok: false, command: 'shop connect', needs, why, ...extra });
@@ -28,6 +28,14 @@ export function stripeConnectionInfo(root, { storage = receiptHome(), now = Date
 }
 
 const json = (s) => { try { return JSON.parse(s); } catch { return null; } };
+// Stripe CLI also prints login failures on stderr (stripe/stripe-cli pkg/cmd/root.go).
+// Never fall back to stdout: successful login output can contain credentials.
+const stripeReason = (result, call) => {
+  const message = (json(result?.stdout)?.error ?? json(result?.stderr)?.error)?.message
+    ?? (result?.code !== 0 ? result?.stderr?.trim() : null);
+  return typeof message === 'string' ? ` Stripe said: “${redactStripe(message).slice(0, 400)}” (${call}).` : '';
+};
+
 // This output stays private, including CLI config, completion, errors and API responses.
 export function stripeProcess(args, { cwd, env = process.env } = {}) {
   const childEnv = { ...env, CI: '1', NO_COLOR: '1' };
@@ -94,15 +102,15 @@ export async function shopConnect(root, options = {}) {
       const login = json(start.stdout);
       const complete = completionArgs(login?.next_step);
       if (start.code !== 0 || !stripeURL(login?.browser_url) || !complete || !/^[a-zA-Z0-9 -]{1,100}$/.test(login?.verification_code ?? '')) {
-        return failure('stripe-login', 'Stripe could not start browser approval. Update the official Stripe CLI and try shop connect again. An account administrator may need to enable CLI access in Stripe’s MCP and CLI access settings.');
+        return failure('stripe-login', 'Stripe could not start browser approval. Update the official Stripe CLI and try shop connect again. An account administrator may need to enable CLI access in Stripe’s MCP and CLI access settings.' + stripeReason(start, 'login'));
       }
       log(`Approve your studio’s Stripe account in your browser. Pairing code: ${login.verification_code}. ${login.browser_url}`);
       open(login.browser_url);
       const finished = await cli(complete);
-      if (finished.code !== 0) return failure('stripe-login', 'Stripe approval did not finish. Run shop connect again when ready.');
+      if (finished.code !== 0) return failure('stripe-login', 'Stripe approval did not finish. Run shop connect again when ready.' + stripeReason(finished, 'login completion'));
 
       probe = await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
-      if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return failure('stripe-access', 'Stripe is signed in but cannot read Products in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.');
+      if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return failure('stripe-access', 'Stripe is signed in but cannot read Products in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.' + stripeReason(probe, 'GET /v1/products'));
     }
     const site = siteUrl(root);
     if (!site) return failure('deploy', 'Stripe is connected on this computer. Deploy the studio with studio_deploy (Cloudflare approval first if needed), then run shop connect again.', { mode, connected: true });
@@ -114,7 +122,9 @@ export async function shopConnect(root, options = {}) {
       for (const [k, v] of formEncode(params)) args.push('-d', `${k}=${v}`);
       const r = await cli(args);
       const body = json(r.stdout);
-      if (r.code !== 0 || !body || body.error) throw new Error('Stripe API operation failed');
+      if (r.code !== 0 || !body || body.error) {
+        throw Object.assign(new Error('Stripe API operation failed'), { stripeReason: stripeReason(r, `${method} ${path.replace(/\/[^/]*_[A-Za-z0-9]+$/, '/…')}`) });
+      }
       return body;
     };
     const reason = fullerReason(checked.shop);
@@ -129,7 +139,8 @@ export async function shopConnect(root, options = {}) {
         renameSync(`${receiptFile}.tmp`, receiptFile);
       } });
     return { ...result, profile };
-  } catch {
-    return failure('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Products, Prices, Payment Links and Webhook Endpoints write permissions, and the Cloudflare login, then run shop connect again. No credentials were printed.');
+  } catch (e) {
+    const said = e?.stripeReason ?? '';
+    return failure('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Products, Prices, Payment Links and Webhook Endpoints write permissions, and the Cloudflare login, then run shop connect again. No credentials were printed.' + said);
   } finally { lock.release(); }
 }

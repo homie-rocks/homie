@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { readStudio } from './studio.mjs';
 import { readShop } from './shop.mjs';
 import { defaultTaxCode, money } from '../worker/shop-rules.mjs';
-import { productIdOf } from '../worker/stripe.mjs';
+import { productIdOf, redactStripe } from '../worker/stripe.mjs';
 
 const MARK = 'shop-v1';
 
@@ -58,6 +58,22 @@ export function productsIn(value, out = [], depth = 0) {
   return out;
 }
 
+// Saved MCP responses can wrap a Stripe refusal in text or structured content.
+function catalogError(value, depth = 0) {
+  if (depth > 8 || value == null) return null;
+  if (typeof value === 'string') {
+    try { return catalogError(JSON.parse(value), depth + 1); } catch { return null; }
+  }
+  if (typeof value !== 'object') return null;
+  if (typeof value.error?.message === 'string') return value.error.message;
+  if (value.isError === true) return (value.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join(' ');
+  for (const child of Array.isArray(value) ? value : ['data', 'content', 'text', 'result', 'results', 'structuredContent'].map((k) => value[k])) {
+    const error = catalogError(child, depth + 1);
+    if (error) return error;
+  }
+  return null;
+}
+
 const taxCodeOf = (p) => (typeof p?.tax_code === 'string' ? p.tax_code : p?.tax_code?.id ?? null);
 
 /** The plan: the read first, then (with what Stripe answered) the writes still needed. */
@@ -83,6 +99,8 @@ export async function catalogPlan(root, { have = null, mode = null, record = tru
       ],
     };
   }
+  const error = catalogError(have);
+  if (error) return { ok: false, command: 'shop catalog', why: `Stripe said: “${redactStripe(error).slice(0, 400)}” (GET /v1/products). Read the catalog again after resolving it.` };
   const products = productsIn(have);
   const ours = products.filter((p) => p.metadata?.homie_studio === String(slug) || wanted.some((w) => w.id === p.id));
   const modes = [...new Set(ours.map((p) => (p.livemode ? 'live' : 'test')))];
@@ -149,6 +167,7 @@ export async function catalogPlan(root, { have = null, mode = null, record = tru
 
 export function catalogLines(r) {
   const lines = [];
+  if (!r.ok) return [r.why];
   if (r.step === 'read') {
     lines.push('The catalog shop.json asks for (one Product an item, the same ids in the sandbox and live):');
     for (const p of r.products) lines.push(`  ${p.id}  ${p.name}  ${p.price}  (tax code ${p.tax_code})`);

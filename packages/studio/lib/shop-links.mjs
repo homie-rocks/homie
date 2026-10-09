@@ -37,8 +37,10 @@ export async function syncPaymentLinks({ api, shop, slug, site, mode, w, receipt
     let product = products.find((p) => p.id === id);
     if (!product) product = await api('POST', '/v1/products', { id, ...fields }, `product-${hash(id)}`);
     else if (!same(product.metadata, metadata) || product.name !== fields.name || (product.description ?? '') !== fields.description || (product.tax_code?.id ?? product.tax_code) !== fields.tax_code || !product.active) await api('POST', `/v1/products/${id}`, fields);
+    // Omit an unset minimum: Stripe applies its settlement-currency floor itself.
+    // https://docs.stripe.com/api/prices/create#create_price-custom_unit_amount-minimum
     const priceFields = { product: id, currency: shop.currency, tax_behavior: 'exclusive', ...(item.price === 'choose'
-      ? { custom_unit_amount: { enabled: true, minimum: item.min, ...(item.max !== null ? { maximum: item.max } : {}) } }
+      ? { custom_unit_amount: { enabled: true, ...(item.min > 0 ? { minimum: item.min } : {}), ...(item.max !== null ? { maximum: item.max } : {}) } }
       : { unit_amount: item.price }) };
     const revision = hash(priceFields);
     let price = prices.find((p) => own(p) && p.product === id && p.metadata?.revision === revision);
