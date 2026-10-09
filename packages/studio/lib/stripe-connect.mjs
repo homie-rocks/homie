@@ -8,8 +8,10 @@ import { join } from 'node:path';
 import { runner } from './cloudflare.mjs';
 import { lockDeploy } from './deploy-state.mjs';
 import { readStudio, siteUrl } from './studio.mjs';
-import { HOOK_EVENTS, hookUrlOf, readShop, shopConnectManual } from './shop.mjs';
-import { formEncode, KEY_SHAPE, STRIPE_VERSION, WEBHOOK_SECRET_SHAPE } from '../worker/stripe.mjs';
+import { hookUrlOf, readShop, shopConnectManual } from './shop.mjs';
+import { syncPaymentLinks } from './shop-links.mjs';
+import { LINKS_STRIPE_VERSION, fullerReason } from '../worker/shop-links.mjs';
+import { formEncode } from '../worker/stripe.mjs';
 
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const failure = (needs, why, extra = {}) => ({ ok: false, command: 'shop connect', needs, why, ...extra });
@@ -61,23 +63,13 @@ export function completionArgs(step) {
   return stripeURL(url) ? ['login', '--complete', url] : null;
 }
 
-/** config --list for a named profile prints field=value (old and current CLI); values may be quoted. */
-export function profileFields(output) {
-  const out = {};
-  for (const line of String(output ?? '').split('\n')) {
-    const m = /^\s*(test_mode_api_key|test_mode_key_expires_at|account_id|display_name)\s*=\s*(.*?)\s*$/.exec(line);
-    if (m) out[m[1]] = m[2].replace(/^"(.*)"$/, '$1');
-  }
-  return out;
-}
-
 export async function shopConnect(root, options = {}) {
   if (options.manual) {
     const result = await shopConnectManual(root, options);
     if (result.ok) rmSync(join(receiptDir(root, options.storage ?? receiptHome()), 'test.json'), { force: true });
     return result;
   }
-  const { live = false, renew = false, log = () => {}, exec = stripeProcess, open = openBrowser, now = Date.now,
+  const { live = false, renew = false, log = () => {}, exec = stripeProcess, open = openBrowser,
     storage = receiptHome(), wrangler = null } = options;
   const mode = live ? 'live' : 'test';
   const checked = readShop(root);
@@ -94,14 +86,11 @@ export async function shopConnect(root, options = {}) {
     const cli = (args) => exec(['--project-name', profile, ...args], { cwd: root });
     const installed = await cli(['--version']);
     if (installed.code !== 0) return failure('stripe-cli', 'Install Stripe’s official CLI, then run shop connect again.', { next: ['npm install -g @stripe/cli@latest'] });
-    const config = async () => profileFields((await cli(['config', '--list'])).stdout);
-    let fields = await config();
-    const expired = fields.test_mode_key_expires_at && Date.parse(fields.test_mode_key_expires_at) <= now();
+
     // A read both checks existing credentials and lets Stripe refresh its OAuth session itself.
-    let reapproved = false;
-    let probe = renew || expired ? { code: 1 } : await cli(['get', '/v1/checkout/sessions', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
+    let probe = renew ? { code: 1 } : await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
     if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) {
-      const start = await cli(['login', '--non-interactive']);
+      const start = await cli(['login', '--non-interactive', ...(renew ? ['--new-session'] : [])]);
       const login = json(start.stdout);
       const complete = completionArgs(login?.next_step);
       if (start.code !== 0 || !stripeURL(login?.browser_url) || !complete || !/^[a-zA-Z0-9 -]{1,100}$/.test(login?.verification_code ?? '')) {
@@ -111,68 +100,36 @@ export async function shopConnect(root, options = {}) {
       open(login.browser_url);
       const finished = await cli(complete);
       if (finished.code !== 0) return failure('stripe-login', 'Stripe approval did not finish. Run shop connect again when ready.');
-      reapproved = true;
-      fields = await config();
-      probe = await cli(['get', '/v1/checkout/sessions', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
-      if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return failure('stripe-access', 'Stripe is signed in but cannot read Checkout Sessions in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.');
+
+      probe = await cli(['get', '/v1/products', '-d', 'limit=1', ...(live ? ['--live'] : [])]);
+      if (probe.code !== 0 || !Array.isArray(json(probe.stdout)?.data)) return failure('stripe-access', 'Stripe is signed in but cannot read Products in the requested mode. Review the account, sandbox and permissions in Stripe, then run shop connect --renew again.');
     }
     const site = siteUrl(root);
     if (!site) return failure('deploy', 'Stripe is connected on this computer. Deploy the studio with studio_deploy (Cloudflare approval first if needed), then run shop connect again.', { mode, connected: true });
     let target;
     try { target = new URL(site); } catch { return failure('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.'); }
     if (target.protocol !== 'https:' || target.username || target.password || /^(localhost|127\.|\[::1\])/.test(target.hostname)) return failure('deploy', 'Deploy the studio to a public HTTPS address, then run shop connect again.');
-    const key = fields.test_mode_api_key;
-    if (live || !KEY_SHAPE.test(key ?? '') || !key.startsWith('rk_test_') && !key.startsWith('sk_test_')) {
-      return failure('worker-credential', 'Stripe CLI access is connected, but this session cannot supply a supported independent Worker credential. Current CLI OAuth does not export server API keys; live CLI keys are not exportable through its config command. No public API creates a shop-only restricted key. The shop is not connected for selling. The owner can choose the manual local-page fallback; never request a key in chat.', { mode, connected: true, fallback: `homie-studio shop connect --manual${live ? ' --live' : ''}` });
-    }
-    if (!Number.isFinite(Date.parse(fields.test_mode_key_expires_at)) || Date.parse(fields.test_mode_key_expires_at) <= now()) return failure('renew', 'The CLI test key has expired or has no known expiry. Run shop connect --renew to approve a fresh session.');
-    const api = async (method, path, params) => {
-      const args = [method.toLowerCase(), path, '--stripe-version', STRIPE_VERSION];
+    const api = async (method, path, params, idempotency) => {
+      const args = [method.toLowerCase(), path, '--stripe-version', LINKS_STRIPE_VERSION, ...(live ? ['--live'] : []), ...(idempotency ? ['--idempotency', idempotency] : [])];
       for (const [k, v] of formEncode(params)) args.push('-d', `${k}=${v}`);
       const r = await cli(args);
       const body = json(r.stdout);
       if (r.code !== 0 || !body || body.error) throw new Error('Stripe API operation failed');
       return body;
     };
-    const url = hookUrlOf(site);
-    let endpoints = [], cursor;
-    do {
-      const list = await api('GET', '/v1/webhook_endpoints', { limit: 100, ...(cursor ? { starting_after: cursor } : {}) });
-      if (!Array.isArray(list.data)) throw new Error('Invalid webhook list');
-      endpoints.push(...list.data);
-      const next = list.has_more ? list.data.at(-1)?.id : null;
-      if (list.has_more && (!next || next === cursor)) throw new Error('Invalid pagination');
-      cursor = next;
-    } while (cursor);
+    const reason = fullerReason(checked.shop);
+    if (reason) return failure('fuller-checkout', reason, { mode, connected: true });
     const studio = readStudio(root);
     const w = wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
     const receiptFile = join(dir, `${mode}.json`);
     const receipt = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
-    if (receipt?.account && fields.account_id !== receipt.account && !reapproved) return failure('stripe-account', 'This Stripe profile now names a different account. Run shop connect --renew and select this studio’s own account in Stripe before changing its Worker credentials.');
-    const fingerprint = hash(key);
-    const secrets = await w(['secret', 'list']);
-    if (secrets.code !== 0) return failure('cloudflare', 'Check Cloudflare sign-in and deploy the studio first, then run shop connect again. No webhook was created.');
-    const names = json(secrets.stdout ?? secrets.out);
-    const same = receipt?.fingerprint === fingerprint && receipt?.url === url && endpoints.some((e) => e.id === receipt.endpoint && e.url === url && e.status === 'enabled' && e.metadata?.homie === 'shop-v1' && HOOK_EVENTS.every((event) => e.enabled_events?.includes(event))) && Array.isArray(names) && ['STRIPE_KEY', 'STRIPE_WEBHOOK_SECRET'].every((name) => names.some((s) => s.name === name));
-    const next = ['Verify a test purchase on the deployed shop, signed webhook delivery, the item grant, then an office refund and removal of the item.', `Renew before ${fields.test_mode_key_expires_at}: homie-studio shop connect --renew`];
-    const retire = async (keep) => {
-      let remaining = 0;
-      for (const e of endpoints.filter((e) => e.id !== keep && e.url === url && e.metadata?.homie === 'shop-v1' && e.status !== 'disabled')) {
-        try { await api('POST', `/v1/webhook_endpoints/${encodeURIComponent(e.id)}`, { disabled: true }); } catch { remaining++; }
-      }
-      return remaining;
-    };
-    if (same && !renew && !reapproved) return { ok: true, command: 'shop connect', alreadyConnected: true, mode, account: fields.account_id, expiresAt: fields.test_mode_key_expires_at, webhook: { id: receipt.endpoint, url, olderStillActive: await retire(receipt.endpoint) }, verifiedPurchase: false, next };
-    const endpoint = await api('POST', '/v1/webhook_endpoints', { url, enabled_events: [...HOOK_EVENTS], api_version: STRIPE_VERSION, description: 'Studio shop', metadata: { homie: 'shop-v1' } });
-    if (!/^we_[A-Za-z0-9_]+$/.test(endpoint.id ?? '') || !WEBHOOK_SECRET_SHAPE.test(endpoint.secret ?? '')) throw new Error('Missing signing secret');
-    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_KEY: key, STRIPE_WEBHOOK_SECRET: endpoint.secret }) });
-    if (saved.code !== 0) return failure('cloudflare', 'Cloudflare could not save the Stripe credentials. Sign in with cloudflare_login, then run shop connect again. Existing webhook endpoints were left active.');
-    const record = { mode, fingerprint, url, endpoint: endpoint.id, account: fields.account_id, expiresAt: fields.test_mode_key_expires_at };
-    writeFileSync(`${receiptFile}.tmp`, JSON.stringify(record), { mode: 0o600 });
-    renameSync(`${receiptFile}.tmp`, receiptFile);
-    const remaining = await retire(endpoint.id);
-    return { ok: true, command: 'shop connect', saved: true, mode, account: fields.account_id, expiresAt: record.expiresAt, webhook: { id: endpoint.id, url, olderStillActive: remaining }, verifiedPurchase: false, message: 'Stripe test credentials and the webhook are installed in your Worker. No key or signing secret was shown. Verify a test purchase next.', next };
+    const result = await syncPaymentLinks({ api, shop: checked.shop, slug: studio.slug, site: target.origin, mode, w, receipt,
+      saveReceipt: (record) => {
+        writeFileSync(`${receiptFile}.tmp`, JSON.stringify(record), { mode: 0o600 });
+        renameSync(`${receiptFile}.tmp`, receiptFile);
+      } });
+    return { ...result, profile };
   } catch {
-    return failure('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Webhook Endpoints Write permission, and the Cloudflare login, then run shop connect again. No credentials were printed.');
+    return failure('stripe-setup', 'Stripe setup could not finish. Check the studio’s Stripe session and Products, Prices, Payment Links and Webhook Endpoints write permissions, and the Cloudflare login, then run shop connect again. No credentials were printed.');
   } finally { lock.release(); }
 }

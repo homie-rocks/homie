@@ -211,7 +211,7 @@ export const SHOP_JS = String.raw`(function () {
       if (i.way === 'cap' && i.retryWay) { act.appendChild(el('span', { class: 'why' }, WAY.cap)); i.way = i.retryWay; }
       if (i.way === 'checkout') {
         var amount = null;
-        if (i.price === 'choose') {
+        if (i.price === 'choose' && !s.keyless) {
           amount = el('input', { type: 'number', 'aria-label': 'How much in ' + s.currency.toUpperCase(), min: String(i.min / s.currencyScale), step: String(s.amountStep / s.currencyScale), value: String(i.min / s.currencyScale) });
           if (i.max !== null) amount.setAttribute('max', String(i.max / s.currencyScale));
           act.appendChild(amount);
@@ -228,7 +228,8 @@ export const SHOP_JS = String.raw`(function () {
         var quantity = el('input', { type: 'number', min: '1', step: '1', value: '1', 'aria-label': 'Quantity' });
         var add = el('button', { type: 'button', class: 'plain' }, 'Add to cart');
         add.onclick = function () { cart.push({ item: i.id, name: i.name, quantity: Number(quantity.value), amount: amount ? units(amount.value, s.currencyScale) : undefined }); drawCart(); };
-        act.appendChild(quantity); act.appendChild(add);
+        if (!s.keyless) { act.appendChild(quantity); act.appendChild(add); }
+        else if (i.price !== 0) act.appendChild(el('p', { class: 'note' }, i.price === 'choose' ? 'Choose your amount on Stripe.' : 'Confirm quantity on Stripe. Buy different items separately.'));
       } else if (i.way === 'owned') {
         act.appendChild(el('span', { class: 'owned' }, 'Yours ✓'));
       } else if (i.way === 'make-an-account') {
@@ -524,6 +525,7 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
       [['Payments', s.stripe.payments], ['Refunds', s.stripe.refunds], ['Disputes', s.stripe.disputes], ['Payouts', s.stripe.payouts], ['Balance', s.stripe.balance], ['Tax', s.stripe.tax]].concat(s.stripe.managedPayments ? [['Managed Payments', s.stripe.managedPayments]] : []).forEach(function (l) { links.appendChild(link(l[1], l[0])); });
       links.appendChild(link('/_studio/api/shop/orders.csv', 'CSV for your accountant'));
       top.appendChild(links);
+      if (s.keyless) top.appendChild(el('p', { class: 'note' }, 'Refund in Stripe or ask your AI connected to Stripe. If a payment is missing here, ask your AI to resend its Stripe webhook.'));
       if (s.totals) top.appendChild(el('p', { class: 'dim' }, 'Last 30 days: ' + s.totals.sales + ' sales, ' + cents(s.totals.paid, s.totals.currency) + ' before tax and fees; ' + s.totals.refunds + ' refunded (' + cents(s.totals.refunded, s.totals.currency) + '); ' + s.totals.disputes + ' disputed now, ' + s.totals.lost + ' lost.'));
       var ord = $('#orders'); ord.textContent = '';
       if (!s.orders.length) ord.appendChild(el('p', { class: 'empty' }, 'No orders yet.'));
@@ -651,7 +653,7 @@ export async function officeShopPage(cat) {
 <div class="game" style="padding:6px 16px 12px"><h3>Orders</h3><div id="orders"></div></div>
 <div class="game" style="padding:6px 16px 12px" id="referrals"></div>
 <div class="toast" id="toast" role="status" hidden></div>
-<p class="note">You are the seller. Money goes from players to your own Stripe account; Homie never sees it and takes nothing. Refund is one tap here (your AI can only ask, and you confirm). A card dispute never touches the player's account: answer it in Stripe; if you lose it, that one item is taken back. Tax: when enabled, Stripe Tax works out and collects tax where you told Stripe you are registered${cat.shop?.till === 'stripe-managed' ? '; with Managed Payments Stripe is the seller of record and files it for you' : ''}. Payouts, the balance and receipts are Stripe's own pages, linked above. Referrals: you pay referrers yourself (they invoice you); nothing moves through Homie. This is not legal or tax advice.</p>`;
+<p class="note">You are the seller. Money goes from players to your own Stripe account; Homie never sees it and takes nothing. Refunds are handled in Stripe or by your connected AI; shops with the fuller checkout connection also offer Refund here. A card dispute never touches the player's account: answer it in Stripe; if you lose it, that one item is taken back. Tax: when enabled, Stripe Tax works out and collects tax where you told Stripe you are registered${cat.shop?.till === 'stripe-managed' ? '; with Managed Payments Stripe is the seller of record and files it for you' : ''}. Payouts, the balance and receipts are Stripe's own pages, linked above. Referrals: you pay referrers yourself (they invoice you); nothing moves through Homie. This is not legal or tax advice.</p>`;
   return new Response(shell(cat, `Shop · ${name}`, body, { script: OFFICE_SHOP_SCRIPT }), {
     headers: { ...PRIVATE, 'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src '${officeHash}'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'` },
   });

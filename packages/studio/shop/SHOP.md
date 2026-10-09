@@ -110,37 +110,53 @@ The person never supplies a key to the AI. A studio-specific CLI profile avoids 
 If the studio is not deployed yet, approval is retained: deploy with `studio_deploy` (and
 `cloudflare_login` first if needed), then rerun connect. Webhooks require the deployed HTTPS address.
 
-Legacy CLI pairing supplies a 90-day test key. Where available, connect captures it privately, creates
-`<site>/api/shop/hook`, and passes that key and the returned signing secret together to Wrangler on stdin.
-Credentials remain in the studio's Stripe CLI storage and Worker secrets, never Homie services or chat.
-Existing installed connections are reused. `shop connect --renew` obtains fresh approval and replaces the
-credential/webhook pair; only after saving does it disable older toolkit endpoints for the same address.
-The result names expiry and the next step: verify a test purchase, signed webhook delivery, item grant,
-and an office refund that removes the item. Installation is not an end-to-end payment verification.
+**The default is keyless.** Connect syncs one Product and Price for each shop.json item and one
+Payment Link for each paid item. Tip Prices use custom amounts; free orders stay local. It creates
+an account webhook at `<site>/api/shop/hook`, captures its signing secret without displaying it,
+and installs `STRIPE_WEBHOOK_SECRET` and `STRIPE_SHOP_LINKS` through Wrangler stdin. No Stripe
+API key goes into the Worker. Repeat connect after editing shop.json: changed prices get new
+Price versions, changed links get new versions, and removed objects are archived. Old paid orders
+keep their frozen item definitions. Receipts contain no credentials. Unchanged runs create nothing.
 
-**Current Stripe CLI OAuth does not export an independent Worker's key. Live CLI key export is also
-unsupported.** In those cases the result says `worker-credential`; login alone does not mean selling works.
-There is no public general restricted-key creation API. Do not force an old CLI or make payments depend on
-the desktop agent. A persistent Worker MCP client would be a separate, unverified runtime design. Only when the owner chooses it, `shop connect --manual` opens the previous local page.
-That fallback requires the owner to create and paste a Dashboard key; it does not meet one-approval setup.
-The page creates the webhook automatically, so the owner need not handle its signing secret.
-Both restricted (`rk_`) and full secret (`sk_`) keys are accepted by that optional fallback.
-For a restricted runtime key use Checkout Sessions Write, Charges Write, PaymentIntents Read, Disputes Read;
-setup also requires Webhook Endpoints Write. Stripe's preset CLI permissions cannot be narrowed here.
-`shop connect --live` is only for an owner's go-live request; the fallback is `--manual --live`.
-Stripe's business activation and tax choices remain the owner's. See the source checkout's
-`docs/stripe-connect-research.md` for current official mechanisms and limitations.
+With an existing account and deployed studio, the person approves Stripe CLI once; an already
+connected profile needs zero new approvals. An MCP-only grant is separate and is never extracted.
+The AI installs tooling, creates/syncs objects and stores the secret. New account verification,
+activation, administrator access settings and Cloudflare authorization are separate prerequisites.
+`shop connect --live` requires the owner's go-live request. `--renew` retries browser authorization.
+Never request a key from the person for the default flow.
 
-[Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment) uses webhooks as well as the redirect.
-A preview normally has no database and cannot sell. Stripe's optional agent tools can populate Products
-with `shop catalog` and read sales. Endpoint creation belongs in the private connect process because
-it returns a signing secret. Stripe approval links belong to the owner.
+At purchase time, the Worker saves an opaque order reference and sends it as the link's
+`client_reference_id`. The buyer confirms quantity or tip amount on Stripe. A signed snapshot
+session must match the frozen link, revision, currency and allowed amount before granting. Reusing
+a link creates a distinct order for each Session. Returns without a webhook never grant goods.
+Refunds and disputes use durable financial snapshots in the existing meta table, without buyer/card
+data. They tolerate retries and arrivals before the payment event. Fully successful refunds revoke
+items; failed refunds restore the financial booking. A lost dispute revokes goods, never the account.
 
-`shop`, `shop orders`, and `/_studio/office/shop` show readiness and sales. Office refunds are owner actions;
-`shop refund <order>` asks the owner to confirm. Stripe controls pending or held refunds.
-The office links Stripe's disputes and provides CSV exports. A dispute does not lock a player's account;
-a lost dispute revokes the order's entitlements. Referral statements record what the studio owes;
-the studio pays referrers directly and marks payment in its office.
+| Need | Keyless behavior / fuller connection |
+|---|---|
+| Several different items in one payment | Buy separately. Stripe supports static multi-item links (up to 20 fixed-price lines), but they are not an arbitrary buyer cart. Dynamic carts use the keyed path. |
+| Reserve an optional spending allowance | Requires keyed Checkout; a reusable public link cannot atomically reserve this studio's local cap. No silent weakening of a configured cap. |
+| Expire an abandoned session | Stripe controls the lifetime; deactivating a link prevents new sessions, not existing sessions. Custom expiry/cancellation requires the keyed path. |
+| Refund in one tap / player self-refund | Owner uses Stripe Dashboard or asks their Stripe-connected AI. Signed events update books. Office shows guidance instead of a paid-order refund button. Free refunds remain local. |
+| Lost webhook | Remains pending. Stripe retries; the AI can use `stripe events resend <event> --webhook-endpoint <endpoint>` (within Stripe's resend window). No grant from a browser return. Automatic provider-read reconciliation needs a key. |
+| Free orders | Local, including free carts; no Stripe account, API key or webhook secret required. |
+| Exact local eligibility/sale/repeat enforcement | Local checks run before redirect, but a public link can be reused. Sync deactivates removed links; strict pre-payment enforcement of previously issued links requires keyed sessions. |
+| Managed Payments | Payment Links support managed_payments.enabled; connect uses it when the studio selects Stripe as seller, subject to Stripe eligibility and terms. |
+| Currency display | Payment Links always enable Stripe Adaptive Pricing. Bookkeeping uses integration currency; presentment details describe what the customer saw. |
+
+An existing `STRIPE_KEY` selects the fuller path automatically. Only if requested, explain:
+“The fuller connection adds combined carts, spending limits, automatic recovery and refunds here.”
+The explicit `shop connect --manual` path remains available, including `--live`, but requires the
+owner's existing Dashboard key step; it does not satisfy one approval. Never choose it automatically.
+Running default connect again saves links, removes the API key, and keeps signed-event fulfillment.
+When switching to spending restrictions, the AI must deactivate previously issued Payment Links through
+the approved CLI and resolve in-flight checkouts before relying on those restrictions; switching credentials
+does not cancel old Stripe sessions. The runtime OAuth finding and sources are in `docs/stripe-connect-research.md` in the source checkout.
+
+`shop`, `shop orders`, and `/_studio/office/shop` show readiness and sales. Stripe's optional MCP
+is useful for owner-requested refunds and analytics; honor its approval links. Do not create a
+secret-returning webhook through a conversation tool: the private connect process owns that call.
 
 ## Payment guarantees and schema
 
@@ -167,7 +183,7 @@ an untagged Dashboard refund revokes items only when the whole order is refunded
 Unneeded signed events are acknowledged without recording. A refund or dispute naming an unrecorded payment
 of this database recovers its Checkout Session first, regardless of event age.
 
-Sessions reserve the optional cap until Stripe confirms an outcome. With the default lifetime, a sessionless
+**With an API key**, sessions reserve the optional cap until Stripe confirms an outcome. With the default lifetime, a sessionless
 reservation ages out after 24 hours plus a one-minute margin; your `checkoutMinutes` changes that window.
 [Stripe session lifetime](https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-expires_at)
 and [expiring open sessions](https://docs.stripe.com/api/checkout/sessions/expire) define these provider bounds.
@@ -175,7 +191,7 @@ Replacing an open checkout expires only reservations at least a minute old; a na
 Unresolved orders become eligible for reconciliation after one minute, even with no cap. A buyer's next shop
 or owned-items request schedules up to three reads off the response path, with atomic claims and backoff up
 to an hour; an optional Worker cron invokes the same reconciliation across buyers. No cron is installed for you. To run it every five minutes, add `"triggers": { "crons": ["*/5 * * * *"] }` to the studio’s root `wrangler.jsonc`; deploy preserves its triggers.
-Every recorded payment checks Stripe’s refunds and dispute state, including payments recovered by an early refund or dispute event. The thanks page can verify a payment directly with the studio's key. Webhook events require Stripe's signature.
+With an API key, every recorded payment checks Stripe’s refunds and dispute state, including payments recovered by an early refund or dispute event. The thanks page can verify a payment directly with the studio's key. Webhook events require Stripe's signature.
 Test and live books stay separate. Owner release attempts to expire an open session, records who released it
 and when, and never prevents a later verified payment grant.
 

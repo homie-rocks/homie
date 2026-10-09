@@ -170,7 +170,7 @@
  *   homie-studio shop                     is the studio's shop selling (its own Stripe), and if not, what is missing
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]   shop.json and SELLING.md
  *   homie-studio shop check               shop.json against studio settings and provider requirements
- *   homie-studio shop connect [--live] [--renew] [--manual]   Stripe browser approval; --manual chooses the local page for the studio's
+ *   homie-studio shop connect [--live] [--renew] [--manual]   sync Payment Links and webhook through Stripe browser approval; --manual chooses the local page for the studio's
  *                                         restricted Stripe key; with it this makes the webhook (0.24.3), and the key
  *                                         and the webhook's secret go straight to the Worker secrets, never a chat or a
  *                                         file (test keys only unless --live)

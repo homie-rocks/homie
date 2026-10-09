@@ -1,4 +1,144 @@
-# Stripe connection: design and evidence
+# Stripe connection, round two: a keyless shop
+
+Checked 2026-10-08 against current Stripe documentation, public OAuth discovery and official CLI source.
+The first-round notes below are retained as historical evidence, not the current setup instructions.
+
+## Decision and human steps
+
+**Ship Payment Links as the default.** An already-deployed studio with an existing Stripe account needs
+one browser approval for its studio CLI session; an already-connected CLI profile needs zero new approvals.
+The AI runs `stripe_login` / `shop connect`, creates/syncs the catalog, links and webhook, and captures the
+signing secret privately into Wrangler stdin. The Worker holds **no Stripe API key** and makes no Stripe
+API requests on a keyless purchase. Buyers pay on Stripe into the studio's account; signed events grant goods.
+No Homie account, credential, platform, server, cut, or persistent desktop agent participates in payments.
+
+This count is for connection, not Stripe account onboarding. A new business still creates/verifies/activates
+its account and completes Stripe's business/bank/identity requirements. CLI access may need administrator
+enablement. Cloudflare authorization and deployment are separate prerequisites. An MCP-only approval is
+not a CLI approval; this implementation neither extracts that token nor pretends to reuse it.
+
+## Verified setup capabilities
+
+- [CLI login](https://docs.stripe.com/cli/login) documents browser approval, account/sandbox/live selection,
+  OS credential storage, and automatic refresh. The [official request implementation](https://github.com/stripe/stripe-cli/blob/v1.53.1/pkg/requests/base.go)
+  supports generic GET/POST requests, nested form arguments, API version, live context and idempotency headers.
+  Thus the AI can make the required setup calls through the official client without exporting its credential.
+  Actual account grants still must permit these writes; no real account was signed into here.
+- [MCP tools](https://docs.stripe.com/mcp) include `stripe_api_read` and `stripe_api_write` for the API and
+  OAuth consent. A raw conversation tool's webhook creation would expose its secret to the conversation.
+  The implemented Homie MCP tool instead drives the private CLI subprocess, capturing output without printing it.
+- [Create Price](https://docs.stripe.com/api/prices/create?query=custom_unit_amount) supports
+  `custom_unit_amount.enabled`, minimum, maximum and preset. Fixed items use unit_amount. The
+  [Payment Links guide](https://docs.stripe.com/payment-links/create) shows Product/Price/link creation,
+  and a custom-price link with exactly one line and quantity one. Each non-free item gets its own link.
+  Free items still have catalog objects but their orders grant locally and do not require Stripe.
+- [Create Payment Link](https://docs.stripe.com/api/payment-link/create) documents metadata copied to
+  generated Sessions, `after_completion.redirect.url`, `payment_intent_data.metadata`, and
+  `line_items.adjustable_quantity` (maximum 999999). It also now documents `managed_payments.enabled`;
+  this is supported when selected by the studio and enabled by Stripe, without forcing that seller choice.
+  Redirects return to the studio's thanks page with `{CHECKOUT_SESSION_ID}`. Metadata pins the link revision;
+  it cannot carry a different player per purchase because the link is shared.
+- [Payment Link URL parameters](https://docs.stripe.com/payment-links/url-parameters) explicitly supports
+  a `client_reference_id` of up to 200 alphanumeric/dash/underscore characters, returned in the Session
+  webhook. We use an opaque random local order ID, not an email, account token or entitlement. A signed
+  Session must also match the stored link/revision/currency/amount range. This URL parameter is correlation,
+  not authentication: sharing the complete link gives the referenced account the resulting entitlement.
+- [Create webhook endpoint](https://docs.stripe.com/api/webhook_endpoints/create) returns its signing
+  secret on creation; it cannot be recovered by listing endpoints. Connect installs the secret privately,
+  reuses a recorded installed endpoint, and retires older toolkit endpoints for that exact address only
+  after storage succeeds. Failed storage leaves old endpoints active; retry completes setup.
+- [Adaptive Pricing](https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing?payment-ui=stripe-hosted)
+  says Session and PaymentIntent amounts remain in integration currency, while `presentment_details`
+  records the buyer's currency/amount. Payment Links always enable it. The books validate integration
+  amounts, and do not reinterpret presentment amounts as the shop's prices. Refunds use integration currency.
+
+## Limits and nearest official equivalents
+
+| Request | Keyless behavior and Stripe's equivalent | When a key is needed |
+|---|---|---|
+| Several different items in one payment | Per-item links buy separately. Stripe supports preconfigured multi-item links with up to 20 fixed-price lines; custom amounts require one line/quantity one. A static bundle could be modeled by the studio as one item. | An arbitrary buyer-built cart uses the existing Session API path. |
+| Reserve a studio spending cap before payment | Public reusable links cannot atomically reserve an amount in the studio's DB and prevent another visit. A configured cap closes paid keyless checkout with a plain next step; it is never silently ignored. | Existing reservation/Session path. |
+| Expire abandoned checkout | Stripe owns Session lifetime. Deactivating a Payment Link stops new sessions, not sessions already open. Sync deactivates removed/replaced links. | Individual [Session expiry](https://docs.stripe.com/api/checkout/sessions/expire), custom lifetime and cancellation retain the keyed path. |
+| One-tap office refund | Office links Stripe and says to refund there or ask the connected AI. Stripe controls its approval requirements. Signed refund snapshots update the local books. Free refunds stay local. | Existing local Refund button and player self-refund need API access. |
+| Lost webhook | Remains pending; no optimistic grant from browser return. Stripe retries automatically. Dashboard resend is available for 15 days; [CLI resend](https://docs.stripe.com/cli/events/resend) for 30 days. The AI resends relevant payment/refund/dispute events from the owner's account. | Existing provider-read reconciliation for automatic repair, or events outside resend retention. |
+| Free orders | No Stripe, including free carts and free lines bought separately. | Mixing free and paid items in one arbitrary cart uses keyed checkout. |
+| Strict sale/eligibility/repeat rules | Local rules run before issuing the reference, but a public link/reference can be reused. Each Session is recorded separately; money is never silently discarded. Old open sessions honor frozen item snapshots. | Strict pre-payment revocation/expiry and dynamic constraints need keyed checkout. |
+| Managed Payments | Current Payment Link API supports it; no extra keyless limitation assumed. | Account eligibility and terms remain Stripe's decisions in either path. |
+
+[Webhook delivery documentation](https://docs.stripe.com/webhooks) warns about duplicates and unordered
+arrival. The Worker verifies signatures before storing a minimal financial snapshot per refund/dispute ID.
+Pending snapshots cannot overwrite terminal ones, failed refunds undo prior success, terminal disputes beat
+older open snapshots, and pre-payment events are applied when the Session arrives. No card/customer payload
+is retained. A lost refund event is a missing fact until Stripe redelivers it; keyless cannot truthfully claim
+provider-read reconciliation. A charge event's embedded refund list is used, but an incomplete list does not
+invent omitted refunds. The AI should resend individual refund events if necessary.
+
+## Point 4: runtime OAuth, precise evidence boundary
+
+**No supported direct-API Worker credential flow established; no blanket OAuth prohibition found.**
+It would be false to claim Stripe explicitly forbids every persistent studio-owned OAuth MCP client.
+
+The fetched [resource discovery](https://mcp.stripe.com/.well-known/oauth-protected-resource) advertises
+resource `https://mcp.stripe.com`, scope `mcp`, and authorization server `https://access.stripe.com/mcp`.
+The fetched [authorization metadata](https://mcp.stripe.com/.well-known/oauth-authorization-server)
+advertises authorization-code and refresh-token grants, S256 PKCE, dynamic client registration and token
+endpoint authentication `none`. These are public-client MCP capabilities, not a documented grant for
+`https://api.stripe.com`. A studio-owned Worker could in principle be an MCP client and renew its own grant;
+it would call the MCP tools, not simply use that bearer token in the existing Stripe REST transport.
+
+Stripe's [MCP guidance](https://docs.stripe.com/mcp) distinguishes OAuth on behalf of a user from agent keys
+for independent persistent applications. It also imposes human approval on certain financial writes.
+That is guidance and an operational limitation, **not an explicit ban on a Worker**. The
+[CLI source](https://github.com/stripe/stripe-cli/blob/v1.53.1/pkg/requests/base.go) does authenticate API
+requests with its own session and context headers, but the [CLI login contract](https://docs.stripe.com/cli/login)
+documents refresh/storage inside the CLI, not an export or third-party registration contract for copying
+its refresh token into an unrelated Worker. We do not impersonate Stripe's CLI OAuth client or extract its OS store.
+
+[Stripe Apps OAuth](https://docs.stripe.com/stripe-apps/api-authentication/oauth) is the documented
+renewable direct API path: exchange/refresh authenticates with the app developer's Stripe API key.
+A studio-owned app can meet independence, but app registration and that bootstrap credential add steps.
+It does not establish a key-free single-approval bootstrap. Connect OAuth requires a platform, contrary to scope.
+
+The [Stripe general terms](https://stripe.com/legal/ssa) hold the user responsible for agent actions;
+[Apps terms](https://stripe.com/legal/apps) require use according to documentation. Neither provides a
+public contract promising that the MCP grant can be used as a direct API bearer credential. No legal
+prohibition on all persistent MCP clients is inferred from that absence. Under the no-real-account constraint,
+authenticated MCP/runtime token refresh and sensitive-write behavior remain **unverified**. Consequently this
+change ships the documented Payment Link architecture, not a speculative runtime OAuth replacement.
+A confirmed supported Worker MCP runtime would merit separate work; even then mandatory refund approvals
+would not automatically preserve one-tap office refunds. This is the remaining open boundary, stated explicitly.
+
+## Implementation and verification
+
+Setup: `lib/stripe-connect.mjs` handles official browser authorization and private process output;
+`lib/shop-links.mjs` reconciles the complete catalog and installs the link configuration and signing secret.
+Stable Product IDs and Price/link revision metadata allow retries and edits without duplicating active objects.
+The studio process lock serializes syncs. Old versions are archived after new configuration is saved.
+A non-secret pending idempotency receipt makes a failed webhook-secret save retry the same creation
+response within Stripe’s retention window; no secret is written to disk. Beyond that window a replacement
+can be necessary, and the old endpoint is retired only after successful storage. API create requests use idempotency keys for catalog
+objects; Stripe's documented idempotency retention is finite, so all pages are read before creating anything.
+
+Runtime: `worker/shop-links.mjs` shares configuration/readiness and the financial snapshot ledger;
+`worker/shop.mjs` redirects keyless orders, binds signed Sessions, grants/revokes goods and retains the keyed path.
+`worker/shop-page.mjs` shows one-item purchases, tip guidance and Stripe refund/redelivery guidance.
+No new schema migration is needed: snapshots use the existing indexed meta KV table; orders use 0012 lines.
+
+Tests use the repository's HTTP-boundary Stripe stand-in and real Chrome at a phone viewport. They do not
+verify Stripe's actual hosted UI or real account permissions; the Stripe page is explicitly a stand-in.
+No Stripe/Cloudflare sign-in, deployment, push or PR.
+
+Round-two gates (run sequentially): `npm ci`, `npm run build`, `npm run validate`,
+`node scripts/desktop.mjs --check`, and `node scripts/changelog.mjs --sync` passed.
+`npm test` with the requested CHROME_PATH: **1,092 passed, 4 skipped, zero failures**.
+`npm run test:plugin`: **106 passed, 10 failed, 1 skipped**. All ten failures are the disk-space
+guards: two performance, three recording and five sound tests (about 6 GB free). No guard was bypassed.
+Generated changelog copies and template fingerprints were synced. Desktop packaging scratch was removed.
+The real-browser test uses a stand-in Stripe page and waits for the actual confirmed “It’s yours” state.
+
+---
+
+# First-round research (historical; superseded by the keyless design above)
 
 Researched 2026-10-08 against Stripe's fetched documentation, CLI source and public OpenAPI. The login/credential files were also fetched at the release tag and matched master byte-for-byte. Latest CLI release fetched from GitHub: **v1.53.1, 2026-10-07**; public API schema: **2026-09-30.endive**.
 

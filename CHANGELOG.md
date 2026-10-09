@@ -19,9 +19,9 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [Unreleased]
 
-- Connect Stripe through its official browser approval with `stripe_login` or `shop connect`; no key is requested in chat.
-- Where Stripe CLI supplies a transferable test key, create the webhook and save both Worker secrets automatically, reuse an installed connection, and name when approval must be renewed.
-- Explain the current OAuth and live Worker-credential gap plainly. Keep the local key page only as an optional `--manual` fallback, and distinguish installed credentials from a verified purchase.
+- New shops use Stripe Payment Links by default: one official CLI browser approval when needed, no human-handled key and no API key in the Worker. Connect syncs Products, fixed/custom-amount Prices, links and the webhook from shop.json; edits replace versions and removals archive them.
+- Signed events fulfill keyless purchases and chosen-amount tips, book refunds and disputes even when delivery is reordered, and reject forged events. Free orders remain local. Office refunds point to Stripe or the owner's connected AI; missing webhooks wait for Stripe redelivery.
+- Keep the existing keyed checkout for dynamic carts, spending reservations, custom expiry, provider-read recovery and office refunds. Readiness explains the next step; skills, guide, scaffold and MCP instructions follow the keyless default. No Homie service enters the money path.
 
 ## [0.34.0] - 2026-10-08
 

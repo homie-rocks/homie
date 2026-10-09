@@ -94,7 +94,8 @@ test('the skills: the owner\'s steps with Stripe\'s own tools; Stripe Projects i
   const shop = readFileSync(join(PLUGIN, 'skills', 'shop', 'SKILL.md'), 'utf8');
   assert.match(shop, /stripe_login/);
   assert.match(shop, /shop connect --renew/);
-  assert.match(shop, /worker-credential/);
+  assert.match(shop, /keyless/);
+  assert.match(shop, /Payment Links/);
   assert.match(shop, /Never silently select/);
   assert.match(shop, /stripe agent setup/);
   assert.match(shop, /https:\/\/mcp\.stripe\.com/);

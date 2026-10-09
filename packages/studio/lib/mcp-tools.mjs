@@ -1104,7 +1104,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'stripe_login', title: 'Connect the studio to Stripe',
-      description: 'Use Stripe’s official CLI browser approval for this studio. No key in chat. Installs test credentials and a webhook when the CLI supplies a transferable key; current OAuth and live mode report the remaining Worker-credential step honestly. Never choose manual unless the owner asks for the fallback. live only when the owner says go live. Follow the job output with studio_job; approval is on Stripe’s page.',
+      description: 'Connect and sync shop.json through Stripe’s official CLI with one browser approval if needed. Creates Products, Prices, Payment Links and the webhook; installs only links and signing secret, no API key in the Worker. Repeat after edits. Follow studio_job. An existing key supports fuller checkout; manual only if explicitly chosen for those features. live only when the owner says go live.',
       inputSchema: { type: 'object', properties: { ...STUDIO_ARG, live: { type: 'boolean' }, renew: { type: 'boolean' }, manual: { type: 'boolean' } } },
       annotations: { title: 'Connect Stripe', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {

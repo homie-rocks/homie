@@ -410,10 +410,10 @@ export async function setupStatus({
     rows.push({
       id: 'stripe', label: 'Stripe', need: 'for selling', state: 'act',
       detail: [version ? `Stripe CLI ${version} is installed` : 'Stripe CLI is not installed', mcp ? `optional MCP is set up for ${mcp}` : 'optional MCP is not set up', 'CLI access is not proof that Worker credentials or a purchase work'].join('; '),
-      unlocks: 'Connect the studio’s own Stripe with browser approval; shop connect reports deployment, credential and renewal steps. Verify a test purchase before calling the shop ready.',
+      unlocks: 'Connect the studio’s own Stripe with browser approval; shop connect syncs Payment Links and the webhook without a Worker API key. Verify a test purchase before calling the shop ready.',
       fix: {
         who: 'ai', run: version ? 'npx --no-install homie-studio shop connect' : 'npm install -g @stripe/cli@latest',
-        say: 'Use stripe_login or shop connect. Never ask for a key in chat. Current CLI OAuth and live mode cannot export independent Worker credentials; explain the result and offer the manual fallback only as a choice.',
+        say: 'Use stripe_login or shop connect. Never ask for a key in chat. Sync Products, Prices, Payment Links and the webhook through the approved CLI. The Worker needs only the signing secret; repeat connect after edits.',
         open: 'https://dashboard.stripe.com/register',
       },
     });

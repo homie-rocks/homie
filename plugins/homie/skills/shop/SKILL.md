@@ -1,6 +1,6 @@
 ---
 name: shop
-description: Sell things in a Homie studio's games with the studio's OWN Stripe - a supporter pack, cosmetics, a season pass, a one-time unlock, a tip - in real money, with Stripe Checkout, Stripe Tax or Stripe Managed Payments, refunds from the office, and optional studio policies with an open default; set up with Stripe's own agent tools (Stripe's MCP server and skills) with browser approval first and an explicit manual fallback where Stripe cannot issue Worker credentials. Use when someone asks to sell something, add a shop or store, take payments or donations, make money from a game, set up or connect Stripe, make the products in Stripe, asks "how are sales?", about tax or Managed Payments, to add a supporter badge, refund a player, or about chargebacks, referral shares or affiliate links between studios.
+description: Sell things in a Homie studio's games with the studio's OWN Stripe - a supporter pack, cosmetics, a season pass, a one-time unlock, a tip - in real money, with Stripe Checkout, Stripe Tax or Stripe Managed Payments, refunds from the office, and optional studio policies with an open default; set up with Stripe's own agent tools (Stripe's MCP server and skills) with one browser approval and Payment Links by default, no human-handled key and no API key in the Worker. Use when someone asks to sell something, add a shop or store, take payments or donations, make money from a game, set up or connect Stripe, make the products in Stripe, asks "how are sales?", about tax or Managed Payments, to add a supporter badge, refund a player, or about chargebacks, referral shares or affiliate links between studios.
 compatibility: The studio's own current toolkit with stripe_login or shop connect --renew, Wrangler, and the official Stripe CLI. Stripe's own agent plugin (MCP and skills) is optional for catalog work and analytics.
 metadata:
   providers: stripe
@@ -23,12 +23,20 @@ sandbox first. If the CLI is missing, run the one installation command the resul
 non-interactive login. Give the person the pairing code; they select their own account and approve.
 Use `studio_job` for the background result. Do not call a raw CLI config command: it may print secrets.
 
-Be honest: Stripe's current CLI OAuth connects the AI, but has no supported export of a Worker key.
-The result `worker-credential` means selling is **not connected**, even after browser approval.
-Legacy CLI pairing can supply a 90-day test key; the toolkit transfers it without displaying it,
-creates the webhook and saves both Worker secrets. No public API creates a shop-only restricted key.
-Do not downgrade the CLI, extract keychain tokens, or put the agent in the checkout money path.
-The upstream findings are `docs/stripe-connect-research.md` in Homie's source checkout.
+The default is **keyless**: the toolkit uses the CLI's approved account to sync Products, Prices
+(including custom amounts for tips), Payment Links and the webhook. It captures the signing secret
+privately and installs it with the link configuration; it never exports the CLI credentials.
+The Worker redirects buyers to Stripe and grants purchases from signed events. No desktop agent,
+Homie service or API key is needed when someone pays. Run connect again after editing shop.json;
+it updates changed objects and archives removed ones. Existing connections need no new approval.
+
+Only when the person asks for combined carts, spending reservations, custom checkout expiry,
+automatic recovery of lost webhooks or office refunds, explain one sentence:
+“The fuller connection adds combined carts, spending limits, automatic recovery and refunds here.”
+A pre-existing Worker key selects that path automatically. Never silently select `--manual` or ask
+for a key: explain its remaining Dashboard step only if the person explicitly chooses that route.
+Before relying on spending restrictions after switching, deactivate old Payment Links with the approved CLI and resolve in-flight checkouts; a credential change does not cancel them.
+`shop connect` selects keyless again and removes an existing Worker API key after saving the links.
 
 ## Never
 
@@ -47,20 +55,28 @@ The upstream findings are `docs/stripe-connect-research.md` in Homie's source ch
 
 ## The owner's steps, for a creator with a fresh Stripe account
 
+With an existing Stripe account and deployed studio, there is **one Stripe approval** for the CLI;
+if that CLI profile is already connected, there are **zero new approvals**. An existing MCP-only
+consent is not a CLI login and is not exported or borrowed. Account creation/activation, an administrator
+enabling CLI access, and an initial Cloudflare sign-in are separate Stripe/hosting requirements.
+
 | The owner | You |
 |---|---|
-| Creates/verifies their Stripe account on Stripe's own pages if needed; approves the browser pairing for their sandbox. | `shop init`, `shop check`, then `stripe_login` / `shop connect`. Check the result, not just whether login succeeded. |
-| Approves Cloudflare separately if not connected yet. | `cloudflare_login`, `studio_deploy`, then rerun `shop connect`. Approval before deploy is reusable; an HTTPS deployment is required for the webhook. |
-| Nothing while supported test credentials are installed. | The toolkit creates the endpoint, captures the secret, and saves both credentials to the Worker. Verify the first test purchase below. No catalog is required for inline products; `shop catalog` reconciles a separate Stripe catalog if wanted. |
-| Chooses the manual fallback, if they want to continue when the result says `worker-credential`. | Explain that OAuth does not supply the independent Worker's key. Offer the fallback; do not ask for the key. The local fallback page guides the Dashboard step. |
-| Approves Stripe again when a legacy key expires. | Rerun `shop connect --renew` before the returned expiry; valid installed connections are reused. OAuth refresh is automatic for CLI operations, not the Worker's key. |
-| Says “go live” and completes Stripe's account activation. | `shop connect --live`. Live key export is unsupported; name the gap and the optional `--manual --live` fallback. Reconcile the live catalog if used; verify a real purchase/refund only when authorized. |
+| Approves Stripe's browser page, selecting their studio account and sandbox. | Create/check shop.json; run stripe_login / shop connect; follow studio_job to completion. |
+| Nothing. | Sync all items and the webhook, install the signing secret and links privately, then verify a test purchase and grant. |
+| Requests a refund in Stripe or asks their connected AI. | Use the official Stripe connection, honor any confirmation link, verify the signed refund event removes the item. |
+| Says “go live” and completes Stripe activation if needed. | shop connect --live in the authorized account; verify only an authorized real purchase. |
+
+`shop connect --renew` restarts the approval flow when needed. CLI OAuth refresh is the CLI's job;
+there is no runtime API credential to expire. `shop catalog` remains the optional older catalog planner
+for keyed shops; keyless shops use connect for the complete catalog, links and webhook sync.
 
 ## Optional Stripe agent tools
 
 For catalog work, analytics and advice, `stripe agent setup` installs Stripe's own agent plugin and
 skills; its OAuth MCP is `https://mcp.stripe.com`. This is optional and separate from Worker credentials.
 Check `get_stripe_account_info` before writes; confirm the account and mode match the studio.
+For CLI refunds or event resends, use the non-secret `profile` returned by connect with `stripe --project-name <profile>`; preserve its test/live context. Do not read credentials.
 The tools include `stripe_api_read`, `stripe_api_write`, API discovery and `stripe_analytics`.
 From **2026-10-31**, MCP rejects API keys without the Agent tag; OAuth remains supported. Agent keys
 can put refunds behind Stripe approval. A returned confirmation link belongs to the owner; wait
@@ -71,14 +87,14 @@ for approval before retrying. Do not silently replace the payment runtime with M
 | The person says | Run | What happens |
 |---|---|---|
 | "Sell a supporter pack for $5" | `npx --no-install homie-studio shop init --supporter` (then `shop check`) | `shop.json` with a US$5 Supporter pack (a badge on their profile and beside their name in rooms, for a year; it changes nothing about play) and `SELLING.md`. Commit both. |
-| "Sell a skin / a season pass / the full game" | edit `shop.json` `items` (`kind`: `cosmetic`, `pass`, `unlock`; `price` in Stripe currency units; `gives`: the keys the game reads), `shop check`, then `shop catalog` again | Kinds are studio labels, without a fixed list. `"advantage": true` follows the studio policy for beginner and kids servers. Homie sets no price ceiling. |
+| "Sell a skin / a season pass / the full game" | edit `shop.json` `items` (`kind`: `cosmetic`, `pass`, `unlock`; `price` in Stripe currency units; `gives`: the keys the game reads), `shop check`, then `shop connect` again | Kinds are studio labels, without a fixed list. `"advantage": true` follows the studio policy for beginner and kids servers. Homie sets no price ceiling. |
 | "Let people tip" | an item `{ "kind": "tip", "price": "choose", "min": 200, "max": 5000 }` | Pay what you want; amounts follow Stripe currency requirements, and max is optional and chosen by the studio. |
-| "Make the products in Stripe" | `shop catalog`, then the read with `stripe_api_read`, then `shop catalog --have <file>` | The exact `stripe_api_write` calls still needed (one Product an item, id `homie_<studio>_<item>`, with a tax code and a default Price of shop.json's amount); a changed price is a new Price made the default; a removed item is archived, never deleted. In sync, shop.json `catalog` records the mode and checkouts name the Products. shop.json's price is always what is charged. |
-| "Connect my Stripe" / "turn the shop on" | `stripe_login` or `npx --no-install homie-studio shop connect` | Stripe browser approval; automatic test credentials and webhook where supported. Follow `deploy`, `renew` or `worker-credential` in the result. `--manual` only if the owner chooses the fallback; `--live` only when they say go live. |
+| "Make the products in Stripe" | `shop connect` | Idempotent Product, Price, Payment Link and webhook sync from shop.json; no secret enters tool output. |
+| "Connect my Stripe" / "turn the shop on" | `stripe_login` or `shop connect` | Approve Stripe once if needed; the Worker receives links and the signing secret only. Follow the single next step returned. Live only when requested. |
 | "Is tax set up?" | `stripe_api_read` `GET /v1/tax/settings`, and `GET /v1/tax/registrations` | Seller "stripe": Stripe Tax needs `status: active` (the business address in Settings, Tax), or checkouts fail; with no registrations it collects no tax anywhere: say so, the accountant decides where to register. Seller "stripe-managed": Stripe files the tax; the connect page's test checkout said whether Managed Payments is on. Change nothing yourself. |
 | "Is the shop working?" | `npx --no-install homie-studio shop` | Open (test or live) or exactly what is missing, the last 30 days, the webhook address. |
 | "How are sales?" / "Show me the sales" | `shop` and `shop orders` first (the studio's own books); with Stripe's MCP, read-only: `stripe_analytics`, or `stripe_api_read` on `/v1/balance`, `/v1/payouts`, `/v1/checkout/sessions` | Counts, money and payouts in a few lines; never a buyer's name, email or card. Never a write to answer a question. The owner's `/_studio/office/shop` links every Stripe page and gives the accountant a CSV. |
-| "Refund that player" | `npx --no-install homie-studio shop refund <ord_…> --note "<why>"` | An ASK: give the owner the one-tap link (in the office their own Refund button does it at once). The item leaves the player's account; the money goes back in 5 to 10 days. If the owner asks you to refund through Stripe's MCP instead, Stripe answers with its confirmation link: theirs to approve; the webhook takes the item back when Stripe refunds. If a refund comes back "held", the shop's key is an Agent key: the owner approves it in Stripe (Settings, Approvals) and reconnects with a plain restricted key. |
+| "Refund that player" | The owner’s official Stripe connection, or link their Stripe Dashboard payment | Honor Stripe’s confirmation link; signed events update the books and revoke fully refunded items. The keyed way still offers office refunds. |
 | "Someone charged back" | nothing to undo: the owner answers it in Stripe (the office links it) | While open nothing changes; lost: that one item goes; won: it stays. **The account is never locked or deleted over a dispute.** |
 | "Show the item in the game" / "the supporter badge" | in the game: `createShop()` from `@homie-rocks/studio/shop`; `shop.has('skin:ember')`, `shop.on('change', …)`, `shop.open('ember-skin')` from a button the player pressed, `shop.used(key)` when equipped | The play shell answers for the signed-in player; a badge rides on their seat as `peer.badge` (the Worker sets it, never a hello). |
 | "Pay studios that send us players" / "affiliate links" | `shop.json` `referrals` (rate, window, hold), `shop statements [--send]` | A `?via=<host>` link from another site (homie.rocks is one more referrer, on the same terms) counts for a new player's purchases; statements are signed with the studio's key; the referrer invoices the studio; the owner pays and marks it paid (an ASK from you). Nothing moves through Homie. |
@@ -94,21 +110,25 @@ The studio can set items, quantities, prices, tip ranges, entitlements, sale dat
 `automaticTax`, `capPerPlayerMonth`, `refundDays`, referral terms and configurable flood protection.
 No toolkit amount or duration ceiling applies. Stripe currency constraints and safe integer arithmetic apply.
 A refund window includes used items unless `policy.refundUsedItems` is false. A player cannot refund a tip;
-the office can refund any order or line. Guest purchases stay owned when the buyer signs in later.
+the owner can refund through Stripe; keyed shops also offer office refunds. Guest purchases stay owned when the buyer signs in later.
 
-For carts: `shop.add(item, quantity, amount?)`, then `shop.checkout()`; `shop.buy(item)` buys directly.
+For keyed shops, carts: `shop.add(item, quantity, amount?)`, then `shop.checkout()`; `shop.buy(item)` buys directly.
 Free and paid lines share one order and one Stripe Session. The studio chooses where to open the shop.
 
 ## The first sale (the acceptance)
 
 In test mode: buy the supporter pack on a phone with Stripe's test card `4242 4242 4242 4242`, see "It's yours",
 see the badge on the account page and beside the name in a room (from the next room the player joins), refund it
-from `/_studio/office/shop`, and see the badge go. With the protective preset, a kids server's room shows no shop and `/<game>/tv` shows only a code.
+in Stripe (or through the connected AI), and see the badge go. With the protective preset, a kids server's room shows no shop and `/<game>/tv` shows only a code.
 
-The optional manual fallback accepts restricted (`rk_`) or full secret (`sk_`) keys; recommend restricted permissions for this shop.
-Checkout setup includes both the Stripe key and webhook signing secret; readiness names either missing step.
-The studio can set `checkoutMinutes` from Stripe's 30-minute minimum to its 1440-minute (24-hour) default and
-maximum (values below 31 use 31 for transport margin). Cancelling a named checkout or replacing an open checkout at least a minute old asks Stripe to expire it before releasing its reservation.
-Free carts grant locally. Game checkout uses a separate tab when available, otherwise the same tab and returns to the game or TV page. Cookies must work before buying. Each recorded payment checks Stripe’s refunds and dispute state. Refund books follow Stripe’s refund list: named lines only, untagged partial refunds on the order, and revocation only after success.
-The additive 0012 schema step tolerates the released Worker during deploy and rollback; before the step,
-new code keeps owned items and office refunds available while new sales wait.
+Keyless purchases buy one item type at a time, with quantity confirmed on Stripe. Tips choose the
+amount on Stripe and always have quantity one. Free orders grant locally without Stripe.
+Refund and dispute snapshots are stored by provider object ID and tolerate retries and reordering.
+A missing webhook stays pending: ask Stripe to resend the event (Dashboard or official CLI
+`stripe events resend <event> --webhook-endpoint <endpoint>`). Never grant based on the return URL.
+Payment Links are public and reusable; do not promise that local sale dates, repeat-purchase or
+eligibility checks revoke a previously opened link. Deactivation stops new sessions after re-sync;
+already opened sessions may still complete. Strict pre-payment enforcement needs the keyed way.
+Stripe always enables Adaptive Pricing on Payment Links; the buyer can use the original currency.
+Keyless has no per-session expiry or provider-read reconciliation. The keyed path retains both,
+carts, cap reservations, local refunds. Managed Payments is supported on Payment Links when Stripe enables it for the account. The studio chooses its needs.

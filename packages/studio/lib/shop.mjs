@@ -6,6 +6,7 @@
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]
  *                                           writes shop.json (a $5 Supporter pack with --supporter) and SELLING.md
  *   homie-studio shop check                 shop.json against the studio settings and provider requirements
+ *   homie-studio shop connect             sync Payment Links and webhook with the approved Stripe CLI; no Worker API key
  *   homie-studio shop connect --manual [--managed] [--live]   a fallback page on THIS computer (127.0.0.1, one use, ten minutes) where the owner
  *                                           pastes the studio's restricted Stripe key (the one thing only they can make);
  *                                           with it this process makes the webhook (0.24.3), and the key and the
@@ -98,7 +99,7 @@ export function shopInit(root, { supporter = false, currency = 'usd', price = 50
   writeFileSync(file, `${JSON.stringify(shop, null, 2)}\n`);
   const wrote = [SHOP_FILE];
   if (!existsSync(join(root, 'SELLING.md')) && existsSync(SELLING)) { writeFileSync(join(root, 'SELLING.md'), readFileSync(SELLING, 'utf8')); wrote.push('SELLING.md'); }
-  return { ok: true, command: 'shop init', wrote, till: shop.till, items: shop.items.map((i) => i.id), next: ['homie-studio shop check', 'npm run deploy (the shop stays closed until the key and webhook signing secret are in)', 'homie-studio shop connect (approve Stripe in your browser; the result names any remaining step)'] };
+  return { ok: true, command: 'shop init', wrote, till: shop.till, items: shop.items.map((i) => i.id), next: ['homie-studio shop check', 'npm run deploy (paid sales wait for the Stripe connection)', 'homie-studio shop connect (approve Stripe in your browser; the result names any remaining step)'] };
 }
 
 /** The office's view of the live shop: open or what is missing, the last 30 days, links to Stripe. */
@@ -345,7 +346,8 @@ export function shopDisconnect(root) {
   const w = runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
   const a = w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' });
   const b = w(['secret', 'delete', 'STRIPE_WEBHOOK_SECRET'], { input: 'y\n' });
-  return a.code === 0 || b.code === 0 ? { ok: true, command: 'shop disconnect', message: 'The Stripe key and webhook secret are gone from the Worker: the shop is closed. Delete the restricted key in Stripe too (Developers → API keys).' } : { ok: false, command: 'shop disconnect', why: a.out.trim().split('\n').slice(-2).join(' ') };
+  const c = w(['secret', 'delete', 'STRIPE_SHOP_LINKS'], { input: 'y\n' });
+  return a.code === 0 || b.code === 0 || c.code === 0 ? { ok: true, command: 'shop disconnect', message: 'The Worker payment connection was removed. Ask your connected AI to deactivate existing Payment Links in Stripe too; already opened Stripe checkouts can still complete.' } : { ok: false, command: 'shop disconnect', why: a.out.trim().split('\n').slice(-2).join(' ') };
 }
 
 /** Lines for a person (the CLI's print). */
