@@ -49,7 +49,6 @@ let L;
 /** The declarations, compiled as a room compiles them. What is wrong with them is said with the line they are on. */
 function compile() {
   const { settings, problems } = L.R.roomSettings(data.room);
-  if (settings.host === 'browser') throw new Error(`games/${data.id}/game.json asks for "room": { "host": "browser" }. Rules hosted by a player's browser arrive in a later release; until then a rules game is hosted by the server ("host": "server", the default).`);
   for (const [name, ask] of Object.entries(L.def.asks ?? {})) {
     const checked = checkDecide({}, ask.questions);
     if (!checked.ok) throw new Error(`asks.${name}.questions: ${checked.why}. Each question needs a type and instructions, for example { type: 'noul', instructions: 'Should the party advance?' }`);

@@ -25,7 +25,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { chromeArgs, findChrome, noChrome, SOFTWARE_GL } from './chrome.mjs';
 import { labDir, startLabServer } from './lab.mjs';
-import { listGames } from './studio.mjs';
+import { isRulesGame, listGames } from './studio.mjs';
 
 const round = (v, d = 2) => (Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : null);
 const pct = (xs, p) => { const s = xs.filter(Number.isFinite).sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.floor((s.length - 1) * p))] : null; };
@@ -56,6 +56,11 @@ export function summarise(pane, { fps, units }) {
     views: pane.meta?.views ?? [], overlays: pane.meta?.overlays ?? [],
     errors: pane.meta?.errors ?? [],
   };
+}
+
+/** A rules take must actually advance its local runtime without joining a room. */
+export function rulesRun(s) {
+  return Boolean(s?.hosting && !s.connected && s.tick > 0 && s.status === 'playing');
 }
 
 /** Where two runs of one build first differ (frame number), or null when every frame matches. */
@@ -137,8 +142,18 @@ export async function labCheck(root, id, { take = null, today = 'HEAD', device =
       new: first.new.available ? firstDifference(first.new.frames, second.new.frames) : null,
       today: first.today.available ? firstDifference(first.today.frames, second.today.frames) : null,
     };
+    const rules = isRulesGame(games.find((g) => g.id === game)) ? await page.evaluate(() => {
+      const out = {};
+      for (const pane of ['new', 'today']) {
+        const frame = [...document.querySelectorAll('iframe')].find((f) => f.src.includes('/' + pane + '/'));
+        const n = frame?.contentWindow?.__homieNet;
+        out[pane] = n ? { format: typeof n.probe?.hosted === 'function', hosting: n.rulesHosting, connected: n.connected, tick: n.probe?.tick?.(), status: n.probe?.status?.() } : null;
+      }
+      return out;
+    }) : null;
+    if (rules && (!rulesRun(rules.new) || (first.today.available && rules.today?.format && !rulesRun(rules.today)))) pageErrors.push('A rules pane did not play on its local host runtime.');
     const summary = {
-      ok: true, game, take: first.take, note: first.note, fps: first.fps, frames: first.frames, device: first.device, seed: first.seed, inputs: first.inputs,
+      ok: !rules || pageErrors.length === 0, rules, game, take: first.take, note: first.note, fps: first.fps, frames: first.frames, device: first.device, seed: first.seed, inputs: first.inputs,
       newBuild: first.newBuild, todayBuild: first.todayBuild, overrides: first.overrides, renderer, software: SOFTWARE_GL.test(String(renderer ?? '')),
       deterministic, new: summarise(first.new, first), today: summarise(first.today, first), pageErrors,
     };
@@ -182,7 +197,7 @@ export async function labCheck(root, id, { take = null, today = 'HEAD', device =
     };
     if (!out) writeFileSync(join(labDir(root, game), 'latest.json'), `${JSON.stringify(latest, null, 2)}\n`);
     return {
-      ok: true, command: 'lab check', game, take: summary.take, out: rel(dir), report: rel(join(dir, 'REPORT.md')), sheet: rel(join(dir, 'sheet.png')), still: rel(stillPath),
+      ok: summary.ok, rules: summary.rules, command: 'lab check', game, take: summary.take, out: rel(dir), report: rel(join(dir, 'REPORT.md')), sheet: rel(join(dir, 'sheet.png')), still: rel(stillPath),
       frames: summary.frames, fps: summary.fps, deterministic, renderer, software: summary.software,
       phases: { new: summary.new.phases?.map((p) => `${p.name} ${p.frames}f`) ?? [], today: summary.today.available ? summary.today.phases.map((p) => `${p.name} ${p.frames}f`) : null },
       timeline: { new: (summary.new.phases ?? []).map(({ name, from, to }) => ({ name, from, to })), today: summary.today.available ? summary.today.phases.map(({ name, from, to }) => ({ name, from, to })) : null },

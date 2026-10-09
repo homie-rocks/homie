@@ -59,6 +59,8 @@ export interface AgentsOptions {
   /** Runtime integration: a room clock and an explicit beat replace the browser timer. */
   now?: () => number;
   manual?: boolean;
+  /** A rules view is always a client; the separate runtime owns guides. */
+  viewOnly?: boolean;
   /** Keep an asked-for goal through scripted floor decisions until completion or sixty seconds. */
   carryFloor?: boolean;
   restore?: AgentsSaved;
@@ -298,7 +300,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
   const offEvent = net.on('event', (e: NetEvent) => {
     const k = e.k;
     const d = (e.d && typeof e.d === 'object' ? e.d : {}) as Record<string, unknown>;
-    if (net.isHost) {
+    if (net.isHost && !opts.viewOnly) {
       const s = slotOfSeat(e.from);
       if (k === 'agent:do' && s) {
         st.dos += 1;
@@ -311,11 +313,11 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
       if (ask && e.from !== null && !net.isAgent(e.from) && Number.isInteger(d['slot'])) { onAsk(d['slot'] as number, ask, (d['args'] ?? {}) as Record<string, unknown>, e.from); return; }
       return;
     }
-    if (k === 'agent:offer' && e.from === net.host?.seat && Number.isInteger(d['slot']) && d['view'] && typeof d['view'] === 'object') { lastView.set(d['slot'] as number, d['view'] as Record<string, unknown>); return; }
+    if (k === 'agent:offer' && e.from === (opts.viewOnly ? null : net.host?.seat) && Number.isInteger(d['slot']) && d['view'] && typeof d['view'] === 'object') { lastView.set(d['slot'] as number, d['view'] as Record<string, unknown>); return; }
     // Every other browser: a guide's line the host relayed (Quiet AI already dropped it in the helper). Its words are
     // this browser's own copy of the vocabulary; an argument is a seat, a value of the line's list, or an id.
     const line = /^say:([a-z][a-z0-9_]{0,31})$/.exec(k)?.[1];
-    if (e.from === net.host?.seat && line && d['ai'] === true && Number.isInteger(d['slot'])) {
+    if (e.from === (opts.viewOnly ? null : net.host?.seat) && line && d['ai'] === true && Number.isInteger(d['slot'])) {
       const args = (d['args'] ?? {}) as Record<string, unknown>;
       const def = own(vocab.lines, line);
       const ids = Object.fromEntries(Object.entries(def?.args ?? {}).map(([n, t]) => [n, t]).filter(([, t]) => typeof t === 'string' && VIEW_ARG.test(t)).map(([n, t]) => [VIEW_ARG.exec(t as string)![1], /^[a-z0-9][a-z0-9_-]{0,39}$/.test(String(args[n as string] ?? '')) ? [args[n as string]] : []]));
@@ -327,7 +329,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
 
   // The host's beat: views to the guides an AI holds (at most one every 2 s each), the floor for the rest.
   const beat = (): void => {
-    if (!net.isHost || net.offline) return;
+    if (opts.viewOnly || !net.isHost || net.offline) return;
     const now = wall();
     for (const s of guides()) {
       const seat = s.agent?.seat ?? null;
@@ -372,7 +374,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
       const s = slotOf(slot);
       if (!def || !s) return false;
       const seat = s.agent?.seat ?? null;
-      if (net.isHost) {
+      if (net.isHost && !opts.viewOnly) {
         const me = net.offline ? 0 : net.seat;
         if (me === null) return false;
         onAsk(slot, k, args, me);

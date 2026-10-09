@@ -43,7 +43,7 @@
  * after five of them, not after five seconds' worth of ticks at its rate.
  * =============================================================================
  */
-import { useAgents, type Agents, type AgentsSaved, type Vocabulary } from '../agents/agents.ts';
+import { AGENT_RULES, useAgents, type Agents, type AgentsSaved, type Vocabulary } from '../agents/agents.ts';
 import { DEFAULT_POLICY, type Netplay, type Peer, type Policy, type Slot } from '../netplay/netplay.ts';
 import { createCore } from './core.ts';
 import type { Core, CoreOut, Driver, SavedCore, StepInput } from './core.ts';
@@ -76,11 +76,15 @@ export interface HostOptions {
   restoreEpoch?: number;
   startDelayMs?: number;
   onTick?(): void;
+  /** Only the shared server isolate can attribute timer lateness to another tick. */
+  enforceOverrun?: boolean;
   log?(line: Record<string, unknown>): void;
   /** A number in [0, 1) for a fresh epoch and seed. */
   random?(): number;
   /** A room saved by `save()`, to carry on from. */
   restore?: Uint8Array | null;
+  /** A browser promotion starts immediately; server recovery starts paused by default. */
+  startPaused?: boolean;
   stage?: string;
   onPause?(): void;
   onResume?(): void;
@@ -98,6 +102,8 @@ export interface Host {
   start(): void;
   pause(): void;
   resume(): void;
+  /** Publish the round, the roster, the shared state and the capabilities again (a browser host's relay restarted). */
+  announce(): void;
   /** Stop for good: the room has ended. */
   stop(): void;
   /** Run the next tick now, whatever the clock says (tests, and the build check's runs). Like the timer's own tick, it never throws. */
@@ -161,7 +167,40 @@ export function createHost(o: HostOptions): Host {
   if (saved) {
     const check = (ok: unknown): void => { if (!ok) throw new Error('saved host inputs are invalid'); };
     const uint = (n: unknown): boolean => Number.isSafeInteger(n) && (n as number) >= 0;
+    check(Object.keys(saved).every(k => ['v', 'core', 'names', 'agents', 'guideViews', 'queues', 'inputs'].includes(k)));
     check(saved.core && Array.isArray(saved.names) && Array.isArray(saved.queues));
+    if (saved.agents !== undefined) {
+      const tables = ['goals', 'asks', 'avoid', 'sayAt', 'viewAt', 'floorAt', 'askAt'];
+      check(saved.agents && Object.keys(saved.agents).every(k => tables.includes(k)));
+      const data = (v: unknown): boolean => Boolean(v && typeof v === 'object' && !Array.isArray(v));
+      const stamp = (v: unknown, future = 0): boolean => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= saved.core.tick * period + future;
+      for (const key of tables) {
+        const rows = own(saved.agents, key) as any;
+        check(Array.isArray(rows) && rows.length <= c.seats);
+        const seats = new Set();
+        for (const row of rows) {
+          check(Array.isArray(row) && row.length === 2 && uint(row[0]) && row[0] < c.seats && !seats.has(row[0])); seats.add(row[0]);
+          const v = row[1];
+          if (key === 'goals') check(data(v) && Object.keys(v).every(k => ['goal', 'args', 'from', 'at', 'state', 'asked'].includes(k)) && typeof v.goal === 'string' && data(v.args) && ['brain', 'floor'].includes(v.from) && ['active', 'done', 'failed'].includes(v.state) && stamp(v.at) && (v.asked === undefined || typeof v.asked === 'boolean'));
+          else if (key === 'asks') {
+            check(Array.isArray(v) && v.length <= 3);
+            for (const a of v) check(data(a) && Object.keys(a).every(k => ['k', 'args', 'from', 'at'].includes(k)) && typeof a.k === 'string' && data(a.args) && uint(a.from) && a.from < c.seats && stamp(a.at));
+          } else if (key === 'avoid') {
+            check(Array.isArray(v) && v.length <= c.seats && new Set(v.map(a => a?.[0])).size === v.length);
+            for (const a of v) check(Array.isArray(a) && a.length === 2 && uint(a[0]) && a[0] < c.seats && stamp(a[1], AGENT_RULES.leaveMs));
+          } else check(stamp(v));
+        }
+      }
+    }
+    if (saved.guideViews !== undefined) {
+      check(Array.isArray(saved.guideViews) && saved.guideViews.length <= c.seats && new Set(saved.guideViews.map(row => row?.[0])).size === saved.guideViews.length);
+      for (const row of saved.guideViews) {
+        check(Array.isArray(row) && row.length === 2);
+        const [seat, v] = row;
+        check(uint(seat) && seat < c.seats && v && Object.keys(v).every(k => ['id', 'at', 'value'].includes(k)) && typeof v.id === 'string' && uint(v.at) && v.at <= saved.core.tick);
+        check(JSON.stringify(v.value) === JSON.stringify(coerceFields(c.view, v.value, c.dims)));
+      }
+    }
     check(saved.names.length <= c.seats && saved.queues.length <= c.seats);
     for (const rows of [saved.names, saved.queues, ...(saved.inputs === undefined ? [] : [saved.inputs])]) {
       check(Array.isArray(rows) && rows.every((row) => Array.isArray(row)));
@@ -187,9 +226,9 @@ export function createHost(o: HostOptions): Host {
     }
   }
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
-  const core = createCore(c, { observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const core = createCore(c, { observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
-  if (saved && o.restoreEpoch !== undefined) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
+  if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
   let saveTick = core.tick;
   let forceSave = false;
@@ -207,7 +246,7 @@ export function createHost(o: HostOptions): Host {
   let savedAgents = saved?.agents;
   const guideOwners = new Map(core.bodies().map((b) => [b.seat, `${b.id}/${b.owner}/${b.driver}`]));
   const guideViews = new Map<number, { id: string; at: number; value: Record<string, unknown> }>();
-  for (const [seat, v] of (Array.isArray(saved?.guideViews) ? saved.guideViews : []).filter((v) => Array.isArray(v) && v.length === 2).slice(0, c.seats)) if (v && core.bodyOf(seat)?.id === v.id) guideViews.set(seat, { id: v.id, at: typeof v.at === 'number' && Number.isFinite(v.at) ? Math.max(0, Math.min(core.tick, v.at)) : 0, value: coerceFields(c.view, v.value, c.dims) });
+  for (const [seat, v] of saved?.guideViews ?? []) if (core.bodyOf(seat)?.id === v.id) guideViews.set(seat, v);
   const agentEvents = new Set<(m: any) => void>();
   let agentInbox: Record<string, unknown>[] = [];
   function agentSlots(brainsOnly = false): Slot[] {
@@ -273,7 +312,7 @@ export function createHost(o: HostOptions): Host {
     }
   }
   let running = false;
-  let paused = Boolean(saved && o.restoreEpoch !== undefined);
+  let paused = Boolean(saved && (o.startPaused ?? o.restoreEpoch !== undefined));
   let ended = false;
   /** The pending timer, and whether there is one. `armed` is the truth: a clock may hand back any value as its handle. */
   let timer: unknown = null;
@@ -292,6 +331,14 @@ export function createHost(o: HostOptions): Host {
   let overTicks = 0;
   let overBlamed = 0;
   let lastStart = 0;
+  let roundRebaseAt = -Infinity;
+  let roundRebasePending = false;
+  function publishRebase(now: number): void {
+    roundRebasePending = true;
+    if (now - roundRebaseAt < 250) return;
+    roundRebaseAt = now; roundRebasePending = false;
+    const { results, ...round } = core.round(); handle([round], now, true);
+  }
   /** When the run of failed ticks this room is in began, or null. */
   let failingSince: number | null = null;
   /** Where in a tick the runtime is, for the log line of a fault. */
@@ -395,9 +442,11 @@ export function createHost(o: HostOptions): Host {
         names.set(seat, typeof p.name === 'string' ? p.name.slice(0, 40) : '');
         present.set(seat, driver === 'person');
         // The relay numbers every stay in a seat (`occ`): the same number is the same holder, back.
-        core.seatJoin({ seat, driver, owner: `p${Number.isInteger(p.occ) ? p.occ : typeof p.id === 'string' ? p.id.slice(0, 40) : seat}` });
+        const owner = `p${Number.isInteger(p.occ) ? p.occ : typeof p.id === 'string' ? p.id.slice(0, 40) : seat}`;
+        const previous = core.bodies().find((s) => s.seat === seat);
+        core.seatJoin({ seat, driver, owner });
         core.seatAway(seat, false);
-        queues.delete(seat);
+        if (!previous || previous.driver !== driver || previous.owner !== owner) queues.delete(seat);
         rosterText = '';
         if (people() > 0) { if (!running && !paused) start(); else if (paused) resume(); }
         return;
@@ -466,16 +515,16 @@ export function createHost(o: HostOptions): Host {
     rosterText = text;
     o.send({ t: 'roster', slots });
   }
-  function handle(out: CoreOut[], now: number): void {
+  function handle(out: CoreOut[], now: number, retime = false): void {
     let roster = false;
     for (const x of out) {
       if (x.t === 'round') {
         if (x.phase === 'over') forceSave = true;
         const ms = (t: number): number => Math.round(now + (t - core.tick) * period);
         const drivers = new Map(core.bodies().map((b) => [b.seat, b.driver]));
-        o.send({ t: 'round', round: {
+        o.send({ t: 'round', ...(retime ? { retime: true } : {}), round: {
           n: x.n, phase: x.phase, startedAt: ms(x.startedAt), endsAt: x.endsAt ? ms(x.endsAt) : ms(core.tick + 86_400 * tickHz),
-          ...(x.results ? { results: x.results.map((r) => ({ slot: r.seat, seat: r.driver === 'bot' ? null : r.seat, name: nameOf(r.seat, drivers.get(r.seat) ?? r.driver), score: r.score, bot: r.driver === 'bot', ...(r.driver === 'ai' ? { agent: true } : {}), place: r.place })) } : {}),
+          ...(!retime && x.results ? { results: x.results.map((r) => ({ slot: r.seat, seat: r.driver === 'bot' ? null : r.seat, name: nameOf(r.seat, drivers.get(r.seat) ?? r.driver), score: r.score, bot: r.driver === 'bot', ...(r.driver === 'ai' ? { agent: true } : {}), place: r.place })) } : {}),
         } });
       } else if (x.t === 'ask') o.send({ t: 'decide', n: x.n, state: x.state, questions: x.questions });
       else if (x.t === 'goalDone') agents?.done(x.seat, x.ok);
@@ -512,6 +561,7 @@ export function createHost(o: HostOptions): Host {
       for (const p of presses) values[p] = true;
       inputs.set(seat, { values, claim: q.claim });
     }
+    if (roundRebasePending) publishRebase(now);
     phase = 'step';
     core.step(inputs, guideBeat);
     phase = 'frames';
@@ -594,7 +644,14 @@ export function createHost(o: HostOptions): Host {
         const due = dueOf(core.tick + 1);
         if (now + 0.5 < due) break;
         // The overrun check: a tick that starts more than a period late blames the tick that held it up.
-        if (now - due > period) { stats.late += 1; blameLate(now, period); }
+        if (now - due > period) {
+          stats.late += 1;
+          if (o.enforceOverrun) blameLate(now, period);
+          // A browser cannot say whose fault a late timer is. Up to a tenth of a second late (two periods, if that
+          // is longer) it catches up as the server does: a 20-tick room on a timer every 70 ms, or a 60-tick room on
+          // one every 37 ms, runs at its rate. Later than that its clock runs slow, and a slow host yields.
+          else if (now - due > Math.max(2 * period, 100)) { base = { ms: now - period, tick: core.tick }; publishRebase(now); }
+        }
         // Blamed since its last tick began: a run of slow ticks begins (when the tick blamed did), or goes on.
         if (blamed) { if (overSince === null) { overSince = lastStart; overTicks = 0; overBlamed = 0; } overBlamed += 1; }
         blamed = false;
@@ -604,7 +661,7 @@ export function createHost(o: HostOptions): Host {
           // A room whose ticks have run slow for five seconds of the clock ends, and the log names the handler that used the most units.
           else if (now - overSince >= OVERRUN_MS) { end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits, seconds: Math.round((now - overSince) / 100) / 10 }); return; }
         }
-        recent.push({ who: self, at: now });
+        if (o.enforceOverrun) recent.push({ who: self, at: now });
         if (recent.length > 8) recent.shift();
         lastStart = now;
         tick(now);
@@ -612,7 +669,7 @@ export function createHost(o: HostOptions): Host {
       }
       // Far behind (the isolate was busy, or the machine slept): the clock runs slow. It never jumps to catch up.
       // The tick after a slip starts on time by the new clock, so the tick that ran last is judged here, before the slip hides it.
-      if (running && o.clock.now() - dueOf(core.tick + 1) > 4 * period) { const now = o.clock.now(); blameLate(now, period); base = { ms: now, tick: core.tick }; stats.slips += 1; }
+      if (running && o.clock.now() - dueOf(core.tick + 1) > 4 * period) { const now = o.clock.now(); if (o.enforceOverrun) blameLate(now, period); base = { ms: now, tick: core.tick }; stats.slips += 1; publishRebase(now); }
     } catch (error) {
       // Thrown outside any tick (the clock, the blame): a failed turn of the loop, counted like a failed tick.
       fault('wake', error);
@@ -633,6 +690,7 @@ export function createHost(o: HostOptions): Host {
       const caps = c.kinds.some((k) => k.think) ? ['skill'] : [];
       if (c.kinds.some((k) => k.guide && k.think)) caps.push('agents');
       if (caps.length) o.send({ t: 'caps', caps });
+      if (saved) { handle([core.round()], base.ms); }
       log({ ev: 'host-start', game: o.game, tick: core.tick, epoch, tickHz });
     } catch (error) { fault('start', error); } finally { keepTime(); }
   }
@@ -651,10 +709,23 @@ export function createHost(o: HostOptions): Host {
       // The room resumes at the tick it paused on: no tick is skipped and no timer fires for the gap.
       base = { ms: o.clock.now() + (firstTick ? o.startDelayMs ?? 0 : 0), tick: core.tick };
       overSince = null; blamed = false; failingSince = null; lastStart = base.ms;
+      handle([core.round()], base.ms);
       for (const q of queues.values()) q.lastFrameTick = core.tick;
       log({ ev: 'host-resume', game: o.game, tick: core.tick });
       o.onResume?.();
     } catch (error) { fault('resume', error); } finally { keepTime(); }
+  }
+  /** What a relay keeps for whoever joins next, said again: the round with its results, the roster, the shared state, the capabilities. */
+  function announce(): void {
+    if (ended) return;
+    try {
+      const caps = c.kinds.some((k) => k.think) ? ['skill'] : [];
+      if (c.kinds.some((k) => k.guide && k.think)) caps.push('agents');
+      if (caps.length) o.send({ t: 'caps', caps });
+      rosterText = '';
+      handle([core.round()], o.clock.now());
+      o.send({ t: 'state', k: 'shared', d: core.shared() });
+    } catch (error) { fault('announce', error); }
   }
   function stop(): void {
     running = false; paused = false; ended = true;
@@ -695,7 +766,7 @@ export function createHost(o: HostOptions): Host {
     get running() { return running; },
     get paused() { return paused; },
     get people() { return people(); },
-    frame, start, pause, resume, stop,
+    frame, start, pause, resume, stop, announce,
     tickNow: () => {
       if (ended) return;
       let now = lastStart;

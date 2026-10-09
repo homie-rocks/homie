@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.36.0] - 2026-10-08
 
-**Plugin 0.37.0** · [#68](https://github.com/homie-rocks/homie/pull/68)
+**Plugin 0.37.0** · [#68](https://github.com/homie-rocks/homie/pull/68) · [#73](https://github.com/homie-rocks/homie/pull/73)
 
 The build plays your rules game and names problems before you publish it.
 
@@ -29,6 +29,17 @@ The build plays your rules game and names problems before you publish it.
 - **A build is refused only for what that play proved.** A handler that threw, a tick that used its whole budget, a character the server had to hold back because its movement outran its declared top speed, a room that did not come back the same from its own save, or a value the room had to change and lose: `NaN`, an infinite number in a fraction or a vector, more entries than a list or a map declares, a text longer than declared. The message names the file, the line of the write and the handler, says what a live room does with the value, and how to repair it. Everything else is an `info:` line that never fails a build: how much was played, which handlers never ran, and how often a whole number was held to its range.
 - **The same game gets the same answer on every computer.** The play is counted in ticks and in the rules' own budget units, never in seconds, so a slow or busy computer builds what a fast one builds and prints the same lines. A small game is played for fifteen minutes of the room's clock, which takes about a second; a heavy game is played until its units are used, a few seconds, and the line says how far that was. `homie-studio build --long-check` plays eight times as much, for a release or a CI run.
 - **A live room never stops for a value that does not fit its field.** It stores the nearest thing the type holds, as before: `NaN` becomes `0`, a list is cut to its size, a whole number is held to its range (`Infinity` is the top of it, so it can stand for "never"). The build is where such a write is caught. `-0` is now stored as `0`, so a room divides the same way before and after a restart, and a map keeps its keys in the order they were added. The `game` skill's `RULES.md` has the table. Saved matches are written in a new form: a match saved by a build made before this change starts afresh once.
+
+- **Let a player host a friends game.** Studios can choose `room.host: "browser"` to run the same rules in an elected player's browser. When that player leaves, another takes over with the saved seats, scores, round clock and AI companions. Server hosting remains the default.
+- **Play offline from the same rules.** Browsers and packaged apps can play with local bots without a connection, unless the studio turns offline play off. Offline progress stays local. The Game Lab uses the same rules with its stages and sliders; online rooms can also use AI guides and decisions.
+- **Browser hosting has different limits.** It depends on a player's device and connection and offers no protection against a modified host: that player can change scores or the match. It has no server recovery guarantee. When a host hides or closes the tab, another player takes over from the current tick; a crash can lose up to a second. Updates are paced to fit the connection, and a room whose state grows beyond the browser limits stops with a clear message. Choose server hosting for stronger authority or larger rooms.
+- **The netplay contract is revision 11** (`netplay/NETPLAY.md`, section 29): the server as a host, input as steps stamped with the room's tick, explicit browser runtime output, and checkpoint handover. Nothing a game written before sends or receives has changed.
+
+### Fixed
+
+- Local development publishes one complete rules build per restart, avoiding the two reloads caused by separate code and asset watchers.
+- Browser rooms recover after a hidden tab, sleep or a dropped connection. Returning players regain a playable body, unavailable offline files keep reconnecting, and failed rules explain why the room stopped.
+- Builds check the relay's browser state limits. A room that grows beyond them stops with a clear message instead of repeatedly changing hosts. Saved inputs and answers are checked before rules use them.
 
 ## [0.35.1] - 2026-10-08
 

@@ -84,20 +84,22 @@
   /** The room's address on the studio's site: a friend opens it in any browser and lands in this room. */
   function linkOf(room) { return site + '/' + game + '/play?room=' + encodeURIComponent(room); }
 
+  var canOffline = !app.room || app.room.host === 'browser' || app.room.offline !== false;
+  noticeEl.querySelector('[data-notice-offline]').hidden = !canOffline;
   // What the button and its sheet say: the room, or plainly that this copy plays offline.
   function paint() {
     var alone = !state.online || (state.link && state.link.state === 'alone');
-    var word = !state.starts ? 'Finding a room…' : alone ? 'Playing offline · Try again' : state.link && state.link.state === 'reconnecting' ? 'Reconnecting…' : labelOf(state.room);
+    var word = !state.starts ? 'Finding a room…' : alone ? (canOffline ? 'Playing offline · Try again' : 'Connection needed · Try again') : state.link && state.link.state === 'reconnecting' ? 'Reconnecting…' : labelOf(state.room);
     ui.querySelector('[data-room-code]').textContent = word;
     ui.querySelector('[data-room-label]').textContent = state.online ? labelOf(state.room) : 'Offline';
     ui.querySelector('[data-room-state]').textContent = !site ? 'This copy has no online address' : alone ? 'No room answered' : '';
     // A copy the site has outgrown cannot invite anybody: a friend's browser would land on the newer version, which
     // this copy cannot join. The line about updating stands where the invite was.
-    ui.querySelector('[data-room-link]').textContent = state.outdated ? STALE : state.online ? linkOf(state.room).replace(/^https?:\/\//, '') : 'Your game and its bots are on this device.';
+    ui.querySelector('[data-room-link]').textContent = state.outdated ? STALE : state.online ? linkOf(state.room).replace(/^https?:\/\//, '') : (canOffline ? 'Your game and its bots are on this device.' : 'This game needs a connection.');
     ui.querySelector('[data-invite]').hidden = !state.online || state.outdated;
     ui.querySelector('[data-quick]').textContent = alone ? 'Try again' : 'Quick play';
     if (alone) ui.querySelector('[data-quick]').classList.add('primary'); else ui.querySelector('[data-quick]').classList.remove('primary');
-    ui.querySelector('[data-offline]').hidden = !state.online;
+    ui.querySelector('[data-offline]').hidden = !state.online || !canOffline;
     wake();
     tellRects();
   }
@@ -113,7 +115,7 @@
     try { if (typeof AbortController === 'function') { var ac = new AbortController(); opts.signal = ac.signal; setTimeout(function () { try { ac.abort(); } catch (e) {} }, 6000); } } catch (e) {}
     return fetch(site + '/' + game + '/api/lobby' + (q.length ? '?' + q.join('&') : ''), opts)
       .then(function (r) { return r.json(); })
-      .then(function (j) { return j && typeof j.room === 'string' && ROOM.test(j.room) ? j.room : null; })
+      .then(function (j) { if (j && j.error === 'stale') { state.outdated = true; flash(STALE); } return j && typeof j.room === 'string' && ROOM.test(j.room) ? j.room : null; })
       .catch(function () { return null; });
   }
 
@@ -165,7 +167,7 @@
       lobby().then(function (room) {
         state.finding = false;
         if (state.starts !== asked) return;
-        if (room) start(room); else { flash('No room answered: still playing offline.'); paint(); }
+        if (room) start(room); else { flash(state.outdated ? STALE : canOffline ? 'No room answered: still playing offline.' : 'This game needs a connection.'); paint(); }
       });
       return;
     }
@@ -184,7 +186,7 @@
   function go() { if (state.finding) return; var kept = remembered(); hide(); if (kept && site) start(kept); else find(); }
   function join(code) {
     if (!ROOM.test(code)) { flash('A room code is 1 to 32 letters, digits, - or _.'); return false; }
-    if (!site) { flash('This copy has no online address: it plays offline.'); return false; }
+    if (!site) { flash(canOffline ? 'This copy has no online address: it plays offline.' : 'This game needs an online address and a connection.'); return false; }
     remember(code); hide(); open(false); start(code);
     return true;
   }

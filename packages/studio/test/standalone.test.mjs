@@ -552,9 +552,9 @@ test('the page frames the game as its own origin, with no sandbox and nothing lo
 
 /* ------------------------------------------------------------------ the Worker */
 
-async function site({ version = '7' } = {}) {
+async function site({ version = '7', room = undefined } = {}) {
   const { default: worker } = await import('../worker/index.mjs');
-  const cat = { studio: { name: 'Owls', slug: 'owls' }, games: [{ id: 'cave-run', name: 'Cave Run', players: { min: 1, max: 4 }, netplay: version ? { version } : {}, landing: {} }] };
+  const cat = { studio: { name: 'Owls', slug: 'owls' }, games: [{ id: 'cave-run', name: 'Cave Run', players: { min: 1, max: 4 }, netplay: version ? { version } : {}, room, landing: {} }] };
   const pages = { '/games.json': JSON.stringify(cat), '/games/cave-run/index.html': '<!doctype html><html><head><title>x</title></head><body></body></html>' };
   const asked = [];
   const env = {
@@ -1476,4 +1476,30 @@ test('the icon: the game\'s own picture first, then its cover, then a letter; th
   set({ standalone: { icon: '../../studio.json' } });
   assert.equal(iconSource(root, game(), meta()).from, 'icon.png');
   assert.deepEqual(TARGETS, ['mac', 'windows', 'linux', 'ios', 'android']);
+});
+
+
+test('server rules refuse an older app before matching; browser rules retain matching by version', async () => {
+  const server = await site({ room: { host: 'server', offline: true, contract: 2, build: '7' } });
+  const old = await server.fetchSite('/cave-run/api/lobby?gv=6', { method: 'POST', headers: { origin: 'app://game' } });
+  assert.equal(old.status, 409);
+  assert.equal((await old.json()).error, 'stale');
+  assert.equal(old.headers.get('access-control-allow-origin'), 'app://game');
+  assert.equal(server.asked.length, 0, 'no old server room is allocated');
+  assert.equal((await server.fetchSite('/cave-run/api/lobby?gv=7', { method: 'POST', headers: { origin: 'app://game' } })).status, 200);
+  const browser = await site({ room: { host: 'browser', offline: true } });
+  assert.equal((await browser.fetchSite('/cave-run/api/lobby?gv=6', { method: 'POST', headers: { origin: 'app://game' } })).status, 200);
+  assert.equal(browser.asked.at(-1).searchParams.get('ver'), '6');
+});
+
+test('the app offers an update for old server rules and says when private rules need a connection', async () => {
+  const old = await shell({ lobby: { ok: false, error: 'stale' }, app: { room: { host: 'server', offline: true } } });
+  assert.equal(old.state.outdated, true);
+  assert.equal(old.net().url, '');
+  assert.match(old.el('[data-room-link]').textContent, /Update Gem Rush/);
+  const privateGame = await shell({ lobby: null, app: { room: { host: 'server', offline: false } } });
+  assert.equal(privateGame.el('[data-room-code]').textContent, 'Connection needed · Try again');
+  assert.equal(privateGame.el('[data-offline]').hidden, true);
+  assert.equal(privateGame.el('[data-notice-offline]').hidden, true);
+  assert.equal(privateGame.el('[data-room-link]').textContent, 'This game needs a connection.');
 });

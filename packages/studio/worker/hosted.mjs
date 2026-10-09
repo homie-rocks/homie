@@ -49,7 +49,7 @@ export function compiledFor(id) {
  */
 export function startHost(game, { send, log, onPause, onResume, onEnd, ...recovery }) {
   return createHost({
-    game, build: games.get(game)?.build ?? undefined, compiled: compiledFor(game), send, log, onPause, onResume, onEnd,
+    enforceOverrun: true, game, build: games.get(game)?.build ?? undefined, compiled: compiledFor(game), send, log, onPause, onResume, onEnd,
     clock: { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h) },
     ...recovery,
   });

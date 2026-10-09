@@ -495,8 +495,7 @@ test('saved AI goals use the bounded plain-value boundary', () => {
   const rig = host(compiled(), fakeClock()); rig.join(); rig.h.tickNow();
   const saved = fromBytes(rig.h.save()); rig.h.stop();
   saved.core.ents[0][15] = { action: 'collect', target: [1, 2] };
-  const back = host(compiled(), fakeClock(), { restore: new TextEncoder().encode(JSON.stringify(saved)) });
-  try { assert.equal(back.h.core.save().ents[0][15], null, 'a person never inherits an AI goal'); } finally { back.h.stop(); }
+  assert.throws(() => host(compiled(), fakeClock(), { restore: new TextEncoder().encode(JSON.stringify(saved)) }), /invalid/, 'a malformed saved goal is refused, never silently erased');
   saved.core.ents[0][15] = { action: 'x'.repeat(257) };
   assert.throws(() => host(compiled(), fakeClock(), { restore: new TextEncoder().encode(JSON.stringify(saved)) }), /invalid/);
 });

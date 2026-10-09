@@ -135,11 +135,11 @@ const blocked = (t, ms) => t.mock.timers.setTime(Date.now() + ms);
 const hasBody = (room) => (room.hosting ? Boolean(room.mine()) : room.net.seat !== null && Boolean(room.net.latest()?.d?.b?.some((r) => r[1] === room.net.seat)));
 const stands = (room) => ({ link: room.net.link, standing: room.standing.state, why: room.standing.why, body: hasBody(room) });
 
-test('revision 10, and the numbers both sides share', async () => {
+test('revision 11, and the numbers both sides share', async () => {
   const { NETPLAY_REVISION, NETPLAY_MARK, PREFS_LIMITS: helperPrefs, cleanVersion, cleanFeatures } = await netplayKit();
-  assert.equal(NETPLAY_REVISION, 10);
-  assert.equal(NET_REVISION, 10);
-  assert.equal(NETPLAY_MARK, 'homie-netplay-rev:10');
+  assert.equal(NETPLAY_REVISION, 11);
+  assert.equal(NET_REVISION, 11);
+  assert.equal(NETPLAY_MARK, 'homie-netplay-rev:11');
   assert.deepEqual({ ...helperPrefs }, { ...PREFS_LIMITS }, 'the helper and the play page keep the same prefs limits');
   for (const v of ['7', 'v2.1', '2026-10-06_b', 12, '', ' x ', 'a b', 'x'.repeat(33), null, undefined, {}]) assert.equal(cleanVersion(v), versionOf(v), `the same word for ${JSON.stringify(v)}`);
   assert.equal(versionOf(12), '12');
@@ -1799,4 +1799,94 @@ test('rules reconnects spread the first attempts and back off through a prolonge
     assert.ok(starts.length >= 5 && starts.length <= 9, `${starts.length} attempts`);
     assert.ok(starts.slice(1).some((at, i) => at - starts[i] >= 8000));
   } finally { net.close(); }
+});
+
+test('step input is only forwarded to a host that announced rules', () => {
+  for (const rules of [false, true]) {
+    const room = new NetRoom({ code: 'steps', maxPlayers: 4 });
+    const make = () => { const frames = []; const wire = room.attach({ send: (text) => frames.push(JSON.parse(text)), close() {}, buffered: () => 0 }); return { frames, send: (m) => wire.onMessage(JSON.stringify(m)) }; };
+    const host = make(); const peer = make();
+    host.send({ t: 'hello', v: 1, rev: 10, name: 'Host', rules });
+    peer.send({ t: 'hello', v: 1, rev: 10, name: 'Peer' });
+    peer.send({ t: 'in', e: 1, k: 1, s: [[0, 127]] });
+    const input = host.frames.filter((m) => m.t === 'in').at(-1);
+    if (rules) assert.deepEqual(input.s, [[0, 127]]);
+    else { assert.equal(input.a, null); assert.equal(input.s, undefined); }
+  }
+});
+
+test('a solo host returning after the hold gets no stale free after welcome', () => {
+  let now = 1000;
+  const room = new NetRoom({ code: 'return', now: () => now });
+  const connect = (token) => {
+    const frames = [];
+    const c = room.attach({ send: (s) => frames.push(JSON.parse(s)), close() {}, buffered: () => 0 });
+    c.onMessage(JSON.stringify({ t: 'hello', v: 1, rules: true, device: 'desk', want: 'play', canHost: true, name: 'Player', ...(token ? { token } : {}) }));
+    return { c, frames, welcome: frames.find((m) => m.t === 'welcome') };
+  };
+  const first = connect(); assert.equal(first.welcome.role, 'host');
+  first.c.onClose(); now += 72000;
+  const back = connect(first.welcome.token);
+  assert.equal(back.welcome.seat, 0); assert.equal(back.welcome.role, 'host');
+  assert.deepEqual(back.frames.slice(back.frames.indexOf(back.welcome) + 1).filter((m) => m.t === 'free'), []);
+});
+
+test('an old-style room is sent nothing revision 11 added: no held occupants, no free, no snapshot epoch, characters counted', () => {
+  let now = 1000;
+  const room = new NetRoom({ code: 'plain', now: () => now, holdMs: 5000 });
+  const connect = () => {
+    const frames = []; const texts = [];
+    const c = room.attach({ send: (s) => { texts.push(s); frames.push(JSON.parse(s)); }, close() {}, buffered: () => 0 });
+    c.onMessage(JSON.stringify({ t: 'hello', v: 1, device: 'desk', want: 'play', canHost: true }));
+    return { c, frames, texts, welcome: frames.find((m) => m.t === 'welcome') };
+  };
+  const host = connect(); const guest = connect(); const third = connect();
+  assert.equal(host.welcome.role, 'host');
+  for (const page of [host, guest, third]) assert.equal('held' in page.welcome, false);
+  host.c.onMessage(JSON.stringify({ t: 'snap', k: 1, st: now, e: 7, d: 'é'.repeat(50) }));
+  const snap = guest.frames.find((m) => m.t === 'snap');
+  assert.equal(snap.k, 1); assert.equal('e' in snap, false);
+  assert.equal(room.stats.bytesOut, [host, guest, third].reduce((sum, page) => sum + page.texts.reduce((n, text) => n + text.length, 0), 0), 'JSON characters, as before');
+  // The guest leaves and its seat's hold runs out: the old-style host hears the leave and nothing else.
+  guest.c.onClose(); now += 60000; room.tick(); third.c.onMessage(JSON.stringify({ t: 'ping', c: 1 })); room.tick();
+  assert.deepEqual(host.frames.filter((m) => m.t === 'free'), []);
+  host.c.onMessage(JSON.stringify({ t: 'yield' }));
+  const role = third.frames.find((m) => m.t === 'role');
+  assert.equal(role?.role, 'host'); assert.equal('held' in role, false);
+  assert.deepEqual(host.frames.filter((m) => m.t === 'host' && m.why === 'host-kept'), []);
+});
+
+test('an old-style host cannot authorize terminal rules failure through hello', () => {
+  const room = new NetRoom({ code: 'legacy' }); const frames = [];
+  const c = room.attach({ send: s => frames.push(JSON.parse(s)), close() { assert.fail('legacy room closed'); }, buffered: () => 0 });
+  c.onMessage(JSON.stringify({ t: 'hello', v: 1, rules: true, canHost: true, want: 'play' }));
+  c.onMessage(JSON.stringify({ t: 'rules-end', why: 'fault' }));
+  assert.ok(room.hostId); assert.equal(frames.filter(m => m.code === 'room-over').length, 0);
+});
+
+test('old-style accented snapshots keep the character measure from main', () => {
+  const room = new NetRoom({ code: 'accented' });
+  const connect = () => {
+    const frames = [];
+    const wire = room.attach({ send: s => frames.push(JSON.parse(s)), close() {}, buffered: () => 0 });
+    const send = m => wire.onMessage(JSON.stringify(m));
+    send({ t: 'hello', v: 1, canHost: true, want: 'play' });
+    return { frames, send };
+  };
+  const a = connect(), b = connect();
+  const frame = { t: 'snap', k: 1, st: 1000, d: 'é'.repeat(9000), c: [] };
+  // Match the review's 9,054-character / 18,054-byte wire frame exactly.
+  const wire = JSON.stringify(frame).padEnd(9054, ' ');
+  assert.equal(wire.length, 9054); assert.equal(Buffer.byteLength(wire), 18054);
+  const host = room.clients.get(room.hostId);
+  room.onMessage(host, wire);
+  assert.equal(b.frames.filter(m => m.t === 'snap').at(-1).d, frame.d);
+  assert.equal(a.frames.filter(m => m.t === 'error').length, 0);
+});
+
+test('forgetting a failed server room never elects a browser', () => {
+  const room = new NetRoom({ code: 'failed' });
+  room.failServerHost('rules could not load'); room.forget();
+  assert.equal(room.hostFailed, 'rules could not load');
+  assert.equal(room.elect(null, 'test'), null);
 });

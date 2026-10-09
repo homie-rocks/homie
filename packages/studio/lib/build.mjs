@@ -376,7 +376,7 @@ function pointAtBundle(html, bundle) {
  * game is served (/games/<id>/ on the site, /<id>/__game/ in its frame, the lab). A game with no dynamic import is
  * one file, as before. `hashed` (the site's build) names the bundle by its content too: see the top of this file.
  */
-export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {}, hashed = false, longCheck = false } = {}) {
+export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {}, hashed = false, lab = false, longCheck = false } = {}) {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, 'assets'), { recursive: true });
   const mode = g.build?.mode ?? 'bundle';
@@ -406,7 +406,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
       // game.json assets.budgets, read by createModels() (assets/assets.ts): a constant in the bundle, never a fetch.
       define: { __HOMIE_MODEL_BUDGETS__: JSON.stringify(budgets ?? {}) },
       // GAME PARTS: `@parts/<host>/<id>` and `@parts/<id>` resolve to the part's entry, and the game is credited.
-      plugins: [partsPlugin(root, g.id), ...(rules ? [viewPlugin(g, rules, entry)] : [])],
+      plugins: [partsPlugin(root, g.id), ...(rules ? [viewPlugin(g, rules, entry, { lab })] : [])],
     };
     const failed = (error) => {
       const first = error.errors?.[0];
@@ -416,7 +416,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     warnings += result.warnings.length;
     metafile = result.metafile;
     const outputs = Object.entries(result.metafile.outputs).filter(([k]) => k.endsWith('.js'));
-    const main = outputs.find(([, v]) => v.entryPoint)?.[0];
+    const main = outputs.find(([, v]) => rules ? v.entryPoint === 'homie-view:homie:view' : Boolean(v.entryPoint))?.[0];
     if (!main) throw new Error(`games/${g.id} did not build: esbuild wrote no bundle for ${entryRel}`);
     bundled = `assets/${basename(main)}`;
     chunks = outputs.filter(([k]) => k !== main).map(([k]) => `assets/${basename(k)}`).sort();
@@ -466,6 +466,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     for (const file of [bundled, ...chunks].filter(Boolean)) digest.update(readFileSync(join(out, file)));
     digest.update(readFileSync(join(out, 'index.html')));
     rules.build = digest.digest('hex').slice(0, 32);
+    writeFileSync(join(out, 'rules.json'), `${JSON.stringify({ v: 1, host: rules.settings.host, offline: rules.settings.offline, build: rules.build, files: [bundled, ...chunks] })}\n`);
     if (g.netplay?.version !== undefined) log(`  ${g.id}: rules games use their build hash as the revision; netplay.version is not read`);
   }
   return { mode, warnings, metafile, bundle: bundled, chunks, rules };
@@ -486,7 +487,7 @@ export function orderGames(games, order, log = () => {}) {
   return [...games].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity) || a.id.localeCompare(b.id));
 }
 
-export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, longCheck = false } = {}) {
+export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, beforePublish = async () => {}, longCheck = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
   // The shop first (shop/SHOP.md): invalid shop settings stop the build before anything is built.
@@ -504,13 +505,13 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   // from the site as it is.
   const dist = openStage(root, { from: only ? live : null });
   try {
-    return await buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, longCheck });
+    return await buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, beforePublish, longCheck });
   } finally {
     rmSync(dist, { recursive: true, force: true });
   }
 }
 
-async function buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, longCheck }) {
+async function buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, beforePublish, longCheck }) {
   const built = [];
   const retired = [];
   const cache = {};
@@ -542,8 +543,11 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max,
       ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
     });
-    log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} ${chunks.length === 1 ? 'chunk' : 'chunks'} loaded later, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
-    if (rules) log(`  ${g.id}: its rules run on the server (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; ${rules.check.ticks} ticks played, the room rebuilt from its save ${rules.check.restores} times: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler; the largest save was ${rules.check.largestSaveBytes} bytes)`);
+    log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} additional ${chunks.length === 1 ? 'chunk' : 'chunks'}, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
+    if (rules && (rules.settings.offline || rules.settings.host === 'browser')) log(`${g.id}: this game's rules and tunables are sent to players' devices so it can be played offline`);
+    if (rules) log(`  ${g.id}: its rules run ${rules.settings.host === 'browser' ? "in a player's browser" : 'on the server'} (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; ${rules.check.ticks} ticks played, the room rebuilt from its save ${rules.check.restores} times: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler; the largest save was ${rules.check.largestSaveBytes} bytes)`);
+    if (rules && rules.settings.host === 'server' && (rules.snapshotBytes > rules.snapshotCap || rules.checkpointBytes > rules.checkpointCap)) log(`  ${g.id}: this state fits server and offline play but exceeds browser hosting limits.`);
+    if (rules) log(`  ${g.id}: smoke-run largest snapshot ${rules.snapshotBytes} B / ${rules.snapshotCap} B browser cap; checkpoint ${rules.checkpointBytes} B / ${rules.checkpointCap} B browser cap (measured, not an upper bound)`);
   }
   // A game written before rules (its own code is the host) builds and runs exactly as it did. Said in one line.
   if (browserHosted.length) log(`hosted by a player's browser, as before (no room object; nothing to do): ${browserHosted.join(', ')}`);
@@ -571,8 +575,8 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   // studio.json site.order: the catalogue's order is every listing's order.
   const shown = orderGames(all.filter((g) => existsSync(join(dist, 'games', g.id, 'index.html'))), s.order, log);
   // Server-hosted games: what this build made, and for a one-game build what the catalogue before it said of the others.
-  const rulesOf = new Map(ruled.map((r) => [r.id, { host: 'server', tickHz: r.settings.tickHz, inputHz: r.settings.inputHz, contract: r.schema.contract, build: r.build, stateHash: r.stateHash, rounds: r.rounds }]));
-  if (only) for (const row of readJson(join(dist, 'games.json'))?.games ?? []) if (row?.room?.host === 'server' && row.id !== only && !rulesOf.has(row.id)) rulesOf.set(row.id, row.room);
+  const rulesOf = new Map(ruled.map((r) => [r.id, { host: r.settings.host, offline: r.settings.offline, tickHz: r.settings.tickHz, inputHz: r.settings.inputHz, contract: r.schema.contract, build: r.build, stateHash: r.stateHash, rounds: r.rounds }]));
+  if (only) for (const row of readJson(join(dist, 'games.json'))?.games ?? []) if (row?.room?.contract && row.id !== only && !rulesOf.has(row.id)) rulesOf.set(row.id, row.room);
   // What each game's build is (its landing's own pictures are not part of it): the digest the manifest names.
   const builds = {};
   const rows = shown.map((g) => {
@@ -714,7 +718,8 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   if (deploy) for (const b of built) log(`  ${b.id}: ${b.changed}${b.changed === 'new' ? '' : ' since the last build here'}, build ${b.hash}`);
   // The rules of the server-hosted games, where the studio's Worker imports them (site/src/rules/). Written with the
   // site, never before: a game that did not build has left both as they were.
-  const hosted = (await rulesBuild()).writeRules(root, ruled, all.filter((g) => rulesOf.has(g.id)).map((g) => g.id));
+  await beforePublish();
+  const hosted = (await rulesBuild()).writeRules(root, ruled, all.filter((g) => rulesOf.get(g.id)?.host === 'server').map((g) => g.id));
   // All of it is there: now, and only now, it becomes site/dist (lib/stage.mjs).
   const swapped = swapIn(dist, live);
   return {

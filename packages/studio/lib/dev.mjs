@@ -413,6 +413,7 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
   // A rules game saved while dev runs is built again (see rulesStamp), one game at a time.
   const stamps = new Map(listGames(root).filter(isRulesGame).map((g) => [g.id, rulesStamp(g)]));
   let rebuilding = false;
+  let published = Promise.resolve();
   const rulesLook = async () => {
     if (rebuilding || ending) return;
     for (const g of listGames(root).filter(isRulesGame)) {
@@ -424,7 +425,20 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
         log(`games/${g.id} changed: checking its rules and building it again…`);
         const hash = () => { try { return JSON.parse(readFileSync(join(root, 'site/dist/games.json'), 'utf8')).games.find((x) => x.id === g.id)?.room?.stateHash; } catch { return null; } };
         const before = hash();
-        await build(root, { only: g.id, log });
+        let release;
+        published = new Promise(resolve => { release = resolve; });
+        try {
+          await build(root, { only: g.id, log, beforePublish: async () => {
+            // Wrangler independently watches assets and code. Publishing both while it runs
+            // reloads the old bundle first, then the new one. Stop once at the publish boundary;
+            // the loop below starts once with the complete build and the same local storage.
+            if (!child || child.exitCode !== null) return;
+            restart = g.id;
+            const stopped = new Promise(resolve => child.once('close', resolve));
+            child.kill('SIGTERM');
+            await stopped;
+          } });
+        } finally { release(); }
         log(`games/${g.id} is rebuilt. ${before && before === hash() ? 'Local rooms resume their saved match; pages reconnect.' : 'The stored shape changed: local rooms reset to a fresh match; pages reconnect.'}`);
       } catch (error) {
         log(`games/${g.id} did not build, so the local site still runs what it had:\n${String(error?.message ?? error)}`);
@@ -461,6 +475,7 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
     writeFileSync(devFile(root), `${JSON.stringify({ pid: process.pid, child: child.pid, port: Number(port), at: new Date().toISOString() })}\n`);
     settle().catch(() => {});
     await new Promise((done) => { child.on('close', done); child.on('error', done); });
+    await published;
     if (!restart || ending) break;
     restart = null;
   }

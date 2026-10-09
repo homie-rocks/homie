@@ -1,6 +1,7 @@
+import { prepareRuntimeFixture } from './rules-kit.mjs';
 /**
  * The view library of a rules game (rules/view.ts), built as `homie-studio build` builds it and run against a real
- * relay with the server as host (worker/room.mjs, rules/host.ts), on virtual time. No browser hosts anything here.
+ * relay in both hosting modes (worker/room.mjs, rules/host.ts), on virtual time, including offline play and handover.
  *
  *   - `openRoom()` needs no argument: the build handed the library the game's declarations and its guarded move;
  *   - two views land in one room, each with its own body, the roster and the round, and neither is ever host;
@@ -12,12 +13,12 @@
  * Run: node --test packages/studio/test/rules-view.test.mjs
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { prepareRules, viewPlugin } from '../lib/rules-build.mjs';
+import { viewPlugin } from '../lib/rules-build.mjs';
 import { NetRoom } from '../worker/room.mjs';
 import { COIN_DASH, PKG, esbuildOf, loadGame } from './rules-kit.mjs';
 import { virtualTime } from './virtual-time.mjs';
@@ -27,43 +28,62 @@ test.after(() => rmSync(scratch, { recursive: true, force: true }));
 const json = (rel) => JSON.parse(readFileSync(join(COIN_DASH, rel), 'utf8'));
 
 /** coin-dash's view library as its build bundles it (the declarations and the guarded move handed over first), and its rules for the server. */
-let kit = null;
-async function coinDashKit() {
-  if (kit) return kit;
+let kit = null; let viewBuild = 0;
+async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false) {
+  if (kit && mode === 'server' && !offline) return kit;
   const esbuild = await esbuildOf();
-  const g = { ...json('game.json'), dir: COIN_DASH };
-  const rules = await prepareRules(esbuild, scratch, g);
+  let dir = COIN_DASH;
+  if (runaway) {
+    dir = join(scratch, 'runaway'); cpSync(COIN_DASH, dir, { recursive: true });
+    const file = join(dir, 'src/rules.ts');
+    writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
+  }
+  const g = { ...json('game.json'), room: { host: mode, offline, tickHz }, dir };
+  // This suite measures protocol outcomes on virtual time. The 60 Hz case uses the same checked fixture without
+  // asking a busy parallel test runner to meet a 17 ms wall-clock build deadline (rules-build tests own that check).
+  const rules = await prepareRuntimeFixture(esbuild, scratch, { ...g, room: { ...g.room, tickHz: 20 } });
+  const L = await loadGame(scratch, dir, 'coin-dash');
+  const compiled = L.R.compileRules(L.def, { tune: json('tunables.json'), map: L.R.compileMap(json('map/main.json')), settings: L.R.roomSettings(g.room).settings, seats: 8 });
+  rules.settings = compiled.settings;
+  rules.schema = L.R.schemaOf(compiled);
   const entry = join(scratch, 'entry.ts');
-  writeFileSync(entry, `import { openRoom } from ${JSON.stringify(join(PKG, 'rules', 'view.ts'))};\n(globalThis as any).__openRoom = openRoom;\n`);
-  const file = join(scratch, 'view.mjs');
+  writeFileSync(entry, `import { openRoom } from ${JSON.stringify(join(PKG, 'rules', 'view.ts'))};\n(globalThis as any).__openRoom = openRoom;\n${mode === 'browser' ? "import { makeHost } from 'homie:host'; (globalThis as any).__makeHost = makeHost;" : ''}\n`);
+  const file = join(scratch, `view-${mode}-${offline}-${tickHz}-${runaway}-${++viewBuild}.mjs`);
   await esbuild.build({ entryPoints: ['homie:view'], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent', plugins: [viewPlugin(g, rules, entry)] });
   await import(pathToFileURL(file).href);
-  const L = await loadGame(scratch, COIN_DASH, 'coin-dash');
-  const compiled = L.R.compileRules(L.def, { tune: json('tunables.json'), map: L.R.compileMap(json('map/main.json')), settings: L.R.roomSettings(g.room).settings, seats: 8 });
-  kit = { L, compiled, openRoom: globalThis.__openRoom, bundle: readFileSync(file, 'utf8') };
-  return kit;
+  const result = { L, compiled, openRoom: globalThis.__openRoom, makeHost: globalThis.__makeHost, bundle: readFileSync(file, 'utf8') };
+  if (mode === 'server' && !offline) kit = result;
+  return result;
 }
 
 /** A relay with the server as host, on the test's clock, and sockets to it. */
-function rig(L, compiled, extra = {}) {
+function rig(L, compiled, mode = false, lag = 0) {
+  const browser = mode === true;
+  const extra = typeof mode === "object" ? mode : {};
   const lines = [];
-  const room = new NetRoom({ code: 'r', maxPlayers: 8, log: (l) => lines.push(l) });
+  const relay = () => new NetRoom({ code: 'r', rules: true, maxPlayers: compiled.seats, tickHz: compiled.settings.tickHz, log: (l) => lines.push(l) });
+  let room = relay();
   const host = L.H.createHost({ game: 'coin-dash', compiled, send: (m, text) => room.hostFrame(m, text), log: (l) => lines.push(l), random: () => 0.37, clock: { now: () => Date.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h) }, ...extra });
-  room.setServerHost(host);
+  if (!browser) room.setServerHost(host);
   const beat = setInterval(() => room.tick(), 250);
   const sockets = [];
+  const network = { up: true };
   const socket = () => class MemorySocket {
     constructor() {
       this.readyState = 0; this.bufferedAmount = 0; this.sent = [];
       sockets.push(this);
-      this.h = room.attach({ send: (x) => setTimeout(() => { if (this.readyState === 1) this.onmessage?.({ data: x }); }, 0), close: () => { setTimeout(() => this.cut(), 0); }, buffered: () => 0 });
-      setTimeout(() => { this.readyState = 1; this.onopen?.({}); }, 0);
+      this.h = room.attach({ send: (x) => setTimeout(() => { if (this.readyState === 1) this.onmessage?.({ data: x }); }, lag), close: () => { setTimeout(() => this.cut(), 0); }, buffered: () => 0 });
+      setTimeout(() => { if (network.up) { this.readyState = 1; this.onopen?.({}); } }, 0);
     }
     send(x) { this.sent.push(JSON.parse(x)); this.h?.onMessage(x); }
     close() { if (this.readyState === 3) return; this.readyState = 3; this.h?.onClose(); }
     cut() { if (this.readyState === 3) return; this.readyState = 3; this.h?.onClose('error'); this.onclose?.({}); }
   };
-  return { room, host, lines, sockets, socket, stop: () => { clearInterval(beat); host.stop(); } };
+  return {
+    get room() { return room; }, host, lines, sockets, socket, network, stop: () => { clearInterval(beat); host.stop(); },
+    /** The relay is replaced by one with no memory (a Worker restart with nothing saved) and every socket drops. */
+    restart() { room = relay(); for (const s of [...sockets]) s.cut(); },
+  };
 }
 const cfg = (who) => ({ v: 1, url: 'ws://relay/coin-dash/__net?room=r', room: 'r', device: 'desk', want: 'play', name: who });
 
@@ -223,6 +243,762 @@ test('a restored epoch past 32 bits reaches the view and its input reaches the h
   const inputs = r.sockets[0].sent.filter((m) => m.t === 'in');
   assert.ok(inputs.length > 0); assert.ok(inputs.every((m) => m.e === 4294967296));
   assert.ok(r.host.facts().ins > 0, 'the host accepts the untruncated epoch');
+});
+
+test('browser hosts run the same rules, hand the round to the other browser, and finish it with bots', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t);
+  const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(600);
+  assert.deepEqual([a.status, b.status], ['playing', 'playing']);
+  assert.deepEqual([a.net.rulesHosting, b.net.rulesHosting], [true, false]);
+  assert.deepEqual([a.seat, b.seat], [0, 1]);
+  const x = b.me.pos.x;
+  b.input({ ax: -127, ay: 0 });
+  await clock.wait(1000);
+  assert.ok(b.me.pos.x < x - 4);
+  b.input({ ax: 0, ay: 0 });
+  await clock.wait(2400);
+  await clock.wait(375);
+  const n = b.round.n;
+  const left = b.round.secondsLeft;
+  assert.ok(r.room.lastCkpt?.d?.data?.core, 'the complete runtime has a relay checkpoint');
+  r.sockets[0].cut();
+  a.close();
+  await clock.wait(1000);
+  assert.equal(b.net.rulesHosting, true);
+  assert.ok(Math.abs(r.room.lastRound.endsAt - (Date.now() + (r.room.lastSnap.d[0][2] - r.room.lastSnap.k) * 50)) < 100, 'the relay deadline follows the restored tick');
+  assert.equal(b.round.n, n);
+  assert.ok(b.round.secondsLeft < left && b.round.secondsLeft > left - 2, 'handover keeps the round timer');
+  assert.equal(b.status, 'playing');
+  const rounds = [];
+  b.on('round', (round) => rounds.push(round));
+  await clock.wait(65_000);
+  const over = rounds.find((round) => round.phase === 'over' && round.results);
+  assert.ok(over, 'the elected browser finishes the round');
+  assert.equal(over.results.reduce((sum, row) => sum + row.score, 0), 16);
+  assert.equal(b.round.n, 2);
+  assert.deepEqual(b.roster.filter((row) => row.driver === 'person').map((row) => row.seat), [1], 'the expired held seat is freed by the relay');
+  assert.equal(r.lines.filter((line) => line.ev === 'failed').length, 0);
+});
+
+for (const mode of ['server', 'browser']) test(`${mode} rules play offline with a local body, input and bots`, async (t) => {
+  const { openRoom } = await coinDashKit(mode, true);
+  const clock = virtualTime(t);
+  const a = openRoom({ net: { config: null, post: null } });
+  t.after(() => a.close());
+  await clock.wait(600);
+  assert.equal(a.status, 'playing');
+  assert.equal(a.net.rulesHosting, true);
+  assert.equal(a.net.connected, false);
+  assert.equal(a.me.driver, 'person');
+  assert.equal(a.roster.filter((row) => row.driver === 'bot').length, 3);
+  const x = a.me.pos.x;
+  a.input({ ax: 127, ay: 0 });
+  await clock.wait(1000);
+  assert.ok(a.me.pos.x > x + 4);
+  a.input({ ax: 0, ay: 0 });
+  const rounds = [];
+  a.on('round', (round) => rounds.push(round));
+  await clock.wait(61_000);
+  assert.equal(rounds.find((round) => round.phase === 'over' && round.results)?.results.reduce((sum, row) => sum + row.score, 0), 16);
+});
+
+test('private server rules do not offer offline play', async (t) => {
+  const { openRoom, bundle } = await coinDashKit();
+  assert.doesNotMatch(bundle, /world\.spawn/);
+  const clock = virtualTime(t);
+  const a = openRoom({ net: { config: null, post: null } });
+  t.after(() => a.close());
+  await clock.wait(2000);
+  assert.equal(a.net.rulesHosting, false);
+  assert.equal(a.me, null);
+  assert.equal(a.status, 'offline');
+});
+
+
+test('a lost server room falls back locally, reports no offline progress, then rejoins the server', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('server', true);
+  const clock = virtualTime(t);
+  const r = rig(L, compiled);
+  const a = openRoom({ net: { config: cfg('One'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(1000);
+  assert.equal(a.net.rulesHosting, false);
+  r.network.up = false;
+  r.sockets[0].cut();
+  await clock.wait(6500);
+  assert.equal(a.net.rulesHosting, true);
+  assert.equal(a.status, 'playing');
+  const frames = () => r.sockets.flatMap((s) => s.sent).filter((m) => ['snap', 'round', 'roster', 'ckpt', 'state'].includes(m.t));
+  assert.deepEqual(frames(), []);
+  a.input({ ax: 127, ay: 0 });
+  await clock.wait(1000);
+  assert.deepEqual(frames(), [], 'offline scores, state, snapshots and saves never go to the relay');
+  r.network.up = true;
+  // The pending silent socket times out, then the existing reconnect path opens another.
+  await clock.wait(30_000);
+  assert.equal(a.net.connected, true);
+  assert.equal(a.net.rulesHosting, false, 'the local timer is stopped before using the server again');
+  assert.equal(a.net.host.id, 'server');
+  assert.deepEqual(frames(), []);
+});
+
+
+test('a sixty-tick browser host sends a snapshot a tick inside the relay allowance', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true, 60);
+  const clock = virtualTime(t);
+  const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(2000);
+  const before = r.room.lastSnap.k;
+  const sent = r.sockets[0].sent.length;
+  await clock.wait(1000);
+  assert.ok(r.room.lastSnap.k - before >= 58, 'the simulation keeps sixty ticks a second');
+  const snapshots = r.sockets[0].sent.slice(sent).filter((m) => m.t === 'snap');
+  assert.ok(snapshots.length >= 59 && snapshots.length <= 61, `${snapshots.length} snapshots a second`);
+  assert.equal(b.status, 'playing');
+});
+
+
+test('offline rules prefetch waits for playable and a closed view cannot start a late loader', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit();
+  const clock = virtualTime(t);
+  const r = rig(L, compiled);
+  let loads = 0;
+  let starts = 0;
+  let deliver;
+  const pending = new Promise((resolve) => { deliver = resolve; });
+  const a = openRoom({ net: { config: cfg('One'), WebSocketImpl: r.socket(), post: null,
+    rulesHost: { mode: 'server', offline: true, load: () => { loads += 1; return pending; } } } });
+  t.after(() => { a.close(); r.stop(); });
+  assert.equal(loads, 0);
+  await clock.wait(1);
+  assert.equal(loads, 0, 'a welcome is not a playable snapshot');
+  await clock.wait(500);
+  assert.equal(a.status, 'playing');
+  assert.equal(loads, 1);
+  a.close();
+  deliver(() => { starts += 1; throw new Error('a closed view started a host'); });
+  await clock.wait(100);
+  assert.equal(starts, 0);
+  const b = openRoom({ net: { config: null, post: null,
+    rulesHost: { mode: 'server', offline: true, load: () => pending } } });
+  b.close();
+  await clock.wait(100);
+  assert.equal(starts, 0, 'closing during offline startup also cancels the pending host');
+});
+
+test('promotion replaces a poisoned checkpoint and publishes the fresh round', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(2200);
+  r.room.lastCkpt.d.data.core.ents = {};
+  r.sockets[0].cut(); a.close();
+  await clock.wait(1500);
+  assert.equal(b.net.rulesHosting, true);
+  assert.equal(b.status, 'playing');
+  assert.ok(Array.isArray(r.room.lastCkpt.d.data.core.ents));
+  assert.ok(r.room.lastCkpt.k > 0);
+  assert.ok(r.room.lastRound.endsAt > Date.now());
+});
+
+test('a failed browser runtime ends the room without electing its checkpoint again', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true, 20, true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(1200);
+  a.command('boom');
+  await clock.wait(6000);
+  assert.equal(r.room.hostId, null);
+  assert.equal(r.room.lastCkpt, null);
+  assert.equal(a.net.rulesHosting, false);
+  assert.equal(b.net.rulesHosting, false);
+  assert.equal(a.net.link, 'closed');
+  assert.equal(b.net.link, 'closed');
+  const fresh = openRoom({ net: { config: cfg('Fresh'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => fresh.close()); await clock.wait(500);
+  assert.equal(fresh.net.rulesHosting, true);
+  assert.equal(fresh.status, 'playing');
+});
+
+for (const offline of [true, false]) test(`a hidden solo host pauses and resumes, offline=${offline}`, async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const listeners = new Map();
+  const previous = globalThis.document;
+  globalThis.document = { hidden: false, removeEventListener() {}, addEventListener: (name, fn) => listeners.set(name, [...(listeners.get(name) ?? []), fn]) };
+  const a = openRoom({ net: { config: offline ? null : cfg('Solo'), WebSocketImpl: r.socket(), post: null } });
+  let currentTick = 0; a.net.on('snapshot', (s) => { currentTick = s.k; });
+  t.after(() => { a.close(); r.stop(); if (previous) globalThis.document = previous; else delete globalThis.document; });
+  await clock.wait(1000);
+  globalThis.document.hidden = true; listeners.get('visibilitychange').forEach((fn) => fn());
+  const tick = currentTick;
+  await clock.wait(10000);
+  assert.equal(currentTick, tick);
+  assert.equal(a.net.rulesHosting, true);
+  globalThis.document.hidden = false; listeners.get('visibilitychange').forEach((fn) => fn());
+  await clock.wait(1000);
+  assert.equal(currentTick, tick + 20);
+});
+
+test('a module that cannot load leaves no host without a runtime', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null,
+    rulesHost: { mode: 'browser', offline: true, load: () => { throw new Error('module unavailable'); } } } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(3000);
+  assert.equal(a.net.rulesHosting, false); assert.equal(a.net.role, 'replica');
+  assert.notEqual(a.net.link, 'closed'); assert.equal(r.room.hostId, null);
+});
+
+test('server reconnect survives an unavailable offline module', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('server', true);
+  const clock = virtualTime(t); const r = rig(L, compiled);
+  const posts = [];
+  const a = openRoom({ net: { config: cfg('One'), WebSocketImpl: r.socket(), post: (m) => posts.push(m),
+    rulesHost: { mode: 'server', offline: true, load: () => Promise.reject(new Error('offline chunk unavailable')) } } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
+  await clock.wait(9000);
+  assert.notEqual(a.net.link, 'closed');
+  assert.match(posts.filter(m => m.what === 'line').at(-1)?.text, /needs a connection/i);
+  r.network.up = true; await clock.wait(30000);
+  assert.equal(a.net.connected, true); assert.equal(a.status, 'playing');
+});
+
+for (const frameType of ['snap', 'ckpt', 'state', 'ev', 'round', 'roster']) test(`a present seat ignores a delayed free and ${frameType} size failure is visible and terminal`, async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const posts = []; const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+  const a = openRoom({ net: { config: cfg('One'), WebSocketImpl: r.socket(), post: (m) => posts.push(m) } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: m => posts.push(m) } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(1000);
+  r.sockets[0].onmessage({ data: JSON.stringify({ t: 'free', seat: a.seat }) });
+  await clock.wait(200); assert.equal(a.me?.driver, 'person');
+  r.sockets[0].send(JSON.stringify({ t: frameType, rules: true, d: 'x'.repeat(frameType === 'ckpt' ? 70000 : 17000) }));
+  await clock.wait(500);
+  assert.equal(a.net.rulesHosting, false); assert.equal(a.net.link, 'closed');
+  assert.match(warnings.join(' '), /size cap/);
+  assert.equal(b.net.link, 'closed'); assert.equal(r.room.hostId, null);
+  assert.match(posts.filter(m => m.what === 'line').at(-1)?.text, /size|cap/);
+});
+
+for (const jump of [-10000, 30000]) test(`local snapshots keep rising when the wall clock moves ${jump} ms`, async (t) => {
+  const { openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const wallNow = Date.now;
+  let shift = 0; Date.now = () => wallNow() + shift;
+  performance.now = () => wallNow() - 1000000;
+  t.after(() => { Date.now = wallNow; });
+  const a = openRoom({ net: { config: null, post: null } }); t.after(() => a.close());
+  const snaps = []; a.net.on('snapshot', s => snaps.push(s));
+  await clock.wait(1000); const before = snaps.at(-1);
+  shift = jump; await clock.wait(1000);
+  assert.equal(snaps.at(-1).k, before.k + 20);
+  assert.ok(snaps.at(-1).st > before.st);
+  assert.ok(a.net.sample().b.k >= before.k + 15, 'the rendered picture advances too');
+  shift = 0; await clock.wait(1000);
+  assert.equal(snaps.at(-1).k, before.k + 40);
+  assert.ok(a.net.sample().b.k >= before.k + 35, 'clock correction also keeps rendering');
+});
+
+test('a solo online save survives a forgotten relay without uploading later offline progress', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('Solo'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(20000);
+  r.network.up = false; r.sockets[0].cut();
+  await clock.wait(6000);
+  const savedTick = r.room.lastCkpt.k;
+  let returnedTick = 0; a.net.on('snapshot', s => { if (r.network.up && a.net.connected && !returnedTick) returnedTick = s.k; });
+  await clock.wait(65000);
+  r.network.up = true; await clock.wait(30000);
+  assert.equal(a.net.connected, true); assert.equal(a.me?.driver, 'person');
+  assert.ok(returnedTick >= savedTick - 30 && returnedTick < savedTick + 300, 'the pre-offline save resumes');
+});
+
+test('browser rules carry reserved guides, validated goals, asks, answers and companion pacing', async (t) => {
+  const { source, vocab: baseVocab } = await import('./rules-feature-kit.mjs');
+  const vocab = { ...baseVocab, asks: { ...baseVocab.asks, no_thanks: { text: 'No thanks', leave: true } } };
+  const { writeGame } = await import('./rules-kit.mjs');
+  const dir = writeGame(scratch, 'browser-features', { rules: source });
+  mkdirSync(join(dir, 'map'), { recursive: true });
+  writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100], max: [100, 100] } }));
+  writeFileSync(join(dir, 'agents.json'), JSON.stringify(vocab));
+  const g = { id: 'browser-features', dir, players: { max: 4 }, room: { host: 'browser' } };
+  const esbuild = await esbuildOf(); const rules = await prepareRuntimeFixture(esbuild, scratch, g);
+  const L = await loadGame(scratch, dir, g.id);
+  const c = L.R.compileRules(L.def, { map: L.R.compileMap(rules.map), settings: rules.settings, seats: 4 });
+  const entry = join(scratch, 'features-view.ts'); writeFileSync(entry, `export { openRoom } from ${JSON.stringify(join(PKG, 'rules/view.ts'))};`);
+  const file = join(scratch, 'features-view.mjs');
+  await esbuild.build({ stdin: { contents: `import 'homie:game'; export { openRoom } from ${JSON.stringify(entry)};`, resolveDir: scratch }, bundle: true, format: 'esm', outfile: file, plugins: [viewPlugin(g, rules, entry)] });
+  const { openRoom } = await import(pathToFileURL(file).href);
+  const clock = virtualTime(t); const r = rig(L, c, true);
+  r.room.setVocabulary(vocab); r.room.setPolicy({ kind: 'beginner', guides: 1, aiSeats: 1, bots: 'fill', brain: 'workers-ai' });
+  r.room.decider = async () => ({ ok: true, by: 'ai', picks: { advance: false } });
+  const a = openRoom({ net: { config: cfg('Player'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(1200);
+  assert.equal(a.net.rulesHosting, true);
+  const saved = () => r.room.lastCkpt.d.data;
+  assert.equal(saved().core.shared[1], 0, 'the remote decision reaches the rules rather than the floor');
+  const guide = saved().core.ents.find(e => e[12] === 'ai' && e[11] === 3);
+  assert.ok(guide); assert.equal(guide[17][2], 1, 'the reserved guide has a valid goal');
+  const goals = []; a.on('goal', g => goals.push(g));
+  let body; a.each('pawn', e => { if (e.seat === 3) body = e; });
+  assert.ok(a.askButtons(body.id).some(b => b.k === 'visit' && b.args.place === 'camp'));
+  a.ask(body.id, 'follow', { seat: 0 });
+  await clock.wait(300);
+  assert.ok(r.sockets[0].sent.some(m => m.k === 'agent:goal' && m.d?.goal?.goal === 'follow'));
+  assert.ok(goals.some(g => g.goal?.goal === 'follow'), 'the hosting view receives its own goal');
+  a.net.checkpointNow();
+  const before = saved().core.ents.find(e => e[11] === 3)[17][0];
+  await clock.wait(1000); a.net.checkpointNow();
+  assert.equal(saved().core.ents.find(e => e[11] === 3)[17][0], before, 'an asked goal carries without repeating the floor');
+});
+
+test('a persistently slow visible browser yields to another ready player', async (t) => {
+  const { L, compiled, openRoom, makeHost } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('Slow'), WebSocketImpl: r.socket(), post: null,
+    rulesHost: { mode: 'browser', offline: true, load: async () => o => makeHost({ ...o, now: () => performance.now() / 20 }) } } });
+  const b = openRoom({ net: { config: cfg('Ready'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(8500);
+  assert.equal(a.net.rulesHosting, false); assert.equal(b.net.rulesHosting, true);
+  assert.equal(b.status, 'playing');
+});
+
+test('a failed offline runtime still reconnects to its healthy server room', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('server', true, 20, true);
+  const clock = virtualTime(t); const r = rig(L, compiled);
+  const posts = [];
+  const a = openRoom({ net: { config: cfg('One'), WebSocketImpl: r.socket(), post: m => posts.push(m) } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
+  await clock.wait(6000); assert.equal(a.net.rulesHosting, true);
+  a.command('boom'); await clock.wait(3000);
+  assert.equal(a.net.rulesHosting, false); assert.notEqual(a.net.link, 'closed');
+  assert.match(posts.filter(m => m.what === 'line').at(-1).text, /offline|connection/i);
+  r.network.up = true; await clock.wait(30000);
+  assert.equal(a.net.connected, true); assert.equal(a.status, 'playing');
+});
+
+
+test('two equally slow browsers keep one host after measuring both', async (t) => {
+  const { L, compiled, openRoom, makeHost } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const open = who => openRoom({ net: { config: cfg(who), WebSocketImpl: r.socket(), post: null,
+    rulesHost: { mode: 'browser', offline: true, load: async () => o => makeHost({ ...o, now: () => performance.now() / 20 }) } } });
+  const a = open('First'); const b = open('Second');
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(40000);
+  assert.ok(r.room.stats.promotions <= 1, `promotions: ${r.room.stats.promotions}`);
+});
+
+test('a held person retains identity and body across browser promotion', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const open = who => openRoom({ net: { config: cfg(who), WebSocketImpl: r.socket(), post: null } });
+  const a = open('First'); const b = open('Held'); const c = open('Next');
+  t.after(() => { a.close(); b.close(); c.close(); r.stop(); });
+  await clock.wait(1000); const id = b.me.id;
+  b.close(); await clock.wait(600); a.close(); await clock.wait(1200);
+  assert.equal(c.get(id)?.driver, 'person');
+  assert.equal(c.roster.find(s => s.seat === 1)?.name, 'Held');
+});
+
+async function featureKit(id, mode, mutate = s => s, tickHz = 20) {
+  const { source, vocab: baseVocab } = await import('./rules-feature-kit.mjs');
+  const vocab = { ...baseVocab, asks: { ...baseVocab.asks, no_thanks: { text: 'No thanks', leave: true } } };
+  const { writeGame } = await import('./rules-kit.mjs');
+  const dir = writeGame(scratch, id, { rules: mutate(source) });
+  mkdirSync(join(dir, 'map'), { recursive: true });
+  writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100], max: [100, 100] } }));
+  writeFileSync(join(dir, 'agents.json'), JSON.stringify(vocab));
+  const g = { id, dir, players: { max: 4 }, room: { host: mode, tickHz } };
+  const esbuild = await esbuildOf(); const rules = await prepareRuntimeFixture(esbuild, scratch, g);
+  const L = await loadGame(scratch, dir, id);
+  const compiled = L.R.compileRules(L.def, { map: L.R.compileMap(rules.map), settings: rules.settings, seats: 4 });
+  const entry = join(scratch, `${id}.ts`); writeFileSync(entry, `export { openRoom } from ${JSON.stringify(join(PKG, 'rules/view.ts'))};`);
+  const file = join(scratch, `${id}.mjs`);
+  await esbuild.build({ stdin: { contents: `import 'homie:game'; export { openRoom } from ${JSON.stringify(entry)};`, resolveDir: scratch }, bundle: true, format: 'esm', outfile: file, plugins: [viewPlugin(g, rules, entry)] });
+  return { L, compiled, vocab, ...(await import(pathToFileURL(file).href)) };
+}
+
+for (const path of ['server', 'replica', 'hosting']) test(`public view session has the same results through ${path}`, async t => {
+  const browser = path !== 'server';
+  const { L, compiled, vocab, openRoom } = await featureKit(`public-${path}`, browser ? 'browser' : 'server', s => s.replace('commands: { done: {}, ask: {} }', 'effects: { pulse: {} }, commands: { done: {}, ask: {} }').replace('self.level = world.level;', "self.level = world.level; world.emit('pulse', self.pos, {});"));
+  const clock = virtualTime(t); const r = rig(L, compiled, browser);
+  r.room.setVocabulary(vocab); r.room.setPolicy({ kind: 'beginner', guides: 1, aiSeats: 1, bots: 'fill', brain: 'workers-ai' });
+  r.room.decider = async () => ({ ok: true, by: 'ai', picks: { advance: true } });
+  const open = who => openRoom({ net: { config: cfg(who), WebSocketImpl: r.socket(), post: null } });
+  const a = open('First'); const b = open('Second'); const watcher = open('Watcher');
+  const view = path === 'replica' ? b : a;
+  const heard = { say: [], ask: [], goal: [], pulse: [] };
+  for (const key of Object.keys(heard)) view.on(key, e => heard[key].push(e));
+  const others = []; watcher.on('say', e => others.push(e));
+  t.after(() => { a.close(); b.close(); watcher.close(); r.stop(); });
+  await clock.wait(1200);
+  let guide; view.each('pawn', e => { if (e.seat === 3) guide = e; });
+  assert.ok(guide);
+  assert.deepEqual(view.askButtons(guide.id).map(b => [b.k, b.args]), [['visit', { place: 'camp' }], ['follow', { seat: view.seat }], ['no_thanks', {}]]);
+  assert.deepEqual(a.roster.map(s => [s.name, s.driver]), b.roster.map(s => [s.name, s.driver]));
+  assert.ok(view.roster.filter(s => s.driver === 'ai').every(s => s.name.includes('AI')));
+  assert.ok(heard.say.some(e => e.text === 'Hello!'));
+  view.ask(guide.id, 'follow', { seat: view.seat });
+  await clock.wait(300);
+  assert.equal(heard.ask.at(-1).k, 'follow'); assert.equal(heard.goal.at(-1).goal.goal, 'follow');
+  assert.equal(view.get(guide.id).goal.asked, true);
+  view.command('ask'); await clock.wait(300); assert.ok(view.me.answered >= 1); assert.equal(view.shared.yes, true);
+  assert.ok(heard.pulse.length > 20);
+  let directDecision; view.net.decide({}, { ready: { type: 'noul', instructions: 'Ready?' } }, { floor: () => ({ ready: false }) }).then(r => { directDecision = r; });
+  await clock.wait(100);
+  assert.equal(directDecision?.why, 'not-host', 'a view never starts a second decision owner beside its runtime');
+  view.net.send('say', { text: 'My own line', seat: 99 });
+  await clock.wait(100);
+  assert.equal(heard.say.find(e => e.text === 'My own line')?.seat, view.seat);
+  assert.equal(others.find(e => e.text === 'My own line')?.seat, view.seat);
+  b.net.send('say', { text: 'From second', ai: true, slot: 3 });
+  await clock.wait(100);
+  for (const events of [heard.say, others]) {
+    const line = events.find(e => e.text === 'From second'); assert.equal(line?.seat, b.seat); assert.equal(line.ai, undefined); assert.equal(line.slot, -1, 'ordinary speech cannot impersonate an AI slot');
+  }
+  watcher.net.send('say', { text: 'From watcher' }); await clock.wait(100);
+  assert.equal(heard.say.find(e => e.text === 'From watcher')?.seat, null);
+  view.ask(guide.id, 'no_thanks'); await clock.wait(100);
+  const goalsBefore = heard.goal.length;
+  view.ask(guide.id, 'follow', { seat: view.seat }); await clock.wait(100);
+  assert.equal(heard.goal.length, goalsBefore);
+  r.room.setPolicy({ ...r.room.policy, speech: 'off' }); await clock.wait(50);
+  a.net.send('say', { text: 'Muted' }); b.net.send('say', { text: 'Muted' }); await clock.wait(100);
+  assert.ok(!heard.say.some(e => e.text === 'Muted'));
+  const oldState = view.shared; assert.equal(view.net.state('shared', [999]), false);
+  view.net.round({ n: 999 }); view.net.roster([]);
+  assert.deepEqual(view.shared, oldState); assert.notEqual(view.round.n, 999);
+  await clock.wait(1500);
+  assert.deepEqual(a.round.results, b.round.results);
+});
+
+test('sixty ticks of effects per second reach both views without drops or elections', async t => {
+  const { L, compiled, openRoom } = await featureKit('fx-sixty', 'browser', s => s.replace('commands: { done: {}, ask: {} }', 'effects: { pulse: { tick: f.u32() } }, commands: { done: {}, ask: {} }').replace('self.level = world.level;', "self.level = world.level; world.emit('pulse', self.pos, { tick: world.tick });").replace('seconds: 3', 'seconds: 60'), 60);
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  const counts = [0, 0]; a.on('pulse', () => counts[0]++); b.on('pulse', () => counts[1]++);
+  await clock.wait(20000);
+  assert.equal(r.room.stats.drops, 0); assert.equal(r.room.stats.promotions, 0);
+  assert.ok(counts[1] >= 1190 * 2, `${counts[1]} effects received`);
+  assert.ok(Math.abs(counts[0] - counts[1]) <= 40);
+});
+
+test('shared state that grows after build stops every page with the measured cap', async t => {
+  const payload = JSON.stringify(Array(1024).fill(4000000000));
+  const { L, compiled, openRoom } = await featureKit('state-growth', 'browser', s => s.replace('commands: { done: {}, ask: {} }', 'events: { grow: {} }, commands: { grow: {}, done: {}, ask: {} }').replace('answers: f.u16()', 'big: f.list(f.u32(), 1024), bigger: f.list(f.u32(), 1024), answers: f.u16()').replace('commands: { done(world', `commands: { grow(world) { world.sendRoom('grow', {}); }, done(world`).replace('on: { answer(world, e)', `on: { grow(world) { world.shared.big = ${payload}; world.shared.bigger = ${payload}; }, answer(world, e)`));
+  const clock = virtualTime(t); const r = rig(L, compiled, true); const posts = [[], []];
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: m => posts[0].push(m) } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: m => posts[1].push(m) } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(1000); a.command('grow'); await clock.wait(1000);
+  assert.equal(a.net.link, 'closed'); assert.equal(b.net.link, 'closed'); assert.equal(r.room.stats.promotions, 0);
+  for (const p of posts) assert.match(p.filter(m => m.what === 'line').at(-1).text, /state is \d+ B; the cap is 8192 B/);
+});
+
+test('runtime bursts drain without dropping output or ending the room', async t => {
+  const { L, compiled, openRoom, makeHost } = await coinDashKit('browser', true);
+  let output;
+  const clock = virtualTime(t); const r = rig(L, compiled, true); const posts = [[], []];
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: m => posts[0].push(m), rulesHost: { mode: 'browser', offline: true, load: async () => o => { output = o.send; return makeHost(o); } } } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: m => posts[1].push(m) } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(1000);
+  for (let i = 0; i < 140; i++) output({ t: 'ev', k: 'say', d: { text: 'A burst' } });
+  await clock.wait(1000);
+  assert.equal(a.net.link, 'online'); assert.equal(b.net.link, 'online'); assert.equal(r.room.stats.promotions, 0);
+  assert.equal(r.sockets[0].sent.filter(m => m.t === 'ev' && m.d?.text === 'A burst').length, 140);
+  assert.equal(r.room.stats.drops, 0);
+});
+
+test('public browser views preserve the whole round through handover', async t => {
+  const { L, compiled, vocab, openRoom } = await featureKit('public-handover', 'browser', s => s
+    .replace('seconds: 3', 'seconds: 60')
+    .replace("start(world) { world.ask('director', { danger: 1 }); }", 'start() {}')
+    .replace('floors: f.u16()', 'score: f.u16({ score: true }), dice: f.u32(), floors: f.u16()')
+    .replace('self.level = world.level;', 'self.level = world.level; self.score += 1; self.dice = Math.floor(world.random() * 1000000);'));
+  const clock = virtualTime(t);
+  t.mock.method(Math, 'random', () => 0.37);
+  const runs = [false, true].map(handover => {
+    const r = rig(L, compiled, true);
+    r.room.setVocabulary(vocab);
+    r.room.setPolicy({ kind: 'beginner', guides: 1, aiSeats: 0, bots: 'fill', brain: 'workers-ai' });
+    // Keep the request pending over the election; the rule's own deadline supplies its floor.
+    r.room.decider = () => new Promise(() => {});
+    const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+    const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+    const frames = new Map(); const lines = [];
+    b.net.on('snapshot', s => frames.set(s.k, structuredClone(s.d)));
+    b.on('say', e => lines.push(e.text));
+    t.after(() => { a.close(); b.close(); r.stop(); });
+    return { r, a, b, frames, lines, handover };
+  });
+  await clock.wait(600);
+  for (const { a } of runs) {
+    let guide; a.each('pawn', e => { if (e.seat === 3) guide = e; });
+    a.ask(guide.id, 'follow', { seat: 1 });
+    a.command('ask');
+  }
+  await clock.wait(150);
+  const changed = runs[1];
+  const before = { roster: changed.b.roster.map(s => [s.seat, s.name, s.driver]), round: changed.b.round.n };
+  changed.a.net.checkpointNow();
+  changed.r.sockets[0].send(JSON.stringify({ t: 'yield' }));
+  await clock.wait(5500);
+  assert.equal(changed.b.net.rulesHosting, true);
+  assert.equal(changed.a.net.rulesHosting, false);
+  assert.deepEqual(changed.b.roster.map(s => [s.seat, s.name, s.driver]), before.roster);
+  assert.equal(changed.b.round.n, before.round);
+  assert.ok(Math.abs(changed.b.round.endsAt - runs[0].b.round.endsAt) < 150);
+  const common = [...changed.frames.keys()].filter(k => k > 16 && runs[0].frames.has(k));
+  assert.ok(common.length > 15);
+  for (const tick of common) assert.deepEqual(changed.frames.get(tick), runs[0].frames.get(tick), `public state at tick ${tick}: scores, dice, bodies, goals and clock`);
+  assert.deepEqual(changed.b.shared, runs[0].b.shared);
+  assert.ok(changed.a.me.answered > 0, 'the carried decision reaches its original body');
+  assert.ok(runs[0].lines.includes('Hello!'), 'the comparison observes guide speech');
+  assert.deepEqual(changed.lines, runs[0].lines, 'guide speech keeps its pacing');
+});
+
+for (const damage of ['field', 'queue', 'name', 'answer']) test(`public browser handover rejects a damaged ${damage} checkpoint and starts fresh`, async t => {
+  const { L, compiled, vocab, openRoom } = await featureKit(`public-bad-${damage}`, 'browser', s => s.replace('seconds: 3', 'seconds: 60'));
+  const clock = virtualTime(t); const r = rig(L, compiled, true); const posts = [];
+  r.room.setVocabulary(vocab);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: m => posts.push(m) } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(1500); a.net.checkpointNow(); await clock.wait(1);
+  const bad = structuredClone(r.room.lastCkpt.d);
+  const save = bad.data;
+  if (damage === 'field') save.core.ents[0][17][0] = -99;
+  if (damage === 'queue') save.queues.push([0, { ax: 999 }, null, 1, 1]);
+  if (damage === 'name') save.names[0][1] = 'x'.repeat(41);
+  if (damage === 'answer') save.core.queue.push([save.core.tick + 1, 0, '', save.core.seq++, '', 'room', 'answer', { ask: 'director', by: 'ai', picks: { advance: 'forged' } }, save.core.tick, 1]);
+  r.sockets[0].send(JSON.stringify({ t: 'ckpt', rules: true, k: r.room.lastCkpt.k, d: bad }));
+  r.sockets[0].send(JSON.stringify({ t: 'yield' }));
+  await clock.wait(500);
+  assert.equal(b.net.rulesHosting, true); assert.equal(b.status, 'playing');
+  assert.ok(posts.some(m => m.what === 'line' && /new round/i.test(m.text)));
+  assert.ok(b.net.latest().k < 20, 'a damaged round is replaced, not repaired');
+});
+
+for (const kind of ['react', 'say', 'vote', 'ping', 'in', 'ev', 'unknown']) test(`hosting player's ${kind} allowance and refusal match a replica`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t), r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(2100);
+  const clients = [...r.room.clients.values()];
+  for (const c of clients) { c.rates.clear(); c.drops = []; }
+  const frame = { t: kind, k: kind === 'ev' ? 'emote:wave' : 'heart', text: 'Hello', op: 'level', value: 2, c: 1, s: [] };
+  for (const socket of r.sockets.slice(0, 2)) for (let i = 0; i < 65; i++) socket.send(JSON.stringify(frame));
+  assert.equal(clients[0].drops.length, clients[1].drops.length);
+  assert.ok(clients[0].drops.length > 0);
+  await clock.wait(500);
+  assert.equal(a.net.link, 'online'); assert.equal(b.net.link, 'online');
+  assert.equal(r.room.stats.promotions, 0);
+});
+
+test('faulty reliable output hands over, excess snapshots only drop', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('browser', true);
+  const clock = virtualTime(t), r = rig(L, compiled, true);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(2100);
+  for (let i = 0; i < 100; i++) r.sockets[0].send(JSON.stringify({ t: 'snap', rules: true, k: 1, d: [] }));
+  assert.equal(r.room.stats.promotions, 0);
+  for (let i = 0; i < 30; i++) r.sockets[0].send(JSON.stringify({ t: 'round', rules: true, round: { n: 1, phase: 'live' } }));
+  await clock.wait(1000);
+  assert.equal(r.room.stats.promotions, 1); assert.equal(b.net.rulesHosting, true);
+  assert.equal(a.net.link, 'online'); assert.equal(b.net.link, 'online');
+});
+
+const pendingDecisionGame = (s) => s.replace('seconds: 3', 'seconds: 60').replace("start(world) { world.ask('director', { danger: 1 }); }", 'start() {}')
+  .replace('floors: f.u16()', 'score: f.u16({ score: true }), dice: f.u32(), adv: f.u8(), by: f.u8(), floors: f.u16()').replace('on: { answer(world, self, e) { self.answered += 1; } }', "on: { answer(world, self, e) { self.answered += 1; self.adv = e.picks.advance ? 2 : 1; self.by = e.by === 'ai' ? 2 : 1; } }")
+  .replace('self.level = world.level;', 'self.level = world.level; self.score += 1; self.dice = Math.floor(world.random() * 1000000);');
+for (const answer of ['never (the floor at its deadline)', 'the relay answers 2 s after the handover', 'the relay refuses 1 s after the handover']) test(`a decision pending at a handover is answered exactly once: ${answer}`, async (t) => {
+  const { L, compiled, vocab, openRoom } = await featureKit(`once-${answer.length}`, 'browser', pendingDecisionGame);
+  const clock = virtualTime(t); t.mock.method(Math, 'random', () => 0.37);
+  const r = rig(L, compiled, true); r.room.setVocabulary(vocab);
+  r.room.setPolicy({ kind: 'beginner', guides: 1, aiSeats: 0, bots: 'fill', brain: 'workers-ai' });
+  let asked = 0; let release = null;
+  r.room.decider = () => { asked += 1; return new Promise((res) => { release = res; }); };
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(1500);
+  let guide; a.each('pawn', (e) => { if (e.seat === 3) guide = e; });
+  a.ask(guide.id, 'no_thanks');                  // "leave me alone" from A
+  b.ask(guide.id, 'follow', { seat: b.seat });   // B's ask: an asked goal carried by pacing
+  await clock.wait(400);
+  a.command('ask'); await clock.wait(200);
+  const before = { tick: b.net.latest().k, score: a.me.score, bscore: b.me.score, goal: b.get(guide.id).goal?.goal, asked: b.get(guide.id).goal?.asked, roster: b.roster.map((s) => [s.seat, s.name, s.driver]), round: [b.round.n, b.round.phase], answers: b.shared.answers, answered: a.me.answered, endsAt: b.round.endsAt };
+  assert.equal(before.answers, 0); assert.equal(asked, 1, 'one decide reached the relay before the handover');
+  a.net.checkpointNow(); r.sockets[0].send(JSON.stringify({ t: 'yield' }));
+  await clock.wait(1000);
+  assert.equal(b.net.rulesHosting, true, 'B hosts'); assert.equal(a.net.rulesHosting, false);
+  if (/answers/.test(answer)) { await clock.wait(1000); release({ ok: true, by: 'ai', picks: { advance: false } }); }
+  if (/refuses/.test(answer)) { release({ ok: false, why: 'pace' }); }
+  await clock.wait(9000);
+  const after = { tick: b.net.latest().k, score: a.me.score, bscore: b.me.score, goal: b.get(guide.id).goal?.goal, asked: b.get(guide.id).goal?.asked, roster: b.roster.map((s) => [s.seat, s.name, s.driver]), round: [b.round.n, b.round.phase], answers: b.shared.answers, answered: a.me.answered, endsAt: b.round.endsAt };
+  console.log(`[${answer}] before ${JSON.stringify(before)}\n   after ${JSON.stringify(after)}; decides the relay was asked ${asked}; decide frames from B ${r.sockets[1].sent.filter((m) => m.t === 'decide').length}; yes ${b.shared.yes}`);
+  assert.equal(after.answered, 1, 'the asking body heard the answer once');
+  assert.deepEqual(after.roster, before.roster); assert.deepEqual(after.round, before.round);
+  assert.ok(Math.abs(after.endsAt - before.endsAt) < 150, `the round's clock: ${before.endsAt} -> ${after.endsAt}`);
+  assert.ok(after.score > before.score && after.bscore > before.bscore, 'scores carried on');
+  assert.equal(after.score - before.score, after.tick - before.tick, 'a score that counts ticks lost none and gained none');
+  // "leave me alone" survives: A's ask is still refused; B's is taken
+  const goalsBefore = b.get(guide.id).goal;
+  a.ask(guide.id, 'follow', { seat: a.seat }); await clock.wait(400);
+  assert.notEqual(b.get(guide.id).goal?.args?.seat, a.seat, 'the guide still leaves A alone');
+  console.log(`   the answer the asking body got: advance ${a.me.adv === 2} by ${a.me.by === 2 ? 'ai' : 'floor/local'}`);
+  if (/answers/.test(answer)) { assert.equal(a.me.by, 2, 'the AI answer, not the floor'); assert.equal(a.me.adv, 1, 'advance: false as the AI said (the floor says true)'); } else { assert.equal(a.me.by, 1); assert.equal(a.me.adv, 2); }
+});
+
+
+test('a sixty-second drop retries promptly while playing offline', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', true);
+  const clock = virtualTime(t), r = rig(L, compiled);
+  const a = openRoom({ net: { config: cfg('Return'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
+  await clock.wait(60000); assert.equal(a.net.offline, true); assert.equal(a.status, 'playing');
+  r.network.up = true; await clock.wait(6500);
+  assert.equal(a.net.link, 'online'); assert.equal(a.status, 'playing'); assert.equal(a.net.rulesHosting, false);
+});
+
+
+test('the browser online event retries a pending offline connection immediately', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', true);
+  const clock = virtualTime(t), r = rig(L, compiled);
+  const previous = globalThis.addEventListener; let online;
+  globalThis.addEventListener = (type, fn) => { if (type === 'online') online = fn; };
+  t.after(() => { if (previous) globalThis.addEventListener = previous; else delete globalThis.addEventListener; });
+  const a = openRoom({ net: { config: cfg('Return'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(1000); r.network.up = false; r.sockets[0].cut();
+  await clock.wait(60000); assert.equal(a.net.offline, true);
+  r.network.up = true; online(); await clock.wait(100);
+  assert.equal(a.net.link, 'online'); assert.equal(a.status, 'playing');
+});
+
+const pulses = s => s.replace('commands: { done: {}, ask: {} }', 'effects: { pulse: { tick: f.u32() } }, commands: { done: {}, ask: {} }')
+  .replace('self.level = world.level;', "self.level = world.level; world.emit('pulse', self.pos, { tick: world.tick });")
+  .replace("start(world) { world.ask('director', { danger: 1 }); }", 'start() {}').replace('seconds: 3', 'seconds: 120');
+/** What a third page is sent: every snapshot's tick in order of arrival, and how often each tick's effects came. */
+function watch(socket) {
+  const seen = { ticks: [], effects: new Map() };
+  const deliver = socket.onmessage;
+  socket.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.t === 'snap') seen.ticks.push(m.k);
+    if (m.t === 'ev' && m.k === 'fx') seen.effects.set(m.d[0], (seen.effects.get(m.d[0]) ?? 0) + 1);
+    deliver.call(socket, e);
+  };
+  return seen;
+}
+const rewind = (ticks) => ticks.reduce((worst, k, i) => Math.max(worst, i ? Math.max(...ticks.slice(0, i)) - k + 1 : 0), 0);
+
+for (const hz of [20, 30, 60]) for (const how of ['yields', 'closes']) test(`a ${hz}-tick host that ${how} hands on its last tick: no page goes back and no effect plays twice`, async t => {
+  const { L, compiled, openRoom } = await featureKit(`handover-${hz}-${how}`, 'browser', pulses, hz);
+  const clock = virtualTime(t);
+  // Ten moments across a tick and across the snapshot's allowance, each in a room of its own.
+  for (let trial = 0; trial < 10; trial++) {
+    // The relay's word takes 40 ms to come back: several ticks at any of these rates.
+    const r = rig(L, compiled, true, 40);
+    const open = who => openRoom({ net: { config: cfg(who), WebSocketImpl: r.socket(), post: null } });
+    const a = open('First'); await clock.wait(300); const b = open('Second'); const c = open('Third');
+    await clock.wait(1500 + trial * 7);
+    assert.equal(a.net.rulesHosting, true);
+    const seen = watch(r.sockets[2]); const from = r.sockets[0].sent.length;
+    if (how === 'yields') assert.equal(a.net.handOff(), true); else a.close();
+    await clock.wait(2500);
+    const last = r.sockets[0].sent.slice(from).filter(m => ['ckpt', 'yield', 'bye'].includes(m.t)).map(m => m.t);
+    assert.deepEqual(last.slice(0, 2), ['ckpt', how === 'yields' ? 'yield' : 'bye'], 'the checkpoint is on the wire before the role is given up');
+    assert.equal(b.net.rulesHosting || c.net.rulesHosting, true); assert.equal(a.net.rulesHosting, false);
+    assert.equal(rewind(seen.ticks), 0, `trial ${trial}: snapshot ticks ${seen.ticks.slice(0, 12)}`);
+    assert.ok(seen.ticks.length > hz * 2, 'the next host carries on');
+    assert.deepEqual([...seen.effects.values()].filter(n => n !== 1), [], 'each tick\'s effects arrive once');
+    const ticks = [...seen.effects.keys()];
+    for (let n = 1; n < ticks.length; n++) assert.equal(ticks[n], ticks[n - 1] + 1, 'and no tick\'s effects are missing');
+    assert.equal(r.room.stats.drops, 0);
+    if (how === 'yields') a.close(); b.close(); c.close(); r.stop();
+  }
+});
+
+test('a yield the relay refuses costs nothing: the host carries on with every tick and effect in order', async t => {
+  const { L, compiled, openRoom } = await featureKit('yield-refused', 'browser', pulses, 60);
+  const clock = virtualTime(t); const r = rig(L, compiled, true, 40);
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  await clock.wait(300);
+  // The second page cannot host, so nobody can take the role.
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null, rulesHost: { mode: 'server', offline: false } } });
+  t.after(() => { a.close(); b.close(); r.stop(); });
+  await clock.wait(1500);
+  const seen = watch(r.sockets[1]); const rounds = []; b.on('round', e => rounds.push(e.n));
+  for (let n = 0; n < 3; n++) { assert.equal(a.net.handOff(), true); await clock.wait(700); }
+  assert.equal(a.net.rulesHosting, true); assert.equal(r.room.stats.promotions, 0);
+  assert.equal(rewind(seen.ticks), 0);
+  assert.ok(seen.ticks.length >= 120, `${seen.ticks.length} snapshots in 2.1 s`);
+  const ticks = [...seen.effects.keys()];
+  assert.ok(ticks.length >= 120);
+  for (let n = 1; n < ticks.length; n++) assert.equal(ticks[n], ticks[n - 1] + 1);
+  assert.deepEqual([...seen.effects.values()].filter(n => n !== 1), []);
+  assert.deepEqual(rounds, [], 'no round is announced again');
+  assert.equal(r.room.stats.drops, 0);
+});
+
+test('a host that reconnects to a restarted relay says the round, roster and shared state again as rules output', async t => {
+  const { L, compiled, openRoom } = await featureKit('relay-restart', 'browser', s => s.replace('seconds: 3, breakSeconds: 1', 'seconds: 4, breakSeconds: 1')
+    .replace("start(world) { world.ask('director', { danger: 1 }); }", 'start() {}').replace('on: { answer(world, e) {', 'on: { roundStart(world) { world.shared.answers += 7; }, answer(world, e) {'));
+  const clock = virtualTime(t); const r = rig(L, compiled, true);
+  // The same wait before each page knocks again, so the host, whose socket dropped first, is back first.
+  t.mock.method(Math, 'random', () => 0.37);
+  const open = who => openRoom({ net: { config: cfg(who), WebSocketImpl: r.socket(), post: null } });
+  const a = open('First'); await clock.wait(800); const b = open('Second');
+  let c = null;
+  t.after(() => { a.close(); b.close(); c?.close(); r.stop(); });
+  // Into the second round, so a relay that knew nothing would leave a replica on the first.
+  await clock.wait(6500);
+  assert.equal(a.net.rulesHosting, true); assert.equal(a.round.n, 2); assert.equal(a.round.phase, 'live'); assert.equal(b.round.n, 2);
+  const shared = structuredClone(a.shared); assert.equal(shared.answers, 14);
+  r.restart();
+  await clock.wait(2500);
+  assert.equal(a.net.connected, true); assert.equal(b.net.connected, true); assert.equal(a.net.rulesHosting, true); assert.equal(b.net.rulesHosting, false);
+  assert.equal(a.round.n, 2, 'still the round it was');
+  const held = { round: [r.room.lastRound?.n, r.room.lastRound?.phase], roster: r.room.lastRoster?.length, keys: [...r.room.state.keys()] };
+  assert.deepEqual(held, { round: [a.round.n, a.round.phase], roster: a.roster.length, keys: ['shared'] }, 'the relay holds what the host holds');
+  assert.equal(r.room.stats.drops, 0, 'nothing the host said was taken for a player\'s');
+  assert.deepEqual([b.round.n, b.round.phase], [a.round.n, a.round.phase]); assert.deepEqual(b.shared, shared);
+  assert.ok(Math.abs(b.round.endsAt - a.round.endsAt) < 100, 'the replica counts down with the host');
+  c = open('Third'); await clock.wait(300);
+  const welcome = r.sockets.at(-1); assert.equal(welcome.readyState, 1);
+  assert.deepEqual([c.round?.n, c.round?.phase], [a.round.n, a.round.phase], 'a later joiner is welcomed with the live round');
+  assert.deepEqual(c.shared, a.shared); assert.equal(c.roster.length, a.roster.length);
 });
 
 test('legacy speech keeps its published envelope even with arbitrary extra data', async (t) => {

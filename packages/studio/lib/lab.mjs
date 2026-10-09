@@ -67,6 +67,20 @@ export function readTunables(dir) {
   return json;
 }
 
+/** Rules keep public movement knobs grouped on disk; sliders name them public.speed, public.jump, and so on. */
+export function flatTunables(spec) {
+  if (!spec) return null;
+  const { public: pub, ...rest } = spec;
+  return { ...rest, ...Object.fromEntries(Object.entries(pub ?? {}).map(([k, v]) => [`public.${k}`, v])) };
+}
+export function setLabTunables(spec, values) {
+  const r = setTunables(flatTunables(spec), values);
+  if (!spec?.public) return r;
+  const out = { ...r.spec, public: { ...spec.public } };
+  for (const [k, v] of Object.entries(r.spec)) if (k.startsWith('public.')) { out.public[k.slice(7)] = v; delete out[k]; }
+  return { ...r, spec: out };
+}
+
 /** `homie-studio lab set <game> name=value ...`: values written into tunables.json, one tunable a line. */
 export function labSet(root, id, pairs) {
   const g = gameOf(root, id);
@@ -74,12 +88,12 @@ export function labSet(root, id, pairs) {
   if (!spec) return { ok: false, command: 'lab set', why: `games/${g.id} has no tunables.json yet: the lab skill says how a game gets one (lab.tunables)` };
   const values = {};
   for (const p of pairs) {
-    const m = /^([A-Za-z_$][\w$]{0,47})=(.+)$/.exec(String(p));
+    const m = /^((?:public\.)?[A-Za-z_$][\w$]{0,47})=(.+)$/.exec(String(p));
     if (!m) return { ok: false, command: 'lab set', why: `"${p}" is not name=value` };
     values[m[1]] = m[2];
   }
   if (!Object.keys(values).length) return { ok: false, command: 'lab set', why: 'usage: homie-studio lab set <game> <name>=<value> ...' };
-  const r = setTunables(spec, values);
+  const r = setLabTunables(spec, values);
   if (r.refused.length) return { ok: false, command: 'lab set', why: r.refused.join('; ') };
   writeFileSync(join(g.dir, 'tunables.json'), formatTunables(r.spec));
   return { ok: true, command: 'lab set', game: g.id, file: `games/${g.id}/tunables.json`, changed: r.changed };
@@ -179,7 +193,7 @@ class Builds {
     const t0 = Date.now();
     this.new = { ...this.new, building: true };
     try {
-      const r = await buildGameFiles(this.esbuild, this.root, g, out, { sourcemap: 'linked', log: this.log });
+      const r = await buildGameFiles(this.esbuild, this.root, g, out, { sourcemap: 'linked', lab: true, log: this.log });
       this.new = { ok: true, building: false, error: null, dir: out, at: new Date().toISOString(), ms: Date.now() - t0, bytes: sizeOf(join(out, 'assets', 'main.js')), metafile: r.metafile, mode: r.mode, dirty: dirtyOf(this.root, this.id) };
     } catch (error) {
       this.new = { ok: false, building: false, error: error.message, dir: out, at: new Date().toISOString() };
@@ -209,7 +223,7 @@ class Builds {
       const g = listGames(dir).find((x) => x.id === this.id);
       if (!g) throw new Error(`games/${this.id}/game.json is not in ${c.short}`);
       this.esbuild ??= await studioEsbuild(this.root);
-      await buildGameFiles(this.esbuild, dir, g, out, { sourcemap: 'linked', log: this.log });
+      await buildGameFiles(this.esbuild, dir, g, out, { sourcemap: 'linked', lab: true, log: this.log });
       let tunables = null;
       try { tunables = readTunables(g.dir); } catch { tunables = null; }
       const at = new Date().toISOString();
@@ -350,7 +364,7 @@ export async function startLabServer(root, { port = LAB_PORT, today = 'HEAD', lo
     if (what === 'tunables') {
       const spec = readTunables(dir);
       if (!spec) return send(res, 400, { ok: false, why: `games/${id} has no tunables.json` });
-      const r = setTunables(spec, json.values ?? {});
+      const r = setLabTunables(spec, json.values ?? {});
       if (r.refused.length) return send(res, 400, { ok: false, why: r.refused.join('; ') });
       writeFileSync(join(dir, 'tunables.json'), formatTunables(r.spec));
       log(`kept in games/${id}/tunables.json: ${r.changed.map((c) => `${c.name} ${c.from} -> ${c.to}`).join(', ') || 'nothing changed'}`);
@@ -422,7 +436,7 @@ function stateOf(root, b) {
   let tunablesError = null;
   try { tunables = readTunables(g.dir); } catch (error) { tunablesError = error.message; }
   const pane = (p) => ({ ok: p.ok, building: p.building, error: p.error ?? null, none: p.none ?? null, at: p.at ?? null, ms: p.ms ?? null, bytes: p.bytes ?? null });
-  const todayValues = b.today.tunables ? Object.fromEntries(Object.entries(b.today.tunables).map(([k, s]) => [k, tunableValue(s)])) : null;
+  const todayValues = b.today.tunables ? Object.fromEntries(Object.entries(flatTunables(b.today.tunables)).map(([k, s]) => [k, tunableValue(s)])) : null;
   return {
     ok: true,
     version: STUDIO_VERSION,
@@ -431,7 +445,7 @@ function stateOf(root, b) {
     new: { ...pane(b.new), dirty: b.new.dirty ?? null, mode: b.new.mode ?? null },
     today: { ...pane(b.today), ref: b.todayRef, commit: b.today.commit ?? null },
     takes: { default: takes.default, takes: takes.takes, problems: takes.problems, file: `games/${g.id}/lab.json`, exists: takes.exists },
-    tunables: { file: `games/${g.id}/tunables.json`, spec: tunables, today: todayValues, error: tunablesError },
+    tunables: { file: `games/${g.id}/tunables.json`, spec: flatTunables(tunables), today: todayValues, error: tunablesError },
   };
 }
 

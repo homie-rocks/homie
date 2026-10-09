@@ -49,13 +49,15 @@
  * who came and went) and fans out each frame it hands back (`hostFrame`). Everything else here is as it was.
  * =============================================================================
  */
+import { LIMITS, capOf, RATES, EV_RATES, STATE_CAPS, rulesRates, RULES_FRAMES, takeRulesToken } from './limits.mjs';
+export { LIMITS, GROWS, capOf } from './limits.mjs';
 import { aiName, skillPreset, stripAi } from './agents.mjs';
 import { DECIDE, checkArgs, checkDecide, talks, vocabularyOf } from './brain.mjs';
 import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normalizeChat, publicChat, windowMsOf } from './chat.mjs';
 
 export const NET_VERSION = 1;
 /** The contract revision this relay speaks (NETPLAY.md): optional fields, frames and refusals; the wire stays `v: 1`. */
-export const NET_REVISION = 10;
+export const NET_REVISION = 11;
 /**
  * Revision 9 (NETPLAY.md sections 22 and 23). STALL: how long a host may send no snapshot, while others are present,
  * before the room is handed on: 1.5 s unless the game names its own (game.json `netplay.stallMs`), never under
@@ -143,30 +145,13 @@ export function medianVote(list) {
   const v = [...list].filter(Number.isFinite).sort((a, b) => a - b);
   return v.length ? v[Math.floor((v.length - 1) / 2)] : null;
 }
+const utf8 = new TextEncoder();
+const byteLength = text => utf8.encode(text).length;
 const PALETTE_SIZE = 12;
 const DEVICE_RANK = { desk: 0, tv: 1, phone: 2 };
 
-/** Size caps (bytes of the JSON text as received), for a room of up to 16 seats. */
-export const LIMITS = Object.freeze({
-  hello: 2048, snap: 16384, in: 2048, ev: 4096, ckpt: 65536, state: 8192, round: 8192, roster: 4096, ping: 256, other: 512,
-  // Room chat (revision 8): a typed line (280 characters, emoji count double), a reaction.
-  say: 1536, react: 256,
-  // A game's own decision (section 20): a few typed questions about its state.
-  decide: DECIDE.bytes,
-});
-/**
- * What grows with the seats (every body, every result, every slot): the checkpoint, round and roster caps double
- * for a room of 17 to 32 (revision 3). Measured: a 32-seat courier game's checkpoint reached 56 KB of the 64 KB
- * a 16-seat room allows. The snapshot cap does not grow: 32 bodies are about 1.5 KB.
- */
-export const GROWS = Object.freeze(['ckpt', 'round', 'roster']);
-export const capOf = (t, seats) => (LIMITS[t] ?? LIMITS.other) * (GROWS.includes(t) && seats > 16 ? 2 : 1);
 /** Rate caps (messages per rolling second, per client). Over the cap a message is dropped, counted and reported. */
-export const RATES = Object.freeze({ snap: 30, in: 60, ev: 30, ckpt: 4, state: 64, round: 4, roster: 8, ping: 8, other: 8, say: 4, react: 10, decide: 2 });
-/** `ev` per second by the sender's role: a screen is a spectator, and the host is somebody's phone. */
-export const EV_RATES = Object.freeze({ host: 30, replica: 10, screen: 2 });
-/** The keyed state channel: at most this many keys and bytes per room. */
-export const STATE_CAPS = Object.freeze({ keys: 64, bytes: 65536 });
+export { RATES, EV_RATES, STATE_CAPS } from './limits.mjs';
 
 /**
  * THE OWNER'S CONTROLS (revision 4, NETPLAY.md section 15). The studio's Worker, acting for the signed-in owner,
@@ -272,7 +257,7 @@ export class NetRoom {
    *   each stamped `at` (ISO time) with its room; never a token, a ticket, a browser key or a frame's contents
    */
   constructor({
-    code, maxPlayers = 8, maxScreens = 16, perIp = 12, stallMs = 1500, silentMs = 2500, idleMs = 10_000,
+    code, rules = false, tickHz = 20, maxPlayers = 8, maxScreens = 16, perIp = 12, stallMs = 1500, silentMs = 2500, idleMs = 10_000,
     holdMs = 60_000, forgetMs = 60_000, persistMs = 30_000, store = null, now = Date.now, log = () => {},
     agentsAloneMs = AGENTS_ALONE_MS, voteMs = VOTE.ms, voteCooldownMs = VOTE.cooldownMs, autoVoteMs = VOTE.autoMs,
   }) {
@@ -294,6 +279,8 @@ export class NetRoom {
     /** Revision 7: the game's agents.json (the Table reads it once), the only words an AI here may say. */
     this.vocab = null;
     this.code = code;
+    this.rules = rules === true;
+    this.tickHz = tickHz;
     this.seatCap = maxPlayers;
     this.maxPlayers = maxPlayers;
     this.maxScreens = maxScreens;
@@ -431,12 +418,11 @@ export class NetRoom {
 
   /** A seat the host runtime knows that is no longer held (its hold ran out, the owner removed its player): its body's seat is given up. */
   syncServerSeats() {
-    if (!this.server) return;
     for (const [seat, occ] of [...this.hosted]) {
       const s = this.seats.get(seat);
       if (s && (s.occ ?? null) === occ) continue;
       this.hosted.delete(seat);
-      this.toServer({ t: 'free', seat });
+      if (this.server) this.toServer({ t: 'free', seat }); else if (this.rules && this.host()?.rules) this.send(this.host(), { t: 'free', seat });
     }
   }
 
@@ -458,7 +444,7 @@ export class NetRoom {
         const kind = String(m.k ?? '').slice(0, 64);
         if (SPEECH.test(kind) && (this.policy.speech === 'off' || (this.policy.speech === 'lines' && /^chat/i.test(kind)))) { this.stats.speechDrops += 1; return; }
         if (d0(m).ai === true && !this.aiLineOk(kind, d0(m))) { this.stats.agentDrops += 1; return; }
-        if (kind === 'agent:view' && !this.agentViewOk(m, JSON.stringify(m).length, now, true)) return;
+        if (kind === 'agent:view' && !this.agentViewOk(m, byteLength(JSON.stringify(m)), now, true)) return;
         this.stats.evs += 1;
         const out = { t: 'ev', from: Number.isInteger(m.from) ? m.from : null, k: kind, d: m.d ?? null };
         const line = JSON.stringify(out);
@@ -476,7 +462,7 @@ export class NetRoom {
     const snap = { k: Number(m.k) || 0, st: c ? this.stamp(m.st) : Number(m.st) || now, d: m.d ?? null };
     if (Array.isArray(m.c)) snap.c = m.c.slice(0, 64);
     // Revision 10: a rules game's snapshot names the room's epoch.
-    if (!c && Number.isFinite(m.e)) snap.e = m.e;
+    if ((!c || this.rules && c.rules) && Number.isFinite(m.e)) snap.e = m.e;
     this.lastSnap = snap;
     if (c) c.lastSnapAt = now;
     this.stats.snaps += 1;
@@ -507,6 +493,7 @@ export class NetRoom {
     } else {
       if (c && ((!prev && this.state.size >= STATE_CAPS.keys) || this.stateBytes - (prev?.bytes ?? 0) + bytes > STATE_CAPS.bytes)) {
         this.error(c, 'state-full', `state is capped at ${STATE_CAPS.keys} keys and ${STATE_CAPS.bytes} B`);
+        this.stopBrowserRules(c, 'size', `This game's rules exceeded the browser room state cap: ${STATE_CAPS.keys} keys and ${STATE_CAPS.bytes} B. Join again for a fresh room.`);
         return;
       }
       this.state.set(key, { d: m.d, bytes });
@@ -515,13 +502,14 @@ export class NetRoom {
     this.stats.states += 1;
     this.persistDirty = true;
     const out = JSON.stringify({ t: 'state', k: key, d: m.d ?? null });
-    for (const o of this.others(c)) if (!this.lite(o)) this.sendText(o.conn, out);
+    for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) if (!this.lite(o)) this.sendText(o.conn, out);
   }
 
   hostRound(c, m) {
     if (!m.round || typeof m.round !== 'object') return;
+    const retime = Boolean(m.retime && (this.server || this.rules && c?.rules));
     // The results name every AI as AI, whatever the host's game says (section 17).
-    const round = Array.isArray(m.round.results) ? { ...m.round, results: this.labelResults(m.round.results) } : m.round;
+    const round = retime && this.lastRound?.n === m.round.n && this.lastRound?.phase === m.round.phase ? { ...m.round, ...(this.lastRound.results ? { results: this.lastRound.results } : {}) } : Array.isArray(m.round.results) ? { ...m.round, results: this.labelResults(m.round.results) } : m.round;
     const wasLive = this.lastRound && this.lastRound.phase === 'live' ? Number(this.lastRound.n) : null;
     this.lastRound = round;
     // The round a launch change waits for is over: everyone sees its results for a moment, then the room re-gates.
@@ -529,10 +517,14 @@ export class NetRoom {
     if (this.agentsOut && round.phase === 'over' && (this.agentsOut.roundN === null || Number(round.n) >= this.agentsOut.roundN)) this.agentsOut.until = Math.min(this.agentsOut.until, this.now() + 5000);
     this.stats.rounds += 1;
     this.persistDirty = true;
-    for (const o of this.others(c)) this.send(o, { t: 'round', round });
+    for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.send(o, { t: 'round', round: retime ? m.round : round, ...(retime ? { retime: true } : {}) });
     // A party's first live round with AI seats: the vote on how strong the AI should be (once per 30 minutes).
     if (round.phase === 'live' && wasLive !== Number(round.n)) this.autoVote();
     this.tellWatchers();
+  }
+
+  heldPeers() {
+    return [...this.seats].filter(([, s]) => !s.present).map(([seat, s]) => ({ id: `held-${s.occ}`, seat, occ: s.occ, name: s.name, ...(s.agent ? { agent: s.agent } : {}) }));
   }
 
   hostRoster(c, m) {
@@ -540,7 +532,7 @@ export class NetRoom {
     // A host cannot hide an AI: a seat an agent holds is named and marked so, a slot with no seat is a bot.
     this.lastRoster = this.labelRoster(m.slots.slice(0, 64));
     this.persistDirty = true;
-    for (const o of this.others(c)) this.send(o, { t: 'roster', slots: this.lastRoster });
+    for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.send(o, { t: 'roster', slots: this.lastRoster });
     this.tellWatchers();
   }
 
@@ -646,7 +638,7 @@ export class NetRoom {
   /* ------------------------------------------------------------ wire */
 
   sendText(conn, text) {
-    try { conn.send(text); this.stats.bytesOut += text.length; } catch { /* closing */ }
+    try { conn.send(text); this.stats.bytesOut += this.rules ? byteLength(text) : text.length; } catch { /* closing */ }
   }
   send(c, msg) { this.sendText(c.conn, JSON.stringify(msg)); }
   error(c, code, message, extra = {}) { this.send(c, { t: 'error', code, message, ...extra }); }
@@ -694,7 +686,7 @@ export class NetRoom {
   onDecide(c, m, isHost) {
     const n = typeof m.n === 'string' || Number.isInteger(m.n) ? String(m.n).slice(0, 16) : '';
     const server = this.server;
-    const reply = (o) => { const frame = { t: 'decided', n, ...o }; if (c) this.send(c, frame); else if (server && this.server === server) this.toServer(frame); };
+    const reply = (o) => { const frame = { t: 'decided', n, ...o }; if (c) { const recipient = this.rules && isHost ? this.host() : c; if (recipient) this.send(recipient, frame); } else if (server && this.server === server) this.toServer(frame); };
     if (!isHost || (c && this.lite(c))) return reply({ ok: false, why: 'not-host' });
     if (typeof this.decider !== 'function') return reply({ ok: false, why: 'off' });
     const now = this.now();
@@ -726,22 +718,55 @@ export class NetRoom {
     try { c.conn.close(code, why); } catch { /* gone */ }
   }
 
-  allow(c, t, bytes) {
+  stopBrowserRules(c, why, message) {
+    if (!this.rules || !c.rules || c.id !== this.hostId) return false;
+    this.log({ ev: 'host-ended', room: this.code, why });
+    for (const peer of this.live()) {
+      this.error(peer, 'room-over', message);
+      this.clients.delete(peer.id);
+      try { peer.conn.close(1011, 'room-over'); } catch { /* gone */ }
+    }
+    this.forget();
+    return true;
+  }
+
+  allow(c, t, bytes, view = false) {
     // A spectator screen has little to say: its events are capped at 512 B (16 screens x 2/s x 512 B at most reach the host).
-    const cap = t === 'ev' && c.seat === null && c.id !== this.hostId ? 512 : capOf(t, this.seatCap);
-    if (bytes > cap) { this.stats.oversize += 1; this.error(c, 'too-large', `${t} is ${bytes} B; the cap is ${cap} B`); return false; }
+    const cap = t === 'ev' && c.seat === null && (view || c.id !== this.hostId) ? 512 : capOf(t, this.seatCap);
+    const rulesOutput = !view && this.rules && c.rules && c.id === this.hostId;
+    if (bytes > cap) {
+      this.stats.oversize += 1;
+      const detail = `${t} is ${bytes} B; the cap is ${cap} B`;
+      this.error(c, 'too-large', detail, view ? { view: true } : {});
+      if (rulesOutput) this.stopBrowserRules(c, 'size', `This game's rules exceeded the browser room size cap: ${detail}. Join again for a fresh room.`);
+      return false;
+    }
     const now = this.now();
-    const limit = t === 'ev' ? EV_RATES[this.roleOf(c)] : (RATES[t] ?? RATES.other);
-    const list = c.rates.get(t) ?? [];
+    if (rulesOutput) {
+      c.rulesBuckets ??= new Map();
+      const rate = rulesRates(this.tickHz, this.seatCap)[t];
+      if (!takeRulesToken(c.rulesBuckets, t, rate, now)) return true;
+      this.stats.drops += 1;
+      if (t === 'snap') return false;
+      const message = `The hosting page exceeded its ${t} allowance. Moving the rules to another player.`;
+      for (const peer of this.live()) this.send(peer, { t: 'error', code: 'host-fault', message });
+      c.canHost = false;
+      if (this.elect(c.id, 'host-fault')) this.send(c, { t: 'role', role: c.seat === null ? 'screen' : 'replica', why: 'host-fault', host: this.hostRef(), peers: this.peers() });
+      else { this.hostId = c.id; this.stopBrowserRules(c, 'rate', 'No player can host this room after its host failed. Join again for a fresh room.'); }
+      return false;
+    }
+    const limit = t === 'ev' ? EV_RATES[view ? (c.seat === null ? 'screen' : 'replica') : this.roleOf(c)] : (RATES[t] ?? RATES.other);
+    const rateKey = view ? `${t}:view` : t;
+    const list = c.rates.get(rateKey) ?? [];
     while (list.length && list[0] <= now - 1000) list.shift();
-    c.rates.set(t, list);
+    c.rates.set(rateKey, list);
     if (list.length >= limit) {
       this.stats.drops += 1;
       c.drops.push(now);
       while (c.drops.length && c.drops[0] <= now - 5000) c.drops.shift();
       // Sustained abuse (20/s over a cap for 5 s) ends the socket; anything less is reported once a second.
       if (c.drops.length > 100) { this.error(c, 'flood', 'too many messages over the rate caps'); this.kick(c, 'flood'); return false; }
-      if (now - c.errAt >= 1000) { c.errAt = now; this.send(c, { t: 'error', code: 'rate', of: t, message: `${t} over ${limit}/s was dropped` }); }
+      if (now - c.errAt >= 1000) { c.errAt = now; this.send(c, { t: 'error', code: 'rate', of: t, message: `${t} over ${limit}/s was dropped`, ...(view ? { view: true } : {}) }); }
       return false;
     }
     list.push(now);
@@ -753,14 +778,27 @@ export class NetRoom {
     text = String(text);
     const now = this.now();
     c.lastSeen = now;
-    this.stats.bytesIn += text.length;
+    const bytes = this.rules ? byteLength(text) : text.length;
+    this.stats.bytesIn += bytes;
     let m;
     try { m = JSON.parse(text); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
-    if (!c.helloed) { if (m.t === 'hello' && text.length <= LIMITS.hello) this.hello(c, m); return; }
-    if (!this.allow(c, m.t, text.length)) return;
-    const isHost = c.id === this.hostId;
+    if (!c.helloed) { if (m.t === 'hello' && bytes <= LIMITS.hello) this.hello(c, m); return; }
+    const view = this.rules && !(c.rules && c.id === this.hostId && m.rules === true && RULES_FRAMES.includes(m.t));
+    if (!this.allow(c, m.t, bytes, view)) return;
+    const isHost = c.id === this.hostId && !view;
     switch (m.t) {
+      case 'rules-end': {
+        if (!isHost || !c.rules || !this.rules) return;
+        const why = ['budget', 'overrun', 'fault', 'clock', 'load', 'size', 'rate'].includes(m.why) ? m.why : 'fault';
+        for (const peer of this.live()) {
+          this.error(peer, 'room-over', `This game's rules stopped: ${why}. Join again for a fresh room.`);
+          this.clients.delete(peer.id);
+          try { peer.conn.close(1011, 'room-over'); } catch { /* gone */ }
+        }
+        this.forget();
+        return;
+      }
       case 'snap': {
         if (!isHost) return;
         return this.hostSnap(c, m, now);
@@ -778,6 +816,7 @@ export class NetRoom {
         const h = this.host();
         if (!h) return;
         this.stats.ins += 1;
+        if (h.rules && Array.isArray(m.s)) { this.send(h, { t: 'in', from: c.seat, e: Number(m.e) || 0, k: Number(m.k) || 0, s: m.s.slice(0, 64), r: Number(m.r) || 0 }); return; }
         const out = { t: 'in', from: c.seat, q: Number(m.q) || 0, a: m.a ?? null, h: Array.isArray(m.h) ? m.h.slice(0, 16).map((x) => String(x).slice(0, 32)) : [] };
         if (Number.isFinite(m.r)) out.r = m.r;
         const p = clampPresses(m.p);
@@ -793,7 +832,7 @@ export class NetRoom {
         // drops all speech, whoever sends it (a host relaying a player's chat too).
         if (SPEECH.test(kind) && (this.policy.speech === 'off' || (this.policy.speech === 'lines' && /^chat/i.test(kind)))) { this.stats.speechDrops += 1; return; }
         // What an AI may send (section 18): its own goals and its game's lines, checked here whatever its host says.
-        if (c.agent && !this.agentEvOk(c, kind, m, text.length, now)) { this.stats.agentDrops += 1; return; }
+        if (c.agent && !this.agentEvOk(c, kind, m, bytes, now)) { this.stats.agentDrops += 1; return; }
         // An agent says at most one line every 4 s and 8 a minute.
         if (c.agent && SPEECH.test(kind)) {
           while (c.speechAt.length && c.speechAt[0] <= now - 60_000) c.speechAt.shift();
@@ -803,14 +842,16 @@ export class NetRoom {
         // A line the host relays for an AI (`d.ai`): still only a line of the vocabulary, with fitting arguments.
         if (isHost && d0(m).ai === true && !this.aiLineOk(kind, d0(m))) { this.stats.agentDrops += 1; return; }
         // The host shows one AI the game (`agent:view`): to that AI's seat only, small, at most one every 2 s.
-        if (kind === 'agent:view' && !this.agentViewOk(m, text.length, now, isHost)) return;
+        if (kind === 'agent:view' && !this.agentViewOk(m, bytes, now, isHost)) return;
         this.stats.evs += 1;
-        const out = { t: 'ev', from: c.seat, k: kind, d: m.d ?? null };
+        const speaker = isHost && this.rules && c.rules ? (Number.isInteger(m.from) && this.live().some(p => p.seat === m.from && !p.agent) ? m.from : null) : c.seat;
+        const out = { t: 'ev', from: speaker, k: kind, d: m.d ?? null, ...(isHost && this.rules && c.rules ? { hosted: true } : {}) };
+        const recipients = isHost && this.rules && c.rules ? this.live() : this.others(c);
         if (isHost) {
-          if (typeof m.to === 'string') { const o = this.clients.get(m.to); if (o && o.helloed && o !== c) this.send(o, out); }
-          else if (Number.isInteger(m.to)) { for (const o of this.others(c)) if (o.seat === m.to) this.send(o, out); }
+          if (typeof m.to === 'string') { const o = this.clients.get(m.to); if (o && o.helloed && (o !== c || (this.rules && c.rules))) this.send(o, out); }
+          else if (Number.isInteger(m.to)) { for (const o of recipients) if (o.seat === m.to) this.send(o, out); }
           // An agent with no game client hears only what is addressed to its seat (the lite feed), and the party's lines.
-          else for (const o of this.others(c)) { if (!this.lite(o) || this.liteHears(kind)) this.send(o, out); }
+          else for (const o of recipients) { if (!this.lite(o) || this.liteHears(kind)) this.send(o, out); }
         } else {
           const h = this.host();
           if (this.server) this.toServer({ ...out, id: c.id });
@@ -830,7 +871,7 @@ export class NetRoom {
       }
       case 'state': {
         if (!isHost) return;
-        return this.hostState(c, m, text.length);
+        return this.hostState(c, m, bytes);
       }
       case 'round': {
         if (!isHost) return;
@@ -855,15 +896,23 @@ export class NetRoom {
         return;
       }
       case 'ping': {
+        if (this.rules && c.rules && Number.isFinite(m.readySpeed)) { c.readySpeed = Math.max(0, Math.min(1, m.readySpeed)); c.readyAt = now; }
         const wasHidden = c.hidden;
         c.hidden = m.hid === true;
         this.send(c, { t: 'pong', c: m.c, st: now });
         // A host whose tab went to the background will stop ticking: hand the round on now.
-        if (isHost && c.hidden && !wasHidden) this.yieldHost(c, 'host-hidden');
+        if (c.id === this.hostId && c.hidden && !wasHidden) this.yieldHost(c, 'host-hidden');
         return;
       }
       case 'yield': {
-        if (isHost) this.yieldHost(c, 'host-yielded');
+        if (c.id === this.hostId && this.rules && c.rules && m.slow === true) {
+          c.rulesSpeed = Math.max(0, Math.min(1, Number(m.speed) || 0));
+          // Both a recent event-loop measurement and any observed hosting speed must be substantially faster.
+          if (this.live().some(p => p !== c && p.canHost && this.fasterRulesHost(p, c))) this.yieldHost(c, 'host-slow');
+        } else if (c.id === this.hostId) this.yieldHost(c, 'host-yielded');
+        // A rules host holds its output from its yield on: it is told when the role stays with it (and the others,
+        // who were just told nobody hosts, are told who does).
+        if (this.rules && c.rules && c.id === this.hostId) for (const o of this.live()) this.send(o, { t: 'host', host: this.hostRef(), why: 'host-kept' });
         return;
       }
       case 'bye': {
@@ -958,18 +1007,21 @@ export class NetRoom {
     }
     if (this.perIp && c.ip && live.filter((o) => o.ip === c.ip).length >= this.perIp) return refuse('too-many', `at most ${this.perIp} sockets per address in one room`);
     if (live.length >= this.maxPlayers + this.maxScreens) return refuse('room-full', 'this room is full; try another');
+    c.rules = m.rules === true;
     c.device = m.device === 'phone' || m.device === 'tv' ? m.device : 'desk';
     // A watcher is a screen that never takes a seat, whatever else its hello says. An agent always plays.
     c.watch = watching;
     c.want = c.agent ? 'play' : watching || m.want === 'screen' ? 'screen' : 'play';
     // An agent with no game client never hosts; one that runs the game hosts only a room no person can (DESIGN D10).
     c.canHost = c.agent ? c.agent.hands === 'self' && m.canHost !== false : m.canHost !== false;
+    // Rules output is marked since revision 11: an older page's would be taken for a player's, so it never hosts.
+    if (this.rules && c.rules && !(Number(m.rev) >= 11)) c.canHost = false;
     c.game = typeof m.game === 'string' ? m.game.slice(0, 64) : '';
     // A person's typed name never ends in an AI or bot mark; on a kids server nobody's typed name is used (handles).
     c.typed = c.agent || this.policy.kids ? '' : typeof m.name === 'string' ? stripAi(m.name.replace(/\s+/g, ' ').trim()).slice(0, 24) : '';
     if (Array.isArray(m.caps)) for (const k of m.caps) if (CAPS.includes(k)) c.caps.add(k);
     // The manifest's player count, from the first visitor of an empty room (the site's Table reads the manifest).
-    if (!this.server && Number.isInteger(m.max) && !this.seats.size && !live.length) { this.askedMax = m.max; this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max)); }
+    if (!this.server && !this.rules && Number.isInteger(m.max) && !this.seats.size && !live.length) { this.askedMax = m.max; this.maxPlayers = Math.max(1, Math.min(this.seatCap, m.max)); }
     this.reapSeats(now);
     // The verified pass names one AI. Reopening its socket resumes that seat and replaces the old socket.
     const agentStay = c.agent?.pass ? [...this.seats.values()].find(s => s.agent?.pass === c.agent.pass) : null;
@@ -1033,6 +1085,8 @@ export class NetRoom {
       }
     }
     if (role === 'host') {
+      // Welcome contains the current holders; old occupancy notices must precede it.
+      this.hosted = new Map([...this.seats].map(([seat, s]) => [seat, s.occ ?? null]));
       this.hostId = c.id;
       this.hostSince = now;
       c.lastSnapAt = 0;
@@ -1047,7 +1101,7 @@ export class NetRoom {
     this.send(c, {
       t: 'welcome', v: NET_VERSION, rev: NET_REVISION, id: c.id, room: this.code, seat: c.seat, token: c.token, name: c.name, colour: c.colour,
       ...(this.gameVer ? { ver: this.gameVer } : {}), ...(behind ? { stale: { ver: this.currentVer } } : {}), stall: this.stallMs,
-      role, why, host: this.hostRef(), peers: this.peers(), st: now, max: this.maxPlayers,
+      role, why, host: this.hostRef(), peers: this.peers(), ...(this.rules ? { held: this.heldPeers() } : {}), st: now, max: this.maxPlayers,
       round: this.lastRound, roster: this.lastRoster, snap: lite ? null : this.lastSnap, state: lite ? {} : this.stateObject(),
       ...(role === 'host' ? { ckpt: this.lastCkpt } : {}),
       ...(full ? { full: true } : {}),
@@ -1059,7 +1113,7 @@ export class NetRoom {
     });
     for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
     // The server host hears of every seat taken (a reconnect is the same stay: its body is back, not new).
-    if (this.server && c.seat !== null) { this.syncServerSeats(); this.joinServer(c); }
+    if (c.seat !== null) { this.syncServerSeats(); this.joinServer(c); }
     // A seat taken by a browser that also watches this room: its watching tab sees the overview from now on.
     this.refreshWatchers(c);
     if (deposed) {
@@ -1148,7 +1202,7 @@ export class NetRoom {
       this.stats.seated += 1;
       this.send(c, { t: 'seat', seat: c.seat, token: c.token, name: c.name, colour: c.colour, role: this.roleOf(c) });
       for (const o of this.others(c)) this.send(o, { t: 'join', peer: this.peer(c) });
-      if (this.server) { this.syncServerSeats(); this.joinServer(c); }
+      this.syncServerSeats(); this.joinServer(c);
       this.log({ ev: 'seated', room: this.code, id: c.id, seat: c.seat });
       this.persist();
       this.refreshWatchers();
@@ -1542,6 +1596,11 @@ export class NetRoom {
     this.tellWatchers();
   }
 
+  fasterRulesHost(candidate, current) {
+    return !candidate.hidden && this.now() - (candidate.readyAt ?? -Infinity) <= 5000 &&
+      Math.min(candidate.rulesSpeed ?? 1, candidate.readySpeed ?? 0) > (current?.rulesSpeed ?? 0) * 1.5 + 0.1;
+  }
+
   /**
    * Choose a host. Visible and responsive first; then tenure in 30 s steps (a newcomer cannot jump the queue by
    * calling itself a desktop); then desk > tv > phone as a tie-break; then whoever came first. The chosen browser
@@ -1549,12 +1608,12 @@ export class NetRoom {
    */
   elect(excludeId, why) {
     // The server is never elected away.
-    if (this.server) return null;
+    if (this.server || this.hostFailed) return null;
     const now = this.now();
     const silent = (c) => Number(now - c.lastSeen > this.silentMs);
     const tenure = (c) => Math.floor((now - c.joinedAt) / 30_000);
     const cands = this.live()
-      .filter((c) => c.canHost && c.id !== excludeId)
+      .filter((c) => c.canHost && c.id !== excludeId && (why !== 'host-slow' || this.fasterRulesHost(c, this.clients.get(excludeId))))
       .sort((a, b) => Number(a.hidden) - Number(b.hidden)
         || silent(a) - silent(b)
         // An agent hosts only when no person can (DESIGN D10); a watcher is next to last: any player comes first.
@@ -1569,6 +1628,7 @@ export class NetRoom {
       for (const o of this.live()) this.send(o, { t: 'host', host: null, why });
       return null;
     }
+    this.hosted = new Map([...this.seats].map(([seat, s]) => [seat, s.occ ?? null]));
     this.hostId = next.id;
     this.hostSince = now;
     this.preferHost = null;
@@ -1580,7 +1640,7 @@ export class NetRoom {
     this.stats.elections.push({ at: now, id: next.id, seat: next.seat, why });
     if (this.stats.elections.length > 32) this.stats.elections.shift();
     this.send(next, {
-      t: 'role', role: 'host', why, host: this.hostRef(), peers: this.peers(),
+      t: 'role', role: 'host', why, host: this.hostRef(), peers: this.peers(), ...(this.rules ? { held: this.heldPeers() } : {}),
       ckpt: this.lastCkpt, snap: this.lastSnap, round: this.lastRound, roster: this.lastRoster, state: this.stateObject(),
     });
     for (const o of this.others(next)) this.send(o, { t: 'host', host: this.hostRef(), why });
@@ -1648,6 +1708,7 @@ export class NetRoom {
 
   /** An EMPTY room forgets everything (after `forgetMs`, or when the Table's alarm ends a server-hosted room nobody came back to). */
   forget() {
+    this.hostId = null;
     for (const c of this.live()) this.kick(c, 'agents-alone', 4001);
     this.lastSnap = null; this.lastSnapText = null; this.lastCkpt = null; this.lastRound = null; this.lastRoster = null;
     this.state.clear(); this.stateBytes = 0; this.seats.clear(); this.preferHost = null;
@@ -1747,6 +1808,16 @@ export class NetRoom {
 
   labelOne(raw, result) {
     if (!raw || typeof raw !== 'object') return null;
+    if (this.rules) {
+      if (!Number.isInteger(raw.slot) || raw.slot < 0 || raw.slot >= this.seatCap) return null;
+      raw = { ...raw, seat: raw.slot };
+      const holder = this.holderOf(raw.slot);
+      if (holder.kind !== 'human' && holder.kind !== 'agent') {
+        if (raw.slot >= this.maxPlayers - this.reserve())
+          raw.agent = { seat: null, role: raw.slot >= this.maxPlayers - this.policy.guides ? 'guide' : 'party', hands: 'host' };
+        else delete raw.agent;
+      }
+    }
     const out = { ...raw };
     const seat = Number.isInteger(raw.seat) ? raw.seat : null;
     const agentSeat = !result && raw.agent && Number.isInteger(raw.agent.seat) ? raw.agent.seat : null;
@@ -1761,7 +1832,7 @@ export class NetRoom {
     } else if (seat !== null && who.kind === 'human') {
       delete out.agent;
       out.bot = false;
-      out.name = stripAi(raw.name) || who.name;
+      out.name = this.rules ? who.name : stripAi(raw.name) || who.name;
     } else {
       // No seat, or a seat nobody holds: a body the host's own bot code moves.
       if (seat !== null) this.stats.labelled += 1;
@@ -1902,7 +1973,7 @@ export class NetRoom {
   restore(saved, graceMs = 3000) {
     const now = this.now();
     if (!saved || saved.v !== NET_VERSION || !(now - Number(saved.savedAt) < 120_000)) return false;
-    if (!this.server && saved.hosted !== 'server' && Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
+    if (!this.server && !this.rules && saved.hosted !== 'server' && Number.isInteger(saved.maxPlayers)) this.maxPlayers = Math.max(1, Math.min(this.seatCap, saved.maxPlayers));
     if (Number.isFinite(saved.openedAt) && saved.openedAt > 0) this.openedAt = saved.openedAt;
     for (const [seat, token, name, agent, occ, since] of saved.seats ?? []) this.seats.set(seat, { token, name, since: saved.durable && Number.isFinite(since) ? since : now, present: false, agent: agent && typeof agent === 'object' ? agent : null, ...(Number.isInteger(occ) ? { occ } : {}) });
     // A stay's number is never given twice while a checkpoint may still name it.
@@ -1916,11 +1987,13 @@ export class NetRoom {
     if ((saved.seats ?? []).some((s) => !s[3])) this.lastHumanAt = now;
     // A server-hosted room has no browser host to hand a checkpoint to, and what its last match showed is not this one's.
     const fresh = saved.hosted === 'server' && !saved.durable;
+    if (!fresh) for (const [seat, s] of this.seats) this.hosted.set(seat, s.occ ?? null);
     this.lastCkpt = fresh ? null : saved.ckpt ?? null;
     this.lastRound = fresh ? null : saved.round ?? null;
     this.lastRoster = fresh ? null : saved.roster ?? null;
     for (const [k, d] of Object.entries(fresh ? {} : saved.state ?? {})) {
-      const bytes = JSON.stringify({ t: 'state', k, d }).length;
+      const text = JSON.stringify({ t: 'state', k, d });
+      const bytes = this.rules ? byteLength(text) : text.length;
       this.state.set(k, { d, bytes });
       this.stateBytes += bytes;
     }
@@ -2227,7 +2300,7 @@ export class NetRoom {
 
   setSeats(n, perIp = null) {
     this.seatCap = Math.max(1, Math.floor(n));
-    this.maxPlayers = Math.max(1, Math.min(this.seatCap, this.server ? this.seatCap : this.askedMax ?? this.seatCap));
+    this.maxPlayers = Math.max(1, Math.min(this.seatCap, (this.server || this.rules) ? this.seatCap : this.askedMax ?? this.seatCap));
     if (Number.isFinite(perIp) && perIp > 0) this.perIp = perIp;
   }
 

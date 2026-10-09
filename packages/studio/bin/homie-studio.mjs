@@ -417,7 +417,7 @@ function print(result) {
       lines.push(`Built ${result.games.map((g) => `${g.id} (${Math.round(g.bytes / 1024)} KB)`).join(', ') || 'no games'} into ${relative(process.cwd(), result.dist) || result.dist}`);
       // Per game: did it change since the build before, which build it is (the hash the live site's manifest says once
       // deployed), and what loads later.
-      for (const g of result.games) lines.push(`  ${g.id}: ${g.changed ?? 'new'}, build ${g.hash ?? '?'}${g.bundle ? ` (${g.bundle}${g.chunks ? ` + ${g.chunks} ${g.chunks === 1 ? 'chunk' : 'chunks'} loaded later` : ''})` : ''}`);
+      for (const g of result.games) lines.push(`  ${g.id}: ${g.changed ?? 'new'}, build ${g.hash ?? '?'}${g.bundle ? ` (${g.bundle}${g.chunks ? ` + ${g.chunks} additional ${g.chunks === 1 ? 'chunk' : 'chunks'}` : ''})` : ''}`);
       if (result.retired) lines.push(`Note: ${result.retired}`);
       if (result.types) lines.push(`Types: ${result.types.games.filter((g) => g.checked).map((g) => g.id).join(', ') || 'no game has TypeScript to check'}${result.types.games.some((g) => g.checked) ? ` checked with TypeScript ${result.types.typescript ?? '?'}, no errors` : ''}`);
       if (result.songs?.length || result.videos?.length) lines.push(`Media pages: ${[...result.songs.map((x) => `/music/${x}/`), ...result.videos.map((x) => `/videos/${x}/`)].join(', ')}`);

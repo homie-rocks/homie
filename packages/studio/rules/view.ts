@@ -1,3 +1,5 @@
+import { rulesOutput } from '../netplay/rules-output.mjs';
+import { rulesCaps, rulesRates } from '../worker/limits.mjs';
 /*
  * view.ts — what a rules game's view imports: the room, as a browser sees it.
  * =============================================================================
@@ -6,10 +8,10 @@
  *   import type rules from './rules';
  *   const room = openRoom<typeof rules>();
  *
- * A game is rules plus view. The rules run on the server; the view draws what it is told and sends what the player
+ * A game is rules plus view. The rules run in one host runtime; the view draws what it is told and sends what the player
  * presses. `openRoom` starts the netplay helper (netplay/netplay.ts), joins the room the play page names and returns
  * at once: `room.status` moves from `connecting` to `playing`. The rules are imported for their types only, so none
- * of their code is in the view's bundle; the build hands this library their declarations as data (`setGame`), and it
+ * of their code is imported by the game's view; the build supplies declarations and an optional local host loader, and it
  * unpacks every frame from them. A view never packs or unpacks state.
  *
  *   room.me                 the player's own body
@@ -39,7 +41,8 @@ import type { useAgents, Vocabulary, AskButton } from '../agents/agents.ts';
 let agentFactory: typeof useAgents | null = null;
 export function setAgentFactory(factory: typeof useAgents): void { agentFactory = factory; }
 import { createNetplay } from '../netplay/netplay.ts';
-import type { Netplay, NetplayOptions, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
+import type { Netplay, NetplayOptions, RulesHostFactory, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
+import { lab } from '../lab/lab.ts';
 import { exposePort } from '../port/probe.ts';
 import { BudgetError } from './guard.ts';
 import { moveContext } from './math.ts';
@@ -49,9 +52,9 @@ import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
 
 /** What the build hands the view library for one game: its declarations, its public tunables and its map. No code. */
 export interface GameData { vocab?: Vocabulary; id: string; schema: Schema; tune: Record<string, unknown>; map: { name?: string; bounds: { min: unknown; max: unknown }; boxes?: unknown[]; circles?: unknown[]; spots?: Record<string, unknown[]> } }
-let current: { game: GameData; move: Record<string, MoveFn> } | null = null;
+let current: { game: GameData; move: Record<string, MoveFn>; load?: () => Promise<RulesHostFactory> } | null = null;
 /** Called by the build's own two lines at the top of a view's bundle, before the view's code runs. */
-export function setGame(game: GameData, move: Record<string, MoveFn> = {}): void { current = { game, move }; }
+export function setGame(game: GameData, move: Record<string, MoveFn> = {}, load?: () => Promise<RulesHostFactory>): void { current = { game, move, load }; }
 
 /** An entity as a view reads it: the built-in fields, the kind's declared fields by name, and its `motion`. */
 export interface Entity {
@@ -82,7 +85,7 @@ export interface Room<R = unknown> {
   follow(id: string | null): void;
   /** Extra values for the testing tools' receipts (`window.__homiePort`). */
   probe(extra: Record<string, () => unknown>): void;
-  /** A guide's ask buttons and a person's ask (today's relay frames; guides are driven by the server in a later release). */
+  /** A guide's ask buttons and a person's ask, handled by the room's rules host. */
   ask(id: string, askId: string, args?: Record<string, unknown>): void;
   askButtons(id: string, offer?: Record<string, unknown>): AskButton[];
   readonly tune: Readonly<Record<string, unknown>>;
@@ -110,8 +113,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const period = 1000 / tickHz;
   const sendEvery = Math.ceil(tickHz / Math.max(1, schema.settings.inputHz));
   const clock = opts.now ?? ((): number => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
-  const net = createNetplay<unknown, unknown, unknown>({ game: game.id, maxPlayers: schema.seats, snapshotHz: tickHz, ...opts.net, rules: true });
-  const agents = game.vocab && agentFactory ? agentFactory(net, game.vocab, { roles: ['guide', 'party'], view: () => ({}), manual: true }) : null;
+  const net = createNetplay<unknown, unknown, unknown>({ game: game.id, maxPlayers: schema.seats, snapshotHz: tickHz, heartbeatMs: 0, rulesHost: { mode: schema.settings.host, offline: schema.settings.offline, load: current?.load }, ...opts.net, rules: true, rulesLimits: { output: rulesOutput, bytes: rulesCaps(schema.seats), rates: rulesRates(tickHz, schema.seats) } });
+  const agents = game.vocab && agentFactory ? agentFactory(net, game.vocab, { roles: ['guide', 'party'], view: () => ({}), manual: true, viewOnly: true }) : null;
   const kindOf = new Map(schema.kinds.map((k) => [k.name, k]));
   const listeners = new Map<string, Set<(e: any) => void>>();
   const emit = (name: string, e: unknown): void => { for (const fn of listeners.get(name) ?? []) { try { fn(e); } catch (err) { console.warn(`[room] on('${name}')`, err); } } };
@@ -119,7 +122,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const map = { bounds: { min: vecOf(game.map.bounds.min), max: vecOf(game.map.bounds.max) }, boxes: (game.map.boxes ?? []).map((b: any) => ({ min: vecOf(b.min), max: vecOf(b.max) })), circles: (game.map.circles ?? []).map((c: any) => ({ at: vecOf(c.at), r: Number(c.r) })) };
   const spots: Record<string, readonly Vec3[]> = {};
   for (const [key, list] of Object.entries(game.map.spots ?? {})) spots[key] = Object.freeze(list.map(vecOf));
-  const tune = Object.freeze({ ...game.tune });
+  const tune = Object.freeze({ ...(lab.rulesTune({ public: game.tune }).public as Record<string, unknown>) });
 
   let status: RoomStatus = 'connecting';
   let latest: Frame | null = null;
@@ -233,12 +236,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
   function pump(): void {
     if (closed) return;
-    if (net.offline) setStatus(net.closedWhy ? 'closed' : 'offline');
+    if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline');
     const now = clock();
     const hidden = typeof document !== 'undefined' && document.hidden === true;
     // Effects play for everyone who draws the room: a watcher has no body and still sees them.
     fire();
-    if (!mine || !base || net.seat === null || !net.connected) return;
+    if (!mine || !base || net.seat === null || (!net.connected && !net.rulesHosting)) return;
     if (hidden) {
       // A hidden tab's timers are too slow to keep input alive, and a body must not run on without its player:
       // one neutral entry at once (every field at its init, no press), then no more steps until the tab shows again.
@@ -296,7 +299,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   function roundNow(): RoomRound | null {
     if (!round || !latest) return null;
     // The room's clock now, from the newest snapshot: a view never turns a tick into time itself.
-    const serverTick = latest.k + (net.connected ? (clock() - latest.at) / period : 0);
+    const serverTick = latest.k + ((net.connected || net.rulesHosting) ? (clock() - latest.at) / period : 0);
     return { ...round, secondsLeft: round.endsAt ? Math.max(0, (round.endsAt - serverTick) / tickHz) : Infinity, ...(results ? { results } : {}) };
   }
   /** Effects wait for the tick they were emitted on to be drawn (an effect on the player's own body plays at once). */
@@ -313,7 +316,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   }
 
   net.on('snapshot', onSnapshot);
-  net.on('role', (e) => { if (e.snap) onSnapshot(e.snap); if (net.offline) setStatus(net.closedWhy ? 'closed' : 'offline'); });
+  net.on('role', (e) => { if (e.snap) onSnapshot(e.snap); if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline'); });
   net.on('link', (e) => {
     if (e.state === 'online') { base = null; if (status !== 'playing') setStatus('connecting'); } else if (e.state === 'closed') setStatus('closed'); else if (e.state === 'alone' || e.state === 'offline') setStatus('offline');
   });
@@ -329,12 +332,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const data = e.d && typeof e.d === 'object' ? e.d as Record<string, unknown> : { text: e.d };
       emit('say', { ...data, kind: e.k, seat: e.from, slot: -1, line: typeof data.line === 'string' ? data.line : undefined, text: typeof data.text === 'string' ? data.text : '', args: {} });
     }
-    else if (e.k === 'agent:goal' && e.from === net.host?.seat) {
+    else if (e.k === 'agent:goal' && e.from === null) {
       const data = e.d as import('../agents/agents.ts').GoalEvent;
       const goal = (g: import('../agents/agents.ts').Goal) => ({ ...g, asked: g.asked === true });
       emit('goal', { ...data, goal: goal(data.goal), prev: data.prev ? goal(data.prev) : null });
     }
-    else if (e.k === 'agent:ask' && e.from === net.host?.seat) emit('ask', e.d);
+    else if (e.k === 'agent:ask' && e.from === null) emit('ask', e.d);
     else if (/^ask:/.test(e.k)) {
       const data = e.d && typeof e.d === 'object' ? e.d as Record<string, unknown> : {};
       emit('ask', { ...data, ask: e.k.slice(4), k: e.k.slice(4), slot: typeof data.slot === 'number' ? data.slot : -1, from: e.from, at: clock(), args: data.args && typeof data.args === 'object' ? data.args : {} });
@@ -406,7 +409,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     self: () => { const m = meNow(); return m ? { x: m.pos.x, y: m.pos.y, z: m.pos.z } : null; },
     peer: (seat: number) => { if (!latest) return null; for (const u of latest.ents.values()) if (u.seat === seat) return { x: u.pos.x, y: u.pos.y, z: u.pos.z }; return null; },
     scores: () => roster().map((r) => ({ seat: r.seat, score: r.score })),
-    score: myScore, tick: () => latest?.k ?? 0, epoch: () => epoch, hosted: () => 'server', status: () => status,
+    score: myScore, tick: () => latest?.k ?? 0, epoch: () => epoch, hosted: () => net.rulesHosting ? 'browser' : schema.settings.host, status: () => status,
   });
   if (typeof window !== 'undefined') {
     exposePort(net as Netplay<unknown, unknown, unknown>, {

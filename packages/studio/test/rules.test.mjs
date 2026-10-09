@@ -493,7 +493,7 @@ test('the room with the server as host: no browser hosts, and a forged score, st
   const rig = roomRig(L, compile({}));
   const a = rig.conn();
   const w = a.hello('Ada');
-  assert.deepEqual([w.t, w.role, w.seat, w.rev], ['welcome', 'replica', 0, 10]);
+  assert.deepEqual([w.t, w.role, w.seat, w.rev], ['welcome', 'replica', 0, 11]);
   assert.deepEqual(w.host, { id: 'server', seat: null }, 'the host is the server, and it is not a client');
   assert.equal(w.ckpt, undefined);
   assert.equal(rig.room.hostId, null);
