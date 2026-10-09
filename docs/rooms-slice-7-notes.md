@@ -380,3 +380,27 @@ and convergence to the authoritative ending position.
 The repeated 18-case Chrome matrix passed after the knock fade fix: first-frame
 response in every case, zero snaps and steady clock rebases. The receipt is
 `feel-knock-fixed.json`; all earlier receipts remain available for comparison.
+
+Main advanced to `8ea9dbd` (paid parts, Studio 0.37.2 / plugin 0.38.2) during
+verification. The branch was rebased again, retaining its new dependencies,
+payment code and migrations. Rules, netplay and all starters are byte-identical
+across that rebase. The carried Slice 6 base is now `ce467ce`. Versions remain
+Studio 0.39.0 / plugin 0.40.0. Template/history were regenerated with both new
+migrations (35 template files). The clean install and all release gates restart.
+
+The post-fix, post-rebase packed studio built all five games. The three migrated
+starters ran Gem 18,000 ticks / 813 restores / 8,150-byte largest save, Hero
+17,054 / 781 / 8,281 bytes, and Ember 20,400 / 980 / 7,825 bytes (including
+2,400 companion ticks). Both visible Chrome windows for each held 59.88 fps
+(median interval), with frame p95 at 17.5–17.6 ms and no browser errors. There
+were no correction snaps or steady clock rebases; Ember's second player had
+one intentional respawn placement. Saved hero reload passed. The final MP4s,
+contact sheets, consecutive motion frames and measurements are in the three
+`*-release-final` evidence folders. I inspected those frames: Hero's airborne
+pose descends into landing, Gem's waves and turns remain coherent, and Ember's
+combat and labels remain stable. No visible sliding or animation glitch was
+found in these short captures.
+
+The final 18-case matrix's first-response p95 ranges were Gem 2.8–10.0 ms,
+Hero 2.8–11.4 ms and Ember 5.4–11.3 ms; every case responded within one drawing
+frame. Hero recorded 78 landings. All 19 tests passed in 461.17 seconds.
