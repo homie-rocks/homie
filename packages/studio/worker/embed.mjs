@@ -1,3 +1,4 @@
+import { appWords, openPath } from './app-format.mjs';
 /**
  * Player cards. X's reference: developer.x.com, "Cards: player card" (archived)
  * (redirects to docs.x.com/overview as checked 2026-10-08). Surviving official sample:
@@ -71,7 +72,8 @@ export function httpsAddress(value, origin) {
   try { const u = new URL(value, origin); return u.protocol === 'https:' && !u.username && !u.password ? u.href : null; } catch { return null; }
 }
 export function playerProperties(cat, game, { origin = '', title = game?.name, description = game?.blurb } = {}) {
-  const player = httpsAddress(`/${game?.id}/play/embed`, origin);
+  if (!game) return {};
+  const player = httpsAddress(`${openPath(game)}/embed`, origin);
   const measured = game?.playerImage;
   const picture = measured && httpsAddress(measured.src, origin);
   // twitter:site goes out when the studio has set its handle; a card is never withheld for the lack of one
@@ -80,7 +82,7 @@ export function playerProperties(cat, game, { origin = '', title = game?.name, d
   if (!playerEnabled(cat, game) || !player || !picture || playerImageRule(measured)) return {};
   return { ...(handle ? { 'twitter:site': handle } : {}), 'twitter:card': 'player', 'twitter:player': player, 'twitter:player:width': PLAYER_SIZE.width,
     'twitter:player:height': PLAYER_SIZE.height, 'twitter:image': picture, 'twitter:title': title,
-    'twitter:description': String(description || `Play ${game.name} in your browser.`).slice(0, 200) };
+    'twitter:description': String(description || `${appWords(game).open} ${game.name} in your browser.`).slice(0, 200) };
 }
 
 /** Browser restrictions belong to the outer host; failures must not kill a game's input loop.

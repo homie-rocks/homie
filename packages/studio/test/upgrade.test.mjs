@@ -82,6 +82,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'add-file site/migrations/0002_studio_stats.sql',
     'add-file site/migrations/0005_studio_office.sql',
     'add-lines .gitignore',
+    'add-section AGENTS.md ## Apps: one screen, roles and parts',
     'add-section AGENTS.md ## Art direction and models',
     'add-section AGENTS.md ## Continuing a build from the Claude app',
     'add-section AGENTS.md ## Running live games (the back office)',

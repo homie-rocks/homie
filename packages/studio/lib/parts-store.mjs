@@ -23,7 +23,7 @@ import {
   packedVersions, parseRef, partDir, readOrigins, readPart, requiredParts, sha256, shareProblems, syncPartCredits, vendorDir, verifyFiles, writeHashes,
   writeOrigins, writePart,
 } from './parts.mjs';
-import { listGames, readStudio } from './studio.mjs';
+import { experienceDir, experienceFile, listExperiences as listGames, readStudio } from './studio.mjs';
 
 export const HUB = 'https://homie.rocks';
 const isObj = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
@@ -139,8 +139,8 @@ export function ensurePackages(root, wants, { npm = runNpm, install = false, say
 /** What a part's licence can care about in the game using it: whether the studio sells, and who the game credits. */
 export function gameFacts(root, id) {
   let g = {}; let credits = {};
-  try { g = JSON.parse(readFileSync(join(root, 'games', id, 'game.json'), 'utf8')); } catch { g = {}; }
-  try { credits = JSON.parse(readFileSync(join(root, 'games', id, 'credits.json'), 'utf8')); } catch { credits = {}; }
+  try { g = JSON.parse(readFileSync(experienceFile(root, id), 'utf8')); } catch { g = {}; }
+  try { credits = JSON.parse(readFileSync(join(experienceDir(root, id), 'credits.json'), 'utf8')); } catch { credits = {}; }
   return { id, name: g.name ?? id, sells: existsSync(join(root, 'shop.json')), credits: Array.isArray(credits.parts) ? credits.parts : [] };
 }
 
@@ -177,7 +177,7 @@ const diffFiles = (was, now) => {
 export async function addPart(root, refText, { game = null, fetch, npm = runNpm, install = true, overwrite = false, say = () => {} } = {}) {
   const command = 'parts add';
   const fail = (why, extra = {}) => ({ ok: false, command, why, ...extra });
-  if (game && !existsSync(join(root, 'games', game, 'game.json'))) return fail(`there is no game "${game}" in this studio (${listGames(root).map((g) => g.id).join(', ') || 'it has none yet'})`);
+  if (game && !existsSync(experienceFile(root, game))) return fail(`there is no game "${game}" in this studio (${listGames(root).map((g) => g.id).join(', ') || 'it has none yet'})`);
   let got;
   try { got = await fetchPart(refText, { fetch }); } catch (error) { return fail(error.message); }
   const { ref, part, files, version, base, entry } = got;
@@ -281,14 +281,15 @@ export function sharePart(root, id, on = true) {
   const packed = packPart(root, id);
   if (!packed.ok) { part.share = false; writePart(dir, part); return { ...packed, command }; }
   const lic = licenseOfPart(part.license);
-  return { ok: true, command, id, share: true, version: part.version, license: lic.id, asks: lic.asks, files: part.files.length, bytes: part.cost?.bytes ?? 0, ...(part.from?.game ? { from: part.from } : {}), effect: 'It is live after the studio\'s next deploy, not before: nothing was uploaded now. Sharing a part does not list the studio in the directory.' };
+  return { ok: true, command, id, share: true, version: part.version, license: lic.id, asks: lic.asks, files: part.files.length, bytes: part.cost?.bytes ?? 0, ...(part.from ? { from: part.from } : {}), effect: 'It is live after the studio\'s next deploy, not before: nothing was uploaded now. Sharing a part does not list the studio in the directory.' };
 }
 
 /* ------------------------------------------------------------------ find */
 
 const row = (p, extra) => ({
   id: p.id, name: p.name, kind: p.kind, version: p.version, summary: line(p.summary), license: p.license || null, tags: Array.isArray(p.tags) ? p.tags.slice(0, 12) : [],
-  from: isObj(p.from) ? { game: p.from.game ?? null, name: p.from.name ?? null, studio: p.from.studio ?? null, play: p.from.play ?? null } : null,
+  ...(Array.isArray(p.uses) ? { uses: p.uses } : {}),
+  from: isObj(p.from) ? { ...(p.from.app ? { app: p.from.app, open: p.from.open ?? null } : {}), ...(p.from.music ? { music: p.from.music } : {}), ...(p.from.video ? { video: p.from.video } : {}), game: p.from.game ?? null, name: p.from.name ?? null, studio: p.from.studio ?? null, play: p.from.play ?? null } : null,
   cost: isObj(p.cost) ? p.cost : {}, requires: isObj(p.requires) ? p.requires : {}, rig: p.skeleton?.rig ?? null, netplay: p.contract?.netplay ?? null, ...extra,
 });
 function matches(p, { words, kind, tag, license, builds }) {
@@ -297,7 +298,7 @@ function matches(p, { words, kind, tag, license, builds }) {
   if (license && String(p.license ?? '').toLowerCase() !== String(license).toLowerCase()) return false;
   // What a part builds on: a package it names, or the skeleton it is made for.
   if (builds && !(Object.keys(p.requires?.packages && typeof p.requires.packages === 'object' ? p.requires.packages : {}).includes(builds) || p.rig === builds)) return false;
-  const hay = [p.id, p.name, p.kind, p.summary, ...(p.tags ?? []), p.from?.name, p.from?.game, p.from?.studio].filter(Boolean).join(' ').toLowerCase();
+  const hay = [p.id, p.name, p.kind, p.summary, ...(p.tags ?? []), p.from?.name, p.from?.game, p.from?.app, p.from?.music, p.from?.video, ...(p.uses ?? []), p.from?.studio].filter(Boolean).join(' ').toLowerCase();
   return words.every((w) => hay.includes(w));
 }
 

@@ -201,3 +201,16 @@ Game and TV checkout use the same tab if a new tab is unavailable, then return t
 During rollback, the released Worker grants only a cart’s first item until the new Worker repairs it; it
 allows whole-cart player refunds even when a tip is included, and counts partially refunded carts at
 the full amount toward a cap. The additive schema preserves its original rows and entitlement keys.
+
+## Shop button on the screen
+
+An open shop with items for this game or app shows **Shop** above its play/open screen. The shell reserves 52 pixels plus the safe area above the content, so the button never covers its controls. In `game.json` or `app.json`, set `"screen": { "shop": false }` to hide this button (merge with any existing screen settings). The room panel and your own shop buttons still work. Closed shops, kids policies and an empty selection show no button.
+
+```ts
+import { createShop } from '@homie-rocks/studio/shop';
+const shop = createShop();
+shopButton.onclick = () => shop.open();
+itemButton.onclick = () => shop.open('supporter');
+```
+
+These calls open the same shop in games and apps. Inside a player card, purchases leave for the studio's shop; ordinary play/open pages start Stripe checkout. The studio's TV and kids policies still apply.

@@ -1,3 +1,4 @@
+import { experienceDir, experienceFile } from './studio.mjs';
 /**
  * GAME PARTS: THE FORMAT AND ITS CHECKER (parts/PARTS.md is the design; this file holds it to its word).
  *
@@ -24,7 +25,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, r
 import { dirname, join, relative } from 'node:path';
 
 export const PART_ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
-export const PART_KINDS = Object.freeze(['character', 'rig', 'clips', 'environment', 'effect', 'sound', 'ui', 'mechanic', 'shader', 'level-generator', 'bot-brain', 'audio-pack', 'set-piece']);
+export const PART_KINDS = Object.freeze(['character', 'rig', 'clips', 'environment', 'effect', 'sound', 'ui', 'mechanic', 'shader', 'level-generator', 'bot-brain', 'audio-pack', 'set-piece', 'quiz', 'menu-board', 'waitlist', 'live-total', 'loop', 'stem', 'track', 'video-intro', 'video-template']);
 export const NETPLAY_KINDS = Object.freeze(['host-authoritative', 'replicated', 'local']);
 export const PROVENANCE = Object.freeze(['original', 'generated', 'imported']);
 export const PIVOTS = Object.freeze(['feet', 'centre', 'base', 'origin']);
@@ -315,8 +316,9 @@ export function checkPart(part, { id = null } = {}) {
     if (!isObj(part.cost)) bad('cost', 'it is not an object', '{ "triangles": 0, "drawCalls": 0, "textureMB": 0, "bytes": 0, "measuredOn": "…" }');
     else for (const k of ['triangles', 'drawCalls', 'textureMB', 'bytes']) if (part.cost[k] !== undefined && !(Number.isFinite(part.cost[k]) && part.cost[k] >= 0)) bad(`cost.${k}`, 'it is not a number of 0 or more', 'leave out a cost nobody measured');
   }
+  if (part.uses !== undefined && (!Array.isArray(part.uses) || part.uses.some((u) => !['game', 'app', 'venue', 'cause', 'music', 'video'].includes(u)))) bad('uses', 'uses must name game, app, venue, cause, music or video');
   if (part.from !== undefined && part.from !== null) {
-    if (!isObj(part.from) || (part.from.game != null && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(part.from.game)))) bad('from', 'it does not name the game the part came out of', '{ "game": "<the game\'s id>", "studio": "<the studio\'s name>" }');
+    if (!isObj(part.from) || ((part.from.game ?? part.from.app ?? part.from.music ?? part.from.video) != null && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(part.from.game ?? part.from.app ?? part.from.music ?? part.from.video)))) bad('from', 'it does not name the game the part came out of', '{ "game": "<the game\'s id>", "studio": "<the studio\'s name>" }');
   }
   if (part.provenance !== undefined) {
     if (!isObj(part.provenance)) bad('provenance', 'it is not an object', '{ "source": "original" }');
@@ -353,13 +355,15 @@ export function requiredParts(part) {
  */
 export function assetRecords(root) {
   const out = new Map();
-  const games = join(root, 'games');
-  if (!existsSync(games)) return out;
+  for (const folder of ['games', 'apps']) {
+  const games = join(root, folder);
+  if (!existsSync(games)) continue;
   for (const e of readdirSync(games, { withFileTypes: true })) {
     if (!e.isDirectory()) continue;
     let m = null;
     try { m = JSON.parse(readFileSync(join(games, e.name, 'assets', 'manifest.json'), 'utf8')); } catch { m = null; }
     for (const a of Array.isArray(m?.assets) ? m.assets : []) for (const f of a.files ?? []) if (/^[a-f0-9]{64}$/.test(String(f.sha256 ?? ''))) out.set(f.sha256, { game: e.name, asset: a.id, kind: a.license?.kind ?? null, attribution: a.license?.attribution ?? null });
+  }
   }
   return out;
 }
@@ -520,7 +524,7 @@ function relSpec(fromFile, toFile) {
  * would point nowhere, and a part that reaches back into one game is not a part another game can use.
  */
 function liftPlan(root, game, paths) {
-  const gdir = join(root, 'games', game);
+  const gdir = join(experienceDir(root, game));
   const files = [];
   const walk = (rel) => {
     const abs = join(gdir, rel);
@@ -528,15 +532,15 @@ function liftPlan(root, game, paths) {
     if (statSync(abs).isDirectory()) { for (const e of readdirSync(abs, { withFileTypes: true })) if (!e.name.startsWith('.') && e.name !== 'node_modules') walk(`${rel}/${e.name}`); } else files.push(rel);
   };
   for (const raw of paths) {
-    const rel = posix(String(raw)).replace(/^\.\//, '').replace(/^games\/[^/]+\//, '').replace(/\/+$/, '');
+    const rel = posix(String(raw)).replace(/^\.\//, '').replace(/^(?:games|apps)\/[^/]+\//, '').replace(/\/+$/, '');
     if (!rel || rel.split('/').includes('..') || rel.startsWith('/')) throw new Error(`"${raw}" is not a path inside games/${game}`);
     walk(rel);
   }
   if (!files.length) throw new Error(`name the files of games/${game} that become the part (src/creature.ts, or a folder)`);
   // A part is a piece of a game, never the whole game: its entry, its page and its game.json stay the game's.
   let entry = 'src/main.ts';
-  try { entry = JSON.parse(readFileSync(join(gdir, 'game.json'), 'utf8')).entry ?? entry; } catch { /* the default entry */ }
-  const whole = files.filter((f) => f === entry || f === 'game.json' || f === 'index.html');
+  try { entry = JSON.parse(readFileSync(experienceFile(root, game), 'utf8')).entry ?? entry; } catch { /* the default entry */ }
+  const whole = files.filter((f) => f === entry || f === 'game.json' || f === 'app.json' || f === 'index.html');
   if (whole.length) throw new Error(`${whole.join(', ')} ${whole.length === 1 ? 'is' : 'are'} the game itself. A part is a piece of a game, never the whole game: name the files of one piece (the creature, the level generator, the camera).`);
   // The folder they share (without a leading src/, which every part has of its own).
   const dirs = files.map((f) => f.split('/').slice(0, -1));
@@ -560,15 +564,16 @@ function liftPlan(root, game, paths) {
  * `parts new`: a private part with every field a sharer will need, so the gaps are visible from the first minute.
  * `from` (a game's id) with `paths` lifts those files out of the game (above); without, the part starts empty.
  */
-export function newPart(root, id, { kind = 'mechanic', name = null, from = null, paths = [] } = {}) {
+export function newPart(root, id, { kind = 'mechanic', name = null, from = null, paths = [], uses = [] } = {}) {
   if (!PART_ID.test(String(id ?? ''))) return { ok: false, command: 'parts new', why: `"${id ?? ''}" is not a part id: lowercase letters, digits and hyphens (chase-camera)` };
   if (!PART_KINDS.includes(kind)) return { ok: false, command: 'parts new', why: `"${kind}" is not a kind of part: ${PART_KINDS.join(', ')}` };
+  if (!Array.isArray(uses) || uses.some((u) => !['game', 'app', 'venue', 'cause', 'music', 'video'].includes(u))) return { ok: false, command: 'parts new', why: 'invalid intended uses' };
   const dir = partDir(root, id);
   if (existsSync(dir)) return { ok: false, command: 'parts new', why: `parts/${id} is there already` };
   const title = clean(name, 80) || id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
   let entry = null; let lifted = null; let fromGame = null;
   if (from) {
-    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(from)) || !existsSync(join(root, 'games', from, 'game.json'))) return { ok: false, command: 'parts new', why: `there is no game "${from}" in this studio to lift a part out of` };
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(from)) || !existsSync(experienceFile(root, from))) return { ok: false, command: 'parts new', why: `there is no game "${from}" in this studio to lift a part out of` };
     let plan;
     try { plan = liftPlan(root, from, paths); } catch (error) { return { ok: false, command: 'parts new', why: error.message }; }
     if (plan.outside.length) return { ok: false, command: 'parts new', why: `These files still reach into the rest of games/${from}: ${plan.outside.slice(0, 6).join('; ')}. A part has to stand without the game: lift those files too, or pass what they provide in as an argument first. Nothing was moved.`, outside: plan.outside };
@@ -589,7 +594,7 @@ export function newPart(root, id, { kind = 'mechanic', name = null, from = null,
     entry = mods.find((p) => /^src\/index\.[a-z]+$/.test(p)) ?? mods[0] ?? null;
     let studio = null;
     try { studio = JSON.parse(readFileSync(join(root, 'studio.json'), 'utf8')).name ?? null; } catch { studio = null; }
-    fromGame = { game: from, ...(studio ? { studio: clean(studio, 80) } : {}) };
+    fromGame = { [experienceFile(root, from).endsWith('/app.json') ? 'app' : 'game']: from, ...(studio ? { studio: clean(studio, 80) } : {}) };
   } else {
     mkdirSync(dir, { recursive: true });
     if (['mechanic', 'ui', 'effect', 'shader', 'level-generator', 'bot-brain'].includes(kind)) {
@@ -602,7 +607,7 @@ export function newPart(root, id, { kind = 'mechanic', name = null, from = null,
   mkdirSync(join(dir, 'preview'), { recursive: true });
   if (!existsSync(join(dir, 'preview', 'index.html'))) writeFileSync(join(dir, 'preview', 'index.html'), PREVIEW_HTML(title));
   writePart(dir, {
-    id, name: title, kind, version: '0.1.0', summary: '', license: '', attribution: '', share: false, tags: [],
+    id, name: title, kind, version: '0.1.0', summary: '', license: '', attribution: '', share: false, tags: [], ...(uses.length ? { uses } : {}),
     ...(fromGame ? { from: fromGame } : {}),
     ...(entry ? { entry } : {}),
     files: [],
@@ -628,7 +633,7 @@ export function newPart(root, id, { kind = 'mechanic', name = null, from = null,
 
 /* ------------------------------------------------------------------ checking a set together */
 
-const creditsFile = (root, game) => join(root, 'games', game, 'credits.json');
+const creditsFile = (root, game) => join(experienceDir(root, game), 'credits.json');
 
 /**
  * THE LICENCES OF THE PARTS A GAME USES, and where they cannot be combined: [{ level: 'conflict' | 'warn' | 'note',
@@ -687,7 +692,7 @@ export function syncPartCredits(root, game, origins) {
   const keep = (Array.isArray(credits.parts) ? credits.parts : []).filter((p) => typeof p?.part !== 'string');
   const mine = Object.entries(origins.parts ?? {}).filter(([, e]) => (e.games ?? []).includes(game)).map(([ref, e]) => creditLine(ref, e));
   if (!mine.length && !existsSync(file)) return null;
-  if (!existsSync(join(root, 'games', game))) return null;
+  if (!existsSync(join(experienceDir(root, game)))) return null;
   const text = `${JSON.stringify({ ...credits, parts: [...keep, ...mine] }, null, 2)}\n`;
   if (!existsSync(file) || readFileSync(file, 'utf8') !== text) writeFileSync(file, text);
   return `games/${game}/credits.json`;

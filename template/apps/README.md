@@ -1,0 +1,1 @@
+One folder per app: app.json, index.html and src/. One transforming screen, its roles and its parts. Start with `npx --no-install homie-studio app new <id>`. The app guide explains lasting records, staff sign-in, LAN preview and standalone builds.

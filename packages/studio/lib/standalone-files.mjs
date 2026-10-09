@@ -105,8 +105,8 @@ export function projectPackage(meta, { targets = TARGETS } = {}) {
 }
 
 /** web/config.js: everything the shell knows about the game it frames. `site` '' is a copy that only plays offline. */
-export function configScript(meta, { target, site = '', share, colours = null, movement = null, params = {}, room = null }) {
-  const cfg = { v: 1, game: meta.id, name: meta.name, site: String(site ?? '').replace(/\/+$/, ''), ver: meta.netplayVersion ?? '', ...(movement ? { movement } : {}), params, share, colours, ...(room ? { room } : {}), version: meta.version, target };
+export function configScript(meta, { target, site = '', share, colours = null, movement = null, params = {}, room = null, kind = null }) {
+  const cfg = { ...(kind === 'app' ? { kind: 'app' } : {}), v: 1, game: meta.id, name: meta.name, site: String(site ?? '').replace(/\/+$/, ''), ver: meta.netplayVersion ?? '', ...(movement ? { movement } : {}), params, share, colours, ...(room ? { room } : {}), version: meta.version, target };
   return `window.__HOMIE_APP = ${JSON.stringify(cfg, null, 2).replace(/</g, '\\u003c')};\n`;
 }
 

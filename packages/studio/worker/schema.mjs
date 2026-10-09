@@ -164,7 +164,7 @@ export function gameNode(cat, g, origin, { listed = true, shop = null } = {}) {
   const L = g.landing ?? {};
   const h = L.hero ?? {};
   const page = `${origin}/${g.id}/`;
-  const play = `${origin}/${g.id}/play`;
+  const play = `${origin}/${g.id}/${g.kind === 'app' ? 'open' : 'play'}`;
   const min = Number(g.players?.min) || 1;
   const max = Number(g.players?.max) || 8;
   const modes = [...(min <= 1 ? ['SinglePlayer'] : []), ...(max > 1 ? ['MultiPlayer'] : [])];
@@ -180,7 +180,7 @@ export function gameNode(cat, g, origin, { listed = true, shop = null } = {}) {
   const addOn = listed ? shopOffers(shop, g, origin) : [];
   const genre = (Array.isArray(g.genre) ? g.genre : g.genre ? [g.genre] : []).map((x) => text(x, 40)).filter(Boolean);
   const node = {
-    '@type': ['VideoGame', 'WebApplication'],
+    '@type': g.kind === 'app' ? 'WebApplication' : ['VideoGame', 'WebApplication'],
     '@id': `${page}#game`,
     name: g.name,
     ...(text(g.blurb ?? L.pitch) ? { description: text(g.blurb || L.pitch) } : {}),
@@ -189,10 +189,11 @@ export function gameNode(cat, g, origin, { listed = true, shop = null } = {}) {
     ...(images.length ? { image: images.length === 1 ? images[0] : images } : {}),
     ...(shots.length ? { screenshot: shots } : {}),
     ...(genre.length ? { genre: genre.length === 1 ? genre[0] : genre } : {}),
-    playMode: modes.map(PLAY_MODE),
+    ...(g.kind === 'app' ? {} : { playMode: modes.map(PLAY_MODE),
     numberOfPlayers: { '@type': 'QuantitativeValue', minValue: min, maxValue: max },
     gamePlatform: ['Web browser', 'Phone', 'Computer', ...(L.tv !== false ? ['TV'] : [])],
-    applicationCategory: 'GameApplication',
+    }),
+    applicationCategory: g.kind === 'app' ? 'BusinessApplication' : 'GameApplication',
     operatingSystem: 'Any',
     browserRequirements: 'A modern web browser with JavaScript',
     isAccessibleForFree: true,
@@ -203,7 +204,7 @@ export function gameNode(cat, g, origin, { listed = true, shop = null } = {}) {
     ...(trailer ? { trailer: videoNode(cat, trailer, origin, { nested: true }) } : {}),
     ...(when(g.dates?.published) ? { datePublished: g.dates.published } : {}),
     ...(when(g.dates?.modified) ? { dateModified: g.dates.modified } : {}),
-    potentialAction: { '@type': 'PlayAction', target: play },
+    potentialAction: { '@type': g.kind === 'app' ? 'ViewAction' : 'PlayAction', target: play },
     ...(listed ? { offers: { '@type': 'Offer', price: 0, priceCurrency: /^[A-Z]{3}$/.test(String(shop?.currency ?? '').toUpperCase()) ? String(shop.currency).toUpperCase() : 'USD', availability: 'https://schema.org/OnlineOnly', url: play, ...(addOn.length ? { addOn } : {}) } } : {}),
   };
   return withExtras(node, g.schema);

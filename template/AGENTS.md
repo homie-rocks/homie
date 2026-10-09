@@ -22,6 +22,16 @@ directory lists its games; homie.rocks does not host them.
 | `studio.json` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. `.studio/` (git-ignored) is this computer's own state. |
 | `.claude/skills/` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |
 
+## Apps: one screen, roles and parts
+
+An app lives in `apps/<id>/app.json` and `src/`. Make one with `homie-studio app new <id>` (or `app_make`). Use the Homie plugin's `app` skill for businesses, venues, causes and customer apps. No game demo, rounds, scores, bots or mandatory fun: build what the person needs with the fewest human steps.
+
+An app is ONE screen that morphs with context: camera moves, panels unfold, its roles see and do different things, and parts plug into the scene. No page-to-page navigation or menus of links inside it. Use all the same engine packages and media skills as games (camera, geom, props, render, postfx, fx, audio, input, ui-world; style, art, models, animate, music, sound, video). It can be fully 3D and wild while remaining useful and legible.
+
+Declare roles, surfaces, words and lasting record collections in app.json. Netplay's host is not a staff permission. Use `@homie-rocks/studio/apps` for authorized lasting records and `@homie-rocks/studio/links` for ticket links, QR and HTTP-safe IDs. Staff use private role links plus existing account grants; keep private records out of public collections. Look for engine mechanisms and shared parts before writing a component. Credit licences; sharing is optional and separate from selling.
+
+Build normally, run `homie-studio dev --lan`, then `homie-studio check <id> --url <origin>`: the app check proves an actual action across a wall and two phones plus reconnect. The public screen is `/<id>/open`, the wall `/<id>/tv`. Customer apps use the same `standalone` build for desktop/iOS/Android; its existing sign-in and store limitations still apply. See `node_modules/@homie-rocks/studio/apps/APPS.md`.
+
 ## Commands (all through the pinned CLI in node_modules)
 
 Use `npm run <script>` or `npx --no-install homie-studio <command>`: `--no-install` makes sure it is this

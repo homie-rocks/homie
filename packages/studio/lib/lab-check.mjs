@@ -25,7 +25,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { chromeArgs, findChrome, noChrome, SOFTWARE_GL } from './chrome.mjs';
 import { labDir, startLabServer } from './lab.mjs';
-import { isRulesGame, listGames } from './studio.mjs';
+import { isRulesGame, listExperiences as listGames } from './studio.mjs';
 
 const round = (v, d = 2) => (Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : null);
 const pct = (xs, p) => { const s = xs.filter(Number.isFinite).sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.floor((s.length - 1) * p))] : null; };

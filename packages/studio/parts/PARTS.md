@@ -1,6 +1,6 @@
-# Game parts
+# Studio parts
 
-Games build on each other by sharing **parts**: a piece of a game that its studio chooses to share, so somebody
+Studios build on each other by sharing **parts**: a reusable piece of a game, app, music or video that its studio chooses to share, so somebody
 making another game can use it. A creature from one game, a level from another, a bot brain from a third. That is
 the whole idea. Without parts, a creator's AI has to come up with everything on its own.
 
@@ -8,7 +8,7 @@ Mashing up is not a command: it is making a game with parts from several games.
 
 ## The rules
 
-1. **A part is a piece of a game, never the whole game.** Remix, which handed over an entire game, is retired;
+1. **A part is a reusable piece, never a whole game or app.** Remix, which handed over an entire game, is retired;
    parts are what replaces it.
 2. **A part can take any form** that suits the piece: code, assets, data, a JSON description, a tuned config, or a
    mix. Form is not restricted.
@@ -89,10 +89,11 @@ named after it):
 | Field | What it is |
 | --- | --- |
 | `id`, `name`, `kind`, `version`, `summary` | `version` is three numbers; a shared version never changes, so a change is a new version. `summary` is one sentence. |
-| `kind` | `character`, `rig`, `clips`, `environment`, `effect`, `sound`, `ui`, `mechanic`, `shader`, `level-generator`, `bot-brain`, `audio-pack`, `set-piece`. There is no kind for a whole game. |
+| `kind` | `character`, `rig`, `clips`, `environment`, `effect`, `sound`, `ui`, `mechanic`, `shader`, `level-generator`, `bot-brain`, `audio-pack`, `set-piece`. `quiz`, `menu-board`, `waitlist`, `live-total`, `loop`, `stem`, `track`, `video-intro`, `video-template` also name parts. There is no kind for a whole game or app. |
 | `license`, `attribution` | Needed to share: an SPDX identifier, and who a game using the part credits. |
 | `share` | **Default `false`.** The part's own switch, and the only thing that decides whether it is shared. |
-| `from` | The game and studio the part came out of. Written when a part is lifted out of a game. |
+| `uses` | Optional intended uses: `game`, `app`, `venue`, `cause`, `music`, `video`. Describe the purpose, independently of licence and any future pricing. |
+| `from` | The source and studio: `game`, `app`, `music` or `video` with its id. Written when a part is lifted out of a game. |
 | `entry` | For a part with code: the module a game imports. A part of assets or data has none. |
 | `files` | Every file with its SHA-256 and size, **written by the tool, never by hand**. A file may carry `"rights"` (below). |
 | `preview` | `page`: a self-contained HTML page shown in a sandboxed frame. `image`: a still. `aspect`: the frame's shape as `"W:H"` (whole numbers 1 to 32, no flatter than 3:1, no taller than 1:2; default `"16:9"`). `phoneAspect`: the shape when the frame is narrower than 600 px. |
@@ -167,3 +168,7 @@ build, whether or not the add named the game.
   A package the studio's own `package.json` already names at a version npm says does not fit is explained and left
   alone.
 - The plumbing behind the tools is `homie-studio parts find | new | add | share | unshare | check`.
+
+App parts use the same lift/import/credit paths as game parts. Music and video parts can start empty with the corresponding kind; add their selected files, licence and provenance before sharing. `uses` describes what they are for, not permission to use them: the licence controls that. No price or checkout behavior is introduced; future commercial metadata can be added separately without changing the meaning of `share`.
+
+For example: `homie-studio parts new welcome-queue --kind waitlist --uses app,venue`, or `parts new gala-loop --kind loop --uses venue,cause`. A source app is selected by the existing `--from <id>` and `--game <id>` options.

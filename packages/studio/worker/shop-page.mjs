@@ -409,7 +409,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     try { inFrame = Boolean(window.top) && window.top !== window; } catch (e) { inFrame = true; }
     if (boot.embed || inFrame) {
       box.appendChild(el('p', { class: 'sub' }, inFrame ? 'Purchases open on the studio’s site, outside this post.' : 'Purchases are made in the studio’s shop.'));
-      box.appendChild(el('a', { class: 'buy', href: '/shop/?game=' + encodeURIComponent(GAME), target: '_blank', rel: 'noopener noreferrer' }, inFrame ? 'Buy on the studio’s site ↗' : 'Go to the shop'));
+      box.appendChild(el('a', { class: 'buy', href: '/shop/?game=' + encodeURIComponent(GAME) + (want ? '&item=' + encodeURIComponent(want) : ''), target: '_blank', rel: 'noopener noreferrer' }, inFrame ? 'Buy on the studio’s site ↗' : 'Go to the shop'));
       return;
     }
     if (screen) {
@@ -463,8 +463,9 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     }
     loadItems('');
   }
-  var opener = document.querySelector('[data-shop-open]');
-  if (opener) opener.addEventListener('click', function () { open(null); });
+  document.querySelectorAll('[data-shop-open]').forEach(function (opener) {
+    opener.addEventListener('click', function () { open(null); });
+  });
   var state = window.__shell || (window.__shell = {});
   state.shop = { open: open, close: close, refresh: refresh, get owns() { return owns.slice(); } };
 

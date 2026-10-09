@@ -161,6 +161,12 @@ test('sound: wired into a game, listed in the manifest, and the player starts on
   assert.equal(w.mode, 'bundle');
   assert.deepEqual(w.sfx.sort(), ['coin', 'jump', 'win']);
   assert.deepEqual(w.music['owl-theme'], ['calm', 'main']);
+  mkdirSync(join(dir, 'apps', 'welcome', 'src'), { recursive: true });
+  writeFileSync(join(dir, 'apps/welcome/app.json'), JSON.stringify({ id: 'welcome' }));
+  const appSound = sound(['wire', 'owl-sfx', '--game', 'welcome'], dir);
+  assert.equal(appSound.ok, true, JSON.stringify(appSound));
+  assert.ok(existsSync(join(dir, 'apps/welcome/public/sound/sound.json')));
+  assert.equal(existsSync(join(dir, 'games/welcome')), false);
   const assets = join(dir, 'games', 'gem', 'public', 'sound');
   const manifest = JSON.parse(readFileSync(join(assets, 'sound.json'), 'utf8'));
   assert.deepEqual(manifest.music['owl-theme'].loops.calm, ['owl-theme-calm-loop-2bars.ogg', 'owl-theme-calm-loop-2bars.wav'], 'Ogg first, WAV as the fallback');

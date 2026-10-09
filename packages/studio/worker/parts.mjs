@@ -38,11 +38,12 @@ export async function partsIndex(env, origin) {
  * Only a PUBLIC game is named (a private or invite-only game's parts are still shared, without saying where from).
  */
 function entryOf(p, cat, url) {
-  const g = p.from?.game ? (cat.games ?? []).find((x) => x.id === p.from.game) : null;
+  const g = (p.from?.game ?? p.from?.app) ? (cat.games ?? []).find((x) => x.id === (p.from.game ?? p.from.app)) : null;
   const { from, ...rest } = p;
   return {
     ...rest,
-    ...(g ? { from: { game: g.id, name: g.name ?? g.id, studio: cat.studio?.name ?? from.studio ?? null, page: `${url.origin}/${g.id}/`, play: `${url.origin}/${g.id}/play` } } : {}),
+    ...(!g && from && (from.music || from.video) ? { from: { ...(from.music ? { music: from.music } : { video: from.video }), name: from.name ?? null, studio: from.studio ?? null } } : {}),
+    ...(g ? { from: { [g.kind === 'app' ? 'app' : 'game']: g.id, name: g.name ?? g.id, studio: cat.studio?.name ?? from.studio ?? null, page: `${url.origin}/${g.id}/`, [g.kind === 'app' ? 'open' : 'play']: `${url.origin}/${g.id}/${g.kind === 'app' ? 'open' : 'play'}` } } : {}),
     add: `${url.host}/${p.id}`,
   };
 }
@@ -131,21 +132,21 @@ const CSS = `<style>
 </style>`;
 const head = (kicker, title, lead, extra = '') => `<header class="head"><p class="kicker">${esc(kicker)}</p><h1>${esc(title)}</h1>${lead ? `<p class="lead">${esc(lead)}</p>` : ''}${extra}</header>`;
 const studioOf = (cat) => cat.studio?.name ?? 'Studio';
-const fromLine = (p) => (p.from?.game ? `From <a href="/${esc(p.from.game)}/">${esc(p.from.name ?? p.from.game)}</a>` : '');
+const fromLine = (p) => ((p.from?.game ?? p.from?.app) ? `From <a href="/${esc((p.from.game ?? p.from.app))}/">${esc(p.from.name ?? (p.from.game ?? p.from.app))}</a>` : '');
 /** What a person says to their AI to get the part, in plain words with its name and reference: no command to type. */
 const sayAdd = (p) => `Add the "${p.name}" part from ${p.add} to my game`;
 const sayRow = (label, say) => `<div class="psay"><div><span class="ptag">${esc(label)}</span><code>${esc(say)}</code></div><button class="pcopy" type="button" data-copy="${esc(say)}">${icon('copy')}<span data-copy-word>Copy</span></button></div>`;
 
 function card(p) {
   const img = p.preview?.image ? `<img src="${esc(`${p.url}${p.preview.image}`)}" alt="" loading="lazy">` : '';
-  return `<li><a class="pcard" href="/parts/${esc(p.id)}/">${img}<span class="ptag">${esc(kindOf(p))} · ${esc(p.license ?? '')}</span><h3>${esc(p.name)}</h3><p>${esc(p.summary ?? '')}</p>${p.from?.game ? `<p>From ${esc(p.from.name ?? p.from.game)}</p>` : ''}</a></li>`;
+  return `<li><a class="pcard" href="/parts/${esc(p.id)}/">${img}<span class="ptag">${esc(kindOf(p))} · ${esc(p.license ?? '')}</span><h3>${esc(p.name)}</h3><p>${esc(p.summary ?? '')}</p>${(p.from?.game ?? p.from?.app) ? `<p>From ${esc(p.from.name ?? (p.from.game ?? p.from.app))}</p>` : ''}</a></li>`;
 }
 
 export function partsPage(cat, parts, url) {
   const name = studioOf(cat);
   // Grouped by the game each came out of: a mashup starts from "the creature in that game".
   const groups = new Map();
-  for (const p of parts) { const k = p.from?.game ?? ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
+  for (const p of parts) { const k = (p.from?.game ?? p.from?.app) ?? ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
   const body = [...groups].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b))).map(([k, list]) => `<p class="sec"${k ? ` id="from-${esc(k)}"` : ''}>${k ? `From ${esc(list[0].from.name ?? k)}` : 'More parts'}</p><ul class="pgrid">${list.map(card).join('')}</ul>`).join('');
   return layout(cat, {
     title: `Game parts · ${name}`, description: `Pieces of ${name}'s games that other studios can use in their own: creatures, levels, mechanics, sounds. Each with its licence.`, origin: url.origin, path: '/parts/', page: 'parts', head: CSS,
@@ -213,7 +214,8 @@ export function partPage(cat, p, url) {
     : p.preview?.image ? `<img class="pframe" src="${esc(`${p.url}${p.preview.image}`)}" alt="${esc(p.name)}">` : '';
   const facts = [
     ['Kind', esc(kindOf(p))],
-    p.from?.game ? ['From the game', `<a href="/${esc(p.from.game)}/">${esc(p.from.name ?? p.from.game)}</a> · <a href="/${esc(p.from.game)}/play">Play it</a>`] : null,
+    p.uses?.length ? ['For', esc(p.uses.join(', '))] : null,
+    (p.from?.game ?? p.from?.app) ? [p.from.app ? 'From the app' : 'From the game', `<a href="/${esc((p.from.game ?? p.from.app))}/">${esc(p.from.name ?? (p.from.game ?? p.from.app))}</a> · <a href="/${esc((p.from.game ?? p.from.app))}/${p.from.app ? 'open' : 'play'}">${p.from.app ? 'Open it' : 'Play it'}</a>`] : null,
     ['Licence', `${esc(p.license ?? 'none named')}${p.license && !/^LicenseRef-/.test(p.license) ? ` · <a href="https://spdx.org/licenses/${esc(p.license)}.html" rel="noopener">what it allows</a>` : ''}`],
     p.attribution ? ['Credit', esc(p.attribution)] : null,
     ['Version', `${esc(p.version)}${(p.versions ?? []).length > 1 ? ` (also ${esc(p.versions.filter((v) => v !== p.version).join(', '))})` : ''}`],
@@ -228,7 +230,7 @@ export function partPage(cat, p, url) {
   return layout(cat, {
     title: `${p.name} · a game part from ${name}`, description: `${p.summary ?? ''} A ${kindOf(p).toLowerCase()} from ${name}${p.from?.name ? `'s ${p.from.name}` : ''}, shared under ${p.license ?? 'its own terms'}.`.trim(), origin: url.origin, path: `/parts/${p.id}/`, page: 'part', head: CSS,
     image: p.preview?.image ? `${p.url}${p.preview.image}` : null,
-    main: `${head(`${kindOf(p)} · game part`, p.name, p.summary ?? '', `<div class="keys"><a class="ghost" href="/parts/">${icon('arrow')}<span>All parts</span></a>${p.from?.game ? `<a class="ghost" href="/${esc(p.from.game)}/play">${icon('games')}<span>Play ${esc(p.from.name ?? p.from.game)}</span></a>` : ''}</div>`)}
+    main: `${head(`${kindOf(p)} · shared part`, p.name, p.summary ?? '', `<div class="keys"><a class="ghost" href="/parts/">${icon('arrow')}<span>All parts</span></a>${(p.from?.game ?? p.from?.app) ? `<a class="ghost" href="/${esc((p.from.game ?? p.from.app))}/${p.from.app ? 'open' : 'play'}">${icon('games')}<span>${p.from.app ? 'Open' : 'Play'} ${esc(p.from.name ?? (p.from.game ?? p.from.app))}</span></a>` : ''}</div>`)}
 <div class="wrap">
 ${preview ? `<p class="sec">Try it</p>${preview}` : ''}
 <p class="sec">Use it in your game</p>
@@ -248,7 +250,7 @@ ${sayRow('Say', sayAdd(p))}
  * build something new from them. Empty when the game shared none. It stands by itself: its own markup and styles.
  */
 export function partsBand(g, parts, host) {
-  const mine = parts.filter((p) => p.from?.game === g.id);
+  const mine = parts.filter((p) => (p.from?.game ?? p.from?.app) === g.id);
   if (!mine.length) return '';
   const say = mine.length === 1 ? sayAdd({ ...mine[0], add: `${host}/${mine[0].id}` }) : `Make a new game in my Homie studio with these parts of ${g.name}: ${mine.slice(0, 4).map((p) => `${host}/${p.id}`).join(', ')}`;
   return `${CSS}<section class="pband" aria-labelledby="parts-title" data-parts-band>
@@ -266,7 +268,7 @@ export async function withPartsBand(res, env, url, g) {
   try {
     if (!res || res.status !== 200 || !/text\/html/i.test(res.headers.get('content-type') ?? '')) return res;
     const index = await partsIndex(env, url.origin);
-    const band = partsBand(g, index.parts.map((p) => ({ ...p, from: p.from?.game === g.id ? { ...p.from, name: g.name } : p.from })), url.host);
+    const band = partsBand(g, index.parts.map((p) => ({ ...p, from: (p.from?.game ?? p.from?.app) === g.id ? { ...p.from, name: g.name } : p.from })), url.host);
     if (!band) return res;
     const html = await res.text();
     const at = html.lastIndexOf('</main>');

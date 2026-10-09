@@ -51,22 +51,22 @@ export function partsToolDefs(ctx, h) {
       },
     },
     {
-      name: 'part_new', title: 'Make a game part',
-      description: 'Make a part of this studio: a piece of one of its games that another game can use. With from (a game\'s id) and files (paths inside that game: a module or a folder), the files are LIFTED out of the game into parts/<id>/ and the game imports them from there, so it builds and behaves as before; a file that still reaches into the rest of the game is refused by name (pass what it needs in as an argument first). Without from, an empty part to write. A part is a piece of a game, never the whole game, in whatever form suits it (code, assets, data, a tuned config). A new part is private. Offer this after building something reusable.',
-      inputSchema: { type: 'object', properties: { id: str('The part\'s id (lowercase, digits, hyphens): "chase-camera"'), kind: { type: 'string', enum: [...PART_KINDS], description: 'What kind of part (default mechanic)' }, name: str('Its name'), from: str('The game to lift it out of'), files: { type: 'array', items: { type: 'string' }, description: 'With from: paths inside games/<from>/ that become the part ("src/creature.ts", "src/cave")' }, ...STUDIO_ARG }, required: ['id'] },
-      annotations: { title: 'Make a game part', ...RW },
+      name: 'part_new', title: 'Make a shared part',
+      description: 'Make a part of this studio: a reusable piece of a game, app, music or video. With from (a game\'s id) and files (paths inside that game: a module or a folder), the files are LIFTED out of the game into parts/<id>/ and the game imports them from there, so it builds and behaves as before; a file that still reaches into the rest of the game is refused by name (pass what it needs in as an argument first). Without from, an empty part to write. A part is a reusable piece, never an entire experience, in whatever form suits it (code, assets, data, a tuned config). A new part is private. Offer this after building something reusable.',
+      inputSchema: { type: 'object', properties: { id: str('The part\'s id (lowercase, digits, hyphens): "chase-camera"'), kind: { type: 'string', enum: [...PART_KINDS], description: 'What kind of part (default mechanic)' }, name: str('Its name'), uses: { type: 'array', items: { type: 'string', enum: ['game', 'app', 'venue', 'cause', 'music', 'video'] } }, from: str('The game to lift it out of'), files: { type: 'array', items: { type: 'string' }, description: 'With from: paths inside games/<from>/ that become the part ("src/creature.ts", "src/cave")' }, ...STUDIO_ARG }, required: ['id'] },
+      annotations: { title: 'Make a shared part', ...RW },
       run: async (a) => {
         const root = ctx.root(a.studio);
-        const r = newPart(root, String(a.id ?? ''), { kind: a.kind ?? 'mechanic', name: a.name ?? null, from: a.from ? String(a.from) : null, paths: Array.isArray(a.files) ? a.files.map(String) : [] });
+        const r = newPart(root, String(a.id ?? ''), { kind: a.kind ?? 'mechanic', uses: a.uses, name: a.name ?? null, from: a.from ? String(a.from) : null, paths: Array.isArray(a.files) ? a.files.map(String) : [] });
         if (!r.ok) return fail(`No part was made: ${r.why}`, { kind: 'part', ...r });
         return ok([text(r), r.lifted ? `Build ${r.from} now and check it still plays the same.` : '', 'Fill in parts/' + r.id + '/part.json: a one-sentence summary, what it takes from a game ("contract"), and its costs if measured. It stays private until the person asks to share it (part_share).'].filter(Boolean).join('\n'), { kind: 'part', ...r });
       },
     },
     {
-      name: 'part_share', title: 'Share a game part',
+      name: 'part_share', title: 'Share a part',
       description: 'Share one of this studio\'s parts with other studios, or stop sharing it. Only when the person asked: a part is private until they say otherwise. It needs a licence the person picked (an SPDX identifier: CC0-1.0, CC-BY-4.0, MIT…; with license it is set here), who to credit when the licence asks, and known rights to every file: anything in the way is listed in plain words and nothing is shared. It is live after the studio\'s next deploy (studio_deploy), not before; stopping takes effect then too. With share left out it only checks and reports.',
       inputSchema: { type: 'object', properties: { id: str('The part\'s id'), share: { type: 'boolean', description: 'true: share it; false: stop sharing it; left out: only check what stands in the way' }, license: str('The licence the person picked, an SPDX identifier (set before sharing)'), attribution: str('Who a game using it should credit'), ...STUDIO_ARG }, required: ['id'] },
-      annotations: { title: 'Share a game part', ...RW },
+      annotations: { title: 'Share a part', ...RW },
       run: async (a) => {
         const root = ctx.root(a.studio);
         const id = String(a.id ?? '');

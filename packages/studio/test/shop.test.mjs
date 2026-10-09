@@ -1753,7 +1753,7 @@ test('the game sheet reaches item 101 and one office click drains queued stateme
   };
   const frame = { contentWindow: { postMessage() {} } };
   const ids = new Map();
-  const document = { body: element(), createElement: element, createTextNode: (text) => ({ textContent: text }), addEventListener() {}, querySelector(selector) {
+  const document = { body: element(), createElement: element, createTextNode: (text) => ({ textContent: text }), addEventListener() {}, querySelectorAll(selector) { return [this.querySelector(selector)]; }, querySelector(selector) {
     if (selector === 'iframe.game') return frame;
     if (!ids.has(selector)) ids.set(selector, element());
     return ids.get(selector);
@@ -2820,7 +2820,7 @@ test('no-popup game and TV scripts create a checkout and restore the exact page 
       nodes.push(node); return node;
     };
     const frame = { contentWindow: { postMessage() {} } };
-    const document = { cookie: '', body: element(), createElement: element, createTextNode: (textContent) => ({ textContent }), addEventListener() {}, querySelector: (q) => q === 'iframe.game' ? frame : null };
+    const document = { cookie: '', body: element(), createElement: element, createTextNode: (textContent) => ({ textContent }), addEventListener() {}, querySelectorAll: () => [], querySelector: (q) => q === 'iframe.game' ? frame : null };
     const window = { open: () => null, __HOMIE_PLAY: { game: 'owl-run', screen, shop: { policy: { televisionCheckout: true } } }, addEventListener: (k, fn) => { events[k] = fn; } };
     const location = { origin: 'https://owls.example', pathname: screen ? '/owl-run/tv' : '/owl-run/play', search: '?room=one', hash: '#shop', href: '' };
     const original = location.pathname + location.search + location.hash;
@@ -3426,7 +3426,7 @@ else { console.log(JSON.stringify({error:{type:'invalid_request_error',message:'
     assert.doesNotMatch(cli.stdout + cli.stderr, /sk_test_|rk_test_|pk_live_|whsec_/);
     const tools = toolDefs(new StudioContext({ cwd: dir, waitMs: 20000, install: false }));
     let mcp = await tools.find((t) => t.name === 'stripe_login').run({});
-    if (mcp.structuredContent.state === 'running') mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.id });
+    if (mcp.structuredContent.state === 'running') mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.job });
     assert.match(JSON.stringify(mcp), /Stripe says this product is refused/);
     assert.doesNotMatch(JSON.stringify(mcp), /sk_test_|rk_test_|pk_live_|whsec_/);
   } finally { process.env.PATH = oldPath; if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome; }
@@ -3443,4 +3443,71 @@ test('keyed chosen amounts use the selected unit amount, with zero allowed for a
     assert.equal(price.custom_unit_amount, undefined);
     assert.doesNotThrow(() => stripeValidation('/v1/checkout/sessions', formEncode(params), {}));
   }
+});
+
+for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/game buttons start ${keyless ? 'Payment Links' : 'keyed Checkout'} at every embed size`, { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH', timeout: 120000 }, async () => {
+  const { default: puppeteer } = await import('puppeteer-core');
+  const { build } = await import('esbuild');
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  const { readShop } = await import('../lib/shop.mjs');
+  let s;
+  if (keyless) {
+    const h = await pairingHarness('visible-shop');
+    assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
+    s = await site({ key: false, settings: readShop(h.dir).shop }); Object.assign(s.env, h.state.saved);
+  } else s = await site();
+  const originalAssets = s.env.ASSETS;
+  const cat = await (await originalAssets.fetch(new Request('https://owls.example/games.json'))).json();
+  const meta = cat.games.find(g => g.id === 'owl-run');
+  s.env.ASSETS = { fetch: req => new URL(req.url).pathname === '/games.json' ? Response.json(cat) : originalAssets.fetch(req) };
+  const client = await build({ stdin: { contents: `import { createShop } from './packages/studio/shop/shop.ts'; const shop = createShop(); document.querySelector('#own-shop').onclick = () => shop.open(); document.querySelector('#own-item').onclick = () => shop.open('supporter');`, resolveDir: process.cwd() }, bundle: true, write: false });
+  const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
+  try {
+    for (const kind of ['game', 'app']) for (const [width, height] of [[390,844], [358,201], [1280,720]]) {
+      Object.assign(meta, { kind, roles: { customer: { signIn: false, can: [] } }, surfaces: { phone: 'customer' }, records: { persist: false, collections: {} } });
+      const p = s.player(400, { band: 'adult' });
+      const page = await browser.newPage();
+      await page.setViewport({ width, height, isMobile: width < 400, hasTouch: width < 400 });
+      await page.setCookie({ name: 'studio_player', value: p.cookie.split('=')[1], domain: 'owls.example', secure: true });
+      await page.evaluateOnNewDocument(() => { window.open = () => null; }); // exercise the supported same-tab checkout fallback
+      const errors = []; page.on('pageerror', e => errors.push(e.message));
+      await page.setRequestInterception(true);
+      page.on('request', async req => {
+        const url = new URL(req.url());
+        if (['buy.stripe.com', 'checkout.stripe.com'].includes(url.hostname)) return req.respond({ status: 200, contentType: 'text/html', body: '<h1>Stripe checkout stand-in</h1>' });
+        if (url.pathname.includes('/__game/')) return req.respond({ status: 200, contentType: 'text/html', body: `<button id="own-shop">Our shop</button><button id="own-item">Supporter</button><script>window.HOMIE_NET={shop:true};${client.outputFiles[0].text}</script>` });
+        if (url.hostname !== 'owls.example') return req.abort();
+        const r = await s.fetchSite(url.pathname + url.search, { method: req.method(), headers: { ...req.headers(), ...s.as(p) }, ...(req.postData() ? { body: req.postData() } : {}) });
+        return req.respond({ status: r.status, headers: Object.fromEntries(r.headers), body: await r.text() });
+      });
+      const address = `https://owls.example/owl-run/${kind === 'app' ? 'open' : 'play'}?arrive=0`;
+      await page.goto(address);
+      await page.waitForSelector('[data-shop-control]');
+      const fit = await page.$eval('[data-shop-control]', e => { const b = e.getBoundingClientRect(), f = document.querySelector('iframe.game').getBoundingClientRect(); return b.height >= 44 && b.left >= 0 && b.right <= innerWidth && b.bottom <= f.top; });
+      assert.ok(fit, `${kind} ${width}x${height}: visible, 44px and clear of content`);
+      await page.click('[data-shop-control]');
+      await page.waitForSelector('.shopsheet .buy');
+      await page.click('.shopsheet [aria-label=Close]');
+      const frame = page.frames().find(f => f.url().includes('/__game/'));
+      for (const button of ['#own-shop', '#own-item']) {
+        await frame.click(button); await page.waitForSelector('.shopsheet .buy');
+        await page.click('.shopsheet [aria-label=Close]');
+      }
+      await page.click('[data-shop-control]');
+      const buy = await page.waitForSelector('.shopsheet .buy');
+      await buy.evaluate(e => e.scrollIntoView({ block: 'center' }));
+      await buy.click();
+      await page.waitForFunction(() => ['buy.stripe.com', 'checkout.stripe.com'].includes(location.hostname));
+      assert.match(await page.$eval('h1', e => e.textContent), /Stripe checkout stand-in/);
+      assert.ok(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_orders WHERE player = ?').get(p.id).n > 0);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    assert.equal(s.stripe.calls.filter(c => c.path === '/v1/checkout/sessions' && c.method === 'POST').length, keyless ? 0 : 6);
+    const originalShop = structuredClone(cat.shop), originalScreen = structuredClone(meta.screen ?? {});
+    for (const change of [() => { meta.screen.shop = false; }, () => { cat.shop.items = cat.shop.items.map(i => ({ ...i, game: 'another-game' })); }, () => { cat.shop.till = 'off'; }, () => { delete s.env.STRIPE_KEY; delete s.env.STRIPE_SHOP_LINKS; }]) {
+      cat.shop = structuredClone(originalShop); meta.screen = structuredClone(originalScreen); change();
+      assert.doesNotMatch(await (await s.fetchSite('/owl-run/open')).text(), /data-shop-control/);
+    }
+  } finally { await browser.close(); }
 });

@@ -141,6 +141,9 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
   // it either, that refusal (for a lookup: BLOCKED, this computer's network, local testing offered) is the report.
   const cannotAsk = siteRefusal(await reachSite(base, { path: `/${game}/play`, timeout: 15_000 }), { command: 'check', play });
   if (cannotAsk?.preflight === 'local') return cannotAsk;
+  let appMeta = null;
+  try { appMeta = (await (await fetch(`${base}/api/games`)).json()).games?.find((g) => g.id === game && g.kind === 'app'); } catch { /* browser preflight below still names failures */ }
+  if (appMeta) return checkApp({ url: base, game, meta: appMeta, shots, log, report, puppeteer, chrome });
   if (shots) mkdirSync(shots, { recursive: true });
   const profiles = [];
   const browsers = [];
@@ -332,4 +335,50 @@ export async function check({ url, game, roundTimeoutMs = 150_000, rounds = 3, s
     for (const b of browsers) await b.close().catch(() => {});
     for (const p of profiles) rmSync(p, { recursive: true, force: true });
   }
+}
+
+/** Apps prove a real action crossing surfaces and a reconnect, without inventing a round. */
+export async function checkApp({ url, game, meta, shots = null, log = () => {}, report = null, puppeteer, chrome }) {
+  const proof = meta.check;
+  if (!proof || typeof proof.action !== 'string' || typeof proof.observe !== 'string') return { ok: false, command: 'check', kind: 'app', why: 'app.json check needs action and observe CSS selectors for a real shared action' };
+  if (shots) mkdirSync(shots, { recursive: true });
+  const profile = mkdtempSync(join(tmpdir(), 'homie-app-check-'));
+  let browser;
+  const surfaces = [];
+  const room = `check-${Date.now().toString(36)}`;
+  try {
+    browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: profile, timeout: LAUNCH_TIMEOUT_MS, args: chromeArgs() });
+    for (const [name, width, height, path] of [['wall', 1280, 720, 'tv'], ['phone', 390, 844, 'open'], ['phone-two', 390, 844, 'open']]) {
+      const context = await browser.createBrowserContext();
+      const page = await context.newPage();
+      await page.setViewport({ width, height, isMobile: name !== 'wall', hasTouch: name !== 'wall' });
+      const params = new URLSearchParams(proof.params ?? {}); params.set('room', room);
+      await page.goto(`${url}/${game}/${path}?${params}`, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+      await page.waitForFunction(() => window.__shell?.link?.state === 'online', { timeout: 90_000 });
+      const frame = page.frames().find((f) => /\/__game\//.test(f.url()));
+      if (!frame) throw new Error(`${name} never loaded the app`);
+      await frame.waitForSelector(proof.observe, { timeout: 30_000 });
+      surfaces.push({ name, page, frame });
+      log(`${name} connected to ${room}`);
+    }
+    const textOf = (f) => f.$eval(proof.observe, (e) => e.textContent);
+    const actor = surfaces[1];
+    await actor.frame.waitForFunction((selector) => { const el = document.querySelector(selector); return el && !el.disabled && !el.hidden; }, {}, proof.action);
+    const before = await textOf(actor.frame);
+    await actor.frame.click(proof.action);
+    await actor.frame.waitForFunction((selector, was) => document.querySelector(selector)?.textContent !== was, {}, proof.observe, before);
+    const after = await textOf(actor.frame);
+    for (const s of surfaces) await s.frame.waitForFunction((selector, wanted) => document.querySelector(selector)?.textContent === wanted, {}, proof.observe, after);
+    // The actor reloads with its ticket and room. The other screens remain live.
+    await actor.page.reload({ waitUntil: 'domcontentloaded' });
+    await actor.page.waitForFunction(() => window.__shell?.link?.state === 'online', { timeout: 90_000 });
+    actor.frame = actor.page.frames().find((f) => /\/__game\//.test(f.url()));
+    await actor.frame.waitForFunction((selector, wanted) => document.querySelector(selector)?.textContent === wanted, {}, proof.observe, after);
+    const rooms = await Promise.all(surfaces.map((s) => s.page.evaluate(() => window.__shell.room)));
+    if (rooms.some((r) => r !== room)) throw new Error('surfaces did not retain the same room');
+    if (shots) for (const s of surfaces) await s.page.screenshot({ path: join(shots, `${s.name}.jpg`), type: 'jpeg', quality: 65 });
+    report?.check?.('app-action', 'pass', { note: 'action reached wall and both phones; reconnect retained it' });
+    return { ok: true, command: 'check', kind: 'app', room, surfaces: surfaces.map((s) => s.name), action: proof.action, before, after, reconnect: true };
+  } catch (error) { return { ok: false, command: 'check', kind: 'app', why: error.message }; }
+  finally { await browser?.close().catch(() => {}); rmSync(profile, { recursive: true, force: true }); }
 }

@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path';
 import { HEX, deltaHex, hexToRgb, luminance, mix, nudge } from './colour.mjs';
 import { CAMERAS, FAMILIES, FONT_SETS, GENRES, LIGHTS, MOODS, PALETTES, PALETTE_KEYS, RENDERS, SHAPES } from './style-presets.mjs';
 import { readTheme } from './site.mjs';
-import { GAME_ID, listGames } from './studio.mjs';
+import { experienceDir, experienceFile, GAME_ID, listExperiences as listGames } from './studio.mjs';
 
 export const DECISIONS_FILE = join('codex', 'decisions.json');
 export const STATES = Object.freeze(['auto', 'steered', 'pinned', 'locked']);
@@ -35,7 +35,7 @@ const clean = (s, n = 200) => String(s ?? '').replace(/[\x00-\x1f\x7f]+/g, ' ').
 
 /** What the automatic picks read: the person's words, the codex (its concept, art text and cards), the game. */
 export function contextOf(root, id, { prompt = '' } = {}) {
-  const dir = join(root, 'games', id);
+  const dir = join(experienceDir(root, id));
   let codex = '';
   try { codex = readFileSync(join(dir, 'CODEX.md'), 'utf8').replace(/<!--[\s\S]*?-->/g, ''); } catch { codex = ''; }
   let game = {};
@@ -282,12 +282,12 @@ function castFrom(ctx) {
 
 /* ------------------------------------------------------------------ the file */
 
-const fileOf = (root, id) => join(root, 'games', id, DECISIONS_FILE);
+const fileOf = (root, id) => join(experienceDir(root, id), DECISIONS_FILE);
 
 function gameDirOf(root, id) {
   if (!GAME_ID.test(String(id ?? ''))) throw new Error(`"${id}" is not a game id`);
-  const dir = join(root, 'games', id);
-  if (!existsSync(join(dir, 'game.json')) && !existsSync(join(dir, 'CODEX.md'))) throw new Error(`no game "${id}" (no games/${id}/game.json or CODEX.md)${listGames(root).length ? `; games: ${listGames(root).map((g) => g.id).join(', ')}` : ''}`);
+  const dir = join(experienceDir(root, id));
+  if (!existsSync(experienceFile(root, id)) && !existsSync(join(dir, 'CODEX.md'))) throw new Error(`no game "${id}" (no games/${id}/game.json or CODEX.md)${listGames(root).length ? `; games: ${listGames(root).map((g) => g.id).join(', ')}` : ''}`);
   return dir;
 }
 
@@ -332,7 +332,7 @@ export function styleTokens(doc) {
 function writeStyleTokens(root, id, doc) {
   const t = styleTokens(doc);
   if (!t) return;
-  const file = join(root, 'games', id, 'style.json');
+  const file = join(experienceDir(root, id), 'style.json');
   const text = `${JSON.stringify(t, null, 2)}\n`;
   if (!existsSync(file) || readFileSync(file, 'utf8') !== text) writeFileSync(file, text);
 }
@@ -790,7 +790,7 @@ export function pickDirection(root, id, choice, { mixes = {}, manifest = null } 
 
 /** One dated line under the codex's Latest, newest first ("- 2026-10-02: …"). */
 export function addLatestLine(root, id, text) {
-  const file = join(root, 'games', id, 'CODEX.md');
+  const file = join(experienceDir(root, id), 'CODEX.md');
   if (!existsSync(file)) return false;
   const src = readFileSync(file, 'utf8');
   const line = `- ${now().slice(0, 10)}: ${clean(text, 300)}`;

@@ -1,3 +1,4 @@
+import { experienceDir, experienceFile } from './studio.mjs';
 /**
  * `homie-studio perf <game> --url <site>` — how fast a game runs, measured the same way every time, so a change can be
  * judged against the build before it (`perf compare`, lib/perf-stats.mjs).
@@ -681,7 +682,7 @@ export function perfSizes(root, game) {
   const dir = join(root, 'site', 'dist', 'games', game);
   if (!existsSync(dir)) return { ok: false, command: 'perf sizes', why: `no build of ${game}: run npm run build first` };
   let cover = null;
-  try { cover = JSON.parse(readFileSync(join(root, 'games', game, 'game.json'), 'utf8')).cover ?? null; } catch { /* none */ }
+  try { cover = JSON.parse(readFileSync(experienceFile(root, game), 'utf8')).cover ?? null; } catch { /* none */ }
   const files = listFiles(dir).map((f) => {
     const buf = readFileSync(join(dir, f));
     const kind = kindOf(f);

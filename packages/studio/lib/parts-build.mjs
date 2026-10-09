@@ -1,3 +1,4 @@
+import { experienceDir, experienceFile } from './studio.mjs';
 /**
  * GAME PARTS IN THE BUILD (parts/PARTS.md). Three small things lib/build.mjs and the deploy plan call, so the build
  * itself stays one line longer in each place:
@@ -63,7 +64,7 @@ export function partsPlugin(root, game = null) {
       });
       // A brought-in part a game imports is that game's to credit, even when it was added without naming the game.
       build.onEnd(() => {
-        if (!game || !used.size || !existsSync(join(root, 'games', game))) return;
+        if (!game || !used.size || !existsSync(join(experienceDir(root, game)))) return;
         try {
           const now = readOrigins(root);
           let changed = false;
@@ -112,7 +113,7 @@ export function buildParts(root, dist, { studio = {}, log = () => {} } = {}) {
       writeFileSync(join(dest, 'part.json'), `${JSON.stringify(publicPart({ ...packed, share: true }))}\n`);
     }
     // The game it came out of, by the name the studio gives it.
-    const g = part.from?.game;
+    const g = part.from?.game ?? part.from?.app;
     if (g && !names.has(g)) names.set(g, gameFacts(root, g).name);
     index.push({ ...part, ...(g ? { from: { ...part.from, name: names.get(g) } } : {}), url: `/parts/${id}/${versions.at(-1)}/`, page: `/parts/${id}/`, versions });
     log(`shared part ${id} (${versions.join(', ')})`);
@@ -142,7 +143,7 @@ export function partsPublishReport(root) {
   for (const [ref, e] of Object.entries(lock.parts)) for (const g of e.games ?? []) { if (!byGame.has(g)) byGame.set(g, []); byGame.get(g).push([ref, e]); }
   const games = [];
   for (const [game, list] of [...byGame].sort(([a], [b]) => a.localeCompare(b))) {
-    if (!existsSync(join(root, 'games', game, 'game.json'))) continue;
+    if (!existsSync(experienceFile(root, game))) continue;
     const issues = licenceIssues(partItems(root, { game }), { game: gameFacts(root, game) });
     games.push({
       game,

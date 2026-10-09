@@ -41,7 +41,7 @@ import { extname, join, relative, resolve, sep } from 'node:path';
 import { latestFeedFor, summarize } from './feed-summary.mjs';
 import { escapeHtml as esc, renderMarkdown } from './markdown.mjs';
 import { readTheme } from './site.mjs';
-import { GAME_ID, listGames, readStudio } from './studio.mjs';
+import { experienceDir, experienceFile, GAME_ID, listExperiences as listGames, readStudio } from './studio.mjs';
 import { decisionRows, readDecisions } from './decisions.mjs';
 
 export const CODEX_FILE = 'CODEX.md';
@@ -514,7 +514,7 @@ function codexGame(root, id, { create = false } = {}) {
   const game = listGames(root).find((g) => g.id === id);
   if (game) return game;
   if (!GAME_ID.test(String(id ?? ''))) return null;
-  const dir = join(root, 'games', id);
+  const dir = join(experienceDir(root, id));
   if (existsSync(join(dir, 'game.json'))) return null;
   return existsSync(join(dir, CODEX_FILE)) || create ? { id, dir, name: null, planned: true } : null;
 }

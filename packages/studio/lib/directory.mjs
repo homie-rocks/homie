@@ -5,7 +5,7 @@
  * nobody can list games under someone else's site.
  */
 import { request } from './net.mjs';
-import { listGames, readLocal, readStudio, siteUrl, writeLocal } from './studio.mjs';
+import { listExperiences as listGames, readLocal, readStudio, siteUrl, writeLocal } from './studio.mjs';
 import { licenceProblems, readManifest } from './asset-manifest.mjs';
 import { partsPlanLines, partsPublishReport } from './parts-build.mjs';
 

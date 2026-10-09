@@ -28,7 +28,7 @@ export async function partsCommand(root, sub, positional, flags, { log = () => {
   const str = (k) => (typeof flags.get(k) === 'string' ? flags.get(k) : null);
   switch (sub ?? 'find') {
     case 'find': return findParts(root, positional.slice(2).join(' '), { kind: str('kind'), tag: str('tag'), license: str('license'), builds: str('builds'), fetch, hub: str('hub') });
-    case 'new': return newPart(root, arg, { kind: str('kind') ?? 'mechanic', name: str('name'), from: str('from'), paths: positional.slice(3) });
+    case 'new': return newPart(root, arg, { kind: str('kind') ?? 'mechanic', name: str('name'), from: str('from'), paths: positional.slice(3), uses: str('uses')?.split(',') });
     case 'check': return checkParts(root, arg ?? null, { write: true });
     case 'share': return arg ? sharePart(root, arg, true) : { ok: false, command: 'parts share', why: 'name the part to share' };
     case 'unshare': return arg ? sharePart(root, arg, false) : { ok: false, command: 'parts unshare', why: 'name the part to stop sharing' };
@@ -49,7 +49,7 @@ function addLines(r) {
   if (r.was && r.same) L.push(`${r.ref} ${r.version} is already here and unchanged.`);
   else if (r.was) L.push(`${r.ref}: ${r.was} → ${r.version}. ${[r.changes.changed.length ? `changed: ${r.changes.changed.join(', ')}` : '', r.changes.added.length ? `new: ${r.changes.added.join(', ')}` : '', r.changes.removed.length ? `gone: ${r.changes.removed.join(', ')}` : ''].filter(Boolean).join('; ') || 'the same files'}. Your tuning.json was kept${r.replaced?.length ? `; REPLACED your edited ${r.replaced.join(', ')} as asked` : ''}.`);
   else L.push(`${r.name} ${r.version} (${r.kind}) from ${r.host} is in ${r.dir}: ${r.files} files, every one checked against its SHA-256. It is this studio's to tune now.`);
-  if (r.from?.name || r.from?.game) L.push(`  It came out of ${r.from.name ?? r.from.game}${r.from.studio ? ` by ${r.from.studio}` : ''}.`);
+  if (r.from?.name || (r.from?.game ?? r.from?.app)) L.push(`  It came out of ${r.from.name ?? (r.from.game ?? r.from.app)}${r.from.studio ? ` by ${r.from.studio}` : ''}.`);
   L.push(`  Licence: ${r.license ?? 'NONE NAMED'} (asks ${r.asks ?? 'unknown'})${r.attribution ? `; credit: ${r.attribution}` : ''}`);
   if (r.credits?.length) L.push(`  Credited in ${r.credits.join(', ')}.`);
   else if (!r.game) L.push('  It is credited in a game\'s credits when that game imports it (the build does it).');
@@ -69,7 +69,7 @@ export function partsLines(r) {
       for (const p of r.results) {
         L.push(`${p.name} (${p.kind}) ${p.version ?? ''} · ${p.license ?? 'no licence named'} · ${p.where === 'hub' ? p.ref : p.where === 'here' ? `${p.ref} (already here)` : `${p.id} (this studio's own${p.share ? ', shared' : ', private'})`}`);
         if (p.summary) L.push(`  ${p.summary}`);
-        if (p.from?.name || p.from?.game) L.push(`  from ${p.from.name ?? p.from.game}${p.from.studio ? ` by ${p.from.studio}` : ''}`);
+        if (p.from?.name || (p.from?.game ?? p.from?.app)) L.push(`  from ${p.from.name ?? (p.from.game ?? p.from.app)}${p.from.studio ? ` by ${p.from.studio}` : ''}`);
         const bits = [costWords(p.cost) && `costs ${costWords(p.cost)}`, buildsWords(p.requires) && `builds on ${buildsWords(p.requires)}`, p.rig && `rig ${p.rig}`, p.netplay && `in a room: ${p.netplay}`].filter(Boolean);
         if (bits.length) L.push(`  ${bits.join(' · ')}`);
         L.push(`  ${p.say}`);

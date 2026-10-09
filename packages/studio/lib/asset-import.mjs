@@ -1,3 +1,4 @@
+import { experienceDir, experienceFile } from './studio.mjs';
 /**
  * A MODEL FILE INTO A GAME: the person's own (imported), or one a provider generated on their account (the models
  * skill's image-to-3D). `homie-studio assets add <id> --file <model> --license <kind>`.
@@ -54,7 +55,7 @@ export function screenImport(path) {
  * the concept and mesh calls with their receipts and prices), slug (the art job's folder).
  */
 export async function importModel(root, id, file, opts = {}) {
-  const gdir = join(root, 'games', id);
+  const gdir = experienceDir(root, id);
   if (!existsSync(join(gdir, 'game.json')) && !existsSync(join(gdir, 'CODEX.md'))) throw new Error(`no game "${id}"`);
   const path = resolve(root, file);
   const route = opts.route === 'generated' ? 'generated' : 'imported';
@@ -117,7 +118,7 @@ export async function importModel(root, id, file, opts = {}) {
  * mesh fix it); one stale only on its budgets is not.
  */
 export async function redoModel(root, id, assetId) {
-  const gdir = join(root, 'games', id);
+  const gdir = experienceDir(root, id);
   const e = readManifest(root, id).assets.find((a) => a.id === assetId);
   if (!e) throw new Error(`no asset "${assetId}" in games/${id}/assets/manifest.json`);
   const raw = (e.files ?? []).find((f) => f.role === 'raw');

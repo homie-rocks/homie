@@ -634,9 +634,9 @@ test('everything that must come from the site\'s own pages still refuses an app,
   }
   // The index and the worker's own source: one place opens anything to an app, and nothing allows credentials.
   const index = read('worker', 'index.mjs');
-  assert.equal(index.split('appCors(').length, 2, 'appCors is used once: on an app\'s Lobby call, at the Worker\'s own door');
+  assert.equal(index.split('appCors(').length, 3, 'CORS covers Lobby and public app records, including record preflight');
   assert.match(index, /const appLobby = isAppOrigin\(request\) && \/\^\\\/\[\^\/\]\+\\\/api\\\/lobby\\\/\?\$\/\.test\(url\.pathname\);/);
-  assert.equal(index.split('isAppOrigin(').length, 3, 'there, and where the Lobby is told the caller is an app');
+  assert.equal(index.split('isAppOrigin(').length, 4, 'Lobby and records entry points, and where the Lobby is told the caller is an app');
   for (const f of readdirSync(join(PKG, 'worker')).filter((n) => n.endsWith('.mjs'))) assert.doesNotMatch(readFileSync(join(PKG, 'worker', f), 'utf8'), /['"]access-control-allow-credentials['"]\s*:/i, `${f} never allows credentials across origins`);
   assert.doesNotMatch(read('worker', 'office.mjs').split('export function sameOrigin')[1].split('\n}')[0], /app|capacitor/, 'sameOrigin knows no app');
 });

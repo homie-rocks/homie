@@ -40,7 +40,7 @@ import { whyFailed } from './net.mjs';
 import { repoOf } from './repo.mjs';
 import { keptRoutes, readConfig, readZoneRoutes, routesOf, shadowedDomain, wideRouteRefusal, zoneFinding } from './routes.mjs';
 import { ensureLocalIgnored, ensureMigrations, migrationWord, wranglerConfig } from './scaffold.mjs';
-import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layoutOf, listGames, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
+import { LOCAL_STATE, configPath, domainOrigin, isRulesGame, isWorkersDev, layoutOf, listExperiences as listGames, readLocal, readStudio, siteUrl, workerDir, writeLocal, writeStudio } from './studio.mjs';
 import { projectsCloudflareEnv } from './projects-env.mjs';
 
 const ANSI = /\u001b\[[0-9;]*m/g;

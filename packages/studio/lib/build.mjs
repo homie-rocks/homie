@@ -1,3 +1,4 @@
+import { appProblems } from '../worker/app-format.mjs';
 /**
  * `homie-studio build` — every game in games/ bundled into site/dist, plus the
  * catalogue the Worker serves (games.json).
@@ -55,7 +56,7 @@ import { buildMedia } from './media.mjs';
 import { buildSiteFiles, isoDate, landingOf, readPosts, readTheme } from './site.mjs';
 import { checkJsonLd } from './schema-check.mjs';
 import { SCHEMA_REFUSED } from '../worker/schema.mjs';
-import { PACKAGE_ROOT, isRulesGame, listGames, readStudio } from './studio.mjs';
+import { PACKAGE_ROOT, isRulesGame, listExperiences as listGames, readStudio } from './studio.mjs';
 
 // The rules build brings a JavaScript parser with it. It is loaded when a build first needs it, never when this
 // module is: Homie for Claude Desktop starts the toolkit with no node_modules beside it (scripts/desktop.mjs).
@@ -78,7 +79,7 @@ import { buildParts, partsPlugin } from './parts-build.mjs';
 // RULES ON THE SERVER (NETPLAY.md section 29): a game declaring a room object and src/rules.ts builds as a view bundle plus a rules module.
 
 /** Never copied into a static game's served folder. */
-const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);
+const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'app.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);
 const LOADERS = { '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file', '.webp': 'file', '.mp3': 'file', '.ogg': 'file', '.wav': 'file', '.m4a': 'file', '.glb': 'file', '.gltf': 'file', '.bin': 'file', '.hdr': 'file', '.svg': 'file', '.json': 'json', '.woff2': 'file', '.ttf': 'file' };
 
 /** The port toolkit as one classic script (window.HomiePort), for static games. Built once per build. */
@@ -269,7 +270,7 @@ export function netplayOf(g, out = null) {
  */
 export function seatsFor(g, net = netplayOf(g)) {
   const named = [net.maxPlayers, net.players?.max, g.players?.max].map((n) => Math.floor(Number(n))).find((n) => Number.isFinite(n) && n >= 1);
-  const asked = named ?? 8;
+  const asked = named ?? (g.kind === 'app' ? 32 : 8);
   const max = Math.min(SEAT_MAX, asked);
   const minNamed = [net.minPlayers, net.players?.min, g.players?.min].map((n) => Math.floor(Number(n))).find((n) => Number.isFinite(n) && n >= 1);
   return { min: Math.min(max, minNamed ?? 1), max, asked };
@@ -495,6 +496,7 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   const live = join(root, 'site', 'dist');
   const games = listGames(root).filter((g) => !only || g.id === only);
   if (only && !games.length) throw new Error(`no game "${only}" in games/`);
+  for (const g of games) if (g.kind === 'app') { const bad = appProblems(g); if (bad.length) throw new Error(`apps/${g.id}/app.json: ${bad.join('; ')}`); }
   // `--types`: the games' TypeScript is checked first (esbuild only strips types, it never reads them), and a type
   // error stops the build before anything is built.
   const typed = types ? typecheck(root, games, { log }) : null;
@@ -601,6 +603,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     const bundle = bundleOf(dir);
     builds[g.id] = { hash: gameDigest(dir), ...(bundle ? { bundle } : {}) };
     return {
+      ...(g.kind === 'app' ? { kind: 'app', roles: g.roles, surfaces: g.surfaces, words: g.words, records: g.records, parts: g.parts ?? [], check: g.check } : {}),
       id: g.id, name: g.name ?? g.id, blurb: g.blurb ?? '', players: { min, max },
       ...(ui ? { ui } : {}),
       // A rules game's round is its rules' own (`room.rounds`), and its movement a per-kind choice there: game.json's

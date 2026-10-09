@@ -49,14 +49,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { USAGES, licenceProblems, readManifest, removeAsset, rightsMarkdown, setUsage, syncCredits, usageOf, writeRights } from './asset-manifest.mjs';
 import { CATALOGUE_IDS, PHASES, blastRadius, decisionRows, derivedPrompt, initDecisions, lockDecision, oneLine, phaseProgress, pickDirection, readDecisions, setDecision, staleAssets, steerDecision, unlockDecision } from './decisions.mjs';
-import { listGames } from './studio.mjs';
+import { experienceDir, experienceFile, listExperiences as listGames } from './studio.mjs';
 import { checkLines } from './asset-check.mjs';
 import { animPlan as animPlanOf } from './characters.mjs';
 
 /** The game a command means: the one named, else the only one. */
 function gameOf(root, id, command) {
   const games = listGames(root);
-  const planned = id && existsSync(join(root, 'games', id, 'CODEX.md'));
+  const planned = id && existsSync(join(experienceDir(root, id), 'CODEX.md'));
   if (id && (games.some((g) => g.id === id) || planned)) return id;
   if (!id && games.length === 1) return games[0].id;
   throw new Error(`name the game: homie-studio ${command} <id>${games.length ? ` (${games.map((g) => g.id).join(', ')})` : ''}`);

@@ -80,9 +80,11 @@ test('only embed and its nested game instance admit configured ancestors; previe
   assert.match(await preview.text(), /http:\/\/localhost:8787\/test\/play\/embed/);
 });
 
-test('Chrome: cross-origin sandbox, no storage, actual netplay seat and input, safe exits', { timeout: 60000 }, async t => {
+for (const kind of ['game', 'app']) test(`Chrome: ${kind} cross-origin sandbox, no storage, actual netplay seat and input, safe exits`, { timeout: 60000 }, async t => {
   if (!process.env.CHROME_PATH) { t.skip('Set CHROME_PATH for the cross-origin Chrome proof.'); return; }
   const cat = catalogue();
+  const action = kind === 'app' ? 'open' : 'play';
+  if (kind === 'app') Object.assign(cat.games[0], { kind, roles: { customer: { signIn: false, can: [] } }, surfaces: { phone: 'customer' }, records: { persist: false, collections: {} } });
   const room = new NetRoom({ code: 'pub-1', maxPlayers: 4 });
   const received = []; let position = 0;
   room.setServerHost({ frame(m) { if (m.t === 'in') { position += Number(m.s[0]?.[1]) || 0; room.hostFrame({ t: 'snap', k: position, d: { position } }); } }, facts: () => ({}) });
@@ -116,11 +118,11 @@ test('Chrome: cross-origin sandbox, no storage, actual netplay seat and input, s
       for (const key of ['localStorage', 'sessionStorage']) Object.defineProperty(window, key, { get() { throw new DOMException('Blocked', 'SecurityError'); } });
       Object.defineProperty(document, 'cookie', { get() { throw new DOMException('Blocked', 'SecurityError'); }, set() { throw new DOMException('Blocked', 'SecurityError'); } });
     });
-    await page.goto(`http://localhost:${server.address().port}/test/play/preview`);
+    await page.goto(`http://localhost:${server.address().port}/test/${action}/preview`);
     await page.waitForFunction(() => document.querySelector('iframe').sandbox.value === 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     let shell, inner;
     for (let n = 0; n < 100; n++) {
-      shell = page.frames().find(f => f.url().includes('/play/embed'));
+      shell = page.frames().find(f => f.url().includes('/' + action + '/embed'));
       inner = page.frames().find(f => f.url().includes('/__game/'));
       if (inner && await inner.evaluate(() => typeof window.net?.seat === 'number').catch(() => false)) break;
       await new Promise(r => setTimeout(r, 100));
@@ -136,9 +138,22 @@ test('Chrome: cross-origin sandbox, no storage, actual netplay seat and input, s
     await shell.click('[data-share-toggle]');
     await shell.click('[data-studio-open]');
     const target = await popupPromise; const popup = await target.page();
-    await popup.waitForFunction(() => location.pathname === '/test/play');
+    await popup.waitForFunction(action => location.pathname === '/test/' + action, {}, action);
+    await popup.waitForFunction(() => !!document.querySelector('iframe.game')?.src);
+    const topGame = popup.frames().find(f => f.url().includes('/__game/'));
+    await topGame.waitForFunction(() => typeof net.seat === 'number');
+    await topGame.click('#step');
+    await topGame.waitForFunction(() => document.querySelector('#result').textContent === '2');
     assert.equal(await popup.evaluate(() => window.top === window), true);
     assert.equal((await shell.$eval('[data-studio-open]', a => a.href)).includes('room=pub-1'), true);
+    await popup.close();
+    await page.goto(`http://localhost:${server.address().port}/test/${action}/embed`);
+    await page.waitForFunction(() => document.documentElement.classList.contains('player-top'));
+    let topInner;
+    for (let n = 0; n < 100; n++) { topInner = page.frames().find(f => f.url().includes('/__game/')); if (topInner) break; await new Promise(r => setTimeout(r, 50)); }
+    await topInner.waitForFunction(() => typeof net.seat === 'number');
+    await topInner.click('#step');
+    await topInner.waitForFunction(() => document.querySelector('#result').textContent === '3');
     assert.deepEqual(errors, []);
   } finally {
     clearInterval(beat); if (browser) await browser.close();
@@ -177,11 +192,11 @@ test('shop in an embed offers a real new-tab studio link and never creates check
   };
   const frame = { contentWindow: { postMessage() {} } };
   const w = { __HOMIE_PLAY: { embed: true, game: 'test', shop: { items: 1 } }, top: {}, addEventListener() {} };
-  runInNewContext(SHOP_SHELL_JS, { window: w, document: { body: node('body'), createElement: node, addEventListener() {}, querySelector: s => s === 'iframe.game' ? frame : null },
+  runInNewContext(SHOP_SHELL_JS, { window: w, document: { body: node('body'), createElement: node, addEventListener() {}, querySelectorAll: () => [], querySelector: s => s === 'iframe.game' ? frame : null },
     fetch: async (url, init) => { calls.push([url, init.method]); return { json: async () => ({ owns: [] }) }; }, setTimeout, clearTimeout });
-  w.__shell.shop.open();
+  w.__shell.shop.open('supporter');
   const link = nodes.find(n => n.tag === 'a');
-  assert.equal(link.attrs.href, '/shop/?game=test'); assert.equal(link.attrs.target, '_blank');
+  assert.equal(link.attrs.href, '/shop/?game=test&item=supporter'); assert.equal(link.attrs.target, '_blank');
   assert.equal(link.attrs.rel, 'noopener noreferrer');
   assert.match(link.textContent, /Buy on the studio/);
   await Promise.resolve(); assert.ok(calls.every(([url, method]) => method === 'GET' && url.startsWith('/api/player/owns')));
@@ -252,8 +267,21 @@ test('the player falls back to the room Play falls back to, keeps a visit, and s
   assert.match(page, /var keeps = !boot\.embed \|\| !framed;/);
   assert.match(page, /var EMBED_ROOM = \/\^\(\?:pub-\[1-9\]\[0-9\]\*\|main\)\$\/;/);
   // Signing in from the player comes back to Play in the same room.
-  assert.match(page, /state\.returnPath = function \(\) \{ return boot\.embed \? '\/' \+ boot\.game \+ '\/play'/);
+  assert.ok(page.includes("boot.kind === 'app' ? '/open' : '/play'"));
   // The room sheet keeps to the safe area, and the way out is its first row.
   assert.match(page, /\.sheet\{position:fixed;inset:calc\(max\(8px,env\(safe-area-inset-top\)\) \+ 48px\) max\(8px,env\(safe-area-inset-right\)\)/);
   assert.ok(page.indexOf('data-studio-open') < page.indexOf('data-invite>'));
+});
+
+ test('apps share player metadata, switches and the open/embed route', async () => {
+  const cat = catalogue(); const app = Object.assign(cat.games[0], { kind: 'app', name: 'Workshop', blurb: '', roles: { customer: { signIn: false, can: [] } }, surfaces: { phone: 'customer' }, records: { persist: false, collections: {} } });
+  const env = fixture(cat);
+  for (const path of ['/test/', '/test/open', '/test/open/embed']) {
+    const res = await get(env, path); assert.equal(res.status, 200, path);
+    const meta = tags(await res.text()); assert.equal(meta['twitter:player'], 'https://studio.example/test/open/embed');
+    assert.equal(meta['twitter:image'], 'https://studio.example/games/test/cover.png');
+    if (path !== '/test/') assert.match(meta['twitter:description'], /Open Workshop/);
+  }
+  app.playerCard = false;
+  assert.equal((await get(fixture(cat), '/test/open/embed')).status, 404);
 });

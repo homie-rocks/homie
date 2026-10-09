@@ -32,7 +32,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { askedFor, withKey } from './office.mjs';
 import { runner } from './cloudflare.mjs';
-import { listGames, readStudio, siteUrl } from './studio.mjs';
+import { listExperiences as listGames, readStudio, siteUrl } from './studio.mjs';
 import { SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
 import {
   KEY_SHAPE, STRIPE_VERSION, StripeError, WEBHOOK_SECRET_SHAPE, createWebhookEndpoint, expireCheckoutSession, isPermissionError, listWebhookEndpoints, modeOf,
