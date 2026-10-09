@@ -324,3 +324,36 @@ stripe-mock, separately configured Wrangler browser suites, and an opt-in
 Miniflare comparison. The dedicated remote-MCP workerd/Chrome test runs in the
 full suite; the separate Brass & Tide proof used actual local Wrangler.
 The plugin's skipped case requires `HOMIE_PLAYTEST_URL`, a live deployed studio.
+
+## PR #78 CI repair and slice 6 integration
+
+Rebased onto `91be345` (PR #77), retaining main's prediction implementation and released changelog sections unchanged. This feature is now studio **0.39.0** / plugin **0.40.0**. The public template and template fingerprints were regenerated with `scripts/template.mjs` and `scripts/studio-template-history.mjs`.
+
+The original CI run was `37992524039`, Node 24 job `114030096628`. Its failed log says:
+
+- `2026-10-09T21:36:49.7463775Z`: `MCP uses the protocol binding for challenges and receipts` failed: `-32603 !== -32042` (`machine-payments.test.mjs:110`).
+- `2026-10-09T21:36:49.7470255Z`: `MCP error -32603: Missing optional dependency "@modelcontextprotocol/sdk". Install it to use mppx MCP SDK transports.`
+- `2026-10-09T21:36:49.7507343Z`: `node_modules/mppx/dist/server/Mppx.js:1836:46: ERROR: Could not resolve "@modelcontextprotocol/sdk/types.js"` in the selling bundle test. The workerd purchase tests and interrupted-deploy assertions failed downstream of the same missing module.
+
+A clean install with Node 24.14.1 / npm 11.11.0 passed the focused reproduction. Matching CI's **Node 24.21.0 / npm 11.19.0** reproduced both the protocol error and the bundle failure. The payment server's aliased SDK did not satisfy mppx's canonical optional peer; npm 11.19 omitted the root optional SDK while installing agents' exact legacy peer in the studio workspace. The fix declares `@modelcontextprotocol/sdk@1.30.0` explicitly in studio (matching agents 0.28.0's exact peer and mppx's >=1.25.0 peer), and in the root development dependencies so hoisted mppx resolves it in workspace tests too. The existing purchase server stays on its aliased SDK 1.32.1. The lockfile now has a required canonical SDK, with no optional orphan or nested conflicting copy. No payment or room assertion was weakened.
+
+Node 22 eventually passed the original run in 21m16s; Node 24 failed normally in 19m26s. Neither original job remained hung. The new MCP OAuth test and the existing purchase-client tests did, however, leave client cleanup on the success path (one purchase client was never closed). They now close clients in `finally`, including assertion/connect failures, before disposing their servers. The Cloudflare stateless MCP handler already closes its product and transport. Test commands set a hard 30-minute limit per test file (including handles left alive after tests finish); a deliberately unclosed interval was verified to exit nonzero under this limit. File concurrency is two to bound concurrent Chrome/workerd load.
+
+The new room-tool regression runs signed remote calls through the actual relay and, for prediction, the actual rules host with slice 6 shared movement. It checks sit/look/act/speak/stand, validated goals and rate limits, prediction acknowledgements, app role loss and connection revocation. Legacy browser-hosted games and app rooms exercise the same path. The real-Chrome OAuth approval, SDK discovery/calls and revocation test also passes on Node 24.21.0.
+
+The first full Node 24 gate also caught an incorrect changelog-test assumption: every section older than the package version had to have a PR link. Main's merged 0.38.0 section has none. The test now treats absent PR links as advisory and validates any links that are present, consistent with the release checker's treatment of absent tag links. This preserves main's released sections byte for byte rather than adding metadata retrospectively.
+
+That first full run completed normally (2,222 passed, two failed, five optional skips). Its other failure was `mcp.test.mjs:160`: the expected `/comet-crews/` completion message was instead the valid `The build is still running ... 20 s so far` response. Slice 6's rules build can outlive the first MCP response window, especially during the browser suite. The workflow test now follows `studio_job` to completion with a two-minute deadline, still requiring a successful result naming the game and a completed build progress stage. It does not extend the production response window or weaken the completion assertions.
+
+The desktop packaging gate exposed a separate confirmed handle leak: its stdio client left every successful request's 60-second timer alive, delaying exit after the success report. The extracted checker helper now clears timers on replies, rejects and clears pending requests on close/error, and bounds child shutdown. The packaging check closes every client in `finally`. Two process-level regressions require natural exit after a reply and after an early server exit, within five seconds (no force-exit/unref). Both passed under Node 24, and the desktop gate was rerun after this fix. This was a delayed checker exit, not the cause of the original Packages job failure.
+
+### Final local repair gates
+
+Every requested gate passed sequentially on both Node 22.23.3 / npm 10.9.9 and Node 24.21.0 / npm 11.19.0: clean `npm ci`, build, package tests with real Chrome and stripe-mock, plugin tests, validate, desktop check, changelog check and publish dry run. Nothing was deployed or published.
+
+| Runtime | Package tests | Plugin tests | Other six gates |
+| --- | --- | --- | --- |
+| Node 22.23.3 | 2,226 passed, zero failed, five optional skips | 120 passed, zero failed, one optional skip | Passed |
+| Node 24.21.0 | 2,224 passed, zero failed, five optional skips; two later desktop cleanup regressions also passed | 120 passed, zero failed, one optional skip | Passed |
+
+The Node 24 full suite preceded extraction of the desktop checker helper; its two process-exit regressions and the desktop gate were rerun afterward. Node 22's full suite includes those regressions. Both full suites passed all 37 real-Chrome prediction matrix cases and the new MCP room-tool cases for rules prediction, legacy games and apps. The publish checks identify only studio 0.39.0 as new, with 22 package versions already on npm. CI on the pushed revision is the remaining gate.

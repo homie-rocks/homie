@@ -115,3 +115,65 @@ test('app schema discovery reveals the caller’s usable roles and collection fi
   const staff=await tool.handler({app:'pub'},{caller:{id:'person',owner:false}});assert.deepEqual(staff.collections.jobs.fields.state.enum,['ready','road-test']);
  }finally{DB.sql.close();}
 });
+
+// Exercise the real relay and host, not a fake seat: prediction games and old
+// browser hosts use the same marked guide seat, vocabulary and revocation path.
+for (const mode of ['prediction', 'legacy', 'app']) test(`MCP room tools: ${mode} sit, look, act, speak, stand and revoke`, {timeout:30000}, async()=>{
+ const {mkdtempSync,realpathSync,rmSync}=await import('node:fs');
+ const {tmpdir}=await import('node:os');
+ const {join}=await import('node:path');
+ const {NetRoom,DEFAULT_POLICY}=await import('../worker/room.mjs');
+ const {remoteSeat,roomSeat}=await import('../worker/mcp-room.mjs');
+ const {verifyControl}=await import('../worker/office.mjs');
+ const {fakeClock,loadGame,writeGame,roomRig}=await import('./rules-kit.mjs');
+ const {source,vocab}=await import('./rules-feature-kit.mjs');
+ const DB=database(),scratch=realpathSync(mkdtempSync(join(tmpdir(),'homie-mcp-room-')));
+ let rig,room,person;const clock=fakeClock(),frames=[];
+ try{
+  DB.sql.exec("CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT);INSERT INTO mcp_connections VALUES('one','alice','client',1,0);INSERT INTO app_roles VALUES('experience','staff','alice')");
+  if(mode==='prediction'){
+   const L=await loadGame(scratch,writeGame(scratch,'prediction',{rules:source}),'prediction');
+   const compiled=L.R.compileRules(L.def,{settings:L.R.roomSettings({}).settings,seats:4});
+   assert.ok(compiled.kinds.some(k=>k.move),'uses slice 6 shared movement');
+   rig=roomRig(L,compiled,{maxPlayers:4,roomOpts:{rules:true}});room=rig.room;
+   person=rig.conn();room.setPolicy({...DEFAULT_POLICY,at:20,kind:'hybrid',speech:'lines',aiSeats:1,brain:'workers-ai'});
+   person.hello('Person',{rev:11,rules:true});rig.run(100);
+  }else{
+   room=new NetRoom({code:'r',maxPlayers:4,now:clock.now});
+   room.setPolicy({...DEFAULT_POLICY,at:20,kind:'hybrid',speech:'lines',aiSeats:1,brain:'workers-ai'});
+   person=room.attach({send:text=>frames.push(JSON.parse(text)),close(){},buffered:()=>0});
+   person.onMessage(JSON.stringify({t:'hello',v:1,rev:7,name:'Person',want:'play',canHost:true,caps:['agents']}));
+  }
+  const table={env:{DB},game:'experience',readVocab:async()=>room.setVocabulary(vocab)};
+  const env={DB,TABLE:{idFromName:name=>name,get:name=>({async fetch(url,init){
+   assert.equal(name,'experience/r');const ctl=JSON.parse(init.body);
+   assert.equal(await verifyControl(env,ctl,{game:'experience',room:'r'}),null);
+   const result=await roomSeat(table,room,ctl);return Response.json(result,{status:result.ok?200:400});
+  }})}};
+  const meta={id:'experience',players:{max:4},servers:[{id:'public',name:'Shared',policy:'hybrid',aiSeats:1}],...(mode==='app'?{kind:'app',roles:{staff:{signIn:true,can:[]}}}:{})};
+  const cat={games:[meta]},caller={id:'alice',name:'Guide',owner:false,connection:'one'};
+  const call=(op,args={})=>remoteSeat(env,cat,caller,op,{game:'experience',room:'r',role:'staff',...args});
+  const sat=await call('sit');assert.equal(sat.ok,true);assert.ok(Number.isInteger(sat.seat));assert.match(sat.name,/AI/);
+  assert.equal(room.clients.get(table.mcpSeats.get('one').handle.id).canHost,false);
+  if(rig){rig.run(1500);}else person.onMessage(JSON.stringify({t:'ev',k:'agent:view',to:sat.seat,d:{nearby:7,places:['camp']}}));
+  const looked=await call('look');assert.deepEqual(looked.view.places,['camp']);assert.deepEqual(looked.vocabulary,vocab);
+  await assert.rejects(call('act',{goal:'visit',args:{place:'elsewhere'}}),/refused/);
+  assert.equal((await call('act',{goal:'visit',args:{place:'camp'}})).ok,true);
+  await assert.rejects(call('act',{goal:'guard'}),/refused/,'rate limit is enforced');
+  assert.equal((await call('speak',{line:'hello'})).ok,true);
+  if(rig){
+   rig.run(100);assert.ok(person.of('ev').some(f=>f.k==='agent:goal'),'goal reached the rules host');
+   assert.ok(person.of('snap').some(f=>f.c?.length),'prediction snapshots still carry input acknowledgements');
+  }else assert.ok(frames.some(f=>f.k==='agent:do'&&f.d.goal==='visit'),'goal reached the browser host');
+  assert.equal((await call('stand')).ok,true);assert.equal(table.mcpSeats.size,0);
+  assert.equal((await call('sit')).ok,true);
+  if(mode==='app'){
+   DB.sql.exec('DELETE FROM app_roles');await assert.rejects(call('look'),/app role required/);
+   DB.sql.exec("INSERT INTO app_roles VALUES('experience','staff','alice')");
+  }
+  DB.sql.exec('UPDATE mcp_connections SET revoked=1');await assert.rejects(call('look'),/revoked/);assert.equal(table.mcpSeats.size,0);
+ }finally{
+  for(const client of [...(room?.clients.values()??[])])room.onClose(client,'test cleanup');
+  rig?.host.stop();DB.sql.close();rmSync(scratch,{recursive:true,force:true});
+ }
+});

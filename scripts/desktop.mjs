@@ -14,7 +14,9 @@
  * Validation and packing use Anthropic's own CLI, @anthropic-ai/mcpb, pinned. Nothing is signed here (see
  * desktop/README.md).
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { talk } from './test/mcp-stdio.mjs';
+export { talk } from './test/mcp-stdio.mjs';
 import { deflateSync } from 'node:zlib';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,30 +35,6 @@ function mcpb(args, cwd = ROOT) {
   const r = spawnSync('npx', ['-y', MCPB, ...args], { cwd, encoding: 'utf8', env: { ...process.env, npm_config_update_notifier: 'false' }, maxBuffer: 32 * 1024 * 1024 });
   if (r.status !== 0) throw new Error(`mcpb ${args.join(' ')} failed:\n${r.stdout}${r.stderr}`);
   return r.stdout;
-}
-
-/** A host's side of the stdio transport, for one server process. */
-export function talk(cmd, args, { cwd, env = {} } = {}) {
-  const child = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
-  let buf = ''; let seq = 0; let err = ''; const waiting = new Map();
-  child.stderr.on('data', (d) => { err += d; });
-  child.stdout.on('data', (d) => {
-    buf += d;
-    let nl;
-    while ((nl = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
-      if (!line.trim()) continue;
-      const m = JSON.parse(line);
-      if (waiting.has(m.id)) { waiting.get(m.id)(m); waiting.delete(m.id); }
-    }
-  });
-  const request = (method, params) => new Promise((resolve, reject) => {
-    const id = ++seq; waiting.set(id, resolve);
-    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-    setTimeout(() => { if (waiting.has(id)) reject(new Error(`no answer to ${method}\n${err.slice(-1500)}`)); }, 60_000);
-  });
-  const close = () => new Promise((r) => { if (child.exitCode !== null) r(); else { child.on('close', r); child.stdin.end(); } });
-  return { request, close, stderr: () => err };
 }
 
 /** The extension's icon as a PNG: a rounded yellow square with a darker base and a dark "H", anti-aliased edges. */
@@ -116,11 +94,12 @@ const manifest = JSON.parse(readFileSync(join(ROOT, 'desktop', 'manifest.json'),
 manifest.version = version;
 {
   const s = talk(process.execPath, [join(STAGE, 'server', 'index.mjs'), '--studios', join(tmpdir(), 'homie-desktop-none')], { cwd: STAGE });
-  await s.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'desktop.mjs', version } });
-  const { tools } = (await s.request('tools/list')).result;
-  await s.close();
-  // The media tools appear only where their provider is set up; the install screen lists the ones every computer has.
-  manifest.tools = tools.filter((t) => !['music', 'sound', 'art', 'video'].includes(t.name)).map((t) => ({ name: t.name, description: t.description.replace(/^Homie Studio: /, '').split(/(?<=[.])\s/)[0].slice(0, 200) }));
+  try {
+    await s.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'desktop.mjs', version } });
+    const { tools } = (await s.request('tools/list')).result;
+    // The media tools appear only where their provider is set up; the install screen lists the ones every computer has.
+    manifest.tools = tools.filter((t) => !['music', 'sound', 'art', 'video'].includes(t.name)).map((t) => ({ name: t.name, description: t.description.replace(/^Homie Studio: /, '').split(/(?<=[.])\s/)[0].slice(0, 200) }));
+  } finally { await s.close(); }
 }
 writeFileSync(join(STAGE, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 say(mcpb(['validate', join(STAGE, 'manifest.json')]).trim());
@@ -133,13 +112,15 @@ say(`packed ${file} (${Math.round(statSync(file).size / 1024)} KB, ${manifest.to
 if (check) {
   // The real bundle: unpacked, and its server started the way the Claude app starts it.
   const work = mkdtempSync(join(tmpdir(), 'homie-desktop-check-'));
+  const clients=[];
+  const open=(...args)=>{const client=talk(...args);clients.push(client);return client;};
   try {
     const dir = join(work, 'ext');
     mcpb(['unpack', file, dir]);
     const m = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
     const studios = join(work, 'Studios');
     const args = m.server.mcp_config.args.map((a) => a.replace('${__dirname}', dir).replace('${user_config.studios_folder}', studios));
-    const s = talk('node', args, { cwd: work, env: { ...m.server.mcp_config.env } });
+    const s = open('node', args, { cwd: work, env: { ...m.server.mcp_config.env } });
     const init = await s.request('initialize', { protocolVersion: '2025-11-25', capabilities: { extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } } }, clientInfo: { name: 'claude-ai', version: 'check' } });
     if (init.result?.serverInfo?.version !== version) throw new Error(`the packed server says ${init.result?.serverInfo?.version}, not ${version}`);
     // The manifest's environment is how the server knows it runs in the desktop app, which asks the person before every
@@ -157,7 +138,7 @@ if (check) {
     if (guide.isError) throw new Error('the guides are not in the bundle');
     await s.close();
     // A studio made by the packed server, without npm install (no network in this check): no game, its home soon.
-    const s2 = talk('node', [...args, '--no-install'], { cwd: work, env: { ...m.server.mcp_config.env } });
+    const s2 = open('node', [...args, '--no-install'], { cwd: work, env: { ...m.server.mcp_config.env } });
     await s2.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'check', version: '1' } });
     const made = (await s2.request('tools/call', { name: 'studio_scaffold', arguments: { name: 'Check Studio' } })).result;
     await s2.close();
@@ -168,12 +149,19 @@ if (check) {
     const setting = m.user_config?.studios_folder;
     if (setting?.required !== false || setting?.default !== '${HOME}/Studios') throw new Error(`the studios folder setting must be optional with the default \${HOME}/Studios: ${JSON.stringify(setting)}`);
     for (const [what, value] of [['its placeholder as written', '${user_config.studios_folder}'], ['an empty value', '']]) {
-      const s3 = talk('node', [join(dir, 'server', 'index.mjs'), '--studios', value, '--no-install'], { cwd: work, env: { ...m.server.mcp_config.env, HOME: work } });
+      const s3 = open('node', [join(dir, 'server', 'index.mjs'), '--studios', value, '--no-install'], { cwd: work, env: { ...m.server.mcp_config.env, HOME: work } });
       await s3.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'check', version: '1' } });
       const st = (await s3.request('tools/call', { name: 'setup_status', arguments: {} })).result;
       await s3.close();
       if (st.structuredContent?.studiosDir !== join(work, 'Studios')) throw new Error(`with ${what} for the folder, the server used ${st.structuredContent?.studiosDir}, not the default`);
     }
     say(`the packed server answers: ${tools.length} tools, 5 cards, setup status, the guides, what the desktop app asks the person, and a new studio with no game (${init.result.protocolVersion}); the folder setting is optional, and an unfilled one means the default`);
-  } finally { rmSync(work, { recursive: true, force: true }); }
+  } finally {
+    try {
+      const results=await Promise.allSettled(clients.map(client=>client.close()));
+      const errors=results.filter(result=>result.status==='rejected').map(result=>result.reason);
+      if(errors.length)throw new AggregateError(errors,'Desktop MCP cleanup failed');
+    }
+    finally { rmSync(work, { recursive: true, force: true }); }
+  }
 }

@@ -10,7 +10,8 @@ import {findChrome,chromeArgs} from '../lib/chrome.mjs';
 import {MCP_MIGRATION} from '../worker/mcp-store.mjs';
 import {Client,StreamableHTTPClientTransport,auth} from 'mcp-studio-client';
 const root=fileURLToPath(new URL('../',import.meta.url));
-test('official SDK client discovers and calls a public studio in workerd',async()=>{
+test('official SDK client discovers and calls a public studio in workerd',{timeout:120000},async()=>{
+  const clients=[];
   const bundled=await build({stdin:{contents:`import {remoteMcp} from './worker/mcp.mjs';export default {fetch(request,env,ctx){return remoteMcp(request,env,ctx,{catalogueOf:async()=>({studio:{name:'Test'},games:[{id:'pub',kind:'app',roles:{customer:{can:['read:specials']}},records:{persist:true,collections:{specials:{fields:{message:{type:'string'}}}}}}]}),definitions:[{name:'opening',kind:'prompt',description:'Opening prompt',audience:'public',inputSchema:{type:'object',properties:{topic:{type:'string'}},required:['topic']},handler:({topic})=>'Explain '+topic},{name:'private_hello',description:'Owner only',audience:'owner',inputSchema:{type:'object',properties:{},additionalProperties:false},handler:()=>({owner:true})},{name:'hello',description:'Say hello',audience:'public',inputSchema:{type:'object',properties:{name:{type:'string'}},required:['name'],additionalProperties:false},handler:({name})=>({hello:name})}]});}};`,resolveDir:root},write:false,bundle:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
   const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'mcp-test',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'worker.mjs',modules:{'worker.mjs':{type:'esm',contents:bundled.outputFiles[0].text}}},env:{DB:{type:'d1',id:'mcp-test'}}}}]});
   try{
@@ -20,7 +21,7 @@ test('official SDK client discovers and calls a public studio in workerd',async(
     const metadata=await (await mf.dispatchFetch('http://localhost/.well-known/oauth-protected-resource/mcp')).json();assert.equal(metadata.resource,'http://localhost/mcp');
     const authMetadata=await (await mf.dispatchFetch('http://localhost/.well-known/oauth-authorization-server')).json();assert.equal(authMetadata.registration_endpoint,'http://localhost/oauth/register');
     const fetcher=async(input,init)=>{const req=new Request(input,init);return mf.dispatchFetch(req.url,{method:req.method,headers:Object.fromEntries(req.headers),...(req.body?{body:await req.arrayBuffer()}: {})});};
-    const client=new Client({name:'conformance-test',version:'1.0.0'});
+    const client=new Client({name:'conformance-test',version:'1.0.0'});clients.push(client);
     await client.connect(new StreamableHTTPClientTransport(new URL('http://localhost/mcp'),{fetch:fetcher}));
     const listed=await client.listTools();assert.ok(listed.tools.some(t=>t.name==='hello'));
     const result=await client.callTool({name:'hello',arguments:{name:'World'}});assert.equal(result.isError,undefined);assert.match(JSON.stringify(result),/World/);
@@ -49,7 +50,7 @@ test('official SDK client discovers and calls a public studio in workerd',async(
       await Promise.all([page.waitForNavigation(),page.click('button[value="allow"]')]);
       assert.ok(callback);assert.equal(callback.searchParams.get('state'),'proof-state');
       assert.equal(await auth(provider,{serverUrl:address+'/mcp',authorizationCode:callback.searchParams.get('code'),iss:callback.searchParams.get('iss')}),'AUTHORIZED');
-      const ownerClient=new Client({name:'owner-proof',version:'1.0.0'});await ownerClient.connect(new StreamableHTTPClientTransport(new URL(address+'/mcp'),{authProvider:provider}));
+      const ownerClient=new Client({name:'owner-proof',version:'1.0.0'});clients.push(ownerClient);await ownerClient.connect(new StreamableHTTPClientTransport(new URL(address+'/mcp'),{authProvider:provider}));
       assert.ok((await ownerClient.listTools()).tools.some(t=>t.name==='private_hello'));
       const own=await ownerClient.callTool({name:'private_hello',arguments:{}});assert.equal(own.isError,undefined);
       await page.goto(address+'/_studio/office/connections');assert.match(await page.content(),/Owner proof/);
@@ -63,5 +64,5 @@ test('official SDK client discovers and calls a public studio in workerd',async(
       await ownerClient.close();
     }finally{await browser.close();}
 
-  }finally{await mf.dispose();}
+  }finally{try{await Promise.all(clients.map(client=>client.close()));}finally{await mf.dispose();}}
 });

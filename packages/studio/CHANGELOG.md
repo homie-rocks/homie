@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.39.0] - 2026-10-09
 
-**Plugin 0.40.0**
+**Plugin 0.40.0** · [#78](https://github.com/homie-rocks/homie/pull/78)
 
 Your studio has its own MCP server. Connect your AI with one browser approval and add tools for the work your studio does.
 
@@ -33,6 +33,11 @@ Your studio has its own MCP server. Connect your AI with one browser approval an
 ### Changed
 
 - Worker builds keep MCP libraries in separate modules, loaded when that surface is used. Ordinary page traffic performs no MCP storage work.
+
+### Fixed
+
+- Clean installs on Node 24 include the MCP SDK required by the payment library, so purchase tools and selling builds work alongside the studio MCP server.
+- MCP integration tests close clients after failures as well as successes. The desktop check clears request timers instead of waiting an extra minute after success. Package and plugin test files have a hard timeout.
 
 ### Upgrade notes
 
