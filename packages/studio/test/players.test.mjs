@@ -34,7 +34,7 @@ const ORIGIN = 'https://owls.example';
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const enc = new TextEncoder();
 const b64u = (bytes) => Buffer.from(bytes).toString('base64url');
-/** An address for the tests, built from parts (the repository's leak audit allows no literal address). */
+/** An address for the tests, built from parts. */
 const addr = (user, domain) => [user, domain].join('@');
 const sha = async (b) => new Uint8Array(await crypto.subtle.digest('SHA-256', typeof b === 'string' ? enc.encode(b) : b));
 

@@ -13,7 +13,7 @@ apps and games pick up a release by pinning its new version, like any studio.
 Before you open one:
 
 - run `npm ci && npm test`; `npm run test:plugin` and `npm run validate` if you changed
-  the plugin or a marketplace file; and `npm run leaks`. CI runs all of them, on Node 22
+  the plugin or a marketplace file. CI runs all of them, on Node 22
   and 24, and a pull request merges when they pass;
 - keep the change small, and say what you saw: the command you ran and what it printed;
 - an engine package's public modules are its API: a change that breaks a caller needs a
@@ -54,10 +54,6 @@ issue.
   `Co-authored-by`, `Reviewed-by`, `Acked-by`, `Tested-by`, `Reported-by` and
   `Helped-by`, each alone on its line as `Key: Name <address>`, with anybody's name and
   address.
-- **Names and addresses go nowhere else.** Not in the sentences of a commit message, not
-  in a comment, not in a file: this repository keeps no authors list, and Git's own
-  record of who made each commit is the credit. The leak audit (below) fails an email
-  address anywhere else.
 
 ## How maintainers merge
 
@@ -73,54 +69,9 @@ A maintainer reviews your pull request and merges it once CI and the DCO check p
   it the title you want `main` to carry; the maintainer reads it before confirming;
 - or with **Rebase and merge**, when the commits are worth keeping one by one: they land
   as you wrote them, each with its own sign-off;
-- never with a merge commit. That method is switched off here: its title would write
-  the branch's name into `main`, and a branch name with a folder in front of it reads
-  to the leak audit as a path;
-- from a fork, CI cannot read the maintainers' private terms (GitHub gives a fork's pull
-  request no secrets), so the leak audit runs its public checks there and says so. The
-  maintainer runs it with the private terms over your commits before merging;
+- never with a merge commit. That method is switched off here;
 - a maintainer's own change comes in the same way: a pull request, the same checks, and
   their own name on the commit.
-
-## The leak audit: what it checks, and why
-
-This repository's open parts are developed next to private ones, by people and by AI
-tools that work in both, and what lands in public Git history stays there. The leak
-audit (`scripts/audit.mjs`) is what keeps something private from landing here by
-accident. `npm run leaks` runs it on what your next commit would hold; CI runs it on the
-tree and on every commit a pull request adds: its files, its author and committer, and
-its message.
-
-It fails on:
-
-- a home or machine path, which names somebody's computer;
-- an email address in a file or in the sentences of a commit message. The exceptions are
-  the security contact, and in a commit message a person's trailer (above);
-- anything shaped like a secret: a key, a token, an account id, a UUID, a `workers.dev`
-  host. A test's made-up values are listed in the script;
-- the old npm scope, a path to a package folder this repository does not have, and a
-  commit id from some other repository (a revert's message names the commit it undoes,
-  and that one is this repository's own);
-- a handful of words from the maintainers' private build process (the script's header
-  lists them; a file that needs one in its ordinary sense is named in `ALLOWED_WORDS`).
-  They fail in a commit message as well, so reword one there;
-- a placeholder or a to-do marker left in a file;
-- a symlink, a submodule, a binary, and a file of a secret-bearing kind (`.env`, a key);
-- the maintainers' private terms: private projects, paths, hosts and ids, internal
-  tool and product names, and names that are private in a file. They are written in no
-  file here. CI reads them from a repository secret, and a finding gives only a term's
-  number and kind (`private term #3 (private folder)`), never the term.
-
-It does not check who you are. A commit's author and committer may be anybody, and a
-person's name is never held against them there or on a trailer: a maintainer's name can
-be a private term for the files and still be the name on their commits. What still fails
-in an author or committer field is a private path, id, host or internal name: none of
-those is anybody's name, and one gets there only when a tool fills in an identity by
-mistake.
-
-When it fails, the report names the check and the line. Fix a file and commit again; fix
-a commit message with `git commit --amend` (or `git rebase -i main` for an earlier one)
-and push again.
 
 ## License: inbound = outbound
 

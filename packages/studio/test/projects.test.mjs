@@ -35,7 +35,7 @@ const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-projects-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-// Made-up values, built here so no credential-shaped string sits in this file (the repository's leak audit reads it).
+// Made-up values, built here so no credential-shaped string sits in this file.
 const TOKEN = ['cfut', 'Zx9'.repeat(12)].join('_');
 const ACCOUNT = 'c0ffee'.repeat(5) + '00';
 const ELEVEN = ['sk', 'e1'.repeat(24)].join('_');

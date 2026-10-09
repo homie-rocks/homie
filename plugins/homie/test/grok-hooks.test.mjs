@@ -1,7 +1,7 @@
 /**
  * Homie's holds in Grok ask the same module as Codex and the Claude Code mod (hooks/lib/holds.mjs, through
  * hooks/codex.mjs). Grok's own envelope (tool names, { decision, reason }) is the only thing that differs.
- * The studio below is made up, and the secret is built at run time (the leak audit reads this file).
+ * The studio below is made up, and the secret is built at run time.
  *
  * Run: node --test plugins/homie/test/grok-hooks.test.mjs
  */

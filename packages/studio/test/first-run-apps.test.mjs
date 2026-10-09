@@ -11,8 +11,7 @@
  *   - `demo` with no network answers with the arcade's standing first pick and says it did not reach the arcade;
  *   - a note to Homie from Grok says Grok, not "another app".
  *
- * Every folder here is a scratch one, and the values that look like a token are built at run time (the repository's
- * leak audit reads this file).
+ * Every folder here is a scratch one, and the values that look like a token are built at run time.
  * Run: node --test packages/studio/test/first-run-apps.test.mjs
  */
 import assert from 'node:assert/strict';

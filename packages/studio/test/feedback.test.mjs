@@ -57,8 +57,7 @@ async function server(args, clientName = 'claude-code') {
 }
 
 /*
- * Made-up values a note must never carry, built at run time: the repository's leak audit reads this file, and a home
- * folder, an address, a token or a workers.dev host written out here would read as a leak.
+ * Made-up values a note must never carry, built at run time.
  */
 const HOME = ['', 'Users', 'somebody'].join('/');
 const WIN_HOME = ['C:', 'Users', 'Somebody'].join('\\');

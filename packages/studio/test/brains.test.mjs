@@ -135,7 +135,7 @@ test('the scripted floor answers asks the way agents.json says, and nothing with
 });
 
 test('a prompt carries game state and seats only: no ticket, account, address, name, secret or typed text', () => {
-  // Made-up secrets, put together at run time (the repository's leak audit never meets one's shape in a file).
+  // Made-up secrets, put together at run time.
   const jwt = ['ey', 'JhbGciOiJIUzI1NiJ9.ey', 'JzdWIiOiJwLTEyMyJ9.c2ln'].join('');
   const mail = ['ada', 'example.com'].join('@');
   const view = {

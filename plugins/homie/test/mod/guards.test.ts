@@ -384,7 +384,7 @@ describe('Stripe\'s MCP (the shop)', () => {
 describe('secrets in tool output', () => {
   const KEY = `hsk_${'0123456789abcdef'.repeat(3)}`
   const PASS = `hap_0123456789_${'A'.repeat(40)}`
-  // Made-up, and built here so no key-shaped string sits in this file (the repository's leak audit reads it).
+  // Made-up, and built here so no key-shaped string sits in this file.
   const FAL = ['0'.repeat(8), '1'.repeat(4), '2'.repeat(4), '3'.repeat(4), '4'.repeat(12)].join('-') + ':' + 'f'.repeat(32)
 
   test('office keys, agent passes and provider keys are hidden; Claude reads why', async ($, on) => {

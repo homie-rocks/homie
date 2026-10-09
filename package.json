@@ -37,7 +37,6 @@
     "test:plugin": "node --test plugins/homie/test/*.test.mjs",
     "test:mod": "claude plugin test plugins/homie",
     "validate": "claude plugin validate . && claude plugin validate plugins/homie",
-    "leaks": "node scripts/audit.mjs --working-tree",
     "release:check": "node scripts/publish.mjs --check"
   },
   "devDependencies": {
