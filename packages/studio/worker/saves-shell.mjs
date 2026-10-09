@@ -324,17 +324,23 @@ export const SAVES_SHELL_JS = `${PASSKEY_JS}
 
   /* -------------------------------------------------- who is playing, and signing in */
   var sheet = null;
+  function account() {
+    var href = '/account/?next=' + encodeURIComponent(window.__shell && window.__shell.returnPath ? window.__shell.returnPath() : location.pathname + location.search);
+    if (window.__HOMIE_PLAY.embed && window.__shell.openStudio) window.__shell.openStudio(href);
+    else location.href = href;
+  }
   function paintWho() {
     var row = document.querySelector('[data-who]');
     if (!row) return;
     var name = row.querySelector('[data-who-name]');
     var btn = row.querySelector('[data-who-act]');
-    if (S.player && !S.player.guest) { name.textContent = S.player.name; btn.textContent = 'Account'; btn.onclick = function () { location.href = '/account/?next=' + encodeURIComponent(location.pathname + location.search); }; }
+    if (S.player && !S.player.guest) { name.textContent = S.player.name; btn.textContent = 'Account'; btn.onclick = function () { account(); }; }
     else { name.textContent = S.player ? S.player.name + ' (guest)' : 'Guest'; btn.textContent = 'Save my progress'; btn.onclick = function () { openSheet(''); }; }
     row.hidden = false;
   }
 
   function openSheet(reason) {
+    if (window.__HOMIE_PLAY.embed && window.top !== window) { account(); return; }
     if (sheet) return;
     var signedIn = S.player && !S.player.guest;
     if (signedIn) { tell('player', { player: me(), cache: snapshot(), same: true }); return; }

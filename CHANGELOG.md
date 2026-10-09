@@ -17,7 +17,7 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [0.33.0] - 2026-10-07
+## [0.33.0] - 2026-10-08
 
 **Plugin 0.34.0** · [#57](https://github.com/homie-rocks/homie/pull/57)
 
@@ -25,6 +25,10 @@ A game's rules can run on your own Cloudflare instead of in a player's browser. 
 
 ### Added
 
+- Public games can offer X a picture with a play button: its phone apps open the game full screen inside X; its website opens the posted link in a new tab. X decides what it shows, and its written card policy is for audio/video, so this may change. Studio and game switches turn it off.
+- The player joins a public room without sign-in or storage and works as a page of its own and framed; opened as its own page, a reload keeps the room, seat and guest name. Account and purchase links leave a frame, and no purchase starts in the player.
+- The build measures the card's picture and offers the card for any picture X's reference says will render (JPG, PNG, WEBP or GIF, at least 68,600 pixels, under 5 MB), whatever its shape; a refused picture is a warning naming the file and the rule. `site.twitterSite` is optional.
+- Ember Vale's new-hero card fits a short screen: a phone on its side, or a small frame.
 - **A room survives restarts and updates.** Server-hosted games save the whole match, including seats, scores, AI companions and pending decisions. Players reconnect to the same room after a restart; with the default settings, at most one second of play is replayed from the last successful save. If storage is unavailable, play continues and the office reports that recovery may lose more.
 - **Updates keep a running match when its saved state still fits.** Players and watchers load the new game and reclaim their seats. A change to the shape of the saved state starts a fresh match. A game that is slow to load after an update is given up to a minute. A load that fails is tried again a few times, the page says what it is doing while it waits, and it asks you to reload if it has to give up. Older browser-hosted games still update at the round break.
 - **A game written as rules plus view.** The rules (`src/rules.ts`, with the movement code in `src/move.ts`) say what is true in the game: who took which coin, every score, when a round ends. The view (`src/view.ts`) draws what it is told and sends what the player presses. `@homie-rocks/studio/rules` is the format (`defineRules`, `defineMove`, `f` for the type of every piece of state) and `@homie-rocks/studio/rules/view` is what a view uses (`openRoom()`).

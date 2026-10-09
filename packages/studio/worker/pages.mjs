@@ -2,7 +2,8 @@
  * The play shell: the page around a game's sandboxed frame at /<game>/play and /<game>/tv. Every other page is
  * worker/site.mjs. Every name a player typed is escaped.
  */
-import { esc, layout } from './site.mjs';
+import { playerAncestors, PLAYER_SANDBOX, PLAYER_SIZE } from './embed.mjs';
+import { esc, layout, gameSocialTags } from './site.mjs';
 import { NET_PALETTE } from './room.mjs';
 import { PARAM_VALUE, PREFS_LIMITS, playParams } from './seats.mjs';
 import { SKILLS } from './agents.mjs';
@@ -88,7 +89,7 @@ export function sharePlaces(value) {
  * the edge (game.json `screen.share`, per device: sharePlaces) opens Invite, Big screen and the room code; nothing
  * covers the middle of the screen or a thumb.
  */
-export function playPage(cat, g, { screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
+export function playPage(cat, g, { embed = false, origin = '', preview = false, screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
   const places = sharePlaces(g.screen?.share);
@@ -165,7 +166,9 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 .notice .acts a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; text-decoration: none; font-weight: 700; color: #eef1f8; border: 1px solid rgba(255,255,255,.18); }
 .notice .acts a.primary { background: var(--hot); color: #0b0b10; border-color: transparent; }
 [hidden] { display: none !important; }
-${arrive.css}${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHOP_SHELL_CSS : ''}${pillUi}`;
+${arrive.css}
+${embed ? `html,body{touch-action:auto}.room.at-top-center{transform:none;left:auto;right:max(8px,env(safe-area-inset-right))}.embed-open{display:flex;align-items:center;min-height:44px;color:inherit}.embed-note{font:12px/1.4 system-ui;overflow-wrap:anywhere}.sheet{position:fixed;inset:calc(max(8px,env(safe-area-inset-top)) + 48px) max(8px,env(safe-area-inset-right)) auto auto;max-width:calc(100vw - max(8px,env(safe-area-inset-left)) - max(8px,env(safe-area-inset-right)));max-height:calc(100dvh - max(8px,env(safe-area-inset-top)) - 48px - max(8px,env(safe-area-inset-bottom)));overflow:auto;overscroll-behavior:contain;touch-action:pan-y}.sheet.more::after{content:'▾ more below';position:sticky;bottom:-12px;display:block;margin:0 -12px -12px;padding:16px 0 5px;text-align:center;font:600 11px/1 system-ui;color:#cfd6e6;background:linear-gradient(transparent,rgba(8,12,22,.98) 60%);pointer-events:none}.sheet .embed-help{margin:8px 2px;font:500 12px/1.4 system-ui;color:#aab3c7}html:not(.player-frame) .frame-only{display:none}.sheet a,.sheet button{min-height:44px}.sheet .foot a,.sheet .foot button{display:inline-flex;align-items:center}.embed-open .frame-only{margin-left:4px}.player-top iframe.game{inset:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);width:calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom))}.arrive-in{padding:12px}.arrive-title{font-size:clamp(24px,7vw,52px)}` : ''}
+${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHOP_SHELL_CSS : ''}${pillUi}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
   // The server this page plays on (0.16.0): its pool (the Lobby), its badge and line for the chip, its ceiling.
@@ -173,7 +176,7 @@ ${arrive.css}${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''
   // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
   const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
   // The address's switches the game's frame is handed (NETPLAY.md section 24): the defaults and the game's own names.
-  const boot = { game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
+  const boot = { embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
@@ -181,7 +184,7 @@ ${arrive.css}${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''
   // button's sheet says to deploy to share, for whoever looks for a link.
   const joinCard = screen && joinUrl && !local ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
   const share = screen ? '' : `<div class="room at-${first.at}" style="--dx:${first.x}px;--dy:${first.y}px" data-room-ui>
-  <div class="pills"><button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="Room, invite and big screen"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
+  <div class="pills"><button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="${embed ? 'Room, invite and the studio’s site' : 'Room, invite and big screen'}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
   <button class="pill spill" type="button" data-server-toggle aria-expanded="false" aria-controls="server-sheet" hidden><span class="sdot" aria-hidden="true"></span><span data-server-label></span></button></div>
   <div class="sheet ssheet" id="server-sheet" role="dialog" aria-label="This server" data-server-sheet hidden>
     <div class="code"><b data-server-name></b><span data-server-badge></span></div>
@@ -190,13 +193,15 @@ ${arrive.css}${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''
     <label class="srow quiet-ai"><span>Quiet AI <small>hides AI chat on this screen</small></span><input type="checkbox" data-quiet-ai></label>
   </div>
   <div class="sheet" id="share-sheet" role="dialog" aria-label="This room" data-share-sheet hidden>
-    <div class="code"><b data-room-label>This room</b><span data-room-count></span></div>
+    <div class="code"><b data-room-label>This room</b><span data-room-count></span></div>${embed ? `
+    <a class="embed-open" data-studio-open href="/${esc(g.id)}/play" target="_blank" rel="noopener noreferrer">Open on the studio's site<span class="frame-only"> ↗</span></a><div class="embed-note" data-embed-note role="status" hidden></div>` : ''}
     <div class="acts">
       <button type="button" class="primary" data-invite><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7.5 7.5 12 3l4.5 4.5M5 12v7a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-7"/></svg><span data-invite-word>Invite</span></button>
       <a data-bigscreen target="_blank" rel="noopener" href="/${esc(g.id)}/tv"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg><span>Big screen</span></a>
     </div>
+${embed ? `    <p class="embed-help">Sound starts after a press. If pointer lock, fullscreen or a gamepad is unavailable, use keys or touch, or open on the studio’s site.<span class="frame-only"> Big screen and phone controllers open in a new tab.</span></p>` : ''}
     <span class="link" data-room-link></span>
-    <div class="foot"><a href="/${esc(g.id)}/">← ${esc(g.name)}</a>${shop ? '<button type="button" data-shop-open>Shop</button>' : ''}<button type="button" data-copy-link>Copy link</button></div>${g.saves ? `
+    <div class="foot"><a href="/${esc(g.id)}/"${embed ? ' target="_blank" rel="noopener noreferrer"' : ''}>← ${esc(g.name)}</a>${shop ? '<button type="button" data-shop-open>Shop</button>' : ''}<button type="button" data-copy-link>Copy link</button></div>${g.saves ? `
     <div class="who-row" data-who hidden><span data-who-name></span><button type="button" data-who-act></button></div>` : ''}
   </div>
 </div>
@@ -215,7 +220,7 @@ ${joinCard}${share}
 <script>${ARRIVAL_JS}</script>
 <script>${SHELL_JS}</script>${g.saves && !screen ? `
 <script>${SAVES_SHELL_JS}</script>` : ''}${shop ? `
-<script>${SHOP_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script><script>${CHAT_OWNER_JS}</script>` : ''}`, css, frameAncestors(cat));
+<script>${SHOP_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script><script>${CHAT_OWNER_JS}</script>` : ''}`, css, embed ? embedAncestors(cat, origin, preview) : frameAncestors(cat), { embed, origin, head: gameSocialTags(cat, g, origin, launch === 'public') });
 }
 
 /*
@@ -262,16 +267,16 @@ const SERVER_CSS = `.spill .sdot { width: 8px; height: 8px; border-radius: 50%; 
 }`;
 
 /** The play page's own document (no site chrome: the game owns the whole screen). */
-function layoutless(title, body, css, ancestors = "'self'") {
+function layoutless(title, body, css, ancestors = "'self'", { embed = false, origin = '', head = '' } = {}) {
   return new Response(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>${esc(title)}</title><link rel="icon" href="data:,"><style>${css}</style></head>
+<title>${esc(title)}</title>${head}<link rel="icon" href="data:,"><style>${css}</style></head>
 <body>${body}</body></html>`, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store, no-transform',
       // Framed only by this site and the origins studio.json names (a browser that reads CSP ignores the older header).
-      'x-frame-options': 'SAMEORIGIN',
+      ...(embed ? {} : { 'x-frame-options': 'SAMEORIGIN' }),
       'content-security-policy': `frame-ancestors ${ancestors}`,
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'strict-origin-when-cross-origin',
@@ -331,12 +336,14 @@ const BUILD_RETRY_JS = String.raw`
 const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   'use strict';
   var boot = window.__HOMIE_PLAY;
+  var framed = window.top !== window;
+  if (boot.embed) document.documentElement.classList.add(framed ? 'player-frame' : 'player-top');
   var params = new URLSearchParams(location.search);
-  var screenMode = params.get('screen') === '1' || boot.screen === true;
+  var screenMode = !boot.embed && (params.get('screen') === '1' || boot.screen === true);
   // Local development (this computer's own address): never hand a phone a link it cannot open.
   var LOCAL = /^(localhost|.*\.localhost|127\..*|\[::1\]|0\.0\.0\.0)$/.test(location.hostname);
-  var asked = params.get('hand');
-  var device = asked === 'phone' || asked === 'desk' || asked === 'tv' ? asked : Math.min(innerWidth, innerHeight) <= 540 ? 'phone' : 'desk';
+  var asked = boot.embed ? null : params.get('hand');
+  var device = asked === 'phone' || asked === 'desk' || asked === 'tv' ? asked : (boot.embed ? matchMedia('(pointer:coarse)').matches : Math.min(innerWidth, innerHeight) <= 540) ? 'phone' : 'desk';
   var want = screenMode ? 'screen' : 'play';
   var frame = document.querySelector('iframe.game');
   var statusEl = document.querySelector('[data-status]');
@@ -344,6 +351,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   var screenCard = document.querySelector('[data-screen]');
   var state = { game: boot.game, room: null, device: device, want: want, attached: false, stats: null, round: null, roster: null, facts: null, seat: null, results: [], closed: null, link: null, notice: null, banner: null, muted: null, server: boot.server || null, vote: null, myVote: {}, quietAi: false, full: false };
   window.__shell = state;
+  // Where signing in comes back to. From the player address that is Play in the same room: the player itself is guests only.
+  state.returnPath = function () { return boot.embed ? '/' + boot.game + '/play' + (state.room ? '?room=' + encodeURIComponent(state.room) : '') : location.pathname + location.search; };
   // The arrival card (worker/arrival.mjs): the game's look while the room connects and the game loads.
   var A = window.__homieArrival || { done: true, room: function () {}, facts: function () {}, full: function () {}, message: function () {}, lift: function () {}, frameLoaded: function () {} };
   state.arrival = A.state || null;
@@ -353,6 +362,16 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     try { var a = new Uint8Array(16); crypto.getRandomValues(a); var s = ''; for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
     catch (e) { var r = ''; while (r.length < 22) r += Math.random().toString(36).slice(2); return r.slice(0, 22); }
   }
+  // The player address (a post's player card): a guest name and room of its own, never the address's. Opened as a
+  // page of its own, and while this tab's storage works, they are kept for the visit: a reload, Back or Forward comes
+  // back to the same room, seat and name. In a frame nothing is kept: two posts of one game on a page are two frames
+  // sharing one sessionStorage, and they must stay two players.
+  var keeps = !boot.embed || !framed;
+  var EMBED_ROOM = /^(?:pub-[1-9][0-9]*|main)$/;
+  var EMBED_KEY = 'homie-player.' + boot.game;
+  var kept = null;
+  if (boot.embed && keeps) try { kept = JSON.parse(sessionStorage.getItem(EMBED_KEY) || 'null'); } catch (e) { kept = null; }
+  var guestName = kept && /^Guest [A-Za-z0-9_-]{6}$/.test(kept.name || '') ? kept.name : 'Guest ' + rnd().slice(0, 6);
   var roomKey = null;
   try { roomKey = localStorage.getItem('homie-b'); if (!/^[A-Za-z0-9_-]{16,43}$/.test(roomKey || '')) { roomKey = rnd(); localStorage.setItem('homie-b', roomKey); } } catch (e) { roomKey = rnd(); }
 
@@ -414,25 +433,34 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
       if (sp && (!ss || ss.hidden)) sp.classList.add('dim');
     }, 6000);
   }
+  // The player address in a short frame: a sheet that scrolls says there is more below (the hint is 30 px of its own).
+  function more(el) { if (!el.hidden) el.classList.toggle('more', el.scrollTop + el.clientHeight < el.scrollHeight - (el.classList.contains('more') ? 34 : 4)); }
+  if (boot.embed) {
+    [].forEach.call(document.querySelectorAll('.sheet'), function (el) {
+      el.addEventListener('scroll', function () { more(el); });
+      try { new MutationObserver(function () { more(el); }).observe(el, { attributes: true, attributeFilter: ['hidden'] }); } catch (e) {}
+    });
+    addEventListener('resize', function () { [].forEach.call(document.querySelectorAll('.sheet'), more); });
+  }
   function open(on) { if (!sheet) return; sheet.hidden = !on; toggle.setAttribute('aria-expanded', on ? 'true' : 'false'); if (on) wake(); else { wake(); try { frame.focus(); } catch (e) {} } }
   function copy(text, done) {
     var ok = function () { flash(done || 'Link copied'); };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, function () { flash(text); });
-    else flash(text);
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, function () { flash(text); });
+    else flash(text); } catch (e) { flash(text); }
   }
   function shareReady(room) {
     if (!ui) return;
     var link = location.origin + '/' + boot.game + '/play?room=' + encodeURIComponent(room);
     state.link = link;
-    ui.querySelector('[data-room-code]').textContent = labelOf(room);
+    ui.querySelector('[data-room-code]').textContent = labelOf(room) + (boot.embed ? ' \u00b7 Site' : '');
     ui.querySelector('[data-room-label]').textContent = labelOf(room);
     ui.querySelector('[data-room-link]').textContent = LOCAL ? 'Deploy to share: this preview address works on this computer only.' : link.replace(/^https?:\/\//, '');
     ui.querySelector('[data-bigscreen]').href = '/' + boot.game + '/tv?room=' + encodeURIComponent(room);
     toggle.addEventListener('click', function (e) { e.stopPropagation(); open(sheet.hidden); });
     ui.querySelector('[data-invite]').addEventListener('click', function () {
       var data = { title: boot.name, text: 'Play ' + boot.name + ' with me: join my room.', url: link };
-      if (navigator.share && (!navigator.canShare || navigator.canShare(data))) navigator.share(data).catch(function () {});
-      else copy(link, 'Invite link copied');
+      try { if (navigator.share && (!navigator.canShare || navigator.canShare(data))) navigator.share(data).catch(function () { copy(link, 'Invite link copied'); });
+      else copy(link, 'Invite link copied'); } catch (e) { copy(link, 'Invite link copied'); }
     });
     ui.querySelector('[data-copy-link]').addEventListener('click', function () { copy(link); });
     document.addEventListener('pointerdown', function (e) { if (!sheet.hidden && !ui.contains(e.target)) open(false); }, true);
@@ -442,6 +470,9 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
 
   function start(room) {
     state.room = room;
+    if (boot.embed && keeps) try { sessionStorage.setItem(EMBED_KEY, JSON.stringify({ room: room, name: guestName })); } catch (e) {}
+    var studioOpen = document.querySelector('[data-studio-open]');
+    if (studioOpen) studioOpen.href = '/' + boot.game + '/play?room=' + encodeURIComponent(room);
     // The room goes into the address: a reload comes back to it, and a copied address brings a friend into it.
     try {
       if (params.get('room') !== room) {
@@ -450,17 +481,20 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
         history.replaceState(history.state, '', location.pathname + '?' + params.toString() + location.hash);
       }
     } catch (e) {}
+    var memoryToken = null;
     var KEY = 'homie-net.' + boot.game + '.' + room + '.' + want;
     // The frame's address, made again for a reload of the game (a newer build, section 23): the seat's token as it is now.
     function frameUrl() {
-      var token = null;
-      try { token = sessionStorage.getItem(KEY); } catch (e) {}
+      var token = memoryToken;
+      try { if (keeps) token = sessionStorage.getItem(KEY) || memoryToken; } catch (e) {}
       var q = new URLSearchParams({ room: room, device: device, want: want });
+      if (boot.embed) q.set('embed', '1');
       if (token) q.set('k', token);
       q.set('b', roomKey);
+      if (boot.embed) q.set('name', guestName);
       if (boot.t) q.set('t', boot.t);
-      if (params.get('name')) q.set('name', params.get('name'));
-      else {
+      if (!boot.embed && params.get('name')) q.set('name', params.get('name'));
+      else if (!boot.embed) {
         // A player with an account (or a named guest) on this studio plays under their own name in every room.
         try { var who = JSON.parse(localStorage.getItem('homie.player') || 'null'); if (who && typeof who.name === 'string' && who.name) q.set('name', who.name.slice(0, 24)); } catch (e) {}
       }
@@ -524,7 +558,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
         if (m.final === true || m.immediate === true || screenMode) reloadGame();
         else flash('A new version of ' + boot.name + ' is ready: it loads after this round.');
       }
-      if (m.what === 'token' && typeof m.token === 'string') { state.seat = m.seat; if (typeof m.seat === 'number') state.full = false; try { sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
+      if (boot.embed && m.what === 'embed-unavailable') { var note = document.querySelector('[data-embed-note]'); if (note) { note.hidden = false; note.textContent = framed ? 'This frame cannot use ' + String(m.feature).slice(0, 30) + '. Open on the studio’s site for full controls.' : String(m.feature).slice(0, 30) + ' is unavailable here: use keys or touch.'; } }
+      if (m.what === 'token' && typeof m.token === 'string') { memoryToken = m.token; state.seat = m.seat; if (typeof m.seat === 'number') state.full = false; try { if (keeps) sessionStorage.setItem(KEY, m.token); } catch (e) {} if (window.__homieChat) window.__homieChat.seat(); }
       if (m.what === 'stats') state.stats = m.stats;
       if (m.what === 'round') { onRound(m.round); if (state.stale && m.round && m.round.phase === 'over') reloadGame(); }
       if (m.what === 'roster') state.roster = m.slots;
@@ -858,9 +893,43 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     if (state.vote.options.indexOf(n) >= 0) { e.preventDefault(); cast(n); }
   });
 
+  if (boot.embed) {
+    state.openStudio = function (href) {
+      if (!framed) { location.assign(href); return; }
+      var opened = null;
+      try { opened = window.open(href, '_blank'); if (opened) opened.opener = null; } catch (e) {}
+      if (!opened) {
+        open(true);
+        var note = document.querySelector('[data-embed-note]');
+        note.hidden = false; note.textContent = 'This host blocked opening a tab. Copy this address into your browser: ' + new URL(href, location.href).href;
+      }
+    };
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      var u = new URL(a.href, location.href);
+      if (u.origin === location.origin && u.pathname === '/' + boot.game + '/play/embed') return;
+      e.preventDefault(); state.openStudio(a.href);
+    }, true);
+    if (self.origin === 'null') {
+      A.lift(); open(true);
+      var note = document.querySelector('[data-embed-note]');
+      note.hidden = false; note.textContent = 'This host prevents the game from connecting. Open on the studio’s site to play.';
+      say('Open on the studio’s site to play');
+      return;
+    }
+  }
+
   // A named room (?room=, a friend's link, a test, the big screen's QR) skips the lobby; everyone else meets strangers.
   // The page refuses a code it cannot use before it gets here, so an asked room is never swapped for a public one.
   var askedRoom = params.get('room');
+  if (boot.embed) {
+    // The player address never takes a room from its address. A reload, Back or Forward goes back to the room this
+    // visit was in (as Play's own address does); a fresh arrival asks the lobby where people are.
+    var arrived = '';
+    try { arrived = performance.getEntriesByType('navigation')[0].type; } catch (e) {}
+    askedRoom = kept && (arrived === 'reload' || arrived === 'back_forward') && EMBED_ROOM.test(kept.room || '') ? kept.room : null;
+  }
   var lobbyQ = [];
   if (state.server) lobbyQ.push('server=' + encodeURIComponent(state.server.id));
   if (/^[A-Za-z0-9_,-]{1,140}$/.test(params.get('not') || '')) lobbyQ.push('not=' + encodeURIComponent(params.get('not')));
@@ -1042,7 +1111,7 @@ const OWNER_JS = String.raw`(function () {
  * watchers see the whole room only. A private or invite-only game is watched only by whoever may play it (the door
  * is the play door's). Every name a player typed is set with textContent.
  */
-export function watchPage(cat, g, { room = null, ticket = null, policy = 'follow', owner = false, acct = false, member = false } = {}) {
+export function watchPage(cat, g, { origin = '', room = null, ticket = null, policy = 'follow', owner = false, acct = false, member = false } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const hot = /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a';
   const boot = { game: g.id, name: g.name, policy, palette: NET_PALETTE, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}) };
@@ -1066,7 +1135,7 @@ export function watchPage(cat, g, { room = null, ticket = null, policy = 'follow
 <script>window.__HOMIE_WATCH=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
 <script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: 'watch', owner, acct, member })).replace(/</g, '\\u003c')};</script>
 <script>${CHAT_JS}</script>${owner ? `<script>${CHAT_OWNER_JS}</script>` : ''}
-<script>${WATCH_JS}</script>`, css, frameAncestors(cat));
+<script>${WATCH_JS}</script>`, css, frameAncestors(cat), { head: gameSocialTags(cat, g, origin) });
 }
 
 /*
@@ -1152,7 +1221,7 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
   var boot = window.__HOMIE_WATCH;
   var params = new URLSearchParams(location.search);
   var hand = params.get('hand');
-  var device = hand === 'phone' || hand === 'desk' || hand === 'tv' ? hand : Math.min(innerWidth, innerHeight) <= 540 ? 'phone' : 'desk';
+  var device = hand === 'phone' || hand === 'desk' || hand === 'tv' ? hand : (boot.embed ? matchMedia('(pointer:coarse)').matches : Math.min(innerWidth, innerHeight) <= 540) ? 'phone' : 'desk';
   var frame = document.querySelector('iframe.game');
   var q1 = function (s) { return document.querySelector(s); };
   var strip = q1('[data-strip]'), note = q1('[data-note]');
@@ -1455,3 +1524,15 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
     look();
   }
 }());`;
+
+export function embedAncestors(cat, origin, preview = false) {
+  const normal = playerAncestors(cat);
+  if (!preview || !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin)) return normal;
+  const port = new URL(origin).port;
+  return `${normal === "'none'" ? '' : normal} http://localhost${port ? ':' + port : ''} http://127.0.0.1${port ? ':' + port : ''}`.trim();
+}
+
+export function embedPreview(cat, g, origin) {
+  const frameOrigin = new URL(origin); frameOrigin.hostname = frameOrigin.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+  return layoutless(`Preview ${g.name} in a post`, `<h1>Player card preview</h1><p>A cross-origin mock post using the sandbox observed in X’s web client. X’s phone apps open the player full screen; its website opens third-party games in a new tab.</p><iframe title="${esc(g.name)}" src="${esc(frameOrigin.origin)}/${esc(g.id)}/play/embed" sandbox="${PLAYER_SANDBOX}" allow="autoplay; fullscreen; web-share" allowfullscreen scrolling="no" style="width:100%;aspect-ratio:${PLAYER_SIZE.width}/${PLAYER_SIZE.height};border:0"></iframe>`, 'body{max-width:480px;margin:24px auto;background:#101622;color:white;font:16px system-ui}');
+}

@@ -291,6 +291,7 @@ export const SHOP_SHELL_CSS = `
 .shopsheet h2 { margin: 0 0 4px; font-size: 19px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .shopsheet h2 button { background: none; border: 0; color: #aab3c7; font: 600 22px/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; width: 40px; height: 40px; }
 .shopsheet .sub { margin: 0 0 12px; color: #aab3c7; font-size: 13px; }
+.shopsheet a.buy { display: inline-flex; align-items: center; min-height: 44px; color: inherit; font-weight: 700; }
 .shopsheet .it { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 0; border-top: 1px solid rgba(255,255,255,.1); }
 .shopsheet .it b { font-size: 15.5px; }
 .shopsheet .it .pr { font-weight: 800; }
@@ -362,6 +363,14 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     sheet.addEventListener('click', function (e) { if (e.target === sheet) close(); });
     document.body.appendChild(sheet);
     if (kids || !cfg) { box.appendChild(el('p', { class: 'sub' }, 'Nothing is sold here.')); return; }
+    // The player address, and any page shown inside another site's frame, never starts a purchase: it links to the shop.
+    var inFrame = false;
+    try { inFrame = Boolean(window.top) && window.top !== window; } catch (e) { inFrame = true; }
+    if (boot.embed || inFrame) {
+      box.appendChild(el('p', { class: 'sub' }, inFrame ? 'Purchases open on the studio’s site, outside this post.' : 'Purchases are made in the studio’s shop.'));
+      box.appendChild(el('a', { class: 'buy', href: '/shop/?game=' + encodeURIComponent(GAME), target: '_blank', rel: 'noopener noreferrer' }, inFrame ? 'Buy on the studio’s site ↗' : 'Go to the shop'));
+      return;
+    }
     if (screen) {
       // The studio's protective TV policy: a code to scan and buy on a phone, in the phone's own browser.
       box.appendChild(el('p', { class: 'sub' }, 'Buy on your phone: scan this code. Nothing is sold on this screen.'));

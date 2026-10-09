@@ -473,3 +473,121 @@ posts to a `/cdn-cgi/rum` a Worker does not serve). Generated pages are never fr
 strict-origin-when-cross-origin` (another studio's stats see which site sent a visitor, never the path). The
 play page and the game may be framed by the site itself and by the https origins studio.json lists in
 `"site": { "frameAncestors": ["https://…"] }`.
+
+## Play from a post
+
+Post a public game's landing link (`/<id>/`) or Play link (`/<id>/play`) on X.
+When X shows a player card, its phone apps show the game's picture with a play
+button; one tap opens `/<id>/play/embed` full screen inside X's in-app browser.
+The player goes straight into a public room with a guest name and seat. On X's
+website, third-party game cards open the posted link in a new tab. Post the player
+address itself when that new tab should go straight into the game.
+
+The player address uses the same Play code with a layout flag. Opened as a page
+of its own on a phone, the game, the room button and the room sheet keep to the
+screen's safe area; cross-origin frames also work when the host permits them. Open
+Graph tags keep their previous picture for other platforms. An owner's hand-written
+Twitter tags on a custom landing take precedence as a set.
+
+The switch is on by default. The tags go out on an HTTPS site for a game with a
+local picture the build has measured: it tries the wide landing still, the landing
+cover, the game's cover, then the studio's social picture, and takes the first one
+X's reference says will render: JPG, PNG, WEBP or GIF, at least 68,600 pixels
+(262×262, or 350×196), under 5 MB. A picture that fails one of those, or that the
+build cannot read whole, produces a warning naming the file and the rule, and the
+page keeps the picture card it had. Remote pictures cannot be measured by the build.
+Starters do not include a cover: supply one before expecting player tags.
+
+The player is advertised as 480×480. That is Homie's choice, not a rule of X's: the
+two game pages whose posts showed a play button when this was written both
+advertise 480×480, and a square player at a phone's post width (about 358 pixels)
+leaves a framed game room for its own dialogs, where a 16:9 one is 201 pixels tall.
+X's reference says the picture "should" have the player's dimensions; it does not
+make that a condition, and both of those pages use wider pictures (1200×628 and
+1200×800). So any shape gets the card: a standard 1200×630 social picture, a 16:9
+still or a square. When the shape is not square the build says so in a warning,
+because X may crop the picture in the post.
+
+`"twitterSite": "@yourstudio"` in `studio.json`'s `site` object adds `twitter:site`
+to the tags. It is optional: X's reference lists the tag, neither of those two
+pages carries it, and Homie never withholds a card for the lack of it.
+
+Play, Watch and the player address carry the card's tags (and Open Graph tags beside
+them) only when the game has a player card; without one they carry no social tags.
+
+To switch it off, set `"playerCard": false` inside `studio.json`'s `site` object,
+or in `games/<id>/game.json` for one game. Remove the switch or set it to `true`
+to turn it back on; studio-wide off wins. A television game with no single-screen
+view must set `"screen": { "singleScreen": false }` (keep its other settings).
+Private and invite-only games never advertise or serve the player address.
+
+`site.playerCardOrigins` replaces the embed's allowed HTTPS ancestors, including
+intermediate frames. The default is
+`["https://x.com", "https://*.x.com", "https://twitter.com", "https://*.twitter.com"]`.
+An empty list denies framing. At most eight valid origins are kept. Wildcards must
+name a domain; paths, credentials, invalid ports and arbitrary CSP text are refused.
+This changes neither ordinary pages nor `site.frameAncestors`. The player's CSP
+is Play's policy with the frame ancestors changed; its inner game remains isolated
+from the studio's cookies and storage.
+
+Blocked or cleared storage still permits a guest seat. Opened as a page of its
+own, and while the tab's storage works, a reload, Back or Forward comes back to the
+same room, seat and guest name; in a frame every instance is a new guest (two posts
+of one game on a page are two players). If the lobby does not answer, the player
+joins the room `main`, exactly as Play does. Saves may not follow a guest back to
+the studio site. Sound starts on the first press, including when a game requested
+sound during startup. Pointer lock, fullscreen and gamepads depend on the host's
+permissions; use keys or touch if unavailable.
+
+The room button reads **Room N · Site**, and the first row of its sheet is **Open on
+the studio's site**, a 44-pixel link carrying the room to Play: it is in view when
+the sheet opens, in a frame 201 pixels tall too. The sheet scrolls in short frames
+and says when there is more below. In a frame, account, purchases, Game and
+big-screen links open a tab of their own, and words about tabs and "this post" are
+shown only there; as a page of its own the same links navigate the tab. Signing in
+from the player comes back to Play in the same room, never to the guests-only
+player. No purchase starts in the player. If popups are blocked, the sheet shows
+the address to copy. A host that removes same-origin permission gets a clear
+connection message and exit instead of an endless loader.
+
+With `homie-studio dev` running, open `/<id>/play/preview` locally. It uses a different
+loopback hostname and X's observed sandbox: `allow-scripts allow-same-origin
+allow-popups allow-popups-to-escape-sandbox`, `allow="autoplay; fullscreen; web-share"`,
+and `scrolling="no"`. Preview-only loopback ancestors never apply to deployed sites.
+Also open `/<id>/play/embed` directly at phone and desktop sizes.
+
+From the toolkit checkout,
+`CHROME_PATH=/path/to/chrome node --test packages/studio/test/embed*.test.mjs`
+runs the five starters at the player address in real Chrome, as a page of its own
+and framed. The starter run also needs Wrangler: installed in the toolkit's
+`node_modules`, or `WRANGLER_PATH` pointing to an installed
+`wrangler/bin/wrangler.js`. Without `CHROME_PATH` the browser checks skip, and
+without Wrangler the starter run skips; all bindings run locally without
+credentials.
+
+**Evidence and limits (2026-10-08):**
+
+- X's archived player-card reference (developer.x.com, "Cards: player card")
+  documents the phone-app picture/play button and top-level in-app browser, the
+  tags (`twitter:site` among them), HTTPS, and the picture conditions above. Its
+  written policy reserves this card for linear audio/video and explicitly excludes
+  gaming and sign-in requirements. This is not a supported game API. The URL may
+  now redirect; the
+  [official sample](https://github.com/xdevplatform/cards-player-samples/blob/main/player/page.html)
+  also shows the tags.
+- X's [public web-client bundle](https://abs.twimg.com/x-web/x-web/assets/article-card-DEH89WAV.js),
+  release `8063dc2e55869d8eae1c30e18f913da88bca1582`, only sets a frame URL for
+  YouTube, SoundCloud and Periscope player hosts. Other hosts get a new-tab link
+  to the posted URL. That observation is from code, not a signed-in session;
+  server flags could vary by account. The same code supplies the sandbox above,
+  enables fullscreen, and clamps tall player ratios to square.
+- Two live game pages, read as X's crawler: `snekarena.com/r/main` and a game page
+  on `www.spawn.co`. Both carry the player tags with a 480×480 player, pictures of
+  1200×628 and 1200×800, and no `twitter:site`; the first allows the X and Twitter
+  domain families as frame ancestors. They show what X accepted that week; they do
+  not prove X frames arbitrary games. No exhaustive current official ancestor list
+  was found.
+
+X decides what it shows, may cache tags, and may change or stop this behavior.
+Local success does not prove that X will display a card. The studio can use the
+off switch above if it does not want to offer a game through a video-oriented card.

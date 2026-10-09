@@ -527,7 +527,7 @@ export const CHAT_JS = String.raw`(function () {
     else if (!typing && r.who === 'members') n = 'Only members of this server type here.';
     if (!reacts && !watchersOut && r.react === 'signed-in' && !cfg.acct) { n = 'Sign in to chat in this room. '; link = 'Sign in'; }
     note.textContent = n;
-    if (link) { var a = el('a', '', link); a.href = cfg.account + '?next=' + encodeURIComponent(location.pathname + location.search); a.target = surface === 'play' ? '_blank' : '_self'; note.appendChild(a); }
+    if (link) { var a = el('a', '', link); a.href = cfg.account + '?next=' + encodeURIComponent(window.__shell && window.__shell.returnPath ? window.__shell.returnPath() : location.pathname + location.search); a.target = surface === 'play' ? '_blank' : '_self'; note.appendChild(a); }
     note.hidden = !n;
     bubbleBox.parentNode.hidden = surface !== 'play' || !r.bubbles || mySeat() === null;
   }
