@@ -141,12 +141,12 @@ processor-time claims. The configured per-tick ceiling is 500,000 units.
 
 | Starter | Seats | p95 / p99 ms | Busiest tick, units | Ending save, bytes |
 | --- | ---: | ---: | ---: | ---: |
-| Gem Rush 3D | 8 | 0.613 / 2.689 | 23,517 | 5,343 |
-| Gem Rush 3D | 32 | 7.452 / 24.879 | 120,433 | 14,856 |
-| Hero Rush 3D | 8 | 4.439 / 16.057 | 26,721 | 6,335 |
-| Hero Rush 3D | 32 | 12.349 / 37.283 | 178,091 | 17,983 |
-| Ember Vale | 8 | 0.430 / 0.794 | 14,704 | 4,063 |
-| Ember Vale | 32 | 2.286 / 2.805 | 73,174 | 12,184 |
+| Gem Rush 3D | 8 | 0.124 / 0.432 | 23,898 | 5,523 |
+| Gem Rush 3D | 32 | 0.969 / 1.693 | 123,419 | 14,926 |
+| Hero Rush 3D | 8 | 0.458 / 0.692 | 26,735 | 5,879 |
+| Hero Rush 3D | 32 | 2.859 / 3.900 | 179,363 | 17,374 |
+| Ember Vale | 8 | 0.458 / 0.793 | 14,704 | 4,063 |
+| Ember Vale | 32 | 2.362 / 3.223 | 73,174 | 12,184 |
 
 The packed build's generated play additionally checked 18,000 ticks/813 restores
 for Gem Rush 3D, 17,026 ticks/780 restores for Hero Rush 3D, and 20,400 ticks/980
@@ -295,3 +295,18 @@ a running job. The test now follows that job to completion before asserting the
 build result and progress feed, with a bounded wait and explicit failure checks.
 This changes the test's use of the existing asynchronous API, not the build's
 budgets or its verdict. The failed run is retained and is not a clean gate pass.
+
+Before restarting that gate, the real Chrome continuity check completed all 130
+updates successfully in 1,368.4 seconds (22.8 minutes), with play and watch pages
+keeping their room. The already-failed run was then stopped. The final clean-install
+gate will use the installed dependency set; the separate continuity receipt above
+includes the optional local Wrangler executable used for that live proof.
+
+The focused continuation regression run passed all 25 tests with zero skips:
+MCP integration, 3D collision and charged owner support, all clear spawns,
+32-seat quotas, old/new crossing and score parity, and kids/guide behavior.
+
+The post-spawn budget repeat completed all 216,000 ticks with zero errors, skipped
+handlers, cut ticks or budget stops. The table now contains that final receipt;
+`budget-before-spawn.json` retains the previous run. Local timing improved with
+less contention, while the deterministic quotas remain the portability check.
