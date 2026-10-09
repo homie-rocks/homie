@@ -288,3 +288,10 @@ The ordinary regression suite also runs each converted starter with 32 bots for
 2,400 ticks, including snapshot accounting, and requires no errors, skipped
 handlers, cut ticks or budget stops. The longer 36,000-tick timing trial remains a
 separate measurement rather than a machine-speed assertion in a build.
+
+The uninterrupted package gate exposed an MCP test that assumed the rules build
+finished inside the tool's 20-second initial response. The tool correctly returned
+a running job. The test now follows that job to completion before asserting the
+build result and progress feed, with a bounded wait and explicit failure checks.
+This changes the test's use of the existing asynchronous API, not the build's
+budgets or its verdict. The failed run is retained and is not a clean gate pass.
