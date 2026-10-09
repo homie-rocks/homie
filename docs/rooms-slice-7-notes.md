@@ -339,3 +339,10 @@ reporting 60/61 fps. Both performance runs passed the corrected role assertion;
 the computer replica was playable at 280 ms, reported 64.5 fps in that separate
 sample, 0.852 ms main-thread work per frame and 5.2 outgoing messages per second.
 The check removed its temporary studio on completion.
+
+`npm test` now runs test files serially with a 1,536 MiB heap cap, matching the
+local verification conditions without a PATH wrapper. The real-timer Chrome
+matrices and live update proof must not compete with every other package file in
+CI. Assertions, rates, delays, loss and tick budgets are unchanged. The final clean
+install added 135 packages and audited 159; npm reported two high advisories in
+the existing dependency set, which were not changed by this slice.
