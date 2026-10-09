@@ -186,7 +186,7 @@ under the same license. Each is ESM with TypeScript types, built for a plain Vit
 | `@homie-rocks/bus` | A typed, synchronous event bus. |
 | `@homie-rocks/scores` | Scores and leaderboards. |
 | `@homie-rocks/noise`, `geom`, `heightfield`, `scatter`, `props`, `brush`, `ui-world` | Procedural fields, geometry, terrain, placement, scenery, box worlds, world-to-panel maths. |
-| `@homie-rocks/nav` | Tiled navigation meshes, restorable fixed-step crowds, runtime obstacles and grid paths. |
+| `@homie-rocks/nav` | Tiled navigation meshes, restorable fixed-step crowds, runtime obstacles and grid paths for games and apps. First npm publication requires the maintainer bootstrap described in its README. |
 | `@homie-rocks/walk`, `film` | A body on two legs (contact, coyote time, jump buffer, slopes); shot timelines and deterministic capture. |
 
 Every package's own README says what it does, what it needs, and how to import it.

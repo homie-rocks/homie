@@ -1,14 +1,16 @@
 # @homie-rocks/nav
 
 Tiled navigation meshes, fixed-step crowds with exact save/restore, and grid
-paths for game rules in Node, browsers and Cloudflare Workers. Bake triangle
+paths for games and apps in Node, browsers and Cloudflare Workers. Bake triangle
 geometry or a heightfield, stream tiles, carve obstacles, and control doors and
 links. Queries and simulation have no renderer, clock or unseeded randomness.
 The optional three.js module imports geometry and draws diagnostics.
 
-Part of Homie's open game engine: the packages the Homie games are built on.
+Part of Homie's open engine packages. Games and apps can import navigation directly; it requires no game manifest, multiplayer room or renderer. Existing studios do not install it unless they need it.
 
 ## Install
+
+The first npm publication requires a maintainer. After this PR merges, use the repository’s `scripts/first-publish.sh` procedure to publish 0.1.0 once and register the trusted publisher. The release workflow reports and defers a new package without blocking independent packages. Until then, build and `npm pack --workspace packages/nav` in this repository and install that tarball in your studio. After bootstrap:
 
 ```sh
 npm install --save-exact @homie-rocks/nav@0.1.0
@@ -21,7 +23,7 @@ backend is navcat 0.4.1; JPS uses PathFinding.js 0.4.18. Neither needs WASM.
 
 ## Use
 
-Bake assets outside the game tick; load them into a shared mesh. Coordinates and
+Bake assets outside the simulation tick; load them into a shared mesh. Coordinates and
 agent dimensions are metres, time is seconds. Points accept arrays or typed
 arrays containing exactly three finite coordinates.
 
