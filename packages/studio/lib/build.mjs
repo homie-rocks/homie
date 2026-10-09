@@ -544,6 +544,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     if (seats.asked > SEAT_MAX) log(`warning: games/${g.id} asks for ${seats.asked} players; a room holds at most ${SEAT_MAX}, so its rooms have ${SEAT_MAX} seats`);
     built.push({
       id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max,
+      ...(rules ? { capacityTrial: rules.check.capacityTrial } : {}),
       ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
     });
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} additional ${chunks.length === 1 ? 'chunk' : 'chunks'}, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);

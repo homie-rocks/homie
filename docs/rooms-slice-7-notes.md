@@ -133,6 +133,9 @@ old-game regression coverage after the last shipped old-style starter is gone.
 
 ## Budget measurements
 
+The local measurement machine is an Apple M4 with 24 GiB of memory, running
+Node 22.22.2 on macOS arm64.
+
 Each row ran 36,000 actual rules ticks and one snapshot per tick. There were no
 handler errors, skipped handlers or budget stops. Time includes snapshot encoding;
 these local wall-clock measurements shared this Mac with the other trials, so the
@@ -282,7 +285,8 @@ The build report now identifies the completed capacity reference trial (32 Hero
 Rush players, 20 Hz, 30 minutes in Node on macOS arm64), and explicitly says that
 Cloudflare capacity and billing are unmeasured. It distinguishes this reference
 workload from a game's generated correctness check and flags rates above that
-completed trial. The structured rules check includes the same reference facts.
+completed trial. The structured rules check and each rules game's JSON build result
+include the same reference facts; legacy games make no rules capacity claim.
 
 The ordinary regression suite also runs each converted starter with 32 bots for
 2,400 ticks, including snapshot accounting, and requires no errors, skipped

@@ -59,6 +59,9 @@ test('game hashes are reproducible, isolate unrelated builds, and distinguish co
   legacyGame(dir, 'gems');
   const build = () => {
     const r = run(['build'], dir); assert.equal(r.status, 0, r.stdout + r.stderr);
+    const trial = out(r).games.find(g => g.id === 'coin-dash').capacityTrial;
+    assert.equal(trial.seats, 32); assert.equal(trial.host, 'Node'); assert.equal(trial.cloudflare, false);
+    assert.equal(out(r).games.find(g => g.id === 'gems').capacityTrial, undefined, 'legacy games make no rules capacity claim');
     return JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash');
   };
   const first = build();
