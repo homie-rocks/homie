@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.35.1] - 2026-10-08
 
-**Plugin 0.36.0** · [PR pending](https://github.com/homie-rocks/homie/pull/0)
+**Plugin 0.36.0** · [#71](https://github.com/homie-rocks/homie/pull/71)
 
 A tip with no minimum connects, and Stripe's own reason is shown when setup cannot finish.
 
