@@ -264,8 +264,8 @@ function pushed it out on the first frame; a continuous sweep deliberately permi
 an already overlapping body to escape, so an idle player could stay inside. Both
 meadow maps now declare the old resolved spawn with a 1 mm clearance. A regression
 checks every declared seat against the solid scenery. The full-room budget will
-be repeated with this map correction; ordinary three-player capture paths are
-unchanged.
+be repeated with this map correction; the shared movement code used by the recorded
+trials is unchanged.
 
 The 3D owner-movement escape hatch also performed its terrain support cast outside
 a handler quota. That cast now runs under the movement budget, with a regression
@@ -277,3 +277,9 @@ its performance trial still demanded a browser host after Gem Rush switched to
 server hosting. The check now derives the expected pair from the generated game
 manifest and reports the measured replica honestly. The packed-studio check will
 exercise this path before completion.
+
+The build report now identifies the completed capacity reference trial (32 Hero
+Rush players, 20 Hz, 30 minutes in Node on macOS arm64), and explicitly says that
+Cloudflare capacity and billing are unmeasured. It distinguishes this reference
+workload from a game's generated correctness check and flags rates above that
+completed trial. The structured rules check includes the same reference facts.

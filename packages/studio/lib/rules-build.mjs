@@ -33,6 +33,10 @@ import { typecheckRules } from './typecheck.mjs';
 export { isRulesGame };
 export { stateHash } from './rules-check.mjs';
 
+// A reference workload, not a promise about every game's rules or a Cloudflare measurement.
+// Receipt and method: docs/rooms-slice-7-notes.md, "Budget measurements".
+export const RULES_CAPACITY_TRIAL = Object.freeze({ game: 'hero-rush-3d', seats: 32, tickHz: 20, minutes: 30, host: 'Node', platform: 'macOS arm64', cloudflare: false });
+
 const readJson = (path) => { try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; } };
 const RULES_FILES = { [RULES_MODULE]: 'rules.ts', [GUARD_MODULE]: 'guard.ts', [`${RULES_MODULE}/view`]: 'view.ts', [`${RULES_MODULE}/host`]: 'host.ts' };
 
@@ -150,6 +154,9 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
   for (const p of checked.problems) log(`warning: games/${g.id}/game.json: ${p}`);
   for (const line of checked.information) log(`info: ${line}`);
   const { settings, schema, publicTune, rounds, stateHash } = checked;
+  const trial = RULES_CAPACITY_TRIAL;
+  log(`info: rules runtime reference trial: ${trial.game}, ${trial.seats} players at ${trial.tickHz} Hz for ${trial.minutes} minutes on ${trial.host} (${trial.platform}). Cloudflare capacity and billing are unmeasured.`);
+  if (settings.tickHz > trial.tickHz) log(`info: games/${g.id} asks for ${settings.tickHz} Hz, above the completed local reference trial's ${trial.tickHz} Hz. This game's generated check does not establish live room capacity.`);
   const { def, R, H } = await loadRules(esbuild, root, g.id, guarded.code);
   const compiled = R.compileRules(def, { tune, map: R.compileMap(map, map.name), settings, seats });
   const stats = smokeRun(H, compiled, g.id, { timer: () => 0, vocab: data.vocab });
@@ -171,7 +178,7 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
     build: createHash('sha256').update(guarded.code).update(JSON.stringify(built)).digest('hex'),
     snapshotCap, checkpointCap, snapshotBytes: stats.snapshotBytes, checkpointBytes: stats.checkpointBytes,
     units: checked.maxUnits, tickUnits: checked.maxTickUnits,
-    check: { information: checked.information, plays: checked.plays, ticks: checked.ticks, rounds: checked.roundsPlayed, restores: checked.restores, units: checked.units, largestSaveBytes: checked.largestSaveBytes },
+    check: { information: checked.information, capacityTrial: trial, plays: checked.plays, ticks: checked.ticks, rounds: checked.roundsPlayed, restores: checked.restores, units: checked.units, largestSaveBytes: checked.largestSaveBytes },
   };
 }
 
