@@ -259,13 +259,22 @@ export const SHOP_JS = String.raw`(function () {
   function load(cursor) { api('GET', '/api/shop' + q + (q ? '&' : '?') + 'cursor=' + encodeURIComponent(cursor || '')).then(draw).catch(function () { draw({ ok: false }); }); }
   if (list) { if (/[?&]cancelled=1/.test(location.search)) say('Checkout cancelled. Any open reservation is released once Stripe confirms it.'); load(); }
 
+  function returnToPage(cancelled) {
+    try {
+      var saved = JSON.parse(sessionStorage.getItem('shop-return') || 'null');
+      if (!saved || typeof saved.path !== 'string' || saved.path[0] !== '/' || new URL(saved.path, location.origin).origin !== location.origin) return;
+      if (cancelled && new URLSearchParams(location.search).get('order') !== saved.order) return;
+      sessionStorage.removeItem('shop-return'); location.href = saved.path;
+    } catch (e) {}
+  }
+  if (/[?&]cancelled=1/.test(location.search)) returnToPage(true);
   /* ---------------- /shop/thanks */
   if (boot.thanks) {
     var tries = 0;
     (function poll() {
       tries += 1;
       api('GET', '/api/shop/order?session=' + encodeURIComponent(boot.thanks)).then(function (r) {
-        if (r.status === 'paid') { $('[data-thanks-title]').textContent = 'It\'s yours'; $('[data-thanks-line]').textContent = 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
+        if (r.status === 'paid') { returnToPage(false); $('[data-thanks-title]').textContent = 'It\'s yours'; $('[data-thanks-line]').textContent = 'Paid. It is on your account now, in every game of ' + boot.studio + ' that uses it.'; return; }
         if (tries < 40) setTimeout(poll, 1500);
         else $('[data-thanks-line]').textContent = 'Stripe has not confirmed it yet. It will be on your account as soon as it does; your receipt comes by email.';
       }).catch(function () { if (tries < 40) setTimeout(poll, 3000); });
@@ -368,6 +377,11 @@ export const SHOP_SHELL_JS = String.raw`(function () {
       return owns;
     }).catch(function () { return owns; });
   }
+  function leaveForCheckout(tab, result) {
+    if (tab) { tab.location.href = result.url; return; }
+    try { sessionStorage.setItem('shop-return', JSON.stringify({ order: result.order, path: location.pathname + location.search + location.hash })); } catch (e) {}
+    location.href = result.url;
+  }
   var watching = 0;
   /** After a checkout opens in a new tab: look again when this tab comes back, and every few seconds for two minutes. */
   function watch() {
@@ -378,25 +392,11 @@ export const SHOP_SHELL_JS = String.raw`(function () {
 
   var sheet = null;
   function close() { if (sheet) { sheet.remove(); sheet = null; post({ ev: 'closed' }); } }
-  function open(want, cart) {
+  function open(want) {
     close();
     sheet = el('div', { class: 'shopsheet', role: 'dialog', 'aria-label': 'Shop' });
     var box = el('div', { class: 'box' });
     var h = el('h2', null, ''); h.appendChild(el('span', null, (boot.name || 'Game') + ': shop'));
-    if (cart) {
-      var retry = el('button', { type: 'button', class: 'buy' }, 'Checkout cart in a new tab');
-      var message = el('p', { class: 'sub' }, 'Your game stays here. Tap to allow a checkout tab.');
-      retry.onclick = function () {
-        var tab = window.open('', '_blank');
-        if (!tab) { message.textContent = 'Allow popups for this site, then try again.'; return; }
-        retry.disabled = true;
-        api('POST', '/api/shop/buy', { lines: cart, game: GAME, server: SERVER }).then(function (r) {
-          if (!r.ok || !r.url) throw new Error(r.message || 'Checkout did not open.');
-          tab.location.href = r.url; message.textContent = 'Finish in the checkout tab.'; watch();
-        }).catch(function (e) { tab.close(); retry.disabled = false; message.textContent = e.message; });
-      };
-      box.appendChild(message); box.appendChild(retry);
-    }
     var x = el('button', { type: 'button', 'aria-label': 'Close' }, '×'); x.addEventListener('click', close); h.appendChild(x);
     box.appendChild(h);
     sheet.appendChild(box);
@@ -418,7 +418,7 @@ export const SHOP_SHELL_JS = String.raw`(function () {
       if (cfg.url) box.appendChild(el('p', { class: 'foot' }, cfg.url.replace(/^https?:\/\//, '')));
       return;
     }
-    box.appendChild(el('p', { class: 'sub' }, 'Real money, from the studio itself. Each purchase opens Stripe\'s own page in a new tab; your game keeps going here.'));
+    box.appendChild(el('p', { class: 'sub' }, 'Real money, from the studio itself. Stripe opens in a new tab when available. Otherwise checkout leaves this page and returns here after payment.'));
     var said = el('p', { class: 'said', role: 'status' });
     var listBox = el('div'); box.appendChild(listBox); box.appendChild(said);
     var foot = el('p', { class: 'foot' }); var all = el('a', { href: '/shop/?game=' + encodeURIComponent(GAME), target: '_blank', rel: 'noopener' }, 'The whole shop'); foot.appendChild(all); foot.appendChild(document.createTextNode(' · see the studio refund terms in the whole shop.')); box.appendChild(foot);
@@ -437,11 +437,10 @@ export const SHOP_SHELL_JS = String.raw`(function () {
           b.addEventListener('click', function () {
             // The new tab opens on the tap (a browser allows that), then goes to Stripe's page once it is made.
             var tab = window.open('', '_blank');
-            if (!tab) { said.textContent = 'Allow a checkout tab, then try again. Your game is still running.'; return; }
             b.disabled = true; said.textContent = 'Opening Stripe…';
             api('POST', '/api/shop/buy', { item: i.id, game: GAME, server: SERVER }).then(function (r) {
               if (!r.ok || !r.url) throw new Error(r.message || 'That did not work.');
-              if (tab) tab.location.href = r.url; else throw new Error('Allow a checkout tab, then try again. Your game is still running.');
+              leaveForCheckout(tab, r);
               said.textContent = 'Finish on Stripe\'s page. It shows up here once it is paid.';
               watch();
             }).catch(function (e) { if (tab) tab.close(); b.disabled = false; said.textContent = e.message; });
@@ -483,11 +482,10 @@ export const SHOP_SHELL_JS = String.raw`(function () {
     if (m.op === 'checkout') {
       if (!cfg || kids || screen) return reply({ ok: false, error: 'policy' });
       var checkoutTab = window.open('', '_blank');
-      if (!checkoutTab) { open(null, m.lines); return reply({ ok: false, error: 'popup', message: 'Use the shop button to open checkout in a new tab.' }); }
       return api('POST', '/api/shop/buy', { lines: m.lines, game: GAME, server: SERVER }).then(function (r) {
-        if (r.ok && r.url) { checkoutTab.location.href = r.url; watch(); } else checkoutTab.close();
+        if (r.ok && r.url) { leaveForCheckout(checkoutTab, r); watch(); } else if (checkoutTab) checkoutTab.close();
         reply(r);
-      }).catch(function () { checkoutTab.close(); reply({ ok: false }); });
+      }).catch(function () { if (checkoutTab) checkoutTab.close(); reply({ ok: false }); });
     }
     if (m.op === 'used') {
       var key = String(m.key || '');

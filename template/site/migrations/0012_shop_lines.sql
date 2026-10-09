@@ -34,3 +34,11 @@ CREATE TRIGGER shop_forget_checkout_player AFTER UPDATE OF player ON shop_orders
 END;
 ALTER TABLE referral_lines ADD COLUMN original_share INTEGER;
 UPDATE referral_lines SET original_share = share;
+ALTER TABLE shop_orders ADD COLUMN attention INTEGER NOT NULL DEFAULT 1;
+UPDATE shop_orders SET attention = 0 WHERE status = 'paid' AND EXISTS (SELECT 1 FROM entitlements WHERE order_id = shop_orders.id);
+ALTER TABLE shop_orders ADD COLUMN refunded_amount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shop_orders ADD COLUMN refunded_net INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shop_orders ADD COLUMN refund_revision INTEGER NOT NULL DEFAULT 0;
+UPDATE shop_orders SET refunded_amount = COALESCE(total, amount), refunded_net = amount WHERE status = 'refunded';
+CREATE INDEX shop_orders_attention_player ON shop_orders (mode, player, updated_at, id) WHERE attention = 1 AND status IN ('started', 'processing', 'paid');
+CREATE INDEX shop_orders_attention ON shop_orders (mode, updated_at, id) WHERE attention = 1 AND status IN ('started', 'processing', 'paid');

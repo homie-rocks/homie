@@ -29,7 +29,7 @@ A kind is a label, not a recurring-billing, wallet, random-reward or fulfillment
   Variable amounts have optional `min` (zero if omitted) and `max` (unbounded if omitted).
   Dates and durations apply only when written.
 - `capPerPlayerMonth`: optional spending cap. A cart reserves its whole pre-tax total atomically.
-- `checkoutMinutes`: optional session lifetime, 30 to 1440 minutes; Stripe defaults to 1440 (24 hours).
+- `checkoutMinutes`: optional session lifetime, 30 to 1440 minutes (values below 31 use 31 to leave a transport margin); Stripe defaults to 1440 (24 hours).
   Returning from checkout or starting another checkout asks Stripe to expire your open session.
   Its reservation releases only when Stripe confirms expiry or another terminal outcome.
 - `refundDays`: optional self-service refund window for items, including used items by default.
@@ -93,7 +93,7 @@ shop.used('badge:studio');          // used-item policy applies only if chosen
 
 The studio chooses where to place or open its shop. The shell verifies game messages and the Worker verifies
 sessions, ownership, origins and payments. `GET /api/player/owns` includes quantity in each detail row.
-The shop page has quantities, Add to cart, Remove and Checkout cart. The game API opens checkout in another tab, keeping the game and room running. If the browser blocks the tab, the shop offers a button to try again. The cart stays in memory and is lost when its game page closes.
+The shop page has quantities, Add to cart, Remove and Checkout cart. The game API opens checkout in another tab, keeping the game and room running. If another tab cannot open, checkout uses the current tab and returns to the game or TV page after payment or cancellation. The cart stays in memory and is lost when its game page closes.
 
 `POST /api/shop/buy` accepts `{ "lines": [{ "item": "badge", "quantity": 2 }] }` or
 `{ "item": "badge" }`. Tip lines also take `amount`. Client-supplied fixed prices are ignored.
@@ -137,8 +137,13 @@ A missing definition gives a named retryable response and office note; the offic
 payment. Older paid orders missing a grant are repaired once. An unknown older item is refunded by the office,
 since its original kind cannot be recovered safely for player self-service.
 A whole-order refund uses one Stripe refund for the remaining charge. Dashboard partial refunds reduce cap
-usage and referral shares by their pre-tax portion; a line is revoked when fully refunded. Out-of-order
-refund events retry until their payment is recorded.
+usage and referral shares by their pre-tax portion, without assigning money to an unnamed line.
+Refunds are rebuilt from [Stripe’s refunds list](https://docs.stripe.com/api/refunds/list). Only
+[succeeded refunds](https://docs.stripe.com/api/refunds/object#refund_object-status) revoke items;
+pending refunds keep them and failed refunds restore them. A named line loses only its own items;
+an untagged Dashboard refund revokes items only when the whole order is refunded.
+Unneeded signed events are acknowledged without recording; an event demonstrably for this shop
+can retry for 15 minutes while its order becomes visible.
 
 Sessions reserve the optional cap until Stripe confirms an outcome. With the default lifetime, a sessionless
 reservation ages out after 24 hours plus a one-minute margin; your `checkoutMinutes` changes that window.
@@ -146,9 +151,14 @@ reservation ages out after 24 hours plus a one-minute margin; your `checkoutMinu
 and [expiring open sessions](https://docs.stripe.com/api/checkout/sessions/expire) define these provider bounds.
 Unresolved orders become eligible for reconciliation after one minute, even with no cap. A buyer's next shop
 or owned-items request schedules up to three reads off the response path, with atomic claims and backoff up
-to an hour; an optional Worker cron invokes the same reconciliation across buyers. No cron is installed for you.
+to an hour; an optional Worker cron invokes the same reconciliation across buyers. No cron is installed for you. To run it every five minutes, add `"triggers": { "crons": ["*/5 * * * *"] }` to `site/wrangler.jsonc`.
 The thanks page can verify a payment directly with the studio's key. Webhook events require Stripe's signature.
 Test and live books stay separate. Owner release attempts to expire an open session, records who released it
 and when, and never prevents a later verified payment grant.
 
 Test mode uses Stripe's test cards. Test a cart, its grants and individual refunds before choosing live mode.
+
+Game and TV checkout use the same tab if a new tab is unavailable, then return to the page the buyer left.
+During rollback, the released Worker grants only a cart’s first item until the new Worker repairs it; it
+allows whole-cart player refunds even when a tip is included, and counts partially refunded carts at
+the full amount toward a cap. The additive schema preserves its original rows and entitlement keys.

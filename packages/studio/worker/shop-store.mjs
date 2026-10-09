@@ -161,6 +161,14 @@ CREATE TRIGGER shop_forget_checkout_player AFTER UPDATE OF player ON shop_orders
 END;
 ALTER TABLE referral_lines ADD COLUMN original_share INTEGER;
 UPDATE referral_lines SET original_share = share;
+ALTER TABLE shop_orders ADD COLUMN attention INTEGER NOT NULL DEFAULT 1;
+UPDATE shop_orders SET attention = 0 WHERE status = 'paid' AND EXISTS (SELECT 1 FROM entitlements WHERE order_id = shop_orders.id);
+ALTER TABLE shop_orders ADD COLUMN refunded_amount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shop_orders ADD COLUMN refunded_net INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shop_orders ADD COLUMN refund_revision INTEGER NOT NULL DEFAULT 0;
+UPDATE shop_orders SET refunded_amount = COALESCE(total, amount), refunded_net = amount WHERE status = 'refunded';
+CREATE INDEX shop_orders_attention_player ON shop_orders (mode, player, updated_at, id) WHERE attention = 1 AND status IN ('started', 'processing', 'paid');
+CREATE INDEX shop_orders_attention ON shop_orders (mode, updated_at, id) WHERE attention = 1 AND status IN ('started', 'processing', 'paid');
 `;
 
 const DAY = 86_400_000;
@@ -186,7 +194,7 @@ export async function migrationNeeded(env) {
     [SHOP_STATEMENTS_FILE, 'SELECT edition FROM referral_edition_lines LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT snapshot, total, refunded_amount FROM shop_order_lines LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT line_id, quantity FROM shop_entitlement_lines LIMIT 1'],
-    [SHOP_LINES_FILE, 'SELECT referral_terms, checkout_player FROM shop_orders LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT referral_terms, checkout_player, attention, refunded_amount, refund_revision FROM shop_orders LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT cart FROM shop_parent_links LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT original_share FROM referral_lines LIMIT 1'],
   ]) {
@@ -245,7 +253,7 @@ export async function spentThisMonth(env, player, now = Date.now()) {
   // A Stripe session remains reserved until Stripe confirms its outcome. Test rows never consume a live cap.
   const d = new Date(now);
   const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-  const r = await env.DB.prepare("SELECT COALESCE(SUM(amount - COALESCE((SELECT SUM(l.refunded_net) FROM shop_order_lines l WHERE l.order_id = shop_orders.id), 0)), 0) AS n FROM shop_orders WHERE player = ?1 AND mode = ?4 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?3)))").bind(player, start, now, String(env.STRIPE_KEY).includes('_live_') ? 'live' : 'test').first();
+  const r = await env.DB.prepare("SELECT COALESCE(SUM(amount - refunded_net), 0) AS n FROM shop_orders WHERE player = ?1 AND mode = ?4 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?3)))").bind(player, start, now, String(env.STRIPE_KEY).includes('_live_') ? 'live' : 'test').first();
   return Number(r?.n) || 0;
 }
 
@@ -278,7 +286,7 @@ export async function orderLines(env, id) {
 
 export function lineView(r) {
   const item = r.snapshot ? JSON.parse(r.snapshot) : null;
-  return { id: r.id, item: r.item, name: item?.name ?? r.item, kind: item?.kind ?? null, quantity: Number(r.quantity), unitAmount: Number(r.unit_amount), amount: Number(r.amount), total: r.total === null ? null : Number(r.total), status: r.status, refundedAt: r.refunded_at };
+  return { id: r.id, refundedAmount: Number(r.refunded_amount ?? 0), item: r.item, name: item?.name ?? r.item, kind: item?.kind ?? null, quantity: Number(r.quantity), unitAmount: Number(r.unit_amount), amount: Number(r.amount), total: r.total === null ? null : Number(r.total), status: r.status, refundedAt: r.refunded_at };
 }
 
 export const orderBySession = (env, session) => env.DB.prepare('SELECT * FROM shop_orders WHERE session = ?1').bind(String(session ?? '')).first();
@@ -287,7 +295,7 @@ export const orderByPayment = (env, payment) => env.DB.prepare('SELECT * FROM sh
 /** An order as the player, the office and the export see it (never a card, never an email). */
 export function orderView(r) {
   return {
-    id: r.id, item: r.item, game: r.game ?? null, amount: Number(r.amount), currency: r.currency, tax: r.tax === null ? null : Number(r.tax), total: r.total === null ? null : Number(r.total),
+    id: r.id, refundedAmount: Number(r.refunded_amount ?? 0), item: r.item, game: r.game ?? null, amount: Number(r.amount), currency: r.currency, tax: r.tax === null ? null : Number(r.tax), total: r.total === null ? null : Number(r.total),
     status: r.status, till: r.till, mode: r.mode, parent: Number(r.parent) === 1, via: r.via ?? null,
     createdAt: Number(r.created_at), paidAt: r.paid_at === null ? null : Number(r.paid_at), refundedAt: r.refunded_at === null ? null : Number(r.refunded_at),
   };

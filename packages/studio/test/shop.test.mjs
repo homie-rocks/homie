@@ -232,12 +232,12 @@ async function fakeStripe() {
   const calls = [];
   // What the stand-in does on purpose (a test sets these): a missing catalog Product, a refund Stripe holds for
   // approval (an Agent key), a key without Webhook Endpoints, Managed Payments not on, the account's endpoints.
-  const behave = { missingProduct: false, approval: false, webhookDenied: false, managedRefused: false, endpoints: [], made: [], updated: [], sessions: new Map(), unreachable: false };
+  const behave = { missingProduct: false, approval: false, webhookDenied: false, managedRefused: false, endpoints: [], made: [], updated: [], sessions: new Map(), refunds: new Map(), payments: new Map(), unreachable: false };
   let n = 0;
   const server = createServer((req, res) => {
     let body = '';
     req.on('data', (c) => { body += c; });
-    req.on('end', () => {
+    req.on('end', async () => {
       const url = new URL(req.url, 'http://x');
       const form = new URLSearchParams(body);
       calls.push({ method: req.method, path: url.pathname, form, auth: String(req.headers.authorization ?? '').replace(/^Bearer (rk|sk)_(test|live)_.*/, '$1_$2'), version: req.headers['stripe-version'], idem: req.headers['idempotency-key'] ?? null });
@@ -265,7 +265,8 @@ async function fakeStripe() {
         session.status = 'expired';
         return send(200, session);
       }
-      if (req.method === 'GET' && url.pathname.startsWith('/v1/payment_intents/')) return send(200, { latest_charge: { amount_refunded: 100 } });
+      if (req.method === 'GET' && url.pathname.startsWith('/v1/payment_intents/')) return send(200, behave.payments.get(url.pathname.split('/').pop()) ?? {});
+      if (req.method === 'GET' && url.pathname === '/v1/refunds') return send(200, { data: [...behave.refunds.values()].filter((r) => r.payment_intent === url.searchParams.get('payment_intent')), has_more: false });
       if (req.method === 'POST' && url.pathname === '/v1/checkout/sessions' && behave.missingProduct && form.get('line_items[0][price_data][product]')) {
         return send(400, { error: { type: 'invalid_request_error', code: 'resource_missing', param: 'line_items[0][price_data][product]', message: `No such product: '${form.get('line_items[0][price_data][product]')}'` } });
       }
@@ -280,8 +281,15 @@ async function fakeStripe() {
         behave.sessions.set(id, session);
         return send(200, session);
       }
-      if (req.method === 'GET' && url.pathname.startsWith('/v1/refunds/')) return send(200, { id: url.pathname.split('/').pop(), status: behave.existingRefundStatus ?? 'pending' });
-      if (req.method === 'POST' && url.pathname === '/v1/refunds') return send(200, { id: `re_test_${n}`, object: 'refund', status: behave.refundStatus ?? 'succeeded', payment_intent: form.get('payment_intent'), amount: Number(form.get('amount') ?? 500) });
+      if (req.method === 'GET' && url.pathname.startsWith('/v1/refunds/')) { const refund = behave.refunds.get(url.pathname.split('/').pop()); if (refund && behave.existingRefundStatus) refund.status = behave.existingRefundStatus; return send(200, refund ?? { id: url.pathname.split('/').pop(), status: 'pending' }); }
+      if (req.method === 'POST' && url.pathname === '/v1/refunds') {
+        const payment = form.get('payment_intent');
+        const remaining = (behave.payments.get(payment)?.amount ?? 500) - [...behave.refunds.values()].filter((r) => r.payment_intent === payment && !['failed', 'canceled'].includes(r.status)).reduce((n, r) => n + r.amount, 0);
+        const refund = { id: `re_test_${n}`, object: 'refund', status: behave.refundStatus ?? 'succeeded', payment_intent: payment, amount: Number(form.get('amount') ?? remaining), metadata: Object.fromEntries([...form].filter(([k]) => k.startsWith('metadata[')).map(([k, v]) => [k.slice(9, -1), v])) };
+        behave.refunds.set(refund.id, refund);
+        if (behave.onRefund) await behave.onRefund(refund);
+        return send(200, refund);
+      }
       if (req.method === 'GET' && url.pathname === '/v1/checkout/sessions') return send(200, { object: 'list', data: [], has_more: false });
       return send(404, { error: { type: 'invalid_request_error', message: 'No such route' } });
     });
@@ -367,8 +375,19 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
   const owner = { ...same, cookie: `studio_owner=${session}` };
   const key0 = { authorization: `Bearer ${officeKey}`, 'content-type': 'application/json' };
   /** Stripe's webhook, signed with the endpoint's (test) secret. */
-  const hook = async (type, object, { id = `evt_${Math.random().toString(36).slice(2, 12)}`, livemode = false, secret = HOOK_SECRET, t = Math.floor(Date.now() / 1000) } = {}) => {
-    const payload = JSON.stringify({ id, object: 'event', type, livemode, data: { object } });
+  const hook = async (type, object, { id = `evt_${Math.random().toString(36).slice(2, 12)}`, livemode = false, secret = HOOK_SECRET, t = Math.floor(Date.now() / 1000), created = t, updateProvider = true } = {}) => {
+    // Provider truth changes before delivery; duplicate deliveries do not add refunds.
+    if (type.startsWith('checkout.session.') && object.payment_intent && secret === HOOK_SECRET && !livemode) {
+      stripe.behave.payments.set(object.payment_intent, { amount: object.amount_total ?? object.amount_subtotal, metadata: object.metadata });
+      const session = stripe.behave.sessions.get(object.id);
+      if (session) Object.assign(session, object);
+    }
+    if (updateProvider && type.startsWith('refund.') && object.id) stripe.behave.refunds.set(object.id, { ...object });
+    if (type === 'charge.refunded') {
+      const total = [...stripe.behave.refunds.values()].filter((r) => r.payment_intent === object.payment_intent && !['failed', 'canceled'].includes(r.status)).reduce((n, r) => n + r.amount, 0);
+      if (object.amount_refunded > total) stripe.behave.refunds.set('re_dashboard_' + id, { id: 're_dashboard_' + id, payment_intent: object.payment_intent, amount: object.amount_refunded - total, status: 'succeeded', metadata: {} });
+    }
+    const payload = JSON.stringify({ id, created, object: 'event', type, livemode, data: { object } });
     return fetchSite('/api/shop/hook', { method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': `t=${t},v1=${await signPayload(payload, secret, t)}` }, body: payload });
   };
   /** Buy as an adult and have Stripe say it is paid: the order, its session and its payment. */
@@ -568,14 +587,14 @@ test('refunds: the owner\'s one tap; from an office key only an ASK the owner co
   assert.equal(asked.status, 202);
   const ask = (await asked.json()).ask;
   assert.match(ask.what, /Refund order ord_\w+ \(Supporter, \$5\.00\)/);
-  assert.equal(s.stripe.calls.filter((c) => c.path === '/v1/refunds').length, 0, 'nothing refunded until the owner says yes');
+  assert.equal(s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST').length, 0, 'nothing refunded until the owner says yes');
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'paid');
   // No key can confirm an ask; the owner's browser can, once.
   assert.equal((await s.fetchSite(`/_studio/confirm/${ask.id}`, { method: 'POST', headers: { ...s.key0, 'content-type': 'application/x-www-form-urlencoded', origin: 'https://owls.example' }, body: 'do=yes' })).status, 401);
-  assert.equal(s.stripe.calls.filter((c) => c.path === '/v1/refunds').length, 0, 'the office key\'s own POST is the locked page');
+  assert.equal(s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST').length, 0, 'the office key\'s own POST is the locked page');
   const confirm = await s.fetchSite(`/_studio/confirm/${ask.id}`, { method: 'POST', headers: { cookie: s.owner.cookie, origin: 'https://owls.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'do=yes' });
   assert.match(await confirm.text(), /Done\./);
-  const refund = s.stripe.calls.filter((c) => c.path === '/v1/refunds');
+  const refund = s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST');
   assert.equal(refund.length, 1);
   assert.equal(refund[0].form.get('payment_intent'), a.payment);
   assert.equal(refund[0].idem, `refund-${a.order}`);
@@ -893,7 +912,7 @@ test('referrals: an arrival from another site, a new player\'s sale, a held line
     assert.equal((await done.json()).ok, true);
     assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order).state, 'settled');
     await s.fetchSite('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: b.order }) });
-    assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order + '_0_540').state, 'clawback');
+    assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order + '_refund_0').state, 'clawback');
   } finally { globalThis.fetch = realFetch; s.stripe.close(); }
 });
 
@@ -1091,7 +1110,7 @@ test('shop connect: with the key alone the page makes the webhook; its secret go
     assert.equal(r.managedPayments.ok, true);
     const made = stripe.behave.made[0];
     assert.equal(made.url, 'https://owls.example/api/shop/hook');
-    assert.deepEqual(made.enabled_events, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'charge.dispute.created', 'charge.dispute.closed']);
+    assert.deepEqual(made.enabled_events, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed']);
     assert.equal(made.api_version, '2025-03-31.basil', 'events rendered in the version the kit reads');
     assert.equal(made.metadata.homie, 'shop-v1');
     assert.deepEqual(stripe.behave.updated, [{ id: 'we_test_older', disabled: 'true' }], 'only the kit\'s own older endpoint, turned off, never deleted');
@@ -2290,7 +2309,7 @@ test('cart grants roll back with payment, snapshots survive edits, each line ref
   const truth = { ...s.stripe.behave.sessions.get(o.session), payment_status: 'paid', payment_intent: 'pi_cart', amount_total: 505 };
   const originalBatch = s.DB.batch;
   s.DB.batch = (writes) => originalBatch([...writes, s.DB.prepare('INSERT INTO nonexistent VALUES (1)')]);
-  await assert.rejects(() => s.hook('checkout.session.completed', truth), /nonexistent/);
+  assert.equal((await s.hook('checkout.session.completed', truth)).status, 503);
   assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id = ?').get(o.id).paid_at, null);
   assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM entitlements').get().n, 0);
   s.DB.batch = originalBatch;
@@ -2307,7 +2326,7 @@ test('cart grants roll back with payment, snapshots survive edits, each line ref
   assert.equal((await s.post('/api/shop/refund', { order: o.id }, s.as(p))).status, 403, 'whole order cannot bypass tip rule');
   assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id, line: o.id + '_2' }, s.owner)).status, 200);
   assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
-  assert.deepEqual(s.stripe.calls.filter((c) => c.path === '/v1/refunds').map((c) => c.form.get('amount')), ['202', '200', null]);
+  assert.deepEqual(s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST').map((c) => c.form.get('amount')), ['202', '200', null]);
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(o.id).status, 'refunded');
   s.stripe.close();
 });
@@ -2354,13 +2373,16 @@ test('Stripe tax totals stay with their lines and pending refunds wait for verif
   s.stripe.behave.refundStatus = 'pending';
   assert.equal((await s.post('/_studio/api/shop/refund', { order, line: order + '_1' }, s.owner)).status, 202);
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_order_lines WHERE id = ?').get(order + '_1').status, 'paid');
-  assert.equal(s.stripe.calls.at(-1).form.get('amount'), '210');
-  await s.hook('refund.updated', { id: 're_tax', payment_intent: 'pi_tax_cart', status: 'succeeded', amount: 210, metadata: { order, line: order + '_1' } });
+  assert.equal(s.stripe.calls.filter((c) => c.method === 'POST' && c.path === '/v1/refunds').at(-1).form.get('amount'), '210');
+  await s.hook('refund.updated', { id: [...s.stripe.behave.refunds.keys()][0], payment_intent: 'pi_tax_cart', status: 'succeeded', amount: 210, metadata: { order, line: order + '_1' } });
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_order_lines WHERE id = ?').get(order + '_1').status, 'refunded');
   assert.deepEqual(s.DB.sql.prepare("SELECT key FROM entitlements WHERE state = 'active' ORDER BY key").all().map((r) => r.key), ['a', 'c']);
   const totals = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
   assert.equal(totals.totals.paid, 500);
   assert.equal(totals.totals.refunded, 200);
+  assert.equal((await s.post('/_studio/api/shop/refund', { order, line: order + '_2' }, s.owner)).status, 200);
+  await s.hook('charge.refunded', { payment_intent: 'pi_tax_cart', amount_refunded: 210 });
+  assert.deepEqual(s.DB.sql.prepare("SELECT key FROM entitlements WHERE state = 'active' ORDER BY key").all().map((r) => r.key), ['a']);
   s.stripe.close();
 });
 
@@ -2497,7 +2519,7 @@ test('rolling schema upgrade: released checkout, payment and refund; new code be
   const before = await site();
   const buyer = before.player(400, { band: 'adult' });
   const purchase = await before.buyPaid(buyer);
-  before.DB.sql.exec('DROP TRIGGER IF EXISTS shop_checkout_player_insert; DROP TRIGGER shop_entitlements_delete; DROP TRIGGER shop_entitlements_adopt; DROP TRIGGER shop_forget_checkout_player; DROP TABLE shop_entitlement_lines; DROP TABLE shop_order_lines; ALTER TABLE shop_orders DROP COLUMN whole_refund; ALTER TABLE shop_orders DROP COLUMN checkout_player; ALTER TABLE shop_orders DROP COLUMN referral_terms; ALTER TABLE shop_parent_links DROP COLUMN cart; ALTER TABLE referral_lines DROP COLUMN original_share;');
+  before.DB.sql.exec('DROP INDEX shop_orders_attention; DROP INDEX shop_orders_attention_player; ALTER TABLE shop_orders DROP COLUMN attention; ALTER TABLE shop_orders DROP COLUMN refunded_amount; ALTER TABLE shop_orders DROP COLUMN refunded_net; ALTER TABLE shop_orders DROP COLUMN refund_revision; DROP TRIGGER IF EXISTS shop_checkout_player_insert; DROP TRIGGER shop_entitlements_delete; DROP TRIGGER shop_entitlements_adopt; DROP TRIGGER shop_forget_checkout_player; DROP TABLE shop_entitlement_lines; DROP TABLE shop_order_lines; ALTER TABLE shop_orders DROP COLUMN whole_refund; ALTER TABLE shop_orders DROP COLUMN checkout_player; ALTER TABLE shop_orders DROP COLUMN referral_terms; ALTER TABLE shop_parent_links DROP COLUMN cart; ALTER TABLE referral_lines DROP COLUMN original_share;');
   before.env.DB = { ...before.DB };
   const list = await (await before.fetchSite('/api/shop', { headers: before.as(buyer) })).json();
   assert.equal(list.open, false); assert.equal(list.migration, SHOP_LINES_FILE);
@@ -2563,6 +2585,7 @@ test('early and partial Dashboard refunds converge, large carts refund in one ca
   const p = s.player();
   const opened = await (await s.post('/api/shop/buy', { lines: Array.from({ length: 100 }, () => ({ item: 'a' })) }, s.as(p))).json();
   const o = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(opened.order);
+  s.stripe.behave.payments.set('pi_early', { amount: 10000, metadata: { order: o.id } });
   const early = { payment_intent: 'pi_early', amount: 10000, amount_refunded: 50 };
   assert.equal((await s.hook('charge.refunded', early, { id: 'evt_early' })).status, 503);
   assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_events WHERE id = ?').get('evt_early').n, 0);
@@ -2573,9 +2596,9 @@ test('early and partial Dashboard refunds converge, large carts refund in one ca
   await s.hook('charge.refunded', early);
   assert.equal(await spentThisMonth(s.env, p.id), 9950);
   assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 995);
-  const count = s.stripe.calls.filter((c) => c.path === '/v1/refunds').length;
+  const count = s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST').length;
   assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
-  assert.equal(s.stripe.calls.filter((c) => c.path === '/v1/refunds').length - count, 1);
+  assert.equal(s.stripe.calls.filter((c) => c.path === '/v1/refunds' && c.method === 'POST').length - count, 1);
   assert.equal(s.DB.sql.prepare("SELECT COUNT(*) AS n FROM shop_order_lines WHERE status = 'refunded'").get().n, 100);
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, []);
   await s.hook('charge.dispute.closed', { payment_intent: 'pi_early', status: 'lost' });
@@ -2587,7 +2610,7 @@ test('early and partial Dashboard refunds converge, large carts refund in one ca
   await s.hook('charge.dispute.created', { payment_intent: 'pi_dispute_lines', id: 'dp_lines' });
   await s.hook('charge.dispute.closed', { payment_intent: 'pi_dispute_lines', status: 'lost' });
   const { orderLines } = await import('../worker/shop-store.mjs');
-  assert.deepEqual((await orderLines(s.env, disputedRow.id)).map((l) => l.status), ['refunded', 'lost']);
+  assert.deepEqual((await orderLines(s.env, disputedRow.id)).map((l) => l.status), ['lost', 'lost']);
   const missing = await (await s.post('/api/shop/buy', { item: 'a' }, s.as(p))).json();
   const missingRow = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(missing.order);
   s.DB.sql.prepare("UPDATE shop_orders SET item = 'removed' WHERE id = ?").run(missing.order);
@@ -2600,5 +2623,221 @@ test('early and partial Dashboard refunds converge, large carts refund in one ca
   assert.equal((await s.post('/_studio/api/shop/refund', { order: missing.order }, s.owner)).status, 200);
   for (const minutes of [30, 31, 1440]) assert.equal(checkShop({ items: [SUPPORTER], checkoutMinutes: minutes }).shop.checkoutMinutes, minutes);
   for (const minutes of [29, 1441]) assert.equal(checkShop({ items: [SUPPORTER], checkoutMinutes: minutes }).ok, false);
+  s.stripe.close();
+});
+
+test('Hat and Cape refunds use Stripe IDs in every event order, including pending failure and Dashboard refunds', async () => {
+  const s = await site({ settings: { policy: undefined, automaticTax: false, capPerPlayerMonth: null, refundDays: 14, purchaseAttemptsPerMinute: 1000, items: [
+    { id: 'hat', name: 'Hat', price: 300, gives: ['hat'] }, { id: 'cape', name: 'Cape', price: 999, gives: ['cape'] },
+  ] } });
+  for (const scenario of ['before', 'created-before', 'after', 'duplicate', 'pending-success', 'pending-failure', 'succeeded-failure', 'player-before', 'dashboard']) {
+    const p = s.player();
+    const purchase = await (await s.post('/api/shop/buy', { lines: [{ item: 'hat' }, { item: 'cape' }] }, s.as(p))).json();
+    const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(purchase.order);
+    const payment = 'pi_' + scenario.replaceAll('-', '_');
+    await s.hook('checkout.session.completed', { ...s.stripe.behave.sessions.get(row.session), payment_status: 'paid', payment_intent: payment, amount_total: 1299 });
+    const books = async (amount, lineAmounts, owned) => {
+      const order = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(row.id);
+      const stripeTotal = [...s.stripe.behave.refunds.values()].filter((r) => r.payment_intent === payment && r.status === 'succeeded').reduce((n, r) => n + r.amount, 0);
+      assert.equal(order.refunded_amount, stripeTotal, scenario);
+      assert.equal(order.refunded_amount, amount, scenario);
+      assert.equal(order.status, amount === 1299 ? 'refunded' : 'paid', scenario);
+      assert.deepEqual(s.DB.sql.prepare('SELECT refunded_amount FROM shop_order_lines WHERE order_id = ? ORDER BY position').all(row.id).map((l) => l.refunded_amount), lineAmounts, scenario);
+      assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns.sort(), owned.sort(), scenario);
+    };
+    if (scenario === 'dashboard') {
+      await s.hook('refund.created', { id: 're_dashboard_partial', payment_intent: payment, amount: 999, status: 'succeeded', metadata: {} });
+      await books(999, [0, 0], ['hat', 'cape']);
+      await s.hook('refund.created', { id: 're_dashboard_full', payment_intent: payment, amount: 300, status: 'succeeded', metadata: {} });
+      await books(1299, [300, 999], []);
+      continue;
+    }
+    s.stripe.behave.refundStatus = scenario.startsWith('pending') ? 'pending' : 'succeeded';
+    const event = async () => scenario === 'created-before' ? s.hook('refund.created', [...s.stripe.behave.refunds.values()].find((r) => r.payment_intent === payment)) : s.hook('charge.refunded', { payment_intent: payment, amount_refunded: 999 }, { id: 'evt_charge_' + scenario });
+    s.stripe.behave.onRefund = scenario.endsWith('before') ? async () => { assert.equal((await event()).status, 200); await books(999, [0, 999], ['hat']); } : null;
+    const result = await s.post(scenario === 'player-before' ? '/api/shop/refund' : '/_studio/api/shop/refund', { order: row.id, line: row.id + '_1' }, scenario === 'player-before' ? s.as(p) : s.owner);
+    assert.equal(result.status, scenario.startsWith('pending') ? 202 : 200, await result.clone().text());
+    await event();
+    if (scenario === 'duplicate') await event();
+    const refund = [...s.stripe.behave.refunds.values()].find((r) => r.payment_intent === payment);
+    if (scenario.startsWith('pending')) await books(0, [0, 0], ['hat', 'cape']);
+    else await books(999, [0, 999], ['hat']);
+    if (scenario.includes('failure') || scenario === 'pending-success') {
+      await s.hook('refund.updated', { ...refund, status: scenario.includes('failure') ? 'failed' : 'succeeded' });
+      await books(scenario.includes('failure') ? 0 : 999, scenario.includes('failure') ? [0, 0] : [0, 999], scenario.includes('failure') ? ['hat', 'cape'] : ['hat']);
+    }
+    s.stripe.behave.onRefund = null;
+  }
+  s.stripe.close();
+});
+
+test('cancel owns its aged session, foreign events are ignored, and release grants a lost paid webhook', async () => {
+  const s = await site({ settings: { policy: undefined, capPerPlayerMonth: null, automaticTax: false, purchaseAttemptsPerMinute: 1000 } });
+  for (const age of [3 * 60000, 3 * 3600000]) {
+    const p = s.player();
+    const bought = await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).json();
+    s.DB.sql.prepare('UPDATE shop_orders SET created_at = ?, updated_at = 1 WHERE id = ?').run(Date.now() - age, bought.order);
+    await s.fetchSite('/shop/?cancelled=1', { headers: s.as(p) });
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(bought.order).status, 'started');
+    await s.fetchSite('/shop/?cancelled=1&order=' + bought.order, { headers: s.as(p) });
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(bought.order).status, 'expired');
+  }
+  const before = s.DB.sql.prepare('SELECT COUNT(*) n FROM shop_events').get().n;
+  for (const type of ['invoice.paid', 'checkout.session.completed', 'checkout.session.expired', 'refund.created', 'charge.refunded', 'charge.dispute.created', 'charge.dispute.closed']) {
+    for (let n = 0; n < 2; n++) {
+      const response = await s.hook(type, { id: 'cs_foreign', payment_intent: 'pi_foreign', payment_status: 'paid', metadata: {}, amount_refunded: 0 });
+      assert.equal(response.status, 200, type);
+      assert.equal((await response.json()).did, 'ignored', type);
+    }
+  }
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) n FROM shop_events').get().n, before);
+  const p = s.player();
+  const bought = await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).json();
+  const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(bought.order);
+  Object.assign(s.stripe.behave.sessions.get(row.session), { payment_status: 'paid', payment_intent: 'pi_release', amount_total: 500 });
+  const release = await s.post('/_studio/api/shop/release', { order: row.id }, s.owner);
+  assert.equal(release.status, 200, await release.clone().text());
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'paid');
+  await s.hook('charge.dispute.closed', { payment_intent: 'pi_release', status: 'lost' });
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(row.id).status, 'lost');
+  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, []);
+  s.stripe.close();
+});
+
+test('200 simultaneous checkouts never expire another successful response session', async () => {
+  const s = await site({ settings: { policy: undefined, capPerPlayerMonth: null, purchaseAttemptsPerMinute: 1000, purchaseAttemptsPerAddressPerMinute: 1000 } });
+  const p = s.player();
+  const responses = await Promise.all(Array.from({ length: 200 }, () => s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))));
+  for (const response of responses) {
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    const row = s.DB.sql.prepare('SELECT session FROM shop_orders WHERE id = ?').get(body.order);
+    assert.equal(s.stripe.behave.sessions.get(row.session).status, 'open');
+  }
+  s.stripe.close();
+});
+
+test('real Chrome without popups creates Stripe sessions from game and TV buttons and cart messages, then returns', { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH to run the real-browser proof' }, async () => {
+  const { default: puppeteer } = await import('puppeteer-core');
+  const { SHOP_SHELL_JS, SHOP_JS } = await import('../worker/shop-page.mjs');
+  const s = await site({ settings: { policy: undefined, automaticTax: false, capPerPlayerMonth: null, purchaseAttemptsPerMinute: 1000 } });
+  const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+  try {
+    for (const path of ['/owl-run/play?room=one', '/owl-run/tv?room=one']) for (const cart of [false, true]) {
+      const page = await browser.newPage();
+      const origin = 'https://owls.example';
+      await page.setRequestInterception(true);
+      page.on('request', async (request) => {
+        const url = new URL(request.url());
+        if (url.hostname === 'checkout.stripe.com') return request.respond({ status: 200, contentType: 'text/html', body: '<p>Stand-in Stripe Checkout</p>' });
+        if (url.pathname.startsWith('/api/')) {
+          const response = await s.fetchSite(url.pathname + url.search, { method: request.method(), headers: { ...request.headers(), origin }, ...(request.postData() ? { body: request.postData() } : {}) });
+          return request.respond({ status: response.status, headers: Object.fromEntries(response.headers), body: await response.text() });
+        }
+        if (url.pathname === '/shop/thanks') return request.respond({ status: 200, contentType: 'text/html', body: '<p data-thanks-title></p><p data-thanks-line></p><script id="shop-boot" type="application/json">' + JSON.stringify({ thanks: url.searchParams.get('session_id') }) + '</script><script>' + SHOP_JS + '</script>' });
+        return request.respond({ status: 200, contentType: 'text/html', body: '<iframe class="game" srcdoc="<p>Game</p>"></iframe><script>window.open=()=>null; window.__HOMIE_PLAY=' + JSON.stringify({ game: 'owl-run', screen: path.includes('/tv'), shop: { policy: { televisionCheckout: true, kidsServer: true } } }) + '</script><script>' + SHOP_SHELL_JS + '</script>' });
+      });
+      await page.goto(origin + path);
+      const creates = s.stripe.calls.filter((c) => c.method === 'POST' && c.path === '/v1/checkout/sessions').length;
+      if (cart) await page.frames().find((f) => f !== page.mainFrame()).evaluate(() => parent.postMessage({ t: 'homie-shop', op: 'checkout', lines: [{ item: 'supporter', quantity: 2 }] }, '*'));
+      else {
+        await page.evaluate(() => window.__shell.shop.open());
+        await page.waitForSelector('.buy');
+        await page.click('.buy');
+      }
+      await page.waitForFunction(() => location.hostname === 'checkout.stripe.com');
+      assert.equal(s.stripe.calls.filter((c) => c.method === 'POST' && c.path === '/v1/checkout/sessions').length, creates + 1);
+      const row = s.DB.sql.prepare('SELECT * FROM shop_orders ORDER BY created_at DESC LIMIT 1').get();
+      await s.hook('checkout.session.completed', { ...s.stripe.behave.sessions.get(row.session), payment_status: 'paid', payment_intent: 'pi_browser_' + row.id, amount_total: row.amount });
+      await page.goto(origin + '/shop/thanks?session_id=' + row.session);
+      await page.waitForFunction((expected) => location.pathname + location.search === expected, {}, path);
+      await page.close();
+    }
+  } finally { await browser.close(); s.stripe.close(); }
+});
+
+test('no-popup game and TV scripts create a checkout and restore the exact page after success or cancel', async () => {
+  const { runInNewContext } = await import('node:vm');
+  const { SHOP_SHELL_JS, SHOP_JS } = await import('../worker/shop-page.mjs');
+  const s = await site({ settings: { policy: undefined, automaticTax: false, capPerPlayerMonth: null, purchaseAttemptsPerMinute: 1000 } });
+  for (const screen of [false, true]) for (const cart of [false, true]) for (const cancel of [false, true]) {
+    const p = s.player(), nodes = [], events = {}, stored = new Map();
+    const element = () => {
+      const node = { children: [], events: {}, setAttribute() {}, appendChild(n) { this.children.push(n); return n; }, addEventListener(k, fn) { this.events[k] = fn; }, remove() {} };
+      nodes.push(node); return node;
+    };
+    const frame = { contentWindow: { postMessage() {} } };
+    const document = { cookie: '', body: element(), createElement: element, createTextNode: (textContent) => ({ textContent }), addEventListener() {}, querySelector: (q) => q === 'iframe.game' ? frame : null };
+    const window = { open: () => null, __HOMIE_PLAY: { game: 'owl-run', screen, shop: { policy: { televisionCheckout: true } } }, addEventListener: (k, fn) => { events[k] = fn; } };
+    const location = { origin: 'https://owls.example', pathname: screen ? '/owl-run/tv' : '/owl-run/play', search: '?room=one', hash: '#shop', href: '' };
+    const original = location.pathname + location.search + location.hash;
+    const sessionStorage = { setItem: (k, v) => stored.set(k, v), getItem: (k) => stored.get(k), removeItem: (k) => stored.delete(k) };
+    const fetch = (path, init) => s.fetchSite(path, { ...init, headers: { ...init.headers, ...s.as(p) } });
+    runInNewContext(SHOP_SHELL_JS, { document, window, fetch, location, sessionStorage, URL, setTimeout() {} });
+    if (cart) events.message({ source: frame.contentWindow, data: { t: 'homie-shop', op: 'checkout', lines: [{ item: 'supporter', quantity: 2 }] } });
+    else {
+      window.__shell.shop.open();
+      for (let i = 0; i < 1000 && !nodes.some((n) => n.textContent === 'Buy on Stripe'); i++) await new Promise((resolve) => setTimeout(resolve, 5));
+      const button = nodes.find((n) => n.textContent === 'Buy on Stripe');
+      assert.ok(button, 'The shop finished loading');
+      button.events.click();
+    }
+    for (let i = 0; i < 1000 && !location.href; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.match(location.href, /^https:\/\/checkout.stripe.com/);
+    const saved = JSON.parse(stored.get('shop-return'));
+    assert.equal(saved.path, original);
+    const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(saved.order);
+    if (!cancel) await s.hook('checkout.session.completed', { ...s.stripe.behave.sessions.get(row.session), payment_status: 'paid', payment_intent: 'pi_script_' + row.id, amount_total: row.amount });
+    else await s.fetchSite('/shop/?cancelled=1&order=' + row.id, { headers: s.as(p) });
+    location.href = ''; location.pathname = cancel ? '/shop/' : '/shop/thanks'; location.search = cancel ? '?cancelled=1&order=' + row.id : '?session_id=' + row.session;
+    const thanks = {};
+    document.querySelector = (q) => q.startsWith('[data-thanks-') ? thanks : null;
+    document.getElementById = () => ({ textContent: JSON.stringify(cancel ? {} : { thanks: row.session }) });
+    runInNewContext(SHOP_JS, { document, fetch, location, sessionStorage, URL, URLSearchParams, setTimeout() {} });
+    for (let i = 0; i < 1000 && !location.href; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(location.href, original);
+    assert.equal(stored.size, 0);
+  }
+  s.stripe.close();
+});
+
+test('legacy tips, deleted players and paid 404s leave reconciliation; early own events have a bounded retry age', async () => {
+  const { reconcileOrders, shopOf } = await import('../worker/shop.mjs');
+  const s = await site({ settings: { policy: undefined, automaticTax: false, capPerPlayerMonth: null, purchaseAttemptsPerMinute: 1000 } });
+  for (const kind of ['removed-tip', 'deleted-player', 'missing-session']) {
+    const p = s.player();
+    const purchase = await s.buyPaid(p);
+    s.stripe.behave.sessions.get(purchase.session).created = Math.floor(Date.now() / 1000) - 120;
+    s.DB.sql.prepare('UPDATE shop_orders SET attention = 1, created_at = 1, updated_at = 1 WHERE id = ?').run(purchase.order);
+    if (kind === 'removed-tip') {
+      s.DB.sql.prepare("UPDATE shop_order_lines SET item = 'removed', snapshot = NULL WHERE order_id = ?").run(purchase.order);
+    } else if (kind === 'deleted-player') s.DB.sql.prepare('UPDATE shop_orders SET player = NULL WHERE id = ?').run(purchase.order);
+    else s.stripe.behave.error = { status: 404, code: 'resource_missing' };
+    const shop = shopOf({ shop: { items: [SUPPORTER] } });
+    await reconcileOrders(s.env, shop);
+    assert.equal(s.DB.sql.prepare('SELECT attention FROM shop_orders WHERE id = ?').get(purchase.order).attention, 0, kind);
+    const calls = s.stripe.calls.length;
+    for (let n = 0; n < 4; n++) await reconcileOrders(s.env, shop);
+    assert.equal(s.stripe.calls.length, calls, kind);
+    s.stripe.behave.error = null;
+  }
+  const obj = { id: 'cs_early_own', metadata: { homie: 'shop-v1', origin: 'https://owls.example', order: 'ord_' + 'x'.repeat(20) }, payment_status: 'paid' };
+  assert.equal((await s.hook('checkout.session.completed', obj)).status, 503);
+  assert.equal((await s.hook('checkout.session.completed', obj, { created: Math.floor(Date.now() / 1000) - 16 * 60 })).status, 200);
+  s.stripe.close();
+});
+
+test('refunding one free cart line keeps its sibling and a later full refund closes the order', async () => {
+  const s = await site({ settings: { policy: undefined, capPerPlayerMonth: null, items: [
+    { id: 'a', name: 'A', price: 0, gives: ['a'] }, { id: 'b', name: 'B', price: 0, gives: ['b'] },
+  ] } });
+  const p = s.player();
+  const { order } = await (await s.post('/api/shop/buy', { lines: [{ item: 'a' }, { item: 'b' }] }, s.as(p))).json();
+  assert.equal((await s.post('/_studio/api/shop/refund', { order, line: order + '_0' }, s.owner)).status, 200);
+  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, ['b']);
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order).status, 'paid');
+  assert.equal((await s.post('/_studio/api/shop/refund', { order }, s.owner)).status, 200);
+  assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, []);
+  assert.equal(s.stripe.calls.length, 0);
   s.stripe.close();
 });

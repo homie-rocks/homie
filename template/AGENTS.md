@@ -344,7 +344,7 @@ where it sells and for Stripe's terms. Homie takes no cut.
   secrets. Stripe's agent tools can manage Products through `shop catalog`; the connect page creates the
   webhook so its secret stays out of chat. Both the key and signing secret are part of working payment setup.
   Stripe's approval links belong to the owner. `checkoutMinutes` is optional (Stripe: 30 to 1440 minutes,
-  default 1440); cancelling or replacing checkout expires the open session on Stripe's confirmation.
+  default 1440; values below 31 use 31 for transport margin); cancelling or replacing checkout expires the open session on Stripe's confirmation.
 - `shop orders` and `/_studio/office/shop` show sales. `shop refund <order>` asks the owner to confirm.
   `shop statements` records optional referral shares; studios pay their referrers directly.
 

@@ -100,7 +100,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
     const url = new URL(request.url);
     assert.equal(url.hostname, 'api.stripe.com');
     if (url.pathname.endsWith('/expire')) { expired.push(url.pathname); return Response.json({ status: 'expired' }); }
-    if (url.pathname === '/v1/refunds') return Response.json({ id: 're_test', status: 'succeeded' });
+    if (url.pathname === '/v1/refunds') return Response.json(request.method === 'GET' ? { data: [{ id: 're_test', status: 'succeeded', amount: 500 }], has_more: false } : { id: 're_test', status: 'succeeded' });
     if (missing) return Response.json({ error: { code: 'resource_missing' } }, { status: 404 });
     return Response.json({ id: url.pathname.split('/').pop(), status: 'open' });
   } } } }] });
@@ -143,5 +143,44 @@ test('missing and released payments grant once and refund in workerd', { timeout
       assert.equal(refunded.owns.length, 0);
     }
     assert.equal(expired.length, 1);
+  } finally { await mf.dispose(); }
+});
+
+test('50,000 paid orders cost at most three reconciliation rows for an empty buyer and a bounded scheduled pass', { timeout: 30000 }, async () => {
+  const bundled = await build({ bundle: true, write: false, format: 'esm', platform: 'browser', stdin: {
+    resolveDir: fileURLToPath(new URL('../worker/', import.meta.url)),
+    contents: `import { reconcileOrders } from './shop.mjs';
+      export default { async fetch(request, env) {
+        const reads = [];
+        const db = env.DB;
+        env.DB = { prepare(sql) {
+          const statement = db.prepare(sql);
+          if (!sql.startsWith('SELECT * FROM shop_orders')) return statement;
+          return { bind(...args) { const bound = statement.bind(...args); return { async all() {
+            const result = await bound.all(); reads.push({ rows: result.meta.rows_read, returned: result.results.length }); return result;
+          } }; } };
+        } };
+        await reconcileOrders({ ...env, STRIPE_KEY: 'rk_test_' + 'a'.repeat(32) }, { items: [] }, new URL(request.url).pathname === '/player' ? 'empty' : null);
+        return Response.json(reads);
+      } };`,
+  } });
+  const mf = new Miniflare({ telemetry: { enabled: false }, workers: [{ config: { name: 'shop-rows', compatibilityDate: '2026-06-01',
+    manifest: { mainModule: 'worker.mjs', modules: { 'worker.mjs': { type: 'esm', contents: bundled.outputFiles[0].text } } },
+    env: { DB: { type: 'd1', id: 'shop-rows' } },
+  }, dev: { outboundService: { type: 'fetcher', handler: () => { throw new Error('No Stripe reads expected'); } } } }] });
+  try {
+    const db = await mf.getD1Database('DB');
+    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
+      const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
+      for (const statement of sql.replace(/^--.*$/gm, '').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g).filter((s) => s.trim())) await db.prepare(statement).run();
+    }
+    await db.prepare("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<50000) INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) SELECT 'ord_' || x, 'buyer_' || (x%1000), 'tip', 100, 'usd', 'stripe', 'test', 'paid', 1, 1 FROM n").run();
+    for (const path of ['/player', '/scheduled']) {
+      const rows = await (await mf.dispatchFetch('https://studio.example' + path)).json();
+      assert.equal(rows.length, 1);
+      assert.ok(rows[0].rows <= 6, JSON.stringify(rows));
+      assert.ok(rows[0].returned <= 3);
+      console.log(path + ' with 50,000 orders: ' + rows[0].rows + ' D1 rows read');
+    }
   } finally { await mf.dispose(); }
 });

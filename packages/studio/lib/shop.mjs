@@ -43,7 +43,7 @@ const SELLING = join(HERE, '..', 'shop', 'SELLING.md');
 /** The events the webhook endpoint listens to (the owner ticks these in Stripe). */
 export const HOOK_EVENTS = Object.freeze([
   'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired',
-  'charge.refunded', 'refund.created', 'refund.updated', 'charge.dispute.created', 'charge.dispute.closed',
+  'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed',
 ]);
 /** The restricted key's permissions, as Stripe's key page names them. Nothing else. */
 export const KEY_PERMISSIONS = Object.freeze([
