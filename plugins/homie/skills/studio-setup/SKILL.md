@@ -1,6 +1,6 @@
 ---
 name: studio-setup
-description: "Set up a Homie studio (one repository with games/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare) with the AI handling setup and defaults: setup status first (accounts and tools, what each unlocks, the exact fix), name the studio, see a working game, make one small change, plan the game into its Game Codex, build it (alone or with parallel agents) with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says \"set up a game studio called X\" (with or without \"and make a multiplayer game\")."
+description: "Set up a Homie studio (one repository with games/, apps/, music/, videos/ and posts/, and a site with public game rooms on the studio's own Cloudflare) with the AI handling setup and defaults: setup status first (accounts and tools, what each unlocks, the exact fix), choose editable defaults, plan the requested game or app, build it with progress the person can watch, playtest, put it online and list it in the homie.rocks directory. Use when someone asks to set up, create or start a studio or a game studio, asks what they need or whether they are set up, or says \"set up a game studio called X\" (with or without \"and make a multiplayer game\")."
 compatibility: Node 22. Reads, and offers only when a feature needs them, each provider's own tools (Wrangler (Cloudflare, pinned in the studio), the GitHub CLI, the ElevenLabs CLI, a fal key, Ollama for Clef on this computer, and as an option the stripe CLI's Stripe Projects). The plugin's providers.json lists them.
 metadata:
   providers: cloudflare github elevenlabs fal stripe ollama
@@ -12,7 +12,7 @@ metadata:
 # Set up a studio
 
 A Homie studio is ONE folder the person can see and open: `AGENTS.md` (+ `CLAUDE.md`
-importing it), `games/`, `music/`, `videos/`, `posts/`, and a site: a Cloudflare Worker with a
+importing it), `games/`, `apps/`, `music/`, `videos/`, `posts/`, and a site: a Cloudflare Worker with a
 D1 database and the Table/Lobby Durable Objects that serve the studio's pages and its public
 game rooms from the studio's **own** Cloudflare account, on Cloudflare. The
 code comes from `@homie-rocks/studio`, pinned in the studio's `package.json`. The person never
@@ -29,6 +29,8 @@ by asking. A business or non-profit may need an app or site: do not force a game
 Use phone and computer controls, a small first version, local sound and CC0 art. Build with one agent
 unless parallel work was requested. Keep provider approvals, paid budgets and required host holds.
 An existing request to go live or list is authorization; do not ask again outside those holds.
+
+**An app first:** For an app request, run `app new <id>` in the empty studio, build the requested roles and shared action, and run its app check. Give the `/<id>/open` link as soon as it passes; continue to the requested publish flow without a game demo or interview. The same keyless shop is optional, with its visible Shop control when something is for sale.
 
 **A Play link first.** Build the game to the point where it plays, run the two-browser `check`, and the moment
 it passes tell the person, with the link they can open now (`http://127.0.0.1:8787/<id>/play`, two tabs for two

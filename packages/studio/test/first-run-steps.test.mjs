@@ -9,7 +9,7 @@ import { prepareNode, nodeHome } from '../lib/prepare.mjs';
 import { studioDomain, registerWorkersAddress } from '../lib/domain.mjs';
 import { newStudio } from '../lib/scaffold.mjs';
 import { readConfig, keptRoutes } from '../lib/routes.mjs';
-import { readStudio, configPath } from '../lib/studio.mjs';
+import { newApp, readStudio, configPath } from '../lib/studio.mjs';
 import { StudioContext, toolDefs, _test } from '../lib/mcp-tools.mjs';
 import { INSTRUCTIONS } from '../lib/mcp.mjs';
 import { toolPath, npmInvocation } from '../lib/jobs.mjs';
@@ -87,6 +87,19 @@ test('first-run MCP defaults the name, has no tutorial gates, and plans without 
   assert.match(INSTRUCTIONS, /business or charity/);
   assert.match(INSTRUCTIONS, /never types a command/);
   assert.equal((await call('studio_domain', { hostname: 'pub.example.com' })).isError, undefined);
+});
+
+
+test('an app request advances first setup without a game or a game codex', async () => {
+  const ctx = new StudioContext({ studiosDir: join(scratch, 'app-studios'), install: false });
+  const made = await toolDefs(ctx).find((t) => t.name === 'studio_scaffold').run({ name: 'Welcome' });
+  assert.notEqual(made.isError, true);
+  const root = ctx.root();
+  await newApp(root, 'queue');
+  const steps = _test.checklist(ctx, root);
+  assert.equal(steps.find((s) => s.state === 'now').label, 'Build and check it');
+  assert.equal(existsSync(join(root, 'games', 'queue')), false);
+  assert.equal(existsSync(join(root, 'apps', 'queue', 'app.json')), true);
 });
 
 

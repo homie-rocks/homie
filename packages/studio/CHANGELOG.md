@@ -29,6 +29,7 @@ Your AI carries first setup through with defaults you can change by asking.
 - Deploy registers an initial workers.dev address through the existing Cloudflare sign-in, keeping an existing address unchanged.
 - The Desktop tools can install a private Node and npm. Your AI can prepare a custom hostname for Cloudflare to create its DNS and certificate during deploy.
 - Public descriptions now describe games, apps, engine packages and media skills, your own Cloudflare and your own Stripe with one approval.
+- App requests go directly to the app build and shared-action check. The large shop-read regression measures CPU work, so other concurrent test processes cannot exhaust its unchanged limit.
 
 ### Upgrade notes
 

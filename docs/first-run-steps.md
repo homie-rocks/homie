@@ -16,6 +16,11 @@ The automation pattern is already present in `cloudflare_login` and `shop connec
 provider tool, the provider opens its approval page, the AI follows the job and completes the work.
 Keys and account ids are implementation details. GitHub is optional for a local studio.
 
+Re-fitted to main `51227fc` (studio 0.37.0 / plugin 0.38.0): app requests use `app new`,
+roles and a shared-action check, with no game tutorial. The optional keyless shop keeps its visible
+Shop control. These add no mandatory human tasks. The before counts and source permalinks remain
+the historical baseline above.
+
 ## Counts
 
 | Path | Before | After |
@@ -589,10 +594,25 @@ custom-domain validation, idempotence, preservation of existing routes, and work
 shop, upgrade and browser tests exercise the rest of the flow against stand-in providers and local servers.
 The full `npm test` is run with real Chrome via CHROME_PATH. No provider login/deploy is needed by these tests.
 
-Scaffold instructions changed, so the next unused patch after main is **studio 0.36.1 / plugin 0.37.1**.
+Scaffold instructions changed, so the next unused patch after main is **studio 0.37.1 / plugin 0.38.1**.
 The package, workspace lock, Worker version, all plugin manifests, marketplace, generated template and template
-fingerprints are bumped together, following the previous release. Both changelog copies include Unreleased
-bullets and the version section. A real private-runtime trial on this Mac downloaded Node v22.23.3, verified its archive, ran Node and npm 10.9.9, and removed the scratch installation. Final gate results are recorded in the PR.
+fingerprints are bumped together, following the previous release. Both changelog copies include the new version section; released sections remain unchanged. A real private-runtime trial on this Mac downloaded Node v22.23.3, verified its archive, ran Node and npm 10.9.9, and removed the scratch installation. Final gate results are recorded in the PR.
+
+## Release-train verification (0.37.1)
+
+The full package suite passed 1,391 tests, skipped 6 optional integrations, and failed none with
+Chrome configured and release tags fetched. The focused first-run suite, including the new app-only
+checklist case, passed 10/10. The plugin suite passed 118, skipped 1, failed none. Install, build,
+plugin validation, the packed Desktop check, changelog check and publish check passed; publish plans
+one new studio version and leaves the other 22 npm packages unchanged.
+
+The four hostile-rule timing failures were already corrected on main by measuring CPU work rather
+than wall time. The 200,000-row shop read now does the same: its 15,000 ms limit is unchanged, and the
+full-suite read used 1,961 CPU ms. This excludes time the operating system gives other test processes;
+there is no retry or weakened threshold. The rolling-upgrade test already ignores tags at or above
+the checkout's own version, including the tag on the commit being published.
+
+Trials: a disposable copy of /Users/ryan/Studios/homie-arcade, initially without node_modules, built and passed all five game checks with the packed toolkit, matching released 0.37.0. Both browsers drew 60–61 fps (baseline 60). The complete app-first-run trial went from an empty folder through the AI-chosen default name, app creation, custom-domain preparation, install/build, a real Chrome shared action on a wall and two phones, reconnect, and the same studio's first deployment using provider stand-ins with automatic workers.dev registration/retry. All temporary copies were deleted; the original studio was untouched.
 
 ## Appendix: source locations of human-directed prompts on main
 

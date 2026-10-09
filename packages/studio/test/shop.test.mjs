@@ -1425,7 +1425,8 @@ test('200000 referral rows have exact SQL totals and bounded pages and heap', as
   s.DB.sql.exec('COMMIT');
   const { linesOf } = await import('../worker/referrals.mjs');
   const before = process.memoryUsage().heapUsed;
-  const started = performance.now();
+  // Measure work, not time this test process is descheduled by the full suite.
+  const started = process.cpuUsage();
   const { books, nextCursor } = await booksOf(s.env);
   assert.equal(books.length, 50);
   assert.equal(nextCursor, null);
@@ -1443,11 +1444,12 @@ test('200000 referral rows have exact SQL totals and bounded pages and heap', as
   }
   assert.equal(count, 200000);
   assert.equal(sum, 10000000);
-  const elapsed = performance.now() - started;
-  assert.ok(elapsed < 15000, `full read took ${elapsed}ms`);
+  const cpu = process.cpuUsage(started);
+  const elapsed = (cpu.user + cpu.system) / 1000;
+  assert.ok(elapsed < 15000, `full read took ${elapsed} CPU ms`);
   const heapDelta = process.memoryUsage().heapUsed - before;
   assert.ok(heapDelta < 48 * 1024 * 1024);
-  t.diagnostic(`200000 rows: exact total ${sum}; full read ${Math.round(elapsed)}ms; heap delta ${heapDelta} bytes.`);
+  t.diagnostic(`200000 rows: exact total ${sum}; full read ${Math.round(elapsed)} CPU ms; heap delta ${heapDelta} bytes.`);
   const { statementPage } = await import('../worker/referrals.mjs');
   let statementCursor = '', statementLines = 0, statementTotal = 0;
   const statementStart = performance.now();
