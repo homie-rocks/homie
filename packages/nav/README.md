@@ -259,8 +259,8 @@ Node uses `process.cpuUsage()`; workerd uses its own process CPU counter, exclud
 the client's HTTP work. Worker counters have 10 ms resolution, so samples batch
 20 ticks (10 for moving goals and edits, five for wakes); tables report each batch's
 per-operation cost. Worker p95 values describe batch averages, not individual ticks.
-The shared machine's one-minute load averages were 113 for the scene/grid run,
-46 for edits and 28 when the wake report finished. CPU time excludes scheduler
+The shared machine's one-minute load averages were 50 for the scene/grid run,
+47 for edits and 47 when the wake report finished. CPU time excludes scheduler
 waits but still reflects contention and processor speed; these are not latency guarantees.
 
 Reproduce with `node packages/nav/test/measure.mjs`, `measure-wake.mjs` and
@@ -279,27 +279,27 @@ Bake/load is one observation; save/restore medians use seven samples.
 
 | Static scene | Bake + load CPU ms | Mesh save / restore CPU ms | Across-map path median CPU ms | 300-agent save bytes | Crowd save / restore CPU ms |
 |---|---:|---:|---:|---:|---:|
-| Flat 20 × 20 m | 129.47 | 0.11 / 0.23 | 0.04 | 131,033 | 16.29 / 12.31 |
-| Pillars 20 × 20 m | 121.36 | 0.39 / 0.40 | 0.14 | 217,989 | 14.11 / 14.79 |
-| Pillars 80 × 80 m | 445.88 | 6.46 / 12.85 | 0.45 | 295,207 | 20.36 / 23.93 |
-| Pillars 160 × 160 m | 674.01 | 28.43 / 35.56 | 2.34 | 488,183 | 24.15 / 23.04 |
+| Flat 20 × 20 m | 123.47 | 0.20 / 0.45 | 0.03 | 131,033 | 11.55 / 11.10 |
+| Pillars 20 × 20 m | 116.99 | 0.17 / 0.42 | 0.11 | 217,989 | 12.73 / 9.67 |
+| Pillars 80 × 80 m | 391.11 | 4.91 / 12.06 | 0.37 | 295,207 | 13.13 / 21.35 |
+| Pillars 160 × 160 m | 602.18 | 23.97 / 47.70 | 2.43 | 488,183 | 24.72 / 25.65 |
 
 Wakes include topology validation and 300 agents; a full wake restores both mesh
 and crowd. Editable worlds retain spans and reapply saved obstacles on restore.
 
 | World | Tiles | Live obstacles | Node mesh save / restore CPU ms | Node full wake CPU ms |
 |---|---:|---:|---:|---:|
-| Static 80 m | 16 | 0 | 7.14 / 9.78 | 19.14 |
-| Editable 80 m | 16 | 0 | 7.58 / 43.46 | 55.67 |
-| Editable 80 m | 16 | 20 | 5.98 / 147.70 | 156.29 |
-| Static 160 m | 64 | 0 | 19.77 / 32.21 | 52.92 |
-| Editable 160 m | 64 | 0 | 20.83 / 177.24 | 194.30 |
-| Editable 160 m | 64 | 20 | 22.94 / 332.17 | 364.35 |
+| Static 80 m | 16 | 0 | 5.92 / 9.35 | 26.39 |
+| Editable 80 m | 16 | 0 | 9.04 / 46.54 | 65.48 |
+| Editable 80 m | 16 | 20 | 7.92 / 156.17 | 172.63 |
+| Static 160 m | 64 | 0 | 25.19 / 35.36 | 58.71 |
+| Editable 160 m | 64 | 0 | 21.98 / 185.78 | 209.92 |
+| Editable 160 m | 64 | 20 | 25.45 / 371.27 | 400.55 |
 
 | Editable world, 20 live obstacles | workerd mesh restore CPU ms | workerd full wake CPU ms |
 |---|---:|---:|
-| 80 m | 116.00 | 128.00 |
-| 160 m | 240.00 | 276.00 |
+| 80 m | 114.00 | 126.00 |
+| 160 m | 244.00 | 272.00 |
 
 Every agent re-requests its fixed goal each tick on the 80 m pillar scene: 30 warmup
 ticks, then 100 Node samples or seven workerd batches. Identical goals preserve
@@ -307,9 +307,9 @@ search progress; target-loop cost still includes cached reachability checks.
 
 | Agents | Node target loop median CPU ms | Node whole tick median / p95 CPU ms | workerd target loop median CPU ms | workerd whole tick median / p95 CPU ms |
 |---|---:|---:|---:|---:|
-| 100 | 0.44 | 3.55 / 6.75 | 0.50 | 5.50 / 6.00 |
-| 400 | 2.82 | 16.90 / 22.56 | 2.50 | 13.50 / 14.50 |
-| 1,000 | 7.34 | 39.80 / 50.87 | 5.00 | 25.50 / 27.50 |
+| 100 | 0.90 | 5.28 / 7.33 | 1.00 | 6.50 / 9.00 |
+| 400 | 3.51 | 19.00 / 24.19 | 3.00 | 17.00 / 20.50 |
+| 1,000 | 8.36 | 41.82 / 55.74 | 7.00 | 36.00 / 43.50 |
 
 Moving goals oscillate 0.2 m from their initial point. The edit workload also removes
 and adds a 0.6 m crate every tick with the crowd attached. Both include all target
@@ -318,26 +318,25 @@ workerd batches. Edits rebuild reachability components before target checks.
 
 | Agents | Node moving goals median / p95 CPU ms | Node plus crate median / p95 CPU ms | workerd moving goals median CPU ms | workerd plus crate median CPU ms |
 |---|---:|---:|---:|---:|
-| 100 | 4.29 / 11.51 | 14.18 / 27.74 | 5.00 | 20.00 |
-| 400 | 15.16 / 20.17 | 28.38 / 35.33 | 15.00 | 27.00 |
-| 1,000 | 30.88 / 36.24 | 55.40 / 62.66 | 29.00 | 47.00 |
+| 100 | 5.07 / 14.93 | 13.97 / 22.98 | 4.00 | 20.00 |
+| 400 | 14.84 / 19.80 | 30.32 / 36.34 | 16.00 | 28.00 |
+| 1,000 | 35.80 / 44.47 | 66.01 / 77.72 | 26.00 | 47.00 |
 
-At 1,000 agents, moving a crate every tick already uses about a 50 ms tick's entire
-CPU budget. Persistence, rendering, other room work and scheduling delays cost more.
+At 1,000 agents, moving a crate every tick can exceed a 50 ms tick's CPU budget. Persistence, rendering, other room work and scheduling delays cost more.
 Capacity depends on geometry, crowd density and edits.
 
 For 2,000 × 2,000 obstructed grids, median CPU milliseconds over three runs:
 
 | Mask | A* | JPS option |
 |---|---:|---:|
-| One blocked centre cell | 50.87 | 16.20 |
-| 10% seeded random obstacles | 675.87 | 656.64 |
-| Alternating long walls | 2134.80 | 326.62 |
-| Unreachable across a full wall | 2131.17 | 2119.01 |
+| One blocked centre cell | 47.16 | 23.10 |
+| 10% seeded random obstacles | 561.78 | 597.32 |
+| Alternating long walls | 2263.11 | 370.34 |
+| Unreachable across a full wall | 2202.88 | 2361.07 |
 
-Initial component labelling used 100.99–162.78 CPU ms; repeated nearby nearest
+Initial component labelling used 113.15–215.18 CPU ms; repeated nearby nearest
 queries used at most 0.01 CPU ms median. A 4,000,113-byte grid restored in
-28.71–36.87 CPU ms. Large obstructed grids need a separate scheduling budget.
+23.58–33.57 CPU ms. Large obstructed grids need a separate scheduling budget.
 
 Grid alone bundles to 20,749 bytes minified (8,229 gzip) with esbuild,
 neutral platform and ESM output. It imports neither navcat nor three.js.
