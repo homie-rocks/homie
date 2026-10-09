@@ -28,7 +28,7 @@ import { cliJob, findNode, getJob, installJob, installed, jobView, runningJobs, 
 import { Feed, currentId, publicFeed, readFeed, startProgress } from './progress.mjs';
 import { newStudio, slugify } from './scaffold.mjs';
 import { repoFromUrl, studioRepo } from './repo.mjs';
-import { GAME_ID, PACKAGE_ROOT, findStudio, listGames, readLocal, readStudio, siteUrl } from './studio.mjs';
+import { GAME_ID, PACKAGE_ROOT, findStudio, isRulesGame, listGames, readLocal, readStudio, siteUrl } from './studio.mjs';
 import { runningDev } from './dev.mjs';
 import { deployWords } from './deploy-state.mjs';
 import { partsForListing, publishBefore, publishesSoFar } from './directory.mjs';
@@ -1018,6 +1018,7 @@ export function toolDefs(ctx, avail = {}) {
         if (!game) return fail(games.length ? `which game? ${games.map((g) => g.id).join(', ')}` : 'there is no game to check yet');
         const url = a.url ? String(a.url) : await devUrl(ctx, root);
         return startRun(ctx, root, { kind: 'check', game, title: `${games.find((g) => g.id === game)?.name ?? game}: two-browser check`, steps: [
+          ...(games.some((g) => g.id === game && isRulesGame(g)) ? [{ label: 'rules build check', args: ['build', game] }] : []),
           { label: 'two-browser check', args: ['check', game, '--url', url, '--shots', join('.checks', game)] },
         ] });
       },

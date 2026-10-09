@@ -382,7 +382,7 @@ test('a kind with think but no guide does not advertise agents', async () => {
 });
 
 test('a held guide whose floor declines an ask is attempted once and then paced', async () => {
-  const rules = source.replace("return ask ? { goal: 'follow', args: ask.args } : { goal: 'guard', say: 'hello' };", "return { goal: 'guard' };");
+  const rules = source.replace("return ask ? { goal: ask.k, args: ask.args } : { goal: 'guard', say: 'hello' };", "return { goal: 'guard' };");
   const L = await loadGame(scratch, writeGame(scratch, 'decline-floor', { rules }), 'decline-floor'); const h = hostRig(L, L.R.compileRules(L.def, { seats: 4 }));
   h.host.frame({ t: 'vocabulary', vocab }); h.join(0); h.join(3, 'Helper', { agent: aiFacts() }); h.ticks(2);
   h.host.frame({ t: 'ev', from: 0, k: 'ask:follow', d: { slot: 3, args: { seat: 0 } } }); h.ticks(200);
@@ -494,4 +494,25 @@ test('whole host saves preserve pending decisions, companion pacing and reserved
   assert.deepEqual(back.host.core.save().ents.filter(e => e[13] === 'reserved'), h.host.core.save().ents.filter(e => e[13] === 'reserved'));
   assert.deepEqual(back.sent.filter(m => m.t === 'roster').at(-1).slots, h.sent.filter(m => m.t === 'roster').at(-1).slots);
   h.host.stop(); back.host.stop();
+});
+
+test('an invalid line rejects the whole floor decision before a valid goal reaches rules', async () => {
+  const rules = source.replace("{ goal: 'guard', say: 'hello' }", "{ goal: 'guard', say: 'missing' }");
+  const L = await loadGame(scratch, writeGame(scratch, 'atomic-floor', { rules }), 'atomic-floor');
+  const h = hostRig(L, L.R.compileRules(L.def, { seats: 4 }));
+  h.host.frame({ t: 'vocabulary', vocab }); h.host.frame({ t: 'policy', policy: policy() }); h.join(0); h.ticks(10);
+  assert.equal(h.host.core.goal(3), null);
+  assert.equal(h.sent.filter(m => m.k === 'say:missing').length, 0);
+});
+
+test('direct core input values cross the same declared boundary as player frames', async () => {
+  const rules = source.replace('self.level = world.level;', "if(typeof self.input.ax !== 'number' || self.input.ax < -128 || self.input.ax > 127)throw new Error('unvalidated input');self.level=world.level;");
+  const L = await loadGame(scratch, writeGame(scratch, 'core-input-boundary', { rules }), 'core-input-boundary');
+  const c = L.R.compileRules(L.def, { seats: 4 });
+  for (const value of [{}, 'wrong', Infinity, NaN, 999, -999]) {
+    const core = L.C.createCore(c);
+    core.seatJoin({ seat: 0, driver: 'person', owner: 'test' }); core.step();
+    core.step(new Map([[0, { values: { ax: value } }]]));
+    assert.equal(core.stats.errors, 0, core.stats.lastError);
+  }
 });

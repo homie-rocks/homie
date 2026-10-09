@@ -13,6 +13,7 @@
  * =============================================================================
  */
 import { brand, charge, own, put } from './guard.ts';
+import { num } from './pack.ts';
 
 export interface Vec3 { readonly x: number; readonly y: number; readonly z: number }
 
@@ -263,4 +264,19 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
   const at = v(fr(px + dx * t), fr(py + dy * t), 0);
   put(body, 'pos', at);
   return Object.freeze({ at, normal: v(h.nx, h.ny, 0) });
+}
+
+/**
+ * What a browser hands the game's `move` as `ctx`: the tick, the step, the public tunables, this maths and the static
+ * map. One function, so that the browser (view.ts) and the person the build check plays hold the same one. The
+ * server's own (core.ts `moveCtx`) is made beside the rest of its world, and charges as that does.
+ */
+export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; dims: number }): unknown {
+  const none = Object.freeze([]);
+  return brand(Object.freeze({
+    get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
+    // As the server's `ctx.ticks` reads it: a plain number, or nothing.
+    ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * o.tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },
+    map: brand(Object.freeze({ name: o.name, spot: (name: string) => (own(o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(o.spots, name) ?? none, sweep: (body: unknown, delta: unknown) => sweepMap(o.map, body, delta, o.radius(), o.dims) })),
+  }));
 }

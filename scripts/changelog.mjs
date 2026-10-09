@@ -106,10 +106,8 @@ if (!section.plugins.includes(plugin)) {
   problems.push(`the plugin is ${plugin} (plugins/homie/.claude-plugin/plugin.json), but the ${version} section's Plugin line says ${section.plugins.join(', then ') || 'nothing'}: write "**Plugin ${plugin}**"${section.plugins.length ? ` (or "**Plugin ${section.plugins.join(', then ')}, then ${plugin}**" when the plugin had a release of its own after ${version}), and say what it changed` : ''}`);
 }
 
-// A released version's section links its tag (release-YYYY-MM-DD-studio-x.y.z). The tag is cut after the section is
-// written, and the package ships this file, so a published version's own section cannot gain the link: the pull request
-// that moves the version adds it to the section before. It is asked for only when this checkout has the tag (a
-// version that was never tagged, or a checkout without tags, is not asked), and the message is the line to write.
+// Tags are cut after a section is written. Missing links are advice, never a reason to rewrite
+// released sections or make a tagged checkout fail its publish gate. Existing links must be correct.
 const TAG = /^release-\d{4}-\d\d-\d\d-studio-(\d+\.\d+\.\d+)$/;
 // (Only this checkout's own tags: a folder inside some other repository has none.)
 const isRepo = spawnSync('git', ['-C', ROOT, 'rev-parse', '--show-cdup'], { encoding: 'utf8' });
@@ -118,6 +116,7 @@ const tags = new Map(); // version -> its tag (the newest, when a release was ta
 for (const t of (listed?.status === 0 ? listed.stdout : '').split('\n').sort()) { const m = TAG.exec(t.trim()); if (m) tags.set(m[1], t.trim()); }
 const source = text.replace(/\r\n?/g, '\n').split('\n');
 let linked = 0;
+const notes = [];
 for (const s of log.versions) {
   if (!s.meta || compareVersions(s.version, version) >= 0) continue;
   const links = [...s.meta.matchAll(/\/releases\/tag\/([^)\s]+)\)/g)].map((m) => m[1]);
@@ -130,7 +129,7 @@ for (const s of log.versions) {
   const at = source.findIndex((line, i) => i >= s.line && /^\*\*Plugin /.test(line));
   const link = `[${tag}](${REPO_URL}/releases/tag/${tag})`;
   const oneLine = at >= 0 && !(source[at + 1] ?? '').trim();
-  problems.push(`${s.version} was released (the tag ${tag}), and its section does not link the tag yet. ${oneLine ? `Make line ${at + 1} of CHANGELOG.md:` : 'Add this to the end of its Plugin line:'}\n\n      ${oneLine ? `${source[at]} · ${link}` : `· ${link}`}\n\n    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md`);
+  notes.push(`Note: ${s.version} was released (the tag ${tag}), and its section does not link the tag yet. ${oneLine ? `Make line ${at + 1} of CHANGELOG.md:` : 'Add this to the end of its Plugin line:'}\n\n      ${oneLine ? `${source[at]} · ${link}` : `· ${link}`}\n\n    then run node scripts/changelog.mjs --sync and commit CHANGELOG.md and packages/studio/CHANGELOG.md`);
 }
 const files = readJson(STUDIO_PKG).files ?? [];
 if (!files.includes('CHANGELOG.md')) problems.push('packages/studio/package.json `files` must list CHANGELOG.md, so npm ships it');
@@ -139,3 +138,5 @@ else if (readFileSync(COPY, 'utf8') !== text) problems.push('packages/studio/CHA
 if (problems.length) fail(`CHANGELOG.md needs a fix:${moved ? `${moved}` : ''}\n${problems.map((p) => `  - ${p}`).join('\n')}`);
 out(`CHANGELOG.md: ${log.versions.length} versions, the newest ${version} (plugin ${section.plugin})${moved ? `, which this pull request moves to from ${was}` : ''}; the package's copy is the same file.`);
 out(tags.size ? `Release tags: this checkout has ${tags.size}; older sections that link theirs: ${linked}.` : 'Release tags: this checkout has none, so no section was asked to link one.');
+
+for (const note of notes) out(note);

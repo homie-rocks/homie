@@ -32,8 +32,14 @@ export const REFUSED_NAMES: ReadonlySet<string> = new Set(['constructor', 'proto
 export const HOOK_NAMES: ReadonlySet<string> = new Set(['valueOf', 'toString', 'toJSON']);
 export const refusedName = (k: string): boolean => REFUSED_NAMES.has(k) || k.startsWith('toLocale');
 
-/** The running handler's budget. One per isolate: handlers never run at the same time. */
-export const G = { left: Infinity };
+/**
+ * The running handler's budget. One per isolate: handlers never run at the same time. `file` and `line` are the line
+ * of the rules that ran last: the guarded module sets them as it goes, and the runtime reads them when a handler throws.
+ * `note` is the build check's listener for a written value that had to be changed to fit (pack.ts); a room has none.
+ */
+export const G = { left: Infinity, file: '', line: 0, note: null as null | ((what: string, at: string, written: string) => void) };
+/** The line a guarded call is on, set again after its arguments ran (they may have called into another file). */
+export function l(file: string, line: number): number { G.file = file; G.line = line; return line; }
 
 /**
  * An object's own data property, read without running anything: a property that is a getter reads as absent, and so
@@ -60,7 +66,7 @@ export function put(o: object, key: string, v: unknown): void {
  */
 export function plainData(v: unknown, left: { n: number }, deep = 4, text = 256): unknown {
   left.n -= 1;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v + 0 : 0;   // `+ 0`: never -0, which the save would not carry (pack.ts, ONE ZERO)
   if (typeof v === 'boolean' || v === null) return v;
   if (typeof v === 'string') return v.slice(0, text);
   if (typeof v !== 'object' || deep <= 0 || left.n <= 0) return null;
@@ -99,7 +105,8 @@ export function charge(n: number): void {
   if (!((G.left -= n) >= 0)) throw STOP;
 }
 /** One loop turn, or one call of a function in rules. */
-export function t(): void {
+export function t(file: string, line: number): void {
+  G.file = file; G.line = line;
   if (!((G.left -= 1) >= 0)) throw STOP;
 }
 

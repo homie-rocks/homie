@@ -46,10 +46,9 @@ test('every version has its section: dated, with the plugin beside it, a summary
     assert.match(s.date, /^2026-\d\d-\d\d$/, `${s.version} is dated`);
     assert.ok(s.plugin, `${s.version} names the plugin's version`);
     assert.ok(s.summary.length > 20 && s.summary.length < 260, `${s.version}: one sentence of summary (${s.summary.length})`);
-    // Released from this repository's pull requests: linked to them, and to the tag once there is one. The tag is cut
-    // after the section is written, so nothing here asks for its link: scripts/changelog.mjs --check does, once the
-    // checkout has the tag, and gives the line to write. A tag a section does link is its own version's.
-    if (compareVersions(s.version, '0.7.0') >= 0) assert.match(s.meta, /\/pull\/\d+/, `${s.version} links its pull request`);
+    // Released sections link their pull requests; the version being prepared may not have a PR yet.
+    // Tags are cut after the section is written. Existing tag links must name their own version.
+    if (s.version !== STUDIO_VERSION && compareVersions(s.version, '0.7.0') >= 0) assert.match(s.meta, /\/pull\/\d+/, `${s.version} links its pull request`);
     for (const [, tag] of s.meta.matchAll(/\/releases\/tag\/([^)\s]+)\)/g)) assert.match(tag, new RegExp(`^release-2026-\\d\\d-\\d\\d-studio-${s.version.replace(/\./g, '\\.')}$`), `${s.version} links its own tag`);
   }
   // The plugin versions that went out with a studio version, as they were.

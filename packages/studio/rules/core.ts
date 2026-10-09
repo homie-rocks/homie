@@ -42,8 +42,8 @@ import { argsWhy, type Vocabulary } from '../agents/agents.ts';
 import { BudgetError, G, brand, charge, deepFreeze, plainData } from './guard.ts';
 import { SKIN, castMap, exact, math, rayCircle, sweepMap } from './math.ts';
 import type { Hit } from './math.ts';
-import { AHEAD, ZERO, coerce, coerceFields, dir, est, estFields, initFields, mutable, num, own, packEntity, packFields, packVec, packed, said, thaw, unpackFields, unpackVec, vec3 } from './pack.ts';
-import { ENTITY_MAX, QUEUE_MAX, REACH_M, cellsOf } from './rules.ts';
+import { AHEAD, ZERO, coerce, coerceFields, dir, est, estFields, initFields, mutable, num, own, packEntity, packFields, packVec, packed, said, thaw, naming, unpackFields, unpackVec, vec3 } from './pack.ts';
+import { ENTITY_MAX, QUEUE_MAX, REACH_M, SAVE_REVISION, cellsOf } from './rules.ts';
 import type { Compiled, Field, FieldList, KindTable, Vec3 } from './rules.ts';
 
 /*
@@ -63,6 +63,8 @@ export const SNAP = 4;
 export const SEND = 16;
 /** A handler that threw: what catching it and writing it down costs the tick. */
 export const THROWN = 512;
+/** The most effects (`world.emit`) one tick takes. */
+export const FX_MAX = 256;
 /** The most area events (`world.sendArea`) one tick takes. */
 export const AREAS_MAX = 64;
 /** What the log names when a room ends because of what it holds, not because of a handler. */
@@ -107,7 +109,7 @@ interface Seat { seat: number; driver: Driver; owner: string; id: string | null;
 interface Ctx { scope: 'none' | 'ent' | 'room' | 'join' | 'move'; ent: Ent | null }
 const NO_SPOTS: readonly Vec3[] = Object.freeze([]);
 /** A list, map or struct a handler was handed a copy of: where it is stored, and the copy to hold to its shape when the handler ends. */
-interface Touched { bag: Record<string, unknown>; name: string; fd: Field; work: Record<string, unknown>; shared: boolean }
+interface Touched { bag: Record<string, unknown>; name: string; fd: Field; work: Record<string, unknown>; shared: boolean; held: (fd: Field, v: unknown, name: string) => unknown }
 
 /** How many values a stored list, map or struct holds now: what copying it for a handler costs. */
 function sizeOf(fd: Field, v: unknown): number {
@@ -127,9 +129,9 @@ function errorText(error: unknown): string {
 
 /** Everything a room is, as plain JSON (pack.ts `toBytes` makes it bytes). The shape is this runtime's own and may change between releases. */
 export interface SavedCore {
-  v: 1; tick: number; epoch: number; rng: number; nextId: number; seq: number;
+  v: number; tick: number; epoch: number; rng: number; nextId: number; seq: number;
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
-  shared: unknown[]; policy: CorePolicy;
+  shared: unknown[]; policy: CorePolicy; intent?: [number, number];
   asks?: PendingAsk[];
   guideViews?: [number, Record<string, unknown>][];
   ents: unknown[][]; spawns: unknown[][]; seats: [number, string, string, string | null, number][]; queue: unknown[][]; areas: unknown[][]; ops: unknown[];
@@ -161,12 +163,19 @@ export interface Core {
   readonly world: object;
   /**
    * `failing`: the handler the budget last stopped. `lost`: area events dropped because the room's queue was full.
+   * `held`: owner-moved claims cut short because they came further than `body.maxSpeed` allows.
    * `tickUnits`: what the last tick used, the state it sends included.
    */
-  stats: { handlers: number; errors: number; budgetStops: number; skipped: number; ticksCut: number; maxUnits: number; worst: string; lastError: string; failing: string; lost: number; tickUnits: number; maxTickUnits: number };
+  stats: { handlers: number; errors: number; budgetStops: number; skipped: number; ticksCut: number; maxUnits: number; worst: string; lastError: string; failing: string; lost: number; held: number; tickUnits: number; maxTickUnits: number };
 }
 
-export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+/**
+ * `observe` and `noted` are the build check's; a room passes neither, and then nothing here costs or changes anything.
+ * `observe`: told of every handler as it ends, and what it threw if it threw.
+ * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
+ * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
+ */
+export function createCore(c: Compiled, opts: { observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   if (c.dims !== 2) throw new Error('this release runs rules with space.dims: 2; bodies with height (dims: 3) arrive in a later one');
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
@@ -176,6 +185,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   /** What `move`, `think`, `join` and `start` are given each once the tick's budget is gone: all of them together, in a full room, use half a budget more. */
   const floor = Math.max(1, Math.floor(c.settings.budget.tick / (4 * ENTITY_MAX)));
   const stage = String(opts.stage ?? '');
+  const noted = opts.noted ?? null;
 
   let tick = 0;
   let pendingAsks: PendingAsk[] = [];
@@ -203,7 +213,8 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   let policy: CorePolicy = { reserved: 0, bots: 'fill', level: 3, levelMax: 5 };
   function normalizeCorePolicy(p: Partial<CorePolicy>): CorePolicy {
     const levelMax = Math.max(1, Math.min(5, Math.floor(num(own(p, 'levelMax') ?? policy.levelMax)) || 5));
-    return { reserved: Math.max(0, Math.min(c.seats - 1, Math.floor(num(own(p, 'reserved') ?? policy.reserved)) || 0)), bots: p.bots === 'off' ? 'off' : p.bots === 'fill' ? 'fill' : policy.bots, levelMax, level: Math.max(1, Math.min(levelMax, Math.floor(num(own(p, 'level') ?? policy.level)) || 3)) };
+    // The keys in the order the room starts with them: a save is compared byte for byte with the save of the room rebuilt from it.
+    return { reserved: Math.max(0, Math.min(c.seats - 1, Math.floor(num(own(p, 'reserved') ?? policy.reserved)) || 0)), bots: p.bots === 'off' ? 'off' : p.bots === 'fill' ? 'fill' : policy.bots, level: Math.max(1, Math.min(levelMax, Math.floor(num(own(p, 'level') ?? policy.level)) || 3)), levelMax };
   }
   let shared: Record<string, unknown> = initFields(c.shared, dims);
   let sharedRO: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -219,7 +230,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   let trips = 0;
   let cut = false;
   let cx: Ctx = { scope: 'none', ent: null };
-  const stats = { handlers: 0, errors: 0, budgetStops: 0, skipped: 0, ticksCut: 0, maxUnits: 0, worst: '', lastError: '', failing: '', lost: 0, tickUnits: 0, maxTickUnits: 0 };
+  const stats = { handlers: 0, errors: 0, budgetStops: 0, skipped: 0, ticksCut: 0, maxUnits: 0, worst: '', lastError: '', failing: '', lost: 0, held: 0, tickUnits: 0, maxTickUnits: 0 };
   /** The lists, maps and structs the running handler was handed copies of. */
   let touched: Touched[] = [];
   /** Events set aside while phase 3 delivers, so the queue's cap counts them. */
@@ -242,12 +253,14 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
    * first read in a handler makes a copy the handler may change in place, charged by what the stored value holds, and
    * `settle` holds that copy to its declaration when the handler ends.
    */
-  function typed(bag: Record<string, unknown>, list: FieldList, target: object, isShared = false): void {
+  function typed(bag: Record<string, unknown>, list: FieldList, target: object, where: string, isShared = false): void {
     const work: Record<string, unknown> = {};
+    /** The value as the field holds it. For a listener the field is named first (`runner.fields`, `score`); a room has none. */
+    const held = (fd: Field, v: unknown, name: string): unknown => { if (G.note === null) return coerce(fd, v, dims); naming(where, name); const out = coerce(fd, v, dims); naming(); return out; };
     for (const [name, fd] of list) {
       if (!mutable(fd)) {
         const cost = cellsOf(fd) === 1 ? SET : COPY * cellsOf(fd);
-        Object.defineProperty(target, name, { get: () => bag[name], set: (v) => { charge(cost); bag[name] = coerce(fd, v, dims); if (isShared) sharedChanged(); }, enumerable: true });
+        Object.defineProperty(target, name, { get: () => bag[name], set: (v) => { charge(cost); bag[name] = held(fd, v, name); if (isShared) sharedChanged(); }, enumerable: true });
         continue;
       }
       Object.defineProperty(target, name, {
@@ -256,11 +269,11 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
           if (w === undefined) {
             charge(COPY * sizeOf(fd, bag[name]));
             w = work[name] = thaw(fd, bag[name]);
-            touched.push({ bag, name, fd, work, shared: isShared });
+            touched.push({ bag, name, fd, work, shared: isShared, held });
           }
           return w;
         },
-        set: (v) => { charge(COPY * est(fd, v)); bag[name] = coerce(fd, v, dims); work[name] = undefined; if (isShared) sharedChanged(); },
+        set: (v) => { charge(COPY * est(fd, v)); bag[name] = held(fd, v, name); work[name] = undefined; if (isShared) sharedChanged(); },
         enumerable: true,
       });
     }
@@ -281,7 +294,9 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
         const w = p.work[p.name];
         if (w === undefined) continue;   // assigned whole after it was read: the assignment stored it
         charge(COPY * est(p.fd, w));
-        p.bag[p.name] = coerce(p.fd, w, dims);
+        // Changed in place, so held to its type only now: a listener is told so, since the line is no longer the write's.
+        if (G.note === null) p.bag[p.name] = coerce(p.fd, w, dims);
+        else { const told = G.note; G.note = (what, at, written) => told(`${what} in place`, at, written); try { p.bag[p.name] = p.held(p.fd, w, p.name); } finally { G.note = told; } }
         p.work[p.name] = undefined;
         if (p.shared) sharedChanged();
       }
@@ -292,16 +307,16 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   function makeSelf(e: Ent): void {
     const ro = (get: () => unknown): PropertyDescriptor => ({ get, enumerable: true });
     const mself = {};
-    typed(e.m, e.kind.motion, mself);
+    typed(e.m, e.kind.motion, mself, `${e.kind.name}.motion`);
     Object.preventExtensions(mself);
     const self = {};
     Object.defineProperties(self, {
       id: ro(() => e.id), kind: ro(() => e.kind.name), pos: ro(() => e.pos), grounded: ro(() => e.grounded), motion: ro(() => mself), input: ro(() => e.input),
-      vel: { get: () => e.vel, set: (v) => { charge(4 * COPY); e.vel = V(v); }, enumerable: true },
-      heading: { get: () => e.heading, set: (v) => { charge(4 * COPY); e.heading = dir(v, dims); }, enumerable: true },
+      vel: { get: () => e.vel, set: (v) => { charge(4 * COPY); naming(e.kind.name, 'vel'); e.vel = V(v); naming(); }, enumerable: true },
+      heading: { get: () => e.heading, set: (v) => { charge(4 * COPY); naming(e.kind.name, 'heading'); e.heading = dir(v, dims); naming(); }, enumerable: true },
     });
     if (e.kind.player) Object.defineProperties(self, { seat: ro(() => e.seat), owner: ro(() => e.owner), driver: ro(() => e.driver), away: ro(() => e.away), goal: ro(() => e.goal) });
-    typed(e.f, e.kind.fields, self);
+    typed(e.f, e.kind.fields, self, `${e.kind.name}.fields`);
     Object.preventExtensions(self);
     e.self = self; e.mself = mself;
   }
@@ -322,10 +337,12 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   function makeEnt(kind: KindTable, at: unknown, why: 'join' | 'spawn', init: { fields?: unknown; motion?: unknown; heading?: unknown } = {}, player: SeatInfo | null = null): Ent {
     if (ents.size + spawns.length >= ENTITY_MAX) throw new Error(`a room holds at most ${ENTITY_MAX} entities`);
     const n = nextId; nextId += 1;
+    naming(kind.name, 'fields'); const f = coerceFields(kind.fields, init.fields, dims);
+    naming(kind.name, 'motion'); const m = coerceFields(kind.motion, init.motion, dims); naming();
     const e: Ent = {
       id: `e${n.toString(36)}`, n, kind, pos: clampIn(V(at), kind.body?.radius ?? 0), vel: ZERO, heading: init.heading === undefined ? AHEAD : dir(init.heading, dims), grounded: true,
       r: 0, born: tick, arrived: false, why, dead: false,
-      f: coerceFields(kind.fields, init.fields, dims), m: coerceFields(kind.motion, init.motion, dims),
+      f, m,
       seat: player ? player.seat : -1, owner: player ? player.owner : '', driver: player ? player.driver : 'bot', away: false, goal: null,
       input: Object.freeze(initFields(kind.input, dims)), allow: 0, cmds: [], self: {}, mself: {},
     };
@@ -366,8 +383,10 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     const limit = E.stackTraceLimit;
     E.stackTraceLimit = 0;
     G.left = quota;
+    // The build check is told of every written value that had to be changed to fit (pack.ts), with the handler it was in.
+    if (noted) G.note = (what, at, written) => noted(kind, handler, what, at, written);
+    let bad = false; let thrown: unknown;
     try {
-      let bad = false; let thrown: unknown;
       try { fn(); } catch (error) { bad = true; thrown = error; }
       // Settled whether or not the handler threw: what it changed in place before it stopped is kept, when it can still pay for it.
       try { settle(); } catch (error) { if (!bad) { bad = true; thrown = error; } }
@@ -375,6 +394,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     } finally {
       const used = quota - (G.left > 0 ? G.left : 0);
       G.left = Infinity;
+      G.note = null;
       E.stackTraceLimit = limit;
       cx = before;
       touched = [];
@@ -382,6 +402,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       stats.handlers += 1;
       if (used > stats.maxUnits) { stats.maxUnits = used; stats.worst = `${kind}.${handler}`; }
     }
+    opts.observe?.(kind, handler, bad ? errorText(thrown) : undefined);
     return true;
   }
   let failing: { kind: string; handler: string } = { kind: '', handler: '' };
@@ -409,7 +430,8 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     const shape = typeof name === 'string' && Object.hasOwn(table, name) ? table[name] : null;
     if (!shape) throw new Error(`${what} "${said(name)}" is not declared in shapes`);
     charge(COPY * estFields(shape, data));
-    return Object.freeze(coerceFields(shape, data, dims));
+    naming(name as string); const held = Object.freeze(coerceFields(shape, data, dims)); naming();
+    return held;
   };
   const sender = (): { from: number; fromId: string } => (cx.ent ? { from: cx.ent.n, fromId: cx.ent.id } : { from: 0, fromId: '' });
   /** One event or timer onto the queue. A handler's send past the room's cap throws in that handler; the runtime's own (`own`: a round turning, an answer) is always taken. */
@@ -443,7 +465,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   const sharedBag: Record<string, unknown> = {};
   const sharedRW = {};
   for (const [name] of c.shared) Object.defineProperty(sharedBag, name, { get: () => shared[name], set: (v) => { shared[name] = v; }, enumerable: true });
-  typed(sharedBag, c.shared, sharedRW, true);
+  typed(sharedBag, c.shared, sharedRW, 'shared', true);
   Object.preventExtensions(sharedRW);
   const sharedView = (): Readonly<Record<string, unknown>> => {
     if (cx.scope === 'room') return sharedRW;
@@ -509,7 +531,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.emit is for handlers');
       const i = typeof effect === 'string' ? c.effectNames.indexOf(effect) : -1;
       if (i < 0) throw new Error(`the effect "${said(effect)}" is not declared in shapes.effects`);
-      if (fx.length >= 256) return;
+      if (fx.length >= FX_MAX) { G.note?.('effect', '', said(effect)); return; }
       const shape = c.effects[c.effectNames[i]];
       fx.push([i, typeof at === 'string' ? at.slice(0, 24) : packVec(V(at), dims), packFields(shape, shapeData(c.effects, effect, 'the effect', data), dims)]);
     },
@@ -611,7 +633,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
       const who = cx.ent ? cx.ent.id : '';
       if (pendingAsks.some((q) => q.name === name) || queue.some((q) => q.ev === 'answer' && (q.data as { ask?: string })?.ask === name)) return false;
       charge(COPY * estFields(a.stateFields, state));
-      const value = deepFreeze(coerceFields(a.stateFields, state, dims));
+      naming('asks', name as string, 'state'); const value = deepFreeze(coerceFields(a.stateFields, state, dims)); naming();
       if (JSON.stringify(value).length > 2048) return false;
       const n = `a${epoch.toString(36)}-${(++seq).toString(36)}`;
       pendingAsks.push({ n, name: name as string, who, at: tick, state: value });
@@ -639,6 +661,14 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     const fn = c.roomOn[ev];
     if (fn) run('room', `on.${ev}`, null, 'room', () => fn(world, data));
   };
+  function validPicks(questions: Record<string, unknown>, value: unknown): boolean {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.entries(questions).every(([id, raw]) => {
+      const q = raw as any; const v = own(value, id);
+      if (q.type === 'noul' || q.type === 'yes-no') return typeof v === 'boolean';
+      if (q.type === 'score') return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < q.criteria.length;
+      return typeof v === 'string' && (Array.isArray(q.criteria) ? q.criteria.includes(v) : Object.hasOwn(q.criteria, v));
+    }));
+  }
   function deliver(item: Item): boolean {
     if (item.kind === 'room') {
       const fn = c.roomOn[item.ev];
@@ -897,15 +927,19 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
         run(e?.kind.name ?? 'room', `asks.${ask.name}.floor`, e ?? null, 'none', () => {
           charge(2 * ANSWER_MAX);
           const r = ask.result;
-          const valid = (p: any): boolean => Boolean(p && typeof p === 'object' && Object.entries(a.questions).every(([id, raw]) => {
-            const q = raw as any; const v = p[id];
-            if (q.type === 'noul' || q.type === 'yes-no') return typeof v === 'boolean';
-            if (q.type === 'score') return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= q.criteria.length - 1;
-            return typeof v === 'string' && (Array.isArray(q.criteria) ? q.criteria.includes(v) : Object.hasOwn(q.criteria, v));
-          }));
+          const valid = (p: unknown): boolean => validPicks(a.questions, p);
           const ai = r?.ok === true && valid(r.picks);
           const picks = plainData(ai ? r.picks : a.floor(ask.state), { n: ANSWER_MAX });
-          if (!valid(picks)) throw new Error(`asks.${ask.name}.floor must answer every declared question`);
+          if (!valid(picks)) {
+            const details = Object.entries(a.questions).map(([id, raw]) => {
+              const q = raw as any; const value = (picks as any)?.[id];
+              const allowed = q.type === 'score' ? `an integer from 0 through ${q.criteria.length - 1}`
+                : q.type === 'noul' || q.type === 'yes-no' ? 'true or false'
+                : `one of ${JSON.stringify(Array.isArray(q.criteria) ? q.criteria : Object.keys(q.criteria))}`;
+              return `${id} received ${JSON.stringify(value) ?? 'missing'}; expected ${allowed}`;
+            }).join('; ');
+            throw new Error(`asks.${ask.name}.floor must answer every declared question: ${details}`);
+          }
           push({ due: tick, to: ask.who, kind: e ? 'ev' : 'room', ev: 'answer', data: deepFreeze({ ask: ask.name, by: ai ? (r.by === 'local' ? 'local' : 'ai') : 'floor', picks, ...(!ai ? { why: r?.ok === true ? 'bad' : typeof r?.why === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(r.why) ? r.why : (opts.decisions ? 'slow' : 'off') } : {}) }), at: tick, builtIn: true }, true);
           answered = true;
         });
@@ -936,8 +970,13 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
             let stepIn: Record<string, unknown> | null = null;
             run(k.name, 'think', e, 'ent', () => {
               const back: unknown = (k.think as NonNullable<KindTable['think']>)(world, e.self);
+              // What is not an input of this kind is not read, and the input is neutral: a room says nothing of it, a listener is told.
+              if (G.note !== null) {
+                if (!back || typeof back !== 'object' || Array.isArray(back)) G.note('think', '', said(back));
+                else for (const key of Object.keys(back)) if (!k.input.some(([name]) => name === key)) G.note('think', key, said((back as Record<string, unknown>)[key]));
+              }
               charge(COPY * k.input.length);
-              stepIn = coerceFields(k.input, back, dims);
+              naming('input'); stepIn = coerceFields(k.input, back, dims); naming();
             }, 'body');
             e.input = Object.freeze(stepIn ?? initFields(k.input, dims));
           } else e.input = Object.freeze(initFields(k.input, dims));
@@ -948,6 +987,8 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
               const dx = claim.pos.x - e.pos.x; const dy = claim.pos.y - e.pos.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
               const go = Math.min(dist, e.allow);
+              // The browser ran the game's own `move` and came further than `maxSpeed` allows: the body is held back.
+              if (go < dist) stats.held += 1;
               e.allow -= go;
               if (dist > 0) e.pos = clampIn(V({ x: e.pos.x + (dx / dist) * go, y: e.pos.y + (dy / dist) * go, z: 0 }), body.radius);
               const sp = Math.sqrt(claim.vel.x * claim.vel.x + claim.vel.y * claim.vel.y);
@@ -963,7 +1004,11 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
         run(k.name, 'move', e, 'move', () => (k.move as NonNullable<KindTable['move']>)(b, e.input, moveCtx), 'body');
         // The runtime rounds to 32-bit floats, here and in the browser, so both step from exactly the same numbers.
         // `b` is the runtime's own object: what `move` left in it is read by its own data properties and cannot throw.
-        e.pos = clampIn(V(own(b, 'pos')), body.radius); e.vel = V(own(b, 'vel')); e.heading = dir(own(b, 'heading'), dims); e.grounded = own(b, 'grounded') === true;
+        // (A listener hears of a position that was not a number here too, as `move`'s.)
+        if (noted) G.note = (what, at, written) => noted(k.name, 'move', what, at, written);
+        naming('body', 'pos'); e.pos = clampIn(V(own(b, 'pos')), body.radius); naming('body', 'vel'); e.vel = V(own(b, 'vel')); naming('body', 'heading'); e.heading = dir(own(b, 'heading'), dims); naming();
+        G.note = null;
+        e.grounded = own(b, 'grounded') === true;
       }
       // Phase 2: for every entity, its commands and then its tick, starting from a different entity each tick.
       const list = [...ents.values()];
@@ -1028,7 +1073,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     const e: Ent = {
       id: w[0], n: w[1], kind, r: w[3], born: w[4], arrived: w[5] === 1, why: w[6], dead: false, pos: unpackVec(w[7], 3), vel: unpackVec(w[8], 3), heading: unpackVec(w[9], 3), grounded: w[10] === 1,
       seat: w[11], driver: w[12], owner: w[13], away: w[14] === 1, goal: null, allow: w[16],
-      f: unpackFields(kind.fields, w[17], dims), m: unpackFields(kind.motion, w[18], dims), input: Object.freeze(unpackFields(kind.input, w[19], dims)), cmds: (w[20] as { name: string; data: unknown }[]).map((x) => ({ name: x.name, data: deepFreeze(x.data) })), self: {}, mself: {},
+      f: unpackFields(kind.fields, w[17], dims), m: unpackFields(kind.motion, w[18], dims), input: Object.freeze(unpackFields(kind.input, w[19], dims)), cmds: (w[20] as { name: string; data: unknown }[]).map((x) => ({ name: x.name, data: deepFreeze(coerceFields(c.commands[x.name] ?? [], x.data, dims)) })), self: {}, mself: {},
     };
     if (kind.player) restoredGoals.set(e.seat, w[15]);
     makeSelf(e);
@@ -1036,8 +1081,8 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   }
   function save(): SavedCore {
     return {
-      v: 1, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
-      shared: packFields(c.shared, shared, dims), policy: { ...policy }, asks: pendingAsks, guideViews: [...guideViews],
+      v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
+      shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
       ents: [...ents.values()].map(saveEnt), spawns: spawns.map(saveEnt),
       seats: [...seats.values()].map((s) => [s.seat, s.driver, s.owner, s.id, s.away ? 1 : 0]),
       queue: queue.map((q) => [q.due, q.from, q.fromId, q.seq, q.to, q.kind, q.ev, q.data, q.at, q.builtIn ? 1 : 0]),
@@ -1053,7 +1098,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     const fields = (list: FieldList, value: unknown): void => {
       check(Array.isArray(value) && JSON.stringify(value) === JSON.stringify(packFields(list, unpackFields(list, value, dims), dims)));
     };
-    check(r.v === 1);
+    check(r.intent === undefined || Array.isArray(r.intent) && r.intent.length === 2 && r.intent.every(bit));
     for (const v of [r.tick, r.epoch, r.rng, r.nextId, r.seq, r.overAt, r.trips]) check(uint(v));
     check(r.rng <= 4294967295 && r.epoch > 0 && r.nextId > 0 && r.seq > 0);
     check(Array.isArray(r.round) && r.round.length === 4 && r.round.every(uint) && bit(r.round[1]));
@@ -1108,7 +1153,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
         const d = q[7] as Record<string, unknown>; check(d && typeof d === 'object');
         if (q[6] === 'answer') {
           check(typeof d.ask === 'string' && Object.hasOwn(c.asks, d.ask) && ['ai', 'local', 'floor'].includes(d.by as string) && (d.why === undefined || typeof d.why === 'string' && d.why.length <= 256));
-          check(JSON.stringify(d.picks) === JSON.stringify(plainData(d.picks, { n: ANSWER_MAX })));
+          check(JSON.stringify(d.picks) === JSON.stringify(plainData(d.picks, { n: ANSWER_MAX })) && validPicks(c.asks[d.ask as string].questions, d.picks));
         } else {
           check(uint(d.n));
           if (q[6] === 'roundOver') {
@@ -1147,8 +1192,8 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
   }
   const r = opts.restore;
   if (r) {
+    if (r.v !== SAVE_REVISION) throw new Error('this save was written by another version of the runtime');
     validateSave(r);
-    if (r.v !== 1) throw new Error('this save was written by another version of the runtime');
     const askNames = new Set<string>();
     pendingAsks = (Array.isArray(r.asks) ? r.asks : []).filter((a) => {
       if (!a || typeof a.name !== 'string' || !Object.hasOwn(c.asks, a.name) || askNames.has(a.name) || typeof a.n !== 'string' || a.n.length > 128 || typeof a.who !== 'string' || a.who.length > 128 || !Number.isSafeInteger(a.at) || a.at < 0 || a.at > r.tick) return false;
@@ -1156,6 +1201,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     }).slice(0, Object.keys(c.asks).length).map((a) => ({ n: a.n, name: a.name, who: a.who, at: a.at, state: deepFreeze(coerceFields(c.asks[a.name].stateFields, a.state, dims)), ...(a.result ? { result: decisionResult(a.result) } : {}) }));
     if (opts.restoreEpoch !== undefined && (!Number.isSafeInteger(opts.restoreEpoch) || opts.restoreEpoch <= 0)) throw new Error('restored epoch is invalid');
     tick = r.tick; epoch = opts.restoreEpoch ?? r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;
+    endAsked = r.intent?.[0] === 1; finishing = r.intent?.[1] === 1;
     round = { n: r.round[0], phase: r.round[1] === 1 ? 'live' : 'over', endsAt: r.round[2], startedAt: r.round[3] };
     refreshRound();
     shared = unpackFields(c.shared, r.shared, dims); sharedChanged();
@@ -1164,8 +1210,13 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     for (const w of r.ents) { const e = loadEnt(w as any[]); ents.set(e.id, e); }
     spawns = r.spawns.map((w) => loadEnt(w as any[]));
     for (const [seat, driver, owner, id, away] of r.seats) seats.set(seat, { seat, driver: driver as Driver, owner, id, away: away === 1 });
-    queue = r.queue.map((q: any[]) => ({ due: q[0], from: q[1], fromId: q[2], seq: q[3], to: q[4], kind: q[5], ev: q[6], data: deepFreeze(q[7]), at: q[8], ...(q[9] === 1 ? { builtIn: true } : {}) }));
-    areas = r.areas.map((a: any[]) => ({ from: a[0], fromId: a[1], seq: a[2], shape: a[3], ev: a[4], data: deepFreeze(a[5]) }));
+    // Checked above. Each payload is held to its shape again, so a restored one is the frozen value a live one is. A saved
+    // flag cannot take a declared event past its payload's shape or make it a room announcement.
+    queue = r.queue.map((q: any[]) => {
+      const builtIn = q[9] === 1 && !Object.hasOwn(c.events, q[6]);
+      return { due: q[0], from: q[1], fromId: q[2], seq: q[3], to: q[4], kind: q[5], ev: q[6], data: deepFreeze(builtIn ? plainData(q[7], { n: ANSWER_MAX }) : coerceFields(c.events[q[6]] ?? [], q[7], dims)), at: q[8], ...(builtIn ? { builtIn: true } : {}) };
+    });
+    areas = r.areas.map((a: any[]) => ({ from: a[0], fromId: a[1], seq: a[2], shape: a[3], ev: a[4], data: deepFreeze(coerceFields(c.events[a[4]] ?? [], a[5], dims)) }));
     ops = r.ops as typeof ops;
   } else startMatch();
 
@@ -1178,7 +1229,7 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
     const def = v && typeof v.goal === 'string' && vocabulary && Object.hasOwn(vocabulary.goals, v.goal) ? vocabulary.goals[v.goal] : null;
     const players = playerBodies().filter((p) => p.driver === 'person' && !p.away).map((p) => p.seat);
     return def && !argsWhy(def.args, v.args, guideViews.get(seat) ?? null, players)
-      ? deepFreeze({ goal: v.goal, args: v.args ?? {}, from: v.from === 'brain' ? 'brain' : 'floor', at: Math.max(0, Math.min(tick, Math.floor(num(v.at)) || 0)), asked: v.asked === true }) : null;
+      ? deepFreeze({ goal: v.goal, args: v.args ?? {}, from: v.from === 'brain' ? 'brain' : 'floor', at: Math.max(0, Math.min(tick, Math.floor(num(v.at)) || 0)), asked: v.asked === true, state: 'active' }) : null;
   }
   return {
     get tick() { return tick; },
@@ -1211,11 +1262,24 @@ export function createCore(c: Compiled, opts: { seed?: number; epoch?: number; r
             return def && players.includes(a.from) && !argsWhy(def.args, a.args, offered, players);
           }).map((a: any) => ({ k: a.k, args: plainData(a.args, { n: ANSWER_MAX }), from: a.from, at: Number.isFinite(a.at) ? a.at : 0 }));
           const goal = validGoal(seat, fv.goal);
-          safeView = { ...coerceFields(c.view, floorView, dims), goal: goal ? { goal: goal.goal, args: goal.args, state: ['active', 'done', 'failed'].includes((fv.goal as any)?.state) ? (fv.goal as any).state : 'active' } : null, asks };
+          safeView = { ...coerceFields(c.view, floorView, dims), goal: goal ? { ...goal, state: ['active', 'done', 'failed'].includes((fv.goal as any)?.state) ? (fv.goal as any).state : 'active' } : null, asks };
         }
         const raw = floorCall ? g.floor?.(world, e.self, deepFreeze(safeView)) : g.view(world, viewOf(e));
         charge(COPY * (floorCall ? ANSWER_MAX : estFields(c.view, raw)));
         const v = floorCall ? plainData(raw, { n: ANSWER_MAX }) : coerceFields(c.view, raw, dims);
+        if (floorCall && vocabulary && v && typeof v === 'object') {
+          const decision = v as Record<string, unknown>;
+          const players = playerBodies().filter(b => b.driver === 'person').map(b => b.seat);
+          for (const [key, argKey, table] of [['goal', 'args', vocabulary.goals ?? {}], ['say', 'sayArgs', vocabulary.lines ?? {}]] as const) {
+            const name = decision[key];
+            if (name === undefined || name === null) continue;
+            const def = typeof name === 'string' && Object.hasOwn(table, name) ? table[name] : null;
+            const why = !def ? `unknown ${key} ${String(name)}; allowed names: ${Object.keys(table).join(', ') || 'none'}`
+              : argsWhy(def.args, decision[argKey], guideViews.get(seat) ?? null, players);
+            // Discarded whole, here and on every host: no part of a decision outside the vocabulary reaches the rules.
+            if (why) { G.note?.('decision', `${key} ${said(name)}`, `${why}${def ? `; its arguments: ${Object.keys(def.args ?? {}).join(', ') || 'none'}` : ''}`); return; }
+          }
+        }
         if (v && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length <= 1900) value = v as Record<string, unknown>;
       });
       if (!floorCall && value) guideViews.set(seat, value);

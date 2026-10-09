@@ -103,7 +103,7 @@ test('a Plugin line for another plugin version, a different copy, and a section 
   assert.match(sh.stderr, /no "\*\*Plugin x\.y\.z\*\* · …" line under the heading/);
 });
 
-test('an older section links its release tag once the tag exists, and the check gives the line to write', () => {
+test('missing release links are advisory so released sections can stay unchanged; wrong links fail', () => {
   const root = checkout('tags', { studio: '0.20.0', plugin: '0.21.0', sections: [section('0.20.0', '0.21.0'), section('0.19.2', '0.20.2')] });
   const check = () => run(['--check', '--root', root]);
   // Not a repository, then a repository with no tag: nothing says 0.19.2 was released, so nothing is asked.
@@ -124,9 +124,9 @@ test('an older section links its release tag once the tag exists, and the check 
   const at = lines.lastIndexOf('**Plugin 0.20.2** · [#1](https://github.com/homie-rocks/homie/pull/1)');
   const wanted = `${lines[at]} · [release-2026-10-02-studio-0.19.2](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-02-studio-0.19.2)`;
   const r = check();
-  assert.equal(r.status, 1);
-  assert.ok(r.stderr.includes(`0.19.2 was released (the tag release-2026-10-02-studio-0.19.2), and its section does not link the tag yet. Make line ${at + 1} of CHANGELOG.md:\n\n      ${wanted}\n`), r.stderr);
-  assert.match(r.stderr, /then run node scripts\/changelog\.mjs --sync and commit CHANGELOG\.md and packages\/studio\/CHANGELOG\.md/);
+  assert.equal(r.status, 0);
+  assert.ok(r.stdout.includes(`0.19.2 was released (the tag release-2026-10-02-studio-0.19.2), and its section does not link the tag yet. Make line ${at + 1} of CHANGELOG.md:\n\n      ${wanted}\n`), r.stdout);
+  assert.match(r.stdout, /then run node scripts\/changelog\.mjs --sync and commit CHANGELOG\.md and packages\/studio\/CHANGELOG\.md/);
   assert.doesNotMatch(r.stderr, /0\.20\.0 was released/);
   // Written as it says, and synced: it passes.
   lines[at] = wanted;

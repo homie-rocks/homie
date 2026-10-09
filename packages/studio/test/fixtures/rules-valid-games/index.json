@@ -1,0 +1,62 @@
+[
+  {
+    "id": "g1-team-shooter",
+    "correct": true
+  },
+  {
+    "id": "x-g2-turns",
+    "correct": true
+  },
+  {
+    "id": "g3-race",
+    "correct": true
+  },
+  {
+    "id": "x-g4-waves",
+    "correct": true
+  },
+  {
+    "id": "g5-tag",
+    "correct": true
+  },
+  {
+    "id": "x-g6-puzzle",
+    "correct": true
+  },
+  {
+    "id": "c1-capture-flag",
+    "correct": true
+  },
+  {
+    "id": "c2-king-hill",
+    "correct": true
+  },
+  {
+    "id": "c3-hide-seek",
+    "correct": true
+  },
+  {
+    "id": "c4-shrink-arena",
+    "correct": true
+  },
+  {
+    "id": "y-c5-relay-noguard",
+    "correct": true
+  },
+  {
+    "id": "c6-party-numbers",
+    "correct": true
+  },
+  {
+    "id": "r2-hot-potato",
+    "correct": true
+  },
+  {
+    "id": "r2-hot-potato-try1",
+    "correct": true
+  },
+  {
+    "id": "r1-freeze-tag",
+    "correct": true
+  }
+]

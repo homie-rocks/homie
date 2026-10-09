@@ -1,0 +1,1 @@
+{"id": "n14-ninth-player", "name": "n14", "players": {"min": 1, "max": 12}, "entry": "src/view.ts", "netplay": {"v": 1, "public": true}, "room": {"host": "server"}}

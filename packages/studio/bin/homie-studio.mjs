@@ -15,10 +15,13 @@
  *                                          the cards (lib/mcp.mjs); --studios: the folder the studios live in
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio games
- *   homie-studio build [<id>] [--maps] [--types]   (--maps: also keep each bundle's source map and module sizes in
- *                                          .studio/maps/<id>/, never in site/dist: what `perf` reads a CPU profile through;
- *                                          --types: check the games' TypeScript first, with the studio's own
- *                                          `typescript`; a type error stops the build. The site is built in a folder of
+ *   homie-studio build [<id>] [--maps] [--types] [--long-check]   (--maps: also keep each bundle's source map and
+ *                                          module sizes in .studio/maps/<id>/, never in site/dist: what `perf` reads a
+ *                                          CPU profile through; --types: check the games' TypeScript first, with the
+ *                                          studio's own `typescript`; a type error stops the build; --long-check: play
+ *                                          each rules game eight times as long before it is written (a rules game is
+ *                                          always type-checked and played; this is more of the same play, for a
+ *                                          release or a CI run). The site is built in a folder of
  *                                          its own and put in place only when all of it is there: a game that does not
  *                                          build fails the command and leaves site/dist as it was. Each game's line says
  *                                          changed or unchanged, its build hash, and whether its source is shared)
@@ -906,7 +909,7 @@ async function main() {
   // go, so an old note, an old card or an agent's memory of the toolkit does not end at "unknown command".
   if (cmd === 'game' && sub === 'remix') return { ok: false, command: 'game remix', why: 'remix was retired: a game is no longer handed over whole, and no studio serves one. Games build on each other through parts, the pieces of a game its studio chose to share: find one with `homie-studio parts find <words>` and bring it in with `homie-studio parts add` (in chat: parts_find, part_add; parts/PARTS.md)' };
   if (cmd === 'games') return { ok: true, command: 'games', games: listGames(root).map(({ dir, ...g }) => ({ ...g, dir: relative(root, dir) })) };
-  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps'), types: flags.has('types') }), 'build');
+  if (cmd === 'build') return tracked(root, 'build', () => build(root, { only: positional[1] ?? null, log, maps: flags.has('maps'), types: flags.has('types'), longCheck: flags.has('long-check') }), 'build');
   if (cmd === 'preview') return preview(root, positional[1] ?? (listGames(root).length === 1 ? listGames(root)[0].id : null));
   if (cmd === 'perf' && sub === 'sizes') return perfSizes(root, positional[2] ?? listGames(root)[0]?.id);
   if (cmd === 'lab') return labCommand(root, sub);

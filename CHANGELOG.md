@@ -17,6 +17,19 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.36.0] - 2026-10-08
+
+**Plugin 0.37.0** · [#68](https://github.com/homie-rocks/homie/pull/68)
+
+The build plays your rules game and names problems before you publish it.
+
+### Added
+
+- **The build plays your rules game before it is written.** After checking the types in rules, movement and view against the game's own declarations, it seats generated players in a room on the real server runtime. They steer, hold every control, send every command the game declares, and sometimes send nothing at all; they leave, come back and give up their seats; the room is restarted as a deploy restarts it. A game with AI companions is played with them too.
+- **A build is refused only for what that play proved.** A handler that threw, a tick that used its whole budget, a character the server had to hold back because its movement outran its declared top speed, a room that did not come back the same from its own save, or a value the room had to change and lose: `NaN`, an infinite number in a fraction or a vector, more entries than a list or a map declares, a text longer than declared. The message names the file, the line of the write and the handler, says what a live room does with the value, and how to repair it. Everything else is an `info:` line that never fails a build: how much was played, which handlers never ran, and how often a whole number was held to its range.
+- **The same game gets the same answer on every computer.** The play is counted in ticks and in the rules' own budget units, never in seconds, so a slow or busy computer builds what a fast one builds and prints the same lines. A small game is played for fifteen minutes of the room's clock, which takes about a second; a heavy game is played until its units are used, a few seconds, and the line says how far that was. `homie-studio build --long-check` plays eight times as much, for a release or a CI run.
+- **A live room never stops for a value that does not fit its field.** It stores the nearest thing the type holds, as before: `NaN` becomes `0`, a list is cut to its size, a whole number is held to its range (`Infinity` is the top of it, so it can stand for "never"). The build is where such a write is caught. `-0` is now stored as `0`, so a room divides the same way before and after a restart, and a map keeps its keys in the order they were added. The `game` skill's `RULES.md` has the table. Saved matches are written in a new form: a match saved by a build made before this change starts afresh once.
+
 ## [0.35.1] - 2026-10-08
 
 **Plugin 0.36.0** · [#71](https://github.com/homie-rocks/homie/pull/71)

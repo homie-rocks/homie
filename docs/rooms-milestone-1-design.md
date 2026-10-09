@@ -1041,23 +1041,32 @@ maps. It is scope-aware: it tells a global from a field of the same name. It shi
 objects. A write throws with a stack, whatever the types said. In production the same objects
 are read-only views.
 
-**Generated tests** (slice 4). For every game the check runs seeded bots (wander, chase,
-mash) in a Node worker thread, with:
+**Generated tests** (slice 4). For every game the check plays a room in a Node worker thread, on
+the real host runtime: generated people who steer at random, hold every control, send every
+declared command and send nothing; who leave, return and give up seats; and a restart of the room
+as a deploy makes it. A game with companions is played a second, short time with them. A build fails only
+for what the runtime itself proves in that play:
 
-- two runs compared tick by tick; a difference is reported as the first field that differs
-  and the handler that wrote it;
-- **two copies side by side on every tick: one kept running, one rebuilt from its saved state
-  before each tick**, compared by a digest of the packed state. Any state that is not in a declared field shows
-  up on the first tick that uses it. This is the proof that section 5 loses nothing it should
-  keep;
-- a kill and restore at random ticks, compared with an unbroken run;
-- **`move` replayed** (from slice 6): a second copy of every player's body is stepped from each snapshot
-  through `move` alone, as a browser would, and must land where the server's did when no
-  handler touched the body;
-- **every `move` from rest**, with every `motion` field at its `init` and each extreme of
-  each input field, for two seconds: a ground speed above `body.maxSpeed` fails;
-- a time limit and a memory limit on the thread, which is ended from outside when either is
-  passed, so the build fails with the handler's name.
+- **a handler threw**, with its file, line and handler;
+- **a tick used its whole budget**;
+- **the room rebuilt from its saved state did not come back the same.** Before every one of the
+  first ticks, and then at intervals, a second room is built from the running room's save. It must
+  save the same bytes again, and after one tick of the same input the two rooms' saves must be the
+  same bytes. Any state that is not in a declared field shows up on the first tick that uses it.
+  This is the proof that section 5 loses nothing it should keep;
+- **the server held a body back**: the check plays each owner-moved body's browser with the game's
+  own `move`, and a claim the server cuts short is a `move` that outruns `body.maxSpeed`;
+- **a handler wrote a value the room had to change and lose**: `NaN`, an infinite number in a
+  fraction or a vector, more than a list, a map or a text declares. The runtime tells whoever asks
+  what it did to a written value, at the one place it holds values to their types; only the check
+  asks. The build names the line of the write.
+
+The first room is played for a quarter of an hour of its clock, or until it has used its budget
+units; a second, short one seats the companions. Both are counted, never timed, so the same source
+gives the same verdict and the same lines on every computer. `--long-check` plays eight times as
+much. What the play did not reach is not checked, and one line says how far it went. **`move` replayed** (from
+slice 6): a second copy of every player's body is stepped from each snapshot through `move` alone,
+as a browser would, and must land where the server's did when no handler touched the body.
 
 **The planted-fault file** of slice 4's exit test holds fifteen faults, each of which must
 be named with its line: a global `Date`; `Math.sin`; the `**` operator; a module-level `let`;
@@ -1067,8 +1076,11 @@ through `a?.[k]`; `const { constructor: c } = x`; an object literal with a `__pr
 loop that never ends; an array doubled with `concat` in a short loop; a loop of `world.near`
 calls that passes the budget.
 
-**Built-in invariants**, every tick of every run: no NaN, positions inside the world,
-declared sizes respected.
+**Built-in invariants** are the runtime's own. A live room never stops for a value that does not
+fit its field: it stores the zero of the type for a number that is not finite, cuts a list, a map
+or a text to its declared size, holds a whole number to its range, and plays on. A list or a map
+changed in place is held the same way when its handler ends. The build is where such a write is
+refused. Positions are held inside the world.
 
 **Messages** are written for the chat: what broke, in the game's words, the line, and the
 usual fix.

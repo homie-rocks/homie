@@ -75,7 +75,7 @@ import { audienceOf } from '../worker/shop-rules.mjs';
 import { loungeConfig, loungeProblems } from '../worker/lounge-store.mjs';
 // GAME PARTS (parts/PARTS.md): the three call-outs below are all the build knows of them.
 import { buildParts, partsPlugin } from './parts-build.mjs';
-// RULES ON THE SERVER (NETPLAY.md section 29): a game with a src/rules.ts is built as a view bundle plus a rules module.
+// RULES ON THE SERVER (NETPLAY.md section 29): a game declaring a room object and src/rules.ts builds as a view bundle plus a rules module.
 
 /** Never copied into a static game's served folder. */
 const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);
@@ -376,7 +376,7 @@ function pointAtBundle(html, bundle) {
  * game is served (/games/<id>/ on the site, /<id>/__game/ in its frame, the lab). A game with no dynamic import is
  * one file, as before. `hashed` (the site's build) names the bundle by its content too: see the top of this file.
  */
-export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {}, hashed = false } = {}) {
+export async function buildGameFiles(esbuild, root, g, out, { maps = false, sourcemap = null, cache = {}, log = () => {}, hashed = false, longCheck = false } = {}) {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, 'assets'), { recursive: true });
   const mode = g.build?.mode ?? 'bundle';
@@ -394,7 +394,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   }
   if (ruled && mode !== 'bundle') throw new Error(`games/${g.id} has a src/rules.ts and game.json "build": { "mode": "${mode}" }. A game written as rules plus view is built by Homie itself: take the "build" setting out.`);
   const { prepareRules, viewPlugin } = ruled ? await rulesBuild() : {};
-  const rules = ruled ? await prepareRules(esbuild, root, g, { log }) : null;
+  const rules = ruled ? await prepareRules(esbuild, root, g, { log, longCheck }) : null;
   const bundle = async (entryRel) => {
     const entry = join(g.dir, entryRel);
     if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
@@ -486,7 +486,7 @@ export function orderGames(games, order, log = () => {}) {
   return [...games].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity) || a.id.localeCompare(b.id));
 }
 
-export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false } = {}) {
+export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, longCheck = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
   // The shop first (shop/SHOP.md): invalid shop settings stop the build before anything is built.
@@ -504,13 +504,13 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   // from the site as it is.
   const dist = openStage(root, { from: only ? live : null });
   try {
-    return await buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps });
+    return await buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, longCheck });
   } finally {
     rmSync(dist, { recursive: true, force: true });
   }
 }
 
-async function buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps }) {
+async function buildInto(dist, { esbuild, studio, shop, live, games, before, typed, root, only, log, deploy, maps, longCheck }) {
   const built = [];
   const retired = [];
   const cache = {};
@@ -519,7 +519,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   for (const g of games) {
     const out = join(dist, 'games', g.id);
     const started = Date.now();
-    const { mode, warnings, bundle, chunks, rules } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log, hashed: true });
+    const { mode, warnings, bundle, chunks, rules } = await buildGameFiles(esbuild, root, g, out, { maps, cache, log, hashed: true, longCheck });
     if (rules) ruled.push({ id: g.id, ...rules }); else browserHosted.push(g.id);
     // The guides' vocabulary (NETPLAY.md section 18): checked here, so a room never meets a line it cannot say.
     vocabFor(g, out);
@@ -543,10 +543,10 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       ...(bundle ? { bundle } : {}), ...(chunks.length ? { chunks: chunks.length, chunkBytes: later } : {}),
     });
     log(`built ${g.id} (${mode}, ${Math.round(bytes / 1024)} KB${chunks.length ? ` + ${chunks.length} ${chunks.length === 1 ? 'chunk' : 'chunks'} loaded later, ${Math.max(1, Math.round(later / 1024))} KB` : ''})`);
-    if (rules) log(`  ${g.id}: its rules run on the server (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; three seconds with bots: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler)`);
+    if (rules) log(`  ${g.id}: its rules run on the server (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; ${rules.check.ticks} ticks played, the room rebuilt from its save ${rules.check.restores} times: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler; the largest save was ${rules.check.largestSaveBytes} bytes)`);
   }
   // A game written before rules (its own code is the host) builds and runs exactly as it did. Said in one line.
-  if (browserHosted.length) log(`hosted by a player's browser, as before (no src/rules.ts; nothing to do): ${browserHosted.join(', ')}`);
+  if (browserHosted.length) log(`hosted by a player's browser, as before (no room object; nothing to do): ${browserHosted.join(', ')}`);
   const all = listGames(root);
   // No game is handed over whole any more (remix was retired; worker/license.mjs). A one-game build starts from the
   // site as it is, which an older toolkit may have built: what that wrote for remixers (a game's whole source, and

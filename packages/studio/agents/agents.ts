@@ -283,7 +283,7 @@ export function useAgents(net: Netplay<any, any, any>, vocab: Vocabulary, opts: 
   function onAsk(slot: number, k: string, args: Record<string, unknown>, from: number): void {
     const def = own(vocab.asks, k);
     const s = slotOf(slot);
-    if (!def || !s || argsWhy(def.args, args, lastView.get(slot) ?? viewOf(slot), null)) { st.drops += 1; return; }
+    if (!def || !s || argsWhy(def.args, args, viewOf(slot), people())) { st.drops += 1; return; }
     const now = wall();
     if (def.leave) { const m = avoid.get(slot) ?? new Map<number, number>(); m.set(from, now + AGENT_RULES.leaveMs); avoid.set(slot, m); }
     asks.set(slot, [...(asks.get(slot) ?? []), { k, args, from, at: now }].slice(-4));

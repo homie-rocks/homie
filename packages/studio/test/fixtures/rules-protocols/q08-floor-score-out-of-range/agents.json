@@ -1,0 +1,4 @@
+{ "v": 1, "persona": "A patient lamp keeper who helps the others.",
+  "goals": { "light": { "about": "Go and light a dark lamp", "args": { "lamp": "view.dark" } }, "rest": { "about": "Stay where you are" }, "follow": { "about": "Stay with a player", "args": { "seat": "player" } } },
+  "lines": { "onit": { "text": "On it!" } },
+  "asks": { "light": { "text": "Light {lamp}", "goal": "light", "args": { "lamp": "view.dark" } }, "follow": { "text": "Follow me", "goal": "follow", "args": { "seat": "player" } } } }

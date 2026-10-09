@@ -359,8 +359,8 @@ test('the runtime runs no code of the rules when it reads a value, even for rule
   const text = JSON.stringify(rig.snap());
   assert.equal(hooks, 0);
   const pawn = rig.ents(0)[0];
-  // A map keeps the names of the first four keys it was handed, as names; what sat under them was not a number, so it is 0.
-  assert.deepEqual(pawn.fields, [0, 0, 0, 0, [0, 0], [1, 0], '', '', [0, 0, 0, 0], [[0, 0], [0, 0], [0, 0], [0, 0]], [['toJSON', 0], ['toString', 0], ['valueOf', 0], ['x', 0]], [0, [0, 0], ['', '']]], 'every field is the zero of its type');
+  // A map keeps the names of the first four keys it was handed, in the order they were added; what sat under them was not a number, so it is 0.
+  assert.deepEqual(pawn.fields, [0, 0, 0, 0, [0, 0], [1, 0], '', '', [0, 0, 0, 0], [[0, 0], [0, 0], [0, 0], [0, 0]], [['valueOf', 0], ['toString', 0], ['toJSON', 0], ['x', 0]], [0, [0, 0], ['', '']]], 'every field is the zero of its type');
   assert.doesNotMatch(text, /function|=>|\[object/, 'and nothing in it was made by turning an object into a text');
 });
 
