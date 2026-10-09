@@ -1,8 +1,8 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
 import { world, PP, stripeMod, baseSale, mainRecord, bought, fullOrder } from './paid-parts-review3-common.mjs';
-const MOCK = process.env.STRIPE_MOCK_URL ?? 'http://127.0.0.1:12111';
+const MOCK = process.env.STRIPE_MOCK_URL;
 const flat = (o, p = '', out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === 'object') flat(v, p ? `${p}.${Array.isArray(o) ? '' : ''}${k}` : k, out); else out[p ? `${p}.${k}` : k] = v; } return out; };
-test('L1 every Checkout parameter sent, per till and billing, with every seller option on; accepted by stripe-mock', async () => {
+test('L1 every Checkout parameter sent, per till and billing, with every seller option on; accepted by stripe-mock', { skip: !MOCK && 'Set STRIPE_MOCK_URL (CI starts stripe-mock)' }, async () => {
   const all = { automaticTax: true, taxBehavior: 'exclusive', adaptivePricing: true, promotionCodes: true, invoiceCreation: true, customerCreation: true, taxIdCollection: true, intentMinutes: 45 };
   for (const till of ['stripe', 'stripe-managed']) for (const billing of ['one-time', 'month', 'year']) {
     const o = { id: 'ord_AAAAAAAAAAAAAAAAAAAA', buyer: 'a'.repeat(64), quantity: 1, game: null, manifest: JSON.stringify({ id: 'camera', name: 'Camera', version: '0.1.0' }), offer: JSON.stringify({ ...baseSale, ...all, billing }) };

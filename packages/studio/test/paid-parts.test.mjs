@@ -314,3 +314,31 @@ test('one-time licence transfer preserves payment identity and subscription paye
     } finally { await f.close(); }
   }
 });
+
+
+test('paid app, music and video parts retain discovery provenance and install into an app', async () => {
+  for (const [kind, source] of [['waitlist', 'app'], ['loop', 'music'], ['video-template', 'video']]) {
+    const f = await fixture(`app-media-${source}`);
+    try {
+      mkdirSync(join(f.root, 'apps', 'welcome'), { recursive: true });
+      writeFileSync(join(f.root, 'apps', 'welcome', 'app.json'), JSON.stringify({ name: 'Welcome' }));
+      mkdirSync(join(f.buyer, 'apps', 'welcome'), { recursive: true });
+      writeFileSync(join(f.buyer, 'apps', 'welcome', 'app.json'), JSON.stringify({ name: 'Welcome' }));
+      const p = readPart(f.dir);
+      Object.assign(p, { version: '0.1.1', kind, uses: ['app', 'venue', source], from: { [source]: 'welcome', name: 'Welcome', studio: 'Part Studio' } });
+      writePart(f.dir, p);
+      assert.equal(sharePart(f.root, 'camera').ok, true);
+      buildParts(f.root, f.dist); await f.upload();
+      f.cat.games.push({ id: 'welcome', name: 'Welcome', kind: 'app' });
+      const catalog = await (await f.fetcher('https://seller.example/.well-known/homie-parts.json')).json();
+      assert.equal(catalog.parts[0].from[source], 'welcome');
+      assert.ok(catalog.parts[0].uses.includes('app'));
+      if (source === 'app') assert.equal(catalog.parts[0].from.open, 'https://seller.example/welcome/open');
+      await f.buy(); await f.event('checkout.session.completed');
+      const installed = await f.add({ game: 'welcome' });
+      assert.equal(installed.ok, true, JSON.stringify(installed));
+      assert.ok(existsSync(join(f.buyer, 'apps', 'welcome', 'credits.json')));
+      assert.equal(partsPublishReport(f.buyer).ok, true);
+    } finally { await f.close(); }
+  }
+});

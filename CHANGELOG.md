@@ -17,6 +17,34 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.37.2] - 2026-10-09
+
+**Plugin 0.38.2** · [#70](https://github.com/homie-rocks/homie/pull/70)
+
+Sell game, app, music or video parts on your own studio's site, with your price and licence; another studio's AI can discover, pay for and install them.
+
+### Added
+
+- **Your own part shop.** Tell your AI which files to sell, their price and their licence. On a studio already deployed with Stripe, connection takes one browser approval when needed (zero if already connected); the AI creates Payment Links and the webhook in your account. It generates and installs the purchase signing key too. Nobody finds or pastes a key for this setup.
+- **An AI can pay without a checkout page.** MPP with Stripe shared payment tokens, x402 on Base, and MPP over MCP return verified files and a signed proof. The buyer approves the exact price or gives its wallet standing authority. Wallet-required approvals still apply. Stripe's hosted checkout is the fallback.
+- **Machine payments are an optional fuller connection.** Stripe's shared-token charge and stablecoin PaymentIntent recording APIs need a Worker credential; the MCP binding uses the same charge. Your AI can operate Stripe's key-creation page and transfer its Copy result privately with `shop connect --from-clipboard`; you only handle Stripe's sign-in, verification and approval prompts. Live Base also needs your CDP facilitator credentials. The guide distinguishes this setup from the one-approval keyless default.
+- Receipts, retries, private storage, refunds and payment recovery belong to your studio. **homie.rocks is not in the money path**, takes no fee, and can be unavailable while a buyer buys directly from your site.
+
+### Changed
+
+- Part kinds are labels you choose; app, music and video are suggestions alongside existing game kinds. Existing manifests and game imports still work. App pieces use the same extraction, imports and credits as games; music and video retain their provenance and intended uses.
+- Sellers choose licence scopes, refund windows, approval-intent lifetimes and recurring intervals supported by Stripe. No new price ceiling, seller kind list or spending cap. Turnstile on the hosted fallback is optional; request flood protection remains configurable.
+- Paid resources use the shop's webhook verification and refund-list reader, including keyless signed refund snapshots. Each purchase keeps its frozen terms and private claim. A second purchase has a fresh claim; retries keep the first claim and never request a second charge.
+- Selling code is loaded only by the selling entry. A studio that sells no parts keeps the ordinary Worker and its existing compatibility flags.
+
+### Upgrade notes
+
+- Follows [#74](https://github.com/homie-rocks/homie/pull/74), studio 0.37.1 / plugin 0.38.1. Main’s apps, keyless shop and visible Shop control remain available.
+
+- The AI applies `0015_purchases.sql` and `0016_purchase_facts.sql`, configures private storage, and uploads and verifies paid files when you deploy. Existing shop migrations stay unchanged. Keep paid files and the seller's signing key backed up.
+- Payment Links need no Stripe API key in the Worker. A keyless refund is made in Stripe or by the owner's connected AI; signed events update the studio. Missing events wait for Stripe redelivery. Dynamic quantities and provider-read recovery use the fuller connection.
+- Verification uses stand-in payment services in the local Workers runtime and Chrome. No real payment account was signed into and nothing was deployed. Actual account eligibility, settlement and provider permissions still need verification on the seller's account.
+
 ## [0.37.1] - 2026-10-09
 
 **Plugin 0.38.1** · [#74](https://github.com/homie-rocks/homie/pull/74)

@@ -313,7 +313,7 @@ export function sharePart(root, id, on = true) {
 const row = (p, extra) => ({
   id: p.id, name: p.name, kind: p.kind, version: p.version, summary: line(p.summary), license: p.license || null, tags: Array.isArray(p.tags) ? p.tags.slice(0, 12) : [],
   ...(Array.isArray(p.uses) ? { uses: p.uses } : {}),
-  from: isObj(p.from) ? { ...(p.from.app ? { app: p.from.app, open: p.from.open ?? null } : {}), ...(p.from.music ? { music: p.from.music } : {}), ...(p.from.video ? { video: p.from.video } : {}), game: p.from.game ?? null, name: p.from.name ?? null, studio: p.from.studio ?? null, play: p.from.play ?? null } : null,
+  from: isObj(p.from) ? { ...(p.from.kind ? { kind: p.from.kind, id: p.from.id ?? null } : {}), ...(p.from.app ? { app: p.from.app, open: p.from.open ?? null } : {}), ...(p.from.music ? { music: p.from.music } : {}), ...(p.from.video ? { video: p.from.video } : {}), game: p.from.game ?? null, name: p.from.name ?? null, studio: p.from.studio ?? null, play: p.from.play ?? null } : null,
   sale: p.sale ?? null, price: priceWords(p.sale), purchaseRequired: Boolean(p.sale), licenseTerms: p.licenseTerms ?? null, quality: p.quality ?? null, checkedAt: p.checkedAt ?? null, available: p.available ?? null, cost: isObj(p.cost) ? p.cost : {}, requires: isObj(p.requires) ? p.requires : {}, rig: p.skeleton?.rig ?? null, netplay: p.contract?.netplay ?? null, ...extra,
 });
 function matches(p, { words, kind, tag, license, builds }) {

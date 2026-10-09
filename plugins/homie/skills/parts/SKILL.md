@@ -1,7 +1,7 @@
 ---
 name: parts
-description: Games build on each other by sharing parts, pieces of a game its studio chose to share (a creature, a level generator, a chase camera, a bot brain, a pickup mechanic, an audio pack). Use this when planning or making any game (look for pieces before writing one from scratch), when the person asks what parts exist, says "use the X from that game", "make this reusable" or "share this", and before a game that uses parts goes online.
-compatibility: Node 22. Paid purchases need @homie-rocks/studio 0.36.0 or later. A studio made with @homie-rocks/studio; npm installs the packages a part builds on.
+description: Studios build on each other with parts from games, apps, music and video that their owners choose to share or sell (a creature, a level generator, a chase camera, a bot brain, a pickup mechanic, an audio pack). Use this when planning or making games, apps, music or video (look for pieces before writing one from scratch), when the person asks what parts exist, says "use the X from that game", "make this reusable" or "share this", and before a game that uses parts goes online.
+compatibility: Node 22. Paid purchases need @homie-rocks/studio 0.37.2 or later. A studio made with @homie-rocks/studio; npm installs the packages a part builds on.
 ---
 
 **Apps:** For a business, venue, cause or customer app, follow the `app` skill: `apps/<id>/app.json`, one morphing screen, roles and parts. Reuse these engines and workflows; do not impose game rounds, scores, bots, a game demo or page navigation. The app check proves shared actions and reconnect; app stores use the same standalone command.
@@ -9,13 +9,12 @@ compatibility: Node 22. Paid purchases need @homie-rocks/studio 0.36.0 or later.
 
 # Studio parts: games, apps, music and video
 
-A studio is the folder with `studio.json`. Games build on each other by sharing **parts**: a piece of a game that
-its studio chooses to share, so somebody making another game can use it. A creature from one game, a level from
+A studio is the folder with `studio.json`. Studios build on each other with **parts**: reusable pieces of games, apps, music and video that their owners choose to share or sell. A creature from one game, a level from
 another, a bot brain from a third. Without parts you would have to come up with everything on your own.
 
 The rules, in full in `node_modules/@homie-rocks/studio/parts/PARTS.md`:
 
-1. Game lifting extracts a piece, **never the whole game**. App screens, music loops or tracks and video may be authored directly in `parts/<id>/`; their licence controls permitted use, including venue use.
+1. Game and app lifting extracts a piece, **never the whole experience**. App components can also be lifted from `apps/<id>/`; music loops or tracks and video may be authored directly in `parts/<id>/`; their licence controls permitted use, including venue use.
 2. A part can take **any form** that suits the piece: code, assets, data, a JSON description, a tuned config, a mix.
 3. **Private until shared**: on purpose, with a licence (an SPDX identifier) and an attribution. A part records the
    game and studio it came from.
@@ -29,23 +28,23 @@ There is no mash-up command: mashing up is making a game with parts from several
 
 ## 1. Look first
 
-When planning or making a game, for each system it needs (camera, movement, bots, pickups, effects, sound, UI,
+When planning or making a game, app, music or video, for each system it needs (camera, movement, bots, pickups, effects, sound, UI,
 environment, characters), before writing it from scratch:
 
 1. Check the `@homie-rocks/*` packages the studio has for the general mechanism.
 2. `parts_find` with the words for the piece (`"chase camera"`, `"cave"`, `"pickups"`), and `kind`, `tag`,
    `license` or `builds` (a package or a skeleton it builds on) to narrow it.
-3. Tell the person what you found, a line each, **naming the game and studio each piece is from**, with your pick.
+3. Tell the person what you found, a line each, **naming the source work and studio each piece is from**, with your pick.
 
 If the catalogue cannot be reached, the tool says so. That is not "nothing exists": say it could not be read, go on
 with what the studio has, and look again later. If it answered and nothing fits, write the piece.
 
-Record in the game's CODEX, under **Built from**, what came from where: the packages, each part with its game,
+Record in the project notes or CODEX, under **Built from**, what came from where: the packages, each part with its game,
 studio and licence, and what you wrote from scratch and why.
 
 ## 2. Use a part
 
-`part_add` with `"<studio site>/<part id>"` (as `parts_find` gave it; `@1.2.0` for one version) and the `game`. It
+`part_add` with `"<studio site>/<part id>"` (as `parts_find` gave it; `@1.2.0` for one version) and the `game` option (a game or app id; omit it for standalone media). It
 fetches one exact version, checks every file's integrity before anything is written, copies it into the studio
 (the studio's to tune from then on), records where it came from, adds the credit to the game, and lets npm install
 the packages it builds on. Read what it answers:
@@ -68,7 +67,7 @@ Then build, and try it on two devices.
 After building a piece another game could use, offer it in one line: "The chase camera turned out reusable. Shall
 I make it a part, so your next game can use it? It stays private unless you ask to share it."
 
-`part_new` with `id`, `from` (the game) and `files` (the module or folder of that piece). The files are lifted out
+`part_new` with `id`, `from` (the game or app) and `files` (the module or folder of that piece). The files are lifted out
 into `parts/<id>/`, the game imports them from there, and **the game still builds and plays the same**: build it
 and check. A file that reaches into the rest of the game is refused by name: pass what it needs in as an argument
 (a collision function, a palette, the room), then lift it. The game's own entry cannot be lifted: a part is never

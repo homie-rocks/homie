@@ -1,9 +1,12 @@
 # Paid parts release check — 2026-10-09
 
-Studio 0.36.0 / plugin 0.37.0, [PR #70](https://github.com/homie-rocks/homie/pull/70).
-Based on main `50877e83213b0287e3b984e65321bec436285b48` (studio 0.35.1).
-The original 15 commits are saved locally on `paid-parts-history-before-main-20261008`.
-They were squashed before rebasing; main's shop, cart, rule-game detection and keyless setup remain in place. Main advanced during verification, so its 0.35.1 tip setup and masked Stripe error fixes were incorporated before the final suite.
+Studio 0.37.2 / plugin 0.38.2, [PR #70](https://github.com/homie-rocks/homie/pull/70).
+Merge AFTER [#74](https://github.com/homie-rocks/homie/pull/74). Rebased onto its verified
+`5c4bfda` commit, which includes main `51227fc` (studio 0.37.0 / plugin 0.38.0).
+
+The release keeps app extraction/imports/credits, app and media provenance, intended uses,
+keyless checkout and the visible Shop control. Purchase migrations are now 0015 and 0016,
+after the released 0014 app migration. No released changelog section is rewritten.
 
 ## What the owner and buyer do
 
@@ -46,11 +49,21 @@ Kinds are lowercase labels chosen by the studio; app, music and video are sugges
 
 Removed restrictions include the kind whitelist, fixed licence-scope list, seat-only quantities, whole-day refund windows, integer renewal grace, Stripe Session bounds on local approval intents, the refund-policy text ceiling and mandatory Turnstile. Stripe's supported recurring intervals include day and week. Safe arithmetic, provider constraints, proof/file validation and configurable flood protection remain.
 
-The selling entry adds resource adapters to main's shop. Webhook verification, event handling, Stripe transport, refund creation, the paginated refund-list reader, keyless money snapshots and the owner office are shared. Immutable resource offers and purchase claims still have their own purchase tables; player cart orders retain main's tables and grant logic. There is no copied selling version of the shop or office. Purchase migrations are 0013 and 0014, after main's 0010–0012.
+The selling entry adds resource adapters to main's shop. Webhook verification, event handling, Stripe transport, refund creation, the paginated refund-list reader, keyless money snapshots and the owner office are shared. Immutable resource offers and purchase claims still have their own purchase tables; player cart orders retain main's tables and grant logic. There is no copied selling version of the shop or office. Purchase migrations are 0015 and 0016, after main’s 0014 app migration.
 
-## Ordinary Worker measurement
+## Current release-train verification
 
-Same esbuild, browser platform, ESM bundle, no source maps; main is an archive of the commit above. No selling modules or payment SDKs occur in the ordinary bundle. No extra ordinary compatibility flag or selling cron is added.
+Studio **0.37.2** / plugin **0.38.2**, after #74 (studio 0.37.1 / plugin 0.38.1), rebased onto its verified commit `5c4bfda`. Main is `51227fc`. Apps and the keyless, visible Shop control remain available. Purchase migrations follow the released app migration as 0015 and 0016. Released changelog sections and previous template fingerprints are unchanged.
+
+The full ordinary suite ran with real Chrome and Stripe's checksum-verified v0.206.0 mock: **2,095 tests, 2,091 passed, four skipped, zero failed** (707.5 seconds). Plugin checks: **119 tests, 118 passed, one optional skip, zero failed**. The app/media, office and paid-parts focused checks passed 43 tests with one skip; the parts/MCP/schema follow-up passed all 24. No timing threshold was loosened. A schema test now skips explicitly when STRIPE_MOCK_URL is absent, matching the other schema tests; it executed against the mock in the full run.
+
+`npm ci`, `npm run build`, `npm run validate`, desktop, changelog and publish checks all passed. Desktop packaging answered 68 tools and five cards. Publish check reports one new version and 22 existing packages. The changelog checker’s advisory for older plugin tag links does not require changing released sections.
+
+The packed 0.37.2 toolkit built a temporary copy of `/Users/ryan/Studios/homie-arcade` without its node_modules. All five games passed the same real-Chrome checks as the main 0.37.0 baseline: 2048 Race (121.3 s), Asteroids Arena (121.3 s), Bone Burglar (152.0 s), Octree Arena (121.9 s), Tiny Platformer (121.1 s), at 60–61 fps. The server stopped and the copy was deleted. The original was untouched. All five workerd/Chrome seller–buyer scenarios passed in the full suite, covering MPP, MCP, x402, keyless hosted checkout, retries, delivery, refunds and renewals against stand-ins. App/music/video discovery and installation into an app also passed.
+
+## Historical ordinary Worker measurement (before the apps rebase)
+
+Same esbuild, browser platform, ESM bundle, no source maps; the historical baseline was main `50877e8` (studio 0.35.1). No selling modules or payment SDKs occur in the ordinary bundle. No extra ordinary compatibility flag or selling cron is added.
 
 | Bundle | Main bytes | Paid-parts bytes | Difference |
 | --- | ---: | ---: | ---: |
@@ -61,7 +74,7 @@ Same esbuild, browser platform, ESM bundle, no source maps; main is an archive o
 
 Wrangler 4.145.0 `check startup`, on those minified bundles, seven alternating local runs: median profile window **26.1 ms main / 24.8 ms branch**, median sampled active CPU **5.1 ms / 5.1 ms**. Active ranges were 0–18.9 ms and 0–8.0 ms: this is noisy local sampling, not evidence of a speedup or Cloudflare production timing. There was no observed median startup regression. The selling runtime loads on first use of the selling entry; ordinary studios never import it.
 
-## Verification
+## Historical verification (before the apps rebase)
 
 The five real-workerd paid-parts end-to-end scenarios passed:
 

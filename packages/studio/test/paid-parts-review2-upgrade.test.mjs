@@ -22,7 +22,7 @@ test('U1 an existing player shop: no parts migration yet, old key; every new eve
 
 test('U2 migrations: template files equal the constants; order; idempotent; half applied', async () => {
   const dir = join(H, 'template/site/migrations'); const files = readdirSync(dir).sort(); console.log('U2 template migrations:', files.join(' '));
-  assert.equal(readFileSync(join(dir, '0013_purchases.sql'), 'utf8').trim(), PP.PURCHASE_MIGRATION.trim()); assert.equal(readFileSync(join(dir, '0014_purchase_facts.sql'), 'utf8').trim(), PP.PURCHASE_STATE.trim());
+  assert.equal(readFileSync(join(dir, '0015_purchases.sql'), 'utf8').trim(), PP.PURCHASE_MIGRATION.trim()); assert.equal(readFileSync(join(dir, '0016_purchase_facts.sql'), 'utf8').trim(), PP.PURCHASE_STATE.trim());
   const sql = new DatabaseSync(':memory:'); sql.exec(SHOP_MIGRATION); sql.exec(PP.PURCHASE_MIGRATION); sql.exec(PP.PURCHASE_MIGRATION); sql.exec(PP.PURCHASE_STATE); sql.exec(PP.PURCHASE_STATE);
   const s2 = new DatabaseSync(':memory:'); s2.exec(SHOP_MIGRATION); let e = ''; try { s2.exec(PP.PURCHASE_STATE); } catch (x) { e = x.message; } console.log('U2 0011 without 0010:', e || 'ok', '| tables created before the failure:', s2.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'part_%'").all().map((r) => r.name).join(','));
   assert.deepEqual(s2.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'part_%'").all(), []);

@@ -44,7 +44,7 @@ function entryOf(p, cat, url, capabilities = { machine: {} }) {
   const { from, ...rest } = p;
   return {
     ...rest,
-    ...(!g && from && !from.game && !from.app ? { from: from } : {}),
+    ...(!g && from && !from.game && !from.app ? { from } : {}),
     ...(g ? { from: { [g.kind === 'app' ? 'app' : 'game']: g.id, name: g.name ?? g.id, studio: cat.studio?.name ?? from.studio ?? null, page: `${url.origin}/${g.id}/`, [g.kind === 'app' ? 'open' : 'play']: `${url.origin}/${g.id}/${g.kind === 'app' ? 'open' : 'play'}` } } : {}),
     add: `${url.host}/${p.id}`,
     ...(selling.entryDescription?.(p, cat, url, capabilities) ?? {}),
@@ -143,7 +143,7 @@ const head = (kicker, title, lead, extra = '') => `<header class="head"><p class
 const studioOf = (cat) => cat.studio?.name ?? 'Studio';
 const fromLine = (p) => ((p.from?.game ?? p.from?.app) ? `From <a href="/${esc((p.from.game ?? p.from.app))}/">${esc(p.from.name ?? (p.from.game ?? p.from.app))}</a>` : '');
 /** What a person says to their AI to get the part, in plain words with its name and reference: no command to type. */
-const sayAdd = (p) => `Add the "${p.name}" part from ${p.add} to my game`;
+const sayAdd = (p) => `Add the "${p.name}" part from ${p.add} to my studio`;
 const sayRow = (label, say) => `<div class="psay"><div><span class="ptag">${esc(label)}</span><code>${esc(say)}</code></div><button class="pcopy" type="button" data-copy="${esc(say)}">${icon('copy')}<span data-copy-word>Copy</span></button></div>`;
 
 function card(p) {

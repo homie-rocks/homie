@@ -380,7 +380,7 @@ test('the site lists and serves shared parts only: a private part is never reach
   assert.match(html, /@homie-rocks\/studio &gt;=0\.1\.0 \(a package, from npm\)/, 'requirements');
   assert.match(html, /KB to download/, 'costs');
   assert.match(html, /the host decides/);
-  assert.match(html, /data-copy="Add the &quot;Pickup field&quot; part from owls\.example\/pickup-field to my game"/);
+  assert.match(html, /data-copy="Add the &quot;Pickup field&quot; part from owls\.example\/pickup-field to my studio"/);
   assert.ok(!/homie-studio parts|npx /.test(html), 'a page never tells a person to type a command');
   assert.equal((await site('/parts/pickup-field')).status, 301);
 
@@ -390,7 +390,7 @@ test('the site lists and serves shared parts only: a private part is never reach
   assert.match(landing, /href="\/parts\/pickup-field\/"/);
   const bandHtml = landing.slice(landing.indexOf('data-parts-band'), landing.indexOf('</main>'));
   assert.ok(!/class="(make|say|band|band-in)\b/.test(bandHtml), 'the band stands on its own: none of another band\'s markup');
-  assert.match(bandHtml, /data-copy="Add the &quot;Pickup field&quot; part from owls\.example\/pickup-field to my game"/, 'what to ask for, with the part\'s name and reference');
+  assert.match(bandHtml, /data-copy="Add the &quot;Pickup field&quot; part from owls\.example\/pickup-field to my studio"/, 'what to ask for, with the part\'s name and reference');
   assert.ok(!(await (await site('/open-game/')).text()).includes('parts-title'));
 
   // Unshared, and the next build takes it down: the index is empty and the file is gone.
@@ -773,7 +773,7 @@ test('the chat tools: parts_find, part_add, part_new and part_share, named like 
   r = await tool('part_add').run({ part: 'owls.example/pickup-field', game: 'fox-dash' });
   assert.ok(!r.isError, text(r));
   assert.match(text(r), /import … from '@parts\/owls\.example\/pickup-field', then build/);
-  assert.match(text(r), /Write in the game's CODEX that it uses this part and which game and studio it came from/);
+  assert.match(text(r), /Write in the project notes or CODEX that it uses this part and which work and studio it came from/);
   assert.ok(existsSync(join(b, 'parts/_vendor/owls.example/pickup-field/src/index.ts')));
   r = await tool('part_add').run({ part: 'owls.example/secret-brain' });
   assert.equal(r.isError, true);
@@ -807,7 +807,7 @@ test('looking for parts is the first move: the planning tool, the game tool and 
   assert.match(plan.description, /`parts find`/, 'the planning tool\'s description names parts find');
   const r = await plan.run({ id: 'new-game', name: 'New Game' });
   assert.match(r.content[0].text, /`parts find`/, 'and so does what it tells the agent to do next');
-  assert.match(r.content[0].text, /which parts and the game and studio each came from/);
+  assert.match(r.content[0].text, /which parts and the work and studio each came from/);
   assert.match(tools.find((t) => t.name === 'game_make').description, /parts_find/);
   assert.match(INSTRUCTIONS, /parts_find/);
   assert.match(readFileSync(join(dir, 'games/new-game/CODEX.md'), 'utf8'), /parts find/i, 'the codex template has a place for it');

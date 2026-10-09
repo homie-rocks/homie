@@ -91,7 +91,7 @@ A guide adapter test uses the same discovery, official MPP client, receipt, gran
 flow with no part storage. The public parts catalogue, protected-file route and installation
 client remain resource-specific consumers of this core.
 
-The unshipped migrations are `0013_purchases.sql` and `0014_purchase_facts.sql`; no legacy
+The unshipped migrations are `0015_purchases.sql` and `0016_purchase_facts.sql`; no legacy
 purchase tables or compatibility routes remain. Purchase endpoints live under `/api/purchases`,
 with payable URLs `/api/purchases/resource/<kind>/<id>/<version>/<claimHash>`, hosted pages at
 `/purchases/<order>`, and signing keys at `/purchases/keys.json`. Tokens use
