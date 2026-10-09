@@ -1,7 +1,9 @@
 # Homie
 
-A studio in a box for your AI: make games, music and video, and publish them from a studio
+A studio in a box for your AI: make games, apps, music and video, and publish them from a studio
 that runs on your own Cloudflare, on the free plan.
+
+Apps live beside games in `apps/`: **one transforming screen, its roles, and its parts**. They use the same engines, live rooms and standalone builds, with lasting records and staff permissions. Ask for a welcome board, repair queue or customer app; no rounds or scores are required. [Build an app](packages/studio/apps/APPS.md).
 
 > **Beta.** Homie for studios is in a friends beta. Bugs, port requests and questions go
 > to [Issues](https://github.com/homie-rocks/homie/issues/new/choose); read

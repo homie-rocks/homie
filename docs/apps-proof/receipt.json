@@ -1,0 +1,33 @@
+{
+  "ok": true,
+  "check": {
+    "ok": true,
+    "command": "check",
+    "kind": "app",
+    "room": "check-mv0mnbu2",
+    "surfaces": [
+      "wall",
+      "phone",
+      "phone-two"
+    ],
+    "action": "[data-join]",
+    "before": "0",
+    "after": "1",
+    "reconnect": true
+  },
+  "surfaces": [
+    "wall",
+    "phone",
+    "phone-two",
+    "staff-tablet"
+  ],
+  "lan": true,
+  "qrTargetOpened": true,
+  "watchRecords": true,
+  "physicalCameraScan": false,
+  "plainHttpIds": true,
+  "passkey": "Chrome virtual authenticator at localhost; test harness copied its session to LAN hostname",
+  "grantAndRevocation": true,
+  "persistedAcrossServerRestart": true,
+  "pageErrors": []
+}
