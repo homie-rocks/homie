@@ -1,25 +1,43 @@
 # Physics release verification
 
-Studio **0.37.4**, plugin **0.38.4**, physics **0.1.0**. Merge after #75, which follows #74 and #70. The code is rebased onto navigation’s verified `742390a`; main is `51227fc`.
+Studio 0.37.4 / plugin 0.38.4, physics 0.1.0. Rebased directly onto main
+`1dadfa6`, dropping the navigation and paid-parts stack. The diff contains physics
+and its release support only. Released changelog sections and released template
+history are preserved from main.
 
-Physics is optional for games and apps; it requires no game manifest or multiplayer room. Apps, the keyless visible Shop, first-run improvements, paid parts and navigation remain available. The packed scene trial supports `--app` and runs the full studio build. Earlier template fingerprints and released changelog sections are preserved.
+This version reserves the slot after #70 and #75. After those merge, rebase on main
+and run `node scripts/renumber-release.mjs` to choose the next studio/plugin patch.
+Explicit slots are supported: `node scripts/renumber-release.mjs 0.37.4 0.38.4`.
+The command updates packages/studio/package.json, packages/studio/worker/version.mjs,
+.claude-plugin/marketplace.json, plugins/homie/plugin.json and its .claude-plugin,
+.codex-plugin and .grok-plugin copies, CHANGELOG.md, packages/studio/CHANGELOG.md,
+packages/studio/lib/template-history.json, template/package.json,
+template/studio.json and package-lock.json with repository generators.
 
-## Gates
+## First publication
 
-All eight commands ran sequentially and passed: npm ci, build, full npm test, plugin tests, validation, desktop, changelog and publish checks. The full suite used real Chrome and Stripe mock v0.206.0: **3,851 tests, 3,850 passed, one optional rules/workerd configuration skip, zero failures**, 3,169.6 seconds. Plugin tests: **119 tests, 118 passed, one optional skip, zero failures**. Desktop answered **68 tools and five cards**. Publish check reports **one version to publish, 22 already on npm, two deferred until bootstrap**.
+Physics has private: true. The unchanged publisher skips it, and no public package
+(including studio) depends on it. A regression test runs the real CI publisher with
+a fake npm registry and proves studio publishes without looking up the private package.
 
-Physics installs a local Wrangler, so the full suite also runs the room-update Chrome integration proof. That proof intentionally schedules 130 updates over roughly 19 minutes. The package’s existing serial test command is retained. Extended physics stress sweeps and CPU tables in the package README are historical measurements, not newly rerun sweeps claimed by this refit.
+An npm-authenticated maintainer runs this from clean merged main:
 
-## Trials
+```sh
+node scripts/first-publish-private.mjs physics
+```
 
-A fresh temporary app-only studio installed the packed toolkit, physics and heightfield. Its full studio build produced the physics app with its owned WebAssembly engine. Real Chrome measured **60.003 fps over 599 sampled frames**, 16.7 ms p95 frame time and **0.6 ms p95 physics time**, with a grounded character, falling props and zero page errors. The browser/server closed and the copy was deleted.
+The script installs/builds, packs physics, removes private only from a temporary copy,
+dry-runs and publishes it, then registers trusted publishing for homie-rocks/homie,
+publish.yml, environment npm. Afterwards remove private from packages/physics/package.json
+and privateUntilPublished: true from packages/physics/test/package.test.mjs, regenerate
+package-lock.json, and run `node scripts/publish.mjs --check --strict` before merging
+activation. If publication succeeds but registration fails, finish registration on npm;
+do not republish 0.1.0. No npm publication is performed during this refresh.
 
-The packed 0.37.4 toolkit built a separate temporary copy of `/Users/ryan/Studios/homie-arcade` without node_modules. All five games passed the same real-Chrome checks as main: 2048 Race (121.4 s), Asteroids Arena (121.5 s), Bone Burglar (152.0 s), Octree Arena (121.5 s), Tiny Platformer (121.6 s), at 60–61 fps. Its server stopped and the copy was deleted; the original was untouched.
+## Validation
 
-## Publication and history
-
-Both navigation and physics are new npm packages. A maintainer must publish each once after merge and register its trusted publisher, following `scripts/first-publish.sh`. The release check reports the missing bootstrap and defers new packages and their dependents; the independent studio release can proceed. No npm publication was attempted.
-
-The old physics PR had a failing DCO check for 32 commits using invalid automation email addresses. Physics-only changes are consolidated into a signed-off commit under the repository’s configured identity, retaining the preceding release commits. The original branch is retained locally as `backup/physics-before-release-refit`.
-
-All temporary studio copies are deleted after their trials. The original arcade is untouched. Nothing was deployed or merged.
+The requested gates run sequentially on this independent branch. Physics retains its
+existing serial test command and memory limit. Its Wrangler dependency enables the
+long room-update browser proof. Extended physics sweeps and CPU measurements in the
+package README remain historical measurements, not newly rerun claims.
+Nothing is deployed or merged.

@@ -3,6 +3,7 @@
 import { testEnginePackage } from "../../../scripts/test/engine-package.mjs";
 
 testEnginePackage(new URL("..", import.meta.url), {
+  privateUntilPublished: true,
   extraExports: {
     "./internal/*": null,
     "./Shapes.js": null,

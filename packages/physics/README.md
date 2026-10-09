@@ -10,7 +10,7 @@ kilograms. Worlds are right-handed and support Y-up or Z-up.
 
 ## Install
 
-The first npm publication requires a maintainer. After merge, follow the repository’s `scripts/first-publish.sh` procedure to publish 0.1.0 once and register its trusted publisher. The release workflow reports and defers new packages without blocking independent packages. Until then, build and pack `packages/physics` and install that tarball locally. After bootstrap:
+The package is private until a maintainer publishes it once. Automated releases skip it, and studio does not depend on it. From clean merged main with npm login completed, run `node scripts/first-publish-private.mjs physics`. This builds and publishes a temporary public copy and registers the trusted publisher, leaving the checkout private. Afterwards remove `private` from `packages/physics/package.json`, remove `privateUntilPublished: true` from `packages/physics/test/package.test.mjs`, regenerate `package-lock.json` and run `node scripts/publish.mjs --check --strict` before merging activation. If npm published successfully but trust registration failed, finish registration on npm (repository `homie-rocks/homie`, workflow `publish.yml`, environment `npm`) before activation; do not republish 0.1.0. Until bootstrap, build and pack `packages/physics` and install that tarball locally. After bootstrap:
 
 ```sh
 npm install --save-exact @homie-rocks/physics@0.1.0

@@ -60,5 +60,6 @@
     "three": {
       "optional": true
     }
-  }
+  },
+  "private": true
 }

@@ -59,7 +59,7 @@ function typeOnly(dts) {
     || ts.isImportDeclaration(s) || (ts.isExportDeclaration(s) && (s.isTypeOnly || !s.exportClause || (ts.isNamedExports(s.exportClause) && s.exportClause.elements.length === 0))));
 }
 
-export function testEnginePackage(packageUrl, { noticeAppendix = '', extraExports = {}, typeOnlyDevDependencies = [] } = {}) {
+export function testEnginePackage(packageUrl, { noticeAppendix = '', extraExports = {}, typeOnlyDevDependencies = [], privateUntilPublished = false } = {}) {
   const dir = fileURLToPath(packageUrl);
   const folder = basename(dir.replace(/\/$/, ''));
   const pj = json(join(dir, 'package.json'));
@@ -71,7 +71,7 @@ export function testEnginePackage(packageUrl, { noticeAppendix = '', extraExport
     assert.equal(pj.license, 'Apache-2.0');
     assert.equal(pj.type, 'module');
     assert.match(pj.version, /^\d+\.\d+\.\d+$/);
-    assert.equal(pj.private, undefined, 'an engine package is published');
+    assert.equal(pj.private, privateUntilPublished ? true : undefined, 'publication status matches the package contract');
     const moduleExports = { ...pj.exports };
     // Exceptional assets and private modules are declared by the individual package's test.
     for (const [key, target] of Object.entries(extraExports)) {
