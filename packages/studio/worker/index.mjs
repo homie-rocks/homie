@@ -1,3 +1,5 @@
+import { appAccess, appRecordsRoute } from './app-records.mjs';
+import { openPath } from './app-format.mjs';
 /**
  * @homie-rocks/studio/worker — a studio's own site, on the studio's own Cloudflare.
  *
@@ -485,6 +487,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   const ver = versionOf(meta?.netplay?.version);
   // The play page's switches for the game (section 24): the allowed names only, checked again here.
   const params = paramsFrom(url.searchParams, meta);
+  if (meta.kind === 'app' && !params.role) params.role = meta.surfaces?.[want === 'screen' ? 'wall' : 'phone'];
   const cfg = {
     v: 1,
     url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}${ver ? `&gv=${encodeURIComponent(ver)}` : ''}`,
@@ -601,6 +604,8 @@ export default {
     const url = new URL(request.url);
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
+    const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
+    if (appRecords && request.method === 'OPTIONS') return appCors(request, new Response(null, { status: 204, headers: { 'access-control-allow-methods': 'GET, POST, PUT, DELETE', 'access-control-allow-headers': 'content-type' } }));
     const appLobby = isAppOrigin(request) && /^\/[^/]+\/api\/lobby\/?$/.test(url.pathname);
     let res;
     try { res = finish(await route(request, env, ctx), url.pathname); } catch (error) {
@@ -608,7 +613,7 @@ export default {
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
       res = json({ ok: false, error: 'failed' }, 500);
     }
-    if (appLobby) return appCors(request, res);
+    if (appLobby || appRecords) return appCors(request, res);
     // A referral's arrival (worker/referrals.mjs): only a person's page load with ?via= of another site, on a studio
     // that pays referrals. The page is answered first; a cookie is added to it only then.
     if (url.searchParams.has('via') && res && res.status === 200 && /text\/html/i.test(res.headers.get('content-type') ?? '')) {
@@ -691,7 +696,7 @@ async function route(request, env, ctx) {
       // its mark is here). A Preview says it is one.
       ...(cat.studio?.build ? { build: { commit: cat.studio.build.commit ?? null, branch: cat.studio.build.branch ?? null, at: cat.studio.build.at ?? null, changes: (cat.studio.build.changes ?? []).slice(0, 50), ...(env.HOMIE_PREVIEW === '1' ? { preview: true } : {}) } } : {}),
       // Only the public games (a private or invite-only game leaves the directory the next time it reads this).
-      games: await Promise.all((cat.games ?? []).map(async (g) => {
+      games: await Promise.all((cat.games ?? []).filter((g) => g.kind !== 'app').map(async (g) => {
         // The card picture is the landing's hero still (what the landing leads with), else the game's cover.
         const cover = gameCover(g);
         // The licence the game names for itself (an SPDX id), when it names one (worker/license.mjs). Nothing here
@@ -709,6 +714,7 @@ async function route(request, env, ctx) {
           ...(byGame ? { played: byGame[g.id] ?? { days: 7, plays: 0, rounds: 0 } } : {}),
         };
       })),
+      ...((cat.games ?? []).some((g) => g.kind === 'app') ? { apps: cat.games.filter((g) => g.kind === 'app').map((g) => ({ id: g.id, kind: 'app', name: g.name, blurb: g.blurb, page: `${url.origin}/${g.id}/`, open: `${url.origin}/${g.id}/open`, wall: `${url.origin}/${g.id}/tv`, surfaces: Object.keys(g.surfaces ?? {}), ...(g.built ? { build: g.built } : {}) })) } : {}),
       songs: (cat.songs ?? []).map((e) => mediaRow(e, url.origin, 'music', cat)),
       videos: (cat.videos ?? []).map((e) => mediaRow(e, url.origin, 'videos', cat)),
       // The studio's posts, for the hub (the full text is in /posts/feed.json).
@@ -829,7 +835,7 @@ async function route(request, env, ctx) {
     const { rooms, live } = await roomsOf(env, cat.games ?? []);
     return homePage(cat, { origin: url.origin, rooms, live });
   }
-  if (['games', 'rooms', 'posts'].includes(parts[0]) && parts.length === 1) {
+  if (['games', 'apps', 'rooms', 'posts'].includes(parts[0]) && parts.length === 1) {
     const cat = await getCat();
     const has = sectionsOf(cat).some((s) => s.key === parts[0]);
     if (!has) return notFoundPage(parts[0] === 'posts' ? 'This studio has no posts yet.' : 'This studio has no games yet.', cat);
@@ -837,7 +843,7 @@ async function route(request, env, ctx) {
     await countVisit(request, env, ctx, parts[0]);
     if (parts[0] === 'posts') return postsPage(cat, { origin: url.origin });
     const { rooms, live } = await roomsOf(env, cat.games ?? []);
-    return parts[0] === 'games' ? gamesPage(cat, { origin: url.origin, live }) : roomsPage(cat, { origin: url.origin, rooms });
+    return ['games', 'apps'].includes(parts[0]) ? gamesPage(cat, { origin: url.origin, live, kind: parts[0] === 'apps' ? 'app' : 'game' }) : roomsPage(cat, { origin: url.origin, rooms });
   }
   if (parts[0] === 'posts' && parts.length === 2 && POST_SLUG.test(parts[1])) {
     const cat = await getCat();
@@ -857,6 +863,7 @@ async function route(request, env, ctx) {
     if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
     const cat = await getCat();
     let sub = parts.slice(1).join('/');
+    if (meta.kind === 'app' && sub === 'open') sub = 'play';
     if (sub === '__restart') {
       if (env.HOMIE_PREVIEW !== '1' || request.method !== 'POST' || !hostedGame(game)) return new Response('not found', { status: 404 });
       const room = url.searchParams.get('room') ?? '';
@@ -869,6 +876,19 @@ async function route(request, env, ctx) {
     // with access, and the owner may have made its rooms smaller than the game's own seats.
     const launch = launchOf(meta, settings, env);
     const max = seatsFor(meta, settings);
+    if (meta.kind === 'app') {
+      if (launch !== 'public' && !(await accessOf(request, env, game, launch)).ok) return json({ ok: false, error: 'not-found' }, 404);
+      const api = await appRecordsRoute(request, env, meta, url, sub);
+      if (api) return api;
+      if (['play', 'tv', 'watch'].includes(sub)) {
+        let a;
+        try { a = await appAccess(request, env, meta, url); } catch { return json({ ok: false, error: 'app roles unavailable; apply studio migrations' }, 503); }
+        if (!a.ok) {
+          if (a.status === 401) return Response.redirect(`${url.origin}/account/?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
+          return json({ ok: false, error: a.error }, a.status);
+        }
+      }
+    }
     const lobby = () => env.LOBBY.get(env.LOBBY.idFromName(game));
     if (sub === 'invite') return redeemInvite(request, env, url, cat, meta, settings);
 
@@ -996,7 +1016,7 @@ async function route(request, env, ctx) {
         if (!room) {
           try { room = (await (await lobby().fetch(`https://lobby/join?max=${humanSeats(pol)}&server=${srv.id}&rooms=${srv.roomsMax}${versionOf(meta?.netplay?.version) ? `&ver=${encodeURIComponent(versionOf(meta.netplay.version))}` : ''}`, { method: 'POST' })).json()).room ?? null; } catch { room = null; }
         }
-        const joinUrl = `${url.origin}/${game}/play${room ? `?room=${encodeURIComponent(room)}` : ''}`;
+        const joinUrl = `${url.origin}${openPath(meta)}${room ? `?room=${encodeURIComponent(room)}` : ''}`;
         // Local development: no phone can open this computer's own address, so no code for it; the card says to deploy.
         const local = isLocalOrigin(url.origin);
         let qr = null;

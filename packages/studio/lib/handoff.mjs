@@ -26,7 +26,7 @@ function originRepo(root) {
   return m ? `${m[1]}/${m[2]}` : null;
 }
 import { setupAttach } from './setup.mjs';
-import { listGames, readStudio } from './studio.mjs';
+import { listExperiences as listGames, readStudio } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 
 const BUILD = /^hb_[a-f0-9]{32}$/;

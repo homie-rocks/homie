@@ -1,3 +1,5 @@
+import { appWords, openPath } from './app-format.mjs';
+import { APP_SHELL_JS } from './app-shell.mjs';
 /**
  * The play shell: the page around a game's sandboxed frame at /<game>/play and /<game>/tv. Every other page is
  * worker/site.mjs. Every name a player typed is escaped.
@@ -46,7 +48,7 @@ export function noWatchPage(cat, g) {
     title: `${g.name} is not shown to watchers`, page: 'no-watch', status: 404,
     main: `<header class="head"><p class="kicker">${esc(g.name)}</p><h1>${esc(g.name)} is played, not watched</h1>
 <p class="lead">Its rooms are not shown to watchers: what each player sees stays theirs. Press Play and you are in a room, with bots in the empty seats.</p>
-<div class="keys"><a class="btn" href="/${esc(g.id)}/play" data-play>Play ${esc(g.name)}</a><a class="ghost" href="/${esc(g.id)}/">Back to ${esc(g.name)}</a></div></header>`,
+<div class="keys"><a class="btn" href="${esc(openPath(g))}" data-play>Play ${esc(g.name)}</a><a class="ghost" href="/${esc(g.id)}/">Back to ${esc(g.name)}</a></div></header>`,
   });
 }
 
@@ -176,13 +178,13 @@ ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHO
   // game.json "agents": { "vote": "game" } draws its own vote card; false turns the vote off (section 17).
   const vote = g.agents?.vote === 'game' || g.agents?.vote === false ? g.agents.vote : 'shell';
   // The address's switches the game's frame is handed (NETPLAY.md section 24): the defaults and the game's own names.
-  const boot = { embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
+  const boot = { ...(g.kind === 'app' ? { kind: 'app', appWords: appWords(g) } : {}), embed, game: g.id, name: g.name, screen: Boolean(screen), share: places, params: playParams(g), paramValue: PARAM_VALUE, prefs: PREFS_LIMITS, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}), ...(owner ? { owner: true, launch } : {}), ...(srv ? { server: srv } : {}), vote, skills: SKILLS.map((k) => ({ level: k.level, name: k.name, card: k.card })), words: POLICY_WORDS, kidsLine: KIDS_LINE, ...(shop ? { shop } : {}) };
   // game.json "screen": { "join": "top-left" | "top-right" | "bottom-left" | "bottom-right" } keeps the card off the game's own HUD.
   const joinCorner = corner('join', 'bottom-right');
   const first = places.desk;
   // Local development: no join card at all on the big screen (no phone can open this computer's address); the room
   // button's sheet says to deploy to share, for whoever looks for a link.
-  const joinCard = screen && joinUrl && !local ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>Scan to play</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
+  const joinCard = screen && joinUrl && !local ? `<div class="join join-${joinCorner}" data-join>${qr ? `<div class="qr">${qr}</div>` : ''}<div><b>${esc(appWords(g).join)}</b><span>${esc(joinUrl.replace(/^https?:\/\//, ''))}</span></div></div>` : '';
   const share = screen ? '' : `<div class="room at-${first.at}" style="--dx:${first.x}px;--dy:${first.y}px" data-room-ui>
   <div class="pills"><button class="pill${first.label ? '' : ' icon'}" type="button" data-share-toggle aria-expanded="false" aria-controls="share-sheet" aria-label="${embed ? 'Room, invite and the studio’s site' : 'Room, invite and big screen'}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span data-room-code>Room</span></button>
   <button class="pill spill" type="button" data-server-toggle aria-expanded="false" aria-controls="server-sheet" hidden><span class="sdot" aria-hidden="true"></span><span data-server-label></span></button></div>
@@ -194,7 +196,7 @@ ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHO
   </div>
   <div class="sheet" id="share-sheet" role="dialog" aria-label="This room" data-share-sheet hidden>
     <div class="code"><b data-room-label>This room</b><span data-room-count></span></div>${embed ? `
-    <a class="embed-open" data-studio-open href="/${esc(g.id)}/play" target="_blank" rel="noopener noreferrer">Open on the studio's site<span class="frame-only"> ↗</span></a><div class="embed-note" data-embed-note role="status" hidden></div>` : ''}
+    <a class="embed-open" data-studio-open href="${esc(openPath(g))}" target="_blank" rel="noopener noreferrer">Open on the studio's site<span class="frame-only"> ↗</span></a><div class="embed-note" data-embed-note role="status" hidden></div>` : ''}
     <div class="acts">
       <button type="button" class="primary" data-invite><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7.5 7.5 12 3l4.5 4.5M5 12v7a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-7"/></svg><span data-invite-word>Invite</span></button>
       <a data-bigscreen target="_blank" rel="noopener" href="/${esc(g.id)}/tv"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg><span>Big screen</span></a>
@@ -206,7 +208,7 @@ ${embed ? `    <p class="embed-help">Sound starts after a press. If pointer lock
   </div>
 </div>
 <div class="toast" data-toast role="status" hidden></div>`;
-  return layoutless(`${g.name} · play`, `
+  return layoutless(`${g.name} · ${appWords(g).open}`, `
 <iframe class="game" title="${esc(g.name)}" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen *; autoplay *; gamepad *"></iframe>
 ${arrive.html}
 <div class="chip${arrive.html ? ' held' : ''}" data-chip><span data-status>finding a room…</span></div>
@@ -218,7 +220,7 @@ ${joinCard}${share}
 <script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: screen ? 'tv' : 'play', owner, acct, member })).replace(/</g, '\\u003c')};</script>
 <script>${CHAT_JS}</script>
 <script>${ARRIVAL_JS}</script>
-<script>${SHELL_JS}</script>${g.saves && !screen ? `
+<script>${SHELL_JS}</script>${g.kind === 'app' ? `<script>${APP_SHELL_JS}</script>` : ''}${g.saves && !screen ? `
 <script>${SAVES_SHELL_JS}</script>` : ''}${shop ? `
 <script>${SHOP_SHELL_JS}</script>` : ''}${owner ? `<style>${OWNER_CSS}</style><script>${OWNER_JS}</script><script>${CHAT_OWNER_JS}</script>` : ''}`, css, embed ? embedAncestors(cat, origin, preview) : frameAncestors(cat), { embed, origin, head: gameSocialTags(cat, g, origin, launch === 'public') });
 }
@@ -450,7 +452,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   }
   function shareReady(room) {
     if (!ui) return;
-    var link = location.origin + '/' + boot.game + '/play?room=' + encodeURIComponent(room);
+    var link = location.origin + '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room);
     state.link = link;
     ui.querySelector('[data-room-code]').textContent = labelOf(room) + (boot.embed ? ' \u00b7 Site' : '');
     ui.querySelector('[data-room-label]').textContent = labelOf(room);
@@ -458,7 +460,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     ui.querySelector('[data-bigscreen]').href = '/' + boot.game + '/tv?room=' + encodeURIComponent(room);
     toggle.addEventListener('click', function (e) { e.stopPropagation(); open(sheet.hidden); });
     ui.querySelector('[data-invite]').addEventListener('click', function () {
-      var data = { title: boot.name, text: 'Play ' + boot.name + ' with me: join my room.', url: link };
+      var data = { title: boot.name, text: (boot.appWords ? boot.appWords.open : 'Play') + ' ' + boot.name + ' with me: join my room.', url: link };
       try { if (navigator.share && (!navigator.canShare || navigator.canShare(data))) navigator.share(data).catch(function () { copy(link, 'Invite link copied'); });
       else copy(link, 'Invite link copied'); } catch (e) { copy(link, 'Invite link copied'); }
     });
@@ -472,7 +474,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     state.room = room;
     if (boot.embed && keeps) try { sessionStorage.setItem(EMBED_KEY, JSON.stringify({ room: room, name: guestName })); } catch (e) {}
     var studioOpen = document.querySelector('[data-studio-open]');
-    if (studioOpen) studioOpen.href = '/' + boot.game + '/play?room=' + encodeURIComponent(room);
+    if (studioOpen) studioOpen.href = '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room);
     // The room goes into the address: a reload comes back to it, and a copied address brings a friend into it.
     try {
       if (params.get('room') !== room) {
@@ -577,7 +579,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     if (typeof setInterval === 'function') setInterval(tellRects, 1000);
     if (screenMode && !document.querySelector('[data-join]') && !LOCAL) {
       var h2 = document.createElement('h2'); h2.textContent = 'Join on your phone';
-      var div = document.createElement('div'); div.textContent = location.origin + '/' + boot.game + '/play?room=' + encodeURIComponent(room);
+      var div = document.createElement('div'); div.textContent = location.origin + '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room);
       screenCard.append(h2, div); screenCard.hidden = false;
     }
   }
@@ -756,7 +758,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     var w = document.createElement('p'); w.className = 'when';
     w.textContent = mins ? (kind === 'kicked' ? 'You can come back to ' + label + ' in ' + mins + ' min.' : label + ' opens again in ' + mins + ' min.') : '';
     var acts = document.createElement('div'); acts.className = 'acts';
-    var other = document.createElement('a'); other.className = 'primary'; other.href = '/' + boot.game + '/play?not=' + encodeURIComponent(state.room || ''); other.textContent = 'Play in another room';
+    var other = document.createElement('a'); other.className = 'primary'; other.href = '/' + boot.game + (boot.kind === 'app' ? '/open?not=' : '/play?not=') + encodeURIComponent(state.room || ''); other.textContent = boot.kind === 'app' ? 'Join another room' : 'Play in another room';
     var back = document.createElement('a'); back.href = '/' + boot.game + '/'; back.textContent = 'Back to ' + boot.name;
     acts.append(other, back);
     inner.append(h, p, w, acts); box.appendChild(inner);
@@ -769,7 +771,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     var n = f && f.counts ? f.counts.players : null;
     var bits = [];
     if (state.server) bits.push(state.server.name);
-    if (n !== null) bits.push(n + ' playing');
+    if (n !== null) bits.push(n + (boot.kind === 'app' ? ' ' + (n === 1 ? boot.appWords.one : boot.appWords.many) + ' here' : ' playing'));
     // Every AI is counted as AI (agents, the seats kept for them, and the game's bots), never as a player.
     var aiN = f && f.counts ? (Number(f.counts.ai) || 0) + (Number(f.counts.bots) || 0) : 0;
     if (aiN) bits.push(aiN + ' AI');
@@ -783,10 +785,10 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     else if (state.link && state.link.state === 'reconnecting') bits.push('reconnecting');
     else if (state.link && state.link.state === 'alone') bits.push(state.link.why === 'reconnect-timeout' ? 'playing on your own: the room dropped' : 'playing on your own: looking for the room');
     // The arrival card's line: the room and who is in it ("Room 2 · 3 playing · 2 AI").
-    if (!A.done && state.room) A.facts([labelOf(state.room), n ? n + ' playing' : '', aiN ? aiN + ' AI' : ''].filter(Boolean).join(' · '));
+    if (!A.done && state.room) A.facts([labelOf(state.room), n ? n + (boot.kind === 'app' ? ' ' + (n === 1 ? boot.appWords.one : boot.appWords.many) + ' here' : ' playing') : '', aiN ? aiN + ' AI' : ''].filter(Boolean).join(' · '));
     say(bits.join(' · ') || 'joining…');
     var count = ui && ui.querySelector('[data-room-count]');
-    if (count && n !== null) count.textContent = n + (n === 1 ? ' player here' : ' players here') + (aiN ? ' · ' + aiN + ' AI' : '');
+    if (count && n !== null) count.textContent = n + ' ' + (boot.appWords ? (n === 1 ? boot.appWords.one : boot.appWords.many) : (n === 1 ? 'player' : 'players')) + ' here' + (aiN ? ' · ' + aiN + ' AI' : '');
     serverUi();
   }
 
@@ -803,7 +805,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   // server's words from the page load are the fallback.
   function policyText(pol) {
     var w = pol && boot.words ? boot.words[pol.kind] : null;
-    if (!w) return state.server ? { badge: state.server.badge, line: state.server.line } : { badge: 'Open', line: 'Open: anyone can play. AI players are always marked AI.' };
+    if (!w) return state.server ? { badge: state.server.badge, line: state.server.line } : { badge: 'Open', line: boot.kind === 'app' ? 'Open: join this screen together.' : 'Open: anyone can play. AI players are always marked AI.' };
     var n = pol.kind === 'hybrid' ? (Number(pol.aiSeats) || 0) : 0;
     return { badge: pol.kind === 'hybrid' ? w.badge + ' · ' + n : w.badge, line: w.line.replace('{n}', String(n)) + (pol.kids && boot.kidsLine ? ' ' + boot.kidsLine : '') };
   }
@@ -1116,8 +1118,8 @@ const OWNER_JS = String.raw`(function () {
 export function watchPage(cat, g, { origin = '', room = null, ticket = null, policy = 'follow', owner = false, acct = false, member = false } = {}) {
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const hot = /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#ffcf5a';
-  const boot = { game: g.id, name: g.name, policy, palette: NET_PALETTE, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}) };
-  const css = `:root{--hot:${hot}}${WATCH_CSS}${CHAT_CSS}`;
+  const boot = { ...(g.kind === 'app' ? { kind: 'app', screen: true, role: g.surfaces?.wall, params: playParams(g) } : {}), game: g.id, name: g.name, policy, palette: NET_PALETTE, ...(room ? { room } : {}), ...(ticket ? { t: ticket } : {}) };
+  const css = `:root{--hot:${hot}}${WATCH_CSS}${CHAT_CSS}${g.kind === 'app' ? '.dock{display:none}' : ''}`;
   return layoutless(`Watch ${g.name}`, `
 <header class="wtop" data-top>
   <span class="live" data-live><i aria-hidden="true"></i><b>Live</b></span>
@@ -1126,7 +1128,7 @@ export function watchPage(cat, g, { origin = '', room = null, ticket = null, pol
   <span class="clock" data-clock hidden></span>
   <span class="grow"></span>
   <span class="eyes" data-eyes hidden title="Watching this room"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span data-eyes-n></span><span class="eyes-w"> watching</span></span>
-  <a class="playb" data-playb href="/${esc(g.id)}/play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8Z" fill="currentColor"/></svg><span>Play</span></a>
+  <a class="playb" data-playb href="${esc(openPath(g))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8Z" fill="currentColor"/></svg><span>${esc(appWords(g).open)}</span></a>
 </header>
 <main class="stage"><iframe class="game" title="${esc(g.name)}, live" tabindex="-1" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups" allow="fullscreen *; autoplay *; gamepad *"></iframe></main>
 <footer class="dock">
@@ -1137,7 +1139,7 @@ export function watchPage(cat, g, { origin = '', room = null, ticket = null, pol
 <script>window.__HOMIE_WATCH=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
 <script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: 'watch', owner, acct, member })).replace(/</g, '\\u003c')};</script>
 <script>${CHAT_JS}</script>${owner ? `<script>${CHAT_OWNER_JS}</script>` : ''}
-<script>${WATCH_JS}</script>`, css, frameAncestors(cat), { head: gameSocialTags(cat, g, origin) });
+<script>${WATCH_JS}</script>${g.kind === 'app' ? `<script>${APP_SHELL_JS}</script>` : ''}`, css, frameAncestors(cat), { head: gameSocialTags(cat, g, origin) });
 }
 
 /*
@@ -1291,9 +1293,10 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
     state.room = room;
     syncUrl();
     q1('[data-room-label]').textContent = labelOf(room);
-    q1('[data-playb]').href = '/' + boot.game + '/play?room=' + encodeURIComponent(room);
+    q1('[data-playb]').href = '/' + boot.game + (boot.kind === 'app' ? '/open?room=' : '/play?room=') + encodeURIComponent(room);
     document.title = 'Watch ' + boot.name + ' · ' + labelOf(room);
     var q = new URLSearchParams({ room: room, watch: '1', device: device, b: roomKey });
+    if (boot.kind === 'app') { q.set('role', params.get('role') || boot.role); q.set('surface', 'wall'); q1('[data-playb] span').textContent = 'Open'; }
     q.set('follow', first === 'auto' ? 'auto' : first === null ? 'overview' : String(first));
     if (boot.t) q.set('t', boot.t);
     if (params.get('debug') === '1') q.set('debug', '1');
@@ -1385,10 +1388,11 @@ const WATCH_JS = String.raw`${BUILD_RETRY_JS}(function () {
       full: 'Every place to watch it from is taken. Try the busiest other room.',
       none: 'This page finds a room the moment somebody starts one. Or press Play, and people who come to watch will see you.',
     };
+    if (boot.kind === 'app') { heads.none = 'Nobody is here right now'; heads.off = 'Watching is unavailable'; lines.empty = lines.none = lines.off = 'Open the app to join a screen, or watch another room.'; }
     box.appendChild(el('h1', '', heads[kind] || heads.closed));
     box.appendChild(el('p', '', lines[kind] || lines.closed));
     var acts = el('div', 'acts');
-    var other = el('a', 'primary', kind === 'none' || kind === 'off' ? 'Play ' + boot.name : 'Watch another room');
+    var other = el('a', 'primary', kind === 'none' || kind === 'off' ? (boot.kind === 'app' ? 'Open ' : 'Play ') + boot.name : 'Watch another room');
     other.href = kind === 'none' || kind === 'off' ? '/' + boot.game + '/play' : '/' + boot.game + '/watch?not=' + encodeURIComponent(state.room || '');
     acts.appendChild(other);
     if (kind !== 'none' && kind !== 'off') { var play = el('a', '', 'Play'); play.href = '/' + boot.game + '/play'; acts.appendChild(play); }

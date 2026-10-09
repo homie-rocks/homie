@@ -18,7 +18,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { LIMITS, checkGlb } from '../assets/safety.mjs';
 import { recordAsset } from './asset-manifest.mjs';
-import { GAME_ID } from './studio.mjs';
+import { experienceDir, experienceFile, GAME_ID } from './studio.mjs';
 
 export const LIBRARY_URL = 'https://homie.rocks/api/library/v0';
 const CACHE = join(homedir(), '.cache', 'homie-studio', 'library');
@@ -117,7 +117,7 @@ const KIND_DIR = { texture: 'tex', sky: 'sky' };
  */
 export async function addFromLibrary(root, game, itemId, { as = null, height = null, card = null, lib = libraryBase(), index = null } = {}) {
   if (!GAME_ID.test(String(game ?? ''))) throw new Error(`"${game}" is not a game id`);
-  const gdir = join(root, 'games', game);
+  const gdir = join(experienceDir(root, game));
   if (!existsSync(gdir)) throw new Error(`no game "${game}"`);
   const idx = index ?? (await loadIndex({ lib })).index;
   const item = idx.items.find((x) => x.id === itemId) ?? idx.items.find((x) => x.item === itemId);

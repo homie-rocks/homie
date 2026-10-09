@@ -1,3 +1,4 @@
+import { APP_SHELL_JS } from '../worker/app-shell.mjs';
 /**
  * `homie-studio standalone plan|build|run|steam|ci <game>`: A STANDALONE COPY OF A GAME (standalone/STANDALONE.md).
  *
@@ -30,7 +31,7 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { build as buildSite, uiOf } from './build.mjs';
 import { compareVersions } from './changelog.mjs';
-import { GAME_ID, PACKAGE_ROOT, isWorkersDev, listGames, readStudio, siteUrl } from './studio.mjs';
+import { GAME_ID, PACKAGE_ROOT, isWorkersDev, listExperiences as listGames, readStudio, siteUrl } from './studio.mjs';
 import { pinnedVersion } from './upgrade.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { sharePlaces } from '../worker/pages.mjs';
@@ -402,11 +403,15 @@ export function webBundle(root, game, dir, { meta, target = 'web', site = '', st
   rmSync(web, { recursive: true, force: true });
   mkdirSync(web, { recursive: true });
   for (const f of ['index.html', 'shell.js', 'shell.css']) copyFileSync(join(SHELL, f), join(web, f));
+  if (game.kind === 'app') {
+    const shell = join(web, 'shell.js');
+    writeFileSync(shell, readFileSync(shell, 'utf8') + '\n' + APP_SHELL_JS);
+  }
   const row = (readJson(join(root, 'site', 'dist', 'games.json'))?.games ?? []).find((g) => g.id === game.id);
   const m = { ...(meta ?? standaloneMeta(studio ?? readStudio(root), game)), ...(row?.room ? { netplayVersion: row.netplay?.version ?? null } : {}) };
   const rules = readJson(join(built, 'rules.json'));
   if (rules) for (const file of rules.files ?? []) if (!existsSync(join(built, file))) throw new Error(`The rules build is incomplete: ${file} is missing. Build the game again before making its app.`);
-  writeFileSync(join(web, 'config.js'), configScript(m, { target, site, share: sharePlaces(game.screen?.share), colours: uiOf(game), movement: game.netplay?.movement ?? game.movement ?? null, room: row?.room ?? null }));
+  writeFileSync(join(web, 'config.js'), configScript(m, { target, site, share: sharePlaces(game.screen?.share), colours: uiOf(game), movement: game.netplay?.movement ?? game.movement ?? null, room: row?.room ?? null, ...(game.kind === 'app' ? { kind: 'app', params: { role: game.surfaces.phone } } : {}) }));
   copyTree(built, join(web, 'game'));
   const index = join(web, 'game', 'index.html');
   writeFileSync(index, withNetScript(readFileSync(index, 'utf8')));

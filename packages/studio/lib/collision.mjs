@@ -32,7 +32,7 @@ import { createRequire } from 'node:module';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { modelTools } from './optimise.mjs';
-import { listGames } from './studio.mjs';
+import { listExperiences as listGames } from './studio.mjs';
 
 /** The body that must fit when a file names none: a person, in metres. */
 export const DEFAULT_MOVER = Object.freeze({ radius: 0.35, height: 1.8, step: 0.3, maxDrop: 0.5, arrival: 1, speed: 4 });

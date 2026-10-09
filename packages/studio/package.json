@@ -75,7 +75,15 @@
       "default": "./rules/host.ts"
     },
     "./worker": "./worker/index.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./links": {
+      "types": "./links/links.d.ts",
+      "default": "./links/links.mjs"
+    },
+    "./apps": {
+      "types": "./apps/apps.ts",
+      "default": "./apps/apps.ts"
+    }
   },
   "files": [
     "bin/",
@@ -99,7 +107,10 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "links/",
+    "apps/",
+    "app-starters/"
   ],
   "engines": {
     "node": ">=22"

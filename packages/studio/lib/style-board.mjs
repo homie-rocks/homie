@@ -1,3 +1,4 @@
+import { experienceDir, experienceFile } from './studio.mjs';
 /**
  * THE STYLE BOARD AND THE LINEUP: pictures the engine draws for free (lib/render3d.mjs).
  *
@@ -77,10 +78,10 @@ export async function styleBoard(root, id, { prompt = '', log = () => {}, librar
   if (!doc) { initDecisions(root, id, { prompt, path: 'hands-on' }); doc = readDecisions(root, id); }
   const { directions } = directionsFor(root, id, { prompt: prompt || doc.prompt });
   let game = {};
-  try { game = JSON.parse(readFileSync(join(root, 'games', id, 'game.json'), 'utf8')); } catch { game = {}; }
+  try { game = JSON.parse(readFileSync(experienceFile(root, id), 'utf8')); } catch { game = {}; }
   const title = game.name ?? id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
   const words = [prompt, doc.prompt, (doc.decisions['cast.list']?.value ?? []).map((c) => c.id).join(' ')].join(' ');
-  const dir = join(root, 'games', id, BOARD_DIR);
+  const dir = join(experienceDir(root, id), BOARD_DIR);
   mkdirSync(dir, { recursive: true });
   const pieces = {};
   if (library) for (const d of directions) if (!pieces[d.family]) pieces[d.family] = await libraryPieces(d.family, words, 4, log);
@@ -90,7 +91,7 @@ export async function styleBoard(root, id, { prompt = '', log = () => {}, librar
       const url = await r.swatch(tokensOf(d.values), pieces[d.family] ?? [], { title });
       const file = join(dir, `${d.id}-swatch.jpg`);
       const bytes = await savePicture(url, file);
-      out.push({ ...d, swatch: relative(join(root, 'games', id), file), bytes, library: (pieces[d.family] ?? []).map((m) => m.id) });
+      out.push({ ...d, swatch: relative(experienceDir(root, id), file), bytes, library: (pieces[d.family] ?? []).map((m) => m.id) });
     }
     return r.renderer;
   }, { log });
@@ -124,13 +125,13 @@ export async function recordMood(root, id, dirId, image, { usd = null, receipt =
   const d = doc?.board?.directions?.find((x) => x.id === dirId);
   if (!d) throw new Error(`no direction "${dirId}" on the style board (style board ${id} draws it first)`);
   if (!existsSync(image)) throw new Error(`no picture at ${image}`);
-  const file = join(root, 'games', id, BOARD_DIR, `${dirId}-mood.jpg`);
+  const file = join(experienceDir(root, id), BOARD_DIR, `${dirId}-mood.jpg`);
   const sharp = (await import('sharp')).default;
   let q = 82;
   let out = await sharp(readFileSync(image)).resize(960, 540, { fit: 'cover' }).jpeg({ quality: q, mozjpeg: true }).toBuffer();
   while (out.byteLength > PICTURE_MAX && q > 50) { q -= 10; out = await sharp(readFileSync(image)).resize(960, 540, { fit: 'cover' }).jpeg({ quality: q, mozjpeg: true }).toBuffer(); }
   writeFileSync(file, out);
-  d.mood = { path: relative(join(root, 'games', id), file).split('\\').join('/'), usd: usd === null ? null : Number(usd), receipt, model, label: 'target (painted, not what the game draws)', at: new Date().toISOString() };
+  d.mood = { path: relative(experienceDir(root, id), file).split('\\').join('/'), usd: usd === null ? null : Number(usd), receipt, model, label: 'target (painted, not what the game draws)', at: new Date().toISOString() };
   writeDecisions(root, id, doc);
   return { ok: true, command: 'style mood', id, direction: dirId, mood: d.mood };
 }
@@ -143,14 +144,14 @@ export async function addGolden(root, id, image, { from = null } = {}) {
   doc.golden = doc.golden ?? [];
   if (doc.golden.length >= 6) throw new Error('six golden images already: remove one first (style golden <id> remove <n>)');
   const n = doc.golden.reduce((m, g) => Math.max(m, Number(/(\d+)\.jpg$/.exec(g.path)?.[1] ?? 0)), 0) + 1;
-  const dir = join(root, 'games', id, BOARD_DIR, 'golden');
+  const dir = join(experienceDir(root, id), BOARD_DIR, 'golden');
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `${n}.jpg`);
   try {
     const sharp = (await import('sharp')).default;
     writeFileSync(file, await sharp(readFileSync(image)).resize(1024, 1024, { fit: 'inside' }).jpeg({ quality: 84, mozjpeg: true }).toBuffer());
   } catch { if (/\.jpe?g$/i.test(extname(image))) copyFileSync(image, file); else throw new Error('sharp could not read that picture'); }
-  doc.golden.push({ path: relative(join(root, 'games', id), file).split('\\').join('/'), from: from ?? relative(root, image), approvedBy: 'person', at: new Date().toISOString() });
+  doc.golden.push({ path: relative(experienceDir(root, id), file).split('\\').join('/'), from: from ?? relative(root, image), approvedBy: 'person', at: new Date().toISOString() });
   writeDecisions(root, id, doc);
   addLatestLine(root, id, `Added golden image ${n} (from ${from ?? relative(root, image)}): every concept is made with it as a reference.`);
   return { ok: true, command: 'style golden', id, golden: doc.golden };
@@ -183,13 +184,13 @@ export async function assetsLineup(root, id, { log = () => {}, scope = null } = 
   for (const a of manifest.assets) {
     const f = (a.files ?? []).find((x) => x.role === 'model');
     if (!f) continue;
-    const abs = join(root, 'games', id, f.path);
+    const abs = join(experienceDir(root, id), f.path);
     if (!existsSync(abs)) continue;
     // `inGame`: what the game's code does to it at runtime (drawn at another height, repainted from style.json): the
     // lineup draws it the same way (the repaint as the board's re-tint, the nearest the game's own swap can be shown).
     const scale = a.inGame?.heightM && a.measured?.heightM ? a.inGame.heightM / a.measured.heightM : null;
     // A character stands in its idle pose from its skeleton's clip library (not its bind pose: arms out in a T).
-    const anims = a.rig?.anims && existsSync(join(root, 'games', id, a.rig.anims)) ? readFileSync(join(root, 'games', id, a.rig.anims)).toString('base64') : null;
+    const anims = a.rig?.anims && existsSync(join(experienceDir(root, id), a.rig.anims)) ? readFileSync(join(experienceDir(root, id), a.rig.anims)).toString('base64') : null;
     models.push({ a, input: modelIn(a.id, readFileSync(abs), { label: a.card ? String(a.card).split('/').pop() : a.id, ...(scale ? { scale } : {}), ...(anims ? { anims, pose: 'idle', poseAt: 0.3 } : {}), ...(a.inGame?.tint ? { tint: lightColours({ sky: a.inGame.tint, ground: a.inGame.tint }, tokens.palette).sky } : a.inGame?.repaint ? { retint: true } : Number(a.inGame?.pull) > 0 ? { pull: Number(a.inGame.pull) } : {}) }), abs });
   }
   if (!models.length) return { ok: false, command: 'assets lineup', id, why: `games/${id} has no recorded models yet (assets add, or the models skill)` };

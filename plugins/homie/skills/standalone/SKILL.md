@@ -4,6 +4,9 @@ description: Make a studio's game into an app of its own, a desktop app for macO
 compatibility: Node 22 and a studio on @homie-rocks/studio 0.32.0 or later (0.32.1 for a run on a real iPhone). A Mac for the macOS and iOS builds (Xcode for iOS). The Android SDK and JDK 21 for Android. Nothing is installed for the person; a target whose tool is missing is skipped, and a GitHub workflow can build it instead.
 ---
 
+**Apps:** For a business, venue, cause or customer app, follow the `app` skill: `apps/<id>/app.json`, one morphing screen, roles and parts. Reuse these engines and workflows; do not impose game rounds, scores, bots, a game demo or page navigation. The app check proves shared actions and reconnect; app stores use the same standalone command.
+
+
 # A game as an app of its own
 
 A studio is the folder with `studio.json`. `homie-studio standalone` wraps a game the studio already has. It does

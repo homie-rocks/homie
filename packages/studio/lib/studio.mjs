@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 export const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const GAME_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const RESERVED_IDS = new Set(['api', 'media', 'games', 'assets', '_homie', '_site', '_studio', 'well-known', 'index', 'play', 'studio', 'studios', 'music', 'videos', 'posts', 'rooms', 'feed', 'account']);
+const RESERVED_IDS = new Set(['api', 'media', 'games', 'apps', 'assets', '_homie', '_site', '_studio', 'well-known', 'index', 'play', 'studio', 'studios', 'music', 'videos', 'posts', 'rooms', 'feed', 'account']);
 
 export function findStudio(from = process.cwd()) {
   let at = resolve(from);
@@ -82,14 +82,25 @@ export function siteUrl(root, studio = readStudio(root)) {
   return custom ?? readLocal(root).url ?? cf.url ?? null;
 }
 
-export function listGames(root) {
-  const dir = join(root, 'games');
+export function listGames(root) { return listKind(root, 'game'); }
+export function listApps(root) { return listKind(root, 'app'); }
+export function listExperiences(root) {
+  const rows = [...listGames(root), ...listApps(root)].sort((a, b) => a.id.localeCompare(b.id));
+  const ids = new Set();
+  for (const row of rows) { if (ids.has(row.id)) throw new Error(`app/game id collision: ${row.id}`); ids.add(row.id); }
+  return rows;
+}
+export const experienceDir = (root, id) => join(root, existsSync(join(root, 'apps', id, 'app.json')) ? 'apps' : 'games', id);
+export const experienceFile = (root, id) => join(experienceDir(root, id), existsSync(join(root, 'apps', id, 'app.json')) ? 'app.json' : 'game.json');
+function listKind(root, kind) {
+  const dir = join(root, `${kind}s`);
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, 'game.json')))
+    .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, `${kind}.json`)))
     .map((d) => {
-      const meta = JSON.parse(readFileSync(join(dir, d.name, 'game.json'), 'utf8'));
-      return { ...meta, id: meta.id ?? d.name, dir: join(dir, d.name) };
+      const meta = JSON.parse(readFileSync(join(dir, d.name, `${kind}.json`), 'utf8'));
+      if (kind === 'app' && (!GAME_ID.test(d.name) || RESERVED_IDS.has(d.name) || (meta.id !== undefined && meta.id !== d.name))) throw new Error(`apps/${d.name}: id must match its folder and use a free site address`);
+      return { ...meta, ...(kind === 'app' ? { kind: 'app' } : {}), id: meta.id ?? d.name, dir: join(dir, d.name) };
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -141,6 +152,7 @@ function renameTakeSaves(dir, from, id) {
  */
 export async function newGame(root, id, { from = 'gem-rush', name } = {}) {
   if (!GAME_ID.test(String(id ?? '')) || RESERVED_IDS.has(id)) throw new Error(`a game id is lowercase letters, digits and hyphens, up to 40, and not one of ${[...RESERVED_IDS].join(', ')} (got ${JSON.stringify(id)})`);
+  if (listApps(root).some((a) => a.id === id)) throw new Error(`apps/${id} already owns this address`);
   const src = join(PACKAGE_ROOT, 'starters', from);
   if (!existsSync(join(src, 'game.json'))) throw new Error(`no starter "${from}"; starters: ${starters().map((s) => s.id).join(', ')}`);
   const dest = join(root, 'games', id);
@@ -287,3 +299,17 @@ export function addNeeds(root, needs) {
   return { needs: Object.fromEntries(want), needsAdded: added, needsHeld: held, installNeeded: added.length > 0 };
 }
 
+
+export async function newApp(root, id, { name } = {}) {
+  if (!GAME_ID.test(String(id ?? '')) || RESERVED_IDS.has(id)) throw new Error('invalid app id');
+  if (listExperiences(root).some((g) => g.id === id) || existsSync(join(root, 'apps', id))) throw new Error(`app/game ${id} already exists`);
+  const dest = join(root, 'apps', id);
+  cpSync(join(PACKAGE_ROOT, 'app-starters', 'welcome'), dest, { recursive: true });
+  const file = join(dest, 'app.json');
+  const meta = JSON.parse(readFileSync(file, 'utf8'));
+  meta.id = id; meta.name = String(name ?? 'Welcome together').slice(0, 60);
+  writeFileSync(file, `${JSON.stringify(meta, null, 2)}\n`);
+  const main = join(dest, 'src/main.ts');
+  writeFileSync(main, readFileSync(main, 'utf8').replaceAll("game: 'welcome'", `game: '${id}'`));
+  return { ok: true, command: 'app new', id, dir: dest, files: readdirSync(dest, { recursive: true }).map(String), ...addNeeds(root, meta.needs) };
+}

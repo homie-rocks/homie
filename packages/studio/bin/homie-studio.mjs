@@ -13,6 +13,8 @@
  *                                         this toolkit as a local MCP server (stdio): the Claude desktop app's Homie
  *                                          extension, Claude Code or any MCP client builds in the same chat that shows
  *                                          the cards (lib/mcp.mjs); --studios: the folder the studios live in
+ *   homie-studio app new <id> [--name "<App Name>"]
+ *   homie-studio app role <id> <role> [--player <account>] [--revoke] [--url <site>]
  *   homie-studio game new <id> [--from gem-rush] [--name "<Game Name>"]
  *   homie-studio games
  *   homie-studio build [<id>] [--maps] [--types] [--long-check]   (--maps: also keep each bundle's source map and
@@ -28,7 +30,7 @@
  *   homie-studio preview <id> [--port 8788]   (one built game's files at an address on this computer, nothing else: no
  *                                          Wrangler, no rooms, no database; for a capture, a screenshot or a perf script.
  *                                          The game plays offline with its bots. Stop it with Ctrl-C)
- *   homie-studio dev [--port 8787] [--remote-ai] [--no-local-ai] [--timestamps]   (--stop: stop exactly this studio's dev server,
+ *   homie-studio dev [--lan] [--port 8787] [--remote-ai] [--no-local-ai] [--timestamps]   (--stop: stop exactly this studio's dev server,
  *                                         nothing else, and clear a stale record; rooms here are always local: production
  *                                         routes in wrangler.jsonc are left out; a game built while it runs is picked up;
  *                                         --timestamps: a time on every line of Wrangler's, not only the room and error ones;
@@ -336,7 +338,7 @@ import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeO
 import { newStudio } from '../lib/scaffold.mjs';
 import { lineDiff, upgradeApply, upgradePlan } from '../lib/upgrade.mjs';
 import { whatsNewLines } from '../lib/changelog.mjs';
-import { listGames, newGame, readStudio, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
+import { listGames, newGame, newApp, readStudio, requireStudio, siteUrl, starters, workerDir } from '../lib/studio.mjs';
 import { STUDIO_VERSION } from '../lib/version.mjs';
 import { statsKey, statsLink, statsRevoke, statsShare, statsShow } from '../lib/stats.mjs';
 import { playersOwner, playersShow } from '../lib/players.mjs';
@@ -371,7 +373,7 @@ import { standaloneDeployNotes } from '../lib/standalone.mjs';
 
 const argv = process.argv.slice(2);
 const flags = new Map();
-const BOOL_FLAGS = ['off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
+const BOOL_FLAGS = ['lan', 'off', 'revoke', 'json', 'yes', 'detach', 'no-install', 'plan', 'stop', 'share', 'apply', 'diff', 'template', 'ci', 'fresh', 'install', 'remove', 'replace', 'artifact', 'open', 'reopen', 'kids', 'remote-ai', 'dry-run', 'verify', 'maps', 'profile', 'hands-on', 'automatic', 'unlock', 'confirm', 'no-library', 'no-validate', 'rigged', 'no-rig', 'supporter', 'managed', 'live', 'manual', 'renew', 'send', 'accept-tos', 'quiet', 'no-local-ai', 'timestamps', 'overwrite', 'own-route', 'before', 'release', 'device'];
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -904,6 +906,13 @@ async function main() {
     if (!url) return { ok: false, command: 'port check', why: 'give --url (the local dev address or the live site)' };
     return tracked(root, 'checks', (report) => portCheck({ url, game, root, only: flags.get('only') ?? null, shots: flags.get('shots') ? resolve(flags.get('shots')) : null, log, report }), 'port check');
   }
+  if (cmd === 'app' && sub === 'role') {
+    const { withKey } = await import('../lib/office.mjs');
+    const id = positional[2]; const role = positional[3];
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id ?? '') || !/^[a-z][a-z0-9-]{0,39}$/.test(role ?? '')) throw new Error('app role <id> <role> [--player <account>] [--revoke] [--url <site>]');
+    return withKey(root, flags.get('url'), (call) => call(`/${id}/api/app/roles`, { role, ...(flags.get('player') ? { player: flags.get('player') } : {}), revoke: flags.has('revoke') }));
+  }
+  if (cmd === 'app' && sub === 'new') return newApp(root, positional[2], { name: flags.get('name') });
   if (cmd === 'game' && sub === 'new') return newGame(root, positional[2], { from: flags.get('from') ?? 'gem-rush', name: flags.get('name') });
   // Remix was retired (a game is never handed over whole): the command is refused in a sentence that says where to
   // go, so an old note, an old card or an agent's memory of the toolkit does not end at "unknown command".
@@ -931,7 +940,7 @@ async function main() {
   }
   // lib/dev.mjs: the dev server, its registration file, and what `--stop` will and will not signal.
   if (cmd === 'dev' && flags.has('stop')) return stopDev(root);
-  if (cmd === 'dev') return dev(root, { port: flags.get('port') ?? 8787, remoteAi: flags.has('remote-ai'), localAi: !flags.has('no-local-ai'), timestamps: flags.has('timestamps'), log });
+  if (cmd === 'dev') return dev(root, { lan: flags.has('lan'), port: flags.get('port') ?? 8787, remoteAi: flags.has('remote-ai'), localAi: !flags.has('no-local-ai'), timestamps: flags.has('timestamps'), log });
   if (cmd === 'check') {
     const game = positional[1] ?? listGames(root)[0]?.id;
     const url = flags.get('url') ?? siteUrl(root);

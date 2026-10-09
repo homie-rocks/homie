@@ -36,7 +36,7 @@ import { animPlan } from './characters.mjs';
 import { CATALOGUE_IDS, decisionRows, lockDecision, oneLine, phaseProgress, pickDirection, readDecisions, setDecision, staleAssets, steerDecision, unlockDecision } from './decisions.mjs';
 import { libraryBase, loadIndex, searchLibrary, itemThumb } from './library.mjs';
 import { boardView } from './style-board.mjs';
-import { listGames } from './studio.mjs';
+import { experienceDir, experienceFile, listExperiences as listGames } from './studio.mjs';
 
 export const ART_UI = Object.freeze({
   style: 'ui://homie-studio/style',
@@ -55,7 +55,7 @@ function picture(h, file, max = 160 * 1024) {
 
 function gameOf(root, id) {
   const games = listGames(root);
-  if (id && (games.some((g) => g.id === id) || existsSync(join(root, 'games', String(id), 'CODEX.md')))) return String(id);
+  if (id && (games.some((g) => g.id === id) || existsSync(join(experienceDir(root, String(id)), 'CODEX.md')))) return String(id);
   if (!id && games.length === 1) return games[0].id;
   throw new Error(`which game? ${games.map((g) => g.id).join(', ') || 'there is none yet (game_plan or game_make first)'}`);
 }
@@ -64,11 +64,11 @@ function gameOf(root, id) {
 function styleData(h, root, game, extra = {}) {
   const doc = readDecisions(root, game);
   let title = null;
-  try { title = JSON.parse(readFileSync(join(root, 'games', game, 'game.json'), 'utf8')).name ?? null; } catch { /* planned: its codex names it */ }
-  if (!title) { try { title = /^#\s+(.+)$/m.exec(readFileSync(join(root, 'games', game, 'CODEX.md'), 'utf8').replace(/^---\n[\s\S]*?\n---\n/, ''))?.[1]?.trim() ?? null; } catch { title = null; } }
+  try { title = JSON.parse(readFileSync(experienceFile(root, game), 'utf8')).name ?? null; } catch { /* planned: its codex names it */ }
+  if (!title) { try { title = /^#\s+(.+)$/m.exec(readFileSync(join(experienceDir(root, game), 'CODEX.md'), 'utf8').replace(/^---\n[\s\S]*?\n---\n/, ''))?.[1]?.trim() ?? null; } catch { title = null; } }
   title = title ?? game;
   const manifest = readManifest(root, game);
-  const dirs = doc ? boardView(root, game, doc).map((d) => ({ ...d, swatch: picture(h, d.swatch ? join(root, 'games', game, d.swatch) : null), mood: d.mood?.path ? { image: picture(h, join(root, 'games', game, d.mood.path)), usd: d.mood.usd ?? null, label: 'a painted target, not what the game draws' } : null })) : [];
+  const dirs = doc ? boardView(root, game, doc).map((d) => ({ ...d, swatch: picture(h, d.swatch ? join(experienceDir(root, game), d.swatch) : null), mood: d.mood?.path ? { image: picture(h, join(experienceDir(root, game), d.mood.path)), usd: d.mood.usd ?? null, label: 'a painted target, not what the game draws' } : null })) : [];
   const rows = doc ? decisionRows(doc) : [];
   return {
     kind: 'style', game, title, path: doc?.path ?? null, line: doc ? oneLine(doc) : null, budget: doc?.budget?.usd ?? null, chosen: doc?.board?.chosen ?? null,
@@ -98,7 +98,7 @@ async function characterThumb(h, root, game, row) {
     try { const lib = await loadIndex({ lib: libraryBase() }); const it = lib.index.items.find((x) => x.id === m.from.item); const t = it ? await itemThumb(lib.lib, it) : null; if (t) return `data:image/webp;base64,${Buffer.from(t).toString('base64')}`; } catch { /* no library here */ }
   }
   const concept = (m?.files ?? []).find((f) => f.role === 'concept');
-  return concept ? picture(h, join(root, 'games', game, concept.path), 60 * 1024) : null;
+  return concept ? picture(h, join(experienceDir(root, game), concept.path), 60 * 1024) : null;
 }
 
 /** Which Game Lab take tunes a verb (lab.json): one named for it or whose note says it, else the default. */

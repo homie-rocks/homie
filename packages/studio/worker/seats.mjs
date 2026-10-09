@@ -34,7 +34,7 @@ export const PREFS_LIMITS = Object.freeze({ bytes: 16_384, keys: 32, key: 64 });
  * the seat's token, the ticket, the browser key…): a game can never ask to be handed those.
  */
 export const PLAY_PARAMS = Object.freeze(['debug', 'q', 'touchdebug', 'cam', 'view']);
-const RESERVED_PARAMS = new Set(['room', 'device', 'want', 'k', 'b', 't', 'name', 'hush', 'chat', 'bub', 'watch', 'follow', 'hand', 'screen', 'arrive', 'not', 'via', 'invite', 'w', 'gv', 'pf', 'server', 'token', 'key', 'code']);
+const RESERVED_PARAMS = new Set(['room', 'device', 'want', 'k', 'b', 't', 'name', 'hush', 'chat', 'bub', 'watch', 'follow', 'hand', 'screen', 'arrive', 'not', 'via', 'invite', 'w', 'gv', 'pf', 'server', 'token', 'key', 'code', 'access']);
 const PARAM_NAME = /^[a-z][a-z0-9_-]{0,23}$/;
 /** A switch's value as it is passed in: up to 48 of A-Z a-z 0-9 _ . ~ - (empty for a bare `?debug`). */
 export const PARAM_VALUE = '^[A-Za-z0-9_.~-]{0,48}$';
@@ -42,7 +42,7 @@ export const PARAM_VALUE = '^[A-Za-z0-9_.~-]{0,48}$';
 /** The names a game may be handed: the defaults, then up to 12 of its own (lowercase, never one the page uses). */
 export function playParams(meta) {
   const own = Array.isArray(meta?.netplay?.params) ? meta.netplay.params : [];
-  const out = [...PLAY_PARAMS];
+  const out = [...PLAY_PARAMS, ...(meta?.kind === 'app' ? ['role', 'surface', 'ticket'] : [])];
   for (const raw of own) {
     const k = String(raw ?? '');
     if (PARAM_NAME.test(k) && !RESERVED_PARAMS.has(k) && !out.includes(k)) out.push(k);

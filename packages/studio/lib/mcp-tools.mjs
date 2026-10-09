@@ -28,7 +28,7 @@ import { cliJob, findNode, getJob, installJob, installed, jobView, runningJobs, 
 import { Feed, currentId, publicFeed, readFeed, startProgress } from './progress.mjs';
 import { newStudio, slugify } from './scaffold.mjs';
 import { repoFromUrl, studioRepo } from './repo.mjs';
-import { GAME_ID, PACKAGE_ROOT, findStudio, isRulesGame, listGames, readLocal, readStudio, siteUrl } from './studio.mjs';
+import { GAME_ID, PACKAGE_ROOT, findStudio, isRulesGame, listExperiences as listGames, readLocal, readStudio, siteUrl } from './studio.mjs';
 import { runningDev } from './dev.mjs';
 import { deployWords } from './deploy-state.mjs';
 import { partsForListing, publishBefore, publishesSoFar } from './directory.mjs';
@@ -864,6 +864,25 @@ export function toolDefs(ctx, avail = {}) {
       },
     },
     {
+      name: 'app_make', title: 'Make an app',
+      description: 'Make one morphing screen with customer, staff and wall roles, lasting records and a shared 3D scene. Uses the same engines, netplay, parts and standalone builds as games. No rounds required.',
+      inputSchema: { type: 'object', properties: { id: str('App id: lowercase, digits, hyphens'), name: str('Display name'), ...STUDIO_ARG }, required: ['id', 'name'] },
+      annotations: { title: 'Make an app', ...RW },
+      run: async (a) => {
+        if (!GAME_ID.test(String(a.id ?? ''))) return fail('invalid app id');
+        const root = ctx.root(a.studio);
+        const r = await cli(ctx, root, `app new ${a.id}`, ['app', 'new', a.id, '--name', String(a.name ?? a.id).slice(0, 60)]);
+        if (!r.ended) return stillRunning(r.job, 'Making the app');
+        if (r.job.code !== 0) return fail(`Not made: ${whyOf(r.job)}`);
+        let install = '';
+        if (r.result?.installNeeded) {
+          if (ctx.install) { const job = runningJobs(root).find((j) => j.label.startsWith('npm install')) ?? installJob(root); install = ` Dependencies are installing (job ${job.id}); wait for studio_job.`; }
+          else install = ' Run studio_install for its engine dependencies.';
+        }
+        return ok(`apps/${a.id} is ready.${install} Build, dev --lan, then check. Follow the app skill: one screen, roles and parts.`, { kind: 'app', ...r.result });
+      },
+    },
+    {
       name: 'game_make', title: 'Make a multiplayer game',
       description: 'Make a game in the studio from a multiplayer starter, under the id you choose, to change into the person\'s game: gem-rush (an arena: every browser renders, one hosts the rules, bots fill empty seats, rounds restart), gem-rush-3d (the same arena in three.js, dressed with free CC0 models through @homie-rocks/studio/assets: the start for a 3D game), hero-rush-3d (the arena with animated CC0 heroes that run, jump and swing through @homie-rocks/studio/animate, a shared clip library per skeleton, a jump and a swing tuned in the Game Lab: the start for a 3D game with characters) or ember-vale (a hero who lasts for days, with cloud saves: for persistent games). In a new studio only once their game is planned (game_plan), or when they ask for a copy of a working starter; never as a first step. A planned game\'s codex stays. Before writing one of its systems from scratch, look for a piece of an existing game that does it (parts_find; part_add brings it in), and for the general mechanism in the @homie-rocks/* packages.',
       inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens): its address'), name: str('The game\'s display name'), from: str('Starter id (default gem-rush)'), ...STUDIO_ARG }, required: ['id', 'name'] },
@@ -1007,7 +1026,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'check', title: 'Two-browser check',
-      description: 'Prove a game works: two fresh browsers (a computer and a phone) press Play, land in the same public room and finish a round (about 70 s). Starts the site here first when it is not running. Runs in the background; the build card follows each step going green. Run it before saying a game works.',
+      description: 'Prove an app works across a wall and two phones: an action propagates and survives reconnect, with no rounds. For a game: two fresh browsers (a computer and a phone) press Play, land in the same public room and finish a round (about 70 s). Starts the site here first when it is not running. Runs in the background; the build card follows each step going green. Run it before saying a game works.',
       inputSchema: { type: 'object', properties: { game: str('The game\'s id (default: the only game)'), url: str('Optional: the site to check (default: this computer\'s preview); the live site after a deploy'), ...STUDIO_ARG } },
       annotations: { title: 'Two-browser check', ...RW }, _meta: ui(UI.build),
       run: async (a) => {
@@ -1017,7 +1036,7 @@ export function toolDefs(ctx, avail = {}) {
         const game = a.game ?? (games.length === 1 ? games[0].id : null);
         if (!game) return fail(games.length ? `which game? ${games.map((g) => g.id).join(', ')}` : 'there is no game to check yet');
         const url = a.url ? String(a.url) : await devUrl(ctx, root);
-        return startRun(ctx, root, { kind: 'check', game, title: `${games.find((g) => g.id === game)?.name ?? game}: two-browser check`, steps: [
+        return startRun(ctx, root, { kind: 'check', game, title: `${games.find((g) => g.id === game)?.name ?? game}: ${games.find((g) => g.id === game)?.kind === 'app' ? 'multi-screen' : 'two-browser'} check`, steps: [
           ...(games.some((g) => g.id === game && isRulesGame(g)) ? [{ label: 'rules build check', args: ['build', game] }] : []),
           { label: 'two-browser check', args: ['check', game, '--url', url, '--shots', join('.checks', game)] },
         ] });

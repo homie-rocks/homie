@@ -108,11 +108,12 @@ export function accountPage(cat, { origin = '', next = '/account/', owner = null
   const studio = cat?.studio?.name ?? 'Studio';
   const boot = { next, owner, link, mode, features, studio };
   const games = (cat?.games ?? []).filter((g) => g.saves).map((g) => g.name);
-  const back = next !== '/account/' ? `<p class="back"><a class="ghost" href="${esc(next)}" data-back>Back to the game</a></p>` : '';
+  const app = (cat.games ?? []).some((g) => g.kind === 'app' && next.startsWith(`/${g.id}/`));
+  const back = next !== '/account/' ? `<p class="back"><a class="ghost" href="${esc(next)}" data-back>Back to the ${app ? 'app' : 'game'}</a></p>` : '';
   const main = `<section class="acct" data-account>
 <p class="kicker">${esc(studio)}</p>
-<h1>Your player account</h1>
-<p class="lead">Keep your characters and progress on every device you play on. It is an account on ${esc(studio)} only, made with a passkey: Face ID, a fingerprint or your device's PIN. No password, and no email needed.</p>
+<h1>${app ? 'Your account' : 'Your player account'}</h1>
+<p class="lead">${app ? 'Sign in for your role in this app.' : 'Keep your characters and progress on every device you play on.'} It is an account on ${esc(studio)} only, made with a passkey: Face ID, a fingerprint or your device's PIN. No password, and no email needed.</p>
 <noscript><p class="lead">This page needs JavaScript for passkeys.</p></noscript>
 <div class="card" data-view="loading"><p>Looking for your account…</p></div>
 

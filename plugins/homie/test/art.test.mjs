@@ -84,6 +84,13 @@ test('art: a cover cropped into the game and named in game.json; tiling, fitting
   assert.equal(c.ok, true, JSON.stringify(c));
   assert.equal(c.cover, 'games/gem/public/cover.jpg');
   assert.equal(JSON.parse(readFileSync(join(dir, 'games', 'gem', 'game.json'), 'utf8')).cover, 'cover.jpg');
+  mkdirSync(join(dir, 'apps', 'welcome'), { recursive: true });
+  writeFileSync(join(dir, 'apps', 'welcome', 'app.json'), JSON.stringify({ id: 'welcome', name: 'Welcome' }));
+  const appCover = run(['cover', 'welcome', '--from', 'art/frames/wide.png']);
+  assert.equal(appCover.ok, true, JSON.stringify(appCover));
+  assert.equal(appCover.cover, 'apps/welcome/public/cover.jpg');
+  assert.equal(JSON.parse(readFileSync(join(dir, 'apps/welcome/app.json'))).cover, 'cover.jpg');
+  assert.equal(existsSync(join(dir, 'games/welcome')), false);
   const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', join(dir, 'games', 'gem', 'public', 'cover.jpg')], { encoding: 'utf8' }).stdout.trim();
   assert.equal(probe, '1600,900');
   assert.ok(statSync(join(dir, 'games', 'gem', 'public', 'cover.jpg')).size <= 400 * 1024);

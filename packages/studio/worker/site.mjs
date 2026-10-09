@@ -1,3 +1,4 @@
+import { appWords, openPath } from './app-format.mjs';
 /**
  * The studio site's pages, in the studio's own look (site/SITE.md): the same sections as homie.rocks
  * (Home, Games, Music, Videos, Rooms, Posts, each shown only when the studio has something in it), an epic
@@ -473,7 +474,7 @@ d.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.t
 var el=function(tag,cls,text){var e=d.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 var EYE='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 var roomRow=function(r){var li=el('li','room');var th=el('span','thumb');if(r.cover){var im=el('img');im.src=r.cover;im.alt='';im.loading='lazy';th.appendChild(im)}li.appendChild(th);
-  var mid=el('div');mid.appendChild(el('b',null,(r.name?r.name+' · ':'')+(r.server?r.server.name+' · ':'')+r.label));mid.appendChild(el('span',null,r.players+' of '+r.max+' seats taken'+(r.ai?' · '+r.ai+' AI':'')+(r.policy==='humans-only'?' · humans only':' · bots hold the rest')));
+  var mid=el('div');mid.appendChild(el('b',null,(r.name?r.name+' · ':'')+(r.server?r.server.name+' · ':'')+r.label));mid.appendChild(el('span',null,(r.kind==='app'?r.players+' people here':r.players+' of '+r.max+' seats taken')+(r.ai?' · '+r.ai+' AI':'')+(r.kind==='app'?'':r.policy==='humans-only'?' · humans only':' · bots hold the rest')));
   var pips=el('div','pips');for(var i=0;i<Math.min(r.max,32);i++)pips.appendChild(el('i',i<r.players?'on':''));mid.appendChild(pips);li.appendChild(mid);
   var acts=el('div','room-acts');
   if(r.watch){var w=el('a','watchb');w.href=r.watch;w.setAttribute('aria-label','Watch '+(r.name?r.name+' · ':'')+r.label);w.innerHTML=EYE;w.appendChild(el('span',null,'Watch'));acts.appendChild(w)}
@@ -488,7 +489,7 @@ if(src){
   var idle=live&&(live.getAttribute('data-idle')||(words&&words.textContent));
   var ask=function(){if(d.hidden)return;fetch(src,{credentials:'omit',cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(b){
     if(!b||b.ok!==true)return;var n=Number(b.playing)||0;
-    if(live){live.setAttribute('data-n',String(n));if(words)words.textContent=n<=0?idle:(n===1?'1 '+one+' playing right now':n+' '+many+' playing right now')}
+    if(live){live.setAttribute('data-n',String(n));if(words)words.textContent=n<=0?idle:(n===1?'1 '+one+(live.hasAttribute('data-app')?' here right now':' playing right now'):n+' '+many+(live.hasAttribute('data-app')?' here right now':' playing right now'))}
     if(list&&Array.isArray(b.rooms))paintRooms(list,b.rooms)}).catch(function(){})};
   var go=function(){setInterval(ask,15000);d.addEventListener('visibilitychange',ask)};
   if(d.prerendering===true)d.addEventListener('prerenderingchange',function(){ask();go()},{once:true});else go();
@@ -551,12 +552,14 @@ const studioName = (cat) => cat.studio?.name ?? 'Studio';
 
 /** Which sections this studio has: a section with nothing in it has no tab (and its page answers 404). */
 export function sectionsOf(cat) {
-  const games = (cat.games ?? []).length > 0;
+  const games = (cat.games ?? []).some((g) => g.kind !== 'app');
+  const apps = (cat.games ?? []).some((g) => g.kind === 'app');
   return [
+    apps && { key: 'apps', href: '/apps/', label: 'Apps' },
     games && { key: 'games', href: '/games/', label: 'Games' },
     (cat.songs ?? []).length > 0 && { key: 'music', href: '/music/', label: 'Music' },
     (cat.videos ?? []).length > 0 && { key: 'videos', href: '/videos/', label: 'Videos' },
-    games && { key: 'rooms', href: '/rooms/', label: 'Rooms' },
+    (games || apps) && { key: 'rooms', href: '/rooms/', label: 'Rooms' },
     (cat.posts ?? []).length > 0 && { key: 'posts', href: '/posts/', label: 'Posts' },
     // The Lounge (0.29.0): the studio's own community room, when studio.json turns it on.
     cat.studio?.lounge && { key: 'lounge', href: '/lounge/', label: cat.studio.lounge.tab ?? 'Lounge' },
@@ -711,10 +714,10 @@ function heroMedia(h = {}, { alt = '', word = '' } = {}) {
 
 function liveLine(g, playing, { idle } = {}) {
   const w = g.landing?.words ?? {};
-  const one = w.one ?? 'player';
-  const many = w.many ?? 'players';
-  const words = playing > 0 ? (playing === 1 ? `1 ${one} playing right now` : `${playing} ${many} playing right now`) : idle;
-  return `<p class="live" data-live="/${esc(g.id)}/live" data-n="${playing}" data-one="${esc(one)}" data-many="${esc(many)}" data-idle="${esc(idle)}" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span data-live-words>${esc(words)}</span></p>`;
+  const one = w.one ?? appWords(g).one;
+  const many = w.many ?? appWords(g).many;
+  const words = playing > 0 ? (playing === 1 ? `1 ${one} ${g.kind === 'app' ? 'here' : 'playing'} right now` : `${playing} ${many} ${g.kind === 'app' ? 'here' : 'playing'} right now`) : idle;
+  return `<p class="live" data-live="/${esc(g.id)}/live"${g.kind === 'app' ? ' data-app="1"' : ''} data-n="${playing}" data-one="${esc(one)}" data-many="${esc(many)}" data-idle="${esc(idle)}" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span data-live-words>${esc(words)}</span></p>`;
 }
 
 function gameCard(g, playing = 0) {
@@ -724,8 +727,8 @@ function gameCard(g, playing = 0) {
   <div class="body">
     <h3><a href="/${esc(g.id)}/">${esc(g.name)}</a></h3>
     <p>${esc(g.landing?.pitch ?? g.blurb)}</p>
-    <div class="meta"><span>${esc(playersText(g))}</span>${minutes(g.roundSeconds) ? `<span>${esc(minutes(g.roundSeconds))}</span>` : ''}<span>phone, computer or TV</span></div>
-    <div class="acts"><a class="btn" href="/${esc(g.id)}/play" data-play>${PLAY_ICON}Play</a><a class="ghost" href="/${esc(g.id)}/">About</a></div>
+    <div class="meta"><span>${esc(g.kind === 'app' ? 'One screen · live together' : playersText(g))}</span>${minutes(g.roundSeconds) ? `<span>${esc(minutes(g.roundSeconds))}</span>` : ''}<span>phone, computer or TV</span></div>
+    <div class="acts"><a class="btn" href="${esc(openPath(g))}" data-play>${PLAY_ICON}${esc(appWords(g).open)}</a><a class="ghost" href="/${esc(g.id)}/">About</a></div>
   </div>
 </article>`;
 }
@@ -750,7 +753,7 @@ export function roomView(g, r, max, srv = null, { chat = false } = {}) {
   const m = /^(?:pub|s-[a-z0-9-]+)-(\d+)$/.exec(String(room ?? ''));
   const n = m ? Number(m[1]) : null;
   return {
-    game: g.id, name: g.name, label: n ? `Room ${n}` : 'A room', room, players: r.players, max, cover: coverOf(g), play: `/${g.id}/play?room=${encodeURIComponent(room)}`,
+    ...(g.kind === 'app' ? { kind: 'app' } : {}), game: g.id, name: g.name, label: n ? `Room ${n}` : 'A room', room, players: r.players, max, cover: coverOf(g), play: `${openPath(g)}?room=${encodeURIComponent(room)}`,
     // Watch this room from any player's view (section 16); a game that cannot be watched has no link.
     watch: watchOf(g) === 'off' ? null : `/${g.id}/watch?room=${encodeURIComponent(room)}`,
     server: srv && srv.id !== 'public' ? { id: srv.id, name: srv.name, badge: policyWords(srv).badge } : null,
@@ -763,7 +766,7 @@ export function roomView(g, r, max, srv = null, { chat = false } = {}) {
 }
 
 function roomRows(rows, { names = true } = {}) {
-  return rows.map((r) => `<li class="room"><span class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : ''}</span><div><b>${names ? `${esc(r.name)} · ` : ''}${r.server ? `${esc(r.server.name)} · ` : ''}${esc(r.label)}</b><span>${esc(r.players)} of ${esc(r.max)} seats taken${r.ai ? ` · ${esc(r.ai)} AI` : ''}${r.policy === 'humans-only' ? ' · humans only' : ' · bots hold the rest'}</span><div class="pips">${Array.from({ length: Math.min(r.max, 32) }, (_, i) => `<i${i < r.players ? ' class="on"' : ''}></i>`).join('')}</div></div><div class="room-acts">${r.watch ? `<a class="watchb" href="${esc(r.watch)}" aria-label="Watch ${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}">${icon('eye', 'ico')}<span>Watch</span></a>` : ''}<a class="join" href="${esc(r.play)}" data-play>Join</a></div></li>`).join('');
+  return rows.map((r) => `<li class="room"><span class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : ''}</span><div><b>${names ? `${esc(r.name)} · ` : ''}${r.server ? `${esc(r.server.name)} · ` : ''}${esc(r.label)}</b><span>${esc(r.players)} of ${esc(r.max)} seats taken${r.ai ? ` · ${esc(r.ai)} AI` : ''}${r.kind === 'app' ? ' · people' : r.policy === 'humans-only' ? ' · humans only' : ' · bots hold the rest'}</span><div class="pips">${Array.from({ length: Math.min(r.max, 32) }, (_, i) => `<i${i < r.players ? ' class="on"' : ''}></i>`).join('')}</div></div><div class="room-acts">${r.watch ? `<a class="watchb" href="${esc(r.watch)}" aria-label="Watch ${names ? `${esc(r.name)} · ` : ''}${esc(r.label)}">${icon('eye', 'ico')}<span>Watch</span></a>` : ''}<a class="join" href="${esc(r.play)}" data-play>Join</a></div></li>`).join('');
 }
 
 const fmtDay = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : ''; };
@@ -807,7 +810,7 @@ export function featuredOf(cat) {
 export const homeLd = (cat, origin) => [studioNode(cat, origin, { full: true }), websiteNode(cat, origin)];
 
 /** A game landing's structured data: its breadcrumbs and its VideoGame (worker/schema.mjs gameNode). */
-export const landingLd = (cat, g, origin, opts = {}) => [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`]]), gameNode(cat, g, origin, opts)];
+export const landingLd = (cat, g, origin, opts = {}) => [breadcrumbs(origin, [['Home', '/'], [g.kind === 'app' ? 'Apps' : 'Games', g.kind === 'app' ? '/apps/' : '/games/'], [g.name, `/${g.id}/`]]), gameNode(cat, g, origin, opts)];
 
 /** The public games as a list of their landings (Games, Rooms). */
 const gamesList = (cat, origin, id, name) => itemList(origin, id, name, (cat.games ?? []).map((g) => ({ name: g.name, path: `/${g.id}/` })));
@@ -821,23 +824,24 @@ const gamesList = (cat, origin, id, name) => itemList(origin, id, name, (cat.gam
  */
 export function homeHero(cat, f, { playing = 0 } = {}) {
   const name = studioName(cat);
-  const games = cat.games ?? [];
+  const games = (cat.games ?? []).filter((g) => (g.kind === 'app') === (f.kind === 'app'));
   const tagline = cat.studio?.tagline ?? '';
   return `<section class="hero home" aria-labelledby="hero-title">
   ${heroMedia(f.landing?.hero, { alt: f.landing?.hero?.alt })}
   <div class="hero-copy">
-    <p class="kicker">${esc(name)}<span class="k-opt"> · ${esc(tagline || 'featured game')}</span></p>
+    <p class="kicker">${esc(name)}<span class="k-opt"> · ${esc(tagline || (f.kind === 'app' ? 'featured app' : 'featured game'))}</span></p>
     <h1 class="title ${titleClass(f.name)}" id="hero-title">${esc(f.name)}</h1>
     <p class="line">${esc(f.landing?.pitch ?? f.blurb)}</p>
-    <div class="row"><a class="play" href="/${esc(f.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>${liveLine(f, playing, { idle: 'Bots hold every empty seat · press Play and you are in a round' })}</div>
-    <a class="also" href="/${esc(f.id)}/">${icon('arrow')}<span>About ${esc(f.name)}</span></a>${games.length > 1 ? `<a class="also" href="/games/">${icon('games')}<span>All ${games.length} games</span></a>` : ''}
+    <div class="row"><a class="play" href="${esc(openPath(f))}" data-play>${PLAY_ICON}<span>${f.kind === 'app' ? esc(appWords(f).open) : 'Play now — free'}</span></a>${liveLine(f, playing, { idle: f.kind === 'app' ? 'One screen, together' : 'Bots hold every empty seat · press Play and you are in a round' })}</div>
+    <a class="also" href="/${esc(f.id)}/">${icon('arrow')}<span>About ${esc(f.name)}</span></a>${games.length > 1 ? `<a class="also" href="/${f.kind === 'app' ? 'apps' : 'games'}/">${icon('games')}<span>All ${games.length} ${f.kind === 'app' ? 'apps' : 'games'}</span></a>` : ''}
   </div>
 </section>`;
 }
 
 export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   const name = studioName(cat);
-  const games = cat.games ?? [];
+  const games = (cat.games ?? []).filter((g) => g.kind !== 'app');
+  const apps = (cat.games ?? []).filter((g) => g.kind === 'app');
   const posts = (cat.posts ?? []).slice(0, 3);
   const songs = cat.songs ?? [];
   const videos = cat.videos ?? [];
@@ -889,6 +893,7 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
   <div class="head-row reveal"><div><p class="kicker">Games</p><h2 id="games-title">${esc(games.length === 1 ? `One game, live now` : `${games.length} games, live now`)}</h2></div>${games.length > 3 ? `<a class="more" href="/games/">All games ${icon('arrow')}</a>` : ''}</div>
   <div class="cards">${games.slice(0, 6).map((g) => gameCard(g, live[g.id] ?? 0)).join('')}</div>
 </div></section>` : '';
+  const appsBand = apps.length ? `<section class="band"><div class="band-in"><div class="head-row"><div><p class="kicker">Apps</p><h2>Spaces to do things together</h2></div><a href="/apps/">All apps</a></div><div class="cards">${apps.map((g) => gameCard(g, live[g.id] ?? 0)).join('')}</div></div></section>` : '';
   const postsBand = posts.length ? `<section class="band hotband" aria-labelledby="posts-title"><div class="band-in">
   <div class="head-row reveal"><div><p class="kicker">Posts</p><h2 id="posts-title">From the studio</h2></div><a class="more" href="/posts/">All posts ${icon('arrow')}</a></div>
   <div class="cards posts">${posts.map(postCard).join('')}</div>
@@ -903,7 +908,7 @@ export function homePage(cat, { origin = '', rooms = [], live = {} } = {}) {
     description: tagline || (f ? `${name}: ${games.map((g) => g.name).join(', ')}. Free in your browser, on a phone, a computer or a TV.` : soon ? `${name}: first game coming soon.` : name),
     origin, path: '/', image: f ? (f.landing?.hero?.wideImage ?? coverOf(f)) : null, page: 'home', hero: true, ld: homeLd(cat, origin),
     head: f?.landing?.hero?.wideImage ? `<link rel="preload" as="image" href="${esc(f.landing.hero.tallImage ?? f.landing.hero.wideImage)}">` : '',
-    main: `${hero}${extra ? `<section class="band">${extra}</section>` : ''}${roomsBand}${gamesBand}${postsBand}${soon}${mediaBand(videos, 'videos', 'Trailers and clips')}${mediaBand(songs, 'music', 'Songs and scores')}`,
+    main: `${hero}${extra ? `<section class="band">${extra}</section>` : ''}${roomsBand}${gamesBand}${appsBand}${postsBand}${soon}${mediaBand(videos, 'videos', 'Trailers and clips')}${mediaBand(songs, 'music', 'Songs and scores')}`,
   });
 }
 
@@ -913,13 +918,15 @@ function pageHead(kicker, title, lead, extra = '') {
   return `<header class="head"><p class="kicker">${esc(kicker)}</p><h1>${esc(title)}</h1>${lead ? `<p class="lead">${esc(lead)}</p>` : ''}${extra}</header>`;
 }
 
-export function gamesPage(cat, { origin = '', live = {} } = {}) {
-  const games = cat.games ?? [];
+export function gamesPage(cat, { origin = '', live = {}, kind = 'game' } = {}) {
+  const games = (cat.games ?? []).filter((g) => (g.kind === 'app' ? 'app' : 'game') === kind);
+  const apps = kind === 'app';
+  const label = apps ? 'Apps' : 'Games';
   const name = studioName(cat);
   return layout(cat, {
-    title: `Games · ${name}`, description: `Every game from ${name}: press Play and you are in a live room.`, origin, path: '/games/', page: 'games', active: 'games',
-    ld: [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/']]), gamesList(cat, origin, '/games/#list', `Games from ${name}`)],
-    main: `${pageHead(name, 'Games', `${games.length === 1 ? 'One game' : `${games.length} games`}. Press Play on a phone, a computer or a TV browser and you are in a live public room with whoever is playing; bots hold the empty seats.`)}
+    title: `${label} · ${name}`, description: apps ? `Apps from ${name}: one screen, live together.` : `Every game from ${name}: press Play and you are in a live room.`, origin, path: `/${kind}s/`, page: `${kind}s`, active: `${kind}s`,
+    ld: [breadcrumbs(origin, [['Home', '/'], [label, `/${kind}s/`]]), gamesList({ ...cat, games }, origin, `/${kind}s/#list`, `${label} from ${name}`)],
+    main: `${pageHead(name, label, apps ? 'Open an app on your phone, tablet, kiosk or wall screen.' : `${games.length === 1 ? 'One game' : `${games.length} games`}. Press Play on a phone, a computer or a TV browser and you are in a live public room with whoever is playing; bots hold the empty seats.`)}
 <div class="wrap"><div class="cards">${games.map((g) => gameCard(g, live[g.id] ?? 0)).join('')}</div></div>`,
   });
 }
@@ -927,15 +934,16 @@ export function gamesPage(cat, { origin = '', live = {} } = {}) {
 export function roomsPage(cat, { origin = '', rooms = [] } = {}) {
   const name = studioName(cat);
   const games = cat.games ?? [];
+  const hasApps = games.some((g) => g.kind === 'app');
   const total = rooms.reduce((n, r) => n + r.players, 0);
   return layout(cat, {
-    title: `Rooms · ${name}`, description: `Public rooms playing now across ${name}'s games. Join one.`, origin, path: '/rooms/', page: 'rooms', active: 'rooms',
+    title: `Rooms · ${name}`, description: hasApps ? `Live rooms across ${name}'s apps and games. Join one.` : `Public rooms playing now across ${name}'s games. Join one.`, origin, path: '/rooms/', page: 'rooms', active: 'rooms',
     // The games a room can be opened in, never who is in one now: a cached copy of the page must not go stale.
     ld: [breadcrumbs(origin, [['Home', '/'], ['Rooms', '/rooms/']]), gamesList(cat, origin, '/rooms/#games', `Games with public rooms at ${name}`)],
-    main: `${pageHead('Live now', 'Rooms', rooms.length ? `${total} ${total === 1 ? 'person' : 'people'} playing in ${rooms.length} public ${rooms.length === 1 ? 'room' : 'rooms'} right now. Join one, or press Play on any game.` : `Public rooms across ${name}'s games, as they happen.`)}
+    main: `${pageHead('Live now', 'Rooms', hasApps ? `${total} people here. Open a screen below to join its room.` : rooms.length ? `${total} ${total === 1 ? 'person' : 'people'} playing in ${rooms.length} public ${rooms.length === 1 ? 'room' : 'rooms'} right now. Join one, or press Play on any game.` : `Public rooms across ${name}'s games, as they happen.`)}
 <div class="wrap">
   <ol class="rooms" data-rooms data-src="/api/rooms"${rooms.length ? '' : ' hidden'}>${roomRows(rooms)}</ol>
-  <div class="quiet" data-rooms-quiet${rooms.length ? ' hidden' : ''}>Nobody is in a room right now. Press Play on any game below: you start at once with bots in the empty seats, and whoever presses Play next lands in your room.</div>
+  <div class="quiet" data-rooms-quiet${rooms.length ? ' hidden' : ''}>${hasApps ? 'Nobody is here right now. Open an app below, or play a game.' : 'Nobody is in a room right now. Press Play on any game below: you start at once with bots in the empty seats, and whoever presses Play next lands in your room.'}</div>
   <p class="sec">Start one</p>
   <div class="cards">${games.map((g) => gameCard(g, 0)).join('')}</div>
 </div>`,
@@ -979,7 +987,7 @@ export function serversPage(cat, g, { origin = '', servers = [], hidden = false,
   const cards = [...(pub && !hidden ? [pub] : []), ...shown];
   return layout(cat, {
     title: `Servers · ${g.name}`, description: `${g.name}'s servers: ${SERVERS_LEAD}`, origin, path: `/${g.id}/servers/`, page: 'servers', active: 'games',
-    ld: pick ? null : [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`], ['Servers', `/${g.id}/servers/`]])],
+    ld: pick ? null : [breadcrumbs(origin, [['Home', '/'], [g.kind === 'app' ? 'Apps' : 'Games', g.kind === 'app' ? '/apps/' : '/games/'], [g.name, `/${g.id}/`], ['Servers', `/${g.id}/servers/`]])],
     main: `${pageHead(g.name, pick ? 'Pick a server' : 'Servers', SERVERS_LEAD)}
 <div class="wrap">${cards.length ? `<div class="scards">${cards.map((sv) => serverCard(g, sv)).join('')}</div>` : `<p class="quiet">No server is open right now.</p>`}
 <p class="sec">Every policy</p><ul class="howto">${Object.values(POLICY_WORDS).map((w) => `<li>${esc(w.line.replace('{n}', 'N'))}</li>`).join('')}</ul></div>`,
@@ -1001,7 +1009,7 @@ export function serverPage(cat, g, sv, { origin = '', rooms = [], door = { ok: t
   const blocked = !door.ok ? `<p class="door-why">${esc(doorWords(g, sv, door).line)}</p>` : '';
   return layout(cat, {
     title: `${sv.name} · ${g.name}`, description: `${sv.name}, a ${words.badge.toLowerCase()} server of ${g.name}. ${words.line}`, origin, path: `/${g.id}/s/${sv.id}/`, page: 'server', active: 'games',
-    ld: [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`], ['Servers', `/${g.id}/servers/`], [sv.name, `/${g.id}/s/${sv.id}/`]])],
+    ld: [breadcrumbs(origin, [['Home', '/'], [g.kind === 'app' ? 'Apps' : 'Games', g.kind === 'app' ? '/apps/' : '/games/'], [g.name, `/${g.id}/`], ['Servers', `/${g.id}/servers/`], [sv.name, `/${g.id}/s/${sv.id}/`]])],
     main: `<header class="head"><p class="kicker">${esc(g.name)} · server</p><h1>${esc(sv.name)}</h1>
 <p class="lead"><span class="pol ${esc(sv.policy)}">${esc(words.badge)}</span> ${esc(words.line)}</p>${sv.blurb ? `<p class="lead">${esc(sv.blurb)}</p>` : ''}
 ${blocked}<div class="keys">${door.ok ? `<a class="btn" href="${esc(play)}" data-play>${PLAY_ICON}<span>Play on ${esc(sv.name)}</span></a>` : ''}${membership}</div></header>
@@ -1165,14 +1173,15 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   const license = licenseLabel(g.license);
   const h = L.hero ?? {};
   const host = origin.replace(/^https?:\/\//, '');
-  const playUrl = `${origin}/${g.id}/play`;
+  const playUrl = `${origin}${openPath(g)}`;
+  const app = g.kind === 'app';
   let qr = '';
   // Local development: no code a phone cannot open; the landing says to deploy instead of naming this computer's address.
   const local = isLocalOrigin(origin);
   if (!local) try { qr = qrSvg(playUrl, { title: `Play ${g.name} on your phone` }); } catch { qr = ''; }
   const tvOn = L.tv !== false;
   const max = g.players?.max ?? 8;
-  const words = L.words ?? {};
+  const words = { ...appWords(g), ...L.words };
   const many = words.many ?? 'players';
   const kicker = L.kicker ?? `Free in your browser · <span class="k-opt">phone, computer or TV · </span>no download`;
   const kickerHtml = L.kicker ? esc(L.kicker) : kicker;
@@ -1186,8 +1195,8 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
     ${lineage ? `<p class="based-on">Based on ${ofWhat}</p>` : ''}
     <p class="line">${esc(L.pitch ?? g.blurb)}</p>
     <div class="row">
-      <a class="play" href="/${esc(g.id)}/play" data-play>${PLAY_ICON}<span>Play now — free</span></a>
-      ${liveLine(g, playing, { idle: `Bots hold every empty seat · one tap and you are in` })}
+      <a class="play" href="${esc(openPath(g))}" data-play>${PLAY_ICON}<span>${app ? esc(words.open) : 'Play now — free'}</span></a>
+      ${liveLine(g, playing, { idle: app ? 'One screen, live together' : `Bots hold every empty seat · one tap and you are in` })}
     </div>
     ${tvOn ? `<a class="also" href="#anywhere">${icon('tv')}<span>Or put it on the big screen</span></a>` : ''}${playing > 0 && rooms.length && watchOf(g) !== 'off' ? `<a class="also" href="/${esc(g.id)}/watch">${icon('eye')}<span>Watch a live room</span></a>` : ''}${trailer ? `<a class="also" href="/videos/${esc(trailer.slug)}/">${icon('videos')}<span>Watch the trailer</span></a>` : ''}${g.saves ? `<a class="also" href="/account/?next=${encodeURIComponent(`/${g.id}/play`)}" data-account>${icon('spark')}<span>Your progress follows you: sign in</span></a>` : ''}
   </div>
@@ -1219,7 +1228,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
 
   const genres = (Array.isArray(g.genre) ? g.genre : g.genre ? [g.genre] : []).filter((x) => typeof x === 'string' && x.trim());
   const facts = [...genres, 'free, in the browser', 'bots fill empty seats', 'join any time: take a bot’s place', 'rounds restart on their own', ...(tvOn ? ['phones as controllers on a TV'] : [])];
-  const side = trailer ? mediaCard(trailer, 'videos', cat) : song ? mediaCard(song, 'music', cat) : (L.cover ? `<figure class="media-card reveal" style="margin:0"><span class="art"><img src="${esc(L.cover)}" alt="${esc(g.name)}, a moment of play" loading="lazy"></span><figcaption class="cap"><b>${esc(g.name)}</b><span>${esc(playersText(g))}${minutes(g.roundSeconds) ? ` · ${esc(minutes(g.roundSeconds))}` : ''}</span></figcaption></figure>` : '');
+  const side = trailer ? mediaCard(trailer, 'videos', cat) : song ? mediaCard(song, 'music', cat) : (L.cover ? `<figure class="media-card reveal" style="margin:0"><span class="art"><img src="${esc(L.cover)}" alt="${esc(g.name)}, a moment of play" loading="lazy"></span><figcaption class="cap"><b>${esc(g.name)}</b><span>${esc(g.kind === 'app' ? 'One screen · live together' : playersText(g))}${minutes(g.roundSeconds) ? ` · ${esc(minutes(g.roundSeconds))}` : ''}</span></figcaption></figure>` : '');
   const howBand = `<section class="band hotband" aria-labelledby="how-title"><div class="band-in split">
   <div class="reveal">
     <p class="kicker">How to play</p>
@@ -1251,13 +1260,13 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   const band = (html) => (!html ? '' : /^\s*<section\b/i.test(html) ? html : `<section class="band tight"><div class="band-in">${html}</div></section>`);
   const vars = { 'game.name': g.name, 'game.id': g.id, 'game.play': `/${g.id}/play` };
   return layout(cat, {
-    title: `${g.name} — play free in your browser`,
-    description: `${g.name}: ${L.pitch ?? g.blurb ?? ''} Free in your browser, nothing to download; a TV or laptop browser can be the big screen, with phones as controllers.`.replace(/\s+/g, ' ').trim(),
-    playerGame: listed ? g : null, origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: 'games', over: landingTokens(cat, L),
+    title: app ? `${g.name} — ${words.open}` : `${g.name} — play free in your browser`,
+    description: app ? `${g.name}: ${L.pitch ?? g.blurb ?? ''} One transforming screen, live across your devices.` : `${g.name}: ${L.pitch ?? g.blurb ?? ''} Free in your browser, nothing to download; a TV or laptop browser can be the big screen, with phones as controllers.`.replace(/\s+/g, ' ').trim(),
+    playerGame: listed ? g : null, origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: app ? 'apps' : 'games', over: landingTokens(cat, L),
     head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}`,
     // A game that is not public yet (private, or an invite-only beta) is never indexed, and offers nothing.
     ld: landingLd(cat, g, origin, { listed, shop }), ...(listed ? {} : { extraHeaders: { 'x-robots-tag': 'noindex' } }),
-    main: `${hero}${ways}${liveBand}${servers ? serversBand(g, servers) : ''}${howBand}${shotsBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}`,
+    main: `${hero}${app ? `<section class="band"><div class="band-in"><h2>One screen. Your place in it.</h2><p>${esc(L.about ?? g.blurb)}</p><div class="keys"><a class="btn" href="${esc(openPath(g))}">${esc(words.open)}</a><a class="ghost" href="/${esc(g.id)}/tv">Wall screen</a></div>${qr ? `<div class="scan"><span class="qr">${qr}</span><p>${esc(words.join)}</p></div>` : ''}</div></section>` : ways + liveBand}${servers ? serversBand(g, servers) : ''}${app ? '' : howBand}${shotsBand}${band(partial(cat, 'game', vars))}${band(partial(cat, `game-${g.id}`, vars))}${creditsBand}`,
   });
 }
 
@@ -1268,7 +1277,7 @@ export function creditsPage(cat, g, texts, { origin = '' } = {}) {
   const of = lineage ? `<p class="sec">Based on</p><p>${lineage.page ? `<a href="${esc(lineage.page)}" rel="noopener">${esc(lineage.name)}</a>` : esc(lineage.name)}${lineage.studio ? ` by ${esc(lineage.studio)}` : ''}</p>` : '';
   return layout(cat, {
     title: `Credits · ${g.name} · ${name}`, description: `Credits and licences for ${g.name}.`, origin, path: `/${g.id}/credits`, page: 'credits', active: 'games',
-    ld: [breadcrumbs(origin, [['Home', '/'], ['Games', '/games/'], [g.name, `/${g.id}/`], ['Credits', `/${g.id}/credits`]])],
+    ld: [breadcrumbs(origin, [['Home', '/'], [g.kind === 'app' ? 'Apps' : 'Games', g.kind === 'app' ? '/apps/' : '/games/'], [g.name, `/${g.id}/`], ['Credits', `/${g.id}/credits`]])],
     main: `${pageHead(g.name, 'Credits and licences', null, `<div class="keys"><a class="ghost" href="/${esc(g.id)}/">${icon('arrow')}<span>Back to ${esc(g.name)}</span></a></div>`)}
 <div class="wrap">${of}${texts.map(({ file, text }) => `<p class="sec">${esc(file)}</p><pre class="licence">${esc(text)}</pre>`).join('')}</div>`,
   });

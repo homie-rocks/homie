@@ -13,6 +13,7 @@
  * itself is never sent to Cloudflare, never written to a file, and lives for its hours only. A studio running
  * locally (`npm run dev`, a loopback --url) uses the local D1.
  */
+import { networkInterfaces } from 'node:os';
 import { createHash, randomBytes } from 'node:crypto';
 import { runner } from './cloudflare.mjs';
 import { readStudio, siteUrl, writeStudio } from './studio.mjs';
@@ -21,7 +22,7 @@ const HOUR = 3600_000;
 const RANGES = new Set(['1d', '7d', '30d', '90d']);
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
-export const loopback = (url) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
+export const loopback = (url) => { try { return ['127.0.0.1', 'localhost', '[::1]', ...Object.values(networkInterfaces()).flat().filter((n) => n?.family === 'IPv4').map((n) => n.address)].includes(new URL(url).hostname); } catch { return false; } };
 
 export function siteOf(root, url) {
   const studio = readStudio(root);

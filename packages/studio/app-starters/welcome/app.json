@@ -1,0 +1,106 @@
+{
+  "id": "welcome",
+  "name": "Welcome together",
+  "blurb": "A little place to gather. Join the queue, keep your ticket, and see when it is your turn.",
+  "entry": "src/main.ts",
+  "roles": {
+    "customer": {
+      "signIn": false,
+      "can": [
+        "read:queue",
+        "create:queue"
+      ]
+    },
+    "wall": {
+      "signIn": false,
+      "can": [
+        "read:queue"
+      ]
+    },
+    "staff": {
+      "signIn": true,
+      "can": [
+        "read:queue",
+        "update:queue",
+        "delete:queue"
+      ]
+    }
+  },
+  "surfaces": {
+    "phone": "customer",
+    "wall": "wall",
+    "kiosk": "customer",
+    "tablet": "staff"
+  },
+  "words": {
+    "open": "Open",
+    "join": "Scan to join",
+    "one": "person",
+    "many": "people"
+  },
+  "records": {
+    "persist": true,
+    "collections": {
+      "queue": {
+        "fields": {
+          "label": {
+            "type": "string",
+            "required": true,
+            "maxLength": 24
+          },
+          "status": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "waiting",
+              "called"
+            ],
+            "initial": "waiting"
+          }
+        }
+      }
+    }
+  },
+  "parts": [
+    "queue",
+    "ticket",
+    "welcome-scene"
+  ],
+  "netplay": {
+    "v": 1,
+    "public": true,
+    "version": "1",
+    "params": [
+      "role",
+      "surface",
+      "ticket"
+    ]
+  },
+  "playerCard": false,
+  "chat": false,
+  "agents": {
+    "vote": false
+  },
+  "watch": "overview",
+  "screen": {
+    "join": "bottom-right",
+    "share": "top-right"
+  },
+  "needs": {
+    "three": "0.185.1",
+    "@homie-rocks/camera": "0.2.1",
+    "@homie-rocks/geom": "0.1.1"
+  },
+  "check": {
+    "action": "[data-join]",
+    "observe": "[data-count]",
+    "surface": "phone"
+  },
+  "landing": {
+    "pitch": "A warm welcome. A place in line. One screen, together.",
+    "controls": {
+      "phone": "Join once and keep your ticket.",
+      "computer": "Staff call the next person from their signed-in tablet."
+    }
+  }
+}

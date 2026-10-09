@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 /**
  * `homie-studio dev` and `dev --stop`: the whole site on this computer (pages, rooms in a local Durable Object, D1),
  * and exactly this studio's dev server stopped, never another project's.
@@ -32,7 +33,7 @@ import { detectLocalAi, localAiVars } from './local-ai.mjs';
 import { projectsCloudflareEnv } from './projects-env.mjs';
 import { routesOf } from './routes.mjs';
 import { ensureMigrations, migrationWord } from './scaffold.mjs';
-import { isRulesGame, listGames, workerDir } from './studio.mjs';
+import { isRulesGame, listExperiences as listGames, workerDir } from './studio.mjs';
 
 export const devFile = (root) => join(workerDir(root), '.wrangler', 'homie-dev.json');
 
@@ -289,7 +290,7 @@ function passLines(stream, to, opts) {
  * saved. `rulesStamp` is what it compares: the newest change among them, and how many there are.
  */
 export function rulesStamp(g) {
-  const files = [join(g.dir, 'game.json'), join(g.dir, 'tunables.json')];
+  const files = [join(g.dir, g.kind === 'app' ? 'app.json' : 'game.json'), join(g.dir, 'tunables.json')];
   for (const sub of ['src', 'map']) {
     const dir = join(g.dir, sub);
     if (existsSync(dir)) for (const name of readdirSync(dir, { recursive: true })) files.push(join(dir, String(name)));
@@ -306,7 +307,7 @@ const builtIds = (root) => { try { return JSON.parse(readFileSync(join(root, 'si
  * `homie-studio dev`: build once, then Wrangler's local runtime until it is stopped. Returns the command's result.
  * options: port, remoteAi, localAi (false: --no-local-ai), timestamps (every line of Wrangler's gets a time), log.
  */
-export async function dev(root, { port: askedPort = 8787, remoteAi = false, localAi = true, timestamps = false, log = () => {}, watchMs = 2000 } = {}) {
+export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi = false, localAi = true, timestamps = false, log = () => {}, watchMs = 2000 } = {}) {
   const port = String(askedPort ?? 8787);
   const stop = 'npx --no-install homie-studio dev --stop';
 
@@ -344,6 +345,7 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
   });
   const origin = `http://127.0.0.1:${port}`;
   log(`Local site: ${origin}/  (each game: ${origin}/<id>/play — open it in two browsers)`);
+  if (lan) for (const address of lanAddresses()) log(`Same Wi-Fi: http://${address}:${port}/ (open this address on phones and wall screens)`);
   const ai = devConfig(root, remoteAi);
   if (ai.note) log(ai.note);
   // The person's own Clef (0.24.4, lib/local-ai.mjs): with Ollama and clef-flash on this computer, the local Worker's
@@ -356,7 +358,7 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
   }
   // --remote-ai: Wrangler's --local turns every remote binding off ("not supported"), so a dev with the real Workers AI
   // (the guides' brains, room chat's review) runs without it; everything else stays local all the same.
-  const args = ['dev', ...(remoteAi ? [] : ['--local']), '--ip', '127.0.0.1', '--port', port, '--var', 'HOMIE_EMBED_PREVIEW:1', ...ai.args, ...localVars];
+  const args = ['dev', ...(remoteAi ? [] : ['--local']), '--ip', lan ? '0.0.0.0' : '127.0.0.1', '--port', port, '--var', 'HOMIE_EMBED_PREVIEW:1', ...ai.args, ...localVars];
   log(`Stop it with: ${stop}   (this studio's dev server only)`);
 
   let child = null;
@@ -390,7 +392,7 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
       for (const g of listGames(root)) {
         if (built.includes(g.id) || told.has(g.id)) continue;
         told.add(g.id);
-        log(`games/${g.id} is new and not built yet, so ${origin}/${g.id}/play is a 404 for now. Build it (npx --no-install homie-studio build): this dev server serves what build wrote and picks the new game up by itself.`);
+        log(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id} is new and not built yet, so ${origin}/${g.id}/play is a 404 for now. Build it (npx --no-install homie-studio build): this dev server serves what build wrote and picks the new game up by itself.`);
       }
       for (const id of built) {
         if (startedWith.has(id)) continue;
@@ -412,17 +414,20 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
   };
   // A rules game saved while dev runs is built again (see rulesStamp), one game at a time.
   const stamps = new Map(listGames(root).filter(isRulesGame).map((g) => [g.id, rulesStamp(g)]));
+  const timingRetries = new Map();
   let rebuilding = false;
   let published = Promise.resolve();
   const rulesLook = async () => {
     if (rebuilding || ending) return;
     for (const g of listGames(root).filter(isRulesGame)) {
       const now = rulesStamp(g);
-      if (stamps.get(g.id) === now) continue;
+      const retry = timingRetries.get(g.id);
+      if (stamps.get(g.id) === now && !(retry?.stamp === now && Date.now() >= retry.at)) continue;
+      if (retry?.stamp !== now) timingRetries.delete(g.id);
       stamps.set(g.id, now);
       rebuilding = true;
       try {
-        log(`games/${g.id} changed: checking its rules and building it again…`);
+        log(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id} changed: checking its rules and building it again…`);
         const hash = () => { try { return JSON.parse(readFileSync(join(root, 'site/dist/games.json'), 'utf8')).games.find((x) => x.id === g.id)?.room?.stateHash; } catch { return null; } };
         const before = hash();
         let release;
@@ -439,9 +444,17 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
             await stopped;
           } });
         } finally { release(); }
-        log(`games/${g.id} is rebuilt. ${before && before === hash() ? 'Local rooms resume their saved match; pages reconnect.' : 'The stored shape changed: local rooms reset to a fresh match; pages reconnect.'}`);
+        timingRetries.delete(g.id);
+        log(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id} is rebuilt. ${before && before === hash() ? 'Local rooms resume their saved match; pages reconnect.' : 'The stored shape changed: local rooms reset to a fresh match; pages reconnect.'}`);
       } catch (error) {
-        log(`games/${g.id} did not build, so the local site still runs what it had:\n${String(error?.message ?? error)}`);
+        log(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id} did not build, so the local site still runs what it had:\n${String(error?.message ?? error)}`);
+        // A busy machine can fail the wall-clock tick guard once. Keep the guard, resample at most three times,
+        // and never retry syntax, contract or deterministic budget failures until the author edits them.
+        const attempts = timingRetries.get(g.id)?.attempts ?? 0;
+        if (/rules ran for .*seconds with bots and were too slow/.test(String(error?.message ?? error)) && attempts < 3) {
+          timingRetries.set(g.id, { stamp: now, attempts: attempts + 1, at: Date.now() + 10000 });
+          log(`${g.id}: retrying the timing check in 10 seconds (${attempts + 1}/3); the last good build stays live.`);
+        } else timingRetries.delete(g.id);
       } finally { rebuilding = false; }
       return;
     }
@@ -483,4 +496,8 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
   rmSync(devFile(root), { force: true });
   if (failed) return { ok: false, command: 'dev', needs: 'local-rooms', socket: failed.socket, expected: failed.expected, why: failed.why };
   return { ok: true, command: 'dev', stopped: true };
+}
+
+export function lanAddresses(interfaces = networkInterfaces()) {
+  return [...new Set(Object.values(interfaces).flat().filter((n) => n && !n.internal && n.family === 'IPv4' && !n.address.startsWith('169.254.')).map((n) => n.address))].sort();
 }

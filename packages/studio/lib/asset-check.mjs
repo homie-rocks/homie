@@ -1,3 +1,4 @@
+import { experienceDir, experienceFile } from './studio.mjs';
 /**
  * `homie-studio assets check <id>`: static, free, on every asset and on the whole game. What it adds up is an
  * INVENTORY ESTIMATE: the recorded files' own triangles, draw calls and pictures times their declared placements. It
@@ -74,7 +75,7 @@ const tierOf = (a) => (a.kind === 'clip' ? 'clip' : BUDGETS[a.tier] ? a.tier : a
 
 /** A game's game.json, or {} (a planned game has none yet). */
 export function gameJson(root, id) {
-  try { return JSON.parse(readFileSync(join(root, 'games', id, 'game.json'), 'utf8')) ?? {}; } catch { return {}; }
+  try { return JSON.parse(readFileSync(experienceFile(root, id), 'utf8')) ?? {}; } catch { return {}; }
 }
 
 /*
@@ -238,7 +239,7 @@ export async function assetsCheck(root, id, { validate = true, write = true } = 
   const doc = readDecisions(root, id);
   const game = gameJson(root, id);
   const budgets = budgetsFor(doc, game);
-  const gdir = join(root, 'games', id);
+  const gdir = experienceDir(root, id);
   let tools = null;
   try { tools = await import('./optimise.mjs'); } catch { tools = null; }
   const rows = [];

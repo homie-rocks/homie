@@ -28,7 +28,7 @@ import { readManifest, recordAsset, writeManifest } from './asset-manifest.mjs';
 import { VERBS, VERB_IDS, bakeLibrary, findClip, gaitOf, rigOf, writeLibrary } from './clips.mjs';
 import { readDecisions } from './decisions.mjs';
 import { FAMILIES, normaliseRig, skeletonOf, socketBone } from './rig.mjs';
-import { GAME_ID } from './studio.mjs';
+import { experienceDir, experienceFile, GAME_ID } from './studio.mjs';
 
 /** Where humanoid clips come from when a character has none of its own: KayKit's adventurers (CC0, 76 clips). */
 export const CLIP_SOURCES = Object.freeze({
@@ -146,7 +146,7 @@ function appendClips(into, from) {
  * `own`: its own clips (a clip source) or null. Returns { path, skeleton, verbs, clips, missing, bytes, entry }.
  */
 async function bakeFor(root, game, rig, own, verbs, { from = null, lib = null, cache = new Map(), license = null } = {}) {
-  const gdir = join(root, 'games', game);
+  const gdir = join(experienceDir(root, game));
   const skel = rig.skeleton;
   const fallback = from ?? CLIP_SOURCES[skel.family] ?? null;
   const existing = await existingLibrary(gdir, skel.id);
@@ -206,7 +206,7 @@ async function bakeFor(root, game, rig, own, verbs, { from = null, lib = null, c
  */
 export async function addCharacter(root, game, opts = {}) {
   if (!GAME_ID.test(String(game ?? ''))) throw new Error(`"${game}" is not a game id`);
-  const gdir = join(root, 'games', game);
+  const gdir = join(experienceDir(root, game));
   if (!existsSync(join(gdir, 'game.json')) && !existsSync(join(gdir, 'CODEX.md'))) throw new Error(`no game "${game}"`);
   const t = await tools();
   const { optimiseModel, measureDoc } = await import('./optimise.mjs');
@@ -297,7 +297,7 @@ export async function bakeClips(root, game, asset, { verbs = [], from = null, li
   if (!a?.rig) throw new Error(`${asset} is not a rigged character in ${game} (assets add brings one in)`);
   const t = await tools();
   const model = a.files.find((f) => f.role === 'model');
-  const doc = await t.io.readBinary(readFileSync(join(root, 'games', game, model.path)));
+  const doc = await t.io.readBinary(readFileSync(join(experienceDir(root, game), model.path)));
   doc.setLogger(t.logger);
   const rig = rigOf(doc);
   if (rig.skeleton.id !== a.rig.skeleton) rig.skeleton.id = a.rig.skeleton;
@@ -368,7 +368,7 @@ export async function measureGait(root, game, assetId) {
   const a = m.assets.find((x) => x.id === assetId);
   const model = (a?.files ?? []).find((f) => f.role === 'model');
   if (!a?.rig || !model) return null;
-  const gdir = join(root, 'games', game);
+  const gdir = join(experienceDir(root, game));
   const t = await tools();
   const read = async (rel) => { const d = await t.io.readBinary(readFileSync(join(gdir, rel))); d.setLogger(t.logger); return d; };
   const rig = rigOf(await read(model.path));
@@ -420,7 +420,7 @@ export function animPlan(root, game) {
   return {
     ok: true, command: 'anim plan', game, verbs: need, rows, unrigged,
     decisions: Object.fromEntries(['anim.style', 'anim.clips', 'anim.source', 'anim.motion', 'anim.blend', 'anim.procedural', 'rig.skeleton', 'rig.source', 'rig.bones', 'game.feel'].map((k) => [k, d[k] ? { label: d[k].label, state: d[k].state } : null])),
-    lab: existsSync(join(root, 'games', game, 'lab.json')) ? JSON.parse(readFileSync(join(root, 'games', game, 'lab.json'), 'utf8')) : null,
+    lab: existsSync(join(experienceDir(root, game), 'lab.json')) ? JSON.parse(readFileSync(join(experienceDir(root, game), 'lab.json'), 'utf8')) : null,
   };
 }
 
@@ -434,7 +434,7 @@ export async function animPreview(root, game, { asset = null, verbs = null, size
   const rows = plan.rows.filter((r) => !asset || r.id === asset);
   if (!rows.length) return { ok: false, command: 'anim preview', game, why: asset ? `${asset} is not a rigged character in ${game}` : `${game} has no rigged characters yet (assets add <game> <character item>)` };
   const m = readManifest(root, game);
-  const gdir = join(root, 'games', game);
+  const gdir = join(experienceDir(root, game));
   let tokens = null;
   try { tokens = JSON.parse(readFileSync(join(gdir, 'style.json'), 'utf8')); } catch { tokens = null; }
   tokens = tokens?.palette ? tokens : { palette: { bg: '#e9eef2', ink: '#1d2b3a', accent: '#ff8a5b', accent2: '#5cbf8a', danger: '#e2553f', good: '#45b36b', gold: '#ffd25a' } };

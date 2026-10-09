@@ -28,7 +28,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, watch, writeFileSync } from 'node:fs';
 import { extname, join, normalize, relative, resolve, sep } from 'node:path';
 import { buildGameFiles, studioEsbuild } from './build.mjs';
-import { GAME_ID, PACKAGE_ROOT, listGames, readStudio } from './studio.mjs';
+import { experienceDir, experienceFile, GAME_ID, PACKAGE_ROOT, listExperiences as listGames, readStudio } from './studio.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { formatLabFile, formatTunables, readLabFile, checkTake, setTunables, tunableValue, TAKE_NAME } from '../lab/take.js';
 
@@ -123,16 +123,16 @@ export function commitOf(root, ref = 'HEAD') {
 
 /** Whether games/<id>/ differs from HEAD (staged, changed or new files). */
 export function dirtyOf(root, id) {
-  const r = git(root, ['status', '--porcelain', '--', `games/${id}`]);
+  const r = git(root, ['status', '--porcelain', '--', relative(root, experienceDir(root, id))]);
   return r.status === 0 ? r.stdout.trim().split('\n').filter(Boolean).length : null;
 }
 
 /** The paths of `sha` that New's bundle read from outside games/<id>/ (a shared folder), plus the game's own. */
 function pathsFor(root, id, sha, metafile) {
-  const want = new Set([`games/${id}`]);
+  const want = new Set([relative(root, experienceDir(root, id))]);
   for (const input of Object.keys(metafile?.inputs ?? {})) {
     const rel = input.split(sep).join('/');
-    if (rel.startsWith('node_modules/') || rel.startsWith('../') || rel.startsWith('/') || rel.startsWith(`games/${id}/`) || rel.includes('/node_modules/')) continue;
+    if (rel.startsWith('node_modules/') || rel.startsWith('../') || rel.startsWith('/') || rel.startsWith(relative(root, experienceDir(root, id)) + '/') || rel.includes('/node_modules/')) continue;
     want.add(rel);
   }
   for (const f of ['package.json', 'studio.json']) want.add(f);
@@ -146,7 +146,7 @@ function checkout(root, id, sha, paths) {
   const dir = join(labDir(root, id), 'checkout');
   const stamp = join(labDir(root, id), 'checkout.json');
   const had = readJson(stamp);
-  if (had?.sha === sha && JSON.stringify(had.paths) === JSON.stringify(paths) && existsSync(join(dir, 'games', id))) return dir;
+  if (had?.sha === sha && JSON.stringify(had.paths) === JSON.stringify(paths) && existsSync(experienceDir(dir, id))) return dir;
   removeCheckout(root, dir);
   mkdirSync(labDir(root, id), { recursive: true });
   const add = git(root, ['worktree', 'add', '--no-checkout', '--detach', dir, sha]);
@@ -154,8 +154,8 @@ function checkout(root, id, sha, paths) {
   const co = git(dir, ['checkout', sha, '--', ...paths]);
   if (co.status !== 0) throw new Error(`git could not check out games/${id} at ${sha.slice(0, 7)}: ${(co.stderr || co.stdout).trim().split('\n').pop()}`);
   // A game with its own build (game.json build.mode "command") builds with its own node_modules: the working tree's.
-  const nm = join(root, 'games', id, 'node_modules');
-  if (existsSync(nm) && existsSync(join(dir, 'games', id)) && !existsSync(join(dir, 'games', id, 'node_modules'))) { try { symlinkSync(nm, join(dir, 'games', id, 'node_modules'), 'dir'); } catch { /* builds without */ } }
+  const nm = join(experienceDir(root, id), 'node_modules');
+  if (existsSync(nm) && existsSync(experienceDir(dir, id)) && !existsSync(join(experienceDir(dir, id), 'node_modules'))) { try { symlinkSync(nm, join(experienceDir(dir, id), 'node_modules'), 'dir'); } catch { /* builds without */ } }
   writeFileSync(stamp, `${JSON.stringify({ sha, paths, at: new Date().toISOString() })}\n`);
   return dir;
 }
@@ -243,7 +243,7 @@ class Builds {
     // A commit changes Today: look every 2 s (one cheap `git rev-parse`).
     this.refTimer = setInterval(() => { void this.followRef(); }, 2000);
     this.refTimer.unref?.();
-    const dir = join(this.root, 'games', this.id);
+    const dir = experienceDir(this.root, this.id);
     try {
       this.watcher = watch(dir, { recursive: true }, (_e, file) => {
         const f = String(file ?? '');

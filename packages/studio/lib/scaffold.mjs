@@ -1,3 +1,4 @@
+import { APPS_MIGRATION, APPS_MIGRATION_FILE } from '../worker/app-records.mjs';
 /**
  * `homie-studio new <folder> --name "<Studio Name>"` — a studio is ONE
  * monorepo: a visible folder the person opens in Claude or Codex.
@@ -130,6 +131,16 @@ directory lists its games; homie.rocks does not host them.
 | \`perf/\` | Performance reports, one folder per game (the Homie plugin's \`perf\` skill): \`README.md\` (the goal, before and after with the noise, every change tried and why it was kept or reverted), \`numbers.json\` and \`before-after/\`. The raw runs, screenshots and CPU profiles stay in \`.perf/\`, which git ignores. |
 | \`studio.json\` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. \`.studio/\` (git-ignored) is this computer's own state. |
 | \`.claude/skills/\` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |
+
+## Apps: one screen, roles and parts
+
+An app lives in \`apps/<id>/app.json\` and \`src/\`. Make one with \`homie-studio app new <id>\` (or \`app_make\`). Use the Homie plugin's \`app\` skill for businesses, venues, causes and customer apps. No game demo, rounds, scores, bots or mandatory fun: build what the person needs with the fewest human steps.
+
+An app is ONE screen that morphs with context: camera moves, panels unfold, its roles see and do different things, and parts plug into the scene. No page-to-page navigation or menus of links inside it. Use all the same engine packages and media skills as games (camera, geom, props, render, postfx, fx, audio, input, ui-world; style, art, models, animate, music, sound, video). It can be fully 3D and wild while remaining useful and legible.
+
+Declare roles, surfaces, words and lasting record collections in app.json. Netplay's host is not a staff permission. Use \`@homie-rocks/studio/apps\` for authorized lasting records and \`@homie-rocks/studio/links\` for ticket links, QR and HTTP-safe IDs. Staff use private role links plus existing account grants; keep private records out of public collections. Look for engine mechanisms and shared parts before writing a component. Credit licences; sharing is optional and separate from selling.
+
+Build normally, run \`homie-studio dev --lan\`, then \`homie-studio check <id> --url <origin>\`: the app check proves an actual action across a wall and two phones plus reconnect. The public screen is \`/<id>/open\`, the wall \`/<id>/tv\`. Customer apps use the same \`standalone\` build for desktop/iOS/Android; its existing sign-in and store limitations still apply. See \`node_modules/@homie-rocks/studio/apps/APPS.md\`.
 
 ## Commands (all through the pinned CLI in node_modules)
 
@@ -700,6 +711,7 @@ export function studioFiles({ name, slug, homie, template = false }) {
     'studio.json': `${JSON.stringify(studio, null, 2)}\n`,
     'package.json': `${JSON.stringify(pkg, null, 2)}\n`,
     '.gitignore': GITIGNORE,
+    'apps/README.md': 'One folder per app: app.json, index.html and src/. One transforming screen, its roles and its parts. Start with `npx --no-install homie-studio app new <id>`. The app guide explains lasting records, staff sign-in, LAN preview and standalone builds.\n',
     'games/README.md': 'One folder per game. A new studio has none (its home page says "First game coming soon"). Start one with `npx --no-install homie-studio game new <id> --from gem-rush` when the person asks for a copy of the starter, or once their game is planned.\n',
     'music/README.md': 'Songs, game scores, loops and stems, one folder each (`music/<slug>/`). `manifest.json` lists them (`node_modules/@homie-rocks/studio/media/MEDIA.md`); a published entry gets a page at `/music/<slug>/`. Without storage the site serves files up to 25 MiB itself. With storage (`npx --no-install homie-studio storage add`), the big ones live in the studio\'s R2: `npx --no-install homie-studio media move` and every deploy put them there, checked by SHA-256, at the same address. Never into git.\n',
     'music/manifest.json': '{ "v": 1, "items": [] }\n',
@@ -728,6 +740,7 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
     [`site/migrations/${SHOP_RESERVATIONS_FILE}`]: SHOP_RESERVATIONS,
     [`site/migrations/${SHOP_STATEMENTS_FILE}`]: SHOP_STATEMENTS,
     [`site/migrations/${SHOP_LINES_FILE}`]: SHOP_LINES,
+    [`site/migrations/${APPS_MIGRATION_FILE}`]: APPS_MIGRATION,
     [`site/migrations/${LOUNGE_MIGRATION_FILE}`]: LOUNGE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
@@ -877,13 +890,19 @@ function ensureLoungeMigration(root) {
   return `site/migrations/${LOUNGE_MIGRATION_FILE}`;
 }
 
+function ensureAppsMigration(root) {
+  const file = join(root, 'site', 'migrations', APPS_MIGRATION_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, APPS_MIGRATION);
+  return `site/migrations/${APPS_MIGRATION_FILE}`;
+}
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
 export function migrationWord(file) {
-  return /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
+  return /studio_apps/.test(file) ? 'apps: lasting records and signed-in role grants' : /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
 }
 
 /**

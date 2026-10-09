@@ -1,10 +1,12 @@
 # @homie-rocks/studio
 
-A studio for games, music and video on its own Cloudflare. One repository (`AGENTS.md`,
-`games/`, `music/`, `videos/`, `posts/`, `site/`), multiplayer games on the Homie netplay
+A studio for games, apps, music and video on its own Cloudflare. One repository (`AGENTS.md`,
+`games/`, `apps/`, `music/`, `videos/`, `posts/`, `site/`), multiplayer games on the Homie netplay
 contract (every browser renders, strangers meet in public rooms, bots fill seats, rounds
 restart), and a site Worker with Table/Lobby Durable Objects and D1 that the studio deploys
 to its own Cloudflare account with Wrangler. The homie.rocks directory lists the games.
+
+Apps are one morphing screen, its roles and its parts: a customer phone, a staff tablet and a wall can share a 3D scene without rounds or scores. `homie-studio app new welcome` creates a working welcome queue in `apps/welcome/`; install its declared dependencies, build, then use `dev --lan` and the printed Wi-Fi address. `check welcome --url <origin>` proves a shared action and reconnect across three screens. Staff permissions, lasting D1 records, public QR/link helpers and customer standalone builds use the existing studio machinery. See [the app guide](apps/APPS.md).
 
 Most people never run this by hand: the Homie plugin for Claude Code, Codex and Grok does,
 and the person approves Cloudflare once in their browser.

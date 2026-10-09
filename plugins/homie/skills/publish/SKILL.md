@@ -6,6 +6,9 @@ metadata:
   providers: cloudflare
 ---
 
+**Apps:** For a business, venue, cause or customer app, follow the `app` skill: `apps/<id>/app.json`, one morphing screen, roles and parts. Reuse these engines and workflows; do not impose game rounds, scores, bots, a game demo or page navigation. The app check proves shared actions and reconnect; app stores use the same standalone command.
+
+
 # Publish a studio
 
 A studio's site runs on the studio's own Cloudflare account; homie.rocks only lists it.

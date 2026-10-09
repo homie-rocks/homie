@@ -4,9 +4,9 @@
  * Worker: `app://game` in the desktop app (Electron), `capacitor://localhost` on iOS and `https://localhost` on
  * Android (Capacitor). Those three are fixed by the shells, never by a game.
  *
- * What an app origin may do here is ONE thing: ask the Lobby which public room to join (`POST /<game>/api/lobby`),
+ * A native shell may use public records for an app kind (worker/app-records.mjs), and otherwise: ask the Lobby which public room to join (`POST /<game>/api/lobby`),
  * and read the answer. The room's socket (`/<game>/__net`) never asked where a page came from, so it needs nothing.
- * Everything else a page of this site does stays this site's own: no credentials are allowed across (there is no
+ * Privileged records and everything else a page of this site does stay this site's own: no credentials are allowed across (there is no
  * `access-control-allow-credentials` anywhere here), the lobby is never opened to `*`, and the POSTs that check
  * `sameOrigin` (players, saves, the shop, chat reports, the office) still refuse an app, as they refuse any other
  * site. So an app has no account, no cloud saves and no shop, and says so.

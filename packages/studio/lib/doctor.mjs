@@ -50,7 +50,7 @@ import { detectLocalAi } from './local-ai.mjs';
 import { findChrome } from './chrome.mjs';
 import { whyFailed } from './net.mjs';
 import { isOurs } from './statusline.mjs';
-import { findStudio, listGames, readLocal, readStudio } from './studio.mjs';
+import { findStudio, listExperiences as listGames, readLocal, readStudio } from './studio.mjs';
 import { standaloneRows } from './standalone.mjs';
 import { projectsCloudflareEnv, projectsElevenLabs } from './projects-env.mjs';
 import { STUDIO_VERSION } from './version.mjs';

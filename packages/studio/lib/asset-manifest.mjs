@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { pinByUse, readDecisions, revisionsFor } from './decisions.mjs';
-import { GAME_ID } from './studio.mjs';
+import { experienceDir, experienceFile, GAME_ID } from './studio.mjs';
 
 export const MANIFEST_FILE = join('assets', 'manifest.json');
 export const RIGHTS_FILE = join('assets', 'RIGHTS.md');
@@ -81,7 +81,7 @@ export function underFor(kind, route) {
   return [...(UNDER[kind] ?? UNDER.prop), ...(route === 'library' ? ['cast.family'] : []), ...(route === 'generated' ? ['derived.prompt'] : [])];
 }
 
-const fileOf = (root, id) => join(root, 'games', id, MANIFEST_FILE);
+const fileOf = (root, id) => join(experienceDir(root, id), MANIFEST_FILE);
 const now = () => new Date().toISOString();
 const clean = (s, n = 300) => (typeof s === 'string' ? s.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, n) : null);
 
@@ -167,7 +167,7 @@ export function removeAsset(root, id, assetId) {
   writeManifest(root, id, manifest);
   writeRights(root, id, manifest);
   syncCredits(root, id, manifest);
-  const gdir = join(root, 'games', id);
+  const gdir = join(experienceDir(root, id));
   const named = new Set(manifest.assets.flatMap((a) => (a.files ?? []).map((f) => f.path)));
   const deleted = []; const kept = [];
   for (const f of gone.files ?? []) {
@@ -216,7 +216,7 @@ export function licenceProblems(root, id, manifest = readManifest(root, id)) {
 
 /** Model files a game ships (.glb, .gltf, .fbx, .obj, .vrm under games/<id>/) that no manifest entry names. */
 export function unrecordedModels(root, id, manifest = readManifest(root, id)) {
-  const dir = join(root, 'games', id);
+  const dir = join(experienceDir(root, id));
   const named = new Set(manifest.assets.flatMap((a) => (a.files ?? []).map((f) => f.path)));
   const out = [];
   const walk = (rel, depth) => {
@@ -245,7 +245,7 @@ const PICTURE = /\.(png|jpe?g|webp|avif|gif|hdr|exr|ktx2)$/i;
  * The codex (private, the style board's own swatches) is not walked at all.
  */
 export function unrecordedPictures(root, id, manifest = readManifest(root, id), { cover = null } = {}) {
-  const dir = join(root, 'games', id);
+  const dir = join(experienceDir(root, id));
   const named = new Set(manifest.assets.flatMap((a) => (a.files ?? []).map((f) => f.path)));
   const coverPaths = new Set(cover ? [String(cover).replace(/^\.\//, ''), `public/${String(cover).replace(/^\.\//, '')}`] : []);
   const shipped = []; const notShipped = [];
@@ -296,7 +296,7 @@ function routeWords(a) {
 /** RIGHTS.md for one game, in plain words. */
 export function rightsMarkdown(root, id, manifest = readManifest(root, id)) {
   let game = {};
-  try { game = JSON.parse(readFileSync(join(root, 'games', id, 'game.json'), 'utf8')); } catch { game = {}; }
+  try { game = JSON.parse(readFileSync(experienceFile(root, id), 'utf8')); } catch { game = {}; }
   const lines = [
     `# Rights: ${game.name ?? id}`,
     '',
@@ -333,7 +333,7 @@ function termsApply(t, a) {
 }
 
 export function writeRights(root, id, manifest = readManifest(root, id)) {
-  const file = join(root, 'games', id, RIGHTS_FILE);
+  const file = join(experienceDir(root, id), RIGHTS_FILE);
   mkdirSync(dirname(file), { recursive: true });
   const text = rightsMarkdown(root, id, manifest);
   if (!existsSync(file) || readFileSync(file, 'utf8') !== text) writeFileSync(file, text);
@@ -347,7 +347,7 @@ export function writeRights(root, id, manifest = readManifest(root, id)) {
  * and one per attribution-required file. Lines this function wrote carry `"asset": true`; every other part stays.
  */
 export function syncCredits(root, id, manifest = readManifest(root, id)) {
-  const file = join(root, 'games', id, 'credits.json');
+  const file = join(experienceDir(root, id), 'credits.json');
   let credits = {};
   try { credits = JSON.parse(readFileSync(file, 'utf8')); } catch { credits = {}; }
   const before = Array.isArray(credits.parts) ? credits.parts : [];

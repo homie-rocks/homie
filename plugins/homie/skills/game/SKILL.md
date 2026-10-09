@@ -6,6 +6,9 @@ metadata:
   providers: cloudflare github ollama
 ---
 
+**Apps:** For a business, venue, cause or customer app, follow the `app` skill: `apps/<id>/app.json`, one morphing screen, roles and parts. Reuse these engines and workflows; do not impose game rounds, scores, bots, a game demo or page navigation. The app check proves shared actions and reconnect; app stores use the same standalone command.
+
+
 # Make a game
 
 You are in a Homie studio when the folder (or one above it) has `studio.json`. If there
