@@ -1,8 +1,8 @@
 /**
  * THE STUDIO'S OWN STRIPE, from its Worker (@homie-rocks/studio 0.24.0). No SDK: a few form-encoded calls with the
- * studio's restricted key (a Worker secret), and Stripe's documented webhook signature check with WebCrypto.
+ * studio's key (a Worker secret), and Stripe's documented webhook signature check with WebCrypto.
  *
- *   createCheckoutSession(env, params)   POST /v1/checkout/sessions (Stripe's hosted page; the TV never calls it)
+ *   createCheckoutSession(env, params)   POST /v1/checkout/sessions (Stripe's hosted page)
  *   createRefund(env, params)            POST /v1/refunds (only ever from the owner's tap, or a confirmed ask)
  *   webhook endpoints                    list, create and turn off: only `homie-studio shop connect` calls these, on the
  *                                        owner's computer with the key the owner pasted there (0.24.3), so a new
@@ -18,12 +18,12 @@
 /** The API version the kit is written against: the first one Managed Payments takes ("2025-03-31.basil or later"). */
 export const STRIPE_VERSION = '2025-03-31.basil';
 export const STRIPE_API = 'https://api.stripe.com';
-/** The webhook's freshness window, as Stripe's own libraries use: a replayed old event is refused. */
+/** Stripe's replay defense: https://docs.stripe.com/webhooks#preventing-replay-attacks */
 export const TOLERANCE_S = 300;
 
-/** A restricted key (rk_test_/rk_live_), or a test secret key for local tests. A live full secret key is refused. */
-export const KEY_SHAPE = /^(?:rk_(?:test|live)|sk_test)_[A-Za-z0-9]{10,247}$/;
-export const WEBHOOK_SECRET_SHAPE = /^whsec_[A-Za-z0-9+/=_-]{16,200}$/;
+/** Stripe key types: https://docs.stripe.com/keys — the studio chooses restricted or secret keys. */
+export const KEY_SHAPE = /^(?:rk|sk)_(?:test|live)_[A-Za-z0-9]+$/;
+export const WEBHOOK_SECRET_SHAPE = /^whsec_[A-Za-z0-9+/=_-]+$/;
 
 /** test or live, from the key alone (never by calling Stripe). */
 export const modeOf = (key) => (/^(?:rk|sk)_live_/.test(String(key ?? '')) ? 'live' : 'test');

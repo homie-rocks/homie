@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { askedFor, withKey } from './office.mjs';
 import { runner } from './cloudflare.mjs';
 import { listGames, readStudio, siteUrl } from './studio.mjs';
-import { POLICY_PRESETS, SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
+import { SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
 import {
   KEY_SHAPE, STRIPE_VERSION, StripeError, WEBHOOK_SECRET_SHAPE, createWebhookEndpoint, expireCheckoutSession, isPermissionError, listWebhookEndpoints, modeOf,
   stripeCall, updateWebhookEndpoint,
@@ -77,10 +77,10 @@ export function shopForBuild(root, { log = () => {} } = {}) {
 export function shopCheck(root) {
   const r = readShop(root);
   if (r.absent) return { ok: true, command: 'shop check', absent: true, message: 'No shop.json: this studio sells nothing (homie-studio shop init writes one).' };
-  return { ok: r.ok, command: 'shop check', policy: r.shop?.policy, capPerPlayerMonth: r.shop?.capPerPlayerMonth, refundDays: r.shop?.refundDays, errors: r.errors, warnings: r.warnings, items: r.shop?.items.map((i) => `${i.id} (${i.kind}, ${i.kind === 'tip' ? 'pay what you want' : money(i.price, r.shop.currency)})`) ?? [], till: r.shop?.till ?? null, why: r.ok ? undefined : `shop.json: ${r.errors.map((e) => `${e.at}: ${e.message}`).join('; ')}` };
+  return { ok: r.ok, command: 'shop check', policy: r.shop?.policy, capPerPlayerMonth: r.shop?.capPerPlayerMonth, refundDays: r.shop?.refundDays, errors: r.errors, warnings: r.warnings, items: r.shop?.items.map((i) => `${i.id} (${i.kind}, ${i.price === 'choose' ? 'pay what you want' : money(i.price, r.shop.currency)})`) ?? [], till: r.shop?.till ?? null, why: r.ok ? undefined : `shop.json: ${r.errors.map((e) => `${e.at}: ${e.message}`).join('; ')}` };
 }
 
-/** The Supporter pack the kit suggests first: deterministic, never pay-to-win, a badge on the profile and in rooms. */
+/** The Supporter pack the kit suggests first: a badge on the profile and in rooms; the studio can replace or edit it. */
 export function supporterItem({ price = 500, days = 365, name = 'Supporter' } = {}) {
   return { id: 'supporter', kind: 'supporter', name, price, days, gives: ['badge:supporter'], badge: 'Supporter', blurb: 'A Supporter badge on your account and beside your name in rooms, for a year. It changes nothing about how any game plays.' };
 }
@@ -91,7 +91,6 @@ export function shopInit(root, { supporter = false, currency = 'usd', price = 50
   const studio = readStudio(root);
   const shop = {
     till: managed ? 'stripe-managed' : 'stripe', currency: String(currency).toLowerCase(),
-    policy: { preset: 'protective', ...POLICY_PRESETS.protective },
     items: supporter ? [supporterItem({ price: Number(price) })] : [],
   };
   const r = checkShop(shop, { games: listGames(root).map((g) => g.id) });
@@ -179,7 +178,7 @@ export function connectPage({ nonce, site, studio, till = 'stripe', test = true 
 <label for="hook">Webhook signing secret</label><input id="hook" name="hook" type="password" autocomplete="off" placeholder="whsec_…"></details>
 <h2>4. Who is the seller?</h2>
 <fieldset>
-<label><input type="radio" name="till" value="stripe"${till !== 'stripe-managed' ? ' checked' : ''}> <span><b>You are</b> (standard Stripe). Stripe takes its usual card fee (in the US 2.9% + 30¢ a sale; in Canada 2.9% + CA$0.30). Stripe Tax is on: it works out and collects sales tax and VAT where you have told Stripe you are registered (0.5% a sale there). Registering and filing are yours, and some countries (the EU, the UK) expect a foreign seller to register from the first sale.</span></label>
+<label><input type="radio" name="till" value="stripe"${till !== 'stripe-managed' ? ' checked' : ''}> <span><b>You are</b> (standard Stripe). Stripe takes its usual card fee (in the US 2.9% + 30¢ a sale; in Canada 2.9% + CA$0.30). Set automaticTax: true in shop.json to enable Stripe Tax: it works out and collects sales tax and VAT where you have told Stripe you are registered (0.5% a sale there). Registering and filing are yours, and some countries (the EU, the UK) expect a foreign seller to register from the first sale.</span></label>
 <label><input type="radio" name="till" value="stripe-managed"${till === 'stripe-managed' ? ' checked' : ''}> <span><b>Stripe is</b> (Stripe Managed Payments). <b>3.5% more</b> a sale, on top of the card fee. Stripe becomes the seller of record: it registers for, collects, files and pays sales tax and VAT in 80+ countries, runs fraud checks, answers card disputes for you and handles buyers' payment questions. Statements read <code>LINK.COM*</code>. You still cover the money of a lost dispute, and Stripe may refund a buyer within 60 days. Turn it on in Stripe first (<a href="${dash}/settings/managed-payments" target="_blank" rel="noopener">Managed Payments</a>, after Stripe's eligibility review; Canada and the US are among the countries it serves).${test ? ' In test mode this page tries one test checkout with Managed Payments (expired at once) and says whether Stripe takes it.' : ''}</span></label>
 </fieldset>
 <button>Save to my Worker</button></form>
@@ -225,7 +224,7 @@ async function makeWebhook(env, site, { fetcher }) {
  * (there is no API to read it). Never in live mode.
  */
 async function probeManaged(env, shop, { fetcher }) {
-  const item = shop?.items?.find((i) => i.kind !== 'tip') ?? null;
+  const item = shop?.items?.find((i) => i.price !== 'choose') ?? null;
   try {
     const s = await stripeCall(env, 'POST', '/v1/checkout/sessions', {
       mode: 'payment', success_url: 'https://example.com/homie-shop-check', cancel_url: 'https://example.com/homie-shop-check',
@@ -270,8 +269,7 @@ export async function shopConnect(root, { managed = null, live = false, log = ()
           const say = ({ status, text }) => { res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); res.end(text); };
           if (form.get('n') !== nonce || finished) { say(said(403, 'This page was used already.')); return; }
           if (busy) { say(said(409, 'Still saving the last press. Wait a moment.')); return; }
-          if (/^sk_live_/.test(key)) { say(said(400, 'That is a full secret key. The shop takes only a RESTRICTED key (rk_…) with the permissions on the page. Go back and make one.')); return; }
-          if (!KEY_SHAPE.test(key) || !/^rk_/.test(key)) { say(said(400, 'That does not look like a restricted key (rk_test_… or rk_live_…). Go back and try again.')); return; }
+          if (!KEY_SHAPE.test(key)) { say(said(400, 'That does not look like a restricted key (rk_test_… or rk_live_…). Go back and try again.')); return; }
           // Test mode unless the owner's AI ran it with --live on purpose: a live key on the test page is refused.
           if (modeOf(key) !== (live ? 'live' : 'test')) { say(said(400, live ? 'This page takes a LIVE restricted key (rk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --live).')); return; }
           if (hook && !WEBHOOK_SECRET_SHAPE.test(hook)) { say(said(400, 'That does not look like a webhook signing secret (whsec_…). Go back and try again, or leave it empty and this page makes the webhook.')); return; }

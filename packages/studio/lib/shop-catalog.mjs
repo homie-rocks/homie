@@ -31,11 +31,11 @@ export async function wantedProducts(shop, slug) {
   return Promise.all((shop?.items ?? []).map(async (it) => {
     const id = await productIdOf(slug, it.id);
     return {
-      id, item: it.id, name: it.name, description: it.blurb ?? null, tax_code: defaultTaxCode(it),
+      id, item: it.id, name: it.name, description: it.blurb ?? null, tax_code: it.taxCode ?? (shop.till === 'stripe-managed' ? defaultTaxCode(it) : null),
       // Stripe metadata values: 500 characters. https://docs.stripe.com/metadata (fetched 2026-10-08).
       metadata: { homie: MARK, homie_studio: String(slug), homie_item: it.id.length <= 500 ? it.id : id },
-      price: it.kind === 'tip' ? null : { currency: shop.currency, unit_amount: it.price, tax_behavior: 'exclusive' },
-      shown: it.kind === 'tip' ? `pay what you want, ${money(it.min, shop.currency)}${it.max === null ? ' or more' : ` to ${money(it.max, shop.currency)}`}` : money(it.price, shop.currency),
+      price: it.price === 'choose' ? null : { currency: shop.currency, unit_amount: it.price, tax_behavior: 'exclusive' },
+      shown: it.price === 'choose' ? `pay what you want, ${money(it.min, shop.currency)}${it.max === null ? ' or more' : ` to ${money(it.max, shop.currency)}`}` : money(it.price, shop.currency),
     };
   }));
 }
@@ -96,7 +96,7 @@ export async function catalogPlan(root, { have = null, mode = null, record = tru
     if (!p) {
       writes.push({
         tool: 'stripe_api_write', method: 'POST', path: '/v1/products', why: `make ${w.name} (${w.shown})`,
-        params: { id: w.id, name: w.name, ...(w.description ? { description: w.description } : {}), tax_code: w.tax_code, metadata: meta, ...(w.price ? { default_price_data: w.price } : {}) },
+        params: { id: w.id, name: w.name, ...(w.description ? { description: w.description } : {}), ...(w.tax_code ? { tax_code: w.tax_code } : {}), metadata: meta, ...(w.price ? { default_price_data: w.price } : {}) },
       });
       continue;
     }

@@ -452,9 +452,9 @@ npx homie-studio lounge mod <player id>                                 # a mode
 A studio sells items for its games (0.24.0; Stripe's own agent tools since 0.24.3) with **its own Stripe account**: the studio is the seller, money goes
 straight from players to its Stripe, and homie.rocks never sees, holds or moves it (Homie takes no cut; no shared
 currency; not a Connect platform). The studio chooses its prices, item kinds and optional spending and refund
-settings, with no Homie ceiling. New shops start with the editable `protective` policy: accounts and an age
-question, no purchases for under-13s, parent checkout for teens, no shop on kids servers, and no paid randomness.
-The studio can inspect and change each rule in shop.json; [shop/SHOP.md](shop/SHOP.md) explains every preset.
+settings, with no Homie ceiling. The default is open: guests can buy repeatedly without an age question,
+from any page, with any wording. `protective` and `adults-only` are optional presets; neither scans content.
+The studio chooses its settings in shop.json; [shop/SHOP.md](shop/SHOP.md) explains them.
 
 ```sh
 npx homie-studio shop init --supporter        # shop.json with a US$5 Supporter pack, and SELLING.md (the owner's plain words)
@@ -473,10 +473,10 @@ connect page, which makes the webhook with it, so its signing secret goes straig
 chat. A webhook is never made through Stripe's MCP (its answer carries the secret). From 2026-10-31 Stripe's MCP takes
 only OAuth or Agent-tagged keys; the shop's own key is a plain restricted key and is not affected.
 
-In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`); a
-supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), Stripe Tax on, or Stripe Managed
+In a game: `createShop()` from `@homie-rocks/studio/shop` (`has`, `entitlements`, `on('change')`, `open`, `used`, `add`, `checkout`, `buy`); a
+supporter's badge rides on their seat (`peer.badge`). Stripe Checkout (hosted), optional Stripe Tax, or Stripe Managed
 Payments (Stripe as seller of record, 3.5% more) as one switch; a signed, idempotent webhook; refunds from the
-office; a dispute never touches the account; referral statements signed per referrer (homie.rocks is one more
+office, per order or line; a dispute never touches the account; referral statements signed per referrer (homie.rocks is one more
 referrer). The guide: `shop/SHOP.md`.
 
 ## Setup status

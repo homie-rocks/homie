@@ -1,11 +1,12 @@
+import { referralShare } from './shop-rules.mjs';
 /**
  * REFERRALS (@homie-rocks/studio 0.24.0): one set of rules for every referrer, homie.rocks included.
  *
  *   arrival     A person's browser opens one of this studio's pages with ?via=<host> (a link from another studio,
- *               from homie.rocks, from anywhere). If this browser has never been here (no player of this site), the
+ *               from homie.rocks, from anywhere). When an optional referral agreement is present, the
  *               Worker keeps the host and the time in a signed cookie (HttpOnly, this site only, for the window).
- *               Prefetches, crawlers, this site itself and server rooms are never recorded.
- *   a sale      A paid order within the window, by an account made after that first visit, writes a referral line in
+ *               Prefetches, crawlers and this site itself are not referrals.
+ *   a sale      A paid order within the optional window writes a referral line in
  *               THIS studio's D1 (the seller's books): the pre-tax price, the published rate, the share, held for
  *               `holdDays` (a refund or a lost dispute inside the hold voids it; after it, it nets off the next
  *               statement). The referrer must prove itself: its own /.well-known/homie-studio.json says it takes
@@ -101,23 +102,19 @@ export async function verifyStatement(envelope, x) {
 
 /* ------------------------------------------------------------------ arrival */
 
-/** Pages where an arrival may be recorded: the studio's own pages and Play; never a server's page or room. */
-const ARRIVAL_PAGE = /^\/(?:|games\/|shop\/|[a-z0-9][a-z0-9-]{0,39}\/(?:play)?)$/;
-
 /**
  * A Set-Cookie for this arrival, or null. Only a person's real page load (not a prefetch, a crawler or this site's
- * own link), with ?via=<host> of another site, from a browser with no player and no earlier arrival here, on a studio
- * that sells and pays referrals, never on a server's page or room.
+ * own link), with ?via=<host> of another site, with no earlier attributed arrival here, on a studio
+ * that sells and pays referrals.
  */
 export async function arrivalCookie(request, env, url, shop) {
   if (!shop?.open || !shop.referrals || !env?.DB) return null;
   const via = hostOf(url.searchParams.get('via'));
   if (!via || via === hostOf(url.hostname)) return null;
-  if (!ARRIVAL_PAGE.test(url.pathname) || url.searchParams.has('room') || url.searchParams.has('server')) return null;
   if (!isVisit(request)) return null;
   const cookies = request.headers.get('cookie') ?? '';
   // Been here before: a player of this site (a guest who saved, or an account), or an earlier arrival.
-  if (/(?:^|;\s*)(?:studio_player|studio_via)=/.test(cookies)) return null;
+  if (/(?:^|;\s*)studio_via=/.test(cookies) || shop.referralNewPlayersOnly && /(?:^|;\s*)studio_player=/.test(cookies)) return null;
   const at = Math.floor(Date.now() / 1000);
   const value = `${via}.${at}.${await macOf(env, `${via}.${at}`)}`;
   // Persistent integer lifetime; browsers may apply their own cookie retention policy.
@@ -185,7 +182,7 @@ export async function lineFor(env, order, shop, { touchAt = null, now = Date.now
   const terms = shop?.referrals;
   if (!terms || !order.via || !(terms.rate > 0)) return [];
   if (touchAt !== null && terms.windowDays !== null && now - touchAt > Math.round(terms.windowDays * DAY)) return [];
-  const share = Math.round(Number(order.amount) * terms.rate);
+  const share = referralShare(Number(order.amount), terms.rate);
   if (!Number.isSafeInteger(share)) throw new RangeError('Referral share exceeds safe integer arithmetic; lower the studio rate or amount.');
   if (share <= 0) return [];
   const period = new Date(now).toISOString().slice(0, 7);
@@ -308,7 +305,7 @@ export async function settle(env, via, ref, { now = Date.now(), currency } = {})
   const h = hostOf(via);
   if (!/^[a-z]{3}$/.test(currency ?? '')) return { ok: false, error: 'currency', message: 'Name the currency to mark paid.' };
   if (!h) return { ok: false, error: 'bad-request', message: 'via is the referrer\'s host' };
-  const note = String(ref ?? '').replace(/[^\w .:#/-]/g, '').slice(0, 80) || 'paid';
+  const note = String(ref ?? '').trim() || 'paid';
   await env.DB.batch([
     env.DB.prepare("UPDATE referral_lines SET state = 'settled', settled_ref = ?2 WHERE via = ?1 AND currency = ?4 AND (state = 'owed' OR (state = 'pending' AND hold_until <= ?3))").bind(h, note, now, currency),
     env.DB.prepare("UPDATE referral_lines SET state = 'settled-clawback', settled_ref = ?2 WHERE via = ?1 AND currency = ?3 AND state = 'clawback'").bind(h, note, currency),

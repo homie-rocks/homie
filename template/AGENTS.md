@@ -325,41 +325,28 @@ studio's pinned copy, never a registry lookup of the bare name.
 
 ## Selling things (the shop)
 
-- **The studio sells with its OWN Stripe account.** The studio is the seller: its prices, its refunds, its tax, its
-  disputes. Money goes from players to the studio's Stripe; homie.rocks never sees it and Homie takes no cut.
-  `SELLING.md` says what that means for the owner in plain words (not legal advice).
-- **`shop.json`** is the studio's settings file: `till` (`stripe`, `stripe-managed`, or `off`), `currency`,
-  optional `refundDays` and `capPerPlayerMonth`, and items with studio-chosen kinds, names, prices and entitlement
-  keys. No Homie ceiling on prices, tips, item count, keys, text, durations or referral terms. Stripe currency
-  units and provider minimums still apply, including zero-decimal currencies. `shop init --supporter` writes a
-  supporter item and explicit protective policy, with no spending cap or refund window. Existing values stay.
-- **The studio chooses who may buy:** `policy.preset` is `protective` (the default), `adults-only`, or `custom`.
-  Each rule can be read and edited in shop.json; SHOP.md lists them. Protective keeps the account and age
-  question, under-13 refusal, parent checkout for teens, closed kids shops, beginner fairness, refusal of paid
-  randomness and countdowns, and TV code to a phone. Do not silently relax protection for children. The studio
-  is responsible for law and provider terms where it sells; presets are not legal advice.
-- **Flood protection:** `purchaseAttemptsPerMinute` (default 6) is per account; `purchaseAttemptsPerAddressPerMinute` (default 600) is per address. Both are per Worker instance and configurable.
-  New guest buyers use `guestBuyersPerAddressPerHour` (default 600). These protect against floods, not spending.
-- **In a game:** `import { createShop } from '@homie-rocks/studio/shop'`; `shop.has('skin:ember')`,
-  `shop.entitlements()`, `shop.on('change', …)`, `shop.open(item)` from a button the player pressed (never the
-  play button, never on a timer), `shop.used(key)` when it is equipped. A supporter's badge rides on their seat
-  (`peer.badge`, set by the Worker, never by a hello). The guide is `node_modules/@homie-rocks/studio/shop/SHOP.md`.
-- **Stripe's own tools** (set up when the studio starts selling): `npm install -g @stripe/cli@latest && stripe agent
-  setup` installs Stripe's agent plugin (its MCP server and skills); the owner signs in once on Stripe's page and
-  gives access to a sandbox first. With it you make the catalog (`npx --no-install homie-studio shop catalog` says
-  the read, then the exact `stripe_api_write` calls), check tax settings, and answer "how are sales?" read-only.
-  Never make a webhook or an API key through the MCP (a secret would land in the chat), and never retry a write
-  Stripe sent to the owner for confirmation until they approved it.
-- **The key** goes in only from a page on the owner's own computer: `npx --no-install homie-studio shop connect`
-  prints a 127.0.0.1 link; the owner pastes one restricted key there, the page makes the webhook with it, and the
-  key and the webhook's secret go straight to the Worker secrets. Test keys only unless `--live`. Never ask for a
-  key in the chat; never write one anywhere.
-- **Refunds:** the owner's one tap in the office (`/_studio/office/shop`). You may only ASK:
-  `homie-studio shop refund <order>` gives the owner a one-tap link. A card dispute never touches the player's
-  account. `shop` says what is missing; `shop orders` lists orders (never a card or an email).
-- **Referrals:** a `?via=<host>` link from another site (homie.rocks is one more referrer) is remembered on a new
-  player's first visit; a kept sale owes that referrer the rate in `shop.json` `referrals`. `shop statements`
-  signs them; the referrer invoices the studio. Nothing moves through Homie.
+Your shop, your choices. The studio sells through its own Stripe account and is responsible for the law
+where it sells and for Stripe's terms. Homie takes no cut.
+
+- `shop.json` lists items, wording, kinds, prices, quantities and entitlements. Optional settings include
+  sale dates, tips, currency, `automaticTax`, refund windows, spending caps and referral terms.
+- The default is open: guests can buy repeatedly, without age questions, from any page. Signing in keeps
+  guest purchases. `shop init --supporter` writes an example item without a policy, cap or refund window.
+- Choose `policy.preset: "protective"` or `"adults-only"` to enable an account and age policy. Omitted
+  presets, including in existing files, use the open default. Individual overrides are in SHOP.md.
+- `createShop()` from `@homie-rocks/studio/shop` supplies `open`, `has`, `entitlements`, `used`, and `change`.
+  `shop.add(item, quantity)` builds a cart; `shop.checkout()` pays; `shop.buy(item)` buys directly.
+- A cart has independent lines and quantities. The office can refund a whole order or line. The optional
+  player refund window covers items; a tip is never taken back by the player.
+- Flood settings are configurable: buyer attempts 6/minute, address attempts 600/minute,
+  new guest buyers 600/hour. Stripe constraints, integer arithmetic, ownership and signatures protect payments.
+- `shop check` validates settings; `shop connect` provides a local page for credentials, stored as Worker
+  secrets. Stripe's agent tools can manage Products through `shop catalog`; the connect page creates the
+  webhook so its secret stays out of chat. Stripe's approval links belong to the owner.
+- `shop orders` and `/_studio/office/shop` show sales. `shop refund <order>` asks the owner to confirm.
+  `shop statements` records optional referral shares; studios pay their referrers directly.
+
+The guide is `node_modules/@homie-rocks/studio/shop/SHOP.md`.
 
 ## Continuing a build from the Claude app
 

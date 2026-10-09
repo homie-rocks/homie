@@ -43,7 +43,7 @@ for (const compatibilityDate of ['2025-01-01', '2026-06-01']) test(`statement se
   });
   try {
     const db = await mf.getD1Database('DB');
-    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql']) {
+    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
       const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
       for (const statement of sql.replace(/^--.*$/gm, '').split(';').filter((s) => s.trim())) await db.prepare(statement).run();
     }
@@ -106,7 +106,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
   } } } }] });
   try {
     const db = await mf.getD1Database('DB');
-    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql']) {
+    for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
       const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
       for (const statement of sql.replace(/^--.*$/gm, '').split(';').filter((s) => s.trim())) await db.prepare(statement).run();
     }
@@ -114,6 +114,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
     for (const state of ['missing', 'released']) {
       const order = `ord_${state.padEnd(20, '0')}`, session = `cs_test_${state}`;
       await db.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, session, created_at, updated_at, expires_at) VALUES (?, 'pl_bbbbbbbbbbbbbbbbbbbbbb', 'badge', 500, 'usd', 'stripe', 'test', 'processing', ?, 1, 1, 1)").bind(order, session).run();
+      await db.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount) VALUES (?, ?, 0, 'badge', 1, 500, 500)").bind(order + '_0', order).run();
       if (state === 'missing') await get('/reconcile');
       else { missing = false; assert.equal((await get(`/release?order=${order}`)).ok, true); }
       assert.equal((await db.prepare('SELECT status FROM shop_orders WHERE id = ?').bind(order).first()).status, state);

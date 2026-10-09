@@ -260,7 +260,7 @@ async function dailyCapReached(env) {
 /** Guests nobody has used for guestIdleDays are forgotten (a few at a time), with everything they kept. */
 export async function pruneGuests(env) {
   const now = Date.now();
-  const ownership = await shopMigrated(env, { complete: false }) ? "AND NOT EXISTS (SELECT 1 FROM entitlements e WHERE e.player = players.id AND e.state = 'active' AND (e.ends_at IS NULL OR e.ends_at > ?2))" : 'AND ?2 > 0';
+  const ownership = await shopMigrated(env, { complete: false }) ? "AND NOT EXISTS (SELECT 1 FROM entitlements e WHERE e.player = players.id AND e.state = 'active' AND (e.ends_at IS NULL OR e.ends_at > ?2)) AND NOT EXISTS (SELECT 1 FROM shop_orders o WHERE o.player = players.id AND (o.paid_at IS NOT NULL OR o.session IS NOT NULL))" : 'AND ?2 > 0';
   const old = (await env.DB.prepare(`SELECT id FROM players WHERE guest = 1 AND seen_at < ?1 ${ownership} LIMIT 25`).bind(now - PLAYER_LIMITS.guestIdleDays * DAY, now).all()).results ?? [];
   for (const { id } of old) await removePlayer(env, id);
   await env.DB.prepare('DELETE FROM player_challenges WHERE expires_at < ?1').bind(Date.now()).run();

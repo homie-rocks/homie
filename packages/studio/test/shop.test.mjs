@@ -33,7 +33,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { POLICY_PRESETS, parseAmount, amountError, currencyScale, money, bandOf, checkShop, wayFor } from '../worker/shop-rules.mjs';
 import { formEncode, modeOf, apiBase, signPayload, verifyWebhook } from '../worker/stripe.mjs';
-import { SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE } from '../worker/shop-store.mjs';
+import { SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE, SHOP_LINES_FILE } from '../worker/shop-store.mjs';
 import { canonicalJson, resetReferrers, verifyStatement } from '../worker/referrals.mjs';
 import { resetShopLimits } from '../worker/shop.mjs';
 
@@ -61,7 +61,7 @@ test('the studio chooses its amounts, catalog and policy; only provider units an
   assert.equal(checked.ok, true);
   assert.equal(checked.shop.capPerPlayerMonth, null);
   assert.equal(checked.shop.refundDays, null);
-  assert.equal(checked.shop.policy.preset, 'protective');
+  assert.equal(checked.shop.policy.preset, 'custom');
   for (const [field, value] of [['capPerPlayerMonth', 10000000], ['refundDays', 10000], ['refundDays', 0], ['refundDays', 0.5]]) {
     const r = checkShop({ ...raw, [field]: value });
     assert.equal(r.ok, true, JSON.stringify(r.errors));
@@ -88,10 +88,10 @@ test('the studio chooses its amounts, catalog and policy; only provider units an
   assert.equal(tip.shop.items[0].max, null);
   assert.equal(checkShop({ items: [{ id: 'tip', name: 'A tip', kind: 'tip', min: 50, max: 10000000 }] }).ok, true);
   for (const it of [{ ...SUPPORTER, name: 'Mystery Box' }, { ...SUPPORTER, odds: 1 }, { ...SUPPORTER, countdown: 1 }, { ...SUPPORTER, gives: ['coins:500'] }, { ...SUPPORTER, advantage: true }]) {
-    assert.equal(checkShop({ items: [it] }).ok, false, JSON.stringify(it));
+    assert.equal(checkShop({ items: [it] }).ok, true, JSON.stringify(it));
     assert.equal(checkShop({ policy: { preset: 'custom' }, items: [it] }).ok, true, JSON.stringify(it));
   }
-  assert.equal(checkShop(raw, { audience: 'kids' }).shop.open, false);
+  assert.equal(checkShop(raw, { audience: 'kids' }).shop.open, true);
   assert.equal(checkShop({ ...raw, policy: { preset: 'protective', kidsStudio: true } }, { audience: 'kids' }).shop.open, true);
   assert.equal(checkShop({ ...raw, policy: { preset: 'typo' } }).ok, false);
   const referrals = { rate: 2, windowDays: 1000, capPerPlayer: 1000000, holdDays: 1000, minimumInvoice: 1000000, accept: ['bank-transfer'] };
@@ -122,28 +122,29 @@ test('the studio chooses its amounts, catalog and policy; only provider units an
 });
 
 test('who may buy: the age band, a guest, under 13, 13-17, an adult, a kids or beginner server, the cap', () => {
+  const protectiveWay = (item, options) => wayFor(item, { policy: POLICY_PRESETS.protective, ...options });
   const now = new Date('2026-10-02T00:00:00Z');
   assert.equal(bandOf(2020, now), 'child');
   assert.equal(bandOf(2013, now), 'child', 'born in 2013 may still be 12: a year alone never makes a child older');
   assert.equal(bandOf(2012, now), 'teen');
   assert.equal(bandOf(2008, now), 'teen');
   assert.equal(bandOf(2007, now), 'adult');
-  assert.equal(bandOf(1890, now), null);
+  assert.equal(bandOf(1890, now), 'adult');
   assert.equal(bandOf('soon', now), null);
   const it = { id: 'x', kind: 'cosmetic', price: 300, gives: ['skin:x'] };
   const adult = { id: 'pl_a', guest: false };
-  assert.equal(wayFor(it, { open: false }), 'closed');
-  assert.equal(wayFor(it, { kids: true, player: adult, band: 'adult' }), 'kids');
-  assert.equal(wayFor({ ...it, advantage: true }, { beginner: true, player: adult, band: 'adult' }), 'beginner');
-  assert.equal(wayFor(it, { player: null }), 'make-an-account');
-  assert.equal(wayFor(it, { player: { id: 'pl_g', guest: true } }), 'make-an-account');
-  assert.equal(wayFor(it, { player: adult, band: null }), 'age-question');
-  assert.equal(wayFor(it, { player: adult, band: 'child' }), 'no');
-  assert.equal(wayFor(it, { player: adult, band: 'teen' }), 'ask-a-parent');
-  assert.equal(wayFor(it, { player: adult, band: 'adult' }), 'checkout');
-  assert.equal(wayFor(it, { player: adult, band: 'adult', spent: 4900, cap: 5000 }), 'cap');
-  assert.equal(wayFor(it, { player: adult, band: 'adult', owned: true }), 'owned');
-  assert.equal(wayFor({ ...it, ends: '2020-01-01' }, { player: adult, band: 'adult' }), 'over');
+  assert.equal(protectiveWay(it, { open: false }), 'closed');
+  assert.equal(protectiveWay(it, { kids: true, player: adult, band: 'adult' }), 'kids');
+  assert.equal(protectiveWay({ ...it, advantage: true }, { beginner: true, player: adult, band: 'adult' }), 'beginner');
+  assert.equal(protectiveWay(it, { player: null }), 'make-an-account');
+  assert.equal(protectiveWay(it, { player: { id: 'pl_g', guest: true } }), 'make-an-account');
+  assert.equal(protectiveWay(it, { player: adult, band: null }), 'age-question');
+  assert.equal(protectiveWay(it, { player: adult, band: 'child' }), 'no');
+  assert.equal(protectiveWay(it, { player: adult, band: 'teen' }), 'ask-a-parent');
+  assert.equal(protectiveWay(it, { player: adult, band: 'adult' }), 'checkout');
+  assert.equal(protectiveWay(it, { player: adult, band: 'adult', spent: 4900, cap: 5000 }), 'cap');
+  assert.equal(protectiveWay(it, { player: adult, band: 'adult', owned: true }), 'owned');
+  assert.equal(protectiveWay({ ...it, ends: '2020-01-01' }, { player: adult, band: 'adult' }), 'over');
 });
 
 /* ------------------------------------------------------------------ Stripe */
@@ -183,14 +184,15 @@ function studio(name) {
 
 function fakeD1(dir) {
   const sql = new DatabaseSync(':memory:');
-  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
+  for (const f of ['0001_studio.sql', '0002_studio_stats.sql', '0004_players.sql', '0005_studio_office.sql', '0006_studio_servers.sql', SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE, SHOP_LINES_FILE]) sql.exec(readFileSync(join(dir, 'site', 'migrations', f), 'utf8'));
   const stmt = (query, args = []) => ({
     bind: (...a) => stmt(query, a),
     first: async () => sql.prepare(query).get(...args) ?? null,
     all: async () => ({ results: sql.prepare(query).all(...args) }),
+    runSync: () => { const r = sql.prepare(query).run(...args); return { success: true, meta: { changes: r.changes } }; },
     run: async () => { const r = sql.prepare(query).run(...args); return { success: true, meta: { changes: r.changes } }; },
   });
-  return { sql, prepare: (q) => stmt(q), batch: async (list) => { for (const s of list) await s.run(); return []; } };
+  return { sql, prepare: (q) => stmt(q), batch: async (list) => { sql.exec('BEGIN'); try { const results = []; for (const s of list) results.push(s.runSync()); sql.exec('COMMIT'); return results; } catch (error) { sql.exec('ROLLBACK'); throw error; } } };
 }
 
 function assetsOf(dir) {
@@ -242,6 +244,7 @@ async function fakeStripe() {
       const send = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
       n += 1;
       const denied = () => send(403, { error: { type: 'invalid_request_error', message: 'The provided key does not have the required permissions for this endpoint. Having the \'rak_webhook_write\' permission would allow this request to continue.' } });
+      if (req.method === 'GET' && url.pathname.endsWith('/line_items')) return send(200, { data: behave.lineItems ?? [], has_more: false });
       if (req.method === 'GET' && url.pathname.startsWith('/v1/checkout/sessions/')) {
         if (behave.disconnect) return req.destroy();
         const answer = () => behave.error ? send(behave.error.status, { error: behave.error }) : behave.unreachable ? send(503, { error: { message: 'unreachable' } }) : send(200, behave.sessions.get(url.pathname.split('/').pop()) ?? {});
@@ -265,11 +268,12 @@ async function fakeStripe() {
       if (req.method === 'POST' && url.pathname === '/v1/refunds' && behave.approval) return send(400, { error: { type: 'invalid_request_error', code: 'approval_required', message: 'This request requires approval.' } });
       if (req.method === 'POST' && url.pathname === '/v1/checkout/sessions') {
         const id = `cs_test_${String(n).padStart(6, '0')}abc`;
-        const session = { id, object: 'checkout.session', url: `https://checkout.stripe.com/c/pay/${id}`, mode: 'payment', livemode: false, client_reference_id: form.get('client_reference_id'), metadata: Object.fromEntries([...form].filter(([k]) => k.startsWith('metadata[')).map(([k, v]) => [k.slice(9, -1), v])), currency: form.get('line_items[0][price_data][currency]'), amount_subtotal: Number(form.get('line_items[0][price_data][unit_amount]')), payment_status: 'unpaid', status: 'open' };
+        const session = { id, object: 'checkout.session', url: `https://checkout.stripe.com/c/pay/${id}`, mode: 'payment', livemode: false, client_reference_id: form.get('client_reference_id'), metadata: Object.fromEntries([...form].filter(([k]) => k.startsWith('metadata[')).map(([k, v]) => [k.slice(9, -1), v])), currency: form.get('line_items[0][price_data][currency]'), amount_subtotal: [...form].filter(([key]) => /^line_items\[\d+\]\[quantity\]$/.test(key)).reduce((sum, [key, quantity]) => sum + Number(quantity) * Number(form.get(key.replace('[quantity]', '[price_data][unit_amount]'))), 0), payment_status: 'unpaid', status: 'open' };
         behave.sessions.set(id, session);
         return send(200, session);
       }
-      if (req.method === 'POST' && url.pathname === '/v1/refunds') return send(200, { id: `re_test_${n}`, object: 'refund', status: 'succeeded', payment_intent: form.get('payment_intent'), amount: 500 });
+      if (req.method === 'GET' && url.pathname.startsWith('/v1/refunds/')) return send(200, { id: url.pathname.split('/').pop(), status: behave.existingRefundStatus ?? 'pending' });
+      if (req.method === 'POST' && url.pathname === '/v1/refunds') return send(200, { id: `re_test_${n}`, object: 'refund', status: behave.refundStatus ?? 'succeeded', payment_intent: form.get('payment_intent'), amount: Number(form.get('amount') ?? 500) });
       if (req.method === 'GET' && url.pathname === '/v1/checkout/sessions') return send(200, { object: 'list', data: [], has_more: false });
       return send(404, { error: { type: 'invalid_request_error', message: 'No such route' } });
     });
@@ -286,7 +290,7 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
     const dir = studio('worker');
     assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
     writeFileSync(join(dir, 'shop.json'), JSON.stringify({
-      till: 'stripe', currency: 'usd', refundDays: 14, capPerPlayerMonth: 2000,
+      till: 'stripe', currency: 'usd', policy: { preset: 'protective' }, automaticTax: true, referralNewPlayersOnly: true, refundDays: 14, capPerPlayerMonth: 2000,
       items: [
         SUPPORTER,
         { id: 'ember', kind: 'cosmetic', game: 'owl-run', name: `Ember hull ${EVIL}`, price: 300, gives: ['skin:ember'] },
@@ -368,7 +372,7 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
     const sid = /\/pay\/(cs_test_\w+)/.exec(j.url)[1];
     const pi = `pi_test_${sid.slice(8, 20)}`;
     const amount = Number(call.form.get('line_items[0][price_data][unit_amount]'));
-    const h = await hook('checkout.session.completed', { id: sid, object: 'checkout.session', payment_status: 'paid', payment_intent: pi, client_reference_id: p.id, metadata: { order: j.order, item }, currency: call.form.get('line_items[0][price_data][currency]'), amount_subtotal: amount, amount_total: amount + 40, total_details: { amount_tax: 40 } });
+    const h = await hook('checkout.session.completed', { id: sid, object: 'checkout.session', payment_status: 'paid', payment_intent: pi, client_reference_id: p.id, metadata: { order: j.order, item }, currency: call.form.get('line_items[0][price_data][currency]'), amount_subtotal: amount, amount_total: amount + (amount ? 40 : 0), total_details: { amount_tax: amount ? 40 : 0 } });
     assert.equal(h.status, 200);
     return { order: j.order, session: sid, payment: pi, hook: await h.json(), call };
   };
@@ -379,15 +383,15 @@ test('closed until the key and the webhook secret are in; a Preview and a missin
   const s = await site({ key: false });
   const j = await (await s.fetchSite('/api/shop?game=owl-run')).json();
   assert.equal(j.open, false);
-  assert.deepEqual(j.missing, ['stripe-key', 'webhook-secret']);
+  assert.deepEqual(j.missing, ['stripe-key']);
   const p = s.player(400, { band: 'adult' });
   const r = await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p));
   assert.equal(r.status, 503);
   assert.equal(s.stripe.calls.length, 0, 'nothing reaches Stripe while the shop is closed');
-  // A full secret key is refused: only a restricted key.
+  // The studio chooses its Stripe key type.
   s.env.STRIPE_KEY = `sk_live_${'x'.repeat(30)}`;
   s.env.STRIPE_WEBHOOK_SECRET = HOOK_SECRET;
-  assert.deepEqual((await (await s.fetchSite('/api/shop')).json()).missing, ['restricted-key']);
+  assert.deepEqual((await (await s.fetchSite('/api/shop')).json()).missing, undefined);
   s.stripe.close();
 });
 
@@ -562,7 +566,7 @@ test('refunds: the owner\'s one tap; from an office key only an ASK the owner co
   const refund = s.stripe.calls.filter((c) => c.path === '/v1/refunds');
   assert.equal(refund.length, 1);
   assert.equal(refund[0].form.get('payment_intent'), a.payment);
-  assert.equal(refund[0].idem, `refund-${a.order}`);
+  assert.equal(refund[0].idem, `refund-${a.order}_0`);
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(a.order).status, 'refunded');
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns, [], 'the item left the account');
   // Stripe's own refund event afterwards changes nothing more.
@@ -586,6 +590,13 @@ test('refunds: the owner\'s one tap; from an office key only an ASK the owner co
   const own = await s.post('/api/shop/refund', { order: d.order }, s.as(p4));
   assert.equal(own.status, 200, await own.clone().text());
   assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(d.order).status, 'refunded');
+  // A tip is a gift: inside the same window the player cannot take it back; the studio still can, from the office.
+  const p5 = s.player(400, { band: 'adult' });
+  const t = await s.buyPaid(p5, 'tip', { amount: 500 });
+  const tips = await (await s.fetchSite('/api/shop/mine', { headers: { cookie: p5.cookie } })).json();
+  assert.equal(tips.orders[0].refundable, false, 'a tip is not offered a refund');
+  assert.equal((await s.post('/api/shop/refund', { order: t.order }, s.as(p5))).status, 403, 'a tip is not the player\'s to refund');
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(t.order).status, 'paid');
   s.stripe.close();
 });
 
@@ -599,7 +610,7 @@ test('a dispute never touches the account: nothing changes while open; lost take
   let owns = (await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns;
   assert.ok(owns.includes('badge:supporter'), 'open: nothing changes');
   const refused = await s.fetchSite('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: a.order }) });
-  assert.match((await refused.json()).message, /disputed/);
+  assert.equal((await refused.json()).ok, true, 'the owner may ask Stripe to refund a disputed order');
   assert.equal((await (await s.hook('charge.dispute.closed', { id: 'dp_1', payment_intent: a.payment, status: 'lost' })).json()).did, 'lost');
   owns = (await (await s.fetchSite('/api/player/owns', { headers: { cookie: p.cookie } })).json()).owns;
   assert.deepEqual(owns, ['skin:ember'], 'lost: only that one item goes');
@@ -870,7 +881,7 @@ test('referrals: an arrival from another site, a new player\'s sale, a held line
     assert.equal((await done.json()).ok, true);
     assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order).state, 'settled');
     await s.fetchSite('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: b.order }) });
-    assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order).state, 'clawback');
+    assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(b.order + '_0').state, 'clawback');
   } finally { globalThis.fetch = realFetch; s.stripe.close(); }
 });
 
@@ -934,7 +945,7 @@ test('stripe-mock: the catalog\'s writes, a checkout that names its Product, and
 
 /* ------------------------------------------------------------------ the CLI */
 
-test('the CLI: shop init and check; the build refuses a shop that breaks the rules; a kids studio sells nothing', () => {
+test('the CLI: init is open; arbitrary wording builds; invalid money stops the build; kids studios can sell', () => {
   const dir = studio('cli');
   let r = JSON.parse(run(['shop', 'check'], dir).stdout);
   assert.equal(r.absent, true);
@@ -942,17 +953,19 @@ test('the CLI: shop init and check; the build refuses a shop that breaks the rul
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.deepEqual(r.wrote, ['shop.json', 'SELLING.md']);
   const initialized = JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8'));
-  assert.equal(initialized.policy.preset, 'protective');
+  assert.equal(initialized.policy, undefined);
   assert.equal(initialized.capPerPlayerMonth, undefined);
   assert.equal(initialized.refundDays, undefined);
-  assert.match(readFileSync(join(dir, 'SELLING.md'), 'utf8'), /not legal or tax advice/);
+  assert.match(readFileSync(join(dir, 'SELLING.md'), 'utf8'), /responsible for the law/);
   r = JSON.parse(run(['shop', 'check'], dir).stdout);
   assert.equal(r.ok, true);
   const shop = JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8'));
   shop.items.push({ id: 'crate', kind: 'cosmetic', name: 'Mystery crate', price: 300, gives: ['skin:random'] });
   writeFileSync(join(dir, 'shop.json'), JSON.stringify(shop));
   r = JSON.parse(run(['shop', 'check'], dir).stdout);
-  assert.equal(r.ok, false);
+  assert.equal(r.ok, true, 'any wording is accepted');
+  shop.items[0].price = 1.5;
+  writeFileSync(join(dir, 'shop.json'), JSON.stringify(shop));
   const b = run(['build'], dir);
   assert.notEqual(b.status, 0);
   assert.match(b.stdout + b.stderr, /shop\.json conflicts with the studio settings/);
@@ -1023,7 +1036,7 @@ test('shop connect: the owner pastes the key on this computer; it goes to the Wo
   const origin = new URL(link).origin;
   const postKey = (body) => fetch(`${origin}/key`, { method: 'POST', body: new URLSearchParams(body) });
   assert.equal((await postKey({ n: 'f'.repeat(32), key: TEST_KEY, hook: HOOK_SECRET })).status, 403);
-  assert.match(await (await postKey({ n, key: `sk_live_${'x'.repeat(30)}`, hook: HOOK_SECRET })).text(), /RESTRICTED/);
+  assert.match(await (await postKey({ n, key: `sk_live_${'x'.repeat(30)}`, hook: HOOK_SECRET })).text(), /TEST mode/);
   assert.match(await (await postKey({ n, key: `rk_live_${'x'.repeat(30)}`, hook: HOOK_SECRET })).text(), /TEST mode/, 'a live key on the test page');
   assert.equal((await postKey({ n, key: TEST_KEY, hook: 'nope' })).status, 400);
   const ok = await postKey({ n, key: TEST_KEY, hook: HOOK_SECRET, till: 'stripe-managed' });
@@ -1130,9 +1143,10 @@ test('@homie-rocks/studio/shop in a game: has, entitlements, change, open, used;
   const g = globalThis;
   const before = g.addEventListener;
   g.addEventListener = (ev, fn) => { if (ev === 'message') handlers.push(fn); };
-  const deliver = (data) => handlers.forEach((fn) => fn({ data }));
+  let target;
+  const deliver = (data) => handlers.forEach((fn) => fn({ data, source: target }));
   try {
-    const shop = createShop({ target: { postMessage: (m) => { sent.push(m); if (m.op === 'hello') setTimeout(() => deliver({ t: 'homie-shop', q: m.q, ok: true, open: true, owns: ['badge:supporter'] }), 1); if (m.op === 'used') setTimeout(() => deliver({ t: 'homie-shop', q: m.q, ok: true }), 1); } } });
+    const shop = createShop({ target: target = { postMessage: (m) => { sent.push(m); if (m.op === 'hello') setTimeout(() => deliver({ t: 'homie-shop', q: m.q, ok: true, open: true, owns: ['badge:supporter'] }), 1); if (m.op === 'used' || m.op === 'checkout') setTimeout(() => deliver({ t: 'homie-shop', q: m.q, ok: true }), 1); } } });
     const st = await shop.ready;
     assert.equal(st.open, true);
     assert.equal(shop.has('badge:supporter'), true);
@@ -1145,6 +1159,15 @@ test('@homie-rocks/studio/shop in a game: has, entitlements, change, open, used;
     assert.deepEqual({ op: sent.at(-1).op, item: sent.at(-1).item }, { op: 'open', item: 'ember' });
     assert.equal(await shop.used('skin:ember'), true);
     assert.equal(await shop.used('skin:not-owned'), false);
+    shop.add('ember', 3); shop.add('tip', 1, 500);
+    assert.equal(shop.cart().length, 2);
+    assert.equal(await shop.checkout(), true);
+    assert.deepEqual(sent.at(-1).lines, [{ item: 'ember', quantity: 3 }, { item: 'tip', quantity: 1, amount: 500 }]);
+    assert.equal(shop.cart().length, 0);
+    assert.equal(await shop.buy('ember'), true);
+    assert.deepEqual(sent.at(-1).lines, [{ item: 'ember', quantity: 1 }]);
+    handlers.forEach((fn) => fn({ source: {}, data: { t: 'homie-shop', ev: 'owns', owns: ['forged'] } }));
+    assert.equal(shop.has('forged'), false);
   } finally { g.addEventListener = before; }
 });
 
@@ -1270,7 +1293,7 @@ test('fractional durations, decimal amounts, provider strings and policy validat
     assert.equal(amountError(5125, currency), null);
     assert.match(money(5000, currency), /5\.000/);
   }
-  for (const raw of [{ till: 'unknown' }, { supportHomie: 1 }, { items: [{ ...SUPPORTER, game: 'missing' }] }, { items: [{ ...SUPPORTER, kind: 'gems' }] }, { items: [{ ...SUPPORTER, blurb: 'random reward' }] }, { items: [{ ...SUPPORTER, id: '   ' }] }, { items: [{ ...SUPPORTER, name: 'x'.repeat(5001) }] }, { items: [{ ...SUPPORTER, blurb: 'x'.repeat(40001) }] }]) assert.equal(checkShop(raw, { games: ['owl-run'] }).ok, false);
+  for (const raw of [{ till: 'unknown' }, { items: [{ ...SUPPORTER, game: 'missing' }] }, { items: [{ ...SUPPORTER, id: '   ' }] }, { items: [{ ...SUPPORTER, name: 'x'.repeat(5001) }] }, { items: [{ ...SUPPORTER, blurb: 'x'.repeat(40001) }] }]) assert.equal(checkShop(raw, { games: ['owl-run'] }).ok, false);
   assert.equal(checkShop({ items: [{ ...SUPPORTER, name: 'Jukebox' }] }).ok, true);
   const publicItem = checkShop({ items: [{ ...SUPPORTER, supplier: 'private', internalNote: 'private' }] }).shop.items[0];
   assert.equal(publicItem.supplier, undefined);
@@ -1876,6 +1899,7 @@ function unresolved(s, p, count, { status = 'processing', amount = 200, age = DA
     const id = `ord_${String(i).padStart(20, '0')}`, session = `cs_test_pending_${i}`;
     const created = Date.now() - age;
     s.DB.sql.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, session, created_at, updated_at, expires_at) VALUES (?, ?, 'tip', ?, 'usd', 'stripe', 'test', ?, ?, ?, 1, ?)").run(id, p.id, amount, status, session, created, created + 1860000);
+    s.DB.sql.prepare("INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount) VALUES (?, ?, 0, 'tip', 1, ?, ?)").run(id + '_0', id, amount, amount);
     const truth = { id: session, status: status === 'processing' ? 'complete' : 'open', payment_status: 'unpaid', livemode: false, metadata: { order: id }, client_reference_id: p.id, amount_subtotal: amount, currency: 'usd', payment_intent: { id: `pi_${i}`, status: 'processing' } };
     s.stripe.behave.sessions.set(session, truth);
     rows.push({ id, session, truth });
@@ -2091,6 +2115,7 @@ test('verified late payments grant once after missing, release, expiry or failur
     const p = s.player(400, { band: 'adult' });
     const [row] = unresolved(s, p, 1, { amount: 500 });
     s.DB.sql.prepare("UPDATE shop_orders SET item = 'supporter' WHERE id = ?").run(row.id);
+    s.DB.sql.prepare("UPDATE shop_order_lines SET item = 'supporter' WHERE order_id = ?").run(row.id);
     if (state === 'missing') {
       s.stripe.behave.error = { status: 404, code: 'resource_missing' };
       const { reconcileOrders } = await import('../worker/shop.mjs');
@@ -2164,4 +2189,230 @@ test('failed Stripe reads log their order and reason, retry soon, then use the s
       s.stripe.close();
     }
   } finally { Date.now = originalNow; console.warn = originalWarn; }
+});
+
+test('open default: only items and a Stripe key sell a three-line cart twice to a guest from any page', async () => {
+  const items = [
+    { id: 'loot', kind: 'Mystery boxes', name: 'Random chance countdown hurry', badge: 'Lottery winner', blurb: 'Only one left! Spin the wheel.', price: 501, gives: ['badge:raffle', 'coins:100'] },
+    { id: 'advantage', kind: 'supporter', name: 'Pay to win', advantage: true, price: 101, gives: ['power:win'], game: 'owl-run' },
+    { id: 'free', kind: 'virtual currency', name: 'Free gems', price: 0, gives: ['gems:free'] },
+  ];
+  const s = await site({ settings: { items, policy: undefined, automaticTax: undefined, capPerPlayerMonth: undefined, refundDays: undefined, referrals: undefined } });
+  delete s.env.STRIPE_WEBHOOK_SECRET;
+  let cookie = '';
+  for (const page of ['/owl-run/tv', '/another-game/play']) {
+    const buy = await s.post('/api/shop/buy', { game: 'another-game', lines: [{ item: 'loot', quantity: 2 }, { item: 'advantage', quantity: 3 }, { item: 'free', quantity: 4 }] }, { ...s.same, cookie, referer: `https://owls.example${page}` });
+    assert.equal(buy.status, 200, await buy.clone().text());
+    cookie ||= buy.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+    assert.ok(cookie);
+    const { order } = await buy.json();
+    const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(order);
+    assert.equal(row.amount, 1305);
+    const form = s.stripe.calls.at(-1).form;
+    assert.equal(form.get('line_items[0][quantity]'), '2');
+    assert.equal(form.get('line_items[1][quantity]'), '3');
+    assert.equal(form.get('line_items[2][price_data][unit_amount]'), '0');
+    assert.equal(form.has('automatic_tax[enabled]'), false);
+    assert.doesNotMatch(form.get('custom_text[submit][message]'), /ends the 14-day/);
+    const truth = s.stripe.behave.sessions.get(row.session);
+    Object.assign(truth, { payment_status: 'paid', amount_total: 1305, payment_intent: 'pi_' + order, created: Math.floor(Date.now() / 1000) });
+    const paid = await (await s.fetchSite('/api/shop/order?session=' + row.session, { headers: { cookie } })).json();
+    assert.equal(paid.status, 'paid');
+    assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_order_lines WHERE order_id = ? AND status = ?').get(order, 'paid').n, 3);
+  }
+  const guest = s.DB.sql.prepare('SELECT * FROM players').get();
+  assert.equal(guest.guest, 1);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM player_age').get().n, 0);
+  const owns = await (await s.fetchSite('/api/player/owns', { headers: { cookie } })).json();
+  assert.equal(owns.detail.find((x) => x.key === 'coins:100').quantity, 4);
+  const { adoptShopStatements, shopDataOf } = await import('../worker/shop-store.mjs');
+  const account = s.player();
+  await s.DB.batch(await adoptShopStatements(s.env, guest.id, account.id));
+  assert.equal((await shopDataOf(s.env, account.id)).orders.length, 2);
+  assert.equal((await shopDataOf(s.env, account.id)).owns.length, 4);
+  s.stripe.close();
+});
+
+test('default policy cannot refuse valid purchases for age, ownership, wording, server or page', () => {
+  const words = ['chance', 'odds', 'random', 'crate', 'box', 'loot', 'gacha', 'lottery', 'countdown', 'hurry', 'coins', 'currency', 'supporter'];
+  for (const preset of [undefined, 'protective', 'adults-only']) for (const word of words) {
+    assert.equal(checkShop({ policy: preset ? { preset } : undefined, items: [{ id: word, name: word, kind: word, badge: word, description: word, gives: [word + ':100'], advantage: true, price: 1 }] }).ok, true);
+  }
+  const policy = checkShop({ items: [SUPPORTER] }).shop.policy;
+  for (const player of [null, { guest: true }, { guest: false }]) for (const band of [null, 'child', 'teen', 'adult']) for (const owned of [true, false]) for (const kids of [true, false]) for (const beginner of [true, false]) {
+    assert.equal(wayFor({ ...SUPPORTER, advantage: true }, { player, band, owned, kids, beginner, policy }), 'checkout');
+  }
+  assert.equal(checkShop({ items: [SUPPORTER] }, { audience: 'kids' }).shop.open, true);
+  assert.equal(policy.televisionCheckout, true);
+  assert.equal(policy.withdrawalAcknowledgement, false);
+});
+
+test('each named preset applies only when chosen', async () => {
+  for (const preset of ['protective', 'adults-only']) {
+    const s = await site({ settings: { policy: { preset } } });
+    const guest = await s.post('/api/shop/buy', { item: 'supporter' }, s.same);
+    assert.equal((await guest.json()).way, 'make-an-account');
+    const teen = s.player(10, { band: 'teen' });
+    assert.equal((await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(teen))).json()).way, preset === 'protective' ? 'ask-a-parent' : 'no');
+    const adult = s.player(10, { band: 'adult' });
+    assert.equal((await s.post('/api/shop/buy', { item: 'supporter' }, s.as(adult))).status, 200);
+    s.stripe.close();
+  }
+});
+
+test('cart grants roll back with payment, snapshots survive edits, each line refunds independently, tips stay given', async () => {
+  const s = await site({ settings: { policy: undefined, automaticTax: false, capPerPlayerMonth: null, refundDays: 10000, items: [
+    { id: 'a', name: 'A', kind: 'skin', price: 101, gives: ['same:key'] },
+    { id: 'b', name: 'B', kind: 'skin', price: 103, gives: ['same:key'] },
+    { id: 'tip', name: 'Tip', kind: 'tip', price: 'choose' },
+  ] } });
+  const p = s.player();
+  const buy = await (await s.post('/api/shop/buy', { lines: [{ item: 'a', quantity: 2 }, { item: 'b' }, { item: 'tip', amount: 200 }] }, s.as(p))).json();
+  const o = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(buy.order);
+  const truth = { ...s.stripe.behave.sessions.get(o.session), payment_status: 'paid', payment_intent: 'pi_cart', amount_total: 505 };
+  const originalBatch = s.DB.batch;
+  s.DB.batch = (writes) => originalBatch([...writes, s.DB.prepare('INSERT INTO nonexistent VALUES (1)')]);
+  await assert.rejects(() => s.hook('checkout.session.completed', truth), /nonexistent/);
+  assert.equal(s.DB.sql.prepare('SELECT paid_at FROM shop_orders WHERE id = ?').get(o.id).paid_at, null);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM entitlements').get().n, 0);
+  s.DB.batch = originalBatch;
+  const oldAssets = s.env.ASSETS;
+  s.env.ASSETS = { fetch: async (req) => new URL(req.url).pathname === '/games.json' ? Response.json({ studio: { name: 'Changed' }, shop: { till: 'off', items: [] } }) : oldAssets.fetch(req) };
+  assert.equal((await (await s.hook('checkout.session.completed', truth)).json()).did, 'paid');
+  assert.equal((await (await s.hook('checkout.session.completed', truth)).json()).did, 'already');
+  s.env.ASSETS = oldAssets;
+  assert.equal(s.DB.sql.prepare('SELECT SUM(quantity) AS n FROM entitlements').get().n, 3);
+  await s.post('/api/shop/used', { key: 'same:key' }, s.as(p));
+  assert.equal((await s.post('/api/shop/refund', { order: o.id, line: o.id + '_0' }, s.as(p))).status, 200, 'used items refundable by open policy');
+  assert.equal(s.DB.sql.prepare("SELECT SUM(quantity) AS n FROM entitlements WHERE state = 'active'").get().n, 1);
+  assert.equal((await s.post('/api/shop/refund', { order: o.id, line: o.id + '_2' }, s.as(p))).status, 403);
+  assert.equal((await s.post('/api/shop/refund', { order: o.id }, s.as(p))).status, 403, 'whole order cannot bypass tip rule');
+  assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id, line: o.id + '_2' }, s.owner)).status, 200);
+  assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
+  assert.deepEqual(s.stripe.calls.filter((c) => c.path === '/v1/refunds').map((c) => Number(c.form.get('amount'))), [202, 200, 103]);
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(o.id).status, 'refunded');
+  s.stripe.close();
+});
+
+test('cart caps reserve exact totals concurrently; partial refunds release only their line; referral allocation is exact', async () => {
+  const { referralShare } = await import('../worker/shop-rules.mjs');
+  assert.equal(referralShare(50, 0.29), 15, 'decimal multiplication rounds exactly');
+  const s = await site({ settings: { policy: undefined, automaticTax: false, purchaseAttemptsPerMinute: 100, capPerPlayerMonth: 1206, items: [
+    { id: 'a', name: 'A', price: 101 }, { id: 'b', name: 'B', price: 200 }, { id: 'c', name: 'C', price: 0 },
+  ], referrals: { rate: 0.29 } } });
+  const p = s.player();
+  const cart = { lines: [{ item: 'a', quantity: 2 }, { item: 'b' }, { item: 'c' }] };
+  const responses = await Promise.all(Array.from({ length: 8 }, () => s.post('/api/shop/buy', cart, s.as(p))));
+  assert.equal(responses.filter((r) => r.status === 200).length, 3);
+  const orders = s.DB.sql.prepare('SELECT * FROM shop_orders').all();
+  assert.equal(orders.reduce((n, o) => n + o.amount, 0), 1206);
+  const o = orders[0];
+  s.DB.sql.prepare("UPDATE shop_orders SET via = 'friends.example' WHERE id = ?").run(o.id);
+  const truth = { ...s.stripe.behave.sessions.get(o.session), payment_status: 'paid', payment_intent: 'pi_exact', amount_total: 402 };
+  await Promise.all([s.hook('checkout.session.completed', truth), s.hook('checkout.session.async_payment_succeeded', truth)]);
+  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 117);
+  assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id, line: o.id + '_0' }, s.owner)).status, 200);
+  const { spentThisMonth } = await import('../worker/shop-store.mjs');
+  assert.equal(await spentThisMonth(s.env, p.id), 1004);
+  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 58);
+  assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
+  assert.equal(s.DB.sql.prepare('SELECT share FROM referral_lines WHERE order_id = ?').get(o.id).share, 0);
+  s.stripe.close();
+});
+
+test('Stripe tax totals stay with their lines and pending refunds wait for verified success', async () => {
+  const s = await site({ settings: { policy: undefined, automaticTax: true, capPerPlayerMonth: null, items: [
+    { id: 'a', name: 'A', price: 500, gives: ['a'] }, { id: 'b', name: 'B', price: 100, gives: ['b'] }, { id: 'c', name: 'C', price: 0, gives: ['c'] },
+  ] } });
+  const p = s.player();
+  const { order } = await (await s.post('/api/shop/buy', { lines: [{ item: 'a' }, { item: 'b', quantity: 2 }, { item: 'c' }] }, s.as(p))).json();
+  const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(order);
+  s.stripe.behave.lineItems = [
+    { quantity: 2, amount_subtotal: 200, amount_total: 210, price: { product: { metadata: { line: order + '_1' } } } },
+    { quantity: 1, amount_subtotal: 0, amount_total: 0, price: { product: { metadata: { line: order + '_2' } } } },
+    { quantity: 1, amount_subtotal: 500, amount_total: 550, price: { product: { metadata: { line: order + '_0' } } } },
+  ];
+  assert.equal((await (await s.hook('checkout.session.completed', { ...s.stripe.behave.sessions.get(row.session), payment_status: 'paid', amount_total: 760, total_details: { amount_tax: 60 }, payment_intent: 'pi_tax_cart' })).json()).did, 'paid');
+  s.stripe.behave.refundStatus = 'pending';
+  assert.equal((await s.post('/_studio/api/shop/refund', { order, line: order + '_1' }, s.owner)).status, 202);
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_order_lines WHERE id = ?').get(order + '_1').status, 'paid');
+  assert.equal(s.stripe.calls.at(-1).form.get('amount'), '210');
+  await s.hook('refund.updated', { id: 're_tax', payment_intent: 'pi_tax_cart', status: 'succeeded', amount: 210, metadata: { order, line: order + '_1' } });
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_order_lines WHERE id = ?').get(order + '_1').status, 'refunded');
+  assert.deepEqual(s.DB.sql.prepare("SELECT key FROM entitlements WHERE state = 'active' ORDER BY key").all().map((r) => r.key), ['a', 'c']);
+  const totals = await (await s.fetchSite('/_studio/api/shop', { headers: s.owner })).json();
+  assert.equal(totals.totals.paid, 500);
+  assert.equal(totals.totals.refunded, 200);
+  s.stripe.close();
+});
+
+test('missing line schema names its step and old order rows become one line', async () => {
+  const { SHOP_MIGRATION, SHOP_RESERVATIONS, SHOP_STATEMENTS, SHOP_LINES, migrationNeeded } = await import('../worker/shop-store.mjs');
+  const db = new DatabaseSync(':memory:');
+  db.exec(SHOP_MIGRATION + SHOP_RESERVATIONS + SHOP_STATEMENTS);
+  const DB = { prepare: (q) => ({ first: async () => db.prepare(q).get() }) };
+  assert.equal(await migrationNeeded({ DB }), '0012_shop_lines.sql');
+  db.prepare("INSERT INTO shop_orders (id, player, item, amount, currency, till, mode, status, created_at, updated_at) VALUES ('ord_old', 'buyer', 'skin', 501, 'usd', 'stripe', 'test', 'paid', 1, 1)").run();
+  db.exec(SHOP_LINES);
+  assert.equal(await migrationNeeded({ DB }), null);
+  const line = db.prepare('SELECT * FROM shop_order_lines').get();
+  assert.equal(line.order_id, 'ord_old');
+  assert.equal(line.quantity, 1);
+  assert.equal(line.amount, 501);
+  db.close();
+});
+
+test('an optional parent step also checks out a cart and a fixed-price tip stays a tip', async () => {
+  const s = await site({ settings: { policy: { preset: 'protective' }, referralNewPlayersOnly: false, referrals: { rate: 0.1 }, items: [SUPPORTER,
+    { id: 'tip', kind: 'tip', name: 'Fixed gift', price: 200 }, { id: 'free', name: 'Free', price: 0, gives: ['free'] },
+  ] } });
+  const teen = s.player(20, { band: 'teen' });
+  const { arrivalCookie } = await import('../worker/referrals.mjs');
+  const arrivalUrl = new URL('https://owls.example/?via=friends.example');
+  const cookie = await arrivalCookie(new Request(arrivalUrl, { headers: { 'user-agent': BROWSER, accept: 'text/html' } }), s.env, arrivalUrl, { open: true, referrals: { windowDays: null } });
+  teen.cookie += '; ' + cookie.split(';')[0];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => String(url).startsWith('https://friends.example/') ? Response.json({ kind: 'homie-studio', referrals: { accepts: true, statements: 'https://friends.example/api/referrals/statement' } }) : originalFetch(url, init);
+  let link;
+  try { link = await (await s.post('/api/shop/parent', { lines: [{ item: 'supporter' }, { item: 'tip' }, { item: 'free' }] }, s.as(teen))).json(); } finally { globalThis.fetch = originalFetch; }
+  assert.ok(link.link);
+  const response = await s.fetchSite(new URL(link.link).pathname, { method: 'POST', headers: { origin: 'https://owls.example', 'content-type': 'application/x-www-form-urlencoded' }, body: 'grownup=yes' });
+  assert.equal(response.status, 303);
+  const form = s.stripe.calls.at(-1).form;
+  assert.equal(form.get('line_items[0][price_data][unit_amount]'), '500');
+  assert.equal(form.get('line_items[1][price_data][unit_amount]'), '200');
+  assert.equal(form.get('metadata[via]'), 'friends.example');
+  assert.equal(form.get('line_items[2][price_data][unit_amount]'), '0');
+  s.stripe.close();
+});
+
+test('default shop accepts a configured preview and has no unwritten referral rate or fixed tip price restriction', async () => {
+  assert.equal(checkShop({ referrals: {}, items: [{ id: 'tip', kind: 'tip', name: 'Tip', price: 100 }] }).shop.referrals.rate, 0);
+  const s = await site({ settings: { policy: undefined, capPerPlayerMonth: undefined, items: [{ id: 'tip', kind: 'tip', name: 'Tip', price: 100 }] } });
+  s.env.HOMIE_PREVIEW = '1';
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip' }, s.same)).status, 200);
+  s.stripe.close();
+});
+
+
+test('failed Stripe refunds can be retried without repeating a pending refund', async () => {
+  const s = await site({ settings: { policy: undefined, automaticTax: false } });
+  const p = s.player();
+  const { order } = await (await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p))).json();
+  const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(order);
+  const checkout = s.stripe.calls.find((c) => c.path === '/v1/checkout/sessions');
+  assert.equal(Number(checkout.form.get('expires_at')), Math.floor(row.created_at / 1000) + 86400);
+  await s.hook('checkout.session.completed', { ...s.stripe.behave.sessions.get(row.session), payment_status: 'paid', amount_total: 500, payment_intent: 'pi_retry_refund' });
+  s.stripe.behave.refundStatus = 'pending';
+  assert.equal((await s.post('/_studio/api/shop/refund', { order }, s.owner)).status, 202);
+  assert.equal((await s.post('/_studio/api/shop/refund', { order }, s.owner)).status, 202);
+  assert.equal(s.stripe.calls.filter((c) => c.method === 'POST' && c.path === '/v1/refunds').length, 1);
+  s.stripe.behave.existingRefundStatus = 'failed';
+  s.stripe.behave.refundStatus = 'succeeded';
+  assert.equal((await s.post('/_studio/api/shop/refund', { order }, s.owner)).status, 200);
+  const calls = s.stripe.calls.filter((c) => c.method === 'POST' && c.path === '/v1/refunds');
+  assert.equal(calls.length, 2);
+  assert.notEqual(calls[0].idem, calls[1].idem);
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order).status, 'refunded');
+  s.stripe.close();
 });

@@ -124,6 +124,35 @@ CREATE TABLE referral_edition_lines (
 ) WITHOUT ROWID;
 `;
 
+export const SHOP_LINES_FILE = '0012_shop_lines.sql';
+export const SHOP_LINES = `-- Each checkout retains its item snapshots and independently refundable lines.
+CREATE TABLE shop_order_lines (
+  id TEXT PRIMARY KEY, order_id TEXT NOT NULL, position INTEGER NOT NULL,
+  item TEXT NOT NULL, quantity INTEGER NOT NULL, unit_amount INTEGER NOT NULL,
+  amount INTEGER NOT NULL, total INTEGER, snapshot TEXT, status TEXT NOT NULL DEFAULT 'started',
+  refund TEXT, refunded_at INTEGER, UNIQUE(order_id, position)
+);
+INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, total, status, refund, refunded_at)
+SELECT id || '_0', id, 0, item, 1, amount, amount, total, status, refund, refunded_at FROM shop_orders;
+ALTER TABLE entitlements RENAME TO entitlements_before_lines;
+CREATE TABLE entitlements (
+  player TEXT NOT NULL, key TEXT NOT NULL, item TEXT NOT NULL, order_id TEXT NOT NULL,
+  line_id TEXT NOT NULL DEFAULT '', quantity INTEGER NOT NULL DEFAULT 1,
+  starts_at INTEGER NOT NULL, ends_at INTEGER, state TEXT NOT NULL, used_at INTEGER,
+  PRIMARY KEY (player, key, order_id, line_id)
+) WITHOUT ROWID;
+INSERT INTO entitlements (player, key, item, order_id, line_id, starts_at, ends_at, state, used_at)
+SELECT player, key, item, order_id, order_id || '_0', starts_at, ends_at, state, used_at FROM entitlements_before_lines;
+DROP TABLE entitlements_before_lines;
+CREATE INDEX entitlements_order ON entitlements (order_id);
+ALTER TABLE shop_parent_links ADD COLUMN cart TEXT;
+ALTER TABLE shop_orders ADD COLUMN referral_terms TEXT;
+ALTER TABLE shop_orders ADD COLUMN checkout_player TEXT;
+UPDATE shop_orders SET checkout_player = player;
+ALTER TABLE referral_lines ADD COLUMN original_share INTEGER;
+UPDATE referral_lines SET original_share = share;
+`;
+
 const DAY = 86_400_000;
 export const ORDER_ID = /^ord_[A-Za-z0-9]{20}$/;
 const PLAYER_ID = /^pl_[A-Za-z0-9_-]{22}$/;
@@ -145,6 +174,11 @@ export async function migrationNeeded(env) {
     [SHOP_RESERVATIONS_FILE, 'SELECT expires_at FROM shop_orders LIMIT 1'],
     [SHOP_STATEMENTS_FILE, 'SELECT issued FROM referral_editions LIMIT 1'],
     [SHOP_STATEMENTS_FILE, 'SELECT edition FROM referral_edition_lines LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT snapshot, total FROM shop_order_lines LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT line_id, quantity FROM entitlements LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT referral_terms, checkout_player FROM shop_orders LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT cart FROM shop_parent_links LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT original_share FROM referral_lines LIMIT 1'],
   ]) {
     try { await env.DB.prepare(query).first(); } catch { return file; }
   }
@@ -174,13 +208,18 @@ export async function setBand(env, player, band) {
 export async function ownsOf(env, player, now = Date.now()) {
   if (!PLAYER_ID.test(String(player ?? ''))) return [];
   try {
-    const { results } = await env.DB.prepare("SELECT key, item, ends_at, used_at FROM entitlements WHERE player = ?1 AND state = 'active' AND starts_at <= ?2 AND (ends_at IS NULL OR ends_at > ?2) ORDER BY starts_at").bind(player, now).all();
-    const out = new Map();
+    const { results } = await env.DB.prepare("SELECT key, item, ends_at, used_at, quantity FROM entitlements WHERE player = ?1 AND state = 'active' AND starts_at <= ?2 AND (ends_at IS NULL OR ends_at > ?2) ORDER BY starts_at").bind(player, now).all();
+    const out = new Map(), quantities = new Map();
     for (const r of results ?? []) {
+      quantities.set(r.key, (quantities.get(r.key) ?? 0n) + BigInt(r.quantity));
       const until = r.ends_at === null ? null : Number(r.ends_at);
       const prev = out.get(r.key);
       // Two orders of the same key: the one that lasts longest wins.
       if (!prev || (prev.until !== null && (until === null || until > prev.until))) out.set(r.key, { key: r.key, item: r.item, until, used: r.used_at !== null && r.used_at !== undefined });
+    }
+    for (const value of out.values()) {
+      const quantity = quantities.get(value.key);
+      value.quantity = quantity <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(quantity) : String(quantity);
     }
     return [...out.values()];
   } catch { return []; }
@@ -191,13 +230,20 @@ export async function spentThisMonth(env, player, now = Date.now()) {
   // A Stripe session remains reserved until Stripe confirms its outcome. Test rows never consume a live cap.
   const d = new Date(now);
   const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-  const r = await env.DB.prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM shop_orders WHERE player = ?1 AND mode = ?4 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?3)))").bind(player, start, now, String(env.STRIPE_KEY).includes('_live_') ? 'live' : 'test').first();
+  const r = await env.DB.prepare("SELECT COALESCE(SUM(amount - COALESCE((SELECT SUM(l.amount) FROM shop_order_lines l WHERE l.order_id = shop_orders.id AND l.status = 'refunded'), 0)), 0) AS n FROM shop_orders WHERE player = ?1 AND mode = ?4 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?3)))").bind(player, start, now, String(env.STRIPE_KEY).includes('_live_') ? 'live' : 'test').first();
   return Number(r?.n) || 0;
 }
 
 export async function orderById(env, id) {
   if (!ORDER_ID.test(String(id ?? ''))) return null;
   try { return await env.DB.prepare('SELECT * FROM shop_orders WHERE id = ?1').bind(id).first(); } catch { return null; }
+}
+
+export const orderLines = async (env, id) => (await env.DB.prepare('SELECT * FROM shop_order_lines WHERE order_id = ?1 ORDER BY position').bind(id).all()).results ?? [];
+
+export function lineView(r) {
+  const item = r.snapshot ? JSON.parse(r.snapshot) : null;
+  return { id: r.id, item: r.item, name: item?.name ?? r.item, kind: item?.kind ?? null, quantity: Number(r.quantity), unitAmount: Number(r.unit_amount), amount: Number(r.amount), total: r.total === null ? null : Number(r.total), status: r.status, refundedAt: r.refunded_at };
 }
 
 export const orderBySession = (env, session) => env.DB.prepare('SELECT * FROM shop_orders WHERE session = ?1').bind(String(session ?? '')).first();
@@ -221,6 +267,7 @@ export function playerOrderStatus(row) {
 export async function shopDataOf(env, player) {
   try {
     const orders = ((await env.DB.prepare("SELECT * FROM shop_orders WHERE player = ?1 AND status != 'started' ORDER BY created_at").bind(player).all()).results ?? []).filter((r) => playerOrderStatus(r) !== 'started').map((r) => orderView({ ...r, status: playerOrderStatus(r) }));
+    for (const order of orders) order.lines = (await orderLines(env, order.id)).map(lineView);
     const owns = await ownsOf(env, player);
     const band = await bandOfPlayer(env, player);
     return { orders, owns, ageBand: band };
@@ -246,15 +293,15 @@ export function forgetPlayerShop(env, player) {
 }
 
 /** Grant an order's entitlements (idempotent on player, key and order). */
-export function grantStatements(env, order, item, now = Date.now()) {
+export function grantStatements(env, order, item, now = Date.now(), line = { id: order.id + '_0', quantity: 1 }) {
   const starts = item.starts ? Math.max(now, Date.parse(item.starts)) : now;
-  const ends = item.ends ? Date.parse(item.ends) : item.days ? starts + Math.round(item.days * DAY) : null;
-  return (item.gives ?? []).map((key) => env.DB.prepare("INSERT INTO entitlements (player, key, item, order_id, starts_at, ends_at, state, used_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', NULL) ON CONFLICT(player, key, order_id) DO UPDATE SET state = 'active'")
-    .bind(order.player, key, item.id, order.id, starts, ends));
+  const ends = item.ends ? Date.parse(item.ends) : item.days !== undefined && item.days !== null ? starts + Math.round(item.days * DAY) : null;
+  return (item.gives ?? []).map((key) => env.DB.prepare("INSERT INTO entitlements (player, key, item, order_id, line_id, quantity, starts_at, ends_at, state, used_at) SELECT ?1, ?2, ?3, ?4, ?7, ?8, ?5, ?6, 'active', NULL WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?4 AND paid_at IS NULL) ON CONFLICT(player, key, order_id, line_id) DO NOTHING")
+    .bind(order.player, key, item.id, order.id, starts, ends, line.id, line.quantity));
 }
 
 export const revokeStatement = (env, orderId) => env.DB.prepare("UPDATE entitlements SET state = 'revoked' WHERE order_id = ?1").bind(orderId);
-export const restoreStatement = (env, orderId) => env.DB.prepare("UPDATE entitlements SET state = 'active' WHERE order_id = ?1").bind(orderId);
+export const restoreStatement = (env, orderId) => env.DB.prepare("UPDATE entitlements SET state = 'active' WHERE order_id = ?1 AND line_id IN (SELECT id FROM shop_order_lines WHERE order_id = ?1 AND status != 'refunded')").bind(orderId);
 
 /** The badge a player shows in rooms (a supporter's), from what they own: the first live badge key, or null. */
 export async function badgeOf(env, player, shop) {
