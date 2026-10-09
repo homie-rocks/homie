@@ -35,6 +35,7 @@ New 3D games keep their matches on the server and answer your controls immediate
 ### Fixed
 
 - Predicted movement respects the server's floor and ceiling, and catch-up animation follows the pose being drawn.
+- A correction after lost snapshots no longer makes a fast knockback look almost twice as fast while it fades.
 - The packed-studio performance check recognizes a room hosted by the server.
 
 ### Upgrade notes

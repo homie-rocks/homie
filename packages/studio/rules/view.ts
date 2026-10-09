@@ -220,16 +220,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (path) {
         // Loss can make even a small correction longer than the distance travelled in
         // 100 ms. Bound its fade by actual progress, or it pulls steady movement backwards.
+        // A forced knock can travel much faster than running. It must not also
+        // erase a large offset at that speed and almost double the drawn impulse.
         // Only one queued fade advances at a time. A stopped body finishes its correction.
         if (waiting) o.at = now;
         else {
           const length = Math.hypot(o.delta.x, o.delta.y, o.delta.z);
           const elapsed = Math.max(0, now - o.last);
-          // A knock may travel faster than normal movement, and catch-up already accelerates it.
-          // Fading the offset must not add another fraction of that accelerated speed.
-          const allowance = length ? (myKind()?.maxSpeed ?? 0) * elapsed / 1000 / length : 1;
-          const release = settled && catchTick === null ? Math.min(allowance, elapsed / predict.blendMs) : 0;
-          const progress = length ? Math.min(allowance, distance(path, o.path) * 0.8 / length) : 1;
+          const travel = Math.max(1, myKind()?.maxSpeed ?? 0) * elapsed / 1000;
+          const release = settled && catchTick === null ? Math.min(elapsed / predict.blendMs, length ? travel / length : 1) : 0;
+          const progress = length ? Math.min(distance(path, o.path), travel) * 0.8 / length : 1;
           const nominal = Math.max(0, Math.min(1, 1 - (now - o.at) / predict.blendMs));
           o.fade = Math.max(nominal, o.fade - Math.max(release, progress));
         }

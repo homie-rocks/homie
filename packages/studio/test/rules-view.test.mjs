@@ -45,6 +45,13 @@ export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{lau
         if(b.motion.launch){const age=c.tick-b.motion.launch;b.motion.phase=Math.min(20,age);if(age===1)b.pos={x:b.pos.x+4,y:0,z:0};b.grounded=age>=10;b.vel={x:0,y:0,z:age<10?1:0};b.pos={x:b.pos.x,y:0,z:age<10?age*.1:0};}
         else b.pos={x:0,y:0,z:b.pos.z+i.az/127};
       }});`);
+    } else if (runaway === 'knock') {
+      writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100, 0], max: [100, 100, 3] } }));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
+export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{launch:{}}},entities:{runner:{player:true,motion:{launch:f.tick()},body:{shape:'capsule',radius:.4,height:1.7,maxSpeed:6},commands:{launch(w,s){s.motion.launch=w.tick;}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+      writeFileSync(join(dir, 'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules'; export const move=defineMove({runner(b,i,c){
+const age=c.tick-b.motion.launch; b.vel={x:b.motion.launch&&age>0&&age<=8?24:0,y:0,z:0}; b.pos=c.math.add(b.pos,c.math.scale(b.vel,c.dt));
+}});`);
     } else if (runaway === 'press') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
@@ -1420,4 +1427,24 @@ test('3D prediction clamps vertical bounds and draws animation from the catch-up
   }
   assert.ok(catches>3 && airborne>0,'the unseen launch exercised airborne catch-up');
   assert.equal(r.host.core.stats.errors,0);
+});
+
+test('a late fast knock does not double its drawn speed while a large correction fades', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'knock');
+  let muteUntil = 0;
+  const clock = virtualTime(t), r = rig(L, compiled, false, m => m.t === 'snap' && Date.now() < muteUntil ? null : 150, 150); t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } }); t.after(() => a.close());
+  await clock.wait(12000); muteUntil = Date.now() + 240; a.command('launch');
+  let previous = a.me.pos.x, largest = 0, caught = false;
+  for (let i = 0; i < 240; i++) {
+    await clock.wait(16); const next = a.me.pos.x, p = globalThis.__homieNet.probe.prediction();
+    largest = Math.max(largest, Math.abs(next - previous)); previous = next;
+    caught ||= p.catchTick !== null;
+  }
+  t.diagnostic(`largest frame movement: ${largest} m`);
+  assert.ok(caught, 'the delayed impulse requires catch-up');
+  assert.ok(largest < .60, `one 16 ms frame moved ${largest} m`);
+  const authoritative = r.host.core.snapshot()[1].find(e => e[9] === a.seat)[3][0];
+  assert.ok(Math.abs(a.me.pos.x - authoritative) < .001, 'the correction converges after the knock ends');
+  assert.equal(globalThis.__homieNet.probe.prediction().snaps, 0);
 });

@@ -354,3 +354,29 @@ the release's own tag is still excluded by version. The publish job explicitly
 fetches full history and tags, so the tagged-commit gate exercises the actual
 predecessor releases rather than skipping for a shallow checkout. No sibling tag
 or branch was changed.
+
+The first release-version gate caught the carried 0.38.0 changelog section's
+missing #77 link (it was previously the newest section, for which the link is
+optional). Both changelogs now include the link. All 11 changelog regressions
+passed; the full release gate restarted before its long browser matrices.
+
+The restarted real-timer matrix caught a rarer Gem Rush 3D case at 300 ms / 10%
+loss: a 5.42 m reconciliation error was eased, but one drawn frame traveled
+0.868 m. A deterministic regression losing the knock's starting snapshots
+reproduced 0.864 m in 16 ms. Offset fading was paced by actual path distance, so
+a fast knock could also erase its correction and almost double its drawn speed.
+Fading is now bounded by normal movement speed as well as path progress, including
+the residual fade after stopping (with a 1 m/s floor for zero-speed bodies).
+The physical knock and catch-up rate are unchanged. Large residual corrections can
+take longer than the nominal blend interval. No continuity assertion was relaxed.
+That failed gate was stopped; the complete view suite, real-timer matrix and final
+renderer trials will be repeated before the final gate restart.
+
+All 95 view/protocol tests passed after the fade fix, including handover, offline
+recovery, clock calibration, late presses, 3D animation and the new regression.
+That regression's largest 16 ms step fell from 0.864 m to 0.557 m, with zero snaps
+and convergence to the authoritative ending position.
+
+The repeated 18-case Chrome matrix passed after the knock fade fix: first-frame
+response in every case, zero snaps and steady clock rebases. The receipt is
+`feel-knock-fixed.json`; all earlier receipts remain available for comparison.
