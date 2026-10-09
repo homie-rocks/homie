@@ -10,7 +10,7 @@ Part of Homie's open engine packages. Games and apps can import navigation direc
 
 ## Install
 
-The first npm publication requires a maintainer. After this PR merges, use the repository’s `scripts/first-publish.sh` procedure to publish 0.1.0 once and register the trusted publisher. The release workflow reports and defers a new package without blocking independent packages. Until then, build and `npm pack --workspace packages/nav` in this repository and install that tarball in your studio. After bootstrap:
+The package is private until a maintainer publishes it once. Automated releases skip it, and studio does not depend on it. From clean merged main with npm login completed, run `node scripts/first-publish-private.mjs nav`. This builds and publishes a temporary public copy and registers the trusted publisher, leaving the checkout private. Afterwards remove `private` from `packages/nav/package.json`, update its package contract assertion to expect `undefined`, regenerate `package-lock.json` and run `node scripts/publish.mjs --check --strict` before merging that activation. If npm published successfully but trust registration failed, complete registration on npm (repository `homie-rocks/homie`, workflow `publish.yml`, environment `npm`) before activation; do not republish 0.1.0. Until bootstrap, build and `npm pack --workspace packages/nav` and install that tarball in your studio. After bootstrap:
 
 ```sh
 npm install --save-exact @homie-rocks/nav@0.1.0

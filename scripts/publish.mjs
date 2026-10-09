@@ -21,13 +21,11 @@
  *     ships as a new version; the release refuses one that would silently not ship.
  *     CHANGELOG.md is set aside: it is the history of every version, so a later section,
  *     or a fixed word in an older one, never needs a version of its own;
- *   - new packages and their dependents wait for a maintainer bootstrap; independent packages
- *     still release. Trusted publishing can only
+ *   - in GitHub Actions, every package already exists on npm. Trusted publishing can only
  *     publish a new VERSION: npm lets a package name a trusted publisher only once the
  *     package exists. A brand-new package is published once by a maintainer, who then
  *     registers this workflow as its trusted publisher; from then on it releases here.
  */
-import { deferredPackages } from './publish-plan.mjs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -118,22 +116,25 @@ try {
   }
 } finally { rmSync(scratch, { recursive: true, force: true }); }
 
-const deferred = deferredPackages(plan, pkgs);
 for (const p of plan) {
   const state = p.changed?.length ? 'CHANGED    ' : p.published ? 'on npm     ' : p.exists ? 'NEW VERSION' : 'NEW PACKAGE';
   const why = p.changed?.length ? ` (differs from npm in ${p.changed.length} file(s): ${p.changed.slice(0, 4).join(', ')}${p.changed.length > 4 ? ', ...' : ''}; give it a new version to release it)` : '';
   process.stdout.write(`${state} ${p.name}@${p.version}${why}\n`);
 }
-const todo = plan.filter((p) => !p.published && !deferred.has(p.name));
-for (const [name, reason] of deferred) process.stdout.write(`DEFERRED    ${name}: ${reason}\n`);
-if (deferred.size) process.stdout.write('A maintainer must publish each new package once with scripts/first-publish.sh after merge, then register this workflow as its trusted publisher (repository homie-rocks/homie, workflow publish.yml, environment npm). Independent packages can release now.\n');
+const todo = plan.filter((p) => !p.published);
 const changed = plan.filter((p) => p.changed?.length);
-process.stdout.write(`${todo.length} to publish, ${plan.filter((p) => p.published).length} already on npm${deferred.size ? `, ${deferred.size} deferred until bootstrap` : ''}${changed.length ? `, ${changed.length} changed since their version was published` : ''}\n`);
+process.stdout.write(`${todo.length} to publish, ${plan.length - todo.length} already on npm${changed.length ? `, ${changed.length} changed since their version was published` : ''}\n`);
 if (STRICT && changed.length) fail(`nothing was published: ${changed.map((p) => `${p.name}@${p.version}`).join(', ')} changed since that version was published. A published version never changes: bump the version (and the exact pins of the packages that depend on it).`);
 if (CHECK) process.exit(0);
 
 // 4. Publish.
 if (!inCI && !DRY) fail('releases are published by .github/workflows/publish.yml. Locally, use --check or --dry-run.');
+const brandNew = todo.filter((p) => !p.exists);
+if (inCI && !DRY && brandNew.length) {
+  fail(`nothing was published: ${brandNew.map((p) => p.name).join(', ')} ${brandNew.length === 1 ? 'is' : 'are'} not on npm yet. `
+    + 'Trusted publishing can only add versions to a package that exists: a maintainer publishes its first version once, '
+    + 'then registers this workflow as its trusted publisher (repository homie-rocks/homie, workflow publish.yml, environment npm).');
+}
 // A package the registry refuses (it has not named this workflow as its trusted publisher yet, so the PUT answers
 // 404) must not hold back the ones that do not depend on it: the toolkit shipped with nothing published once, behind a
 // package it never imports. Each refusal is kept; a package that depends on a refused one is not tried (it would pin

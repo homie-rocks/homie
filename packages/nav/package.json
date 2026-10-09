@@ -80,5 +80,6 @@
   "devDependencies": {
     "recast-navigation": "0.43.1",
     "workerd": "1.20261007.1"
-  }
+  },
+  "private": true
 }

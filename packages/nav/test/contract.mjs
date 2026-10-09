@@ -85,7 +85,7 @@ export function testEnginePackage(packageUrl, { publicModules } = {}) {
     assert.equal(pj.license, 'Apache-2.0');
     assert.equal(pj.type, 'module');
     assert.match(pj.version, /^\d+\.\d+\.\d+$/);
-    assert.equal(pj.private, undefined, 'an engine package is published');
+    assert.equal(pj.private, true, 'navigation waits for its maintainer first publication');
     const expectedExports = { './package.json': './package.json' };
     if (publicModules) {
       // Explicit opt-in for a package with private implementation modules.
