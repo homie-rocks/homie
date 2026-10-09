@@ -1,3 +1,5 @@
+import { selling } from './extensions.mjs';
+
 /**
  * THE STUDIO'S SHARED GAME PARTS, AS ITS SITE SERVES THEM (parts/PARTS.md section 4).
  *
@@ -17,7 +19,7 @@ const VERSION = /^\d{1,6}\.\d{1,6}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,40})?$/;
 /** A packed part's files: framed by the part's own page and by the hub, so they keep their own frame rule (index.mjs finish). */
 export const PART_FILES = /^\/parts\/[a-z0-9][a-z0-9-]{0,47}\/\d{1,6}\.\d{1,6}\.\d{1,6}[^/]*\//;
 export const PARTS_WELL_KNOWN = '/.well-known/homie-parts.json';
-export const isPartsPath = (path) => path === PARTS_WELL_KNOWN || path === '/parts' || path.startsWith('/parts/');
+export const isPartsPath = (path) => path === '/openapi.json' || path === '/.well-known/api-catalog' || path === '/parts/catalog.json' || path === '/purchases/keys.json' || path === PARTS_WELL_KNOWN || path === '/parts' || path.startsWith('/parts/');
 
 const CORS = { 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff' };
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', ...headers } });
@@ -37,25 +39,29 @@ export async function partsIndex(env, origin) {
  * One index entry as the world sees it: how to add it, and the game it came out of with its page and Play address.
  * Only a PUBLIC game is named (a private or invite-only game's parts are still shared, without saying where from).
  */
-function entryOf(p, cat, url) {
+function entryOf(p, cat, url, capabilities = { machine: {} }) {
   const g = (p.from?.game ?? p.from?.app) ? (cat.games ?? []).find((x) => x.id === (p.from.game ?? p.from.app)) : null;
   const { from, ...rest } = p;
   return {
     ...rest,
-    ...(!g && from && (from.music || from.video) ? { from: { ...(from.music ? { music: from.music } : { video: from.video }), name: from.name ?? null, studio: from.studio ?? null } } : {}),
+    ...(!g && from && !from.game && !from.app ? { from } : {}),
     ...(g ? { from: { [g.kind === 'app' ? 'app' : 'game']: g.id, name: g.name ?? g.id, studio: cat.studio?.name ?? from.studio ?? null, page: `${url.origin}/${g.id}/`, [g.kind === 'app' ? 'open' : 'play']: `${url.origin}/${g.id}/${g.kind === 'app' ? 'open' : 'play'}` } } : {}),
     add: `${url.host}/${p.id}`,
+    ...(selling.entryDescription?.(p, cat, url, capabilities) ?? {}),
   };
 }
 
 export async function partsRoutes(request, env, url, { catalogueOf }) {
   const path = url.pathname;
+  if (!selling.enabled && ['/purchases/keys.json','/openapi.json','/.well-known/api-catalog'].includes(path)) return null;
+  if (selling.enabled) { const extra = await selling.discoveryRoutes(request, env, url, { catalogueOf }); if (extra) return extra; }
   const read = request.method === 'GET' || request.method === 'HEAD';
-  if (path === PARTS_WELL_KNOWN) {
+  if (path === PARTS_WELL_KNOWN || path === '/parts/catalog.json') {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, HEAD' } });
     if (!read) return json({ ok: false, error: 'method' }, 405, { allow: 'GET, HEAD', ...CORS });
     const [index, cat] = await Promise.all([partsIndex(env, url.origin), catalogueOf()]);
-    return json({ v: 1, studio: { name: cat.studio?.name ?? index.studio?.name ?? null, url: url.origin }, parts: index.parts.map((p) => entryOf(p, cat, url)) }, 200, { ...CORS, 'cache-control': 'public, max-age=300' });
+    const capabilities = await selling.machineCapabilities(env);
+    return json({ v: 1, studio: { name: cat.studio?.name ?? index.studio?.name ?? null, url: url.origin }, parts: index.parts.map((p) => entryOf(p, cat, url, capabilities)) }, 200, { ...CORS, 'cache-control': 'public, max-age=300' });
   }
   const segs = path.split('/').filter(Boolean);
   // /parts/<id>/<version>/<file…>: a packed file, only when the index names that part and that version.
@@ -67,6 +73,9 @@ export async function partsRoutes(request, env, url, { catalogueOf }) {
     let file;
     try { file = segs.slice(3).map(decodeURIComponent).join('/'); } catch { file = '..'; }
     const gone = () => new Response('not found', { status: 404, headers: { ...CORS, 'cache-control': 'no-store' } });
+    if (file.split('/').some((s) => !s || s === '..' || s.startsWith('.')) || file.includes('\\')) return gone();
+    const protectedFile = part && !part.sale && !part.releases?.some((r) => r.version === segs[2] && r.sale) ? null : await selling.paidFile(request, env, url, segs[1], segs[2], file, TYPES[file.split('.').pop().toLowerCase()]);
+    if (protectedFile) return protectedFile;
     if (!part || !(part.versions ?? []).includes(segs[2]) || file.split('/').some((s) => !s || s === '..' || s.startsWith('.'))) return gone();
     const res = await env.ASSETS.fetch(new Request(`${url.origin}/parts/${segs[1]}/${segs[2]}/${file.split('/').map(encodeURIComponent).join('/')}`));
     if (!res.ok) return gone();
@@ -104,7 +113,7 @@ export async function partsRoutes(request, env, url, { catalogueOf }) {
 /* ------------------------------------------------------------------ the pages */
 
 const KIND_WORDS = { character: 'Character', rig: 'Rig', clips: 'Animation clips', environment: 'Environment', effect: 'Effect', sound: 'Sound', ui: 'UI', mechanic: 'Mechanic', shader: 'Shader', 'level-generator': 'Level generator', 'bot-brain': 'Bot brain', 'audio-pack': 'Audio pack', 'set-piece': 'Set piece' };
-const kindOf = (p) => KIND_WORDS[p.kind] ?? 'Part';
+const kindOf = (p) => KIND_WORDS[p.kind] ?? p.kind ?? 'Part';
 const CSS = `<style>
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;margin:8px 0 0;padding:0;list-style:none}
 .pcard{display:flex;flex-direction:column;gap:8px;padding:18px;border:1px solid color-mix(in srgb,var(--fg) 14%,transparent);border-radius:16px;text-decoration:none;color:inherit;background:color-mix(in srgb,var(--fg) 3%,transparent)}
@@ -134,12 +143,12 @@ const head = (kicker, title, lead, extra = '') => `<header class="head"><p class
 const studioOf = (cat) => cat.studio?.name ?? 'Studio';
 const fromLine = (p) => ((p.from?.game ?? p.from?.app) ? `From <a href="/${esc((p.from.game ?? p.from.app))}/">${esc(p.from.name ?? (p.from.game ?? p.from.app))}</a>` : '');
 /** What a person says to their AI to get the part, in plain words with its name and reference: no command to type. */
-const sayAdd = (p) => `Add the "${p.name}" part from ${p.add} to my game`;
+const sayAdd = (p) => `Add the "${p.name}" part from ${p.add} to my studio`;
 const sayRow = (label, say) => `<div class="psay"><div><span class="ptag">${esc(label)}</span><code>${esc(say)}</code></div><button class="pcopy" type="button" data-copy="${esc(say)}">${icon('copy')}<span data-copy-word>Copy</span></button></div>`;
 
 function card(p) {
   const img = p.preview?.image ? `<img src="${esc(`${p.url}${p.preview.image}`)}" alt="" loading="lazy">` : '';
-  return `<li><a class="pcard" href="/parts/${esc(p.id)}/">${img}<span class="ptag">${esc(kindOf(p))} · ${esc(p.license ?? '')}</span><h3>${esc(p.name)}</h3><p>${esc(p.summary ?? '')}</p>${(p.from?.game ?? p.from?.app) ? `<p>From ${esc(p.from.name ?? (p.from.game ?? p.from.app))}</p>` : ''}</a></li>`;
+  return `<li><a class="pcard" href="/parts/${esc(p.id)}/">${img}<span class="ptag">${esc(kindOf(p))} · ${esc(p.license ?? '')} · ${esc(selling.priceWords(p.sale))}</span><h3>${esc(p.name)}</h3><p>${esc(p.summary ?? '')}</p>${(p.from?.game ?? p.from?.app) ? `<p>From ${esc(p.from.name ?? (p.from.game ?? p.from.app))}</p>` : ''}</a></li>`;
 }
 
 export function partsPage(cat, parts, url) {
@@ -149,7 +158,7 @@ export function partsPage(cat, parts, url) {
   for (const p of parts) { const k = (p.from?.game ?? p.from?.app) ?? ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
   const body = [...groups].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b))).map(([k, list]) => `<p class="sec"${k ? ` id="from-${esc(k)}"` : ''}>${k ? `From ${esc(list[0].from.name ?? k)}` : 'More parts'}</p><ul class="pgrid">${list.map(card).join('')}</ul>`).join('');
   return layout(cat, {
-    title: `Game parts · ${name}`, description: `Pieces of ${name}'s games that other studios can use in their own: creatures, levels, mechanics, sounds. Each with its licence.`, origin: url.origin, path: '/parts/', page: 'parts', head: CSS,
+    title: `Game parts · ${name}`, description: `Pieces of ${name}'s games that other studios can use in their own: creatures, levels, mechanics, sounds. Each with its licence.`, origin: url.origin, path: '/parts/', page: 'parts', head: CSS + (selling.enabled ? `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: parts.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: productDescription(p, url.origin) })) }).replaceAll('<', '\\u003c')}</script>` : ''),
     main: `${head('Game parts', 'Take a piece, make a game', `Pieces of ${name}'s games, shared one by one. Take the creature from one game, the level from another and the bot brain from a third, and make something new. Each part says its licence and who to credit.`)}
 <div class="wrap">${body}</div>`,
   });
@@ -207,6 +216,8 @@ function previewOf(p) {
 <a class="popen" href="${src}" target="_blank" rel="noopener noreferrer">${icon('arrow')}<span>Open the preview in its own tab</span></a>`;
 }
 
+export const productDescription = (p, origin) => selling.productDescription?.(p, origin);
+
 export function partPage(cat, p, url) {
   const name = studioOf(cat);
   const preview = p.preview?.page
@@ -216,6 +227,8 @@ export function partPage(cat, p, url) {
     ['Kind', esc(kindOf(p))],
     p.uses?.length ? ['For', esc(p.uses.join(', '))] : null,
     (p.from?.game ?? p.from?.app) ? [p.from.app ? 'From the app' : 'From the game', `<a href="/${esc((p.from.game ?? p.from.app))}/">${esc(p.from.name ?? (p.from.game ?? p.from.app))}</a> · <a href="/${esc((p.from.game ?? p.from.app))}/${p.from.app ? 'open' : 'play'}">${p.from.app ? 'Open it' : 'Play it'}</a>`] : null,
+    ['Price', esc(selling.priceWords(p.sale))],
+    p.sale ? ['Purchase terms', esc(`${p.sale.refund} Source: ${p.sale.source ? 'included' : 'not included'}. Updates: ${p.sale.updates}.`)] : null,
     ['Licence', `${esc(p.license ?? 'none named')}${p.license && !/^LicenseRef-/.test(p.license) ? ` · <a href="https://spdx.org/licenses/${esc(p.license)}.html" rel="noopener">what it allows</a>` : ''}`],
     p.attribution ? ['Credit', esc(p.attribution)] : null,
     ['Version', `${esc(p.version)}${(p.versions ?? []).length > 1 ? ` (also ${esc(p.versions.filter((v) => v !== p.version).join(', '))})` : ''}`],
@@ -228,7 +241,7 @@ export function partPage(cat, p, url) {
     (p.tags ?? []).length ? ['Tags', esc(p.tags.join(', '))] : null,
   ].filter(Boolean);
   return layout(cat, {
-    title: `${p.name} · a game part from ${name}`, description: `${p.summary ?? ''} A ${kindOf(p).toLowerCase()} from ${name}${p.from?.name ? `'s ${p.from.name}` : ''}, shared under ${p.license ?? 'its own terms'}.`.trim(), origin: url.origin, path: `/parts/${p.id}/`, page: 'part', head: CSS,
+    title: `${p.name} · a game part from ${name}`, description: `${p.summary ?? ''} A ${kindOf(p).toLowerCase()} from ${name}${p.from?.name ? `'s ${p.from.name}` : ''}, shared under ${p.license ?? 'its own terms'}.`.trim(), origin: url.origin, path: `/parts/${p.id}/`, page: 'part', head: CSS + (selling.enabled ? `<script type="application/ld+json">${JSON.stringify(productDescription(p, url.origin)).replaceAll('<', '\\u003c')}</script>` : ''),
     image: p.preview?.image ? `${p.url}${p.preview.image}` : null,
     main: `${head(`${kindOf(p)} · shared part`, p.name, p.summary ?? '', `<div class="keys"><a class="ghost" href="/parts/">${icon('arrow')}<span>All parts</span></a>${(p.from?.game ?? p.from?.app) ? `<a class="ghost" href="/${esc((p.from.game ?? p.from.app))}/${p.from.app ? 'open' : 'play'}">${icon('games')}<span>${p.from.app ? 'Open' : 'Play'} ${esc(p.from.name ?? (p.from.game ?? p.from.app))}</span></a>` : ''}</div>`)}
 <div class="wrap">
@@ -236,7 +249,7 @@ ${preview ? `<p class="sec">Try it</p>${preview}` : ''}
 <p class="sec">Use it in your game</p>
 <p class="plead">In a chat with your Homie studio open, ask for it by name:</p>
 ${sayRow('Say', sayAdd(p))}
-<p class="plead">Your AI fetches the files, checks every one, copies them into your studio and credits ${esc(name)} in your game. They are yours to tune from there.</p>
+<p class="plead">${p.sale ? 'Your AI shows the price and asks first. After your wallet pays, it receives the files,' : 'Your AI fetches the files,'} checks every one, copies them into your studio and credits ${esc(name)} in your game. They are yours to tune from there.</p>
 <p class="sec">About this part</p>
 <dl class="pfacts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>
 </div>`,

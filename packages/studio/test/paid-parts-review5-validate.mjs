@@ -1,0 +1,27 @@
+import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { seller } from './paid-parts-review5-kit.mjs';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+const world = await seller('validator5', { machine: { profile: 'profile_x', base: privateKeyToAccount(generatePrivateKey()).address } });
+world.env.CDP_API_KEY_ID = 'x'; world.env.CDP_API_KEY_SECRET = 'x';
+const server = createServer(async (req, res) => { try { const chunks = []; for await (const c of req) chunks.push(c);
+  const request = new Request(`http://${req.headers.host}${req.url}`, { method: req.method, headers: req.headers, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) });
+  const response = await world.direct(request); res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(Buffer.from(await response.arrayBuffer())); } catch (e) { res.writeHead(500); res.end(String(e)); } });
+await new Promise((r) => server.listen(0, '127.0.0.1', r));
+const origin = `http://127.0.0.1:${server.address().port}`;
+const discovery = await (await world.direct(new Request(`${origin}/openapi.json`))).json();
+const [path, operation] = Object.entries(discovery.paths)[0];
+const schema = operation.post.requestBody.content['application/json'].schema;
+const body = Object.fromEntries(Object.entries(schema.properties).filter(([, v]) => v.const !== undefined).map(([k, v]) => [k, v.const])); Object.assign(body, { buyer: 'a'.repeat(64), claim: 'b'.repeat(64) });
+const child = spawn(process.execPath, [new URL('../../../node_modules/mppx/dist/bin.js', import.meta.url).pathname, 'validate', origin, '--body', JSON.stringify({ [path]: body }), '--output-json'], { env: { ...process.env, NO_COLOR: '1' } });
+let out = ''; child.stdout.on('data', (d) => out += d); child.stderr.on('data', (d) => out += d);
+const code = await new Promise((r) => child.on('close', r));
+if (process.env.OUT) writeFileSync(process.env.OUT, out);
+let j; try { j = JSON.parse(out.slice(out.indexOf('{'))); } catch { j = null; }
+const flat = []; const walk = (x) => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') { if (x.severity) flat.push(x); Object.values(x).forEach(walk); } }; walk(j);
+const count = {}; for (const f of flat) count[f.severity] = (count[f.severity] ?? 0) + 1;
+console.log('exit', code, 'checks by severity', JSON.stringify(count)); for (const f of flat.filter((f) => f.severity !== 'pass')) console.log(JSON.stringify(f).slice(0, 300));
+if (!j) console.log(out.slice(0, 1500));
+console.log('orders left by the validator', world.sql.prepare('SELECT status, COUNT(*) n FROM purchase_orders GROUP BY status').all());
+server.closeAllConnections(); server.close(); await world.close(); process.exit(code);

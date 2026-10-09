@@ -819,7 +819,8 @@ const OUTWARD_FLAGS = {
   'lounge mod': ['url', 'remove'], 'lounge remove': ['url', 'all'],
   'chat remove': ['url', 'all'], 'chat budget': ['url'],
   'servers close': ['url', 'reopen'], 'servers level': ['url'], 'servers member': ['url', 'role', 'remove'],
-  'shop connect': ['url', 'managed', 'live', 'manual', 'renew'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note'], 'shop statements': ['url', 'period', 'send', 'cursor'],
+  'parts reissue': ['claim-hash', 'receipt-verified', 'buyer'], 'parts retire': [], 'parts keys': [], 'parts refund': ['game'],
+  'shop connect': ['url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'], 'shop statements': ['url', 'period', 'send', 'cursor'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
   // With --device it adds a phone to the person's Apple team and installs on it: a flag it does not know stops it.
@@ -1057,7 +1058,7 @@ async function main() {
     if (!sub) return shopStatus(root, { url });
     if (sub === 'init') return shopInit(root, { supporter: flags.has('supporter'), currency: flags.get('currency') ?? 'usd', price: flags.get('price') ?? 500, managed: flags.has('managed') });
     if (sub === 'check') return shopCheck(root);
-    if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
+    if (sub === 'connect') return shopConnect(root, { managed: flags.has('managed') ? true : null, live: flags.has('live'), manual: flags.has('manual'), fromClipboard: flags.has('from-clipboard'), renew: flags.has('renew'), log: (line) => process.stderr.write(`${line}\n`) });
     if (sub === 'disconnect') return shopDisconnect(root);
     if (sub === 'catalog') {
       const from = flags.get('have');
@@ -1072,7 +1073,7 @@ async function main() {
       return catalogPlan(root, { have, mode: mode ?? null });
     }
     if (sub === 'orders') return shopOrders(root, { url });
-    if (sub === 'refund') return shopRefund(root, positional[2], { url, reason: flags.get('reason'), note: flags.get('note') });
+    if (sub === 'refund') return shopRefund(root, positional[2], { url, reason: flags.get('reason'), note: flags.get('note'), manualTransaction: flags.get('manual-transaction') });
     if (sub === 'statements') return shopStatements(root, { url, period: flags.get('period'), cursor: flags.get('cursor') ?? '', send: flags.has('send') });
     return { ok: false, command: 'shop', why: `unknown: shop ${sub} (init, check, connect, disconnect, catalog, orders, refund, statements)` };
   }

@@ -8,3 +8,6 @@ dist/
 # points at them): made for the version that loaded it, never committed.
 plugins/homie/.claude-plugin/types/
 plugins/homie/tsconfig.json
+
+# Local review handoff; never part of a release.
+/SUMMARY-FOR-REVIEW.md

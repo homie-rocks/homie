@@ -49,5 +49,10 @@
     "simplex-noise": "4.0.3",
     "three": "0.185.1",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "miniflare": {
+      "sharp": "0.35.5"
+    }
   }
 }

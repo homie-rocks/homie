@@ -57,7 +57,7 @@ export function stripeValidation(path, form, catalog) {
     url('url');
     const events = [...form].filter(([k]) => /^enabled_events\[\d+\]$/.test(k)).map(([, v]) => v);
     // The events the shop uses, plus '*'; extend this documented subset when the shop subscribes to more.
-    const supported = ['*', 'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed'];
+    const supported = ['*', 'payment_intent.succeeded', 'invoice.paid', 'invoice_payment.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted', 'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed'];
     if (!events.length || events.some((e) => !supported.includes(e))) invalid('enabled_events', 'Specify valid enabled_events.');
   }
   if (path === '/v1/checkout/sessions') {

@@ -57,6 +57,22 @@ test('the virtual clock: real until frozen, then time, timers and animation fram
   assert.equal(clock.stats().steps, 3);
 });
 
+test('freezing drains overdue real-time timers before the stepped interval begins', () => {
+  let now = 0;
+  const win = { setTimeout: () => 1, setInterval: () => 2, clearTimeout() {}, clearInterval() {}, performance: { now: () => now }, Date, document: {}, requestAnimationFrame() {} };
+  win.window = win;
+  const ctx = vm.createContext(win);
+  vm.runInContext(VIRTUAL_CLOCK, ctx);
+  vm.runInContext('globalThis.ticks = 0; setInterval(() => ticks++, 10);', ctx);
+  // The host did not schedule its pump while the page's real time advanced.
+  now = 85;
+  win.__homieClock.freeze();
+  const baseline = win.ticks;
+  assert.equal(baseline, 8);
+  win.__homieClock.step(60);
+  assert.equal(win.ticks - baseline, 6, 'only the six intervals in the captured time belong to the take');
+});
+
 test('the two-client smoke verdict: no seat, two rooms, alone offline and one seat twice all fail by name', () => {
   const c = (kind, seat, extra = {}) => ({ kind, seated: seat === null ? null : { room: 'shoot-a', seat, role: seat === 0 ? 'host' : 'replica' }, net: { connected: true, offline: false }, ...extra });
   assert.deepEqual(judgeSmoke([c('computer', 0), c('phone', 1)]), { ok: true, verdict: 'PASS', room: 'shoot-a', seats: [0, 1] });

@@ -1,3 +1,4 @@
+import { selling } from './extensions.mjs';
 /**
  * The shop's pages (@homie-rocks/studio 0.24.0; worker/shop.mjs has the rules):
  *
@@ -527,14 +528,15 @@ export const OFFICE_SHOP_SCRIPT = String.raw`(function () {
       links.appendChild(link('/_studio/api/shop/orders.csv', 'CSV for your accountant'));
       top.appendChild(links);
       if (s.keyless) top.appendChild(el('p', { class: 'note' }, 'Refund in Stripe or ask your AI connected to Stripe. If a payment is missing here, ask your AI to resend its Stripe webhook.'));
-      if (s.totals) top.appendChild(el('p', { class: 'dim' }, 'Last 30 days: ' + s.totals.sales + ' sales, ' + cents(s.totals.paid, s.totals.currency) + ' before tax and fees; ' + s.totals.refunds + ' refunded (' + cents(s.totals.refunded, s.totals.currency) + '); ' + s.totals.disputes + ' disputed now, ' + s.totals.lost + ' lost.'));
+      for (const total of s.totalsByCurrency ?? (s.totals ? [s.totals] : [])) top.appendChild(el('p', { class: 'dim' }, 'Orders in the last 30 days: ' + total.sales + ' paid orders, ' + cents(total.paid, total.currency) + ' before tax and fees (subscription renewals are in Stripe); ' + total.refunds + ' refunded (' + cents(total.refunded, total.currency) + '); ' + total.disputes + ' disputed now, ' + total.lost + ' lost.'));
+      /* purchase-office */
       var ord = $('#orders'); ord.textContent = '';
       if (!s.orders.length) ord.appendChild(el('p', { class: 'empty' }, 'No orders yet.'));
       s.orders.forEach(function (o) {
         var row = el('div', { class: 'row' });
         row.appendChild(el('span', null, new Date(o.createdAt).toISOString().slice(0, 16).replace('T', ' ')));
         row.appendChild(el('b', null, o.name + ' · ' + o.shown));
-        row.appendChild(el('span', null, (o.player && o.player.name ? o.player.name : 'a deleted account') + (o.parent ? ' (a parent paid)' : '') + (o.via ? ' · sent by ' + o.via : '')));
+        row.appendChild(el('span', null, (o.player && o.player.name ? o.player.name : o.resourceKind ? 'a studio purchase' : 'a deleted account') + (o.parent ? ' (a parent paid)' : '') + (o.via ? ' · sent by ' + o.via : '')));
         row.appendChild(el('span', { class: 'st st-' + o.status }, o.status + (o.mode === 'test' ? ' · test' : '') + (o.note ? ' · ' + o.note : '')));
         if (o.stripe) row.appendChild(link(o.stripe, 'In Stripe'));
         if (o.dispute) row.appendChild(link(o.dispute, 'The dispute'));
@@ -644,8 +646,9 @@ let officeHash = null;
 /** /_studio/office/shop: the owner's shop. One inline script, allowed by its hash; connect only to this site. */
 export async function officeShopPage(cat) {
   const name = cat.studio?.name ?? 'Studio';
+  const script = OFFICE_SHOP_SCRIPT.replace('/* purchase-office */', selling.officeScript ?? '');
   if (!officeHash) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(OFFICE_SHOP_SCRIPT));
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(script));
     officeHash = `sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}`;
   }
   const body = `<header class="top"><h1>${esc(name)} <small>Shop</small></h1><div class="links"><a href="/_studio/office">Office</a><a href="/_studio/stats">Stats</a></div></header>
@@ -655,7 +658,7 @@ export async function officeShopPage(cat) {
 <div class="game" style="padding:6px 16px 12px" id="referrals"></div>
 <div class="toast" id="toast" role="status" hidden></div>
 <p class="note">You are the seller. Money goes from players to your own Stripe account; Homie never sees it and takes nothing. Refunds are handled in Stripe or by your connected AI; shops with the fuller checkout connection also offer Refund here. A card dispute never touches the player's account: answer it in Stripe; if you lose it, that one item is taken back. Tax: when enabled, Stripe Tax works out and collects tax where you told Stripe you are registered${cat.shop?.till === 'stripe-managed' ? '; with Managed Payments Stripe is the seller of record and files it for you' : ''}. Payouts, the balance and receipts are Stripe's own pages, linked above. Referrals: you pay referrers yourself (they invoice you); nothing moves through Homie. This is not legal or tax advice.</p>`;
-  return new Response(shell(cat, `Shop · ${name}`, body, { script: OFFICE_SHOP_SCRIPT }), {
+  return new Response(shell(cat, `Shop · ${name}`, body, { script }), {
     headers: { ...PRIVATE, 'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src '${officeHash}'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'` },
   });
 }

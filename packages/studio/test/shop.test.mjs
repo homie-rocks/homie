@@ -3512,4 +3512,13 @@ for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/gam
       assert.doesNotMatch(await (await s.fetchSite('/owl-run/open')).text(), /data-shop-control/);
     }
   } finally { await browser.close(); }
+  s.stripe.close();
+});
+
+test('agent clipboard transfer installs the provider key privately with no paste step',async()=>{
+ const {shopConnect}=await import('../lib/stripe-connect.mjs');const {dir,state}=connectStudio('agent-clipboard');const stripe=await fakeStripe();const logs=[];
+ try { const result=await shopConnect(dir,{fromClipboard:true,clipboard:async()=>`rk_test_${'A9'.repeat(20)}`,log:s=>logs.push(s),wait:5000,fetcher:(url,options)=>fetch(String(url).replace('https://api.stripe.com',stripe.base),options)});assert.equal(result.ok,true,JSON.stringify(result));assert.equal(stripe.behave.made.length,1);assert.doesNotMatch(JSON.stringify([result,logs]),/A9A9|whsec_/);
+ stripe.behave.refusePath='/v1/webhook_endpoints';stripe.behave.refuseMessage='Stripe refuses webhook access sk_test_PRIVATE';
+ const refused=await shopConnect(dir,{fromClipboard:true,clipboard:async()=>`rk_test_${'A9'.repeat(20)}`,log:s=>logs.push(s),wait:5000,fetcher:(url,options)=>fetch(String(url).replace('https://api.stripe.com',stripe.base),options)});assert.equal(refused.ok,false);assert.match(refused.why,/Stripe refuses webhook access/);assert.doesNotMatch(JSON.stringify([refused,logs]),/sk_test_PRIVATE|A9A9|whsec_/); }
+ finally {stripe.close();}
 });

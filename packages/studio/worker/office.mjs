@@ -1,3 +1,5 @@
+import { selling } from './extensions.mjs';
+import { purchaseOrderIfPresent } from './shop.mjs';
 /**
  * THE STUDIO'S BACK OFFICE (@homie-rocks/studio 0.13.0): the studio's owner, and the owner's AI, see and run the
  * studio's live games. Everything lives in the studio's own Worker and D1; homie.rocks stores none of it.
@@ -1255,6 +1257,7 @@ async function api(request, env, url, cat) {
     return lounge ? json({ ok: true, lounge }) : json({ ok: false, error: 'no-lounge', message: 'This studio has no Lounge: add "lounge": true to studio.json and deploy.' }, 404);
   }
   // The shop (0.24.0): the owner's view, the accountant's CSV, the referral statements.
+  if (selling.enabled) { const result = await selling.officeRoutes(request, env, path, body); if (result) return result; }
   if (path === '/_studio/api/shop' && request.method === 'GET') return json(await shopOffice(env, cat, url.origin, url.searchParams.get('cursor') ?? '', /^\d+$/.test(url.searchParams.get('itemCursor') ?? '') ? Number(url.searchParams.get('itemCursor')) : 0, /^\d+$/.test(url.searchParams.get('orderCursor') ?? '') ? Math.min(Number(url.searchParams.get('orderCursor')), Number.MAX_SAFE_INTEGER) : 0));
   if (path === '/_studio/api/shop/orders.csv' && request.method === 'GET') {
     try {
@@ -1283,7 +1286,7 @@ async function api(request, env, url, cat) {
   if (op === 'server-create' || op === 'pass' || op === 'lounge-night') action.origin = url.origin;
   if (op === 'refund') {
     // The ask and the confirm page say what the order is (its item and price), read from the books now.
-    const o = await orderById(env, action.order);
+    const o = await orderById(env, action.order) ?? await purchaseOrderIfPresent(env, action.order);
     if (!o) return json({ ok: false, error: 'order', message: 'No such order (homie-studio shop orders lists them).' }, 404);
     Object.assign(action, { item: o.item, amount: Number(o.amount), currency: o.currency });
   }
