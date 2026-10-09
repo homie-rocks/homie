@@ -17,6 +17,46 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.34.0] - 2026-10-08
+
+**Plugin 0.35.0** · [#64](https://github.com/homie-rocks/homie/pull/64)
+
+A plain shop: nothing is imposed unless you write it. A shop is open to guests by default, the protective rules 0.33.0 started with are a preset you choose, and a player can put several items in a cart and pay once.
+
+### Added
+
+- **A cart.** A cart holds several items and quantities, free and paid lines together, and is paid in one Stripe Checkout Session. `shop.add(item, quantity, amount?)` and `shop.checkout()` build and pay for a cart; `shop.buy(item)` still buys one thing directly. Each line keeps the item as it was defined at the time of sale, grants exactly once, and can be refunded on its own in the office.
+- A cart with only free lines grants its items without going to Stripe.
+- `checkoutMinutes` in `shop.json` sets how long a checkout stays open, within Stripe's bounds of 30 to 1440 minutes.
+- The shop accepts a restricted (`rk_`) or a full secret (`sk_`) Stripe key. A preview you give its own database and both Stripe secrets can sell; previews normally have no database.
+
+### Changed
+
+- **Your shop is open by default.** 0.33.0 started every shop on the protective preset. Now a shop that names no preset has no policy: guests can buy, and buy again, without an age question or a parent step, from any page. You choose your items, wording, kinds, prices, dates, caps, refund windows and referral terms. `shop init` writes no policy.
+- **Every policy is optional.** The account, age, kids-server, advantage, repeat-purchase, used-item refund and TV rules apply only when you write them, one by one or with `"preset": "protective"` or `"preset": "adults-only"`. Stripe Tax and the withdrawal acknowledgement are optional too. The toolkit no longer scans your items' wording in any preset. Flood protection stays, with rates you can change.
+- **A player cannot refund a tip.** A refund window you set covers items, including used ones unless you choose otherwise. You can refund any order or any line from your office.
+- A checkout now stays open for Stripe's default of 24 hours instead of 31 minutes.
+- Shop and owned-item pages now ask Stripe about unfinished payments in the background (up to three at a time), instead of only when a purchase was refused by your spending cap. A paid order nobody came back to is found after a minute, with or without a cap, and by your Worker's scheduled handler if you set one.
+- With a spending cap, a refund of one line gives back that line's amount. Before, a partial refund kept the whole price counted.
+
+### Fixed
+
+- **The webhook signing secret is required.** The shop is ready only with both the Stripe key and the webhook signing secret, whichever kind of key you use, and the shop's setup steps and readiness name whichever is missing. Payment is confirmed by Stripe's signed event, not only by the buyer's return to your site.
+- Cancelling or replacing a checkout asks Stripe to expire the open session before freeing its place under your spending cap. A checkout with no Stripe session frees its place after the checkout lifetime plus one minute.
+- Refunds follow Stripe's own list of refunds and their statuses. A refund that names a line affects only that line, a pending refund keeps the item, and a failed refund gives it back. A partial refund made in the Stripe Dashboard lowers the order's balance, cap and referral totals without guessing a line. A refund of the whole order takes back the whole order, and a refund of a paid line leaves free lines in the same order alone. A refund event that arrives before its payment was recorded records the payment first.
+- An order in dispute cannot be refunded until Stripe resolves the dispute, and a lost dispute keeps the refunds made before it. Every recorded payment is checked against Stripe's refunds and dispute state.
+- A payment, its items and its referral share are recorded together, including a verified payment that arrives late. A paid order that is missing an item is repaired once.
+- Shop errors no longer show Stripe keys or secrets. Deleting an account clears the checkout's buyer too. An older order whose item name is missing falls back to the catalog; an item with no definition gives an answer that can be retried and a note in the office.
+- Checkout from inside a game keeps the running game in its tab and explains a blocked tab or blocked cookies. When a new tab cannot open, game and TV checkout use the current tab and return to the game or TV page.
+- Signed Stripe events that are not about your shop are ignored. Optional cron triggers survive a deploy.
+
+### Upgrade notes
+
+- **To keep the 0.33.0 behaviour, write one line.** A `shop.json` that names no preset was protective in 0.33.0 and is open in 0.34.0. To keep the account and age rules you had, write `"policy": { "preset": "protective" }` in `shop.json`. Settings you wrote yourself stay as written. The wording scans are gone in every preset.
+- To keep Stripe Tax, write `"automaticTax": true`. To count referrals for new players only, write `"referralNewPlayersOnly": true`. To keep the shorter checkout, write `"checkoutMinutes": 31`.
+- **Deploy applies one new database step, `0012_shop_lines.sql`.** It only adds: your orders become one-line orders, and nothing is removed, so the 0.33.0 Worker keeps working while you deploy and if you roll back. Until the step has run, owned items and office refunds work and checkout says which step is missing.
+- **The webhook signing secret is required, with either kind of key.** A shop with a key and no signing secret reports not ready and does not sell. `homie-studio shop connect` makes the webhook and stores the secret, or takes one you made yourself.
+
 ## [0.33.1] - 2026-10-08
 
 **Plugin 0.34.1** · [#65](https://github.com/homie-rocks/homie/pull/65)
