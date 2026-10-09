@@ -1,0 +1,14 @@
+import { readFileSync } from 'node:fs'; import { join } from 'node:path';
+export * from './paid-parts-review4-harness.mjs';
+import { partsCommand, PP, shopMod } from './paid-parts-review4-harness.mjs';
+export const flags = (o) => new Map(Object.entries(o));
+export const offer = (w, f, id = 'camera') => partsCommand(w.root, 'offer', ['parts', 'offer', id], flags(f), {});
+export const index = (w) => JSON.parse(readFileSync(join(w.dist, 'parts', 'index.json'), 'utf8')).parts.find((p) => p.id === 'camera');
+export const view = (w) => index(w).releases.map((r) => `${r.version} onSale=${r.onSale} offer=${r.offer?.amount} upgrade=${r.upgrade}`).join(' | ');
+export const offersFile = (w) => JSON.parse(readFileSync(join(w.root, 'parts', 'offers.json'), 'utf8'));
+export const fullOrder = (w, id) => w.sql.prepare('SELECT o.*, o.subscription, o.paid_until, o.customer FROM purchase_orders o' + (id ? ' WHERE o.id = ?' : '')).get(...(id ? [id] : []));
+export const inv = (w, sub) => w.st.invoices.get(sub.latest_invoice);
+export const get = (w, url, token) => w.fetcher(url, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+export const FILE = 'https://seller.example/parts/camera/0.1.0/src/index.ts';
+export const bought = async (w, opts = {}) => { const b = await w.buy(opts); await w.event('checkout.session.completed', b.session); const a = await w.add(opts); if (!a.ok) throw new Error('add after buy: ' + (a.why ?? JSON.stringify(a.purchase))); return b; };
+export const sync = (w) => PP.expirePurchaseCheckouts(w.env);

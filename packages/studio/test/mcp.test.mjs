@@ -42,9 +42,9 @@ function server(args, { cwd = scratch, env = {} } = {}) {
   });
   const request = (method, params) => new Promise((resolve, reject) => {
     const id = ++seq;
-    waiting.set(id, resolve);
+    const timer = setTimeout(() => { if (waiting.delete(id)) reject(new Error(`no answer to ${method}: ${err.slice(-800)}`)); }, 60_000);
+    waiting.set(id, (reply) => { clearTimeout(timer); resolve(reply); });
     child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-    setTimeout(() => { if (waiting.has(id)) reject(new Error(`no answer to ${method}: ${err.slice(-800)}`)); }, 60_000);
   });
   const call = async (name, args = {}) => (await request('tools/call', { name, arguments: args })).result;
   const close = () => new Promise((r) => { child.on('close', r); child.stdin.end(); });
@@ -233,7 +233,20 @@ test('a studio on an older toolkit: the card says what\'s new, and studio_run ["
     // found, so it ends at once with the target skipped; what matters is that the words for the person are IN the
     // job's result, so studio_job says them (the list, what to do with it, the upgrade-and-deploy note) and not a
     // page of JSON, when a real build outlasts the tool's own wait.
-    const tried = await s.call('game_standalone', { game: 'comet-crews', for: ['android'] });
+    let tried = await s.call('game_standalone', { game: 'comet-crews', for: ['android'] });
+    // A slow build legitimately outlasts the tool's wait. Follow the documented
+    // job result before asserting failure; a running job is not a success claim.
+    if (tried.structuredContent?.kind === 'job') {
+      const job = tried.structuredContent.job;
+      const deadline = Date.now() + 240_000;
+      let finished;
+      do {
+        finished = await s.call('studio_job', { job });
+      } while (finished.structuredContent.state === 'running' && Date.now() < deadline);
+      assert.equal(finished.structuredContent.state, 'failed', finished.content[0].text);
+      const result = finished.structuredContent.result;
+      tried = { isError: result.ok === false, content: [{ type: 'text', text: result.say.join('\n') }], structuredContent: result };
+    }
     assert.equal(tried.isError, true, 'a named target that was not built is not a success');
     const words = tried.content[0].text;
     assert.match(words, /○ android {2}SKIPPED: the Android SDK is not ready/);

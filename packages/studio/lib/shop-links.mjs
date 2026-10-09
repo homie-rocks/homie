@@ -3,10 +3,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { productIdOf, WEBHOOK_SECRET_SHAPE } from '../worker/stripe.mjs';
 import { defaultTaxCode } from '../worker/shop-rules.mjs';
 import { LINKS_STRIPE_VERSION, linkSettings, paymentLinkURL } from '../worker/shop-links.mjs';
-import { HOOK_EVENTS } from './shop.mjs';
+import { HOOK_EVENTS, SHOP_HOOK_EVENTS } from './shop.mjs';
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const same = (a, b) => Object.keys(a ?? {}).length === Object.keys(b).length && Object.entries(b).every(([k, v]) => a?.[k] === v);
-export async function syncPaymentLinks({ api, shop, slug, site, mode, w, receipt, saveReceipt }) {
+export async function syncPaymentLinks({ root, api, shop, slug, site, mode, w, receipt, saveReceipt }) {
   const list = async (path, params = {}) => {
     const all = []; let cursor;
     do {
@@ -62,26 +62,35 @@ export async function syncPaymentLinks({ api, shop, slug, site, mode, w, receipt
     keepLinks.add(link.id);
     config.items.push({ item: item.id, id: link.id, url: link.url, revision: linkRevision });
   }
+  const purchases = root ? await (await import('./purchase-links.mjs')).syncPurchaseLinks({ root, api, slug, site, mode, list, till: shop.purchasesTill ?? shop.till }) : null;
+  const purchaseSecrets = {};
+  if (purchases?.config.offers.length && !has('PURCHASE_SIGNING_KEYS')) {
+    const { generateKeyPair, exportJWK } = await import('jose');
+    const pair = await generateKeyPair('Ed25519', { extractable: true });
+    purchaseSecrets.PURCHASE_SIGNING_KEYS = JSON.stringify([await exportJWK(pair.privateKey)]);
+  }
+  const events = purchases?.config.offers.length ? HOOK_EVENTS : SHOP_HOOK_EVENTS;
   const endpoints = await list('/v1/webhook_endpoints');
   const url = `${site}/api/shop/hook`;
-  const current = endpoints.find((e) => e.id === receipt?.endpoint && e.url === url && e.status === 'enabled' && HOOK_EVENTS.every((event) => e.enabled_events?.includes(event)));
+  const current = endpoints.find((e) => e.id === receipt?.endpoint && e.url === url && e.status === 'enabled' && events.every((event) => e.enabled_events?.includes(event)));
   let endpoint = current, secret;
   if (!endpoint || !has('STRIPE_WEBHOOK_SECRET')) {
     const pending = receipt?.url === url && receipt?.pending ? receipt.pending : randomUUID();
     saveReceipt({ ...receipt, pending, mode, url }); // Retry the same private creation response; never persist the secret.
-    endpoint = await api('POST', '/v1/webhook_endpoints', { url, enabled_events: [...HOOK_EVENTS], api_version: LINKS_STRIPE_VERSION, metadata: { homie: 'shop-v1' }, description: 'Studio shop' }, `webhook-${pending}`);
+    endpoint = await api('POST', '/v1/webhook_endpoints', { url, enabled_events: [...events], api_version: LINKS_STRIPE_VERSION, metadata: { homie: 'shop-v1' }, description: 'Studio shop' }, `webhook-${pending}`);
     if (!WEBHOOK_SECRET_SHAPE.test(endpoint.secret ?? '')) throw new Error('Missing signing secret');
     secret = endpoint.secret;
   }
-  const fingerprint = hash(config);
+  const fingerprint = hash({config, purchases:purchases?.config});
   const unchanged = current && !secret && receipt?.fingerprint === fingerprint && has('STRIPE_SHOP_LINKS') && !has('STRIPE_KEY');
   if (!unchanged) {
-    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_SHOP_LINKS: JSON.stringify(config), ...(secret ? { STRIPE_WEBHOOK_SECRET: secret } : {}) }) });
+    const saved = await w(['secret', 'bulk'], { input: JSON.stringify({ STRIPE_SHOP_LINKS: JSON.stringify(config), ...purchaseSecrets, ...(purchases && (purchases.config.offers.length || has('PURCHASE_LINKS')) ? { PURCHASE_LINKS: JSON.stringify(purchases.config) } : {}), ...(secret ? { STRIPE_WEBHOOK_SECRET: secret } : {}) }) });
     if (saved.code !== 0) return { ok: false, needs: 'cloudflare', why: 'Cloudflare could not save the shop connection. Run shop connect again; existing webhooks remain active.' };
     // Explicitly running connect selects keyless; manual selects the existing keyed checkout.
     if (has('STRIPE_KEY') && (await w(['secret', 'delete', 'STRIPE_KEY'], { input: 'y\n' })).code !== 0) return { ok: false, needs: 'cloudflare', why: 'The links are ready; run shop connect again to finish removing the old checkout credential.' };
     saveReceipt({ mode, endpoint: endpoint.id, url, fingerprint, keyless: true });
   }
+  await purchases?.retire();
   // Retire only after the replacement configuration and signing secret are installed.
   for (const link of links.filter((p) => own(p) && p.active && !keepLinks.has(p.id))) await api('POST', `/v1/payment_links/${link.id}`, { active: false });
   for (const price of prices.filter((p) => own(p) && p.active && !keepPrices.has(p.id))) await api('POST', `/v1/prices/${price.id}`, { active: false });

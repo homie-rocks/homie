@@ -20,12 +20,17 @@ import { experienceDir, experienceFile } from './studio.mjs';
  * NOTHING HERE IS A PACKAGE MANAGER: packages are npm's (lib/parts-store.mjs hands them to npm), and a part is copied
  * in and then the studio's own. There are no version ranges, no resolver and no lockfile of Homie's.
  */
+import { canonicalJson } from '../worker/referrals.mjs';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const parseSpdx = (value) => require('spdx-expression-parse')(value);
+import { saleProblems } from "../worker/parts-sale.mjs";
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 
 export const PART_ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
-export const PART_KINDS = Object.freeze(['character', 'rig', 'clips', 'environment', 'effect', 'sound', 'ui', 'mechanic', 'shader', 'level-generator', 'bot-brain', 'audio-pack', 'set-piece', 'quiz', 'menu-board', 'waitlist', 'live-total', 'loop', 'stem', 'track', 'video-intro', 'video-template']);
+export const PART_KINDS = Object.freeze(['character', 'rig', 'clips', 'environment', 'effect', 'sound', 'ui', 'mechanic', 'shader', 'level-generator', 'bot-brain', 'audio-pack', 'set-piece', 'quiz', 'menu-board', 'waitlist', 'live-total', 'loop', 'stem', 'track', 'video-intro', 'video-template', 'app', 'music', 'video']);
 export const NETPLAY_KINDS = Object.freeze(['host-authoritative', 'replicated', 'local']);
 export const PROVENANCE = Object.freeze(['original', 'generated', 'imported']);
 export const PIVOTS = Object.freeze(['feet', 'centre', 'base', 'origin']);
@@ -107,7 +112,10 @@ export function licenseOfPart(value) {
   const id = typeof value === 'string' ? value.trim() : '';
   // Not an identifier at all; a word people write instead of one (cc0, proprietary); or a real
   // identifier in the wrong case (SPDX is case-sensitive, and "mit" must not pass as some unknown licence).
-  if (!id || !SPDX_SHAPE.test(id)) return null;
+  if (!id) return null;
+  if (!SPDX_SHAPE.test(id)) {
+    try { parseSpdx(id); return { id, class: 'unrecognised', credit: true, asks: 'read this SPDX expression and its licence texts; no alternative was selected', known: false }; } catch { return null; }
+  }
   const cased = Object.values(CLASSES).flatMap((c) => c.ids).find((k) => k.toLowerCase() === id.toLowerCase());
   if (cased ? cased !== id : Object.hasOwn(NOT_SPDX, id.toLowerCase())) return null;
   for (const [name, c] of Object.entries(CLASSES)) if (c.ids.includes(id)) return { id, class: name, credit: c.credit, asks: c.asks, known: true };
@@ -231,7 +239,7 @@ export function checkPart(part, { id = null } = {}) {
   if (!PART_ID.test(String(part.id ?? ''))) bad('id', `"${String(part.id ?? '').slice(0, 60)}" is not a part id`, 'lowercase letters, digits and hyphens, starting with a letter or digit (chase-camera)');
   else if (id && part.id !== id) bad('id', `the folder is parts/${id} but part.json says "${part.id}"`, 'name them the same');
   if (!clean(part.name, 80)) bad('name', 'it has no name', 'a few words a person would search for ("Third-person chase camera")');
-  if (!PART_KINDS.includes(part.kind)) bad('kind', part.kind === undefined ? 'it has no kind' : `"${String(part.kind).slice(0, 40)}" is not a kind of part`, `one of: ${PART_KINDS.join(', ')}`);
+  if (!(typeof part.kind === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(part.kind))) bad('kind', part.kind === undefined ? 'it has no kind' : `"${String(part.kind).slice(0, 40)}" is not a kind of part`, 'a lowercase label using letters, digits and hyphens');
   if (!isVersion(part.version)) bad('version', part.version === undefined ? 'it has no version' : `"${String(part.version).slice(0, 40)}" is not a version`, 'three numbers: 1.0.0');
   // A part being written has no summary yet; one that is shared must (shareProblems).
   if (!clean(part.summary)) warn('summary', 'it has no summary', 'one sentence: what it does and what it needs from a game');
@@ -239,6 +247,8 @@ export function checkPart(part, { id = null } = {}) {
   if (part.share !== undefined && typeof part.share !== 'boolean') bad('share', 'it is neither true nor false', 'false keeps the part private (the default); sharing the part sets it true');
   if (part.license !== undefined && part.license !== null && part.license !== '' && !licenseOfPart(part.license)) bad('license', 'it is not a licence a stranger can rely on', licenceHint(part.license));
   if (part.attribution !== undefined && typeof part.attribution !== 'string') bad('attribution', 'it is not text', 'the line a game using the part shows in its credits, or ""');
+  for (const problem of saleProblems(part)) bad('sale', problem);
+  if (part.licenseTerms !== undefined && !safePath(part.licenseTerms)) bad('licenseTerms', 'must be a file inside the part');
   if (part.tags !== undefined) {
     if (!Array.isArray(part.tags) || part.tags.some((t) => typeof t !== 'string' || !/^[a-z0-9][a-z0-9-]{0,29}$/.test(t))) bad('tags', 'a tag is not a lowercase word', 'up to 12 words such as "camera", "3d", "top-down"');
     else if (part.tags.length > 12) warn('tags', 'more than 12 tags; the first 12 are used', null);
@@ -444,6 +454,24 @@ export function packPart(root, id, { bump = null } = {}) {
   const dir = partDir(root, id);
   let part = readPart(dir);
   if (bump) { part.version = bumpVersion(part.version, bump); writePart(dir, part); }
+  // REUSE places custom licence texts under LICENSES and annotates binary files.
+  if (part.sale && part.licenseTerms && safePath(part.licenseTerms) && existsSync(join(dir, part.licenseTerms)) && !existsSync(packedDir(root, id, part.version))) {
+    const refs = [...new Set(String(part.license).match(/LicenseRef-[A-Za-z0-9.-]+/g) ?? [])];
+    if (refs.length > 1 && refs.some((ref) => !existsSync(join(dir, 'LICENSES', `${ref}.txt`)))) return { ok: false, command: 'parts pack', id, why: 'An expression with multiple custom licences needs each full text under LICENSES before packing' };
+    for (const ref of refs) {
+      const target = join(dir, 'LICENSES', `${ref}.txt`);
+      mkdirSync(dirname(target), { recursive: true });
+      if (!existsSync(target)) cpSync(join(dir, part.licenseTerms), target);
+    }
+    if (!existsSync(join(dir, 'REUSE.toml'))) writeFileSync(join(dir, 'REUSE.toml'), `version = 1
+
+[[annotations]]
+path = ["**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ${JSON.stringify(part.attribution || 'The selling studio')}
+SPDX-License-Identifier = ${JSON.stringify(part.license)}
+`);
+  }
   part = writeHashes(dir);
   const shape = checkPart(part, { id });
   if (!shape.ok) return { ok: false, command: 'parts pack', id, why: `parts/${id} is not a part yet: ${shape.problems.filter((p) => p.level === 'refuse').map((p) => `${p.field}: ${p.problem}${p.fix ? ` (${p.fix})` : ''}`).slice(0, 4).join('; ')}`, problems: shape.problems };
@@ -451,6 +479,9 @@ export function packPart(root, id, { bump = null } = {}) {
   if (existsSync(out)) {
     const was = readPart(out);
     const same = JSON.stringify((was.files ?? []).map((f) => [f.path, f.sha256])) === JSON.stringify(part.files.map((f) => [f.path, f.sha256]));
+    if ((was.sale || part.sale) && canonicalJson(publicPart({ ...was, share: true })) !== canonicalJson(publicPart({ ...part, share: true }))) return { ok: false, command: 'parts pack', id, why: 'A paid release is immutable, including its description, price and licence. Give the change a new version.' };
+    const legalSame = JSON.stringify({ license: was.license, licenseTerms: was.licenseTerms, sale: was.sale }) === JSON.stringify({ license: part.license, licenseTerms: part.licenseTerms, sale: part.sale });
+    if (!legalSame) return { ok: false, command: 'parts pack', id, why: 'A packed version cannot change its price or licence terms. Give it a new version.' };
     if (!same) return { ok: false, command: 'parts pack', id, version: part.version, why: `parts/${id} ${part.version} is already packed with different files, and a shared version never changes (another studio may have copied it). Give the change a new version: raise "version" in parts/${id}/part.json, then share it again.` };
     // The same bytes: only the description may have moved (a summary, `share`), so the frozen copy takes it.
     writePart(out, part);
@@ -566,7 +597,7 @@ function liftPlan(root, game, paths) {
  */
 export function newPart(root, id, { kind = 'mechanic', name = null, from = null, paths = [], uses = [] } = {}) {
   if (!PART_ID.test(String(id ?? ''))) return { ok: false, command: 'parts new', why: `"${id ?? ''}" is not a part id: lowercase letters, digits and hyphens (chase-camera)` };
-  if (!PART_KINDS.includes(kind)) return { ok: false, command: 'parts new', why: `"${kind}" is not a kind of part: ${PART_KINDS.join(', ')}` };
+  if (!(typeof kind === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(kind))) return { ok: false, command: 'parts new', why: `"${kind}" is not a lowercase kind label` };
   if (!Array.isArray(uses) || uses.some((u) => !['game', 'app', 'venue', 'cause', 'music', 'video'].includes(u))) return { ok: false, command: 'parts new', why: 'invalid intended uses' };
   const dir = partDir(root, id);
   if (existsSync(dir)) return { ok: false, command: 'parts new', why: `parts/${id} is there already` };
@@ -653,6 +684,19 @@ export function licenceIssues(items, { game = null } = {}) {
   const add = (level, parts, problem, fix = null) => out.push({ level, parts, problem, fix });
   const sa = new Map();
   for (const x of items.filter((y) => isObj(y.part))) {
+    if (x.vendored && x.part.sale) {
+      const s = x.part.sale; const p = x.purchase;
+      if (!p) add('conflict', [x.ref], 'No purchase evidence is recorded for this paid part', 'add it through part_add');
+      else {
+        if (p.version !== x.part.version) add('conflict', [x.ref], 'This game has no recorded grant for the installed paid release', 'call part_add for this game and version to check its update rights');
+        if (p.scope === 'game' && game && p.game !== game.id) add('conflict', [x.ref], `This licence covers game ${p.game}, not ${game.id}`, 'buy a licence for this game');
+        if (p.paidUntil && p.paidUntil <= Date.now() && s.onExpiry === 'terminate') add('conflict', [x.ref], 'The subscription licence expired', 'renew through the seller');
+        if (['refunded', 'lost'].includes(p.status) && s.onRefund === 'terminate') add('conflict', [x.ref], 'This purchase was revoked under its refund terms', 'settle the licence before publishing');
+        add('note', [x.ref], `${p.mode} purchase; ${p.scope} scope${p.scope === 'seat' ? `, ${p.quantity} seats` : ''}; last checked ${p.checkedAt ?? 'unknown'}. Offline evidence cannot prove current refund status.`);
+      }
+      if (game?.sells && !s.commercialUse) add('conflict', [x.ref], 'This paid licence excludes commercial use', 'obtain commercial rights before selling');
+      add('note', [x.ref], `Read ${x.part.licenseTerms}: source ${s.source ? 'included' : 'not included'}, transfer ${s.transferable ? 'permitted under the written terms' : 'requires a new licence'}. Publishing a game does not grant standalone part redistribution rights.`);
+    }
     const lic = licenseOfPart(x.part.license);
     if (!lic) { if (x.vendored) add('conflict', [x.ref], 'it names no licence, so nothing says a game may use it', 'ask its studio, or use another part'); continue; }
     if (lic.class === 'unrecognised') add('warn', [x.ref], `${lic.id} is not a licence the toolkit can reason about`, 'read it with the person before the game goes online');
@@ -677,7 +721,7 @@ export function creditLine(ref, entry) {
     url: entry.page ?? null,
     licence: lic?.id ?? null,
     licenceUrl: lic?.known ? `https://spdx.org/licenses/${lic.id}.html` : null,
-    note: entry.from?.name || entry.from?.game ? `A part of ${entry.from.name ?? entry.from.game}, from ${ref.split('/')[0]}` : `A game part from ${ref.split('/')[0]}`,
+    note: entry.from?.name || entry.from?.game ? `A part of ${entry.from.name ?? entry.from.game}, from ${ref.split('/')[0]}` : `A studio part from ${ref.split('/')[0]}`,
     part: ref,
   };
 }

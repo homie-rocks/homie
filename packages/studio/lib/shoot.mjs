@@ -115,7 +115,7 @@ export const VIRTUAL_CLOCK = `(() => {
   window.__homieClock = {
     get frozen() { return frozen; },
     now: perfNow,
-    freeze() { if (frozen) return vPerf; /* a whole millisecond (never earlier than the last real reading): stepped time is then base + n steps exactly, with no float dust between a step asked for and the time handed out */ vPerf = Math.ceil(R.perf()); vDate = R.D.now(); frozen = true; stepAnims(0); return vPerf; },
+    freeze() { if (frozen) return vPerf; /* a whole millisecond (never earlier than the last real reading): stepped time is then base + n steps exactly, with no float dust between a step asked for and the time handed out */ vPerf = Math.ceil(R.perf()); vDate = R.D.now(); frozen = true; runTimers(vPerf); stepAnims(0); return vPerf; },
     step(ms) {
       if (!frozen) this.freeze();
       const d = Math.max(0, Number(ms) || 0);

@@ -116,7 +116,7 @@ describe('commands', () => {
     const w = world(on, { feed: null })
     await start($)
     await run($, 'parts')
-    expect(w.log.opened).toEqual(['homie-parts'])
+    expect(w.log.opened).toEqual(['homie-purchases'])
   })
 
   test('a running build opens the Studio pane by itself (unasked: the surface places it only where it is wide enough)', async ($, on) => {

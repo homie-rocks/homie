@@ -716,6 +716,7 @@ test('a command that changes something outside this computer stops at a flag it 
     'office kick': ['crown-thief', 'room-1', 'p1'], 'office mute': ['crown-thief', 'room-1', 'p1'], 'office close': ['crown-thief', 'room-1'], 'office revoke': [],
     'lounge mod': ['someone'], 'lounge remove': ['m1'], 'chat remove': ['crown-thief', 'room-1', 'm1'], 'chat budget': ['200'],
     'servers close': ['crown-thief', 'main'], 'servers level': ['crown-thief', 'main', 'two'], 'servers member': ['crown-thief', 'main', 'someone'],
+    'parts keys': [], 'parts refund': ['seller.example/camera'], 'parts reissue': ['order-1'], 'parts retire': ['camera'],
     'shop connect': [], 'shop disconnect': [], 'shop refund': ['order-1'], 'shop statements': [],
     'agents pass': ['crown-thief'], 'agents revoke': ['pass-1'], 'agents brain': ['crown-thief', 'main', 'workers-ai'], 'agents sit': ['crown-thief'],
     // With --device it adds a phone to the person's Apple team and installs a game on it (0.32.1).

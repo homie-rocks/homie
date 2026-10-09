@@ -1,4 +1,5 @@
 import { APPS_MIGRATION, APPS_MIGRATION_FILE } from '../worker/app-records.mjs';
+import { PURCHASE_MIGRATION, PURCHASE_MIGRATION_FILE, PURCHASE_STATE, PURCHASE_STATE_FILE } from '../worker/purchase-schema.mjs';
 /**
  * `homie-studio new <folder> --name "<Studio Name>"` — a studio is ONE
  * monorepo: a visible folder the person opens in Claude or Codex.
@@ -65,7 +66,7 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false, routes = null, triggers = null }) {
+export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/worker.mjs', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/worker.mjs', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
@@ -79,19 +80,20 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // subdomain) reaches it instead of failing with 1042.
     // `disallow_eval_during_startup`: no code is made from a string while the Worker loads (Cloudflare never allows it
     // later). A game's rules run in this Worker (NETPLAY.md section 29), and nothing in them is ever made from text.
-    compatibility_flags: ['global_fetch_strictly_public', 'disallow_eval_during_startup'],
+    compatibility_flags: ['global_fetch_strictly_public', 'disallow_eval_during_startup', ...(paidParts ? ['nodejs_compat'] : [])],
+    ...(paidParts ? { alias: { '@homie-rocks/studio/worker': '@homie-rocks/studio/worker/selling' }, triggers: { crons: ['*/5 * * * *'] }, ratelimits: [partsRateLimit ?? { name: 'PURCHASE_RATE_LIMITER', namespace_id: '1001', simple: { limit: 60, period: 60 } }] } : {}),
     workers_dev: true,
     preview_urls: true,
     // The studio's own custom-domain and exact-host routes, as its owner wrote them: this file is written again by
     // every deploy, and one written without them sends the studio's domain back to whatever else the zone routes
     // (lib/routes.mjs). A studio without routes gets no key at all.
     ...(routes?.length ? { routes } : {}),
-    ...(triggers ? { triggers } : {}),
+    ...(triggers ? { triggers: paidParts ? { ...triggers, crons: [...new Set([...(triggers.crons ?? []), '*/5 * * * *'])] } : triggers } : {}),
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }],
     d1_databases: [{ binding: 'DB', database_name: d1, ...(d1Id ? { database_id: d1Id } : {}), migrations_dir: at.migrations }],
-    ...(r2 ? { r2_buckets: [{ binding: 'MEDIA', bucket_name: r2 }] } : {}),
+    ...(r2 ? { r2_buckets: [{ binding: 'MEDIA', bucket_name: r2 }, ...(paidParts ? [{ binding: 'PURCHASE_MEDIA', bucket_name: `${r2.slice(0, 52)}-purchases` }] : [])] } : {}),
     // Workers AI, only when a server's AI guides think with it (agents_brain workers-ai; deploy adds it, 0.17.0).
     // Never in Previews: they do not inherit it, so a Preview's guides answer from the game's script.
     ...(ai ? { ai: { binding: 'AI' } } : {}),
@@ -747,6 +749,8 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
     [`site/migrations/${SERVERS_MIGRATION_FILE}`]: SERVERS_MIGRATION,
     [`site/migrations/${CHAT_MIGRATION_FILE}`]: CHAT_MIGRATION,
     [`site/migrations/${SHOP_MIGRATION_FILE}`]: SHOP_MIGRATION,
+    [`site/migrations/${PURCHASE_MIGRATION_FILE}`]: PURCHASE_MIGRATION,
+    [`site/migrations/${PURCHASE_STATE_FILE}`]: PURCHASE_STATE,
     [`site/migrations/${SHOP_RESERVATIONS_FILE}`]: SHOP_RESERVATIONS,
     [`site/migrations/${SHOP_STATEMENTS_FILE}`]: SHOP_STATEMENTS,
     [`site/migrations/${SHOP_LINES_FILE}`]: SHOP_LINES,
@@ -906,8 +910,24 @@ function ensureAppsMigration(root) {
   mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, APPS_MIGRATION);
   return `site/migrations/${APPS_MIGRATION_FILE}`;
 }
+export function ensurePartsMigration(root) {
+  const file = join(root, 'site', 'migrations', PURCHASE_MIGRATION_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, PURCHASE_MIGRATION);
+  return `site/migrations/${PURCHASE_MIGRATION_FILE}`;
+}
+
+function ensurePartsStateMigration(root) {
+  const file = join(root, 'site', 'migrations', PURCHASE_STATE_FILE);
+  if (existsSync(file)) return null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, PURCHASE_STATE);
+  return `site/migrations/${PURCHASE_STATE_FILE}`;
+}
+
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */

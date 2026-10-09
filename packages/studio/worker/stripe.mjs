@@ -63,6 +63,7 @@ export class StripeError extends Error {
     const e = body?.error ?? {};
     super(e.message ? redactStripe(e.message).slice(0, 400) : `Stripe answered ${status}`);
     this.status = status;
+    this.statusCode = status;
     this.code = redactStripe(e.code ?? e.type ?? 'stripe');
     this.type = e.type ? redactStripe(e.type) : null;
     this.param = typeof e.param === 'string' ? redactStripe(e.param).slice(0, 120) : null;
@@ -93,7 +94,7 @@ export async function productIdOf(slug, item) {
 }
 
 /** One call with the studio's key. `idempotencyKey` makes a retried POST do the work once (Stripe keeps it 24 h). */
-export async function stripeCall(env, method, path, params = null, { idempotencyKey = null, fetcher = fetch, timeout = 15_000 } = {}) {
+export async function stripeCall(env, method, path, params = null, { idempotencyKey = null, fetcher = fetch, version = STRIPE_VERSION, timeout = 15_000 } = {}) {
   const key = String(env?.STRIPE_KEY ?? '');
   if (!KEY_SHAPE.test(key)) throw new StripeError(0, { error: { message: 'no Stripe key on this Worker', code: 'no-key' } });
   const body = params && method !== 'GET' ? formEncode(params).toString() : null;
@@ -103,7 +104,7 @@ export async function stripeCall(env, method, path, params = null, { idempotency
     method,
     headers: {
       authorization: `Bearer ${key}`,
-      'stripe-version': STRIPE_VERSION,
+      'stripe-version': version,
       ...(body !== null ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
       ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
     },
@@ -113,7 +114,11 @@ export async function stripeCall(env, method, path, params = null, { idempotency
   } catch (error) { throw new StripeError(502, { error: { message: redactStripe(error?.message ?? 'Stripe did not answer', env), code: 'network' } }); }
   let json = null;
   try { json = await res.json(); } catch { json = null; }
-  if (!res.ok) throw new StripeError(res.status, JSON.parse(redactStripe(JSON.stringify(json), env)));
+  if (!res.ok) {
+    const error = new StripeError(res.status, JSON.parse(redactStripe(JSON.stringify(json), env)));
+    error.idempotentReplayed = res.headers.get('idempotent-replayed') === 'true';
+    throw error;
+  }
   return json;
 }
 
@@ -188,4 +193,32 @@ export function dashboardLink(mode, kind, id = '') {
     case 'managed-payments': return `${base}/settings/managed-payments`;
     default: return base;
   }
+}
+
+/** Stripe is authoritative; DELETE is idempotent even when a prior request already canceled it. */
+export async function cancelSubscription(env, id) {
+  try {
+    const sub = await stripeCall(env, 'GET', `/v1/subscriptions/${encodeURIComponent(id)}`);
+    if (sub.status === 'canceled') return sub;
+    return await stripeCall(env, 'DELETE', `/v1/subscriptions/${encodeURIComponent(id)}`);
+  } catch (error) { if (error.code === 'resource_missing') return { id, status: 'canceled' }; throw error; }
+}
+
+/** Expiration races with completion. Re-read after failure and accept only a terminal session. */
+export async function closeCheckoutSession(env, id) {
+  const session = await retrieveCheckoutSession(env, id);
+  if (session.status !== 'open') return session;
+  try { return await expireCheckoutSession(env, id, { idempotencyKey: `expire-${id}` }); }
+  catch (error) {
+    const current = await retrieveCheckoutSession(env, id);
+    if (['expired', 'complete'].includes(current.status)) return current;
+    throw error;
+  }
+}
+
+export async function refundPayment(env, payment, params = {}) {
+  const pi = await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(payment)}`, { expand: ['latest_charge'] });
+  if (pi.latest_charge?.refunded) return { id: null, status: 'succeeded', already: true };
+  try { return await createRefund(env, { payment_intent: payment }, { idempotencyKey: `purchase-refund-${payment}` }); }
+  catch (error) { if (error.code === 'charge_already_refunded') return { id: null, status: 'succeeded', already: true }; throw error; }
 }

@@ -1,3 +1,5 @@
+import { paymentRefunds } from './shop-refunds.mjs';
+import { selling } from './extensions.mjs';
 /**
  * THE SHOP (@homie-rocks/studio 0.24.0): a studio sells with ITS OWN Stripe account (shop/SHOP.md is the guide).
  * The studio is the seller; homie.rocks never sees, holds or moves its money, and Homie takes no cut.
@@ -215,6 +217,7 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
   if (path === '/api/referrals/statement') return receiveStatement(request, env, url);
   if (path === '/_homie/shop.js') return new Response(SHOP_JS, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300', 'x-content-type-options': 'nosniff' } });
   const shopPath = path === '/shop' || path === '/shop/' || path.startsWith('/shop/') || path === '/api/shop' || path.startsWith('/api/shop/') || path === '/api/player/owns';
+  if (selling.enabled && (path.startsWith('/api/purchases/') || path.startsWith('/purchases/'))) return selling.purchaseRoutes(request, env, url, await catalogueOf());
   if (!shopPath) return null;
   if (path === '/shop') return Response.redirect(`${url.origin}/shop/${url.search}`, 301);
   const cat = await catalogueOf();
@@ -737,6 +740,11 @@ async function hook(request, env, cat, shop, ready) {
   const ev = v.event;
   const obj = ev.data?.object ?? {};
   const needed = ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed'];
+  if (selling.enabled) {
+    if (typeof ev.livemode === 'boolean' && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
+    const purchase = await selling.purchasePaymentEvent(env, ev);
+    if (purchase !== null) { await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run(); return json({ ok: true, did: purchase }); }
+  }
   if (!needed.includes(ev.type)) return json({ ok: true, did: 'ignored' });
   if (typeof ev.livemode === 'boolean' && (hasStripeKey(env) || linkConfig(env)) && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
   try {
@@ -946,22 +954,7 @@ async function syncRefunds(env, payment, freeOrder = null, freeLines = []) {
   const o = freeOrder ?? await orderByPayment(env, payment);
   if (!o) return 'unknown-order';
   const all = await orderLines(env, o.id);
-  const refunds = new Map();
-  let cursor;
-  if (payment && !hasStripeKey(env)) {
-    for (const r of await rememberedMoney(env, payment, o.mode)) if (r.id.startsWith('re_')) {
-      if (r.currency !== o.currency) throw new Error('Refund currency mismatch');
-      refunds.set(r.id, r);
-    }
-  }
-  if (payment && hasStripeKey(env)) do {
-    const page = await stripeCall(env, 'GET', '/v1/refunds', { payment_intent: payment, limit: 100, ...(cursor ? { starting_after: cursor } : {}) });
-    if (!Array.isArray(page.data)) throw new Error('Stripe refund list is unavailable');
-    for (const refund of page.data) refunds.set(refund.id, refund);
-    const next = page.has_more ? page.data.at(-1)?.id : null;
-    if (page.has_more && (!next || next === cursor)) throw new Error('Stripe refund list is incomplete');
-    cursor = next;
-  } while (cursor);
+  const refunds = await paymentRefunds(env, payment, o);
   const totals = new Map(all.map((line) => [line.id, 0]));
   let amount = 0;
   for (const refund of refunds.values()) {
@@ -1051,6 +1044,7 @@ export const REFUND_HELD = 'Stripe is holding this refund until a person approve
 
 /** Refund selected lines through Stripe, revoking each only after success. */
 export async function refundOrder(env, o, { reason = 'requested_by_customer', by = 'owner', line: lineId = null } = {}) {
+  if (o.resource_kind) return selling.refundOrder(env, o, { reason, by });
   if (o.status !== 'paid' && !(o.payment && ['started', 'processing', 'missing', 'released', 'expired', 'failed'].includes(o.status))) return { ok: false, error: 'state', message: `This order is ${o.status}.` };
   const lines = (await orderLines(env, o.id)).filter((l) => !lineId || l.id === lineId);
   if (!lines.length) return { ok: false, error: 'line', message: 'No such order line.' };
@@ -1105,7 +1099,7 @@ export function checkRefund(body) {
   if (!/^ord_[A-Za-z0-9]{20}$/.test(String(body.order ?? ''))) return { ok: false, error: 'bad-request', message: 'order is the order\'s id (ord_…, from the office\'s shop page or `homie-studio shop orders`)' };
   const reason = ['duplicate', 'fraudulent', 'requested_by_customer'].includes(body.reason) ? body.reason : 'requested_by_customer';
   const note = String(body.note ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim() || null;
-  return { ok: true, action: { op: 'refund', order: body.order, line: typeof body.line === 'string' ? body.line : null, reason, note } };
+  return { ok: true, action: { op: 'refund', order: body.order, line: typeof body.line === 'string' ? body.line : null, reason, note, ...(body.manualTransaction ? { manualTransaction: body.manualTransaction } : {}) } };
 }
 /** Explicit owner override of an unresolved reservation; the existing note records its actor and time. */
 export function checkRelease(body) {
@@ -1151,7 +1145,8 @@ export function describeRefund(cat, a, order = null) {
 
 /** Do the refund (the owner's tap, or the owner's yes to the AI's ask). */
 export async function performRefund(env, cat, a) {
-  let o = await orderById(env, a.order);
+  let o = await orderById(env, a.order) ?? await purchaseOrderIfPresent(env, a.order);
+  if (o?.resource_kind) return a.manualTransaction ? selling.confirmManualRefund(env, o, a.manualTransaction) : refundOrder(env, o, { reason: a.reason, by: 'owner' });
   if (!o) return { ok: false, error: 'order', message: 'No such order.' };
   if (hasStripeKey(env) && !o.payment && o.session && o.paid_at === null && !(await migrationNeeded(env))) {
     try {
@@ -1199,6 +1194,7 @@ export async function shopOffice(env, cat, origin, cursor = '', itemCursor = 0, 
     releasable: hasStripeKey(env) && ['started', 'processing'].includes(r.status),
     refundable: (Number(r.amount) === 0 || hasStripeKey(env)) && ['paid', 'started', 'processing', 'missing', 'released', 'expired', 'failed'].includes(r.status) && (Number(r.amount) === 0 || Boolean(r.payment) || Boolean(r.session)),
   })));
+  if (selling.enabled) await selling.extendOffice(env, cat, origin, out);
   const { books, nextCursor } = await booksOf(env, { cursor });
   out.referrals = { nextCursor, owe: books, failures: await statementFailures(env), owedToUs: await statementsIn(env), invoice: dashboardLink(mode, 'invoices') };
   return out;
@@ -1253,4 +1249,8 @@ export async function roomBadge(env, cat, player, { kids = false } = {}) {
     if (!b) return null;
     return shop.items.find((i) => i.id === b.item)?.badge ?? b.key.slice(6);
   } catch { return null; }
+}
+
+export async function purchaseOrderIfPresent(env, id) {
+  try { return await selling.resourceOrder(env, id); } catch (error) { if (/no such table/.test(error.message)) return null; throw error; }
 }

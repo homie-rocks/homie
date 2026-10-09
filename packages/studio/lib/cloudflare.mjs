@@ -1,3 +1,4 @@
+import { paidReleases, uploadPaidParts } from './parts-upload.mjs';
 /**
  * `homie-studio deploy` — the studio's site on the studio's OWN Cloudflare
  * account, through Cloudflare's own tool (Wrangler, pinned in the studio).
@@ -349,12 +350,25 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     step(`created D1 ${cf.d1}`);
   }
 
+  // Paid objects use a separate private bucket, so even old Worker versions cannot serve them.
+  if (paidReleases(root).length && !storage) return refuse('Paid releases need private storage. Run homie-studio storage add before deploying.');
+  const purchaseBucket = storage && `${storage.slice(0, 52)}-purchases`;
+  if (paidReleases(root).length && !created.has(`r2:${purchaseBucket}`)) {
+    const listed = w(['r2', 'bucket', 'list']);
+    if (listed.code !== 0) return refuse('Could not inspect private purchase storage', listed.out);
+    const buckets = parseJson(listed.out);
+    if (!Array.isArray(buckets)) return refuse('Could not read the private storage list', listed.out);
+    if (buckets.some((bucket) => bucket.name === purchaseBucket)) return refuse('The private purchase bucket already exists and is not owned by this studio');
+    const made = w(['r2', 'bucket', 'create', purchaseBucket]);
+    if (made.code !== 0) return refuse('Could not create private purchase storage', made.out);
+    remember(`r2:${purchaseBucket}`);
+  }
   // Storage (R2) is bound only when `storage add` made the bucket. Deploy itself never creates or lists R2, so a
   // free account with no payment method deploys the whole studio.
   const r2 = storage;
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
-  writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes, triggers }));
+  writeFileSync(configPath(root), wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes, triggers }));
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
@@ -362,7 +376,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   step('D1 migrations applied');
   // Workers AI (0.17.0): bound only when a server's AI guides think with it.
   if (needsWorkersAi(root, w, cf.d1)) {
-    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes, triggers }));
+    writeFileSync(configPath(root), wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes, triggers }));
     step('Workers AI bound (AI): a server\'s AI guides think with it and typed room chat is reviewed with it, each within its day\'s budget (free allocation: 10,000 neurons a day)');
   }
 
@@ -377,6 +391,11 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     dep = w(['deploy', ...repoVar(root)]);
   }
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
+  if (paidReleases(root).length) {
+    const bin = wranglerBin(root);
+    const uploadOptions = { cwd: workerDir(root), env: { ...process.env, ...projectsCloudflareEnv(root), CLOUDFLARE_ACCOUNT_ID: accountId, WRANGLER_SEND_METRICS: 'false', CI: '1' } };
+    await uploadPaidParts(root, { bucket: purchaseBucket, log, put: (key, file) => wranglerRun(bin, ['r2', 'object', 'put', key, '--file', file, '--remote'], uploadOptions), hash: (key) => hashRemote(bin, key, uploadOptions) });
+  }
   remember(`worker:${cf.worker}`);
   // The workers.dev address names the Cloudflare account (often after its owner): it stays on this computer, in
   // .studio/local.json (git-ignored), and never in the committed studio.json. A custom domain stays in studio.json.
@@ -394,6 +413,12 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
 
   // The homie.rocks directory claim: the live site claims itself the first time its manifest is read (0.10.0), so
   // reading it once now is all it takes; nothing is stored by hand.
+  if (paidReleases(root).length) {
+    const { withKey } = await import('./office.mjs');
+    const synced = await withKey(root, url, (call) => call('/_studio/api/shop/sync-offers', {}));
+    if (!synced.ok) return refuse('Site deployed, but open part Checkouts could not be closed. Retry deploy: ' + (synced.message ?? synced.why ?? 'no answer'));
+    step(`closed ${synced.expired} obsolete part Checkouts`);
+  }
   const directory = homie || studio.homie?.directory || 'https://homie.rocks';
   recordDeploy(root, builtNow);
   let claim = null;
@@ -655,7 +680,7 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   writeStudio(root, next);
   if (next.cloudflare.d1Id) {
     // The studio's own routes stay through this rewrite too (lib/routes.mjs).
-    writeFileSync(configPath(root), wranglerConfig({ worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root), routes: keptRoutes(root, studio) }));
+    writeFileSync(configPath(root), wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root), routes: keptRoutes(root, studio) }));
   }
   log(`created R2 ${bucket}`);
   return { ok: true, command: 'storage add', bucket, account: accountId, cost: R2_COST, next: ['npx --no-install homie-studio media move --dry-run   (which songs and videos go to R2: over 1 MiB, or left out of git)', 'npm run deploy   (binds the bucket as MEDIA, moves them, checks each by SHA-256, and serves them from R2 at the same addresses; the files stay in this folder)'] };

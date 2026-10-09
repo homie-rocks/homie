@@ -346,6 +346,7 @@ function etagMatches(header, etag) {
  * object stored without one.
  */
 async function mediaObject(request, env, key, { cache = 'public, max-age=3600', type = null } = {}) {
+  if (key.startsWith('paid-parts/')) return new Response('not found', { status: 404 });
   const range = request.headers.get('range');
   const inm = request.headers.get('if-none-match');
   const headOnly = request.method === 'HEAD';
@@ -399,7 +400,7 @@ async function heldInR2(env, getCat, path) {
   try { want = decodeURIComponent(path); } catch { return null; }
   for (const e of [...(cat.songs ?? []), ...(cat.videos ?? [])]) {
     for (const f of e.files ?? []) {
-      if (typeof f.r2 !== 'string' || !f.r2 || f.r2.startsWith('players/') || typeof f.url !== 'string') continue;
+      if (typeof f.r2 !== 'string' || !f.r2 || (f.r2.startsWith('players/') || f.r2.startsWith('paid-parts/')) || typeof f.url !== 'string') continue;
       let at;
       try { at = decodeURIComponent(f.url); } catch { continue; }
       if (at === want) return f;
@@ -749,7 +750,7 @@ async function route(request, env, ctx) {
     if (!env.MEDIA) return new Response('this studio keeps no media in R2 yet', { status: 404 });
     const key = decodeURIComponent(path.slice('/media/'.length));
     // A player's large saves live under players/ in the same bucket: never served here (saves/SAVES.md).
-    if (!key || key.includes('..') || key.startsWith('players/')) return new Response('not found', { status: 404 });
+    if (!key || key.includes('..') || (key.startsWith('players/') || key.startsWith('paid-parts/'))) return new Response('not found', { status: 404 });
     return mediaObject(request, env, key);
   }
   if (path === '/posts/feed.xml' || path === '/posts/feed.json') {

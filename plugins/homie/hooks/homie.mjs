@@ -53,7 +53,7 @@ import {
 } from './lib/views.mjs';
 
 const PANE = 'homie-studio';
-const PARTS = 'homie-parts';
+const PARTS = 'homie-purchases';
 const ARCADE = 'homie-arcade';
 const HOLD = 'homie-hold';
 const TELL = 'homie-tell';

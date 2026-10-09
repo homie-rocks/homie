@@ -235,7 +235,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
   if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off under policy.kidsStudio).' });
   const shop = {
-    v: 1, policy, checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, referralNewPlayersOnly: raw.referralNewPlayersOnly === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
+    v: 1, policy, purchasesTill: TILLS.includes(raw.purchasesTill ?? till) ? (raw.purchasesTill ?? till) : 'off', ...(/^https:\/\/billing\.stripe\.com\/p\/login\/[A-Za-z0-9_]+$/.test(raw.purchasesPortalLogin ?? '') ? { purchasesPortalLogin: raw.purchasesPortalLogin } : {}), checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, referralNewPlayersOnly: raw.referralNewPlayersOnly === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
     open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };
   // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-custom_text-submit-message

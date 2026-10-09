@@ -72,7 +72,7 @@ export function completionArgs(step) {
 }
 
 export async function shopConnect(root, options = {}) {
-  if (options.manual) {
+  if (options.manual || options.fromClipboard) {
     const result = await shopConnectManual(root, options);
     if (result.ok) rmSync(join(receiptDir(root, options.storage ?? receiptHome()), 'test.json'), { force: true });
     return result;
@@ -133,7 +133,7 @@ export async function shopConnect(root, options = {}) {
     const w = wrangler ?? runner(root, studio.cloudflare?.accountId ? { CLOUDFLARE_ACCOUNT_ID: studio.cloudflare.accountId } : {});
     const receiptFile = join(dir, `${mode}.json`);
     const receipt = existsSync(receiptFile) ? json(readFileSync(receiptFile, 'utf8')) : null;
-    const result = await syncPaymentLinks({ api, shop: checked.shop, slug: studio.slug, site: target.origin, mode, w, receipt,
+    const result = await syncPaymentLinks({ root, api, shop: checked.shop, slug: studio.slug, site: target.origin, mode, w, receipt,
       saveReceipt: (record) => {
         writeFileSync(`${receiptFile}.tmp`, JSON.stringify(record), { mode: 0o600 });
         renameSync(`${receiptFile}.tmp`, receiptFile);

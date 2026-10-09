@@ -81,7 +81,7 @@ export function runsFromStudio(pid, root) {
 export function processOfStudio(pid, root, kind) {
   if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid || !isAlive(pid)) return false;
   const cmd = commandOf(pid);
-  if (cmd === null) return process.platform === 'win32'; // no ps: the registration file is all there is
+  if (cmd === null) return process.platform === 'win32' || runsFromStudio(pid, root); // no ps: the registration file is all there is
   if (kind === 'dev' ? /homie-studio/.test(cmd) : /wrangler|workerd/.test(cmd)) return true;
   return runsFromStudio(pid, root);
 }

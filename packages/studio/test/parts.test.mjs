@@ -96,12 +96,12 @@ const GOOD = { id: 'chase-camera', name: 'Chase camera', kind: 'mechanic', versi
 test('part.json is checked in plain words: each problem names its field and says what to write instead', () => {
   assert.deepEqual(checkPart(GOOD), { ok: true, problems: [] });
   assert.equal(checkPart(GOOD).ok && GOOD.share, undefined, 'share is absent, which is private');
-  const bad = checkPart({ id: 'Chase Camera', name: '', kind: 'weapon', version: '1.0', summary: 'x', license: 'cc0', share: 'yes', tags: ['Bad Tag'], requires: { packages: { '@homie-rocks/camera': ['^0.2.0'] }, parts: ['not a ref'] }, physical: { units: 'feet', pivot: 'head' }, contract: { netplay: 'p2p' } });
+  const bad = checkPart({ id: 'Chase Camera', name: '', kind: 'Invalid Kind', version: '1.0', summary: 'x', license: 'cc0', share: 'yes', tags: ['Bad Tag'], requires: { packages: { '@homie-rocks/camera': ['^0.2.0'] }, parts: ['not a ref'] }, physical: { units: 'feet', pivot: 'head' }, contract: { netplay: 'p2p' } });
   assert.equal(bad.ok, false);
   const by = Object.fromEntries(bad.problems.map((p) => [p.field, p]));
   for (const field of ['id', 'name', 'kind', 'version', 'license', 'share', 'tags', 'requires.packages', 'requires.parts', 'physical.units', 'physical.pivot', 'contract.netplay']) assert.ok(by[field], `${field} is reported`);
   assert.match(by.license.fix, /write "CC0-1\.0"/, 'a near miss is corrected, not just refused');
-  assert.match(by.kind.fix, /level-generator.*bot-brain.*audio-pack/, 'the kinds are listed');
+  assert.match(by.kind.fix, /lowercase/, 'kind labels have a portable syntax');
   assert.match(by.share.fix, /false keeps the part private \(the default\)/);
   assert.match(by['physical.units'].problem, /metres/);
   assert.ok(bad.problems.every((p) => !/undefined|\[object/.test(`${p.problem}${p.fix}`)), 'no problem leaks a raw value');
@@ -111,7 +111,10 @@ test('part.json is checked in plain words: each problem names its field and says
   assert.equal(checkPart({ ...GOOD, somethingNew: { a: 1 } }).ok, true);
   // A part is a piece of a game, never the whole game: there is no kind for one. And form is not restricted.
   assert.ok(!PART_KINDS.includes('game'));
-  assert.equal(checkPart({ ...GOOD, kind: 'game' }).ok, false);
+  assert.equal(checkPart({ ...GOOD, kind: 'app' }).ok, true);
+  assert.equal(checkPart({ ...GOOD, kind: 'music' }).ok, true);
+  assert.equal(checkPart({ ...GOOD, kind: 'video' }).ok, true);
+  assert.equal(checkPart({ ...GOOD, kind: 'venue-loop' }).ok, true);
   assert.equal(checkPart({ ...GOOD, kind: 'level-generator', entry: undefined, files: [{ path: 'levels/one.json', sha256: 'a'.repeat(64), bytes: 10 }, { path: 'art/rock.glb', sha256: 'b'.repeat(64), bytes: 10 }, { path: 'notes.md', sha256: 'c'.repeat(64), bytes: 10 }] }).ok, true, 'data, assets and text with no code at all');
 });
 
@@ -493,7 +496,7 @@ test('studio B adds studio A\'s part: fetched, every hash checked, copied in, im
   assert.deepEqual(have.installs(), [], 'a satisfied package causes no install');
   assert.deepEqual(r.packages.map((p) => p.state), ['ok']);
   assert.equal(r.ready, true);
-  assert.ok(seen.includes('https://owls.example/.well-known/homie-parts.json') && seen.includes('https://owls.example/parts/pickup-field/1.0.0/part.json'));
+  assert.ok(seen.includes('https://owls.example/parts/catalog.json') && seen.includes('https://owls.example/parts/pickup-field/1.0.0/part.json'));
   const vdir = join(b, 'parts', '_vendor', 'owls.example', 'pickup-field');
   const lock = readOrigins(b).parts['owls.example/pickup-field'];
   assert.equal(lock.version, '1.0.0');
@@ -615,15 +618,15 @@ test('studio B adds studio A\'s part: fetched, every hash checked, copied in, im
   assert.deepEqual(dry.calls.map((x) => x[0]), ['ls'], 'npm is only asked what the studio has');
   assert.equal(readFileSync(join(c, 'package.json'), 'utf8'), pkgBefore, 'package.json is as it was');
   assert.equal(existsSync(join(c, 'package-lock.json')) ? readFileSync(join(c, 'package-lock.json'), 'utf8') : null, lockBefore);
-  assert.deepEqual(kept.packages.map((x) => [x.name, x.state, x.command]), [['@homie-rocks/studio', 'missing', 'npm install --save-exact @homie-rocks/studio@>=0.1.0']]);
-  assert.match(partsLines(kept).join('\n'), /NOT INSTALLED @homie-rocks\/studio@>=0\.1\.0: .* npm installs it with: npm install --save-exact @homie-rocks\/studio@>=0\.1\.0/);
+  assert.deepEqual(kept.packages.map((x) => [x.name, x.state, x.command]), [['@homie-rocks/studio', 'missing', 'npm install --ignore-scripts --save-exact @homie-rocks/studio@>=0.1.0']]);
+  assert.match(partsLines(kept).join('\n'), /NOT INSTALLED @homie-rocks\/studio@>=0\.1\.0: .* npm installs it with: npm install --ignore-scripts --save-exact @homie-rocks\/studio@>=0\.1\.0/);
   // And the help says exactly that, with the same words for the state.
   assert.match(PARTS_ADD_USAGE, /--no-install: install nothing and leave package\.json as it is; .* named NOT INSTALLED with the npm command that installs it/);
   assert.match((await partsCommand(c, 'add', ['parts', 'add'], new Map(), { fetch })).why, /--no-install: install nothing and leave package\.json as it is/);
   // Without the flag the same command lets npm install it (and npm, not Homie, writes package.json).
   const wet = npmOf();
   await partsCommand(lacking('foxes-wet', 'Fox Wet'), 'add', ['parts', 'add', 'owls.example/pickup-field'], new Map(), { fetch, npm: wet.npm });
-  assert.deepEqual(wet.installs(), [['install', '--save-exact', '@homie-rocks/studio@>=0.1.0']]);
+  assert.deepEqual(wet.installs(), [['install', '--ignore-scripts', '--save-exact', '@homie-rocks/studio@>=0.1.0']]);
 
 });
 
@@ -637,7 +640,7 @@ test('packages: npm says what is there and npm installs what is missing; a studi
   const miss = npmOf();
   let rows = ensurePackages(dir, wants, { npm: miss.npm, install: true, say: (l) => said.push(l) });
   assert.deepEqual(said, ['Installing @homie-rocks/camera@^0.2.0 from npm: owls.example/chase-camera is built on it.']);
-  assert.deepEqual(miss.calls, [['ls', '@homie-rocks/camera@^0.2.0', '--depth=0'], ['install', '--save-exact', '@homie-rocks/camera@^0.2.0']]);
+  assert.deepEqual(miss.calls, [['ls', '@homie-rocks/camera@^0.2.0', '--depth=0'], ['install', '--ignore-scripts', '--save-exact', '@homie-rocks/camera@^0.2.0']]);
   assert.equal(rows[0].state, 'installed');
   assert.equal(rows[0].said, 'added 1 package', 'npm\'s own words');
   // Satisfied: npm is asked, nothing is installed, nothing is said.
@@ -647,7 +650,7 @@ test('packages: npm says what is there and npm installs what is missing; a studi
   // --no-install: nothing runs but the question; the command is given.
   const dry = npmOf();
   rows = ensurePackages(dir, wants, { npm: dry.npm, install: false });
-  assert.deepEqual([rows[0].state, rows[0].command, dry.installs().length], ['missing', 'npm install --save-exact @homie-rocks/camera@^0.2.0', 0]);
+  assert.deepEqual([rows[0].state, rows[0].command, dry.installs().length], ['missing', 'npm install --ignore-scripts --save-exact @homie-rocks/camera@^0.2.0', 0]);
   // npm fails: its error, as it printed it.
   rows = ensurePackages(dir, wants, { npm: npmOf({}, { fail: 'npm error code E404\nnpm error 404 Not Found' }).npm, install: true });
   assert.equal(rows[0].state, 'failed');
@@ -711,7 +714,7 @@ test('parts find searches the hub and this studio; an unreachable hub is said pl
   assert.deepEqual([c.name, c.kind, c.license, c.cost.bytes, c.requires.packages['@homie-rocks/camera'], c.from.name], ['Third-person chase camera', 'mechanic', 'MIT', 4096, '^0.2.0', 'Cave Run']);
   assert.match(c.say, /part_add \{ "part": "owls\.example\/chase-camera" \}/);
   const lines = partsLines(r).join('\n');
-  assert.match(lines, /Third-person chase camera \(mechanic\) 1\.2\.0 · MIT · owls\.example\/chase-camera/);
+  assert.match(lines, /Third-person chase camera \(mechanic\) 1\.2\.0 · MIT · Free · owls\.example\/chase-camera/);
   assert.match(lines, /from Cave Run by Night Owls/);
   assert.match(lines, /costs 4 KB · builds on @homie-rocks\/camera · in a room: local/);
   // Filters; and packages are never results.
@@ -763,7 +766,7 @@ test('the chat tools: parts_find, part_add, part_new and part_share, named like 
 
   const text = (r) => r.content[0].text;
   let r = await tool('parts_find').run({ query: 'pickup', studio: 'foxes4' });
-  assert.match(text(r), /Pickup field \(mechanic\) 1\.0\.0 · CC-BY-4\.0 · owls\.example\/pickup-field/);
+  assert.match(text(r), /Pickup field \(mechanic\) 1\.0\.0 · CC-BY-4\.0 · Free · owls\.example\/pickup-field/);
   assert.match(text(r), /from Gem cave by Night Owls/);
   assert.match(text(r), /part_add \{ "part": "owls\.example\/pickup-field" \}/);
   assert.equal(r.structuredContent.results[0].add, 'owls.example/pickup-field');

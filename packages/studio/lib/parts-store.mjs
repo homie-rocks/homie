@@ -1,3 +1,6 @@
+import { paidAccess, savePurchaseBackup, offlinePurchase, purchaseFacts } from './parts-purchase.mjs';
+import { priceWords } from "../worker/purchase-pricing.mjs";
+
 /**
  * FINDING, ADDING AND SHARING PARTS (parts/PARTS.md): what the four chat tools do (lib/parts-tools.mjs).
  *
@@ -37,13 +40,13 @@ export function baseOf(host) {
 }
 
 /** Every request this file makes. Bytes back, capped; a plain sentence when it fails. */
-async function get(url, { fetch: f = globalThis.fetch, max = LIMITS.fileBytes, what = 'the file' } = {}) {
+async function get(url, { fetch: f = globalThis.fetch, max = LIMITS.fileBytes, what = 'the file', authorization } = {}) {
   let res;
-  try { res = await f(url, { redirect: 'follow', headers: { accept: '*/*' } }); } catch (error) { throw new Error(`${new URL(url).host} could not be reached (${String(error?.cause?.code ?? error?.message ?? error).slice(0, 80)})`); }
+  try { res = await f(url, { redirect: authorization ? 'error' : 'follow', headers: { accept: '*/*', ...(authorization ? { authorization: `Bearer ${authorization}` } : {}) }, signal: AbortSignal.timeout(30000) }); } catch (error) { throw new Error(`${new URL(url).host} could not be reached (${String(error?.cause?.code ?? error?.message ?? error).slice(0, 80)})`); }
   if (!res.ok) throw new Error(`${url} answered ${res.status}: ${what} is not there`);
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (bytes.length > max) throw new Error(`${url} is ${bytes.length} bytes, more than ${what} may be (${max})`);
-  return bytes;
+  const reader = res.body?.getReader(); const chunks = []; let size = 0;
+  if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > max) { await reader.cancel(); throw new Error(`${url} exceeds the size ${what} may be (${max} bytes)`); } chunks.push(value); }
+  return Buffer.concat(chunks);
 }
 async function getJson(url, opts) {
   const bytes = await get(url, { max: 4 * 1024 * 1024, ...opts });
@@ -55,12 +58,22 @@ async function getJson(url, opts) {
  * Nothing is returned unless every file's SHA-256 and size are what the part.json says, so nothing unverified can
  * be written by a caller.
  */
-export async function fetchPart(refText, { fetch } = {}) {
+export async function fetchPart(refText, { fetch, onPaid } = {}) {
   const ref = parseRef(refText);
   if (!ref) throw new Error(`"${String(refText).slice(0, 80)}" does not name a part: "<studio site>/<part id>", such as "owls.example/pickup-field" (and "@1.2.0" for one version)`);
   const base = baseOf(ref.host);
-  const index = await getJson(`${base}/.well-known/homie-parts.json`, { fetch, what: 'the studio\'s list of shared parts' }).catch((error) => { throw new Error(`${ref.host} shares no parts that can be read: ${error.message}`); });
-  const entry = (Array.isArray(index?.parts) ? index.parts : []).find((p) => p?.id === ref.id);
+  let catalog = `${base}/parts/catalog.json`;
+  try {
+    const discovery = await getJson(`${base}/.well-known/api-catalog`, { fetch, what: 'the studio API catalogue' });
+    const candidate = discovery.linkset?.flatMap((item) => item.item ?? []).find((item) => item.type === 'application/json' && new URL(item.href).origin === base);
+    if (candidate) catalog = candidate.href;
+  } catch { /* Older studios expose the resource catalogue directly. */ }
+  const index = await getJson(catalog, { fetch, what: 'the studio list of shared parts' }).catch(() => getJson(`${base}/.well-known/homie-parts.json`, { fetch, what: 'the older studio catalogue' })).catch((error) => { throw new Error(`${ref.host} shares no parts that can be read: ${error.message}`); });
+  let entry = (Array.isArray(index?.parts) ? index.parts : []).find((p) => p?.id === ref.id);
+  if (!entry && ref.version) {
+    const retired = await getJson(`${base}/parts/${ref.id}/${ref.version}/part.json`, { fetch, max: LIMITS.json, what: 'the previously sold release' });
+    if (retired.sale) entry = { ...retired, versions: [ref.version] };
+  }
   if (!entry) {
     const names = (Array.isArray(index?.parts) ? index.parts : []).map((p) => p?.id).filter(Boolean);
     throw new Error(`${ref.host} does not share a part "${ref.id}"${names.length ? ` (it shares: ${names.slice(0, 12).join(', ')})` : ' (it shares none)'}. A part its studio keeps private is not there to add.`);
@@ -75,16 +88,19 @@ export async function fetchPart(refText, { fetch } = {}) {
   if (part.id !== ref.id || part.version !== version) throw new Error(`${at}part.json says it is ${part.id} ${part.version}, not ${ref.id} ${version}`);
   if (part.share !== true) throw new Error(`${ref.ref} is not shared`);
   if (!Array.isArray(part.files) || !part.files.length) throw new Error(`${ref.ref} ${version} lists no files`);
+  const access = part.sale ? (onPaid ? await onPaid(ref, part, entry.releases?.find((r) => r.version === version)?.offer ?? part.sale) : null) : null;
+  if (part.sale && !access) throw new Error(`This is a paid part: ${priceWords(part.sale)}. Use part_add to review its price first.`);
   const files = new Map();
   let total = 0;
   for (const f of part.files) {
-    const bytes = await get(`${at}${f.path.split('/').map(encodeURIComponent).join('/')}`, { fetch, max: Math.min(LIMITS.fileBytes, f.bytes), what: f.path });
+    const delivered = access?.files?.find((item) => item.path === f.path);
+    const bytes = delivered ? Buffer.from(delivered.data, 'base64') : await get(`${at}${f.path.split('/').map(encodeURIComponent).join('/')}`, { fetch, max: Math.min(LIMITS.fileBytes, f.bytes), what: f.path, authorization: access?.token });
     if (bytes.length !== f.bytes || sha256(bytes) !== f.sha256) throw new Error(`${ref.ref} ${version}: ${f.path} is not the file its part.json describes (its SHA-256 or size differs). Nothing was written; tell its studio.`);
     total += bytes.length;
     if (total > LIMITS.totalBytes) throw new Error(`${ref.ref} is over ${Math.round(LIMITS.totalBytes / 1048576)} MB`);
     files.set(f.path, bytes);
   }
-  return { ref, part, files, entry, base, version, versions };
+  return { ref, part, files, entry, base, version, versions, access };
 }
 
 /* ------------------------------------------------------------------ packages: npm's */
@@ -124,10 +140,10 @@ export function ensurePackages(root, wants, { npm = runNpm, install = false, say
     if (ls.status === 0) { rows.push({ ...w, state: 'ok' }); continue; }
     const pinned = pinnedIn(root, w.name);
     if (pinned) { rows.push({ ...w, state: 'pinned', has: pinned, why: `${w.by} is built on ${w.name} ${w.range}; this studio's package.json has ${w.name} at ${pinned}, which npm says does not fit. Nothing was changed: move the studio to a version in that range if the part is worth it, or use a part written against ${pinned}.` }); continue; }
-    const command = `npm install --save-exact ${spec}`;
+    const command = `npm install --ignore-scripts --save-exact ${spec}`;
     if (!install) { rows.push({ ...w, state: 'missing', command, why: `${w.by} is built on ${w.name} ${w.range}, which this studio does not have.` }); continue; }
     say(`Installing ${spec} from npm: ${w.by} is built on it.`);
-    const r = npm(['install', '--save-exact', spec], { cwd: root });
+    const r = npm(['install', '--ignore-scripts', '--save-exact', spec], { cwd: root });
     const said = `${r.stdout}${r.stderr}`.trim();
     rows.push(r.status === 0 ? { ...w, state: 'installed', said } : { ...w, state: 'failed', said, command, why: `npm could not install ${spec} for ${w.by}. npm said:\n${said}` });
   }
@@ -153,7 +169,7 @@ export function partItems(root, { game = null, refs = null } = {}) {
     const dir = vendorDir(root, ref);
     let part = null;
     try { part = readPart(dir); } catch { part = null; }
-    items.push({ ref, part, vendored: true, changed: part ? verifyFiles(dir, { files: e.files }, { skipTuning: true }).changed : [] });
+    items.push({ ref, part, vendored: true, purchase: e.purchase ? { ...(e.purchases?.[game] ?? e.purchase), ...purchaseFacts(root, ref, game) } : null, changed: part ? verifyFiles(dir, { files: e.files }, { skipTuning: true }).changed : [] });
   }
   for (const o of listOwnParts(root)) if (refs ? refs.includes(o.id) : !game) items.push({ ref: o.id, part: o.part, vendored: false });
   return items;
@@ -174,12 +190,19 @@ const diffFiles = (was, now) => {
  * told to (`overwrite`); only then write. tuning.json is the studio's from the first add and is never replaced: a
  * new version's defaults land beside it as tuning.upstream.json.
  */
-export async function addPart(root, refText, { game = null, fetch, npm = runNpm, install = true, overwrite = false, say = () => {} } = {}) {
+export async function addPart(root, refText, { game = null, fetch, npm = runNpm, install = true, overwrite = false, say = () => {}, approve = null, quantity = 1, offline = false, wallet, walletPay } = {}) {
   const command = 'parts add';
   const fail = (why, extra = {}) => ({ ok: false, command, why, ...extra });
   if (game && !existsSync(experienceFile(root, game))) return fail(`there is no game "${game}" in this studio (${listGames(root).map((g) => g.id).join(', ') || 'it has none yet'})`);
   let got;
-  try { got = await fetchPart(refText, { fetch }); } catch (error) { return fail(error.message); }
+  try {
+    got = offline ? await offlinePurchase(root, refText, game) : await fetchPart(refText, { fetch, onPaid: (ref, part, offer) => paidAccess(root, ref, part, { game, quantity, approve, fetch, offer, wallet, walletPay }) });
+    if (got.access) {
+      savePurchaseBackup(root, got, got.access, game);
+      const c = got.access.claims;
+      got.purchase = { version: c.version, mode: c.mode, scope: c.terms.scope, game: c.game, quantity: c.quantity, paidUntil: c.paidUntil, onExpiry: c.onExpiry, onRefund: c.onRefund, status: 'paid', checkedAt: new Date().toISOString() };
+    }
+  } catch (error) { return fail(error.message, error.purchase ? { purchase: error.purchase } : {}); }
   const { ref, part, files, version, base, entry } = got;
   const lock = readOrigins(root);
   const was = lock.parts[ref.ref] ?? null;
@@ -205,6 +228,7 @@ export async function addPart(root, refText, { game = null, fetch, npm = runNpm,
   const games = [...new Set([...(was?.games ?? []), ...(game ? [game] : [])])].sort();
   const from = isObj(entry.from) ? { game: line(entry.from.game, 40) || null, name: line(entry.from.name, 80) || null, studio: line(entry.from.studio, 80) || null, page: /^https:\/\//.test(String(entry.from.page ?? '')) ? String(entry.from.page).slice(0, 300) : null } : isObj(part.from) ? { game: part.from.game ?? null, studio: line(part.from.studio, 80) || null } : null;
   lock.parts[ref.ref] = {
+    ...(got.purchase ? { purchase: got.purchase, purchases: { ...(was?.purchases ?? {}), ...(got.purchase.scope === 'game' ? { [game]: got.purchase } : {}) } } : {}),
     version, url: `${base}/parts/${ref.id}/${version}/`, license: part.license ?? null, attribution: part.attribution ?? '', name: part.name, kind: part.kind,
     ...(from ? { from } : {}), page: `${base}/parts/${ref.id}/`, studio: line(got.entry?.studio?.name, 80) || null,
     files: part.files.map(({ path, sha256: h, bytes }) => ({ path, sha256: h, bytes })), games, addedAt: was?.addedAt ?? new Date().toISOString(), ...(was && !same ? { updatedAt: new Date().toISOString() } : {}),
@@ -224,7 +248,7 @@ export async function addPart(root, refText, { game = null, fetch, npm = runNpm,
     license: lic?.id ?? null, asks: lic?.asks ?? null, attribution: part.attribution ?? '', ...(from ? { from } : {}),
     files: part.files.length, bytes: part.files.reduce((n, f) => n + f.bytes, 0), verified: true,
     entry: part.entry ?? null, import: part.entry ? `@parts/${ref.ref}` : null, game, credits,
-    packages, needs, licences,
+    packages, needs, licences, ...(got.purchase ? { purchase: got.purchase } : {}),
     ready: !blocked.length && !packages.some((p) => p.state === 'missing') && !needs.length && !licences.some((c) => c.level === 'conflict'),
   };
 }
@@ -290,7 +314,7 @@ const row = (p, extra) => ({
   id: p.id, name: p.name, kind: p.kind, version: p.version, summary: line(p.summary), license: p.license || null, tags: Array.isArray(p.tags) ? p.tags.slice(0, 12) : [],
   ...(Array.isArray(p.uses) ? { uses: p.uses } : {}),
   from: isObj(p.from) ? { ...(p.from.app ? { app: p.from.app, open: p.from.open ?? null } : {}), ...(p.from.music ? { music: p.from.music } : {}), ...(p.from.video ? { video: p.from.video } : {}), game: p.from.game ?? null, name: p.from.name ?? null, studio: p.from.studio ?? null, play: p.from.play ?? null } : null,
-  cost: isObj(p.cost) ? p.cost : {}, requires: isObj(p.requires) ? p.requires : {}, rig: p.skeleton?.rig ?? null, netplay: p.contract?.netplay ?? null, ...extra,
+  sale: p.sale ?? null, price: priceWords(p.sale), purchaseRequired: Boolean(p.sale), licenseTerms: p.licenseTerms ?? null, quality: p.quality ?? null, checkedAt: p.checkedAt ?? null, available: p.available ?? null, cost: isObj(p.cost) ? p.cost : {}, requires: isObj(p.requires) ? p.requires : {}, rig: p.skeleton?.rig ?? null, netplay: p.contract?.netplay ?? null, ...extra,
 });
 function matches(p, { words, kind, tag, license, builds }) {
   if (kind && p.kind !== kind) return false;
@@ -332,12 +356,19 @@ export async function findParts(root, query = '', { kind = null, tag = null, lic
     const have = new Set(here.filter((h) => h.where === 'here').map((h) => h.ref));
     found = index.parts.filter((p) => isObj(p) && typeof p.id === 'string' && (typeof p.host === 'string' || typeof p.add === 'string')).map((p) => {
       const ref = parseRef(typeof p.add === 'string' ? p.add : `${p.host}/${p.id}`)?.ref;
-      return ref ? row(p, { where: 'hub', ref, add: ref, studio: line(p.studio?.name, 80) || null, page: /^https:\/\//.test(String(p.page ?? '')) ? p.page : null, here: have.has(ref), say: `Add it: part_add { "part": "${ref}" }.` }) : null;
+      return ref ? row(p, { where: 'hub', ref, add: ref, studio: line(p.studio?.name, 80) || null, page: /^https:\/\//.test(String(p.page ?? '')) ? p.page : null, here: have.has(ref), say: `${p.sale ? `Paid: ${priceWords(p.sale)}. Ask for approval of the exact quote before requesting payment. ` : 'Free. '}Add it: part_add { "part": "${ref}" }.` }) : null;
     }).filter(Boolean);
     hubState = { ok: true, url, parts: found.length };
   } catch (error) {
     hubState = { ok: false, url, why: `The catalogue of shared parts could not be read just now (${error.message}). This is NOT "no parts exist": only this studio's own parts were searched. Try again, or add a part straight from a studio you know (part_add with "<studio site>/<part id>").` };
   }
   const results = [...here.filter((p) => matches(p, filter)), ...found.filter((p) => !p.here && matches(p, filter))];
+  for (const p of results) {
+    p.relevance = words.reduce((n, w) => n + (String(p.name ?? '').toLowerCase().includes(w) ? 3 : 0) + (String(p.id).includes(w) ? 2 : 0) + (String(p.summary ?? '').toLowerCase().includes(w) ? 1 : 0), 0);
+    p.availability = p.available === false ? 'unavailable' : p.where === 'hub' && (!Number.isFinite(Date.parse(p.checkedAt)) || Date.parse(p.checkedAt) > Date.now() + 300000 || Date.now() - Date.parse(p.checkedAt) > 86400000) ? 'stale: verify with seller' : 'recently checked';
+    p.qualityMeaning = 'Seller-attested purchases are not independent payment verification; quality is informational and does not change ranking.';
+  }
+  results.sort((a, b) => b.relevance - a.relevance || (a.where === 'hub') - (b.where === 'hub') || Boolean(a.sale) - Boolean(b.sale) || String(a.ref ?? a.id).localeCompare(String(b.ref ?? b.id)));
+  for (const p of results) p.ranking = 'Text relevance first (name 3, id 2, summary 1 per matching word); ties: local first, then free before paid, then reference. Quality is informational.';
   return { ok: true, command: 'parts find', query: words.join(' '), filter: { kind, tag, license, builds }, hub: hubState, results, searched: { hub: found.length, here: here.length } };
 }
