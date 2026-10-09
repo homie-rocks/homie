@@ -3433,9 +3433,14 @@ else { console.log(JSON.stringify({error:{type:'invalid_request_error',message:'
     assert.notEqual(cli.status, 0);
     assert.match(cli.stdout, /Stripe says this product is refused/);
     assert.doesNotMatch(cli.stdout + cli.stderr, /sk_test_|rk_test_|pk_live_|whsec_/);
-    const tools = toolDefs(new StudioContext({ cwd: dir, waitMs: 20000, install: false }));
+    const context = new StudioContext({ cwd: dir, waitMs: 0, install: false });
+    const tools = toolDefs(context);
     let mcp = await tools.find((t) => t.name === 'stripe_login').run({});
-    if (mcp.structuredContent.state === 'running') mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.job });
+    context.waitMs = 20000;
+    while (mcp.structuredContent.state === 'running') {
+      assert.match(mcp.structuredContent.job, /^j_/);
+      mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.job });
+    }
     assert.match(JSON.stringify(mcp), /Stripe says this product is refused/);
     assert.doesNotMatch(JSON.stringify(mcp), /sk_test_|rk_test_|pk_live_|whsec_/);
   } finally { process.env.PATH = oldPath; if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome; }
