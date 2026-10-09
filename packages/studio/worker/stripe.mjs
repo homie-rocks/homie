@@ -4,7 +4,7 @@
  *
  *   createCheckoutSession(env, params)   POST /v1/checkout/sessions (Stripe's hosted page)
  *   createRefund(env, params)            POST /v1/refunds (only ever from the owner's tap, or a confirmed ask)
- *   webhook endpoints                    list, create and turn off: only `homie-studio shop connect` calls these, on the
+ *   webhook endpoints                    list, create and turn off: the manual `homie-studio shop connect --manual` fallback calls these, on the
  *                                        owner's computer with the key the owner pasted there (0.24.3), so a new
  *                                        endpoint's signing secret goes straight to the Worker secret
  *   productIdOf(slug, item)              the catalog Product a shop item is (`homie-studio shop catalog`, 0.24.3)

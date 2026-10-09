@@ -104,15 +104,37 @@ One order stores every line and its item snapshot. `/api/shop/mine` lists the li
 
 `homie-studio shop init --supporter` writes an example item and `SELLING.md`, without a policy, cap or refund
 window. `shop check` validates settings; the build uses the same validation.
-`shop connect` opens a local page for the studio's Stripe key and webhook secret; `--live` selects live mode.
-Both restricted (`rk_`) and full secret (`sk_`) keys are accepted. A restricted key is useful: Checkout Sessions Write, Charges Write, PaymentIntents Read, Disputes Read;
-Webhook Endpoints Write lets the connect page create the webhook. The key and webhook signing secret are both
-part of working payment setup; without either, readiness names the missing step and opens no checkout.
+`shop connect` (MCP `stripe_login`) starts Stripe's official browser approval, sandbox/test first.
+If Stripe CLI is missing, the result gives `npm install -g @stripe/cli@latest` for the AI to run.
+The person never supplies a key to the AI. A studio-specific CLI profile avoids borrowing another studio's login.
+If the studio is not deployed yet, approval is retained: deploy with `studio_deploy` (and
+`cloudflare_login` first if needed), then rerun connect. Webhooks require the deployed HTTPS address.
+
+Legacy CLI pairing supplies a 90-day test key. Where available, connect captures it privately, creates
+`<site>/api/shop/hook`, and passes that key and the returned signing secret together to Wrangler on stdin.
+Credentials remain in the studio's Stripe CLI storage and Worker secrets, never Homie services or chat.
+Existing installed connections are reused. `shop connect --renew` obtains fresh approval and replaces the
+credential/webhook pair; only after saving does it disable older toolkit endpoints for the same address.
+The result names expiry and the next step: verify a test purchase, signed webhook delivery, item grant,
+and an office refund that removes the item. Installation is not an end-to-end payment verification.
+
+**Current Stripe CLI OAuth does not export an independent Worker's key. Live CLI key export is also
+unsupported.** In those cases the result says `worker-credential`; login alone does not mean selling works.
+There is no public general restricted-key creation API. Do not force an old CLI or make payments depend on
+the desktop agent. A persistent Worker MCP client would be a separate, unverified runtime design. Only when the owner chooses it, `shop connect --manual` opens the previous local page.
+That fallback requires the owner to create and paste a Dashboard key; it does not meet one-approval setup.
+The page creates the webhook automatically, so the owner need not handle its signing secret.
+Both restricted (`rk_`) and full secret (`sk_`) keys are accepted by that optional fallback.
+For a restricted runtime key use Checkout Sessions Write, Charges Write, PaymentIntents Read, Disputes Read;
+setup also requires Webhook Endpoints Write. Stripe's preset CLI permissions cannot be narrowed here.
+`shop connect --live` is only for an owner's go-live request; the fallback is `--manual --live`.
+Stripe's business activation and tax choices remain the owner's. See the source checkout's
+`docs/stripe-connect-research.md` for current official mechanisms and limitations.
+
 [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment) uses webhooks as well as the redirect.
-Credentials stay in Worker secrets. A preview normally has no database and cannot sell. A preview that you
-configure with a database, key and signing secret sells into that database.
-Stripe's agent tools can populate Products with `shop catalog` and read sales; secret-returning endpoint
-creation belongs on the connect page. Stripe approval links are handled by the owner.
+A preview normally has no database and cannot sell. Stripe's optional agent tools can populate Products
+with `shop catalog` and read sales. Endpoint creation belongs in the private connect process because
+it returns a signing secret. Stripe approval links belong to the owner.
 
 `shop`, `shop orders`, and `/_studio/office/shop` show readiness and sales. Office refunds are owner actions;
 `shop refund <order>` asks the owner to confirm. Stripe controls pending or held refunds.

@@ -22,7 +22,7 @@
  * Run: node --test packages/studio/test/shop.test.mjs
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -1031,7 +1031,7 @@ if [ "$1" = secret ]; then wc -c | tr -d ' ' >> ${state}/stdin-bytes; echo "Succ
 async function openConnect(dir, opts = {}) {
   const { shopConnect } = await import('../lib/shop.mjs');
   const said = [];
-  const done = shopConnect(dir, { log: (line) => said.push(line), wait: 20_000, ...opts });
+  const done = shopConnect(dir, { manual: true, log: (line) => said.push(line), wait: 20_000, ...opts });
   for (let i = 0; i < 50 && !said.length; i += 1) await new Promise((r) => setTimeout(r, 50));
   const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}/.exec(said.join(' '))?.[0];
   assert.ok(link, said.join(' '));
@@ -1045,12 +1045,12 @@ async function openConnect(dir, opts = {}) {
 test('shop connect: the owner pastes the key on this computer; it goes to the Worker secret and is never printed', async () => {
   const { shopConnect } = await import('../lib/shop.mjs');
   const bare = studio('connect-undeployed');
-  const none = await shopConnect(bare, { wait: 1000 });
+  const none = await shopConnect(bare, { manual: true, wait: 1000 });
   assert.equal(none.needs, 'deploy', 'no live address yet: Stripe has nowhere to send payments');
   const { dir, state } = connectStudio('connect');
   writeFileSync(join(dir, 'shop.json'), JSON.stringify({ till: 'stripe', items: [SUPPORTER] }));
   const said = [];
-  const done = shopConnect(dir, { log: (line) => said.push(line), wait: 20_000, verify: false });
+  const done = shopConnect(dir, { manual: true, log: (line) => said.push(line), wait: 20_000, verify: false });
   for (let i = 0; i < 50 && !said.length; i += 1) await new Promise((r) => setTimeout(r, 50));
   const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}/.exec(said.join(' '))?.[0];
   assert.ok(link, said.join(' '));
@@ -2494,6 +2494,7 @@ for (const tag of rollingFrom) test(`${ROLLING} (from ${tag})`, async () => {
   const build = spawnSync('npm', ['run', 'build'], { cwd: released, encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=1536' } });
   assert.equal(build.status, 0, build.stdout + build.stderr);
   const { default: old } = await import(join(released, 'packages/studio/worker/index.mjs'));
+  const releasedStore = await import(join(released, 'packages/studio/worker/shop-store.mjs'));
   const s = await site();
   const p = s.player(400, { band: 'adult' });
   const oldFetch = (path, init) => old.fetch(new Request('https://owls.example' + path, init), s.env, { waitUntil() {} });
@@ -2518,9 +2519,9 @@ for (const tag of rollingFrom) test(`${ROLLING} (from ${tag})`, async () => {
   assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_order_lines WHERE order_id = ?').get(o.id).n, 1);
   const oldRefund = await oldFetch('/_studio/api/shop/refund', { method: 'POST', headers: s.owner, body: JSON.stringify({ order: o.id }) });
   assert.equal(oldRefund.status, 200, await oldRefund.clone().text());
-  // F: a released checkout's first payment reaches the new code, with no line rows.
+  // F: older releases have no line rows; releases with the additive schema already create one.
   o = await oldBuy();
-  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_order_lines WHERE order_id = ?').get(o.id).n, 0);
+  assert.equal(s.DB.sql.prepare('SELECT COUNT(*) AS n FROM shop_order_lines WHERE order_id = ?').get(o.id).n, releasedStore.SHOP_LINES_FILE ? 1 : 0);
   assert.equal((await s.hook('checkout.session.completed', truth(o))).status, 200);
   assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner)).status, 200);
   // Repair a paid legacy order missing its entitlement, and prove duplicate delivery cannot add it twice.
@@ -2969,4 +2970,202 @@ test('foreign events need no PaymentIntent read without an unrecorded order or w
     assert.equal(s.stripe.calls.filter(c => c.path.startsWith('/v1/payment_intents/')).length, 0);
     assert.equal(s.DB.sql.prepare('SELECT COUNT(*) n FROM shop_events').get().n, 0);
   } finally { s.stripe.close(); }
+});
+
+/** CLI stand-in uses the same HTTP-boundary Stripe as the Worker tests above. No account or network login. */
+async function pairingHarness(name) {
+  const { dir } = connectStudio(name);
+  const { shopInit } = await import('../lib/shop.mjs');
+  shopInit(dir, { supporter: true });
+  const stripe = await fakeStripe();
+  const state = { connected: false, oauth: false, expired: false, saveFails: false, cliCalls: [], approvals: [], logs: [], saved: null, writes: 0 };
+  const key = `rk_test_${'B8'.repeat(20)}`;
+  const exec = async (argv) => {
+    const args = argv.slice(2); state.cliCalls.push(args);
+    const okay = (body) => ({ code: 0, stdout: typeof body === 'string' ? body : JSON.stringify(body) });
+    if (args[0] === '--version') return okay('stripe version 1.53.1');
+    if (args[0] === 'config') return okay(state.connected && !state.oauth ? `account_id=acct_owls\ntest_mode_api_key=${key}\ntest_mode_key_expires_at=${state.expired ? '2020-01-01' : '2099-01-01'}\n` : '');
+    if (args[0] === 'login' && args[1] === '--non-interactive') return okay({ browser_url: 'https://dashboard.stripe.com/stripecli/confirm?test=1', verification_code: 'owl-owl', next_step: 'stripe login --complete-device' });
+    if (args[0] === 'login' && args[1] === '--complete-device') { state.connected = true; state.expired = false; return okay(`Logged in ${key}`); }
+    if (!state.connected || state.expired) return { code: 1, stderr: `expired ${key}` };
+    const method = args[0].toUpperCase(); const path = args[1]; const body = new URLSearchParams();
+    for (let i = 2; i < args.length; i++) if (args[i] === '-d') { const data = args[++i]; const at = data.indexOf('='); body.append(data.slice(0, at), data.slice(at + 1)); }
+    const r = await fetch(`${stripe.base}${path}${method === 'GET' ? `?${body}` : ''}`, { method, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/x-www-form-urlencoded' }, ...(method === 'GET' ? {} : { body }) });
+    const data = await r.json();
+    if (method === 'POST' && path === '/v1/webhook_endpoints' && r.ok) stripe.behave.endpoints.push({ ...data, secret: undefined });
+    if (method === 'POST' && path.startsWith('/v1/webhook_endpoints/')) { const old = stripe.behave.endpoints.find((e) => e.id === data.id); if (old) old.status = data.status; }
+    return { code: r.ok ? 0 : 1, stdout: JSON.stringify(data) };
+  };
+  const wrangler = (args, opts) => {
+    if (args[1] === 'list') return { code: 0, stdout: JSON.stringify(state.saved ? Object.keys(state.saved).map((name) => ({ name })) : []) };
+    assert.deepEqual(args, ['secret', 'bulk']); state.writes++;
+    if (state.saveFails) return { code: 1, out: 'private failure' };
+    state.saved = JSON.parse(opts.input); return { code: 0 };
+  };
+  return { dir, stripe, state, opts: { storage: join(scratch, 'pairing-receipts'), exec, wrangler, open: (url) => state.approvals.push(url), log: (line) => state.logs.push(line) } };
+}
+
+test('browser pairing: first connect, existing endpoint, repeat, expiry, renewal and test then live', async () => {
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  const h = await pairingHarness('pairing-first');
+  h.stripe.behave.endpoints.push({ id: 'we_old', url: 'https://owls.example/api/shop/hook', metadata: { homie: 'shop-v1' }, status: 'enabled' }, { id: 'we_foreign', url: 'https://other.example/api/shop/hook', metadata: { homie: 'shop-v1' }, status: 'enabled' });
+  const first = await shopConnect(h.dir, h.opts);
+  assert.equal(first.ok, true, JSON.stringify(first)); assert.equal(first.verifiedPurchase, false);
+  assert.equal(h.state.approvals.length, 1); assert.equal(h.state.writes, 1);
+  assert.deepEqual(Object.keys(h.state.saved).sort(), ['STRIPE_KEY', 'STRIPE_WEBHOOK_SECRET']);
+  assert.deepEqual(h.stripe.behave.updated.map((e) => e.id), ['we_old']);
+  assert.doesNotMatch(JSON.stringify([first, h.state.logs]), /rk_test_|whsec_/);
+  const second = await shopConnect(h.dir, h.opts);
+  assert.equal(second.alreadyConnected, true); assert.equal(h.state.writes, 1); assert.equal(h.state.approvals.length, 1);
+  h.state.expired = true;
+  const renewed = await shopConnect(h.dir, h.opts);
+  assert.equal(renewed.ok, true); assert.equal(h.state.approvals.length, 2);
+  const live = await shopConnect(h.dir, { ...h.opts, live: true });
+  assert.equal(live.needs, 'worker-credential'); assert.match(live.fallback, /--manual --live/);
+  assert.equal(h.state.saved.STRIPE_KEY.startsWith('rk_test_'), true, 'unsupported live cannot replace test credentials');
+});
+
+test('browser pairing: connect before deploy retains approval; current OAuth does not pretend to install credentials', async () => {
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  const h = await pairingHarness('pairing-before-deploy');
+  const file = join(h.dir, 'studio.json'); const studio = JSON.parse(readFileSync(file));
+  const bare = { ...studio, cloudflare: {} }; writeFileSync(file, JSON.stringify(bare));
+  const first = await shopConnect(h.dir, h.opts);
+  assert.equal(first.needs, 'deploy'); assert.equal(h.state.approvals.length, 1); assert.equal(h.state.writes, 0);
+  writeFileSync(file, JSON.stringify(studio));
+  assert.equal((await shopConnect(h.dir, h.opts)).ok, true); assert.equal(h.state.approvals.length, 1);
+  h.state.oauth = true;
+  const oauth = await shopConnect(h.dir, h.opts);
+  assert.equal(oauth.needs, 'worker-credential'); assert.equal(h.state.writes, 1);
+});
+
+test('browser pairing: failed storage leaves old hook active; retry recovers without another approval', async () => {
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  const h = await pairingHarness('pairing-save-failure');
+  h.state.saveFails = true;
+  const failed = await shopConnect(h.dir, h.opts);
+  assert.equal(failed.needs, 'cloudflare'); assert.equal(h.stripe.behave.updated.length, 0);
+  h.state.saveFails = false;
+  assert.equal((await shopConnect(h.dir, h.opts)).ok, true);
+  assert.equal(h.state.approvals.length, 1); assert.equal(h.stripe.behave.updated.length, 1);
+  // Deleted Worker secrets invalidate the receipt even though the CLI session still works.
+  h.state.saved = null;
+  assert.equal((await shopConnect(h.dir, h.opts)).saved, true);
+});
+
+test('browser pairing: missing CLI, permission failure, and hostile continuation fail without exposing output', async () => {
+  const { shopConnect, completionArgs, stripeProcess } = await import('../lib/stripe-connect.mjs');
+  const h = await pairingHarness('pairing-errors');
+  const managed = await shopConnect(h.dir, { ...h.opts, managed: true });
+  assert.equal(managed.needs, 'shop-settings', 'a seller flag is not silently ignored');
+  const missing = await shopConnect(h.dir, { ...h.opts, exec: async () => ({ code: 1, missing: true }) });
+  assert.equal(missing.needs, 'stripe-cli'); assert.deepEqual(missing.next, ['npm install -g @stripe/cli@latest']);
+  assert.equal(completionArgs("stripe login --complete 'https://evil.example/x'"), null);
+  assert.equal(completionArgs('stripe login --complete-device; echo token'), null);
+  assert.deepEqual(completionArgs("stripe login --complete 'https://dashboard.stripe.com/stripecli/auth/a'"), ['login', '--complete', 'https://dashboard.stripe.com/stripecli/auth/a']);
+  h.stripe.behave.webhookDenied = true;
+  const denied = await shopConnect(h.dir, h.opts);
+  assert.equal(denied.needs, 'stripe-setup'); assert.equal(h.state.writes, 0);
+  // Exercise real child-process transport with a fake CLI: inherited keys are never used or printed.
+  const bin = join(h.dir, 'node_modules', '.bin');
+  writeFileSync(join(bin, 'stripe'), '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({key:!!process.env.STRIPE_API_KEY,args:process.argv.slice(2)}));\n');
+  chmodSync(join(bin, 'stripe'), 0o755);
+  const result = await stripeProcess(['--version'], { cwd: h.dir, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, STRIPE_API_KEY: 'must-not-use' } });
+  assert.deepEqual(JSON.parse(result.stdout), { key: false, args: ['--version'] });
+});
+
+test('real browser: the explicitly chosen manual fallback submits locally and automatically installs its webhook', { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH for real-browser proof' }, async () => {
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  const { default: puppeteer } = await import('puppeteer-core');
+  const { dir } = connectStudio('pairing-manual-browser');
+  const stripe = await fakeStripe();
+  const logs = [];
+  const done = shopConnect(dir, { manual: true, log: (line) => logs.push(line), wait: 20_000, fetcher: (url, options) => fetch(String(url).replace('https://api.stripe.com', stripe.base), options) });
+  for (let i = 0; i < 100 && !logs.length; i++) await new Promise((r) => setTimeout(r, 10));
+  const url = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]+/.exec(logs.join(' '))[0];
+  const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
+  try {
+    const page = await browser.newPage(); await page.goto(url);
+    assert.match(await page.title(), /Connect.*Stripe/);
+    await page.type('#key', `rk_test_${'T6'.repeat(20)}`);
+    await Promise.all([page.waitForNavigation(), page.click('button')]);
+    assert.match(await page.$eval('body', (el) => el.textContent), /Saved to your Worker/);
+    assert.equal((await done).ok, true); assert.equal(stripe.behave.made.length, 1);
+    assert.doesNotMatch(logs.join(' '), /T6T6|whsec_/);
+  } finally { await browser.close(); }
+});
+
+test('real browser: Stripe pairing shows the code and one approval, with no credential field', { skip: !process.env.CHROME_PATH && 'Set CHROME_PATH for real-browser proof' }, async () => {
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  const { default: puppeteer } = await import('puppeteer-core');
+  const h = await pairingHarness('pairing-browser');
+  const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true });
+  let approve; const approved = new Promise((resolve) => { approve = resolve; });
+  let opened; const ready = new Promise((resolve) => { opened = resolve; });
+  try {
+    const page = await browser.newPage();
+    await page.exposeFunction('approvedByOwner', approve);
+    await page.setRequestInterception(true);
+    page.on('request', (request) => request.respond({ status: 200, contentType: 'text/html', body: '<h1>Stripe pairing stand-in</h1><p>owl-owl</p><button onclick="approvedByOwner();this.textContent=\'Approved\'">Approve studio sandbox</button>' }));
+    const done = shopConnect(h.dir, { ...h.opts, open: (url) => { page.goto(url).then(opened); }, exec: async (args, opts) => { if (args.includes('--complete-device')) await approved; return h.opts.exec(args, opts); } });
+    await ready;
+    assert.match(await page.$eval('body', (el) => el.textContent), /owl-owl/);
+    assert.equal(await page.$$eval('input', (all) => all.length), 0);
+    await page.click('button');
+    const result = await done;
+    assert.equal(result.saved, true); assert.equal(h.state.writes, 1);
+    assert.doesNotMatch(JSON.stringify([result, h.state.logs]), /rk_test_|whsec_/);
+  } finally { approve(); await browser.close(); }
+});
+
+test('browser pairing: the installed key and signing secret fulfill a purchase and office refund in the Worker', async () => {
+  const { shopConnect, stripeConnectionInfo } = await import('../lib/stripe-connect.mjs');
+  const h = await pairingHarness('pairing-purchase');
+  const result = await shopConnect(h.dir, h.opts);
+  assert.equal(result.saved, true);
+  assert.equal(stripeConnectionInfo(h.dir, h.opts).expired, false);
+  assert.equal(stripeConnectionInfo(h.dir, { ...h.opts, now: () => Date.parse('2100-01-01') }).expired, true);
+  const s = await site(); Object.assign(s.env, h.state.saved);
+  const p = s.player(30, { band: 'adult' });
+  const buy = await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p)); const order = await buy.json();
+  assert.equal(buy.status, 200, JSON.stringify(order));
+  const id = /\/pay\/(cs_test_\w+)/.exec(order.url)[1];
+  const session = s.stripe.behave.sessions.get(id);
+  const payment = `pi_test_${id.slice(8, 20)}`;
+  Object.assign(session, { payment_status: 'paid', payment_intent: payment, amount_total: 500, total_details: { amount_tax: 0 } });
+  s.stripe.behave.payments.set(payment, { amount: 500, metadata: session.metadata });
+  const delivered = await s.hook('checkout.session.completed', session, { secret: h.state.saved.STRIPE_WEBHOOK_SECRET });
+  assert.equal(delivered.status, 200, await delivered.text());
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order.order).status, 'paid');
+  const refund = await s.post('/_studio/api/shop/refund', { order: order.order }, s.owner);
+  assert.equal(refund.status, 200, await refund.text());
+  assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(order.order).status, 'refunded');
+});
+
+
+test('browser pairing: an owner can choose the live fallback after test; no second webhook secret is requested', async () => {
+  const { shopConnect, stripeConnectionInfo } = await import('../lib/stripe-connect.mjs');
+  const h = await pairingHarness('pairing-live-choice');
+  assert.equal((await shopConnect(h.dir, h.opts)).saved, true);
+  const c = await openConnect(h.dir, { live: true, storage: h.opts.storage, fetcher: (url, options) => fetch(String(url).replace('https://api.stripe.com', h.stripe.base), options) });
+  assert.match(c.page, /Live mode/);
+  const saved = await c.postKey({ key: `rk_live_${'L7'.repeat(20)}`, till: 'stripe' });
+  assert.equal(saved.status, 200, await saved.text());
+  const result = await c.done;
+  assert.equal(result.mode, 'live'); assert.equal(result.webhook.made, true);
+  assert.equal(stripeConnectionInfo(h.dir, h.opts), null, 'manual replacement clears the old test receipt');
+});
+
+test('shop connect --json keeps the local approval link on stderr while waiting for the owner', async () => {
+  const { dir } = connectStudio('pairing-json-link');
+  const child = spawn(process.execPath, [CLI, 'shop', 'connect', '--manual', '--json'], { cwd: dir, env: { ...process.env, HOMIE_STUDIO_WARM: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '', errors = '';
+  child.stdout.on('data', (b) => { output += b; }); child.stderr.on('data', (b) => { errors += b; });
+  const closed = new Promise((resolve) => child.once('close', resolve));
+  try {
+    for (let i = 0; i < 200 && !errors.includes('http://127.0.0.1:'); i++) await new Promise((r) => setTimeout(r, 20));
+    const link = /http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]+/.exec(errors)?.[0];
+    assert.ok(link, errors); assert.equal(output, '');
+    assert.match(await (await fetch(link)).text(), /Connect.*shop to your Stripe/);
+  } finally { child.kill(); await closed; }
 });

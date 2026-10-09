@@ -349,7 +349,7 @@ export function stripeSecretWriteOf(tool, input) {
   const newEndpoint = flat.includes('webhookendpoint') && !flat.includes('eventdestination') && !/\bwe_[A-Za-z0-9]{6,}/.test(text);
   const destinationSecret = flat.includes('eventdestination') && flat.includes('signingsecret');
   if (!newEndpoint && !destinationSecret) return null;
-  return 'Refused by the Homie mod: Stripe answers a new webhook\'s signing secret in this call, and it would land in the conversation. A studio\'s shop webhook is made on the owner\'s computer instead: run `npx --no-install homie-studio shop connect` and give the owner the 127.0.0.1 link; the page makes the webhook with the shop\'s key and the secret goes straight to the Worker. (Reading or turning off an existing endpoint through Stripe\'s MCP is fine.)';
+  return 'Refused by the Homie mod: Stripe answers a new webhook\'s signing secret in this call, and it would land in the conversation. A studio\'s shop webhook is made on the owner\'s computer instead: run `npx --no-install homie-studio shop connect` for Stripe browser approval and private webhook setup; follow the remaining step it names. Only if the owner chooses the fallback use --manual. (Reading or turning off an existing endpoint through Stripe\'s MCP is fine.)';
 }
 
 // git's own options before the subcommand that take a value, and the subcommands' (a value is never a path).

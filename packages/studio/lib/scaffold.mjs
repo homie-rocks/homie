@@ -449,9 +449,14 @@ where it sells and for Stripe's terms. Homie takes no cut.
   player refund window covers items; a tip is never taken back by the player.
 - Flood settings are configurable: buyer attempts 6/minute, address attempts 600/minute,
   new guest buyers 600/hour. Stripe constraints, integer arithmetic, ownership and signatures protect payments.
-- \`shop check\` validates settings; \`shop connect\` provides a local page for credentials, stored as Worker
-  secrets. Stripe's agent tools can manage Products through \`shop catalog\`; the connect page creates the
-  webhook so its secret stays out of chat. Both the key and signing secret are part of working payment setup.
+- \`shop check\` validates settings; \`stripe_login\` / \`shop connect\` starts Stripe browser approval.
+  Never ask a person for a key. Follow the result's next step: deploy first if needed, then rerun connect.
+  Legacy CLI test credentials and the webhook are installed privately as Worker secrets; renew before expiry
+  with \`shop connect --renew\`. Current OAuth and live mode cannot export Worker credentials: explain that
+  limitation. Only if the owner chooses the fallback use \`shop connect --manual\`; live only on request.
+  Verify a test purchase, signed webhook, item grant and office refund; login alone is not selling readiness.
+  Stripe's optional agent tools manage Products through \`shop catalog\`; never create secret-returning
+  webhooks through MCP. Both the key and signing secret are part of working payment setup.
   Stripe's approval links belong to the owner. \`checkoutMinutes\` is optional (Stripe: 30 to 1440 minutes,
   default 1440; values below 31 use 31 for transport margin); cancelling a named checkout, or replacing one at least a minute old, expires the open session on Stripe's confirmation.
 - \`shop orders\` and \`/_studio/office/shop\` show sales. \`shop refund <order>\` asks the owner to confirm.

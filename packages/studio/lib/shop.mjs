@@ -6,7 +6,7 @@
  *   homie-studio shop init [--supporter] [--currency usd] [--price 500] [--managed]
  *                                           writes shop.json (a $5 Supporter pack with --supporter) and SELLING.md
  *   homie-studio shop check                 shop.json against the studio settings and provider requirements
- *   homie-studio shop connect [--managed] [--live]   a page on THIS computer (127.0.0.1, one use, ten minutes) where the owner
+ *   homie-studio shop connect --manual [--managed] [--live]   a fallback page on THIS computer (127.0.0.1, one use, ten minutes) where the owner
  *                                           pastes the studio's restricted Stripe key (the one thing only they can make);
  *                                           with it this process makes the webhook (0.24.3), and the key and the
  *                                           webhook's signing secret go straight to the Worker secrets STRIPE_KEY and
@@ -98,7 +98,7 @@ export function shopInit(root, { supporter = false, currency = 'usd', price = 50
   writeFileSync(file, `${JSON.stringify(shop, null, 2)}\n`);
   const wrote = [SHOP_FILE];
   if (!existsSync(join(root, 'SELLING.md')) && existsSync(SELLING)) { writeFileSync(join(root, 'SELLING.md'), readFileSync(SELLING, 'utf8')); wrote.push('SELLING.md'); }
-  return { ok: true, command: 'shop init', wrote, till: shop.till, items: shop.items.map((i) => i.id), next: ['homie-studio shop check', 'npm run deploy (the shop stays closed until the key and webhook signing secret are in)', 'homie-studio shop connect (the owner pastes a Stripe key into a page on this computer)'] };
+  return { ok: true, command: 'shop init', wrote, till: shop.till, items: shop.items.map((i) => i.id), next: ['homie-studio shop check', 'npm run deploy (the shop stays closed until the key and webhook signing secret are in)', 'homie-studio shop connect (approve Stripe in your browser; the result names any remaining step)'] };
 }
 
 /** The office's view of the live shop: open or what is missing, the last 30 days, links to Stripe. */
@@ -106,7 +106,10 @@ export async function shopStatus(root, { url } = {}) {
   const r = await withKey(root, url, (call) => call('/_studio/api/shop'));
   if (!r.ok) return { ok: false, command: 'shop', why: r.message ?? r.why ?? 'the studio did not answer' };
   const local = readShop(root);
-  return { ok: true, command: 'shop', ready: r.ready, mode: r.mode, missing: r.missing, totals: r.totals, stripe: r.stripe, hook: r.hook, till: r.shop?.till ?? null, items: r.shop?.items ?? [], local: { ok: local.ok, absent: Boolean(local.absent), errors: local.errors } };
+  const { stripeConnectionInfo } = await import('./stripe-connect.mjs');
+  const connection = r.mode === 'test' ? stripeConnectionInfo(root) : null;
+  const missing = [...(r.missing ?? []), ...(connection?.expired ? [{ id: 'stripe-expired', words: 'Stripe test credentials have expired. Run homie-studio shop connect --renew and approve Stripe again.' }] : [])];
+  return { ok: true, command: 'shop', ready: r.ready && !connection?.expired, mode: r.mode, missing, connection, totals: r.totals, stripe: r.stripe, hook: r.hook, till: r.shop?.till ?? null, items: r.shop?.items ?? [], local: { ok: local.ok, absent: Boolean(local.absent), errors: local.errors } };
 }
 
 export async function shopOrders(root, { url } = {}) {
@@ -240,11 +243,11 @@ async function probeManaged(env, shop, { fetcher }) {
 }
 
 /**
- * `homie-studio shop connect`: the page above on 127.0.0.1 (one use, ten minutes). The key goes to Stripe once (a
+ * `homie-studio shop connect --manual`: the fallback page above on 127.0.0.1 (one use, ten minutes). The key goes to Stripe once (a
  * read, then the webhook), and to `wrangler secret put` on its standard input; so does the webhook's signing secret,
  * which Stripe hands this process when it makes the endpoint. Nothing is printed or returned but ids and words.
  */
-export async function shopConnect(root, { managed = null, live = false, log = () => {}, port = 0, wait = 10 * 60_000, verify = true, fetcher = fetch } = {}) {
+export async function shopConnectManual(root, { managed = null, live = false, log = () => {}, port = 0, wait = 10 * 60_000, verify = true, fetcher = fetch } = {}) {
   const studio = readStudio(root);
   const site = siteUrl(root);
   if (!site) return { ok: false, command: 'shop connect', needs: 'deploy', why: 'the studio has no live address yet, and Stripe needs one to send payments to (the webhook): run npm run deploy first, then this' };
@@ -272,7 +275,7 @@ export async function shopConnect(root, { managed = null, live = false, log = ()
           if (busy) { say(said(409, 'Still saving the last press. Wait a moment.')); return; }
           if (!KEY_SHAPE.test(key)) { say(said(400, 'That does not look like a Stripe key (rk_test_…, rk_live_…, sk_test_… or sk_live_…). Go back and try again.')); return; }
           // Test mode unless the owner's AI ran it with --live on purpose: a live key on the test page is refused.
-          if (modeOf(key) !== (live ? 'live' : 'test')) { say(said(400, live ? 'This page takes a LIVE Stripe key (rk_live_… or sk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_… or sk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --live).')); return; }
+          if (modeOf(key) !== (live ? 'live' : 'test')) { say(said(400, live ? 'This page takes a LIVE Stripe key (rk_live_… or sk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_… or sk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --manual --live).')); return; }
           if (hook && !WEBHOOK_SECRET_SHAPE.test(hook)) { say(said(400, 'That does not look like a webhook signing secret (whsec_…). Go back and try again, or leave it empty and this page makes the webhook.')); return; }
           busy = true;
           try {
@@ -351,6 +354,7 @@ export function shopLines(r) {
   if (r.command === 'shop') {
     lines.push(r.ready ? `The shop is open${r.mode === 'test' ? ' in TEST MODE (no real money)' : ', live'} (till: ${r.till}).` : 'The shop is not selling yet:');
     for (const m of r.missing ?? []) lines.push(`  - ${m.words}`);
+    if (r.connection) lines.push(`Stripe test credentials expire ${r.connection.expiresAt}. Renew: ${r.connection.renew}`);
     if (r.totals) lines.push(`Last 30 days: ${r.totals.sales} sales, ${money(r.totals.paid, r.totals.currency)} before tax and fees; ${r.totals.refunds} refunded; ${r.totals.disputes} disputed.`);
     lines.push(`Webhook endpoint for Stripe: ${r.hook}`, `Payouts: ${r.stripe?.payouts}`);
     if (r.local && !r.local.ok) lines.push(`shop.json here: ${r.local.errors.map((e) => e.message).join('; ')}`);
@@ -372,6 +376,9 @@ export function shopLines(r) {
     if (r.sent) for (const s of r.sent) lines.push(`${s.via}: ${s.ok ? 'sent' : `not sent (${s.why ?? s.status})`}`);
     else for (const s of r.statements ?? []) lines.push(`${s.statement.referrer}: due ${s.statement.totals ? money(s.statement.totals.due, s.statement.currency) : 'see first page'} (${s.statement.lines.length} line(s)), signed`);
     if (!(r.sent ?? r.statements ?? []).length) lines.push(`No referral statements for ${r.period}.`);
-  } else lines.push(r.message ?? '');
+  } else { lines.push(r.message ?? r.why ?? (r.alreadyConnected ? 'Stripe test credentials are already installed.' : '')); for (const step of r.next ?? []) lines.push(step); if (r.fallback) lines.push(`Optional fallback, only if chosen: ${r.fallback}`); }
   return lines;
 }
+
+// Public entry point: browser pairing by default; the local key page is explicitly opt-in.
+export { shopConnect } from './stripe-connect.mjs';

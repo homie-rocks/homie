@@ -24,9 +24,9 @@
  *   GitHub             optional    a private backup, publishing by pull request, building from the Claude app
  *   ElevenLabs         optional    songs and game scores
  *   fal                optional    painted art and generated video
- *   Stripe             for selling only in a studio with shop.json (0.24.3): Stripe's own agent plugin (its MCP server
- *                                  and skills) for this AI, set up when the studio starts selling; the shop's key itself
- *                                  goes in through `homie-studio shop connect`, never here
+ *   Stripe             for selling only in a studio with shop.json: official CLI browser connection first; optional
+ *                                  agent tooling is reported separately. `shop connect` names payment readiness;
+ *                                  a CLI or MCP installation alone never proves the Worker can sell.
  *   Standalone builds  optional    only in a studio where a game.json has a "standalone" block: Xcode, the Android SDK
  *                                  and a JDK it builds on, Apple signing (a count of identities, never a name),
  *                                  notarization and steamcmd (lib/standalone.mjs standaloneRows)
@@ -401,19 +401,19 @@ export async function setupStatus({
     fix: fal.key && fal.valid !== false ? null : { who: 'person', open: 'https://fal.ai/dashboard/keys', say: 'Make a key, put FAL_KEY in the environment your AI runs in (for example a line in your shell profile), and start a new session. Never paste it into the chat.' },
   });
 
-  // Stripe, only in a studio that sells (shop.json): Stripe's own agent plugin, set up when selling starts (lazy, like
-  // every provider here). The shop's key never comes through here: `homie-studio shop connect` takes it on a page.
+  // Stripe, only in a studio that sells. Installing agent tooling is not proof of Worker credentials.
+  // shop connect runs browser pairing and reports the remaining steps; this read-only status never reads keys.
   if (root && existsSync(join(root, 'shop.json'))) {
     const v = await exec('stripe', ['--version']);
     const version = v.code === 0 ? /(\d+\.\d+\.\d+)/.exec(v.stdout)?.[1] ?? null : null;
     const mcp = stripeAgentConfigured({ root, env });
     rows.push({
-      id: 'stripe', label: 'Stripe', need: 'for selling', state: mcp ? 'ok' : 'act',
-      detail: [mcp ? `Stripe's MCP is set up for ${mcp}` : 'Stripe\'s MCP is not set up for this AI', version ? `the Stripe CLI ${version}` : 'no Stripe CLI'].join('; '),
-      unlocks: 'the shop: your AI makes the catalog, checks tax and Managed Payments and answers "how are sales?" with Stripe\'s own tools, on your own Stripe account; you sign in on Stripe\'s page',
-      fix: mcp ? null : {
-        who: 'ai', run: 'npm install -g @stripe/cli@latest && stripe agent setup',
-        say: 'Stripe\'s own agent plugin for Claude Code and Codex (its MCP server and skills, kept up to date); you approve the install. Then sign in once on Stripe\'s page and give access to your Stripe sandbox first.',
+      id: 'stripe', label: 'Stripe', need: 'for selling', state: 'act',
+      detail: [version ? `Stripe CLI ${version} is installed` : 'Stripe CLI is not installed', mcp ? `optional MCP is set up for ${mcp}` : 'optional MCP is not set up', 'CLI access is not proof that Worker credentials or a purchase work'].join('; '),
+      unlocks: 'Connect the studio’s own Stripe with browser approval; shop connect reports deployment, credential and renewal steps. Verify a test purchase before calling the shop ready.',
+      fix: {
+        who: 'ai', run: version ? 'npx --no-install homie-studio shop connect' : 'npm install -g @stripe/cli@latest',
+        say: 'Use stripe_login or shop connect. Never ask for a key in chat. Current CLI OAuth and live mode cannot export independent Worker credentials; explain the result and offer the manual fallback only as a choice.',
         open: 'https://dashboard.stripe.com/register',
       },
     });

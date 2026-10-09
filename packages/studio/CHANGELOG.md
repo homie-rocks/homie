@@ -17,6 +17,12 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [Unreleased]
+
+- Connect Stripe through its official browser approval with `stripe_login` or `shop connect`; no key is requested in chat.
+- Where Stripe CLI supplies a transferable test key, create the webhook and save both Worker secrets automatically, reuse an installed connection, and name when approval must be renewed.
+- Explain the current OAuth and live Worker-credential gap plainly. Keep the local key page only as an optional `--manual` fallback, and distinguish installed credentials from a verified purchase.
+
 ## [0.34.0] - 2026-10-08
 
 **Plugin 0.35.0** · [#64](https://github.com/homie-rocks/homie/pull/64)

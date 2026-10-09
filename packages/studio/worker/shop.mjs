@@ -21,7 +21,7 @@
  * owner's AI (an office key) can only ASK for one, which the owner confirms with one tap. A dispute never touches the
  * player's account: it changes nothing until it is decided, and a lost one is a refund of that one item.
  *
- * SECRETS (Worker secrets, put there by `homie-studio shop connect` from a page on the owner's own computer):
+ * SECRETS (Worker secrets, put there by `homie-studio shop connect` on the owner's own computer):
  * STRIPE_KEY (a secret key or a restricted key: Checkout Sessions write, Charges write for refunds, PaymentIntents and Disputes read;
  * from 0.24.3 also Webhook Endpoints write, which only the connect page on the owner's computer uses) and
  * STRIPE_WEBHOOK_SECRET. Never in a file, a chat, a log or a page.
@@ -153,8 +153,8 @@ export const MISSING_WORDS = Object.freeze({
   'shop.json-refused': 'shop.json conflicts with the studio settings or payment requirements (homie-studio shop check says which), so nothing is sold.',
   'till-off': 'shop.json says "till": "off".',
   items: 'shop.json has no items.',
-  'stripe-key': 'The Worker has no Stripe key yet (homie-studio shop connect: the owner pastes a Stripe key into a page on their own computer).',
-  'webhook-secret': 'The Worker has no webhook signing secret yet (the same page takes it).',
+  'stripe-key': 'The Worker has no Stripe key yet (homie-studio shop connect: approve Stripe in your browser; the command names any remaining Worker credential step).',
+  'webhook-secret': 'The Worker has no webhook signing secret yet (run homie-studio shop connect to create and store it automatically).',
   database: 'This Worker has no database.',
   migration: 'The shop\'s tables are not in the studio\'s D1 yet: npm run deploy applies migrations 0008_studio_shop.sql, 0010_shop_reservations.sql and 0011_shop_statements.sql and 0012_shop_lines.sql.',
 });

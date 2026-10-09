@@ -15,5 +15,5 @@ A player can refund items within a window you set; a tip stays given unless you 
 Stripe handles payments, receipts, payment limits, held refunds and disputes. Stripe Tax is optional;
 Managed Payments is another selectable integration. Your office links Stripe's own pages.
 
-`homie-studio shop connect` provides a local page for the key and webhook signing secret; both are part of payment setup, credentials stay in Worker secrets.
+`homie-studio shop connect` starts Stripe browser approval and names any remaining setup step. Where a transferable test key is available, it and the webhook secret go straight to Worker secrets. Current OAuth and live setup still need an independent Worker credential; the old local key page is an optional `--manual` fallback.
 The scaffold has no policy, cap or refund window. Test mode is available before choosing live mode.

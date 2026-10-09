@@ -61,7 +61,7 @@ test('handshake, tools with the remote\'s names, prompts, and the cards as MCP A
     assert.match(init.result.instructions, /NO game/);
     const { tools } = (await s.request('tools/list')).result;
     const names = tools.map((t) => t.name);
-    for (const n of ['setup_status', 'studio_scaffold', 'studio_card', 'game_demo', 'game_make', 'game_port', 'game_plan', 'game_codex', 'build', 'preview_run', 'check', 'playtest', 'studio_deploy', 'studio_publish', 'build_open', 'build_progress', 'build_stop', 'game_lab', 'file_read', 'file_write', 'file_edit', 'studio_guide']) assert.ok(names.includes(n), `tool ${n}`);
+    for (const n of ['setup_status', 'studio_scaffold', 'studio_card', 'game_demo', 'game_make', 'game_port', 'game_plan', 'game_codex', 'build', 'preview_run', 'check', 'playtest', 'studio_deploy', 'stripe_login', 'studio_publish', 'build_open', 'build_progress', 'build_stop', 'game_lab', 'file_read', 'file_write', 'file_edit', 'studio_guide']) assert.ok(names.includes(n), `tool ${n}`);
     // The same names and input shapes as the remote Homie MCP where they overlap.
     const by = Object.fromEntries(tools.map((t) => [t.name, t]));
     assert.deepEqual(by.game_make.inputSchema.required, ['id', 'name']);
