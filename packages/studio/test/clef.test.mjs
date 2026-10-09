@@ -36,7 +36,7 @@ const VOCAB = vocabularyOf(RAW).vocab;
 const VIEW = { me: { hp: 90, down: false }, zone: 'camp', danger: null, party: [{ seat: 0, dist: 120, hp: 80 }, { seat: 1, dist: 300, hp: 35 }], quests: ['slime-hunt', 'king-slime'], slimes: { near: 2, king: false } };
 const TALK = (extra = {}) => ({ ...DEFAULT_POLICY, at: 10, kind: 'beginner', guides: 2, speech: 'lines', brain: 'workers-ai', level: 2, ...extra });
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-clef-')));
-/** A made-up address, put together (the leak audit allows none in the repository). */
+/** A made-up address, put together. */
 const MAIL = (user, host) => [user, host].join('@');
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 

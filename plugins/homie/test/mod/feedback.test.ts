@@ -8,7 +8,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { ROOT, pane, start, textOf, world } from './world.ts'
 
 const TELL = 'https://homie.rocks/api/feedback/tell'
-// Made-up values built at run time (the repository's leak audit reads this file).
+// Made-up values built at run time.
 const REF = ['0f0e0d0c', '0001', '4000', '8000', '0'.repeat(12)].join('-')
 const HOME = ['', 'Users', 'someone'].join('/')
 const MAIL = ['me', 'example.org'].join('@')

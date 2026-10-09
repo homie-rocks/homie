@@ -32,7 +32,7 @@ const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
 const STUDIO = join(PLUGIN, '..', '..', 'packages', 'studio');
 
 test('secrets: every kind is hidden, its public part kept, and code that names a key is not touched', () => {
-  // Made-up values, built here so no key-shaped string sits in this file (the repository's leak audit reads it).
+  // Made-up values, built here so no key-shaped string sits in this file.
   const hsk = `hsk_${'ab12'.repeat(12)}`;
   const j = (...parts) => parts.join('');
   const cases = [

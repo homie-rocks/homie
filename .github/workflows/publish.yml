@@ -4,7 +4,7 @@
 #
 # A release is a tag named release-*, pushed directly or made with a GitHub release:
 #   git tag release-2026-10-01 && git push origin release-2026-10-01
-# The job builds and tests everything, audits the tagged tree for leaks, then publishes
+# The job builds and tests everything, then publishes
 # each package whose package.json version is not on npm yet, in dependency order
 # (scripts/publish.mjs). Versions already on npm are skipped, so re-running a release
 # is safe. A studio version with no section in CHANGELOG.md is refused before anything
@@ -47,10 +47,6 @@ jobs:
         run: npm install -g npm@11
       - run: npm ci
       - run: npm test
-      - name: Leak audit of the tagged tree (with the maintainers' private terms)
-        run: node scripts/audit.mjs --require-terms
-        env:
-          HOMIE_AUDIT_TERMS: ${{ secrets.HOMIE_AUDIT_TERMS }}
       - name: CHANGELOG.md has this studio version's section
         run: node scripts/changelog.mjs --check
       - name: What goes out

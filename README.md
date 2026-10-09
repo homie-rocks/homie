@@ -375,9 +375,8 @@ from npm, pinned exactly, like any studio.
 | `packages/<engine package>/` | The game engine packages above, one folder each. |
 | `desktop/`, `scripts/desktop.mjs` | Homie for Claude Desktop: the Desktop Extension (`.mcpb`) around `homie-studio mcp`, its manifest, and how it is packed and checked (`node scripts/desktop.mjs --check`). |
 | `CHANGELOG.md`, `scripts/changelog.mjs` | What changed in each `@homie-rocks/studio` version and the plugin beside it. npm ships a copy in the package, every GitHub release's notes are its version's section, and CI checks that a version bump comes with one. |
-| `scripts/audit.mjs` | The leak audit CI runs on every pull request. |
 | `scripts/publish.mjs`, `.github/workflows/publish.yml`, `scripts/first-publish.sh` | How the packages reach npm: trusted publishing on a `release-*` tag, with provenance. |
-| `.github/workflows/ci.yml` | CI: every package's tests on Node 22 and 24, the plugin's tests and `claude plugin validate`, and the leak audit. |
+| `.github/workflows/ci.yml` | CI: every package's tests on Node 22 and 24, and the plugin's tests with `claude plugin validate`. |
 
 ## Develop
 
@@ -389,7 +388,6 @@ npm run build         # tsc --build: each engine package after the packages it r
 npm test              # the build, then every package's tests and the repository's own
 npm run test:plugin   # the plugin's skills, against stand-ins for their providers (no account, no money)
 npm run validate      # claude plugin validate: the marketplace and the plugin
-npm run leaks         # the leak audit of what your next commit would hold
 npm run release:check # what a release would publish, and whether a package changed since its version shipped
 ```
 
@@ -438,7 +436,7 @@ that moves the version without one, and says what to write. Merge, then tag:
 git tag release-YYYY-MM-DD && git push origin release-YYYY-MM-DD
 ```
 
-`.github/workflows/publish.yml` builds, tests and audits the tagged commit, checks the
+`.github/workflows/publish.yml` builds and tests the tagged commit, checks the
 changelog, then publishes every package whose version is not on npm yet, with provenance;
 it refuses a package that changed since its version was published. The tag's GitHub
 release gets the version's CHANGELOG.md section as its notes, and Homie for Claude
@@ -446,17 +444,9 @@ Desktop's `.mcpb` attached. A package that is not on npm at all is published
 once by a maintainer with `scripts/first-publish.sh`, because trusted publishing can only
 add versions to a package that exists.
 
-**The leak audit.** Nothing private goes into this repository: `scripts/audit.mjs` fails a
-home path, an email address other than the security contact, a key or account id, the old
-`@homie/` scope, a placeholder, and the maintainers' private terms (private projects,
-paths and names, which live in a repository secret and are never printed). CI runs it on
-every pull request, over the tree and every commit the pull request adds. It does not
-check who made a commit: an author, a committer and the trailers that name a person
-(`Signed-off-by`, `Co-authored-by` and the like) carry anybody's own name and address.
-
 Contributions come in under Apache-2.0 with a DCO sign-off (`git commit -s`), and no
 CLA, from people under their own names: [CONTRIBUTING.md](CONTRIBUTING.md) says how a
-change gets in, how a maintainer merges it, and what the leak audit checks. To report a
+change gets in and how a maintainer merges it. To report a
 vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License

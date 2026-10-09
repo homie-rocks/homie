@@ -23,7 +23,7 @@ import { redact, redactText } from '../hooks/lib/redact.mjs';
 import { projectsKey, road } from '../skills/music/scripts/lib/eleven.mjs';
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
-// Built here so no key-shaped string sits in this file (the repository's leak audit reads it).
+// Built here so no key-shaped string sits in this file.
 const j = (...parts) => parts.join('');
 
 test('Stripe\'s MCP: a write that would hand back a webhook secret is refused; everything else passes', () => {

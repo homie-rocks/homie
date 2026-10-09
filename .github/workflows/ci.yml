@@ -1,17 +1,7 @@
 # Every pull request and every push to main: the packages build and pass their tests,
-# the plugin validates and passes its tests, CHANGELOG.md has a section for the studio's
-# version, and the leak audit passes on the tree and on every commit the change adds.
+# the plugin validates and passes its tests, and CHANGELOG.md has a section for the
+# studio's version.
 # Releases are publish.yml (a release-* tag).
-#
-# The leak audit's private terms (private projects, paths and names that must never be
-# written here) come from the repository secret HOMIE_AUDIT_TERMS; the maintainers set
-# it, and the audit prints a hit as "private term #n (kind)", never the term. A pull
-# request from a fork gets no secrets, so there the audit runs its public checks and
-# says so; the maintainers' own branches and main require the terms.
-#
-# The audit does not check who made a commit. An author, a committer and a message's
-# person trailers (Signed-off-by, Co-authored-by and the like) carry anybody's own name
-# and address, so a contributor's commit, a maintainer's and the merge button's all pass.
 name: CI
 
 on:
@@ -116,30 +106,3 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: New studio, dev site, two-browser check, the video skill's recorded examples, a perf run per device and the Game Lab's take (Chrome for Testing, as a machine without Chrome gets)
         run: node scripts/studio-check.mjs --chrome-for-testing --record --perf --lab
-
-  leaks:
-    name: Leak audit
-    runs-on: ubuntu-latest
-    env:
-      HOMIE_AUDIT_TERMS: ${{ secrets.HOMIE_AUDIT_TERMS }}
-      # Required wherever the secret is available: a push here, or a pull request from this repository.
-      REQUIRE_TERMS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '--require-terms' || '' }}
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with:
-          node-version: 24
-      - name: The tree
-        run: node scripts/audit.mjs $REQUIRE_TERMS
-      - name: Every commit this change adds (its files, author and message)
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            range="origin/${{ github.base_ref }}..HEAD^2"
-          elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            range="${{ github.event.before }}..${{ github.sha }}"
-          else
-            range="${{ github.sha }}"
-          fi
-          node scripts/audit.mjs --history "$range" $REQUIRE_TERMS

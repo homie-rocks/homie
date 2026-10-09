@@ -7,7 +7,7 @@
  * make Codex run the hooks at all.
  *
  * Nothing reaches a provider: the art skill here is a stand-in whose --dry-run names a made-up price, and every key
- * below is made up and built at run time (the repository's leak audit reads this file).
+ * below is made up and built at run time.
  *
  * Run: node --test plugins/homie/test/codex-hooks.test.mjs
  */
@@ -25,7 +25,7 @@ import { applyChunks, parsePatch, patchChanges } from '../hooks/lib/patch.mjs';
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = join(PLUGIN, 'hooks', 'codex.mjs');
 const json = (p) => JSON.parse(readFileSync(p, 'utf8'));
-// git commits in the studios below, by nobody in particular (no address: the leak audit allows none here).
+// git commits in the studios below, by nobody in particular.
 const WHO = { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: '' };
 
 // What Codex accepts in each hook's answer (codex-rs/hooks/schema/generated/*.command.output.schema.json).

@@ -133,7 +133,7 @@ test('the run with the proxy on never outlives the CLI: a kill by process id rea
 
 test('the studio\'s repository: owner/name from any remote, never a token, never the engine', () => {
   assert.equal(repoFromUrl('https://github.com/octo/super-game.git'), 'octo/super-game');
-  const at = '@'; // (kept apart so the public repository's leak audit does not read these as email addresses)
+  const at = '@';
   assert.equal(repoFromUrl(`git${at}github.com:octo/super-game.git`), 'octo/super-game');
   assert.equal(repoFromUrl(`https://x-access-token:not-a-token${at}github.com/octo/super-game`), 'octo/super-game', 'only owner/name is kept');
   assert.equal(repoFromUrl('http://local_proxy@127.0.0.1:41537/git/octo/super-game'), 'octo/super-game', 'a cloud session\'s proxied remote');

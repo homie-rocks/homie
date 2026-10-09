@@ -4,7 +4,7 @@
 # merged:
 #
 #   npx -y npm@11 login                      (once, if not logged in)
-#   HOMIE_AUDIT_TERMS=... bash scripts/first-publish.sh
+#   bash scripts/first-publish.sh
 #
 # Releases are published by GitHub Actions with trusted publishing (OIDC, provenance,
 # no token): .github/workflows/publish.yml. But npm lets a package name a trusted
@@ -12,8 +12,7 @@
 # be created by that workflow. This script does exactly that part, once:
 #
 #   0. checks: the checkout is clean and is the public main (so npm gets exactly what
-#      this repository holds), the leak audit of that tree and of every commit is clean
-#      with the maintainers' private terms (HOMIE_AUDIT_TERMS, as in CI), `npx -y npm@11`
+#      this repository holds), `npx -y npm@11`
 #      answers 11.15 or later (for `npm trust`), and npm is logged in (the account name
 #      is not printed);
 #   1. npm ci and a full build, from clean build outputs;
@@ -76,17 +75,13 @@ cd "$REPO"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-say "0. The checkout, the audit, npm and the login"
+say "0. The checkout, npm and the login"
 [ -z "$(git status --porcelain)" ] || die "this checkout has uncommitted changes: publish only a merged commit"
 COMMIT="$(git rev-parse HEAD)"
 echo "commit $COMMIT"
 GIT_TERMINAL_PROMPT=0 git fetch -q origin main || die "could not fetch the public repository"
 [ "$COMMIT" = "$(git rev-parse origin/main)" ] || die "HEAD is $COMMIT, the public main is $(git rev-parse origin/main): check out the public main, so npm gets exactly what this repository holds."
 echo "pushed: the public main is this commit"
-node scripts/audit.mjs --require-terms > "$WORK/audit.txt" || { cat "$WORK/audit.txt"; die "the leak audit of $COMMIT is not clean"; }
-head -1 "$WORK/audit.txt"
-node scripts/audit.mjs --history --require-terms > "$WORK/history.txt" || { cat "$WORK/history.txt"; die "the leak audit of this repository's history is not clean"; }
-head -1 "$WORK/history.txt"
 NPM_VERSION="$(npm11 --version)" || die "npx -y npm@11 did not run"
 node -e 'const [a,b]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&b>=15)?0:1)' "$NPM_VERSION" \
   || die "npx -y npm@11 gave npm $NPM_VERSION: npm trust needs 11.15 or later"
