@@ -6,6 +6,17 @@ import {tmpdir} from 'node:os';import {join} from 'node:path';
 import {PKG,loadGame} from './rules-kit.mjs';
 const scratch=realpathSync(mkdtempSync(join(tmpdir(),'homie-starter-feel-')));
 test.after(()=>rmSync(scratch,{recursive:true,force:true}));
+for (const id of ['gem-rush-3d', 'hero-rush-3d', 'ember-vale']) test(`${id}: a full 32-seat room stays within its tick budget`, async t => {
+  const dir = join(PKG, 'starters', id), L = await loadGame(scratch, dir, id + '-full');
+  const read = p => JSON.parse(readFileSync(join(dir, p), 'utf8'));
+  const def = L.R.defineRules({ ...L.def, room: { ...L.def.room, bots: { keep: 32 } } });
+  const c = L.R.compileRules(def, { map: L.R.compileMap(read('map/main.json')), tune: read('tunables.json'), seats: 32 });
+  const core = L.C.createCore(c, { seed: 123 });
+  for (let i = 0; i < 2400; i++) { core.step(); core.snapshot(); core.drain(); }
+  for (const key of ['errors', 'budgetStops', 'skipped', 'ticksCut']) assert.equal(core.stats[key], 0, key);
+  assert.ok(core.stats.maxTickUnits < c.settings.budget.tick);
+  t.diagnostic(`${core.stats.maxTickUnits}/${c.settings.budget.tick} units in the busiest of 2,400 ticks, including snapshots`);
+});
 for (const id of ['gem-rush-3d', 'hero-rush-3d']) test(`${id}: every seat starts clear of the meadow's solid features`, () => {
   const map = JSON.parse(readFileSync(join(PKG, 'starters', id, 'map/main.json'), 'utf8'));
   for (const [seat, point] of map.spots.start.entries()) for (const obstacle of map.circles) {

@@ -283,3 +283,8 @@ Rush players, 20 Hz, 30 minutes in Node on macOS arm64), and explicitly says tha
 Cloudflare capacity and billing are unmeasured. It distinguishes this reference
 workload from a game's generated correctness check and flags rates above that
 completed trial. The structured rules check includes the same reference facts.
+
+The ordinary regression suite also runs each converted starter with 32 bots for
+2,400 ticks, including snapshot accounting, and requires no errors, skipped
+handlers, cut ticks or budget stops. The longer 36,000-tick timing trial remains a
+separate measurement rather than a machine-speed assertion in a build.
