@@ -34,7 +34,7 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "npm run build && node --test packages/*/test/*.test.mjs scripts/*.test.mjs",
+    "test": "npm run build && node --test --test-concurrency=1 packages/*/test/*.test.mjs scripts/*.test.mjs",
     "test:plugin": "node --test plugins/homie/test/*.test.mjs",
     "test:rules:extended": "RULES_EXTENDED=1 node --test --test-concurrency=1 packages/studio/test/rules-corpus.test.mjs packages/studio/test/rules-protocol-corpus.test.mjs packages/studio/test/rules-author-requests.test.mjs packages/studio/test/rules-boundaries.test.mjs packages/studio/test/rules-repeatability.test.mjs packages/studio/test/rules-prediction-chrome.test.mjs packages/studio/test/rules-3d-prediction-chrome.test.mjs packages/studio/test/rules-interest.test.mjs packages/studio/test/rules-traffic-chrome.test.mjs packages/studio/test/rules-crowd-extended.mjs packages/studio/test/gates-workerd.test.mjs",
     "test:mod": "claude plugin test plugins/homie",
