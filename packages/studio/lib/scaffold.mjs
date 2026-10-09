@@ -450,7 +450,9 @@ where it sells and for Stripe's terms. Homie takes no cut.
   new guest buyers 600/hour. Stripe constraints, integer arithmetic, ownership and signatures protect payments.
 - \`shop check\` validates settings; \`shop connect\` provides a local page for credentials, stored as Worker
   secrets. Stripe's agent tools can manage Products through \`shop catalog\`; the connect page creates the
-  webhook so its secret stays out of chat. Stripe's approval links belong to the owner.
+  webhook so its secret stays out of chat. Both the key and signing secret are part of working payment setup.
+  Stripe's approval links belong to the owner. \`checkoutMinutes\` is optional (Stripe: 30 to 1440 minutes,
+  default 1440); cancelling or replacing checkout expires the open session on Stripe's confirmation.
 - \`shop orders\` and \`/_studio/office/shop\` show sales. \`shop refund <order>\` asks the owner to confirm.
   \`shop statements\` records optional referral shares; studios pay their referrers directly.
 

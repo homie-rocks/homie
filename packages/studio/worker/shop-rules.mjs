@@ -121,6 +121,10 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
     if (at.endsWith('Days') && value !== null && (!Number.isSafeInteger(Math.round(value * 86400000)) || !Number.isSafeInteger(Math.round(value * 86400000) + Date.now()) || !Number.isFinite(new Date(Math.round(value * 86400000) + Date.now()).getTime()))) err(at, 'duration rounded to milliseconds must remain within safe arithmetic and the JavaScript timestamp range');
     return value;
   };
+  // Stripe permits 30 minutes to 24 hours; 24 hours is its default.
+  // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-expires_at
+  const checkoutMinutes = numeric(raw.checkoutMinutes ?? 1440);
+  if (!Number.isSafeInteger(checkoutMinutes * 60) || checkoutMinutes < 30 || checkoutMinutes > 1440) err('checkoutMinutes', 'Stripe accepts 30 to 1440 minutes (24 hours), in whole seconds.');
   const requestBytes = optionalNumber(raw.requestBytes, 'requestBytes');
   const refundDays = optionalNumber(raw.refundDays, 'refundDays');
   const cap = optionalNumber(raw.capPerPlayerMonth, 'capPerPlayerMonth');
@@ -231,7 +235,7 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const finalTill = kids ? 'off' : TILLS.includes(till) ? till : 'off';
   if (kids && till !== 'off') warnings.push({ at: 'till', message: 'studio.json says "audience": "kids": the studio sells nothing in its games (the till is off under policy.kidsStudio).' });
   const shop = {
-    v: 1, policy, requestBytes, automaticTax: raw.automaticTax === true, referralNewPlayersOnly: raw.referralNewPlayersOnly === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
+    v: 1, policy, checkoutMinutes, requestBytes, automaticTax: raw.automaticTax === true, referralNewPlayersOnly: raw.referralNewPlayersOnly === true, guestBuyersPerAddressPerHour, purchaseAttemptsPerMinute, purchaseAttemptsPerAddressPerMinute, till: finalTill, currency: CURRENCY.test(currency) ? currency : 'usd', refundDays, capPerPlayerMonth: cap, items, referrals,
     open: finalTill !== 'off' && items.length > 0, ...(kids ? { audience: 'kids' } : {}), ...(catalog.length ? { catalog } : {}),
   };
   // https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-custom_text-submit-message

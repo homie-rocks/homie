@@ -22,7 +22,7 @@
  * player's account: it changes nothing until it is decided, and a lost one is a refund of that one item.
  *
  * SECRETS (Worker secrets, put there by `homie-studio shop connect` from a page on the owner's own computer):
- * STRIPE_KEY (a restricted key: Checkout Sessions write, Charges write for refunds, PaymentIntents and Disputes read;
+ * STRIPE_KEY (a secret key or a restricted key: Checkout Sessions write, Charges write for refunds, PaymentIntents and Disputes read;
  * from 0.24.3 also Webhook Endpoints write, which only the connect page on the owner's computer uses) and
  * STRIPE_WEBHOOK_SECRET. Never in a file, a chat, a log or a page.
  *
@@ -38,7 +38,7 @@ import {
   orderLines, lineView, bandOfPlayer, forgetPlayerShop, grantStatements, migrationNeeded, migrated, newOrderId, orderById, orderByPayment, orderBySession, orderView, playerOrderStatus, ownsOf, restoreStatement, revokeStatement,
   setBand, shopDataOf, spentThisMonth,
 } from './shop-store.mjs';
-import { KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, modeOf, productIdOf, verifyWebhook } from './stripe.mjs';
+import { redactStripe, WEBHOOK_SECRET_SHAPE, KEY_SHAPE, stripeCall, StripeError, createCheckoutSession, createRefund, expireCheckoutSession, dashboardLink, isApprovalRequired, isMissingProduct, modeOf, productIdOf, verifyWebhook } from './stripe.mjs';
 import { pendingStatementPeriod, statementFailures, arrivalOf, booksOf, linesOf, statementPage, lineFor, receiveStatement, receivedPages, referrerOk, sendStatements, settle, statementsIn, voidLineStatements } from './referrals.mjs';
 import { SHOP_JS, officeShopPage, parentPage, refundsPage, shopPage, thanksPage } from './shop-page.mjs';
 import { notFoundPage } from './site.mjs';
@@ -138,6 +138,9 @@ export async function readiness(env, shop) {
   else if (!shop.items.length) missing.push('items');
   const key = String(env?.STRIPE_KEY ?? '');
   if (!KEY_SHAPE.test(key)) missing.push('stripe-key');
+  // Reliable fulfillment requires the webhook as well as the redirect.
+  // https://docs.stripe.com/checkout/fulfillment
+  if (!WEBHOOK_SECRET_SHAPE.test(String(env?.STRIPE_WEBHOOK_SECRET ?? ''))) missing.push('webhook-secret');
   let migration = null;
   if (!env?.DB) missing.push('database');
   else if ((migration = await migrationNeeded(env))) missing.push('migration');
@@ -150,7 +153,7 @@ export const MISSING_WORDS = Object.freeze({
   'shop.json-refused': 'shop.json conflicts with the studio settings or payment requirements (homie-studio shop check says which), so nothing is sold.',
   'till-off': 'shop.json says "till": "off".',
   items: 'shop.json has no items.',
-  'stripe-key': 'The Worker has no Stripe key yet (homie-studio shop connect: the owner pastes a restricted key into a page on their own computer).',
+  'stripe-key': 'The Worker has no Stripe key yet (homie-studio shop connect: the owner pastes a Stripe key into a page on their own computer).',
   'webhook-secret': 'The Worker has no webhook signing secret yet (the same page takes it).',
   database: 'This Worker has no database.',
   migration: 'The shop\'s tables are not in the studio\'s D1 yet: npm run deploy applies migrations 0008_studio_shop.sql, 0010_shop_reservations.sql and 0011_shop_statements.sql and 0012_shop_lines.sql.',
@@ -216,7 +219,17 @@ export async function shopRoutes(request, env, ctx, url, { catalogueOf }) {
     return shop ? notFoundPage('This studio sells nothing.', cat) : null;
   }
   const ready = await readiness(env, shop);
+  if (read && ctx?.waitUntil && !ready.migration && KEY_SHAPE.test(String(env.STRIPE_KEY ?? ''))) {
+    ctx.waitUntil((async () => {
+      const player = await players.of(request, env);
+      if (player) await reconcileOrders(env, shop, player.id);
+    })().catch((error) => logOrderError(env, null, error)));
+  }
   try {
+    if (path === '/shop/' && read && url.searchParams.get('cancelled') === '1' && !ready.migration) {
+      const player = await players.of(request, env);
+      if (player) await reconcileOrders(env, shop, player.id, { expireOpen: true, order: url.searchParams.get('order') });
+    }
     if (path === '/api/shop/hook') return await hook(request, env, cat, shop, ready);
     if (!read && !sameOrigin(request, url)) return fail(403, 'origin', 'only this site\'s own pages may do that');
     if (path === '/api/shop' && read) return await listRoute(request, env, url, cat, shop, ready);
@@ -275,7 +288,8 @@ async function mineRoute(request, env, shop) {
   const orders = [];
   for (const o of data?.orders ?? []) {
     for (const line of o.lines) {
-      const used = await env.DB.prepare('SELECT 1 FROM entitlements WHERE line_id = ?1 AND used_at IS NOT NULL LIMIT 1').bind(line.id).first();
+      if (line.kind === null) { const item = shop.items.find((i) => i.id === line.item); line.name = item?.name ?? line.name; line.kind = item?.kind ?? null; }
+      const used = await lineWasUsed(env, o.id, line);
       line.refundable = refundableNow({ ...line, paidAt: o.paidAt }, used ? [{ item: line.item, used: true }] : [], shop);
       line.shown = money(line.amount, o.currency);
     }
@@ -351,9 +365,9 @@ export function sessionParams(shop, item, order, { origin, amount, player, game,
     metadata: { homie: 'shop-v1', studio: String(studio ?? '').length <= 500 ? String(studio ?? '') : undefined, order: order.id, item: item.id.length <= 500 ? item.id : undefined, ...(game ? { game } : {}), ...(order.via ? { via: order.via } : {}), ...(parent ? { parent: '1' } : {}) },
     payment_intent_data: { metadata: { order: order.id, item: item.id.length <= 500 ? item.id : undefined } },
     success_url: `${origin}/shop/thanks?session_id={CHECKOUT_SESSION_ID}${back}`,
-    cancel_url: `${origin}/shop/?cancelled=1${back}`,
+    cancel_url: `${origin}/shop/?cancelled=1&order=${order.id}${back}`,
     // Keep Stripe’s default 24-hour Checkout lifetime: https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-expires_at
-    expires_at: order.expiresAt ?? Math.floor((order.createdAt ?? Date.now()) / 1000) + 24 * 60 * 60,
+    expires_at: order.expiresAt ?? Math.floor((order.createdAt ?? Date.now()) / 1000) + (shop.checkoutMinutes ?? 1440) * 60,
     // The studio can opt into immediate-delivery acknowledgement beside the pay button.
     custom_text: { submit: { message: checkoutMessage(shop, String(studio ?? 'this studio'), parent) } },
     // The studio can enable Stripe Tax, or choose Managed Payments (Stripe is the seller of record
@@ -363,8 +377,8 @@ export function sessionParams(shop, item, order, { origin, amount, player, game,
 }
 
 function logOrderError(env, order, error) {
-  const reason = String(error?.message ?? error).replaceAll(String(env.STRIPE_KEY || '\0'), '[redacted]');
-  console.warn('Shop reconciliation', { order, reason, status: error?.status ?? null, code: error?.code ?? null });
+  const reason = redactStripe(error?.message ?? error, env);
+  console.warn('Shop reconciliation', { order, reason, status: error?.status ?? null, code: redactStripe(error?.code, env) });
 }
 
 /** At most three reads in parallel, claimed before I/O. Old unresolved rows back off up to an hour.
@@ -372,19 +386,30 @@ function logOrderError(env, order, error) {
  * Missing sessions: https://docs.stripe.com/error-codes#resource-missing
  * Payment time: https://docs.stripe.com/api/charges/object#charge_object-created
  */
-export async function reconcileOrders(env, shop, player) {
+export async function reconcileOrders(env, shop, player = null, { expireOpen = false, order = null } = {}) {
+  if (!shop || !KEY_SHAPE.test(String(env?.STRIPE_KEY ?? '')) || !(await migrated(env))) return;
   const now = Date.now();
-  const rows = (await env.DB.prepare("SELECT * FROM shop_orders WHERE player = ?1 AND mode = ?2 AND session IS NOT NULL AND status IN ('started', 'processing') AND (expires_at IS NULL OR expires_at <= ?3 OR status = 'processing') AND updated_at <= ?3 - MIN(3600000, MAX(CASE WHEN status = 'processing' THEN 300000 ELSE 60000 END, CAST((?3 - created_at) / 24 AS INTEGER))) ORDER BY updated_at, id LIMIT 3")
-    .bind(player, modeOf(env.STRIPE_KEY), now).all()).results ?? [];
+  const rows = (await env.DB.prepare("SELECT * FROM shop_orders WHERE (?1 IS NULL OR player = ?1) AND mode = ?2 AND session IS NOT NULL AND status IN ('started', 'processing', 'paid') AND (?5 IS NULL OR id = ?5) AND ((?4 = 1 AND status = 'started') OR (?4 = 0 AND (created_at <= ?3 - 60000 OR expires_at <= ?3 OR status = 'processing') AND updated_at <= ?3 - MIN(3600000, MAX(60000, CAST((?3 - created_at) / 24 AS INTEGER))))) AND (status != 'paid' OR (NOT EXISTS (SELECT 1 FROM entitlements WHERE order_id = shop_orders.id) AND (NOT EXISTS (SELECT 1 FROM shop_order_lines WHERE order_id = shop_orders.id) OR EXISTS (SELECT 1 FROM shop_order_lines WHERE order_id = shop_orders.id AND (snapshot IS NULL OR json_array_length(json_extract(snapshot, '$.gives')) > 0))))) ORDER BY updated_at, id LIMIT 3")
+    .bind(player, modeOf(env.STRIPE_KEY), now, expireOpen ? 1 : 0, order).all()).results ?? [];
   await Promise.all(rows.map(async (row) => {
-    const claim = await env.DB.prepare("UPDATE shop_orders SET updated_at = ?3 WHERE id = ?1 AND updated_at = ?2 AND status IN ('started', 'processing')").bind(row.id, row.updated_at, now).run();
+    const claim = await env.DB.prepare("UPDATE shop_orders SET updated_at = ?3 WHERE id = ?1 AND updated_at = ?2 AND status IN ('started', 'processing', 'paid')").bind(row.id, row.updated_at, now).run();
     if (!claim.meta?.changes) return;
     try {
-      const session = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(row.session)}`, { expand: ['payment_intent.latest_charge'] }, { timeout: 2000 });
+      let session;
+      if (expireOpen) {
+        try { session = await expireCheckoutSession(env, row.session, { timeout: 2000 }); }
+        catch (error) {
+          if (!(error instanceof StripeError) || error.status !== 400) throw error;
+          // Already complete or expired: read Stripe's outcome instead of freeing an unconfirmed payment.
+          session = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(row.session)}`, { expand: ['payment_intent.latest_charge'] }, { timeout: 2000 });
+        }
+      } else session = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(row.session)}`, { expand: ['payment_intent.latest_charge'] }, { timeout: 2000 });
       if (!session || session.id !== row.session || (typeof session.livemode === 'boolean' && session.livemode !== (row.mode === 'live'))) throw new Error('Stripe session identity or mode mismatch');
+      // A buyer abandoning their own open session releases only on Stripe's confirmation.
+      // https://docs.stripe.com/api/checkout/sessions/expire
       const payment = session.payment_intent;
       if (session.payment_status === 'paid' || session.payment_status === 'no_payment_required' || payment?.status === 'succeeded') {
-        const time = session.payment_status === 'no_payment_required' ? session.created : payment?.latest_charge?.created;
+        const time = session.payment_status === 'no_payment_required' ? session.created : payment?.latest_charge?.created ?? session.created;
         // Missing payment time remains unresolved; never charge an old payment to this month's allowance.
         if (Number.isSafeInteger(time) && time > 0 && time * 1000 <= now) await paid(env, shop, session, time * 1000);
       } else if (session.status === 'expired' || payment?.status === 'canceled' || (session.status === 'complete' && payment?.status === 'requires_payment_method' && payment.last_payment_error)) {
@@ -398,7 +423,7 @@ export async function reconcileOrders(env, shop, player) {
       } else {
         // Keep the atomic claim, but retry failures after roughly a minute, regardless of row age.
         const interval = Math.min(3600000, Math.max(row.status === 'processing' ? 300000 : 60000, Math.trunc((now - row.created_at) / 24)));
-        await env.DB.prepare("UPDATE shop_orders SET updated_at = ?3 WHERE id = ?1 AND updated_at = ?2 AND status IN ('started', 'processing')").bind(row.id, now, now - interval + 60000).run();
+        await env.DB.prepare("UPDATE shop_orders SET updated_at = ?3 WHERE id = ?1 AND updated_at = ?2 AND status IN ('started', 'processing', 'paid')").bind(row.id, now, now - interval + 60000).run();
       }
     }
   }).map((work, i) => work.catch((error) => logOrderError(env, rows[i].id, error))));
@@ -411,9 +436,9 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
   const order = { id: newOrderId(), player: player.id, via: via ?? null, amount, currency: shop.currency };
   const now = Date.now();
   order.createdAt = now;
-  order.expiresAt = Math.floor(now / 1000) + 24 * 60 * 60;
+  order.expiresAt = Math.floor(now / 1000) + (shop.checkoutMinutes ?? 1440) * 60;
   // One SQL statement reserves the amount: concurrent requests cannot both spend the remaining cap.
-  const reservation = () => env.DB.prepare("INSERT INTO shop_orders (id, player, item, game, amount, currency, till, mode, status, parent, via, created_at, updated_at, expires_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'started', ?9, ?10, ?11, ?11, ?14 WHERE ?5 = 0 OR ?12 IS NULL OR ?5 <= ?12 - (SELECT COALESCE(SUM(amount - COALESCE((SELECT SUM(l.amount) FROM shop_order_lines l WHERE l.order_id = shop_orders.id AND l.status = 'refunded'), 0)), 0) FROM shop_orders WHERE player = ?2 AND mode = ?8 AND ((status IN ('paid', 'disputed') AND paid_at >= ?13) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?11))))")
+  const reservation = () => env.DB.prepare("INSERT INTO shop_orders (id, player, item, game, amount, currency, till, mode, status, parent, via, created_at, updated_at, expires_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'started', ?9, ?10, ?11, ?11, ?14 WHERE ?5 = 0 OR ?12 IS NULL OR ?5 <= ?12 - (SELECT COALESCE(SUM(amount - COALESCE((SELECT SUM(l.refunded_net) FROM shop_order_lines l WHERE l.order_id = shop_orders.id), 0)), 0) FROM shop_orders WHERE player = ?2 AND mode = ?8 AND ((status IN ('paid', 'disputed') AND paid_at >= ?13) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?11))))")
     .bind(order.id, player.id, item.id, game ?? item.game ?? null, amount, shop.currency, shop.till, modeOf(env.STRIPE_KEY), parent ? 1 : 0, order.via, now, shop.capPerPlayerMonth, Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), 1), order.expiresAt * 1000);
   lines = lines.map((line, i) => ({ ...line, id: `${order.id}_${i}` }));
   const reserve = async () => {
@@ -424,6 +449,7 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
     ]);
     return results[0];
   };
+  await reconcileOrders(env, shop, player.id, { expireOpen: true });
   let reserved = await reserve();
   const reconciled = !reserved.meta?.changes;
   if (!reserved.meta?.changes) {
@@ -431,13 +457,24 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
     reserved = await reserve();
   }
   if (!reserved.meta?.changes) return { error: fail(403, 'cap', WAY_WORDS.cap, { way: 'cap' }) };
+  if (amount === 0) {
+    const id = `cs_free_${order.id}`;
+    await env.DB.prepare('UPDATE shop_orders SET session = ?2 WHERE id = ?1').bind(order.id, id).run();
+    await paid(env, shop, { id, metadata: { order: order.id }, client_reference_id: player.id, currency: shop.currency, amount_subtotal: 0, amount_total: 0, payment_status: 'no_payment_required' });
+    return { order, url: `${url.origin}/shop/thanks?session_id=${id}`, session: id, reconciled };
+  }
   let session = null;
   const mode = modeOf(env.STRIPE_KEY);
   try {
     const useCatalog = Array.isArray(shop.catalog) && shop.catalog.includes(mode);
     for (const line of lines) line.product = useCatalog ? await productIdOf(cat.studio?.slug, line.item.id) : null;
     await env.DB.batch(lines.map((line) => env.DB.prepare('UPDATE shop_order_lines SET snapshot = ?2 WHERE id = ?1').bind(line.id, JSON.stringify({ ...line.item, stripeProduct: line.product }))));
-    const params = () => sessionParams(shop, item, order, { origin: url.origin, amount, player: player.id, game, parent, studio: cat.studio?.name, lines });
+    // Start the provider lifetime at session creation, after reservation/expiry I/O. At Stripe's
+    // lower bound the timestamp is computed immediately before the HTTP call.
+    const params = () => {
+      order.expiresAt = Math.floor(Date.now() / 1000) + (shop.checkoutMinutes ?? 1440) * 60;
+      return sessionParams(shop, item, order, { origin: url.origin, amount, player: player.id, game, parent, studio: cat.studio?.name, lines });
+    };
     try {
       session = await createCheckoutSession(env, params(), { idempotencyKey: `checkout-${order.id}` });
     } catch (error) {
@@ -449,10 +486,10 @@ async function startCheckout(env, url, cat, shop, item, { player, game, via, amo
       await env.DB.prepare("UPDATE shop_orders SET status = 'failed', updated_at = ?2 WHERE id = ?1").bind(order.id, Date.now()).run();
       return { error: fail(502, 'stripe', 'Stripe answered without a checkout page. Nothing was charged.') };
     }
-    await env.DB.prepare('UPDATE shop_orders SET session = ?2, updated_at = ?3 WHERE id = ?1').bind(order.id, session.id, Date.now()).run();
+    await env.DB.prepare('UPDATE shop_orders SET session = ?2, updated_at = ?3, expires_at = ?4 WHERE id = ?1').bind(order.id, session.id, Date.now(), (session.expires_at ?? order.expiresAt) * 1000).run();
   } catch (error) {
-    await env.DB.prepare("UPDATE shop_orders SET status = 'failed', note = ?2, updated_at = ?3 WHERE id = ?1").bind(order.id, String(error?.code ?? 'stripe').slice(0, 60), Date.now()).run();
-    const why = error instanceof StripeError ? error.message : 'Stripe did not answer';
+    await env.DB.prepare("UPDATE shop_orders SET status = 'failed', note = ?2, updated_at = ?3 WHERE id = ?1").bind(order.id, redactStripe(error?.code ?? 'stripe', env).slice(0, 60), Date.now()).run();
+    const why = error instanceof StripeError ? redactStripe(error.message, env) : 'Stripe did not answer';
     return { error: fail(502, 'stripe', `Stripe could not open the checkout (${why}). Nothing was charged.`) };
   }
   return { order, url: session.url, session: session.id, reconciled };
@@ -526,7 +563,7 @@ async function buyRoute(request, env, url, cat, shop, ready, ctx) {
   const via = await viaFor(request, env, url, shop, player);
   const r = await startCheckout(env, url, cat, shop, item, { player, game, via, amount, lines });
   const response = r.error ?? json({ ok: true, order: r.order.id, url: r.url });
-  if (!r.error && !r.reconciled && shop.capPerPlayerMonth !== null && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, player.id).catch((error) => logOrderError(env, r.order.id, error)));
+  if (!r.error && !r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, player.id).catch((error) => logOrderError(env, r.order.id, error)));
   for (const cookie of cookies) response.headers.append('set-cookie', cookie);
   return response;
 }
@@ -599,7 +636,7 @@ async function parentRoute(request, env, url, cat, shop, ready, token, ctx) {
   const r = await startCheckout(env, url, cat, shop, item, { player: { id: row.player }, game: row.game, via: cart[0]?.via ?? null, amount, parent: true, lines });
   if (r.error) return parentPage(cat, shop, { item, lines, name: kid.name, token, open: true, said: (await r.error.json()).message });
   await env.DB.prepare('UPDATE shop_parent_links SET order_id = ?2 WHERE hash = ?1').bind(await sha256Hex(token), r.order.id).run();
-  if (!r.reconciled && shop.capPerPlayerMonth !== null && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, row.player).catch((error) => logOrderError(env, r.order.id, error)));
+  if (!r.reconciled && ctx?.waitUntil) ctx.waitUntil(reconcileOrders(env, shop, row.player).catch((error) => logOrderError(env, r.order.id, error)));
   return Response.redirect(r.url, 303);
 }
 
@@ -615,10 +652,15 @@ async function usedRoute(request, env, shop) {
   return json({ ok: true, used: Number(r?.meta?.changes ?? 0) });
 }
 
+async function lineWasUsed(env, order, line) {
+  if (await migrated(env)) return env.DB.prepare('SELECT 1 FROM entitlements e WHERE order_id = ?1 AND used_at IS NOT NULL AND (item = ?2 OR key IN (SELECT key FROM shop_entitlement_lines WHERE line_id = ?3)) LIMIT 1').bind(order, line.item, line.id).first();
+  return env.DB.prepare('SELECT 1 FROM entitlements WHERE order_id = ?1 AND item = ?2 AND used_at IS NOT NULL LIMIT 1').bind(order, line.item).first();
+}
+
 function refundableNow(order, owns, shop, now = Date.now()) {
   if (shop.refundDays === null || order.status !== 'paid' || order.paidAt === null) return false;
   // A tip is a gift, not an item: a player never takes one back by themselves. The studio can still refund any order from its office.
-  if ((order.kind ?? shop.items.find((it) => it.id === order.item)?.kind) === 'tip') return false;
+  if (!(order.kind ?? shop.items.find((it) => it.id === order.item)?.kind) || (order.kind ?? shop.items.find((it) => it.id === order.item)?.kind) === 'tip') return false;
   if (now - order.paidAt > Math.round(shop.refundDays * DAY)) return false;
   return shop.policy.refundUsedItems || !owns.some((o) => o.item === order.item && o.used);
 }
@@ -634,7 +676,7 @@ async function selfRefundRoute(request, env, shop, ready) {
   const lines = (await orderLines(env, o.id)).filter((l) => !b.body.line || l.id === b.body.line);
   if (!lines.length) return fail(404, 'line', 'no such line on this order');
   for (const line of lines) {
-    const used = await env.DB.prepare('SELECT 1 FROM entitlements WHERE line_id = ?1 AND used_at IS NOT NULL LIMIT 1').bind(line.id).first();
+    const used = await lineWasUsed(env, o.id, line);
     if (!refundableNow({ ...lineView(line), paidAt: o.paid_at }, used ? [{ item: line.item, used: true }] : [], shop)) return fail(403, 'not-refundable', 'Ask the studio for this refund. Tips are not refundable by the player; items follow the studio refund settings.');
   }
   if (Number(o.amount) !== 0 && !KEY_SHAPE.test(String(env.STRIPE_KEY ?? ''))) return fail(503, 'closed', MISSING_WORDS['stripe-key']);
@@ -657,7 +699,10 @@ async function hook(request, env, cat, shop, ready) {
   const ev = v.event;
   // A test event never touches a live shop's books, nor a live one a test shop's.
   if (typeof ev.livemode === 'boolean' && KEY_SHAPE.test(String(env.STRIPE_KEY ?? '')) && ev.livemode !== (modeOf(env.STRIPE_KEY) === 'live')) return json({ ok: true, ignored: 'mode' });
-  if (await env.DB.prepare('SELECT 1 AS x FROM shop_events WHERE id = ?1').bind(ev.id).first()) return json({ ok: true, duplicate: true });
+  if (await env.DB.prepare('SELECT 1 AS x FROM shop_events WHERE id = ?1').bind(ev.id).first()) {
+    if (['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(ev.type) && ['paid', 'no_payment_required'].includes(ev.data?.object?.payment_status)) await paid(env, shop, ev.data.object);
+    return json({ ok: true, duplicate: true });
+  }
   const obj = ev.data?.object ?? {};
   let did = 'ignored';
   switch (ev.type) {
@@ -675,7 +720,7 @@ async function hook(request, env, cat, shop, ready) {
       did = 'closed';
       break;
     case 'charge.refunded':
-      if (obj.refunded === true || Number(obj.amount_refunded) >= Number(obj.amount)) did = await refunded(env, String(obj.payment_intent ?? ''), null);
+      did = await cumulativeRefund(env, String(obj.payment_intent ?? ''), Number(obj.amount_refunded));
       break;
     case 'refund.created':
     case 'refund.updated':
@@ -685,7 +730,16 @@ async function hook(request, env, cat, shop, ready) {
         if (order && obj.metadata?.line) {
           const line = (await orderLines(env, order.id)).find((l) => l.id === obj.metadata.line);
           if (line && Number(obj.amount) === Number(line.total ?? line.amount)) { await refundLines(env, order, [line.id], String(obj.id)); did = 'refunded'; }
-        } else if (order && Number(obj.amount) >= Number(order.total ?? order.amount)) did = await refunded(env, String(obj.payment_intent ?? ''), String(obj.id ?? ''));
+        } else if (!order) did = 'unknown-order';
+        else if (Number(obj.amount) >= Number(order.total ?? order.amount)) did = await refunded(env, String(obj.payment_intent ?? ''), String(obj.id ?? ''));
+        else {
+          // A Dashboard refund has no line metadata. Read cumulative charge truth, never add deliveries.
+          // https://docs.stripe.com/api/payment_intents/retrieve
+          const payment = await stripeCall(env, 'GET', `/v1/payment_intents/${encodeURIComponent(order.payment)}`, { expand: ['latest_charge'] });
+          const amount = payment?.latest_charge?.amount_refunded;
+          if (!Number.isSafeInteger(amount)) return fail(503, 'refund-pending', 'Stripe refund totals are not available yet.');
+          did = await cumulativeRefund(env, order.payment, amount);
+        }
       }
       break;
     case 'charge.dispute.created':
@@ -697,6 +751,7 @@ async function hook(request, env, cat, shop, ready) {
     default:
       break;
   }
+  if (did === 'missing-item' || did === 'unknown-order') return fail(503, did, did === 'missing-item' ? 'Restore this order item in shop.json to grant it; the office can refund its payment.' : 'Payment order is not recorded yet; retry this event.');
   await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run();
   if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM shop_events WHERE at < ?1').bind(Date.now() - 60 * DAY).run();
   return json({ ok: true, did });
@@ -707,9 +762,9 @@ async function paid(env, shop, session, paidAt = Date.now()) {
   const o = await orderBySession(env, session.id);
   if (!o) return 'unknown-order';
   // The session must be the one this order opened, for this player and this price.
-  if (session.metadata?.order !== o.id || (session.client_reference_id && session.client_reference_id !== (o.checkout_player ?? o.player))) return 'mismatch';
+  if (session.metadata?.order !== o.id || ((o.checkout_player ?? o.player) && session.client_reference_id && session.client_reference_id !== (o.checkout_player ?? o.player))) return 'mismatch';
   if (session.currency !== o.currency || !Number.isSafeInteger(session.amount_subtotal) || session.amount_subtotal !== Number(o.amount)) return 'mismatch';
-  if (o.paid_at !== null) return 'already';
+  if (['refunded', 'lost', 'disputed'].includes(o.status)) return 'already';
   const lines = await orderLines(env, o.id);
   if (!lines.length) throw new Error('Order has no lines');
   const now = Date.now();
@@ -729,7 +784,10 @@ async function paid(env, shop, session, paidAt = Date.now()) {
   for (const line of lines) {
     // The database schema step creates lines for old orders. Only those lack a snapshot.
     const item = line.snapshot ? JSON.parse(line.snapshot) : shop.items.find((i) => i.id === line.item);
-    if (!item) throw new Error('Legacy order item is missing; restore its catalog definition to grant it');
+    if (!item) {
+      await env.DB.prepare("UPDATE shop_orders SET payment = COALESCE(payment, ?2), total = ?4, tax = ?5, note = 'missing-item: restore the catalog definition to grant this paid order', updated_at = ?3 WHERE id = ?1").bind(o.id, typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null, now, total, tax).run();
+      return 'missing-item';
+    }
     let gross = lines.length === 1 ? total : Number(line.amount);
     if (stripeLines) {
       const index = stripeLines.findIndex((l) => l.quantity === line.quantity && l.amount_subtotal === line.amount &&
@@ -739,11 +797,11 @@ async function paid(env, shop, session, paidAt = Date.now()) {
     }
     if (!Number.isSafeInteger(gross) || gross < line.amount) throw new Error('Invalid Stripe line total');
     lineTotal += gross;
-    if (o.player) writes.push(...grantStatements(env, o, item, now, line));
-    writes.push(env.DB.prepare("UPDATE shop_order_lines SET status = 'paid', total = ?2, snapshot = COALESCE(snapshot, ?3) WHERE id = ?1 AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?4 AND paid_at IS NULL)").bind(line.id, gross, JSON.stringify(item), o.id));
+    if (o.player && line.status !== 'refunded') writes.push(...grantStatements(env, o, item, Number(o.paid_at ?? now), line));
+    writes.push(env.DB.prepare("UPDATE shop_order_lines SET status = 'paid', total = ?2, snapshot = COALESCE(snapshot, ?3) WHERE id = ?1 AND status != 'refunded'").bind(line.id, gross, JSON.stringify(item)));
   }
   if (lineTotal !== total) throw new Error('Stripe line totals do not match order');
-  if (o.via) writes.push(...(await lineFor(env, o, o.referral_terms ? { referrals: JSON.parse(o.referral_terms) } : shop, { now })));
+  if (o.via && o.paid_at === null) writes.push(...(await lineFor(env, o, o.referral_terms ? { referrals: JSON.parse(o.referral_terms) } : shop, { now })));
   writes.push(env.DB.prepare("UPDATE referral_lines SET original_share = share WHERE order_id = ?1 AND original_share IS NULL").bind(o.id));
   writes.push(env.DB.prepare("UPDATE shop_orders SET status = 'paid', payment = ?2, tax = ?3, total = ?4, paid_at = ?5, updated_at = ?6 WHERE id = ?1 AND paid_at IS NULL")
     .bind(o.id, typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null, tax, total, paidAt, now));
@@ -760,25 +818,47 @@ function allocatedShare(share, before, amount, total) {
   return Number(round(before + amount) - round(before));
 }
 
-async function refundLines(env, o, selected, refundId) {
+async function refundLines(env, o, selected, refundId, cumulative = null) {
   const all = await orderLines(env, o.id);
   const referral = await env.DB.prepare('SELECT * FROM referral_lines WHERE order_id = ?1').bind(o.id).first();
   const writes = [];
   let before = 0;
+  let remaining = cumulative === null ? null : Math.max(0, cumulative - all.reduce((n, l) => n + Number(l.refunded_amount ?? 0), 0));
   for (const line of all) {
-    const delta = referral ? allocatedShare(Number(referral.original_share ?? referral.share), before, Number(line.amount), Number(o.amount)) : 0;
+    const gross = Number(line.total ?? line.amount), old = Number(line.refunded_amount ?? 0);
+    const target = remaining === null ? (selected.includes(line.id) ? gross : old) : old + Math.min(gross - old, remaining);
+    if (remaining !== null) remaining -= target - old;
+    const net = gross ? Number(BigInt(line.amount) * BigInt(target) / BigInt(gross)) : Number(line.amount);
+    const delta = referral ? allocatedShare(Number(referral.original_share ?? referral.share), before + Number(line.refunded_net ?? 0), net - Number(line.refunded_net ?? 0), Number(o.amount)) : 0;
     before += Number(line.amount);
-    if (!selected.includes(line.id)) continue;
+    if (target === old && !(gross === 0 && selected.includes(line.id) && line.status !== 'refunded')) continue;
     if (referral) {
-      // A settled share is reduced and a distinct clawback records the money already sent.
-      writes.push(env.DB.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, original_share, currency, state, period, hold_until, created_at) SELECT ?2, via, ?3, rate, ?4, ?4, currency, 'clawback', period, hold_until, ?5 FROM referral_lines WHERE order_id = ?1 AND state = 'settled' AND EXISTS (SELECT 1 FROM shop_order_lines WHERE id = ?2 AND refunded_at IS NULL) ON CONFLICT(order_id) DO NOTHING").bind(o.id, line.id, line.amount, delta, Date.now()));
-      writes.push(env.DB.prepare("UPDATE referral_lines SET share = MAX(0, share - ?3), net = MAX(0, net - ?4), state = CASE WHEN share <= ?3 AND state IN ('pending', 'owed') THEN 'void' ELSE state END WHERE order_id = ?1 AND state IN ('pending', 'owed', 'settled') AND EXISTS (SELECT 1 FROM shop_order_lines WHERE id = ?2 AND refunded_at IS NULL)").bind(o.id, line.id, delta, line.amount));
+      const clawback = `${line.id}_${target}`;
+      writes.push(env.DB.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, original_share, currency, state, period, hold_until, created_at) SELECT ?2, via, ?3, rate, ?4, ?4, currency, 'clawback', period, hold_until, ?5 FROM referral_lines WHERE order_id = ?1 AND state = 'settled' AND EXISTS (SELECT 1 FROM shop_order_lines WHERE id = ?6 AND refunded_amount = ?7) ON CONFLICT DO NOTHING").bind(o.id, clawback, net - Number(line.refunded_net ?? 0), delta, Date.now(), line.id, old));
+      writes.push(env.DB.prepare("UPDATE referral_lines SET share = MAX(0, share - ?3), net = MAX(0, net - ?4), state = CASE WHEN share <= ?3 AND state IN ('pending', 'owed') THEN 'void' ELSE state END WHERE order_id = ?1 AND state IN ('pending', 'owed', 'settled') AND EXISTS (SELECT 1 FROM shop_order_lines WHERE id = ?2 AND refunded_amount = ?5)").bind(o.id, line.id, delta, net - Number(line.refunded_net ?? 0), old));
     }
-    writes.push(env.DB.prepare("UPDATE entitlements SET state = 'revoked' WHERE order_id = ?1 AND line_id = ?2").bind(o.id, line.id));
-    writes.push(env.DB.prepare("UPDATE shop_order_lines SET status = 'refunded', refund = COALESCE(?2, refund), refunded_at = COALESCE(refunded_at, ?3) WHERE id = ?1").bind(line.id, refundId, Date.now()));
+    if (target === gross) writes.push(env.DB.prepare("UPDATE shop_entitlement_lines SET state = 'revoked' WHERE order_id = ?1 AND line_id = ?2").bind(o.id, line.id));
+    writes.push(env.DB.prepare("UPDATE shop_order_lines SET refunded_amount = ?3, refunded_net = ?4, status = CASE WHEN ?3 = COALESCE(total, amount) THEN 'refunded' ELSE status END, refund = COALESCE(?2, refund), refunded_at = CASE WHEN ?3 = COALESCE(total, amount) THEN COALESCE(refunded_at, ?5) ELSE refunded_at END WHERE id = ?1 AND refunded_amount = ?6").bind(line.id, refundId, target, net, Date.now(), old));
   }
+  writes.push(env.DB.prepare("UPDATE entitlements SET state = 'revoked' WHERE order_id = ?1 AND (EXISTS (SELECT 1 FROM shop_entitlement_lines WHERE order_id = ?1 AND key = entitlements.key) AND NOT EXISTS (SELECT 1 FROM shop_entitlement_lines WHERE order_id = ?1 AND key = entitlements.key AND state = 'active') OR NOT EXISTS (SELECT 1 FROM shop_order_lines WHERE order_id = ?1 AND status != 'refunded'))").bind(o.id));
+  // The released Worker reads the original entitlement row. Keep its lifetime equal to the
+  // remaining active lines, so a rollback neither loses a longer grant nor keeps a refunded one.
+  writes.push(env.DB.prepare("UPDATE entitlements SET starts_at = (SELECT MIN(starts_at) FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active'), ends_at = CASE WHEN EXISTS (SELECT 1 FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active' AND l.ends_at IS NULL) THEN NULL ELSE (SELECT MAX(ends_at) FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active') END WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active')").bind(o.id));
   writes.push(env.DB.prepare("UPDATE shop_orders SET status = CASE WHEN NOT EXISTS (SELECT 1 FROM shop_order_lines WHERE order_id = ?1 AND status != 'refunded') THEN 'refunded' ELSE status END, refund = COALESCE(?2, refund), refunded_at = CASE WHEN NOT EXISTS (SELECT 1 FROM shop_order_lines WHERE order_id = ?1 AND status != 'refunded') THEN ?3 ELSE refunded_at END, updated_at = ?3 WHERE id = ?1").bind(o.id, refundId, Date.now()));
   await env.DB.batch(writes);
+  const recorded = await orderLines(env, o.id);
+  // A concurrent smaller cumulative event can win the compare-and-set. Let Stripe retry the larger
+  // event instead of acknowledging a total that has not reached the books yet.
+  if (cumulative !== null && recorded.reduce((n, l) => n + Number(l.refunded_amount ?? 0), 0) < cumulative || cumulative === null && recorded.some((l) => selected.includes(l.id) && l.status !== 'refunded')) throw new Error('Refund totals changed concurrently; retry the refund');
+}
+
+async function cumulativeRefund(env, payment, amount) {
+  const o = await orderByPayment(env, payment);
+  if (!o) return 'unknown-order';
+  if (o.status === 'refunded') return 'already';
+  if (!Number.isSafeInteger(amount) || amount < 0 || amount > Number(o.total ?? o.amount)) return 'mismatch';
+  await refundLines(env, o, [], null, amount);
+  return 'refunded';
 }
 
 async function refunded(env, payment, refundId) {
@@ -802,9 +882,11 @@ async function disputeClosed(env, payment, status) {
   const o = payment ? await orderByPayment(env, payment) : null;
   if (!o) return 'unknown-order';
   const now = Date.now();
+  if (o.status !== 'disputed') return 'already';
   if (status === 'lost') {
     await env.DB.batch([
-      env.DB.prepare("UPDATE shop_orders SET status = 'lost', updated_at = ?2 WHERE id = ?1").bind(o.id, now),
+      env.DB.prepare("UPDATE shop_orders SET status = 'lost', updated_at = ?2 WHERE id = ?1 AND status = 'disputed'").bind(o.id, now),
+      env.DB.prepare("UPDATE shop_order_lines SET status = 'lost' WHERE order_id = ?1 AND status != 'refunded' AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?1 AND status = 'lost')").bind(o.id),
       revokeStatement(env, o.id),
       ...voidLineStatements(env, o.id),
     ]);
@@ -812,6 +894,7 @@ async function disputeClosed(env, payment, status) {
   }
   await env.DB.batch([
     env.DB.prepare("UPDATE shop_orders SET status = 'paid', updated_at = ?2 WHERE id = ?1 AND status = 'disputed'").bind(o.id, now),
+    env.DB.prepare("UPDATE shop_order_lines SET status = 'paid' WHERE order_id = ?1 AND status = 'disputed' AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?1 AND status = 'paid')").bind(o.id),
     restoreStatement(env, o.id),
   ]);
   return 'kept';
@@ -822,39 +905,45 @@ export const REFUND_HELD = 'Stripe is holding this refund until a person approve
 
 /** Refund selected lines through Stripe, revoking each only after success. */
 export async function refundOrder(env, o, { reason = 'requested_by_customer', by = 'owner', line: lineId = null } = {}) {
-  if (!['paid', 'disputed'].includes(o.status)) return { ok: false, error: 'state', message: `This order is ${o.status}.` };
+  if (o.status !== 'paid' && !(o.payment && ['started', 'processing', 'missing', 'released', 'expired', 'failed'].includes(o.status))) return { ok: false, error: 'state', message: `This order is ${o.status}.` };
   const lines = (await orderLines(env, o.id)).filter((l) => !lineId || l.id === lineId);
   if (!lines.length) return { ok: false, error: 'line', message: 'No such order line.' };
-  let amount = 0;
-  for (const line of lines) {
-    if (line.status === 'refunded') continue;
-    const gross = Number(line.total ?? line.amount);
-    let refund = null;
-    if (gross) {
-      if (!o.payment) return { ok: false, error: 'no-payment', message: 'Stripe has not confirmed the payment yet.' };
-      try {
-        // One stable key per line also makes simultaneous whole-order and line refunds safe.
-        // https://docs.stripe.com/api/refunds/create#create_refund-amount
-        refund = line.refund ? await stripeCall(env, 'GET', `/v1/refunds/${encodeURIComponent(line.refund)}`) : null;
-        // A terminal failed/canceled refund returned no money. Its id names the next attempt,
-        // so simultaneous retries still share one Stripe idempotency key.
-        if (!refund || ['failed', 'canceled'].includes(refund.status)) {
-          refund = await createRefund(env, { payment_intent: o.payment, amount: gross,
-            reason: ['duplicate', 'fraudulent', 'requested_by_customer'].includes(reason) ? reason : 'requested_by_customer',
-            metadata: { order: o.id, line: line.id, by } }, { idempotencyKey: `refund-${line.id}${refund ? '-' + refund.id : ''}` });
-        }
-        // Remember pending refunds across Stripe's idempotency retention period.
-        // https://docs.stripe.com/api/refunds/retrieve
-        if (typeof refund?.id === 'string') await env.DB.prepare('UPDATE shop_order_lines SET refund = ?2 WHERE id = ?1').bind(line.id, refund.id).run();
-      } catch (error) {
-        if (isApprovalRequired(error)) return { ok: false, error: 'approval', held: true, message: REFUND_HELD };
-        return { ok: false, error: 'stripe', message: `Stripe did not refund this line (${error instanceof StripeError ? error.message : 'no answer'}). Previously completed line refunds remain recorded.` };
+  const legacy = Boolean(await migrationNeeded(env));
+  // One whole-order refund asks Stripe for the charge's remaining balance. Stripe arbitrates concurrent
+  // line/whole refunds; this keeps even 100-line carts within the Worker's subrequest budget.
+  // https://docs.stripe.com/api/refunds/create#create_refund-amount
+  const selected = lines.filter((l) => l.status !== 'refunded');
+  if (!selected.length) return { ok: true, order: o.id, line: lineId, amount: 0, currency: o.currency, status: 'succeeded' };
+  const amount = selected.reduce((sum, l) => sum + Number(l.total ?? l.amount) - Number(l.refunded_amount ?? 0), 0);
+  let refund = null;
+  if (amount) {
+    if (!o.payment) return { ok: false, error: 'no-payment', message: 'Stripe has not confirmed the payment yet.' };
+    try {
+      const prior = lineId ? selected[0].refund : legacy ? o.refund : o.whole_refund;
+      refund = prior ? await stripeCall(env, 'GET', `/v1/refunds/${encodeURIComponent(prior)}`) : null;
+      if (!refund || ['failed', 'canceled'].includes(refund.status)) {
+        refund = await createRefund(env, { payment_intent: o.payment, ...(lineId ? { amount } : {}),
+          reason: ['duplicate', 'fraudulent', 'requested_by_customer'].includes(reason) ? reason : 'requested_by_customer',
+          metadata: { order: o.id, ...(lineId ? { line: lineId } : {}), by } },
+          { idempotencyKey: `refund-${lineId ?? o.id}${lineId && selected[0].refunded_amount ? '-' + selected[0].refunded_amount : ''}${refund ? '-' + refund.id : ''}` });
       }
-      if (refund?.status !== 'succeeded') return { ok: false, held: true, error: 'pending', message: 'Stripe has not completed this refund yet.' };
+      if (typeof refund?.id === 'string') {
+        if (lineId && !legacy) await env.DB.prepare('UPDATE shop_order_lines SET refund = ?2 WHERE id = ?1').bind(lineId, refund.id).run();
+        else await env.DB.prepare(legacy ? 'UPDATE shop_orders SET refund = ?2 WHERE id = ?1' : 'UPDATE shop_orders SET whole_refund = ?2 WHERE id = ?1').bind(o.id, refund.id).run();
+      }
+    } catch (error) {
+      if (isApprovalRequired(error)) return { ok: false, error: 'approval', held: true, message: REFUND_HELD };
+      return { ok: false, error: 'stripe', message: `Stripe did not refund this order (${error instanceof StripeError ? redactStripe(error.message, env) : 'no answer'}).` };
     }
-    await refundLines(env, o, [line.id], refund?.id ?? null);
-    amount += gross;
+    if (refund?.status !== 'succeeded') return { ok: false, held: true, error: 'pending', message: 'Stripe has not completed this refund yet.' };
   }
+  if (legacy) {
+    await env.DB.batch([
+      revokeStatement(env, o.id), ...voidLineStatements(env, o.id),
+      env.DB.prepare("UPDATE shop_orders SET status = 'refunded', refund = ?2, refunded_at = ?3, updated_at = ?3 WHERE id = ?1").bind(o.id, refund?.id ?? null, Date.now()),
+    ]);
+  } else await refundLines(env, o, selected.map((l) => l.id), refund?.id ?? null);
+
   return { ok: true, order: o.id, line: lineId, amount, currency: o.currency, status: 'succeeded' };
 }
 
@@ -878,7 +967,7 @@ export async function performRelease(env, a) {
   // https://docs.stripe.com/api/checkout/sessions/expire — only open sessions can expire.
   if (row.session) {
     try {
-      const session = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(row.session)}`, null, { timeout: 2000 });
+      let session = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(row.session)}`, null, { timeout: 2000 });
       if (session?.id === row.session && session.status === 'open') await expireCheckoutSession(env, row.session, { timeout: 2000 });
     } catch (error) { logOrderError(env, row.id, error); }
   }
@@ -904,8 +993,17 @@ export function describeRefund(cat, a, order = null) {
 
 /** Do the refund (the owner's tap, or the owner's yes to the AI's ask). */
 export async function performRefund(env, cat, a) {
-  const o = await orderById(env, a.order);
+  let o = await orderById(env, a.order);
   if (!o) return { ok: false, error: 'order', message: 'No such order.' };
+  if (!o.payment && o.session && o.paid_at === null && !(await migrationNeeded(env))) {
+    try {
+      const session = await stripeCall(env, 'GET', `/v1/checkout/sessions/${encodeURIComponent(o.session)}`, { expand: ['payment_intent.latest_charge'] }, { timeout: 2000 });
+      if (session?.id === o.session && (session.livemode === undefined || session.livemode === (o.mode === 'live')) && ['paid', 'no_payment_required'].includes(session.payment_status)) {
+        await paid(env, shopOf(cat), session, (session.payment_intent?.latest_charge?.created ?? session.created ?? Math.floor(Date.now() / 1000)) * 1000);
+        o = await orderById(env, a.order);
+      }
+    } catch (error) { return { ok: false, error: 'stripe', message: redactStripe(error.message, env) }; }
+  }
   return refundOrder(env, o, { reason: a.reason, by: 'owner', line: a.line });
 }
 
@@ -925,22 +1023,22 @@ export async function shopOffice(env, cat, origin, cursor = '', itemCursor = 0, 
     hook: `${origin}/api/shop/hook`,
     totals: null, orders: [], referrals: { owe: [], owedToUs: [] },
   };
-  if (!(await migrated(env))) return out;
+  if (!(await migrated(env, { complete: false }))) return out;
   const since = Date.now() - 30 * DAY;
   const t = await env.DB.prepare("SELECT SUM(CASE WHEN status IN ('paid', 'disputed') THEN amount ELSE 0 END) AS paid, SUM(CASE WHEN status IN ('paid', 'disputed') THEN 1 ELSE 0 END) AS sales, SUM(CASE WHEN status = 'refunded' THEN amount ELSE 0 END) AS refunded, SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END) AS refunds, SUM(CASE WHEN status = 'disputed' THEN 1 ELSE 0 END) AS disputes, SUM(CASE WHEN status = 'lost' THEN 1 ELSE 0 END) AS lost FROM shop_orders WHERE created_at >= ?1").bind(since).first();
   out.totals = { days: 30, currency: shop?.currency ?? 'usd', paid: Number(t?.paid) || 0, sales: Number(t?.sales) || 0, refunded: Number(t?.refunded) || 0, refunds: Number(t?.refunds) || 0, disputes: Number(t?.disputes) || 0, lost: Number(t?.lost) || 0 };
   const rows = (await env.DB.prepare("SELECT o.*, p.name AS player_name FROM shop_orders o LEFT JOIN players p ON p.id = o.player ORDER BY CASE WHEN o.status IN ('started', 'processing') THEN 0 ELSE 1 END, o.created_at DESC, o.id LIMIT 101 OFFSET ?1").bind(orderCursor).all()).results ?? [];
-  const partial = await env.DB.prepare("SELECT COALESCE(SUM(l.amount), 0) AS amount, COUNT(DISTINCT o.id) AS orders FROM shop_order_lines l JOIN shop_orders o ON o.id = l.order_id WHERE o.created_at >= ?1 AND o.status IN ('paid', 'disputed') AND l.status = 'refunded'").bind(since).first();
+  const partial = ready.migration ? null : await env.DB.prepare("SELECT COALESCE(SUM(l.refunded_net), 0) AS amount, COUNT(DISTINCT o.id) AS orders FROM shop_order_lines l JOIN shop_orders o ON o.id = l.order_id WHERE o.created_at >= ?1 AND o.status IN ('paid', 'disputed') AND l.refunded_net > 0").bind(since).first();
   out.totals.paid -= Number(partial?.amount ?? 0); out.totals.refunded += Number(partial?.amount ?? 0); out.totals.refunds += Number(partial?.orders ?? 0);
   out.nextOrdersCursor = rows.length > 100 ? String(orderCursor + 100) : null;
   if (rows.length > 100) rows.pop();
   const names = new Map((shop?.items ?? []).map((i) => [i.id, i.name]));
   out.orders = await Promise.all(rows.map(async (r) => ({
-    lines: (await orderLines(env, r.id)).map(lineView),
+    lines: (await orderLines(env, r.id)).map((line) => { const view = lineView(line); return { ...view, name: line.snapshot ? view.name : names.get(line.item) ?? view.name }; }),
     ...orderView(r), note: r.note ?? null, name: names.get(r.item) ?? r.item, shown: money(r.amount, r.currency), player: r.player ? { id: r.player, name: r.player_name ?? null } : null,
     stripe: r.payment ? dashboardLink(r.mode, 'payment', r.payment) : null, dispute: r.dispute ? dashboardLink(r.mode, 'dispute', r.dispute) : null,
     releasable: ['started', 'processing'].includes(r.status),
-    refundable: ['paid', 'disputed'].includes(r.status) && (Number(r.amount) === 0 || Boolean(r.payment)),
+    refundable: ['paid', 'started', 'processing', 'missing', 'released', 'expired', 'failed'].includes(r.status) && (Number(r.amount) === 0 || Boolean(r.payment) || Boolean(r.session)),
   })));
   const { books, nextCursor } = await booksOf(env, { cursor });
   out.referrals = { nextCursor, owe: books, failures: await statementFailures(env), owedToUs: await statementsIn(env), invoice: dashboardLink(mode, 'invoices') };

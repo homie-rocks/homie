@@ -98,7 +98,7 @@ export function shopInit(root, { supporter = false, currency = 'usd', price = 50
   writeFileSync(file, `${JSON.stringify(shop, null, 2)}\n`);
   const wrote = [SHOP_FILE];
   if (!existsSync(join(root, 'SELLING.md')) && existsSync(SELLING)) { writeFileSync(join(root, 'SELLING.md'), readFileSync(SELLING, 'utf8')); wrote.push('SELLING.md'); }
-  return { ok: true, command: 'shop init', wrote, till: shop.till, items: shop.items.map((i) => i.id), next: ['homie-studio shop check', 'npm run deploy (the shop stays closed until the key is in)', 'homie-studio shop connect (the owner pastes a restricted key into a page on this computer)'] };
+  return { ok: true, command: 'shop init', wrote, till: shop.till, items: shop.items.map((i) => i.id), next: ['homie-studio shop check', 'npm run deploy (the shop stays closed until the key and webhook signing secret are in)', 'homie-studio shop connect (the owner pastes a Stripe key into a page on this computer)'] };
 }
 
 /** The office's view of the live shop: open or what is missing, the last 30 days, links to Stripe. */
@@ -161,8 +161,9 @@ export function connectPage({ nonce, site, studio, till = 'stripe', test = true 
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2.5rem auto;padding:0 1rem;color:#1b1b1b}h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:1.8rem}input[type=password]{width:100%;box-sizing:border-box;font:inherit;padding:.6rem;border:1px solid #999;border-radius:8px}label{display:block;margin:.8rem 0 .3rem;font-weight:600}fieldset{border:1px solid #ccc;border-radius:10px;padding:.6rem 1rem}fieldset label{font-weight:400;display:flex;gap:.6rem;align-items:flex-start}button{margin-top:1.2rem;font:inherit;font-weight:700;padding:.7rem 1.3rem;border:0;border-radius:8px;background:#1b1b1b;color:#fff}small{color:#555}code{font-size:.85em;background:#f2f2f2;padding:0 .25em;border-radius:4px}ol li,ul li{margin:.25rem 0}.box{background:#f6f6f2;border-radius:10px;padding:.8rem 1rem}details{margin-top:1rem}summary{cursor:pointer}</style>
 <h1>Connect ${esc(studio)}'s shop to your Stripe</h1>
 <p>Money goes straight from players to <b>your own Stripe account</b>. Homie never sees it and takes no cut. What you paste here goes from this page to Stripe (one check) and to your studio's Worker as a secret, and nowhere else: not to the chat, not to a file, not to a log.</p>
-<p class="box">${test ? '<b>Test mode first.</b> Use your Stripe sandbox or test mode (the key starts with <code>rk_test_</code>): nothing real is charged, and test cards work. Live keys only when you say the shop is ready to sell.' : '<b>Live mode.</b> Real cards, real money.'}</p>
-<h2>1. In Stripe: one restricted key</h2>
+<p class="box">${test ? '<b>Test mode first.</b> Use your Stripe sandbox or test mode (the key starts with <code>rk_test_</code> or <code>sk_test_</code>): nothing real is charged, and test cards work. Live keys only when you say the shop is ready to sell.' : '<b>Live mode.</b> Real cards, real money.'}</p>
+<h2>1. In Stripe: a key for this shop</h2>
+<p>You can use a restricted (<code>rk_</code>) or full secret (<code>sk_</code>) key. To choose a restricted key with just the permissions this shop uses:</p>
 <ol><li>Open <a href="${dash}/apikeys" target="_blank" rel="noopener">Developers → API keys</a> and press <b>Create restricted key</b>. If Stripe asks what the key is for, choose your own integration, <b>not</b> "Authorizing agent access" (Stripe holds an agent key's refunds for a second approval).</li>
 <li>Name it "${esc(studio)} shop" and give it exactly these permissions (leave everything else at None):<ul>${perms}</ul></li>
 <li>Create it and copy the key (it starts with <code>rk_</code>).</li></ol>
@@ -170,7 +171,7 @@ export function connectPage({ nonce, site, studio, till = 'stripe', test = true 
 <p>With your key, this page makes the endpoint where Stripe tells your shop about payments (<code>${esc(hookUrlOf(site))}</code>, for ${HOOK_EVENTS.length} events), and its signing secret goes straight to your Worker. Nobody sees it. An older one this page made for the same address is turned off, never deleted.</p>
 <form method="post" action="/key"><input type="hidden" name="n" value="${esc(nonce)}">
 <h2>3. Paste the key here</h2>
-<label for="key">Restricted key</label><input id="key" name="key" type="password" autocomplete="off" placeholder="rk_test_…" required>
+<label for="key">Stripe key</label><input id="key" name="key" type="password" autocomplete="off" placeholder="rk_test_…" required>
 <details><summary>I made the webhook myself (or my key has no Webhook Endpoints permission)</summary>
 <ol><li>Open <a href="${dash}/workbench/webhooks" target="_blank" rel="noopener">Webhooks</a> and press <b>Create an event destination</b> (Your account, a Webhook endpoint).</li>
 <li>Endpoint URL: <code>${esc(hookUrlOf(site))}</code></li><li>Events: ${events}</li>
@@ -269,9 +270,9 @@ export async function shopConnect(root, { managed = null, live = false, log = ()
           const say = ({ status, text }) => { res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); res.end(text); };
           if (form.get('n') !== nonce || finished) { say(said(403, 'This page was used already.')); return; }
           if (busy) { say(said(409, 'Still saving the last press. Wait a moment.')); return; }
-          if (!KEY_SHAPE.test(key)) { say(said(400, 'That does not look like a restricted key (rk_test_… or rk_live_…). Go back and try again.')); return; }
+          if (!KEY_SHAPE.test(key)) { say(said(400, 'That does not look like a Stripe key (rk_test_…, rk_live_…, sk_test_… or sk_live_…). Go back and try again.')); return; }
           // Test mode unless the owner's AI ran it with --live on purpose: a live key on the test page is refused.
-          if (modeOf(key) !== (live ? 'live' : 'test')) { say(said(400, live ? 'This page takes a LIVE restricted key (rk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --live).')); return; }
+          if (modeOf(key) !== (live ? 'live' : 'test')) { say(said(400, live ? 'This page takes a LIVE Stripe key (rk_live_… or sk_live_…).' : 'This page is for TEST mode: paste a test key (rk_test_… or sk_test_…). Live keys go in only when the shop is ready to sell for real (shop connect --live).')); return; }
           if (hook && !WEBHOOK_SECRET_SHAPE.test(hook)) { say(said(400, 'That does not look like a webhook signing secret (whsec_…). Go back and try again, or leave it empty and this page makes the webhook.')); return; }
           busy = true;
           try {

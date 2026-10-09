@@ -130,25 +130,35 @@ CREATE TABLE shop_order_lines (
   id TEXT PRIMARY KEY, order_id TEXT NOT NULL, position INTEGER NOT NULL,
   item TEXT NOT NULL, quantity INTEGER NOT NULL, unit_amount INTEGER NOT NULL,
   amount INTEGER NOT NULL, total INTEGER, snapshot TEXT, status TEXT NOT NULL DEFAULT 'started',
-  refund TEXT, refunded_at INTEGER, UNIQUE(order_id, position)
+  refund TEXT, refunded_at INTEGER, refunded_amount INTEGER NOT NULL DEFAULT 0, refunded_net INTEGER NOT NULL DEFAULT 0, UNIQUE(order_id, position)
 );
 INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, total, status, refund, refunded_at)
 SELECT id || '_0', id, 0, item, 1, amount, amount, total, status, refund, refunded_at FROM shop_orders;
-ALTER TABLE entitlements RENAME TO entitlements_before_lines;
-CREATE TABLE entitlements (
+-- Keep the released entitlement key and columns intact for rolling deploys and rollback.
+CREATE TABLE shop_entitlement_lines (
   player TEXT NOT NULL, key TEXT NOT NULL, item TEXT NOT NULL, order_id TEXT NOT NULL,
-  line_id TEXT NOT NULL DEFAULT '', quantity INTEGER NOT NULL DEFAULT 1,
-  starts_at INTEGER NOT NULL, ends_at INTEGER, state TEXT NOT NULL, used_at INTEGER,
+  line_id TEXT NOT NULL, quantity INTEGER NOT NULL,
+  starts_at INTEGER NOT NULL, ends_at INTEGER, state TEXT NOT NULL,
   PRIMARY KEY (player, key, order_id, line_id)
 ) WITHOUT ROWID;
-INSERT INTO entitlements (player, key, item, order_id, line_id, starts_at, ends_at, state, used_at)
-SELECT player, key, item, order_id, order_id || '_0', starts_at, ends_at, state, used_at FROM entitlements_before_lines;
-DROP TABLE entitlements_before_lines;
-CREATE INDEX entitlements_order ON entitlements (order_id);
+CREATE TRIGGER shop_entitlements_delete AFTER DELETE ON entitlements BEGIN
+  DELETE FROM shop_entitlement_lines WHERE player = OLD.player AND key = OLD.key AND order_id = OLD.order_id;
+END;
+CREATE TRIGGER shop_entitlements_adopt AFTER UPDATE OF player ON entitlements BEGIN
+  UPDATE shop_entitlement_lines SET player = NEW.player WHERE player = OLD.player AND key = OLD.key AND order_id = OLD.order_id;
+END;
+UPDATE shop_order_lines SET refunded_amount = COALESCE(total, amount), refunded_net = amount WHERE status = 'refunded';
 ALTER TABLE shop_parent_links ADD COLUMN cart TEXT;
+ALTER TABLE shop_orders ADD COLUMN whole_refund TEXT;
 ALTER TABLE shop_orders ADD COLUMN referral_terms TEXT;
 ALTER TABLE shop_orders ADD COLUMN checkout_player TEXT;
 UPDATE shop_orders SET checkout_player = player;
+CREATE TRIGGER shop_checkout_player_insert AFTER INSERT ON shop_orders BEGIN
+  UPDATE shop_orders SET checkout_player = NEW.player WHERE id = NEW.id;
+END;
+CREATE TRIGGER shop_forget_checkout_player AFTER UPDATE OF player ON shop_orders WHEN NEW.player IS NULL BEGIN
+  UPDATE shop_orders SET checkout_player = NULL WHERE id = NEW.id;
+END;
 ALTER TABLE referral_lines ADD COLUMN original_share INTEGER;
 UPDATE referral_lines SET original_share = share;
 `;
@@ -174,8 +184,8 @@ export async function migrationNeeded(env) {
     [SHOP_RESERVATIONS_FILE, 'SELECT expires_at FROM shop_orders LIMIT 1'],
     [SHOP_STATEMENTS_FILE, 'SELECT issued FROM referral_editions LIMIT 1'],
     [SHOP_STATEMENTS_FILE, 'SELECT edition FROM referral_edition_lines LIMIT 1'],
-    [SHOP_LINES_FILE, 'SELECT snapshot, total FROM shop_order_lines LIMIT 1'],
-    [SHOP_LINES_FILE, 'SELECT line_id, quantity FROM entitlements LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT snapshot, total, refunded_amount FROM shop_order_lines LIMIT 1'],
+    [SHOP_LINES_FILE, 'SELECT line_id, quantity FROM shop_entitlement_lines LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT referral_terms, checkout_player FROM shop_orders LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT cart FROM shop_parent_links LIMIT 1'],
     [SHOP_LINES_FILE, 'SELECT original_share FROM referral_lines LIMIT 1'],
@@ -208,7 +218,12 @@ export async function setBand(env, player, band) {
 export async function ownsOf(env, player, now = Date.now()) {
   if (!PLAYER_ID.test(String(player ?? ''))) return [];
   try {
-    const { results } = await env.DB.prepare("SELECT key, item, ends_at, used_at, quantity FROM entitlements WHERE player = ?1 AND state = 'active' AND starts_at <= ?2 AND (ends_at IS NULL OR ends_at > ?2) ORDER BY starts_at").bind(player, now).all();
+    let results;
+    try {
+      ({ results } = await env.DB.prepare("SELECT l.key, l.item, l.ends_at, e.used_at, l.quantity FROM shop_entitlement_lines l JOIN entitlements e ON e.player = l.player AND e.key = l.key AND e.order_id = l.order_id WHERE l.player = ?1 AND l.state = 'active' AND e.state = 'active' AND l.starts_at <= ?2 AND (l.ends_at IS NULL OR l.ends_at > ?2) UNION ALL SELECT e.key, e.item, e.ends_at, e.used_at, 1 AS quantity FROM entitlements e WHERE e.player = ?1 AND e.state = 'active' AND e.starts_at <= ?2 AND (e.ends_at IS NULL OR e.ends_at > ?2) AND NOT EXISTS (SELECT 1 FROM shop_entitlement_lines l WHERE l.player = e.player AND l.key = e.key AND l.order_id = e.order_id)").bind(player, now).all());
+    } catch {
+      ({ results } = await env.DB.prepare("SELECT key, item, ends_at, used_at, 1 AS quantity FROM entitlements WHERE player = ?1 AND state = 'active' AND starts_at <= ?2 AND (ends_at IS NULL OR ends_at > ?2) ORDER BY starts_at").bind(player, now).all());
+    }
     const out = new Map(), quantities = new Map();
     for (const r of results ?? []) {
       quantities.set(r.key, (quantities.get(r.key) ?? 0n) + BigInt(r.quantity));
@@ -230,7 +245,7 @@ export async function spentThisMonth(env, player, now = Date.now()) {
   // A Stripe session remains reserved until Stripe confirms its outcome. Test rows never consume a live cap.
   const d = new Date(now);
   const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-  const r = await env.DB.prepare("SELECT COALESCE(SUM(amount - COALESCE((SELECT SUM(l.amount) FROM shop_order_lines l WHERE l.order_id = shop_orders.id AND l.status = 'refunded'), 0)), 0) AS n FROM shop_orders WHERE player = ?1 AND mode = ?4 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?3)))").bind(player, start, now, String(env.STRIPE_KEY).includes('_live_') ? 'live' : 'test').first();
+  const r = await env.DB.prepare("SELECT COALESCE(SUM(amount - COALESCE((SELECT SUM(l.refunded_net) FROM shop_order_lines l WHERE l.order_id = shop_orders.id), 0)), 0) AS n FROM shop_orders WHERE player = ?1 AND mode = ?4 AND ((status IN ('paid', 'disputed') AND paid_at >= ?2) OR (status IN ('started', 'processing') AND (session IS NOT NULL OR COALESCE(expires_at, created_at + 1860000) + 60000 > ?3)))").bind(player, start, now, String(env.STRIPE_KEY).includes('_live_') ? 'live' : 'test').first();
   return Number(r?.n) || 0;
 }
 
@@ -239,7 +254,27 @@ export async function orderById(env, id) {
   try { return await env.DB.prepare('SELECT * FROM shop_orders WHERE id = ?1').bind(id).first(); } catch { return null; }
 }
 
-export const orderLines = async (env, id) => (await env.DB.prepare('SELECT * FROM shop_order_lines WHERE order_id = ?1 ORDER BY position').bind(id).all()).results ?? [];
+export async function orderLines(env, id) {
+  const o = await orderById(env, id);
+  if (!o) return [];
+  const fallback = { id: id + '_0', order_id: id, position: 0, item: o.item, quantity: 1, unit_amount: o.amount, amount: o.amount, total: o.total, snapshot: null, status: o.status, refund: o.refund, refunded_at: o.refunded_at };
+  try {
+    let rows = (await env.DB.prepare('SELECT * FROM shop_order_lines WHERE order_id = ?1 ORDER BY position').bind(id).all()).results ?? [];
+    if (!rows.length) {
+      await env.DB.prepare('INSERT INTO shop_order_lines (id, order_id, position, item, quantity, unit_amount, amount, total, status, refund, refunded_at) VALUES (?1, ?2, 0, ?3, 1, ?4, ?4, ?5, ?6, ?7, ?8) ON CONFLICT DO NOTHING').bind(fallback.id, id, o.item, o.amount, o.total, o.status, o.refund, o.refunded_at).run();
+      rows = (await env.DB.prepare('SELECT * FROM shop_order_lines WHERE order_id = ?1 ORDER BY position').bind(id).all()).results ?? [];
+    }
+    // A released Worker may have paid or refunded after the step without touching its single line.
+    if (rows.length === 1 && !rows[0].snapshot && o.paid_at !== null) {
+      await env.DB.prepare("UPDATE shop_order_lines SET status = ?2, total = ?3, refund = ?4, refunded_at = ?5, refunded_amount = CASE WHEN ?2 = 'refunded' THEN COALESCE(?3, amount) ELSE refunded_amount END, refunded_net = CASE WHEN ?2 = 'refunded' THEN amount ELSE refunded_net END WHERE id = ?1 AND snapshot IS NULL").bind(rows[0].id, o.status, o.total, o.refund, o.refunded_at).run();
+      rows[0] = { ...rows[0], status: o.status, total: o.total, refund: o.refund, refunded_at: o.refunded_at };
+    }
+    return rows.map((line) => ['refunded', 'lost', 'disputed'].includes(o.status) && (line.status !== 'refunded' || o.status === 'refunded') ? { ...line, status: o.status } : line);
+  } catch (error) {
+    if (!/no such table/i.test(String(error.message))) throw error;
+    return [fallback];
+  }
+}
 
 export function lineView(r) {
   const item = r.snapshot ? JSON.parse(r.snapshot) : null;
@@ -296,12 +331,14 @@ export function forgetPlayerShop(env, player) {
 export function grantStatements(env, order, item, now = Date.now(), line = { id: order.id + '_0', quantity: 1 }) {
   const starts = item.starts ? Math.max(now, Date.parse(item.starts)) : now;
   const ends = item.ends ? Date.parse(item.ends) : item.days !== undefined && item.days !== null ? starts + Math.round(item.days * DAY) : null;
-  return (item.gives ?? []).map((key) => env.DB.prepare("INSERT INTO entitlements (player, key, item, order_id, line_id, quantity, starts_at, ends_at, state, used_at) SELECT ?1, ?2, ?3, ?4, ?7, ?8, ?5, ?6, 'active', NULL WHERE EXISTS (SELECT 1 FROM shop_orders WHERE id = ?4 AND paid_at IS NULL) ON CONFLICT(player, key, order_id, line_id) DO NOTHING")
-    .bind(order.player, key, item.id, order.id, starts, ends, line.id, line.quantity));
+  return (item.gives ?? []).flatMap((key) => [
+    env.DB.prepare("INSERT INTO entitlements (player, key, item, order_id, starts_at, ends_at, state, used_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', NULL) ON CONFLICT(player, key, order_id) DO UPDATE SET starts_at = MIN(starts_at, excluded.starts_at), ends_at = CASE WHEN ends_at IS NULL OR excluded.ends_at IS NULL THEN NULL ELSE MAX(ends_at, excluded.ends_at) END").bind(order.player, key, item.id, order.id, starts, ends),
+    env.DB.prepare("INSERT INTO shop_entitlement_lines (player, key, item, order_id, line_id, quantity, starts_at, ends_at, state) SELECT ?1, ?2, ?3, ?4, ?7, ?8, ?5, ?6, 'active' WHERE NOT EXISTS (SELECT 1 FROM entitlements WHERE player = ?1 AND key = ?2 AND order_id = ?4 AND state != 'active') ON CONFLICT DO NOTHING").bind(order.player, key, item.id, order.id, starts, ends, line.id, line.quantity),
+  ]);
 }
 
 export const revokeStatement = (env, orderId) => env.DB.prepare("UPDATE entitlements SET state = 'revoked' WHERE order_id = ?1").bind(orderId);
-export const restoreStatement = (env, orderId) => env.DB.prepare("UPDATE entitlements SET state = 'active' WHERE order_id = ?1 AND line_id IN (SELECT id FROM shop_order_lines WHERE order_id = ?1 AND status != 'refunded')").bind(orderId);
+export const restoreStatement = (env, orderId) => env.DB.prepare("UPDATE entitlements SET state = 'active' WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM shop_orders WHERE id = ?1 AND status = 'paid') AND EXISTS (SELECT 1 FROM shop_order_lines WHERE order_id = ?1 AND status != 'refunded') AND (NOT EXISTS (SELECT 1 FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key) OR EXISTS (SELECT 1 FROM shop_entitlement_lines l WHERE l.order_id = ?1 AND l.key = entitlements.key AND l.state = 'active'))").bind(orderId);
 
 /** The badge a player shows in rooms (a supporter's), from what they own: the first live badge key, or null. */
 export async function badgeOf(env, player, shop) {

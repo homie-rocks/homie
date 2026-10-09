@@ -118,7 +118,7 @@ import {
 // every device, and the owner's own account (`homie-studio players owner`) counts as the owner.
 usePlayers(playerAccounts);
 import { STUDIO_VERSION_TAG } from './version.mjs';
-import { readiness, roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs';
+import { reconcileOrders, readiness, roomBadge, shellShop, shopOf, shopRoutes } from './shop.mjs';
 import { DISCOVERY_FILES, discoveryResponse, llmsTxt, robotsTxt, sitemapXml } from './discover.mjs';
 import { ldScript, studioNode } from './schema.mjs';
 import { arrivalCookie, manifestReferrals } from './referrals.mjs';
@@ -591,6 +591,12 @@ function finish(res, path) {
 }
 
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      const cat = await catalogue(env, 'https://studio.invalid');
+      await reconcileOrders(env, shopOf(cat));
+    })());
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an

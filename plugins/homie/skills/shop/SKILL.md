@@ -70,7 +70,7 @@ Say these as they come, one or two at a time. Everything else is yours.
 
 | # | The owner | You |
 |---|---|---|
-| 1 | Makes a Stripe account (https://dashboard.stripe.com/register) and confirms the email. A sandbox works at once; selling for real waits for step 7. | `shop init --supporter` (or their items), `shop check`, commit, `npm run deploy` (migration 0008; the shop stays closed). |
+| 1 | Makes a Stripe account (https://dashboard.stripe.com/register) and confirms the email. A sandbox works at once; selling for real waits for step 7. | `shop init --supporter` (or their items), `shop check`, commit, `npm run deploy` (shop schema steps through 0012; the shop stays closed). |
 | 2 | Approves Stripe's sign-in page once and picks **a sandbox** (or has connected Stripe's connector in the Claude app already). | `npm install -g @stripe/cli@latest && stripe agent setup` (they approve the install), then `/mcp` (Claude Code); with the Claude app's connector, nothing to install. Then `get_stripe_account_info`: the right account, its sandbox. |
 | 3 | Nothing. | The catalog: `shop catalog`, the read it names with `stripe_api_read`, then `shop catalog --have <saved answer>` and each `stripe_api_write` it lists, until it says in sync (shop.json gets `"catalog": ["test"]`; commit, deploy). Then the tax check below. |
 | 4 | Makes **one restricted key** in the sandbox (Developers, API keys, Create restricted key; not "Authorizing agent access") with the permissions the page lists, and pastes it into the page on this computer. Optional, recommended: afterwards sets the key's Webhook Endpoints back to None. | `shop connect` (test mode) and give them the 127.0.0.1 link. The page makes the webhook with that key; key and secret go straight to the Worker. Then `stripe_api_read` `/v1/webhook_endpoints`: the endpoint it named (`we_…`) must be there; if not, the MCP is signed in to another account or sandbox than the key. |
@@ -116,3 +116,11 @@ Free and paid lines share one order and one Stripe Session. The studio chooses w
 In test mode: buy the supporter pack on a phone with Stripe's test card `4242 4242 4242 4242`, see "It's yours",
 see the badge on the account page and beside the name in a room (from the next room the player joins), refund it
 from `/_studio/office/shop`, and see the badge go. With the protective preset, a kids server's room shows no shop and `/<game>/tv` shows only a code.
+
+The studio chooses a restricted (`rk_`) or full secret (`sk_`) key; the steps above describe the restricted option.
+Checkout setup includes both the Stripe key and webhook signing secret; readiness names either missing step.
+The studio can set `checkoutMinutes` from Stripe's 30-minute minimum to its 1440-minute (24-hour) default and
+maximum. Cancelling or replacing an open checkout asks Stripe to expire it before releasing its reservation.
+Free carts grant locally. Game checkout opens a separate tab and explains blocked tabs or cookies.
+The additive 0012 schema step tolerates the released Worker during deploy and rollback; before the step,
+new code keeps owned items and office refunds available while new sales wait.

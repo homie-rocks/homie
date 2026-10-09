@@ -45,7 +45,7 @@ for (const compatibilityDate of ['2025-01-01', '2026-06-01']) test(`statement se
     const db = await mf.getD1Database('DB');
     for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
       const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
-      for (const statement of sql.replace(/^--.*$/gm, '').split(';').filter((s) => s.trim())) await db.prepare(statement).run();
+      for (const statement of sql.replace(/^--.*$/gm, '').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g).filter((s) => s.trim())) await db.prepare(statement).run();
     }
     await db.prepare("INSERT INTO referral_lines (order_id, via, net, rate, share, currency, state, period, hold_until, created_at) VALUES ('order', 'referrer.example', 100, 1, 100, 'usd', 'owed', '2026-09', 1, 1)").run();
     for (redirect of ['', 'manifest', 'post']) {
@@ -108,7 +108,7 @@ test('missing and released payments grant once and refund in workerd', { timeout
     const db = await mf.getD1Database('DB');
     for (const file of ['0001_studio.sql', '0008_studio_shop.sql', '0010_shop_reservations.sql', '0011_shop_statements.sql', '0012_shop_lines.sql']) {
       const sql = readFileSync(new URL(`../../../template/site/migrations/${file}`, import.meta.url), 'utf8');
-      for (const statement of sql.replace(/^--.*$/gm, '').split(';').filter((s) => s.trim())) await db.prepare(statement).run();
+      for (const statement of sql.replace(/^--.*$/gm, '').match(/\s*CREATE TRIGGER[\s\S]*?END;|[^;]+;/g).filter((s) => s.trim())) await db.prepare(statement).run();
     }
     const get = async (path) => (await mf.dispatchFetch(`https://studio.example${path}`)).json();
     for (const state of ['missing', 'released']) {

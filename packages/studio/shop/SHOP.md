@@ -16,7 +16,7 @@ A minimal `shop.json`:
 
 The default is an open shop: guests can buy, repeatedly, from any page, without an age question.
 Guest purchases belong to their browser session; signing in keeps them. Clearing the guest cookie loses
-access, so adding a passkey is useful. Item kinds and wording are yours; nothing scans them.
+access, so adding a passkey is useful. Checkout checks browser cookies and explains how to enable them if blocked. Item kinds and wording are yours; nothing scans them.
 A kind is a label, not a recurring-billing, wallet, random-reward or fulfillment implementation.
 
 ## Settings you can choose
@@ -29,8 +29,11 @@ A kind is a label, not a recurring-billing, wallet, random-reward or fulfillment
   Variable amounts have optional `min` (zero if omitted) and `max` (unbounded if omitted).
   Dates and durations apply only when written.
 - `capPerPlayerMonth`: optional spending cap. A cart reserves its whole pre-tax total atomically.
+- `checkoutMinutes`: optional session lifetime, 30 to 1440 minutes; Stripe defaults to 1440 (24 hours).
+  Returning from checkout or starting another checkout asks Stripe to expire your open session.
+  Its reservation releases only when Stripe confirms expiry or another terminal outcome.
 - `refundDays`: optional self-service refund window for items, including used items by default.
-  A tip is never refunded by the player. The studio can refund any order or line from its office.
+  A tip is never refunded by the player. The studio can refund any paid order or line from its office; disputed charges wait for Stripe to resolve the dispute.
 - `referrals`: optional `rate`, `windowDays`, `capPerPlayer`, `holdDays`, `minimumInvoice`,
   `billingEmail` and `accept`. `rate` defaults to zero until written;
   omitted limits do not apply. `referralNewPlayersOnly: true` limits attribution to new players.
@@ -46,7 +49,7 @@ A kind is a label, not a recurring-billing, wallet, random-reward or fulfillment
 No toolkit ceiling applies to prices, quantities, tips, durations, refund windows, caps or referral terms.
 Money is integer Stripe currency units, with checked safe arithmetic. Stripe's currency rules and
 [Checkout's maximum of 100 lines](https://docs.stripe.com/api/checkout/sessions/create#line_items) apply.
-Free and paid lines can share a cart. Product text limits and currency-unit requirements come from Stripe;
+Free and paid lines can share a cart. An entirely free cart grants locally without a Stripe call. Product text limits and currency-unit requirements come from Stripe;
 [Stripe decides settlement minimums and payment-method limits](https://docs.stripe.com/currencies).
 
 ## Optional policy bundles
@@ -90,7 +93,7 @@ shop.used('badge:studio');          // used-item policy applies only if chosen
 
 The studio chooses where to place or open its shop. The shell verifies game messages and the Worker verifies
 sessions, ownership, origins and payments. `GET /api/player/owns` includes quantity in each detail row.
-The shop page has quantities, Add to cart, Remove and Checkout cart. The game API navigates to Stripe.
+The shop page has quantities, Add to cart, Remove and Checkout cart. The game API opens checkout in another tab, keeping the game and room running. If the browser blocks the tab, the shop offers a button to try again. The cart stays in memory and is lost when its game page closes.
 
 `POST /api/shop/buy` accepts `{ "lines": [{ "item": "badge", "quantity": 2 }] }` or
 `{ "item": "badge" }`. Tip lines also take `amount`. Client-supplied fixed prices are ignored.
@@ -102,8 +105,12 @@ One order stores every line and its item snapshot. `/api/shop/mine` lists the li
 `homie-studio shop init --supporter` writes an example item and `SELLING.md`, without a policy, cap or refund
 window. `shop check` validates settings; the build uses the same validation.
 `shop connect` opens a local page for the studio's Stripe key and webhook secret; `--live` selects live mode.
-A restricted key is useful: Checkout Sessions Write, Charges Write, PaymentIntents Read, Disputes Read;
-Webhook Endpoints Write lets the connect page create the webhook. Credentials stay in Worker secrets.
+Both restricted (`rk_`) and full secret (`sk_`) keys are accepted. A restricted key is useful: Checkout Sessions Write, Charges Write, PaymentIntents Read, Disputes Read;
+Webhook Endpoints Write lets the connect page create the webhook. The key and webhook signing secret are both
+part of working payment setup; without either, readiness names the missing step and opens no checkout.
+[Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment) uses webhooks as well as the redirect.
+Credentials stay in Worker secrets. A preview normally has no database and cannot sell. A preview that you
+configure with a database, key and signing secret sells into that database.
 Stripe's agent tools can populate Products with `shop catalog` and read sales; secret-returning endpoint
 creation belongs on the connect page. Stripe approval links are handled by the owner.
 
@@ -116,7 +123,9 @@ the studio pays referrers directly and marks payment in its office.
 ## Payment guarantees and schema
 
 The schema step `0012_shop_lines.sql` follows the reservation and statement steps. Deploy applies it through
-the existing migration mechanism. A missing step closes checkout and readiness names it.
+the existing migration mechanism. It adds tables and columns without changing any existing primary key or
+column meaning. Released code keeps working after the step, including through rollback. The new Worker
+without the step still reads owned items and refunds from the office; new sales wait for the named step.
 
 A verified payment atomically grants all line snapshots and records the referral share on the order total.
 Duplicate events, reconciliation and late payments grant exactly once, including after a missing mark,
@@ -124,11 +133,22 @@ owner release, expiry or failure. Refunds revoke only their own lines, retain ot
 and adjust the referral share with exact integer allocation. Stripe tax is read per line when applicable.
 Snapshots preserve delivery after catalog edits; the schema step represents older orders as one line.
 An unpaid older order has no historical item snapshot and needs its catalog definition to complete delivery.
+A missing definition gives a named retryable response and office note; the office can refund the verified
+payment. Older paid orders missing a grant are repaired once. An unknown older item is refunded by the office,
+since its original kind cannot be recovered safely for player self-service.
+A whole-order refund uses one Stripe refund for the remaining charge. Dashboard partial refunds reduce cap
+usage and referral shares by their pre-tax portion; a line is revoked when fully refunded. Out-of-order
+refund events retry until their payment is recorded.
 
-Sessions reserve the optional cap until Stripe confirms an outcome. A sessionless reservation has a
-Stripe-default 24-hour creation window and one-minute margin. Session reads use bounded reconciliation with backoff;
-GET catalog reads make no Stripe calls. The thanks page can verify a payment directly with the studio's key.
-Webhook events require Stripe's signature. Test and live books stay separate. Owner release attempts to
-expire an open session, records who released it and when, and never prevents a later verified payment grant.
+Sessions reserve the optional cap until Stripe confirms an outcome. With the default lifetime, a sessionless
+reservation ages out after 24 hours plus a one-minute margin; your `checkoutMinutes` changes that window.
+[Stripe session lifetime](https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-expires_at)
+and [expiring open sessions](https://docs.stripe.com/api/checkout/sessions/expire) define these provider bounds.
+Unresolved orders become eligible for reconciliation after one minute, even with no cap. A buyer's next shop
+or owned-items request schedules up to three reads off the response path, with atomic claims and backoff up
+to an hour; an optional Worker cron invokes the same reconciliation across buyers. No cron is installed for you.
+The thanks page can verify a payment directly with the studio's key. Webhook events require Stripe's signature.
+Test and live books stay separate. Owner release attempts to expire an open session, records who released it
+and when, and never prevents a later verified payment grant.
 
 Test mode uses Stripe's test cards. Test a cart, its grants and individual refunds before choosing live mode.
