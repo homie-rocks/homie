@@ -25,7 +25,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.34.0] - 2026-10-08
 
-**Plugin 0.35.0** · [#64](https://github.com/homie-rocks/homie/pull/64)
+**Plugin 0.35.0** · [#64](https://github.com/homie-rocks/homie/pull/64) · [release-2026-10-08-studio-0.34.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-08-studio-0.34.0)
 
 A plain shop: nothing is imposed unless you write it. A shop is open to guests by default, the protective rules 0.33.0 started with are a preset you choose, and a player can put several items in a cart and pay once.
 
