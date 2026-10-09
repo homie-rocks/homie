@@ -356,7 +356,7 @@ export async function dev(root, { port: askedPort = 8787, remoteAi = false, loca
   }
   // --remote-ai: Wrangler's --local turns every remote binding off ("not supported"), so a dev with the real Workers AI
   // (the guides' brains, room chat's review) runs without it; everything else stays local all the same.
-  const args = ['dev', ...(remoteAi ? [] : ['--local']), '--ip', '127.0.0.1', '--port', port, ...ai.args, ...localVars];
+  const args = ['dev', ...(remoteAi ? [] : ['--local']), '--ip', '127.0.0.1', '--port', port, '--var', 'HOMIE_EMBED_PREVIEW:1', ...ai.args, ...localVars];
   log(`Stop it with: ${stop}   (this studio's dev server only)`);
 
   let child = null;

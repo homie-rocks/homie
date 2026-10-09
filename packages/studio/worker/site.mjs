@@ -9,6 +9,7 @@
  * What a studio puts in site/ wins: a whole page (site/pages), a partial (site/partials), its tokens
  * (site/theme.json) and CSS (site/theme.css). The build gathers them into games.json and site/dist/_site/.
  */
+import { playerProperties } from './embed.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
 import { STUDIO_VERSION_TAG } from './version.mjs';
 import { basedOnRow, licenseLabel } from './license.mjs';
@@ -597,13 +598,24 @@ export function footer(cat) {
 </div></footer>`;
 }
 
-const ogTags = (props) => Object.entries(props).filter(([, v]) => v).map(([k, v]) => `<meta ${k.startsWith('twitter:') ? 'name' : 'property'}="${esc(k)}" content="${esc(v)}">`).join('\n');
+export const ogTags = (props) => Object.entries(props).filter(([, v]) => v).map(([k, v]) => `<meta ${k.startsWith('twitter:') ? 'name' : 'property'}="${esc(k)}" content="${esc(v)}">`).join('\n');
+
+/**
+ * Play, Watch and the player address say what a post of their address shows only when the game has a player card:
+ * the card's tags and the Open Graph ones beside them. Without one these pages carry no social tags, as before.
+ */
+export function gameSocialTags(cat, g, origin, enabled = true) {
+  const player = enabled ? playerProperties(cat, g, { origin }) : {};
+  if (!player['twitter:card']) return '';
+  return ogTags({ 'og:type': 'website', 'og:title': g.name, 'og:description': g.blurb,
+    'og:url': origin ? `${origin}/${g.id}/` : null, 'og:image': player['twitter:image'], ...player });
+}
 
 /**
  * A whole generated page. `hero` pages draw the top line over the hero; `style` is the game's own accent on its
  * landing (game.json landing.theme).
  */
-export function layout(cat, { title, description = '', origin = '', path = '/', image = null, type = 'website', active = null, page = 'page', hero = false, head = '', ld = null, main, over = null, status = 200, extraHeaders = {} }) {
+export function layout(cat, { title, description = '', origin = '', path = '/', image = null, type = 'website', active = null, page = 'page', hero = false, head = '', ld = null, main, over = null, status = 200, extraHeaders = {}, playerGame = null }) {
   const theme = cat.studio?.theme ?? {};
   const abs = (u) => (u && u.startsWith('/') ? `${origin}${u}` : u);
   const icon = theme.icon ? `<link rel="icon" href="${esc(theme.icon)}">` : `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="3" fill="${(over?.accent ?? theme.accent ?? TOKEN_DEFAULTS.accent)}"/></svg>`)}">`;
@@ -617,7 +629,7 @@ export function layout(cat, { title, description = '', origin = '', path = '/', 
 ${description ? `<meta name="description" content="${esc(description)}">` : ''}
 ${origin ? `<link rel="canonical" href="${esc(`${origin}${path}`)}">` : ''}
 <meta name="theme-color" content="${esc(over?.bg ?? theme.bg ?? TOKEN_DEFAULTS.bg)}">
-${ogTags({ 'og:title': title, 'og:description': description, 'og:type': type, 'og:url': origin ? `${origin}${path}` : null, 'og:image': abs(image ?? theme.social ?? null), 'og:site_name': studioName(cat), 'twitter:card': image || theme.social ? 'summary_large_image' : 'summary' })}
+${ogTags({ 'og:title': title, 'og:description': description, 'og:type': type, 'og:url': origin ? `${origin}${path}` : null, 'og:image': abs(image ?? theme.social ?? null), 'og:site_name': studioName(cat), 'twitter:card': image || theme.social ? 'summary_large_image' : 'summary', ...(playerGame ? playerProperties(cat, playerGame, { origin, title, description }) : {}) })}
 ${icon}${feeds}${head}${origin && ld ? ldScript(ld) : ''}
 <style>${tokensCss(theme, over)}${BASE_CSS}${cat.site?.css ?? ''}</style>
 ${partial(cat, 'head') ?? ''}
@@ -643,7 +655,16 @@ ${footer(cat)}
  * and <!-- homie:home-hero --> or <!-- homie:home-hero <id> --> (Home's hero for the featured game, or for the
  * public game it names: homeHero, below; a game that is not public, or not this studio's, leaves nothing there).
  */
-export function customPage(cat, html, { active = null, schema = '' } = {}) {
+export function customPage(cat, html, { active = null, schema = '', playerGame = null, origin = '' } = {}) {
+  // An owner's hand-written Twitter metadata wins as a set. Do not partially replace it.
+  if (playerGame && !/<meta\b[^>]*(?:name|property)\s*=\s*(?:["']twitter:|twitter:)/i.test(html)) {
+    const tags = ogTags(playerProperties(cat, playerGame, { origin }));
+    if (tags) {
+      if (/<\/head\s*>/i.test(html)) html = html.replace(/<\/head\s*>/i, () => tags + '</head>');
+      else if (/<html\b[^>]*>/i.test(html)) html = html.replace(/<html\b[^>]*>/i, m => m + '<head>' + tags + '</head>');
+      else html = html.replace(/^(<!doctype[^>]*>)?/i, m => m + '<head>' + tags + '</head>');
+    }
+  }
   const out = String(html)
     .replace(/<!--\s*homie:schema\s*-->/g, () => schema)
     .replace(/<!--\s*homie:home-hero(?:\s+([a-z0-9][a-z0-9-]{0,39}))?\s*-->/g, (m, id) => {
@@ -1232,7 +1253,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
   return layout(cat, {
     title: `${g.name} — play free in your browser`,
     description: `${g.name}: ${L.pitch ?? g.blurb ?? ''} Free in your browser, nothing to download; a TV or laptop browser can be the big screen, with phones as controllers.`.replace(/\s+/g, ' ').trim(),
-    origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: 'games', over: landingTokens(cat, L),
+    playerGame: listed ? g : null, origin, path: `/${g.id}/`, image: h.wideImage ?? L.cover ?? null, page: 'landing', hero: true, active: 'games', over: landingTokens(cat, L),
     head: `${h.tallImage || h.wideImage ? `<link rel="preload" as="image" href="${esc(h.tallImage ?? h.wideImage)}"${h.tallImage && h.wideImage ? ' media="(max-aspect-ratio: 3/4)"' : ''}>${h.tallImage && h.wideImage ? `<link rel="preload" as="image" href="${esc(h.wideImage)}" media="(min-aspect-ratio: 3/4)">` : ''}` : ''}`,
     // A game that is not public yet (private, or an invite-only beta) is never indexed, and offers nothing.
     ld: landingLd(cat, g, origin, { listed, shop }), ...(listed ? {} : { extraHeaders: { 'x-robots-tag': 'noindex' } }),

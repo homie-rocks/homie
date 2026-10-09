@@ -83,11 +83,12 @@
  * on the Table's alarm: Workers AI through the optional AI binding (deploy adds
  * it when a server uses it), or the owner's own key (secret HOMIE_BRAIN_KEY).
  */
+import { playerEnabled, EMBED_GAME_JS } from './embed.mjs';
 import { NetRoom, WATCH_POLICIES, departure, errorLine, versionOf } from './room.mjs';
 import { hostedGame, hostedBuild, startHost } from './hosted.mjs';
 import { roomStore, restoreDelay } from './room-store.mjs';
 import { appCors, isAppOrigin } from './standalone.mjs';
-import { ROOM_ID, badRoomPage, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
+import { ROOM_ID, badRoomPage, embedAncestors, embedPreview, frameAncestors, noWatchPage, playPage, watchPage } from './pages.mjs';
 import {
   PUBLIC_SERVER, SERVER_ID, homeOf, memberCounts, memberOf, noteMember, policyOf, pooledRoom, roomCode, roomServer, serverAccess, serverPassOf, serverView, serversOf,
   setMembership,
@@ -458,7 +459,10 @@ function notAHomie(request) {
  * frame was opened with an agent's ticket (section 17): the game plays as that AI, named "<label> · AI".
  */
 async function gameDocument(request, env, url, game, meta, cat, { agent = null } = {}) {
+  const embedded = url.searchParams.get('embed') === '1' && playerEnabled(cat, meta);
   const asked = url.searchParams.get('room');
+  // A player card's game joins a public room, or `main`: the room Play itself falls back to when the lobby does not answer.
+  if (embedded && (!/^(?:pub-[1-9][0-9]*|main)$/.test(asked || '') || url.searchParams.has('t') || url.searchParams.has('watch') || url.searchParams.get('want') === 'screen')) return new Response('Player cards join public rooms through the player address.\n', { status: 400 });
   // A room code the relay cannot use is refused here too, never swapped for another room.
   if (asked !== null && !ROOM_ID.test(asked)) return new Response('That room link does not work: a room code is 1 to 32 letters, digits, - or _.\n', { status: 400, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
   const res = await env.ASSETS.fetch(new Request(`${url.origin}/games/${game}/index.html`));
@@ -510,7 +514,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     ...(!agent && !watching && shellShop(cat, game) ? { shop: true } : {}),
   };
   let html = await res.text();
-  const head = `<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
+  const head = `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
   html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`) : head + html;
   return new Response(html, {
     headers: {
@@ -518,7 +522,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
       'cache-control': 'no-store, no-transform',
       'access-control-allow-origin': '*',
       // The game runs in an opaque origin: it cannot read this site's storage or cookies.
-      'content-security-policy': `sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups; frame-ancestors ${frameAncestors(cat)}`,
+      'content-security-policy': `sandbox allow-scripts allow-pointer-lock allow-forms allow-modals allow-popups; frame-ancestors ${embedded ? `'self' ${embedAncestors(cat, url.origin, env.HOMIE_EMBED_PREVIEW === '1').replace("'none'", '')}` : frameAncestors(cat)}`,
     },
   });
 }
@@ -577,7 +581,8 @@ function finish(res, path) {
   const cache = res.headers.get('cache-control') ?? '';
   const addNt = !/no-transform/i.test(cache);
   // GAME PARTS: a shared part's preview page is framed by the part's page and the hub, sandboxed (worker/parts.mjs).
-  const addXfo = !res.headers.has('x-frame-options') && !GAME_FILES.test(path) && !PART_FILES.test(path);
+  const playerFrame = /^\/[a-z0-9][a-z0-9-]{0,39}\/play\/embed$/.test('/' + path.split('/').filter(Boolean).join('/')) && res.status === 200 && /frame-ancestors/.test(res.headers.get('content-security-policy') ?? '');
+  const addXfo = !playerFrame && !res.headers.has('x-frame-options') && !GAME_FILES.test(path) && !PART_FILES.test(path);
   if (!addNt && !addXfo) return res;
   const headers = new Headers(res.headers);
   if (addNt) headers.set('cache-control', cache ? `${cache}, no-transform` : 'no-transform');
@@ -780,7 +785,7 @@ async function route(request, env, ctx) {
           : want === '/' ? ldScript(homeLd(cat, url.origin))
             : game && parts.length === 1 ? ldScript(landingLd(cat, game, url.origin, { shop: await sellingShop(env, cat) }))
               : ldScript([studioNode(cat, url.origin, { full: true })]);
-        return customPage(cat, html, { active, schema });
+        return customPage(cat, html, { active, schema, origin: url.origin, playerGame: game && parts.length === 1 ? game : null });
       }
     }
   }
@@ -949,9 +954,12 @@ async function route(request, env, ctx) {
       if (body.join !== false && !d.ok) return json({ ok: false, error: d.why, message: 'This server\'s door does not let you in.' }, 403);
       try { return json(await setMembership(env, game, srv.id, acct.slice(2), { join: body.join !== false, home: body.home === true })); } catch { return json({ ok: false, error: 'not-migrated', message: 'This studio\'s database has no servers yet (migration 0006).' }, 503); }
     }
-    if (sub === 'tv' || sub === 'play') {
-      const screen = sub === 'tv' || url.searchParams.get('screen') === '1';
-      const asked = askedRoom;
+    if (sub === 'play/preview' && env.HOMIE_EMBED_PREVIEW === '1' && isLocalOrigin(url.origin)) return embedPreview(cat, meta, url.origin);
+    if (sub === 'tv' || sub === 'play' || sub === 'play/embed') {
+      const embed = sub === 'play/embed';
+      if (embed && (!playerEnabled(cat, meta) || launch !== 'public')) return notFoundPage('This game does not play inside a post. Open its studio page to play.', cat);
+      const screen = !embed && (sub === 'tv' || url.searchParams.get('screen') === '1');
+      const asked = embed ? null : askedRoom;
       if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { screen });
       if (!door.ok) return shut();
       // Which server: the path's, the room's, else (Play) the player's home server, else public.
@@ -959,7 +967,7 @@ async function route(request, env, ctx) {
       if (asked !== null && !srv) return notFoundPage(`${meta.name} has no server for the room "${asked}".`, cat);
       const named = asked !== null && !pooledRoom(asked);
       if (!srv) {
-        const acct = await accountSub(request, env);
+        const acct = embed ? null : await accountSub(request, env);
         const home = acct?.startsWith('p-') ? await homeOf(env, game, acct.slice(2)) : null;
         const h = home ? serverById(home) : null;
         srv = h && h.state === 'open' ? h : serverById('public') ?? PUBLIC_SERVER;
@@ -991,11 +999,11 @@ async function route(request, env, ctx) {
         const sh = shellShop(cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
-        return playPage(cat, meta, { screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
+        return playPage(cat, meta, { origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      return playPage(cat, meta, { ticket, owner: d.owner, launch, server, ...(await chatWho(env, game, srv, d.acct)), shop: shellShop(cat, game, { kids: pol.kids }) });
+      return playPage(cat, meta, { origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: shellShop(cat, game, { kids: pol.kids }) });
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.
@@ -1012,7 +1020,7 @@ async function route(request, env, ctx) {
       const ticket = d.holder ? await ticketFor(env, game, d.holder) : null;
       await countVisit(request, env, ctx, game, 'watch');
       shareDaily(cat, url, ctx);
-      return watchPage(cat, meta, { room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
+      return watchPage(cat, meta, { origin: url.origin, room: asked, ticket, policy, owner: d.owner, ...(await chatWho(env, game, srv, d.acct)) });
     }
     if (sub === 'api/watch') {
       if (!door.ok || watchOf(meta) === 'off') return json({ ok: false, error: 'not-found' }, 404);
@@ -1147,6 +1155,7 @@ async function route(request, env, ctx) {
     // The same knock, relative to the game's own page: the same answer (see notAHomie).
     if (sub === '__homie' || sub.startsWith('__homie/')) return notAHomie(request);
     if (sub === '__game' || sub === '__game/' || sub === '__game/index.html') {
+      if (url.searchParams.get('embed') === '1' && (!playerEnabled(cat, meta) || launch !== 'public')) return notFoundPage('Embedding is off for this game.', cat);
       const who = await ticketSub(env, game, url.searchParams.get('t'));
       if (launch !== 'public' && !(await ticketAllows(env, who, launch))) return new Response('This game is not open to you.\n', { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
       // An agent's frame (hands `self`): the game plays as that AI.

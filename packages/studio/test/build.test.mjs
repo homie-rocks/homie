@@ -541,3 +541,14 @@ test('preview <id>: one built game\'s files and nothing else, across a rebuild',
     assert.match(await (await fetch(new URL(next, p.url))).text(), /rebuilt under a running preview/);
   } finally { p.server.closeAllConnections?.(); p.server.close(); }
 });
+
+test('player card choices survive the studio and game build', () => {
+  const dir = studio('player-cards', ['alpha']);
+  editJson(join(dir, 'studio.json'), s => { s.site = { ...s.site, playerCard: false, playerCardOrigins: ['https://posts.example', 'https://*.x.com', '*', 'http://no.example'] }; });
+  editJson(join(dir, 'games/alpha/game.json'), g => { g.playerCard = false; g.screen = { singleScreen: false }; });
+  const built = run(['build'], dir); assert.equal(built.status, 0, built.stdout + built.stderr);
+  const cat = json(join(dir, 'site/dist/games.json'));
+  assert.equal(cat.studio.site.playerCard, false);
+  assert.deepEqual(cat.studio.site.playerCardOrigins, ['https://posts.example', 'https://*.x.com']);
+  assert.equal(cat.games[0].playerCard, false); assert.equal(cat.games[0].screen.singleScreen, false);
+});

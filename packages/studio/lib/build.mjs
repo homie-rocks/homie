@@ -42,6 +42,8 @@
  *   { "mode": "command", "command": "npm run build", "out": "dist" }
  *                                     the game's own build (Vite, webpack…), then its output copied; base must be './'
  */
+import { playerImage } from './player-image.mjs';
+import { playerOrigins } from '../worker/embed.mjs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -605,6 +607,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       // room runs one build at a time), its own host stall time, and the address's switches its frame is handed.
       ...(netRow.row ? { netplay: netRow.row } : {}),
       ...(g.screen ? { screen: g.screen } : {}),
+      ...(g.playerCard === false ? { playerCard: false } : {}),
       // game.json "saves": true — player accounts and cloud saves (saves/SAVES.md): the play shell answers the game's
       // saves calls, and the site's nav and the game's landing offer a player account.
       ...(g.saves === true || (g.saves && typeof g.saves === 'object') ? { saves: true } : {}),
@@ -658,6 +661,9 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       // studio.json "site": { "schema": { … } }: the owner's own schema.org properties on the studio (sameAs, …).
       ...(studioExtras ? { schema: studioExtras } : {}),
       site: {
+        ...(/^@[A-Za-z0-9_]{1,15}$/.test(s.twitterSite || '') ? { twitterSite: s.twitterSite } : {}),
+        ...(s.playerCard === false ? { playerCard: false } : {}),
+        ...(Array.isArray(s.playerCardOrigins) ? { playerCardOrigins: playerOrigins(s.playerCardOrigins) } : {}),
         ...(rows.some((g) => g.id === s.featured) ? { featured: s.featured } : {}),
         ...(Array.isArray(s.frameAncestors) ? { frameAncestors: s.frameAncestors.filter((o) => /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(String(o))).slice(0, 8) } : {}),
       },
@@ -687,6 +693,10 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     // shop.json, checked (nothing secret is ever in it): the Worker sells from this and checks it again.
     ...(shop ? { shop } : {}),
   };
+  for (const game of rows) {
+    const image = await playerImage(catalogue, game, dist, log);
+    if (image) game.playerImage = image;
+  }
   writeFileSync(join(dist, 'games.json'), `${JSON.stringify(catalogue, null, 2)}\n`);
   // What this build made, for whatever runs next (a deploy says which games it changes; a script checks the live
   // site against it): per game its digest, its bundle and chunks, and whether it differs from the build before.
