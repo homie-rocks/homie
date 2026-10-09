@@ -38,7 +38,7 @@ import { listExperiences as listGames, readStudio, siteUrl } from './studio.mjs'
 import { SHOP_FILE, audienceOf, checkShop, defaultTaxCode, money } from '../worker/shop-rules.mjs';
 import {
   KEY_SHAPE, STRIPE_VERSION, StripeError, WEBHOOK_SECRET_SHAPE, createWebhookEndpoint, expireCheckoutSession, isPermissionError, listWebhookEndpoints, modeOf,
-  stripeCall, updateWebhookEndpoint,
+  stripeCall, updateWebhookEndpoint, redactStripe,
 } from '../worker/stripe.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -407,7 +407,7 @@ export async function shopConnectManual(root, { fromClipboard = false, clipboard
           if (!KEY_SHAPE.test(key)) throw new Error('Clipboard does not contain a Stripe credential');
           const result = await fetch(`http://127.0.0.1:${server.address().port}/key`, {method:'POST',body:new URLSearchParams({key,n:nonce,till})});
           key = '';
-          if (!result.ok) { finished=true;server.close();done({ok:false,command:'shop connect',why:'Credential setup failed. Check the provider permissions and payment mode; no credential was printed.'}); }
+          if (!result.ok) { finished=true;server.close();done({ok:false,command:'shop connect',why:redactStripe(await result.text()).slice(0,800) || 'Credential setup failed. Check the provider permissions and payment mode; no credential was printed.'}); }
         } catch { finished=true;server.close();done({ok:false,command:'shop connect',why:'The agent must copy the approved Stripe key in the browser first. macOS, Windows or Wayland clipboard tooling is required; no credential was printed.'}); } finally {
           if (!clipboard) { try { if(process.platform==='darwin') execFileSync('pbcopy',[],{input:''}); else if(process.platform==='win32') execFileSync('powershell',['-NoProfile','-Command','Set-Clipboard -Value ""']); else execFileSync('wl-copy',['--clear']); } catch {} }
         }

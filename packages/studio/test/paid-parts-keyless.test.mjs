@@ -4,13 +4,15 @@ import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {world} from './paid-parts-review4-harness.mjs';
 import {syncPaymentLinks} from '../lib/shop-links.mjs';
+import {stripeValidation} from './stripe-validation.mjs';
+import {formEncode} from '../worker/stripe.mjs';
 import {checkShop} from '../worker/shop-rules.mjs';
 
 test('keyless connection syncs frozen offers, signs proofs, retries, edits and retires without a Worker API key',async()=>{
  const w=await world('keyless-setup');
  try{
   const objects={products:[],prices:[],payment_links:[],webhook_endpoints:[]};const calls=[];let n=0,receipt,secrets={};
-  const api=async(method,path,params={})=>{calls.push({method,path,params});const [,kind,id]=/^\/v1\/([^/]+)(?:\/(.+))?$/.exec(path);const rows=objects[kind];assert.ok(rows,path);if(method==='GET')return{data:rows,has_more:false};if(id){const row=rows.find(r=>r.id===id);assert.ok(row);Object.assign(row,params);return row;}
+  const api=async(method,path,params={})=>{calls.push({method,path,params});if(method==='POST')stripeValidation(path,formEncode(params),objects);const [,kind,id]=/^\/v1\/([^/]+)(?:\/(.+))?$/.exec(path);const rows=objects[kind];assert.ok(rows,path);if(method==='GET')return{data:rows,has_more:false};if(id){const row=rows.find(r=>r.id===id);assert.ok(row);Object.assign(row,params);return row;}
    const row={...params,id:params.id??`${{products:'prod',prices:'price',payment_links:'plink',webhook_endpoints:'we'}[kind]}_${++n}`,active:true};if(kind==='payment_links')row.url=`https://buy.stripe.com/test_${n}`;if(kind==='webhook_endpoints'){row.secret='whsec_'+'T'.repeat(32);row.status='enabled';}rows.push(row);return row;};
   const shop=checkShop({items:[]}).shop;
   const connect=()=>syncPaymentLinks({root:w.root,api,shop,slug:'seller',site:'https://seller.example',mode:'test',w:async(args,opts)=>{if(args[1]==='list')return{code:0,stdout:JSON.stringify(Object.keys(secrets).map(name=>({name})))};assert.deepEqual(args,['secret','bulk']);secrets={...secrets,...JSON.parse(opts.input)};return{code:0};},receipt,saveReceipt:r=>receipt=r});
