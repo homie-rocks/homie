@@ -1,8 +1,43 @@
-# Rooms, slice 7 — work in progress
+# Rooms, slice 7
 
 Slice 7 moves the remaining starters to server-run rules and adds the third
 dimension to the shared movement runtime. The milestone design is the authority;
 the game skill belongs to slice 8 and is not changed here.
+
+## Final verification
+
+Rebased onto merged Slice 6, `origin/main` at `91be345`; final fetch confirmed
+that base was still current. Studio 0.39.0 / plugin 0.40.0 are the next releases.
+The game skill has no diff against main. All five shipped starters use rules;
+Ember Vale retains its 2D renderer and play.
+
+- Clean `npm ci` and `npm run build`: passed.
+- Final `npm test`: **2,263 passed, 3 skipped, 0 failed; 2,266 total**, in
+  4,226.355 seconds (70.44 minutes). Includes all nine migrated-starter
+  determinism checks, all eighteen 3D network cases, all 37 shared prediction
+  cases, 3D collision, save/restore, build checks and full-room budgets.
+- `npm run test:plugin`: **120 passed, 1 skipped, 0 failed; 121 total**.
+- `npm run validate`, desktop, changelog and publish checks: passed. Desktop
+  served 68 tools and five cards; changelog checked 62 versions and 57 tags;
+  publish found one new package version and 22 already on npm. Nothing published.
+- An isolated clone with this release's own tag passed all **3/3** predecessor
+  upgrade tests. No release tag was added to the shared repository.
+
+The three package skips require an optional local Wrangler installation (apps,
+starter player addresses and 130 local updates). Separate packed-studio trials
+passed all five starter room checks and the 130-update continuity proof in
+22.8 minutes. The plugin skip requires `HOMIE_PLAYTEST_URL`. The eight copied
+real-studio builds and room checks passed, as did Codex's 377 tests and Moonbase's
+eight. The original official studio's missing Halocline helper and two placeholder
+failing test scripts remain unchanged and are not passes.
+
+Final receipts are `gates/npm-test-clean-final.log`, `feel-reviewed-final.json`,
+`budget-node.json`, the three `*-reviewed-final` capture folders, and the
+`*-reviewed` copied-studio logs. Earlier runs below are a chronological record,
+not replacements for the final clean gate. Temporary studio copies and capacity
+folders were deleted; the local mock was stopped and evidence retained. No
+remaining temporary test directories link to this checkout. Production Cloudflare
+T1 capacity and billing remain unmeasured because this task forbids deployment.
 
 ## Initial inspection
 
@@ -476,3 +511,10 @@ After #77's final changelog arrived, Slice 7's release notes stopped repeating
 its shared knock-speed and performance-tool fixes. Slice 7's fixed notes name
 its own 3D floor/ceiling and animation behavior.
 This is a release-note correction only; the measured code is unchanged.
+
+The clean post-merge gate's final 3D matrix passed all 18 cases. First-response
+p95 across the six network cases was Gem 3.6–16.8 ms, Hero 3.2–11.1 ms and Ember
+3.8–16.6 ms. Every measured response used one drawing frame; all cases had zero
+snaps and steady clock rebases. Largest corrections were 2.859 / 1.021 / 0.568 m
+respectively, eased rather than placed. Hero recorded 78 landings. The final
+receipt is `feel-reviewed-final.json`; previous receipts remain separate.
