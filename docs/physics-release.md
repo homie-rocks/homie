@@ -1,7 +1,8 @@
 # Physics release verification
 
 Studio 0.37.4 / plugin 0.38.4, physics 0.1.0. Rebased directly onto main
-`1dadfa6`, dropping the navigation and paid-parts stack. The diff contains physics
+`8ea9dbd` (studio 0.37.2), dropping the navigation stack and inheriting paid parts
+from main. The diff contains physics
 and its release support only. Released changelog sections and released template
 history are preserved from main.
 
@@ -41,3 +42,10 @@ existing serial test command and memory limit. Its Wrangler dependency enables t
 long room-update browser proof. Extended physics sweeps and CPU measurements in the
 package README remain historical measurements, not newly rerun claims.
 Nothing is deployed or merged.
+
+The first run on main 0.37.1 passed 2,975 tests with three environment skips but
+reported a single emote subtest failure (and its parent): one relay drop. The test
+now waits for each emote batch to arrive before spacing the next batch, rather
+than relying on interval deadlines. The 210-emote and zero-drop assertions are
+unchanged, as is the production relay. All 13 traffic-group tests passed after
+that pacing fix. The full suite is being rerun after rebasing onto main 0.37.2.
