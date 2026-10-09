@@ -346,3 +346,11 @@ matrices and live update proof must not compete with every other package file in
 CI. Assertions, rates, delays, loss and tick budgets are unchanged. The final clean
 install added 135 packages and audited 159; npm reported two high advisories in
 the existing dependency set, which were not changed by this slice.
+
+The shared Git repository also contained an unpushed release-shaped tag on an
+unmerged sibling branch, whose engine dependencies this checkout does not have.
+Rolling-upgrade tests now select only older-version tags reachable from HEAD;
+the release's own tag is still excluded by version. The publish job explicitly
+fetches full history and tags, so the tagged-commit gate exercises the actual
+predecessor releases rather than skipping for a shallow checkout. No sibling tag
+or branch was changed.
