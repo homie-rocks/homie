@@ -19,7 +19,7 @@
  */
 import { cellsOf } from './rules.ts';
 import type { Field, FieldList, Vec3 } from './rules.ts';
-import { charge, keyCount, own, refusedName } from './guard.ts';
+import { G, charge, keyCount, own, refusedName } from './guard.ts';
 
 const RANGE: Record<string, [number, number]> = { u8: [0, 255], u16: [0, 65535], u32: [0, 4294967295], i8: [-128, 127], i16: [-32768, 32767], i32: [-2147483648, 2147483647], tick: [0, 4294967295], ticks: [0, 4294967295] };
 /** `f.fix`: steps of 1/4096, to plus or minus 2^31 (a tick count with a fraction fits for the life of any room). */
@@ -45,6 +45,14 @@ const fr = Math.fround;
  *                                whatever was handed in, and `est` says in a few steps how much that will be, so the
  *                                caller charges the running handler before the work is done.
  *
+ * WHAT IT CHANGED IS SAID, TO WHOEVER ASKS. A value that does not fit is stored as something else, here and nowhere
+ * else: a number that is not one becomes 0, a list is cut to its size. A room does that in silence, as it always has, and
+ * a handler is never stopped for it. The build check wants to know, so while a handler runs for a room that was given a
+ * listener (`G.note`, set by core.ts `run`), each such change is told to it with the field's name (`trail`) and what
+ * was done (`Adjusted`). With no listener nothing is built, counted or charged: one test of `G.note` and no more.
+ * Not told, because nothing is lost that a game would not mean: rounding (a fraction in a whole number, a number to a
+ * 32-bit float), an absent value taking the zero of its type, and a property a struct does not declare.
+ *
  * What comes out is plain data, frozen: a list, a map and a struct are new frozen objects, a vector is a frozen
  * `{ x, y, z }`. Stored state is therefore read-only everywhere, and a query result or an event can hand it out as it
  * is, with no copy. A handler that changes a list in place is handed a copy to change (`thaw`), which is held to its
@@ -67,8 +75,39 @@ const DIRS = new WeakSet<object>();
 /** Lists, maps and structs this file made, each with the declaration it was held to: the same value under the same declaration is not read twice. */
 const MADE = new WeakMap<object, Field>();
 const INIT = new WeakMap<Field, { v: unknown }>();
-const mk = (x: number, y: number, z: number): Vec3 => { const p = Object.freeze({ x, y, z }); VECS.add(p); return p; };
-const f32 = (a: unknown): number => { const x = fr(num(a)); return Number.isFinite(x) ? x : 0; };
+/*
+ * ONE ZERO. JavaScript has two, and the save and every frame are JSON, which writes both as `0`. A room that kept `-0`
+ * would divide by it one way before a restart and the other way after, and a browser would never have seen it at all. So
+ * every number that enters state has `+ 0` added, which changes `-0` to `0` and nothing else.
+ */
+const mk = (x: number, y: number, z: number): Vec3 => { const p = Object.freeze({ x: x + 0, y: y + 0, z: z + 0 }); VECS.add(p); return p; };
+
+/**
+ * What was done to a written value that did not fit:
+ *   nan      not a number at all (NaN, or a text, a list, nothing a number can be read from): stored as 0
+ *   infinite an infinite number where a fraction or a vector belongs: stored as 0
+ *   range    a whole number outside its range, an infinite one included: held to the nearest end of the range
+ *   text     a text longer than declared: cut
+ *   list     a list longer than declared: cut
+ *   map      a map with more keys than declared: the keys past its size dropped
+ *   key      a map key over 32 characters, or a name every object has: dropped
+ *   kind     something that is not a list where a list belongs, or not a plain object where a map or a struct does: stored empty
+ */
+export type Adjusted = 'nan' | 'infinite' | 'range' | 'text' | 'list' | 'map' | 'key' | 'kind';
+/** The field being held to its type, outermost first (`['runner.fields', 'bag', 3]`), kept only while somebody listens. */
+const trail: (string | number)[] = [];
+/** Name what is about to be held to its type (core.ts, before each `coerce` of something the rules wrote); with no name, forget it. */
+export function naming(...parts: (string | number)[]): void { if (G.note !== null) { trail.length = 0; for (const p of parts) trail.push(p); } }
+function note(what: Adjusted, written: unknown): void {
+  let at = '';
+  for (const p of trail) at += typeof p === 'number' ? `[${p}]` : at ? `.${p}` : p;
+  (G.note as NonNullable<typeof G.note>)(what, at, said(written));
+}
+/** What the rules wrote where a list, a map or a struct belongs and is none. Absent (`undefined`, `null`) is the empty one, and is not said. */
+const wrongKind = (v: unknown): void => { if (G.note !== null && v !== undefined && v !== null) note('kind', v instanceof Map ? 'a Map' : v instanceof Set ? 'a Set' : v); };
+/** A number that is to be 0 because it is not finite: said, when it was written and not merely absent. */
+function zeroed(v: unknown, x: number): 0 { if (G.note !== null && v !== undefined) note(x === Infinity || x === -Infinity ? 'infinite' : 'nan', v); return 0; }
+const f32 = (a: unknown): number => { const n = num(a); const x = fr(n); return Number.isFinite(x) ? x : zeroed(a, n !== n ? n : x); };
 
 export const ZERO: Vec3 = mk(0, 0, 0);
 export const AHEAD: Vec3 = mk(1, 0, 0);
@@ -78,7 +117,9 @@ DIRS.add(AHEAD);
 export function vec3(v: unknown, dims: number): Vec3 {
   if (v === null || typeof v !== 'object') return ZERO;
   if (VECS.has(v)) { const p = v as Vec3; return dims === 2 && p.z !== 0 ? mk(p.x, p.y, 0) : p; }
-  return mk(f32(own(v, 'x')), f32(own(v, 'y')), dims === 2 ? 0 : f32(own(v, 'z')));
+  if (G.note === null) return mk(f32(own(v, 'x')), f32(own(v, 'y')), dims === 2 ? 0 : f32(own(v, 'z')));
+  trail.push('x'); const x = f32(own(v, 'x')); trail[trail.length - 1] = 'y'; const y = f32(own(v, 'y')); trail[trail.length - 1] = 'z'; const z = dims === 2 ? 0 : f32(own(v, 'z')); trail.pop();
+  return mk(x, y, z);
 }
 /** A unit vector on the ground plane, as 32-bit floats. Too short to have a direction: +x. One that is already a unit vector is kept as it is, so a direction packs and unpacks to itself. */
 export function dir(v: unknown, dims: number): Vec3 {
@@ -99,24 +140,31 @@ const made = <T extends object>(fd: Field, o: T): T => { Object.freeze(o); MADE.
 export function coerce(fd: Field, v: unknown, dims: number): unknown {
   switch (fd.t) {
     case 'bit': case 'press': return v === true || v === 1;
-    case 'fix': { const n = Math.round(num(v) * FIX_STEP) / FIX_STEP; return Number.isFinite(n) ? Math.max(-FIX_MAX, Math.min(FIX_MAX, n)) : 0; }
+    case 'fix': { const x = num(v); const n = Math.round(x * FIX_STEP) / FIX_STEP; return Number.isFinite(n) ? Math.max(-FIX_MAX, Math.min(FIX_MAX, n)) + 0 : zeroed(v, x); }
     case 'vec3': return vec3(v, dims);
     case 'dir': return dir(v, dims);
     case 'ref': return typeof v === 'string' ? v.slice(0, 24) : '';
-    case 'text': return (typeof v === 'string' ? v : typeof v === 'number' || typeof v === 'boolean' ? String(v) : '').slice(0, fd.max);
+    case 'text': {
+      const text = typeof v === 'string' ? v : typeof v === 'number' || typeof v === 'boolean' ? String(v) : '';
+      if (G.note !== null && text.length > (fd.max as number)) note('text', `${text.length} characters for a size of ${fd.max}`);
+      return text.slice(0, fd.max);
+    }
     case 'list': {
-      if (!Array.isArray(v)) return made(fd, []);
+      if (!Array.isArray(v)) { wrongKind(v); return made(fd, []); }
       if (MADE.get(v) === fd) return v;
       // An array's length is its own data property. No more than the declared size is read, however long the list is.
       const n = Math.min(v.length, fd.max as number);
       const out = new Array(n);
-      for (let i = 0; i < n; i += 1) out[i] = coerce(fd.of as Field, own(v, i), dims);
+      if (G.note === null) { for (let i = 0; i < n; i += 1) out[i] = coerce(fd.of as Field, own(v, i), dims); return made(fd, out); }
+      if (v.length > n) note('list', `${v.length} entries for a size of ${fd.max}`);
+      for (let i = 0; i < n; i += 1) { trail.push(i); out[i] = coerce(fd.of as Field, own(v, i), dims); trail.pop(); }
       return made(fd, out);
     }
     case 'map': {
       const out: Record<string, unknown> = Object.create(null);
-      if (v === null || typeof v !== 'object') return made(fd, out);
+      if (v === null || typeof v !== 'object') { wrongKind(v); return made(fd, out); }
       if (MADE.get(v) === fd) return v;
+      if (G.note !== null && (v instanceof Map || v instanceof Set)) wrongKind(v);
       // The one cost here that the declaration does not bound: how many keys the value handed in has. The running handler
       // pays for each: before they are listed when the count is known (a module's constant), after when the handler made
       // the value itself (and so has already paid a unit and more for every key).
@@ -126,23 +174,28 @@ export function coerce(fd: Field, v: unknown, dims: number): unknown {
       if (known === undefined) charge(16 * keys.length);
       let n = 0;
       for (const key of keys) {
-        if (n >= (fd.max as number)) break;
-        if (key.length > 32 || refusedName(key)) continue;
-        out[key] = coerce(fd.of as Field, own(v, key), dims); n += 1;
+        if (n >= (fd.max as number)) { if (G.note !== null) note('map', `${keys.length} keys for a size of ${fd.max}`); break; }
+        if (key.length > 32 || refusedName(key)) { if (G.note !== null) note('key', key); continue; }
+        if (G.note === null) out[key] = coerce(fd.of as Field, own(v, key), dims);
+        else { trail.push(key); out[key] = coerce(fd.of as Field, own(v, key), dims); trail.pop(); }
+        n += 1;
       }
       return made(fd, out);
     }
     case 'struct': {
       if (v !== null && typeof v === 'object' && MADE.get(v) === fd) return v;
       const out: Record<string, unknown> = {};
-      for (const [key, sub] of Object.entries(fd.fields ?? {})) out[key] = coerce(sub, own(v, key), dims);
+      if (G.note === null) { for (const [key, sub] of Object.entries(fd.fields ?? {})) out[key] = coerce(sub, own(v, key), dims); return made(fd, out); }
+      if (typeof v !== 'object' || v instanceof Map || v instanceof Set) wrongKind(v);
+      for (const [key, sub] of Object.entries(fd.fields ?? {})) { trail.push(key); out[key] = coerce(sub, own(v, key), dims); trail.pop(); }
       return made(fd, out);
     }
     default: {
       const [lo, hi] = RANGE[fd.t];
       const x = num(v);
       const n = Math.round(x);
-      return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : x === Infinity ? hi : x === -Infinity ? lo : 0;
+      if (G.note !== null && v !== undefined) { if (x !== x) note('nan', v); else if (n < lo || n > hi) note('range', v); }
+      return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) + 0 : x === Infinity ? hi : x === -Infinity ? lo : 0;
     }
   }
 }
@@ -189,11 +242,34 @@ export function thawFields(list: FieldList, values: Record<string, unknown>): Re
 /** The value a field starts with: its `init`, else the zero of its type. Made once for each declaration, and shared: it is frozen. */
 export function initOf(fd: Field, dims: number): unknown {
   let hit = INIT.get(fd);
-  if (!hit) { hit = { v: coerce(fd, fd.init, dims) }; INIT.set(fd, hit); }
+  if (!hit) {
+    // A declaration is read here, by whichever handler needs it first: it is not that handler's write, so nobody is told.
+    const listener = G.note; G.note = null;
+    try { hit = { v: coerce(fd, fd.init, dims) }; } finally { G.note = listener; }
+    INIT.set(fd, hit);
+  }
   return hit.v;
 }
 /** Whether a field's value is changed in place (a list, a map, a struct), so a handler is handed a copy of it and the runtime holds the copy to its type again when the handler ends. */
 export const mutable = (fd: Field): boolean => fd.t === 'list' || fd.t === 'map' || fd.t === 'struct';
+
+/** A body as `move` is handed it. */
+export interface MoveBody { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }
+/**
+ * One step of a body by the game's own guarded `move`, as a browser takes it for its own body (rules/view.ts) and as the
+ * build check takes it when it plays that browser: counted against `quota` as the server counts a handler, and what it
+ * left rounded to 32-bit floats and held to the declared shapes as the server does it, so both hold the same numbers.
+ * `used` is the units it took. What it throws goes to `failed` (the budget's own stop too) and the body is still read.
+ */
+export function stepMove(fn: (body: MoveBody, input: unknown, ctx: unknown) => void, body: MoveBody, input: Readonly<Record<string, unknown>>, ctx: unknown, quota: number, motion: FieldList, dims: number, failed: (error: unknown) => void): MoveBody & { used: number } {
+  G.left = quota;
+  try { fn(body, input, ctx); } catch (error) { failed(error); }
+  const used = quota - (G.left > 0 ? G.left : 0);
+  G.left = Infinity;
+  naming('body', 'pos'); const pos = vec3(body.pos, dims); naming('body', 'vel'); const vel = vec3(body.vel, dims); naming('body', 'heading'); const heading = dir(body.heading, dims);
+  naming('body', 'motion'); const held = thawFields(motion, coerceFields(motion, body.motion, dims)); naming();
+  return { pos, vel, heading, grounded: body.grounded === true, motion: held, used };
+}
 
 /** How many values `pack` has packed since this was last set to 0: the core reads it to charge a tick for the state it sends. */
 export const packed = { n: 0 };
@@ -205,7 +281,7 @@ export function pack(fd: Field, v: unknown, dims: number): unknown {
     case 'bit': case 'press': return v ? 1 : 0;
     case 'vec3': case 'dir': { const p = v as Vec3; return dims === 2 ? [p.x, p.y] : [p.x, p.y, p.z]; }
     case 'list': return (v as unknown[]).map((x) => pack(fd.of as Field, x, dims));
-    case 'map': return Object.keys(v as object).sort().map((key) => [key, pack(fd.of as Field, (v as Record<string, unknown>)[key], dims)]);
+    case 'map': return Object.keys(v as object).map((key) => [key, pack(fd.of as Field, (v as Record<string, unknown>)[key], dims)]);
     case 'struct': return Object.entries(fd.fields ?? {}).map(([key, sub]) => pack(sub, (v as Record<string, unknown>)[key], dims));
     default: return v;
   }
@@ -242,7 +318,8 @@ export function initFields(list: FieldList, dims: number): Record<string, unknow
 export function coerceFields(list: FieldList, values: unknown, dims: number): Record<string, unknown> {
   const v = values !== null && typeof values === 'object' ? values : null;
   const out: Record<string, unknown> = {};
-  for (const [name, fd] of list) { const x = v ? own(v, name) : undefined; out[name] = x === undefined ? initOf(fd, dims) : coerce(fd, x, dims); }
+  if (G.note === null) { for (const [name, fd] of list) { const x = v ? own(v, name) : undefined; out[name] = x === undefined ? initOf(fd, dims) : coerce(fd, x, dims); } return out; }
+  for (const [name, fd] of list) { const x = v ? own(v, name) : undefined; if (x === undefined) out[name] = initOf(fd, dims); else { trail.push(name); out[name] = coerce(fd, x, dims); trail.pop(); } }
   return out;
 }
 

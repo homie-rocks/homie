@@ -58,6 +58,10 @@ export interface HostClock {
 }
 export interface HostOptions {
   game: string;
+  /** Told of every handler as it ends, and what it threw if it threw (core.ts `observe`): the build check listens. */
+  observe?(kind: string, handler: string, error?: string): void;
+  /** Told of a written value the runtime changed to make it fit (core.ts `noted`): the build check listens. */
+  noted?(kind: string, handler: string, what: string, at: string, written: string): void;
   /** The game's build, for the log. */
   build?: string;
   compiled: Compiled;
@@ -183,7 +187,7 @@ export function createHost(o: HostOptions): Host {
     }
   }
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
-  const core = createCore(c, { seed: Math.floor(random() * 4294967296) >>> 0, epoch: (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const core = createCore(c, { observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && o.restoreEpoch !== undefined) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
@@ -238,7 +242,7 @@ export function createHost(o: HostOptions): Host {
       send: (k: string, d: unknown, to?: number) => o.send({ t: 'ev', k, d, ...(to !== undefined ? { to } : {}) }),
     } as unknown as Netplay;
     agents = useAgents(net, vocab, { roles: ['guide', 'party'], manual: true, carryFloor: true, now: () => core.tick * period, restore: savedAgents,
-      view: agentView, decide: (v, ctx) => core.guide(ctx.slot, v),
+      view: agentView, decide: (v, ctx) => core.guide(ctx.slot, { ...v, goal: ctx.goal ? { ...ctx.goal, at: Math.round(ctx.goal.at / period) } : null }),
     });
     savedAgents = undefined;
     agents.on('goal', (d) => o.send({ t: 'ev', k: 'agent:goal', d }));

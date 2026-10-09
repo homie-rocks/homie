@@ -416,13 +416,13 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
   const isNum = (n, scope) => num(n, scope, new Set(), numIds);
 
   /* ------------------------------------------------------------ the rewrite */
-  const line = (node) => t.numericLiteral(lineOf(node));
+  const line = (node) => call('l', [t.stringLiteral(file), t.numericLiteral(lineOf(node))]);
   const call = (fn, args) => { const c = t.callExpression(t.memberExpression(t.identifier(G), t.identifier(fn)), args); c._homie = true; return c; };
-  const counted = () => t.expressionStatement(call('t', []));
+  const counted = (node) => t.expressionStatement(call('t', [t.stringLiteral(file), t.numericLiteral(lineOf(node))]));
   const block = (path, key) => {
     const body = path.node[key];
     if (!t.isBlockStatement(body)) path.node[key] = t.blockStatement(t.isExpression(body) ? [t.returnStatement(body)] : [body]);
-    path.node[key].body.unshift(counted());
+    path.node[key].body.unshift(counted(path.node));
   };
   const args = (list) => t.arrayExpression(list.map((a) => (t.isSpreadElement(a) ? t.spreadElement(call('sp', [a.argument, line(a)])) : a)));
   const globalObject = (path, obj) => t.isIdentifier(obj) && !path.scope.getBinding(obj.name);
@@ -715,6 +715,7 @@ export async function guardFiles(esbuild, root, gameDir, entry) {
   const files = new Map();
   const problems = [];
   const todo = [entry];
+  const sites = {};
   while (todo.length) {
     const file = todo.pop();
     if (files.has(file)) continue;
@@ -725,15 +726,33 @@ export async function guardFiles(esbuild, root, gameDir, entry) {
       const first = error.errors?.[0];
       problems.push({ file: shown, line: first?.location?.line ?? 0, message: `this file does not parse: ${first?.text ?? error.message}` }); files.set(file, null); continue;
     }
+    const original = parse(readFileSync(file, 'utf8'), { sourceType: 'module', plugins: ['typescript'] });
+    traverse(original, {
+      ExportDefaultDeclaration(path) { sites.default = `${shown}:${path.node.loc.start.line}`; },
+      'ObjectProperty|ObjectMethod'(path) {
+        const keys = [];
+        for (let p = path; p; p = p.parentPath) if (p.isObjectProperty() || p.isObjectMethod()) {
+          if (!p.node.computed) keys.unshift(p.node.key.name ?? p.node.key.value);
+        }
+        if (keys.length) {
+          sites[keys.join('.')] = `${shown}:${path.node.loc.start.line}`;
+          const binding = path.findParent(p => p.isVariableDeclarator());
+          if (binding?.node.id?.name === 'move') sites[`move.${keys.join('.')}`] = `${shown}:${path.node.loc.start.line}`;
+        }
+      },
+    });
     const res = guardSource(stripped.code, { file: shown, map: stripped.map });
     problems.push(...res.problems);
     files.set(file, res.code);
     for (const m of stripped.code.matchAll(/^\s*import\s[^'"]*['"](\.\.?\/[^'"]+)['"]/gm)) {
       const next = resolveOwn(file, m[1]);
-      if (next) todo.push(next); else problems.push({ file: shown, line: 0, message: `"${m[1]}" is not a file of this game` });
+      const line = original.program.body.find(n => n.type === 'ImportDeclaration' && n.source.value === m[1])?.loc?.start.line ?? 1;
+      if (next && relative(gameDir,next).startsWith('..')) problems.push({file:shown,line,message:'rules import only files of their own game'});
+      else if (next) todo.push(next);
+      else problems.push({ file: shown, line, message: `"${m[1]}" is not a file of this game` });
     }
   }
-  return { files, problems };
+  return { files, problems, sites };
 }
 
 /** An esbuild plugin that serves a game's guarded files in place of its sources (`stub`: files a bundle must not hold at all). */
@@ -755,7 +774,7 @@ export function guardedPlugin(files, { stub = [] } = {}) {
  * Returns { ok, code, problems, files }. `code` imports only Homie's rules module and the guard.
  */
 export async function guardRules(esbuild, root, gameDir, { entry = join(gameDir, 'src', 'rules.ts') } = {}) {
-  const { files, problems } = await guardFiles(esbuild, root, gameDir, entry);
+  const { files, problems, sites } = await guardFiles(esbuild, root, gameDir, entry);
   if (problems.length) return { ok: false, code: null, problems, files };
   let linked;
   try {
@@ -766,5 +785,5 @@ export async function guardRules(esbuild, root, gameDir, { entry = join(gameDir,
   }
   const code = linked.outputFiles[0].text;
   const again = guardSource(code, { file: `${relative(root, gameDir).split('\\').join('/')} (linked rules)`, linked: true });
-  return { ok: !again.problems.length, code: again.problems.length ? null : code, problems: again.problems, files };
+  return { ok: !again.problems.length, code: again.problems.length ? null : code, problems: again.problems, files, sites };
 }

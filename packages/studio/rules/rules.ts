@@ -26,6 +26,13 @@ import { brand, deepFreeze, own, plainData } from './guard.ts';
 
 /** The version of the rules contract this runtime runs. Today's netplay contract is version 1. */
 export const RULES_CONTRACT = 2;
+/**
+ * The revision of a saved room (core.ts `SavedCore`). It is raised whenever a save written before would be read
+ * differently now. It is part of every game's state hash (lib/rules-check.mjs `stateHash`), so a room saved by an
+ * earlier revision starts a fresh match instead of being restored wrongly. 2: a map keeps its keys in JavaScript's own
+ * order (1 sorted them), and a round or a match asked to end on the tick of the save is carried.
+ */
+export const SAVE_REVISION = 2;
 /** How far a query, a ray or an area event reaches, in metres. */
 export const REACH_M = 64;
 /** The most entities one room holds. A spawn past it throws in the handler that asked. */
@@ -108,18 +115,16 @@ export const cellsOfList = (list: FieldList): number => { let n = 0; for (const 
 /* ------------------------------------------------------------------ what a module declares */
 
 export interface Vec3 { readonly x: number; readonly y: number; readonly z: number }
-/**
- * What handlers are handed. The build's type check of rules (always on from the release that ships the build check)
- * narrows these per kind from the declarations; until then they are deliberately loose.
- */
-export type World = Record<string, any>;
-export type Self = Record<string, any>;
-export type Handler = (world: World, self: Self, e?: any) => void;
-export type RoomHandler = (world: World, e?: any) => void;
+/** Public faces are specialised by the build from declarations. Internal dispatch accepts compiled tables. */
+export type { World, Self, MoveBody, MoveContext, ReadonlyState } from './types.ts';
+type RuntimeWorld = Record<string, any>;
+type RuntimeSelf = Record<string, any>;
+export type Handler = (world: RuntimeWorld, self: RuntimeSelf, e?: any) => void;
+export type RoomHandler = (world: RuntimeWorld, e?: any) => void;
 export type MoveFn = (body: any, input: any, ctx: any) => void;
 
 export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner' }
-export interface GuideDef { view: (world: World, self: Self) => unknown; floor?: (world: World, self: Self, view: any) => unknown }
+export interface GuideDef { view: (world: RuntimeWorld, self: RuntimeSelf) => unknown; floor?: (world: RuntimeWorld, self: RuntimeSelf, view: any) => unknown }
 export interface EntityDef {
   player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot' };
   fields?: Fields;
@@ -128,7 +133,7 @@ export interface EntityDef {
   body?: BodyDef;
   guide?: GuideDef;
   tick?: Handler;
-  think?: (world: World, self: Self) => Record<string, unknown>;
+  think?: (world: RuntimeWorld, self: RuntimeSelf) => Record<string, unknown>;
   on?: Record<string, Handler>;
   commands?: Record<string, Handler>;
   onRoom?: Record<string, Handler>;
@@ -294,6 +299,8 @@ export interface KindTable {
 }
 export interface Compiled {
   contract: 2;
+  /** `SAVE_REVISION`, so that what hashes these declarations hashes it too. */
+  save: number;
   dims: 2 | 3;
   kinds: KindTable[];
   kindOf: Record<string, KindTable>;
@@ -437,7 +444,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   const view = fieldList(d.shapes?.view, 'shapes.view');
 
   const move = d.move as (Record<string, MoveFn> & Record<string, unknown>) | undefined;
-  if (move !== undefined && (typeof move !== 'object' || move[MOVE] !== true)) throw new Error('move is what move.ts exports: `export const move = defineMove({ … })`');
+  if (move !== undefined && (typeof move !== 'object' || (move as Record<string, unknown>)[MOVE] !== true)) throw new Error('move is what move.ts exports: `export const move = defineMove({ … })`');
 
   const kinds: KindTable[] = [];
   const kindOf: Record<string, KindTable> = {};
@@ -506,12 +513,13 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   if (players.length && typeof room.join !== 'function') throw new Error('room.join(ctx, player) says where a player\'s body starts: return { kind, at }');
   const asks: Compiled['asks'] = {};
   for (const [key, a] of Object.entries(d.asks ?? {})) {
-    if (!a || typeof a.floor !== 'function' || !a.questions || typeof a.questions !== 'object') throw new Error(`asks.${key} is { state, questions, floor(state) }`);
+    if (!a || typeof a.floor !== 'function') throw new Error(`asks.${key} needs a local floor(state) function that returns every declared question's pick; for example floor(state) { return { advance: true }; }`);
+    if (!a.questions || typeof a.questions !== 'object') throw new Error(`asks.${key}.questions is required; for example { advance: { type: 'noul', instructions: 'Should the party advance?' } }`);
     asks[key] = { ...a, stateFields: fieldList(a.state, `asks.${key}.state`) };
   }
   const seats = Math.max(1, Math.min(SEATS_MAX, Math.floor(Number(env.seats)) || 8));
   return {
-    contract: RULES_CONTRACT, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
+    contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
     shared: fieldList(d.shared, 'shared'), view, rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
     tune, publicTune, map, settings, seats,
   };

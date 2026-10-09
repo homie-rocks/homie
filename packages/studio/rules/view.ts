@@ -41,9 +41,9 @@ export function setAgentFactory(factory: typeof useAgents): void { agentFactory 
 import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { exposePort } from '../port/probe.ts';
-import { BudgetError, G, brand } from './guard.ts';
-import { math, sweepMap } from './math.ts';
-import { coerce, coerceFields, dir, num, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
+import { BudgetError } from './guard.ts';
+import { moveContext } from './math.ts';
+import { coerce, dir, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
 import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
 
@@ -167,12 +167,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const tickAt = (now: number): number => (base ? base.tick + (now - base.at) / period : 0);
   /** The tick `move` is being run for: the step just taken, or the one after it while the own body is drawn between ticks. */
   let moveTick = 0;
-  const moveCtx = brand(Object.freeze({
-    get tick() { return moveTick; }, dt: 1 / tickHz, tune, math,
-    // As the server's `ctx.ticks` reads it: a plain number, or nothing.
-    ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },
-    map: brand(Object.freeze({ name: game.map.name ?? 'main', spot: (name: string) => spots[name]?.[0], spots: (name: string) => spots[name] ?? Object.freeze([]), sweep: (body: any, delta: unknown) => sweepMap(map, body, delta, myKind()?.radius ?? 0, dims) })),
-  }));
+  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, dims });
   function rebase(k: number): void {
     const rtt = net.stats().rtt ?? 100;
     base = { tick: k + Math.ceil(rtt / period + TARGET_LEAD) + sendEvery - 1, at: clock() };
@@ -190,12 +185,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const fn = moves[kindName];
     if (!fn) return body;
     moveTick = t;
-    G.left = Math.max(1, Math.floor(schema.settings.budget.tick / 4));
-    try { fn(body, input, moveCtx); } catch (err) { if (!(err instanceof BudgetError)) console.warn('[room] move', err); }
-    G.left = Infinity;
-    // Rounded to 32-bit floats and held to the declared shapes, as the server does it: both hold the same numbers.
-    const list = kindOf.get(kindName)?.motion ?? [];
-    return { pos: vec3(body.pos, dims), vel: vec3(body.vel, dims), heading: dir(body.heading, dims), grounded: body.grounded === true, motion: thawFields(list, coerceFields(list, body.motion, dims)) };
+    return stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
   }
   /** The input values the last step held (a press is never held). */
   let held: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -335,10 +325,20 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       return;
     }
     // A player's speech and emotes, and a guide's lines and goals, as the relay carries them today.
-    if (/^(?:say|chat|emote)/i.test(e.k) && !(agents && (e.d as { ai?: boolean })?.ai)) emit('say', { kind: e.k, seat: e.from, ...(e.d && typeof e.d === 'object' ? e.d as object : { text: e.d }) });
-    else if (e.k === 'agent:goal' && e.from === net.host?.seat) emit('goal', e.d);
+    if (/^(?:say|chat|emote)/i.test(e.k) && !(agents && (e.d as { ai?: boolean })?.ai)) {
+      const data = e.d && typeof e.d === 'object' ? e.d as Record<string, unknown> : { text: e.d };
+      emit('say', { ...data, kind: e.k, seat: e.from, slot: -1, line: typeof data.line === 'string' ? data.line : undefined, text: typeof data.text === 'string' ? data.text : '', args: {} });
+    }
+    else if (e.k === 'agent:goal' && e.from === net.host?.seat) {
+      const data = e.d as import('../agents/agents.ts').GoalEvent;
+      const goal = (g: import('../agents/agents.ts').Goal) => ({ ...g, asked: g.asked === true });
+      emit('goal', { ...data, goal: goal(data.goal), prev: data.prev ? goal(data.prev) : null });
+    }
     else if (e.k === 'agent:ask' && e.from === net.host?.seat) emit('ask', e.d);
-    else if (/^ask:/.test(e.k)) emit('ask', { ask: e.k.slice(4), ...(e.d && typeof e.d === 'object' ? e.d as object : {}) });
+    else if (/^ask:/.test(e.k)) {
+      const data = e.d && typeof e.d === 'object' ? e.d as Record<string, unknown> : {};
+      emit('ask', { ...data, ask: e.k.slice(4), k: e.k.slice(4), slot: typeof data.slot === 'number' ? data.slot : -1, from: e.from, at: clock(), args: data.args && typeof data.args === 'object' ? data.args : {} });
+    }
   });
 
   agents?.on('say', (e) => emit('say', e));

@@ -223,14 +223,16 @@ test('coin-dash passes, and its linked module is the checked one: no unguarded k
   const res = await guardRules(esbuild, PKG, COIN_DASH);
   assert.deepEqual(res.problems, []);
   assert.equal(res.ok, true);
-  const code = res.code;
+  // Location calls do not change guard semantics. Strip only those for the mutation probes below.
+  assert.match(res.code, /__homie\d*\.l\("[^"\n]+", \d+\)/);
+  const code = res.code.replace(/__homie\d*\.l\("[^"\n]+", (\d+)\)/g, '$1');
   assert.match(code, /import \* as __homie\d* from "@homie-rocks\/studio\/rules\/guard";/);
   assert.match(code, /import \{[^}]*defineRules[^}]*\} from "@homie-rocks\/studio\/rules";/);
   assert.equal([...code.matchAll(/^import /gm)].length <= 4, true, 'it imports Homie\'s rules module and the guard, and nothing else');
   assert.doesNotMatch(code.replace(/^import .*$/gm, ''), /\bimport\b|\brequire\b/);
   // Every function and loop starts by counting; every method call and computed key goes through the guard.
-  assert.match(code, /tick\(world, self\) \{\n\s+__homie\d*\.t\(\);/);
-  assert.match(code, /for \(const coin of __homie\d*\.c\(world, "near", \[self\.pos, 1, "coin"\], \d+\)\) \{\n\s+__homie\d*\.t\(\);/);
+  assert.match(code, /tick\(world, self\) \{\n\s+__homie\d*\.t\("[^"\n]+", \d+\);/);
+  assert.match(code, /for \(const coin of __homie\d*\.c\(world, "near", \[self\.pos, 1, "coin"\], \d+\)\) \{\n\s+__homie\d*\.t\("[^"\n]+", \d+\);/);
   const KEY = /__homie\d*\.g\(spots, (__homie\d*\.p\(self\.seat, \d+\) % __homie\d*\.p\(spots\.length, \d+\)), \d+\)/;
   assert.match(code, KEY, 'a computed key goes through the guard, and so does each operand of the % that makes it');
   assert.match(code, /__homie\d*\.w\(self, \d+\)\.score = __homie\d*\.p\(self\.score, \d+\) \+ 1;/, '`self.score += 1` is written out: the old value is checked, and the write is checked not to land on a function');
@@ -244,10 +246,10 @@ test('coin-dash passes, and its linked module is the checked one: no unguarded k
   assert.deepEqual(again(code.replace(/__homie\d*\.p\(self\.seat, \d+\) % /, 'self.seat % ')), ['the linked module holds an operator whose operand the guard did not check']);
   assert.deepEqual(again(code.replace(/__homie\d*\.p\(self\.score, \d+\) \+ 1/, 'self.score + 1')), ['the linked module holds an operator whose operand the guard did not check']);
   assert.deepEqual(again(code.replace(/__homie\d*\.w\(self, \d+\)\.score = 0;/, 'self.score = 0;')), ['the linked module holds a write to a property the guard did not check']);
-  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+)__homie\d*\.t\(\);/, '$1')), ['the linked module holds a function the guard did not count']);
-  assert.deepEqual(again(code.replace(/(for \(const coin of [^\n]+\{\n\s+)__homie\d*\.t\(\);/, '$1')), ['the linked module holds a loop the guard did not count']);
-  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+__homie\d*\.t\(\);)/, '$1\n        const [first, ...others] = [1, 2];')), ['the linked module holds a rest (...) in a pattern that the guard did not count']);
-  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+__homie\d*\.t\(\);)/, '$1\n        if (world === self) return;')), ['the linked module holds an operator whose operand the guard did not check']);
+  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+)__homie\d*\.t\("[^"\n]+", \d+\);/, '$1')), ['the linked module holds a function the guard did not count']);
+  assert.deepEqual(again(code.replace(/(for \(const coin of [^\n]+\{\n\s+)__homie\d*\.t\("[^"\n]+", \d+\);/, '$1')), ['the linked module holds a loop the guard did not count']);
+  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+__homie\d*\.t\("[^"\n]+", \d+\);)/, '$1\n        const [first, ...others] = [1, 2];')), ['the linked module holds a rest (...) in a pattern that the guard did not count']);
+  assert.deepEqual(again(code.replace(/(tick\(world, self\) \{\n\s+__homie\d*\.t\("[^"\n]+", \d+\);)/, '$1\n        if (world === self) return;')), ['the linked module holds an operator whose operand the guard did not check']);
   assert.match(again(`import fs from "node:fs";\n${code}`)[0], /rules import only/);
   assert.match(again(`${code}\nvar leak = fetch("https://example.com");`).join('\n'), /fetch is not available in rules/);
 });

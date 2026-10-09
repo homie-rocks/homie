@@ -224,3 +224,22 @@ test('a restored epoch past 32 bits reaches the view and its input reaches the h
   assert.ok(inputs.length > 0); assert.ok(inputs.every((m) => m.e === 4294967296));
   assert.ok(r.host.facts().ins > 0, 'the host accepts the untruncated epoch');
 });
+
+test('legacy speech keeps its published envelope even with arbitrary extra data', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit();
+  const clock = virtualTime(t);
+  const r = rig(L, compiled);
+  t.after(() => r.stop());
+  const view = openRoom({ net: { config: cfg('Player'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => view.close());
+  const heard = [];
+  view.on('say', e => heard.push(e));
+  await clock.wait(600);
+  r.room.broadcast({ t: 'ev', from: 0, k: 'say', d: { text: 'hello', line: 42, slot: 900, seat: 900 } });
+  await clock.wait(10);
+  assert.equal(heard.length, 1);
+  assert.equal(heard[0].text, 'hello');
+  assert.equal(heard[0].line, undefined);
+  assert.equal(heard[0].seat, 0);
+  assert.equal(heard[0].slot, -1);
+});
