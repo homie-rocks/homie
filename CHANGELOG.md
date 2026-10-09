@@ -59,7 +59,7 @@ A plain shop: nothing is imposed unless you write it. A shop is open to guests b
 
 ## [0.33.1] - 2026-10-08
 
-**Plugin 0.34.1** · [#65](https://github.com/homie-rocks/homie/pull/65)
+**Plugin 0.34.1** · [#65](https://github.com/homie-rocks/homie/pull/65) · [release-2026-10-08-studio-0.33.1](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-08-studio-0.33.1)
 
 A fix for studios upgrading to 0.33.0, found by upgrading one of Homie's own.
 
