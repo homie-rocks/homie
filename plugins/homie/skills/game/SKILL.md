@@ -56,7 +56,7 @@ The game is `games/<id>/`: `game.json` (name, blurb, players, round length),
 `index.html`, `src/main.ts`. The starter (Gem Rush) is a complete netplay game in one
 readable file: rules, bots, snapshots, rendering on a canvas, keys and touch.
 
-**A game that has a `src/rules.ts` is written another way, and this skill does not yet change one.** Its rules
+**A game with `"room"` in its game.json and a `src/rules.ts` is written another way, and this skill does not yet change one.** Its rules
 (`src/rules.ts`, `src/move.ts`) run on the studio's Cloudflare, not in a player's browser, and its view
 (`src/view.ts`) only draws and sends input (`node_modules/@homie-rocks/studio/netplay/NETPLAY.md`, section 29; the
 example is the `coin-dash` starter). The build checks those rules and refuses anything outside a short list of safe

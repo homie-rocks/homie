@@ -95,11 +95,12 @@ export function listGames(root) {
 }
 
 /**
- * RULES ON THE SERVER (NETPLAY.md section 29). A game written as rules plus view has a src/rules.ts; its settings are
- * game.json `"room"` (where its rules run, its tick rate…; rules/rules.ts `roomSettings` checks them at build). Any
- * other game is hosted by a player's browser, as before.
+ * RULES ON THE SERVER (NETPLAY.md section 29). A game written as rules plus view says so in game.json with a `"room"`
+ * object (where its rules run, its tick rate…; rules/rules.ts `roomSettings` checks them at build) and has a
+ * src/rules.ts. Any other game is hosted by a player's browser, as before. The file alone decides nothing: games made
+ * before this had their own src/rules.ts, with whatever they liked in it, and they build exactly as they did.
  */
-export const isRulesGame = (g) => existsSync(join(g.dir, 'src', 'rules.ts'));
+export const isRulesGame = (g) => g?.room != null && typeof g.room === 'object' && existsSync(join(g.dir, 'src', 'rules.ts'));
 
 const RULES_HEADER = '// Written by `homie-studio build` from this studio\'s games. Do not edit: the next build writes it again.\n';
 /**
