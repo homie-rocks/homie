@@ -75,7 +75,7 @@ import { audienceOf } from '../worker/shop-rules.mjs';
 import { loungeConfig, loungeProblems } from '../worker/lounge-store.mjs';
 // GAME PARTS (parts/PARTS.md): the three call-outs below are all the build knows of them.
 import { buildParts, partsPlugin } from './parts-build.mjs';
-// RULES ON THE SERVER (NETPLAY.md section 29): a game with a src/rules.ts is built as a view bundle plus a rules module.
+// RULES ON THE SERVER (NETPLAY.md section 29): a game declaring a room object and src/rules.ts builds as a view bundle plus a rules module.
 
 /** Never copied into a static game's served folder. */
 const STATIC_SKIP = new Set(['node_modules', '.git', '.wrangler', '.port', '.DS_Store', 'game.json', 'PORT.md', 'CODEX.md', 'lab.json', 'codex']);

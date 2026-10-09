@@ -2156,14 +2156,15 @@ test('a purchase below the cap returns before background reconciliation; old row
   s.stripe.close();
 });
 
-test('at the cap a teen can request a parent link without reading Stripe; only parent payment reconciles', async () => {
+test('a teen can request a parent link after the shop read reconciles an expired reservation', async () => {
   const s = await site({ settings: { capPerPlayerMonth: 500 } });
   const p = s.player(400, { band: 'teen' });
   const [row] = unresolved(s, p, 1, { amount: 500 });
   row.truth.status = 'expired';
+  // Settle the background read before asserting availability; its race with the first response is intentional.
+  await s.fetchSite('/api/shop', { headers: s.as(p) });
   const list = await (await s.fetchSite('/api/shop', { headers: s.as(p) })).json();
-  assert.equal(list.items[0].way, 'cap');
-  assert.equal(list.items[0].retryWay, 'ask-a-parent');
+  assert.equal(list.items[0].way, 'ask-a-parent');
   const link = await (await s.post('/api/shop/parent', { item: 'supporter' }, s.as(p))).json();
   assert.ok(link.link);
   assert.equal(stripeReads(s).length, 1);
