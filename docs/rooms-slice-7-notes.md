@@ -440,3 +440,21 @@ occurred during play except one intentional Ember respawn placement. Saved hero
 reload passed again. I inspected the new recordings' contact and consecutive
 motion frames; no animation or sliding issue was visible. Final evidence now
 uses the three `*-reviewed-final` folders; earlier captures are retained.
+
+#77 merged at 21:38 UTC as `91be345`. Its tree exactly matched the reviewed
+`45dcf326` base. Slice 7 was rebased onto actual `origin/main`, dropping the
+carried dependency; the entire checkout tree was unchanged by that rebase.
+Studio 0.39.0 / plugin 0.40.0 follow main's released 0.38.0 / 0.39.0. The game
+skill has no Slice 7 diff against main. All five reviewed-base starter room
+checks passed with zero reconnects. The refreshed Codex studio copy also built
+all four games, passed all four room checks and passed all 377 tests.
+
+The reviewed-toolkit real-studio repeat is complete: eight builds and eight
+standard two-browser checks passed. Codex tests passed 377/377; Moonbase passed
+8/8. Halocline again passed movement and gun feel before the same missing
+`tools/lib/puppeteer.mjs` import; Kart Royale and Span Nine again exited from
+their original placeholder test scripts. No game/test source was changed. The
+second source comparison covered 520 files (234 Codex, 286 official, excluding
+vendor directories) with no differences. Both temporary dev servers were stopped.
+Raw results are `codex-*-reviewed.log`, `official-*-reviewed.log`,
+`reviewed-{codex,official}-*-check.json` and `copy-integrity-reviewed.json`.
