@@ -404,3 +404,14 @@ found in these short captures.
 The final 18-case matrix's first-response p95 ranges were Gem 2.8–10.0 ms,
 Hero 2.8–11.4 ms and Ember 5.4–11.3 ms; every case responded within one drawing
 frame. Hero recorded 78 landings. All 19 tests passed in 461.17 seconds.
+
+All five standard two-browser checks passed again on the final package with
+150 ms added round-trip delay, with zero reconnects through the results. Their
+receipts are `release-final-server-*-check.json`. Trial servers were then stopped
+before the full serial package gate.
+
+The rebased full gate found an outdated exhaustive author-surface fixture: its
+`Record<keyof GameWorld, true>` and guide context inventory omitted `guideLevel`,
+`guideSeats`, `kids` and `levelSet`. The fixture now lists and type-checks natural
+reads of all four in both contexts. The current run is allowed to finish to
+collect any further failures; its result is not a passing release gate.

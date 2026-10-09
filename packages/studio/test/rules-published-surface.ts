@@ -3,12 +3,13 @@ import { defineRules, type GameWorld, type GameSelf, type GameGoal, type GameReq
 import { openRoom } from '@homie-rocks/studio/rules/view';
 export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: GameRequest) {
   const members: Record<keyof GameWorld, true> = {
-    tick:true,dt:true,ticks:true,math:true,tune:true,map:true,stage:true,level:true,levelMax:true,shared:true,round:true,
+    tick:true,dt:true,ticks:true,math:true,tune:true,map:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
     random:true,send:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,ask:true,
     goalDone:true,despawn:true,place:true,sweep:true,
   };
   const time:number=w.tick+w.dt+w.ticks(1)+w.random()+w.level+w.levelMax+w.round.n+w.round.endsAt;
   const stage:string=w.stage+w.map.name+w.round.phase;
+  const guideLevel:number=w.guideLevel;const guideSeats:readonly number[]=w.guideSeats;const policy:boolean=w.kids||w.levelSet;
   const math:number=w.math.sin(4);
   w.map.spot('camp')?.x;w.map.spots('camp').map(p=>p.y);
   const yes:boolean=w.shared.yes;const n:number=w.shared.answers;
@@ -72,7 +73,8 @@ export const movement:NonNullable<Def['move']>={pawn(body,input,ctx){
 }};
 export const guide:NonNullable<Def['entities']['pawn']['guide']>={
  view(w,s){
-  const members:Record<keyof typeof w,true>={tick:true,dt:true,ticks:true,math:true,map:true,tune:true,stage:true,level:true,levelMax:true,round:true,shared:true,near:true,inBox:true,ray:true};
+  const members:Record<keyof typeof w,true>={tick:true,dt:true,ticks:true,math:true,map:true,tune:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,round:true,shared:true,near:true,inBox:true,ray:true};
+  const guideLevel:number=w.guideLevel;const guideSeats:readonly number[]=w.guideSeats;const policy:boolean=w.kids||w.levelSet;
   return {nearby:w.near(s.pos,4,'pawn').length,places:['camp']};
  },
  floor(w,s,v){
