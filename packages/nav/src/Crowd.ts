@@ -274,7 +274,9 @@ export class Crowd {
       velocity: fromAxes(a.velocity, this.mesh.up),
       status:
         a.state === crowd.AgentState.INVALID ||
-        (this.#state.revision !== this.mesh.revision && !locate(this.mesh, a.position).success)
+        (a.state === crowd.AgentState.WALKING &&
+          this.#state.revision !== this.mesh.revision &&
+          !locate(this.mesh, a.position).success)
           ? 'stranded'
           : a.state === crowd.AgentState.OFFMESH
             ? 'link'
@@ -475,6 +477,13 @@ export class Crowd {
     record(s.traversals);
     record(s.data.agents);
     numbers(s.data.agentPlacementHalfExtents, 3);
+    requireState(s.data.agentPlacementHalfExtents.every((v, i) => v === meshData(mesh).extent[i]));
+    for (const budget of [
+      s.data.maxIterationsPerUpdate,
+      s.data.maxIterationsPerAgent,
+      s.data.quickSearchIterations,
+    ])
+      requireState(budget <= 8192);
     for (const n of [
       s.data.agentIdCounter,
       s.data.maxIterationsPerUpdate,

@@ -3,6 +3,7 @@ import { bakeLevel, bakeTile } from '@homie-rocks/nav/Bake.js';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { config } from './fixtures.mjs';
+import { unpack } from '../dist/internal/Binary.js';
 const point = (p, up) => (up === 'z' ? [p[0], -p[2], p[1]] : p);
 const quad = (out, a, b, c, d) => out.push(...a, ...b, ...c, ...a, ...c, ...d);
 function box(out, x, z, X, Z) {
@@ -83,6 +84,10 @@ export function runArrival(s, count, mode, ticks = 2400) {
     if (['same', 'moving', 'combined'].includes(mode))
       for (const id of crowd.ids()) crowd.target(id, goal);
     crowd.step();
+    if (tick === 1 && count === 1 && mode === 'none') {
+      const agent = unpack('crowd', crowd.save()).state.data.agents[1];
+      assert.equal(agent.slicedQuery.status & 1, 1, 'maze needs more than one default-budget tick');
+    }
     for (const id of crowd.ids()) {
       const p = crowd.agent(id).position;
       if (Math.hypot(...p.map((v, i) => v - goal[i])) < 6) {

@@ -595,6 +595,8 @@ export class Mesh implements NavigationQuery {
       Object.keys(saved.hashes).map((key) => [key, mesh.#state.tiles[key]!]),
     );
     for (const header of Object.values(runtimeHeaders)) {
+      if (Object.keys(header).some(key => !['id', 'sequence', 'tileX', 'tileY', 'polyNodes'].includes(key)))
+        throw new Error('nav: invalid runtime tile header');
       const asset = mesh.#state.tiles[`${header.tileX},${header.tileY}`];
       if (!asset) throw new Error('nav: missing runtime tile');
       const obstacles = mesh.overlapping(asset),

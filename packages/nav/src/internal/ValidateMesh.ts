@@ -2,6 +2,7 @@ import * as nav from 'navcat';
 import { numbers, record, requireState } from './Validate.ts';
 import type { MeshState } from './MeshData.ts';
 import { checkObstacle } from '../Bake.ts';
+import { axes } from './Coordinates.ts';
 
 const integer = (n: number, min = 0): void => requireState(Number.isSafeInteger(n) && n >= min);
 /** Check both structure and cross references before exposing restored topology. */
@@ -9,7 +10,10 @@ export function validateMesh(s: MeshState): void {
   const n = s.nav;
   record(n);
   numbers(n.origin, 3);
-  requireState(n.tileWidth > 0 && n.tileHeight > 0);
+  requireState(
+    n.tileWidth === s.config.cellSize * s.config.tileCells && n.tileHeight === n.tileWidth,
+  );
+  requireState(n.origin.every((v, i) => v === axes(s.config.origin, s.config.up)[i]));
   integer(s.revision);
   integer(s.nextId, 1);
   for (const value of [

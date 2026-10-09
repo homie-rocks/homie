@@ -112,13 +112,21 @@ export function decodeTile(bytes: Uint8Array): TileData {
       numbers(p.vertices);
       numbers(p.neis, p.vertices.length);
       requireState(
+        p.neis.every(
+          (n) =>
+            Number.isSafeInteger(n) &&
+            n >= 0 &&
+            (n <= t.polys.length || (n >= 0x8000 && n <= 0x800f)),
+        ),
+      );
+      requireState(
         p.vertices.length >= 3 &&
           p.vertices.every((i) => Number.isInteger(i) && i >= 0 && i * 3 < t.vertices.length) &&
           Number.isSafeInteger(p.flags) &&
           Number.isSafeInteger(p.area),
       );
     }
-    for (const d of t.detailMeshes) {
+    for (const [polyIndex, d] of t.detailMeshes.entries()) {
       requireState(
         d &&
           [d.verticesBase, d.verticesCount, d.trianglesBase, d.trianglesCount].every(
@@ -129,13 +137,24 @@ export function decodeTile(bytes: Uint8Array): TileData {
         (d.verticesBase + d.verticesCount) * 3 <= t.detailVertices.length &&
           (d.trianglesBase + d.trianglesCount) * 4 <= t.detailTriangles.length,
       );
+      for (let i = d.trianglesBase; i < d.trianglesBase + d.trianglesCount; i++) {
+        for (let k = 0; k < 3; k++) {
+          const index = t.detailTriangles[i * 4 + k]!;
+          requireState(
+            Number.isSafeInteger(index) &&
+              index >= 0 &&
+              index < t.polys[polyIndex]!.vertices.length + d.verticesCount,
+          );
+        }
+      }
     }
     requireState(
       t.bvTree && Array.isArray(t.bvTree.nodes) && Number.isFinite(t.bvTree.quantFactor),
     );
-    for (const node of t.bvTree.nodes) {
+    for (const [index, node] of t.bvTree.nodes.entries()) {
       numbers(node.bounds, 6);
       requireState(Number.isSafeInteger(node.i));
+      requireState(node.i >= 0 ? node.i < t.polys.length : index - node.i <= t.bvTree.nodes.length);
     }
   }
   return data;
