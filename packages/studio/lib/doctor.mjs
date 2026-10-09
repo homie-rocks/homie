@@ -192,7 +192,7 @@ export async function setupStatus({
   rows.push({
     id: 'node', label: 'Node.js', need: 'required', state: major >= 22 ? 'ok' : 'missing', detail: `v${node}${major >= 22 ? '' : ' (22 or newer is needed)'}`,
     unlocks: 'everything: the studio\'s toolkit runs on it',
-    fix: major >= 22 ? null : { who: 'person', open: 'https://nodejs.org/en/download', say: 'Install Node.js 22 or newer (the LTS download), then start a new session.' },
+    fix: major >= 22 ? null : { who: 'ai', say: 'Call setup_prepare in the Desktop extension; with a shell, install Node.js 22 or newer for this computer and continue setup. The person never runs a command.' },
   });
 
   // The Homie connector (the AI says; the network is checked here), Cloudflare, GitHub and the providers, at once.
@@ -318,15 +318,15 @@ export async function setupStatus({
       { label: 'email verified', state: verified, detail: deployed ? 'a deploy went through' : verified === 'act' ? 'the last deploy was refused until it is' : 'Cloudflare checks it at the first deploy' },
     ];
     const fix = attached ? null : signedIn === 'act'
-      ? { who: 'ai', run: 'npx wrangler login', say: 'Cloudflare opens in your browser: approve once. A free account works; no payment method.', open: 'https://dash.cloudflare.com/sign-up' }
+      ? { who: 'ai', run: 'npx wrangler login', say: 'Cloudflare opens in your browser: approve once.', open: 'https://dash.cloudflare.com/sign-up' }
       : verified === 'act'
-        ? { who: 'person', open: 'https://dash.cloudflare.com/profile', say: 'Open the email Cloudflare sent and click its link (or Profile, "Send verification email"); then deploy again.' }
+        ? { who: 'person', open: 'https://dash.cloudflare.com/profile', say: 'Open the email Cloudflare sent and click its link (or Profile, "Send verification email"); your AI resumes deployment.' }
         : signedIn === 'later' || verified === 'later'
-          ? { who: 'person', open: 'https://dash.cloudflare.com/sign-up', say: 'No Cloudflare account yet? Make a free one now (no payment method) and click the link in the email it sends. Your AI signs in for you later; you approve once.' }
+          ? { who: 'ai', say: 'Continue making the studio. When it is ready to go live, call cloudflare_login; the person signs in or creates an account in that browser flow.' }
           : null;
     rows.push({
       id: 'cloudflare', label: 'Cloudflare', need: 'to go online', state: worst(parts.map((p) => p.state)), detail: parts.map((p) => `${p.label}: ${p.detail}`).join('; '), parts,
-      unlocks: 'putting the studio\'s site and public rooms online, on its own free Cloudflare account', fix,
+      unlocks: 'putting the studio\'s site and public rooms online, on its own Cloudflare account', fix,
     });
   }
 
@@ -357,7 +357,7 @@ export async function setupStatus({
       unlocks: 'sound effects and a synthesized theme (free, on this computer), trailers, and footage in a landing page\'s hero',
       fix: ok ? null : mac ? { who: 'ai', run: 'brew install ffmpeg', say: 'about a minute with Homebrew; you approve the install.' }
         : win ? { who: 'ai', run: 'winget install --id Gyan.FFmpeg -e', say: 'you approve the install.' }
-          : { who: 'person', say: 'Install your system\'s ffmpeg package (for example: sudo apt-get install -y ffmpeg).' },
+          : { who: 'ai', run: 'sudo apt-get install -y ffmpeg', say: 'Install ffmpeg with this system’s package manager; only an OS authorization prompt belongs to the person.' },
     });
   }
 
@@ -398,7 +398,7 @@ export async function setupStatus({
     id: 'fal', label: 'fal', need: 'optional', state: fal.key ? (fal.valid === false ? 'act' : 'ok') : 'optional',
     detail: !fal.key ? 'no FAL_KEY in this environment' : fal.valid === true ? 'FAL_KEY is set and fal accepts it' : fal.valid === false ? 'fal refused the FAL_KEY that is set (wrong or revoked)' : 'FAL_KEY is set (fal did not answer just now)',
     unlocks: 'painted art and backdrops (the art skill) and generated video clips (the video skill), on your own fal account under a budget; covers from a real frame and captured trailers are free',
-    fix: fal.key && fal.valid !== false ? null : { who: 'person', open: 'https://fal.ai/dashboard/keys', say: 'Make a key, put FAL_KEY in the environment your AI runs in (for example a line in your shell profile), and start a new session. Never paste it into the chat.' },
+    fix: fal.key && fal.valid !== false ? null : { who: 'ai', say: 'Use local art and captured footage. Paid fal scripts need an already connected account; never ask the person to find or set a key. Offer the provider browser connection only when generated media is requested.', open: 'https://fal.ai/dashboard' },
   });
 
   // Stripe, only in a studio that sells. Installing agent tooling is not proof of Worker credentials.

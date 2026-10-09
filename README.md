@@ -1,41 +1,20 @@
 # Homie
 
-A studio in a box for your AI: make games, apps, music and video, and publish them from a studio
-that runs on your own Cloudflare, on the free plan.
+Make games and apps with Homie's engine packages, animated characters, sound, music and
+video skills. Play from a post on X. Your AI builds and checks the result, publishes it on
+your own Cloudflare, and connects your own Stripe with one browser approval. Open source.
+
+Ask: *"Make a game for my pub and put it online."* Your AI chooses the technical and design
+details; you can change them by asking. Cloudflare opens for your approval when it is time
+to go live. Listing on homie.rocks is optional. Homie for studios is in beta.
 
 Apps live beside games in `apps/`: **one transforming screen, its roles, and its parts**. They use the same engines, live rooms and standalone builds, with lasting records and staff permissions. Ask for a welcome board, repair queue or customer app; no rounds or scores are required. [Build an app](packages/studio/apps/APPS.md).
 
-> **Beta.** Homie for studios is in a friends beta. Bugs, port requests and questions go
-> to [Issues](https://github.com/homie-rocks/homie/issues/new/choose); read
-> [Known issues](#known-issues) first.
-
-Homie is a plugin for Claude Code, Codex and Grok. Ask it to *"set up a game studio called
-Night Owls and make a multiplayer game"* and it:
-
-1. makes a **studio**: one folder you can see and open, a git repository with `games/`,
-   `music/`, `videos/`, `posts/` and `site/`, and an `AGENTS.md` that tells your AI how
-   everything in it works;
-2. makes your **game**, built on the Gem Rush starter and the netplay contract: every browser
-   renders the game itself, strangers who press Play meet in the same public room,
-   bots fill empty seats, and rounds end and restart on their own;
-3. **proves it**: two fresh browsers (a computer and a phone) press Play, and the check
-   passes only when they share a room and finish a round;
-4. **deploys** the studio's site to **your own Cloudflare account**, after you approve
-   Cloudflare once in your browser (a free account, no payment method: it says what it
-   will create and what it costs before it does). The site has the same sections as
-   homie.rocks in your studio's own look (Home, Games, Music, Videos, Rooms, Posts), and
-   every game gets a landing page of its own, in the game's own palette: a full-bleed hero
-   from its footage or art, a big Play button into a public room, phone / computer / TV,
-   live rooms and credits. Play never opens on a blank screen:
-   the game's title, art and a progress line show while its room connects and it loads.
-   Search engines and AI agents read it correctly: schema.org data on every page (a full
-   VideoGame on each landing), and a sitemap, robots.txt and llms.txt made from what is public;
-5. **lists** the games in the [homie.rocks](https://homie.rocks/studios/) directory, so
-   people can find them.
-
-Your AI runs the commands. You approve what matters.
 
 ## Install
+
+Ask your AI to install Homie from `homie-rocks/homie`. The commands below are for your AI;
+you do not open a terminal. Approve the host’s plugin prompt, then ask for your live outcome.
 
 **Claude Code**
 
@@ -101,97 +80,12 @@ not need Claude's GitHub app; that hand-off we have not run end to end ourselves
 Then ask for a studio. The plugin adds twenty-one skills (`studio-setup`, `plan`, `parallel`, `game`, `parts`, `port`, `publish`, `office`, `servers`, `shop`, `sound`, `music`, `art`, `style`, `models`, `animate`, `video`, `playtest`, `perf`, `lab`, `standalone`) and connects the Homie MCP server at
 `https://homie.rocks/mcp`, which has creator tools only: set up a studio, make a game, make an
 existing single-player web game multiplayer, preview it, deploy it, and list it.
-A studio needs Node.js 22 or later.
+Your AI installs Node.js and the studio’s dependencies when needed.
 
-A new studio follows one checklist, and never jumps ahead:
+Your AI checks setup, installs missing tools, makes the studio, builds your request and
+checks it in real browsers. There is no mandatory demo or planning interview. A studio can
+hold games, apps, music and video. Ask for changes in the same chat.
 
-0. **Setup status** (*"what do I need for my studio?"*): Node, the Homie connector, Cloudflare (signed in,
-   email verified), Chrome, ffmpeg, and the optional GitHub, ElevenLabs and fal, each green, missing or
-   "do this now", with what it unlocks and the exact fix; in Codex and Grok, whether Homie's holds are on.
-   Optional ones never block, and neither does a missing connector: a session that can run commands makes
-   the studio with the studio's own. The person's own steps (making a free Cloudflare account) can be done
-   any time, even while waiting for something else.
-1. **The studio**, by name.
-2. **A working game**: a live one to try at once on Homie Arcade (`homie-studio demo`), with nothing copied
-   into the studio. A new studio has no game (its home page says "First game coming soon"); a copy of a
-   starter goes in only when the person asks for one.
-3. **One small change**, from one sentence.
-4. **The plan** (`plan`, *"let's plan my game"*): a short interview (game type and genre, style, devices,
-   players and rooms, art and film, music and sound, scope) that becomes the game's **Game Codex**:
-   `games/<id>/CODEX.md`, drawn as a page in the game's own palette, fonts and art, with cards for its
-   characters, a controls table per device, milestones, open questions and the decisions as they are
-   made. It is a Claude artifact where the app has artifacts, a page in the browser otherwise, and a
-   private page on the studio's site. The AI keeps it true as decisions change.
-5. **Build it** (`parallel`): one agent step by step, or several at once (game logic, levels, art, sound,
-   the landing page), each in its own folders, then a merge, a check, a playtest and a blind review; the
-   person chooses, knowing parallel is faster and uses more of their plan. Every build has a progress
-   feed: the codex's **Build status** tab (a percentage, each step and check going green, how to try it,
-   what was spent) and, in Claude Code, an optional status line under the prompt.
-6. **Playtest, then online** on the studio's own Cloudflare, listed in the directory.
-
-Three skills need no account and cost nothing:
-
-- **`sound`** (*"make sound effects and a short theme for my game"*): effects from presets and
-  synthesized scores from chords and patterns, rendered on your computer, with stems and seamless
-  loops, measured (loudness, clipping, late starts, what a phone speaker loses), and wired into the
-  game with a small player that starts on the first touch and changes music on bar lines.
-- **`playtest`** (*"playtest my game and tell me what's weak"*): real browsers on a computer and a
-  phone held both ways: the first ten seconds, the look while playing, how much of the screen the UI
-  covers, the game's real sound, a round with one player trying and one idle, the owner control tests,
-  and a brief for a blind review by a fresh reviewer.
-- **`perf`** (*"make my game run faster on phones"*, *"find out why it stutters"*): a measured loop on real
-  Chrome on your computer's GPU, a computer and an emulated phone, two browsers in a room (the host and a
-  replica): frame times (median, p95, long frames), the game's JavaScript and the main thread per frame, time
-  to the first meaningful frame and to playable, what it downloads, the heap and netplay messages a second, then a CPU
-  profile that names the hot functions through the game's source map. It tries one small change at a time,
-  measures it against the build to beat in alternating runs, and keeps it only when it is better beyond the
-  noise, nothing guarded got worse and two browsers still finish a round; anything else is reverted. The
-  report goes in the studio's `perf/` folder, with the numbers and the before and after.
-- **`lab`** (*"iterate on the jump"*, *"make the hit feel punchier"*, *"tune the drift"*): a Game Lab for one
-  mechanic, on your computer. One short take plays in New (your working tree) beside Today (the last commit) on one
-  clock, with the same seed and presses: slowed to a tenth or a frame at a time, with a timeline of the move's named
-  phases (hit-stop, launch, slide, settle), graphs of what it does New against Today, the game's own onion skin and
-  arcs, a phone view, and sliders that write the values you keep into the game's `tunables.json`. Claude instruments
-  the move and commits that first, so Today is the game as it is; proposes the change as phases and numbers; and
-  keeps only what you like, with the numbers (and the frame cost, measured with `perf` when it costs any) and a
-  side-by-side clip.
-
-Music, art and generated video use the providers' own accounts, asked for only when the skill is
-first used:
-
-- **`music`** (*"make a 30-second theme song for my studio"*): ElevenLabs Music through its
-  official CLI (`elevenlabs auth login`, a browser sign-in) or your own API key. It says your
-  plan, the rights that plan gives and the credit cost before anything is rendered, renders
-  only inside the budget you set, checks that every sung line is sung, masters it, cuts
-  seamless loops for games, and publishes a song page.
-- **`video`** (*"make a 15-second trailer of my game"*): trailers from your game's real
-  gameplay (free: nothing generated), and music videos and cutscenes with fal on your own key,
-  every call priced first, capped by your budget and receipted. 16:9 and 9:16 cuts, a sync
-  check and a contact sheet, and a video page. It also records any page while a script drives it
-  (*"record my game page: press Play and move around"*, a site walkthrough, a demo): clicks,
-  taps, keys, typing and waits, in real time, every frame one the page drew. It never passes
-  generated footage off as gameplay, and puts no real people or brands in a video. With storage,
-  a studio's big videos and songs live in its own R2, at the same addresses.
-
-- **`art`** (*"make a cover for my game"*): a cover from a real frame of the game (free), and
-  painted covers, backdrops and textures with fal on your own key, priced, capped and receipted;
-  checks that a texture tiles and that files are small enough for a phone.
-- **`style`** (*"show me other looks"*, *"make it warmer"*, *"keep that palette"*): a game's look as
-  decisions (render style, palette, light, camera, fonts, budgets), picked automatically from your
-  words, drawn in the Game Codex; a style board of three directions drawn by the game engine itself
-  (free); steer, lock, and the blast radius before a locked one changes.
-- **`models`** (*"find free models for my game"*, *"make a lantern prop"*): free CC0 models from
-  Homie's starter library (Kenney, KayKit, Poly Haven, ambientCG), your own models with their
-  licence, and generated props (a concept in the locked style, then Tripo P1 image-to-3D) on your
-  own fal key, priced, capped and receipted; every model checked for phones, licensed, credited
-  and shown in a lineup at true scale. Characters too: free animated heroes from the library, or
-  one generated and auto-rigged on your fal key (an A-pose concept, then Meshy image-to-3D).
-- **`animate`** (*"give my game animated characters"*, *"the jump feels floaty"*): one skeleton
-  standard, the library's CC0 clips (idle, run, jump, attack, hit, ...) retargeted onto every
-  character, and one shared player with blends, IK feet, springs and look-at; an Animation card
-  of looping previews, and "feel" opens the Game Lab on that move. Free.
-
-All of them but `lab`, `style`, `models` and `animate` need ffmpeg; `video`, `art`, `style`, `models`, `animate`, `playtest`, `perf` and `lab` use Chrome.
 
 ## In the Claude desktop app: one chat
 
@@ -238,14 +132,12 @@ may be blocking homie.rocks: the toolkit says so, and names the setting.
 ## What the studio deploys to your Cloudflare
 
 `npm run deploy` in a studio runs Wrangler under **your** Cloudflare login and creates,
-on your account, only what Cloudflare's free Workers plan gives a new account with **no
-payment method** (`npx --no-install homie-studio deploy --plan` prints this for your
-studio and changes nothing):
+the studio's own resources. Your AI shows the deploy plan and its costs before publishing:
 
 | Resource | Name | What it does |
 | --- | --- | --- |
 | Worker | `<studio>` | The studio's pages (Home, Games, Music, Videos, Rooms, Posts and their feeds), each game's landing and play shell, the game files, `/api/games`, `/api/rooms`, `/.well-known/homie-studio.json` for the directory, and `/robots.txt`, `/sitemap.xml`, `/llms.txt` for search engines and AI agents (`packages/studio/site/SITE.md`). |
-| Durable Object `Table` | one per room | The netplay relay (`worker/room.mjs`): seats, host election, snapshots, keyed state, checkpoints. It runs no game code. |
+| Durable Object `Table` | one per room | The netplay relay (`worker/room.mjs`): seats, host election, snapshots, keyed state, checkpoints. It also runs server-hosted game rules. |
 | Durable Object `Lobby` | one per game | Puts strangers who press Play into the same public room, and opens the next room when one is full. |
 | D1 database | `<studio>-db` | The directory claim and every finished round. |
 | Workers AI binding | `AI` | Only when a game's players may type (room chat's review, Cloudflare's Clef decision model) or a server's AI guides think with it; within the free allocation (10,000 neurons a day) by default. |
@@ -256,7 +148,7 @@ production branch, and `npx wrangler preview` on every other branch, which gets 
 URL and its own rooms (a Durable Object namespace of its own). The live site claims itself
 in the homie.rocks directory the first time the directory reads it.
 
-Both Durable Objects are SQLite-backed, which the Workers Free plan supports. There is no
+Both Durable Objects are SQLite-backed. There is no
 R2 bucket: a studio needs none to run. Deploy never uses a Worker, database or bucket that
 it did not create, and it records what it created in `studio.json`. Cloudflare's free
 plan has daily limits (100,000 Worker requests; D1 reads 5 million rows and writes 100,000);

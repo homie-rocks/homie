@@ -1,12 +1,12 @@
 {
   "v": 1,
   "checked": "2026-10-03",
-  "about": "The providers' own agent tools (CLIs, MCP servers, plugins and skills) that Homie's skills use or offer, and what stays Homie's. Nothing here installs by itself: a skill names its providers in its SKILL.md metadata, offers their tools only when the person wants that feature, and the person approves every install and signs in on the provider's own page. plugin.json points here (extensions.rocks.homie.providers); test/providers.test.mjs keeps this file, the skills and the Homie mod's guards in step.",
+  "about": "The providers' own agent tools (CLIs, MCP servers, plugins and skills) that Homie's skills use or offer, and what stays Homie's. Nothing here installs by itself: a skill names its providers in its SKILL.md metadata, offers their tools only when the person wants that feature, and the AI installs required tools and the person signs in on the provider's own page. plugin.json points here (extensions.rocks.homie.providers); test/providers.test.mjs keeps this file, the skills and the Homie mod's guards in step.",
   "load": "on-use",
   "providers": {
     "cloudflare": {
       "name": "Cloudflare",
-      "account": "the studio's own Cloudflare account (the free Workers plan, no payment method)",
+      "account": "the studio's own Cloudflare account",
       "skills": ["studio-setup", "publish", "servers", "game"],
       "cli": {
         "name": "wrangler",
@@ -31,7 +31,7 @@
       ],
       "homieKeeps": [
         "the studio's own Worker, D1 database, R2 bucket and secrets are created, changed and deleted only by npm run deploy and homie-studio, which record what they create in studio.json and never touch what they did not create",
-        "the free plan: no payment method, R2 only when the person adds storage",
+        "R2 only when the person adds storage",
         "secrets go from a page on this computer straight to wrangler secret put, never through the chat",
         "the Workers AI model probe and the AI brains' daily budget, which the guides' decisions and a game's own (net.decide) share: Clef (@cf/cloudflare/clef-flash) by default, its questions checked by the fixed rules, the game's script or floor whenever it cannot answer"
       ]

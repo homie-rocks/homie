@@ -31,6 +31,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { registerWorkersAddress } from './domain.mjs';
 import { cloudflareAuth } from './brain-probe.mjs';
 import { build } from './build.mjs';
 import { builtGames, compareDeploy, deployWords, lastDeploy, lastDeployRecord, lockDeploy, recordDeploy } from './deploy-state.mjs';
@@ -93,10 +94,10 @@ export function explainCloudflare(out, accountId = null) {
   const text = String(out ?? '');
   const dash = accountId ? `https://dash.cloudflare.com/${accountId}` : 'https://dash.cloudflare.com';
   if (/\b10034\b|verify your email/i.test(text)) {
-    return { needs: 'cloudflare-verify-email', why: `Cloudflare needs this account's email address verified before it runs a Worker. Ask the person to open the verification email from Cloudflare (or ${dash}/profile and "Send verification email"), click it, then run \`npm run deploy\` again. No payment method is needed.` };
+    return { needs: 'cloudflare-verify-email', why: `Cloudflare needs this account's email address verified before it runs a Worker. Ask the person to open the verification email from Cloudflare (or ${dash}/profile and "Send verification email"), click it. The AI resumes deployment after verification.` };
   }
   if (/register a workers\.dev subdomain|workers\/onboarding/i.test(text)) {
-    return { needs: 'workers-dev-subdomain', why: `This Cloudflare account has no workers.dev address yet. Ask the person to open ${dash}/workers/onboarding once and pick one (it is free), then run \`npm run deploy\` again.` };
+    return { needs: 'workers-dev-subdomain', why: `This Cloudflare account has no workers.dev address yet. AI: retry deploy to register it automatically through the existing sign-in. If Cloudflare refuses, open ${dash}/workers/onboarding and handle the setting in the browser; the person only handles provider authorization.` };
   }
   if (/maximum number of (D1 )?databases|database limit|too many databases/i.test(text)) {
     return { needs: 'd1-limit', why: 'This Cloudflare account has used all the D1 databases its plan allows (10 on the free plan). Nothing was deployed. Ask the person which unused database of theirs to remove, or use another account; never delete one yourself.' };
@@ -366,7 +367,15 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   }
 
   const started = Date.now();
-  const dep = w(['deploy', ...repoVar(root)]);
+  let dep = w(['deploy', ...repoVar(root)]);
+  if (dep.code !== 0 && explainCloudflare(dep.out, accountId)?.needs === 'workers-dev-subdomain') {
+    const headers = await cloudflareAuth({ env: { ...process.env, ...projectsCloudflareEnv(root) }, bin: wranglerBin(root), cwd: root,
+      exec: async (_bin, args) => { const r = w(args, { cwd: root }); return { code: r.code, stdout: r.stdout }; } });
+    const address = await registerWorkersAddress({ accountId, slug: studio.slug, headers, ...(fetchFn ? { fetchFn } : {}) });
+    if (!address.ok) return { ok: false, command: 'deploy', needs: 'workers-dev-subdomain', why: address.next };
+    step(address.created ? 'registered the account’s workers.dev address automatically' : 'kept the account’s existing workers.dev address');
+    dep = w(['deploy', ...repoVar(root)]);
+  }
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   remember(`worker:${cf.worker}`);
   // The workers.dev address names the Cloudflare account (often after its owner): it stays on this computer, in

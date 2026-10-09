@@ -28,7 +28,7 @@ test('studio-setup: setup status first, then a checklist in order that never jum
   const listed = steps.map((x) => at(s, x));
   assert.deepEqual([...listed].sort((a, b) => a - b), listed, 'the checklist is in order');
   assert.ok(at(s, 'setup status --connector yes') < at(s, 'game new <id> --from gem-rush'), 'the status comes before any game is made');
-  assert.match(s, /Never jump ahead/);
+  assert.match(s, /without waiting between setup/);
   // A new studio has no game: "see a working game" is a live one elsewhere, and a starter goes in only when asked.
   assert.match(s, /Show a live one; copy nothing/);
   assert.match(s, /homie-studio demo/);
@@ -37,9 +37,9 @@ test('studio-setup: setup status first, then a checklist in order that never jum
   assert.match(s, /Never block on an optional row/);
   assert.match(s, /even while they wait/, 'the person can do their part while waiting');
   assert.match(s, /`plan` skill/);
-  assert.match(s, /`parallel` skill/);
+  assert.match(s, /one agent/);
   assert.match(s, /statusline --install/, 'the status line is offered in the setup step');
-  assert.match(s, /Asked for everything at once/, 'a one-prompt studio still goes all the way');
+  assert.match(s, /Carry the request through/, 'a one-prompt studio still goes all the way');
 });
 
 test('a first run in Codex and Grok: no connector is no dead end, the holds are said when off, and a neighbouring studio is left alone', () => {
@@ -82,7 +82,7 @@ test('a first run in Codex and Grok: no connector is no dead end, the holds are 
     assert.doesNotMatch(said, /Grok(?: Build)?(?: 1\.0\.\d+)? (?:runs|registers) no plugin's\s+hooks|hooks do not run (?:in Grok|there) yet|nothing is held (?:there|in Grok) yet/, `${name}: nothing says Grok runs no hooks`);
   }
   for (const m of ['plugin.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', '.grok-plugin/plugin.json']) {
-    assert.match(readFileSync(join(PLUGIN, m), 'utf8'), /In Grok Build the same hooks hold the same calls once you trust the plugin/, m);
+    assert.match(readFileSync(join(PLUGIN, m), 'utf8'), /Open source/, m);
   }
   // Going online never lists: the directory is a separate step the person asks for.
   assert.match(s, /\*\*The directory, only when asked\.\*\* Going online never lists a studio/);
@@ -92,32 +92,31 @@ test('a first run in Codex and Grok: no connector is no dead end, the holds are 
   assert.ok(at(s, 'A Play link first') < at(s, '## 0. Setup status'), 'said with the one-sentence flow');
 });
 
-test('plan: the interview covers every topic, naturally, and ends in the Game Codex', () => {
+test('plan: default decisions go into the Game Codex without an interview', () => {
   const s = skill('plan');
-  for (const topic of ['Game type and genre', 'Style and art direction', 'Devices', 'Players and rooms', 'Art and film', 'Music and sound', 'Scope']) assert.match(s, new RegExp(`\\*\\*${topic}\\*\\*`), topic);
-  // Persistent games: the interview always asks, and the game skill wires cloud saves in when the answer is yes.
-  assert.match(s, /Does progress need to persist across sessions or devices\?/);
+  assert.match(s, /Never route engineering or design questions/);
+  assert.match(s, /Infer cloud saves/);
   const game = skill('game');
   for (const needle of ['"saves": true', "createSaves", '--from ember-vale', 'saves.fall', 'SAVES.md']) at(game, needle);
-  assert.match(s, /natural, not a form/);
-  assert.match(s, /Two or three questions a message/);
+  assert.match(s, /Default to doing the planning yourself/);
+  assert.match(s, /explicitly asks to plan together/);
   for (const needle of ['games/<id>/CODEX.md', 'codex new <id>', 'codex <id> --artifact', 'codex <id> --open', 'codex link <id>', 'Keep it true', 'Build status', 'progress start <id>']) at(s, needle);
   assert.match(s, /Codex CLI has no command status\s+line/, 'what a Codex user sees instead');
   const ref = readFileSync(join(PLUGIN, 'skills', 'plan', 'references', 'CODEX.md'), 'utf8');
   for (const needle of ['palette:', 'fonts:', '### Cinder Wisp', '`M-01`', '- [x]', '| Action | Phone | Computer']) at(ref, needle);
 });
 
-test('parallel: a choice with its trade-off, one folder each, then merge, check, playtest and a blind review', () => {
+test('parallel: requested work within the usage budget, one folder each, then merge, check, playtest and a blind review', () => {
   const s = skill('parallel');
   assert.match(s, /usage/);
-  assert.match(s, /only when your app can run subagents/);
+  assert.match(s, /parallel work is requested and the host supports it/);
   assert.match(s, /Writes only in/);
   assert.match(s, /Shared files have one owner/);
   const order = ['2. `npm run build`', '3. `npm run dev` in the background, then `npx --no-install homie-studio check <id>', 'The `playtest` skill', 'then its blind review', 'Update the codex', 'Commit once'].map((x) => at(s, x));
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'merge, check, playtest, review, codex, commit, in that order');
 });
 
-test('standalone: plan first, what the app does not have said before shipping, signing and uploads left to the person', () => {
+test('standalone: plan first, what the app does not have said before shipping, signing prepared by the AI, provider approval retained', () => {
   const s = skill('standalone');
   const front = /^---\n([\s\S]*?)\n---\n/.exec(s)[1];
   assert.match(front, /^name: standalone$/m);
@@ -132,10 +131,10 @@ test('standalone: plan first, what the app does not have said before shipping, s
   // The order: the plan, then the build; and the honest list before anything ships.
   const order = ['standalone plan <id>', 'What the standalone game does not have (v1)', 'standalone build <id>', 'standalone run <id>', '--release', 'standalone ci <id>'].map((x) => at(s, x));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
-  for (const needle of ['no player accounts or sign-in', 'no cloud saves', 'no shop', 'no room chat', 'no automatic updates', 'Do not soften it', 'Never\n  install a JDK', 'Never\n   ask for a password', '**Uploading is the person\'s.**', '0.32.0 or later', '**and it has been deployed since**', '"netplay": { "version": "1" }', 'game_standalone']) at(s, needle);
+  for (const needle of ['no player accounts or sign-in', 'no cloud saves', 'no shop', 'no room chat', 'no automatic updates', 'Do not soften it', 'Install the prerequisites for the requested target yourself', 'Never ask for a password', '**Uploading is the person\'s.**', '0.32.0 or later', '**and it has been deployed since**', '"netplay": { "version": "1" }', 'game_standalone']) at(s, needle);
   assert.match(s, /"Skipped" is not "built"/);
   // What was run and what was not, said as it is: built is not works, a store is not a yes, Steam's overlay is not promised.
-  for (const needle of ['"started here and loaded the game: yes" or "NO"', '"built, not\nstarted on this computer"', '**UNSIGNED**', 'The Windows and Linux builds have never been started', 'lost when the app is\n  uninstalled', 'never a promise that the store\n  takes the game', 'Before you spend money', 'do not promise an overlay', 'has not been run by the people who made it', '`launchctl setenv`', 'studio_job']) at(s, needle);
+  for (const needle of ['"started here and loaded the game: yes" or "NO"', '"built, not\nstarted on this computer"', '**UNSIGNED**', 'The Windows and Linux builds have never been started', 'lost when the app is\n  uninstalled', 'never a promise that the store\n  takes the game', 'Before you spend money', 'do not promise an overlay', 'has not been run by the people who made it', 'Never tell a person to set environment variables', 'studio_job']) at(s, needle);
   assert.doesNotMatch(s, /the builds (Steam|the App Store and Google Play) takes?/, 'a file a store accepts for upload, never "the build the store takes"');
   // Onto the person's own phone: asked for first, in the words of what it changes; and what an older site means, both halves.
   for (const needle of ['standalone run <id> --for ios --device', '**Ask before you run it, in these\nwords: this adds the phone to your Apple team\'s device list**', '`--device`\nis their yes: never add it on your own', 'Settings, Privacy & Security, Developer Mode, and the phone restarts', '"installed, not seen running" is not "running"', 'never ask for a team id, a phone\'s id or a name in the chat', 'never been run on a real Android phone', 'before **Quick play** finds a room in a copy', 'A room made or joined by its code works\nwith an older site too (seen against 0.31.0, not promised for every older version)']) at(s, needle);

@@ -132,6 +132,16 @@ directory lists its games; homie.rocks does not host them.
 | \`studio.json\` | The studio's name, slug, Cloudflare resource names, custom domain and stats sharing. \`.studio/\` (git-ignored) is this computer's own state. |
 | \`.claude/skills/\` | Skills only this studio uses. Homie's own skills come from the Homie plugin. |
 
+The person describes an outcome; you carry it through setup, building and checks without a tutorial
+or a planning interview. Choose engineering and design defaults from their words and record them
+in the codex. Use "My Studio" when unnamed, phones and computers, local sound and CC0 art.
+They can change anything by asking. A business or charity may want an app, not a game.
+Install missing prerequisites yourself; never ask the person to run a command or handle a key,
+account id, zone id or setting. Honour an existing request to go live or list, subject to host holds.
+For a requested custom hostname, add its custom_domain route in Wrangler along with cloudflare.domain;
+Cloudflare creates DNS and TLS during deploy with the existing sign-in.
+
+
 ## Apps: one screen, roles and parts
 
 An app lives in \`apps/<id>/app.json\` and \`src/\`. Make one with \`homie-studio app new <id>\` (or \`app_make\`). Use the Homie plugin's \`app\` skill for businesses, venues, causes and customer apps. No game demo, rounds, scores, bots or mandatory fun: build what the person needs with the fewest human steps.

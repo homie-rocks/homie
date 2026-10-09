@@ -76,17 +76,18 @@ test('setup status before a studio exists: one checklist, what each row unlocks,
   assert.equal(by.node.state, 'ok');
   assert.equal(by.connector.state, 'unknown', 'only the AI knows whether its Homie tools are there');
   assert.equal(by.cloudflare.state, 'later', 'Cloudflare is checked once the studio (and its Wrangler) exists');
-  assert.equal(by.cloudflare.fix.open, 'https://dash.cloudflare.com/sign-up', 'the person can make the account now, while waiting');
+  assert.equal(by.cloudflare.fix.who, 'ai');
+  assert.match(by.cloudflare.fix.say, /cloudflare_login/);
   assert.equal(by.chrome.state, 'act');
   assert.match(by.chrome.fix.run, /^npx -y @homie-rocks\/studio@\d+\.\d+\.\d+ chrome install$/, 'outside a studio the fix names the pinned toolkit');
   for (const id of ['github', 'elevenlabs', 'fal']) assert.equal(by[id].state, 'optional', `${id} is optional`);
   for (const row of r.rows) assert.ok(row.unlocks.length > 20, `${row.id} says what it unlocks`);
   assert.deepEqual(r.blocking, [], 'nothing is missing that blocks making a game');
-  assert.ok(r.meanwhile.some((m) => m.id === 'cloudflare'), 'the sign-up is something to do while waiting');
+  assert.ok(!r.meanwhile.some((m) => m.id === 'cloudflare'), 'do not send the person to a separate sign-up before login');
   const text = formatStatus(r);
   assert.match(text, /Setup status \(before the studio exists\)/);
   assert.match(text, /Optional rows never block anything/);
-  assert.match(text, /Safe to do any time, even while you wait/);
+  assert.doesNotMatch(text, /Make a free one now/);
 });
 
 test('setup status in a studio: Wrangler signed in, the email proven by a deploy, providers connected, and no key printed', async () => {

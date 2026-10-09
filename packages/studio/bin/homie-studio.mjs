@@ -226,6 +226,8 @@
  *                                          pages; the account id goes into studio.json, the token stays in Projects'
  *                                          vault and its git-ignored .env, and Wrangler runs with it here. The usual
  *                                          way, npx wrangler login, stays the default. lib/projects.mjs)
+ *   homie-studio domain <hostname>                  AI configures DNS/TLS for the next deploy
+ *   homie-studio setup prepare                     AI installs a private Node/npm if missing
  *   homie-studio setup status [--connector yes|no] [--client claude|codex|grok]   (also: homie-studio doctor)
  *                                         what this computer and the person's accounts have for a studio: Node, the Homie
  *                                         connector, Cloudflare (signed in, email verified), Chrome, ffmpeg, GitHub,
@@ -325,6 +327,8 @@ import { build } from '../lib/build.mjs';
 import { PREVIEW_PORT, previewServer } from '../lib/preview.mjs';
 import { check } from '../lib/check.mjs';
 import { ciDeploy, deploy, deployPlan, mediaMove, storageAdd, whoami, wranglerBin, zonePlan } from '../lib/cloudflare.mjs';
+import { studioDomain } from '../lib/domain.mjs';
+import { prepareNode } from '../lib/prepare.mjs';
 import { setupAttach } from '../lib/setup.mjs';
 import { chromeArgs, findChrome, installChrome, noChrome } from '../lib/chrome.mjs';
 import { deployWords } from '../lib/deploy-state.mjs';
@@ -863,6 +867,7 @@ async function main() {
   if (cmd === 'port' && sub === 'plan') return planPort(positional[2] ?? '.');
   if (cmd === 'chrome' && sub === 'install') return installChrome({ log, fresh: flags.has('fresh') });
   if (cmd === 'chrome') { const chrome = findChrome(); return chrome ? { ok: true, command: 'chrome', chrome, args: chromeArgs() } : { ok: false, command: 'chrome', why: noChrome() }; }
+  if (cmd === 'setup' && sub === 'prepare') return prepareNode();
   if ((cmd === 'setup' && sub === 'status') || cmd === 'doctor') return setupStatus({ connector: flags.get('connector') ?? null, homie: flags.get('homie') ?? null, client: flags.get('client') ?? null });
   if (cmd === 'statusline' && !flags.has('install') && !flags.has('remove')) {
     const line = statusLine({ columns: Number(process.env.COLUMNS) || 100, color: !process.env.NO_COLOR && !asJson && process.stdout.isTTY });
@@ -891,6 +896,7 @@ async function main() {
   if (cmd === 'statusline') return installStatusLine(root, { remove: flags.has('remove'), replace: flags.has('replace'), project: flags.get('project') ?? null });
   if (cmd === 'codex') return codexCommand(root, sub);
   if (cmd === 'progress') return progressCommand(root, sub);
+  if (cmd === 'domain') return studioDomain(root, sub);
   if (cmd === 'setup' && sub === 'attach') return setupAttach(root, positional[2], { homie: flags.get('homie'), client: flags.get('client') });
   if (cmd === 'setup' && flags.has('via')) {
     if (flags.get('via') !== 'stripe-projects') return { ok: false, command: 'setup', why: '--via stripe-projects is the one other way this version knows (the default is npx wrangler login)' };

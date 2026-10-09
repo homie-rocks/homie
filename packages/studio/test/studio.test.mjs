@@ -361,11 +361,12 @@ test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and
   }
 });
 
-test('a new account\'s first deploy says the next step: verify the email (10034), pick a workers.dev address', async () => {
+test('a new account\'s first deploy says the next step: verify the email (10034), let the AI register workers.dev', async () => {
   const { explainCloudflare } = await import('../lib/cloudflare.mjs');
   const mail = explainCloudflare('X [ERROR] A request to the Cloudflare API failed. You need to verify your email address to use Workers. [code: 10034]', 'acc1');
   assert.equal(mail.needs, 'cloudflare-verify-email');
-  assert.match(mail.why, /No payment method is needed/);
+  assert.match(mail.why, /AI resumes deployment/);
+  assert.doesNotMatch(mail.why, /run `npm/);
   const sub = explainCloudflare('You can either deploy your worker to one or more routes by specifying them in your wrangler.jsonc file, or register a workers.dev subdomain here:\nhttps://dash.cloudflare.com/acc1/workers/onboarding', 'acc1');
   assert.equal(sub.needs, 'workers-dev-subdomain');
   assert.match(sub.why, /dash\.cloudflare\.com\/acc1\/workers\/onboarding/);

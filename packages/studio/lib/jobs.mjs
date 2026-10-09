@@ -17,6 +17,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { nodeHome } from './prepare.mjs';
 import { PACKAGE_ROOT } from './studio.mjs';
 
 const WIN = process.platform === 'win32';
@@ -38,7 +39,7 @@ export function toolPath(env = process.env, platform = process.platform, home = 
     : ['/opt/homebrew/bin', '/usr/local/bin', join(home, '.volta', 'bin'), join(home, '.asdf', 'shims'), join(home, '.local', 'bin'), join(home, '.fnm', 'aliases', 'default', 'bin'), join(home, '.bun', 'bin'), ...nvm, '/usr/bin', '/bin'];
   const seen = new Set();
   const out = [];
-  for (const p of [...String(env.PATH ?? env.Path ?? '').split(delimiter), ...extra]) if (p && !seen.has(p)) { seen.add(p); out.push(p); }
+  for (const p of [...String(env.PATH ?? env.Path ?? '').split(delimiter), join(nodeHome(home), platform === 'win32' ? '' : 'bin'), ...extra]) if (p && !seen.has(p)) { seen.add(p); out.push(p); }
   return out.join(delimiter);
 }
 
@@ -52,6 +53,7 @@ export function findNode({ fresh = false } = {}) {
   if (!process.versions.electron) candidates.push(process.execPath);
   for (const dir of toolPath().split(delimiter)) candidates.push(join(dir, exe));
   const tried = new Set();
+  let withoutNpm = null;
   for (const bin of candidates) {
     if (tried.has(bin) || !existsSync(bin)) continue;
     tried.add(bin);
@@ -61,11 +63,12 @@ export function findNode({ fresh = false } = {}) {
     const version = String(r.stdout ?? '').trim().replace(/^v/, '');
     if (r.status === 0 && Number(version.split('.')[0]) >= 22) {
       const npmNext = join(dirname(bin), WIN ? 'npm.cmd' : 'npm');
-      nodeCache = { bin, version, npm: existsSync(npmNext) ? npmNext : which(WIN ? 'npm.cmd' : 'npm') };
-      return nodeCache;
+      const found = { bin, version, npm: existsSync(npmNext) ? npmNext : which(WIN ? 'npm.cmd' : 'npm') };
+      if (found.npm) { nodeCache = found; return nodeCache; }
+      withoutNpm ??= found;
     }
   }
-  return null;
+  return withoutNpm;
 }
 
 export function which(name) {
@@ -161,16 +164,23 @@ export function jobView(job, { lines = 12 } = {}) {
 /** Run the studio's pinned CLI as a job: `homie-studio <args> --json`. */
 export function cliJob(root, label, args, { cli = null, ...opts } = {}) {
   const node = findNode();
-  if (!node) throw new Error('no Node.js 22 or newer on this computer: install it from https://nodejs.org/en/download (the LTS), then ask again');
+  if (!node) throw new Error('Node.js is missing. AI: call setup_prepare, then retry this tool.');
   // `cli`: another homie-studio than the studio's pinned one (this package's, for an upgrade to it).
   return startJob({ root, label, cmd: node.bin, args: [cli ?? cliOf(root), ...args, '--json'], json: true, ...opts });
+}
+
+/** Windows command shims need a shell; run npm's JavaScript with Node instead. */
+export function npmInvocation(node, platform = process.platform) {
+  return platform === 'win32'
+    ? { cmd: node.bin, args: [join(dirname(node.npm), 'node_modules', 'npm', 'bin', 'npm-cli.js'), 'install', '--no-audit', '--no-fund'] }
+    : { cmd: node.npm, args: ['install', '--no-audit', '--no-fund'] };
 }
 
 /** `npm install` in a studio (its pinned toolkit and Wrangler). */
 export function installJob(root, opts = {}) {
   const node = findNode();
-  if (!node?.npm) throw new Error('npm was not found next to Node.js on this computer: install Node.js 22 or newer from https://nodejs.org/en/download, then ask again');
-  return startJob({ root, label: 'npm install (the studio\'s pinned toolkit and Wrangler)', cmd: node.npm, args: ['install', '--no-audit', '--no-fund'], ...opts });
+  if (!node?.npm) throw new Error('npm is missing. AI: call setup_prepare, then retry studio_install.');
+  return startJob({ root, label: 'npm install (the studio\'s pinned toolkit and Wrangler)', ...npmInvocation(node), ...opts });
 }
 
 /** When the server ends (the app quit), nothing it started keeps running, except what asked to (none today). */
