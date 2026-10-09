@@ -1,0 +1,64 @@
+{
+  "name": "@homie-rocks/physics",
+  "version": "0.1.0",
+  "description": "Deterministic 3D rigid-body physics, character movement and complete snapshots for browsers, Node and Workers.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/physics"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/physics#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./vendor/rapier.wasm": {
+      "types": "./dist/vendor/rapier.wasm.d.ts",
+      "default": "./dist/vendor/rapier.wasm"
+    },
+    "./internal/*": null,
+    "./Shapes.js": null,
+    "./vendor/*": null
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "node scripts/engine.mjs && tsc --build",
+    "prepare": "node scripts/engine.mjs",
+    "prepack": "node scripts/engine.mjs && tsc --build"
+  },
+  "dependencies": {
+    "@homie-rocks/heightfield": "0.2.0",
+    "@msgpack/msgpack": "3.1.3"
+  },
+  "devDependencies": {
+    "@dimforge/rapier3d-deterministic": "0.21.0",
+    "@sinonjs/text-encoding": "0.7.3",
+    "cannon-es": "0.20.0",
+    "esbuild": "0.28.1",
+    "puppeteer-core": "25.8.0",
+    "workerd": "1.20261006.1",
+    "wrangler": "4.149.0",
+    "rapier-previous": "npm:@dimforge/rapier3d-deterministic@0.17.3"
+  },
+  "peerDependencies": {
+    "three": "0.185.1"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  }
+}

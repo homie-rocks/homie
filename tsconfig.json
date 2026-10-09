@@ -18,6 +18,7 @@
     { "path": "packages/loop" },
     { "path": "packages/nav" },
     { "path": "packages/noise" },
+    { "path": "packages/physics" },
     { "path": "packages/postfx" },
     { "path": "packages/props" },
     { "path": "packages/render" },

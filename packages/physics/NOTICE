@@ -1,0 +1,12 @@
+Homie
+https://homie.rocks/
+
+Copyright 2026 1243116 B.C. Ltd.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+The names "Homie" and "homie.rocks" are not licensed by it (section 6 of the
+License).
+
+This product includes Rapier 3D by Dimforge, licensed under the Apache
+License, Version 2.0. Its deterministic WebAssembly engine is redistributed
+with this package. https://rapier.rs/
