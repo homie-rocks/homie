@@ -17,9 +17,21 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.35.1] - 2026-10-08
+
+**Plugin 0.36.0** · [PR pending](https://github.com/homie-rocks/homie/pull/0)
+
+A tip with no minimum connects, and Stripe's own reason is shown when setup cannot finish.
+
+### Fixed
+
+- A pay-what-you-want item with no minimum connects.
+- When Stripe refuses something during setup, you are told what Stripe said. Keys are masked, including during renewal, catalog reads and the manual connection.
+- The test Stripe now refuses invalid amounts and incomplete shop objects, so these mistakes fail a test before release.
+
 ## [0.35.0] - 2026-10-08
 
-**Plugin 0.36.0** · [#67](https://github.com/homie-rocks/homie/pull/67)
+**Plugin 0.36.0** · [#67](https://github.com/homie-rocks/homie/pull/67) · [release-2026-10-08-studio-0.35.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-08-studio-0.35.0)
 
 A shop with no Stripe key to find. You approve once in your browser, and your AI sets up the rest in your own Stripe account.
 

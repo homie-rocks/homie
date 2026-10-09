@@ -35,6 +35,7 @@ import { POLICY_PRESETS, parseAmount, amountError, currencyScale, money, bandOf,
 import { formEncode, modeOf, apiBase, signPayload, verifyWebhook } from '../worker/stripe.mjs';
 import { SHOP_MIGRATION_FILE, SHOP_RESERVATIONS_FILE, SHOP_STATEMENTS_FILE, SHOP_LINES_FILE } from '../worker/shop-store.mjs';
 import { canonicalJson, resetReferrers, verifyStatement } from '../worker/referrals.mjs';
+import { stripeValidation } from './stripe-validation.mjs';
 import { resetShopLimits } from '../worker/shop.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -247,6 +248,10 @@ async function fakeStripe() {
       const send = (status, obj) => { if (idem && status === 200) idempotent.set(idem, obj); res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
       if (idem && idempotent.has(idem)) return send(200, idempotent.get(idem));
       n += 1;
+      if (req.method === 'POST') {
+        if (behave.refusePath === url.pathname) return send(400, { error: { type: 'invalid_request_error', message: behave.refuseMessage } });
+        try { stripeValidation(url.pathname, form, catalog); } catch (error) { return send(400, { error }); }
+      }
       const denied = () => send(403, { error: { type: 'invalid_request_error', message: 'The provided key does not have the required permissions for this endpoint. Having the \'rak_webhook_write\' permission would allow this request to continue.' } });
       const resource = /^\/v1\/(products|prices|payment_links)(?:\/([^/]+))?$/.exec(url.pathname);
       if (resource) {
@@ -3328,4 +3333,113 @@ test('real Chrome: keyless buyer sees one-item checkout, chooses a tip on Stripe
     assert.equal(s.DB.sql.prepare('SELECT amount FROM shop_orders WHERE id = ?').get(reference).amount, 750);
     assert.deepEqual(errors, []); assert.equal(s.stripe.calls.length, 0);
   } finally { await browser.close(); }
+});
+
+test('chosen-amount links omit an unset minimum and preserve a studio minimum and maximum', async () => {
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  for (const minimum of [undefined, 0, 100]) {
+    const h = await pairingHarness(`tip-minimum-${minimum}`);
+    writeFileSync(join(h.dir, 'shop.json'), JSON.stringify({ till: 'stripe', currency: 'usd', items: [{ id: 'tip', name: 'Tip', price: 'choose', ...(minimum === undefined ? {} : { min: minimum }), max: 1000 }] }));
+    const result = await shopConnect(h.dir, h.opts);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const form = h.stripe.calls.find((c) => c.method === 'POST' && c.path === '/v1/prices').form;
+    assert.equal(form.get('custom_unit_amount[minimum]'), minimum === 100 ? '100' : null);
+    assert.equal(form.get('custom_unit_amount[maximum]'), '1000');
+  }
+});
+
+test('stand-in refuses invalid Stripe objects at the HTTP boundary', async () => {
+  const stripe = await fakeStripe();
+  const post = async (path, params) => {
+    const response = await fetch(stripe.base + path, { method: 'POST', body: formEncode(params) });
+    return { status: response.status, body: await response.json() };
+  };
+  const product = (await post('/v1/products', { name: 'Tip' })).body;
+  const price = (await post('/v1/prices', { product: product.id, currency: 'usd', custom_unit_amount: { enabled: true } })).body;
+  const bad = [
+    ['/v1/products', {}, 'name'],
+    ['/v1/prices', { product: product.id, currency: 'usd', custom_unit_amount: { enabled: true, minimum: 0 } }, 'custom_unit_amount[minimum]'],
+    ['/v1/prices', { product: product.id, currency: 'usd', custom_unit_amount: { enabled: true, minimum: 49 } }, 'custom_unit_amount[minimum]'],
+    ['/v1/prices', { product: product.id, currency: 'usd', custom_unit_amount: { enabled: true, maximum: 0 } }, 'custom_unit_amount[maximum]'],
+    ['/v1/prices', { product: product.id, currency: 'usd', custom_unit_amount: { enabled: true, minimum: 100, maximum: 99 } }, 'custom_unit_amount[maximum]'],
+    ['/v1/prices', { product: product.id, currency: 'usd', custom_unit_amount: { enabled: false } }, 'custom_unit_amount[enabled]'],
+    ['/v1/prices', { product: product.id, currency: 'usd' }, 'unit_amount'],
+    ['/v1/prices', { product: product.id, currency: 'usd', unit_amount: -1 }, 'unit_amount'],
+    ['/v1/prices', { product: product.id, currency: 'usd', unit_amount: 100, tax_behavior: 'wrong' }, 'tax_behavior'],
+    ['/v1/payment_links', {}, 'line_items'],
+    ['/v1/payment_links', { line_items: [{ price: price.id, quantity: 2 }] }, 'line_items'],
+    ['/v1/payment_links', { line_items: [{ price: price.id }] }, 'line_items[0][quantity]'],
+    ['/v1/webhook_endpoints', { enabled_events: ['checkout.session.completed'] }, 'url'],
+    ['/v1/webhook_endpoints', { url: 'https://example.com/hook', enabled_events: ['made.up'] }, 'enabled_events'],
+    ['/v1/checkout/sessions', { mode: 'payment', line_items: [{ price_data: { currency: 'usd', custom_unit_amount: { enabled: true } } }] }, 'line_items[0][price_data][unit_amount]'],
+  ];
+  for (const [path, params, param] of bad) {
+    const r = await post(path, params);
+    assert.equal(r.status, 400, JSON.stringify(params));
+    assert.equal(r.body.error.type, 'invalid_request_error');
+    assert.equal(r.body.error.param, param);
+    if (param === 'custom_unit_amount[minimum]') assert.match(r.body.error.message, /must convert to at least 50 cents/);
+  }
+  assert.equal((await post('/v1/prices', { product: product.id, currency: 'usd', unit_amount: 0 })).status, 200);
+});
+
+test('Stripe refusals survive setup, renew and catalog parsing with secrets masked before truncation', async () => {
+  const { shopConnect } = await import('../lib/stripe-connect.mjs');
+  const { catalogPlan } = await import('../lib/shop-catalog.mjs');
+  const h = await pairingHarness('stripe-reasons');
+  const message = 'Stripe refuses this value: sk_test_fake rk_live_fake pk_test_fake oak_fake whsec_abc+/=_- cs_test_fake_secret_abc ' + 'x'.repeat(500);
+  h.stripe.behave.refusePath = '/v1/prices'; h.stripe.behave.refuseMessage = message;
+  const result = await shopConnect(h.dir, h.opts);
+  assert.equal(result.ok, false); assert.match(result.why, /Stripe refuses this value/); assert.match(result.why, /POST \/v1\/prices/);
+  assert.doesNotMatch(result.why, /sk_test|rk_live|pk_test|oak_|whsec_|_secret_|abc/);
+  assert.ok(result.why.length < 800);
+  const exec = async (args) => args.includes('login') ? { code: 1, stdout: 'private completion output', stderr: message } : h.opts.exec(args);
+  const renewed = await shopConnect(h.dir, { ...h.opts, renew: true, exec });
+  assert.match(renewed.why, /Stripe refuses this value/); assert.doesNotMatch(renewed.why, /sk_test|rk_live|pk_test|oak_|whsec_|_secret_/);
+  const catalog = await catalogPlan(h.dir, { have: { content: [{ type: 'text', text: JSON.stringify({ error: { message } }) }] } });
+  assert.equal(catalog.ok, false); assert.match(catalog.why, /Stripe refuses this value/); assert.doesNotMatch(catalog.why, /sk_test|rk_live|pk_test|oak_|whsec_|_secret_/);
+});
+
+test('CLI and MCP Stripe setup results carry the refusal without a key', async () => {
+  const { StudioContext, toolDefs } = await import('../lib/mcp-tools.mjs');
+  const { shopInit } = await import('../lib/shop.mjs');
+  const { dir } = connectStudio('stripe-cli-reason');
+  shopInit(dir, { supporter: true });
+  const bin = join(dir, 'node_modules', '.bin');
+  const script = `#!/usr/bin/env node
+const args = process.argv.slice(4);
+if (args[0] === '--version') console.log('stripe stand-in');
+else if (args[0] === 'get') console.log(JSON.stringify({data:[],has_more:false}));
+else { console.log(JSON.stringify({error:{type:'invalid_request_error',message:'Stripe says this product is refused sk_test_FAKE rk_test_FAKE pk_live_FAKE whsec_FAKE+/='}})); process.exitCode = 1; }
+`;
+  writeFileSync(join(bin, 'stripe'), script); chmodSync(join(bin, 'stripe'), 0o755);
+  writeFileSync(join(bin, 'wrangler'), '#!/bin/sh\necho "[]"\n');
+  const oldPath = process.env.PATH, oldHome = process.env.HOME;
+  process.env.HOME = join(dir, 'test-home');
+  mkdirSync(process.env.HOME, { recursive: true });
+  process.env.PATH = `${bin}:${oldPath}`;
+  try {
+    const cli = run(['shop', 'connect'], dir);
+    assert.notEqual(cli.status, 0);
+    assert.match(cli.stdout, /Stripe says this product is refused/);
+    assert.doesNotMatch(cli.stdout + cli.stderr, /sk_test_|rk_test_|pk_live_|whsec_/);
+    const tools = toolDefs(new StudioContext({ cwd: dir, waitMs: 20000, install: false }));
+    let mcp = await tools.find((t) => t.name === 'stripe_login').run({});
+    if (mcp.structuredContent.state === 'running') mcp = await tools.find((t) => t.name === 'studio_job').run({ job: mcp.structuredContent.id });
+    assert.match(JSON.stringify(mcp), /Stripe says this product is refused/);
+    assert.doesNotMatch(JSON.stringify(mcp), /sk_test_|rk_test_|pk_live_|whsec_/);
+  } finally { process.env.PATH = oldPath; if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome; }
+});
+
+
+test('keyed chosen amounts use the selected unit amount, with zero allowed for a free line', async () => {
+  const { sessionParams } = await import('../worker/shop.mjs');
+  const shop = checkShop({ items: [{ id: 'tip', name: 'Tip', price: 'choose' }] }).shop;
+  for (const amount of [0, 100]) {
+    const params = sessionParams(shop, shop.items[0], { id: 'order' }, { origin: 'https://owls.example', amount, player: 'player' });
+    const price = params.line_items[0].price_data;
+    assert.equal(price.unit_amount, amount);
+    assert.equal(price.custom_unit_amount, undefined);
+    assert.doesNotThrow(() => stripeValidation('/v1/checkout/sessions', formEncode(params), {}));
+  }
 });
