@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "persona": "A helpful companion.",
+  "goals": {
+    "guard": { "about": "Wait here" },
+    "follow": { "about": "Follow a person", "args": { "seat": "player" } },
+    "visit": { "about": "Visit a place", "args": { "place": "view.places" } }
+  },
+  "lines": { "ready": { "text": "Ready!" } },
+  "asks": {
+    "follow": { "text": "Follow me", "goal": "follow", "args": { "seat": "player" } },
+    "visit": { "text": "Visit {place}", "goal": "visit", "args": { "place": "view.places" } }
+  }
+}

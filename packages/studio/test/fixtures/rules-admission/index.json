@@ -1,0 +1,446 @@
+[
+  {
+    "id": "f01-round-never-ends",
+    "what": "rounds are manual (seconds: 0) and nothing ever calls world.round.end()",
+    "stage": "built"
+  },
+  {
+    "id": "f02-module-let",
+    "what": "state kept in a module-level let",
+    "stage": "guard",
+    "match": "src/rules\\.ts:5\\ a\\ rules\\ module\\ has\\ no\\ state\\ of\\ its\\ own:\\ \"let\"\\ at\\ module\\ level\\ is\\ refused\\.\\ Put\\ this\\ in\\ a\\ declared\\ field\\ \\(fields,\\ motion\\ or\\ shared\\),\\ or\\ make\\ it\\ a\\ const"
+  },
+  {
+    "id": "f03-module-const-object",
+    "what": "state kept in a property of a module-level const object",
+    "stage": "guard",
+    "match": "src/rules\\.ts:32\\ a\\ rules\\ module\\ has\\ no\\ state\\ of\\ its\\ own:\\ \"STATS\"\\ is\\ declared\\ at\\ module\\ level,\\ so\\ nothing\\ may\\ assign\\ to\\ it\\ or\\ to\\ anything\\ in\\ it\\.\\ Put\\ what\\ changes\\ in\\ a\\ declared\\ field"
+  },
+  {
+    "id": "f04-score-underflow",
+    "what": "a penalty takes an unsigned score below zero (u16): self.score -= 5 on every hit",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "f05-score-nan",
+    "what": "score divided by (3 - hp), which is 0 at full health: Infinity/NaN into the score",
+    "stage": "built",
+    "limit": "The score is a whole number and what is written is Infinity: a whole-number field holds an infinite value at the end of its range, in a live room and in the play alike (a game may mean it, as in \"never\"), so this is not a fault of a proven kind. The build says so in one line of information, with the count.",
+    "says": "src/rules\\.ts:44: runner\\.on\\.score: runner\\.fields\\.score was written a whole number outside its range \\d+ times in this play \\(the first: Infinity\\)"
+  },
+  {
+    "id": "f06-leaves-map",
+    "what": "move adds velocity to pos itself instead of ctx.map.sweep: the body walks out of the world",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "f07-divide-by-zero",
+    "what": "average distance to rivals divided by their count, which is 0 when alone in reach",
+    "stage": "generated",
+    "match": "src/rules\\.ts:24\\ runner\\.tick:\\ runner\\.fields\\.crowd\\ was\\ written\\ NaN,\\ which\\ is\\ not\\ a\\ number\\."
+  },
+  {
+    "id": "f08-stale-target",
+    "what": "a bot remembers where an orb was and walks to that spot for ever after the orb is gone",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "f09-list-overflow",
+    "what": "a trail list declared for 8 entries grows by one every tick",
+    "stage": "generated",
+    "match": "src/rules\\.ts:23\\ runner\\.tick:\\ runner\\.fields\\.trail\\ was\\ written\\ a\\ list\\ of\\ 9\\ entries\\ for\\ a\\ size\\ of\\ 8\\."
+  },
+  {
+    "id": "f10-self-event-doubling",
+    "what": "an entity answers every respawn event by sending itself two more",
+    "stage": "generated",
+    "match": "src/rules\\.ts:57\\ runner\\.on\\.respawn:\\ this\\ room\\ already\\ holds\\ 16384\\ events\\ and\\ timers\\ that\\ are\\ waiting:\\ send\\ fewer,\\ or\\ set\\ fewer\\ timers\\ that\\ are\\ far\\ off\\."
+  },
+  {
+    "id": "f11-timer-pileup",
+    "what": "a far-off timer is set on every tick and never cleared: the queue fills after minutes",
+    "stage": "generated",
+    "match": "src/rules\\.ts:23\\ runner\\.tick:\\ this\\ room\\ already\\ holds\\ 16384\\ events\\ and\\ timers\\ that\\ are\\ waiting:\\ send\\ fewer,\\ or\\ set\\ fewer\\ timers\\ that\\ are\\ far\\ off\\."
+  },
+  {
+    "id": "f12-fix-accumulation",
+    "what": "a fixed-point charge adds 0.1 a tick and fires only when it === 1, which it never does",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "f13-diagonal-speed",
+    "what": "the stick is not clamped: a diagonal moves at 1.41 times maxSpeed",
+    "stage": "generated",
+    "match": "src/move\\.ts:10\\ runner\\.move:\\ the\\ server\\ held\\ this\\ body\\ back:\\ one\\ step\\ of\\ this\\ move,\\ from\\ where\\ the\\ server\\ has\\ the\\ body,\\ goes\\ further\\ than\\ the\\ server\\ lets\\ a\\ body\\ go\\ in\\ a\\ tick\\ \\(body\\.maxSpeed\\ is\\ 6\\ m/s\\)\\.\\ A\\ player\\ would\\ see\\ their\\ character\\ pulled\\ back\\.\\ Clamp\\ the\\ speed\\ \\(a\\ diagonal\\ is\\ longer\\ than\\ either\\ stick\\ axis\\),\\ or\\ declare\\ the\\ body's\\ real\\ top\\ speed\\."
+  },
+  {
+    "id": "f14-speed-ramp",
+    "what": "move speeds up for as long as the stick is held: past maxSpeed only after 2.5 seconds",
+    "stage": "built",
+    "limit": "The speed is kept in motion, and a browser's motion is the server's from every snapshot, so in a room the speed never builds up: no step of this move is longer than the server allows, and nothing is held back. The fault would need the server to move this body, which it does not."
+  },
+  {
+    "id": "f15-ninth-player",
+    "what": "join reads the x and y of spots[player.seat]: there are 8 spots and 16 seats",
+    "stage": "generated",
+    "match": "src/rules\\.ts:87\\ room\\.join:\\ The\\ value\\ before\\ \\.x\\ is\\ absent\\.\\ Check\\ that\\ the\\ map\\ spot,\\ list\\ entry\\ or\\ query\\ result\\ exists\\ before\\ reading\\ \\.x\\."
+  },
+  {
+    "id": "f16-unwinnable",
+    "what": "the round ends when a score === 5 exactly, and a zap is worth 2 and can step over it",
+    "stage": "built"
+  },
+  {
+    "id": "f17-unreached-handler",
+    "what": "a handler for an event nobody sends, holding a query past the 64 m reach (throws when run)",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "f18-event-typo-send",
+    "what": "world.send names 'tkae', which is not declared",
+    "stage": "types",
+    "match": "src/rules\\.ts:23:78\\ TS2345\\ Argument\\ of\\ type\\ '\"tkae\"'\\ is\\ not\\ assignable\\ to\\ parameter\\ of\\ type\\ '\"hit\"\\ \\|\\ \"score\"\\ \\|\\ \"take\"\\ \\|\\ \"tally\"\\ \\|\\ \"respawn\"'\\."
+  },
+  {
+    "id": "f19-handler-typo",
+    "what": "the orb's handler is spelt 'tkae': nothing answers 'take', no orb is ever taken",
+    "stage": "generated",
+    "match": "src/rules\\.ts:72:\\ entities\\.orb\\.on\\.tkae:\\ no\\ event\\ \"tkae\"\\ is\\ declared\\ in\\ shapes\\.events"
+  },
+  {
+    "id": "f20-undeclared-field",
+    "what": "self.combo is written and never declared",
+    "stage": "types",
+    "match": "src/rules\\.ts:44:16 TS2339.*combo"
+  },
+  {
+    "id": "f21-wrong-type",
+    "what": "a text is written to a u8 field: self.hp = 'full'",
+    "stage": "types",
+    "match": "src/rules\\.ts:49:11\\ TS2322\\ Type\\ 'string'\\ is\\ not\\ assignable\\ to\\ type\\ 'number'\\."
+  },
+  {
+    "id": "f22-tick-in-u8",
+    "what": "a moment on the clock kept in a u8: it sticks at 255 and the cooldown is gone after 13 seconds",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately.",
+    "says": "runner\\.fields\\.\\w+ was written a whole number outside its range \\d+ times in this play"
+  },
+  {
+    "id": "f23-no-think",
+    "what": "bots are asked for (keep: 3, away: think) and the kind has no think",
+    "stage": "generated",
+    "match": "src/rules\\.ts:15:\\ entities\\.runner:\\ away:\\ 'think'\\ and\\ leave:\\ 'bot'\\ need\\ a\\ think\\(world,\\ self\\)\\ handler\\ to\\ steer\\ the\\ body"
+  },
+  {
+    "id": "f24-empty-room-throw",
+    "what": "tick reads the second runner in reach without checking there is one (throws when alone)",
+    "stage": "generated",
+    "match": "src/rules\\.ts:23\\ runner\\.tick:\\ The\\ value\\ before\\ \\.score\\ is\\ absent\\.\\ Check\\ that\\ the\\ map\\ spot,\\ list\\ entry\\ or\\ query\\ result\\ exists\\ before\\ reading\\ \\.score\\."
+  },
+  {
+    "id": "f25-function-property",
+    "what": "a counter hung on a helper function",
+    "stage": "guard",
+    "match": "src/rules\\.ts:46\\ a\\ rules\\ module\\ has\\ no\\ state\\ of\\ its\\ own:\\ \"streak\"\\ is\\ declared\\ at\\ module\\ level,\\ so\\ nothing\\ may\\ assign\\ to\\ it\\ or\\ to\\ anything\\ in\\ it\\.\\ Put\\ what\\ changes\\ in\\ a\\ declared\\ field"
+  },
+  {
+    "id": "f26-write-query-result",
+    "what": "a handler lowers the hp of a runner that world.near returned",
+    "stage": "types",
+    "match": "src/rules\\.ts:28:20\\ TS2540\\ Cannot\\ assign\\ to\\ 'hp'\\ because\\ it\\ is\\ a\\ read\\-only\\ property\\."
+  },
+  {
+    "id": "f27-shared-from-entity",
+    "what": "an entity handler writes world.shared",
+    "stage": "types",
+    "match": "src/rules\\.ts:45:24\\ TS2540\\ Cannot\\ assign\\ to\\ 'total'\\ because\\ it\\ is\\ a\\ read\\-only\\ property\\."
+  },
+  {
+    "id": "f28-round-end-from-entity",
+    "what": "an entity handler calls world.round.end() when its score reaches 3",
+    "stage": "types",
+    "match": "src/rules\\.ts:46:44\\ TS2339\\ Property\\ 'end'\\ does\\ not\\ exist\\ on\\ type\\ 'Round'\\."
+  },
+  {
+    "id": "f29-spawn-leak",
+    "what": "every runner spawns a spark each tick and no spark is ever removed (2,048 entities after half a minute)",
+    "stage": "generated",
+    "match": "src/rules\\.ts:23\\ runner\\.tick:\\ a\\ room\\ holds\\ at\\ most\\ 2048\\ entities\\."
+  },
+  {
+    "id": "f30-infinite-velocity",
+    "what": "a knock-back divides by the distance to the attacker, which the handler has as zero",
+    "stage": "generated",
+    "match": "src/rules\\.ts:49\\ runner\\.on\\.hit:\\ runner\\.vel\\.x\\ was\\ written\\ NaN,\\ which\\ is\\ not\\ a\\ number\\."
+  },
+  {
+    "id": "f31-undeclared-effect",
+    "what": "world.emit names 'boom', which is not declared",
+    "stage": "types",
+    "match": "src/rules\\.ts:74:22\\ TS2345\\ Argument\\ of\\ type\\ '\"boom\"'\\ is\\ not\\ assignable\\ to\\ parameter\\ of\\ type\\ '\"ding\"\\ \\|\\ \"zap\"'\\."
+  },
+  {
+    "id": "f32-reach-too-far",
+    "what": "think asks world.near for 200 m: the reach is 64",
+    "stage": "generated",
+    "match": "src/rules\\.ts:34\\ runner\\.think:\\ world\\.near\\ reaches\\ 64\\ m\\ at\\ most\\."
+  },
+  {
+    "id": "f33-join-wrong-kind",
+    "what": "join returns the kind orb, which is not a player body",
+    "stage": "types",
+    "match": "src/rules\\.ts:85:5 TS2322.*\\n.*room.join returns a player kind: runner"
+  },
+  {
+    "id": "f34-think-wrong-shape",
+    "what": "think returns { x, y }: the declared input is { ax, ay, fire }, so bots never move",
+    "stage": "generated",
+    "match": "src/rules\\.ts:37\\ runner\\.think:\\ think\\ returned\\ \"x\",\\ which\\ is\\ not\\ an\\ input\\ this\\ kind\\ declares\\."
+  },
+  {
+    "id": "f35-rare-infinite-loop",
+    "what": "a loop that never ends, behind a score nobody reaches in a five-second round",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "f36-late-tick-fault",
+    "what": "after tick 3000 (two and a half minutes) every tick writes Infinity",
+    "stage": "generated",
+    "match": "src/rules\\.ts:23\\ runner\\.tick:\\ runner\\.fields\\.cheers\\ was\\ written\\ NaN,\\ which\\ is\\ not\\ a\\ number\\."
+  },
+  {
+    "id": "f37-second-person",
+    "what": "a fault only a second human player reaches: reading a list entry that is not there",
+    "stage": "generated",
+    "match": "src/rules\\.ts:24\\ runner\\.tick:\\ The\\ value\\ before\\ \\.score\\ is\\ absent\\.\\ Check\\ that\\ the\\ map\\ spot,\\ list\\ entry\\ or\\ query\\ result\\ exists\\ before\\ reading\\ \\.score\\."
+  },
+  {
+    "id": "f38-budget-every-tick",
+    "what": "two thousand queries in one handler, every tick",
+    "stage": "generated",
+    "match": "src/rules\\.ts:24\\ runner\\.tick:\\ this\\ handler\\ ran\\ too\\ long:\\ it\\ used\\ its\\ whole\\ share\\ of\\ the\\ tick\\ \\(a\\ loop\\ that\\ never\\ ends,\\ or\\ too\\ much\\ work\\ in\\ one\\ step\\)\\.\\ Bound\\ this\\ loop\\ or\\ split\\ the\\ work\\ across\\ ticks\\."
+  },
+  {
+    "id": "f39-recursion",
+    "what": "a helper that calls itself with no end",
+    "stage": "generated",
+    "match": "src/rules\\.ts:5\\ runner\\.tick:\\ Calls\\ went\\ too\\ deep\\ \\(a\\ function\\ that\\ calls\\ itself\\ without\\ end\\)\\.\\ Use\\ a\\ bounded\\ loop\\ or\\ an\\ explicit\\ list\\ instead\\."
+  },
+  {
+    "id": "f40-math-random",
+    "what": "Math.random() for the dice",
+    "stage": "guard",
+    "match": "src/rules\\.ts:37\\ Math\\.random\\ is\\ not\\ available\\ in\\ rules\\ \\(Math\\ offers\\ sqrt,\\ abs,\\ floor,\\ ceil,\\ round,\\ trunc,\\ min,\\ max,\\ sign,\\ imul,\\ fround\\)"
+  },
+  {
+    "id": "f41-seat-left-handler",
+    "what": "room.on.seatLeft throws (reads a property of undefined): no generated run ever gives a seat up",
+    "stage": "generated",
+    "match": "src/rules\\.ts:95\\ room\\.on\\.seatLeft:\\ The\\ value\\ before\\ \\.x\\ is\\ absent\\.\\ Check\\ that\\ the\\ map\\ spot,\\ list\\ entry\\ or\\ query\\ result\\ exists\\ before\\ reading\\ \\.x\\."
+  },
+  {
+    "id": "f42-despawn-other",
+    "what": "a runner despawns the orb it found, instead of asking the orb",
+    "stage": "types",
+    "match": "src/rules\\.ts:23:73 TS2345.*\\n.*world.despawn takes self"
+  },
+  {
+    "id": "f43-date-now",
+    "what": "Date.now() for a cooldown",
+    "stage": "guard",
+    "match": "src/rules\\.ts:25\\ Date\\ is\\ not\\ available\\ in\\ rules:\\ rules\\ have\\ no\\ wall\\ clock:\\ use\\ world\\.tick\\ and\\ world\\.ticks\\(seconds\\)"
+  },
+  {
+    "id": "f44-hp-u8-wrap",
+    "what": "damage greater than hp on an unsigned field: hp is held at 0 and the body never respawns (dead for ever)",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n01-third-join-team",
+    "what": "wrong team on the third join: seat 2 is put on team 2, which has no flag and no base of its own",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n02-rejoin-double-income",
+    "what": "a timer chain started in arrive and never stopped: every return or takeover starts another, so the scoreboard counts double, then triple",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n03-leak-on-round-restart",
+    "what": "orbs are not removed when a round ends: sixteen more every round until the room is full",
+    "stage": "built",
+    "limit": "No declared limit is reached. The away population collects the orbs, so growth is not supported by both populations."
+  },
+  {
+    "id": "n04-welcome-after-leave",
+    "what": "a timer set when a seat joins, never cleared on leave: its handler reads the fighter, who may be gone",
+    "stage": "generated",
+    "match": "src/rules\\.ts:122\\ room\\.on\\.welcome:\\ The\\ value\\ before\\ \\.pos\\ is\\ absent\\.\\ Check\\ that\\ the\\ map\\ spot,\\ list\\ entry\\ or\\ query\\ result\\ exists\\ before\\ reading\\ \\.pos\\."
+  },
+  {
+    "id": "n05-baton-to-nobody",
+    "what": "an event addressed to a runner who has left, with nothing that takes the offer back: the baton is stuck for the rest of the round",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n06-pickup-twice",
+    "what": "an orb answers every take and removes itself a tick later: two runners in reach both score, and one runner scores twice",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n07-spawn-in-wall",
+    "what": "a bonus orb is spawned at the middle of the map, inside the centre wall: nobody can reach it and the bots push at the wall for the whole round",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n08-round-ends-on-away",
+    "what": "a player who goes away (a phone locked) counts as out: the round ends early for everybody",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n09-bots-never-act",
+    "what": "think returns the unit direction, not the stick (-127 to 127): it rounds to nothing and the bots stand still",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n10-command-edge-crash",
+    "what": "a command used as an index with no range check: pick 0 or pick 200 throws",
+    "stage": "generated",
+    "match": "src/rules\\.ts:46\\ guest\\.commands\\.pick:\\ Cannot\\ call\\ slice\\ because\\ the\\ value\\ it\\ is\\ called\\ on\\ is\\ absent\\.\\ Check\\ the\\ index\\ or\\ query\\ result\\ first\\ \\(line\\ 46\\)\\."
+  },
+  {
+    "id": "n11-winners-list-grows",
+    "what": "a list of round winners that is never cleared: fine for eight rounds, then every round start fails",
+    "stage": "generated",
+    "match": "src/rules\\.ts:91\\ room\\.on\\.roundStart:\\ shared\\.rounds\\ was\\ written\\ a\\ list\\ of\\ 9\\ entries\\ for\\ a\\ size\\ of\\ 8\\."
+  },
+  {
+    "id": "n12-frozen-after-first-round",
+    "what": "the freeze set when a round ends is never lifted: from the second round on nobody can move",
+    "stage": "built"
+  },
+  {
+    "id": "n13-memory-outside-state",
+    "what": "who has scored is remembered in a Set built inside the rules, not in a field: gone after a save and restore",
+    "stage": "guard",
+    "match": "src/rules\\.ts:5\\ a\\ module\\-level\\ constant\\ is\\ made\\ of\\ literals:\\ numbers,\\ texts,\\ lists\\ and\\ objects\\ of\\ them"
+  },
+  {
+    "id": "n14-ninth-player",
+    "what": "a name tag looked up by seat in a table of eight: the ninth player to join throws",
+    "stage": "generated",
+    "match": "src/rules\\.ts:128\\ room\\.join:\\ Cannot\\ call\\ slice\\ because\\ the\\ value\\ it\\ is\\ called\\ on\\ is\\ absent\\.\\ Check\\ the\\ index\\ or\\ query\\ result\\ first\\ \\(line\\ 128\\)\\."
+  },
+  {
+    "id": "n15-shared-from-entity-cast",
+    "what": "an entity handler writes shared state through a cast that silences the compiler",
+    "stage": "generated",
+    "match": "src/rules\\.ts:45\\ runner\\.on\\.score:\\ \"total\"\\ is\\ read\\ only\\ here\\.\\ A\\ handler\\ writes\\ its\\ own\\ entity's\\ fields\\ and\\ motion\\ \\(room\\ handlers\\ write\\ shared\\);\\ constants,\\ query\\ results\\ and\\ event\\ data\\ are\\ read\\ only\\.\\ Send\\ an\\ event\\ to\\ change\\ another\\ entity\\."
+  },
+  {
+    "id": "n16-move-ignores-stun",
+    "what": "move ignores the stun flag: a tagged carrier, and everybody in the break, runs on",
+    "stage": "built",
+    "limit": "Coverage information does not establish the intended stun behavior; that requires a gameplay assertion."
+  },
+  {
+    "id": "n17-phase-typo",
+    "what": "the phase is compared with 'running', which it never is: the hill never pays",
+    "stage": "types",
+    "match": "src/rules\\.ts:73:13\\ TS2367\\ This\\ comparison\\ appears\\ to\\ be\\ unintentional\\ because\\ the\\ types\\ '\"live\"\\ \\|\\ \"over\"'\\ and\\ '\"running\"'\\ have\\ no\\ overlap\\."
+  },
+  {
+    "id": "n18-send-entity-not-id",
+    "what": "world.send is given the entity instead of its id",
+    "stage": "types",
+    "match": "src/rules\\.ts:45:77 TS2345 Argument of type '\\{ readonly [^']*readonly carrying: string; \\}' is not assignable to parameter of type 'string'\\.[^]*world\\.send takes an entity ID"
+  },
+  {
+    "id": "n19-list-never-initialised",
+    "what": "the lap list is never given its two zeros: the first lap adds one to nothing",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n20-absent-map-key",
+    "what": "a map read for a key that is not there yet, with ?? after it",
+    "stage": "generated",
+    "match": "src/rules\\.ts:92\\ room\\.on\\.picked:\\ there\\ is\\ no\\ \"e3\"\\ on\\ this\\ value:\\ a\\ computed\\ key\\ names\\ something\\ the\\ value\\ holds\\ itself\\ \\(test\\ with\\ `key\\ in\\ value`\\ first\\)\\ \\(line\\ 92\\)\\."
+  },
+  {
+    "id": "n21-loose-equality",
+    "what": "loose == between a team and a text typed by mistake",
+    "stage": "guard",
+    "match": "src/rules\\.ts:42\\ the\\ !=\\ operator\\ is\\ refused\\ in\\ rules:\\ use\\ !==\\ \\(a\\ loose\\ comparison\\ turns\\ a\\ list\\ into\\ a\\ text\\ to\\ compare\\ it\\)\\.\\ `x\\ !=\\ null`\\ is\\ allowed"
+  },
+  {
+    "id": "n22-json-clone",
+    "what": "a deep copy with JSON.parse(JSON.stringify(...))",
+    "stage": "guard",
+    "match": "src/rules\\.ts:94\\ JSON\\ is\\ not\\ available\\ in\\ rules:\\ rules\\ pack\\ nothing\\ themselves:\\ declared\\ fields\\ are\\ packed\\ for\\ them"
+  },
+  {
+    "id": "n23-object-assign-self",
+    "what": "a reset done with Object.assign(self, {...})",
+    "stage": "guard",
+    "match": "src/rules\\.ts:81\\ Object\\.assign\\ is\\ not\\ available\\ in\\ rules\\ \\(Object\\ offers\\ keys,\\ values,\\ entries\\)"
+  },
+  {
+    "id": "n24-busy-wait",
+    "what": "a handler waits for its cooldown in a loop",
+    "stage": "generated",
+    "match": "src/rules\\.ts:27\\ runner\\.tick:\\ this\\ handler\\ ran\\ too\\ long:\\ it\\ used\\ its\\ whole\\ share\\ of\\ the\\ tick\\ \\(a\\ loop\\ that\\ never\\ ends,\\ or\\ too\\ much\\ work\\ in\\ one\\ step\\)\\.\\ Bound\\ this\\ loop\\ or\\ split\\ the\\ work\\ across\\ ticks\\."
+  },
+  {
+    "id": "n25-spot-name-typo",
+    "what": "join asks the map for spots named 'spawn'; the map calls them 'start'",
+    "stage": "generated",
+    "match": "src/rules\\.ts:94\\ room\\.join:\\ a\\ number\\ used\\ as\\ a\\ key\\ is\\ a\\ whole\\ number\\ \\(line\\ 94\\)\\."
+  },
+  {
+    "id": "n26-effect-flood",
+    "what": "every pellet emits a sparkle every tick: 299 effects a tick, and a tick may send 256",
+    "stage": "generated",
+    "match": "src/rules\\.ts:71\\ orb\\.tick:\\ more\\ than\\ 256\\ effects\\ were\\ emitted\\ in\\ one\\ tick\\ \\(this\\ one:\\ sparkle\\)\\.",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n27-stale-round-timer",
+    "what": "the 45-second payout timer is not tied to its round: after a round that ended early it ends the next round early, and pays it",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n28-signed-hp-immortal",
+    "what": "hp is signed and death is tested with === 0: two damage on one hp steps over zero and the runner cannot be beaten again",
+    "stage": "built",
+    "limit": "A finite generated run does not prove the intended mechanic. The independent case remains part of gameplay review; observed warnings are asserted separately."
+  },
+  {
+    "id": "n29-move-atan2",
+    "what": "move turns the body with Math.atan2 and Math.cos",
+    "stage": "guard",
+    "match": "src/move\\.ts:8\\ Math\\.atan2\\ is\\ not\\ available\\ in\\ rules,\\ because\\ browsers\\ and\\ servers\\ may\\ disagree\\ on\\ its\\ last\\ digits:\\ use\\ world\\.math\\.atan2\\ \\(ctx\\.math\\.atan2\\ in\\ move\\.ts\\)"
+  },
+  {
+    "id": "n30-view-undeclared-field",
+    "what": "the view draws r.points; the field is called score",
+    "stage": "types",
+    "match": "src/view\\.ts:23:25 TS2339 Property 'points' does not exist"
+  }
+]

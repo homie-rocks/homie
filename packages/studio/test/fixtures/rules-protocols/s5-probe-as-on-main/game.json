@@ -1,0 +1,7 @@
+{"id": "probe", "name": "Probe", "players": {"min": 1, "max": 4}, "entry": "src/view.ts", "room": {"host": "server"}, "netplay": {"v": 1, "public": true}, "decide": true,
+ "servers": [
+  {"id": "humans", "name": "Humans", "policy": "humans-only"},
+  {"id": "hybrid", "name": "Hybrid", "policy": "hybrid", "aiSeats": 2, "brain": "script"},
+  {"id": "begin", "name": "Begin", "policy": "beginner", "guides": 1, "brain": "script"},
+  {"id": "kids", "name": "Kids", "policy": "beginner", "guides": 1, "kids": true, "level": 5, "levelMax": 5, "brain": "script"}
+ ]}

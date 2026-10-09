@@ -1,0 +1,1 @@
+{"id":"n3-companion-board","name":"n3-companion-board","players":{"min":1,"max":4},"entry":"src/view.ts","netplay":{"v":1,"public":true},"room":{"host":"server"}}

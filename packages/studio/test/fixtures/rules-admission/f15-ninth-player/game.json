@@ -1,0 +1,1 @@
+{"id":"f15-ninth-player","name":"f15-ninth-player","players":{"min":1,"max":16},"entry":"src/view.ts","netplay":{"v":1,"public":true},"room":{"host":"server"}}

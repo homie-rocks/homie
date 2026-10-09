@@ -1,0 +1,5 @@
+{
+  "bounds": { "min": [-12, -8], "max": [12, 8] },
+  "boxes": [], "circles": [],
+  "spots": { "start": [[0, 0]], "camp": [[4, 0]] }
+}

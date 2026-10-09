@@ -92,13 +92,13 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   const built = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;
-  assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{32}; three seconds with bots: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler\)/);
+  assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{32}; 18000 ticks played, the room rebuilt from its save \d+ times: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler; the largest save was \d+ bytes\)/);
   assert.match(said, /hosted by a player's browser, as before \(no src\/rules\.ts; nothing to do\): gems\n/);
   // The rules module: one file, importing only Homie's rules module and the guard.
   const rules = read(dir, 'site/src/rules/coin-dash.mjs');
   assert.deepEqual([...new Set([...rules.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))].sort(), ['@homie-rocks/studio/rules', '@homie-rocks/studio/rules/guard']);
   assert.match(rules, /"take"/);
-  assert.match(rules, /__homie\d*\.t\(\);/);
+  assert.match(rules, /__homie\d*\.t\("[^"\n]+", \d+\);/);
   assert.equal(read(dir, 'site/src/rules/index.mjs'), `// Written by \`homie-studio build\` from this studio's games. Do not edit: the next build writes it again.\n// The rules of this studio's server-hosted games, for the Worker (site/src/worker.mjs hands them to hostRules).\nimport rules0 from './coin-dash.mjs';\nimport data0 from './coin-dash.data.mjs';\nexport default {\n  "coin-dash": { rules: rules0, ...data0 },\n};\n`);
   const data = (await import(pathToFileURL(join(dir, 'site/src/rules/coin-dash.data.mjs')).href)).default;
   assert.deepEqual(Object.keys(data), ['tune', 'map', 'settings', 'seats', 'build', 'stateHash']);
@@ -165,11 +165,11 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   writeFileSync(join(dir, 'games/coin-dash/src/rules.ts'), src.replace("for (const coin of world.near(self.pos, 1, 'coin'))", "for (const coin of world.near(self.pos, 100, 'coin'))"));
   const thrown = run(['build'], dir);
   assert.notEqual(thrown.status, 0);
-  assert.match(thrown.stdout + thrown.stderr, /games\/coin-dash: its rules ran for three seconds with bots and \d+ handlers failed\. The last: runner\.tick: world\.near reaches 64 m at most/);
+  assert.match(thrown.stdout + thrown.stderr, /games\/coin-dash\/src\/rules.ts:\d+ runner\.tick: world\.near reaches 64 m at most/);
   // And a declaration that does not fit.
   writeFileSync(join(dir, 'games/coin-dash/src/rules.ts'), src.replace('score(world, self) { self.score += 1; },', 'score(world, self) { self.score += 1; }, bonus(world, self) { self.score += 5; },'));
   const undeclared = run(['build'], dir);
-  assert.match(undeclared.stdout + undeclared.stderr, /games\/coin-dash\/src\/rules\.ts: entities\.runner\.on\.bonus: no event \\?"bonus\\?" is declared in shapes\.events/);
+  assert.match(undeclared.stdout + undeclared.stderr, /games\/coin-dash\/src\/rules\.ts:\d+: entities\.runner\.on\.bonus: no event \\?"bonus\\?" is declared in shapes\.events/);
   // A rules game cannot be hosted by a browser yet, and says when.
   writeFileSync(join(dir, 'games/coin-dash/src/rules.ts'), src);
   const cd = JSON.parse(read(dir, 'games/coin-dash/game.json'));

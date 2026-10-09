@@ -1,0 +1,1 @@
+{ "public": { "speed": { "value": 5, "min": 2, "max": 6, "step": 0.1 }, "itSpeed": { "value": 6, "min": 2, "max": 6, "step": 0.1 } } }

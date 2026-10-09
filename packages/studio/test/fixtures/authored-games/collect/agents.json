@@ -1,0 +1,34 @@
+{
+  "v": 1,
+  "goals": {
+    "gather": {
+      "about": "Gather an offered gem",
+      "args": {
+        "gem": "view.gems"
+      }
+    },
+    "follow": {
+      "about": "Follow a person",
+      "args": {
+        "seat": "player"
+      }
+    }
+  },
+  "lines": {},
+  "asks": {
+    "gather": {
+      "text": "Gather this gem",
+      "goal": "gather",
+      "args": {
+        "gem": "view.gems"
+      }
+    },
+    "follow": {
+      "text": "Follow me",
+      "goal": "follow",
+      "args": {
+        "seat": "player"
+      }
+    }
+  }
+}

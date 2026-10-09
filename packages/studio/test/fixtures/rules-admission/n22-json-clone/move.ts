@@ -1,0 +1,11 @@
+import { defineMove } from '@homie-rocks/studio/rules';
+
+export const move = defineMove({
+  guest(body, input, ctx) {
+    const M = ctx.math;
+    const speed = ctx.tick < body.motion.frozenUntil ? 0 : 6;
+    body.vel = M.scale(M.clampLen({ x: input.ax / 127, y: input.ay / 127, z: 0 }, 1), speed);
+    if (M.len(body.vel) > 0.5) body.heading = M.norm(body.vel);
+    ctx.map.sweep(body, M.scale(body.vel, ctx.dt));
+  },
+});

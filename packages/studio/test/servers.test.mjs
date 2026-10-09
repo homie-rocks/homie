@@ -152,6 +152,7 @@ async function site() {
     assert.equal(run(['game', 'new', 'vale', '--from', 'ember-vale', '--name', 'Vale'], dir).status, 0);
     assert.equal(run(['game', 'new', 'rules-run', '--from', 'coin-dash', '--name', 'Rules Run'], dir).status, 0);
     writeFileSync(join(dir, 'games/rules-run/src/rules.ts'), source);
+    writeFileSync(join(dir, 'games/rules-run/src/view.ts'), "import { openRoom } from '@homie-rocks/studio/rules/view'; openRoom();\n");
     const rulesManifest = join(dir, 'games/rules-run/game.json');
     writeFileSync(rulesManifest, JSON.stringify({ ...JSON.parse(readFileSync(rulesManifest, 'utf8')), players: { min: 1, max: 4 } }));
     writeFileSync(join(dir, 'games/rules-run/agents.json'), JSON.stringify(vocab));

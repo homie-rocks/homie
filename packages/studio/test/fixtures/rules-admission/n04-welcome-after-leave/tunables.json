@@ -1,0 +1,8 @@
+{
+  "public": {
+    "speed": { "value": 5, "min": 2, "max": 5, "step": 0.5, "unit": "m/s", "group": "Run", "note": "Walking speed" },
+    "dashSpeed": { "value": 9, "min": 5, "max": 9, "step": 0.5, "unit": "m/s", "group": "Run", "note": "Speed while dashing; never above maxSpeed 9" }
+  },
+  "startRadius": { "value": 12, "min": 6, "max": 14, "step": 1, "unit": "m", "group": "Zone", "note": "How wide the safe zone starts" },
+  "shrinkEvery": { "value": 2, "min": 1, "max": 10, "step": 0.5, "unit": "s", "group": "Zone", "note": "Seconds between shrinks" }
+}
