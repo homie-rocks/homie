@@ -471,3 +471,8 @@ version, 22 unchanged packages already on npm). In an isolated clone only, addin
 the release's own 0.39.0 tag still ran and passed all three rolling upgrades from
 0.38.0, 0.33.0 and 0.32.1. The shared repository received no new tag. The complete
 clean package gate repeats after these checks on the post-merge branch.
+
+After #77's final changelog arrived, Slice 7's release notes stopped repeating
+its shared knock-speed and performance-tool fixes. Slice 7's fixed notes name
+its own 3D floor/ceiling and animation behavior.
+This is a release-note correction only; the measured code is unchanged.
