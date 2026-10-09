@@ -12,6 +12,7 @@
  * Every call is charged 4 units to the running handler's budget (guard.ts), beside what any guarded call costs.
  * =============================================================================
  */
+import { castMap3, restsOnMap, type BodyShape } from './collision.ts';
 import { brand, charge, own, put } from './guard.ts';
 import { num } from './pack.ts';
 
@@ -181,7 +182,7 @@ export const exact = Object.freeze({ sin, cos, atan, atan2, exp, log, pow });
 /* ------------------------------------------------------------------ the ground plane: a point or a circle against the map */
 
 /** The shapes of a map the sweep reads (rules.ts `GameMap` has them). */
-export interface MapShapes { bounds: { min: Vec3; max: Vec3 }; boxes: readonly { min: Vec3; max: Vec3 }[]; circles: readonly { at: Vec3; r: number }[] }
+export interface MapShapes { bounds: { min: Vec3; max: Vec3 }; boxes: readonly { min: Vec3; max: Vec3 }[]; circles: readonly { at: Vec3; r: number }[]; spheres?: readonly { at: Vec3; r: number }[]; capsules?: readonly { at: Vec3; r: number; height: number }[]; heightTiles?: readonly import('./rules.ts').MapHeightTile[] }
 /** How close a swept body stops to what it hit, in metres. */
 export const SKIN = 0.001;
 
@@ -244,9 +245,9 @@ export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: 
 /**
  * `ctx.map.sweep(body, delta)`: move `body.pos` along `delta` and stop at the first static shape in the way. The server
  * and a browser both move a body with this, so they agree to the last bit. Returns nothing, or `{ at, normal }`.
- * Charged 20 units and 4 for each shape of the map. With `dims` 2 a body always rests on the ground.
+ * The 2D path charges 20 units and 4 per shape; 3D also charges each convex cast and terrain tile. With `dims` 2 a body always rests on the ground.
  */
-export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, _dims: number): unknown {
+export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, dims: number, shape: BodyShape = { shape: 'sphere', radius, height: 2 * radius }): unknown {
   // Charged before the cast, for every shape of the map it may test.
   charge(20 + 4 * (4 + map.boxes.length + map.circles.length));
   const fr = Math.fround;
@@ -256,6 +257,15 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
   const pos = own(body, 'pos');
   const dx = num(own(delta, 'x')); const dy = num(own(delta, 'y'));
   const px = num(own(pos, 'x')); const py = num(own(pos, 'y'));
+  if (dims === 3) {
+    const p = v(px, py, num(own(pos, 'z'))), d = v(dx, dy, num(own(delta, 'z')));
+    const h = castMap3(map, p, d, shape);
+    const length = Math.sqrt(dx * dx + dy * dy + d.z * d.z);
+    const t = h ? Math.max(0, h.t - (length > 0 ? SKIN / length : 0)) : 1;
+    const at = v(fr(px + dx * t), fr(py + dy * t), fr(p.z + d.z * t));
+    put(body, 'pos', at); put(body, 'grounded', restsOnMap(map, at, shape));
+    return h ? Object.freeze({ at, normal: v(h.nx, h.ny, h.nz) }) : undefined;
+  }
   const { hit: h } = castMap(map, px, py, dx, dy, radius);
   put(body, 'grounded', true);
   if (!h) { put(body, 'pos', v(fr(px + dx), fr(py + dy), 0)); return undefined; }
@@ -271,12 +281,12 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
  * map. One function, so that the browser (view.ts) and the person the build check plays hold the same one. The
  * server's own (core.ts `moveCtx`) is made beside the rest of its world, and charges as that does.
  */
-export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; dims: number }): unknown {
+export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number }): unknown {
   const none = Object.freeze([]);
   return brand(Object.freeze({
     get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
     // As the server's `ctx.ticks` reads it: a plain number, or nothing.
     ticks: (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * o.tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; },
-    map: brand(Object.freeze({ name: o.name, spot: (name: string) => (own(o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(o.spots, name) ?? none, sweep: (body: unknown, delta: unknown) => sweepMap(o.map, body, delta, o.radius(), o.dims) })),
+    map: brand(Object.freeze({ name: o.name, spot: (name: string) => (own(o.spots, name) as readonly unknown[] | undefined)?.[0], spots: (name: string) => own(o.spots, name) ?? none, sweep: (body: unknown, delta: unknown) => sweepMap(o.map, body, delta, o.radius(), o.dims, o.shape?.()) })),
   }));
 }

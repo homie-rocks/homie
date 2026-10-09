@@ -2390,3 +2390,70 @@ A missing offline module leaves the connection helper alive and says the game ne
 connection. A failed offline runtime stops locally while reconnection continues. An online
 runtime failure ends the room. Snapshots never grow above 16,384 bytes, including above
 sixteen seats.
+
+### 29.8 Three dimensions, level data and animation
+
+All five shipped starters are rules games with `room.host: 'server'`. Existing games
+made with `port` keep their version 1 callbacks and browser hosting. Ember Vale keeps
+its cloud character saves; the room save holds the shared fight and companion state.
+
+A rules declaration with `space: { dims: 3 }` uses metres and seconds, with **z up**.
+`pos` is the body's feet, `vel` has three components, `heading` is a unit direction,
+and `grounded` says a supporting collision has an upward normal greater than 0.5.
+The guarded `move` gets these values and declared `motion`, input, public tuning,
+`ctx.dt`, deterministic maths and `ctx.map.sweep`. The host and prediction run the
+same function. Gravity, jump impulse, acceleration and facing are game decisions,
+not a second physics loop in the view. Camera-relative controls are converted to
+world-space input in the view before calling `room.input`.
+
+Bodies may be upright capsules (`radius`, full `height`), spheres (`radius`), or
+axis-aligned boxes (`radius` is horizontal half-width, `height` is full height).
+Sweeps are continuous: a fast body cannot skip a thin solid. `ctx.map.sweep` moves
+against the static map and returns its contact normal; a second sweep along that
+normal's tangent slides. `world.sweep` also considers entity bodies and accepts
+`ignore` ids. `world.ray`, `near`, `inBox` and areas consider height in a 3D game.
+A placement is a discontinuity, with a new spawn revision, rather than a sweep.
+
+The game's declared map directory contains `main.json`. Static data is compiled
+into both the host and view and included in the state compatibility hash. It is
+not copied into each room save. Changing geometry makes old room state incompatible,
+just as changing a field does. Named `spots` provide spawn points and other fixed
+positions. A map has finite, increasing `bounds.min`/`max` vectors and at most 4,096
+solid shapes across these lists:
+
+| List | Declaration | Meaning in 3D |
+|---|---|---|
+| `boxes` | `{ min: [x,y,z], max: [x,y,z] }` | Axis-aligned solid |
+| `circles` | `{ at: [x,y,z], r }` | Vertical column through the map, for arena obstacles |
+| `spheres` | `{ at: [x,y,z], r }` | Centre and radius |
+| `capsules` | `{ at: [x,y,z], r, height }` | Feet, radius, full upright height (at least twice the radius) |
+| `heightTiles` | `{ at: [x,y,z], size: [width,depth], heights: [h00,h10,h01,h11] }` | Relative corner heights, split on the 00–11 diagonal |
+
+Height tiles support the foot point, with open edges and no underside. They are
+terrain, not a triangle-mesh collider or a solid platform; use boxes for platforms
+and ceilings. Every tile, solid and bounded convex-cast iteration is charged to
+the handler budget. The build check uses the same map and body shape as the host
+and predictor, measures full-room steps, and restores the complete declared state.
+The two meadow starters' playable ground is flat; their rolling scenery is visual.
+
+The view interpolates remote three-axis position and velocity, and takes the shortest
+arc between unit headings, including half turns. Discrete animation fields stay at
+the earlier snapshot until their tick. Takeoff becomes airborne as the interpolated
+pose rises; landing waits for contact. Own-body reconciliation eases all three axes
+and heading. A renderer reads `room.me`/`room.each`, maps rules `(x,y,z)` to its
+renderer axes, and feeds those poses and grounded/vertical-speed values to animation.
+Effects such as strikes and hits still come from the authoritative room.
+
+Rules can read `world.kids` and `world.levelSet` (an explicitly set party dial).
+`world.level` is the party's skill dial; `world.guideLevel` is the server's own level
+for guides. `world.guideSeats` is the frozen list of guide seats, assigned by the
+host from admitted agents and reserved seats; party companions use `world.level`.
+These policy values survive saves without changing older saves' defaults.
+
+A view may opt into `openRoom({ fallback: 'solo' })` when its room allows offline
+play. After four active seconds without a body in a connected room, it plays a
+private rules round while the original connection keeps waiting for a seat. The
+private round imports no room save, match score or simulation state into the online
+room. When a body is assigned, the private round closes and the view joins the
+online match. Ember Vale retains its separate cloud hero: experience earned in
+solo play still belongs to that hero, whose level is sent through the usual command.

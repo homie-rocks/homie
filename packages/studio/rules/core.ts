@@ -38,6 +38,7 @@
  * that is held to its shape, and paid for, before the handler's budget is closed.
  * =============================================================================
  */
+import { castMap3, castSolid, restsOnMap, solidAt, type BodyShape, type Hit3 } from './collision.ts';
 import { argsWhy, type Vocabulary } from '../agents/agents.ts';
 import { BudgetError, G, brand, charge, deepFreeze, plainData } from './guard.ts';
 import { SKIN, castMap, exact, math, rayCircle, sweepMap } from './math.ts';
@@ -88,7 +89,7 @@ export type CoreOut =
   | { t: 'shared' }
   | { t: 'epoch'; epoch: number }
   | { t: 'fail'; why: 'budget'; kind: string; handler: string };
-export interface CorePolicy { reserved?: number; bots: 'fill' | 'off'; level: number; levelMax: number }
+export interface CorePolicy { kids?: boolean; levelSet?: boolean; guideLevel?: number; guideSeats?: readonly number[]; reserved?: number; bots: 'fill' | 'off'; level: number; levelMax: number }
 export interface Body { seat: number; id: string; kind: string; driver: Driver; owner: string; away: boolean; score: number; r: number }
 
 interface Ent {
@@ -178,7 +179,6 @@ export interface Core {
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
 export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
-  if (c.dims !== 2) throw new Error('this release runs rules with space.dims: 2; bodies with height (dims: 3) arrive in a later one');
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -212,11 +212,13 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   let vocabulary: Vocabulary | null = null;
   const restoredGoals = new Map<number, unknown>();
   const guideViews = new Map<number, Record<string, unknown>>();
+  const EMPTY_GUIDE_SEATS: readonly number[] = Object.freeze([]);
   let policy: CorePolicy = { reserved: 0, bots: 'fill', level: 3, levelMax: 5 };
   function normalizeCorePolicy(p: Partial<CorePolicy>): CorePolicy {
     const levelMax = Math.max(1, Math.min(5, Math.floor(num(own(p, 'levelMax') ?? policy.levelMax)) || 5));
+    const guideSeats = Object.freeze([...new Set(p.guideSeats ?? policy.guideSeats ?? [])].filter(seat => Number.isInteger(seat) && seat >= 0 && seat < c.seats).sort((a, b) => a - b));
     // The keys in the order the room starts with them: a save is compared byte for byte with the save of the room rebuilt from it.
-    return { reserved: Math.max(0, Math.min(c.seats - 1, Math.floor(num(own(p, 'reserved') ?? policy.reserved)) || 0)), bots: p.bots === 'off' ? 'off' : p.bots === 'fill' ? 'fill' : policy.bots, level: Math.max(1, Math.min(levelMax, Math.floor(num(own(p, 'level') ?? policy.level)) || 3)), levelMax };
+    return { reserved: Math.max(0, Math.min(c.seats - 1, Math.floor(num(own(p, 'reserved') ?? policy.reserved)) || 0)), bots: p.bots === 'off' ? 'off' : p.bots === 'fill' ? 'fill' : policy.bots, level: Math.max(1, Math.min(levelMax, Math.floor(num(own(p, 'level') ?? policy.level)) || 3)), levelMax, ...((p.kids ?? policy.kids) ? { kids: true } : {}), ...((p.levelSet ?? policy.levelSet) ? { levelSet: true } : {}), ...((p.guideLevel ?? policy.guideLevel) !== undefined ? { guideLevel: Math.max(1, Math.min(levelMax, Math.floor(num(p.guideLevel ?? policy.guideLevel)) || 3)) } : {}), ...(guideSeats.length ? { guideSeats } : {}) };
   }
   let shared: Record<string, unknown> = initFields(c.shared, dims);
   let sharedRO: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -342,7 +344,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     naming(kind.name, 'fields'); const f = coerceFields(kind.fields, init.fields, dims);
     naming(kind.name, 'motion'); const m = coerceFields(kind.motion, init.motion, dims); naming();
     const e: Ent = {
-      id: `e${n.toString(36)}`, n, kind, pos: clampIn(V(at), kind.body?.radius ?? 0), vel: ZERO, heading: init.heading === undefined ? AHEAD : dir(init.heading, dims), grounded: true,
+      id: `e${n.toString(36)}`, n, kind, pos: clampIn(V(at), kind.body?.radius ?? 0, kind.body ? kind.body.height || 2 * kind.body.radius : 0), vel: ZERO, heading: init.heading === undefined ? AHEAD : dir(init.heading, dims), grounded: dims === 2 || restsOnMap(c.map, clampIn(V(at), kind.body?.radius ?? 0, kind.body ? kind.body.height || 2 * kind.body.radius : 0), kind.body ?? { shape: 'sphere', radius: 0, height: 0 }),
       r: 0, born: tick, arrived: false, why, dead: false,
       f, m,
       seat: player ? player.seat : -1, owner: player ? player.owner : '', driver: player ? player.driver : 'bot', away: false, goal: null,
@@ -351,10 +353,11 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     makeSelf(e);
     return e;
   }
-  function clampIn(p: Vec3, r: number): Vec3 {
+  function clampIn(p: Vec3, r: number, height = 0): Vec3 {
     const b = c.map.bounds;
     const x = Math.max(b.min.x + r, Math.min(b.max.x - r, p.x)); const y = Math.max(b.min.y + r, Math.min(b.max.y - r, p.y));
-    return x === p.x && y === p.y ? p : V({ x, y, z: p.z });
+    const z = dims === 3 ? Math.max(b.min.z, Math.min(b.max.z - height, p.z)) : 0;
+    return x === p.x && y === p.y && z === p.z ? p : V({ x, y, z });
   }
 
   /* ---------------------------------------------------------------- running a handler under the budget */
@@ -475,9 +478,19 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     return sharedRO;
   };
 
+  function cast3(p: Vec3, d: Vec3, shape: BodyShape, ignored: Set<string>): Hit3 | null {
+    let best = castMap3(c.map, p, d, shape);
+    const solid = solidAt(p, shape);
+    for (const other of ents.values()) {
+      if (!other.kind.body || ignored.has(other.id)) continue;
+      const hit = castSolid(solid, d, solidAt(other.pos, other.kind.body));
+      if (hit && (!best || hit.t < best.t)) best = { ...hit, id: other.id };
+    }
+    return best;
+  }
   const world = brand({} as Record<string, unknown>);
   const getters: Record<string, () => unknown> = {
-    tick: () => tick, dt: () => dt, round: () => roundApi, shared: sharedView, level: () => policy.level, levelMax: () => policy.levelMax,
+    tick: () => tick, dt: () => dt, round: () => roundApi, shared: sharedView, level: () => policy.level, levelMax: () => policy.levelMax, guideLevel: () => policy.guideLevel ?? policy.level, guideSeats: () => policy.guideSeats ?? EMPTY_GUIDE_SEATS, kids: () => Boolean(policy.kids), levelSet: () => Boolean(policy.levelSet),
     stage: () => stage, tune: () => c.tune, math: () => math, map: () => mapApi,
   };
   for (const [name, get] of Object.entries(getters)) Object.defineProperty(world, name, { get, enumerable: true });
@@ -558,9 +571,10 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       charge(10 + 12 * COPY);
       const e = mine(self, 'world.place');
       const vel = own(o, 'vel'); const heading = own(o, 'heading');
-      e.pos = clampIn(V(at), e.kind.body?.radius ?? 0);
+      e.pos = clampIn(V(at), e.kind.body?.radius ?? 0, e.kind.body ? e.kind.body.height || 2 * e.kind.body.radius : 0);
       e.vel = vel !== undefined ? V(vel) : ZERO;
       if (heading !== undefined) e.heading = dir(heading, dims);
+      e.grounded = dims === 2 || restsOnMap(c.map, e.pos, e.kind.body ?? { shape: 'sphere', radius: 0, height: 0 });
       e.r = (e.r + 1) & 0xffff;
       e.allow = 0;
     },
@@ -572,7 +586,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       for (const e of ents.values()) {
         if (k && e.kind !== k) continue;
         const dx = e.pos.x - p.x; const dy = e.pos.y - p.y;
-        const d2 = dx * dx + dy * dy;
+        const dz = dims === 3 ? e.pos.z - p.z : 0;
+        const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 <= R * R) { found.push({ d: d2, e }); cost += viewCost.get(e.kind) as number; }
       }
       // Sorting them and handing each out is charged before either is done.
@@ -583,10 +598,10 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     inBox: (box: unknown, kind?: unknown): readonly unknown[] => {
       charge(20 + 2 * ents.size);
       const min = V(own(box, 'min')); const max = V(own(box, 'max')); const k = kindFilter(kind);
-      if (max.x - min.x > 2 * REACH_M || max.y - min.y > 2 * REACH_M) throw new Error(`world.inBox reaches ${REACH_M} m from its centre at most`);
+      if (max.x - min.x > 2 * REACH_M || max.y - min.y > 2 * REACH_M || dims === 3 && max.z - min.z > 2 * REACH_M) throw new Error(`world.inBox reaches ${REACH_M} m from its centre at most`);
       const found: Ent[] = [];
       let cost = 0;
-      for (const e of ents.values()) if ((!k || e.kind === k) && e.pos.x >= min.x && e.pos.x <= max.x && e.pos.y >= min.y && e.pos.y <= max.y) { found.push(e); cost += viewCost.get(e.kind) as number; }
+      for (const e of ents.values()) if ((!k || e.kind === k) && e.pos.x >= min.x && e.pos.x <= max.x && e.pos.y >= min.y && e.pos.y <= max.y && (dims === 2 || e.pos.z >= min.z && e.pos.z <= max.z)) { found.push(e); cost += viewCost.get(e.kind) as number; }
       charge(cost);
       return Object.freeze(found.map(viewOf));
     },
@@ -594,6 +609,11 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       // Charged before the cast, for every shape it may test: the map's, and every entity in the room.
       charge(20 + 4 * (mapShapes + ents.size));
       const p = V(from); const d = dir(direction, dims); const far = reach(max, 'world.ray');
+      if (dims === 3) {
+        const delta = { x: d.x * far, y: d.y * far, z: d.z * far };
+        const hit = cast3(p, delta, { shape: 'sphere', radius: 0, height: 0 }, new Set(cx.ent ? [cx.ent.id] : []));
+        return hit ? Object.freeze({ ...(hit.id ? { entity: hit.id } : {}), at: V({ x: p.x + delta.x * hit.t, y: p.y + delta.y * hit.t, z: p.z + delta.z * hit.t }), normal: V({ x: hit.nx, y: hit.ny, z: hit.nz }), dist: far * hit.t }) : undefined;
+      }
       const cast = castMap(c.map, p.x, p.y, d.x * far, d.y * far, 0);
       let best: Hit | null = cast.hit;
       for (const e of ents.values()) {
@@ -609,12 +629,23 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       charge(20 + 4 * (mapShapes + ents.size));
       const d = V(delta);
       const radius = e.kind.body?.radius ?? 0;
-      const cast = castMap(c.map, e.pos.x, e.pos.y, d.x, d.y, radius);
-      let best: Hit | null = cast.hit;
       // The ids to pass through: the first few of a list, read as plain texts. A longer list is not searched once for every entity.
       const list = own(o, 'ignore');
       const ignore = new Set<string>();
       if (Array.isArray(list)) for (let i = 0; i < list.length && i < IGNORE_MAX; i += 1) { const id = own(list, i); if (typeof id === 'string') ignore.add(id); }
+      if (dims === 3) {
+        ignore.add(e.id);
+        const shape = e.kind.body ?? { shape: 'sphere', radius: 0, height: 0 };
+        const hit = cast3(e.pos, d, shape, ignore);
+        const length = Math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+        const t = hit ? Math.max(0, hit.t - (length > 0 ? SKIN / length : 0)) : 1;
+        e.pos = V({ x: e.pos.x + d.x * t, y: e.pos.y + d.y * t, z: e.pos.z + d.z * t });
+        const support = cast3(e.pos, { x: 0, y: 0, z: -2 * SKIN }, shape, ignore);
+        e.grounded = Boolean(support && support.nz > 0.5);
+        return hit ? Object.freeze({ ...(hit.id ? { entity: hit.id } : {}), at: e.pos, normal: V({ x: hit.nx, y: hit.ny, z: hit.nz }) }) : undefined;
+      }
+      const cast = castMap(c.map, e.pos.x, e.pos.y, d.x, d.y, radius);
+      let best: Hit | null = cast.hit;
       for (const other of ents.values()) {
         if (other === e || !other.kind.body || ignore.has(other.id)) continue;
         const h = rayCircle(e.pos.x, e.pos.y, d.x, d.y, other.pos.x, other.pos.y, other.kind.body.radius + radius);
@@ -647,8 +678,9 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   });
   Object.freeze(world);
 
-  const moveMap = brand(Object.freeze({ name: c.map.name, spot: mapApi.spot, spots: mapApi.spots, sweep: (body: unknown, delta: unknown): unknown => sweepMap(c.map, body, delta, moveRadius, dims) }));
+  const moveMap = brand(Object.freeze({ name: c.map.name, spot: mapApi.spot, spots: mapApi.spots, sweep: (body: unknown, delta: unknown): unknown => sweepMap(c.map, body, delta, moveRadius, dims, moveShape) }));
   let moveRadius = 0;
+  let moveShape = { shape: 'sphere', radius: 0, height: 0 };
   const moveCtx = brand({} as Record<string, unknown>);
   for (const [name, get] of Object.entries({ tick: () => tick, dt: () => dt, tune: () => c.publicTune, math: () => math, map: () => moveMap })) Object.defineProperty(moveCtx, name, { get, enumerable: true });
   Object.assign(moveCtx, { ticks: (seconds: unknown): number => { charge(1); return ticks(seconds); } });
@@ -887,14 +919,15 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   /* ---------------------------------------------------------------- one tick */
 
   function inArea(a: any, p: Vec3): boolean {
-    if (a.k === 'b') return p.x >= a.min.x && p.x <= a.max.x && p.y >= a.min.y && p.y <= a.max.y;
+    if (a.k === 'b') return p.x >= a.min.x && p.x <= a.max.x && p.y >= a.min.y && p.y <= a.max.y && (dims === 2 || p.z >= a.min.z && p.z <= a.max.z);
     const dx = p.x - a.at.x; const dy = p.y - a.at.y;
-    const d2 = dx * dx + dy * dy;
+    const dz = dims === 3 ? p.z - a.at.z : 0;
+    const d2 = dx * dx + dy * dy + dz * dz;
     if (d2 > a.r * a.r) return false;
     if (a.k === 's' || d2 === 0) return true;
     const l = Math.sqrt(d2);
     // Inside the cone: the angle to its axis is at most half its opening, compared by cosine.
-    return (dx * a.dir.x + dy * a.dir.y) / l >= exact.cos(a.half);
+    return (dx * a.dir.x + dy * a.dir.y + dz * a.dir.z) / l >= exact.cos(a.half);
   }
   function step(inputs: ReadonlyMap<number, StepInput> = new Map(), guides?: () => void): void {
     tick = (tick + 1) >>> 0;
@@ -992,10 +1025,14 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
               // The browser ran the game's own `move` and came further than `maxSpeed` allows: the body is held back.
               if (go < dist) stats.held += 1;
               e.allow -= go;
-              if (dist > 0) e.pos = clampIn(V({ x: e.pos.x + (dx / dist) * go, y: e.pos.y + (dy / dist) * go, z: 0 }), body.radius);
+              e.pos = clampIn(V({ x: e.pos.x + (dist > 0 ? (dx / dist) * go : 0), y: e.pos.y + (dist > 0 ? (dy / dist) * go : 0), z: dims === 3 ? claim.pos.z : 0 }), body.radius, body.height || 2 * body.radius);
               const sp = Math.sqrt(claim.vel.x * claim.vel.x + claim.vel.y * claim.vel.y);
-              e.vel = sp > body.maxSpeed && sp > 0 ? V({ x: (claim.vel.x / sp) * body.maxSpeed, y: (claim.vel.y / sp) * body.maxSpeed, z: 0 }) : V(claim.vel);
+              e.vel = sp > body.maxSpeed && sp > 0 ? V({ x: (claim.vel.x / sp) * body.maxSpeed, y: (claim.vel.y / sp) * body.maxSpeed, z: claim.vel.z }) : V(claim.vel);
               e.heading = dir(claim.heading, dims);
+              e.grounded = dims === 2;
+              // The support cast is map work even when a browser supplies the pose.
+              // Keep it under the same movement quota as a server-driven body's sweep.
+              if (dims === 3) run(k.name, 'move', e, 'move', () => { e.grounded = restsOnMap(c.map, e.pos, body); }, 'body');
             }
             continue;
           }
@@ -1003,13 +1040,13 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         if (!k.move) continue;
         const b = { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: e.mself };
         const beforeMove = opts.moved ? { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } } : null;
-        moveRadius = body.radius;
+        moveRadius = body.radius; moveShape = body;
         run(k.name, 'move', e, 'move', () => (k.move as NonNullable<KindTable['move']>)(b, e.input, moveCtx), 'body');
         // The runtime rounds to 32-bit floats, here and in the browser, so both step from exactly the same numbers.
         // `b` is the runtime's own object: what `move` left in it is read by its own data properties and cannot throw.
         // (A listener hears of a position that was not a number here too, as `move`'s.)
         if (noted) G.note = (what, at, written) => noted(k.name, 'move', what, at, written);
-        naming('body', 'pos'); e.pos = clampIn(V(own(b, 'pos')), body.radius); naming('body', 'vel'); e.vel = V(own(b, 'vel')); naming('body', 'heading'); e.heading = dir(own(b, 'heading'), dims); naming();
+        naming('body', 'pos'); e.pos = clampIn(V(own(b, 'pos')), body.radius, body.height || 2 * body.radius); naming('body', 'vel'); e.vel = V(own(b, 'vel')); naming('body', 'heading'); e.heading = dir(own(b, 'heading'), dims); naming();
         G.note = null;
         e.grounded = own(b, 'grounded') === true;
         if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } });
@@ -1128,7 +1165,10 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     const duration = r.round[1] === 1 ? ticks(c.rounds?.seconds ?? 0) : Math.max(3, ticks(c.rounds?.breakSeconds ?? 0));
     check(r.round[3] <= r.tick && r.round[2] <= r.tick + duration && !(r.round[1] === 1 && !duration && r.round[2] !== 0));
     check(r.policy && ['fill', 'off'].includes(r.policy.bots) && Number.isInteger(r.policy.level) && Number.isInteger(r.policy.levelMax) && r.policy.level >= 1 && r.policy.level <= r.policy.levelMax && r.policy.levelMax <= 5);
-    check(Object.keys(r.policy).every((key) => ['bots', 'level', 'levelMax', 'reserved'].includes(key)));
+    check(r.policy.guideLevel === undefined || Number.isInteger(r.policy.guideLevel) && r.policy.guideLevel >= 1 && r.policy.guideLevel <= r.policy.levelMax);
+    check(r.policy.guideSeats === undefined || Array.isArray(r.policy.guideSeats) && r.policy.guideSeats.length > 0 && r.policy.guideSeats.length <= c.seats && r.policy.guideSeats.every((seat, i, seats) => uint(seat) && seat < c.seats && (i === 0 || seat > seats[i - 1])));
+    check((r.policy.kids === undefined || r.policy.kids === true) && (r.policy.levelSet === undefined || r.policy.levelSet === true));
+    check(Object.keys(r.policy).every((key) => ['bots', 'level', 'levelMax', 'reserved', 'kids', 'levelSet', 'guideLevel', 'guideSeats'].includes(key)));
     check(r.policy.reserved === undefined || uint(r.policy.reserved) && r.policy.reserved < c.seats);
     fields(c.shared, r.shared);
     check(Array.isArray(r.ents) && Array.isArray(r.spawns) && r.ents.length + r.spawns.length <= ENTITY_MAX);
@@ -1147,7 +1187,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       const goal = w[15] as any;
       if (goal !== null) check(goal && typeof goal === 'object' && !Array.isArray(goal) && Object.keys(goal).every(k => ['goal', 'args', 'from', 'at', 'asked', 'state'].includes(k)) && typeof goal.goal === 'string' && goal.args && typeof goal.args === 'object' && !Array.isArray(goal.args) && ['brain', 'floor'].includes(goal.from) && uint(goal.at) && goal.at <= r.tick && typeof goal.asked === 'boolean' && goal.state === 'active');
       const pos = unpackVec(w[7] as number[], 3), bounds = c.map.bounds;
-      check(pos.x >= bounds.min.x && pos.x <= bounds.max.x && pos.y >= bounds.min.y && pos.y <= bounds.max.y && pos.z === 0);
+      check(pos.x >= bounds.min.x && pos.x <= bounds.max.x && pos.y >= bounds.min.y && pos.y <= bounds.max.y && (dims === 3 ? pos.z >= bounds.min.z && pos.z <= bounds.max.z : pos.z === 0));
       check(Number.isInteger(w[11]) && (w[11] as number) >= -1 && (w[11] as number) < c.seats && ['person', 'bot', 'ai'].includes(w[12] as string) && typeof w[13] === 'string' && w[13].length <= 128);
       if (k.player) { check(!bodySeats.has(w[11])); bodySeats.add(w[11]); }
       fields(k.fields, w[17]); fields(k.motion, w[18]); fields(k.input, w[19]);
@@ -1327,8 +1367,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     snapshot: () => {
       packed.n = 0;
       const list = [...ents.values()].map((e) => packEntity(e.kind, e, dims));
-      // Ten values an entity for what every entity carries (its id, its place, its velocity and heading), and one for each value of its fields.
-      snapCells = packed.n + 10 * list.length;
+      // Include all three components of position, velocity and heading in a 3D snapshot.
+      snapCells = packed.n + (dims === 3 ? 13 : 10) * list.length;
       return [[round.n, round.phase === 'live' ? 1 : 0, round.endsAt], list];
     },
     shared: () => packFields(c.shared, shared, dims),

@@ -43,7 +43,7 @@ function studio(name) {
   assert.equal(r.status, 0, r.stdout + r.stderr);
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
-  for (const m of ['esbuild', 'three']) symlinkSync(join(REPO_NM, m), join(dir, 'node_modules', m));
+  for (const m of ['esbuild', 'three', '@types']) symlinkSync(join(REPO_NM, m), join(dir, 'node_modules', m));
   return dir;
 }
 
@@ -67,7 +67,7 @@ test('the starter is text only: no model file in the repository, a library item 
   const binaries = files(STARTER).filter((f) => !/\.(json|md|ts|html)$/.test(f));
   assert.deepEqual(binaries, [], 'only text: game new fetches the models');
   assert.ok(manifest.assets.length >= 12, `the animals, the gem and the dressing (${manifest.assets.length})`);
-  const src = readFileSync(join(STARTER, 'src', 'main.ts'), 'utf8');
+  const src = readFileSync(join(STARTER, 'src', 'view.ts'), 'utf8');
   for (const a of manifest.assets) {
     assert.equal(a.route, 'library', a.id);
     assert.equal(a.from?.library, 'homie-starter', a.id);
@@ -106,7 +106,7 @@ test('RIGHTS.md and credits.json say where the models come from; style.json has 
   assert.ok(style.camera?.pitch > 0 && style.camera?.fov > 0 && style.camera?.distance > 0, 'camera');
   // The game reads them, loads every model through the shared loader (never three's own GLTFLoader), repaints the
   // flat ones into the palette and draws stand-ins for any model that is not there.
-  const src = readFileSync(join(STARTER, 'src', 'main.ts'), 'utf8');
+  const src = readFileSync(join(STARTER, 'src', 'view.ts'), 'utf8');
   assert.match(src, /from '\.\.\/style\.json'/);
   assert.match(src, /from '@homie-rocks\/studio\/assets'/);
   assert.doesNotMatch(src, /GLTFLoader/);
@@ -122,7 +122,7 @@ test('game new --from gem-rush-3d: three.js joins devDependencies, the models co
   assert.equal(made.status, 0, made.stdout + made.stderr);
   const r = JSON.parse(made.stdout);
   assert.equal(r.installNeeded, true);
-  assert.deepEqual(r.needsAdded, [{ name: 'three', version: '0.185.1' }]);
+  assert.deepEqual(r.needsAdded, [{ name: 'three', version: '0.185.1' }, { name: '@types/three', version: '0.185.1' }]);
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
   assert.equal(pkg.devDependencies.three, '0.185.1', 'exact version, in devDependencies');
   assert.equal(pkg.dependencies?.three, undefined);
@@ -139,7 +139,7 @@ test('game new --from gem-rush-3d: three.js joins devDependencies, the models co
   }
   assert.ok(!existsSync(join(game, 'public', 'models', 'flower-red.glb')), 'a refused file is never written');
   assert.equal(JSON.parse(readFileSync(join(game, 'game.json'), 'utf8')).needs.three, '0.185.1', 'game.json keeps what it was written against');
-  assert.match(readFileSync(join(game, 'src', 'main.ts'), 'utf8'), /game: 'arena'/);
+  assert.equal(JSON.parse(readFileSync(join(game, 'game.json'), 'utf8')).room.host, 'server');
   assert.match(readFileSync(join(game, 'assets', 'RIGHTS.md'), 'utf8'), /^# Rights: Arena$/m);
   assert.match(readFileSync(join(game, 'assets', 'RIGHTS.md'), 'utf8'), /homie-studio assets rights arena`/);
   assert.deepEqual(unrecordedModels(dir, 'arena'), [], 'every model it holds is recorded');

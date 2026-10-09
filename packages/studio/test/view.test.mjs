@@ -168,7 +168,7 @@ test('createLabels: other bodies and the game\'s boxes are kept clear when they 
 
 test('the starters draw through it, and Ember Vale\'s ask panel stands clear above STRIKE on a touch screen', () => {
   for (const g of ['ember-vale', 'gem-rush']) {
-    const src = readFileSync(join(PKG, 'starters', g, 'src', g === 'gem-rush' ? 'view.ts' : 'main.ts'), 'utf8');
+    const src = readFileSync(join(PKG, 'starters', g, 'src', 'view.ts'), 'utf8');
     assert.match(src, /fitView\(/, `${g} frames its world with fitView`);
     assert.match(src, /createLabels\(/, `${g} places its names with createLabels`);
     assert.match(src, /labels: \(\) =>/, `${g} lets the probe see its names (boxes only)`);
@@ -181,5 +181,5 @@ test('the starters draw through it, and Ember Vale\'s ask panel stands clear abo
   assert.match(touch, /size: Math\.max\(56, b\.size \?\? 68\), right: b\.right \?\? 18, bottom: b\.bottom \?\? 24 \+ i \* 84/);
   assert.ok(bottom >= 24 + 68 + 8, `the panel's foot (${bottom} px up) is at least 8 px above STRIKE's top (92 px up)`);
   assert.match(html, /id="asks"[^>]*data-touch-pass/, 'a touch on the panel never starts the stick');
-  assert.match(readFileSync(join(PKG, 'starters', 'ember-vale', 'src', 'main.ts'), 'utf8'), /classList\.toggle\('touch', input\.touch\.enabled\)/);
+  assert.match(readFileSync(join(PKG, 'starters', 'ember-vale', 'src', 'view.ts'), 'utf8'), /classList\.toggle\('touch', input\.touch\.enabled\)/);
 });

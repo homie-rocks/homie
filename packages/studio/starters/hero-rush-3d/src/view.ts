@@ -1,65 +1,31 @@
-/*
- * GEM RUSH 3D — Gem Rush (the netplay v1 reference game: the gem-rush starter and
- * @homie-rocks/studio/netplay/NETPLAY.md) drawn in three.js and dressed with free CC0 models.
- *
- * THE RULES ARE GEM RUSH'S, line for line: move, collect gems, score; 60 s rounds that cycle forever; the round
- * starts the moment the first browser arrives, with two bots, and every human who arrives takes a bot's body. One
- * browser hosts (pickups, scoring, bots, the clock) and broadcasts snapshots; everyone else moves their own animal
- * locally and draws the rest from interpolated snapshots; a promoted host continues the same round. A wave knocks
- * nearby bodies back (the host TAKES a client-owned body, drives the knockback, and GIVES it back); the hot zone
- * (keyed state) scores double; a watcher follows any player (`net.viewSeat`, `net.spotlight`); bots play at the
- * room's skill dial; the knock is tuned in the Game Lab (tunables.json, lab.json). Only the units changed: the
- * world is in metres, a 26 x 16 m clearing with a few bushes, rocks and a tree in it (solid: bodies go round them), x across and y deep (y is
- * three.js's z; the ground is y = 0 in three.js).
- *
- * THE LOOK comes from files beside game.json:
- *   style.json      the palette, fonts, light and camera (the art direction's tokens: `homie-studio style` writes it);
- *                   everything the code draws, and the repainted models, take their colours from it
- *   public/models/  the animals, the gem, trees, rocks, flowers and the fence: Kenney's CC0 packs from the Homie
- *                   starter library, phone-sized, fetched by `game new` (the repository keeps no model files).
- *                   assets/manifest.json names each library item and its SHA-256; assets/RIGHTS.md and credits.json
- *                   say what its licence allows.
- * Every model loads through @homie-rocks/studio/assets (createModels: each file is checked before three.js reads a
- * byte). A model that is refused or not there is drawn as a stand-in in the same colours (see "models" below): a
- * round never waits on, or breaks for, a model.
- *
- * HEADINGS, AND THERE ARE TWO: a body's `yaw` is `Math.atan2(dx, dy)` in the game's own x and y, so yaw 0 faces +y
- * (three.js's +z, the way the models are built) and it goes straight into `rotation.y`. That is also the yaw
- * `@homie-rocks/camera` means (0 faces +Z, positive turns toward +X, radians), so a follow or chase camera from that
- * package takes a body's `yaw` as it stands. The knock and aim angles (`ang`, `base`) are the OTHER kind,
- * `Math.atan2(dy, dx)`: 0 faces +x. Never hand one of those to a camera or to `rotation.y` without converting it:
- * `headingFrom({ zero: '+x', toward: '+z' })` from `@homie-rocks/camera/heading.js` is the adapter.
- *
- * PHONE BUDGETS: under 100 draw calls and 150k triangles a frame (the `drawCalls` and `triangles` probes read
- * renderer.info), the pixel ratio at most 1.5 on a phone and 2 on a computer, and no shadow map on a phone: a soft
- * disc under each body, gem, tree and rock (a computer draws the sun's real shadows). Repeated things (gems, trees, flowers, the fence, the discs) are one
- * InstancedMesh per model.
- *
- * The HUD (clock, scores, names, results, "Reconnecting…", the controls hint, the role badge) is a 2D canvas over
- * the world, in style.json's fonts and colours.
- */
+/** Hero Rush 3D: server rules, predicted jumps, and the original meadow and heroes. */
 import {
-  AmbientLight, AnimationClip, AnimationMixer, Box3, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, ConeGeometry, CylinderGeometry,
-  DodecahedronGeometry, IcosahedronGeometry, OctahedronGeometry,
-  DirectionalLight, DynamicDrawUsage, Euler, ExtrudeGeometry, Fog, Group, HemisphereLight, InstancedMesh, LineBasicMaterial,
+  AmbientLight, Box3, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, ConeGeometry, CylinderGeometry,
+  DodecahedronGeometry, IcosahedronGeometry,
+  DirectionalLight, DoubleSide, DynamicDrawUsage, Euler, ExtrudeGeometry, Fog, Group, HemisphereLight, InstancedMesh, LineBasicMaterial,
   LineSegments, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial, NoToneMapping, Object3D, Path,
   PCFSoftShadowMap, PerspectiveCamera, PlaneGeometry, Quaternion, RingGeometry, Scene, Shape, SRGBColorSpace, Vector3, WebGLRenderer,
-  type AnimationAction, type Material,
+  type Material,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 // The one model loader every studio game uses: checks each file, decodes meshopt and WebP, copies for placing.
 import { createModels, instancedCopies, placeCopy, repaint, stylize, type Copies } from '@homie-rocks/studio/assets';
-import { createNetplay, guardGestures, Roster, q, lerp, capMove, PALETTE, AI_MARK, type Peer, type RoleChange, type RoundInfo, type RoundResult, type Skill, type Slot, type Snapshot } from '@homie-rocks/studio/netplay';
+// Characters that move well: clips from the skeleton's clip library, blended, layered and tuned (Game Lab tunables).
+import { crowd, loadCharacter, type Character } from '@homie-rocks/studio/animate';
+import { guardGestures, PALETTE, AI_MARK, type RoundInfo, type Slot } from '@homie-rocks/studio/netplay';
 // The port toolkit: its probe (what `homie-studio port check` and `perf` read, and sandbox + audio shims), and name
 // labels that never pile up (port/view.ts).
 import { createBubbles, createLabels, exposePort, paintBubbles, type BubbleIn, type BubbleOut, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
 // The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).
 import { lab } from '@homie-rocks/studio/lab';
-import tuning from '../tunables.json';
+import { openRoom, type Entity } from '@homie-rocks/studio/rules/view';
+import type rules from './rules';
+const room = openRoom<typeof rules>({ net: { game: 'hero-rush-3d', arrival: 'game' } });
+const net = room.net;
+guardGestures({ touch: 'canvas' });
 import styleFile from '../style.json';
 import gameFile from '../game.json';
 
-/* ------------------------------------------------------------------ rules */
 const W = 26;
 const H = 16;
 const R_AV = 0.44;
@@ -73,18 +39,8 @@ const OBSTACLES: readonly { x: number; y: number; r: number; kind: 'camp' | 'bus
   { x: 4.6, y: 3.8, r: 0.75, kind: 'bush' }, { x: 21.4, y: 4.6, r: 0.55, kind: 'rock' }, { x: 6.0, y: 12.6, r: 0.5, kind: 'rock' },
   { x: 20.2, y: 12.2, r: 0.75, kind: 'bush' }, { x: 9.6, y: 13.4, r: 0.45, kind: 'stone' }, { x: 23.6, y: 2.0, r: 0.5, kind: 'tree' },
 ];
-/** A position kept in the clearing and out of its features (pushed to their edge, so a body slides round them). */
-function bound(x: number, y: number): { x: number; y: number } {
-  x = Math.max(R_AV, Math.min(W - R_AV, x)); y = Math.max(R_AV, Math.min(H - R_AV, y));
-  for (const o of OBSTACLES) {
-    const dx = x - o.x; const dy = y - o.y; const d = Math.hypot(dx, dy); const min = o.r + R_AV;
-    if (d >= min) continue;
-    if (d > 1e-6) { x = o.x + (dx / d) * min; y = o.y + (dy / d) * min; } else x = o.x + min;
-  }
-  return { x, y };
-}
-const R_GEM = 0.26;
-const SPEED = 6.8;
+const R_GEM = 0.3;
+const SPEED = 6.2;
 const BOT_SPEED = 5;
 const ROUND_MS = 60_000;
 const BREAK_MS = 7_000;
@@ -92,7 +48,7 @@ const GEM_COUNT = 14;
 const MIN_SLOTS = 3; // 1 human + 2 bots from the first frame
 const MAX_SLOTS = 8;
 /** The knock's numbers (tunables.json): the file's values, or the Game Lab's sliders while it plays a take. */
-const T = lab.tunables(tuning);
+const T = room.tune as Record<string, number>;
 const ZONE_MS = 12_000;
 /** The contract's 12 colours (PALETTE, NETPLAY.md section 3): a person wears their seat's, so the watch page's strip matches. */
 const colourOf = (slot: number, seat: number | null): string => PALETTE[(seat ?? slot) % PALETTE.length] as string;
@@ -101,289 +57,59 @@ const botName = (slot: number): string => BOT_NAMES[slot % BOT_NAMES.length] as 
 /** An AI's name already ends in " · AI" (the relay sees to it); a plain bot says bot. */
 const label = (name: string, bot: boolean): string => (name.endsWith(AI_MARK) ? name : bot ? `${name} · bot` : name);
 
-/* ------------------------------------------------------------ wire shapes */
-/** Snapshot: compact arrays, quantized to the centimetre. (Reset epochs ride in the helper's `c` table.) */
-type P = [slot: number, seat: number, x: number, y: number, score: number, vx: number, vy: number];
-type G = [id: number, x: number, y: number];
-interface Snap { r: [n: number, phase: number, startedAt: number, endsAt: number]; p: P[]; g: G[] }
-/**
- * Replica input: the avatar (owner movement) AND the stick intent (host movement), so either mode reads the same
- * frame. The helper stamps the reset epoch the replica has adopted.
- */
-type Avatar = [x: number, y: number, vx: number, vy: number, mx: number, my: number];
-/** A body's bump, while it lasts: its direction (kvx, kvy), where its slide starts (kx, ky) and when (kat, after the hit-stop). */
-interface Knock { kvx: number; kvy: number; kx: number; ky: number; kat: number; knockUntil: number }
-interface Body extends Knock { slot: number; seat: number | null; name: string; bot: boolean; x: number; y: number; vx: number; vy: number; score: number; tx: number; ty: number }
-interface Gem { id: number; x: number; y: number }
-/** Slow state, on the keyed state channel (net.state('zone', ...)), not in the 20 Hz snapshot. */
-interface Zone { n: number; x: number; y: number; r: number; until: number }
-interface Ckpt { round: RoundInfo; bodies: Body[]; gems: Gem[]; roster: Slot[]; tick: number; gemSeq: number; occ?: [number, number][] }
-
-/* --------------------------------------------------------------- the net */
-/**
- * `?movement=host` plays host movement: the host moves every body from the seats' stick intents (its rules own
- * movement), and each replica PREDICTS its own body by replaying its unacknowledged intents on the host's position.
- * Default `owner`: each browser moves its own body and the host bounds it.
- */
-const MOVEMENT: 'owner' | 'host' = (() => { try { return new URLSearchParams(location.search).get('movement') === 'host' ? 'host' : 'owner'; } catch { return 'owner'; } })();
-// caps: its bots read the dial ('skill'), and its Roster takes an AI's slot for it ('agents': the join passes p.agent).
-const net = createNetplay<Snap, Avatar, Ckpt>({ game: 'gem-rush-3d', maxPlayers: MAX_SLOTS, movement: MOVEMENT, snapshotHz: 20, inputHz: 20, checkpointMs: 1000, caps: ['skill', 'agents'], checkpoint: () => checkpoint() });
-// A touch game guards its own page (NETPLAY.md section 24): a long press on the canvas never selects text or raises
-// the copy/paste callout on a phone, and a touch on it never pans or zooms the page.
-guardGestures({ touch: 'canvas' });
-/** The Roster keeps the server's AI seats (revision 6): the policy is read whenever it fills. */
-const policy = () => net.policy;
-
-/* ------------------------------------------------------------ host state */
-let roster = new Roster({ min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
-let bodies = new Map<number, Body>();
-let gems: Gem[] = [];
-let gemSeq = 0;
+const jumpSpeed = (): number => 2 * T.jumpHeight / T.jumpRise;
+const mySeat = (): number | null => room.seat;
+const viewSeat = (): number | null => net.viewSeat;
+const me = { x: 13, y: 8, h: 0, vh: 0, has: false };
+const poses = new Map<number, Entity>();
+const drawn = new Map<number, { x: number; y: number; h: number; seat: number; score: number; slot: number }>();
+const waves: { x: number; y: number; at: number; colour: string; knock?: boolean; fa?: number; slot?: number }[] = [];
+let wavesSeen = 0, knocksSeen = 0, frames = 0, jumpsSeen = 0, dodgesSeen = 0;
+let firstStateAt = 0, firstSnapAt = 0;
+let gems: { x: number; y: number; id: number }[] = [];
 let round: RoundInfo | null = null;
-let zone: Zone | null = null;
-let tick = 0;
-let hosting = false;
-let cheatResets = 0;
-let controlResets = 0;
-let predictionError = 0;
-/** Gems each slot picked up this round (a gem, whatever it scored): the dial's numbers (`pickups` probe). */
-let pickups = new Map<number, number>();
-
-/* ------------------------------------------------ this browser's avatar */
-const me = { x: W / 2, y: H / 2, vx: 0, vy: 0, kvx: 0, kvy: 0, kx: 0, ky: 0, kat: 0, knockUntil: 0, has: false };
-/** Offline (no shell) plays as a local seat 0, with keys or touch. */
-const mySeat = (): number | null => (net.offline ? 0 : net.seat);
-/** Whose view to draw: my own seat, or for a watcher the player it follows (null: the whole arena). */
-const viewSeat = (): number | null => (net.offline ? 0 : net.viewSeat);
-
-/* ------------------------------------------------------- replica view */
-const drawn = new Map<number, { x: number; y: number; seat: number; score: number; slot: number }>();
-const waves: { x: number; y: number; at: number; colour: string; knock?: boolean }[] = [];
-let wavesSeen = 0;
-let knocksSeen = 0;
-let firstStateAt = 0;
-let firstSnapAt = 0;
-let frames = 0;
-
-const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
-const spawnPoint = (i: number): { x: number; y: number } => {
-  const a = (i / MAX_SLOTS) * Math.PI * 2;
-  return { x: W / 2 + Math.cos(a) * 6.6, y: H / 2 + Math.sin(a) * 5 };
-};
-const newGem = (): Gem => {
-  let x = rnd(1.2, W - 1.2); let y = rnd(1.2, H - 1.2);
-  for (let i = 0; i < 12 && OBSTACLES.some((o) => Math.hypot(o.x - x, o.y - y) < o.r + 0.7); i += 1) { x = rnd(1.2, W - 1.2); y = rnd(1.2, H - 1.2); }
-  return { id: ++gemSeq, x, y };
-};
-
-function bodyFor(slot: Slot): Body {
-  const sp = spawnPoint(slot.slot);
-  return { slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, x: sp.x, y: sp.y, vx: 0, vy: 0, score: 0, tx: sp.x, ty: sp.y, kvx: 0, kvy: 0, kx: sp.x, ky: sp.y, kat: 0, knockUntil: 0 };
+let zone: { x: number; y: number; r: number } | null = null;
+const slotOf = (e: Entity): number => e.kind === 'runner' ? e.seat ?? 0 : 0;
+function updateView(): void {
+  const v = moveVector(); room.input({ ax: Math.round(v.x * 127), ay: Math.round(v.y * 127) });
+  const own = room.me; me.has = Boolean(own);
+  if (own) { me.x = own.pos.x; me.y = own.pos.y; me.h = own.pos.z; me.vh = own.vel.z; }
+  drawn.clear(); poses.clear(); room.each('runner', e => poses.set(slotOf(e), e));
+  room.each('runner', e => drawn.set(slotOf(e), { slot: slotOf(e), seat: e.driver === 'bot' ? -1 : e.seat ?? -1, x: e.pos.x, y: e.pos.y, h: e.pos.z, score: Number(e.score) }));
+  gems = []; room.each('gem', e => gems.push({ id: Number(e.serial), x: e.pos.x, y: e.pos.y }));
+  const z = room.shared.zone as { x: number; y: number } | undefined;
+  zone = z ? { x: z.x, y: z.y, r: 3 } : null;
+  if (own && !firstSnapAt) firstSnapAt = performance.now();
+  if (z && !firstStateAt) firstStateAt = performance.now();
+  const r = room.round;
+  round = r ? { ...r, startedAt: 0, endsAt: net.now() + r.secondsLeft * 1000 } : null;
 }
-
-function syncBodiesFromRoster(): void {
-  const seen = new Set<number>();
-  for (const s of roster.slots) {
-    seen.add(s.slot);
-    const b = bodies.get(s.slot);
-    if (!b) { bodies.set(s.slot, bodyFor(s)); continue; }
-    b.seat = s.seat; b.name = s.name; b.bot = s.bot;
+function effect(name: 'swing' | 'knock', e: { id?: string; at?: { x: number; y: number } | null; dir?: { x: number; y: number }; by?: string }): void {
+  const body = e.id ? room.get(e.id) : null;
+  if (!body || body.kind !== 'runner' || !e.at) return;
+  const slot = slotOf(body), at = { x: body.pos.x, y: body.pos.y }, now = performance.now();
+  waves.push({ ...at, at: now, colour: name === 'knock' ? '#ffffff' : colourOf(slot, body.seat ?? null), knock: name === 'knock', slot, fa: e.dir ? Math.atan2(e.dir.x, e.dir.y) : 0 });
+  if (name === 'swing') { net.spotlight(body.driver === 'person' ? body.seat ?? null : null); wavesSeen++; swung(slot); }
+  else if (e.dir) {
+    const by = e.by ? room.get(e.by) : null;
+    knocksSeen++; bumped({ slot, dx: e.dir.x, dy: e.dir.y, by: by?.kind === 'runner' ? by.seat : undefined }, at);
+    if (lab.on) Object.assign(subject, { slot, at: net.now(), x0: at.x, y0: at.y, px: at.x, py: at.y, has: true });
   }
-  for (const k of [...bodies.keys()]) if (!seen.has(k)) bodies.delete(k);
 }
-
-function publishRoster(): void { net.roster(roster.toJSON()); }
-
-/** The host moved body `b` itself: tell its owner (a replica adopts it; the host's own body is `me`). */
-function hostMoved(b: Body): void {
-  if (b.bot || b.seat === null) return;
-  if (b.seat === mySeat()) { me.x = b.x; me.y = b.y; me.vx = 0; me.vy = 0; me.has = true; return; }
-  net.reset(b.seat);
-}
-
-function newZone(n: number): Zone {
-  return { n, x: rnd(4.4, W - 4.4), y: rnd(4, H - 4), r: 3, until: net.now() + ZONE_MS };
-}
-function setZone(z: Zone): void { zone = z; net.state('zone', z); }
-
-function startRound(n: number, rollover = false): void {
-  const now = net.now();
-  roster.trim();
-  // The next round of a running room: the trim is what makes room (the seats a server no longer keeps for AI go
-  // here), so whoever was seated with no body is given one now, before the bodies are placed.
-  if (rollover && !net.offline) seatWaiting();
-  syncBodiesFromRoster();
-  let i = 0;
-  for (const b of [...bodies.values()].sort((a, c) => a.slot - c.slot)) {
-    const sp = spawnPoint(i++);
-    b.x = sp.x; b.y = sp.y; b.vx = 0; b.vy = 0; b.score = 0; b.tx = sp.x; b.ty = sp.y; b.kvx = 0; b.kvy = 0; b.knockUntil = 0;
-    hostMoved(b);
-  }
-  gems = Array.from({ length: GEM_COUNT }, newGem);
-  pickups = new Map();
-  sight.clear();
-  round = { n, phase: 'live', startedAt: now, endsAt: now + ROUND_MS };
-  if (lab.stage === 'dummy') stageDummy();
-  setZone(newZone((zone?.n ?? 0) + 1));
-  net.round(round);
-  publishRoster();
-  net.snapshot(buildSnap(), tick, true);
-}
-
-function endRound(): void {
-  if (!round) return;
-  const now = net.now();
-  const ranked = [...bodies.values()].sort((a, b) => b.score - a.score || Number(a.bot) - Number(b.bot) || a.slot - b.slot);
-  const agentSlot = (slot: number): boolean => Boolean(roster.slots.find((x) => x.slot === slot)?.agent);
-  const results: RoundResult[] = ranked.map((b, i) => ({ slot: b.slot, seat: b.seat, name: b.name, score: b.score, bot: b.bot, place: i + 1, ...(agentSlot(b.slot) ? { agent: true as const } : {}) }));
-  round = { n: round.n, phase: 'over', startedAt: now, endsAt: now + BREAK_MS, results };
-  net.round(round);
-}
-
-/* ---------------------------------------------------- becoming the host */
-function becomeHost(e: RoleChange<Snap, Ckpt>): void {
-  hosting = true;
-  if (e.promoted) restore(e);
-  else {
-    roster = new Roster({ min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
-    bodies = new Map();
-    const seat = mySeat();
-    if (seat !== null) roster.claim(seat, net.offline ? 'You' : net.name);
-    syncBodiesFromRoster();
-    startRound((e.round?.n ?? 0) + 1);
-  }
-  // Whoever is connected now is who plays: seats that left during the gap become bots.
-  const peers = net.offline ? [{ seat: 0, name: 'You' }] : [...net.peers.values()].filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, agent: p.agent ?? null, occ: p.occ ?? null }));
-  // `occ` (NETPLAY.md section 25): which stay in its seat each peer's is, so a seat number that changed hands while
-  // nobody was hosting is claimed afresh instead of inheriting the last player's body in silence.
-  const { claimed } = roster.reconcile(peers);
-  syncBodiesFromRoster();
-  for (const s of claimed) { const b = bodies.get(s.slot); if (b && b.seat !== mySeat()) hostMoved(b); }
-  // My own body is wherever my local avatar is: it was client-owned a moment ago and still is.
-  const mine = mySeat() !== null ? [...bodies.values()].find((b) => b.seat === mySeat()) : undefined;
-  if (mine && me.has) { mine.x = me.x; mine.y = me.y; }
-  else if (mine) { me.x = mine.x; me.y = mine.y; me.has = true; }
-  // The hot zone is keyed state: the relay handed it over with the role.
-  zone = net.stateOf<Zone>('zone') ?? zone;
-  if (!zone && round) setZone(newZone(1));
-  publishRoster();
-}
-
-function restore(e: RoleChange<Snap, Ckpt>): void {
-  const ck = e.ckpt?.d ?? null;
-  if (ck) {
-    roster = Roster.from(ck.roster, { min: MIN_SLOTS, max: MAX_SLOTS, botName, policy }, ck.occ ?? null);
-    bodies = new Map(ck.bodies.map((b) => [b.slot, { ...b }]));
-    gems = ck.gems.map((g) => ({ ...g }));
-    gemSeq = ck.gemSeq;
-    round = ck.round;
-    tick = ck.tick;
-  } else {
-    roster = Roster.from(e.roster ?? [], { min: MIN_SLOTS, max: MAX_SLOTS, botName, policy });
-    bodies = new Map();
-    syncBodiesFromRoster();
-  }
-  // The snapshot is newer than the checkpoint (20 Hz vs 1 Hz): positions, scores and gems from it.
-  const s = e.snap;
-  if (s && (!e.ckpt || s.st >= e.ckpt.st)) {
-    for (const [slot, seat, x, y, score] of s.d.p) {
-      let b = bodies.get(slot);
-      if (!b) {
-        const rs0 = roster.slots.find((r) => r.slot === slot) ?? { slot, seat: seat >= 0 ? seat : null, name: seat >= 0 ? `Player ${seat + 1}` : botName(slot), bot: seat < 0 };
-        b = bodyFor(rs0);
-        bodies.set(slot, b);
-      }
-      b.x = x; b.y = y; b.score = score; b.tx = x; b.ty = y;
-    }
-    gems = s.d.g.map(([id, x, y]) => ({ id, x, y }));
-    gemSeq = Math.max(gemSeq, ...gems.map((g) => g.id));
-    const [n, ph, startedAt, endsAt] = s.d.r;
-    round = { n, phase: ph ? 'over' : 'live', startedAt, endsAt, ...(round?.n === n && round.results ? { results: round.results } : {}) };
-    tick = Math.max(tick, s.k);
-  }
-  // A round message the relay kept is at least as authoritative as the checkpoint's copy.
-  if (e.round && (!round || e.round.n > round.n || (e.round.n === round.n && e.round.phase === 'over' && round.phase === 'live'))) round = e.round;
-  if (!round) { startRound(1); return; }
-  net.round(round);
-}
-
-function checkpoint(): Ckpt {
-  return {
-    round: round ?? { n: 0, phase: 'live', startedAt: 0, endsAt: 0 },
-    bodies: [...bodies.values()].map((b) => ({ ...b })),
-    gems: gems.map((g) => ({ ...g })),
-    roster: roster.toJSON(),
-    // Whose stay each body is, beside the roster: how the next host tells a player who came back from a new one.
-    occ: roster.occupants(),
-    tick,
-    gemSeq,
-  };
-}
-
-net.on('role', (e) => {
-  if (e.role === 'host') becomeHost(e);
-  else { hosting = false; }
-});
-/** Host: a body for somebody the relay seated. False when every body is somebody's (they wait: see seatWaiting). */
-function giveBody(p: Peer): boolean {
-  if (p.seat === null) return false;
-  // An AI takes a seat kept for AI, a person never does (revision 6: the Roster needs p.agent for that).
-  const c = roster.claim(p.seat, p.name, p.agent ? { role: p.agent.role, hands: p.agent.hands } : null, p.occ ?? null);
-  if (!c) return false;
-  syncBodiesFromRoster();
-  const b = bodies.get(c.slot.slot);
-  // The arriving human takes over the bot's body where it stands, score and all (reset = "adopt this position").
-  if (b) { b.vx = 0; b.vy = 0; b.kvx = 0; b.kvy = 0; b.knockUntil = 0; hostMoved(b); }
-  return true;
-}
-/**
- * SEAT WHOEVER IS WAITING (NETPLAY.md section 28). The relay seats a person; this host gives them a body. A claim that
- * found every body taken (a server's AI seats were still kept, say) used to be tried once: that player watched for the
- * rest of the visit, online, with nothing said. It is tried again whenever a body frees up and at every round start.
- */
-function seatWaiting(): boolean {
-  let any = false;
-  for (const p of net.peers.values()) if (p.seat !== null && !roster.bySeat(p.seat) && giveBody(p)) any = true;
-  return any;
-}
-net.on('join', (p) => {
-  if (!hosting || !giveBody(p)) return;
-  publishRoster();
-  net.snapshot(buildSnap(), tick, true);
-});
-net.on('leave', (p) => {
-  if (!hosting || p.seat === null) return;
-  roster.release(p.seat); // their body stays, driven by a bot
-  syncBodiesFromRoster();
-  // A body just went to a bot: somebody seated with none takes it now.
-  const seated = seatWaiting();
-  publishRoster();
-  if (seated) net.snapshot(buildSnap(), tick, true);
-});
-// The server's policy changed: its AI seats come (or go between rounds) at once.
-net.on('policy', () => { if (!hosting) return; roster.fill(); syncBodiesFromRoster(); publishRoster(); });
-net.on('event', (e) => {
-  if (e.k === 'wave') addWave(e.d as { slot: number });
-  if (e.k === 'knock') addWave(e.d as { slot: number }, true);
-});
-net.on('round', (r) => { round = hosting ? round : r; });
-net.on('state', (e) => { if (e.k === 'zone' && !hosting) zone = (e.d as Zone | null) ?? null; if (!firstStateAt) firstStateAt = performance.now(); });
-net.on('snapshot', () => { if (!firstSnapAt) firstSnapAt = performance.now(); });
-/** My body's control changed: on a reset, stand where the host put me (a new round, a takeover, a knockback's end). */
-net.on('control', (e) => {
-  if (!e.reset) return;
-  controlResets += 1;
-  const p = (e.snap as Snapshot<Snap>).d.p.find((x) => x[1] === net.seat);
-  if (p) { me.x = p[2]; me.y = p[3]; me.vx = 0; me.vy = 0; me.has = true; }
-});
-
+room.on('swing', e => effect('swing', e));
+room.on('knock', e => effect('knock', e));
+room.on('jump', e => { const b = e.id ? room.get(e.id) : null; if (b) jumped(slotOf(b)); });
+room.on('dodge', e => { const b = e.id ? room.get(e.id) : null; if (b) dodged(slotOf(b)); });
 /* ----------------------------------------------------------------- input */
 // The camera looks across the meadow from its near edge, square to it: screen right is +x and screen down is +y, so
-// keys and the stick move a body exactly as in Gem Rush.
+// keys and the stick move a body exactly as in Gem Rush. Space jumps; F (or J, Enter, a click) swings. On a phone the
+// first finger anywhere is the stick, and two buttons at the bottom right jump and swing (a second finger anywhere
+// else swings too).
 const keys = new Set<string>();
 addEventListener('keydown', (e) => {
-  if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-  if (e.code === 'Space' && !keys.has('Space')) wave();
+  if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyF', 'KeyJ', 'Enter'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Space' && !keys.has('Space')) jump();
+  if (['KeyF', 'KeyJ', 'Enter'].includes(e.code) && !keys.has(e.code)) swing();
   keys.add(e.code);
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -393,9 +119,16 @@ const stick = { id: -1, ox: 0, oy: 0, x: 0, y: 0, active: false };
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hudCanvas = document.getElementById('hud') as HTMLCanvasElement;
 const ctx = hudCanvas.getContext('2d') as CanvasRenderingContext2D;
+/** The touch buttons (CSS px, set by the HUD each frame); shown once a finger has touched the screen. */
+const buttons: { id: 'jump' | 'swing'; x: number; y: number; r: number; at: number }[] = [];
+let touched = (() => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } })();
+const buttonAt = (x: number, y: number): (typeof buttons)[number] | null => buttons.find((b) => Math.hypot(x - b.x, y - b.y) <= b.r * 1.15) ?? null;
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'mouse') return;
-  if (stick.active && e.pointerId !== stick.id) { wave(); return; } // a second finger waves
+  if (e.pointerType === 'mouse') { if (e.button === 0) swing(); return; }
+  touched = true;
+  const b = buttonAt(e.clientX, e.clientY);
+  if (b) { b.at = performance.now(); if (b.id === 'jump') jump(); else swing(); return; }
+  if (stick.active && e.pointerId !== stick.id) { swing(); return; } // a second finger swings
   stick.id = e.pointerId; stick.ox = e.clientX; stick.oy = e.clientY; stick.x = e.clientX; stick.y = e.clientY; stick.active = true;
   canvas.setPointerCapture(e.pointerId);
 });
@@ -416,284 +149,13 @@ function moveVector(): { x: number; y: number } {
     if (len > 6) { const m = Math.min(1, len / 56); x += (dx / len) * m; y += (dy / len) * m; }
   }
   const len = Math.hypot(x, y);
-  return len > 1 ? { x: x / len, y: y / len } : { x, y };
+  if (len > 1) { x /= len; y /= len; }
+  const c = Math.cos(view3.yaw), s = Math.sin(view3.yaw);
+  return { x: x * c + y * s, y: -x * s + y * c };
 }
 
-function wave(): void {
-  const seat = mySeat();
-  if (seat === null) return;
-  if (hosting) {
-    const b = [...bodies.values()].find((x) => x.seat === seat);
-    if (b) hostWave(b);
-  } else net.press('wave');
-}
-/** Host: a wave rings out, and knocks back every body within reach (bots, the host itself, and replicas). */
-function hostWave(from: Body): void {
-  addWave({ slot: from.slot }); net.send('wave', { slot: from.slot });
-  for (const b of bodies.values()) {
-    if (b === from || Math.hypot(b.x - from.x, b.y - from.y) > T.knockRange) continue;
-    knock(b, from.x, from.y, from.slot);
-  }
-}
-/**
- * Host: knock a body back. The hit LANDS first: for T.hitStopMs the body holds where it was hit (it flashes, squashes
- * and shakes on every screen), then it SLIDES T.knockDistance along the hit, fast at first and easing into the stop
- * (T.knockEase), so it arrives at rest, the same distance at any frame rate, and its owner steers again with no pop.
- * A replica's body is TAKEN for the whole bump (its owner's avatar frames are ignored; the host drives it; the owner
- * draws its body from snapshots), then the helper GIVES it back with a reset, so the owner stands where it ended.
- */
-function knock(b: Body, fx: number, fy: number, by: number): void {
-  let dx = b.x - fx; let dy = b.y - fy;
-  const len = Math.hypot(dx, dy);
-  if (len < 0.02) { const a = Math.random() * Math.PI * 2; dx = Math.cos(a); dy = Math.sin(a); } else { dx /= len; dy /= len; }
-  const at = net.now() + T.hitStopMs;
-  const o: Knock & { x: number; y: number } = !b.bot && b.seat !== null && b.seat === mySeat() ? me : b;
-  o.kvx = dx; o.kvy = dy; o.kx = o.x; o.ky = o.y; o.kat = at; o.knockUntil = at + T.knockMs;
-  if (o === b && !b.bot && b.seat !== null) net.take(b.seat, T.hitStopMs + T.knockMs);
-  labKnock(b);
-  const d = { slot: b.slot, dx: q(dx, 2), dy: q(dy, 2), by };
-  addWave(d, true); net.send('knock', d);
-}
-
-/** Where a bumped body is now: held through the hit-stop, then eased out along the hit. Sets its velocity too. */
-function slide(o: Knock & { x: number; y: number; vx: number; vy: number }, now: number, dt: number): void {
-  const u = Number.isFinite(o.kat) ? Math.max(0, Math.min(1, (now - o.kat) / Math.max(1, T.knockMs))) : 1;
-  const e = 1 - (1 - u) ** Math.max(1, T.knockEase);
-  const { x, y } = bound(o.kx + o.kvx * T.knockDistance * e, o.ky + o.kvy * T.knockDistance * e);
-  if (u >= 1) { o.vx = 0; o.vy = 0; } else if (dt > 0) { o.vx = (x - o.x) / dt; o.vy = (y - o.y) / dt; }
-  o.x = x; o.y = y;
-}
-/** The frame a bump is over: the body lands exactly where its slide ends, at rest (at 12 fps the last step is long). */
-function landed(o: Knock & { x: number; y: number; vx: number; vy: number }): void {
-  if (!o.kat) return;
-  slide(o, o.kat + T.knockMs, 0);
-  o.kat = 0;
-}
-function addWave(d: { slot: number; dx?: number; dy?: number; by?: number }, isKnock = false): void {
-  const pos = hosting ? bodies.get(d.slot) : [...drawn.values()].find((x) => x.slot === d.slot);
-  // The action, for a watcher on Auto: whoever waved (a person, never a bot).
-  const waver = pos && 'bot' in pos ? (pos.bot ? null : pos.seat) : pos && pos.seat >= 0 ? pos.seat : null;
-  if (!isKnock) net.spotlight(waver);
-  const mineSlot = hosting ? [...bodies.values()].find((x) => x.seat !== null && x.seat === mySeat())?.slot : [...drawn.values()].find((x) => x.seat === net.seat)?.slot;
-  const at = mineSlot === d.slot && me.has ? me : pos;
-  if (!at) return;
-  waves.push({ x: at.x, y: at.y, at: performance.now(), colour: isKnock ? '#ffffff' : PALETTE[d.slot % PALETTE.length] as string, knock: isKnock });
-  if (isKnock) knocksSeen += 1; else wavesSeen += 1;
-  if (isKnock) bumped(d, at); else pushes.set(d.slot, performance.now());
-}
-
-/* ---------------------------------------------------------------- simulate */
-/** The one movement rule, shared by the owner, the host (host movement) and a replica's prediction. */
-function integrate(o: { x: number; y: number; vx: number; vy: number }, mx: number, my: number, dt: number): void {
-  mx = Number(mx) || 0; my = Number(my) || 0;
-  const len = Math.hypot(mx, my);
-  if (len > 1) { mx /= len; my /= len; } // an intent is at most full stick: no speed hack through intents
-  const k = Math.min(1, dt * 14);
-  o.vx += (mx * SPEED - o.vx) * k;
-  o.vy += (my * SPEED - o.vy) * k;
-  const p = bound(o.x + o.vx * dt, o.y + o.vy * dt);
-  o.x = p.x; o.y = p.y;
-}
-
-function stepMe(dt: number): void {
-  const seat = mySeat();
-  if (seat === null) { me.has = false; return; }
-  // Host-driven (host movement, or knocked back on a replica): stepReplica predicts me instead.
-  if (!net.owned) return;
-  if (me.knockUntil > net.now()) { slide(me, net.now(), dt); return; }
-  landed(me);
-  const v = moveVector();
-  integrate(me, v.x, v.y, dt);
-}
-
-/**
- * Replica, host-driven body. My stick moves me locally every frame (instant response), with the same rule the host
- * runs. When a new snapshot lands: start from where the host has me, replay every intent it had not acknowledged,
- * and pull toward that by 30% (or jump, if it is far). The host stays the truth; I never wait for it.
- */
-let predictedK = -1;
-function predictMe(dt: number): void {
-  const v = moveVector();
-  integrate(me, v.x, v.y, dt);
-  const snap = net.latest();
-  if (!snap || snap.k === predictedK) return;
-  predictedK = snap.k;
-  const p = snap.d.p.find((x) => x[1] === net.seat);
-  if (!p) return;
-  const pred = { x: p[2], y: p[3], vx: p[5] ?? 0, vy: p[6] ?? 0 };
-  for (const f of net.pending()) {
-    let left = Math.min(0.25, f.dt / 1000);
-    while (left > 0) { const h = Math.min(left, 1 / 60); integrate(pred, f.a[4], f.a[5], h); left -= h; }
-  }
-  const err = Math.hypot(pred.x - me.x, pred.y - me.y);
-  predictionError = err;
-  if (!me.has || err > 3) { me.x = pred.x; me.y = pred.y; me.vx = pred.vx; me.vy = pred.vy; }
-  else { me.x += (pred.x - me.x) * 0.3; me.y += (pred.y - me.y) * 0.3; }
-  me.has = true;
-}
-
-function stepKnocked(b: Body, dt: number): void { slide(b, net.now(), dt); }
-
-/**
- * THE BOTS, AT THE ROOM'S DIAL (NETPLAY.md section 17). A bot re-reads the world only every `reactionMs` (what it
- * last noticed is where it heads, and a miss costs it that long again), aims up to 4 m off at aimNoise 1, leaves
- * the hot zone to the people at positioning 0 and fights for it at 1, and waves at a rival in reach about
- * `aggression x 0.8` times a second. Rookie is beatable by anyone, Maxed by few.
- */
-const sight = new Map<number, { at: number; tx: number; ty: number; arrived?: boolean }>();
-
-function stepBots(dt: number): void {
-  const taken = new Set<number>();
-  const now = net.now();
-  for (const b of bodies.values()) {
-    if (!b.bot) continue;
-    if (b.knockUntil > now) { stepKnocked(b, dt); continue; }
-    landed(b);
-    if (lab.stage === 'dummy') { standStill(b, dt); continue; }
-    const s: Skill = net.skillOf(b.slot); // Fair when nobody set a dial
-    let eye = sight.get(b.slot);
-    if (!eye || now - eye.at >= s.reactionMs) { // REACTION TIME
-      const g = pickGem(b, taken, s); // POSITIONING
-      const miss = 4 * s.aimNoise; // AIM NOISE: up to 4 m off at 1
-      eye = { at: now, tx: g ? g.x + (Math.random() - 0.5) * miss : b.tx, ty: g ? g.y + (Math.random() - 0.5) * miss : b.ty };
-      sight.set(b.slot, eye);
-      if (g) taken.add(g.id);
-    }
-    b.tx = eye.tx; b.ty = eye.ty;
-    const rival = nearestBody(b, T.knockRange); // AGGRESSION: waves at a rival in reach
-    if (rival && round?.phase === 'live' && Math.random() < s.aggression * 0.8 * dt) hostWave(b);
-    const dx = b.tx - b.x; const dy = b.ty - b.y; const dist = Math.hypot(dx, dy);
-    const len = dist || 1;
-    // Arrived where it aimed: it stands there, and notices what it missed only a reaction later.
-    if (dist < 0.12 && !eye.arrived) { eye.arrived = true; eye.at = now; }
-    const speed = dist < 0.12 ? 0 : BOT_SPEED;
-    const k = Math.min(1, dt * 5);
-    b.vx += ((dx / len) * speed - b.vx) * k;
-    b.vy += ((dy / len) * speed - b.vy) * k;
-    const p = bound(b.x + b.vx * dt, b.y + b.vy * dt);
-    b.x = p.x; b.y = p.y;
-  }
-}
-
-/** Positioning: 0 leaves the hot zone to the people, 1 fights for it. */
-function pickGem(b: Body, taken: Set<number>, s: Skill): Gem | null {
-  let best: Gem | null = null; let bd = Infinity;
-  for (const g of gems) {
-    if (taken.has(g.id)) continue;
-    const hot = zone !== null && Math.hypot(g.x - zone.x, g.y - zone.y) < zone.r;
-    const d = Math.hypot(g.x - b.x, g.y - b.y) * (hot ? 1.5 - s.positioning : 1);
-    if (d < bd) { bd = d; best = g; }
-  }
-  return best;
-}
-
-/** The nearest other body within `range` (a bot's rival), or null. */
-function nearestBody(b: Body, range: number): Body | null {
-  let best: Body | null = null; let bd = range;
-  for (const o of bodies.values()) {
-    if (o === b) continue;
-    const d = Math.hypot(o.x - b.x, o.y - b.y);
-    if (d < bd) { bd = d; best = o; }
-  }
-  return best;
-}
-
-function stepHost(dt: number): void {
-  tick += 1;
-  const seat = mySeat();
-  const now0 = net.now();
-  for (const b of bodies.values()) {
-    if (b.bot) continue;
-    if (b.seat === seat) {
-      me.has = true;
-      b.x = me.x; b.y = me.y; b.vx = me.vx; b.vy = me.vy;
-      continue;
-    }
-    if (b.seat === null) continue;
-    const ctl = net.control(b.seat);
-    if (ctl.taken || b.knockUntil > now0) { stepKnocked(b, dt); if (net.takePresses(b.seat)['wave']) hostWave(b); continue; } // the host drives the knockback
-    if (MOVEMENT === 'host') {
-      // Host movement: the seat sends intents; the rules move the body.
-      const f = net.inputOf(b.seat);
-      integrate(b, f ? Number(f.a?.[4]) : 0, f ? Number(f.a?.[5]) : 0, dt);
-      if (net.takePresses(b.seat)['wave']) hostWave(b);
-      continue;
-    }
-    const a = net.avatar(b.seat); // null while taken, or until the owner has adopted the last reset
-    if (a && Array.isArray(a)) {
-      // Client-owned movement, bounded: to the arena, and to 1.3x top speed per frame. A legitimate avatar catches
-      // up within a frame; a teleport crawls, and a claim more than half a second of running away is reset.
-      const claim = bound(Number(a[0]) || 0, Number(a[1]) || 0);
-      const m = capMove(b, claim, SPEED * 1.3 * dt + 0.12);
-      if (m.over > SPEED * 0.5) { net.reset(b.seat); cheatResets += 1; }
-      else { b.x = m.x; b.y = m.y; b.vx = Number(a[2]) || 0; b.vy = Number(a[3]) || 0; }
-    }
-    if (net.takePresses(b.seat)['wave']) hostWave(b);
-  }
-  stepBots(dt);
-  const now = net.now();
-  if (round && round.phase === 'live') {
-    if (!zone || now >= zone.until) setZone(newZone((zone?.n ?? 0) + 1));
-    for (const b of bodies.values()) {
-      for (let i = 0; i < gems.length; i += 1) {
-        const g = gems[i] as Gem;
-        if (Math.hypot(g.x - b.x, g.y - b.y) < R_AV + R_GEM) {
-          b.score += zone && Math.hypot(g.x - zone.x, g.y - zone.y) < zone.r ? 2 : 1;
-          pickups.set(b.slot, (pickups.get(b.slot) ?? 0) + 1);
-          gems[i] = newGem();
-        }
-      }
-    }
-    if (now >= round.endsAt) endRound();
-  } else if (round && round.phase === 'over' && now >= round.endsAt) startRound(round.n + 1, true);
-  if (net.snapshotDue()) net.snapshot(buildSnap(), tick);
-}
-
-function buildSnap(): Snap {
-  const r = round ?? { n: 0, phase: 'live', startedAt: 0, endsAt: 0 };
-  return {
-    r: [r.n, r.phase === 'over' ? 1 : 0, r.startedAt, r.endsAt],
-    p: [...bodies.values()].map((b) => [b.slot, b.seat ?? -1, q(b.x, 2), q(b.y, 2), b.score, q(b.vx, 1), q(b.vy, 1)] as P),
-    g: gems.map((g) => [g.id, q(g.x, 2), q(g.y, 2)] as G),
-  };
-}
-
-function stepReplica(dt: number): void {
-  const seat = net.seat;
-  if (seat !== null) {
-    // Host-driven (host movement, or taken for a knockback): predict from the host's position and my intents.
-    if (!net.owned) predictMe(dt);
-    // Only once I have a body (the first control event adopts it): before that my position is nobody's.
-    if (me.has) {
-      const v = moveVector();
-      // Stick direction as held "buttons": a new direction is a press edge, so it is sent within 16 ms.
-      const held = [v.x > 0.2 ? 'R' : v.x < -0.2 ? 'L' : '', v.y > 0.2 ? 'D' : v.y < -0.2 ? 'U' : ''].filter(Boolean);
-      net.input([q(me.x, 2), q(me.y, 2), q(me.vx, 1), q(me.vy, 1), q(v.x, 2), q(v.y, 2)], held);
-    }
-  }
-  const smp = net.sample();
-  drawn.clear();
-  if (!smp) return;
-  const bySlot = new Map<number, P>(smp.a.d.p.map((p) => [p[0], p]));
-  for (const pb of smp.b.d.p) {
-    const pa = bySlot.get(pb[0]) ?? pb;
-    drawn.set(pb[0], { slot: pb[0], seat: pb[1], x: lerp(pa[2], pb[2], smp.alpha), y: lerp(pa[3], pb[3], smp.alpha), score: pb[4] });
-  }
-  const [n, ph, startedAt, endsAt] = smp.b.d.r;
-  if (!round || round.n !== n || (round.phase === 'over') !== (ph === 1)) {
-    const kept = net.roundInfo && net.roundInfo.n === n ? net.roundInfo : null;
-    round = kept ?? { n, phase: ph ? 'over' : 'live', startedAt, endsAt };
-  }
-}
-
-/* -------------------------------------------------------------- how a bump looks */
-/*
- * Every screen draws a bump from the knock event (the host's own, or the one it sends): the hit lands (the animal
- * flashes white and holds, squashed against the hit, shaking), flies (stretched along the hit, less as it slows),
- * stops (squashed, then a wobble that dies away: overlap), throws sparks, and kicks the camera of whoever was in it.
- * The waver's own body puffs up a little when it waves. Sparks and the camera's kick roll lab.random(): their own
- * dice, so the world's (Math.random) stay the same as a build without them, which the Game Lab needs to compare two.
- */
+function jump(): void { const v = moveVector(); room.input({ ax: Math.round(v.x * 127), ay: Math.round(v.y * 127), jump: true }); }
+function swing(): void { const v = moveVector(); room.input({ ax: Math.round(v.x * 127), ay: Math.round(v.y * 127), swing: true }); }
 const bumps = new Map<number, { at: number; dx: number; dy: number }>();
 const pushes = new Map<number, number>();
 const sparks: { x: number; y: number; h: number; vx: number; vy: number; vh: number; at: number; life: number; gold?: boolean }[] = [];
@@ -710,8 +172,28 @@ function bumped(d: { slot: number; dx?: number; dy?: number; by?: number }, at: 
   }
   if (sparks.length > 160) sparks.splice(0, sparks.length - 160);
   // The camera kicks for whoever was in it: the body bumped, or the one who waved.
-  const mine = hosting ? [...bodies.values()].find((x) => x.seat !== null && x.seat === mySeat())?.slot : [...drawn.values()].find((x) => x.seat === net.seat)?.slot;
+  const mine = [...drawn.values()].find((x) => x.seat === net.seat)?.slot;
   if (mine !== undefined && (d.slot === mine || d.by === mine)) kickAt = now;
+  const hero = heroes.get(d.slot)?.char;
+  if (hero) hero.hit(dx, dy, 1);
+}
+/** A swing started: its hero plays its action (the mage casts, the rest strike). */
+function swung(slot: number): void {
+  const h = heroes.get(slot);
+  if (!h?.char) return;
+  h.char.act(h.char.has(HERO_ACTION[h.kind] ?? 'attack') ? (HERO_ACTION[h.kind] ?? 'attack') : 'attack', { from: T.swingSkip });
+  labSwing(slot);
+}
+/** Count authoritative jumps; the clip starts with the drawn takeoff, including prediction. */
+function jumped(slot: number): void {
+  jumpsSeen += 1;
+}
+/** A swing passed under a jumper: a word pops over it. */
+const pops: { slot: number; at: number; text: string }[] = [];
+function dodged(slot: number): void {
+  dodgesSeen += 1;
+  pops.push({ slot, at: performance.now(), text: 'Dodged!' });
+  if (pops.length > 12) pops.shift();
 }
 /** A gem taken: a little gold burst where it was (drawn on every screen from the gem list; the rules never see it). */
 function sparkle(x: number, y: number): void {
@@ -745,61 +227,48 @@ function bodyFx(slot: number, t: number): { ox: number; oy: number; sx: number; 
   return out;
 }
 
-/* -------------------------------------------------------------- the Game Lab */
-/*
- * What the lab shows of a knock (lab.json's take "knock"): the body bumped last is the subject. Every frame its phase,
- * its speed and its distance from where it was hit go to the lab, and its pose feeds the onion skin and the spacing
- * arc (dots far apart: fast; close together: slow), drawn as lines on the meadow. Only in the lab: outside it,
- * labKnock and labReport never run.
- */
 type Pose = { x: number; y: number; sx?: number; sy?: number; a?: number };
-/**
- * The take's stage "dummy" (lab.stage, only ever set by the lab): you stand left of the middle with a bot a short step
- * to your right, and every bot stands still unless it is bumped, like a training dummy. The knock alone, every time.
- */
-function stageDummy(): void {
-  const seat = mySeat();
-  const list = [...bodies.values()].sort((a, c) => a.slot - c.slot);
-  const mine = list.find((b) => !b.bot && b.seat === seat);
-  const bots = list.filter((b) => b.bot);
-  if (mine) { mine.x = W / 2 - 3.2; mine.y = H / 2; hostMoved(mine); }
-  bots.forEach((b, i) => { b.x = i === 0 ? W / 2 - 3.2 + 1.84 : W - 3.6; b.y = i === 0 ? H / 2 : 3 + (i - 1) * 14; b.tx = b.x; b.ty = b.y; });
-}
-/** A dummy at rest: it eases to a stop wherever the last bump left it. */
-function standStill(b: Body, dt: number): void {
-  const k = Math.min(1, dt * 5);
-  b.vx -= b.vx * k; b.vy -= b.vy * k;
-  const p = bound(b.x + b.vx * dt, b.y + b.vy * dt); b.x = p.x; b.y = p.y;
-}
 const subject = { slot: -1, at: 0, x0: 0, y0: 0, px: 0, py: 0, has: false };
-function labKnock(b: Body): void {
-  if (!lab.on) return;
-  subject.slot = b.slot; subject.at = net.now(); subject.x0 = b.x; subject.y0 = b.y; subject.px = b.x; subject.py = b.y; subject.has = true;
-}
-/** Where the subject is now (the host's own body is `me`), or null. */
-function subjectAt(): Pose | null {
-  if (!subject.has) return null;
-  const b = bodies.get(subject.slot);
-  if (!b) return null;
-  return !b.bot && b.seat !== null && b.seat === mySeat() ? me : b;
-}
+const swinger = { slot: -1, at: 0 };
+function labSwing(slot: number): void { if (lab.on) { swinger.slot = slot; swinger.at = net.now(); } }
+function subjectAt(): Pose | null { return subject.has ? drawn.get(subject.slot) ?? null : null; }
+let apex = 0;
 function labReport(dt: number): void {
+  if (dt <= 0) return;
+  if (lab.stage === 'jump') {
+    const hero = [...heroes.values()].find((x) => x.mine)?.char ?? null;
+    lab.track('height', me.h, 'm');
+    lab.track('stretch', hero ? (hero.root.children[0]?.scale.y ?? 1) * 100 - 100 : 0, '%');
+    if (room.me?.grounded) { lab.phase(hero?.state === 'LAND' ? 'LAND' : null, 'Squash on touch-down, then back to the run'); apex = 0; }
+    else if (me.vh > jumpSpeed() * 0.55) lab.phase('TAKE-OFF', 'Leaves fast and stretched');
+    else if (me.vh > jumpSpeed() * 0.15) lab.phase('RISE', 'Slows as it climbs');
+    else if (me.vh > -jumpSpeed() * 0.25) { lab.phase('HANG', 'A moment at the top to read it'); apex = Math.max(apex, me.h); }
+    else lab.phase('FALL', `Down ${T.fallFaster.toFixed(1)}x harder than up: weight`);
+    lab.pose('subject', { x: me.x, y: me.y - me.h, sx: 1, sy: 1, a: 0 });
+    return;
+  }
   const at = subjectAt();
-  if (!at || dt <= 0) { lab.phase(null); return; }
+  const sinceSwing = net.now() - swinger.at;
+  if (swinger.slot >= 0 && sinceSwing < T.windupMs && (!at || net.now() - subject.at > T.hitStopMs + T.knockMs + T.settleMs)) {
+    lab.phase('WINDUP', 'The swing gathers: what you see before it lands');
+    lab.track('speed', 0, 'm/s');
+    return;
+  }
+  if (!at) { lab.phase(null); return; }
   const age = net.now() - subject.at;
   lab.track('speed', Math.hypot(at.x - subject.px, at.y - subject.py) / dt, 'm/s');
   lab.track('distance', Math.hypot(at.x - subject.x0, at.y - subject.y0), 'm');
   subject.px = at.x; subject.py = at.y;
   const fx = bodyFx(subject.slot, performance.now());
   lab.track('stretch', (fx.sx - 1) * 100, '%');
-  if (age < T.hitStopMs) lab.phase('HIT-STOP', 'The hit lands: hold, flash, squash');
+  if (age < T.hitStopMs) lab.phase('HIT-STOP', 'The hit lands: hold, flash, flinch');
   else if (age < T.hitStopMs + T.knockMs * 0.3) lab.phase('LAUNCH', 'Leaves fast, stretched along the hit');
   else if (age < T.hitStopMs + T.knockMs) lab.phase('SLIDE', 'Eases into the stop: no creep, no pop');
   else if (age < T.hitStopMs + T.knockMs + T.settleMs) lab.phase('SETTLE', 'Squash on the stop, overlap on the way out');
   else lab.phase(null);
   lab.pose('subject', { x: at.x, y: at.y, sx: fx.sx, sy: fx.sy, a: fx.ang });
 }
-/** The lab's views: the game's own camera, close on the knock, the whole arena. */
+/** The lab's views: the game's own camera, close on the action, the whole arena. */
 const labView = lab.camera<{ zoom?: number; whole?: boolean } | null>({ game: null, close: { zoom: 2.4 }, arena: { whole: true } });
 
 /* ================================================================== THE LOOK */
@@ -875,6 +344,74 @@ function loadFonts(): void {
   } catch { /* the system's face, then */ }
 }
 loadFonts();
+
+/* ------------------------------------------------------------------ the characters, asked for first */
+/*
+ * THE CHARACTERS, your own first: the play page's arrival card waits for your own hero's real model (THE ARRIVAL,
+ * below), and your seat (so your hero's kind) is known at the welcome, so the moment it comes your own hero is asked for
+ * alone, followed by its skeleton's clip library; then the other heroes. The bots' skeletons (drawn as stand-ins until
+ * they are in) come after the heroes, or after 4 s at most, so on a slow phone they never share the line with your own
+ * hero. A watcher asks for every hero at once. About 0.67 MB for the heroes and their clips, 0.47 MB for the skeletons
+ * and theirs, 0.15 MB for the meadow's props: the same files as ever, in this order.
+ */
+const models = createModels();
+/**
+ * The heroes people play (one a seat, in turn) and the skeletons bots play (one a slot): KayKit's adventurers and
+ * skeletons, one rig family, so one clip library each and one look. Each is drawn HERO_M tall (`game new` made them so).
+ */
+const HEROES = ['knight', 'barbarian', 'mage', 'rogue', 'rogue-hooded'] as const;
+const SKELETONS = ['skeleton-minion', 'skeleton-warrior', 'skeleton-rogue', 'skeleton-mage'] as const;
+const HERO_BUDGET = { triangles: 8000, texturePx: 1024, materials: 2, bytes: 1536 * 1024 };
+const heroUrl = (kind: string): string => `./models/${kind}.glb`;
+/** Models that are not there (refused or missing): drawn as stand-ins. */
+const standIns = new Set<string>();
+/** THE ARRIVAL's progress line: the files asked for while the game loads, and how many have come (or failed). */
+const loads = { all: 0, done: 0, heroes: 0, heroesDone: 0, said: 0 };
+function sayLoading(): void {
+  loads.said = Math.max(loads.said, loads.all ? loads.done / loads.all : 0);
+  net.loading(loads.said, loads.heroesDone < loads.heroes ? 'the heroes' : 'the clearing');
+}
+/** One more file on the line (`hero`: a character or its clips); the function it returns says it came or failed. */
+function expect(hero: boolean): () => void {
+  loads.all += 1; if (hero) loads.heroes += 1;
+  let settled = false;
+  return () => { if (settled) return; settled = true; loads.done += 1; if (hero) loads.heroesDone += 1; sayLoading(); };
+}
+function track<T>(p: Promise<T>, hero: boolean): Promise<T> { const done = expect(hero); p.then(done, done); return p; }
+/** Each kind's model and its clip library, loaded once (loadCharacter finds both in hand); copies are made per body. */
+const heroLoads = new Map<string, Promise<boolean>>();
+const clipLoads = new Map<string, Promise<unknown>>();
+let heroesIn = (): void => {};
+const afterHeroes = new Promise<void>((done) => { heroesIn = done; setTimeout(done, 4000); });
+function loadHero(kind: string): Promise<boolean> {
+  let p = heroLoads.get(kind);
+  if (!p) {
+    const url = heroUrl(kind);
+    const came = expect(true);
+    const go = (): Promise<boolean> => models.load(url, { budget: HERO_BUDGET }).then((m) => {
+      came();
+      // Its skeleton's clip library at once (the model names it), at loadCharacter's own address and budget.
+      const named = (m.scene.userData?.homie as { anims?: string } | undefined)?.anims;
+      if (!named) return true;
+      const href = new URL(named, new URL(url, location.href)).href;
+      let clips = clipLoads.get(href);
+      if (!clips) { clips = track(models.load(href, { budget: { triangles: 0, bytes: 3 * 1024 * 1024 } }), true).catch(() => null); clipLoads.set(href, clips); }
+      return clips.then(() => true);
+    }, () => { came(); standIns.add(url); return false; });
+    p = (SKELETONS as readonly string[]).includes(kind) ? afterHeroes.then(go) : go();
+    heroLoads.set(kind, p);
+  }
+  return p;
+}
+/** Every hero in (your own first, at the welcome): the skeletons wait for it, and so does the Game Lab. */
+const allHeroes: Promise<boolean[]> = net.ready.then(() => {
+  const seat = mySeat();
+  const own = seat !== null && !net.watching ? (HEROES[seat % HEROES.length] as string) : null;
+  return (own ? loadHero(own) : Promise.resolve(true)).then(() => Promise.all(HEROES.map(loadHero)));
+});
+void allHeroes.then(() => heroesIn());
+sayLoading();
+for (const k of SKELETONS) void loadHero(k);
 
 /* ------------------------------------------------------------------ renderer, scene, light */
 const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -1008,87 +545,23 @@ function facets(tris: number[][], colours: string[]): BufferGeometry {
  * refused file) is drawn as a stand-in made here in the same colours, or left out when it is only a flower or a tuft of
  * grass: a round never waits on, or breaks for, a model.
  */
-const models = createModels();
-const ANIMALS = ['fox', 'chick', 'crab', 'elephant', 'cat', 'panda', 'caterpillar', 'pig'] as const;
-const ANIMAL_M = 0.8;
-/** Each seat is its own animal, and wears its seat's colour as a ring (the same key as its colour). */
-const animalOf = (slot: number, seat: number | null): number => (seat ?? slot) % ANIMALS.length;
-const animalUrl = (k: number): string => `./models/animal-${ANIMALS[k % ANIMALS.length]}.glb`;
+// `models`, HEROES and SKELETONS are above (the characters, asked for first).
+/** The verb a hero's swing plays: a mage casts; everyone else strikes. */
+const HERO_ACTION: Record<string, string> = { mage: 'cast', 'skeleton-mage': 'cast' };
+/** What your own name chip says you are ("You · Mage"): which hero is yours reads at a glance, even from above. */
+const HERO_NAME: Record<string, string> = { knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rogue: 'Rogue', 'rogue-hooded': 'Rogue' };
+const heroName = (kind: string): string => HERO_NAME[kind] ?? kind.replace(/[-_]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
+const HERO_M = 1.45;
+const heroKind = (slot: number, seat: number | null, bot: boolean): string => (bot ? SKELETONS[slot % SKELETONS.length] : HEROES[(seat ?? slot) % HEROES.length]) as string;
 
-/** Colour families a flat-coloured pack paints with: leaves, wood and earth, pale stone, and petals. */
-type Family = 'leaf' | 'wood' | 'pale' | 'red' | 'yellow' | 'purple';
 type RGB = [number, number, number];
-function hslOf(r: number, g: number, b: number): [number, number, number] {
-  const R = r / 255; const G = g / 255; const B = b / 255;
-  const mx = Math.max(R, G, B); const mn = Math.min(R, G, B); const l = (mx + mn) / 2; const d = mx - mn;
-  if (d < 1e-6) return [0, 0, l];
-  const s = d / (1 - Math.abs(2 * l - 1));
-  const h = mx === R ? ((G - B) / d + 6) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4;
-  return [h * 60, s, l];
-}
-function rgbOf(h: number, s: number, l: number): RGB {
-  const c = (1 - Math.abs(2 * l - 1)) * s; const x = c * (1 - Math.abs(((h / 60) % 2) - 1)); const m = l - c / 2;
-  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
-}
-function familyOf(h: number, s: number, l: number): Family | null {
-  if (l > 0.78 || s < 0.12) return 'pale';
-  if (h >= 140 && h <= 205) return 'leaf';
-  if (h >= 6 && h < 28) return 'wood';
-  if (h >= 28 && h < 70) return 'yellow';
-  if (h >= 225 && h < 300) return 'purple';
-  if (h >= 320 || h < 6) return 'red';
-  return null;
-}
-/** How light each family usually is in a pack: a pixel lighter or darker than that stays as much lighter or darker. */
-const FAMILY_L: Record<Family, number> = { leaf: 0.48, wood: 0.6, pale: 0.86, red: 0.6, yellow: 0.63, purple: 0.75 };
-/** A palette swap: each colour family to one colour of style.json's palette, keeping the pack's own shading. */
-function swapTo(to: Partial<Record<Family, string>>): (r: number, g: number, b: number) => RGB | null {
-  const want = Object.fromEntries(Object.entries(to).map(([k, hex]) => { const c = new Color(hex).getHex(); return [k, hslOf((c >> 16) & 255, (c >> 8) & 255, c & 255)]; })) as Partial<Record<Family, [number, number, number]>>;
-  return (r, g, b) => {
-    const [h, s, l] = hslOf(r, g, b);
-    const f = familyOf(h, s, l);
-    const t = f ? want[f] : undefined;
-    if (!f || !t) return null;
-    return rgbOf(t[0], t[1], Math.max(0.04, Math.min(0.96, t[2] + (l - FAMILY_L[f]) * 0.6)));
-  };
-}
-const nearestHue = (hue: number, fallback: string): string => (PAL.ramp ?? []).map((hex) => { const c = new Color(hex).getHex(); const [h, s] = hslOf((c >> 16) & 255, (c >> 8) & 255, c & 255); return { hex, d: s > 0.25 ? Math.abs(h - hue) : 999 }; }).sort((x, y) => x.d - y.d).find((x) => x.d < 40)?.hex ?? fallback;
 const PAINT = {
-  leaf: mixHex(PAL.good, PAL.ink, 0.25), leafLight: mixHex(mixHex(PAL.good, PAL.ink, 0.25), PAL.gold, 0.22), needle: mixHex(PAL.good, PAL.ink, 0.45),
-  wood: mixHex(PAL.accent, PAL.ink, 0.45), earth: mixHex(mixHex(PAL.accent, PAL.ink, 0.4), mixHex(PAL.bg, PAL.ink, 0.12), 0.35), blade: mixHex(PAL.good, PAL.accent2, 0.5),
-  stone: mixHex(mixHex(PAL.bg, PAL.ink, 0.5), '#8c8f96', 0.35), cream: mixHex(PAL.gold, '#ffffff', 0.8), purple: nearestHue(270, '#b07ad9'),
+  leaf: mixHex(PAL.good, PAL.ink, 0.25), wood: mixHex(PAL.accent, PAL.ink, 0.45), blade: mixHex(PAL.good, PAL.accent2, 0.5),
+  stone: mixHex(mixHex(PAL.bg, PAL.ink, 0.5), '#8c8f96', 0.35),
 };
-const SWAPS = {
-  tree: swapTo({ leaf: PAINT.leaf, wood: PAINT.wood }),
-  treeLight: swapTo({ leaf: PAINT.leafLight, wood: PAINT.wood }),
-  pine: swapTo({ leaf: PAINT.needle, wood: mixHex(PAINT.wood, PAL.ink, 0.3) }),
-  bush: swapTo({ leaf: PAINT.leaf, wood: PAINT.wood }),
-  blade: swapTo({ leaf: PAINT.blade }),
-  flower: swapTo({ leaf: PAINT.leaf, red: PAL.danger, yellow: PAL.gold, purple: PAINT.purple }),
-  mushroom: swapTo({ pale: PAINT.cream, red: PAL.danger }),
-  rock: swapTo({ wood: PAINT.earth, leaf: mixHex(PAL.good, PAL.gold, 0.2), pale: PAINT.stone }),
-  stone: swapTo({ pale: PAINT.stone }),
-  gem: swapTo({ pale: PAL.gold, yellow: PAL.gold, purple: PAL.gold }),
-  fence: swapTo({ wood: PAINT.wood }),
-};
-
-/**
- * The animals keep their own painted colours (a fox stays a fox) pulled a third of the way to the palette's nearest, so
- * they sit in this world rather than on top of it (assets/manifest.json says so: `inGame.pull`, the lineup draws it).
- */
-const PULL_TO: RGB[] = [...new Set([...(PAL.ramp ?? []), PAL.accent, PAL.accent2, PAL.gold, PAL.good, PAL.danger, PAL.ink])].map((hex) => { const c = new Color(hex).getHex(); return [(c >> 16) & 255, (c >> 8) & 255, c & 255] as RGB; });
-function pullToPalette(k: number): (r: number, g: number, b: number) => RGB {
-  return (r, g, b) => {
-    let best = PULL_TO[0] as RGB; let bd = Infinity;
-    for (const p of PULL_TO) { const d = 0.3 * (p[0] - r) ** 2 + 0.59 * (p[1] - g) ** 2 + 0.11 * (p[2] - b) ** 2; if (d < bd) { bd = d; best = p; } }
-    return [Math.round(r + (best[0] - r) * k), Math.round(g + (best[1] - g) * k), Math.round(b + (best[2] - b) * k)];
-  };
-}
-const ANIMAL_PULL = pullToPalette(0.35);
 
 /** Stand-ins, drawn in the same colours when a model is not there: low-poly shapes, one draw call each. */
-type Stand = 'gem' | 'tree' | 'pine' | 'bush' | 'rock' | 'stone' | 'fence' | 'critter';
+type Stand = 'gem' | 'tree' | 'pine' | 'bush' | 'rock' | 'stone' | 'fence' | 'hero' | 'chest';
 function standIn(kind: Stand, colour = PAL.accent): Mesh {
   const parts: BufferGeometry[] = [];
   const add = (geo: BufferGeometry, hex: string, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): void => {
@@ -1099,76 +572,62 @@ function standIn(kind: Stand, colour = PAL.accent): Mesh {
     g.setAttribute('color', new BufferAttribute(col, 3));
     parts.push(g);
   };
-  if (kind === 'gem') add(new OctahedronGeometry(0.2, 0), PAL.gold, 0, 0.28, 0, 1, 1.4, 1);
+  if (kind === 'gem') add(new CylinderGeometry(0.22, 0.22, 0.06, 10), PAL.gold, 0, 0.28, 0);
   if (kind === 'tree') { add(new CylinderGeometry(0.12, 0.17, 1.5, 6), PAINT.wood, 0, 0.75, 0); add(new IcosahedronGeometry(1.05, 0), PAINT.leaf, 0, 2.45, 0); }
-  if (kind === 'pine') { add(new CylinderGeometry(0.1, 0.14, 0.9, 6), PAINT.wood, 0, 0.45, 0); add(new ConeGeometry(1, 2.2, 7), PAINT.needle, 0, 1.9, 0); add(new ConeGeometry(0.72, 1.6, 7), PAINT.needle, 0, 2.95, 0); }
-  if (kind === 'bush') add(new IcosahedronGeometry(0.55, 0), PAINT.leaf, 0, 0.42, 0, 1.2, 0.8, 1.1);
+  if (kind === 'pine') { add(new CylinderGeometry(0.1, 0.14, 0.9, 6), PAINT.wood, 0, 0.45, 0); add(new ConeGeometry(1, 2.2, 7), PAINT.leaf, 0, 1.9, 0); add(new ConeGeometry(0.72, 1.6, 7), PAINT.leaf, 0, 2.95, 0); }
+  if (kind === 'bush') add(new CylinderGeometry(0.42, 0.38, 0.8, 8), PAINT.wood, 0, 0.4, 0);
   if (kind === 'rock') add(new DodecahedronGeometry(0.5, 0), PAINT.stone, 0, 0.3, 0, 1.3, 0.75, 1.1);
-  if (kind === 'stone') add(new CylinderGeometry(0.3, 0.45, 1, 5), PAINT.stone, 0, 0.5, 0);
+  if (kind === 'stone') add(new BoxGeometry(0.9, 0.55, 0.7), PAINT.stone, 0, 0.27, 0);
   if (kind === 'fence') { for (const x of [-0.96, 0.96]) add(new BoxGeometry(0.1, 0.7, 0.1), PAINT.wood, x, 0.35, 0); for (const y of [0.3, 0.55]) add(new BoxGeometry(2.03, 0.08, 0.05), PAINT.wood, 0, y, 0); }
-  if (kind === 'critter') {
-    // A cube animal in its seat's colour: ears, eyes and feet, facing +z like the models.
-    add(new BoxGeometry(0.62, 0.5, 0.62), colour, 0, 0.36, 0);
-    for (const x of [-0.18, 0.18]) { add(new BoxGeometry(0.14, 0.16, 0.1), colour, x, 0.69, -0.05); add(new BoxGeometry(0.13, 0.15, 0.02), '#ffffff', x * 0.8, 0.42, 0.315); add(new BoxGeometry(0.06, 0.08, 0.02), PAL.ink, x * 0.8, 0.41, 0.33); }
-    for (const x of [-0.18, 0.18]) for (const z of [-0.18, 0.18]) add(new BoxGeometry(0.15, 0.12, 0.15), mixHex(colour, PAL.ink, 0.35), x, 0.06, z);
+  if (kind === 'chest') { add(new BoxGeometry(1.1, 0.6, 0.7), PAINT.wood, 0, 0.3, 0); add(new BoxGeometry(1.12, 0.12, 0.72), PAL.gold, 0, 0.62, 0); }
+  if (kind === 'hero') {
+    // A hero-shaped stand-in in its seat's colour while its model loads: a body, a head, a sword arm.
+    add(new CylinderGeometry(0.26, 0.3, 0.62, 8), colour, 0, 0.46, 0);
+    add(new IcosahedronGeometry(0.3, 1), mixHex(colour, '#ffffff', 0.35), 0, 1.02, 0);
+    for (const x of [-0.17, 0.17]) add(new BoxGeometry(0.16, 0.2, 0.18), mixHex(colour, PAL.ink, 0.4), x, 0.1, 0);
+    add(new BoxGeometry(0.07, 0.62, 0.07), PAINT.stone, 0.42, 0.62, 0.12);
   }
   const mesh = new Mesh(mergeGeometries(parts) as BufferGeometry, new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   mesh.name = 'stand-in';
   return mesh;
 }
 
-/** One colour for a whole model, its picture dropped: its faces keep their shading from the light. */
-function paintAll(model: Object3D, hex: string): void {
-  model.traverse((o) => {
-    const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    for (const mat of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as MeshStandardMaterial[]) { mat.map = null; mat.color = new Color(hex); mat.needsUpdate = true; }
-  });
-}
-/** Every model the game draws: its file, how tall it stands, its palette swap and its stand-in. */
-interface Spec { url: string; m: number; swap: ((r: number, g: number, b: number) => RGB | null) | null; stand: Stand | null; tint?: string; px?: number }
-// The gem is one colour, the palette's gold (its pack paints it from a picture atlas: the tint replaces that).
-const GEM: Spec = { url: './models/gem.glb', m: 0.42, swap: SWAPS.gem, stand: 'gem', tint: PAL.gold };
-const FENCE: Spec = { url: './models/fence.glb', m: 0.7, swap: SWAPS.fence, stand: 'fence' };
-// The camp at the clearing's heart: a ring of stones round its logs, two logs to sit on, and a flame made here.
-const CAMPFIRE: Spec = { url: './models/campfire.glb', m: 0.16, swap: swapTo({ pale: PAINT.stone, wood: PAINT.wood }), stand: 'rock' };
-const LOG: Spec = { url: './models/log.glb', m: 0.42, swap: swapTo({ wood: PAINT.wood, pale: mixHex(PAINT.wood, PAL.ink, 0.45) }), stand: null };
-const FIREWOOD: Spec = { url: './models/firewood.glb', m: 0.14, swap: swapTo({ wood: mixHex(PAINT.wood, PAL.bg, 0.25) }), stand: null };
+/** Every model the game draws: its file, how big it is drawn (m: its height, or its width with `wide`) and its stand-in. */
+interface Spec { url: string; m: number; swap: ((r: number, g: number, b: number) => RGB | null) | null; stand: Stand | null; tint?: string; px?: number; wide?: boolean }
+// The coin: KayKit's gold coin, drawn standing on its edge and spinning (its width is its size).
+const GEM: Spec = { url: './models/coin.glb', m: 0.56, swap: null, stand: 'gem', wide: true };
+const FENCE: Spec = { url: './models/fence.glb', m: 0.7, swap: null, stand: 'fence' };
+// The clearing's heart: the treasure chest, two lit torches beside it, barrels and crates round it.
+const CHEST: Spec = { url: './models/chest.glb', m: 0.95, swap: null, stand: 'chest' };
+const TORCH: Spec = { url: './models/torch.glb', m: 1.6, swap: null, stand: null };
+const BARREL: Spec = { url: './models/barrel.glb', m: 0.8, swap: null, stand: 'bush' };
+const CRATE: Spec = { url: './models/crate.glb', m: 0.72, swap: null, stand: 'stone' };
 /** The dressing: how many, where, its footprint in metres (for spacing), its shadow's radius and its size range. */
 type Where = 'far' | 'any' | 'low' | 'inside' | 'edge';
 const DRESSING: (Spec & { count: number; where: Where; foot: number; shadow: number; scale: [number, number] })[] = [
-  { url: './models/tree-oak.glb', m: 3.6, swap: SWAPS.tree, stand: 'tree', count: 14, where: 'far', foot: 2.1, shadow: 1.3, scale: [0.85, 1.2] },
-  { url: './models/tree-round.glb', m: 3.2, swap: SWAPS.treeLight, stand: 'tree', count: 14, where: 'far', foot: 1.4, shadow: 1.0, scale: [0.85, 1.25] },
-  { url: './models/tree-pine.glb', m: 4, swap: SWAPS.pine, stand: 'pine', count: 16, where: 'far', foot: 2.1, shadow: 1.2, scale: [0.8, 1.3] },
-  { url: './models/stone.glb', m: 1, swap: SWAPS.stone, stand: 'stone', count: 6, where: 'far', foot: 1, shadow: 0.6, scale: [0.8, 1.3] },
-  { url: './models/bush.glb', m: 1.1, swap: SWAPS.bush, stand: 'bush', count: 22, where: 'any', foot: 1.4, shadow: 0.75, scale: [0.7, 1.15] },
-  { url: './models/rock.glb', m: 0.75, swap: SWAPS.rock, stand: 'rock', count: 12, where: 'any', foot: 1.4, shadow: 0.75, scale: [0.6, 1.1] },
-  { url: './models/flower-red.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 30, where: 'low', foot: 0.3, shadow: 0, scale: [0.9, 1.5] },
-  { url: './models/flower-yellow.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 30, where: 'low', foot: 0.4, shadow: 0, scale: [0.9, 1.5] },
-  { url: './models/flower-purple.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 30, where: 'low', foot: 0.3, shadow: 0, scale: [0.9, 1.5] },
-  { url: './models/mushrooms.glb', m: 0.45, swap: SWAPS.mushroom, stand: null, count: 12, where: 'any', foot: 0.5, shadow: 0, scale: [0.8, 1.3] },
-  // The clearing's edge, when it has no fence: bushes and rocks just outside it (never on the camera's side).
-  { url: './models/bush.glb', m: 1.1, swap: SWAPS.bush, stand: 'bush', count: FENCED ? 0 : 26, where: 'edge', foot: 1.2, shadow: 0.7, scale: [0.75, 1.15] },
-  { url: './models/rock.glb', m: 0.75, swap: SWAPS.rock, stand: 'rock', count: FENCED ? 0 : 10, where: 'edge', foot: 1.1, shadow: 0.6, scale: [0.6, 1] },
-  // Tufts of grass in and around the clearing: the lawn is a meadow, never a bare board (they never block a move).
-  { url: './models/grass.glb', m: 0.18, swap: SWAPS.blade, stand: null, count: 36, where: 'inside', foot: 0.9, shadow: 0, scale: [0.7, 1.1] },
-  { url: './models/grass.glb', m: 0.18, swap: SWAPS.blade, stand: null, count: 36, where: 'low', foot: 0.6, shadow: 0, scale: [0.8, 1.2] },
-  { url: './models/flower-red.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 22, where: 'inside', foot: 0.9, shadow: 0, scale: [0.55, 0.8] },
-  { url: './models/flower-purple.glb', m: 0.4, swap: SWAPS.flower, stand: null, count: 22, where: 'inside', foot: 0.9, shadow: 0, scale: [0.55, 0.8] },
+  { url: './models/pine.glb', m: 3.8, swap: null, stand: 'pine', count: 22, where: 'far', foot: 1.6, shadow: 1.0, scale: [0.8, 1.3] },
+  { url: './models/pine-round.glb', m: 3.3, swap: null, stand: 'tree', count: 18, where: 'far', foot: 1.6, shadow: 1.0, scale: [0.8, 1.25] },
+  { url: './models/grove.glb', m: 3.4, swap: null, stand: 'pine', count: 7, where: 'far', foot: 4.2, shadow: 2.4, scale: [0.9, 1.2] },
+  { url: './models/rock.glb', m: 0.75, swap: null, stand: 'rock', count: 14, where: 'any', foot: 1.3, shadow: 0.7, scale: [0.6, 1.15] },
+  { url: './models/rocks.glb', m: 0.55, swap: null, stand: 'rock', count: 10, where: 'any', foot: 1.2, shadow: 0.6, scale: [0.7, 1.2] },
+  { url: './models/pine.glb', m: 3.8, swap: null, stand: 'pine', count: 8, where: 'any', foot: 1.6, shadow: 1.0, scale: [0.55, 0.85] },
+  // The clearing's edge: rocks, barrels and crates just outside it (never on the camera's side).
+  { url: './models/rock.glb', m: 0.75, swap: null, stand: 'rock', count: FENCED ? 0 : 12, where: 'edge', foot: 1.1, shadow: 0.6, scale: [0.6, 1] },
+  { url: './models/barrel.glb', m: 0.8, swap: null, stand: 'bush', count: FENCED ? 0 : 6, where: 'edge', foot: 0.9, shadow: 0.45, scale: [0.9, 1.1] },
+  { url: './models/crate.glb', m: 0.72, swap: null, stand: 'stone', count: FENCED ? 0 : 5, where: 'edge', foot: 1, shadow: 0.5, scale: [0.85, 1.15] },
 ];
 
 /** A model loaded once, repainted and measured: `fit` scales it to its height, `size` is its box at that height. */
 interface Ready { scene: Object3D; fit: number; size: Vector3 }
 const ready = new Map<string, Promise<Ready | null>>();
-const standIns = new Set<string>();
-function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap' | 'tint' | 'px'>): Promise<Ready | null> {
+function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap' | 'tint' | 'px' | 'wide'>): Promise<Ready | null> {
   let p = ready.get(spec.url);
   if (!p) {
-    p = models.load(spec.url).then((m) => {
+    p = track(models.load(spec.url), false).then((m) => {
       if (spec.swap) repaint(m.scene, spec.swap, spec.px ? { maxPx: spec.px } : undefined);
-      if (spec.tint) paintAll(m.scene, spec.tint);
       const size = new Box3().setFromObject(m.scene).getSize(new Vector3());
-      const fit = size.y > 1e-3 ? spec.m / size.y : 1;
+      const along = spec.wide ? Math.max(size.x, size.z) : size.y;
+      const fit = along > 1e-3 ? spec.m / along : 1;
       // The art direction's material model and ink line (style.json), as the style board drew them.
       stylize(m.scene, STYLE, { scale: fit });
       return { scene: m.scene, fit, size: size.multiplyScalar(fit) };
@@ -1177,9 +636,9 @@ function prepare(spec: Pick<Spec, 'url' | 'm' | 'swap' | 'tint' | 'px'>): Promis
   }
   return p;
 }
-// The Game Lab plays a take only once the models have settled (loaded or not there), so both builds start alike.
+// The Game Lab plays a take only once the models have settled (loaded or not there), so both builds start alike:
+// held here, released below once every model (the heroes too) has loaded or failed.
 lab.hold();
-void Promise.all([...ANIMALS.map((_, i) => prepare({ url: animalUrl(i), m: ANIMAL_M, swap: ANIMAL_PULL, px: 512 })), prepare(GEM), ...(FENCED ? [prepare(FENCE)] : []), prepare(CAMPFIRE), prepare(FIREWOOD), prepare(LOG), ...DRESSING.map(prepare)]).then(() => lab.ready());
 
 /**
  * A model as instanced copies (instancedCopies: one InstancedMesh per mesh, placed with placeCopy, never by baking into
@@ -1215,7 +674,7 @@ const placed: { x: number; z: number; r: number }[] = [];
  * near the fence (where the camera sees them), clear of the others. Trees and standing stones only behind the arena
  * and beside its far half: never between the camera and the play.
  */
-function spotFor(roll: () => number, where: Where, r: number): { x: number; z: number } | null {
+function spotFor(roll: () => number, where: Where, r: number, tall = false): { x: number; z: number } | null {
   if (where === 'inside') {
     // A few small flowers on the lawn itself, so a phone's close view is never bare grass (they never block a move).
     for (let tries = 0; tries < 60; tries += 1) {
@@ -1226,7 +685,7 @@ function spotFor(roll: () => number, where: Where, r: number): { x: number; z: n
     }
     return null;
   }
-  const [lo, hi] = where === 'edge' ? [0.15, 1.4] : where === 'low' ? [1.2, 7] : where === 'any' ? [1.5, 9] : [1.8, 16];
+  const [lo, hi] = where === 'edge' ? [0.5, 1.6] : where === 'low' ? [1.2, 7] : where === 'any' ? [1.5, 9] : [1.8, 16];
   for (let tries = 0; tries < 60; tries += 1) {
     const out = lo + (hi - lo) * roll() ** 1.5;
     const hw = W / 2 + EDGE + out; const hh = H / 2 + EDGE + out;
@@ -1234,7 +693,8 @@ function spotFor(roll: () => number, where: Where, r: number): { x: number; z: n
     if (u < 2 * hw) { x = -hw + u; z = -hh; } else if ((u -= 2 * hw) < 2 * hh) { x = hw; z = -hh + u; } else if ((u -= 2 * hh) < 2 * hw) { x = hw - u; z = hh; } else { u -= 2 * hw; x = -hw; z = hh - u; }
     if (where === 'far' && z > 0) continue;
     if (where === 'edge' && z > H / 2) continue; // the near side stays open to the camera
-    if (where === 'any' && z > H / 2 && out > 4) continue; // little on the camera's side
+    if (where === 'any' && z > H / 2 && (out > 4 || tall)) continue; // little on the camera's side, and nothing tall:
+    // a tree there would stand between a phone's close camera and its hero
     if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r)) continue;
     placed.push({ x, z, r });
     return { x, z };
@@ -1242,45 +702,46 @@ function spotFor(roll: () => number, where: Where, r: number): { x: number; z: n
   return null;
 }
 const shadowSpots: { x: number; z: number; r: number }[] = [];
-/** The flame at the camp's heart (flickered in draw): two cones in the palette's gold and accent, and its glow. */
-let flame: Object3D | null = null;
+/** The torches' flames at the clearing's heart (flickered in draw): two cones in the palette's gold and accent, a glow. */
+const flames: Object3D[] = [];
 async function buildCamp(o: { x: number; y: number; r: number }): Promise<void> {
   const [x, z] = XZ(o.x, o.y);
   const camp = new Group(); camp.position.set(x, 0, z); scene.add(camp);
-  const ring = await prepare(CAMPFIRE);
-  if (ring) {
-    const obj = ring.scene.clone(true);
-    const wide = Math.max(ring.size.x, ring.size.z) || 1;
-    obj.scale.setScalar(ring.fit * (1.5 / wide));
-    camp.add(obj);
+  const chest = await prepare(CHEST);
+  const box = chest ? chest.scene.clone(true) : standIn('chest');
+  if (chest) box.scale.setScalar(chest.fit);
+  box.rotation.y = 0.15; // turned a little toward the camera's side
+  camp.add(box);
+  const torch = await prepare(TORCH);
+  for (const [tx, tz] of [[-1.05, -0.35], [1.05, -0.3]] as [number, number][]) {
+    const t = new Group(); t.position.set(tx, 0, tz); camp.add(t);
+    if (torch) { const obj = torch.scene.clone(true); obj.scale.setScalar(torch.fit); t.add(obj); }
+    else { const pole = new Mesh(new CylinderGeometry(0.05, 0.06, 1.5, 6), new MeshLambertMaterial({ color: PAINT.wood })); pole.position.y = 0.75; t.add(pole); }
+    const f = new Group(); f.position.y = TORCH.m * 0.92;
+    const outer = new Mesh(new ConeGeometry(0.13, 0.42, 6), new MeshBasicMaterial({ color: PAL.accent }));
+    const inner = new Mesh(new ConeGeometry(0.08, 0.28, 6), new MeshBasicMaterial({ color: PAL.gold }));
+    outer.position.y = 0.2; inner.position.y = 0.15; f.add(outer, inner);
+    t.add(f); flames.push(f);
   }
-  const wood = await prepare(FIREWOOD);
-  if (wood) {
-    const obj = wood.scene.clone(true);
-    obj.scale.setScalar(wood.fit * (0.85 / (Math.max(wood.size.x, wood.size.z) || 1)));
-    camp.add(obj);
+  const glow = new Mesh(new CircleGeometry(2.2, 28), new MeshBasicMaterial({ map: discTexture, color: PAL.gold, transparent: true, opacity: 0.3, depthWrite: false }));
+  glow.rotation.x = -Math.PI / 2; glow.position.y = 0.02; camp.add(glow);
+  for (const [spec, bx, bz, rot] of [[BARREL, -1.55, 0.55, 0.3], [CRATE, 1.6, 0.6, -0.4], [BARREL, 1.95, -0.25, 1]] as [Spec, number, number, number][]) {
+    const r = await prepare(spec);
+    const obj = r ? r.scene.clone(true) : spec.stand ? standIn(spec.stand) : null;
+    if (!obj) continue;
+    if (r) obj.scale.setScalar(r.fit * 0.85);
+    obj.position.set(bx, 0, bz); obj.rotation.y = rot; camp.add(obj);
   }
-  const log = await prepare(LOG);
-  if (log) for (const [lx, lz, rot] of [[-1.55, 0.25, 0.2], [1.5, -0.35, -0.25]] as [number, number, number][]) {
-    const l = log.scene.clone(true); l.position.set(lx, 0, lz); l.rotation.y = Math.PI / 2 + rot; l.scale.setScalar(log.fit); camp.add(l);
-  }
-  const f = new Group();
-  const outer = new Mesh(new ConeGeometry(0.26, 0.75, 6), new MeshBasicMaterial({ color: PAL.accent }));
-  const inner = new Mesh(new ConeGeometry(0.15, 0.5, 6), new MeshBasicMaterial({ color: PAL.gold }));
-  outer.position.y = 0.42; inner.position.y = 0.32; f.add(outer, inner);
-  const glow = new Mesh(new CircleGeometry(1.3, 24), new MeshBasicMaterial({ map: discTexture, color: PAL.gold, transparent: true, opacity: 0.45, depthWrite: false }));
-  glow.rotation.x = -Math.PI / 2; glow.position.y = 0.02; f.add(glow);
-  camp.add(f); flame = f;
-  if (REAL_SHADOWS) camp.traverse((n) => { const mm = n as Mesh; if (mm.isMesh && mm.name !== 'hull' && n !== glow) mm.castShadow = true; });
+  if (REAL_SHADOWS) camp.traverse((n) => { const mm = n as Mesh; if (mm.isMesh && mm.name !== 'hull' && n !== glow && !flames.some((f) => f.children.includes(n))) mm.castShadow = true; });
 }
 
 /** The clearing's solid features (OBSTACLES), drawn with the dressing's own models. */
 const OBSTACLE_SPEC = {
   camp: null,
-  bush: DRESSING.find((d) => d.url.endsWith('/bush.glb')),
+  bush: BARREL,
   rock: DRESSING.find((d) => d.url.endsWith('/rock.glb')),
-  stone: DRESSING.find((d) => d.url.endsWith('/stone.glb')),
-  tree: DRESSING.find((d) => d.url.endsWith('/tree-round.glb')),
+  stone: CRATE,
+  tree: DRESSING.find((d) => d.url.endsWith('/pine-round.glb')),
 } as const;
 async function dressMeadow(): Promise<void> {
   const roll = dice(2024);
@@ -1292,7 +753,7 @@ async function dressMeadow(): Promise<void> {
     const spots: { x: number; z: number; rot: number; sc: number }[] = [];
     for (let i = 0; i < d.count; i += 1) {
       const sc = d.scale[0] + roll() * (d.scale[1] - d.scale[0]);
-      const at = spotFor(roll, d.where, d.foot * 0.5 * sc + 0.15);
+      const at = spotFor(roll, d.where, d.foot * 0.5 * sc + 0.15, d.m * sc > 1.6);
       if (at) spots.push({ ...at, rot: roll() * Math.PI * 2, sc });
     }
     return { d, spots };
@@ -1326,7 +787,10 @@ async function dressMeadow(): Promise<void> {
     if (!obj) return;
     const [x, z] = XZ(o.x, o.y);
     obj.position.set(x, 0, z); obj.rotation.y = turn() * Math.PI * 2;
-    obj.scale.setScalar((r?.fit ?? 1) * (o.kind === 'tree' ? 0.8 : 1.1));
+    // Drawn as wide as it is solid (its footprint a little over o.r), so a hero stops at what it sees, never inside it.
+    const half = r ? Math.max(r.size.x, r.size.z) / 2 : 0;
+    const k = o.kind === 'tree' || !half ? (o.kind === 'tree' ? 0.8 : 1.1) : Math.max(0.6, Math.min(1.6, (o.r + 0.08) / half));
+    obj.scale.setScalar((r?.fit ?? 1) * k);
     if (REAL_SHADOWS) obj.traverse((n) => { const mm = n as Mesh; if (mm.isMesh && mm.name !== 'hull') mm.castShadow = true; });
     scene.add(obj);
   }));
@@ -1356,7 +820,37 @@ async function buildFence(): Promise<void> {
     scene.add(c.mesh);
   }
 }
+/**
+ * Tufts of grass in and around the clearing, made here (procedural, free): three thin blades in the palette's greens,
+ * one InstancedMesh for all of them, so a phone's close view is never a bare board (they never block a move).
+ */
+function grassTufts(): void {
+  const roll = dice(311);
+  const blades: BufferGeometry[] = [];
+  for (let i = 0; i < 3; i += 1) {
+    const g = new ConeGeometry(0.035, 0.26 + i * 0.05, 3); g.translate(0, 0.13 + i * 0.025, 0);
+    g.rotateZ((i - 1) * 0.35); g.rotateY(i * 2.1); g.translate((i - 1) * 0.05, 0, (i % 2) * 0.04);
+    blades.push(g.toNonIndexed());
+  }
+  const geo = mergeGeometries(blades) as BufferGeometry;
+  const tufts = new InstancedMesh(geo, new MeshLambertMaterial({ color: PAINT.blade, flatShading: true }), 220);
+  const m = new Matrix4(); const qt = new Quaternion(); const e = new Euler(); const p = new Vector3(); const sc = new Vector3();
+  let n = 0;
+  for (let i = 0; i < 220; i += 1) {
+    const inside = i < 110;
+    const x = inside ? (roll() - 0.5) * (W - 1) : (roll() - 0.5) * (W + 16); const z = inside ? (roll() - 0.5) * (H - 1) : -H / 2 - roll() * 9 + (roll() < 0.3 ? H + 4 : 0);
+    if (OBSTACLES.some((o) => { const [ox, oz] = XZ(o.x, o.y); return Math.hypot(ox - x, oz - z) < o.r + 0.3; })) continue;
+    const k = 0.8 + roll() * 0.8;
+    tufts.setMatrixAt(n, m.compose(p.set(x, heightAt(x, z) - 0.01, z), qt.setFromEuler(e.set(0, roll() * Math.PI * 2, 0)), sc.set(k, k * (0.8 + roll() * 0.5), k)));
+    tufts.setColorAt(n, new Color(mixHex(PAINT.blade, roll() < 0.5 ? PAL.good : PAL.gold, roll() * 0.25)));
+    n += 1;
+  }
+  tufts.count = n; tufts.computeBoundingSphere();
+  tufts.receiveShadow = REAL_SHADOWS;
+  scene.add(tufts);
+}
 void dressMeadow();
+grassTufts();
 if (FENCED) void buildFence();
 
 /* ------------------------------------------------------------------ gems */
@@ -1422,110 +916,128 @@ function waveMesh(i: number): Mesh {
   return w;
 }
 
+/**
+ * A swing's slash: a flat band of T.swingArc degrees in front of the swinger at waist height, sweeping out to its reach
+ * (what a swing can hit, drawn). Its geometry follows the tunable (the Game Lab's slider redraws it).
+ */
+let slashArc = -1;
+let slashGeo = new BufferGeometry();
+const slashPool: Mesh[] = [];
+function slashMesh(i: number): Mesh {
+  if (slashArc !== T.swingArc) {
+    slashArc = T.swingArc;
+    const half = (Math.min(359, Math.max(10, T.swingArc)) * Math.PI) / 360;
+    const g = new RingGeometry(0.82, 1, 28, 1, -Math.PI / 2 - half, half * 2); g.rotateX(-Math.PI / 2);
+    slashGeo.dispose(); slashGeo = g;
+    for (const m of slashPool) m.geometry = g;
+  }
+  let w = slashPool[i];
+  if (!w) { w = new Mesh(slashGeo, new MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: DoubleSide })); scene.add(w); slashPool[i] = w; }
+  return w;
+}
+
 /** Sparks: little bars flying off a hit (white, then gold) and up off a taken gem; one draw call. */
 const sparkMesh = new InstancedMesh(new BoxGeometry(1, 0.07, 0.07), new MeshBasicMaterial({ color: 0xffffff }), 160);
 sparkMesh.frustumCulled = false; sparkMesh.count = 0; sparkMesh.instanceMatrix.setUsage(DynamicDrawUsage);
 sparkMesh.setColorAt(0, new Color(0xffffff));
 scene.add(sparkMesh);
 
-/* ------------------------------------------------------------------ the animals */
-interface Animal {
-  slot: number; kind: number;
-  root: Group; tilt: Group; squash: Group; untilt: Group; turn: Group;
-  model: Object3D | null; mixer: AnimationMixer | null; actions: Map<string, AnimationAction>; clip: string;
-  mats: { emissive: Color; dispose(): void }[]; yaw: number; px: number; py: number; speed: number; seen: number;
+/* ------------------------------------------------------------------ the heroes */
+/*
+ * Each body is a hero (people) or a skeleton (bots): its model and its clips come through @homie-rocks/studio/animate
+ * (loadCharacter finds the clip library the model names). The game moves the body; the character only shows it: it
+ * faces where it goes, blends idle, walk and run by its speed, plays the swing, the jump and the hit from the same
+ * events every screen gets, flashes white when hit, and cheers when it won the round.
+ *
+ *   root (where, and how high it jumped) > tilt (the hit's angle) > squash (stretch along the hit) > untilt > character
+ */
+interface Hero {
+  slot: number; kind: string; mine: boolean;
+  root: Group; tilt: Group; squash: Group; untilt: Group;
+  char: Character | null; stand: Mesh | null; mats: MeshStandardMaterial[];
+  px: number; py: number; ph: number; grounded: boolean; speed: number; seen: number; yaw: number; held: string | null;
 }
-const animals = new Map<number, Animal>();
-function animalFor(slot: number, kind: number, colour: string): Animal {
-  let a = animals.get(slot);
-  if (a && a.kind === kind) return a;
-  if (!a) {
-    // root (where) > tilt (the hit's angle) > squash (stretch along the hit) > untilt > turn (which way it faces) > model
-    const root = new Group(); const tilt = new Group(); const squash = new Group(); const untilt = new Group(); const turn = new Group();
-    root.add(tilt); tilt.add(squash); squash.add(untilt); untilt.add(turn);
+const heroes = new Map<number, Hero>();
+function heroFor(slot: number, kind: string, colour: string): Hero {
+  let h = heroes.get(slot);
+  if (h && h.kind === kind) return h;
+  if (!h) {
+    const root = new Group(); const tilt = new Group(); const squash = new Group(); const untilt = new Group();
+    root.add(tilt); tilt.add(squash); squash.add(untilt);
     scene.add(root);
-    a = { slot, kind, root, tilt, squash, untilt, turn, model: null, mixer: null, actions: new Map(), clip: '', mats: [], yaw: 0, px: NaN, py: NaN, speed: 0, seen: 0 };
-    animals.set(slot, a);
+    h = { slot, kind, mine: false, root, tilt, squash, untilt, char: null, stand: null, mats: [], px: NaN, py: NaN, ph: 0, grounded: true, speed: 0, seen: 0, yaw: 0, held: null };
+    heroes.set(slot, h);
   }
-  a.kind = kind;
-  dressAnimal(a, colour);
-  return a;
+  h.kind = kind;
+  dressHero(h, colour);
+  return h;
 }
-function clearModel(a: Animal): void {
-  if (a.model) a.turn.remove(a.model);
-  if (a.model?.name === 'stand-in') (a.model as Mesh).geometry.dispose();
-  a.mixer?.stopAllAction();
-  for (const m of a.mats) m.dispose();
-  a.model = null; a.mixer = null; a.actions = new Map(); a.clip = ''; a.mats = [];
+function clearHero(h: Hero): void {
+  if (h.char) { h.char.dispose(); h.char = null; }
+  if (h.stand) { h.untilt.remove(h.stand); h.stand.geometry.dispose(); h.stand = null; }
+  for (const m of h.mats) m.dispose();
+  h.mats = []; h.held = null;
 }
-/** The animal's model: a stand-in in its seat's colour at once (a round never waits), then its own copy when the file is in. */
-function dressAnimal(a: Animal, colour: string): void {
-  clearModel(a);
-  const critter = standIn('critter', colour);
-  a.model = critter; a.turn.add(critter); a.mats = [critter.material as MeshLambertMaterial];
-  const want = a.kind;
-  const url = animalUrl(want);
-  void models.instance(url).then(async (obj) => {
-    if (a.kind !== want || animals.get(a.slot) !== a) return; // it changed while loading
-    const clips = (await models.load(url)).animations;
-    const fit = (await prepare({ url, m: ANIMAL_M, swap: ANIMAL_PULL, px: 512 }))?.fit ?? 1;
-    if (a.kind !== want || animals.get(a.slot) !== a) return;
-    clearModel(a);
-    obj.scale.setScalar(fit);
-    // Its own materials (the copy shares the file's), so a hit can flash this one animal.
+/** The hero's model: a stand-in in its seat's colour at once (a round never waits), then its own character when it is in. */
+function dressHero(h: Hero, colour: string): void {
+  clearHero(h);
+  h.stand = standIn('hero', colour);
+  h.untilt.add(h.stand);
+  const want = h.kind;
+  void loadHero(want).then(async (ok) => {
+    if (!ok || h.kind !== want || heroes.get(h.slot) !== h) return;
+    const char = await loadCharacter(models, heroUrl(want), { tune: T }).catch(() => null);
+    if (!char || h.kind !== want || heroes.get(h.slot) !== h) { char?.dispose(); return; }
+    clearHero(h);
+    // Its own materials (a copy shares the file's), so a hit flashes this one hero; the art direction's material model.
     const own = new Map<Material, MeshStandardMaterial>();
-    obj.traverse((o) => {
+    char.model.traverse((o) => {
       const mesh = o as Mesh;
-      if (!mesh.isMesh || mesh.name === 'hull') return;
+      if (!mesh.isMesh) return;
       const m = mesh.material as MeshStandardMaterial;
       let c = own.get(m);
-      if (!c) { c = m.clone(); own.set(m, c); a.mats.push(c); }
+      if (!c) { c = m.clone(); own.set(m, c); h.mats.push(c); }
       mesh.material = c;
+      mesh.castShadow = REAL_SHADOWS;
+      // A skinned body moves out of its bind-pose box: never culled by it.
+      mesh.frustumCulled = false;
     });
-    if (REAL_SHADOWS) obj.traverse((o) => { const mm = o as Mesh; if (mm.isMesh && mm.name !== 'hull') mm.castShadow = true; });
-    a.model = obj; a.turn.add(obj);
-    a.mixer = new AnimationMixer(obj);
-    for (const name of ['idle', 'walk', 'run', 'dance']) { const clip = AnimationClip.findByName(clips, name); if (clip) a.actions.set(name, a.mixer.clipAction(clip)); }
-    play(a, 'idle');
-  }, () => { /* refused or missing: the stand-in stays (models.stats() says why) */ });
+    char.root.rotation.y = h.yaw;
+    h.char = char;
+    h.untilt.add(char.root);
+  });
 }
-function play(a: Animal, name: string, rate = 1): void {
-  const next = a.actions.get(name);
-  if (!next) return;
-  next.timeScale = rate;
-  if (a.clip === name) return;
-  const prev = a.actions.get(a.clip);
-  next.reset().setEffectiveWeight(1).fadeIn(0.12).play();
-  prev?.fadeOut(0.12);
-  a.clip = name;
-}
-/** Place, turn, squash, flash and animate one animal this frame. */
-function poseAnimal(a: Animal, at: { x: number; y: number }, t: number, dt: number, fx: ReturnType<typeof bodyFx>, place: number | null): void {
+/** Place, turn, squash, flash and animate one hero this frame. */
+function poseHero(h: Hero, at: { x: number; y: number; h: number }, t: number, dt: number, fx: ReturnType<typeof bodyFx>, place: number | null, over: boolean): void {
   const [x, z] = XZ(at.x + fx.ox, at.y + fx.oy);
-  a.root.position.set(x, 0, z);
+  h.root.position.set(x, at.h, z);
   // How fast it moves, from where it is drawn (the same for its owner, the host and every replica).
-  const dx = at.x - a.px; const dy = at.y - a.py; const step = Math.hypot(dx, dy);
-  const sp = !Number.isFinite(step) || step > 2 || dt <= 0 ? 0 : step / dt; // a jump (a new round, a takeover) is not a run
-  a.speed += (Math.min(sp, 12) - a.speed) * Math.min(1, dt * 10);
-  a.px = at.x; a.py = at.y;
+  const dx = at.x - h.px; const dy = at.y - h.py; const step = Math.hypot(dx, dy);
+  const sp = !Number.isFinite(step) || step > 2 || dt <= 0 ? 0 : step / dt; // a jump in place (a new round, a takeover) is not a run
+  h.speed += (Math.min(sp, 12) - h.speed) * Math.min(1, dt * 10);
+  const vh = dt > 0 ? (at.h - h.ph) / dt : 0;
+  h.px = at.x; h.py = at.y; h.ph = at.h;
   // It faces where it goes, but not while flying from a bump (it is knocked backwards, not turned round).
-  if (sp > 0.6 && !bumps.has(a.slot) && Number.isFinite(step)) {
-    const want = Math.atan2(dx, dy);
-    let d = want - a.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
-    a.yaw += d * Math.min(1, dt * 14);
-  }
-  a.turn.rotation.y = a.yaw;
-  // Squash and stretch along the hit: rotate to its angle on the ground, scale, rotate back.
-  a.tilt.rotation.y = -fx.ang; a.untilt.rotation.y = fx.ang;
-  a.squash.scale.set(fx.sx, fx.up, fx.sy);
-  for (const m of a.mats) { m.emissive.setScalar(fx.flash); }
-  if (!a.mixer) return;
-  if (round?.phase === 'over' && place === 1) play(a, 'dance');
-  else if (a.speed < 0.5) play(a, 'idle');
-  else if (a.speed < 4.2) play(a, 'walk', Math.max(0.6, Math.min(1.6, a.speed / 2.2)));
-  else play(a, 'run', Math.max(0.7, Math.min(1.4, a.speed / 6)));
-  a.mixer.update(dt);
+  const pose = poses.get(h.slot);
+  if (pose) h.yaw = Math.atan2(pose.heading.x, pose.heading.y);
+  h.tilt.rotation.y = -fx.ang; h.untilt.rotation.y = fx.ang;
+  h.squash.scale.set(fx.sx, fx.up, fx.sy);
+  for (const m of h.mats) if (m.emissive) m.emissive.setScalar(fx.flash * 0.9);
+  const c = h.char;
+  if (!c) { if (h.stand) h.stand.rotation.y = h.yaw; return; }
+  c.face(h.yaw, dt);
+  c.move(bumps.has(h.slot) ? 0 : h.speed);
+  const grounded = pose?.grounded ?? at.h <= 0.002, vertical = pose?.vel.z ?? vh;
+  if (h.grounded && !grounded && vertical > 0) c.jump();
+  c.air(grounded, vertical); h.grounded = grounded;
+  // The round's end: its winner cheers (held until the next round), everyone else stands.
+  const want = over && place === 1 ? 'win' : null;
+  if (want !== h.held) { if (want) c.hold(want); else if (h.held) c.hold(''); h.held = want; }
+  c.update(dt);
 }
+
+// The Game Lab starts its take once everything is in (the heroes in their order above: never all at once at boot).
+void Promise.all([allHeroes, ...SKELETONS.map((k) => loadHero(k)), prepare(GEM), ...(FENCED ? [prepare(FENCE)] : []), prepare(CHEST), prepare(TORCH), prepare(BARREL), prepare(CRATE), ...DRESSING.map(prepare)]).then(() => lab.ready());
 
 /* ------------------------------------------------------------------ the Game Lab's overlays, as lines on the meadow */
 const pen = (() => {
@@ -1575,7 +1087,7 @@ lab.overlay('reach', (c) => {
 /*
  * style.json's camera: high three-quarter (its pitch and field of view), square to the arena so the stick's up is
  * the screen's up. How close: the screen's short side about 13.5 m of meadow at the player on a computer and 9.5 m on
- * a phone (style.json's distance scales both: 22 is these), so an animal reads at about the same size in the hand.
+ * a phone (style.json's distance scales both: 22 is these), so a hero reads at about the same size in the hand.
  * It follows the body whose view this is and never looks past the arena's edge (beyond the path and the fence, as
  * far as the perspective allows); following nobody, it frames the whole arena (turned on a tall screen, so the
  * arena's long side runs up it).
@@ -1584,12 +1096,15 @@ const PITCH0 = (CAM.pitch * Math.PI) / 180;
 const HALF = (CAM.fov * Math.PI) / 360;
 /*
  * A phone held upright sees the ground through a slit: its width is the short side. Followed from style.json's pitch
- * and distance it shows a long strip of mostly empty grass with a small animal in it. So, like the port kit's fitView
- * (fill a phone held upright and follow the player), it frames the action instead: closer (about 7 m across at the
- * player, an animal a fifth of the screen's width) at 44 to 50 degrees, the player in the lower half and what is
- * around and ahead of it filling the rest, the woods' edge at the top (never a wall of canopy).
+ * and distance it shows a long strip of mostly empty grass with a small hero in it. So, like the port kit's fitView
+ * (fill a phone held upright and follow the player), it frames the action instead: closer (about 5.5 m across at the
+ * player, a hero a quarter of the screen's width) and LOWER, 28 to 32 degrees (8 under style.json's pitch): from the
+ * 40 it once was, a hero is the top of its hat (a mage's brim hides the whole mage), and its legs, so its run, never
+ * show. At 30 the face, the body and the legs read on every kind, and the far side of the clearing and the woods fill
+ * the top of the screen, where the rivals ahead are. The player stands in the lower half. No tall dressing stands on
+ * the camera's side, so nothing comes between the camera and its hero.
  */
-const UPRIGHT_PITCH = Math.max((44 * Math.PI) / 180, Math.min((50 * Math.PI) / 180, PITCH0 + (6 * Math.PI) / 180));
+const UPRIGHT_PITCH = Math.max((28 * Math.PI) / 180, Math.min((32 * Math.PI) / 180, PITCH0 - (8 * Math.PI) / 180));
 let PITCH = PITCH0;
 const MARGIN = EDGE + 3; // how far past the arena's near side and ends the camera may look: the path, the fence, the flowers
 // Past its far side it may look into the woods (the trees stand 3 to 18 m out): the clearing reads as a place.
@@ -1607,10 +1122,10 @@ function setPitch(p: number): void {
 }
 setPitch(PITCH0);
 function followDistance(cw: number, ch: number, phone: boolean, upright = false): number {
-  // style.json's distance scales the view (22 is these spans); an upright phone's stays near 5.5 m whatever it says,
-  // or a close camera would show one animal and nothing round it.
+  // style.json's distance scales the view (22 is these spans); an upright phone's stays between 5.5 and 8 m whatever
+  // it says, or a close camera would show one hero and nothing round it.
   const k = (CAM.distance ?? 22) / 22;
-  const span = upright ? 7 * Math.max(0.9, Math.min(1.3, k)) : (phone ? 9.5 : 13.5) * k;
+  const span = upright ? 6.1 * Math.max(0.9, Math.min(1.3, k)) : (phone ? 9.5 : 13.5) * k;
   return span / (2 * Math.tan(HALF) * Math.min(1, cw / ch));
 }
 /** How far away the whole arena fits; `turned`: seen from its side, its 32 m running up the screen (a tall screen). */
@@ -1644,7 +1159,7 @@ function aimAt(focus: { x: number; y: number } | null, d: number, cw: number, ch
   if (turned) return { x: W - middleOf(W, d), y: H / 2 };
   // An upright phone follows its player everywhere (past the edge it sees the fence and the woods), looking a little
   // ahead so the player stands in the lower half and what is coming fills the top.
-  if (upright && focus) return { x: focus.x, y: focus.y - d * 0.18 };
+  if (upright && focus) return { x: focus.x, y: focus.y - d * 0.27 };
   const loY = FAR_K * d - MARGIN_FAR; const hiY = H + MARGIN - NEAR_K * d;
   let y: number;
   if (whole || loY > hiY) y = middleOf(H, d);
@@ -1656,7 +1171,7 @@ function aimAt(focus: { x: number; y: number } | null, d: number, cw: number, ch
   const x = whole || !focus || loX > hiX ? W / 2 : Math.max(loX, Math.min(hiX, focus.x));
   return { x, y };
 }
-function placeCamera(want: { x: number; y: number; dist: number; yaw: number }, dt: number, kick: number): void {
+function placeCamera(want: { x: number; y: number; dist: number; yaw: number; lift?: number }, dt: number, kick: number): void {
   if (!view3.dist) Object.assign(view3, want);
   // A watcher's switch glides, never a cut; the zoom and the turn ease a little slower than the pan.
   const kp = 1 - Math.exp(-dt * 12); const kd = 1 - Math.exp(-dt * 7);
@@ -1664,8 +1179,10 @@ function placeCamera(want: { x: number; y: number; dist: number; yaw: number }, 
   const [tx, tz] = XZ(view3.x, view3.y);
   const kx = kick ? (lab.random() - 0.5) * 2 * kick : 0; const kz = kick ? (lab.random() - 0.5) * 2 * kick : 0;
   const back = Math.cos(PITCH) * view3.dist;
-  camera.position.set(tx + kx + Math.sin(view3.yaw) * back, Math.sin(PITCH) * view3.dist, tz + kz + Math.cos(view3.yaw) * back);
-  camera.lookAt(tx + kx, 0, tz + kz);
+  // `lift`: the point looked at stands this high (the hero intro looks at a hero's chest, not its feet).
+  const lift = want.lift ?? 0;
+  camera.position.set(tx + kx + Math.sin(view3.yaw) * back, Math.sin(PITCH) * view3.dist + lift, tz + kz + Math.cos(view3.yaw) * back);
+  camera.lookAt(tx + kx, lift, tz + kz);
   camera.updateMatrixWorld();
   // The sun's shadow box follows what the camera looks at (a little toward the far side, where the view widens).
   if (REAL_SHADOWS) { sun.target.position.set(tx, 0, tz - view3.dist * 0.25); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 40); }
@@ -1694,7 +1211,7 @@ resize();
 let zoneMark: { left: number; top: number; right: number; bottom: number } | null = null;
 const labels = createLabels({ screen: () => ({ w: innerWidth, h: innerHeight }), avoid: () => (zoneMark ? [zoneMark] : []) });
 let shownLabels: LabelOut[] = [];
-// Room chat (NETPLAY.md section 19): what a player says in the room's chat shows over their animal for a few seconds,
+// Room chat (NETPLAY.md section 19): what a player says in the room's chat shows over their hero for a few seconds,
 // on the HUD's own paper (one UI with the names, the clock and the board). The studio taking a message down takes it too.
 const BUBBLE_TYPE = `600 14px ${FONT_BODY}`;
 const bubbles = createBubbles({ measure: (t) => { ctx.font = BUBBLE_TYPE; return ctx.measureText(t).width; }, screen: () => ({ w: innerWidth, h: innerHeight }), avoid: () => (zoneMark ? [zoneMark] : []) });
@@ -1705,10 +1222,14 @@ let lastDraw = 0;
 /** Where a seat's body is drawn now (host: the real body; replica: interpolated), or null. */
 function seatPos(seat: number): { x: number; y: number } | null {
   if (seat === mySeat() && me.has && !net.watching) return me;
-  if (hosting) { const b = [...bodies.values()].find((x) => !x.bot && x.seat === seat); return b ? { x: b.x, y: b.y } : null; }
   const d = [...drawn.values()].find((x) => x.seat === seat);
   return d ? { x: d.x, y: d.y } : null;
 }
+/** The hero intro: how long, and how close it starts (a share of the game's own distance). */
+const INTRO_MS = 2600;
+const INTRO_CLOSE = 0.38;
+const INTRO_PITCH = (24 * Math.PI) / 180;
+let introAt = 0;
 const v3 = new Vector3();
 /** A point on the meadow (rules x, y, h metres up) on the screen, CSS px. */
 function onScreen(x: number, y: number, h: number, cw: number, ch: number): { x: number; y: number; ok: boolean } {
@@ -1738,8 +1259,27 @@ function draw(t: number, dt: number): void {
   const aim = aimAt(lv?.zoom ? subjectAt() ?? focus : focus, dist, cw, ch, whole, turned, upright);
   // The camera's kick (a bump you were in): a few centimetres, gone in a fifth of a second.
   const kick = t - kickAt < 200 ? T.shake * (1 - (t - kickAt) / 200) ** 2 : 0;
-  placeCamera({ ...aim, dist, yaw: turned ? -Math.PI / 2 : 0 }, dt, kick);
-  if (flame) { const k = 1 + 0.12 * Math.sin(t / 95) + 0.06 * Math.sin(t / 37); flame.children[0]?.scale.set(1, k, 1); flame.children[1]?.scale.set(1, 2 - k, 1); }
+  // A seat taken: the camera opens close on your own hero (its idle, its face, the clip library at work) and pulls
+  // back to the game's view over INTRO_MS. Never in the Game Lab, never for a watcher.
+  let want: { x: number; y: number; dist: number; lift?: number } = { ...aim, dist };
+  if (focus && !net.watching && !lab.on) {
+    // It starts with a live round (a seat taken during the results waits for the next one, under the results card)
+    // the moment the game is playable: the arrival card lifts on the hero's own model (its stand-in only when the model
+    // is still not in after about five seconds), so the close-up is the first thing the player sees.
+    if (!introAt && round?.phase === 'live' && playableAt) introAt = t;
+    const u = introAt ? Math.min(1, (t - introAt) / INTRO_MS) : 1;
+    if (u < 1) {
+      const e = u < 0.35 ? 0 : (u - 0.35) / 0.65; const k = e * e * (3 - 2 * e);
+      // Looking at the hero's chest: the whole hero, head to feet, in the middle of the screen.
+      const fy = focus.y - 0.2;
+      want = { x: focus.x + (aim.x - focus.x) * k, y: fy + (aim.y - fy) * k, dist: dist * (INTRO_CLOSE + (1 - INTRO_CLOSE) * k), lift: HERO_M * 0.55 * (1 - k) };
+      // Lower too, at first: its face, not the top of its hat.
+      setPitch(PITCH + (INTRO_PITCH - PITCH) * (1 - k));
+      if (u === 0 || !view3.dist) Object.assign(view3, want, { yaw: 0 });
+    }
+  } else if (!focus) introAt = 0;
+  placeCamera({ ...want, yaw: turned ? -Math.PI / 2 : 0 }, dt, kick);
+  flames.forEach((f, i) => { const k = 1 + 0.14 * Math.sin(t / 95 + i * 2) + 0.06 * Math.sin(t / 37 + i); f.children[0]?.scale.set(1, k, 1); f.children[1]?.scale.set(1, 2 - k, 1); });
 
   // hot zone (keyed state): gems inside score double
   zoneFill.visible = zoneRing.visible = Boolean(zone);
@@ -1752,7 +1292,7 @@ function draw(t: number, dt: number): void {
   }
 
   // gems: spinning, bobbing, glowing; a taken one bursts into gold where it was
-  const gemList: { x: number; y: number; id: number }[] = hosting ? gems : (net.latest()?.d.g ?? []).map(([id, x, y]) => ({ id, x, y }));
+  const gemList: { x: number; y: number; id: number }[] = gems;
   const rn = round?.n ?? -1;
   const seenNow = new Set<number>();
   let nb = 0;
@@ -1765,7 +1305,8 @@ function draw(t: number, dt: number): void {
     const [gx, gz] = XZ(g.x, g.y);
     const bob = 0.5 + 0.5 * Math.sin(t / 300 + g.id);
     const sc = 1 + 0.12 * Math.sin(t / 200 + g.id);
-    mtx.compose(vpos.set(gx, 0.1 + 0.16 * bob, gz), quat.setFromEuler(eul.set(0, t / 500 + g.id, 0)), vscl.setScalar(sc * GEM_DRAWN * gemFit));
+    // A coin stands on its edge and spins (the model lies flat: up on its edge first, then turned about the up axis).
+    mtx.compose(vpos.set(gx, 0.42 + 0.14 * bob, gz), quat.setFromEuler(eul.set(Math.PI / 2, t / 420 + g.id, 0, 'YXZ')), vscl.setScalar(sc * GEM_DRAWN * gemFit));
     for (const c of gemParts) placeCopy(c, i, mtx);
     glows.setMatrixAt(i, mtx.compose(vpos.set(gx, 0, gz), quat.identity(), vscl.set(0.75 + 0.1 * bob, 1, 0.75 + 0.1 * bob)));
     blobs.setMatrixAt(nb++, mtx.compose(vpos.set(gx, 0, gz), quat.identity(), vscl.set(0.32 - 0.06 * bob, 1, 0.32 - 0.06 * bob)));
@@ -1774,53 +1315,67 @@ function draw(t: number, dt: number): void {
   for (const { mesh: im } of gemParts) { im.count = ng; im.instanceMatrix.needsUpdate = true; }
   glows.count = ng; glows.instanceMatrix.needsUpdate = true;
 
-  // waves
-  let nw = 0;
+  // swings: a slash arcs in front of the swinger as the swing lands (after its windup); a hit rings white
+  let nw = 0; let ns2 = 0;
   for (let i = waves.length - 1; i >= 0; i -= 1) {
     const w = waves[i] as (typeof waves)[number];
-    const age = (t - w.at) / T.ringMs;
+    const lead = w.knock ? 0 : T.windupMs * 0.75;
+    const age = (t - w.at - lead) / T.ringMs;
     if (age > 1) { waves.splice(i, 1); continue; }
-    const m = waveMesh(nw++);
-    const r = w.knock ? R_AV + 0.12 + age * 0.8 : R_AV + age * (T.knockRange + 0.2);
+    if (age < 0) continue;
     const [wx, wz] = XZ(w.x, w.y);
-    m.visible = true; m.position.set(wx, 0.03, wz); m.scale.set(r, 1, r);
-    const mat = m.material as MeshBasicMaterial; mat.color.set(w.colour); mat.opacity = 1 - age;
+    if (w.knock) {
+      const m = waveMesh(nw++);
+      const r = R_AV + 0.12 + age * 0.8;
+      m.visible = true; m.position.set(wx, 0.03, wz); m.scale.set(r, 1, r);
+      const mat = m.material as MeshBasicMaterial; mat.color.set(w.colour); mat.opacity = 1 - age;
+    } else {
+      const m = slashMesh(ns2++);
+      const fa = w.fa ?? 0;
+      const r = 0.55 + Math.min(1, age * 2.2) * (T.knockRange - 0.55);
+      m.visible = true; m.position.set(wx, 0.55, wz); m.rotation.set(0, fa, 0); m.scale.set(r, 1, r);
+      const mat = m.material as MeshBasicMaterial; mat.color.set(w.colour); mat.opacity = 0.85 * (1 - age) ** 1.5;
+    }
   }
   for (let i = nw; i < wavePool.length; i += 1) (wavePool[i] as Mesh).visible = false;
+  for (let i = ns2; i < slashPool.length; i += 1) (slashPool[i] as Mesh).visible = false;
 
-  // the animals
-  const names = new Map<number, Slot>((net.slots ?? roster.slots).map((s) => [s.slot, s]));
+  // the heroes
+  const names = new Map<number, Slot>((net.slots ?? []).map((s) => [s.slot, s]));
   // `mine`: the body whose view this is: my own, or the player a watcher follows (named, never "You").
-  const list: { slot: number; seat: number | null; x: number; y: number; bot: boolean; name: string; mine: boolean }[] = [];
+  const list: { slot: number; seat: number | null; x: number; y: number; h: number; bot: boolean; name: string; mine: boolean }[] = [];
   const isView = (seat: number | null, bot: boolean): boolean => !bot && seat !== null && seat === view;
-  if (hosting) {
-    for (const b of bodies.values()) list.push({ slot: b.slot, seat: b.seat, x: b.x, y: b.y, bot: b.bot, name: b.name, mine: isView(b.seat, b.bot) });
-  } else {
+  {
     for (const d of drawn.values()) {
       const own = !net.watching && d.seat >= 0 && d.seat === net.seat;
       const s = names.get(d.slot);
-      list.push({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, x: own && me.has ? me.x : d.x, y: own && me.has ? me.y : d.y, bot: d.seat < 0, name: s?.name ?? (d.seat >= 0 ? `Player ${d.seat + 1}` : botName(d.slot)), mine: isView(d.seat >= 0 ? d.seat : null, d.seat < 0) });
+      list.push({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, x: own && me.has ? me.x : d.x, y: own && me.has ? me.y : d.y, h: own && me.has ? me.h : d.h, bot: d.seat < 0, name: s?.name ?? (d.seat >= 0 ? `Player ${d.seat + 1}` : botName(d.slot)), mine: isView(d.seat >= 0 ? d.seat : null, d.seat < 0) });
     }
   }
-  const places = new Map<number, number>((round?.phase === 'over' ? round.results ?? [] : []).map((r) => [r.slot, r.place]));
+  const over = round?.phase === 'over';
+  const places = new Map<number, number>((over ? round?.results ?? [] : []).map((r) => [r.slot, r.place]));
   let nr = 0;
   youRing.visible = false;
   for (const a of list) {
     const colour = colourOf(a.slot, a.bot ? null : a.seat);
     const fx = bodyFx(a.slot, t);
-    const an = animalFor(a.slot, animalOf(a.slot, a.bot ? null : a.seat), colour);
-    an.seen = frames;
-    poseAnimal(an, a, t, dt, fx, places.get(a.slot) ?? null);
+    const hero = heroFor(a.slot, heroKind(a.slot, a.seat, a.bot), colour);
+    hero.seen = frames; hero.mine = a.mine;
+    poseHero(hero, a, t, dt, fx, places.get(a.slot) ?? null, over);
     const [bx, bz] = XZ(a.x + fx.ox, a.y + fx.oy);
     seatRings.setMatrixAt(nr, mtx.compose(vpos.set(bx, 0, bz), quat.identity(), vscl.setScalar(1)));
     seatEdges.setMatrixAt(nr, mtx);
     seatRings.setColorAt(nr, tint.set(a.bot ? mixHex(colour, '#9aa3ad', 0.55) : colour));
     nr += 1;
-    blobs.setMatrixAt(nb++, mtx.compose(vpos.set(bx, 0, bz), quat.identity(), vscl.set(0.5 * fx.sx, 1, 0.5 * fx.sy)));
+    // The shadow stays on the ground and shrinks as the hero rises.
+    const lift = Math.max(0.45, 1 - a.h * 0.45);
+    blobs.setMatrixAt(nb++, mtx.compose(vpos.set(bx, 0, bz), quat.identity(), vscl.set(0.55 * fx.sx * lift, 1, 0.55 * fx.sy * lift)));
     if (a.mine) { youRing.visible = true; youRing.position.set(bx, 0.024, bz); youRing.scale.setScalar(1 + 0.05 * Math.sin(t / 220)); }
   }
-  // Bodies that left: their animals go.
-  for (const [slot, an] of animals) if (an.seen !== frames) { clearModel(an); scene.remove(an.root); animals.delete(slot); }
+  // Far and off-screen heroes pose less often (a room of many on a phone).
+  crowd([...heroes.values()].map((x) => x.char).filter((c): c is Character => Boolean(c)), camera, { near: 16, far: 30 });
+  // Bodies that left: their heroes go.
+  for (const [slot, hero] of heroes) if (hero.seen !== frames) { clearHero(hero); scene.remove(hero.root); heroes.delete(slot); }
   seatRings.count = nr; seatRings.instanceMatrix.needsUpdate = true; seatEdges.count = nr; seatEdges.instanceMatrix.needsUpdate = true; if (seatRings.instanceColor) seatRings.instanceColor.needsUpdate = true;
   blobs.count = nb; blobs.instanceMatrix.needsUpdate = true;
 
@@ -1845,15 +1400,25 @@ function draw(t: number, dt: number): void {
 
   if (lab.on) { pen.begin(); lab.draw(pen); pen.end(); }
   renderer.render(scene, camera);
+  arrival(t);
 
   // ---- the HUD, over the world
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cw, ch);
-  // the hot zone's "×2", on the screen over its middle
+  // the hot zone's "×2", on the screen over its middle; over its far or near edge instead when the hero whose view
+  // this is stands under its middle (the mark never covers your own hero)
   zoneMark = null;
   if (zone) {
-    const z = onScreen(zone.x, zone.y, 0, cw, ch);
     const size = phone ? 20 : 24;
+    const own = list.find((a) => a.mine);
+    const covers = (p: { x: number; y: number }): boolean => {
+      if (!own) return false;
+      const head = onScreen(own.x, own.y, HERO_M + own.h, cw, ch); const foot = onScreen(own.x, own.y, 0, cw, ch);
+      const r = Math.max(14, Math.abs(onScreen(own.x + 0.5, own.y, 0, cw, ch).x - foot.x));
+      return Math.abs(p.x - foot.x) < r + size && p.y > head.y - size && p.y < foot.y + size;
+    };
+    let z = onScreen(zone.x, zone.y, 0, cw, ch);
+    for (const dy of [-0.72, 0.72]) { if (!covers(z)) break; z = onScreen(zone.x, zone.y + dy * zone.r, 0, cw, ch); }
     if (z.ok) {
       ctx.font = `700 ${size}px ${FONT_DISPLAY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.strokeText('×2', z.x, z.y); ctx.fillStyle = PAL.accent; ctx.fillText('×2', z.x, z.y);
@@ -1868,10 +1433,10 @@ function draw(t: number, dt: number): void {
   const heads = new Map<number, { x: number; y: number; seat: number; mine: boolean }>();
   const viewAt = list.find((a) => a.mine) ?? null;
   for (const a of list) {
-    const text = a.mine && !net.watching ? 'You' : label(a.name, a.bot);
-    const head = onScreen(a.x, a.y, 0.98, cw, ch);
-    const mid = onScreen(a.x, a.y, 0.35, cw, ch);
-    const side = onScreen(a.x + R_AV, a.y, 0.35, cw, ch);
+    const text = a.mine && !net.watching ? `You · ${heroName(heroKind(a.slot, a.seat, a.bot))}` : label(a.name, a.bot);
+    const head = onScreen(a.x, a.y, HERO_M + 0.12 + a.h, cw, ch);
+    const mid = onScreen(a.x, a.y, HERO_M * 0.45 + a.h, cw, ch);
+    const side = onScreen(a.x + R_AV, a.y, HERO_M * 0.45 + a.h, cw, ch);
     if (!head.ok) continue;
     const r = Math.max(6, Math.hypot(side.x - mid.x, side.y - mid.y));
     if (mid.x + r < 0 || mid.x - r > cw || head.y > ch || mid.y + r < 0) continue; // off screen: no name at the edge
@@ -1910,7 +1475,42 @@ function draw(t: number, dt: number): void {
     paintBubbles(ctx, shownBubbles, { font: BUBBLE_TYPE, paper: PAPER, ink: TEXT, edge: mixHex(TEXT, PAPER, 0.7) });
   } else shownBubbles = [];
 
-  hud(cw, ch, phone, list);
+  // A dodge pops a word over the jumper, rising and fading.
+  for (let i = pops.length - 1; i >= 0; i -= 1) {
+    const pp = pops[i] as (typeof pops)[number];
+    const age = (t - pp.at) / 900;
+    if (age > 1) { pops.splice(i, 1); continue; }
+    const who = list.find((x) => x.slot === pp.slot);
+    if (!who) continue;
+    const at = onScreen(who.x, who.y, HERO_M + 0.6 + who.h + age * 0.6, cw, ch);
+    if (!at.ok) continue;
+    ctx.globalAlpha = Math.min(1, (1 - age) * 2);
+    ctx.font = `700 ${phone ? 18 : 22}px ${FONT_DISPLAY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.strokeText(pp.text, at.x, at.y); ctx.fillStyle = PAL.accent2; ctx.fillText(pp.text, at.x, at.y);
+    ctx.globalAlpha = 1;
+  }
+  // A big screen's HUD is drawn larger (up to 1.35 times at 840 px and taller), so it reads from the sofa as well.
+  const ui = phone ? 1 : Math.max(1, Math.min(1.35, Math.min(cw, ch) / 620));
+  ctx.save(); ctx.scale(ui, ui);
+  hud(cw / ui, ch / ui, phone, list);
+  ctx.restore();
+  // The touch buttons, bottom right: Jump (the bigger, nearer the thumb) and Swing. Only on a touch screen.
+  buttons.length = 0;
+  if (touched && mySeat() !== null && !net.watching) {
+    const r = phone ? 34 : 40; const pad = phone ? 18 : 26;
+    const jx = cw - pad - r; const jy = ch - pad - r - 6;
+    const sx = jx - r * 2.3; const sy = jy - r * 0.55;
+    for (const b of [{ id: 'jump' as const, x: jx, y: jy, r, label: 'Jump' }, { id: 'swing' as const, x: sx, y: sy, r: r * 0.92, label: 'Swing' }]) {
+      const pressed = t - (prevButtons.get(b.id) ?? -1e9) < 160;
+      ctx.globalAlpha = pressed ? 0.95 : 0.78;
+      ctx.fillStyle = b.id === 'jump' ? PAPER : HOT;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r * (pressed ? 0.92 : 1), 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = b.id === 'jump' ? TEXT : '#ffffff'; ctx.font = `700 ${phone ? 14 : 16}px ${FONT_BODY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(b.label, b.x, b.y + 1);
+      buttons.push({ id: b.id, x: b.x, y: b.y, r: b.r, at: prevButtons.get(b.id) ?? 0 });
+    }
+  }
   if (stick.active) {
     ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(stick.ox, stick.oy, 56, 0, Math.PI * 2); ctx.stroke();
@@ -1920,6 +1520,9 @@ function draw(t: number, dt: number): void {
   }
 }
 
+/** When each touch button was last pressed (for its press look). */
+const prevButtons = new Map<string, number>();
+canvas.addEventListener('pointerdown', (e) => { const b = buttonAt(e.clientX, e.clientY); if (b) prevButtons.set(b.id, performance.now()); });
 /** A rounded panel behind HUD text (style.json's "chips"): the palette's ink, a little see-through. */
 function chip(x: number, y: number, w: number, h: number, alpha = 0.88): void {
   ctx.fillStyle = PAPER; ctx.globalAlpha = Math.max(alpha, 0.82);
@@ -1928,40 +1531,29 @@ function chip(x: number, y: number, w: number, h: number, alpha = 0.88): void {
 }
 
 /**
- * The game's own first screen: its name and one line, on a card in the palette, for the first few seconds (it never
- * waits for a press and never takes one: the round is already on underneath). game.json's name and the first sentence
- * of its blurb.
+ * THE ARRIVAL (NETPLAY.md section 21; createNetplay's `arrival: 'game'`). Until this game says it is playable, the play
+ * page shows its arrival card: the game's title and art, and a progress line this game feeds (`net.loading`: the
+ * characters first, "the heroes", then "the clearing"). It is playable once the round's state is in (a host has its
+ * round; anyone else has drawn a snapshot) and the hero whose view this is stands there in its real model, drawn this
+ * frame; or, when its model is still not in after about five seconds, with its stand-in. A watcher's overview waits for
+ * every hero in view instead. Then `net.playable()`, once, and the hero intro starts under the lifting card.
+ * The game drew its own title card at a round's start before the page had one: the arrival card is that title now, so
+ * the round opens on the hero, with nothing over it. performance marks `hero:model` (your hero's real model first drawn)
+ * and `hero:playable` say when, for a harness.
  */
 const BOOT_AT = performance.now();
-const TITLE = String((gameFile as { name?: string }).name ?? document.title).slice(0, 40);
-const TAGLINE = String((gameFile as { blurb?: string }).blurb ?? '').split(/(?<=[.!?])\s/)[0]?.slice(0, 90) ?? '';
-function titleCard(cw: number, ch: number, phone: boolean): void {
-  const since = performance.now() - BOOT_AT;
-  if (since > 4600) return;
-  const a = since < 3400 ? 1 : 1 - (since - 3400) / 1200;
-  const w = Math.min(cw - 32, phone ? 340 : 460);
-  ctx.save();
-  ctx.globalAlpha = Math.max(0, a);
-  ctx.font = `700 ${phone ? 15 : 17}px ${FONT_BODY}`;
-  const words = TAGLINE.split(' '); const lines: string[] = []; let line = '';
-  for (const word of words) { const next = line ? `${line} ${word}` : word; if (ctx.measureText(next).width > w - 40 && line) { lines.push(line); line = word; } else line = next; }
-  if (line) lines.push(line);
-  const titleSize = phone ? 34 : 44; const lineH = phone ? 21 : 24;
-  const h = 34 + titleSize + (lines.length ? 14 + lines.length * lineH : 0) + 26;
-  const x = (cw - w) / 2; const y = phone ? ch * 0.3 - h / 2 : (ch - h) / 2;
-  ctx.fillStyle = mixHex(PAPER, '#ffffff', 0.35);
-  ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
-  ctx.beginPath();
-  const rr = (ctx as CanvasRenderingContext2D & { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect;
-  if (rr) rr.call(ctx, x, y, w, h, 18); else ctx.rect(x, y, w, h);
-  ctx.fill();
-  ctx.shadowColor = 'transparent';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = HOT; ctx.font = `700 ${titleSize}px ${FONT_DISPLAY}`;
-  ctx.fillText(TITLE, cw / 2, y + 30 + titleSize / 2);
-  ctx.fillStyle = TEXT; ctx.font = `600 ${phone ? 15 : 17}px ${FONT_BODY}`;
-  lines.forEach((l, i) => ctx.fillText(l, cw / 2, y + 30 + titleSize + 14 + lineH * i + lineH / 2));
-  ctx.restore();
+let playableAt = 0;
+let modelAt = 0;
+function arrival(t: number): void {
+  const view = [...heroes.values()].find((h) => h.mine) ?? null;
+  if (!modelAt && view?.char && !net.watching) { modelAt = t; try { performance.mark('hero:model'); } catch { /* old browser */ } }
+  if (playableAt) return;
+  const stateIn = Boolean(round) && (drawn.size > 0);
+  const dressed = view ? Boolean(view.char) : heroes.size > 0 && [...heroes.values()].every((h) => h.char);
+  if (!stateIn || (!dressed && performance.now() - BOOT_AT < 5000)) return;
+  playableAt = t;
+  try { performance.mark('hero:playable'); } catch { /* old browser */ }
+  net.playable();
 }
 
 function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat: number | null; name: string; bot: boolean; mine: boolean }[]): void {
@@ -1984,16 +1576,19 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
   // scores: the play page's room button (and a server's pill beside it) sit at the top right (game.json screen.share's
   // default): the scores start under that band, so the buttons never cover a score.
   const scores = new Map<number, number>();
-  if (hosting) for (const b of bodies.values()) scores.set(b.slot, b.score);
-  else for (const d of drawn.values()) scores.set(d.slot, d.score);
-  // A phone's board is compact (the top three, names without " · bot": a bot's dot is hollow), so a game's own HUD at
-  // the top left (a basket, a timer) has room beside it.
+  for (const d of drawn.values()) scores.set(d.slot, d.score);
+  // A phone's board is compact (the top three, a short name and a small "bot" or "AI" tag after it; a bot's dot is
+  // hollow), so a game's own HUD at the top left (a basket, a timer) has room beside it. Every bot and AI says so.
   const rows = [...list].sort((a, b) => (scores.get(b.slot) ?? 0) - (scores.get(a.slot) ?? 0)).slice(0, phone ? 3 : 6);
+  const TAG_FONT = `800 10px ${FONT_BODY}`;
+  ctx.font = TAG_FONT;
+  const marks = rows.map((a) => (!phone || (a.mine && !net.watching) ? '' : a.name.endsWith(AI_MARK) ? 'AI' : a.bot ? 'bot' : ''));
+  const markW = marks.map((m) => (m ? ctx.measureText(m).width + 10 : 0));
   ctx.font = `700 ${phone ? 13 : 16}px ${FONT_BODY}`;
   const rowH = phone ? 20 : 25;
   const fit = (t: string, max: number): string => { let x = t; while (x.length > 3 && ctx.measureText(x).width > max) x = `${x.slice(0, -2)}…`; return x; };
-  const texts = rows.map((a) => (a.mine && !net.watching ? 'You' : phone ? fit(a.name.replace(AI_MARK, '').trim(), 104) : label(a.name, a.bot)));
-  const nameW = Math.max(0, ...texts.map((x) => ctx.measureText(x).width));
+  const texts = rows.map((a, i) => (a.mine && !net.watching ? 'You' : phone ? fit(a.name.replace(AI_MARK, '').trim(), 104 - (markW[i] ? (markW[i] as number) + 5 : 0)) : label(a.name, a.bot)));
+  const nameW = Math.max(0, ...texts.map((x, i) => ctx.measureText(x).width + (markW[i] ? (markW[i] as number) + 5 : 0)));
   const boardW = nameW + (phone ? 56 : 74);
   // Together: the room's total heads the board, which moves down by a row so it stays under the room buttons.
   const board = top + 18 + 44 - rowH / 2 + (TOGETHER ? rowH + 6 : 0);
@@ -2017,6 +1612,14 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
     ctx.textAlign = 'left';
     ctx.fillStyle = a.mine ? TEXT : mixHex(TEXT, PAPER, a.bot ? 0.42 : 0.15);
     ctx.fillText(texts[i] as string, cw - pad - boardW + 26, y + 1);
+    const mark = marks[i];
+    if (mark) {
+      // The tag: a small pill after the name, the HUD's ink on its paper.
+      const mx = cw - pad - boardW + 26 + ctx.measureText(texts[i] as string).width + 5; const mw = markW[i] as number;
+      ctx.fillStyle = mixHex(TEXT, PAPER, 0.8); ctx.beginPath(); ctx.roundRect(mx, y - 7, mw, 14, 7); ctx.fill();
+      ctx.font = TAG_FONT; ctx.fillStyle = mixHex(TEXT, PAPER, 0.15); ctx.fillText(mark, mx + 5, y + 1);
+      ctx.font = `700 ${phone ? 13 : 16}px ${FONT_BODY}`;
+    }
     ctx.textAlign = 'right';
     ctx.fillStyle = a.mine ? HOT : TEXT;
     ctx.fillText(String(scores.get(a.slot) ?? 0), cw - pad - 12, y + 1);
@@ -2056,13 +1659,15 @@ function hud(cw: number, ch: number, phone: boolean, list: { slot: number; seat:
     chip(cw / 2 - tw / 2 - 12, ch - pad - 24, tw + 24, 26);
     ctx.fillStyle = HOT; ctx.fillText(text, cw / 2, ch - pad - 10);
   }
-  titleCard(cw, ch, phone);
-  if (frames < 240 && mySeat() !== null) {
-    ctx.textAlign = 'center'; ctx.font = `700 14px ${FONT_BODY}`;
-    const text = phone ? 'Drag to move · second finger bumps' : 'WASD / arrows to move · Space bumps';
+  // The controls, for the first eight seconds of play (from the moment the arrival card lifts), above the touch
+  // buttons when there are some, never under them.
+  if (playableAt && performance.now() - playableAt < 8000 && mySeat() !== null && !net.watching) {
+    ctx.textAlign = 'center'; ctx.font = `700 ${phone ? 14 : 16}px ${FONT_BODY}`;
+    const text = phone ? 'Drag to move · Jump and Swing on the right' : 'WASD to move · Space jumps · F or click swings';
     const tw = ctx.measureText(text).width;
-    chip(cw / 2 - tw / 2 - 12, ch - pad - 56, tw + 24, 26, 0.6);
-    ctx.fillStyle = TEXT; ctx.fillText(text, cw / 2, ch - pad - 42);
+    const y = ch - pad - 56 - (touched ? (phone ? 96 : 110) : 0);
+    chip(cw / 2 - tw / 2 - 12, y, tw + 24, 26, 0.6);
+    ctx.fillStyle = TEXT; ctx.fillText(text, cw / 2, y + 14);
   }
   ctx.textBaseline = 'alphabetic';
 }
@@ -2073,9 +1678,7 @@ function frame(t: number): void {
   const dt = lab.time.dt(t, 0.05);
   // The look's own clock (the animals' clips): real seconds, at most a tenth, whatever the rules' step.
   const ddt = lastT < 0 ? 0 : Math.min(0.1, Math.max(0, (t - lastT) / 1000)); lastT = t;
-  stepMe(dt);
-  if (hosting) stepHost(dt);
-  else stepReplica(dt);
+  updateView();
   if (lab.on) labReport(dt);
   draw(t, lab.on ? dt : ddt);
   frames += 1;
@@ -2085,26 +1688,18 @@ function frame(t: number): void {
 net.expose({
   // Room chat's bubbles on this screen now: whose, what, and where (an end-to-end test reads them).
   bubbles: () => shownBubbles.map((b) => ({ seat: b.key, text: b.lines.join(' '), alpha: b.alpha, left: Math.round(b.left), top: Math.round(b.top), right: Math.round(b.right), bottom: Math.round(b.bottom) })),
-  self: () => (me.has ? { x: me.x, y: me.y } : null),
+  self: () => (me.has ? { x: me.x, y: me.y, z: me.h } : null),
   peer: (seat: number) => {
-    if (hosting) { const b = [...bodies.values()].find((x) => x.seat === seat); return b ? { x: b.x, y: b.y } : null; }
     const d = [...drawn.values()].find((x) => x.seat === seat);
-    return d ? { x: d.x, y: d.y } : null;
+    return d ? { x: d.x, y: d.y, z: d.h } : null;
   },
   frames: () => frames,
-  scores: () => (hosting ? [...bodies.values()].map((b) => ({ slot: b.slot, seat: b.seat, bot: b.bot, score: b.score })) : [...drawn.values()].map((d) => ({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, bot: d.seat < 0, score: d.score }))),
-  /** Host: gems each slot picked up this round, the round's age, and the dial each bot plays at (the dial's numbers). */
-  pickups: () => (hosting ? { round: round ? { n: round.n, phase: round.phase, ageMs: net.now() - round.startedAt } : null, slots: [...bodies.values()].map((b) => ({ slot: b.slot, bot: b.bot, gems: pickups.get(b.slot) ?? 0, level: b.bot ? net.skillOf(b.slot).level : null })) } : null),
-  /** Host: when each bot last looked (its reaction clock). */
-  sight: () => (hosting ? [...sight.entries()].map(([slot, e]) => ({ slot, at: e.at })) : null),
+  scores: () => [...drawn.values()].map(d => ({ slot: d.slot, seat: d.seat >= 0 ? d.seat : null, bot: d.seat < 0, score: d.score })),
+  pickups: () => { const slots: unknown[] = []; room.each('runner', e => slots.push({ slot: e.seat, bot: e.driver === 'bot', gems: e.pickups })); return { round, slots }; },
   waves: () => wavesSeen,
   knocks: () => knocksSeen,
   zone: () => zone,
-  owned: () => net.owned,
-  cheatResets: () => cheatResets,
-  movement: () => MOVEMENT,
-  controlResets: () => controlResets,
-  predictionError: () => predictionError,
+  movement: () => 'server',
   /** Where the camera looks (rules metres), how far away it is, its turn, and whose view it is. */
   camera: () => ({ x: view3.x, y: view3.y, dist: view3.dist, yaw: view3.yaw, view: viewSeat() }),
   /** The names as drawn (boxes, never the text): the e2e probe counts overlaps and checks your own. */
@@ -2115,32 +1710,25 @@ net.expose({
   drawCalls: () => renderer.info.render.calls,
   triangles: () => renderer.info.render.triangles,
   /** The models: how many loaded, their triangles, texture memory and bytes, and any refused (with why). */
-  models: () => ({ ...models.stats(), standIns: [...standIns], animals: [...animals.values()].map((a) => ({ slot: a.slot, animal: ANIMALS[a.kind], standIn: a.model?.name === 'stand-in' })) }),
-  /** Harness hook (host only): knock the body of `seat` back, toward the middle of the arena. */
-  debugKnock: (seat: number) => {
-    if (!hosting) return false;
-    const b = [...bodies.values()].find((x) => x.seat === seat);
-    if (!b) return false;
-    knock(b, b.x < W / 2 ? b.x - 0.05 : b.x + 0.05, b.y, -1); // push toward the middle, away from the nearer wall (bumped by nobody)
-    return true;
-  },
+  models: () => ({ ...models.stats(), standIns: [...standIns], heroes: [...heroes.values()].map(h => ({ slot: h.slot, state: h.char?.state })) }),
+
+  heroes: () => [...heroes.values()].map((h) => ({ slot: h.slot, hero: h.kind, state: h.char?.state ?? 'LOADING', verbs: h.char?.verbs ?? [], lod: h.char?.lod ?? null, family: h.char?.family ?? null })),
+  jumps: () => jumpsSeen,
+  dodges: () => dodgesSeen,
+  /** Harness hooks for this screen's own player: jump, swing. */
+  debugJump: () => { const accepted = Boolean(room.me?.grounded); jump(); return accepted; },
+  debugSwing: () => { swing(); return true; },
+
 });
 
 exposePort(net, {
   view: 'top',
   self: () => (me.has && mySeat() !== null ? { x: me.x, y: me.y } : null),
   size: R_AV,
-  score: () => { const seat = mySeat(); const b = hosting ? [...bodies.values()].find((x) => x.seat === seat) : [...drawn.values()].find((x) => x.seat === seat); return b ? b.score : null; },
+  score: () => { const seat = mySeat(); const b = [...drawn.values()].find((x) => x.seat === seat); return b ? b.score : null; },
   // The renderer's own counters, by the names `homie-studio perf` and the playtest read on the port probe (measured
   // scene cost while playing; port/probe.ts PortExtra). Nobody dies in this game, so there is no `alive` to say.
   extra: { drawCalls: () => renderer.info.render.calls, triangles: () => renderer.info.render.triangles },
 });
 
-void net.ready.then(() => {
-  const seat = mySeat();
-  if (seat !== null && hosting) {
-    const b = [...bodies.values()].find((x) => x.seat === seat);
-    if (b) { me.x = b.x; me.y = b.y; me.has = true; }
-  }
-});
 requestAnimationFrame(frame);

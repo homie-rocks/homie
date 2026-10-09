@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.16.0: servers (worker/servers.mjs), agent passes and the sit route (worker/agents.mjs).
  *
@@ -148,8 +149,8 @@ let built = null;
 async function site() {
   if (!built) {
     const dir = studio('worker');
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
-    assert.equal(run(['game', 'new', 'vale', '--from', 'ember-vale', '--name', 'Vale'], dir).status, 0);
+    legacyGame(dir, 'owl-run', 'Owl Run');
+    legacyGame(dir, 'vale', 'Vale');
     assert.equal(run(['game', 'new', 'rules-run', '--from', 'coin-dash', '--name', 'Rules Run'], dir).status, 0);
     writeFileSync(join(dir, 'games/rules-run/src/rules.ts'), source);
     writeFileSync(join(dir, 'games/rules-run/src/view.ts'), "import { openRoom } from '@homie-rocks/studio/rules/view'; openRoom();\n");
@@ -599,7 +600,7 @@ test('AI guides at the Table: consent, house guides, a Workers AI decision on th
 
 test('the build refuses an agents.json that is not a vocabulary, and serves a good one beside the game', async () => {
   const dir = studio('vocab');
-  assert.equal(run(['game', 'new', 'vale', '--from', 'ember-vale', '--name', 'Vale'], dir).status, 0);
+  legacyGame(dir, 'vale', 'Vale');
   let b = JSON.parse(run(['build'], dir).stdout);
   assert.equal(b.ok, true);
   assert.equal(JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games', 'vale', 'agents.json'), 'utf8')).v, 1);

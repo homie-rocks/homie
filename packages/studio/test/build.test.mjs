@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio: what `homie-studio build` promises a studio.
  *
@@ -57,7 +58,7 @@ function studio(name, games = ['alpha', 'beta'], { typescript = false } = {}) {
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
   if (typescript) symlinkSync(join(REPO_NM, 'typescript'), join(dir, 'node_modules', 'typescript'));
-  for (const id of games) assert.equal(run(['game', 'new', id, '--from', 'ember-vale', '--name', `Game ${id}`], dir).status, 0);
+  for (const id of games) legacyGame(dir, id, `Game ${id}`);
   return dir;
 }
 

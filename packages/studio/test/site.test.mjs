@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.7.0: a studio site has the hub's shape, and every game gets a landing.
  *
@@ -107,7 +108,7 @@ test('theme: a new studio gets a palette of its own in site/theme.json; unsafe v
 
 function arcadeLike(name) {
   const dir = studio(name);
-  assert.equal(out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale', '--name', 'Crown Thief'], dir)).ok, true);
+  legacyGame(dir, 'crown-thief', 'Crown Thief');
   // A ported static game with its cover, credits.json, a licence file and its own hero footage.
   write(dir, 'games/rock-race/game.json', JSON.stringify({
     id: 'rock-race', name: 'Rock <Race>', blurb: 'Six ships, one rock field.', players: { min: 1, max: 6 }, roundSeconds: 120,
@@ -303,7 +304,7 @@ test('posts: the index, a post (its HTML safe, its links as cards), Atom and JSO
   assert.equal(feed.items[1]._homie.record.$type, 'rocks.homie.studio.post');
   // A studio with no posts has no Posts: no tab, no feed.
   const none = studio('no-posts');
-  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], none));
+  legacyGame(none, 'crown-thief');
   assert.equal(out(run(['build'], none)).ok, true);
   const bare = await siteOf(none);
   assert.equal((await bare('/posts/')).status, 404);

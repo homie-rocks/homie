@@ -236,7 +236,7 @@ function play(c, companions, allow) {
   const ends = (fd) => (fd.t === 'bit' || fd.t === 'press' ? [false, true] : fd.t === 'fix' ? [-1, 1] : [L.P.coerce(fd, -Infinity, c.dims), L.P.coerce(fd, Infinity, c.dims)]);
   const steering = new Map();
   let moveTick = 0;
-  const moveCtx = new Map(c.kinds.filter((k) => k.move && k.body).map((k) => [k.name, L.M.moveContext({ tick: () => moveTick, tickHz, tune: c.publicTune, map: c.map, name: c.map.name, spots: c.map.spots, radius: () => k.body.radius, dims: c.dims })]));
+  const moveCtx = new Map(c.kinds.filter((k) => k.move && k.body).map((k) => [k.name, L.M.moveContext({ tick: () => moveTick, tickHz, tune: c.publicTune, map: c.map, name: c.map.name, spots: c.map.spots, radius: () => k.body.radius, shape: () => k.body, dims: c.dims })]));
   /**
    * An owner-moved body's own browser, for one tick: the game's `move` from where the last snapshot has the body, by
    * the step a browser takes (pack.ts `stepMove`), and the claim of where that leaves it. Its units are the play's.
@@ -350,8 +350,8 @@ function play(c, companions, allow) {
       const result = L.P.stepMove(kind.move, before, input, moveCtx.get(name), Math.max(1, Math.floor(budget / 4)), kind.motion, c.dims,
         error => { fault ??= `${siteOf(name, 'move')} ${name}.move: prediction failed: ${error.message}.${when()}`; });
       units += result.used;
-      const r = kind.body.radius, bounds = c.map.bounds;
-      result.pos = L.P.vec3({ x: Math.max(bounds.min.x + r, Math.min(bounds.max.x - r, result.pos.x)), y: Math.max(bounds.min.y + r, Math.min(bounds.max.y - r, result.pos.y)), z: result.pos.z }, c.dims);
+      const r = kind.body.radius, height = kind.body.height || 2 * r, bounds = c.map.bounds;
+      result.pos = L.P.vec3({ x: Math.max(bounds.min.x + r, Math.min(bounds.max.x - r, result.pos.x)), y: Math.max(bounds.min.y + r, Math.min(bounds.max.y - r, result.pos.y)), z: c.dims === 3 ? Math.max(bounds.min.z, Math.min(bounds.max.z - height, result.pos.z)) : 0 }, c.dims);
       delete result.used;
       if (JSON.stringify(result) !== JSON.stringify(after)) fault ??= `${siteOf(name, 'move')} ${name}.move: prediction and the server produced different bodies from the same input.${when()}`;
     }

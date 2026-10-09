@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.23.0: room chat (NETPLAY.md section 19; worker/chat.mjs, chat-store.mjs, chat-page.mjs).
  *
@@ -492,7 +493,7 @@ let built = null;
 async function site() {
   if (!built) {
     const dir = studio('worker');
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
+    legacyGame(dir, 'owl-run', 'Owl Run');
     const gj = join(dir, 'games', 'owl-run', 'game.json');
     writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), chat: { mode: 'text', slow: 1, lines: { gg: 'Good game!', hoot: 'Hoot hoot!' }, emoji: { owl: '🦉' } } }, null, 2));
     const b = run(['build'], dir);

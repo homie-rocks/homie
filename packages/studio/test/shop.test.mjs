@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.24.0: the shop kit (worker/shop.mjs, shop-rules.mjs, shop-store.mjs, stripe.mjs,
  * referrals.mjs, shop-page.mjs; lib/shop.mjs; shop/shop.ts). A studio sells with ITS OWN Stripe.
@@ -333,7 +334,7 @@ let built = null;
 async function site({ key = true, managed = false, catalog = null, settings = null } = {}) {
   if (!built) {
     const dir = studio('worker');
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
+    legacyGame(dir, 'owl-run', 'Owl Run');
     writeFileSync(join(dir, 'shop.json'), JSON.stringify({
       till: 'stripe', currency: 'usd', policy: { preset: 'protective' }, automaticTax: true, referralNewPlayersOnly: true, refundDays: 14, capPerPlayerMonth: 2000,
       items: [

@@ -46,10 +46,28 @@ import { BudgetError } from './guard.ts';
 import { moveContext } from './math.ts';
 import { coerce, dir, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
+import { compileMap } from './rules.ts';
 import type { FieldList, MoveFn, Schema, Vec3 } from './rules.ts';
 
+/** Unit headings take the shortest arc, including an exact half turn. Linear
+ * interpolation passes through zero at a half turn and visibly flips a character. */
+export function blendHeading(a: Vec3, b: Vec3, t: number, dims: 2 | 3): Vec3 {
+  if (t <= 0) return a;
+  if (t >= 1) return b;
+  const dot = Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z));
+  if (dot > 0.9995) return dir({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) }, dims);
+  if (dot < -0.9995) {
+    const side = Math.abs(a.z) < 0.9 ? dir({ x: -a.y, y: a.x, z: 0 }, 3) : dir({ x: a.z, y: 0, z: -a.x }, 3);
+    const c = Math.cos(Math.PI * t), s = Math.sin(Math.PI * t);
+    return dir({ x: a.x * c + side.x * s, y: a.y * c + side.y * s, z: a.z * c + side.z * s }, dims);
+  }
+  const angle = Math.acos(dot), scale = Math.sin(angle);
+  const from = Math.sin((1 - t) * angle) / scale, to = Math.sin(t * angle) / scale;
+  return dir({ x: a.x * from + b.x * to, y: a.y * from + b.y * to, z: a.z * from + b.z * to }, dims);
+}
+
 /** What the build hands the view library for one game: its declarations, its public tunables and its map. No code. */
-export interface GameData { vocab?: Vocabulary; id: string; schema: Schema; tune: Record<string, unknown>; map: { name?: string; bounds: { min: unknown; max: unknown }; boxes?: unknown[]; circles?: unknown[]; spots?: Record<string, unknown[]> } }
+export interface GameData { vocab?: Vocabulary; id: string; schema: Schema; tune: Record<string, unknown>; map: { name?: string; bounds: { min: unknown; max: unknown }; boxes?: unknown[]; circles?: unknown[]; spheres?: unknown[]; capsules?: unknown[]; heightTiles?: unknown[]; spots?: Record<string, unknown[]> } }
 let current: { game: GameData; move: Record<string, MoveFn>; load?: () => Promise<RulesHostFactory> } | null = null;
 /** Called by the build's own two lines at the top of a view's bundle, before the view's code runs. */
 export function setGame(game: GameData, move: Record<string, MoveFn> = {}, load?: () => Promise<RulesHostFactory>): void { current = { game, move, load }; }
@@ -67,6 +85,8 @@ export type RoomStatus = 'connecting' | 'playing' | 'offline' | 'closed';
 export interface RoomRound { n: number; phase: 'live' | 'over'; endsAt: number; secondsLeft: number; results?: RoundInfo['results'] }
 export interface RosterRow { seat: number; name: string; driver: 'person' | 'bot' | 'ai'; score: number; me: boolean }
 export interface OpenRoomOptions {
+  /** Play a private rules round while an online room has no body for this player. */
+  fallback?: 'solo';
   game?: GameData;
   move?: Record<string, MoveFn>;
   net?: NetplayOptions;
@@ -97,7 +117,7 @@ export interface Room<R = unknown> {
   askButtons(id: string, offer?: Record<string, unknown>): AskButton[];
   readonly tune: Readonly<Record<string, unknown>>;
   /** The game's static map: its edges, its solid shapes and its named spots, in metres. */
-  readonly map: { readonly bounds: { min: Vec3; max: Vec3 }; readonly boxes: readonly { min: Vec3; max: Vec3 }[]; readonly circles: readonly { at: Vec3; r: number }[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> };
+  readonly map: { readonly bounds: { min: Vec3; max: Vec3 }; readonly boxes: readonly { min: Vec3; max: Vec3 }[]; readonly circles: readonly { at: Vec3; r: number }[]; readonly heightTiles: readonly import('./rules.ts').MapHeightTile[]; readonly spheres: readonly { at: Vec3; r: number }[]; readonly capsules: readonly { at: Vec3; r: number; height: number }[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> };
   readonly net: Netplay;
   /** Run the room's clock up to now (called by itself on a timer and whenever the view reads the room). */
   pump(): void;
@@ -124,11 +144,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const agents = game.vocab && agentFactory ? agentFactory(net, game.vocab, { roles: ['guide', 'party'], view: () => ({}), manual: true, viewOnly: true }) : null;
   const kindOf = new Map(schema.kinds.map((k) => [k.name, k]));
   const listeners = new Map<string, Set<(e: any) => void>>();
-  const emit = (name: string, e: unknown): void => { for (const fn of listeners.get(name) ?? []) { try { fn(e); } catch (err) { console.warn(`[room] on('${name}')`, err); } } };
-  const vecOf = (a: unknown): Vec3 => { const p = Array.isArray(a) ? { x: a[0], y: a[1], z: a[2] ?? 0 } : a; return vec3(p, dims); };
-  const map = { bounds: { min: vecOf(game.map.bounds.min), max: vecOf(game.map.bounds.max) }, boxes: (game.map.boxes ?? []).map((b: any) => ({ min: vecOf(b.min), max: vecOf(b.max) })), circles: (game.map.circles ?? []).map((c: any) => ({ at: vecOf(c.at), r: Number(c.r) })) };
-  const spots: Record<string, readonly Vec3[]> = {};
-  for (const [key, list] of Object.entries(game.map.spots ?? {})) spots[key] = Object.freeze(list.map(vecOf));
+  let solo: Room<R> | null = null, noBodyMs = 0, checkedAt = clock();
+  const soloListeners = new Map<string, () => void>();
+  const emit = (name: string, e: unknown, local = false): void => { if (Boolean(solo) !== local) return; for (const fn of listeners.get(name) ?? []) { try { fn(e); } catch (err) { console.warn(`[room] on('${name}')`, err); } } };
+  const map = compileMap(game.map, game.map.name ?? 'main');
+  const spots = map.spots;
   const tune = Object.freeze({ ...(lab.rulesTune({ public: game.tune }).public as Record<string, unknown>) });
 
   let status: RoomStatus = 'connecting';
@@ -183,6 +203,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let observedLeadAt = 0;
   let catchTick: number | null = null;
   let catchAt = 0;
+  let headingBlend: { from: Vec3; at: number } | null = null;
   let offsets: { delta: Vec3; at: number; path: Vec3; fade: number; last: number }[] = [];
   const predict = schema.settings.predict;
   const quantile = (list: number[], q: number): number => [...list].sort((a, b) => a - b)[Math.floor((list.length - 1) * q)] ?? 0;
@@ -224,7 +245,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const tickAt = (now: number): number => (base ? base.tick + (now - base.at) / period * speed : 0);
   /** The tick `move` is being run for: the step just taken, or the one after it while the own body is drawn between ticks. */
   let moveTick = 0;
-  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, dims });
+  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
   function authorityRtt(): number {
     // The helper's ping ends at the relay. A browser host adds another network leg in both directions.
     // Snapshot stamps use the relay clock, so their observed age measures the complete downstream path.
@@ -257,7 +278,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     base = { tick: k + Math.ceil(rtt / period + target) + sendEvery - 1, at: clock() };
     stepped = Math.floor(base.tick) - 1;
     entries = []; pending = []; history.clear(); replayHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Set();
-    speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; correction.rebases += 1;
+    speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; headingBlend = null; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
     if (mine) {
       history.set(stepped, copyMine(mine));
@@ -275,8 +296,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (!fn) return body;
     moveTick = t;
     const out = stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
-    const r = kindOf.get(kindName)?.radius ?? 0;
-    out.pos = vec3({ x: Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, out.pos.x)), y: Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, out.pos.y)), z: out.pos.z }, dims);
+    const kind = kindOf.get(kindName), r = kind?.radius ?? 0;
+    const height = kind?.height || 2 * r;
+    out.pos = vec3({ x: Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, out.pos.x)), y: Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, out.pos.y)), z: dims === 3 ? Math.max(map.bounds.min.z, Math.min(map.bounds.max.z - height, out.pos.z)) : 0 }, dims);
     return out;
   }
   /** The input values the last step held (a press is never held). */
@@ -329,6 +351,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (closed) return;
     if (net.offline && !net.rulesHosting) setStatus(net.closedWhy ? 'closed' : 'offline');
     const now = clock();
+    checkSolo(now);
     const hidden = typeof document !== 'undefined' && document.hidden === true;
     // Effects play for everyone who draws the room: a watcher has no body and still sees them.
     fire();
@@ -378,7 +401,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         mine!.motion = motionOf(me.kind, me.motion);
       } else {
         const previous = mine!.pos;
-        const shown = meNow()?.pos ?? previous;
+        const shownBody = meNow();
+        const shown = shownBody?.pos ?? previous;
+        const oldHeading = mine!.heading;
         const oldOffset = visualOffset(clock()), oldOffsets = offsets;
         adopt(me);
         history.set(f.k, copyMine(mine!));
@@ -402,6 +427,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           history.set(t, copyMine(mine!));
         }
         pending = pending.filter(e => e.t > f.k || e.t > ack && f.k + 1 - e.t <= Math.ceil(tickHz / 4));
+        if (shownBody && distance(oldHeading, mine!.heading) > 0.0001) headingBlend = { from: shownBody.heading, at: clock() };
         const error = distance(previous, mine!.pos);
         correction.last = error;
         if (error > 0.00001) { correction.count++; correction.max = Math.max(correction.max, error); }
@@ -466,6 +492,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     setStatus(seat === null || me ? 'playing' : status);
   }
   function roundNow(): RoomRound | null {
+    if (solo) return solo.round;
     if (!round || !latest) return null;
     // The room's clock now, from the newest snapshot: a view never turns a tick into time itself.
     const serverTick = latest.k + ((net.connected || net.rulesHosting) ? (clock() - latest.at) / period : 0);
@@ -527,21 +554,26 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
    * drawn frame, not on the next tick.
    */
   function meNow(): Entity | null {
+    if (solo) return solo.me;
     if (!mine || !latest) return null;
     const server = latest.ents.get(mine.id);
     if (!server) return null;
     const kind = kindOf.get(mine.kind);
     let pos = mine.pos;
     let heading = mine.heading;
+    let velocity = mine.vel, grounded = mine.grounded, motion = mine.motion;
     let settled = true;
-    let preview: { pos: Vec3; heading: Vec3 } | null = null;
+    let preview: ReturnType<typeof runMove> | null = null;
     if (kind && base) {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
       const now: Record<string, unknown> = {};
       for (const [name, fd] of kind.input) now[name] = fd.t === 'press' ? pressed.has(name) : coerce(fd, sample[name] ?? fd.init, dims);
       const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
       pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
-      heading = next.heading;
+      heading = blendHeading(mine.heading, next.heading, a, dims);
+      velocity = vec3({ x: lerp(mine.vel.x, next.vel.x, a), y: lerp(mine.vel.y, next.vel.y, a), z: lerp(mine.vel.z, next.vel.z, a) }, dims);
+      // A takeoff is airborne as soon as it rises; a landing waits for its contact.
+      grounded = mine.grounded && (a === 0 || next.grounded);
       preview = next;
       settled = distance(next.pos, mine.pos) < 0.00001;
     }
@@ -551,17 +583,25 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       if (catchTick >= tickAt(now)) catchTick = null;
       else {
         // Catch-up can reach the fractional current tick before its next whole step exists.
-        // Use the same preview as normal drawing, rather than hold and jump when that step arrives.
+        // Use the normal drawing preview, including its 3D pose, instead of holding then jumping.
         const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1) ?? (t === stepped ? preview : null);
-        if (a && b) { const f = catchTick - t; pos = { x: lerp(a.pos.x, b.pos.x, f), y: lerp(a.pos.y, b.pos.y, f), z: lerp(a.pos.z, b.pos.z, f) }; heading = b.heading; }
-        else if (a) pos = a.pos;
+        if (a && b) { const f = catchTick - t; pos = { x: lerp(a.pos.x, b.pos.x, f), y: lerp(a.pos.y, b.pos.y, f), z: lerp(a.pos.z, b.pos.z, f) }; heading = blendHeading(a.heading, b.heading, f, dims);
+          velocity = vec3({ x: lerp(a.vel.x, b.vel.x, f), y: lerp(a.vel.y, b.vel.y, f), z: lerp(a.vel.z, b.vel.z, f) }, dims);
+          grounded = a.grounded && (f === 0 || b.grounded); motion = a.motion;
+        } else if (a) { pos = a.pos; heading = a.heading; velocity = a.vel; grounded = a.grounded; motion = a.motion; }
       }
     }
     const offset = visualOffset(clock(), pos, settled);
     pos = { x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z };
-    return entityOf({ ...server, pos, vel: mine.vel, heading, grounded: mine.grounded, motion: mine.motion }, true);
+    if (headingBlend) {
+      const t = predict.blendMs > 0 ? Math.min(1, (clock() - headingBlend.at) / predict.blendMs) : 1;
+      heading = blendHeading(headingBlend.from, heading, t, dims);
+      if (t >= 1) headingBlend = null;
+    }
+    return entityOf({ ...server, pos, vel: velocity, heading, grounded, motion }, true);
   }
   function drawn(id: string): Entity | null {
+    if (solo) return solo.get(id);
     if (mine && id === mine.id) return meNow();
     const s = net.sample();
     const a = s ? frameOf(s.a) : latest;
@@ -571,12 +611,13 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     // A placed body jumps: nobody's view glides across a placement.
     if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(eb);
     const t = s.alpha;
-    const h = dir({ x: lerp(ea.heading.x, eb.heading.x, t), y: lerp(ea.heading.y, eb.heading.y, t), z: lerp(ea.heading.z, eb.heading.z, t) }, dims);
-    return entityOf({ ...eb, pos: vec3({ x: lerp(ea.pos.x, eb.pos.x, t), y: lerp(ea.pos.y, eb.pos.y, t), z: lerp(ea.pos.z, eb.pos.z, t) }, dims), vel: eb.vel, heading: h });
+    const h = blendHeading(ea.heading, eb.heading, t, dims);
+    return entityOf({ ...(t < 1 ? ea : eb), grounded: t >= 1 ? eb.grounded : ea.grounded && (t === 0 || eb.grounded), pos: vec3({ x: lerp(ea.pos.x, eb.pos.x, t), y: lerp(ea.pos.y, eb.pos.y, t), z: lerp(ea.pos.z, eb.pos.z, t) }, dims), vel: vec3({ x: lerp(ea.vel.x, eb.vel.x, t), y: lerp(ea.vel.y, eb.vel.y, t), z: lerp(ea.vel.z, eb.vel.z, t) }, dims), heading: h });
   }
   function get(id: string): Entity | null { return drawn(id); }
   function each(kind: string, fn: (e: Entity) => void): void {
     pump();
+    if (solo) { solo.each(kind, fn); return; }
     const s = net.sample();
     const a = s ? frameOf(s.a) : latest;
     const b = s ? frameOf(s.b) : latest;
@@ -587,20 +628,51 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     for (const id of ids) { const e = drawn(id); if (e) fn(e); }
   }
   function roster(): RosterRow[] {
+    if (solo) return solo.roster;
     const scores = new Map<number, number>();
     if (latest) for (const u of latest.ents.values()) { const k = kindOf.get(u.kind); if (u.seat !== undefined && k?.score) scores.set(u.seat, Number(u.fields[k.score]) || 0); }
     return (net.slots ?? []).map((sl) => ({ seat: sl.slot, name: sl.name, driver: sl.agent ? 'ai' as const : sl.bot ? 'bot' as const : 'person' as const, score: scores.get(sl.slot) ?? 0, me: sl.seat !== null && sl.seat === net.seat }));
   }
+  function forwardSolo(name: string): void {
+    if (solo && !soloListeners.has(name)) soloListeners.set(name, solo.on(name, e => emit(name, e, true)));
+  }
+  function stopSolo(): void {
+    for (const off of soloListeners.values()) off(); soloListeners.clear();
+    const old = solo; solo = null; old?.close();
+  }
+  function checkSolo(now: number): void {
+    if (opts.fallback !== 'solo') return;
+    const elapsed = Math.min(300, Math.max(0, now - checkedAt)); checkedAt = now;
+    if (net.offline || net.watching) { noBodyMs = 0; stopSolo(); return; }
+    if (net.link !== 'online') { noBodyMs = 0; return; }
+    if (mine && net.seat !== null && latest?.ents.has(mine.id)) {
+      noBodyMs = 0;
+      if (solo) { stopSolo(); net.line(null); emit('status', status); emit('placed', { id: mine.id }); }
+      return;
+    }
+    if (solo || net.seat === null && !net.full) return;
+    noBodyMs += elapsed;
+    if (noBodyMs < 4000 || !(schema.settings.offline || schema.settings.host === 'browser')) return;
+    // Keep the online socket and its seat queue. The separate offline room emits no wire
+    // traffic, writes no room save to the server, and closes as soon as a body arrives.
+    const g = globalThis as unknown as Record<string, unknown>;
+    const probes = [g.__homieNet, g.__homiePort];
+    solo = openRoom<R>({ game, move: moves, now: opts.now, timers: opts.timers, net: { config: null, post: null, linkOverlay: false } });
+    [g.__homieNet, g.__homiePort] = probes;
+    for (const name of listeners.keys()) forwardSolo(name);
+    net.line(net.full ? 'This room is full · playing on your own until a seat is free' : 'Playing on your own until the next round');
+    emit('status', 'offline', true);
+  }
   let extra: Record<string, () => unknown> = {};
-  const myScore = (): number | null => { const k = myKind(); const u = mine && latest ? latest.ents.get(mine.id) : null; return k?.score && u ? Number(u.fields[k.score]) || 0 : null; };
-  const busy = (): boolean => status !== 'playing' || !mine || latest?.ents.get(mine.id)?.away === true;
+  const myScore = (): number | null => { if (solo) { const k = schema.kinds.find(k => k.player); return k?.score && solo.me ? Number(solo.me[k.score]) || 0 : null; } const k = myKind(); const u = mine && latest ? latest.ents.get(mine.id) : null; return k?.score && u ? Number(u.fields[k.score]) || 0 : null; };
+  const busy = (): boolean => solo ? !solo.me : status !== 'playing' || !mine || latest?.ents.get(mine.id)?.away === true;
   // The probes the testing tools read (`check`, `shoot`, `perf`, the playtest judge): the same two objects a game written the old way publishes.
   net.expose({
     self: () => { const m = meNow(); return m ? { x: m.pos.x, y: m.pos.y, z: m.pos.z } : null; },
     peer: (seat: number) => { if (!latest) return null; for (const u of latest.ents.values()) if (u.seat === seat) return { x: u.pos.x, y: u.pos.y, z: u.pos.z }; return null; },
     prediction: () => ({ ...correction, observedLeadAt, lastSendAt, now: clock(), serverTick: latest?.k, tick: stepped, catchTick, lead: targetLead(), medianLead: medianLead(), rate: speed, rtt: authorityRtt(), hostAge: quantile(hostAges, 0.5), pending: pending.length }),
     scores: () => roster().map((r) => ({ seat: r.seat, score: r.score })),
-    score: myScore, tick: () => latest?.k ?? 0, epoch: () => epoch, hosted: () => net.rulesHosting ? 'browser' : schema.settings.host, status: () => status,
+    score: myScore, tick: () => latest?.k ?? 0, epoch: () => epoch, hosted: () => net.rulesHosting ? 'browser' : schema.settings.host, status: () => solo ? 'offline' : status,
   });
   if (typeof window !== 'undefined') {
     exposePort(net as Netplay<unknown, unknown, unknown>, {
@@ -616,27 +688,28 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onShow);
 
   return {
-    get status() { return status; },
-    get seat() { return net.seat; },
+    get status() { return solo ? 'offline' : status; },
+    get seat() { return solo ? solo.seat : net.seat; },
     get me() { pump(); return meNow(); },
     each, get,
-    on(name, fn) { let set = listeners.get(name); if (!set) { set = new Set(); listeners.set(name, set); } set.add(fn); return () => { set?.delete(fn); }; },
-    get shared() { return Object.freeze(unpackFields(schema.shared, net.stateOf('shared'), dims)); },
+    on(name, fn) { let set = listeners.get(name); if (!set) { set = new Set(); listeners.set(name, set); } set.add(fn); forwardSolo(name); return () => { set?.delete(fn); }; },
+    get shared() { if (solo) return solo.shared; return Object.freeze(unpackFields(schema.shared, net.stateOf('shared'), dims)); },
     input(s) {
+      if (solo) { solo.input(s); return; }
       const kind = myKind() ?? schema.kinds.find((k) => k.player) ?? null;
       const next: Record<string, unknown> = {};
       for (const [name, fd] of kind?.input ?? []) { if (fd.t === 'press') { if (s[name] === true || s[name] === 1) pressed.add(name); } else if (s[name] !== undefined) next[name] = s[name]; }
       sample = next;
     },
-    command(name, data = {}) { if (schema.commands[name]) net.send('cmd', [name, data]); else console.warn(`[room] no command "${name}" is declared in shapes.commands`); },
+    command(name, data = {}) { if (solo) { solo.command(name, data); return; } if (schema.commands[name]) net.send('cmd', [name, data]); else console.warn(`[room] no command "${name}" is declared in shapes.commands`); },
     get round() { return roundNow(); },
     get roster() { return roster(); },
     follow(id) { const e = id ? latest?.ents.get(id) : null; net.follow(e && e.seat !== undefined ? e.seat : null); },
     probe(x) { extra = { ...extra, ...x }; },
-    ask(id, askId, args = {}) { const e = latest?.ents.get(id); if (e && e.seat !== undefined) agents?.ask(e.seat, askId, args); },
-    askButtons(id, offer = {}) { const e = latest?.ents.get(id); return e && e.seat !== undefined ? agents?.askButtons(e.seat, offer) ?? [] : []; },
+    ask(id, askId, args = {}) { if (solo) return; const e = latest?.ents.get(id); if (e && e.seat !== undefined) agents?.ask(e.seat, askId, args); },
+    askButtons(id, offer = {}) { if (solo) return []; const e = latest?.ents.get(id); return e && e.seat !== undefined ? agents?.askButtons(e.seat, offer) ?? [] : []; },
     tune, map: Object.freeze({ ...map, spots: Object.freeze(spots) }), net: net as Netplay,
     pump,
-    close() { closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
+    close() { stopSolo(); closed = true; if (timer) clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onShow); agents?.stop(); net.close(); setStatus('closed'); },
   };
 }

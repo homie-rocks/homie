@@ -611,7 +611,6 @@ test('rules that cannot start refuse joins and say why, and a room never falls b
   assert.deepEqual(a.closed, [1008, 'host-failed']);
   assert.equal(rig.room.hostId, null);
   assert.equal(rig.room.facts().hostFailed.length > 0, true);
-  // A 3D game is declared in full and refused by this release's core with the reason.
-  const flat = compile({});
-  assert.throws(() => L.C.createCore({ ...flat, dims: 3 }), /this release runs rules with space\.dims: 2/);
+  // Unsupported dimensions still fail at declaration time; 3D is covered by rules-3d.
+  assert.throws(() => L.R.compileRules(L.R.defineRules({ contract: 2, space: { dims: 4 }, entities: {} })), /space/);
 });

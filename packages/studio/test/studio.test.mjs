@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio: the scaffold touches only a new or empty folder and lists
  * what it writes; a game from a starter builds into the site; the Lobby puts
@@ -105,7 +106,7 @@ test('the Lobby: two strangers pressing Play together land in the same room; a f
 
 test('deploy: never a Worker, database or bucket this studio did not create; not signed in asks for one browser approval', () => {
   const dir = studio('deploys');
-  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], dir));
+  legacyGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   const fake = (script) => { writeFileSync(join(bin, 'wrangler'), `#!/bin/sh\n${script}\n`); chmodSync(join(bin, 'wrangler'), 0o755); };
@@ -138,7 +139,7 @@ test('deploy: never a Worker, database or bucket this studio did not create; not
 
 test('deploy resumes after a cut: a resource it created is recorded the moment it exists', () => {
   const dir = studio('resumes');
-  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], dir));
+  legacyGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   const state = join(dir, '.fake-cf');
@@ -203,7 +204,7 @@ esac
 
 test('NO CREDIT CARD: a free account without R2 deploys the whole studio, and deploy never asks R2 anything', () => {
   const dir = studio('nocard');
-  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], dir));
+  legacyGame(dir, 'crown-thief');
   const account = noCardAccount(dir);
   const plan = out(run(['deploy', '--plan'], dir));
   assert.equal(plan.ok, true, JSON.stringify(plan));
@@ -245,7 +246,7 @@ test('the workers.dev address never goes into studio.json (it names the account)
   const homie = `http://127.0.0.1:${directory.address().port}`;
   try {
     const dir = studio('address');
-    out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], dir));
+    legacyGame(dir, 'crown-thief');
     noCardAccount(dir);
     const runAsync = (args) => new Promise((resolve) => {
       const p = spawn(process.execPath, [CLI, ...args, '--json'], { cwd: dir, env: { ...process.env, HOMIE_STUDIO_WARM: '0' } });
@@ -302,7 +303,7 @@ test('the workers.dev address never goes into studio.json (it names the account)
 
 test('storage add: refused with the dashboard link on an account without R2 (nothing created); on one with R2 it makes the bucket and deploy binds it', () => {
   const dir = studio('storage');
-  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], dir));
+  legacyGame(dir, 'crown-thief');
   noCardAccount(dir);
   assert.equal(out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir)).ok, true);
   const refused = out(run(['storage', 'add'], dir));
@@ -332,7 +333,7 @@ test('storage add: refused with the dashboard link on an account without R2 (not
 
 test('dev --stop stops exactly this studio\'s dev server (Wrangler with it), and nothing else', async () => {
   const dir = studio('devstop');
-  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], dir));
+  legacyGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   // A stand-in Wrangler: `dev` runs until it is stopped, like the real one.
@@ -372,7 +373,7 @@ test('a new account\'s first deploy says the next step: verify the email (10034)
   assert.match(sub.why, /dash\.cloudflare\.com\/acc1\/workers\/onboarding/);
   assert.equal(explainCloudflare('some other failure'), null);
   const dir = studio('verify');
-  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], dir));
+  legacyGame(dir, 'crown-thief');
   const bin = join(dir, 'node_modules', '.bin');
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'wrangler'), `#!/bin/sh
