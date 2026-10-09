@@ -546,7 +546,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     if (rules) log(`  ${g.id}: its rules run on the server (checked and guarded, ${Math.max(1, Math.round(rules.code.length / 1024))} KB, build ${rules.build}; ${rules.check.ticks} ticks played, the room rebuilt from its save ${rules.check.restores} times: the busiest tick used ${rules.tickUnits} of ${rules.settings.budget.tick} budget units, ${rules.units} of them in one handler; the largest save was ${rules.check.largestSaveBytes} bytes)`);
   }
   // A game written before rules (its own code is the host) builds and runs exactly as it did. Said in one line.
-  if (browserHosted.length) log(`hosted by a player's browser, as before (no src/rules.ts; nothing to do): ${browserHosted.join(', ')}`);
+  if (browserHosted.length) log(`hosted by a player's browser, as before (no room object; nothing to do): ${browserHosted.join(', ')}`);
   const all = listGames(root);
   // No game is handed over whole any more (remix was retired; worker/license.mjs). A one-game build starts from the
   // site as it is, which an older toolkit may have built: what that wrote for remixers (a game's whole source, and

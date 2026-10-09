@@ -93,7 +93,7 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;
   assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{32}; 18000 ticks played, the room rebuilt from its save \d+ times: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler; the largest save was \d+ bytes\)/);
-  assert.match(said, /hosted by a player's browser, as before \(no src\/rules\.ts; nothing to do\): gems\n/);
+  assert.match(said, /hosted by a player's browser, as before \(no room object; nothing to do\): gems\n/);
   // The rules module: one file, importing only Homie's rules module and the guard.
   const rules = read(dir, 'site/src/rules/coin-dash.mjs');
   assert.deepEqual([...new Set([...rules.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))].sort(), ['@homie-rocks/studio/rules', '@homie-rocks/studio/rules/guard']);
