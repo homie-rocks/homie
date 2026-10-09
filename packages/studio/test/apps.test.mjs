@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, mkdirSync, utimesSync, symlinkSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, utimesSync, symlinkSync, readFileSync, readdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,7 @@ import { appRecordsRoute, appAccess } from '../worker/app-records.mjs';
 import worker from '../worker/index.mjs';
 import { appLink, randomId, qrSvg } from '../links/links.mjs';
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-const scratch = mkdtempSync(join(tmpdir(), 'homie-app-tests-'));
+const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-app-tests-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 function studio(name) { const dir = join(scratch, name); newStudio(dir, { name, install: false }); symlinkSync(join(ROOT, 'node_modules'), join(dir, 'node_modules')); return dir; }
 const hash = (s) => createHash('sha256').update(s).digest('hex');

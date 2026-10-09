@@ -45,7 +45,7 @@ function studio(name, { game = 'ember-run', gameName = 'Ember Run' } = {}) {
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-  if (game) assert.equal(out(run(['game', 'new', game, '--name', gameName], dir)).ok, true);
+  if (game) assert.equal(out(run(['game', 'new', game, '--from', 'ember-vale', '--name', gameName], dir)).ok, true);
   return dir;
 }
 

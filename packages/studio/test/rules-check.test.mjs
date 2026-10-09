@@ -75,9 +75,10 @@ test('a tick that runs out of budget refuses the build, whether one handler was 
 });
 
 test('a body whose own move outruns its declared top speed is held back by the server, and that refuses the build', async () => {
+  const rules = readFileSync(join(COIN_DASH, 'src/rules.ts'), 'utf8').replace('maxSpeed: 6 }', "maxSpeed: 6, move: 'owner' }");
   const fast = readFileSync(join(COIN_DASH, 'src/move.ts'), 'utf8').replace('ctx.tune.speed', '12');
-  await refuses(coin('fast', { move: fast }), /^fast\/src\/move\.ts:\d+ runner\.move: the server held this body back: one step of this move, from where the server has the body, goes further than the server lets a body go in a tick \(body\.maxSpeed is 6 m\/s\)\. A player would see their character pulled back\./);
-  await coin('at-speed');
+  await refuses(coin('fast', { rules, move: fast }), /^fast\/src\/move\.ts:\d+ runner\.move: the server held this body back: one step of this move, from where the server has the body, goes further than the server lets a body go in a tick \(body\.maxSpeed is 6 m\/s\)\. A player would see their character pulled back\./);
+  await coin('at-speed', { rules });
 });
 
 test('a value the room had to change is a fault of the build, named at the line that wrote it; a live room stores it as it always did', async () => {
@@ -229,4 +230,20 @@ test('the three fixed Coin Dash edit requests keep building and change what was 
       const self = { score: 0 }; c.kindOf.runner.on.score({}, self, {}); assert.equal(self.score, 2);
     }
   }
+});
+
+test('prediction replays scalar motion writes with the server coercion before the next read', async () => {
+  const rules = `import { defineRules, f } from '@homie-rocks/studio/rules';
+import { move } from './move';
+export default defineRules({ contract: 2, space: { dims: 2 }, move,
+entities: { runner: { player: true, input: { ax: f.i8() }, motion: { n: f.u8() }, body: { shape: 'circle', radius: 0.5, maxSpeed: 1 } } },
+room: { join() { return { kind: 'runner', at: { x: 0, y: 0, z: 0 } }; } } });`;
+  const move = `import { defineMove } from '@homie-rocks/studio/rules';
+export const move = defineMove({ runner(body, input, ctx) {
+body.motion.n = 1.8;
+body.vel = { x: body.motion.n, y: 0, z: 0 };
+ctx.map.sweep(body, ctx.math.scale(body.vel, ctx.dt));
+} });`;
+  const { result } = await check(rules, 'prediction-coercion', { allowance: { ticks: 100, units: 2_000_000, restoreBytes: 60_000 } }, move);
+  assert.ok(result.ticks >= 100);
 });

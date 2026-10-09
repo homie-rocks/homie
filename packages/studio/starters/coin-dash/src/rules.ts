@@ -10,8 +10,8 @@
  * on a later tick. So a runner does not take a coin: it asks the coin (`take`), the coin answers the first one that
  * asked (`score`) and is gone, and a second `take` finds nobody there.
  *
- * In this release a person's runner moves as today: its own browser says where it is, and the server holds each claim
- * to the body's top speed (`move: 'owner'`). The server moves the bots with the same code (src/move.ts).
+ * The server moves every runner with src/move.ts. The view predicts its own runner using that same module,
+ * so controls answer immediately while the server decides what is true.
  */
 import { defineRules, f } from '@homie-rocks/studio/rules';
 import { move } from './move';
@@ -31,7 +31,7 @@ export default defineRules({
       fields: { score: f.u16({ score: true }) },
       motion: { frozenUntil: f.tick() },
       input: { ax: f.i8(), ay: f.i8() },
-      body: { shape: 'circle', radius: 0.5, maxSpeed: 6, move: 'owner' },
+      body: { shape: 'circle', radius: 0.5, maxSpeed: 6 },
       tick(world, self) {
         if (world.round.phase !== 'live') return;
         // A second `take` sent before the coin is gone is dropped: the coin no longer exists.

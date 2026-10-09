@@ -2,9 +2,24 @@
   "id": "gem-rush",
   "name": "Gem Rush",
   "blurb": "Grab gems, knock rivals away. Sixty-second rounds that never stop, and everyone who presses Play is in the same room.",
-  "players": { "min": 1, "max": 8 },
+  "players": {
+    "min": 1,
+    "max": 8
+  },
   "roundSeconds": 60,
-  "entry": "src/main.ts",
-  "netplay": { "v": 1, "public": true, "movement": "owner" },
-  "landing": { "pitch": "Grab the gems. Bump your rivals away.", "controls": { "phone": "Drag to move; a second finger bumps.", "computer": "WASD or arrows to move, Space to bump." } }
+  "entry": "src/view.ts",
+  "netplay": {
+    "v": 1,
+    "public": true
+  },
+  "landing": {
+    "pitch": "Grab the gems. Bump your rivals away.",
+    "controls": {
+      "phone": "Drag to move; a second finger bumps.",
+      "computer": "WASD or arrows to move, Space to bump."
+    }
+  },
+  "room": {
+    "host": "server"
+  }
 }

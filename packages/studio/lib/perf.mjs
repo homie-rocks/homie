@@ -194,6 +194,17 @@ export function renderCostOf(samples) {
   return { samples: Math.max(calls.length, tris.length), drawCalls: sum(calls), triangles: sum(tris) };
 }
 
+/** Presence in the last drawn frame is independent of its frame rate. Runs measure frame timing separately. */
+export function gameReadiness() {
+  const p = window.__homiePort;
+  let self = null;
+  if (p && p.view !== 'board') {
+    const rows = p.rows(); const last = rows[rows.length - 1];
+    self = Boolean(last && Number.isFinite(last[1]) && Number.isFinite(last[2]));
+  }
+  return { first: window.__perf?.first?.() ?? null, port: Boolean(p), view: p?.view ?? null, self };
+}
+
 /** Open one browser of a run on the play page, instrumented, and wait until it is playable. */
 async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
   const dev = PERF_DEVICES[device];
@@ -243,12 +254,7 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
       shell = await T(page.evaluate(() => { const s = window.__shell; const a = s?.arrival; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, arrival: a ? { phase: a.phase, lookMs: a.lookMs, liftedMs: a.liftedMs, by: a.by, mode: a.mode, explicitMs: a.explicitMs, lateMs: a.lateMs } : null } : null; }), 5000);
       const now = Date.now();
       if (seatedAt === null && shell?.room && Number.isInteger(shell.seat) && shell.role) seatedAt = now;
-      const g = await inGame(h, () => {
-        const p = window.__homiePort;
-        let self = null;
-        if (p && p.view !== 'board') { const r = p.rows(p.now() - 400); const last = r[r.length - 1]; self = last ? Number.isFinite(last[1]) : false; }
-        return { first: window.__perf?.first?.() ?? null, port: Boolean(p), view: p?.view ?? null, self };
-      });
+      const g = await inGame(h, gameReadiness);
       // The play page's arrival card (0.26.0) covers the game until the game says it is playable: not playable before.
       const lifted = !shell?.arrival || shell.arrival.phase === 'done';
       if (seatedAt !== null && g?.first !== null && g?.first !== undefined && lifted) {
@@ -651,7 +657,7 @@ function arrivalWords(summary, device, role, readyMs) {
 function headlineOf(summary) {
   const out = [];
   for (const device of summary.devices) {
-    for (const role of ['host', 'replica']) {
+    for (const role of ['host', 'replica', 'replica-2']) {
       const m = (k) => summary.metrics[`${device}.${role}.${k}`]?.median;
       if (m('frame.p50') === undefined) continue;
       out.push(`${device} ${role}: frames ${m('frame.p50')} ms median, ${m('frame.p95')} ms p95, ${m('frame.over50') ?? 0}% over 50 ms; game JS ${m('work.p50')} ms a frame (p95 ${m('work.p95')}); main thread ${m('busy')} ms a frame; first look at ${m('load.look') ?? '?'} ms, playable (control-ready) at ${m('load.playable') ?? '?'} ms${arrivalWords(summary, device, role, m('load.ready'))}; netplay ${m('net.msgsOut')} out / ${m('net.msgsIn')} in a second; heap ${m('heap')} MB; fetched before playable (measured) ${m('load.prePlayKb') ?? '?'} KB; renderer ${m('render.calls') !== undefined ? `${m('render.calls')} draw calls, ${m('render.triangles') ?? '?'} triangles (measured while playing)` : 'cost not exposed by the game (not measured)'}`);
@@ -749,8 +755,8 @@ export function readRuns(dir) {
 /** The metrics guarded by default: frame time and main-thread work of each role, time to playable and heap. */
 export function defaultGuards(devices, goal) {
   const g = [];
-  for (const d of devices) for (const role of ['host', 'replica']) g.push(`${d}.${role}.frame.p95`, `${d}.${role}.busy`, `${d}.${role}.load.playable`);
-  for (const d of devices) g.push(`${d}.host.heap`, `${d}.host.net.kbOut`);
+  for (const d of devices) for (const role of ['host', 'replica', 'replica-2']) g.push(`${d}.${role}.frame.p95`, `${d}.${role}.busy`, `${d}.${role}.load.playable`);
+  for (const d of devices) for (const role of ['host', 'replica', 'replica-2']) g.push(`${d}.${role}.heap`, `${d}.${role}.net.kbOut`);
   return g.filter((k) => k !== goal);
 }
 
@@ -758,10 +764,11 @@ export function defaultGuards(devices, goal) {
  * `homie-studio perf compare <before> <after>`: the goal metric and the guards, before against after, from the runs
  * in two folders. A run that was blocked, taken on a busy computer or profiled is left out (and counted).
  */
-export function perfCompare(beforeDir, afterDir, { goal = DEFAULT_GOAL, guards = null, also = [], min = 0.03, write = true } = {}) {
+export function perfCompare(beforeDir, afterDir, { goal = null, guards = null, also = [], min = 0.03, write = true } = {}) {
   const A = readRuns(beforeDir);
   const B = readRuns(afterDir);
   if (!A.runs.length || !B.runs.length) return { ok: false, command: 'perf compare', why: `no runs in ${!A.runs.length ? beforeDir : afterDir} (folders that homie-studio perf wrote)` };
+  goal ??= A.runs.every((r) => r.room?.hosted === 'server') ? DEFAULT_GOAL.replace('.host.', '.replica.') : DEFAULT_GOAL;
   const usable = (r) => !r.blocked && !r.loaded;
   const left = { before: A.runs.filter((r) => !usable(r)).length, after: B.runs.filter((r) => !usable(r)).length };
   const flat = (runs, sizes) => {

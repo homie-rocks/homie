@@ -168,7 +168,7 @@ test('createLabels: other bodies and the game\'s boxes are kept clear when they 
 
 test('the starters draw through it, and Ember Vale\'s ask panel stands clear above STRIKE on a touch screen', () => {
   for (const g of ['ember-vale', 'gem-rush']) {
-    const src = readFileSync(join(PKG, 'starters', g, 'src', 'main.ts'), 'utf8');
+    const src = readFileSync(join(PKG, 'starters', g, 'src', g === 'gem-rush' ? 'view.ts' : 'main.ts'), 'utf8');
     assert.match(src, /fitView\(/, `${g} frames its world with fitView`);
     assert.match(src, /createLabels\(/, `${g} places its names with createLabels`);
     assert.match(src, /labels: \(\) =>/, `${g} lets the probe see its names (boxes only)`);

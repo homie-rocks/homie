@@ -21,11 +21,9 @@ import { rulesCaps, rulesRates } from '../worker/limits.mjs';
  *   room.command(name, data)  a reliable one-shot request to the player's own body
  *   room.round, room.roster, room.shared, room.seat, room.status
  *
- * THE OWN BODY. In this release a player's body moves as it does today: this browser runs the game's `move` code
- * (the same guarded module the server runs) on its own copy of the room's clock and says where its body is; the
- * server holds each claim to the body's top speed (`body: { move: 'owner' }` in the rules). The stick therefore answers
- * on the next drawn frame. Everything the rules decide (score, pickups, rounds, where a body is placed) comes from the
- * server and cannot be changed from here. A later release has the server move every body and this library predict.
+ * THE OWN BODY. This browser predicts its own movement with the server's guarded `move` module. Snapshots are
+ * authoritative: the view replays pending inputs from each snapshot and eases the visual correction. Large
+ * disagreements draw the corrected path at catch-up speed. Scores, pickups and effects come only from the host.
  *
  * THE CLOCK AND THE INPUT (rooms-milestone-1-design.md, sections 4.4 and 6.1). Input is one step a tick, stamped with
  * its tick. This browser steps a little ahead of the server so an entry arrives before its tick runs, and holds that
@@ -43,7 +41,7 @@ export function setAgentFactory(factory: typeof useAgents): void { agentFactory 
 import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RulesHostFactory, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { lab } from '../lab/lab.ts';
-import { exposePort } from '../port/probe.ts';
+import { exposePort, type PortProbeOptions } from '../port/probe.ts';
 import { BudgetError } from './guard.ts';
 import { moveContext } from './math.ts';
 import { coerce, dir, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
@@ -68,7 +66,16 @@ export interface Entity {
 export type RoomStatus = 'connecting' | 'playing' | 'offline' | 'closed';
 export interface RoomRound { n: number; phase: 'live' | 'over'; endsAt: number; secondsLeft: number; results?: RoundInfo['results'] }
 export interface RosterRow { seat: number; name: string; driver: 'person' | 'bot' | 'ai'; score: number; me: boolean }
-export interface OpenRoomOptions { game?: GameData; move?: Record<string, MoveFn>; net?: NetplayOptions; /** Tests: a clock in ms and a way to run without timers. */ now?: () => number; timers?: boolean }
+export interface OpenRoomOptions {
+  game?: GameData;
+  move?: Record<string, MoveFn>;
+  net?: NetplayOptions;
+  /** Camera axes on the rules' x/y plane for the testing tools. Default: x right, y up. */
+  screenBasis?: PortProbeOptions['basis'];
+  /** Tests: a clock in ms and a way to run without timers. */
+  now?: () => number;
+  timers?: boolean;
+}
 export interface Room<R = unknown> {
   readonly status: RoomStatus;
   readonly seat: number | null;
@@ -113,7 +120,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const period = 1000 / tickHz;
   const sendEvery = Math.ceil(tickHz / Math.max(1, schema.settings.inputHz));
   const clock = opts.now ?? ((): number => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
-  const net = createNetplay<unknown, unknown, unknown>({ game: game.id, maxPlayers: schema.seats, snapshotHz: tickHz, heartbeatMs: 0, rulesHost: { mode: schema.settings.host, offline: schema.settings.offline, load: current?.load }, ...opts.net, rules: true, rulesLimits: { output: rulesOutput, bytes: rulesCaps(schema.seats), rates: rulesRates(tickHz, schema.seats) } });
+  const net = createNetplay<unknown, unknown, unknown>({ game: game.id, maxPlayers: schema.seats, snapshotHz: tickHz, interpFloorMs: schema.settings.predict.interpMs ?? period * sendEvery, heartbeatMs: 0, rulesHost: { mode: schema.settings.host, offline: schema.settings.offline, load: current?.load }, ...opts.net, rules: true, rulesLimits: { output: rulesOutput, bytes: rulesCaps(schema.seats), rates: rulesRates(tickHz, schema.seats) } });
   const agents = game.vocab && agentFactory ? agentFactory(net, game.vocab, { roles: ['guide', 'party'], view: () => ({}), manual: true, viewOnly: true }) : null;
   const kindOf = new Map(schema.kinds.map((k) => [k.name, k]));
   const listeners = new Map<string, Set<(e: any) => void>>();
@@ -157,7 +164,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   /** The clock: the room tick this browser is on at `at` (ms), and the newest step it has run. */
   let base: { tick: number; at: number } | null = null;
   let stepped = 0;
+  // Lead observations use one clock phase: steering our clock is not network jitter.
   const leads: number[] = [];
+  const phases: { tick: number; at: number; rate: number }[] = [];
+  const hostAges: number[] = [];
   /** What the player holds, the presses since the last step, what the server was last told, and the entries of this send period. */
   let sample: Record<string, unknown> = {};
   let pressed = new Set<string>();
@@ -165,52 +175,127 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let lastSendAt = 0;
   let entries: { t: number; row: number[] }[] = [];
   let hiddenSent = false;
-  const TARGET_LEAD = 1;
+  const history = new Map<number, Mine>();
+  let pending: { t: number; input: Readonly<Record<string, unknown>> }[] = [];
+  let replayHeld: Readonly<Record<string, unknown>> = Object.freeze({});
+  let speed = 1;
+  let leadAfter = 0;
+  let observedLeadAt = 0;
+  let catchTick: number | null = null;
+  let catchAt = 0;
+  let offsets: { delta: Vec3; at: number; path: Vec3; fade: number; last: number }[] = [];
+  const predict = schema.settings.predict;
+  const quantile = (list: number[], q: number): number => [...list].sort((a, b) => a - b)[Math.floor((list.length - 1) * q)] ?? 0;
+  const targetLead = (): number => 0.5 + Math.max(0, quantile(leads, 0.5) - quantile(leads, 0.05));
+  const copyMine = (m: Mine): Mine => ({ ...m, motion: motionOf(m.kind, m.motion) });
+  const distance = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  const correction = { count: 0, max: 0, last: 0, catches: 0, snaps: 0, rebases: 0, rebaseReason: '', rebaseError: 0 };
+  function visualOffset(now: number, path?: Vec3, settled = false): Vec3 {
+    if (predict.blendMs <= 0) { offsets = []; return { x: 0, y: 0, z: 0 }; }
+    offsets = offsets.filter(o => o.fade > 0);
+    const sum = { x: 0, y: 0, z: 0 };
+    let waiting = false;
+    for (const o of offsets) {
+      if (path) {
+        // Loss can make even a small correction longer than the distance travelled in
+        // 100 ms. Bound its fade by actual progress, or it pulls steady movement backwards.
+        // Only one queued fade advances at a time. A stopped body finishes its correction.
+        if (waiting) o.at = now;
+        else {
+          const length = Math.hypot(o.delta.x, o.delta.y, o.delta.z);
+          const elapsed = Math.max(0, now - o.last);
+          // A knock may travel faster than normal movement, and catch-up already accelerates it.
+          // Fading the offset must not add another fraction of that accelerated speed.
+          const allowance = length ? (myKind()?.maxSpeed ?? 0) * elapsed / 1000 / length : 1;
+          const release = settled && catchTick === null ? Math.min(allowance, elapsed / predict.blendMs) : 0;
+          const progress = length ? Math.min(allowance, distance(path, o.path) * 0.8 / length) : 1;
+          const nominal = Math.max(0, Math.min(1, 1 - (now - o.at) / predict.blendMs));
+          o.fade = Math.max(nominal, o.fade - Math.max(release, progress));
+        }
+        o.path = path; o.last = now;
+      }
+      waiting = true;
+      sum.x += o.delta.x * o.fade; sum.y += o.delta.y * o.fade; sum.z += o.delta.z * o.fade;
+    }
+    return sum;
+  }
+
   const myKind = (): (typeof schema.kinds)[number] | null => (mine ? kindOf.get(mine.kind) ?? null : null);
-  const tickAt = (now: number): number => (base ? base.tick + (now - base.at) / period : 0);
+  const tickAt = (now: number): number => (base ? base.tick + (now - base.at) / period * speed : 0);
   /** The tick `move` is being run for: the step just taken, or the one after it while the own body is drawn between ticks. */
   let moveTick = 0;
   const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, dims });
-  function rebase(k: number): void {
-    const rtt = net.stats().rtt ?? 100;
-    base = { tick: k + Math.ceil(rtt / period + TARGET_LEAD) + sendEvery - 1, at: clock() };
+  function authorityRtt(): number {
+    // The helper's ping ends at the relay. A browser host adds another network leg in both directions.
+    // Snapshot stamps use the relay clock, so their observed age measures the complete downstream path.
+    const relayRtt = net.stats().rtt ?? 100;
+    return net.offline ? 0 : schema.settings.host === 'browser' ? Math.max(relayRtt, 2 * quantile(hostAges, 0.5)) : relayRtt;
+  }
+  function phaseAt(at: number): number {
+    let p = phases[0];
+    for (let i = phases.length - 1; i >= 0; i--) if (phases[i].at <= at) { p = phases[i]; break; }
+    return p ? p.tick + (at - p.at) / period * p.rate - at / period : 0;
+  }
+  const medianLead = (): number => leads.length ? quantile(leads.slice(-8), 0.5) + phaseAt(clock()) : 0;
+  function steer(now: number): void {
+    if (!base || !leads.length) return;
+    base = { tick: tickAt(now), at: now };
+    speed = 1 + Math.max(-0.05, Math.min(0.05, (targetLead() - medianLead()) * 0.05));
+    if (phases[phases.length - 1]?.rate !== speed) phases.push({ ...base, rate: speed });
+    while (phases.length > 2 && phases[1].at < now - Math.max(1000, 2 * authorityRtt() + period)) phases.shift();
+  }
+  function rebase(k: number, reason = 'placement'): void {
+    correction.rebaseReason = reason; correction.rebaseError = medianLead() - targetLead();
+    const rtt = authorityRtt();
+    // Lead samples refer to the clock which stamped them. Do not mix its offset with this clock's jitter.
+    const target = targetLead();
+    leads.length = 0;
+    leadAfter = clock() + 2 * rtt + period;
+    base = { tick: k + Math.ceil(rtt / period + target) + sendEvery - 1, at: clock() };
     stepped = Math.floor(base.tick) - 1;
-    entries = []; lastSent = ''; leads.length = 0; pressed = new Set();
+    entries = []; pending = []; history.clear(); replayHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Set();
+    speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; correction.rebases += 1;
+    const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
+    if (mine) history.set(stepped, copyMine(mine));
   }
   /** `motion` as this browser's own `move` may change it in place: what a snapshot carries is frozen, so every list, map and struct in it is copied. */
   const motionOf = (kindName: string, motion: Record<string, unknown>): Record<string, unknown> => thawFields(kindOf.get(kindName)?.motion ?? [], motion);
   function adopt(u: Unpacked): void {
     mine = { id: u.id, kind: u.kind, r: u.r, pos: u.pos, vel: u.vel, heading: u.heading, grounded: u.grounded, motion: motionOf(u.kind, u.motion) };
-    lastSent = '';
   }
   /** The game's guarded `move` for one tick, counted as the server counts it, with the result rounded as the server rounds it. */
   function runMove(kindName: string, body: { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boolean; motion: Record<string, unknown> }, input: Readonly<Record<string, unknown>>, t: number): typeof body {
     const fn = moves[kindName];
     if (!fn) return body;
     moveTick = t;
-    return stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
+    const out = stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
+    const r = kindOf.get(kindName)?.radius ?? 0;
+    out.pos = vec3({ x: Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, out.pos.x)), y: Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, out.pos.y)), z: out.pos.z }, dims);
+    return out;
   }
   /** The input values the last step held (a press is never held). */
   let held: Readonly<Record<string, unknown>> = Object.freeze({});
   /** One step of the own body on tick `t`: the input step, `move`, and an entry when the sample or the claim changed. */
-  function step(t: number): void {
+  function step(t: number, fresh = true): void {
     const kind = myKind();
     if (!mine || !kind) return;
     const values: number[] = [];
     const input: Record<string, unknown> = {};
     let press = false;
     for (const [name, fd] of kind.input) {
-      if (fd.t === 'press') { const on = pressed.has(name); input[name] = on; values.push(on ? 1 : 0); if (on) press = true; } else { const v = coerce(fd, sample[name] ?? fd.init, dims); input[name] = v; values.push(v === true ? 1 : v === false ? 0 : v as number); }
+      if (fd.t === 'press') { const on = fresh && pressed.has(name); input[name] = on; values.push(on ? 1 : 0); if (on) press = true; } else { const v = coerce(fd, (fresh ? sample[name] : held[name]) ?? fd.init, dims); input[name] = v; values.push(v === true ? 1 : v === false ? 0 : v as number); }
     }
-    pressed = new Set();
+    if (fresh) pressed = new Set();
     held = Object.freeze({ ...input });
-    if (kind.owner) {
+    {
       const body = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: mine.motion }, held, t);
       mine.pos = body.pos; mine.vel = body.vel; mine.heading = body.heading; mine.grounded = body.grounded; mine.motion = body.motion;
     }
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
     const sig = JSON.stringify([values, claim]);
-    if (sig !== lastSent || press) { entries.push({ t, row: [...values, ...claim] }); lastSent = sig; }
+    if (sig !== lastSent || press) { entries.push({ t, row: [...values, ...claim] }); pending.push({ t, input: held }); lastSent = sig; }
+    history.set(t, copyMine(mine));
+    for (const k of history.keys()) if (k < t - tickHz && (catchTick === null || k < Math.floor(catchTick))) history.delete(k);
   }
   /**
    * The end of a send period (`sendEvery` ticks, counted from tick 0): one frame with the entries made in it, `k` the
@@ -232,7 +317,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (!mine || !kind) return;
     const values = kind.input.map(([name, fd]) => (fd.t === 'press' ? 0 : Number(coerce(fd, sample[name] ?? fd.init, dims))));
     const claim = kind.owner ? [mine.pos.x, mine.pos.y, mine.pos.z, mine.vel.x, mine.vel.y, mine.vel.z, mine.heading.x, mine.heading.y, mine.heading.z] : [];
-    entries = [{ t, row: [...values, ...claim] }]; lastSent = JSON.stringify([values, claim]);
+    entries = [{ t, row: [...values, ...claim] }]; pending.push({ t, input: Object.fromEntries(kind.input.map(([name, fd], i) => [name, fd.t === 'press' ? false : values[i]])) }); lastSent = JSON.stringify([values, claim]);
   }
   function pump(): void {
     if (closed) return;
@@ -250,12 +335,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       return;
     }
     hiddenSent = false;
+    // Feedback can be sparse (idle keepalives or dropped snapshots). Re-evaluate the
+    // steering every frame so a stale +/-5% command cannot drive past its target.
+    steer(now);
     let t = Math.floor(tickAt(now));
     // A frame longer than a quarter of a second: set the clock again from the newest snapshot and carry on from there.
-    if (t - stepped > Math.ceil(tickHz / 4) && latest) { rebase(latest.k); t = Math.floor(tickAt(now)); }
+    if (t - stepped > Math.ceil(tickHz / 4) && latest) { rebase(latest.k, 'frame'); t = Math.floor(tickAt(now)); }
     while (stepped < t) {
       stepped += 1;
-      step(stepped);
+      step(stepped, stepped === t);
       if (stepped % sendEvery === sendEvery - 1) flush(now, stepped);
     }
   }
@@ -264,24 +352,89 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const f = frameOf(s);
     if (!f) return;
     const before = latest;
+    if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
+    if (before && before.e !== f.e) hostAges.length = 0;
+    hostAges.push(Math.max(0, net.now() - s.st)); if (hostAges.length > 40) hostAges.shift();
+    if (before && before.e !== f.e) fxQueue.length = 0;
     const changedEpoch = f.e !== epoch;
     epoch = f.e;
     const seat = net.seat;
     let me: Unpacked | null = null;
-    if (seat !== null) for (const u of f.ents.values()) if (u.seat === seat && u.driver !== 'bot') { me = u; break; }
+    if (seat !== null) for (const u of f.ents.values()) if (u.seat === seat && u.driver === 'person') { me = u; break; }
     if (me) {
-      // The server placed the body (a spawn, a round reset, a seat taken over), or the room began again: jump there.
       const placed = !mine || mine.id !== me.id || mine.r !== me.r || changedEpoch;
-      if (placed) { adopt(me); emit('placed', entityOf(me, true)); }
-      else if (mine) { mine.motion = motionOf(me.kind, me.motion); if (!kindOf.get(me.kind)?.owner) { mine.pos = me.pos; mine.vel = me.vel; mine.heading = me.heading; mine.grounded = me.grounded; } }
-      if (!base || changedEpoch) rebase(f.k);
       const row = f.rows.find((x) => x[0] === seat);
-      if (row && row[3] !== -128 && base) {
-        // Hold the lead: the median of the last 8, nudged by at most a twentieth of a tick a snapshot; far off, set the clock again.
-        leads.push(row[3] / 16); if (leads.length > 8) leads.shift();
-        const med = [...leads].sort((a, b) => a - b)[Math.floor(leads.length / 2)];
-        if (Math.abs(med - TARGET_LEAD) > 4) rebase(f.k); else base.tick += Math.max(-0.05, Math.min(0.05, (TARGET_LEAD - med) * 0.1));
+      if (placed || !base) {
+        adopt(me); rebase(f.k);
+        if (placed) emit('placed', entityOf(me, true));
+      } else if (kindOf.get(me.kind)?.owner) {
+        mine!.motion = motionOf(me.kind, me.motion);
+      } else {
+        const previous = mine!.pos;
+        const shown = meNow()?.pos ?? previous;
+        const oldOffset = visualOffset(clock()), oldOffsets = offsets;
+        adopt(me);
+        history.set(f.k, copyMine(mine!));
+        const ack = row?.[2] ?? 0;
+        const late = new Set<string>();
+        for (const entry of pending) if (entry.t <= f.k) {
+          replayHeld = entry.input;
+          if (entry.t > ack && f.k + 1 - entry.t <= Math.ceil(tickHz / 4))
+            for (const [name, fd] of myKind()!.input) if (fd.t === 'press' && entry.input[name]) late.add(name);
+        }
+        let input = replayHeld;
+        for (let t = f.k + 1; t <= stepped; t++) {
+          const presses = new Set(t === f.k + 1 ? late : []);
+          for (const entry of pending) if (entry.t === t) {
+            input = entry.input;
+            for (const [name, fd] of myKind()!.input) if (fd.t === 'press' && entry.input[name]) presses.add(name);
+          }
+          const stepInput = { ...input };
+          for (const [name, fd] of myKind()!.input) if (fd.t === 'press') stepInput[name] = presses.has(name);
+          Object.assign(mine!, runMove(me.kind, mine!, Object.freeze(stepInput), t));
+          history.set(t, copyMine(mine!));
+        }
+        pending = pending.filter(e => e.t > f.k || e.t > ack && f.k + 1 - e.t <= Math.ceil(tickHz / 4));
+        const error = distance(previous, mine!.pos);
+        correction.last = error;
+        if (error > 0.00001) { correction.count++; correction.max = Math.max(correction.max, error); }
+        // A snapshot can replace the historical segment being drawn even when replay reaches
+        // the same current position. Preserve that drawn pose on every catch-up reconciliation.
+        if (error > 0.00001 || catchTick !== null) {
+          if (catchTick === null && error > (predict.catchM ?? myKind()!.maxSpeed * 3 / tickHz) + 0.00001) {
+            catchTick = f.k; catchAt = clock(); correction.catches++;
+          }
+          offsets = [];
+          const corrected = meNow()?.pos ?? mine!.pos;
+          const gap = distance(shown, corrected);
+          const ahead = Math.max(0, tickAt(clock()) - f.k) / tickHz;
+          const cap = predict.snapM ?? myKind()!.maxSpeed * (2 * ahead + 0.1);
+          const scale = gap > cap && gap > 0 ? cap / gap : 1;
+          if (scale < 1) correction.snaps++;
+          const delta = { x: (shown.x - corrected.x) * scale, y: (shown.y - corrected.y) * scale, z: (shown.z - corrected.z) * scale };
+          if (catchTick !== null || scale < 1) offsets = [{ delta, at: clock(), path: corrected, fade: 1, last: clock() }];
+          else {
+            // Each small correction gets its own blend. Restarting one fade for their accumulated
+            // offset can erase several ticks of travel in 100 ms and send a steadily moving body backwards.
+            offsets = oldOffsets;
+            for (const o of offsets) { o.path = corrected; o.last = clock(); }
+            offsets.push({ delta: { x: delta.x - oldOffset.x, y: delta.y - oldOffset.y, z: delta.z - oldOffset.z }, at: clock(), path: corrected, fade: 1, last: clock() });
+          }
+        }
+      }
+      if (row && row[3] !== -128 && base && clock() >= leadAfter) {
+        const now = clock(), rtt = authorityRtt();
+        // A reported lead describes an input sent roughly one authority round trip ago. Remove that
+        // clock's phase before measuring jitter; project the control median onto today's phase. Otherwise
+        // our own +/-5% steering inflates the 40-sample jitter window and winds the clock ever further ahead.
+        observedLeadAt = now;
+        leads.push(row[3] / 16 - phaseAt(now - rtt)); if (leads.length > 40) leads.shift();
+        const med = medianLead(), target = targetLead();
+        if (leads.length >= 8 && Math.abs(med - target) > 4) rebase(f.k, 'lead');
+        else {
+          steer(now);
+        }
       }
     } else mine = null;
     if (before) {
@@ -302,13 +455,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const serverTick = latest.k + ((net.connected || net.rulesHosting) ? (clock() - latest.at) / period : 0);
     return { ...round, secondsLeft: round.endsAt ? Math.max(0, (round.endsAt - serverTick) / tickHz) : Infinity, ...(results ? { results } : {}) };
   }
-  /** Effects wait for the tick they were emitted on to be drawn (an effect on the player's own body plays at once). */
+  /** Effects wait for their authoritative snapshot and the body's drawn tick, including its catch-up path. */
   function fire(): void {
     if (!fxQueue.length) return;
     const s = net.sample();
     const drawn = s ? lerp(s.a.k, s.b.k, s.alpha) : latest ? latest.k : 0;
-    while (fxQueue.length && (fxQueue[0].tick <= drawn || fxQueue[0].at === mine?.id || fxQueue.length > 128)) {
-      const x = fxQueue.shift() as (typeof fxQueue)[number];
+    for (let i = 0; i < fxQueue.length;) {
+      const x = fxQueue[i];
+      const ownTick = catchTick === null ? tickAt(clock()) : catchTick + Math.max(0, clock() - catchAt) / period * predict.catchUp;
+      if (x.tick > (x.at === mine?.id ? Math.min(latest?.k ?? 0, ownTick) : drawn)) { i++; continue; }
+      fxQueue.splice(i, 1);
       const id = typeof x.at === 'string' ? x.at : null;
       const where = id ? get(id)?.pos ?? null : unpackVec(x.at, dims);
       emit(x.name, Object.freeze({ ...x.data, at: where, ...(id ? { id } : {}), tick: x.tick }));
@@ -361,14 +517,32 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const kind = kindOf.get(mine.kind);
     let pos = mine.pos;
     let heading = mine.heading;
-    if (kind?.owner && base) {
+    let settled = true;
+    let preview: { pos: Vec3; heading: Vec3 } | null = null;
+    if (kind && base) {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
       const now: Record<string, unknown> = {};
       for (const [name, fd] of kind.input) now[name] = fd.t === 'press' ? pressed.has(name) : coerce(fd, sample[name] ?? fd.init, dims);
       const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
       pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
       heading = next.heading;
+      preview = next;
+      settled = distance(next.pos, mine.pos) < 0.00001;
     }
+    if (catchTick !== null && base) {
+      const now = clock();
+      catchTick += Math.max(0, now - catchAt) / period * predict.catchUp; catchAt = now;
+      if (catchTick >= tickAt(now)) catchTick = null;
+      else {
+        // Catch-up can reach the fractional current tick before its next whole step exists.
+        // Use the same preview as normal drawing, rather than hold and jump when that step arrives.
+        const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1) ?? (t === stepped ? preview : null);
+        if (a && b) { const f = catchTick - t; pos = { x: lerp(a.pos.x, b.pos.x, f), y: lerp(a.pos.y, b.pos.y, f), z: lerp(a.pos.z, b.pos.z, f) }; heading = b.heading; }
+        else if (a) pos = a.pos;
+      }
+    }
+    const offset = visualOffset(clock(), pos, settled);
+    pos = { x: pos.x + offset.x, y: pos.y + offset.y, z: pos.z + offset.z };
     return entityOf({ ...server, pos, vel: mine.vel, heading, grounded: mine.grounded, motion: mine.motion }, true);
   }
   function drawn(id: string): Entity | null {
@@ -379,7 +553,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const ea = a?.ents.get(id); const eb = b?.ents.get(id);
     if (!ea || !eb) return ea ? entityOf(ea) : eb && s && s.alpha >= 1 ? entityOf(eb) : eb && !a?.ents.size ? entityOf(eb) : null;
     // A placed body jumps: nobody's view glides across a placement.
-    if (ea.r !== eb.r || !s) return entityOf(eb);
+    if (ea.r !== eb.r || a?.e !== b?.e || !s) return entityOf(eb);
     const t = s.alpha;
     const h = dir({ x: lerp(ea.heading.x, eb.heading.x, t), y: lerp(ea.heading.y, eb.heading.y, t), z: lerp(ea.heading.z, eb.heading.z, t) }, dims);
     return entityOf({ ...eb, pos: vec3({ x: lerp(ea.pos.x, eb.pos.x, t), y: lerp(ea.pos.y, eb.pos.y, t), z: lerp(ea.pos.z, eb.pos.z, t) }, dims), vel: eb.vel, heading: h });
@@ -408,13 +582,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   net.expose({
     self: () => { const m = meNow(); return m ? { x: m.pos.x, y: m.pos.y, z: m.pos.z } : null; },
     peer: (seat: number) => { if (!latest) return null; for (const u of latest.ents.values()) if (u.seat === seat) return { x: u.pos.x, y: u.pos.y, z: u.pos.z }; return null; },
+    prediction: () => ({ ...correction, observedLeadAt, lastSendAt, now: clock(), serverTick: latest?.k, tick: stepped, catchTick, lead: targetLead(), medianLead: medianLead(), rate: speed, rtt: authorityRtt(), hostAge: quantile(hostAges, 0.5), pending: pending.length }),
     scores: () => roster().map((r) => ({ seat: r.seat, score: r.score })),
     score: myScore, tick: () => latest?.k ?? 0, epoch: () => epoch, hosted: () => net.rulesHosting ? 'browser' : schema.settings.host, status: () => status,
   });
   if (typeof window !== 'undefined') {
     exposePort(net as Netplay<unknown, unknown, unknown>, {
       view: 'top', size: schema.kinds.find((k) => k.player)?.radius ?? 0.5,
-      self: () => { const m = meNow(); return m ? { x: m.pos.x, y: -m.pos.y } : null; },
+      self: () => { const m = meNow(); return m ? { x: m.pos.x, y: m.pos.y } : null; },
+      basis: opts.screenBasis ?? (() => ({ right: [1, 0], up: [0, 1] })),
       score: myScore, busy: () => (typeof extra.busy === 'function' ? Boolean(extra.busy()) : busy()),
       extra: new Proxy({}, { get: (_t, key) => (typeof key === 'string' ? extra[key] : undefined), ownKeys: () => Object.keys(extra), getOwnPropertyDescriptor: (_t, key) => (typeof key === 'string' && extra[key] ? { enumerable: true, configurable: true, value: extra[key] } : undefined) }) as Record<string, () => unknown>,
     });

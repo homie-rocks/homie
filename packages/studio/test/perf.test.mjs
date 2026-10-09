@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { bootstrapChange, judge, judgePaired, quantile, rankTest, signedRankTest, summarize } from '../lib/perf-stats.mjs';
 import { decodeMappings, sourceMapLookup, summarizeProfile } from '../lib/perf-profile.mjs';
-import { DEFAULT_GOAL, defaultGuards, deviceLabel, metricsOfRun, perfCompare, perfRun, perfSizes, prePlayTransfer, renderCostOf, summaryOf } from '../lib/perf.mjs';
+import { DEFAULT_GOAL, gameReadiness, defaultGuards, deviceLabel, metricsOfRun, perfCompare, perfRun, perfSizes, prePlayTransfer, renderCostOf, summaryOf } from '../lib/perf.mjs';
 import { readCode } from '../lib/perf-code.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -262,10 +262,11 @@ test('build --maps: the map and module sizes go to .studio/maps/<id>/, never int
   const sizes = perfSizes(dir, 'gem-rush');
   assert.equal(sizes.ok, true);
   assert.ok(sizes.js.bytes > 20_000 && sizes.js.gzip < sizes.js.bytes);
-  assert.equal(sizes.biggest[0].path, bundle);
+  assert.ok(sizes.biggest.some((file) => file.path === bundle), 'the entry is listed beside the shared rules/runtime chunks');
   assert.equal(sizes.biggest[0].code.minified, true, 'a studio build is minified, and perf sizes reads it so');
-  assert.ok(sizes.modules.top.some((m) => /netplay\/netplay\.ts$/.test(m.module)), 'the netplay helper is in the bundle');
-  assert.ok(sizes.modules.top.some((m) => /games\/gem-rush\/src\/main\.ts$/.test(m.module)));
+  const meta = JSON.parse(readFileSync(join(maps, 'meta.json'), 'utf8'));
+  assert.ok(Object.values(meta.outputs).some((out) => Object.keys(out.inputs).some((name) => /netplay\/netplay\.ts$/.test(name))), 'the netplay helper is in a built chunk');
+  assert.ok(sizes.modules.top.some((m) => /games\/gem-rush\/src\/view\.ts$/.test(m.module)));
   assert.match(sizes.apart.note, /never loaded by the game/, 'what the game never loads is listed apart');
   // The CLI says the same, as paths and numbers.
   const cli = JSON.parse(run(['perf', 'sizes', 'gem-rush'], dir).stdout);
@@ -418,4 +419,38 @@ test('perf: a name this process cannot resolve is a blocked preflight, not "the 
   assert.equal(r.verdict, 'BLOCKED');
   assert.match(r.why, /^BLOCKED network preflight failed, before any page or game was opened: this computer's Node\.js could not look up homie-perf\.invalid/);
   assert.match(r.why, /127\.0\.0\.1:8787/);
+});
+
+test('server rooms default to a replica goal and guard the second replica against regressions', () => {
+  const server = (k, p95, secondBusy = 1) => {
+    const r = fakeRun('phone', k, { p95 });
+    r.room = { hosted: 'server' };
+    r.browsers[0].role = 'replica'; r.browsers[1].role = 'replica-2';
+    r.browsers[1].main.busyPerFrame = secondBusy;
+    return r;
+  };
+  const before = writeRuns(join(scratch, 'server-before'), [1,2,3,4,5,6].map((k) => server(k, 30)));
+  const after = writeRuns(join(scratch, 'server-after'), [1,2,3,4,5,6].map((k) => server(k, 20, 4)));
+  const result = perfCompare(before, after);
+  assert.equal(result.goal.metric, 'phone.replica.frame.p95');
+  assert.equal(result.goal.verdict, 'better');
+  assert.equal(result.verdict, 'worse');
+  assert.ok(result.guards.some((g) => g.metric === 'phone.replica-2.busy' && g.verdict === 'worse'));
+  assert.ok(!result.guards.some((g) => g.metric.includes('.host.')));
+});
+
+
+test('playability reads the last drawn body even when software rendering takes over 400 ms', () => {
+  const previous = globalThis.window;
+  let rows = [[100, 2, 3]];
+  globalThis.window = { __perf: { first: () => 100 }, __homiePort: {
+    view: 'top', now: () => 1000, rows: (since = 0) => rows.filter(r => r[0] >= since),
+  } };
+  try {
+    assert.equal(gameReadiness().self, true);
+    rows.push([1100, NaN, NaN]);
+    assert.equal(gameReadiness().self, false, 'a newer frame without a body must not reuse an old body');
+    rows = [];
+    assert.equal(gameReadiness().self, false);
+  } finally { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; }
 });

@@ -11,7 +11,7 @@ import puppeteer from 'puppeteer-core';
 import { findChrome, chromeArgs } from '../lib/chrome.mjs';
 import { PKG, REPO_NM } from './rules-kit.mjs';
 
-test('real Chrome play and watch pages retain their room through ten runs of ten updates and thirty updates', async t => {
+test('real Chrome play and watch pages retain their room through ten runs of ten updates and thirty updates', { timeout: 1_800_000 }, async t => {
   const wrangler = join(REPO_NM, '.bin', process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler');
   if (!existsSync(wrangler)) { t.skip('Local Wrangler executable is absent; install Wrangler to run the real update proof.'); return; }
   if (!findChrome()) { t.skip('Chrome is absent; set CHROME_PATH to run the real update proof.'); return; }
@@ -48,7 +48,11 @@ test('real Chrome play and watch pages retain their room through ten runs of ten
     assert.ok(ready, log);
     proof = spawn(process.execPath, ['--max-old-space-size=1536', join(PKG, 'test/rooms-pages.mjs'), origin, studio], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let result = ''; for (const stream of [proof.stdout, proof.stderr]) stream.on('data', chunk => { result += chunk; });
-    const [code] = await once(proof, 'exit'); assert.equal(code, 0, result + '\n' + log);
+    const [code] = await Promise.race([
+      once(proof, 'exit'),
+      once(dev, 'exit').then(([code, signal]) => { throw new Error(`Preview dev exited during the update proof (code ${code}, signal ${signal})\n${log}`); }),
+    ]);
+    assert.equal(code, 0, result + '\n' + log);
   } finally {
     await stop(proof);
     if (dev && dev.exitCode === null && dev.signalCode === null) {

@@ -325,8 +325,8 @@ let built = null;
 async function site() {
   if (!built) {
     const dir = studio('worker');
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
-    assert.equal(run(['game', 'new', 'night-vault', '--from', 'gem-rush', '--name', 'Night Vault'], dir).status, 0);
+    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
+    assert.equal(run(['game', 'new', 'night-vault', '--from', 'ember-vale', '--name', 'Night Vault'], dir).status, 0);
     const gj = join(dir, 'games', 'night-vault', 'game.json');
     writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), launch: 'private' }, null, 2));
     const b = run(['build'], dir);

@@ -2,7 +2,7 @@
   "$schema": "https://code.claude.com/schemas/plugin.json",
   "name": "homie",
   "displayName": "Homie",
-  "version": "0.38.2",
+  "version": "0.39.0",
   "description": "Build games and apps with Homie’s engine packages, animated characters, sound, music and video skills. Play from a post on X. Publish on your own Cloudflare and connect your own Stripe with one approval. Open source.",
   "author": {
     "name": "Homie",

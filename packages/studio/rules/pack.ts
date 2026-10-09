@@ -263,12 +263,39 @@ export interface MoveBody { pos: Vec3; vel: Vec3; heading: Vec3; grounded: boole
  */
 export function stepMove(fn: (body: MoveBody, input: unknown, ctx: unknown) => void, body: MoveBody, input: Readonly<Record<string, unknown>>, ctx: unknown, quota: number, motion: FieldList, dims: number, failed: (error: unknown) => void): MoveBody & { used: number } {
   G.left = quota;
+  const bag = coerceFields(motion, body.motion, dims);
+  const target: Record<string, unknown> = {};
+  const work: Record<string, unknown> = {};
+  // Match core.typed: scalar writes round immediately; collections copy on first read and settle at the end.
+  for (const [name, fd] of motion) {
+    const held = (v: unknown): unknown => { naming('body.motion', name); const out = coerce(fd, v, dims); naming(); return out; };
+    Object.defineProperty(target, name, { enumerable: true,
+      get: () => {
+        if (!mutable(fd)) return bag[name];
+        if (work[name] === undefined) {
+          const size = fd.t === 'list' ? 1 + (bag[name] as unknown[]).length * cellsOf(fd.of as Field)
+            : fd.t === 'map' ? 1 + Object.keys(bag[name] as object).length * (1 + cellsOf(fd.of as Field)) : cellsOf(fd);
+          charge(6 * size); work[name] = thaw(fd, bag[name]);
+        }
+        return work[name];
+      },
+      set: (v: unknown) => {
+        charge(mutable(fd) ? 6 * est(fd, v) : cellsOf(fd) === 1 ? 3 : 6 * cellsOf(fd));
+        bag[name] = held(v); work[name] = undefined;
+      },
+    });
+  }
+  body.motion = Object.preventExtensions(target);
   try { fn(body, input, ctx); } catch (error) { failed(error); }
+  try {
+    for (const [name, fd] of motion) if (work[name] !== undefined) {
+      charge(6 * est(fd, work[name])); naming('body.motion', name); bag[name] = coerce(fd, work[name], dims); naming();
+    }
+  } catch (error) { failed(error); }
   const used = quota - (G.left > 0 ? G.left : 0);
   G.left = Infinity;
-  naming('body', 'pos'); const pos = vec3(body.pos, dims); naming('body', 'vel'); const vel = vec3(body.vel, dims); naming('body', 'heading'); const heading = dir(body.heading, dims);
-  naming('body', 'motion'); const held = thawFields(motion, coerceFields(motion, body.motion, dims)); naming();
-  return { pos, vel, heading, grounded: body.grounded === true, motion: held, used };
+  naming('body', 'pos'); const pos = vec3(body.pos, dims); naming('body', 'vel'); const vel = vec3(body.vel, dims); naming('body', 'heading'); const heading = dir(body.heading, dims); naming();
+  return { pos, vel, heading, grounded: body.grounded === true, motion: thawFields(motion, bag), used };
 }
 
 /** How many values `pack` has packed since this was last set to 0: the core reads it to charge a tick for the state it sends. */

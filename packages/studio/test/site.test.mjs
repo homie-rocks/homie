@@ -107,7 +107,7 @@ test('theme: a new studio gets a palette of its own in site/theme.json; unsafe v
 
 function arcadeLike(name) {
   const dir = studio(name);
-  assert.equal(out(run(['game', 'new', 'crown-thief', '--from', 'gem-rush', '--name', 'Crown Thief'], dir)).ok, true);
+  assert.equal(out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale', '--name', 'Crown Thief'], dir)).ok, true);
   // A ported static game with its cover, credits.json, a licence file and its own hero footage.
   write(dir, 'games/rock-race/game.json', JSON.stringify({
     id: 'rock-race', name: 'Rock <Race>', blurb: 'Six ships, one rock field.', players: { min: 1, max: 6 }, roundSeconds: 120,
@@ -303,7 +303,7 @@ test('posts: the index, a post (its HTML safe, its links as cards), Atom and JSO
   assert.equal(feed.items[1]._homie.record.$type, 'rocks.homie.studio.post');
   // A studio with no posts has no Posts: no tab, no feed.
   const none = studio('no-posts');
-  out(run(['game', 'new', 'crown-thief'], none));
+  out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale'], none));
   assert.equal(out(run(['build'], none)).ok, true);
   const bare = await siteOf(none);
   assert.equal((await bare('/posts/')).status, 404);

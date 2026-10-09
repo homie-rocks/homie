@@ -17,6 +17,37 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.38.0] - 2026-10-09
+
+**Plugin 0.39.0**
+
+Your own character answers as soon as you press, even when the room runs on the server.
+
+### Added
+
+- Rules games predict your own movement with the same movement code the host runs. They ease corrections from the host and smoothly draw everyone else. Authors get this through the view library.
+- The build checks that browser movement agrees with the server and stays within its budget.
+
+### Changed
+
+- New Gem Rush games use rules plus view, with the server keeping movement, pickups and scores. The canvas, controls, waves and knockback keep their familiar look and play. Coin Dash also uses server movement with prediction.
+
+### Fixed
+
+- A rules correction that catches up to the current fractional tick uses the next movement preview instead of holding still and jumping when the next whole tick arrives. Snapshots also preserve the drawn catch-up pose when they replace its history. Offset fading is bounded by normal movement speed, so it does not compound a fast knock's catch-up speed.
+- Gem Rush reports its downward Y axis to the rules probe, so control checks judge its actual on-screen direction. Rules views can supply their camera axes through `screenBasis`.
+- Playtest no longer attributes its default timeout duration to a rules game that declares no round duration in `game.json`.
+- Perf checks body presence in the last drawn frame without imposing a hidden 400 ms frame-rate requirement on software rendering.
+- Studio checks accept two replicas when the server hosts the rules. Perf reports and regression guards include both replicas, and choose a replica as the default goal for server rooms.
+- Shoot sends held keys to the game frame and reports a server-only preview without a running room as not playing. Its saved receipt now includes the final verdict.
+- The Game Lab exits after writing its completed report, even when Chrome leaves a pipe open. Coin Dash includes a reproducible Lab take.
+- Control timing starts at the game frame's receipt of a key or completed thumb gesture, judges the first changed frame, collects enough frames on a slow renderer, and measures the round clock between matching observations (including slow screenshots). The response and steering limits are unchanged.
+- The controls check exercises a browser disconnect and late joining in server rooms as well as host takeover in browser rooms. A hold with too little runway is repeated after moving away from the wall, with the same steering requirements.
+
+### Upgrade notes
+
+- Existing games keep their own source when you upgrade. Games written the old way keep working.
+
 ## [0.37.2] - 2026-10-09
 
 **Plugin 0.38.2** · [#70](https://github.com/homie-rocks/homie/pull/70)

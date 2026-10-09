@@ -27,7 +27,7 @@
  *
  * `--preview` (no --url): THE FRAMES HALF WITHOUT THE WHOLE SITE. It starts the light preview server itself
  * (lib/preview.mjs: the one built game's files on 127.0.0.1, no Wrangler, no rooms), opens the game's own page there
- * and shoots it. The game plays alone, offline, with its bots, which is what pictures of the game itself want. The
+ * and shoots it. A game with offline play enabled plays alone, with its bots, which is what pictures of the game itself want. The
  * smoke is NOT RUN (there is no room to meet in: that half needs `dev`), and there is no loading cover to wait for.
  * The result says which build the frames are of (`build`: its hash, the one `build` printed) and that the page
  * really loaded that build's hashed bundle (`bundle`: lib/build.mjs bundleOf, never a guess at assets/main.js).
@@ -274,7 +274,11 @@ export async function shoot({ url, game, frames = 60, fps = 30, device = 'comput
     const inAll = (fn, arg) => Promise.all(all().map((f) => T(f.evaluate(fn, arg), 20_000)));
     const frozen = await inAll(() => (window.__homieClock ? (window.__homieClock.freeze(), true) : false));
     if (!frozen.some(Boolean)) { result.why = 'the virtual clock is not in the page (it was opened before the script could be injected)'; return result; }
-    if (hold) await first.page.keyboard.down(hold).catch(() => {});
+    if (hold) {
+      // The play page owns the top-level focus; the game's key listener lives in its iframe.
+      if (gf) await T(gf.evaluate(() => window.focus()), 5000);
+      await first.page.keyboard.down(hold).catch(() => {});
+    }
     const rows = [];
     for (let n = 1; n <= frames; n++) {
       if (left() < 3000) { result.partial = `stopped at frame ${n - 1} of ${frames}: the ${Math.round(timeoutMs / 1000)} s bound was reached (a slow renderer; ask for fewer frames or a longer --timeout)`; break; }
@@ -287,6 +291,7 @@ export async function shoot({ url, game, frames = 60, fps = 30, device = 'comput
       rows.push({ n, file, virtualMs: +(n * (1000 / fps)).toFixed(3), clockMs: nows.find((v) => Number.isFinite(v)) ?? null, realMs: Date.now() - t, ...(await frameFacts(first) ?? {}) });
     }
     if (hold) await first.page.keyboard.up(hold).catch(() => {});
+    result.rules = gf ? await T(gf.evaluate(() => { const p = window.__homieNet?.probe; return typeof p?.hosted === 'function' ? { hosted: p.hosted(), status: p.status?.(), tick: p.tick?.() } : null; }), 5000) : null;
     result.frames = rows.length;
     result.realSeconds = +((Date.now() - started) / 1000).toFixed(1);
     result.virtualSeconds = +((rows.length * 1000) / fps / 1000).toFixed(3);
@@ -294,10 +299,11 @@ export async function shoot({ url, game, frames = 60, fps = 30, device = 'comput
     result.limits = 'Stepped: requestAnimationFrame, performance.now, Date, setTimeout, setInterval, CSS and Web animations, in the page and the game\'s frame. NOT stepped: the room\'s socket and its server clock (other players and the round arrive in real time), Web Audio\'s clock, <video>, workers. These frames show what was drawn; they are not a frame rate.';
     const probed = rows.some((r) => r.phase !== undefined);
     if (!probed) result.note = [result.note, 'the game exposes no port probe (exposePort): the frames carry no round phase or position'].filter(Boolean).join('; ');
-    writeFileSync(join(out, 'shoot.json'), `${JSON.stringify({ v: 1, kind: 'homie-shoot', ...result, rows }, null, 1)}\n`);
     const smokeOk = result.smoke.ok !== false;
-    result.ok = rows.length === frames && smokeOk;
-    if (!result.ok) result.why = !smokeOk ? `smoke: ${result.smoke.why}` : result.partial;
+    const rulesOk = !result.rules || (result.rules.status === 'playing' && result.rules.tick > 0);
+    result.ok = rows.length === frames && smokeOk && rulesOk && !result.errors.length;
+    if (!result.ok) result.why = !smokeOk ? `smoke: ${result.smoke.why}` : !rulesOk ? 'The rules game is not playing. A server-only build needs its room: run homie-studio dev and shoot with --url (or explicitly enable room.offline for offline play).' : result.errors.length ? `game errors: ${result.errors.join('; ')}` : result.partial;
+    writeFileSync(join(out, 'shoot.json'), `${JSON.stringify({ v: 1, kind: 'homie-shoot', ...result, rows }, null, 1)}\n`);
     return result;
   } finally {
     if (served?.server) { served.server.closeAllConnections?.(); served.server.close(); }
