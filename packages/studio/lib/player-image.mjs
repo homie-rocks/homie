@@ -1,6 +1,6 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
-import { PLAYER_IMAGE, PLAYER_SIZE, playerEnabled, playerImageRule } from '../worker/embed.mjs';
+import { PLAYER_IMAGE, playerEnabled, playerImageRule } from '../worker/embed.mjs';
 
 /**
  * The picture a game's player card shows, measured by the build: the first of the wide landing still, the landing
@@ -33,9 +33,6 @@ export async function playerImage(cat, game, dist, log) {
       if (rule) { warn(src, `at least 68,600 pixels; found ${width}×${height}`); continue; }
       // Decode as well as reading headers: a truncated/corrupt file is not a usable card picture.
       await sharp(data).resize(1, 1).raw().toBuffer();
-      if (Math.abs(width / height - PLAYER_SIZE.width / PLAYER_SIZE.height) > 0.01) {
-        log(`warning: ${src}: the player card is offered, but this picture is ${width}×${height} and the player is ${PLAYER_SIZE.width}×${PLAYER_SIZE.height}; X may crop it in the post (a square picture fits exactly).`);
-      }
       return { src, width, height, format, bytes };
     } catch { warn(src, 'a readable, complete image in the built assets'); }
   }

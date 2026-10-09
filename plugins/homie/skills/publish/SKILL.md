@@ -32,8 +32,8 @@ measured against what X's reference says will render: JPG/PNG/WEBP/GIF, at least
 68,600 pixels, under 5 MB. A missing or refused picture produces a build warning
 naming the file and the rule, and the page keeps its picture card. Any shape gets
 the card (a 1200×630 social picture, a 16:9 still, a square); the player is
-advertised as 480×480, Homie's choice from two live game cards, and the build
-warns that X may crop a picture that is not square. `site.twitterSite` (an
+advertised as 480×480, Homie's choice from two live game cards; X's website draws
+the picture as a small square thumbnail whatever its shape. `site.twitterSite` (an
 @handle) adds `twitter:site` and is optional. Starters need a cover. Custom
 landing Twitter tags remain the owner's; Open Graph pictures stay unchanged.
 

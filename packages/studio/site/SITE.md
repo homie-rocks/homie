@@ -505,8 +505,8 @@ leaves a framed game room for its own dialogs, where a 16:9 one is 201 pixels ta
 X's reference says the picture "should" have the player's dimensions; it does not
 make that a condition, and both of those pages use wider pictures (1200×628 and
 1200×800). So any shape gets the card: a standard 1200×630 social picture, a 16:9
-still or a square. When the shape is not square the build says so in a warning,
-because X may crop the picture in the post.
+still or a square. X's website draws the picture as a small square thumbnail
+whatever its shape.
 
 `"twitterSite": "@yourstudio"` in `studio.json`'s `site` object adds `twitter:site`
 to the tags. It is optional: X's reference lists the tag, neither of those two
