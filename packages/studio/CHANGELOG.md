@@ -17,9 +17,19 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.33.1] - 2026-10-08
+
+**Plugin 0.34.1** · [#65](https://github.com/homie-rocks/homie/pull/65)
+
+A fix for studios upgrading to 0.33.0, found by upgrading one of Homie's own.
+
+### Fixed
+
+- **A game that already had its own `src/rules.ts` builds again.** 0.33.0 treated any game with a file of that name as a game whose rules run on the server, checked it against those rules and refused the build. A game is written that way only when its game.json has a `"room"` object; every other game builds exactly as it did, whatever its files are called.
+
 ## [0.33.0] - 2026-10-08
 
-**Plugin 0.34.0** · [#57](https://github.com/homie-rocks/homie/pull/57)
+**Plugin 0.34.0** · [#57](https://github.com/homie-rocks/homie/pull/57) · [release-2026-10-08-studio-0.33.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-08-studio-0.33.0)
 
 A game's rules can run on your own Cloudflare instead of in a player's browser. This is the first piece of it: the format, the server that runs it, and one example game. Your existing games are not touched.
 

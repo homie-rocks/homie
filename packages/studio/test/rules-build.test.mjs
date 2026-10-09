@@ -142,6 +142,15 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   assert.match(no.stdout + no.stderr, /games\/gems\/game\.json asks for \\?"room\\?": \{ \\?"host\\?": \\?"server\\?" \}, but this game has no src\/rules\.ts: its rules are inside its own code and run in a player's browser\. Ask for it to be rewritten as rules plus view\./);
   writeFileSync(join(dir, 'games/gems/game.json'), JSON.stringify(meta));
 
+  // A game made before rules existed may have its own src/rules.ts, with anything in it. Without "room" in its
+  // game.json it is a browser-hosted game as before: the file is its own code, not checked and not run on the server.
+  writeFileSync(join(dir, 'games/gems/src/rules.ts'), 'export const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);\nexport const roll = () => Math.random();\n');
+  const own = run(['build'], dir);
+  assert.equal(own.status, 0, own.stdout + own.stderr);
+  assert.ok(!existsSync(join(dir, 'site/src/rules/gems.mjs')), 'its file is not built as rules');
+  assert.equal(JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'gems').room, undefined);
+  rmSync(join(dir, 'games/gems/src/rules.ts'));
+
   // Rules the wall refuses stop the build with the line named, and nothing that was built is touched.
   const before = { rules, index: read(dir, 'site/src/rules/index.mjs'), games: read(dir, 'site/dist/games.json') };
   const src = read(dir, 'games/coin-dash/src/rules.ts');

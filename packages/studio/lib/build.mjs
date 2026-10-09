@@ -385,7 +385,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   let bundled = null;
   let chunks = [];
   const budgets = modelBudgetsOf(g, log);
-  // RULES PLUS VIEW (rooms on the server). A game with a src/rules.ts has its rules checked, guarded and loaded first:
+  // RULES PLUS VIEW (rooms on the server). A game with "room" in game.json and a src/rules.ts has its rules checked, guarded and loaded first:
   // a rule the wall refuses stops the build here, with the line named. A game without one is hosted by a player's
   // browser exactly as before, and cannot ask for the server.
   const ruled = isRulesGame(g);

@@ -2068,7 +2068,7 @@ such a game fails the build with the reason. So does a ported game.
 
 ### 29.1 Who is the host
 
-- game.json `"room": { "host": "server" }` (the default for a game that has a `src/rules.ts`). The
+- game.json `"room": { "host": "server" }` (the default for a game with a `"room"` object in game.json and a `src/rules.ts`). The
   build checks the rules, guards them (section 29.5) and puts them into the studio's Worker
   (`site/src/rules/`, imported by `site/src/worker.mjs` and handed over with `hostRules`).
 - When a room of such a game opens, its `Table` starts the host runtime **before the first socket
