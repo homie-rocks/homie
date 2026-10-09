@@ -284,9 +284,9 @@ test('build --types: a type error in a game stops the build; the studio\'s own T
   assert.equal(r.status, 1);
   assert.match(out(r).why, /this studio has none: run `npm install --save-dev typescript`/);
   assert.equal(run(['build'], none).status, 0);
-  // The toolkit does not depend on it; a new studio asks for it itself.
+  // Rules always use the toolkit's pinned compiler; legacy --types still uses the studio's own.
   const pkg = json(join(PKG, 'package.json'));
-  assert.equal(pkg.dependencies?.typescript, undefined);
+  assert.equal(pkg.dependencies?.typescript, '5.9.3');
   assert.equal(pkg.peerDependencies?.typescript, undefined);
   assert.match(json(join(none, 'package.json')).devDependencies.typescript, /^\d+\.\d+\.\d+$/, 'pinned exactly, in the studio\'s own devDependencies');
 });
