@@ -352,7 +352,8 @@ export async function checkApp({ url, game, meta, shots = null, log = () => {}, 
       const context = await browser.createBrowserContext();
       const page = await context.newPage();
       await page.setViewport({ width, height, isMobile: name !== 'wall', hasTouch: name !== 'wall' });
-      await page.goto(`${url}/${game}/${path}?room=${room}`, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+      const params = new URLSearchParams(proof.params ?? {}); params.set('room', room);
+      await page.goto(`${url}/${game}/${path}?${params}`, { waitUntil: 'domcontentloaded', timeout: 90_000 });
       await page.waitForFunction(() => window.__shell?.link?.state === 'online', { timeout: 90_000 });
       const frame = page.frames().find((f) => /\/__game\//.test(f.url()));
       if (!frame) throw new Error(`${name} never loaded the app`);

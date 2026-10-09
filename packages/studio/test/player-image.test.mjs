@@ -40,3 +40,21 @@ test('build measures card files and reports the filename and violated image rule
     assert.ok(logs.some(l => l.includes(cat.studio.theme.social) && l.includes('local image')));
   } finally { rmSync(dist, { recursive: true, force: true }); }
 });
+
+test('app cards measure their own tall still before a studio fallback and name app.json', async () => {
+  const dist = mkdtempSync(join(tmpdir(), 'app-player-image-'));
+  const cat = { studio: { theme: { social: '/social.png' } } }, logs = [];
+  const app = { id: 'workshop', kind: 'app', name: 'Workshop', landing: { hero: { tallImage: '/games/workshop/tall.png' } } };
+  try {
+    mkdirSync(join(dist, 'games/workshop'), { recursive: true });
+    for (const file of ['games/workshop/tall.png', 'social.png']) await sharp({ create: { width: 450, height: 800, channels: 3, background: '#aabbcc' } }).png().toFile(join(dist, file));
+    const image = await playerImage(cat, app, dist, m => logs.push(m));
+    assert.equal(image.src, '/games/workshop/tall.png');
+    assert.equal(playerProperties(cat, { ...app, playerImage: image }, { origin: 'https://studio.example' })['twitter:player'], 'https://studio.example/workshop/open/embed');
+    delete app.landing;
+    assert.equal((await playerImage(cat, app, dist, m => logs.push(m))).src, '/social.png');
+    delete cat.studio.theme.social;
+    assert.equal(await playerImage(cat, app, dist, m => logs.push(m)), null);
+    assert.ok(logs.some(line => line.includes('apps/workshop/app.json')));
+  } finally { rmSync(dist, { recursive: true, force: true }); }
+});

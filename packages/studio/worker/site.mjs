@@ -1220,7 +1220,7 @@ export function gameLanding(cat, g, { origin = '', rooms = [], playing = 0, week
 </div></section>`;
 
   const liveBand = `<section class="band tight" aria-labelledby="rooms-title"><div class="band-in">
-  <div class="head-row reveal"><div><p class="kicker">Live rooms</p><h2 class="small-h" id="rooms-title">${rooms.length ? `${esc(playing)} ${playing === 1 ? esc(words.one ?? 'player') : esc(many)} in ${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} right now` : 'Rooms open the moment you press Play'}</h2></div><a class="more" href="/rooms/">Every room ${icon('arrow')}</a></div>
+  <div class="head-row reveal"><div><p class="kicker">Live rooms</p><h2 class="small-h" id="rooms-title">${rooms.length ? `${esc(playing)} ${playing === 1 ? esc(words.one ?? 'player') : esc(many)} in ${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} right now` : `Rooms open the moment you press ${appWords(g).open}`}</h2></div><a class="more" href="/rooms/">Every room ${icon('arrow')}</a></div>
   <ol class="rooms" data-rooms data-src="/${esc(g.id)}/live"${rooms.length ? '' : ' hidden'}>${roomRows(rooms, { names: false })}</ol>
   <p class="quiet" data-rooms-quiet${rooms.length ? ' hidden' : ''}>No one is in a room this minute. Press Play and you start at once, with bots in the empty seats; whoever presses Play next takes a bot’s place in your room.</p>
   ${week ? `<div class="stat"><span>Played this week: <b>${esc(week.plays)}</b> ${week.plays === 1 ? 'time' : 'times'}</span><span><b>${esc(week.rounds)}</b> ${week.rounds === 1 ? 'round' : 'rounds'} with people</span>${week.peak ? `<span>Most at once today: <b>${esc(week.peak)}</b></span>` : ''}</div>` : ''}

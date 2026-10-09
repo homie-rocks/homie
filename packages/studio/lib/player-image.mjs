@@ -12,10 +12,10 @@ import { PLAYER_IMAGE, playerEnabled, playerImageRule } from '../worker/embed.mj
  */
 export async function playerImage(cat, game, dist, log) {
   if (!playerEnabled(cat, game)) return null;
-  const sources = [...new Set([game.landing?.hero?.wideImage, game.landing?.cover,
+  const sources = [...new Set([game.landing?.hero?.wideImage, game.landing?.hero?.tallImage, game.landing?.cover,
     game.cover ? `/games/${game.id}/${game.cover}` : null, cat.studio.theme?.social].filter(Boolean))];
   const warn = (file, rule) => log(`warning: ${file}: player card needs ${rule}; keeping the picture card unless another image qualifies.`);
-  if (!sources.length) warn(`games/${game.id}/game.json`, 'a cover or a studio social picture in the built site (starters do not include one)');
+  if (!sources.length) warn(`${game.kind === 'app' ? 'apps' : 'games'}/${game.id}/${game.kind === 'app' ? 'app' : 'game'}.json`, 'a cover or a studio social picture in the built site (starters do not include one)');
   const root = realpathSync(dist);
   for (const src of sources) {
     if (!src.startsWith('/') || src.startsWith('//')) { warn(src, 'a local image the build can measure'); continue; }

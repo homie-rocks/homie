@@ -92,6 +92,7 @@ export function sharePlaces(value) {
  * covers the middle of the screen or a thumb.
  */
 export function playPage(cat, g, { embed = false, origin = '', preview = false, screen = false, joinUrl = null, qr = null, local = false, room = null, ticket = null, owner = false, launch = 'public', server = null, acct = false, member = false, shop = null } = {}) {
+  const shopControl = Boolean(shop && !screen && g.screen?.shop !== false);
   const accent = cat?.studio?.theme?.accent ?? '#ffcf5a';
   const corner = (name, fallback) => (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(g.screen?.[name]) ? g.screen[name] : fallback);
   const places = sharePlaces(g.screen?.share);
@@ -170,6 +171,7 @@ iframe.game { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; d
 [hidden] { display: none !important; }
 ${arrive.css}
 ${embed ? `html,body{touch-action:auto}.room.at-top-center{transform:none;left:auto;right:max(8px,env(safe-area-inset-right))}.embed-open{display:flex;align-items:center;min-height:44px;color:inherit}.embed-note{font:12px/1.4 system-ui;overflow-wrap:anywhere}.sheet{position:fixed;inset:calc(max(8px,env(safe-area-inset-top)) + 48px) max(8px,env(safe-area-inset-right)) auto auto;max-width:calc(100vw - max(8px,env(safe-area-inset-left)) - max(8px,env(safe-area-inset-right)));max-height:calc(100dvh - max(8px,env(safe-area-inset-top)) - 48px - max(8px,env(safe-area-inset-bottom)));overflow:auto;overscroll-behavior:contain;touch-action:pan-y}.sheet.more::after{content:'▾ more below';position:sticky;bottom:-12px;display:block;margin:0 -12px -12px;padding:16px 0 5px;text-align:center;font:600 11px/1 system-ui;color:#cfd6e6;background:linear-gradient(transparent,rgba(8,12,22,.98) 60%);pointer-events:none}.sheet .embed-help{margin:8px 2px;font:500 12px/1.4 system-ui;color:#aab3c7}html:not(.player-frame) .frame-only{display:none}.sheet a,.sheet button{min-height:44px}.sheet .foot a,.sheet .foot button{display:inline-flex;align-items:center}.embed-open .frame-only{margin-left:4px}.player-top iframe.game{inset:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);width:calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom))}.arrive-in{padding:12px}.arrive-title{font-size:clamp(24px,7vw,52px)}` : ''}
+${shopControl ? `.shop-control{color:#eef1f8;font:600 13px/1.2 system-ui;position:fixed;top:env(safe-area-inset-top);left:max(8px,env(safe-area-inset-left));height:52px;display:flex;align-items:center;z-index:6}.shop-control button{min-height:44px;padding:0 18px}html body .room.room{flex-direction:column;align-items:flex-end;top:max(4px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;transform:none}html body iframe.game.game{top:calc(env(safe-area-inset-top) + 52px);height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 52px)}` : ''}
 ${SERVER_CSS}${CHAT_CSS}${g.saves && !screen ? SAVES_SHELL_CSS : ''}${shop ? SHOP_SHELL_CSS : ''}${pillUi}`;
   // The room button's place on each device (sharePlaces); the shell moves it to this browser's once it knows the device.
   // A ticket (a game that is not public) and the owner's overlay ride along only for the browser they are for.
@@ -215,7 +217,7 @@ ${arrive.html}
 <div class="vote" data-vote role="dialog" aria-label="How strong should the AI be?" data-keep-focus hidden></div>
 <div class="card" data-results hidden></div>
 <div class="card" data-screen hidden></div>
-${joinCard}${share}
+${joinCard}${share}${shopControl ? '<div class="shop-control"><button class="pill" type="button" data-shop-open data-shop-control>Shop</button></div>' : ''}
 <script>window.__HOMIE_PLAY=${JSON.stringify(boot).replace(/</g, '\\u003c')};</script>
 <script>window.__HOMIE_CHAT=${JSON.stringify(chatBoot(g, { surface: screen ? 'tv' : 'play', owner, acct, member })).replace(/</g, '\\u003c')};</script>
 <script>${CHAT_JS}</script>
@@ -354,7 +356,7 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
   var state = { game: boot.game, room: null, device: device, want: want, attached: false, stats: null, round: null, roster: null, facts: null, seat: null, results: [], closed: null, link: null, notice: null, banner: null, muted: null, server: boot.server || null, vote: null, myVote: {}, quietAi: false, full: false };
   window.__shell = state;
   // Where signing in comes back to. From the player address that is Play in the same room: the player itself is guests only.
-  state.returnPath = function () { return boot.embed ? '/' + boot.game + '/play' + (state.room ? '?room=' + encodeURIComponent(state.room) : '') : location.pathname + location.search; };
+  state.returnPath = function () { return boot.embed ? '/' + boot.game + (boot.kind === 'app' ? '/open' : '/play') + (state.room ? '?room=' + encodeURIComponent(state.room) : '') : location.pathname + location.search; };
   // The arrival card (worker/arrival.mjs): the game's look while the room connects and the game loads.
   var A = window.__homieArrival || { done: true, room: function () {}, facts: function () {}, full: function () {}, message: function () {}, lift: function () {}, frameLoaded: function () {} };
   state.arrival = A.state || null;
@@ -912,14 +914,14 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
       var a = e.target.closest && e.target.closest('a[href]');
       if (!a) return;
       var u = new URL(a.href, location.href);
-      if (u.origin === location.origin && u.pathname === '/' + boot.game + '/play/embed') return;
+      if (u.origin === location.origin && u.pathname === '/' + boot.game + (boot.kind === 'app' ? '/open/embed' : '/play/embed')) return;
       e.preventDefault(); state.openStudio(a.href);
     }, true);
     if (self.origin === 'null') {
       A.lift(); open(true);
       var note = document.querySelector('[data-embed-note]');
-      note.hidden = false; note.textContent = 'This host prevents the game from connecting. Open on the studio’s site to play.';
-      say('Open on the studio’s site to play');
+      note.hidden = false; note.textContent = 'This host prevents connecting. Open on the studio’s site.';
+      say('Open on the studio’s site');
       return;
     }
   }
@@ -1540,5 +1542,5 @@ export function embedAncestors(cat, origin, preview = false) {
 
 export function embedPreview(cat, g, origin) {
   const frameOrigin = new URL(origin); frameOrigin.hostname = frameOrigin.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
-  return layoutless(`Preview ${g.name} in a post`, `<h1>Player card preview</h1><p>A cross-origin mock post using the sandbox observed in X’s web client. X’s phone apps open the player full screen; its website opens third-party games in a new tab.</p><iframe title="${esc(g.name)}" src="${esc(frameOrigin.origin)}/${esc(g.id)}/play/embed" sandbox="${PLAYER_SANDBOX}" allow="autoplay; fullscreen; web-share" allowfullscreen scrolling="no" style="width:100%;aspect-ratio:${PLAYER_SIZE.width}/${PLAYER_SIZE.height};border:0"></iframe>`, 'body{max-width:480px;margin:24px auto;background:#101622;color:white;font:16px system-ui}');
+  return layoutless(`Preview ${g.name} in a post`, `<h1>Player card preview</h1><p>A cross-origin mock post using the sandbox observed in X’s web client. X’s phone apps open the player full screen; its website opens third-party games in a new tab.</p><iframe title="${esc(g.name)}" src="${esc(frameOrigin.origin)}${esc(openPath(g))}/embed" sandbox="${PLAYER_SANDBOX}" allow="autoplay; fullscreen; web-share" allowfullscreen scrolling="no" style="width:100%;aspect-ratio:${PLAYER_SIZE.width}/${PLAYER_SIZE.height};border:0"></iframe>`, 'body{max-width:480px;margin:24px auto;background:#101622;color:white;font:16px system-ui}');
 }

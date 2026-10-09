@@ -71,6 +71,7 @@ test('Chrome: every starter plays at the player address, as its own page and fra
     await build(root, { log: () => {} });
     // The build's esbuild is a child process of this one, and can hold it open for minutes after the test: stop it.
     await createRequire(join(root, 'package.json'))('esbuild').stop();
+    writeFileSync(join(root, '.dev.vars'), 'STRIPE_KEY=rk_test_' + 'a'.repeat(32) + '\nSTRIPE_WEBHOOK_SECRET=whsec_' + 'b'.repeat(32) + '\n');
     const config = join(root, 'wrangler.jsonc');
     const env = { PATH: process.env.PATH, HOME: root, TMPDIR: tmpdir(), NODE_OPTIONS: '--max-old-space-size=1536', WRANGLER_SEND_METRICS: 'false', CI: '1' };
     const migrate = spawnSync(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'DB', '--local', '--config', config], { cwd: root, env, encoding: 'utf8' });
@@ -146,7 +147,16 @@ test('Chrome: every starter plays at the player address, as its own page and fra
     const moves = async (page, game, touch) => {
       const at = () => game.evaluate(() => window.__homieNet.probe.self());
       const far = (a, b) => a && b && Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)) > .1;
-      const box = await (await game.$('canvas')).boundingBox(); const x = box.x + box.width * .35, y = box.y + box.height * .65;
+      const box = await (await game.$('canvas')).boundingBox();
+      // Resizing the content for the shop can move the game's own buttons. Start on exposed canvas.
+      const point = await game.evaluate(() => {
+        for (const [x,y] of [[.35,.65],[.5,.45],[.35,.35],[.6,.55]]) {
+          const px = innerWidth*x, py = innerHeight*y;
+          if (document.elementFromPoint(px,py)?.tagName === 'CANVAS') return {x:px,y:py};
+        }
+        return {x:innerWidth*.35,y:innerHeight*.65};
+      });
+      const x = box.x + point.x, y = box.y + point.y;
       const start = await at();
       if (!touch) await page.mouse.click(x, y);
       for (const [key, dx, dy] of [['KeyD', 60, -25], ['KeyA', -60, 25], ['KeyS', 20, 50], ['KeyW', -20, -50]]) {
@@ -213,13 +223,21 @@ test('Chrome: every starter plays at the player address, as its own page and fra
         // Ember Vale starts from its own card: through the button a person presses.
         if (id === 'ember-vale') for (const b of await game.$$('button')) if (/Into the vale/i.test(await b.evaluate(e => e.textContent)) && await b.boundingBox()) await b.click();
         await game.waitForFunction(() => window.__homieNet?.probe?.self?.());
-        assert.ok(await moves(page, game, touch), `${label}: the player's own body moves`);
+        const moved = await moves(page, game, touch);
+        if (!moved) await page.screenshot({ path: join(shots, label + '-movement-failure.png') });
+        assert.ok(moved, `${label}: the player's own body moves`);
         await game.waitForFunction(() => window.__sound.state === 'running');
         for (const f of [shell, game]) {
           assert.deepEqual(await f.evaluate(() => window.__csp), [], label);
           assert.ok(await f.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), `${label}: nothing scrolls`);
         }
         await page.screenshot({ path: join(shots, label + '.png') });
+
+        const shopControl = await box(shell, '[data-shop-control]');
+        assert.ok(shopControl && shopControl.height >= 44 && shopControl.y + shopControl.height <= frameBox.y, label + ': Shop reserves space above content');
+        await shell.click('[data-shop-control]');
+        await shell.waitForSelector('.shopsheet');
+        await shell.click('.shopsheet button[aria-label=Close]');
 
         // The closed shell: the way out is not drawn over the game, and the room button says there is one.
         assert.equal(await shell.$eval('[data-studio-open]', e => e.getBoundingClientRect().height), 0, 'the way out is in the closed sheet, never over the game');

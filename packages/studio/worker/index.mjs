@@ -175,6 +175,10 @@ async function sellingShop(env, cat) {
   try { return (await readiness(env, shop)).ready ? shop : null; } catch { return null; }
 }
 
+async function availableShellShop(env, cat, game, options) {
+  return await sellingShop(env, cat) ? shellShop(cat, game, options) : null;
+}
+
 async function postsOf(env, origin) {
   try {
     const res = await env.ASSETS.fetch(new Request(`${origin}/_site/posts.json`));
@@ -514,7 +518,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
     ...(meta?.saves && want === 'play' ? { saves: true } : {}),
     // The studio sells something in this game (shop/SHOP.md): the play shell answers @homie-rocks/studio/shop. A
     // watcher has no shop; the shell follows the studio shop policy for kids servers and television checkout.
-    ...(!agent && !watching && shellShop(cat, game) ? { shop: true } : {}),
+    ...(!agent && !watching && await availableShellShop(env, cat, game) ? { shop: true } : {}),
   };
   let html = await res.text();
   const head = `${embedded ? `<script>${EMBED_GAME_JS}</script>` : ''}<script>window.HOMIE_NET=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script>`;
@@ -863,7 +867,7 @@ async function route(request, env, ctx) {
     if (parts.length === 1 && !path.endsWith('/')) return Response.redirect(`${url.origin}/${game}/`, 301);
     const cat = await getCat();
     let sub = parts.slice(1).join('/');
-    if (meta.kind === 'app' && sub === 'open') sub = 'play';
+    if (meta.kind === 'app' && /^open(?:\/(embed|preview))?$/.test(sub)) sub = sub.replace(/^open/, 'play');
     if (sub === '__restart') {
       if (env.HOMIE_PREVIEW !== '1' || request.method !== 'POST' || !hostedGame(game)) return new Response('not found', { status: 404 });
       const room = url.searchParams.get('room') ?? '';
@@ -1022,14 +1026,14 @@ async function route(request, env, ctx) {
         let qr = null;
         if (!local) try { qr = qrSvg(joinUrl, { title: `Join ${meta.name ?? game}` }); } catch { /* too long for a QR: the address shows as text */ }
         // Television checkout and kids-server visibility follow the studio shop policy.
-        const sh = shellShop(cat, game, { kids: pol.kids });
+        const sh = await availableShellShop(env, cat, game, { kids: pol.kids });
         let shopQr = null;
         if (sh && !local) try { shopQr = qrSvg(`${url.origin}/shop/?game=${encodeURIComponent(game)}`, { title: `Shop: ${meta.name ?? game}` }); } catch { shopQr = null; }
         return playPage(cat, meta, { origin: url.origin, screen: true, joinUrl, qr, local, room, ticket, owner: d.owner, launch, server, shop: sh ? { ...sh, qr: shopQr, url: `${url.origin}/shop/?game=${game}` } : null });
       }
       await countVisit(request, env, ctx, game, 'play');
       shareDaily(cat, url, ctx);
-      return playPage(cat, meta, { origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: shellShop(cat, game, { kids: pol.kids }) });
+      return playPage(cat, meta, { origin: url.origin, embed, preview: env.HOMIE_EMBED_PREVIEW === '1', ticket: embed ? null : ticket, owner: !embed && d.owner, launch, server, ...(embed ? {} : await chatWho(env, game, srv, d.acct)), shop: await availableShellShop(env, cat, game, { kids: pol.kids }) });
     }
     if (sub === 'watch') {
       // The same door as Play: a game that is private or an invite-only beta is watched only by whoever may play it.

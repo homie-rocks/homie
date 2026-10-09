@@ -43,6 +43,19 @@ The QR encoder is the existing wall encoder, publicly exported with types. Links
 
 ## Parts, check and stores
 
-Parts import exactly as games do (`@parts/<id>` or `@parts/<host>/<id>`), with the same provenance and credit checks. `check.action` and `check.observe` name real UI selectors: the checker clicks on a phone, waits for changed text on wall and both phones, then reloads the actor and checks again. No round hooks are required. This performs the declared action and writes real records: use a local/test studio or a workflow explicitly safe to exercise.
+Parts import exactly as games do (`@parts/<id>` or `@parts/<host>/<id>`), with the same provenance and credit checks. `check.action` and `check.observe` name real UI selectors: the checker clicks on a phone, waits for changed text on wall and both phones, then reloads the actor and checks again. `check.params` optionally supplies public URL parameters (for example `{ "ticket": "404" }`) to all three surfaces so the action can address an existing sample record. The checker always chooses its own room. No round hooks are required. This performs the declared action and writes real records: use a local/test studio or a workflow explicitly safe to exercise.
 
 `homie-studio standalone plan/build <app-id>` reuses Electron/Capacitor and the same built bundle. Public customer record calls use the existing standalone origin allowlist; credentials are never shared across origins. Native staff sign-in, private collections, offline record writes, native billing and automatic store upload are not implemented. Existing game standalone behavior is unchanged. A store build still needs its normal local SDK, signing and store review.
+
+## Shop button on the screen
+
+An open shop with items for this game or app shows **Shop** above its play/open screen. The shell reserves 52 pixels plus the safe area above the content, so the button never covers its controls. In `game.json` or `app.json`, set `"screen": { "shop": false }` to hide this button (merge with any existing screen settings). The room panel and your own shop buttons still work. Closed shops, kids policies and an empty selection show no button.
+
+```ts
+import { createShop } from '@homie-rocks/studio/shop';
+const shop = createShop();
+shopButton.onclick = () => shop.open();
+itemButton.onclick = () => shop.open('supporter');
+```
+
+These calls open the same shop in games and apps. Inside a player card, purchases leave for the studio's shop; ordinary play/open pages start Stripe checkout. The studio's TV and kids policies still apply.

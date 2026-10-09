@@ -17,12 +17,21 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [Unreleased]
+## [0.37.0] - 2026-10-09
+
+**Plugin 0.38.0** · [#72](https://github.com/homie-rocks/homie/pull/72)
+
+A studio holds apps beside its games, with public player cards and a shop you can find.
+
+### Added
 
 - Apps are a studio kind: `apps/<id>/app.json`, `app new` / `app_make`, one morphing screen with roles and parts, and a 3D welcome queue starter. Apps share game build, rooms, screen, shop, parts and standalone paths; their buttons say Open and Scan to join.
 - App records outlast rooms in the studio's D1, with validated fields, role permissions, account grants, private staff addresses and optimistic updates. Public links/QR and cryptographic IDs work on LAN HTTP; `dev --lan` prints phone-reachable addresses.
 - Local rules rebuilds retry transient wall-clock timing rejections up to three times, keeping the last good build and the existing performance guard.
 - App checks exercise a real action across a wall and two phones and prove reconnect without requiring rounds. The app skill and scaffold guidance cover roles, single-screen composition, engine/media reuse and customer store builds. Parts now include app components, music and video with explicit intended uses and the existing licence checks; sharing adds no selling flow.
+
+- Public apps carry the same player card as games, opening their own screen and using their own picture and wording.
+- An open shop has a visible Shop button above the play/open screen, with room reserved for it. Set `screen.shop` to `false` to hide it; `createShop().open()` or `.open(item)` opens the same shop from your own button. Closed shops and experiences with nothing for sale show no control.
 
 ## [0.36.0] - 2026-10-08
 
