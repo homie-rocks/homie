@@ -17,6 +17,24 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.37.1] - 2026-10-09
+
+**Plugin 0.38.1** · [#74](https://github.com/homie-rocks/homie/pull/74)
+
+Your AI carries first setup through with defaults you can change by asking.
+
+### Fixed
+
+- Setup no longer makes you play a demo, request a practice change, name the studio or answer a design interview before your AI builds your request.
+- Deploy registers an initial workers.dev address through the existing Cloudflare sign-in, keeping an existing address unchanged.
+- The Desktop tools can install a private Node and npm. Your AI can prepare a custom hostname for Cloudflare to create its DNS and certificate during deploy.
+- Public descriptions now describe games, apps, engine packages and media skills, your own Cloudflare and your own Stripe with one approval.
+- App requests go directly to the app build and shared-action check. The large shop-read regression measures CPU work, so other concurrent test processes cannot exhaust its unchanged limit.
+
+### Upgrade notes
+
+- Ask your AI to upgrade; it shows the changes and applies them after one yes, keeping your edited files.
+
 ## [0.37.0] - 2026-10-09
 
 **Plugin 0.38.0** · [#72](https://github.com/homie-rocks/homie/pull/72)

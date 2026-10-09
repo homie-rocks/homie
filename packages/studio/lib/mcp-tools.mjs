@@ -16,6 +16,8 @@
  * AI in a game's guide seat, marked " · AI". This process holds the socket between turns; the game's own bot code
  * moves the body while the AI thinks; the AI chooses only the game's own goals and lines (agents.json).
  */
+import { prepareNode } from './prepare.mjs';
+import { studioDomain } from './domain.mjs';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -192,7 +194,7 @@ function needsInstall(ctx, root) {
   if (installed(root) || !ctx.install) return null;
   const running = runningJobs(root).find((j) => j.label.startsWith('npm install'));
   const job = running ?? installJob(root);
-  return ok(`The studio's toolkit is still being installed (npm install, job ${job.id}; usually 20 to 60 s). Ask again in a moment, or follow it with studio_job { "job": "${job.id}" }.`, { kind: 'job', ...jobView(job) });
+  return ok(`The studio's toolkit is still being installed (npm install, job ${job.id}; usually 20 to 60 s). AI: follow it with studio_job { "job": "${job.id}" }.`, { kind: 'job', ...jobView(job) });
 }
 
 /* ------------------------------------------------------------------ the setup card */
@@ -217,7 +219,7 @@ async function statusOf(ctx, root, { fresh = false } = {}) {
 }
 
 function checklist(ctx, root) {
-  const steps = ['Setup status', 'The studio', 'See a working game', 'One small change', 'Plan your game: its Game Codex', 'Build it, with progress you can watch', 'Playtest it, then put it online'];
+  const steps = ['Setup status', 'The studio', 'Plan from your request', 'Build and check it', 'Put it online'];
   const done = [true, Boolean(root)];
   if (root) {
     const games = listGames(root);
@@ -228,7 +230,7 @@ function checklist(ctx, root) {
     const checked = note.checked || (() => {
       try { return readdirSync(join(root, '.studio', 'progress')).some((f) => f.endsWith('.json') && readFeed(root, f.slice(0, -5))?.stages?.some((x) => x.id === 'checks' && x.state === 'done')); } catch { return false; }
     })();
-    done.push(Boolean(note.demo || games.length || codex), Boolean(note.changed || codex), codex, Boolean(checked), Boolean(local.deployedAt || local.connectedAt));
+    done.push(Boolean(codex || games.length || checked || local.deployedAt), Boolean(checked || local.deployedAt), Boolean(local.deployedAt || local.connectedAt));
   }
   // In order: a step counts as done only when every step before it is (an early file edit is not "one small change").
   for (let i = 1; i < done.length; i++) done[i] = done[i] && done[i - 1];
@@ -618,9 +620,18 @@ async function openFromGitHub(ctx, a) {
 }
 
 /** github_login: GitHub's device sign-in through the GitHub CLI; the person types the one-time code in the browser. */
-async function githubLogin(ctx) {
-  const { gh, signedIn } = ghState();
-  if (!gh) return fail('The GitHub CLI is not on this computer: it is one download from https://cli.github.com (or, on a Mac with Homebrew, brew install gh). Then ask again. No token is ever pasted anywhere.');
+async function githubLogin(ctx, { state = ghState, find = which, start = startJob, activeJobs = runningJobs, view = jobView } = {}) {
+  const { gh, signedIn } = state();
+  if (!gh) {
+    const brew = find('brew');
+    if (brew) {
+      const root = ctx.current ?? ctx.studiosDir ?? homedir();
+      const active = activeJobs(root).find((j) => j.label === 'Install GitHub CLI');
+      const job = active ?? start({ root, label: 'Install GitHub CLI', cmd: brew, args: ['install', 'gh'] });
+      return ok(`AI: follow studio_job { "job": "${job.id}" }, then retry github_login.`, { kind: 'job', ...view(job) });
+    }
+    return fail('AI: install the GitHub CLI from https://cli.github.com, then retry github_login. The person only approves an OS installer prompt; never ask them for a command or token.');
+  }
   if (signedIn) return ok('This computer is signed in to GitHub already.');
   const job = startJob({ root: ctx.current ?? ctx.studiosDir ?? homedir(), label: 'GitHub sign-in (gh auth login)', cmd: gh, args: ['auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web'], env: toolEnv() });
   let code = null;
@@ -759,6 +770,26 @@ const RW = { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
 export function toolDefs(ctx, avail = {}) {
   const tools = [
     {
+      name: 'setup_prepare', title: 'Prepare this computer',
+      description: 'AI setup: install a private Node.js and npm when missing, without a terminal or administrator rights. Then resume studio_scaffold; install Chrome with studio_run ["chrome","install"] when checks need it. No provider account is needed.',
+      inputSchema: { type: 'object', properties: {} },
+      annotations: { title: 'Prepare this computer', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      run: async () => {
+        if (findNode({ fresh: true })?.npm) return ok('Node and npm are ready. AI: continue studio_scaffold.');
+        const r = await prepareNode();
+        ctx.status = null;
+        findNode({ fresh: true });
+        return r.ok ? ok('Node and npm are ready. AI: continue studio_scaffold.', r) : fail(r.next, r);
+      },
+    },
+    {
+      name: 'studio_domain', title: 'Set the studio domain',
+      description: 'Prepare a requested custom hostname for deployment. Cloudflare creates DNS and TLS using its existing browser sign-in. The AI handles configuration; never ask for an account id, zone id or DNS value. Does not deploy or change the domain registrar.',
+      inputSchema: { type: 'object', properties: { hostname: str('Requested hostname, e.g. play.example.com'), ...STUDIO_ARG }, required: ['hostname'] },
+      annotations: { title: 'Set the studio domain', ...RW },
+      run: async (a) => { const r = studioDomain(ctx.root(a.studio), a.hostname); return r.ok ? ok(r.next, r) : fail(r.next, r); },
+    },
+    {
       name: 'setup_status', title: 'Setup status',
       description: 'Step 0 of a new studio, and any time the person asks what they need or whether they are set up: what this computer and their accounts have (Node, Cloudflare signed in and email verified, Chrome for the checks, ffmpeg, and the optional GitHub, ElevenLabs and fal), what each unlocks, and the exact fix; the studios in the studios folder; and the new-studio checklist with where they are on it. For a studio that is not made yet, pass its name as studio: the checklist is then the new studio\'s, never another studio\'s that happens to be in the folder. Read-only, a few seconds. Optional rows never block anything.',
       inputSchema: { type: 'object', properties: { studio: str('Optional: which studio (its folder name or name), or the name of a new studio that is not made yet; else the one in use'), fresh: { type: 'boolean', description: 'Check again now instead of the last 20 s' } } },
@@ -772,12 +803,11 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_scaffold', title: 'Make a studio',
-      description: 'Step 1: make a new game studio ON THIS COMPUTER, in the studios folder: one folder with AGENTS.md, games/, music/, videos/, posts/ and a site that later goes online on the studio\'s own Cloudflare (free plan). It has NO game: its home page says "First game coming soon". Then installs its pinned toolkit (npm install, in the background). Never put a game in it the person did not ask for.',
-      inputSchema: { type: 'object', properties: { name: str('The studio\'s name, e.g. "Night Owls"'), folder: str('Optional: the folder name inside the studios folder (default: from the name)') }, required: ['name'] },
+      description: 'Step 1: make a new game studio ON THIS COMPUTER, in the studios folder: one folder with AGENTS.md, games/, music/, videos/, posts/ and a site that later goes online on the studio\'s own Cloudflare (their account). It has NO game: its home page says "First game coming soon". Then installs its pinned toolkit (npm install, in the background). Never put a game in it the person did not ask for.',
+      inputSchema: { type: 'object', properties: { name: str('The studio\'s name, e.g. "Night Owls"'), folder: str('Optional: the folder name inside the studios folder (default: from the name)') } },
       annotations: { title: 'Make a studio', ...RW }, _meta: ui(UI.setup),
       run: async (a) => {
-        const name = String(a.name ?? '').trim().slice(0, 60);
-        if (!name) return fail('name the studio, e.g. "Night Owls"');
+        const name = String(a.name ?? '').trim().slice(0, 60) || 'My Studio';
         if (!ctx.studiosDir) return fail('no studios folder is set: in Claude, Settings > Extensions > Homie, choose the folder your studios live in');
         mkdirSync(ctx.studiosDir, { recursive: true });
         const folder = a.folder ? String(a.folder).trim() : slugify(name);
@@ -797,6 +827,7 @@ export function toolDefs(ctx, avail = {}) {
         ctx.note(made.dir).earlier = earlier.map((e) => e.path);
         let install = null;
         if (ctx.install) {
+          if (!findNode()?.npm) { const ready = await prepareNode(); if (!ready.ok) return fail(ready.next, ready); findNode({ fresh: true }); }
           try { install = installJob(made.dir); } catch (error) { return fail(`${name} is made at ${made.dir}, but ${error.message}`); }
           await waitJob(install, Math.min(ctx.waitMs, 35_000));
         }
@@ -937,8 +968,8 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_plan', title: 'Plan a game (its Game Codex)',
-      description: 'Step 4: start the game\'s Game Codex (games/<id>/CODEX.md, every section) and get the plan interview to run with the person: two or three questions a message, each with options and your pick, about game type and genre, style, devices, players and rooms, art and film, music and sound, and scope. A game is planned before it is made: with no game <id> yet, this starts its folder with only the codex. Fill CODEX.md from their answers in one call (file_write of the whole file, or one file_edit with an edits list), then game_codex shows it. While planning, run `parts find` (the parts_find tool) for each system the game needs, so the plan starts from pieces of existing games and the @homie-rocks/* packages rather than from nothing; the codex\'s Built from section records what was found.',
-      inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens)'), name: str('Its name, when the game is not made yet'), ...STUDIO_ARG }, required: ['id'] },
+      description: 'Step 4: start the game\'s Game Codex (games/<id>/CODEX.md, every section) and record sensible defaults from the request for genre, style, devices, rooms, art, sound and scope. Never route engineering or design questions to the person. A game is planned before it is made: with no game <id> yet, this starts its folder with only the codex. Fill CODEX.md from their request and your defaults in one call (file_write of the whole file, or one file_edit with an edits list), then game_codex shows it. While planning, run `parts find` (the parts_find tool) for each system the game needs, so the plan starts from pieces of existing games and the @homie-rocks/* packages rather than from nothing; the codex\'s Built from section records what was found.',
+      inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens)'), name: str('Its name, when the game is not made yet'), interview: { type: 'boolean', description: 'Only when the person explicitly requests a planning conversation' }, ...STUDIO_ARG }, required: ['id'] },
       annotations: { title: 'Plan a game', ...RW },
       run: async (a) => {
         const root = ctx.root(a.studio);
@@ -948,12 +979,12 @@ export function toolDefs(ctx, avail = {}) {
           made = newCodex(root, String(a.id), { name: a.name ?? null });
           if (!made.ok) return fail(made.why);
         }
-        const guide = ctx.skillsDir && existsSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md')) ? readFileSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md'), 'utf8') : null;
+        const guide = a.interview === true && ctx.skillsDir && existsSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md')) ? readFileSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md'), 'utf8') : null;
         return ok([
           made ? `Wrote games/${a.id}/CODEX.md (every section${made.planned ? '; the game is planned here before it is made' : ''}).` : `games/${a.id}/CODEX.md is there already: change it, never replace it.`,
-          'Now the interview: two or three questions a message, each with concrete options and your pick, so "yes" is an answer. Say back what you heard in one line before the next. Stop after three or four rounds; "just build it" means fill the rest with your own choices and list them under Open questions. Then fill CODEX.md in one call (file_read it once; then file_write the whole file, or one file_edit whose edits list has every section) and show it with game_codex.',
+          'From the request and sensible defaults, fill CODEX.md in one call, then show it with game_codex and continue building. Choose phone and computer controls, a small first version, local sound and CC0 art. Infer persistent progress from the premise. No interview unless the person explicitly asks to plan together; no engineering or design questions.',
           '', PARTS_FIRST,
-          ...(guide ? ['', guide] : []),
+          ...(guide ? ['', 'Optional reference for a person who explicitly requests an interview:', guide] : []),
         ].join('\n'), { kind: 'plan', id: a.id, file: `games/${a.id}/CODEX.md`, created: Boolean(made) });
       },
     },
@@ -1105,7 +1136,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'studio_deploy', title: 'Put the studio online',
-      description: 'Put the studio\'s site online on the studio\'s OWN Cloudflare account: one Worker, one D1 database and two Durable Objects, free plan, no payment method. Call it with plan: true first and tell the person in two or three lines what it creates and costs. If Cloudflare is not signed in, cloudflare_login opens it in their browser to approve once. Runs in the background with the build card.',
+      description: 'Put the studio\'s site online on the studio\'s OWN Cloudflare account: one Worker, one D1 database and two Durable Objects, with its own resources. Call it with plan: true first and tell the person in two or three lines what it creates and costs. If Cloudflare is not signed in, cloudflare_login opens it in their browser to approve once. Runs in the background with the build card.',
       inputSchema: { type: 'object', properties: { plan: { type: 'boolean', description: 'Only say what it will create and what it costs; change nothing' }, ownRoute: { type: 'boolean', description: 'Only after the plan or a deploy warned that another site\'s route on the studio\'s custom domain covers its hostname, and the person agreed: add the studio\'s own exact-host route (the one line the warning gives) and deploy. It never edits or removes any other route' }, ...STUDIO_ARG } },
       annotations: { title: 'Put the studio online', readOnlyHint: false, destructiveHint: false, openWorldHint: true }, _meta: ui(UI.build),
       run: async (a) => {
@@ -1139,7 +1170,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'cloudflare_login', title: 'Sign in to Cloudflare',
-      description: 'Open Cloudflare in the person\'s browser to approve this computer once (Wrangler\'s own sign-in; a free account, no payment method, no key pasted anywhere). Say in one line that Cloudflare opened and they should approve it.',
+      description: 'Open Cloudflare in the person\'s browser to approve this computer once (Wrangler\'s own sign-in; no key pasted anywhere). Say in one line that Cloudflare opened and they should approve it.',
       inputSchema: { type: 'object', properties: { ...STUDIO_ARG } },
       annotations: { title: 'Sign in to Cloudflare', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       run: async (a) => {
@@ -1464,4 +1495,4 @@ export function slimCodex(html, { max = 140_000, pictures = true } = {}) {
   return h.length <= max ? h : null;
 }
 
-export const _test = { checklist, feedFor, slimCodex, expandHome, feedbackFacts };
+export const _test = { githubLogin, checklist, feedFor, slimCodex, expandHome, feedbackFacts };

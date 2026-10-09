@@ -5,7 +5,7 @@
     "email": "hello@homie.rocks"
   },
   "metadata": {
-    "description": "Studio in a box on your own Cloudflare"
+    "description": "Build games and apps with Homie’s engine packages, animated characters, sound, music and video skills. Play from a post on X. Publish on your own Cloudflare and connect your own Stripe with one approval. Open source."
   },
   "plugins": [
     {

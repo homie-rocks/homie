@@ -57,7 +57,7 @@ test('handshake, tools with the remote\'s names, prompts, and the cards as MCP A
     const init = await s.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
     assert.equal(init.result.protocolVersion, '2025-06-18');
     assert.equal(init.result.serverInfo.name, 'homie-studio');
-    assert.match(init.result.instructions, /never ahead/);
+    assert.match(init.result.instructions, /without a lesson or an interview/);
     assert.match(init.result.instructions, /NO game/);
     const { tools } = (await s.request('tools/list')).result;
     const names = tools.map((t) => t.name);
@@ -116,7 +116,7 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     assert.ok(!existsSync(join(root, 'games', 'gem-rush')), 'no starter game');
     assert.match(made.content[0].text, /First game coming soon/);
     assert.equal(made.structuredContent.current.name, 'Paper Comets');
-    assert.equal(made.structuredContent.checklist.find((x) => x.state === 'now').n, 2, 'see a working game is next');
+    assert.equal(made.structuredContent.checklist.find((x) => x.state === 'now').n, 2, 'planning from the request is next');
     // Link the toolkit as npm install would (no network in tests).
     mkdirSync(join(root, 'node_modules', '@homie-rocks'), { recursive: true });
     symlinkSync(PKG, join(root, 'node_modules', '@homie-rocks', 'studio'));
@@ -141,7 +141,7 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     assert.ok(!plan.isError, plan.content[0].text);
     assert.ok(existsSync(join(root, 'games', 'comet-crews', 'CODEX.md')));
     assert.ok(!existsSync(join(root, 'games', 'comet-crews', 'game.json')), 'planned, not made');
-    assert.match(plan.content[0].text, /two or three questions/);
+    assert.match(plan.content[0].text, /sensible defaults/);
     const codex = await s.call('game_codex', { id: 'comet-crews' });
     assert.ok(!codex.isError, codex.content[0].text);
     assert.equal(codex.structuredContent.kind, 'codex');

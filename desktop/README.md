@@ -25,10 +25,8 @@ skills), packed with Anthropic's own tool, [`@anthropic-ai/mcpb`](https://github
    seconds with nothing to click, a request is waiting out of sight: press ⌘ Return (Ctrl+Enter on Windows; a
    request shows its keys beside its buttons) to allow it, or scroll the chat to find it.
 
-The studio needs Node.js 22 or newer on the computer (it installs its own pinned toolkit and Cloudflare's Wrangler
-with npm). The setup card says so if it is missing, with the download page. Chrome is needed for the two-browser
-check; Cloudflare only when the studio goes online (you approve once in your browser: a free account, no payment
-method).
+The AI installs a private Node.js and npm when this computer needs them, and Chrome for
+its checks. Cloudflare opens for your approval when the site is ready to go live.
 
 ## The test: one minute, in your own Claude desktop app
 

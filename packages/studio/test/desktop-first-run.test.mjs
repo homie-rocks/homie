@@ -63,11 +63,11 @@ test('in the Claude desktop app the model is told, once, what the app asks the p
       assert.match(text, /ONCE in a chat[\s\S]*skip it if you already said it/, `${where} says it is said once`);
       assert.match(text, /write one short line of text before your next tool call/, `${where} keeps a card and the next request apart`);
     }
-    assert.match(s.init.instructions, /never ahead/, 'the checklist is still there');
+    assert.match(s.init.instructions, /without a lesson or an interview/, 'the checklist is still there');
     // Past a new studio's first minutes the setup card stops carrying it (the guides and the instructions still do).
     assert.ok(!(await s.call('game_plan', { id: 'moon-relay', name: 'Moon Relay' })).isError);
     const later = await s.call('setup_status');
-    assert.equal(later.structuredContent.checklist.find((x) => x.state === 'now').n, 5);
+    assert.equal(later.structuredContent.checklist.find((x) => x.state === 'now').n, 3);
     assert.doesNotMatch(later.content[0].text, SAID);
     // A reference file is the guide's own text, as it is.
     assert.doesNotMatch((await s.call('studio_guide', { topic: 'plan', file: 'INTERVIEW.md' })).content[0].text, SAID);
