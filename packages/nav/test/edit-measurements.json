@@ -1,0 +1,86 @@
+{
+  "cpu": "Apple M4",
+  "node": "v22.22.2",
+  "load": [
+    46.1357421875,
+    73.1220703125,
+    56.294921875
+  ],
+  "timing": "user + system CPU ms",
+  "nodeRows": [
+    {
+      "count": 100,
+      "edits": false,
+      "median": 4.295,
+      "p95": 11.508
+    },
+    {
+      "count": 100,
+      "edits": true,
+      "median": 14.184,
+      "p95": 27.741
+    },
+    {
+      "count": 400,
+      "edits": false,
+      "median": 15.159,
+      "p95": 20.167
+    },
+    {
+      "count": 400,
+      "edits": true,
+      "median": 28.382,
+      "p95": 35.33
+    },
+    {
+      "count": 1000,
+      "edits": false,
+      "median": 30.877,
+      "p95": 36.24
+    },
+    {
+      "count": 1000,
+      "edits": true,
+      "median": 55.401,
+      "p95": 62.662
+    }
+  ],
+  "workerdRows": [
+    {
+      "count": 100,
+      "edits": false,
+      "median": 5,
+      "p95": 8
+    },
+    {
+      "count": 100,
+      "edits": true,
+      "median": 20,
+      "p95": 23
+    },
+    {
+      "count": 400,
+      "edits": false,
+      "median": 15,
+      "p95": 16
+    },
+    {
+      "count": 400,
+      "edits": true,
+      "median": 27.000000000000092,
+      "p95": 31
+    },
+    {
+      "count": 1000,
+      "edits": false,
+      "median": 29,
+      "p95": 32
+    },
+    {
+      "count": 1000,
+      "edits": true,
+      "median": 47,
+      "p95": 53
+    }
+  ]
+}

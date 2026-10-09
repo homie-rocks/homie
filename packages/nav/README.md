@@ -119,6 +119,7 @@ const restored = Grid.restore(grid.save());
 | `mesh.save()` | Save dynamic topology; immutable asset bytes are excluded. |
 | `Mesh.restore(bytes, assets)` | Restore topology with every saved tile's original bytes, in any order. |
 | `Crowd.js` — `new Crowd(mesh, dt, maxRadius, options?)` | Create a fixed-step crowd; `searchIterations` bounds sliced search work. |
+| `crowd.detach()` | Release the mesh association permanently; further use throws a navigation error. |
 | `crowd.tick`, `crowd.mesh` | Read tick count and shared mesh. |
 | `crowd.add(at, tune)` | Add an agent using baked clearance; return its id. |
 | `crowd.remove(id)` | Remove an agent. |
@@ -243,15 +244,28 @@ and obstacle edits and unchanged targets must match every baseline arrival tick
 exactly (zero-tick tolerance); relevant edits and moving goals must all arrive.
 The memory soak creates, restores and discards 200,000 crowds and meshes without
 yielding, checking retained heap after GC (4 MiB maximum growth after warmup).
-The full sweep runs 600 randomised axis/seed cases plus the wider topology cases.
+The three fixed continuation cases used 14.4 CPU seconds on the machine below
+(88.6 seconds elapsed under shared load). The full sweep runs 600 randomised
+axis/seed cases plus the wider topology cases; it is deliberately outside `npm test`.
 
 ## Measurements
 
-Apple M4, Node 22.22.2, local workerd 1.20261007.1. From the repository root, reproduce with
-`node packages/nav/test/measure.mjs`; raw results are in `test/measurements.json`.
-The scenes use 20 m tiles, 0.25 m cells, 0.1 m height cells and 0.3 m agents.
-Pillars are actual 1.2 m square, 3 m high geometry on 5 m spacing.
-Bake/load is a single observation; save/restore medians use seven runs.
+Apple M4 (10 cores), Node 22.22.2 and local workerd 1.20261007.1, macOS arm64.
+All timings below are **user + system CPU milliseconds**, not elapsed latency.
+Node uses `process.cpuUsage()`; workerd uses its own process CPU counter, excluding
+the client's HTTP work. Worker counters have 10 ms resolution, so samples batch
+20 ticks (10 for moving goals and edits, five for wakes); tables report each batch's
+per-operation cost. Worker p95 values describe batch averages, not individual ticks.
+The shared machine's one-minute load averages were 113 for the scene/grid run,
+46 for edits and 28 when the wake report finished. CPU time excludes scheduler
+waits but still reflects contention and processor speed; these are not latency guarantees.
+
+Reproduce with `node packages/nav/test/measure.mjs`, `measure-wake.mjs` and
+`measure-edits.mjs` in the same folder. Raw results are `test/measurements.json`,
+`test/wake-measurements.json` and `test/edit-measurements.json`.
+Scenes use 20 m tiles, 0.25 m cells, 0.1 m height cells and 0.3 m agents.
+Pillars are 1.2 m square, 3 m high geometry on 5 m spacing.
+Bake/load is one observation; save/restore medians use seven samples.
 
 | Scene | Tiles | Static assets total / largest | Retained assets total / largest | Mesh save |
 |---|---:|---:|---:|---:|
@@ -260,59 +274,70 @@ Bake/load is a single observation; save/restore medians use seven runs.
 | Pillars 80 × 80 m | 16 | 174,075 / 11,782 B | 3,180,879 / 206,758 B | 103,048 B |
 | Pillars 160 × 160 m | 64 | 726,059 / 11,868 B | 12,977,471 / 206,844 B | 428,827 B |
 
-| Static scene | Bake + load ms | Mesh save / restore ms | Across-map path median ms | 300-agent save bytes | Crowd save / restore ms |
+| Static scene | Bake + load CPU ms | Mesh save / restore CPU ms | Across-map path median CPU ms | 300-agent save bytes | Crowd save / restore CPU ms |
 |---|---:|---:|---:|---:|---:|
-| Flat 20 m | 36.4 | 0.06 / 0.16 | 0.020 | 128,212 | 4.94 / 3.20 |
-| Pillars 20 m | 18.4 | 0.14 / 0.28 | 0.028 | 216,741 | 6.36 / 3.66 |
-| Pillars 80 m | 93.4 | 2.74 / 5.44 | 0.104 | 275,071 | 7.30 / 5.55 |
-| Pillars 160 m | 276.8 | 12.70 / 18.47 | 0.458 | 299,259 | 8.04 / 6.27 |
+| Flat 20 × 20 m | 129.47 | 0.11 / 0.23 | 0.04 | 131,033 | 16.29 / 12.31 |
+| Pillars 20 × 20 m | 121.36 | 0.39 / 0.40 | 0.14 | 217,989 | 14.11 / 14.79 |
+| Pillars 80 × 80 m | 445.88 | 6.46 / 12.85 | 0.45 | 295,207 | 20.36 / 23.93 |
+| Pillars 160 × 160 m | 674.01 | 28.43 / 35.56 | 2.34 | 488,183 | 24.15 / 23.04 |
 
-Wake costs below include topology validation and use seven warm samples with
-300 agents; full room wake restores both mesh and crowd. Reproduce separately
-with `node packages/nav/test/measure-wake.mjs`; raw values are in
-`test/wake-measurements.json`. Editable worlds retain voxel spans, so restoring
-and reapplying live obstacles is substantially more expensive than static tiles.
+Wakes include topology validation and 300 agents; a full wake restores both mesh
+and crowd. Editable worlds retain spans and reapply saved obstacles on restore.
 
-| World | Tiles | Live obstacles | Mesh save / restore ms | Full room wake ms |
+| World | Tiles | Live obstacles | Node mesh save / restore CPU ms | Node full wake CPU ms |
 |---|---:|---:|---:|---:|
-| Static 80 m | 16 | 0 | 6.65 / 11.63 | 26.68 |
-| Editable 80 m | 16 | 0 | 5.08 / 35.85 | 43.16 |
-| Editable 80 m | 16 | 20 | 6.30 / 103.97 | 110.62 |
-| Static 160 m | 64 | 0 | 15.73 / 21.26 | 30.15 |
-| Editable 160 m | 64 | 0 | 13.07 / 128.71 | 134.91 |
-| Editable 160 m | 64 | 20 | 13.45 / 216.23 | 225.23 |
+| Static 80 m | 16 | 0 | 7.14 / 9.78 | 19.14 |
+| Editable 80 m | 16 | 0 | 7.58 / 43.46 | 55.67 |
+| Editable 80 m | 16 | 20 | 5.98 / 147.70 | 156.29 |
+| Static 160 m | 64 | 0 | 19.77 / 32.21 | 52.92 |
+| Editable 160 m | 64 | 0 | 20.83 / 177.24 | 194.30 |
+| Editable 160 m | 64 | 20 | 22.94 / 332.17 | 364.35 |
 
-Every agent retargets every tick on the 80 m pillar scene. Timings are milliseconds,
-100 samples after 30 warm-up ticks; topology and reachability caches are warm.
-Worker measurements include one local HTTP round trip per operation.
+| Editable world, 20 live obstacles | workerd mesh restore CPU ms | workerd full wake CPU ms |
+|---|---:|---:|
+| 80 m | 116.00 | 128.00 |
+| 160 m | 240.00 | 276.00 |
 
-| Agents | Node target loop median | Node whole tick median / p95 | Worker target loop median | Worker whole tick median / p95 |
+Every agent re-requests its fixed goal each tick on the 80 m pillar scene: 30 warmup
+ticks, then 100 Node samples or seven workerd batches. Identical goals preserve
+search progress; target-loop cost still includes cached reachability checks.
+
+| Agents | Node target loop median CPU ms | Node whole tick median / p95 CPU ms | workerd target loop median CPU ms | workerd whole tick median / p95 CPU ms |
 |---|---:|---:|---:|---:|
-| 100 | 0.25 | 1.94 / 2.52 | 0.51 | 2.67 / 3.16 |
-| 400 | 1.11 | 9.24 / 10.70 | 1.62 | 9.92 / 10.63 |
-| 1,000 | 2.72 | 26.58 / 31.15 | 3.30 | 24.98 / 29.40 |
+| 100 | 0.44 | 3.55 / 6.75 | 0.50 | 5.50 / 6.00 |
+| 400 | 2.82 | 16.90 / 22.56 | 2.50 | 13.50 / 14.50 |
+| 1,000 | 7.34 | 39.80 / 50.87 | 5.00 | 25.50 / 27.50 |
 
-At 400 agents this leaves room inside a 50 ms tick. At 1,000 the observed Node
-maximum was 53.86 ms, exceeding a 50 ms tick even without edits.
-Capacity depends on geometry, density and other room work.
-These timings exclude persistence. Reachability components rebuild after topology
-changes; ordinary target requests then use cached set membership and queued searches.
+Moving goals oscillate 0.2 m from their initial point. The edit workload also removes
+and adds a 0.6 m crate every tick with the crowd attached. Both include all target
+calls, invalidation and stepping; 30 warmup ticks precede 100 Node samples or seven
+workerd batches. Edits rebuild reachability components before target checks.
 
-For 2,000 × 2,000 obstructed grids, median query milliseconds over three runs:
+| Agents | Node moving goals median / p95 CPU ms | Node plus crate median / p95 CPU ms | workerd moving goals median CPU ms | workerd plus crate median CPU ms |
+|---|---:|---:|---:|---:|
+| 100 | 4.29 / 11.51 | 14.18 / 27.74 | 5.00 | 20.00 |
+| 400 | 15.16 / 20.17 | 28.38 / 35.33 | 15.00 | 27.00 |
+| 1,000 | 30.88 / 36.24 | 55.40 / 62.66 | 29.00 | 47.00 |
+
+At 1,000 agents, moving a crate every tick already uses about a 50 ms tick's entire
+CPU budget. Persistence, rendering, other room work and scheduling delays cost more.
+Capacity depends on geometry, crowd density and edits.
+
+For 2,000 × 2,000 obstructed grids, median CPU milliseconds over three runs:
 
 | Mask | A* | JPS option |
 |---|---:|---:|
-| One blocked centre cell | 26.4 | 13.5 |
-| 10% seeded random obstacles | 304.5 | 302.8 |
-| Alternating long walls | 1,387.1 | 230.6 |
-| Unreachable across a full wall | 1,177.1 | 1,127.1 |
+| One blocked centre cell | 50.87 | 16.20 |
+| 10% seeded random obstacles | 675.87 | 656.64 |
+| Alternating long walls | 2134.80 | 326.62 |
+| Unreachable across a full wall | 2131.17 | 2119.01 |
 
-Initial component labelling took 72–119 ms; repeated nearby blocked-cell nearest
-queries took about 0.002 ms. A 4,000,113-byte grid restored in 20–24 ms. Large
-obstructed grids therefore need a different scheduling budget from crowds.
+Initial component labelling used 100.99–162.78 CPU ms; repeated nearby nearest
+queries used at most 0.01 CPU ms median. A 4,000,113-byte grid restored in
+28.71–36.87 CPU ms. Large obstructed grids need a separate scheduling budget.
 
-Grid alone bundles to 20,659 bytes minified (8,180 gzip) with esbuild, neutral
-platform and ESM output. It imports neither navcat nor three.js.
+Grid alone bundles to 20,749 bytes minified (8,229 gzip) with esbuild,
+neutral platform and ESM output. It imports neither navcat nor three.js.
 
 ## License
 

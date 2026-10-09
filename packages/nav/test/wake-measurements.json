@@ -1,5 +1,11 @@
 {
   "cpu": "Apple M4",
+  "timing": "process user + system CPU milliseconds",
+  "load": [
+    27.943359375,
+    56.4072265625,
+    52.23291015625
+  ],
   "node": "v22.22.2",
   "samples": 7,
   "agents": 300,
@@ -11,11 +17,11 @@
       "obstacles": 0,
       "assets": 174075,
       "meshBytes": 103048,
-      "crowdBytes": 275071,
-      "meshSaveMs": 6.649791000000278,
-      "meshRestoreMs": 11.626874999999927,
-      "crowdRestoreMs": 12.90441699999974,
-      "roomWakeMs": 26.68420900000001
+      "crowdBytes": 295207,
+      "meshSaveMs": 7.141,
+      "meshRestoreMs": 9.782,
+      "crowdRestoreMs": 14.586,
+      "roomWakeMs": 19.144
     },
     {
       "size": 80,
@@ -24,11 +30,11 @@
       "obstacles": 0,
       "assets": 3180879,
       "meshBytes": 103048,
-      "crowdBytes": 275071,
-      "meshSaveMs": 5.075917000000118,
-      "meshRestoreMs": 35.847999999999956,
-      "crowdRestoreMs": 5.445791999999983,
-      "roomWakeMs": 43.15883300000041
+      "crowdBytes": 295207,
+      "meshSaveMs": 7.579,
+      "meshRestoreMs": 43.457,
+      "crowdRestoreMs": 11.648,
+      "roomWakeMs": 55.667
     },
     {
       "size": 80,
@@ -37,11 +43,11 @@
       "obstacles": 20,
       "assets": 3180879,
       "meshBytes": 139922,
-      "crowdBytes": 337387,
-      "meshSaveMs": 6.295250000000124,
-      "meshRestoreMs": 103.9672499999997,
-      "crowdRestoreMs": 6.394916999999623,
-      "roomWakeMs": 110.6239999999998
+      "crowdBytes": 335044,
+      "meshSaveMs": 5.981,
+      "meshRestoreMs": 147.697,
+      "crowdRestoreMs": 10.716,
+      "roomWakeMs": 156.295
     },
     {
       "size": 160,
@@ -50,11 +56,11 @@
       "obstacles": 0,
       "assets": 726059,
       "meshBytes": 428827,
-      "crowdBytes": 299259,
-      "meshSaveMs": 15.725124999999025,
-      "meshRestoreMs": 21.26074999999946,
-      "crowdRestoreMs": 6.407332999999198,
-      "roomWakeMs": 30.147499999999127
+      "crowdBytes": 488183,
+      "meshSaveMs": 19.774,
+      "meshRestoreMs": 32.209,
+      "crowdRestoreMs": 18.739,
+      "roomWakeMs": 52.917
     },
     {
       "size": 160,
@@ -63,11 +69,11 @@
       "obstacles": 0,
       "assets": 12977471,
       "meshBytes": 428828,
-      "crowdBytes": 299260,
-      "meshSaveMs": 13.071917000001122,
-      "meshRestoreMs": 128.70645799999875,
-      "crowdRestoreMs": 5.818957999999839,
-      "roomWakeMs": 134.90808300000026
+      "crowdBytes": 488184,
+      "meshSaveMs": 20.828,
+      "meshRestoreMs": 177.241,
+      "crowdRestoreMs": 17.186,
+      "roomWakeMs": 194.299
     },
     {
       "size": 160,
@@ -76,11 +82,23 @@
       "obstacles": 20,
       "assets": 12977471,
       "meshBytes": 488114,
-      "crowdBytes": 332056,
-      "meshSaveMs": 13.449499999998807,
-      "meshRestoreMs": 216.23291599999902,
-      "crowdRestoreMs": 5.575333999997383,
-      "roomWakeMs": 225.22791700000016
+      "crowdBytes": 598758,
+      "meshSaveMs": 22.944,
+      "meshRestoreMs": 332.174,
+      "crowdRestoreMs": 26.664,
+      "roomWakeMs": 364.35
+    }
+  ],
+  "workerd": [
+    {
+      "size": 80,
+      "meshRestoreMs": 116,
+      "roomWakeMs": 128
+    },
+    {
+      "size": 160,
+      "meshRestoreMs": 240,
+      "roomWakeMs": 276
     }
   ]
 }

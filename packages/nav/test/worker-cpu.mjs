@@ -41,7 +41,9 @@ export async function workerCpu(source, run) {
     );
     child.stderr.on('data', (b) => process.stderr.write(b));
     const request = async (path) => {
-      const response = await fetch(`http://127.0.0.1:${port}${path}`);
+      const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+        headers: { Connection: 'close' },
+      });
       if (!response.ok) throw Error(await response.text());
       return response.json();
     };
