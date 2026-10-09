@@ -19,6 +19,31 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.39.0] - 2026-10-09
 
+**Plugin 0.40.0**
+
+New 3D games keep their matches on the server and answer your controls immediately.
+
+### Added
+
+- Rules games can move and face in three dimensions, jump and land, and collide with boxes, spheres, upright capsules and sloped height tiles. Declared level data reaches the server and the browser together and is checked with the game's save and restore.
+- Prediction follows vertical movement and facing, eases corrections, and draws other players' poses and animation state smoothly. The build reports the completed local room-capacity trial separately from its generated game check.
+
+### Changed
+
+- Gem Rush 3D, Hero Rush 3D and Ember Vale now use rules plus view with the server keeping the match, including bots, companions, pickups and combat. Ember Vale keeps its saved hero. All five game starters now use the rules runtime; Ember Vale keeps its two-dimensional play.
+
+### Fixed
+
+- Predicted movement respects the server's floor and ceiling, and catch-up animation follows the pose being drawn.
+- The packed-studio performance check recognizes a room hosted by the server.
+
+### Upgrade notes
+
+- Existing games keep their source and their hosting choice. The game skill is unchanged; its authoring update is the next slice.
+- Capacity measurements in this release are local. Cloudflare capacity and billing have not been measured.
+
+## [0.39.0] - 2026-10-09
+
 **Plugin 0.39.0** · [#78](https://github.com/homie-rocks/homie/pull/78)
 
 Your studio has its own MCP server. Connect your AI with one browser approval and add tools for the work your studio does.

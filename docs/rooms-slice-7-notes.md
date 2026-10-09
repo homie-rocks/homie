@@ -324,3 +324,18 @@ reported by builds is therefore 32 players at 30 Hz. Both this and the separate
 30-minute 20 Hz result are Node/WebSocket trials, not Cloudflare Table or billing
 measurements. Raw receipts and final recordings remain in
 `~/.homie/rooms-slice-7-evidence/`, indexed by its `README.md`.
+
+At release preparation, #77 was still open with conflicts and failed CI. The branch
+was rebased onto current `origin/main` (`1dadfa6`) while retaining the Slice 6 base
+as `a961539`; no rules, netplay or starter code changed in that rebase. Main's new
+setup behavior and metadata were retained. Studio 0.39.0 / plugin 0.40.0 follow
+Slice 6's reserved 0.38.0 / 0.39.0, with both changelogs, manifests, Worker tag,
+lockfile, template and template history updated. Dropping the carried Slice 6 base
+still depends on #77 landing; this is not claimed as a post-merge rebase.
+
+The packed 0.39.0 `scripts/studio-check.mjs --perf` passed from a fresh temporary
+studio. Two real Chrome clients finished a round as server replicas in 62 seconds,
+reporting 60/61 fps. Both performance runs passed the corrected role assertion;
+the computer replica was playable at 280 ms, reported 64.5 fps in that separate
+sample, 0.852 ms main-thread work per frame and 5.2 outgoing messages per second.
+The check removed its temporary studio on completion.
