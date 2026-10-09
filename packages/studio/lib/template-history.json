@@ -2087,7 +2087,10 @@
    "sections": {
     "AGENTS.md": {
      "(intro)": "214aa46eb3a895d5",
-     "## Layout": "8baf49e4291e7e88",
+     "## Layout": [
+      "8baf49e4291e7e88",
+      "c18362ed28975d81"
+     ],
      "## Apps: one screen, roles and parts": "4db0abe4cdfac09f",
      "## Commands (all through the pinned CLI in node_modules)": "a7f290579585368c",
      "## The site": "0cb8dd9a6f8a0096",

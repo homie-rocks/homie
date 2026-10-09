@@ -67,6 +67,12 @@ export function roomContinued(before, after, serverHosted) {
     : after?.role === 'host';
 }
 
+/** Compare two observations on the same browser clock, including time spent taking screenshots. */
+export function roundClockContinued(before, after) {
+  return !before?.round || !after?.round || before.round.n !== after.round.n
+    || Math.abs((before.round.leftMs - after.round.leftMs) - (after.observedAt - before.observedAt)) < 6000;
+}
+
 /** A wall can leave too little runway; retry the same hold after moving away, never excuse steering faults. */
 export function needsRunway(res) {
   return !res.ok && (res.why === 'barely moved' || res.why?.startsWith('blocked at once'))
@@ -147,6 +153,9 @@ export function judgePresses(rows, presses, size, view) {
   const out = presses.map((p) => {
     const seg = rows.filter((r) => r[0] >= p.a && r[0] <= p.b + 60 && steerable(r));
     if (seg.length < 4) return rows.some((r) => r[0] >= p.a && r[0] <= p.b && finite(r) && r[8]) ? { dir: p.dir, ok: false, blocked: true, busy: true } : { dir: p.dir, ok: false, why: 'no samples' };
+    // The first post-input frame can already show the response. Keep its preceding drawn pose.
+    const before = rows.filter((r) => r[0] < p.a).at(-1);
+    if (before && steerable(before)) seg.unshift(before);
     const u = DIRV[p.dir]; const r0 = seg[0];
     let matchAt = null, after = 0, afterOk = 0, maxYaw = 0, peakAlong = 0, contact = false;
     for (let i = 1; i < seg.length; i++) {
@@ -271,7 +280,7 @@ async function webkit(pw) {
 const frameOf = (h) => h.page.frames().find((f) => f.url().includes('/__game/')) ?? null;
 async function inFrame(h, src, v = null) { const f = frameOf(h); return f ? T(f.evaluate(src), 10_000, v) : v; }
 const shell = (h) => T(h.page.evaluate(() => { const s = window.__shell; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, results: s.results ?? [], facts: s.facts ? { counts: s.facts.counts } : null } : null; }), 8000, null);
-const info = (h) => inFrame(h, '(() => { const p = window.__homiePort; if (!p) return null; const i = p.info(); const n = window.__homieNet; i.net = n ? { snapHzIn: n.stats().snapHzIn, snapHzOut: n.stats().snapHzOut, rtt: n.stats().rtt, promotions: n.stats().promotions } : null; i.hosted = n?.probe?.hosted?.() ?? null; i.tick = n?.probe?.tick?.() ?? null; i.v = p.view; i.size = p.size; i.keys = p.keys; i.thumb = p.thumb; return i; })()');
+const info = (h) => inFrame(h, '(() => { const p = window.__homiePort; if (!p) return null; const i = p.info(); i.observedAt = performance.now(); const n = window.__homieNet; i.net = n ? { snapHzIn: n.stats().snapHzIn, snapHzOut: n.stats().snapHzOut, rtt: n.stats().rtt, promotions: n.stats().promotions } : null; i.hosted = n?.probe?.hosted?.() ?? null; i.tick = n?.probe?.tick?.() ?? null; i.v = p.view; i.size = p.size; i.keys = p.keys; i.thumb = p.thumb; return i; })()');
 const rowsSince = (h, t) => inFrame(h, `(window.__homiePort ? window.__homiePort.rows(${Number(t) || 0}) : [])`, []);
 const frameNow = (h) => inFrame(h, '(window.__homiePort ? window.__homiePort.now() : performance.now())', 0);
 
@@ -298,13 +307,14 @@ async function focusGame(h) {
 
 /* ------------------------------------------------------------------ input */
 
-async function holdKey(h, code, ms) { await h.page.keyboard.down(code); await sleep(ms); await h.page.keyboard.up(code); }
+async function holdKey(h, code, ms, ready) { await h.page.keyboard.down(code); if (ready) await ready(); await sleep(ms); await h.page.keyboard.up(code); }
 
 function thumbAt(h, i) { const t = i?.thumb ?? [0.24, 0.74]; return [Math.round(h.vp.width * t[0]), Math.round(h.vp.height * t[1])]; }
-async function touchDrag(h, from, dir, reach, holdMs) {
+async function touchDrag(h, from, dir, reach, holdMs, ready) {
   const [x0, y0] = from; const u = DIRV[dir];
   await h.touch('touchStart', [{ id: 1, x: x0, y: y0 }]);
   for (let k = 1; k <= 8; k++) { await h.touch('touchMove', [{ id: 1, x: Math.round(x0 + (u[0] * reach * k) / 8), y: Math.round(y0 + (u[1] * reach * k) / 8) }]); await sleep(12); }
+  if (ready) await ready();
   const end = Date.now() + holdMs;
   let w = 0;
   while (Date.now() < end) {
@@ -315,6 +325,31 @@ async function touchDrag(h, from, dir, reach, holdMs) {
   }
   await h.touch('touchEnd', h.touchAll ? [] : [{ id: 1, x: Math.round(x0 + u[0] * reach), y: Math.round(y0 + u[1] * reach) }]);
 }
+/** Timestamp real input delivery, then keep it held until four frames can judge its direction.
+ * The response limit stays 600 ms; slow automation delivery and the thumb's ramp are not game latency. */
+export async function measuredPress(h, how, code, from, dir) {
+  await inFrame(h, `(() => {
+    if (!window.__homieCheckInput) {
+      const state = window.__homieCheckInput = {};
+      addEventListener('keydown', e => { if (state.code === e.code && state.key === null) state.key = performance.now(); }, true);
+      addEventListener('touchmove', () => { state.touch = performance.now(); }, { capture: true, passive: true });
+    }
+    Object.assign(window.__homieCheckInput, { code: ${JSON.stringify(code)}, key: null, touch: null });
+  })()`);
+  let a = null, b = null;
+  const ready = async () => {
+    a = await inFrame(h, `window.__homieCheckInput.${how === 'keys' ? 'key' : 'touch'}`);
+    if (!Number.isFinite(a)) throw new Error('the game frame did not receive the measured input');
+    await sleep(420);
+    const until = Date.now() + 3000;
+    while (Date.now() < until && (await rowsSince(h, a)).length < 4) await sleep(50);
+    b = await frameNow(h);
+  };
+  if (how === 'keys') await holdKey(h, code, 0, ready);
+  else await touchDrag(h, from, dir, 70, 0, ready);
+  return { dir, a, b };
+}
+
 async function swipe(h, dir) {
   const x0 = Math.round(h.vp.width * 0.5); const y0 = Math.round(h.vp.height * 0.55); const u = DIRV[dir]; const reach = Math.round(Math.min(h.vp.width, h.vp.height) * 0.3);
   await h.touch('touchStart', [{ id: 2, x: x0, y: y0 }]);
@@ -407,12 +442,9 @@ async function ownerTests(h, how, log) {
   const presses = [];
   const a0 = await frameNow(h);
   const until = Date.now() + 10_000;
-  for (let k = 0; Date.now() < until; k++) {
+  for (let k = 0; k < alt.length || Date.now() < until; k++) {
     const dir = alt[k % alt.length];
-    const a = await frameNow(h);
-    if (how === 'keys') await holdKey(h, keys[dir], 420); else await touchDrag(h, thumbAt(h, i), dir, 70, 380);
-    const b = await frameNow(h);
-    presses.push({ dir, a, b });
+    presses.push(await measuredPress(h, how, keys[dir], thumbAt(h, i), dir));
     await sleep(170);
   }
   await sleep(200);
@@ -619,11 +651,13 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
         if (!oa.ok || !ob.ok) { row('host-kill', false, { why: 'a browser was never seated' }); row('late-join', null, { why: 'skipped: no room' }); collect(A); collect(B); await close(A); await close(B); }
         else {
           await sleep(3000);
-          const ia = await info(A); const ib = await info(B);
+          const ia = await info(A); let ib = await info(B);
           const serverHosted = ia?.hosted === 'server' && ib?.hosted === 'server';
           if (ia?.role !== 'host' && !serverHosted) row('host-kill', null, { why: `the first browser was not the host (it was ${ia?.role}); skipped`, ia: ia?.role, ib: ib?.role });
           else {
             await shot(B, 'life-before');
+            // Screenshot encoding may span a round on a software renderer. Observe the room we actually leave.
+            ib = await info(B);
             const pids = A.pid ? [A.pid, ...descendants(A.pid)] : [];
             const killAt = Date.now();
             for (const p of pids) { try { process.kill(p, 'SIGKILL'); } catch { /* gone */ } }
@@ -635,7 +669,7 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
             await sleep(1500);
             const ib2 = await info(B);
             const sameRound = ib?.round && ib2?.round && (ib2.round.n === ib.round.n || (ib.round.phase === 'over' || ib.round.leftMs < 3000));
-            const clockOk = ib?.round && ib2?.round && ib2.round.n === ib.round.n ? Math.abs((ib.round.leftMs - ib2.round.leftMs) - (Date.now() - killAt + 0)) < 6000 : true;
+            const clockOk = roundClockContinued(ib, ib2);
             const running = (ib2?.frames ?? 0) > (ibAfter?.frames ?? 0) && (ib2?.net?.snapHzOut ?? 0) >= 0;
             await shot(B, 'life-after-kill');
             row('host-kill', Boolean(promoted !== null && promoted <= 5000 && sameRound && clockOk && running), { hosted: serverHosted ? 'server' : 'browser', promotedMs: serverHosted ? null : promoted, continuedMs: serverHosted ? promoted : null, roundBefore: ib?.round ?? null, roundAfter: ib2?.round ?? null, why: promoted === null ? (serverHosted ? 'the server room stopped after a browser left' : 'nobody took over as host within 15 s') : promoted > 5000 ? `the phone took over after ${promoted} ms (over 5 s)` : !sameRound ? 'the round did not continue (a new round started)' : !clockOk ? 'the round clock jumped at the takeover' : undefined });

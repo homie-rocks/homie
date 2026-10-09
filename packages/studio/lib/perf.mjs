@@ -194,6 +194,17 @@ export function renderCostOf(samples) {
   return { samples: Math.max(calls.length, tris.length), drawCalls: sum(calls), triangles: sum(tris) };
 }
 
+/** Presence in the last drawn frame is independent of its frame rate. Runs measure frame timing separately. */
+export function gameReadiness() {
+  const p = window.__homiePort;
+  let self = null;
+  if (p && p.view !== 'board') {
+    const rows = p.rows(); const last = rows[rows.length - 1];
+    self = Boolean(last && Number.isFinite(last[1]) && Number.isFinite(last[2]));
+  }
+  return { first: window.__perf?.first?.() ?? null, port: Boolean(p), view: p?.view ?? null, self };
+}
+
 /** Open one browser of a run on the play page, instrumented, and wait until it is playable. */
 async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
   const dev = PERF_DEVICES[device];
@@ -243,12 +254,7 @@ async function openPlayer(puppeteer, chrome, device, playUrl, label, log, cpu) {
       shell = await T(page.evaluate(() => { const s = window.__shell; const a = s?.arrival; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, arrival: a ? { phase: a.phase, lookMs: a.lookMs, liftedMs: a.liftedMs, by: a.by, mode: a.mode, explicitMs: a.explicitMs, lateMs: a.lateMs } : null } : null; }), 5000);
       const now = Date.now();
       if (seatedAt === null && shell?.room && Number.isInteger(shell.seat) && shell.role) seatedAt = now;
-      const g = await inGame(h, () => {
-        const p = window.__homiePort;
-        let self = null;
-        if (p && p.view !== 'board') { const r = p.rows(p.now() - 400); const last = r[r.length - 1]; self = last ? Number.isFinite(last[1]) : false; }
-        return { first: window.__perf?.first?.() ?? null, port: Boolean(p), view: p?.view ?? null, self };
-      });
+      const g = await inGame(h, gameReadiness);
       // The play page's arrival card (0.26.0) covers the game until the game says it is playable: not playable before.
       const lifted = !shell?.arrival || shell.arrival.phase === 'done';
       if (seatedAt !== null && g?.first !== null && g?.first !== undefined && lifted) {

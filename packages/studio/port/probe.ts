@@ -123,7 +123,8 @@ export function exposePort(net: Netplay<unknown, unknown, unknown> | null, opts:
     rows.push([t, me ? me.x : NaN, me ? me.y : NaN, b.right[0], b.right[1], b.up[0], b.up[1], m, busy]);
     if (rows.length > RING) rows.splice(0, rows.length - RING);
   };
-  const loop = (t: number): void => { sample(t); requestAnimationFrame(loop); };
+  // The position is sampled now; rAF may carry an earlier timestamp on a busy renderer.
+  const loop = (): void => { sample(performance.now()); requestAnimationFrame(loop); };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(loop);
   const probe: PortProbe = {
     v: 1,

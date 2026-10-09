@@ -2508,6 +2508,8 @@ const releaseTags = (() => {
   const own = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8')).version.split('.').map(Number);
   const older = (t) => { const v = version(t); return v[0] - own[0] || v[1] - own[1] || v[2] - own[2]; };
   return r.stdout.split('\n').map((t) => t.trim()).filter((t) => RELEASE_TAG.test(t) && older(t) < 0)
+    // Tags are shared by local worktrees: an unpublished sibling branch is not a released predecessor.
+    .filter((t) => spawnSync('git', ['merge-base', '--is-ancestor', t, 'HEAD'], { cwd: ROLLING_REPO }).status === 0)
     .sort((x, y) => { const a = version(x), b = version(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2] || (x < y ? 1 : -1); });
 })();
 const rollingFrom = [...new Set([releaseTags[0], ...['0.33.0', '0.32.1'].map((v) => releaseTags.find((t) => t.endsWith(`-studio-${v}`)))].filter(Boolean))];
