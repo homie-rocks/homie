@@ -632,6 +632,10 @@ export default {
   },
 };
 
+let studioTools = async () => [];
+/** Studio-authored Worker code, loaded only on the MCP surface. */
+export function useTools(load) { studioTools = load; }
+
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -642,6 +646,11 @@ async function route(request, env, ctx) {
   // Every game (for a game's own pages and the owner's), and the public ones (every list, the rooms, the manifest).
   const getAll = () => (catP ??= catalogue(env, url.origin).then((cat) => named(cat, env)));
   const getCat = () => (pubP ??= Promise.all([getAll(), settingsOf(env)]).then(([cat, settings]) => publicCatalogue(cat, settings, env)));
+
+  if (path === '/mcp' || path.startsWith('/hooks/tools/') || path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-') || path === '/_studio/office/connections') {
+    const { remoteMcp } = await import('./mcp.mjs');
+    return remoteMcp(request, env, ctx, { catalogueOf: getAll, definitions: await studioTools() });
+  }
 
   // "Connect this chat" (the template's first-run band): the directory's setup page, for this site's address.
   if (path === '/_studio/connect' && read) {
@@ -1911,6 +1920,23 @@ export class Table {
       // A line older than the window is in the room's kept history, when it keeps one (0.29.0).
       const r = room.chatLog.find((x) => x.id === id) ?? (room.chatRules().history > 0 ? await keptLine(this.env, this.game, this.code, id) : null);
       return json({ ok: Boolean(r), line: r ? { id: r.id, kind: r.kind, text: r.text ?? null, glyph: r.glyph ?? null, name: r.name, seat: r.seat, at: r.at, by: r.by, player: r.from?.player ?? null, owner: Boolean(r.owner), mod: Boolean(r.mod) } : null });
+    }
+    if (url.pathname === '/__mcp-event') {
+      const ctl = await request.json().catch(() => null);
+      const why = await verifyControl(this.env, ctl, { game: this.game, room: this.code }, this.seen);
+      if (why || ctl.op !== 'mcp-event' || !/^external:[a-z][a-z0-9_-]{0,40}$/.test(ctl.args?.event ?? '')) return json({ ok: false, error: 'refused' }, 403);
+      if (!room.live().length) return json({ ok: false, error: 'room empty; use records for lasting changes' }, 409);
+      const event = { t: 'ev', from: null, k: ctl.args.event, d: ctl.args.data, external: true };
+      if (room.server) room.toServer(event);
+      for (const client of room.live()) room.send(client, event);
+      return json({ ok: true });
+    }
+    if (url.pathname === '/__mcp') {
+      const ctl = await request.json().catch(() => null);
+      const why = await verifyControl(this.env, ctl, { game: this.game, room: this.code }, this.seen);
+      if (why || ctl.op !== 'mcp-seat') return json({ ok: false, error: 'refused' }, 403);
+      const result = await (await import('./mcp-room.mjs')).roomSeat(this, room, ctl);
+      return json(result, result.ok ? 200 : 403);
     }
     if (url.pathname === '/__office') {
       const ctl = await request.json().catch(() => null);

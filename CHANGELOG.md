@@ -17,6 +17,28 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.39.0] - 2026-10-09
+
+**Plugin 0.40.0**
+
+Your studio has its own MCP server. Connect your AI with one browser approval and add tools for the work your studio does.
+
+### Added
+
+- Connect Claude, ChatGPT or Grok to your studio's own `/mcp` address. Use your existing studio account; there is no key to find or copy. Client setup and workspace policies still apply.
+- Let your AI use the office, app records, shared parts and marked guide seats in rooms. Staff keep their own app permissions. Destructive office controls still wait for your confirmation.
+- Add a typed tool with `homie-studio tool new`, test it with `tool call` and share its code as a part. Tools can also supply prompts and signed inbound integrations; readable app records are resources.
+- Review AI connections and recent tool calls in the office. Revoke a connection there. Role checks, validated input and configurable call limits apply on the server.
+
+### Changed
+
+- Worker builds keep MCP libraries in separate modules, loaded when that surface is used. Ordinary page traffic performs no MCP storage work.
+
+### Upgrade notes
+
+- Ask your AI to upgrade and build your studio. The build writes Worker modules and the normal deploy applies the new connection and audit tables. No separate Homie service or Cloudflare resource is needed.
+- Studio tools are trusted code in your Worker. Review tools received as parts before adding them. The tool context does not expose raw credentials.
+
 ## [0.38.0] - 2026-10-09
 
 **Plugin 0.39.0**

@@ -1,3 +1,4 @@
+import { toolIdentity } from './tool-identity.mjs';
 /** Lasting app records in the studio's own D1. Room hosts never authorize writes. */
 import { appRole, recordProblem } from './app-format.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
@@ -38,6 +39,13 @@ export async function appAccess(request, env, meta, url) {
   if (!declared) return { ok: false, status: 404, error: 'unknown role' };
   if (!declared.signIn) return { ok: true, role, can: declared.can };
   if (!env.DB) return { ok: false, status: 503, error: 'app roles need the studio database' };
+  const caller = toolIdentity(request);
+  if (caller) {
+    if (caller.owner) return { ok: true, role, can: declared.can };
+    if (!caller.id) return { ok: false, status: 401, error: 'sign in to this studio' };
+    const grant = await env.DB.prepare('SELECT player FROM app_roles WHERE app = ?1 AND role = ?2 AND player = ?3').bind(meta.id, role, caller.id).first();
+    return grant ? { ok: true, role, can: declared.can } : { ok: false, status: 403, error: 'this account has no role grant' };
+  }
   const link = await env.DB.prepare('SELECT token FROM app_role_links WHERE app = ?1 AND role = ?2').bind(meta.id, role).first();
   if (!link || link.token !== url.searchParams.get('access')) return { ok: false, status: 404, error: 'private role link required' };
   if (await isOwner(request, env)) return { ok: true, role, can: declared.can };

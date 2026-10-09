@@ -1,3 +1,4 @@
+import { MCP_MIGRATION, MCP_MIGRATION_FILE } from '../worker/mcp-store.mjs';
 import { APPS_MIGRATION, APPS_MIGRATION_FILE } from '../worker/app-records.mjs';
 import { PURCHASE_MIGRATION, PURCHASE_MIGRATION_FILE, PURCHASE_STATE, PURCHASE_STATE_FILE } from '../worker/purchase-schema.mjs';
 /**
@@ -67,8 +68,8 @@ export function slugify(name) {
  * the binding names and keep it linked.
  */
 export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null }) {
-  const at = layout === 'site' ? { schema: '../node_modules', main: 'src/worker.mjs', dist: './dist', migrations: 'migrations' }
-    : { schema: 'node_modules', main: 'site/src/worker.mjs', dist: './site/dist', migrations: 'site/migrations' };
+  const at = layout === 'site' ? { schema: '../node_modules', main: 'src/runtime/worker.js', dist: './dist', migrations: 'migrations' }
+    : { schema: 'node_modules', main: 'site/src/runtime/worker.js', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
   const config = {
     $schema: `${at.schema}/wrangler/config-schema.json`,
@@ -80,7 +81,8 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // subdomain) reaches it instead of failing with 1042.
     // `disallow_eval_during_startup`: no code is made from a string while the Worker loads (Cloudflare never allows it
     // later). A game's rules run in this Worker (NETPLAY.md section 29), and nothing in them is ever made from text.
-    compatibility_flags: ['global_fetch_strictly_public', 'disallow_eval_during_startup', ...(paidParts ? ['nodejs_compat'] : [])],
+    no_bundle: true, find_additional_modules: true, rules: [{ type: 'ESModule', globs: ['**/*.js'], fallthrough: true }],
+    compatibility_flags: ['nodejs_compat', 'global_fetch_strictly_public', 'disallow_eval_during_startup'],
     ...(paidParts ? { alias: { '@homie-rocks/studio/worker': '@homie-rocks/studio/worker/selling' }, triggers: { crons: ['*/5 * * * *'] }, ratelimits: [partsRateLimit ?? { name: 'PURCHASE_RATE_LIMITER', namespace_id: '1001', simple: { limit: 60, period: 60 } }] } : {}),
     workers_dev: true,
     preview_urls: true,
@@ -151,6 +153,8 @@ An app lives in \`apps/<id>/app.json\` and \`src/\`. Make one with \`homie-studi
 An app is ONE screen that morphs with context: camera moves, panels unfold, its roles see and do different things, and parts plug into the scene. No page-to-page navigation or menus of links inside it. Use all the same engine packages and media skills as games (camera, geom, props, render, postfx, fx, audio, input, ui-world; style, art, models, animate, music, sound, video). It can be fully 3D and wild while remaining useful and legible.
 
 Declare roles, surfaces, words and lasting record collections in app.json. Netplay's host is not a staff permission. Use \`@homie-rocks/studio/apps\` for authorized lasting records and \`@homie-rocks/studio/links\` for ticket links, QR and HTTP-safe IDs. Staff use private role links plus existing account grants; keep private records out of public collections. Look for engine mechanisms and shared parts before writing a component. Credit licences; sharing is optional and separate from selling.
+
+Your studio also serves MCP at \`/mcp\`. Staff connect their own AI with their existing account and one browser approval; never ask them for a key. Add business actions with \`homie-studio tool new <name> --app <id>\`, keep their declared role narrow, and reuse the app's existing record IDs, field formats and versions. Test owner, staff and public calls locally. Read \`node_modules/@homie-rocks/studio/tools/TOOLS.md\` and the Homie plugin's \`tools\` skill.
 
 Build normally, run \`homie-studio dev --lan\`, then \`homie-studio check <id> --url <origin>\`: the app check proves an actual action across a wall and two phones plus reconnect. The public screen is \`/<id>/open\`, the wall \`/<id>/tv\`. Customer apps use the same \`standalone\` build for desktop/iOS/Android; its existing sign-in and store limitations still apply. See \`node_modules/@homie-rocks/studio/apps/APPS.md\`.
 
@@ -645,6 +649,8 @@ anything here wins. The whole list is in \`node_modules/@homie-rocks/studio/site
 `;
 
 const GITIGNORE = `node_modules/
+site/src/runtime/
+site/src/tools/
 # This computer's own state: the site's workers.dev address (it names the Cloudflare account, often after its owner).
 .studio/
 # This person's own Claude Code settings for this studio (the status line, for one).
@@ -734,11 +740,12 @@ export function studioFiles({ name, slug, homie, template = false }) {
     'site/README.md': SITE_README,
     'site/src/worker.mjs': `// This studio's site: pages, public rooms (Table + Lobby Durable Objects), D1, and R2 once storage is added.
 // The code is @homie-rocks/studio's, pinned in package.json, so an update never changes a published game by surprise.
-import { hostRules } from '@homie-rocks/studio/worker';
+import { hostRules, useTools } from '@homie-rocks/studio/worker';
 // The rules of this studio's games that run on the server (written by homie-studio build; empty until a game has some).
 import rules from './rules/index.mjs';
 
 hostRules(rules);
+useTools(async () => (await import('./tools/index.mjs')).default);
 export { default, Table, Lobby } from '@homie-rocks/studio/worker';
 `,
     'site/src/rules/index.mjs': rulesIndex([]),
@@ -755,6 +762,7 @@ export { default, Table, Lobby } from '@homie-rocks/studio/worker';
     [`site/migrations/${SHOP_STATEMENTS_FILE}`]: SHOP_STATEMENTS,
     [`site/migrations/${SHOP_LINES_FILE}`]: SHOP_LINES,
     [`site/migrations/${APPS_MIGRATION_FILE}`]: APPS_MIGRATION,
+    [`site/migrations/${MCP_MIGRATION_FILE}`]: MCP_MIGRATION,
     [`site/migrations/${LOUNGE_MIGRATION_FILE}`]: LOUNGE_MIGRATION,
     'wrangler.jsonc': wranglerConfig({ worker, name, d1: studio.cloudflare.d1, r2: studio.cloudflare.r2, layout: 'root' }),
     '.claude/skills/.gitkeep': '',
@@ -926,13 +934,18 @@ function ensurePartsStateMigration(root) {
   return `site/migrations/${PURCHASE_STATE_FILE}`;
 }
 
+function ensureMcpMigration(root) {
+  const file=join(root,'site','migrations',MCP_MIGRATION_FILE);
+  if(existsSync(file))return null;
+  mkdirSync(dirname(file),{recursive:true});writeFileSync(file,MCP_MIGRATION);return `site/migrations/${MCP_MIGRATION_FILE}`;
+}
 export function ensureMigrations(root) {
-  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root)].filter(Boolean);
+  return [ensureStatsMigration(root), ensurePlayersMigration(root), ensureOfficeMigration(root), ensureServersMigration(root), ensureChatMigration(root), ensureShopMigration(root), ensureLoungeMigration(root), ensureShopReservations(root), ensureShopStatements(root), ensureShopLines(root), ensureAppsMigration(root), ensurePartsMigration(root), ensurePartsStateMigration(root), ensureMcpMigration(root)].filter(Boolean);
 }
 
 /** What a migration file the template added is for, in a few words (deploy and dev say it). */
 export function migrationWord(file) {
-  return /studio_apps/.test(file) ? 'apps: lasting records and signed-in role grants' : /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
+  return /studio_mcp/.test(file) ? 'AI connections and tool call history' : /studio_apps/.test(file) ? 'apps: lasting records and signed-in role grants' : /lounge/.test(file) ? 'the Lounge and kept chat: play nights, moderators, and what was said only where an owner turns history on' : /shop/.test(file) ? 'the shop: orders, what players own, refunds and referral books (paid sales wait until shop.json and the studio\'s Stripe connection are ready)' : /players/.test(file) ? 'player accounts and cloud saves' : /chat/.test(file) ? 'room chat: the owner\'s chat rules and players\' reports (never the chat itself)' : /servers/.test(file) ? 'servers and agent seats: room pools with their own rules, AI passes' : /office/.test(file) ? 'the back office: launch states, invites, the owner\'s controls' : 'the studio\'s own stats: counts, never tracks';
 }
 
 /**

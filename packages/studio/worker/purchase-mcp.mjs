@@ -1,9 +1,9 @@
 import { purchaseResponse } from './purchase-response.mjs';
 import { machineCapabilities } from './payment-capabilities.mjs';
 /** The SDK owns protocol negotiation, JSON-RPC errors and stateless HTTP transport. */
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { Server } from 'mcp-purchase-sdk/server/index.js';
+import { WebStandardStreamableHTTPServerTransport } from 'mcp-purchase-sdk/server/webStandardStreamableHttp.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from 'mcp-purchase-sdk/types.js';
 import { machineResource } from './purchase-machine.mjs';
 export const purchaseSchema = {
   type: 'object', required: ['kind', 'resource', 'version', 'buyer', 'claim', 'offerVersion'],

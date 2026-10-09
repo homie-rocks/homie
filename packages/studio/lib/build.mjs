@@ -491,6 +491,7 @@ export function orderGames(games, order, log = () => {}) {
 export async function build(root, { only = null, log = () => {}, deploy = process.env.WORKERS_CI === '1', maps = false, types = false, beforePublish = async () => {}, longCheck = false } = {}) {
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
+  await (await import('./tools-build.mjs')).buildTools(root, esbuild);
   // The shop first (shop/SHOP.md): invalid shop settings stop the build before anything is built.
   const shop = shopForBuild(root, { log });
   const live = join(root, 'site', 'dist');
@@ -689,6 +690,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
       ...(audienceOf(studio) !== 'general' ? { audience: audienceOf(studio) } : {}),
       ...(studio.referrals === false ? { referrals: false } : {}),
       ...(lounge ? { lounge } : {}),
+      ...(studio.mcp ? { mcp: studio.mcp } : {}),
       build: buildInfo(root),
     },
     games: rows,
@@ -723,6 +725,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
   // site, never before: a game that did not build has left both as they were.
   await beforePublish();
   const hosted = (await rulesBuild()).writeRules(root, ruled, all.filter((g) => rulesOf.get(g.id)?.host === 'server').map((g) => g.id));
+  await (await import('./worker-build.mjs')).buildWorker(root, esbuild);
   // All of it is there: now, and only now, it becomes site/dist (lib/stage.mjs).
   const swapped = swapIn(dist, live);
   return {

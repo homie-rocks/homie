@@ -1,4 +1,6 @@
 node_modules/
+site/src/runtime/
+site/src/tools/
 # This computer's own state: the site's workers.dev address (it names the Cloudflare account, often after its owner).
 .studio/
 # This person's own Claude Code settings for this studio (the status line, for one).

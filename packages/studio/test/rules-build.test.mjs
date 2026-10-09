@@ -43,9 +43,9 @@ function studio(name) {
 
 test('a new studio\'s Worker imports the table of its server-hosted games, and its config turns off evaluation at startup', () => {
   const dir = studio('fresh');
-  assert.match(read(dir, 'site/src/worker.mjs'), /import \{ hostRules \} from '@homie-rocks\/studio\/worker';\n[^\n]*\nimport rules from '\.\/rules\/index\.mjs';\n\nhostRules\(rules\);\nexport \{ default, Table, Lobby \} from '@homie-rocks\/studio\/worker';/);
+  assert.ok(read(dir, 'site/src/worker.mjs').includes("hostRules(rules);\nuseTools(async () => (await import('./tools/index.mjs')).default);\nexport { default, Table, Lobby } from '@homie-rocks/studio/worker';"));
   assert.match(read(dir, 'site/src/rules/index.mjs'), /export default \{\};\n$/);
-  assert.match(read(dir, 'wrangler.jsonc'), /"compatibility_flags": \[\s*"global_fetch_strictly_public",\s*"disallow_eval_during_startup"\s*\]/);
+  assert.match(read(dir, 'wrangler.jsonc'), /"compatibility_flags": \[\s*"nodejs_compat",\s*"global_fetch_strictly_public",\s*"disallow_eval_during_startup"\s*\]/);
   // coin-dash is an example, shown as one, and can be copied by its name.
   const list = starters();
   assert.deepEqual(list.find((s) => s.id === 'coin-dash').example, true);

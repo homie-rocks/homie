@@ -91,7 +91,7 @@ test('the template: Deploy to Cloudflare and Workers Builds ready, and the repos
   const made = out(run(['new', dir, '--name', 'My Studio', '--no-install', '--template'], scratch));
   assert.equal(made.ok, true, JSON.stringify(made));
   const config = jsonc(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8'));
-  assert.equal(config.main, 'site/src/worker.mjs');
+  assert.equal(config.main, 'site/src/runtime/worker.js');
   assert.equal(config.assets.directory, './site/dist');
   assert.equal(config.d1_databases[0].binding, 'DB');
   assert.equal(config.d1_databases[0].migrations_dir, 'site/migrations');
