@@ -2163,8 +2163,8 @@ Small errors fade as a visual offset with a nominal 100 ms blend. Overlapping sm
 queue their individual fades, so their accumulated offset is not erased all at once. A disagreement
 beyond three ticks of travel plays the corrected path from the snapshot at 1.25 times speed,
 showing the hold and slide of a knock. Offset fades are limited by progress along the drawn
-path, so a late-input correction cannot erase more travel than the player makes; when movement
-stops after catch-up, the remaining fade finishes over the configured blend time. An effect on the body waits for its drawn tick. Placements, epoch changes and clock rebases
+path and the body's declared maximum movement speed, so a late-input correction cannot erase more travel than the player makes or compound a fast knock's catch-up speed. Catch-up preserves the drawn pose when a snapshot replaces its history, and uses the next movement preview when its next whole-tick history entry is not yet available. When movement
+stops after catch-up, the remaining fade follows the configured blend time, still bounded by that speed. An effect on the body waits for its drawn tick. Placements, epoch changes and clock rebases
 jump deliberately. Other bodies keep the helper's adaptive interpolation, with one send period
 as the default minimum delay. The `room.predict` settings customize these defaults.
 

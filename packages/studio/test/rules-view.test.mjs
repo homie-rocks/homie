@@ -41,6 +41,11 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{player:true,motion:{jumps:f.u8()},input:{ax:f.i8(),jump:f.press()},body:{shape:'circle',radius:.5,maxSpeed:6}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){if(i.jump)b.motion.jumps+=1;b.pos={x:b.pos.x+i.ax/127*6*c.dt,y:b.motion.jumps,z:0};}});`);
+    } else if (runaway === 'push') {
+      writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bump:{}}},entities:{runner:{player:true,motion:{push:f.ticks()},input:{ax:f.i8()},body:{shape:'circle',radius:.5,maxSpeed:6},commands:{bump(world,self){self.motion.push=world.ticks(.4);}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:0,z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:12,z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
   }
   const g = { ...json('game.json'), room: { host: mode, offline, tickHz }, dir };
@@ -1119,4 +1124,28 @@ for (const hz of [20, 60]) for (const seed of [417, 1, 42, 43, 60, 2026]) test(`
   a.input({ax:0}); await clock.wait(3000);
   const server = r.host.core.snapshot()[1].find(e=>e[9]===a.seat)[3][0];
   assert.ok(Math.abs(a.me.pos.x-server)<.001,'the eased path converges to server truth after stopping');
+});
+
+for (const hz of [20, 30, 60]) for (const delay of [50, 150, 300]) for (const ax of [0, 127]) for (const phase of [0, 19]) test(`prediction: unseen pushes stay continuous on uneven frames at ${hz} Hz, ${delay} ms, input ${ax}, phase ${phase}`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, hz, 'push');
+  const clock = virtualTime(t);
+  let rng = 417;
+  const random = () => { rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0; return rng / 4294967296; };
+  const lag = m => ['in', 'snap'].includes(m.t) ? random() < .1 ? null : delay / 2 * (.75 + random() * .5) : delay / 2;
+  const r = rig(L, compiled, false, lag, lag); t.after(() => r.stop());
+  const other = openRoom({ timers: false, net: { config: cfg('Bo'), WebSocketImpl: r.socket(), post: null } }); t.after(() => other.close());
+  await clock.wait(200);
+  const a = openRoom({ timers: false, net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } }); t.after(() => a.close());
+  for (let n = 0; n < 1500; n++) { await clock.wait(16); const input = { ax: n < 750 ? 0 : ax }; other.input(input); a.input(input); void other.me; void a.me; }
+  await clock.wait(phase);
+  a.command('bump'); let previous = a.me.pos, probeBefore = globalThis.__homieNet.probe.prediction();
+  const bad = [];
+  for (let n = 0; n < 120; n++) {
+    const ms = [28, 5, 17, 33][n % 4]; await clock.wait(ms);
+    const pos = a.me.pos, distance = Math.hypot(pos.x - previous.x, pos.y - previous.y);
+    if (distance > 21 * ms / 1000 + .05) bad.push({ n, ms, distance, previous, pos, probeBefore, probe: globalThis.__homieNet.probe.prediction() });
+    previous = pos; probeBefore = globalThis.__homieNet.probe.prediction();
+  }
+  assert.ok(a.me.pos.y > 2, 'the authoritative push wins');
+  assert.deepEqual(bad, [], 'catch-up and its blend form one continuous path');
 });

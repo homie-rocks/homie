@@ -88,16 +88,18 @@ test('the two-client smoke verdict: no seat, two rooms, alone offline and one se
 });
 
 /** A stub site: a play page with a shell that seats each visitor, and a game frame that moves a box by its own clock. */
-function stubSite() {
+function stubSite({ status = null, keyed = false } = {}) {
   let seat = 0;
   const game = `<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:#102040}canvas{display:block}</style><canvas width="640" height="360"></canvas><script>
     const t0 = performance.now(); let frames = 0; const rows = [];
     const c = document.querySelector('canvas'); const g = c.getContext('2d');
-    const loop = () => { frames++; const x = (performance.now() - t0) * 0.1; rows.push([performance.now(), x, 50, 1, 0, 0, -1, 0, 0]); if (rows.length > 600) rows.shift();
+    let held = false; addEventListener('keydown', () => { held = true; }); addEventListener('keyup', () => { held = false; });
+    let walked = 0;
+    const loop = () => { frames++; if (held) walked++; const x = ${keyed} ? walked : (performance.now() - t0) * 0.1; rows.push([performance.now(), x, 50, 1, 0, 0, -1, 0, 0]); if (rows.length > 600) rows.shift();
       g.fillStyle = '#102040'; g.fillRect(0, 0, 640, 360); g.fillStyle = '#ffcc55'; g.fillRect(x % 600, 40, 30, 30); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
     window.__homiePort = { view: 'top', rows: (s = 0) => rows.filter((r) => r[0] >= s), now: () => performance.now(), info: () => ({ frames, round: { n: 1, phase: 'live', leftMs: 60000 }, extra: { drawCalls: 7, triangles: 120 } }) };
-    window.__homieNet = { connected: true, offline: false };
+    window.__homieNet = { connected: true, offline: false, ${status ? `probe: { hosted: () => 'server', status: () => ${JSON.stringify(status)}, tick: () => 0 }` : ''} };
   </script>`;
   const server = createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
@@ -124,6 +126,7 @@ test('shoot against a stub site: two clients seated in one private room, then fr
     assert.equal(r.ready.ready, true);
     assert.equal(r.frames, 6);
     const rec = JSON.parse(readFileSync(join(out, 'shoot.json'), 'utf8'));
+    assert.equal(rec.ok, true, 'the saved receipt carries the final verdict');
     assert.equal(rec.rows.length, 6);
     for (const row of rec.rows) assert.ok(existsSync(join(out, row.file)), row.file);
     // The claim: each frame is exactly 1/30 s of the game's own clock later than the last, whatever the wall clock
@@ -136,4 +139,19 @@ test('shoot against a stub site: two clients seated in one private room, then fr
     assert.ok(!readFileSync(join(out, 'frame-0001.png')).equals(readFileSync(join(out, 'frame-0006.png'))), 'the pictures differ: the box moved');
     assert.match(r.limits, /NOT stepped: the room's socket/);
   } finally { await site.close(); }
+});
+
+test('shoot holds input in the game iframe and refuses pictures of rules that never started', { skip: findChrome() ? false : 'no Chrome on this machine', timeout: 240_000 }, async () => {
+  for (const status of [null, 'offline']) {
+    const site = await stubSite({ status, keyed: true });
+    try {
+      const out = join(scratch, `input-${status ?? 'live'}`);
+      const r = await shoot({ url: site.url, game: 'g', frames: 4, fps: 30, hold: 'ArrowRight', out });
+      const rec = JSON.parse(readFileSync(join(out, 'shoot.json'), 'utf8'));
+      assert.ok(rec.rows.at(-1).x > rec.rows[0].x, 'the iframe received the held key');
+      assert.equal(r.ok, status === null);
+      assert.equal(rec.ok, r.ok);
+      if (status) assert.match(r.why, /server-only build needs its room/);
+    } finally { await site.close(); }
+  }
 });

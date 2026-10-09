@@ -67,20 +67,22 @@ test('Chrome prediction: delay, jitter and loss at all supported tick rates and 
             const context=await browser.createBrowserContext();contexts.push(context);const page=await context.newPage();pages.push(page);
             await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.waitForFunction('window.openRoom');
             await page.evaluate(n=>{
-              window.room=openRoom({net:{config:{v:1,url:location.origin.replace('http','ws')+'/socket',room:'r',device:'desk',want:'play',name:'P'+n},post:null}});
+              window.room=openRoom({screenBasis:n===1?()=>({right:[1,0],up:[0,-1]}):undefined,net:{config:{v:1,url:location.origin.replace('http','ws')+'/socket',room:'r',device:'desk',want:'play',name:'P'+n},post:null}});
               window.answers=[];room.on('answer',e=>answers.push({n:e.n,at:Date.now()}));
               window.samples=[];window.latencies=[];window.latencyFrames=[];window.pendingPaint=null;window.dx=0;
               const ctx=document.querySelector('canvas').getContext('2d');
-              function frame(t){room.input({ax:dx,ay:0});const me=room.me;
+              function frame(t){if(window.latePaint && ++window.paintN%2===0){const until=performance.now()+window.latePaint;while(performance.now()<until){}}room.input({ax:dx,ay:0});const me=room.me;const at=performance.now();
                 let other=null;room.each('runner',e=>{if(!e.mine)other=e.pos.x});
                 if(me){ctx.clearRect(0,0,800,600);ctx.fillRect(400+me.pos.x%300,300+me.pos.y%250,12,12);
                   if(pendingPaint)pendingPaint.frames++;
                   if(pendingPaint&&Math.abs(me.pos.x-pendingPaint.x)>0.00001){latencyFrames.push(pendingPaint.frames);latencies.push(performance.now()-pendingPaint.at);pendingPaint=null;}
-                  samples.push({t,x:me.pos.x,y:me.pos.y,other,prediction:__homieNet.probe.prediction()});}
+                  samples.push({t,at,x:me.pos.x,y:me.pos.y,other,prediction:__homieNet.probe.prediction()});}
                 requestAnimationFrame(frame);
               }requestAnimationFrame(frame);
               window.change=()=>{const me=room.me;samples=[];dx=127;pendingPaint={x:me.pos.x,at:performance.now(),frames:0};room.input({ax:127,ay:0});};
             },n);
+            // Two cases deliberately run alternating callbacks late, as a busy software renderer does.
+            if (n === 1 && mode === 'server' && delay === 50 && ((hz === 20 && loss === 0.02) || (hz === 30 && loss === 0.1))) await page.evaluate(ms=>{window.latePaint=ms;window.paintN=0;}, hz === 20 ? 12 : 21);
             await page.waitForFunction('room.me && room.status === "playing"',{timeout:15000});
           }
           await sleep(12000);
@@ -88,10 +90,16 @@ test('Chrome prediction: delay, jitter and loss at all supported tick rates and 
           for(const page of pages) await page.evaluate(()=>change());
           await sleep(12000);
           const ordinary=await pages[1].evaluate(()=>({latencies,latencyFrames,samples,prediction:__homieNet.probe.prediction()}));
+          const portBefore = await pages[1].evaluate(()=>__homiePort.rows().at(-1));
           await pages[1].evaluate(()=>room.command('bump'));await sleep(1800);
           const after=await pages[1].evaluate(()=>({prediction:__homieNet.probe.prediction(),y:room.me.pos.y,samples:samples.slice()}));
+          const portAfter = await pages[1].evaluate(()=>__homiePort.rows().at(-1));
+          const screenDown = -((portAfter[1]-portBefore[1])*portBefore[5] + (portAfter[2]-portBefore[2])*portBefore[6]);
+          assert.ok(screenDown > 1, 'a downward push in a Y-down canvas is reported downward by the rules probe');
           const pushed=after.samples.filter(s=>s.t>=ordinary.samples.at(-1).t);
-          const pushSteps=pushed.slice(1).map((s,i)=>({distance:Math.hypot(s.x-pushed[i].x,s.y-pushed[i].y),ms:s.t-pushed[i].t}));
+          // The pose uses performance.now(), not rAF's earlier frame timestamp. Judge its speed on
+          // the same clock: a late callback can sample 29 ms of movement in a nominal 16.7 ms frame.
+          const pushSteps=pushed.slice(1).map((s,i)=>({distance:Math.hypot(s.x-pushed[i].x,s.y-pushed[i].y),ms:s.at-pushed[i].at, frameMs:s.t-pushed[i].t, before:{x:pushed[i].x,y:pushed[i].y,prediction:pushed[i].prediction}, after:{x:s.x,y:s.y,prediction:s.prediction}}));
           const deltas=ordinary.samples.slice(1).map((s,i)=>s.x-ordinary.samples[i].x);
           const others=ordinary.samples.slice(1).map((s,i)=>s.other-ordinary.samples[i].other);
           const gaps=ordinary.samples.slice(1).map((s,i)=>s.t-ordinary.samples[i].t);
@@ -121,7 +129,7 @@ test('Chrome prediction: delay, jitter and loss at all supported tick rates and 
           assert.equal(row.rebases,0,'the calibrated clock stays steady');
           assert.equal(row.snaps,0,'ordinary corrections and an unseen push do not teleport');
           assert.ok(after.y>12,'the authoritative collision wins');
-          assert.ok(pushSteps.every(s=>s.distance<=21*s.ms/1000+.05),'the unseen push follows a continuous path: '+JSON.stringify(row));
+          assert.ok(pushSteps.every(s=>s.distance<=21*s.ms/1000+.05),'the unseen push follows a continuous path: '+JSON.stringify({ ...row, failed: pushSteps.filter(s=>s.distance>21*s.ms/1000+.05).slice(0,5) }));
         }finally{
           for(const c of contexts)await c.close();host?.stop();clearInterval(beat);for(const timer of timers)clearTimeout(timer);
           for(const s of sockets.clients)s.terminate();sockets.close();server.closeAllConnections();await new Promise(r=>server.close(r));

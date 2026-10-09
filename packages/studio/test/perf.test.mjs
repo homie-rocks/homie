@@ -420,3 +420,21 @@ test('perf: a name this process cannot resolve is a blocked preflight, not "the 
   assert.match(r.why, /^BLOCKED network preflight failed, before any page or game was opened: this computer's Node\.js could not look up homie-perf\.invalid/);
   assert.match(r.why, /127\.0\.0\.1:8787/);
 });
+
+test('server rooms default to a replica goal and guard the second replica against regressions', () => {
+  const server = (k, p95, secondBusy = 1) => {
+    const r = fakeRun('phone', k, { p95 });
+    r.room = { hosted: 'server' };
+    r.browsers[0].role = 'replica'; r.browsers[1].role = 'replica-2';
+    r.browsers[1].main.busyPerFrame = secondBusy;
+    return r;
+  };
+  const before = writeRuns(join(scratch, 'server-before'), [1,2,3,4,5,6].map((k) => server(k, 30)));
+  const after = writeRuns(join(scratch, 'server-after'), [1,2,3,4,5,6].map((k) => server(k, 20, 4)));
+  const result = perfCompare(before, after);
+  assert.equal(result.goal.metric, 'phone.replica.frame.p95');
+  assert.equal(result.goal.verdict, 'better');
+  assert.equal(result.verdict, 'worse');
+  assert.ok(result.guards.some((g) => g.metric === 'phone.replica-2.busy' && g.verdict === 'worse'));
+  assert.ok(!result.guards.some((g) => g.metric.includes('.host.')));
+});

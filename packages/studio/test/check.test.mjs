@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { CHECK_STEPS, LAUNCH_TIMEOUT_MS, arrivalReadiness, connectionSummary, judgeRounds } from '../lib/check.mjs';
 import { isLoopbackUrl } from '../lib/chrome.mjs';
-import { judgeTv } from '../lib/port-check.mjs';
+import { judgeTv, roomContinued, needsRunway, judgeHold } from '../lib/port-check.mjs';
 
 const round = (n, rows) => ({ n, endsAt: 1000 * n, results: rows, ms: 5000 * n });
 const seen = (...rounds) => new Map(rounds.map((r) => [`${r.n}:${r.endsAt}`, r]));
@@ -121,4 +121,26 @@ test('nothing listening on this computer: check and shoot say "does not answer: 
   const s = await shoot({ url: base, game: 'gem', frames: 1, out: join(tmpdir(), 'homie-shoot-never') });
   assert.deepEqual([s.ok, s.command, s.preflight, s.why], [false, 'shoot', 'local', said.why]);
   assert.ok(Date.now() - started < 30_000, 'said at once: no browser was started to find it out');
+});
+
+test('disconnect checks a server clock advancing without a browser promotion', () => {
+  const before = { hosted: 'server', role: 'replica', tick: 100, frames: 200 };
+  assert.equal(roomContinued(before, { ...before, tick: 101, frames: 201 }, true), true);
+  assert.equal(roomContinued(before, { ...before, frames: 201 }, true), false);
+  assert.equal(roomContinued(before, { ...before, tick: 101 }, true), false);
+  assert.equal(roomContinued(before, { ...before, hosted: 'browser', role: 'host', tick: 101, frames: 201 }, true), false);
+  assert.equal(roomContinued(before, { role: 'host' }, false), true);
+  assert.equal(roomContinued(before, before, false), false);
+});
+
+test('short runway retries the same hold, without accepting wrong steering or missing samples', () => {
+  // Coin Dash starts 1.5 m from the left wall: the initial 400 ms consume that runway.
+  const run = (space) => Array.from({ length: 151 }, (_, n) => [n * 1000 / 30, -Math.min(space, n * 6 / 30), 0, 1, 0, 0, 1, 0, false]);
+  const blocked = judgeHold(run(1.5), 'left', 0, 5000, 0.5, 'top');
+  assert.equal(blocked.ok, false);
+  assert.equal(judgeHold(run(6.6), 'left', 0, 5000, 0.5, 'top').ok, true);
+  assert.equal(needsRunway(blocked), true);
+  assert.equal(needsRunway({ ...blocked, wrongFrames: 48 }), true, 'thumb wobble along a wall still needs runway; the retry must pass the full hold judgement');
+  assert.equal(needsRunway({ ...blocked, why: 'blocked at once (it started against something)' }), true);
+  for (const change of [{ ok: true }, { dirErrDeg: 180 }, { yawChangeDeg: 10 }, { why: 'too few samples' }, { why: 'went the wrong way' }]) assert.equal(needsRunway({ ...blocked, ...change }), false);
 });

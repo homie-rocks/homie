@@ -3,7 +3,7 @@
  * Today from git's checkout of a commit with only the game's files, the harness first in the game's page, writes
  * only from the lab page itself, tunables written back one a line); `lab set` and `lab --stop`; `game new` keeping a
  * take's saves; and, in a real Chrome when this machine has one, the harness's clock, dice, timers and presses
- * replaying a take frame for frame, a game that reads crypto dice caught replaying differently, and both starters'
+ * replaying a take frame for frame, a game that reads crypto dice caught replaying differently, and the starters'
  * takes replaying the same in New and Today.
  * Run: node --test packages/studio/test/lab.test.mjs
  */
@@ -28,7 +28,7 @@ const run = (args, cwd) => spawnSync(process.execPath, [CLI, ...args, '--json'],
 const WHO = { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: '' };
 const git = (cwd, ...args) => { const r = spawnSync('git', ['-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8', env: { ...process.env, ...WHO } }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
 
-/** A studio with both starters, its node_modules pointing at this package and the repo's esbuild, committed once. */
+/** A studio with the starters, its node_modules pointing at this package and the repo's esbuild, committed once. */
 function studio(name) {
   const dir = join(scratch, name);
   const r = run(['new', dir, '--name', 'Lab Test', '--homie', 'https://homie.test', '--no-install'], scratch);
@@ -36,9 +36,9 @@ function studio(name) {
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-  for (const id of ['gem-rush', 'ember-vale']) assert.equal(run(['game', 'new', id, '--from', id], dir).status, 0);
+  for (const id of ['gem-rush', 'ember-vale', 'coin-dash']) assert.equal(run(['game', 'new', id, '--from', id], dir).status, 0);
   git(dir, 'add', '-A');
-  git(dir, 'commit', '-qm', 'two games');
+  git(dir, 'commit', '-qm', 'three games');
   return dir;
 }
 
@@ -100,7 +100,7 @@ test('the server: New and Today built, the checkout holds only the game, writes 
     const st = await (await fetch(`${s.url}/_lab/api/gem-rush/state`)).json();
     assert.equal(st.new.ok, true, st.new.error);
     assert.equal(st.today.ok, true, st.today.error ?? st.today.none);
-    assert.equal(st.today.commit.subject, 'two games');
+    assert.equal(st.today.commit.subject, 'three games');
     assert.equal(st.new.dirty, 0, 'New is Today: nothing changed since the commit');
     assert.equal(st.takes.default, 'knock');
     assert.ok(st.tunables.spec['public.knockRange'], 'the starter has tunables');
@@ -248,12 +248,14 @@ test('in Chrome: a game that rolls crypto dice is caught replaying differently, 
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const d = JSON.parse(r.stdout);
   assert.equal(typeof d.deterministic.new, 'number', 'the lab says where the replay differed');
-  for (const game of ['gem-rush', 'ember-vale']) {
+  for (const game of ['gem-rush', 'ember-vale', 'coin-dash']) {
     const g = run(['lab', 'check', game, '--out', join(scratch, game)], dir);
+    assert.equal(g.error?.code, undefined, `${game}: the completed Lab command exits without a timeout`);
     assert.equal(g.status, 0, g.stdout + g.stderr);
     const res = JSON.parse(g.stdout);
     assert.deepEqual(res.deterministic, { new: null, today: null }, `${game} replays the same`);
-    assert.ok(res.phases.new.length >= 2, `${game} names its phases: ${res.phases.new.join(', ')}`);
+    if (game === 'coin-dash') assert.equal(res.take, 'run');
+    else assert.ok(res.phases.new.length >= 2, `${game} names its phases: ${res.phases.new.join(', ')}`);
     assert.deepEqual(res.phases.new, res.phases.today, `${game}: New is Today`);
     assert.deepEqual(res.errors, []);
   }

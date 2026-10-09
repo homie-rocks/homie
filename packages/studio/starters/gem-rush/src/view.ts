@@ -4,7 +4,8 @@ import type rules from './rules';
 import { guardGestures, PALETTE, AI_MARK, type Slot, type RoundInfo } from '@homie-rocks/studio/netplay';
 import { BUBBLE_FONT, createBubbles, createLabels, fitView, paintBubbles, type BubbleIn, type BubbleOut, type LabelIn, type LabelOut } from '@homie-rocks/studio/port';
 import { lab } from '@homie-rocks/studio/lab';
-const room = openRoom<typeof rules>();
+// This canvas draws positive Y downward; report its axes to the control checks.
+const room = openRoom<typeof rules>({ screenBasis: () => ({ right: [1, 0], up: [0, -1] }) });
 const net = room.net;
 guardGestures({ touch: 'canvas' });
 const W = 1600, H = 1000, R_AV = 22, R_GEM = 13;

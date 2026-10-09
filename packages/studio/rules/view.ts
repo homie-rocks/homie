@@ -41,7 +41,7 @@ export function setAgentFactory(factory: typeof useAgents): void { agentFactory 
 import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RulesHostFactory, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { lab } from '../lab/lab.ts';
-import { exposePort } from '../port/probe.ts';
+import { exposePort, type PortProbeOptions } from '../port/probe.ts';
 import { BudgetError } from './guard.ts';
 import { moveContext } from './math.ts';
 import { coerce, dir, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
@@ -66,7 +66,16 @@ export interface Entity {
 export type RoomStatus = 'connecting' | 'playing' | 'offline' | 'closed';
 export interface RoomRound { n: number; phase: 'live' | 'over'; endsAt: number; secondsLeft: number; results?: RoundInfo['results'] }
 export interface RosterRow { seat: number; name: string; driver: 'person' | 'bot' | 'ai'; score: number; me: boolean }
-export interface OpenRoomOptions { game?: GameData; move?: Record<string, MoveFn>; net?: NetplayOptions; /** Tests: a clock in ms and a way to run without timers. */ now?: () => number; timers?: boolean }
+export interface OpenRoomOptions {
+  game?: GameData;
+  move?: Record<string, MoveFn>;
+  net?: NetplayOptions;
+  /** Camera axes on the rules' x/y plane for the testing tools. Default: x right, y up. */
+  screenBasis?: PortProbeOptions['basis'];
+  /** Tests: a clock in ms and a way to run without timers. */
+  now?: () => number;
+  timers?: boolean;
+}
 export interface Room<R = unknown> {
   readonly status: RoomStatus;
   readonly seat: number | null;
@@ -194,8 +203,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         if (waiting) o.at = now;
         else {
           const length = Math.hypot(o.delta.x, o.delta.y, o.delta.z);
-          const release = settled && catchTick === null ? Math.max(0, now - o.last) / predict.blendMs : 0;
-          const progress = length ? distance(path, o.path) * 0.8 / length : 1;
+          const elapsed = Math.max(0, now - o.last);
+          // A knock may travel faster than normal movement, and catch-up already accelerates it.
+          // Fading the offset must not add another fraction of that accelerated speed.
+          const allowance = length ? (myKind()?.maxSpeed ?? 0) * elapsed / 1000 / length : 1;
+          const release = settled && catchTick === null ? Math.min(allowance, elapsed / predict.blendMs) : 0;
+          const progress = length ? Math.min(allowance, distance(path, o.path) * 0.8 / length) : 1;
           const nominal = Math.max(0, Math.min(1, 1 - (now - o.at) / predict.blendMs));
           o.fade = Math.max(nominal, o.fade - Math.max(release, progress));
         }
@@ -385,8 +398,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
         pending = pending.filter(e => e.t > f.k || e.t > ack && f.k + 1 - e.t <= Math.ceil(tickHz / 4));
         const error = distance(previous, mine!.pos);
         correction.last = error;
-        if (error > 0.00001) {
-          correction.count++; correction.max = Math.max(correction.max, error);
+        if (error > 0.00001) { correction.count++; correction.max = Math.max(correction.max, error); }
+        // A snapshot can replace the historical segment being drawn even when replay reaches
+        // the same current position. Preserve that drawn pose on every catch-up reconciliation.
+        if (error > 0.00001 || catchTick !== null) {
           if (catchTick === null && error > (predict.catchM ?? myKind()!.maxSpeed * 3 / tickHz) + 0.00001) {
             catchTick = f.k; catchAt = clock(); correction.catches++;
           }
@@ -503,6 +518,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     let pos = mine.pos;
     let heading = mine.heading;
     let settled = true;
+    let preview: { pos: Vec3; heading: Vec3 } | null = null;
     if (kind && base) {
       const a = Math.max(0, Math.min(1, tickAt(clock()) - stepped));
       const now: Record<string, unknown> = {};
@@ -510,6 +526,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       const next = runMove(kind.name, { pos: mine.pos, vel: mine.vel, heading: mine.heading, grounded: mine.grounded, motion: motionOf(mine.kind, mine.motion) }, Object.freeze(now), stepped + 1);
       pos = vec3({ x: lerp(mine.pos.x, next.pos.x, a), y: lerp(mine.pos.y, next.pos.y, a), z: lerp(mine.pos.z, next.pos.z, a) }, dims);
       heading = next.heading;
+      preview = next;
       settled = distance(next.pos, mine.pos) < 0.00001;
     }
     if (catchTick !== null && base) {
@@ -517,7 +534,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
       catchTick += Math.max(0, now - catchAt) / period * predict.catchUp; catchAt = now;
       if (catchTick >= tickAt(now)) catchTick = null;
       else {
-        const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1);
+        // Catch-up can reach the fractional current tick before its next whole step exists.
+        // Use the same preview as normal drawing, rather than hold and jump when that step arrives.
+        const t = Math.floor(catchTick), a = history.get(t), b = history.get(t + 1) ?? (t === stepped ? preview : null);
         if (a && b) { const f = catchTick - t; pos = { x: lerp(a.pos.x, b.pos.x, f), y: lerp(a.pos.y, b.pos.y, f), z: lerp(a.pos.z, b.pos.z, f) }; heading = b.heading; }
         else if (a) pos = a.pos;
       }
@@ -570,7 +589,8 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   if (typeof window !== 'undefined') {
     exposePort(net as Netplay<unknown, unknown, unknown>, {
       view: 'top', size: schema.kinds.find((k) => k.player)?.radius ?? 0.5,
-      self: () => { const m = meNow(); return m ? { x: m.pos.x, y: -m.pos.y } : null; },
+      self: () => { const m = meNow(); return m ? { x: m.pos.x, y: m.pos.y } : null; },
+      basis: opts.screenBasis ?? (() => ({ right: [1, 0], up: [0, 1] })),
       score: myScore, busy: () => (typeof extra.busy === 'function' ? Boolean(extra.busy()) : busy()),
       extra: new Proxy({}, { get: (_t, key) => (typeof key === 'string' ? extra[key] : undefined), ownKeys: () => Object.keys(extra), getOwnPropertyDescriptor: (_t, key) => (typeof key === 'string' && extra[key] ? { enumerable: true, configurable: true, value: extra[key] } : undefined) }) as Record<string, () => unknown>,
     });

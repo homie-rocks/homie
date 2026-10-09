@@ -60,6 +60,19 @@ function yawDeg(a, b) {
   const d = a[5] * b[5] + a[6] * b[6]; const la = Math.hypot(a[5], a[6]) || 1; const lb = Math.hypot(b[5], b[6]) || 1;
   return (Math.acos(Math.max(-1, Math.min(1, d / (la * lb)))) * 180) / Math.PI;
 }
+/** A server room keeps its authority and advances; a browser room must promote a host. */
+export function roomContinued(before, after, serverHosted) {
+  return serverHosted
+    ? after?.hosted === 'server' && after?.role === 'replica' && Number.isFinite(before?.tick) && after?.tick > before.tick && after?.frames > before.frames
+    : after?.role === 'host';
+}
+
+/** A wall can leave too little runway; retry the same hold after moving away, never excuse steering faults. */
+export function needsRunway(res) {
+  return !res.ok && (res.why === 'barely moved' || res.why?.startsWith('blocked at once'))
+    && res.yawChangeDeg < 10 && (res.dirErrDeg === null || res.dirErrDeg < 15);
+}
+
 const finite = (r) => r && Number.isFinite(r[1]) && Number.isFinite(r[2]);
 /** A frame the player steers (the probe's `busy` says when a knockback, a stun or a respawn has the body). */
 const steerable = (r) => finite(r) && !r[8];
@@ -258,7 +271,7 @@ async function webkit(pw) {
 const frameOf = (h) => h.page.frames().find((f) => f.url().includes('/__game/')) ?? null;
 async function inFrame(h, src, v = null) { const f = frameOf(h); return f ? T(f.evaluate(src), 10_000, v) : v; }
 const shell = (h) => T(h.page.evaluate(() => { const s = window.__shell; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, results: s.results ?? [], facts: s.facts ? { counts: s.facts.counts } : null } : null; }), 8000, null);
-const info = (h) => inFrame(h, '(() => { const p = window.__homiePort; if (!p) return null; const i = p.info(); const n = window.__homieNet; i.net = n ? { snapHzIn: n.stats().snapHzIn, snapHzOut: n.stats().snapHzOut, rtt: n.stats().rtt, promotions: n.stats().promotions } : null; i.v = p.view; i.size = p.size; i.keys = p.keys; i.thumb = p.thumb; return i; })()');
+const info = (h) => inFrame(h, '(() => { const p = window.__homiePort; if (!p) return null; const i = p.info(); const n = window.__homieNet; i.net = n ? { snapHzIn: n.stats().snapHzIn, snapHzOut: n.stats().snapHzOut, rtt: n.stats().rtt, promotions: n.stats().promotions } : null; i.hosted = n?.probe?.hosted?.() ?? null; i.tick = n?.probe?.tick?.() ?? null; i.v = p.view; i.size = p.size; i.keys = p.keys; i.thumb = p.thumb; return i; })()');
 const rowsSince = (h, t) => inFrame(h, `(window.__homiePort ? window.__homiePort.rows(${Number(t) || 0}) : [])`, []);
 const frameNow = (h) => inFrame(h, '(window.__homiePort ? window.__homiePort.now() : performance.now())', 0);
 
@@ -365,11 +378,22 @@ async function ownerTests(h, how, log) {
   const holds = view === 'side' ? ['right', 'left'] : ['down', 'left'];
   out.holds = [];
   for (const dir of holds) {
-    const a = await frameNow(h);
-    if (how === 'keys') await holdKey(h, keys[dir], 5000); else await touchDrag(h, thumbAt(h, i), dir, 70, 5000);
-    const b = await frameNow(h);
-    await sleep(250);
-    const res = judgeHold(await rowsSince(h, a - 50), dir, a, b, size, view);
+    const hold = async () => {
+      const a = await frameNow(h);
+      if (how === 'keys') await holdKey(h, keys[dir], 5000); else await touchDrag(h, thumbAt(h, i), dir, 70, 5000);
+      const b = await frameNow(h);
+      await sleep(250);
+      return judgeHold(await rowsSince(h, a - 50), dir, a, b, size, view);
+    };
+    let res = await hold();
+    if (needsRunway(res)) {
+      const first = res;
+      const away = { up: 'down', down: 'up', left: 'right', right: 'left' }[dir];
+      log(`  ${h.engine}-${h.kind} ${how} hold ${dir}: ${first.why}; move ${away} and retry the same hold`);
+      if (how === 'keys') await holdKey(h, keys[away], 1100); else await touchDrag(h, thumbAt(h, i), away, 70, 1100);
+      await sleep(400);
+      res = { ...await hold(), runwayRetry: first };
+    }
     out.holds.push(res);
     log(`  ${h.engine}-${h.kind} ${how} hold ${dir}: ${res.ok ? 'ok' : `FAIL (${res.why})`} travel ${res.travelBodies} bodies, yaw ${res.yawChangeDeg}°`);
     await sleep(400);
@@ -596,7 +620,8 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
         else {
           await sleep(3000);
           const ia = await info(A); const ib = await info(B);
-          if (ia?.role !== 'host') row('host-kill', null, { why: `the first browser was not the host (it was ${ia?.role}); skipped`, ia: ia?.role, ib: ib?.role });
+          const serverHosted = ia?.hosted === 'server' && ib?.hosted === 'server';
+          if (ia?.role !== 'host' && !serverHosted) row('host-kill', null, { why: `the first browser was not the host (it was ${ia?.role}); skipped`, ia: ia?.role, ib: ib?.role });
           else {
             await shot(B, 'life-before');
             const pids = A.pid ? [A.pid, ...descendants(A.pid)] : [];
@@ -606,14 +631,14 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
             collect(A);
             void A.close();
             let promoted = null; let ibAfter = null;
-            while (Date.now() - killAt < 15_000) { ibAfter = await info(B); if (ibAfter?.role === 'host') { promoted = Date.now() - killAt; break; } await sleep(100); }
+            while (Date.now() - killAt < 15_000) { ibAfter = await info(B); if (roomContinued(ib, ibAfter, serverHosted)) { promoted = Date.now() - killAt; break; } await sleep(100); }
             await sleep(1500);
             const ib2 = await info(B);
             const sameRound = ib?.round && ib2?.round && (ib2.round.n === ib.round.n || (ib.round.phase === 'over' || ib.round.leftMs < 3000));
             const clockOk = ib?.round && ib2?.round && ib2.round.n === ib.round.n ? Math.abs((ib.round.leftMs - ib2.round.leftMs) - (Date.now() - killAt + 0)) < 6000 : true;
             const running = (ib2?.frames ?? 0) > (ibAfter?.frames ?? 0) && (ib2?.net?.snapHzOut ?? 0) >= 0;
             await shot(B, 'life-after-kill');
-            row('host-kill', Boolean(promoted !== null && promoted <= 5000 && sameRound && clockOk && running), { promotedMs: promoted, roundBefore: ib?.round ?? null, roundAfter: ib2?.round ?? null, why: promoted === null ? 'nobody took over as host within 15 s' : promoted > 5000 ? `the phone took over after ${promoted} ms (over 5 s)` : !sameRound ? 'the round did not continue (a new round started)' : !clockOk ? 'the round clock jumped at the takeover' : undefined });
+            row('host-kill', Boolean(promoted !== null && promoted <= 5000 && sameRound && clockOk && running), { hosted: serverHosted ? 'server' : 'browser', promotedMs: serverHosted ? null : promoted, continuedMs: serverHosted ? promoted : null, roundBefore: ib?.round ?? null, roundAfter: ib2?.round ?? null, why: promoted === null ? (serverHosted ? 'the server room stopped after a browser left' : 'nobody took over as host within 15 s') : promoted > 5000 ? `the phone took over after ${promoted} ms (over 5 s)` : !sameRound ? 'the round did not continue (a new round started)' : !clockOk ? 'the round clock jumped at the takeover' : undefined });
             // Late joiner into the same, running room.
             const C = await launch('desk');
             const joinAt = Date.now();

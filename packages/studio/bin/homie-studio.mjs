@@ -336,7 +336,7 @@ import { publish, publishBefore } from '../lib/directory.mjs';
 import { look } from '../lib/look.mjs';
 import { importPort, planPort } from '../lib/port.mjs';
 import { portCheck } from '../lib/port-check.mjs';
-import { DEFAULT_GOAL, perfCompare, perfRun, perfSizes } from '../lib/perf.mjs';
+import { perfCompare, perfRun, perfSizes } from '../lib/perf.mjs';
 import { LAB_PORT, labServe, labSet, labStop } from '../lib/lab.mjs';
 import { R2_COST, lineOf, mediaPlan, r2OverOf, recordUpload, resolveMedia, sizeOf, typeOf } from '../lib/media.mjs';
 import { newStudio } from '../lib/scaffold.mjs';
@@ -878,7 +878,7 @@ async function main() {
   }
   if (cmd === 'perf' && sub === 'compare') {
     if (!positional[2] || !positional[3]) return { ok: false, command: 'perf compare', why: 'usage: homie-studio perf compare <before dir> <after dir> [--goal <metric>] [--min 3]' };
-    return perfCompare(positional[2], positional[3], { goal: String(flags.get('goal') ?? DEFAULT_GOAL), min: flags.has('min') ? Number(flags.get('min')) / 100 : 0.03, guards: flags.get('guards') ? String(flags.get('guards')).split(',').map((x) => x.trim()).filter(Boolean) : null, also: flags.get('also') ? String(flags.get('also')).split(',').map((x) => x.trim()).filter(Boolean) : [] });
+    return perfCompare(positional[2], positional[3], { goal: flags.has('goal') ? String(flags.get('goal')) : null, min: flags.has('min') ? Number(flags.get('min')) / 100 : 0.03, guards: flags.get('guards') ? String(flags.get('guards')).split(',').map((x) => x.trim()).filter(Boolean) : null, also: flags.get('also') ? String(flags.get('also')).split(',').map((x) => x.trim()).filter(Boolean) : [] });
   }
   // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
   if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
@@ -1327,7 +1327,7 @@ try {
   if (result && result.command !== 'help') print(result);
   if (result?.ok === false) process.exitCode = 1;
   // Chrome's pipes can outlive browser.close(); a finished check must not hang its caller.
-  if (['check', 'port check', 'look', 'perf', 'shoot'].includes(result?.command)) process.exit(process.exitCode ?? 0);
+  if (['check', 'port check', 'look', 'perf', 'shoot', 'lab check'].includes(result?.command)) process.exit(process.exitCode ?? 0);
 } catch (error) {
   await flushProgress().catch(() => {});
   print({ ok: false, why: error instanceof Error ? error.message : String(error) });

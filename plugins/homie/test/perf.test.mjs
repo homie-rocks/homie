@@ -74,6 +74,7 @@ else if (a[0] === 'perf') {
   const wobble = 1 + 0.06 * Math.sin(n * 2.3 + (device === 'phone' ? 1 : 0));
   const b = (role) => ({ role, load: { playableMs: 500 + (n % 3), firstFrameMs: 400 }, frames: { p50: 16.7, p95: 16.7 + (n % 2) * 0.1, over50: 0 }, work: { mean: 0.4 }, main: { busyPerFrame: speed * wobble * (role === 'host' ? 1 : 0.9) }, heap: { afterGcMb: 2 + (n % 2) * 0.01 }, net: { kbOut: 9, kbIn: 1, msgsOut: 21, msgsIn: 20 } });
   const run = { v: 1, kind: 'homie-perf-run', game: g, device, deviceLabel: device, renderer: 'stand-in GPU', machine: { cpu: 'stand-in', cores: 8 }, load: { before: { load1: 1 }, after: { load1: 1 } }, loaded: false, blocked: null, browsers: [b('host'), b('replica')] };
+  if (JSON.parse(readFileSync(join(root, 'games', g, 'game.json'), 'utf8')).room && JSON.parse(readFileSync(join(root, 'games', g, 'game.json'), 'utf8')).room.host !== 'browser') { run.room = { hosted: 'server' }; run.browsers[0].role = 'replica'; run.browsers[1].role = 'replica-2'; }
   if (a.includes('--profile')) run.browsers[0].profile = { file: 'x.cpuprofile', seconds: 5, mapped: true, idlePct: 80, gamePct: 30, gcPct: 2, programPct: 50, top: [{ name: 'draw', where: 'src/main.ts:10', game: true, selfMs: 20, selfPct: 10, totalPct: 40 }] };
   const file = join(dir, device + '-' + k + '.json');
   writeFileSync(file, JSON.stringify(run));
@@ -354,4 +355,21 @@ test('what BASELINE.md says about the download: three.js minified is minified (i
   const old = perfSizes(root, 'sky-race');
   for (const f of old.biggest) delete f.code;
   assert.doesNotMatch(sizeHints(old).join('\n'), /minif/i);
+});
+
+for (const host of ['server', undefined]) test(`server rules baseline (${host ?? 'default host'}) chooses a replica goal and reports both browsers`, async () => {
+  const { root, game } = studioWith('server-rules');
+  const file = join(game, 'game.json');
+  const meta = JSON.parse(readFileSync(file, 'utf8')); meta.room = { host };
+  writeFileSync(join(game, 'src', 'rules.ts'), '// rules default to server hosting');
+  writeFileSync(file, JSON.stringify(meta));
+  const server = await site(root);
+  try {
+    const base = await perf(['baseline', 'gem-rush', '--url', `http://127.0.0.1:${server.address().port}`, '--devices', 'computer', '--runs', '3', '--seconds', '5'], root);
+    assert.equal(base.code, 0, base.out + base.err);
+    assert.equal(base.json.goal, 'computer.replica.frame.p95');
+    const md = readFileSync(join(base.json.loop, 'BASELINE.md'), 'utf8');
+    assert.match(md, /computer\.replica\.frame\.p95/);
+    assert.match(md, /computer\.replica-2\.frame\.p95/);
+  } finally { await new Promise((r) => server.close(r)); }
 });
