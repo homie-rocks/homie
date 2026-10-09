@@ -31,8 +31,8 @@ test('build measures card files and reports the filename and violated image rule
       assert.equal(tags['twitter:card'], 'player', file); assert.equal(tags['twitter:image'], `https://studio.example/games/test/${file}`);
     }
     // A shape that is not the player's is said, as a warning that keeps the card; a square picture says nothing.
-    for (const file of ['og.png', 'wide.png', 'tall.png']) assert.ok(logs.some(l => l.startsWith('warning:') && l.includes(file) && l.includes('player card is offered') && l.includes('480×480')), `${file}: ${logs}`);
-    assert.ok(!logs.some(l => l.includes('square.png')), String(logs));
+    // Any shape gets the card and no shape draws a warning.
+    for (const file of ['og.png', 'wide.png', 'tall.png', 'square.png', 'least.png']) assert.ok(!logs.some(l => l.includes(file)), `${file}: ${logs}`);
     // No handle is asked for, of anybody.
     assert.ok(!logs.some(l => /twitterSite|@handle/.test(l)), String(logs));
     await check(null); assert.ok(logs.some(l => l.includes('games/test/game.json') && l.includes('starters')));
