@@ -73,7 +73,7 @@ Your studio has its own MCP server. Connect your AI with one browser approval an
 
 ## [0.38.0] - 2026-10-09
 
-**Plugin 0.39.0**
+**Plugin 0.39.0** · [#77](https://github.com/homie-rocks/homie/pull/77)
 
 Your own character answers as soon as you press, even when the room runs on the server.
 
