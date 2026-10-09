@@ -51,13 +51,14 @@ The MCP integration test now follows a running build job to its result. The full
 package suite schedules one test file at a time so browser timing tests do not
 compete with other test files in the same run. All assertions remain unchanged.
 
-The latest full Chrome-enabled local run completed 2,386 tests: 2,374 passed,
+A full Chrome-enabled local run during the refresh completed 2,386 tests: 2,374 passed,
 nine environment skips, and three failures representing two scenarios (one
 prediction subtest and its parent, and an input-receipt timestamp comparison).
-The input-receipt check passed an unchanged focused rerun. The prediction action
-case still exceeded its median response limit while an unrelated CPU/browser
-stress job was active. Its movement assertions passed. These timing failures
-remain under investigation; this run is not recorded as a passing gate.
+Both scenarios passed unchanged focused reruns. The action case measured
+161 ms median and 174 ms at the 95th percentile, within its 170/220 ms limits.
+A separate CPU/browser stress job was active during the failures. The failed
+run is retained as evidence, not recorded as a passing gate. Final full-suite
+and CI results are maintained in [PR #75](https://github.com/homie-rocks/homie/pull/75).
 
 Earlier complete runs before main 0.38.0 passed on the independent branch and on
 main 0.37.2. Historical extended navigation stress measurements remain in the
