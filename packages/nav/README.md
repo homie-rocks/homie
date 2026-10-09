@@ -187,7 +187,8 @@ for tiled polygon meshes, streamed floors, runtime carving, links and crowds.
   Links are graph connections, not physical jump animations. Manual traversal
   requires the game to call `completeLink`.
 - Crowd avoidance is local, not a collision solver or a traffic scheduler.
-  Dense opposing traffic can overlap or jam; one standing agent can hold another indefinitely. Unloaded floors report `stranded`;
+  Dense opposing traffic can overlap or jam; one standing agent can hold another
+  indefinitely. Unloaded floors report `stranded`;
   reloading or `place` can recover them. Targets submitted while stranded or on
   a link are remembered even when `target` returns false. Edits invalidate only
   searches and corridors containing replaced tile/polygon generations or disabled
@@ -242,6 +243,8 @@ The arrival matrix runs 2,400 ticks for eight edit/target modes, both up axes an
 arrival region, avoiding a stationary queue at the destination. Unrelated link
 and obstacle edits and unchanged targets must match every baseline arrival tick
 exactly (zero-tick tolerance); relevant edits and moving goals must all arrive.
+Moving-goal rows cross a tile/polygon boundary every tick, alternating endpoints
+0.4 m apart, including while the initial search is still pending.
 The memory soak creates, restores and discards 200,000 crowds and meshes without
 yielding, checking retained heap after GC (4 MiB maximum growth after warmup).
 The three fixed continuation cases used 14.4 CPU seconds on the machine below

@@ -4,6 +4,7 @@ import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
 import { config } from './fixtures.mjs';
 import { unpack } from '../dist/internal/Binary.js';
+import { locate } from '../dist/internal/MeshData.js';
 const point = (p, up) => (up === 'z' ? [p[0], -p[2], p[1]] : p);
 const quad = (out, a, b, c, d) => out.push(...a, ...b, ...c, ...a, ...c, ...d);
 function box(out, x, z, X, Z) {
@@ -52,6 +53,8 @@ export function runArrival(s, count, mode, ticks = 2400) {
     assert.equal(crowd.target(id, point([37, 0, 37.5], up)), true);
   }
   const times = new Array(count).fill(0);
+  const moving = mode === 'moving' || mode === 'combined';
+  if (moving) assert.notEqual(locate(mesh, [37, 0, 29.8]).nodeRef, locate(mesh, [37, 0, 30.2]).nodeRef);
   const bounds = (a, b) => {
     a = point(a, up);
     b = point(b, up);
@@ -78,13 +81,16 @@ export function runArrival(s, count, mode, ticks = 2400) {
       if (tick === 180) mesh.loadTile(assets.find((a) => a.x === 1 && a.z === 3).bytes);
     }
     const goal = point(
-      [37, 0, 37.5 + (mode === 'moving' || mode === 'combined' ? 0.2 * Math.sin(tick * 0.01) : 0)],
+      [37, 0, moving ? 30 + (tick % 2 ? 0.2 : -0.2) : 37.5],
       up,
     );
     if (['same', 'moving', 'combined'].includes(mode))
-      for (const id of crowd.ids()) crowd.target(id, goal);
+      for (const id of crowd.ids()) {
+        crowd.target(id, goal);
+        if (mode === 'combined') crowd.target(id, goal);
+      }
     crowd.step();
-    if (tick === 1 && count === 1 && mode === 'none') {
+    if (tick === 1 && count === 1 && (mode === 'none' || moving)) {
       const agent = unpack('crowd', crowd.save()).state.data.agents[1];
       assert.equal(agent.slicedQuery.status & 1, 1, 'maze needs more than one default-budget tick');
     }
