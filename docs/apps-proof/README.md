@@ -37,6 +37,8 @@ Recording, sound and performance plugin tests passed on this run. Free disk spac
 
 The follow-up rebases onto main including the rules build check and browser-hosted rules. It allocates studio **0.37.0**, plugin **0.38.0**, regenerates the lockfile, public template and template history, and retains main's older changelog sections byte for byte.
 
+The 13 release files follow the previous release pattern: `.claude-plugin/marketplace.json`; both `CHANGELOG.md` files; `package-lock.json`; `packages/studio/package.json`, `worker/version.mjs` and `lib/template-history.json`; `plugins/homie/plugin.json` and its `.claude-plugin`, `.codex-plugin` and `.grok-plugin` manifests; and `template/package.json` / `template/studio.json`. The template and history were regenerated with the repository scripts; all 55 history entries from main remain unchanged.
+
 Public apps use the game's player-card renderer, HTTPS image rules and sandbox, through `/open/embed`; their metadata and exits say Open. Chrome exercises an app framed cross-origin with storage blocked, actual shared input, and the same app at the top-level player address. Image tests measure an app's own tall still and fallback picture.
 
 The Shop button has its own 52-pixel strip above the content, respecting safe areas. It uses the same store sheet as the room panel and `createShop().open()` / `.open(item)`. `screen.shop: false` hides the button per game or app. The Worker checks shop readiness and the experience's items before rendering it. A player-card purchase opens the studio's shop, preserving the requested item. Ordinary play/open pages use the configured Payment Link or keyed Checkout path.
@@ -67,4 +69,37 @@ Against the freshly packed main toolkit (including PR #73), the packed APPS tool
 | octree-arena | `16e295509bb7b9f9` |
 | tiny-platformer | `4c685613817d26d7` |
 
-Final browser-check and gate results follow.
+### Follow-up verification
+
+The full suite ran with Chrome, the installed Wrangler and Miniflare, and a temporary local `release-2026-10-09-studio-0.37.0` tag pointing at the tested code. This exercises the publish job's current-version tag case, rather than assuming every tag is older. The tag was removed afterwards and was never pushed.
+
+| Gate | Result |
+| --- | --- |
+| `npm ci` | Passed; 135 packages installed |
+| `npm run build` | Passed |
+| `npm test -- --test-concurrency=2` | 1,386 passed, 0 failed, 0 cancelled, 2 skipped; 1,388 tests total |
+| `npm run test:plugin` | 116 passed, 0 failed, 1 skipped; 117 tests total |
+| `npm run validate` | Both marketplace and plugin passed |
+| `node scripts/desktop.mjs --check` | Passed; packed server answered with 66 tools and 5 cards |
+| `node scripts/changelog.mjs --check` | Passed; main's older sections remain byte-identical |
+| `node scripts/publish.mjs --check` | Passed; 1 new version, 22 published packages unchanged |
+
+The two suite skips require the external `STRIPE_MOCK_URL` service; the in-process stand-in Stripe purchase tests ran and passed. The plugin skip requires `HOMIE_PLAYTEST_URL`. The real-Chrome starter proof passed all 20 cases, the added Shop proof passed all 12 game/app/size/payment-path cases, and the room-update proof passed ten batches of ten updates and one batch of thirty. The workerd/Node determinism check also ran.
+
+The default-concurrency run exposed a snapshot mismatch and a timeout in main's wall-clock rules traffic test while the machine was heavily loaded. All 12 traffic scenarios then passed in isolation (13 reported tests including the parent), and the complete suite passed with two test files at a time. No runtime assertion was removed and no rules test was skipped. Earlier Shop test mock failures were fixed by modelling both Shop buttons and following the MCP result's actual `job` handle.
+
+The changelog checker retains main's advisory about the missing 0.35.1 tag link; its released section was deliberately not edited.
+
+The converted Switchback workshop built and its packed-toolkit app check passed: `[data-ring="404"]` changed the visible count from `Bell calls: 0` to `Bell calls: 1` on the wall and both phones, and the actor's reload retained the result.
+
+All five Arcade checks passed through a real completed round with both human browser seats present in the results, no reconnects, and the same build output as packed main. The default check settings and studio sources were retained.
+
+| Arcade game | Check | Computer / phone FPS | Reconnects |
+| --- | --- | --- | --- |
+| 2048-race | Passed | 60 / 60 | 0 |
+| asteroids-arena | Passed | 60 / 60 | 0 |
+| bone-burglar | Passed | 60 / 60 | 0 |
+| octree-arena | Passed | 60 / 60 | 0 |
+| tiny-platformer | Passed | 61 / 60 | 0 |
+
+Both temporary studio copies, the baseline toolkit copy and tarballs were deleted after recording these results. Local trial servers were stopped. The original studios were never changed. Temporary Wrangler links, the local test tag and desktop packaging output were removed. No deployment or merge was performed.
