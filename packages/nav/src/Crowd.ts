@@ -5,6 +5,8 @@ import { requireState, numbers, record } from './internal/Validate.ts';
  * Pending targets coalesce until the current search finishes. The pinned backend
  * resets requests unconditionally and uses a dense neighbour array: this wrapper
  * preserves requests, and scripts/runtime.mjs patches that array to a sparse hash.
+ * Mutations and save synchronize topology. Read-only observations project floor
+ * validity without advancing requests or relocating agents between mesh edits.
  * All persistent bookkeeping is saved; steering scratch is rebuilt next tick. */
 import { crowd, pathCorridor, localBoundary, obstacleAvoidance } from './internal/Backend.ts';
 import type { crowd as CrowdTypes } from 'navcat/blocks';
@@ -68,16 +70,13 @@ export class Crowd {
     return this.#mesh;
   }
   /** Constructor attaches; detach releases ownership and ends all access. */
-  detach(): void { this.#mesh = undefined; }
+  detach(): void {
+    this.#mesh = undefined;
+  }
   private sync(): void {
     if (this.#state.revision !== this.mesh.revision) this.invalidate();
   }
-  constructor(
-    mesh: Mesh,
-    dt: number,
-    maxRadius: number,
-    options: CrowdOptions = {},
-  ) {
+  constructor(mesh: Mesh, dt: number, maxRadius: number, options: CrowdOptions = {}) {
     this.#mesh = mesh;
     positive(dt, 'fixed dt');
     positive(maxRadius, 'maximum radius');
@@ -108,7 +107,6 @@ export class Crowd {
       traversals: {},
       generations: {},
     };
-
   }
   get tick(): number {
     void this.mesh;
@@ -182,11 +180,15 @@ export class Crowd {
     if (agent.targetRef === result.nodeRef && agent.targetState !== crowd.AgentTargetState.NONE) {
       agent.targetPosition = [...result.position];
       if (agent.slicedQuery.status !== 0) agent.slicedQuery.endPosition = [...result.position];
-      if (agent.corridor.path.at(-1) === result.nodeRef) agent.corridor.target = [...result.position];
+      if (agent.corridor.path.at(-1) === result.nodeRef)
+        agent.corridor.target = [...result.position];
       return true;
     }
-    if (agent.targetState === crowd.AgentTargetState.WAITING_FOR_PATH ||
-        agent.targetState === crowd.AgentTargetState.WAITING_FOR_QUEUE) return true;
+    if (
+      agent.targetState === crowd.AgentTargetState.WAITING_FOR_PATH ||
+      agent.targetState === crowd.AgentTargetState.WAITING_FOR_QUEUE
+    )
+      return true;
     if (agent.corridor.path.length && agent.targetState === crowd.AgentTargetState.VALID) {
       agent.targetRef = result.nodeRef;
       agent.targetPosition = [...result.position];
@@ -291,7 +293,7 @@ export class Crowd {
       !!a &&
       !!target &&
       (this.#state.revision === this.mesh.revision ||
-        a.corridor.path.every(ref => this.#state.generations[ref] === this.generation(ref))) &&
+        a.corridor.path.every((ref) => this.#state.generations[ref] === this.generation(ref))) &&
       !a.targetPathIsPartial &&
       a.targetState === crowd.AgentTargetState.VALID &&
       a.state === crowd.AgentState.WALKING &&
@@ -303,7 +305,8 @@ export class Crowd {
     if (!isValidNodeRef(nav, ref)) return '';
     const node = getNodeByRef(nav, ref);
     const tile = nav.tiles[node.tileId];
-    return tile ? `${tile.tileX},${tile.tileY},${tile.tileLayer}:${tile.sequence}:${node.polyIndex}:${node.flags}`
+    return tile
+      ? `${tile.tileX},${tile.tileY},${tile.tileLayer}:${tile.sequence}:${node.polyIndex}:${node.flags}`
       : `link:${node.offMeshConnectionId}:${ref}:${node.flags}`;
   }
   private captureGenerations(): void {
@@ -312,11 +315,15 @@ export class Crowd {
       for (const ref of [...a.corridor.path, ...a.boundary.polys]) refs.add(ref);
       if (a.targetRef !== null) refs.add(a.targetRef);
       if (a.slicedQuery.status !== 0) {
-        refs.add(a.slicedQuery.startNodeRef); refs.add(a.slicedQuery.endNodeRef);
-        for (const nodes of Object.values(a.slicedQuery.nodes)) for (const node of nodes) refs.add(node.nodeRef);
+        refs.add(a.slicedQuery.startNodeRef);
+        refs.add(a.slicedQuery.endNodeRef);
+        for (const nodes of Object.values(a.slicedQuery.nodes))
+          for (const node of nodes) refs.add(node.nodeRef);
       }
     }
-    this.#state.generations = Object.fromEntries([...refs].sort((a, b) => a - b).map(ref => [ref, this.generation(ref)]));
+    this.#state.generations = Object.fromEntries(
+      [...refs].sort((a, b) => a - b).map((ref) => [ref, this.generation(ref)]),
+    );
   }
   /** All mesh mutations funnel here before stale references can be observed.
    * Completed, valid corridors keep moving. Every search pool and boundary is
@@ -327,14 +334,17 @@ export class Crowd {
     const s = this.#state,
       m = meshData(this.mesh);
     const valid = (ref: number): boolean =>
-      isValidNodeRef(m.nav, ref) && DEFAULT_QUERY_FILTER.passFilter(ref, m.nav) &&
+      isValidNodeRef(m.nav, ref) &&
+      DEFAULT_QUERY_FILTER.passFilter(ref, m.nav) &&
       (s.generations[ref] === undefined || s.generations[ref] === this.generation(ref));
     for (const id of Object.keys(s.data.agents).map(Number)) {
       const a = s.data.agents[id]!;
       const q = a.slicedQuery;
-      let restart = q.status !== 0 && (
-        !valid(q.startNodeRef) || !valid(q.endNodeRef) ||
-        Object.values(q.nodes).some(nodes => nodes.some(node => !valid(node.nodeRef))));
+      let restart =
+        q.status !== 0 &&
+        (!valid(q.startNodeRef) ||
+          !valid(q.endNodeRef) ||
+          Object.values(q.nodes).some((nodes) => nodes.some((node) => !valid(node.nodeRef))));
       if (restart) a.slicedQuery = createSlicedNodePathQuery();
       if (!a.boundary.polys.every(valid)) localBoundary.resetLocalBoundary(a.boundary);
       a.neis = [];
@@ -414,7 +424,8 @@ export class Crowd {
     }
     for (const [id, target] of Object.entries(s.targets)) {
       const a = s.data.agents[id];
-      if (a?.state !== crowd.AgentState.WALKING || a.targetState !== crowd.AgentTargetState.VALID) continue;
+      if (a?.state !== crowd.AgentState.WALKING || a.targetState !== crowd.AgentTargetState.VALID)
+        continue;
       const goal = locate(this.mesh, target);
       if (goal.success && goal.nodeRef !== a.targetRef) {
         a.targetRef = goal.nodeRef;

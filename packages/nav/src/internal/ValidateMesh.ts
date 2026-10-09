@@ -25,10 +25,11 @@ export function validateMesh(s: MeshState): void {
     n.offMeshConnectionAttachments,
   ])
     record(value);
-  for (const collection of [s.obstacles, s.links, s.doors]) for (const id of Object.keys(collection)) {
-    integer(Number(id), 1);
-    requireState(Number(id) < s.nextId);
-  }
+  for (const collection of [s.obstacles, s.links, s.doors])
+    for (const id of Object.keys(collection)) {
+      integer(Number(id), 1);
+      requireState(Number(id) < s.nextId);
+    }
   for (const obstacle of Object.values(s.obstacles)) checkObstacle(obstacle);
   for (const door of Object.values(s.doors)) {
     record(door);
@@ -93,7 +94,8 @@ export function validateMesh(s: MeshState): void {
         n.nodes[link.fromNodeIndex]!.links.includes(i),
     );
     for (const v of [link.edge, link.side, link.bmin, link.bmax]) integer(v);
-    const from = n.nodes[link.fromNodeIndex]!, to = n.nodes[link.toNodeIndex]!;
+    const from = n.nodes[link.fromNodeIndex]!,
+      to = n.nodes[link.toNodeIndex]!;
     if (from.type === nav.NodeType.POLY && to.type === nav.NodeType.POLY) {
       const poly = n.tiles[from.tileId]!.polys[from.polyIndex]!;
       requireState(link.edge < poly.vertices.length);

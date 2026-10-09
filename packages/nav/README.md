@@ -186,21 +186,64 @@ for tiled polygon meshes, streamed floors, runtime carving, links and crowds.
   Links are graph connections, not physical jump animations. Manual traversal
   requires the game to call `completeLink`.
 - Crowd avoidance is local, not a collision solver or a traffic scheduler.
-  Dense opposing traffic can overlap or jam. Unloaded floors report `stranded`;
+  Dense opposing traffic can overlap or jam; one standing agent can hold another indefinitely. Unloaded floors report `stranded`;
   reloading or `place` can recover them. Targets submitted while stranded or on
-  a link are remembered even when `target` returns false. Every mesh edit clears
-  active searches, validates boundary caches and repairs invalid corridors before it
-  returns. Valid completed corridors continue moving; active traversals retain
-  their endpoint coordinates and public link ID even if the link is removed. Fixed `dt` must be at most 0.1 seconds.
+  a link are remembered even when `target` returns false. Edits invalidate only
+  searches and corridors containing replaced tile/polygon generations or disabled
+  nodes. An invalidated request restarts at retained corridor progress; unrelated
+  searches keep their queue priority and budget. Corridors through replaced data
+  recover from the current position. Active traversals retain endpoint coordinates
+  and public link IDs even if the link disappears.
+- Calling `target()` with the same destination leaves its request untouched.
+  A point moving within the goal polygon updates the endpoint. A goal crossing a
+  polygon boundary is coalesced while a search finishes, then the retained corridor
+  is extended toward the newest goal. This avoids restarting a multi-tick search
+  on every chase update. Search work is budgeted at the backend defaults (20 quick
+  expansions, 200 per agent and 600 per tick); nearby retargets keep usable progress.
+- Constructing or restoring a crowd attaches it to its mesh. `detach()` releases
+  that association permanently; subsequent calls throw `nav: crowd is detached`.
+  The mesh never retains crowds or callbacks. No weak references or finalisers
+  are used. Mutating calls and `save()` synchronize pending mesh revisions;
+  read-only agent observations project floor validity without advancing requests.
+  Neighbours use a sparse hash with at most nine cell probes per agent, independent
+  of the distance between loaded tiles. Fixed `dt` must be at most 0.1 seconds.
   Apply inputs in a stable order and save random state separately.
 - Grid capacity is 4,000,000 cells, not a per-tick performance guarantee. Large
   obstructed searches and initial component labelling belong outside a 20 Hz
   tick. JPS uses A* on very sparse or dense masks where jump scanning costs more;
   an unobstructed octile route bypasses either search. Components cache until an edit.
 - Snapshots are data graphs with explicit little-endian typed sections and an
-  exact backend-version check. They are trusted assets/saves, not player input.
+  exact backend-version check. After checking the checksum, restores validate
+  graph structure, cross references, compact-span connections and coordinate bounds.
+  Malformed input throws a `nav:` error. Walking agents need a floor within query
+  extents; stranded and link states retain their positions for later recovery.
+  Coordinates are bounded to ±10,000,000 units and query half extents to eight tiles.
   Persist all chunks atomically;
   one large blob may exceed a storage system's per-value limit.
+
+## Tests
+
+`npm ci` runs this package's prepare script to generate its pinned private backend;
+then root `npm run build` can compile it. `npm run build -w @homie-rocks/nav` also
+regenerates that backend explicitly.
+
+`npm test` uses a fixed small sample of both up axes and restore orders. It has no
+wall-clock assertions. Run the larger checks separately from the repository root:
+
+```sh
+npm run test:arrival -w @homie-rocks/nav
+npm run test:memory -w @homie-rocks/nav
+npm run test:sweep -w @homie-rocks/nav
+```
+
+The arrival matrix runs 2,400 ticks for eight edit/target modes, both up axes and
+1, 60, 300 and 1,000 agents (64 rows). Agents leave after entering the goal's 6 m
+arrival region, avoiding a stationary queue at the destination. Unrelated link
+and obstacle edits and unchanged targets must match every baseline arrival tick
+exactly (zero-tick tolerance); relevant edits and moving goals must all arrive.
+The memory soak creates, restores and discards 200,000 crowds and meshes without
+yielding, checking retained heap after GC (4 MiB maximum growth after warmup).
+The full sweep runs 600 randomised axis/seed cases plus the wider topology cases.
 
 ## Measurements
 

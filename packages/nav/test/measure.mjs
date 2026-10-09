@@ -1,14 +1,10 @@
 import { gzipSync } from 'node:zlib';
 // Run separately from the test suite to avoid competing CPU work.
 import assert from 'node:assert/strict';
-import { performance } from 'node:perf_hooks';
-import { cpus } from 'node:os';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { workerCpu } from './worker-cpu.mjs';
+import { cpus, loadavg } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
 import { build } from 'esbuild';
 import { Mesh } from '@homie-rocks/nav/Mesh.js';
 import { Crowd } from '@homie-rocks/nav/Crowd.js';
@@ -24,12 +20,15 @@ const stats = (values) => {
   };
 };
 const time = (fn) => {
-  const t = performance.now();
+  const t = process.cpuUsage();
   fn();
-  return performance.now() - t;
+  const used = process.cpuUsage(t);
+  return (used.user + used.system) / 1000;
 };
 const report = {
   cpu: cpus()[0].model,
+  timing: 'process user + system CPU milliseconds',
+  load: loadavg(),
   node: process.version,
   scenes: [],
   ticks: [],
@@ -140,92 +139,52 @@ for (const kind of ['single', 'random', 'walls', 'unreachable']) {
     restoreMs: time(() => Grid.restore(bytes)),
   });
 }
-const dir = await mkdtemp(join(tmpdir(), 'nav-measure-'));
-const server = createServer();
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-const port = server.address().port;
-await new Promise((resolve) => server.close(resolve));
-let child;
-try {
-  const source = `
-    import { makeScene } from './scale-scene.mjs';
-    let scene;
-    export default { fetch(request) {
-      const url = new URL(request.url);
-      if (url.pathname === '/new') scene = makeScene(80, Number(url.searchParams.get('count')));
-      if (url.pathname === '/tick') scene.tick();
-      if (url.pathname === '/target') scene.retarget();
-      return Response.json({ok: true});
-    }};
-  `;
-  await build({
-    stdin: { contents: source, resolveDir: fileURLToPath(new URL('.', import.meta.url)) },
-    bundle: true,
-    platform: 'browser',
-    format: 'esm',
-    outfile: join(dir, 'worker.js'),
-  });
-  await writeFile(
-    join(dir, 'config.capnp'),
-    `
-    using Workerd = import "/workerd/workerd.capnp";
-    const config :Workerd.Config = (
-      services=[(name="main",worker=(modules=[(name="worker.js",esModule=embed "worker.js")],compatibilityDate="2026-10-07"))],
-      sockets=[(name="http",address="127.0.0.1:${port}",http=(),service="main")]);
-  `,
-  );
-  child = spawn(
-    fileURLToPath(new URL('../../../node_modules/.bin/workerd', import.meta.url)),
-    ['serve', join(dir, 'config.capnp')],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
-  );
-  child.stderr.on('data', (b) => process.stderr.write(b));
-  const request = async (path) => {
-    const response = await fetch(`http://127.0.0.1:${port}${path}`);
-    if (!response.ok) throw Error(await response.text());
-    await response.json();
-  };
-  for (let i = 0; i < 100; i++) {
-    try {
-      await request('/ping');
-      break;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 20));
+report.workerd = await workerCpu(
+  `
+  import { makeScene } from './scale-scene.mjs';
+  let scene;
+  export default { fetch(request) {
+    const u = new URL(request.url);
+    if (u.pathname === '/new') scene = makeScene(80, Number(u.searchParams.get('count')));
+    for (let i = 0; i < Number(u.searchParams.get('n') ?? 1); i++) {
+      if (u.pathname === '/tick') scene.tick();
+      if (u.pathname === '/target') scene.retarget();
     }
-  }
-  for (const count of [100, 400, 1000]) {
-    await request(`/new?count=${count}`);
-    for (let i = 0; i < 30; i++) await request('/tick');
-    const ticks = [],
-      targets = [];
-    for (let i = 0; i < 100; i++) {
-      let t = performance.now();
-      await request('/target');
-      targets.push(performance.now() - t);
-      t = performance.now();
-      await request('/tick');
-      ticks.push(performance.now() - t);
+    return Response.json({ok: true});
+  }};
+`,
+  async (request, measure) => {
+    const rows = [];
+    for (const count of [100, 400, 1000]) {
+      await request(`/new?count=${count}`);
+      await request('/tick?n=30');
+      const ticks = [],
+        targets = [];
+      for (let i = 0; i < 7; i++) {
+        targets.push(await measure('/target'));
+        ticks.push(await measure('/tick'));
+      }
+      rows.push({ count, targetCpu: stats(targets), tickCpu: stats(ticks) });
     }
-    report.workerd.push({
-      count,
-      targetLoopIncludingHttp: stats(targets),
-      tickIncludingHttp: stats(ticks),
-    });
-  }
-} finally {
-  if (child) {
-    child.kill();
-    await new Promise((resolve) => child.once('exit', resolve));
-  }
-  await rm(dir, { recursive: true, force: true });
-}
+    return rows;
+  },
+);
 const gridBundle = await build({
-  stdin: { contents: "export { Grid } from '@homie-rocks/nav/Grid.js';",
-    resolveDir: fileURLToPath(new URL('.', import.meta.url)) },
-  bundle: true, minify: true, platform: 'neutral', format: 'esm', write: false,
+  stdin: {
+    contents: "export { Grid } from '@homie-rocks/nav/Grid.js';",
+    resolveDir: fileURLToPath(new URL('.', import.meta.url)),
+  },
+  bundle: true,
+  minify: true,
+  platform: 'neutral',
+  format: 'esm',
+  write: false,
 });
 const gridBytes = gridBundle.outputFiles[0].contents;
-report.gridBundle = { minified: gridBytes.length, gzip: gzipSync(gridBytes).length };
+report.gridBundle = {
+  minified: gridBytes.length,
+  gzip: gzipSync(gridBytes).length,
+};
 const output = JSON.stringify(report, null, 2) + '\n';
 await writeFile(new URL('measurements.json', import.meta.url), output);
 console.log(output);

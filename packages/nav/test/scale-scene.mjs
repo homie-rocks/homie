@@ -55,7 +55,7 @@ export function makeScene(size = 80, count = 400, pillars = true, retained = fal
     retarget();
     crowd.step();
   };
-  return { assets, mesh, crowd, retarget, tick };
+  return { assets, mesh, crowd, retarget, tick, goals };
 }
 export function gridScene(kind) {
   const n = 2000,

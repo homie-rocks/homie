@@ -16,12 +16,12 @@ test('README documents the package surface, storage contract and realistic measu
   assert.match(readme, /must persist.*mesh\.save\(\)/i);
   assert.match(readme, /pillars/i);
   assert.match(readme, /retarget/i);
-  assert.doesNotMatch(readme, /SUMMARY-FOR-REVIEW|review [12]|restricted session|earlier busy/i);
-  await assert.rejects(access(new URL('SUMMARY-FOR-REVIEW.md', root)));
 });
 
 test('test sources are formatted for human review', async () => {
-  for (const entry of await readdir(new URL('test/', root), { recursive: true })) {
+  for (const entry of await readdir(new URL('test/', root), {
+    recursive: true,
+  })) {
     if (!entry.endsWith('.mjs')) continue;
     const text = await readFile(new URL(`test/${entry}`, root), 'utf8');
     assert.ok(

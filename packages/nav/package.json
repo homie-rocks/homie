@@ -58,7 +58,10 @@
   "scripts": {
     "build": "node scripts/runtime.mjs && tsc --build",
     "prepack": "npm run build",
-    "prepare": "node scripts/runtime.mjs"
+    "prepare": "node scripts/runtime.mjs",
+    "test:sweep": "NAV_FULL=1 node --test test/continuation*.test.mjs test/topology.test.mjs",
+    "test:arrival": "node test/full-arrival.mjs",
+    "test:memory": "node --expose-gc test/full-memory.mjs"
   },
   "dependencies": {
     "@homie-rocks/heightfield": "0.2.0",
