@@ -458,3 +458,16 @@ second source comparison covered 520 files (234 Codex, 286 official, excluding
 vendor directories) with no differences. Both temporary dev servers were stopped.
 Raw results are `codex-*-reviewed.log`, `official-*-reviewed.log`,
 `reviewed-{codex,official}-*-check.json` and `copy-integrity-reviewed.json`.
+
+The first reviewed Moonbase room check finished successfully but recorded one
+startup reconnect. A repeat with the same unchanged source and packed toolkit
+passed in 157.568 seconds with zero reconnects and uninterrupted seats through
+results (`reviewed-official-moonbase-repeat.json`); both receipts are retained.
+
+Final ancillary gates passed: plugin 120 passed / one optional live-studio skip;
+marketplace and plugin validation; desktop manifest and packed-server proof
+(68 tools, five cards); changelog (62 versions); publish check (one new Studio
+version, 22 unchanged packages already on npm). In an isolated clone only, adding
+the release's own 0.39.0 tag still ran and passed all three rolling upgrades from
+0.38.0, 0.33.0 and 0.32.1. The shared repository received no new tag. The complete
+clean package gate repeats after these checks on the post-merge branch.
