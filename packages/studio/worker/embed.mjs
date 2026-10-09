@@ -72,6 +72,7 @@ export function httpsAddress(value, origin) {
   try { const u = new URL(value, origin); return u.protocol === 'https:' && !u.username && !u.password ? u.href : null; } catch { return null; }
 }
 export function playerProperties(cat, game, { origin = '', title = game?.name, description = game?.blurb } = {}) {
+  if (!game) return {};
   const player = httpsAddress(`${openPath(game)}/embed`, origin);
   const measured = game?.playerImage;
   const picture = measured && httpsAddress(measured.src, origin);

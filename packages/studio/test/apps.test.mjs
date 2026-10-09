@@ -120,6 +120,10 @@ test('app home, landing, manifest and shared watch shell use app language and pu
   assert.match(watch, /homie-app-result/); assert.match(watch, /"kind":"app"/); assert.match(watch, /"role":"wall"/);
   const phone = await (await get('/welcome/open?room=one')).text(); assert.match(phone, /homie-app-result/);
   assert.equal((await get('/welcome/open?role=undeclared')).status, 404);
+  const wallSurface = await (await get('/welcome/__game/?room=one&surface=wall')).text();
+  assert.match(wallSurface, /"params":\{[^}]*"role":"wall"/);
+  const explicitRole = await (await get('/welcome/__game/?room=one&surface=wall&role=customer')).text();
+  assert.match(explicitRole, /"params":\{[^}]*"role":"customer"/);
   for (const origin of ['app://game', 'capacitor://localhost', 'https://localhost', 'https://evil.example']) {
     const request = (method, suffix = '') => new Request('https://apps.example/welcome/api/app/records/queue/native' + suffix, { method, headers: { origin, 'content-type': 'application/json' }, ...(method === 'POST' ? { body: JSON.stringify({ data: { label: 'Native', status: 'waiting' } }) } : {}) });
     const preflight = await worker.fetch(request('OPTIONS'), env, { waitUntil() {} });

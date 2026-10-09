@@ -3504,8 +3504,9 @@ for (const keyless of [false, true]) test(`real Chrome: visible Shop and app/gam
       await page.close();
     }
     assert.equal(s.stripe.calls.filter(c => c.path === '/v1/checkout/sessions' && c.method === 'POST').length, keyless ? 0 : 6);
-    for (const change of [() => { meta.screen = { ...meta.screen, shop: false }; }, () => { delete meta.screen.shop; cat.shop.items = cat.shop.items.map(i => ({ ...i, game: 'another-game' })); }, () => { cat.shop.till = 'off'; }]) {
-      change();
+    const originalShop = structuredClone(cat.shop), originalScreen = structuredClone(meta.screen ?? {});
+    for (const change of [() => { meta.screen.shop = false; }, () => { cat.shop.items = cat.shop.items.map(i => ({ ...i, game: 'another-game' })); }, () => { cat.shop.till = 'off'; }, () => { delete s.env.STRIPE_KEY; delete s.env.STRIPE_SHOP_LINKS; }]) {
+      cat.shop = structuredClone(originalShop); meta.screen = structuredClone(originalScreen); change();
       assert.doesNotMatch(await (await s.fetchSite('/owl-run/open')).text(), /data-shop-control/);
     }
   } finally { await browser.close(); }

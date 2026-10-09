@@ -1,5 +1,5 @@
 import { appAccess, appRecordsRoute } from './app-records.mjs';
-import { openPath } from './app-format.mjs';
+import { appRole, openPath } from './app-format.mjs';
 /**
  * @homie-rocks/studio/worker — a studio's own site, on the studio's own Cloudflare.
  *
@@ -491,7 +491,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   const ver = versionOf(meta?.netplay?.version);
   // The play page's switches for the game (section 24): the allowed names only, checked again here.
   const params = paramsFrom(url.searchParams, meta);
-  if (meta.kind === 'app' && !params.role) params.role = meta.surfaces?.[want === 'screen' ? 'wall' : 'phone'];
+  if (meta.kind === 'app' && !params.role) params.role = appRole(meta, url);
   const cfg = {
     v: 1,
     url: `${wsBase}/${game}/__net?room=${encodeURIComponent(room)}${b ? `&b=${b}` : ''}${t ? `&t=${encodeURIComponent(t)}` : ''}${watching ? '&w=1' : ''}${ver ? `&gv=${encodeURIComponent(ver)}` : ''}`,
@@ -987,7 +987,7 @@ async function route(request, env, ctx) {
     if (sub === 'play/preview' && env.HOMIE_EMBED_PREVIEW === '1' && isLocalOrigin(url.origin)) return embedPreview(cat, meta, url.origin);
     if (sub === 'tv' || sub === 'play' || sub === 'play/embed') {
       const embed = sub === 'play/embed';
-      if (embed && (!playerEnabled(cat, meta) || launch !== 'public')) return notFoundPage('This game does not play inside a post. Open its studio page to play.', cat);
+      if (embed && (!playerEnabled(cat, meta) || launch !== 'public')) return notFoundPage(meta.kind === 'app' ? 'This app does not open inside a post. Open its studio page.' : 'This game does not play inside a post. Open its studio page to play.', cat);
       const screen = !embed && (sub === 'tv' || url.searchParams.get('screen') === '1');
       const asked = embed ? null : askedRoom;
       if (asked !== null && !ROOM_ID.test(asked)) return badRoomPage(cat, meta, asked, { screen });

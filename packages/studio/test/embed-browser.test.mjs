@@ -324,7 +324,7 @@ test('Chrome: every starter plays at the player address, as its own page and fra
     // A host that grants less fails in words, and never navigates the frame to a page that refuses framing.
     for (const [sandbox, message] of [
       ['allow-same-origin allow-scripts', 'blocked opening a tab'],
-      ['allow-popups allow-popups-to-escape-sandbox allow-scripts', 'prevents the game from connecting'],
+      ['allow-popups allow-popups-to-escape-sandbox allow-scripts', 'prevents connecting'],
     ]) {
       const page = await browser.newPage(); page.setDefaultTimeout(15000);
       await page.setRequestInterception(true);
