@@ -266,6 +266,7 @@ async function fakeStripe() {
         return send(200, session);
       }
       if (req.method === 'GET' && url.pathname.startsWith('/v1/payment_intents/')) return send(200, behave.payments.get(url.pathname.split('/').pop()) ?? {});
+      if (req.method === 'GET' && url.pathname === '/v1/disputes') return send(200, { data: behave.disputes ?? [], has_more: false });
       if (req.method === 'GET' && url.pathname === '/v1/refunds') return send(200, { data: [...behave.refunds.values()].filter((r) => r.payment_intent === url.searchParams.get('payment_intent')), has_more: false });
       if (req.method === 'POST' && url.pathname === '/v1/checkout/sessions' && behave.missingProduct && form.get('line_items[0][price_data][product]')) {
         return send(400, { error: { type: 'invalid_request_error', code: 'resource_missing', param: 'line_items[0][price_data][product]', message: `No such product: '${form.get('line_items[0][price_data][product]')}'` } });
@@ -378,7 +379,7 @@ async function site({ key = true, managed = false, catalog = null, settings = nu
   const hook = async (type, object, { id = `evt_${Math.random().toString(36).slice(2, 12)}`, livemode = false, secret = HOOK_SECRET, t = Math.floor(Date.now() / 1000), created = t, updateProvider = true } = {}) => {
     // Provider truth changes before delivery; duplicate deliveries do not add refunds.
     if (type.startsWith('checkout.session.') && object.payment_intent && secret === HOOK_SECRET && !livemode) {
-      stripe.behave.payments.set(object.payment_intent, { amount: object.amount_total ?? object.amount_subtotal, metadata: object.metadata });
+      stripe.behave.payments.set(object.payment_intent, { ...stripe.behave.payments.get(object.payment_intent), amount: object.amount_total ?? object.amount_subtotal, metadata: object.metadata });
       const session = stripe.behave.sessions.get(object.id);
       if (session) Object.assign(session, object);
     }
@@ -1366,7 +1367,8 @@ test('many concurrent purchases reserve the studio cap atomically and expiry rel
   s.stripe.behave.sessions.get(order.session).status = 'expired';
   assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 200, 'Stripe expiry releases capacity without an event');
   await s.hook('checkout.session.expired', { id: order.session });
-  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 200, 'a new checkout expires the buyer open reservation');
+  s.DB.sql.prepare("UPDATE shop_orders SET created_at = ?, updated_at = 1 WHERE status = 'started'").run(Date.now() - 120000);
+  assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 200, 'a new checkout expires the buyer aged open reservation');
   s.stripe.close();
 });
 
@@ -2679,7 +2681,8 @@ test('cancel owns its aged session, foreign events are ignored, and release gran
     s.DB.sql.prepare('UPDATE shop_orders SET created_at = ?, updated_at = 1 WHERE id = ?').run(Date.now() - age, bought.order);
     await s.fetchSite('/shop/?cancelled=1', { headers: s.as(p) });
     assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(bought.order).status, 'started');
-    await s.fetchSite('/shop/?cancelled=1&order=' + bought.order, { headers: s.as(p) });
+    await Promise.all([s.fetchSite('/shop/?cancelled=1&order=' + bought.order, { headers: s.as(p) }), s.fetchSite('/api/player/owns', { headers: s.as(p) }), s.fetchSite('/api/shop', { headers: s.as(p) })]);
+    await Promise.all(s.waits);
     assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(bought.order).status, 'expired');
   }
   const before = s.DB.sql.prepare('SELECT COUNT(*) n FROM shop_events').get().n;
@@ -2801,7 +2804,7 @@ test('no-popup game and TV scripts create a checkout and restore the exact page 
   s.stripe.close();
 });
 
-test('legacy tips, deleted players and paid 404s leave reconciliation; early own events have a bounded retry age', async () => {
+test('legacy tips, deleted players and paid 404s leave reconciliation; unknown orders are ignored at any age', async () => {
   const { reconcileOrders, shopOf } = await import('../worker/shop.mjs');
   const s = await site({ settings: { policy: undefined, automaticTax: false, capPerPlayerMonth: null, purchaseAttemptsPerMinute: 1000 } });
   for (const kind of ['removed-tip', 'deleted-player', 'missing-session']) {
@@ -2822,7 +2825,7 @@ test('legacy tips, deleted players and paid 404s leave reconciliation; early own
     s.stripe.behave.error = null;
   }
   const obj = { id: 'cs_early_own', metadata: { homie: 'shop-v1', origin: 'https://owls.example', order: 'ord_' + 'x'.repeat(20) }, payment_status: 'paid' };
-  assert.equal((await s.hook('checkout.session.completed', obj)).status, 503);
+  assert.equal((await s.hook('checkout.session.completed', obj)).status, 200);
   assert.equal((await s.hook('checkout.session.completed', obj, { created: Math.floor(Date.now() / 1000) - 16 * 60 })).status, 200);
   s.stripe.close();
 });
@@ -2840,4 +2843,110 @@ test('refunding one free cart line keeps its sibling and a later full refund clo
   assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, []);
   assert.equal(s.stripe.calls.length, 0);
   s.stripe.close();
+});
+
+test('unrecorded payments recover Stripe refunds and lost disputes through every paid route and event order', async () => {
+  const { reconcileOrders, shopOf } = await import('../worker/shop.mjs');
+  const { spentThisMonth } = await import('../worker/shop-store.mjs');
+  const settings = { policy: undefined, automaticTax: false, capPerPlayerMonth: null, purchaseAttemptsPerMinute: 10000,
+    referrals: { rate: 0.1, holdDays: 0 }, items: [{ id: 'a', name: 'Hat', price: 300, gives: ['a'] }, { id: 'b', name: 'Cape', price: 999, gives: ['b'] }] };
+  const s = await site({ settings });
+  try {
+    for (const lost of [false, true]) for (const route of ['event-first', 'charge-first', 'update-first', 'payment-first', 'buyer', 'thanks', 'scheduled', 'office', 'release']) {
+      const p = s.player();
+      const purchase = await (await s.post('/api/shop/buy', { lines: [{ item: 'a' }, { item: 'b' }] }, s.as(p))).json();
+      const o = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(purchase.order);
+      const pi = `pi_${o.id}`, at = Math.floor(Date.now() / 1000) - 1200;
+      const payment = { id: pi, metadata: { order: o.id }, status: 'succeeded', latest_charge: { id: `ch_${o.id}`, created: at, disputed: lost } };
+      s.stripe.behave.payments.set(pi, payment);
+      const session = s.stripe.behave.sessions.get(o.session);
+      Object.assign(session, { payment_status: 'paid', payment_intent: payment, amount_total: 1299, created: at });
+      s.DB.sql.prepare("UPDATE shop_orders SET via = 'ref.example', created_at = ?, updated_at = 1 WHERE id = ?").run(at * 1000, o.id);
+      const refund = { id: `re_${o.id}`, payment_intent: pi, amount: 1299, status: 'succeeded', metadata: {} };
+      if (!lost) s.stripe.behave.refunds.set(refund.id, refund);
+      s.stripe.behave.disputes = lost ? [{ id: `du_${o.id}`, payment_intent: pi, status: 'lost' }] : [];
+      const event = () => s.hook(lost ? 'charge.dispute.closed' : 'refund.created', lost ? s.stripe.behave.disputes[0] : refund, { created: at });
+      if (route === 'event-first') assert.equal((await event()).status, 200);
+      if (route === 'charge-first' || route === 'update-first') assert.equal((await s.hook(lost ? 'charge.dispute.created' : route === 'charge-first' ? 'charge.refunded' : 'refund.updated', lost ? s.stripe.behave.disputes[0] : refund, { created: at })).status, 200);
+      if (route === 'payment-first') assert.equal((await s.hook('checkout.session.completed', { ...session, payment_intent: pi })).status, 200);
+      if (route === 'buyer') { await s.fetchSite('/api/player/owns', { headers: s.as(p) }); await Promise.all(s.waits); }
+      if (route === 'thanks') await s.fetchSite('/api/shop/order?session=' + o.session, { headers: s.as(p) });
+      if (route === 'scheduled') await reconcileOrders(s.env, shopOf({ shop: settings }));
+      if (route === 'office') await s.post('/_studio/api/shop/refund', { order: o.id }, s.owner);
+      if (route === 'release') await s.post('/_studio/api/shop/release', { order: o.id }, s.owner);
+      const check = () => {
+        const row = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(o.id);
+        assert.equal(row.status, lost ? 'lost' : 'refunded', `${lost} ${route}`);
+        assert.equal(row.refunded_amount, lost ? 0 : 1299);
+        assert.equal(row.refunded_net, lost ? 0 : 1299);
+        assert.equal(s.DB.sql.prepare("SELECT COUNT(*) n FROM entitlements WHERE order_id = ? AND state = 'active'").get(o.id).n, 0);
+        assert.equal(s.DB.sql.prepare('SELECT state FROM referral_lines WHERE order_id = ?').get(o.id).state, 'void');
+        if (lost) assert.equal(s.DB.sql.prepare('SELECT COUNT(*) n FROM entitlements WHERE order_id = ?').get(o.id).n, 0, 'lost charges never grant');
+      };
+      check();
+      assert.equal(await spentThisMonth(s.env, p.id), 0);
+      await event(); check();
+      await s.hook('checkout.session.completed', { ...session, payment_intent: pi }); check();
+      await s.hook('charge.refunded', { payment_intent: pi }); check();
+    }
+  } finally { s.stripe.close(); }
+});
+
+test('eligible work bypasses processing backoff and legacy paid repairs', async () => {
+  const { reconcileOrders, shopOf } = await import('../worker/shop.mjs');
+  const s = await site({ settings: { policy: undefined, capPerPlayerMonth: null } });
+  try {
+    const p = s.player();
+    const rows = unresolved(s, p, 4);
+    for (const r of rows.slice(0, 3)) s.DB.sql.prepare("UPDATE shop_orders SET status = 'processing', created_at = 1, updated_at = ? WHERE id = ?").run(Date.now() - 600000, r.id);
+    Object.assign(rows[3].truth, { payment_status: 'paid', amount_total: rows[3].truth.amount_subtotal, created: Math.floor(Date.now() / 1000) - 120 });
+    const shop = shopOf({ shop: { items: [{ id: 'tip', kind: 'tip', name: 'Tip' }] } });
+    await reconcileOrders(s.env, shop, p.id);
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(rows[3].id).status, 'paid');
+    assert.equal(stripeReads(s).length, 1);
+    for (const r of rows.slice(0, 3)) s.DB.sql.prepare("UPDATE shop_orders SET status = 'paid', updated_at = 1 WHERE id = ?").run(r.id);
+    s.DB.sql.prepare("UPDATE shop_orders SET status = 'started', paid_at = NULL, attention = 1, updated_at = 1 WHERE id = ?").run(rows[3].id);
+    await reconcileOrders(s.env, shop);
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(rows[3].id).status, 'paid');
+  } finally { s.stripe.close(); }
+});
+
+test('simultaneous refund events do not advance unchanged books, and paid-line refunds keep the free line', async () => {
+  const s = await site({ settings: { policy: undefined, automaticTax: false, capPerPlayerMonth: null, refundDays: 14, items: [
+    { id: 'a', name: 'Hat', price: 300, gives: ['a'] }, { id: 'free', name: 'Free', price: 0, gives: ['free'] },
+  ] } });
+  try {
+    const p = s.player();
+    const purchase = await (await s.post('/api/shop/buy', { lines: [{ item: 'a' }, { item: 'free' }] }, s.as(p))).json();
+    const o = s.DB.sql.prepare('SELECT * FROM shop_orders WHERE id = ?').get(purchase.order);
+    const session = s.stripe.behave.sessions.get(o.session);
+    await s.hook('checkout.session.completed', { ...session, payment_status: 'paid', payment_intent: 'pi_free_sibling', amount_total: 300 });
+    s.stripe.behave.refundStatus = 'pending';
+    let r = await s.post('/api/shop/refund', { order: o.id, line: o.id + '_0' }, s.as(p));
+    assert.equal(r.status, 202);
+    assert.match((await r.json()).message, /not completed/);
+    const refund = [...s.stripe.behave.refunds.values()][0]; refund.status = 'succeeded';
+    const responses = await Promise.all(Array.from({ length: 5 }, () => s.hook('refund.updated', refund)));
+    assert.ok(responses.every((r) => r.status === 200));
+    const revision = s.DB.sql.prepare('SELECT refund_revision FROM shop_orders WHERE id = ?').get(o.id).refund_revision;
+    await Promise.all(Array.from({ length: 5 }, () => s.hook('refund.updated', refund)));
+    assert.equal(s.DB.sql.prepare('SELECT refund_revision FROM shop_orders WHERE id = ?').get(o.id).refund_revision, revision);
+    assert.deepEqual((await (await s.fetchSite('/api/player/owns', { headers: s.as(p) })).json()).owns, ['free']);
+    assert.equal((await s.post('/_studio/api/shop/refund', { order: o.id, line: o.id + '_1' }, s.owner)).status, 200);
+    assert.equal(s.DB.sql.prepare('SELECT status FROM shop_orders WHERE id = ?').get(o.id).status, 'refunded');
+  } finally { s.stripe.close(); }
+});
+
+
+test('foreign events need no PaymentIntent read without an unrecorded order or with foreign metadata', async () => {
+  const s = await site({ settings: { policy: undefined, capPerPlayerMonth: null } });
+  try {
+    const events = ['charge.refunded', 'refund.created', 'refund.updated', 'charge.dispute.created', 'charge.dispute.closed'];
+    for (const type of events) assert.equal((await s.hook(type, { id: 'foreign', payment_intent: 'pi_foreign' })).status, 200);
+    const p = s.player();
+    await s.post('/api/shop/buy', { item: 'supporter' }, s.as(p));
+    for (const type of events) assert.equal((await s.hook(type, { id: 'foreign', payment_intent: 'pi_foreign', metadata: { homie: 'shop-v1', origin: 'https://another.example', order: 'ord_' + 'z'.repeat(20) } })).status, 200);
+    assert.equal(s.stripe.calls.filter(c => c.path.startsWith('/v1/payment_intents/')).length, 0);
+    assert.equal(s.DB.sql.prepare('SELECT COUNT(*) n FROM shop_events').get().n, 0);
+  } finally { s.stripe.close(); }
 });

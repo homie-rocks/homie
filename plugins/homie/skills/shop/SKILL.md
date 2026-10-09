@@ -120,7 +120,7 @@ from `/_studio/office/shop`, and see the badge go. With the protective preset, a
 The studio chooses a restricted (`rk_`) or full secret (`sk_`) key; the steps above describe the restricted option.
 Checkout setup includes both the Stripe key and webhook signing secret; readiness names either missing step.
 The studio can set `checkoutMinutes` from Stripe's 30-minute minimum to its 1440-minute (24-hour) default and
-maximum (values below 31 use 31 for transport margin). Cancelling or replacing an open checkout asks Stripe to expire it before releasing its reservation.
-Free carts grant locally. Game checkout uses a separate tab when available, otherwise the same tab and returns to the game or TV page. Cookies must work before buying. Refund books follow Stripe’s refund list: named lines only, untagged partial refunds on the order, and revocation only after success.
+maximum (values below 31 use 31 for transport margin). Cancelling a named checkout or replacing an open checkout at least a minute old asks Stripe to expire it before releasing its reservation.
+Free carts grant locally. Game checkout uses a separate tab when available, otherwise the same tab and returns to the game or TV page. Cookies must work before buying. Each recorded payment checks Stripe’s refunds and dispute state. Refund books follow Stripe’s refund list: named lines only, untagged partial refunds on the order, and revocation only after success.
 The additive 0012 schema step tolerates the released Worker during deploy and rollback; before the step,
 new code keeps owned items and office refunds available while new sales wait.

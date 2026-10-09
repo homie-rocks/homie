@@ -63,9 +63,9 @@ A game's rules can run on your own Cloudflare instead of in a player's browser. 
 ### Fixed
 
 - Shop readiness requires both the Stripe key and webhook signing secret. Unseen paid orders reconcile after one minute on shop or owned-item requests, off the response path, and through the optional Worker scheduled handler, with or without a cap.
-- The cart schema step is additive and keeps the released Worker working during deployment and rollback. Before the step, owned items and office refunds remain available; checkout names the missing step. Legacy orders without lines are read as one line, and missing paid grants are repaired once.
+- The cart schema step is additive and keeps the released Worker working during deployment and rollback. Before the step, owned items and office refunds remain available; checkout names the missing step. Legacy orders without lines are read as one line, and missing paid grants are repaired once, after eligible unrecorded payments.
 - Cancelling or replacing checkout expires the buyer's open session through Stripe before freeing its optional cap reservation. `checkoutMinutes` follows Stripe's 30-to-1440-minute bounds and 1440-minute default. Sessionless reservations add a one-minute margin.
-- Free carts grant without Stripe. Whole-cart refunds use one Stripe refund; Dashboard partial refunds update cap and referral totals, and early refund events retry. Disputed orders cannot be refunded until Stripe resolves the dispute. Lost disputes preserve earlier refunds.
+- Free carts grant without Stripe. Whole-cart refunds use one Stripe refund; Dashboard partial refunds update cap and referral totals, and early refund events recover their own unrecorded payment before reconciling. Disputed orders cannot be refunded until Stripe resolves the dispute. Lost disputes preserve earlier refunds.
 - Shop errors redact Stripe keys and secrets. Account deletion clears the checkout buyer too. Legacy item names fall back to the catalog; missing definitions produce a retryable response and office note. Game checkout preserves the running game in its tab and explains blocked tabs or cookies.
 
 
@@ -76,7 +76,7 @@ A game's rules can run on your own Cloudflare instead of in a player's browser. 
 
 ### Upgrade notes
 
-- Refunds follow Stripe’s refunds list and statuses: named line refunds affect exactly that line, pending refunds keep items, and failed refunds restore them. Untagged Dashboard partial refunds reduce the order’s balance without guessing a line; full refunds revoke the whole order. Reconciliation uses bounded unresolved-order indexes, cancellation owns its named session, unrelated signed webhooks are ignored, and game/TV checkout falls back to the current tab.
+- Every recorded payment checks Stripe’s refunds and dispute state. Refunds follow Stripe’s refunds list and statuses: named line refunds affect exactly that line, pending refunds keep items, unchanged books keep their revision, and failed refunds restore them. Untagged Dashboard partial refunds reduce the order’s balance without guessing a line; whole-order refunds revoke the whole order; named paid-line refunds keep free siblings. Optional cron triggers survive deploy. Reconciliation uses bounded unresolved-order indexes, cancellation owns its named session, unrelated signed webhooks are ignored, and game/TV checkout falls back to the current tab.
 - The shop accepts restricted (`rk_`) or full secret (`sk_`) keys; the webhook signing secret remains part of required payment setup. Previews normally have no database; a preview you give its own database and both Stripe secrets can sell. Checkout sessions now use Stripe's 24-hour default instead of 31 minutes; write `"checkoutMinutes": 31` to choose the earlier lifetime. Cancelling or replacing a session releases its reservation on Stripe's confirmation.
 
 

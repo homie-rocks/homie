@@ -142,17 +142,18 @@ Refunds are rebuilt from [Stripe’s refunds list](https://docs.stripe.com/api/r
 [succeeded refunds](https://docs.stripe.com/api/refunds/object#refund_object-status) revoke items;
 pending refunds keep them and failed refunds restore them. A named line loses only its own items;
 an untagged Dashboard refund revokes items only when the whole order is refunded.
-Unneeded signed events are acknowledged without recording; an event demonstrably for this shop
-can retry for 15 minutes while its order becomes visible.
+Unneeded signed events are acknowledged without recording. A refund or dispute naming an unrecorded payment
+of this database recovers its Checkout Session first, regardless of event age.
 
 Sessions reserve the optional cap until Stripe confirms an outcome. With the default lifetime, a sessionless
 reservation ages out after 24 hours plus a one-minute margin; your `checkoutMinutes` changes that window.
 [Stripe session lifetime](https://docs.stripe.com/api/checkout/sessions/create#create_checkout_session-expires_at)
 and [expiring open sessions](https://docs.stripe.com/api/checkout/sessions/expire) define these provider bounds.
+Replacing an open checkout expires only reservations at least a minute old; a named cancellation can expire immediately.
 Unresolved orders become eligible for reconciliation after one minute, even with no cap. A buyer's next shop
 or owned-items request schedules up to three reads off the response path, with atomic claims and backoff up
-to an hour; an optional Worker cron invokes the same reconciliation across buyers. No cron is installed for you. To run it every five minutes, add `"triggers": { "crons": ["*/5 * * * *"] }` to `site/wrangler.jsonc`.
-The thanks page can verify a payment directly with the studio's key. Webhook events require Stripe's signature.
+to an hour; an optional Worker cron invokes the same reconciliation across buyers. No cron is installed for you. To run it every five minutes, add `"triggers": { "crons": ["*/5 * * * *"] }` to the studio’s root `wrangler.jsonc`; deploy preserves its triggers.
+Every recorded payment checks Stripe’s refunds and dispute state, including payments recovered by an early refund or dispute event. The thanks page can verify a payment directly with the studio's key. Webhook events require Stripe's signature.
 Test and live books stay separate. Owner release attempts to expire an open session, records who released it
 and when, and never prevents a later verified payment grant.
 

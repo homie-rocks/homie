@@ -167,8 +167,8 @@ ALTER TABLE shop_orders ADD COLUMN refunded_amount INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE shop_orders ADD COLUMN refunded_net INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE shop_orders ADD COLUMN refund_revision INTEGER NOT NULL DEFAULT 0;
 UPDATE shop_orders SET refunded_amount = COALESCE(total, amount), refunded_net = amount WHERE status = 'refunded';
-CREATE INDEX shop_orders_attention_player ON shop_orders (mode, player, updated_at, id) WHERE attention = 1 AND status IN ('started', 'processing', 'paid');
-CREATE INDEX shop_orders_attention ON shop_orders (mode, updated_at, id) WHERE attention = 1 AND status IN ('started', 'processing', 'paid');
+CREATE INDEX shop_orders_attention_player ON shop_orders (mode, player, status, updated_at, id) WHERE attention = 1;
+CREATE INDEX shop_orders_attention ON shop_orders (mode, status, updated_at, id) WHERE attention = 1;
 `;
 
 const DAY = 86_400_000;

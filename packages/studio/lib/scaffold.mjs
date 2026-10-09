@@ -64,7 +64,7 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false, routes = null }) {
+export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false, routes = null, triggers = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/worker.mjs', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/worker.mjs', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
@@ -85,6 +85,7 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     // every deploy, and one written without them sends the studio's domain back to whatever else the zone routes
     // (lib/routes.mjs). A studio without routes gets no key at all.
     ...(routes?.length ? { routes } : {}),
+    ...(triggers ? { triggers } : {}),
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
     durable_objects: { bindings: rooms },
     migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }],
@@ -452,7 +453,7 @@ where it sells and for Stripe's terms. Homie takes no cut.
   secrets. Stripe's agent tools can manage Products through \`shop catalog\`; the connect page creates the
   webhook so its secret stays out of chat. Both the key and signing secret are part of working payment setup.
   Stripe's approval links belong to the owner. \`checkoutMinutes\` is optional (Stripe: 30 to 1440 minutes,
-  default 1440; values below 31 use 31 for transport margin); cancelling or replacing checkout expires the open session on Stripe's confirmation.
+  default 1440; values below 31 use 31 for transport margin); cancelling a named checkout, or replacing one at least a minute old, expires the open session on Stripe's confirmation.
 - \`shop orders\` and \`/_studio/office/shop\` show sales. \`shop refund <order>\` asks the owner to confirm.
   \`shop statements\` records optional referral shares; studios pay their referrers directly.
 

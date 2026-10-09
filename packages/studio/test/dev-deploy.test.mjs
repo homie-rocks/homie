@@ -204,7 +204,7 @@ test('deploy and its plan warn before Wrangler changes anything, read only, and 
   assert.equal(out(run(['deploy', '--plan'], dir)).zone, undefined);
 
   writeStudio(dir, { ...readStudio(dir), cloudflare: { ...readStudio(dir).cloudflare, domain: 'play.example.com' } });
-  editConfig(dir, (c) => { c.routes = [{ pattern: 'play.example.com', custom_domain: true }]; });
+  editConfig(dir, (c) => { c.routes = [{ pattern: 'play.example.com', custom_domain: true }]; c.triggers = { crons: ['*/5 * * * *'] }; });
   assert.equal(customHost(readStudio(dir)), 'play.example.com');
   const api = cloudflareApi({ zones: { 'example.com': [{ pattern: '*/*', script: 'main-site' }] } });
 
@@ -223,6 +223,8 @@ test('deploy and its plan warn before Wrangler changes anything, read only, and 
   const said = [];
   const warned = await deploy(dir, { homie: 'http://127.0.0.1:9', fetchFn: api.fetchFn, log: (line) => said.push(line) });
   assert.equal(warned.ok, true, JSON.stringify(warned));
+  assert.deepEqual(readConfig(dir).triggers, { crons: ['*/5 * * * *'] });
+  assert.deepEqual(JSON.parse(readFileSync(join(cf.state, 'deployed-config'), 'utf8').replace(/^\s*\/\/.*$/gm, '')).triggers, readConfig(dir).triggers);
   assert.equal(warned.zone.state, 'foreign');
   assert.deepEqual(warned.zone.foreign, [{ pattern: '*/*', worker: 'main-site', kind: 'catch-all' }]);
   assert.deepEqual(warned.zone.route, { pattern: 'play.example.com/*', zone_name: 'example.com' });
