@@ -17,7 +17,7 @@ const sleep = ms => new Promise(r => setTimeout(r, Math.max(0, ms)));
 const browser = await puppeteer.launch({ executablePath: findChrome(), headless: true, args: chromeArgs(), timeout: 0 });
 let edit = 1;
 try {
-  for (const [count, gap] of [[10, 10000], [30, 5000]]) {
+  for (const [count, gap] of [...Array.from({ length: 10 }, () => [10, 10000]), [30, 5000]]) {
     const room = `updates-${Date.now().toString(36)}`; const clients = []; const errors = []; let sent = 0;
     try {
       for (const mode of ['play', 'play', 'watch']) {

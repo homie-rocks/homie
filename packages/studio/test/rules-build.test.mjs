@@ -19,8 +19,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { starters } from '../lib/studio.mjs';
-import { PKG, REPO_NM } from './rules-kit.mjs';
+import { buildGameFiles, build as buildSite } from '../lib/build.mjs';
+import { webBundle } from '../lib/standalone.mjs';
+import { starters, listGames } from '../lib/studio.mjs';
+import { PKG, REPO_NM, esbuildOf } from './rules-kit.mjs';
 
 const CLI = join(PKG, 'bin', 'homie-studio.mjs');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-rules-build-')));
@@ -92,6 +94,8 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   const built = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;
+  assert.doesNotMatch(said, /chunks? loaded later/);
+  assert.match(said, /smoke-run largest snapshot \d+ B .*checkpoint \d+ B/);
   assert.match(said, /coin-dash: its rules run on the server \(checked and guarded, \d+ KB, build [0-9a-f]{32}; 18000 ticks played, the room rebuilt from its save \d+ times: the busiest tick used \d+ of 500000 budget units, \d+ of them in one handler; the largest save was \d+ bytes\)/);
   assert.match(said, /hosted by a player's browser, as before \(no room object; nothing to do\): gems\n/);
   // The rules module: one file, importing only Homie's rules module and the guard.
@@ -111,23 +115,34 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   // The view's bundle: the game's declarations as data and the guarded move, and none of the rules' own code.
   const cat = JSON.parse(read(dir, 'site/dist/games.json'));
   const row = cat.games.find((g) => g.id === 'coin-dash');
-  assert.deepEqual(row.room, { host: 'server', tickHz: 20, inputHz: 20, contract: 2, build: data.build, stateHash: data.stateHash, rounds: { seconds: 60, breakSeconds: 8 } });
+  assert.deepEqual(row.room, { host: 'server', offline: true, tickHz: 20, inputHz: 20, contract: 2, build: data.build, stateHash: data.stateHash, rounds: { seconds: 60, breakSeconds: 8 } });
   assert.equal(row.roundSeconds, 60, 'the round is the rules\' own');
-  assert.equal(row.netplayRev, 10);
+  assert.equal(row.netplayRev, 11);
   const view = read(dir, `site/dist/games/coin-dash/${row.built.bundle}`);
   assert.doesNotMatch(view, /"take"|roundStart\(|world\.spawn|\.despawn\(/, 'no handler of the rules is in the view');
+  const manifest = JSON.parse(read(dir, 'site/dist/games/coin-dash/rules.json'));
+  assert.equal(manifest.build, data.build, 'the offline manifest uses the complete built game revision');
+  const files = manifest.files;
+  const allView = files.map((f) => read(dir, `site/dist/games/coin-dash/${f}`)).join('\n');
+  assert.ok(files.length > 1, 'offline rules are a separate module');
+  assert.match(allView, /world\.spawn|\"take\"/, 'the optional module contains the guarded handlers');
+  assert.match(said, /rules and tunables are sent to players/);
+  const appDir = join(dir, '.studio', 'app');
+  webBundle(dir, listGames(dir).find((g) => g.id === 'coin-dash'), appDir);
+  for (const file of files) assert.equal(read(appDir, `web/game/${file}`), read(dir, `site/dist/games/coin-dash/${file}`), 'the app carries each module byte for byte');
+  assert.match(read(appDir, 'web/config.js'), /offline[^,]*true/);
+  assert.match(allView, /frozenUntil/, 'the move code is');
+  assert.match(allView, /this handler ran too long/, 'with the guard that counts it');
   assert.doesNotMatch(view, /agent:offer|carryMs|floorMs/, 'a game without a vocabulary excludes the optional agents helper');
-  assert.match(view, /frozenUntil/, 'the move code is');
-  assert.match(view, /this handler ran too long/, 'with the guard that counts it');
   assert.match(view, /"effectNames":\["ding"\]|effectNames:\["ding"\]/, 'and the declarations, as data');
   // gem-rush: the same catalogue row it always had, its own code the host, nothing about rules.
   const gems = cat.games.find((g) => g.id === 'gems');
   assert.equal(gems.room, undefined);
   assert.equal(gems.movement, 'owner');
   assert.equal(gems.roundSeconds, 60);
-  assert.equal(gems.netplayRev, 10);
+  assert.equal(gems.netplayRev, 11);
   assert.ok(existsSync(join(dir, 'site/dist/games/gems', gems.built.bundle)));
-  assert.match(read(dir, `site/dist/games/gems/${gems.built.bundle}`), /homie-netplay-rev:10/);
+  assert.match(read(dir, `site/dist/games/gems/${gems.built.bundle}`), /homie-netplay-rev:11/);
 
   // A one-game build of the other game keeps coin-dash's rules and its row.
   assert.equal(spawnSync(process.execPath, [CLI, 'build', 'gems'], { cwd: dir, encoding: 'utf8' }).status, 0);
@@ -170,14 +185,120 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   writeFileSync(join(dir, 'games/coin-dash/src/rules.ts'), src.replace('score(world, self) { self.score += 1; },', 'score(world, self) { self.score += 1; }, bonus(world, self) { self.score += 5; },'));
   const undeclared = run(['build'], dir);
   assert.match(undeclared.stdout + undeclared.stderr, /games\/coin-dash\/src\/rules\.ts:\d+: entities\.runner\.on\.bonus: no event \\?"bonus\\?" is declared in shapes\.events/);
-  // A rules game cannot be hosted by a browser yet, and says when.
+  // The same rules also build for a browser host; the Worker no longer carries them.
   writeFileSync(join(dir, 'games/coin-dash/src/rules.ts'), src);
   const cd = JSON.parse(read(dir, 'games/coin-dash/game.json'));
   writeFileSync(join(dir, 'games/coin-dash/game.json'), JSON.stringify({ ...cd, room: { host: 'browser' } }));
-  assert.match(run(['build'], dir).stdout, /Rules hosted by a player's browser arrive in a later release/);
+  assert.equal(run(['build'], dir).status, 0);
+  assert.equal(JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash').room.host, 'browser');
+  assert.deepEqual(readdirSync(join(dir, 'site/src/rules')), ['index.mjs']);
+  // Private server games ship neither handlers nor private values, including in an app.
+  const tuning = JSON.parse(read(dir, 'games/coin-dash/tunables.json'));
+  tuning.privateMarker = 987654321;
+  writeFileSync(join(dir, 'games/coin-dash/tunables.json'), JSON.stringify(tuning));
+  writeFileSync(join(dir, 'games/coin-dash/game.json'), JSON.stringify({ ...cd, room: { host: 'server', offline: false } }));
+  const privateBuild = run(['build'], dir);
+  assert.equal(privateBuild.status, 0, privateBuild.stdout + privateBuild.stderr);
+  const privateFiles = JSON.parse(read(dir, 'site/dist/games/coin-dash/rules.json')).files;
+  assert.equal(privateFiles.length, 1);
+  assert.doesNotMatch(read(dir, `site/dist/games/coin-dash/${privateFiles[0]}`), /987654321|world\.spawn|"take"|__homieLab/);
+  webBundle(dir, listGames(dir).find((g) => g.id === 'coin-dash'), appDir);
+  assert.match(read(appDir, 'web/config.js'), /offline[^,]*false/);
+  const labOut = join(dir, '.studio', 'lab-private');
+  await buildGameFiles(await esbuildOf(), dir, listGames(dir).find((g) => g.id === 'coin-dash'), labOut, { lab: true });
+  const labFiles = JSON.parse(read(labOut, 'rules.json')).files;
+  assert.match(labFiles.map((f) => read(labOut, f)).join('\n'), /987654321/, 'the private game can be tested locally in the Lab');
+  rmSync(join(dir, 'site/dist/games/coin-dash', privateFiles[0]));
+  assert.throws(() => webBundle(dir, listGames(dir).find((g) => g.id === 'coin-dash'), appDir), /rules build is incomplete/);
   // A game that stops being a rules game loses its files in site/src/rules.
   rmSync(join(dir, 'games/coin-dash'), { recursive: true });
   assert.equal(run(['build'], dir).status, 0);
   assert.deepEqual(readdirSync(join(dir, 'site/src/rules')), ['index.mjs']);
   assert.match(read(dir, 'site/src/rules/index.mjs'), /export default \{\};\n$/);
+});
+
+test('a browser rules build refuses measured state above the relay caps', async () => {
+  const dir = studio('large-state');
+  assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
+  const file = join(dir, 'games/coin-dash/src/rules.ts');
+  const source = readFileSync(file, 'utf8').replace("for (const coin of world.near(self.pos, 1, 'coin')) world.send(coin.id, 'take', { by: self.id });", '// Keep the large fixture state; this test measures frames, not coin collection.');
+  writeFileSync(file, source.replace("for (const spot of world.map.spots('coins')) world.spawn('coin', spot, {});", "for (let i = 0; i < 420; i += 1) world.spawn('coin', { x: 8, y: 8, z: 0 }, {});"));
+  const config = join(dir, 'games/coin-dash/game.json');
+  const g = JSON.parse(readFileSync(config, 'utf8'));
+  writeFileSync(config, JSON.stringify({ ...g, room: { host: 'browser' } }));
+  const result = run(['build'], dir);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /snapshot \d+ B \(cap 16384 B\), checkpoint \d+ B \(cap 65536 B\)/);
+  writeFileSync(config, JSON.stringify({ ...g, room: { host: 'server' } }));
+  assert.equal(run(['build'], dir).status, 0);
+  writeFileSync(file, source.replace("for (const spot of world.map.spots('coins')) world.spawn('coin', spot, {});", "for (let i = 0; i < 420; i += 1) world.spawn('coin', { x: 8, y: 8, z: 0 }, {});"));
+  writeFileSync(config, JSON.stringify({ ...g, players: { ...g.players, max: 17 }, room: { host: 'browser' } }));
+  const largeRoom = run(['build'], dir);
+  assert.notEqual(largeRoom.status, 0);
+  assert.match(largeRoom.stdout + largeRoom.stderr, /snapshot \d+ B \(cap 16384 B\), checkpoint \d+ B \(cap 131072 B\)/);
+  const payload = JSON.stringify('a'.repeat(4096));
+  writeFileSync(file, source.replace('events: { take:', 'events: { later: { text: f.text(4096) }, take:').replace('roundStart(world) {', `roundStart(world) { for (let i = 0; i < 20; i += 1) world.after(1000, 'later', { text: ${payload} });`));
+  writeFileSync(config, JSON.stringify({ ...g, room: { host: 'browser' } }));
+  const checkpoint = run(['build'], dir);
+  assert.notEqual(checkpoint.status, 0);
+  const sizes = (checkpoint.stdout + checkpoint.stderr).match(/snapshot (\d+) B \(cap 16384 B\), checkpoint (\d+) B \(cap 65536 B\)/);
+  assert.ok(sizes, checkpoint.stdout + checkpoint.stderr);
+  assert.ok(Number(sizes[1]) < 16384 && Number(sizes[2]) > 65536, 'checkpoint growth is measured independently of snapshots');
+});
+
+for (const kind of ['state', 'ev']) test(`browser build reports the measured ${kind} cap and server alternative`, async () => {
+  const { prepareRules } = await import('../lib/rules-build.mjs');
+  const { writeGame } = await import('./rules-kit.mjs');
+  const { source } = await import('./rules-feature-kit.mjs');
+  const payload = JSON.stringify(Array(1024).fill(4000000000));
+  const rules = `import { defineRules, defineMove, f } from '@homie-rocks/studio/rules';
+export default defineRules({ contract: 2, space: { dims: 2 }, move: defineMove({ pawn() {} }),
+  shapes: { effects: { huge: { text: f.text(4096) } } },
+  shared: { big: f.list(f.u32(), 1024), bigger: f.list(f.u32(), 1024) },
+  entities: { pawn: { player: true, body: { shape: 'circle', radius: 0.2, maxSpeed: 1 },
+    tick(world, self) { ${kind === 'ev' ? `world.emit('huge', self.pos, { text: ${JSON.stringify('x'.repeat(4096))} });` : ''} } } },
+  room: { join() { return { kind: 'pawn', at: { x: 0, y: 0, z: 0 } }; },
+    start(world) { ${kind === 'state' ? `world.shared.big = ${payload}; world.shared.bigger = ${payload};` : ''} } }
+});`;
+  const dir = writeGame(scratch, `cap-${kind}`, { rules });
+  mkdirSync(join(dir, 'map'), { recursive: true });
+  writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100], max: [100, 100] } }));
+  const g = { id: `cap-${kind}`, dir, players: { max: 4 }, room: { host: 'browser' } };
+  const esbuild = await esbuildOf();
+  await assert.rejects(prepareRules(esbuild, scratch, g), new RegExp(`${kind} \\d+ B \\(cap ${kind === 'state' ? 8192 : 4096} B; over by \\d+ B\\).*room.host: server`));
+  const warnings = [];
+  await prepareRules(esbuild, scratch, { ...g, room: { host: 'server' } }, { log: m => warnings.push(m) });
+  assert.ok(warnings.some(m => m.includes(`${kind} `) && m.includes('cap')));
+});
+
+test('smoke measurement includes round, roster, shared state and event sizes and rates', async () => {
+  const { smokeRun } = await import('../lib/rules-build.mjs');
+  const frames = ['round', 'roster', 'state', 'ev'];
+  const H = { createHost({ send }) { return { tick: 1, core: { stats: {} }, frame() {}, stop() {}, facts: () => ({}), save: () => new TextEncoder().encode('{}'), tickNow() { for (const t of frames) send({ t, d: 'x'.repeat(9000) }); } }; } };
+  const stats = smokeRun(H, { settings: { tickHz: 60 } }, 'measure', { timer: () => 0 });
+  for (const t of frames) { assert.ok(stats.frameBytes[t] > 9000); assert.equal(stats.frameRates[t], 60); }
+});
+
+
+test('a rules build publishes code and assets only after the development barrier', async () => {
+  const dir = studio('publish-barrier');
+  assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
+  await buildSite(dir);
+  const rulesPath = join(dir, 'games/coin-dash/src/rules.ts');
+  const oldCode = read(dir, 'site/src/rules/coin-dash.mjs');
+  const oldCatalogue = read(dir, 'site/dist/games.json');
+  const original = readFileSync(rulesPath, 'utf8');
+  writeFileSync(rulesPath, original.replace('self.score += 1;', 'self.score += 2;'));
+  let calls = 0;
+  await buildSite(dir, { only: 'coin-dash', beforePublish: async () => {
+    calls++;
+    assert.equal(read(dir, 'site/src/rules/coin-dash.mjs'), oldCode);
+    assert.equal(read(dir, 'site/dist/games.json'), oldCatalogue);
+  } });
+  assert.equal(calls, 1);
+  assert.notEqual(read(dir, 'site/src/rules/coin-dash.mjs'), oldCode);
+  assert.notEqual(read(dir, 'site/dist/games.json'), oldCatalogue);
+  writeFileSync(rulesPath, 'invalid rules');
+  await assert.rejects(buildSite(dir, { beforePublish: async () => { calls++; } }));
+  assert.equal(calls, 1, 'a rejected build leaves the running Worker alone');
 });

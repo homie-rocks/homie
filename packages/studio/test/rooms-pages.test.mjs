@@ -11,7 +11,7 @@ import puppeteer from 'puppeteer-core';
 import { findChrome, chromeArgs } from '../lib/chrome.mjs';
 import { PKG, REPO_NM } from './rules-kit.mjs';
 
-test('real Chrome play and watch pages retain their room through ten and thirty updates', async t => {
+test('real Chrome play and watch pages retain their room through ten runs of ten updates and thirty updates', async t => {
   const wrangler = join(REPO_NM, '.bin', process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler');
   if (!existsSync(wrangler)) { t.skip('Local Wrangler executable is absent; install Wrangler to run the real update proof.'); return; }
   if (!findChrome()) { t.skip('Chrome is absent; set CHROME_PATH to run the real update proof.'); return; }

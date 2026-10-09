@@ -388,6 +388,7 @@ export async function standalonePlan(root, id, opts = {}) {
 
 /* ------------------------------------------------------------------ the web folder */
 
+const readJson = (file) => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
 const copyTree = (from, to) => { rmSync(to, { recursive: true, force: true }); cpSync(from, to, { recursive: true, dereference: true }); };
 
 /**
@@ -401,8 +402,11 @@ export function webBundle(root, game, dir, { meta, target = 'web', site = '', st
   rmSync(web, { recursive: true, force: true });
   mkdirSync(web, { recursive: true });
   for (const f of ['index.html', 'shell.js', 'shell.css']) copyFileSync(join(SHELL, f), join(web, f));
-  const m = meta ?? standaloneMeta(studio ?? readStudio(root), game);
-  writeFileSync(join(web, 'config.js'), configScript(m, { target, site, share: sharePlaces(game.screen?.share), colours: uiOf(game), movement: game.netplay?.movement ?? game.movement ?? null }));
+  const row = (readJson(join(root, 'site', 'dist', 'games.json'))?.games ?? []).find((g) => g.id === game.id);
+  const m = { ...(meta ?? standaloneMeta(studio ?? readStudio(root), game)), ...(row?.room ? { netplayVersion: row.netplay?.version ?? null } : {}) };
+  const rules = readJson(join(built, 'rules.json'));
+  if (rules) for (const file of rules.files ?? []) if (!existsSync(join(built, file))) throw new Error(`The rules build is incomplete: ${file} is missing. Build the game again before making its app.`);
+  writeFileSync(join(web, 'config.js'), configScript(m, { target, site, share: sharePlaces(game.screen?.share), colours: uiOf(game), movement: game.netplay?.movement ?? game.movement ?? null, room: row?.room ?? null }));
   copyTree(built, join(web, 'game'));
   const index = join(web, 'game', 'index.html');
   writeFileSync(index, withNetScript(readFileSync(index, 'utf8')));

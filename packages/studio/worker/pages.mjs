@@ -565,7 +565,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
       if (m.what === 'roster') state.roster = m.slots;
       // Stopped for good. Removed, or the room closed: the notice. A room with no place left at all: the same notice
       // with its own words, because "try another room" is the only thing a player can do about it.
-      if (m.what === 'closed') { state.closed = m.why; if (m.why === 'kicked' || m.why === 'room-closed' || m.why === 'agents-off') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); else if (m.why === 'room-full' || m.why === 'too-many') notice('full', m); }
+      if (m.what === 'line') state.gameLine = typeof m.text === 'string' ? m.text.slice(0, 200) : null;
+      if (m.what === 'closed') { state.closed = m.why; if (typeof m.message === 'string') state.gameLine = m.message.slice(0, 200); if (m.why === 'kicked' || m.why === 'room-closed' || m.why === 'agents-off') notice(m.why === 'kicked' ? 'kicked' : 'closed', m); else if (m.why === 'room-full' || m.why === 'too-many') notice('full', m); }
       // A game's net.pickPlayer(seat): only an owner's page listens (its overlay opens that player's card).
       if (m.what === 'pick' && (m.seat === null || typeof m.seat === 'number')) { try { window.dispatchEvent(new CustomEvent('homie-pick', { detail: { seat: m.seat } })); } catch (e) {} }
       paint();
@@ -775,7 +776,8 @@ const SHELL_JS = String.raw`${BUILD_RETRY_JS}(function () {
     if (f && f.counts && f.counts.watchers) bits.push(f.counts.watchers + ' watching');
     if (state.full) bits.push('waiting for a seat');
     // Stopped for good: nothing is knocking any more, so it never says "reconnecting". What is true, in a word.
-    if (state.closed) bits.push({ replaced: 'opened in another tab', 'room-full': 'room full', 'too-many': 'room full', stale: 'updating…', kicked: 'removed from this room', 'room-closed': 'room closed', 'agents-off': 'room closed' }[state.closed] || 'disconnected: reload to play');
+    if (state.gameLine) bits.push(state.gameLine);
+    else if (state.closed) bits.push({ replaced: 'opened in another tab', 'room-full': 'room full', 'too-many': 'room full', stale: 'updating…', kicked: 'removed from this room', 'room-closed': 'room closed', 'agents-off': 'room closed' }[state.closed] || 'disconnected: reload to play');
     // The link (section 22): cut off from a room it was in and knocking again ("reconnecting" is true only then), or
     // playing by itself because the room never answered, or did not come back in time.
     else if (state.link && state.link.state === 'reconnecting') bits.push('reconnecting');

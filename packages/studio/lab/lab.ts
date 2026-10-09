@@ -166,6 +166,21 @@ export const lab = {
     return out as Tuned<S>;
   },
 
+  /** Rules use the same slider file as the view. Public values keep their public. prefix in the Lab's UI. */
+  rulesTune(raw: Record<string, unknown>): Record<string, unknown> {
+    if (!ON) return raw;
+    const pub = raw.public && typeof raw.public === 'object' ? raw.public as Record<string, unknown> : {};
+    const spec: TunableFile = {};
+    for (const [k, v] of Object.entries(raw)) if (k !== 'public' && (typeof v === 'number' || typeof (v as TunableSpec)?.value === 'number')) spec[k] = v as TunableSpec | number;
+    for (const [k, v] of Object.entries(pub)) if (typeof v === 'number' || typeof (v as TunableSpec)?.value === 'number') spec[`public.${k}`] = v as TunableSpec | number;
+    const values = host!.tunables(spec);
+    const out: Record<string, unknown> & { public: Record<string, unknown> } = { ...raw, public: { ...pub } };
+    for (const k of Object.keys(spec)) if (Number.isFinite(values[k])) {
+      if (k.startsWith('public.')) out.public[k.slice(7)] = values[k]; else out[k] = values[k];
+    }
+    return out;
+  },
+
   /**
    * Dice for juice (particles, shake, sparks): its own stream in the lab, so a build that adds a particle never moves
    * a gem or a bot in the other build (Math.random() is the world's dice, the same in both). Math.random() outside.

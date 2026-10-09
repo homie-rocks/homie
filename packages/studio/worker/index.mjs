@@ -1148,7 +1148,7 @@ async function route(request, env, ctx) {
       const cur = versionOf(meta?.netplay?.version) ?? '';
       const gv = versionOf(url.searchParams.get('gv')) ?? '';
       const stall = Number(meta?.netplay?.stallMs) || 0;
-      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}&cur=${encodeURIComponent(cur)}${gv ? `&gv=${encodeURIComponent(gv)}` : ''}${stall ? `&stall=${stall}` : ''}${meta?.room?.host === 'server' ? '&host=server' : ''}`;
+      const target = `https://table/${sub}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}&max=${max}${b ? `&b=${b}` : ''}${who ? `&via=${encodeURIComponent(who)}` : ''}${sub === '__net' ? `&wp=${policy}${w ? '&w=1' : ''}` : ''}&pol=${encodeFacts(pol)}&chat=${encodeFacts(lean)}${acct ? '&acct=1' : ''}${member ? '&mem=1' : ''}${hub ? '&hub=1' : ''}${ag ? `&ag=${encodeFacts(ag)}` : ''}${badge ? `&bd=${encodeURIComponent(badge)}` : ''}&cur=${encodeURIComponent(cur)}${gv ? `&gv=${encodeURIComponent(gv)}` : ''}${stall ? `&stall=${stall}` : ''}${meta?.room?.contract ? `&rules=1&hz=${meta.room.tickHz ?? 20}` : ''}${meta?.room?.host === 'server' ? '&host=server' : ''}`;
       // The room's own failure to answer is told apart from the browser going away while it was connecting (a closed
       // tab, a reload racing its own socket): the second is a departure, said in one line with its room, never an
       // uncaught error with nothing on it.
@@ -1388,7 +1388,7 @@ export class Table {
         send: (m, text) => room.hostFrame(m, text),
         log: (line) => { if (line.ev === 'persist-failed') this.storageProblem(new Error(line.error)); else this.say(line); },
         onPause: () => { this.pauseFromRestore = false; this.pausedAt ??= Date.now(); this.armRoom(this.pausedAt + ROOM_PAUSE_MS); },
-        onResume: () => { this.pauseFromRestore = false; this.pausedAt = null; if (this.hostRt) { try { this.saveRoom(this.hostRt.save()); } catch { /* retry already scheduled */ } } this.retimeRound(); this.armRoom(Date.now() + ROOM_ALARM_MS); },
+        onResume: () => { this.pauseFromRestore = false; this.pausedAt = null; if (this.hostRt) { try { this.saveRoom(this.hostRt.save()); } catch { /* retry already scheduled */ } } this.armRoom(Date.now() + ROOM_ALARM_MS); },
         onEnd: (why) => this.endHosted(why),
       });
       room.setServerHost(this.hostRt);
@@ -1396,7 +1396,6 @@ export class Table {
       room.setCurrent(build.build);
       if (pauseWriteFailed) { try { this.saveRoom(this.hostRt.save()); } catch { /* the save retry retains the original absence */ } }
       if (saved) {
-        this.retimeRound();
         room.hostFrame({ t: 'state', k: 'shared', d: this.hostRt.core.shared() });
         room.hostFrame({ t: 'snap', from: null, e: epoch, k: this.hostRt.tick, st: Date.now(), d: this.hostRt.core.snapshot(), c: [] });
       }
@@ -1444,13 +1443,6 @@ export class Table {
       }
       throw error;
     }
-  }
-
-  retimeRound() {
-    if (!this.hostRt) return;
-    const r = this.hostRt.core.save().round;
-    const period = 1000 / hostedBuild(this.game).settings.tickHz;
-    this.room.hostFrame({ t: 'round', round: { ...this.room.lastRound, n: r[0], phase: r[1] ? 'live' : 'over', endsAt: Date.now() + (r[2] - this.hostRt.tick) * period, startedAt: Date.now() + (r[3] - this.hostRt.tick) * period } });
   }
 
   storageProblem(error) {
@@ -1908,8 +1900,12 @@ export class Table {
       this.report();
       return json(res);
     }
+    room.rules = url.searchParams.get('rules') === '1';
+    // Any tick rate a game may declare (1 to 60): the relay's allowances are the page's, from the same table.
+    const hz = Number(url.searchParams.get('hz'));
+    room.tickHz = Number.isInteger(hz) && hz >= 1 && hz <= 60 ? hz : 20;
     // The owner's room size: a room already open takes it from the next visitor on.
-    if (room.seatCap !== max) room.setSeats(max, perAddress(max));
+    if (room.seatCap !== max || room.rules && room.maxPlayers !== max) room.setSeats(max, perAddress(max));
     // Revision 9: the game's own stall time and the build that is live now, the Worker's word with every socket.
     const said = url.searchParams.has('cur');
     if (said) { room.setStall(url.searchParams.get('stall')); room.setCurrent(url.searchParams.get('cur') || null); }

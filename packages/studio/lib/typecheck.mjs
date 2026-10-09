@@ -118,6 +118,8 @@ export async function typecheckRules(root, g, checked, tune, { log = () => {} } 
   writeFileSync(join(dir, 'files.d.ts'), AMBIENT);
   const project = join(dir, 'tsconfig.json');
   writeFileSync(project, `${JSON.stringify({ compilerOptions: { ...OPTIONS, checkJs: true, paths: {
+    ...Object.fromEntries(Object.entries(JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).exports)
+      .filter(([, entry]) => entry?.types).map(([name, entry]) => [`@homie-rocks/studio/${name.slice(2)}`, [join(PACKAGE_ROOT, entry.types)]])),
     '@homie-rocks/studio/rules': [join(dir, 'rules.d.ts')],
     '@homie-rocks/studio/rules/view': [join(dir, 'view.d.ts')],
     '@homie-rocks/studio/*': [join(PACKAGE_ROOT, '*')],

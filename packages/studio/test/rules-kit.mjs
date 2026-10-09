@@ -3,11 +3,12 @@
  * guarded, linked, then imported with the runtime as one instance), small games written on the spot, a clock a test
  * moves, and a relay with a host runtime wired as the Table wires them.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { guardRules, problemLine } from '../lib/rules-guard.mjs';
-import { loadRules } from '../lib/rules-build.mjs';
+import { loadRules, stateHash } from '../lib/rules-build.mjs';
+import { createHash } from 'node:crypto';
 import { NetRoom } from '../worker/room.mjs';
 
 export const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,10 +25,11 @@ export async function loadGame(scratch, dir, id = 'game') {
 }
 
 /** A game written on the spot: `rules` (and `move`) are the text of its files. Returns its folder. */
-export function writeGame(scratch, name, { rules, move = null }) {
+export function writeGame(scratch, name, { rules, move = null, view = 'export {};\n' }) {
   const dir = join(scratch, name);
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(join(dir, 'src', 'rules.ts'), rules);
+  writeFileSync(join(dir, 'src', 'view.ts'), view);
   if (move) writeFileSync(join(dir, 'src', 'move.ts'), move);
   return dir;
 }
@@ -65,7 +67,7 @@ export function hostRig(L, compiled, opts = {}) {
   const ended = [];
   const lines = [];
   let n = 0;
-  const host = L.H.createHost({ game: 'test', compiled, clock, send: (m) => sent.push(m), log: (l) => lines.push(l), random: () => { n += 1; return ((n * 7919) % 1000) / 1000; }, onEnd: (why, facts) => ended.push({ why, ...facts }), ...opts.host });
+  const host = L.H.createHost({ game: 'test', enforceOverrun: true, compiled, clock, send: (m) => sent.push(m), log: (l) => lines.push(l), random: () => { n += 1; return ((n * 7919) % 1000) / 1000; }, onEnd: (why, facts) => ended.push({ why, ...facts }), ...opts.host });
   const snap = () => sent.filter((m) => m.t === 'snap').at(-1) ?? null;
   return {
     host, clock, sent, ended, lines, snap,
@@ -88,7 +90,7 @@ export function roomRig(L, compiled, { maxPlayers = 8, roomOpts = {} } = {}) {
   const room = new NetRoom({ code: 'r', maxPlayers, now: clock.now, log: (l) => lines.push(l), ...roomOpts });
   let host = null;
   const start = () => {
-    host = L.H.createHost({ game: 'test', compiled, clock, send: (m, text) => room.hostFrame(m, text), log: (l) => lines.push(l), random: () => 0.25, onPause: () => events.push('pause'), onResume: () => events.push('resume'), onEnd: (why) => events.push(`end:${why}`) });
+    host = L.H.createHost({ game: 'test', enforceOverrun: true, compiled, clock, send: (m, text) => room.hostFrame(m, text), log: (l) => lines.push(l), random: () => 0.25, onPause: () => events.push('pause'), onResume: () => events.push('resume'), onEnd: (why) => events.push(`end:${why}`) });
     room.setServerHost(host);
     return host;
   };
@@ -117,4 +119,21 @@ export function roomRig(L, compiled, { maxPlayers = 8, roomOpts = {} } = {}) {
       }
     },
   };
+}
+
+/** Runtime fault-injection fixtures still pass the guard/compiler, but deliberately bypass the build verdict.
+ * These suites inject loops, oversized frames and invalid companion requests to prove live recovery. The build
+ * suite separately proves those programs are refused; running that verdict here would prevent the runtime test.
+ */
+export async function prepareRuntimeFixture(esbuild, root, g) {
+  const guarded = await guardRules(esbuild, root, g.dir);
+  if (!guarded.ok) throw new Error(guarded.problems.map(problemLine).join('\n'));
+  const { def, R } = await loadRules(esbuild, root, g.id, guarded.code);
+  const read = (name, fallback) => existsSync(join(g.dir, name)) ? JSON.parse(readFileSync(join(g.dir, name), 'utf8')) : fallback;
+  const tune = read('tunables.json', {}), map = { ...read('map/main.json', {}), name: 'main' };
+  const settings = R.roomSettings(g.room).settings, seats = g.players?.max ?? 8;
+  const compiled = R.compileRules(def, { tune, map: R.compileMap(map, map.name), settings, seats });
+  return { code: guarded.code, tune, map, settings, seats, schema: R.schemaOf(compiled), publicTune: compiled.publicTune,
+    files: guarded.files, rounds: compiled.rounds, stateHash: stateHash(compiled),
+    build: createHash('sha256').update(guarded.code).update(JSON.stringify({ tune, map, settings, seats })).digest('hex') };
 }

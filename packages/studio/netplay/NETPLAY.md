@@ -1,9 +1,16 @@
-# Homie netplay contract, v1 (revision 10)
+# Homie netplay contract, v1 (revision 11)
 
-Status: **v1, revision 10** (2026-10-07, `@homie-rocks/studio` 0.33.0). The wire
-version is `v: 1`. Everything revisions 2 to 10 added is either an optional field, a new message type,
+Status: **v1, revision 11** (2026-10-08, `@homie-rocks/studio` 0.33.1). The wire
+version is `v: 1`. Everything revisions 2 to 11 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do
 not know. A change to the contract bumps `v` and keeps v1 working.
+
+**Revision 11** adds browser rules hosting and offline play (29.7): `held` occupants on
+welcome/promotion, explicit `rules: true` on runtime output, `hosted` relay events,
+`view` player events, `retime` clock-only round frames, terminal `rules-end`, and
+`host` with `why: 'host-kept'` to a rules host whose yield elected nobody.
+The hosting page's unmarked frames have ordinary player allowances. Old-style games
+keep revision 10's character counts and rates.
 
 **What revision 10 added** (a game that knows none of it plays exactly as before, hosted by a player's
 browser; nothing here changes a frame such a game sends or receives):
@@ -295,7 +302,7 @@ it.
 | The host closes or says `bye` | Sends `leave`, then elects a replacement. |
 | **Stall:** the host has sent no snapshot for **1.5 s** (the game's own `netplay.stallMs`, 1.5 to 10 s; section 22) while others are present | Demotes it (`role replica, why host-stalled`) and elects another. A host whose frames hitch sends a heartbeat meanwhile, for 4 s. |
 | **Frozen host at a newcomer's hello:** the host is hidden, or has sent nothing for 2.5 s | Makes the newcomer host at once. The old host gets `role replica`. |
-| **Hidden tab** | The helper sends a checkpoint, then `yield`. `ping {hid: true}` has the same effect. |
+| **Hidden tab** | The helper sends a checkpoint, then `yield`. `ping {hid: true}` has the same effect. A rules host is answered when nobody could take the role (section 29.7). |
 | **Silent socket:** nothing received for **10 s** | Closes it (a slept phone, a half-open link). The seat's body turns into a bot. The helper pings every 2 s. |
 
 - **Ranking candidates:**
@@ -2247,8 +2254,8 @@ The state hash includes ordered declarations and handler names/presence, body/pl
 field options, shared state, shapes, bots, asks, map, dimensions, tick rate, rounds and contract.
 Handler implementations, tunables and view code do not change it. The build hash includes
 built rules, view, tunables and map, excluding build time, commit and other games. It replaces
-`netplay.version` for rules games. Browser-hosted games keep the existing version and checkpoint
-behaviour. An old standalone app must update before joining a rules game's live room.
+`netplay.version` for rules games in either hosting mode. Browser-hosted games use the
+checkpoint handover described below. An old standalone app must update before joining a rules game's live room.
 
 A restored run increments `boots.count` at its first tick and clears it after ten seconds of
 ticking. The second successive restored run waits a deterministic room-specific delay of up
@@ -2259,3 +2266,113 @@ After sixty seconds paused without a returning person, the room ends even if wat
 Ending deletes `save`, `boots` and `net`, preserves `office` and `recorded`, and keeps an `ended`
 marker so a late reconnect cannot reopen that room. The Lobby forgets it. The stored alarm
 also cleans up a room whose object restarted with nobody returning.
+### 29.7 The same runtime in a browser and offline
+
+`room.host: 'browser'` bundles the guarded host runtime and announces `rules: true` in
+`hello`. The relay elects a browser using the existing election and visibility yield.
+Only an elected host that announced rules receives step `in` frames (`e`, `k`, `s`, `r`);
+an older host receives the original input format. The relay supplies `from` from the socket's
+seat. It preserves `e` on a rules host's snapshots, and seat expiry sends `{ t: 'free', seat }`
+to a rules host. An old-style host is sent neither, and its `welcome` and `role` carry no
+`held`: nothing an old-style game sends or receives differs from revision 9. A page that
+announces rules with a revision below 11 is never elected (its output would be unmarked).
+Joins, AI identity and policy are the relay's facts, never fields copied from a player's input.
+
+A rules checkpoint holds `{ rules: build, data: runtimeSave }`. Promotion validates it and
+restores one complete state through `createHost` and the single `createCore` save validator, with a fresh input epoch. `restoreEpoch` is the single replacement epoch option; `startPaused: false` lets browser promotion resume with the relay’s current occupants, while server recovery starts paused. A malformed or incompatible checkpoint
+starts a fresh round, says so, and immediately replaces the relay checkpoint. Abrupt loss
+can rewind to the last checkpoint; the replacement host republishes the round's wall-clock
+deadline from its restored tick. No newer display snapshot is mixed into the save.
+
+An elected rules host may send `{ t: 'rules-end', rules: true, why }` when its runtime ends. The relay
+accepts this only from that host in a game the server catalogue identifies as rules, sends terminal `room-over` to everyone, closes sockets,
+and forgets the room and checkpoint. A later visitor starts fresh. Replicas cannot end it.
+`host-failed` and `room-over` are terminal helper errors; neither starts offline play or
+restores the failed state automatically.
+
+Browser simulation uses `performance.now()`. The helper converts outgoing timestamps to
+the room's wall clock with rising snapshot stamps. Clock corrections republish the round deadline. A callback up to a tenth of a second late (two tick periods, if that is longer) is caught up, as on the server; a later one rebases the simulation clock without blaming rules, so a browser whose timers are that late runs slow and yields to a faster one.
+Hidden local hosts pause; visible hosts resume at the same tick. With another player present,
+the hidden host checkpoints and yields as before. Server isolate overrun enforcement is
+explicitly enabled only by the server adapter.
+
+Server-hosted games with offline enabled fetch a separate rules entry after playable.
+Private games (`offline: false`) have no local rules import. Local play sends no snapshots,
+checkpoints, results or state to the relay. A dropped connection tries for five seconds
+before local play starts when rules are available; reconnecting announces the switch to
+the online round. Production bundles do not read Lab stage or tuning globals.
+
+The browser relay and rules build share `worker/limits.mjs`. The rules view receives the
+same table without adding imports to vendored connection helpers. Rules sizes are UTF-8
+JSON bytes, including the runtime marker. Old-style games count characters, as before.
+For tick rate H and seat count S, the shared allowances are:
+
+| Frame | Bytes through 16 seats | Bytes above 16 seats | Tokens/second |
+| --- | --- | --- | --- |
+| Snapshot | 16,384 | 16,384 | max(30, ceil(1.25 H)) |
+| Checkpoint | 65,536 | 131,072 | 4 |
+| Shared state | 8,192 | 8,192 | H + 64 |
+| Event, including effects | 4,096 | 4,096 | ceil((H + 10S + 32) / 0.8) |
+| Round | 8,192 | 16,384 | 8 |
+| Roster | 4,096 | 8,192 | 2S + 8 |
+| Decision | 6,144 | 6,144 | ceil((H + 5S + 8) / 0.8) |
+| Caps / rules-end | 512 | 512 | 4 |
+
+The relay's token bucket holds two seconds of each allowance. For every kind but the
+snapshot the sender refills at 80% of that rate and holds one second of tokens, which
+leaves headroom for transport batching and late timers. A snapshot spends the relay's
+whole rate with two tokens in hand: a tick that runs on time sends its snapshot at once,
+so a browser host sends a snapshot a tick at any tick rate, as the server does, and the
+quarter above the tick rate absorbs the ticks a late timer runs together. Only snapshots
+coalesce. All other runtime output, including checkpoints and decisions, shares one
+ordered FIFO, and each frame leaves as soon as its own kind has a token: nothing reliable
+waits for a snapshot's.
+A snapshot over the relay allowance drops. Reliable output over it moves the rules to
+another player with `host-fault` explaining the change; that socket is not elected again
+(a page that reconnects is a newcomer, behind every other candidate). The
+room ends only if no eligible host remains. Player rate errors never end the room.
+
+**Giving the role up is one ordered act.** A rules host that yields (its tab is hidden, it
+runs slow, the game calls `handOff()`) saves a checkpoint and puts `yield` behind it in the
+same FIFO, so the relay elects with the tick the room is on. From the yield on, the sender
+holds what the rules make until the relay answers: a `role` to somebody else discards it
+(the next host makes those ticks itself), and `{ t: 'host', host, why: 'host-kept' }`, sent
+to everyone in a rules room whose host's yield elected nobody, releases it in order. Two seconds without an answer
+release it too. `ping` does not report `hid: true` while a yield is still queued. A page
+that closes (`pagehide`, `close()`) sends what its allowances permit, in order, then its
+last checkpoint whatever the checkpoint allowance says (the relay's bucket holds twice the
+sender's), then `bye`; a frame it could not send is covered by that checkpoint.
+
+**Everything the rules say goes one way.** The helper sends no `round`, `roster`, `state`,
+`caps`, `snap`, `ckpt` or `decide` of its own in a rules game. A host that reconnects and
+is still the host (the relay may have restarted with an old save or none) asks its runtime
+to announce: the round with its results, the roster, the shared state and the capabilities
+leave as marked output, then a checkpoint. A promoted host that restored a checkpoint says
+its shared state with its round, since the checkpoint may be older than what the relay kept.
+A modified host can already fabricate rules output; its marker adds no authority.
+
+Effects share one frame per tick. Shared state also has a room total of 64 keys and
+65,536 bytes. Build smoke checks measure every runtime kind; browser size excesses
+fail with a measured explanation, and server builds warn. These samples are not a
+proof of every future round. Oversized runtime frames remain terminal with the
+measurement on every page. Clock-only round retimings carry no results and do not
+fire another round event. Offline players retry at most 2.5 seconds apart, and the
+browser's `online` event retries immediately.
+
+The view's guide helper never owns guides. Online commands, asks, inputs and speech go
+through the relay even on the page running the runtime. Runtime events return through the
+relay with a `hosted` mark (which a player's event cannot supply), and rosters and results
+return with the same AI labels all other views receive. A rules host's relayed speech keeps
+a live person's seat or null; older hosts retain the original sender stamping. Offline
+play uses the same runtime boundary locally and has bots, without online guides or AI.
+
+A slow host reports its achieved speed. A replacement needs a recent event-loop measurement
+at least fifty percent faster plus ten percentage points, and any measured hosting speed
+must also pass that threshold. Two equally slow hosts keep one authority. Hidden tabs and
+lost hosts still use the existing election path. Welcome and promotion frames include held
+seat identities, without tokens, so an absent person's body stays theirs after handover.
+
+A missing offline module leaves the connection helper alive and says the game needs a
+connection. A failed offline runtime stops locally while reconnection continues. An online
+runtime failure ends the room. Snapshots never grow above 16,384 bytes, including above
+sixteen seats.

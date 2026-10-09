@@ -23,7 +23,7 @@
  * Run: node --test packages/studio/test/rules-hostile.test.mjs
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -61,14 +61,14 @@ async function plant(parts, { budget = 1_000_000, seats = 4, host = {}, clock = 
   rig.join(0);
   return { refused: null, L, rig, c };
 }
-/** Run ticks one by one on the test's clock. Returns the real time the slowest took, and whatever escaped a tick (nothing may). */
+/** Run ticks one by one on the test's clock. Returns the CPU time the slowest took (excluding time other processes run), and whatever escaped a tick (nothing may). */
 function drive(rig, ticks) {
   let slowest = 0; let escaped = null;
-  for (let i = 0; i < ticks && !escaped; i += 1) { const t0 = performance.now(); try { rig.ticks(1); } catch (error) { escaped = error; } slowest = Math.max(slowest, performance.now() - t0); }
+  for (let i = 0; i < ticks && !escaped; i += 1) { const t0 = process.cpuUsage(); try { rig.ticks(1); } catch (error) { escaped = error; } const cpu = process.cpuUsage(t0); slowest = Math.max(slowest, (cpu.user + cpu.system) / 1000); }
   return { slowest, escaped };
 }
 const stats = (rig) => rig.host.core.stats;
-/** The line every room must be under: a tick of a small game, however its rules try, in real milliseconds. Hundreds of times what any of these takes when the budget holds, and far under what each took before it did. */
+/** The line every room must be under: a tick of a small game, however its rules try, in CPU milliseconds. Hundreds of times what any of these takes when the budget holds, and far under what each took before it did. */
 const SLOW_MS = 400;
 
 /* ================================================================== a room is never frozen */
@@ -429,7 +429,7 @@ test('a declaration is read as plain data too: nothing a module declares is turn
   for (let i = 0; i < 40; i += 1) deep = [deep, deep];
   const evil = { valueOf: hook, toString: hook, toJSON: hook, [Symbol.toPrimitive]: hook };
   const compile = (over, env = {}) => L.R.compileRules(L.R.defineRules({ contract: 2, space: { dims: 2 }, entities: { a: { fields: { n: f.u8() } } }, ...over }), env);
-  const quick = (what, fn) => { const t0 = performance.now(); const out = fn(); const ms = performance.now() - t0; assert.ok(ms < SLOW_MS, `${what} took ${ms.toFixed(0)} ms`); return out; };
+  const quick = (what, fn) => { const t0 = process.cpuUsage(); const out = fn(); const cpu = process.cpuUsage(t0); const ms = (cpu.user + cpu.system) / 1000; assert.ok(ms < SLOW_MS, `${what} took ${ms.toFixed(0)} ms`); return out; };
   // `init`: copied as plain data of a bounded size when the declaration is read, whether it came through `f` or was written by hand.
   const c = quick('a declaration whose init is very deep', () => compile({ entities: { a: { fields: { bag: f.list(f.u8(), 4, { init: deep }), n: { t: 'u8', init: evil }, note: f.text(8, { init: evil }), at: f.vec3({ init: { x: evil, y: deep, z: 1 } }) } } } }));
   assert.equal(hooks, 0);
@@ -792,4 +792,14 @@ test('with the tick\'s budget gone nothing is lost: an entity that has not arriv
   assert.ok(rocks().every((f) => f[0] === 1), 'every one arrived, once');
   assert.equal(rig.ents(0).find((e) => e.seat === 0).fields[1], 16, 'every command ran, once');
   assert.ok(stats(rig).ticksCut > 0);
+});
+
+test('the smoke and hostile tick clocks exclude time the process was not running', async (t) => {
+  const L = await loadGame(scratch, COIN_DASH, 'cpu-clock');
+  const c = L.R.compileRules(L.def, { tune: JSON.parse(readFileSync(join(COIN_DASH, 'tunables.json'))), map: L.R.compileMap(JSON.parse(readFileSync(join(COIN_DASH, 'map/main.json')))), settings: L.R.roomSettings({}).settings, seats: 8 });
+  let wall = 0;
+  t.mock.method(performance, 'now', () => (wall += 300));
+  assert.doesNotThrow(() => smokeRun(L.H, c, 'cpu-clock'));
+  const rig = hostRig(L, c); rig.join(0);
+  try { assert.ok(drive(rig, 4).slowest < SLOW_MS); } finally { rig.host.stop(); }
 });

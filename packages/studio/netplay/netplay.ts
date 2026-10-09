@@ -88,9 +88,9 @@
 
 export const NETPLAY_VERSION = 1;
 /** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
-export const NETPLAY_REVISION = 10;
+export const NETPLAY_REVISION = 11;
 /** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
-export const NETPLAY_MARK = 'homie-netplay-rev:10';
+export const NETPLAY_MARK = 'homie-netplay-rev:11';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -571,6 +571,35 @@ export interface Probes {
   [extra: string]: unknown;
 }
 
+/** The guarded rules module supplies this adapter lazily; the vendorable helper imports no runtime. */
+export interface RulesHost {
+  frame(m: Record<string, unknown>): void;
+  sync(peers: Peer[]): void;
+  /** The round, the roster, the shared state and the capabilities again, as output: a relay that restarted has none of them. */
+  announce(): void;
+  pause(): void;
+  resume(): void;
+  start(): void;
+  stop(): void;
+  save(): unknown;
+  readonly tick: number;
+  facts(): Record<string, unknown>;
+}
+export type RulesHostFactory = (o: { now(): number; send(m: Record<string, unknown>): void; restore: unknown; peers?: Peer[]; held?: Peer[]; policy?: Policy; onEnd(why: string): void }) => RulesHost;
+
+export interface RulesOutputSender {
+  push(frame: Record<string, unknown>): void;
+  finish(frame: Record<string, unknown>): void;
+  /** `yield`, in order behind the checkpoint; what the rules make after it is held until `release()` or `stop()`. */
+  handOver(frame: Record<string, unknown>): void;
+  readonly handing: boolean;
+  readonly waiting: boolean;
+  release(): void;
+  /** The page is going: what the allowance permits, then the last checkpoint, always. */
+  leave(): void;
+  stop(): void;
+}
+
 export interface NetplayOptions<C = unknown> {
   /** Defaults to `window.HOMIE_NET`. `null` forces offline. */
   config?: NetConfig | null;
@@ -582,11 +611,15 @@ export interface NetplayOptions<C = unknown> {
   /** May this browser be elected host? Default true. */
   canHost?: boolean;
   /**
-   * Revision 10: this game is written as rules plus view, and its room's host is the server (NETPLAY.md section 29).
-   * This browser is never elected host, sends its input with `net.steps`, and reads the control table as rows of
+   * Revision 10: this game is written as rules plus view (NETPLAY.md section 29). Its elected browser or server
+   * runs the same host runtime. The view sends input with `net.steps` and reads the control table as rows of
    * `[seat, r, ack, lead]`. Set by the view library (`openRoom`), not by a game.
    */
   rules?: boolean;
+  /** Shared relay limits supplied by the rules view; legacy vendor copies stay dependency-free. */
+  rulesLimits?: { bytes: Record<string, number>; rates: Record<string, number>; output: (opts: { rates: Record<string, number>; send: (frame: Record<string, unknown>) => void; now: () => number }) => RulesOutputSender };
+  /** Set by the rules view's build. Server games load this only once playable, or when starting offline. */
+  rulesHost?: { mode: 'server' | 'browser'; offline: boolean; load?: () => Promise<RulesHostFactory> };
   /** Game id, for the relay's logs. */
   game?: string;
   /** Seats in a room (the manifest's players.max). The relay takes it from the first visitor of an empty room. */
@@ -747,6 +780,7 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   readonly seat: number | null;
   readonly spectator: boolean;
   readonly offline: boolean;
+  readonly rulesHosting: boolean;
   readonly connected: boolean;
   /** Why the client stopped for good (a refusal reconnecting would repeat: 'replaced', 'room-full', ...), else null. */
   readonly closedWhy: string | null;
@@ -1293,7 +1327,7 @@ const LADDER = [250, 500, 1000, 2000, 4000];
  * second of frames at once), and a kick that ended the page's play for good left a phone frozen with no word.
  * After one it comes back (its seat token keeps its body), sending at the slow rate below.
  */
-const FINAL_ERRORS = new Set(['replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed', 'watch-off', 'agent-pass', 'agents-off', 'agents-unsupported', 'stale']);
+const FINAL_ERRORS = new Set(['room-over', 'host-failed', 'replaced', 'version', 'room-full', 'too-many', 'kicked', 'room-closed', 'watch-off', 'agent-pass', 'agents-off', 'agents-unsupported', 'stale']);
 /** An AI closed for being alone in a room (`agents-alone`, section 17) waits this long before it knocks again. */
 const AGENTS_ALONE_WAIT_MS = 30_000;
 /**
@@ -1469,8 +1503,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const checkpointMs = Math.max(250, opts.checkpointMs ?? 1000);
   const connectTimeoutMs = opts.connectTimeoutMs ?? 4000;
   const connectOpenMaxMs = Math.max(2000, Math.min(120_000, Number(opts.connectOpenMaxMs) || CONNECT_OPEN_MAX_MS));
-  const reconnectMaxMs = Math.max(5000, Math.min(300_000, Number(opts.reconnectMaxMs) || RECONNECT_MAX_MS));
-  const heartbeatMs = opts.heartbeatMs === 0 ? 0 : Math.max(200, Math.min(2000, Number(opts.heartbeatMs) || HEARTBEAT_MS));
+  const reconnectMaxMs = Math.max(5000, Math.min(300_000, Number(opts.reconnectMaxMs) || (opts.rules && (opts.rulesHost?.offline || opts.rulesHost?.mode === 'browser') ? 5000 : RECONNECT_MAX_MS)));
+  const heartbeatMs = opts.rules === true || opts.heartbeatMs === 0 ? 0 : Math.max(200, Math.min(2000, Number(opts.heartbeatMs) || HEARTBEAT_MS));
   const staleMs = Math.max(2500, opts.staleMs ?? 6000);
   // Revisions (section 23): the game's revision (the page's word, or the game's own) and what this build can do.
   const version = cleanVersion(opts.version ?? cfg?.ver);
@@ -1480,7 +1514,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   const watching = Boolean(opts.watch ?? cfg?.watch);
   const want: Want = watching ? 'screen' : (opts.want ?? cfg?.want ?? 'play');
   const rulesGame = opts.rules === true;
-  const canHost = rulesGame ? false : opts.canHost ?? true;
+  let canHost = rulesGame ? opts.rulesHost?.mode === 'browser' : opts.canHost ?? true;
   const defaultOwn = (opts.movement ?? 'owner') === 'owner';
 
   // Where parent notifications go: the shell page around a framed game.
@@ -1508,6 +1542,143 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   };
 
   // ---------------------------------------------------------------- state
+  let rulesHost: RulesHost | null = null;
+  let hostLoad: Promise<RulesHostFactory> | null = null;
+  let hostGeneration = 0;
+  let pendingRules: Record<string, unknown>[] = [];
+  let disposed = false;
+  let onlineRulesSave: unknown = null;
+  const canOffline = !rulesGame || Boolean(opts.rulesHost?.offline || canHost);
+  function loadHost(): Promise<RulesHostFactory> | null {
+    if (!opts.rulesHost?.load) return null;
+    return hostLoad ??= Promise.resolve().then(() => opts.rulesHost!.load!()).catch((error) => { hostLoad = null; throw error; });
+  }
+  let rulesSender: RulesOutputSender | null = null;
+  let yieldTimer: ReturnType<typeof setTimeout> | null = null;
+  function stopRules(): void { if (yieldTimer !== null) { clearTimeout(yieldTimer); yieldTimer = null; } rulesSender?.stop(); rulesSender = null; hostGeneration += 1; rulesHost?.stop(); rulesHost = null; pendingRules = []; }
+  /**
+   * Checkpoint, then yield: one ordered act. A rules host's yield follows its checkpoint through the sender, and what
+   * its rules make afterwards is held until the relay answers (a `role` to somebody else, or `host` with
+   * `why: 'host-kept'`), so no page is shown a tick the next host will run again.
+   */
+  function yieldHost(extra: Record<string, unknown> = {}): boolean {
+    sendCheckpoint();
+    if (!rulesHost || !rulesSender) return raw({ t: 'yield', ...extra });
+    rulesSender.handOver(extra);
+    // An answer that never comes (a relay that does not know the frame) must not hold the room's output for good.
+    if (yieldTimer === null) yieldTimer = setTimeout(yieldAnswered, 2000);
+    return true;
+  }
+  function yieldAnswered(): void {
+    if (yieldTimer !== null) { clearTimeout(yieldTimer); yieldTimer = null; }
+    rulesPace = null;
+    rulesSender?.release();
+    // A second yield was queued behind what was held: it waits for its own answer.
+    if (rulesSender?.waiting) yieldTimer = setTimeout(yieldAnswered, 2000);
+  }
+  function rulesFrame(m: Record<string, unknown>): boolean {
+    if (!rulesGame || role !== 'host' || offline) return false;
+    if (rulesHost) rulesHost.frame(m);
+    else if (pendingRules.length < 256) pendingRules.push(m);
+    return true;
+  }
+  function rulesPeers(): Peer[] {
+    if (!offline) return [...peers.values()];
+    return seat === null ? [] : [{ id: 'offline', seat, name: name || 'You', colour: seat % 12, device, want: 'play', role: 'host', occ: 1 }];
+  }
+  function rulesNotice(text: string): void {
+    api.line(text);
+    setTimeout(() => { if (!disposed && gameLine === text) api.line(null); }, 8000);
+  }
+  function unavailableRules(): void {
+    canHost = false;
+    stopRules(); setRole('replica', 'rules-unavailable');
+    if (!offline && ws) { raw({ t: 'bye' }); lost(ws, 'rules-unavailable'); }
+    api.line('This game needs a connection.');
+  }
+  function endRules(why: string, message = `This game's rules stopped: ${why}`): void {
+    if (offline && cfg?.url) {
+      stopRules(); setRole('replica', 'offline-rules-ended');
+      api.line(`Offline rules stopped: ${why}. This game needs a connection.`);
+      return;
+    }
+    const sender = rulesSender; rulesSender = null;
+    if (sender) sender.finish({ t: 'rules-end', why }); else raw({ t: 'rules-end', why, rules: true });
+    stopRules(); setRole('replica', 'rules-ended');
+    closed = true; api.line(message); setLink('closed', 'rules-ended');
+  }
+  function startRules(restore: unknown): void {
+    stopRules();
+    const generation = hostGeneration;
+    const loading = loadHost();
+    if (!loading) { unavailableRules(); return; }
+    void loading.then((make) => {
+      if (disposed || generation !== hostGeneration || role !== 'host') return;
+      try {
+        rebase = true;
+        rulesPace = null;
+        if (!opts.rulesLimits) throw new Error('Rules output limits are missing');
+        rulesSender = opts.rulesLimits.output({ rates: opts.rulesLimits.rates, send: raw, now: () => performance.now() });
+        const options = { now: () => performance.now(), restore, peers: rulesPeers(), held: offline ? [] : heldPeers, policy: offline ? DEFAULT_POLICY : policy, send: rulesOut, onEnd: (why: string) => endRules(why) };
+        try { rulesHost = make(options); }
+        catch (error) {
+          if (!restore) throw error;
+          rulesHost = make({ ...options, restore: null });
+          rulesNotice('The saved round could not be restored. A new round has started.');
+        }
+        rulesHost.frame({ t: 'policy', policy: offline ? DEFAULT_POLICY : policy });
+        rulesHost.sync(rulesPeers());
+        for (const m of pendingRules) rulesHost.frame(m);
+        pendingRules = [];
+        rulesHost.start();
+        if (offline && cfg?.url && !closed) { if (retryTimer !== null) clearTimeout(retryTimer); retryTimer = setTimeout(open, 0); }
+        if (hidden()) rulesHost.pause();
+        sendCheckpoint(); paintLink();
+      } catch (error) {
+        if (generation === hostGeneration && !disposed) { endRules('fault', 'The game rules could not start. Reload to try again.'); console.warn('[netplay] rules startup failed', error); }
+      }
+    }, (error) => {
+      if (generation === hostGeneration && !disposed) { unavailableRules(); console.warn('[netplay] rules module failed to load', error); }
+    });
+  }
+  /** A local host sees its own output too. No offline frame is ever sent or saved to the relay. */
+  let rulesPace: { at: number; tick: number } | null = null;
+  let rulesWireStamp = -Infinity;
+  let rulesSimStamp = 0;
+  let rulesFrameAt = 0;
+  let rulesWireOffset: number | null = null;
+  let rulesRound: Record<string, unknown> | null = null;
+  function rulesOut(m: Record<string, unknown>): void {
+    const offset = now() - performance.now();
+    let slowYield: Record<string, unknown> | null = null;
+    if (m.t === 'snap') {
+      const at = performance.now();
+      if (!rulesPace) rulesPace = { at, tick: Number(m.k) };
+      else if (at - rulesPace.at >= 5000) {
+        const { at: paceAt, tick: paceTick } = rulesPace;
+        const slow = (Number(m.k) - rulesPace.tick) * 1000 < (at - rulesPace.at) * (opts.snapshotHz ?? 20) / 2;
+        rulesPace = { at, tick: Number(m.k) };
+        if (slow && !offline && peers.size > 1 && !hidden()) slowYield = { slow: true, speed: (Number(m.k) - paceTick) * 1000 / ((at - paceAt) * (opts.snapshotHz ?? 20)) };
+      }
+      rulesWireStamp = Math.max(rulesWireStamp + Math.max(1, Number(m.st) - rulesSimStamp), Math.round(Number(m.st) + offset));
+      rulesSimStamp = Number(m.st); rulesFrameAt = performance.now();
+      m = { ...m, st: rulesWireStamp };
+      if (rulesWireOffset !== null && Math.abs(offset - rulesWireOffset) > 50 && rulesRound) { const { results, ...round } = rulesRound.round as RoundInfo; rulesOut({ ...rulesRound, round, retime: true }); }
+      rulesWireOffset = offset;
+    }
+    if (m.t === 'round') rulesRound = m;
+    if (m.t === 'round') { const r = m.round as RoundInfo; m = { ...m, round: { ...r, startedAt: Math.round(r.startedAt + offset), endsAt: Math.round(r.endsAt + offset) } }; }
+
+    if (!offline && connected) rulesSender?.push(m);
+    // A slow host yields after the snapshot of the tick its checkpoint saves, so nothing of that tick follows the yield.
+    if (slowYield) yieldHost(slowYield);
+    if (!offline && connected && ['ev', 'roster', 'round', 'state'].includes(String(m.t))) return;
+    if (m.t === 'snap') { tick = Number(m.k); onSnap(m, 0, true); }
+    else if (m.t === 'state' && typeof m.k === 'string') applyState(m.k, m.d);
+    else if (m.t === 'round') { const incoming = m.round as RoundInfo; roundInfo = m.retime && roundInfo?.n === incoming.n ? { ...roundInfo, ...incoming } : incoming; if (!m.retime) { emit('round', roundInfo); post?.({ what: 'round', round: roundInfo }); } }
+    else if (m.t === 'roster' && (offline || !connected)) { slots = m.slots as Slot[]; emit('roster', slots); post?.({ what: 'roster', slots }); }
+    else if (m.t === 'ev' && (m.to === undefined || m.to === seat || m.to === id)) emit('event', { k: String(m.k), d: m.d, from: typeof m.from === 'number' ? m.from : null });
+  }
   let role: Role = 'replica';
   let roleKnown = false;
   let seat: number | null = null;
@@ -1529,8 +1700,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   let staleVer: string | null = null;
   let promotions = 0;
   let lastMsgAt = 0;
+  let socketStartedAt = 0;
   let waitingVisible = false;
   const peers = new Map<string, Peer>();
+  let heldPeers: Peer[] = [];
   let roundInfo: RoundInfo | null = null;
   let slots: Slot[] | null = null;
   let lastCkpt: Checkpoint<C> | null = null;
@@ -1611,6 +1784,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     arrived.by = by;
     arrived.playableMs = Math.round(wall() - createdAt);
     post?.({ what: 'playable', by });
+    if (rulesGame && canOffline && !canHost) void loadHost()?.catch(() => {});
   }
   /**
    * The game's own `net.playable()`. With `arrival: 'auto'` the helper may already have given the game the screen
@@ -1631,7 +1805,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   /** 'auto': a host at once, anyone else at its first snapshot, then two animation frames (the game drew with it). */
   function autoPlayable(): void {
     if (arrival !== 'auto' || playableSent || autoArmed || !roleKnown) return;
-    if (role !== 'host' && !snapSeen) return;
+    if ((rulesGame || role !== 'host') && !snapSeen) return;
     autoArmed = true;
     const raf = (globalThis as { requestAnimationFrame?: (cb: () => void) => number }).requestAnimationFrame;
     const later = (fn: () => void): void => { if (typeof raf === 'function') raf(fn); else setTimeout(fn, 16); };
@@ -1744,7 +1918,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   /** Why this page plays alone, and the last refusal that was not final (`room-stale`): the line says the true one. */
   let aloneWhy = '';
   let lastRefusal = '';
-  type LineKind = 'reconnecting' | 'alone' | 'stale' | 'closed' | 'full' | 'seat';
+  type LineKind = 'offline' | 'reconnecting' | 'alone' | 'stale' | 'closed' | 'full' | 'seat';
   function showOverlay(kind: LineKind, text: string, forMs = 0): void {
     const el = overlayEl();
     if (!el) return;
@@ -1756,6 +1930,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
   /** What is true of a page that plays by itself: it never says "reconnecting" to somebody who was never connected. */
   function aloneText(): string {
+    if (!canOffline) return 'This game needs a connection.';
+    if (rulesGame && !rulesHost) return 'Loading offline play…';
     if (aloneWhy === 'reconnect-timeout') return 'Playing on your own · the room dropped, still trying…';
     if (lastRefusal === 'room-stale') return 'Playing on your own · this room opens when its players have the new version';
     return 'Playing on your own · still looking for the room…';
@@ -1771,11 +1947,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   function paintLink(): void {
     if (!overlayOn) return;
     if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
-    const closedSays = link === 'closed' ? closedText() : null;
+    const closedSays = link === 'closed' ? gameLine || closedText() : null;
     if (link === 'reconnecting') {
       // A blip shorter than a blink is never drawn.
       overlayTimer = setTimeout(() => { overlayTimer = null; if (link === 'reconnecting') showOverlay('reconnecting', 'Reconnecting…'); }, LINK_OVERLAY_MS);
-    } else if (link === 'alone') showOverlay('alone', aloneText());
+    } else if (link === 'offline' && !canOffline) showOverlay('offline', 'This game needs a connection.');
+    else if (link === 'alone') showOverlay('alone', gameLine || aloneText());
     else if (link === 'closed' && closedWhy === 'stale') showOverlay('stale', inApp ? APP_STALE_LINE : 'This game was updated. Tap to reload.');
     else if (closedSays) showOverlay('closed', closedSays);
     // In the room: the game's own sentence about where this player stands, else that the room is full.
@@ -2147,6 +2324,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     }
     post?.({ what: 'role', role: next, prev, why, seat });
     if (next === 'host') { capsSent = ''; sendCaps(); }
+    if (rulesGame) { if (next === 'host') startRules(extra.ckpt?.d ?? null); else stopRules(); }
     resolveReady(e);
     emit('role', e);
     resolveView('seat');
@@ -2171,8 +2349,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     switch (m['t']) {
       case 'welcome': return onWelcome(m);
       case 'snap': return onSnap(m, text.length);
-      case 'in': return onInput(m);
+      case 'free': if (![...peers.values()].some((p) => p.seat === m.seat)) rulesFrame(m); return;
+      case 'in': if (rulesFrame(m)) return; return onInput(m);
       case 'ev': {
+        if (m.hosted !== true && rulesFrame(m)) return;
         const k = String(m['k'] ?? '');
         const from = typeof m['from'] === 'number' ? m['from'] : null;
         // Quiet AI (section 17): this browser does not hear an AI's speech, its own or relayed by the host (section 18:
@@ -2182,6 +2362,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'policy': {
+        rulesFrame(m);
         if (m['policy'] && typeof m['policy'] === 'object') { policy = readPolicy(m['policy']); emit('policy', policy); post?.({ what: 'policy', policy }); }
         return;
       }
@@ -2229,11 +2410,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'join': {
+        rulesFrame(m);
         const p = m['peer'] as Peer | undefined;
         if (p && typeof p.id === 'string') { peers.set(p.id, p); if (role === 'host' && p.seat !== null) ctlOf(p.seat); emit('join', p); if (watching) resolveView('auto'); }
         return;
       }
       case 'leave': {
+        rulesFrame(m);
         const pid = String(m['id'] ?? '');
         const p = peers.get(pid);
         peers.delete(pid);
@@ -2244,7 +2427,9 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'round': {
-        roundInfo = m['round'] as RoundInfo;
+        const incoming = m['round'] as RoundInfo;
+        roundInfo = m.retime && roundInfo?.n === incoming.n ? { ...roundInfo, ...incoming } : incoming;
+        if (m.retime) return;
         post?.({ what: 'round', round: roundInfo });
         emit('round', roundInfo);
         return;
@@ -2256,8 +2441,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'host': {
+        // The relay kept this page as the host after its yield: what the rules made meanwhile goes out.
+        if (m['why'] === 'host-kept') yieldAnswered();
         host = (m['host'] as HostRef | null) ?? null;
-        rebase = true; // the next snapshot is on the new host's timeline
+        if (m['why'] !== 'host-kept') rebase = true; // the next snapshot is on the new host's timeline
         for (const p of peers.values()) p.role = host && p.id === host.id ? 'host' : (p.seat === null ? 'screen' : 'replica');
         notifyStats(true);
         return;
@@ -2275,6 +2462,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'role': {
+        heldPeers = Array.isArray(m.held) ? m.held as Peer[] : [];
         const next = m['role'] as Role;
         host = (m['host'] as HostRef | null) ?? host;
         rebase = true;
@@ -2282,7 +2470,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         if (m['round']) roundInfo = m['round'] as RoundInfo;
         if (m['roster']) slots = m['roster'] as Slot[];
         if (m['state']) replaceState(m['state']);
-        const ckpt = (m['ckpt'] as Checkpoint<C> | null) ?? null;
+        const ckpt = (m['ckpt'] as Checkpoint<C> | null) ?? (next === 'host' && !m['snap'] && onlineRulesSave ? { k: tick, st: now(), d: onlineRulesSave as C } : null);
+        onlineRulesSave = null;
         let snap = (m['snap'] as Snapshot<S> | null) ?? null;
         if (next === 'host' && !snap) snap = localSnap();
         if (ckpt) lastCkpt = ckpt;
@@ -2303,6 +2492,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'decided': {
+        if (rulesFrame(m)) return;
         const n = String(m['n'] ?? '');
         const w = deciding.get(n);
         if (!w) return;
@@ -2333,10 +2523,15 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
           setLink('closed', code);
           return;
         }
+        if (rulesGame && role === 'host' && m.view !== true && ['too-large', 'state-full'].includes(code)) {
+          const message = `This game's rules exceeded the browser room size cap: ${m.message}. Join again for a fresh room.`;
+          console.warn('[netplay]', message); endRules('size', message); return;
+        }
         // Inputs over the relay's cap were dropped: send fewer for a while (the newest frame still goes out).
         if ((code === 'rate' && m['of'] === 'in') || code === 'flood') inSlowUntil = wall() + IN_SLOW_MS;
         // An AI alone in a room (nobody seated): it knocks again only after a while (section 17).
         if (code === 'agents-alone') aloneUntil = wall() + AGENTS_ALONE_WAIT_MS;
+        if (code === 'host-fault') { rulesNotice(String(m.message)); return; }
         if (code === 'vote') { warnOnce('vote', m['message']); return; }
         if (code === 'rate' || code === 'state-full') { warnOnce(`${code}:${String(m['of'] ?? '')}`, m['message']); return; }
         // The room still runs another build of the game (section 23): not final. Its players were told to reload; this
@@ -2351,6 +2546,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
           post?.({ what: 'closed', why: code, room: cfg?.room ?? null, ...(typeof m['until'] === 'number' ? { until: m['until'] } : {}), ...(typeof m['message'] === 'string' ? { message: String(m['message']).slice(0, 200) } : {}) });
           // Kept out of a room for running an older build (section 23): the page reloads the game; the game may too.
           if (code === 'stale') noteStale(m['ver'], true, m['immediate'] === true);
+          if (rulesGame) { stopRules(); setRole('replica', code); if (typeof m['message'] === 'string' && !(code === 'room-over' && gameLine?.includes('cap:'))) api.line(m['message']); if (inApp && code === 'stale' && canOffline) goOfflineHost('stale'); }
           setLink('closed', code);
         }
         return;
@@ -2385,6 +2581,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     name = typeof m['name'] === 'string' ? m['name'] : name;
     colour = typeof m['colour'] === 'number' ? m['colour'] : colour;
     host = (m['host'] as HostRef | null) ?? null;
+    heldPeers = Array.isArray(m.held) ? m.held as Peer[] : [];
     peers.clear();
     if (Array.isArray(m['peers'])) for (const p of m['peers'] as Peer[]) peers.set(p.id, p);
     if (typeof m['st'] === 'number' && rtt === null) offset = (m['st'] as number) - Date.now();
@@ -2397,7 +2594,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // Revision 6: the room's policy and an open vote (an older relay says neither: open, Fair).
     if (m['policy'] && typeof m['policy'] === 'object') { policy = readPolicy(m['policy']); queueMicrotask(() => { emit('policy', policy); post?.({ what: 'policy', policy }); }); }
     if (m['vote'] && typeof m['vote'] === 'object') voteState = readVote(m['vote'] as Record<string, unknown>);
-    const ckpt = (m['ckpt'] as Checkpoint<C> | null) ?? null;
+    const ckpt = (m['ckpt'] as Checkpoint<C> | null) ?? (next === 'host' && !m['snap'] && onlineRulesSave ? { k: tick, st: now(), d: onlineRulesSave as C } : null);
+    onlineRulesSave = null;
     let snap = (m['snap'] as Snapshot<S> | null) ?? null;
     const a = m['announce'] as Announcement | undefined;
     if (a && typeof a === 'object' && typeof a.id === 'string' && typeof a.text === 'string' && (!announcement || announcement.id !== a.id)) { announcement = { ...a, from: 'studio' }; queueMicrotask(() => emit('announce', announcement as Announcement)); }
@@ -2410,6 +2608,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // The relay's last snapshot comes with the welcome: the room's state is in (the arrival, section 21).
     if (snap && next !== 'host' && acceptSnap(snap, JSON.stringify(snap).length, false)) snapSeen = true;
     if (next === 'host' && !snap && !continuing) snap = localSnap();
+    if (wasOffline && rulesGame) rulesNotice('Connection restored. Joining the online round.');
     offline = false;
     connected = true;
     downSince = 0;
@@ -2427,7 +2626,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       setRole(next, wasOffline && roleKnown ? 'reconnected' : String(m['why'] ?? 'welcome'), { ckpt, snap, round: roundInfo, roster: slots });
       if (next === 'host' && snap) tick = Math.max(tick, snap.k);
     }
-    if (continuing) { reannounce(); catchUp(had, hadSeat); }
+    if (continuing) { rulesHost?.sync(rulesPeers()); reannounce(); catchUp(had, hadSeat); }
     if (link === 'online') paintLink(); else setLink('online', 'welcome');
     // A build older than the live one, let in to its own room (section 23).
     if (m['stale'] && typeof m['stale'] === 'object') noteStale((m['stale'] as { ver?: unknown }).ver, false);
@@ -2468,6 +2667,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   /** A host that reconnected (the relay may have restarted): hand the relay the round, roster, state and a checkpoint. */
   function reannounce(): void {
+    // A rules host's are its runtime's output, by the one way out every other frame of the rules takes.
+    if (rulesGame) { rulesHost?.announce(); sendCheckpoint(); return; }
     if (roundInfo) raw({ t: 'round', round: roundInfo });
     if (slots) raw({ t: 'roster', slots });
     for (const [k, d] of stateMap) raw({ t: 'state', k, d });
@@ -2476,10 +2677,10 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   }
 
   /** Buffer a snapshot. `live`: it came off the wire just now (its age is a transit sample). */
-  function acceptSnap(s: Snapshot<S>, bytes: number, live: boolean): boolean {
+  function acceptSnap(s: Snapshot<S>, bytes: number, live: boolean, local = false): boolean {
     const t = now();
     // A snapshot stamped far in the future would hold the buffer for good (the relay clamps st too).
-    if (!Number.isFinite(s.st) || s.st > t + 1000) { rejectedSnaps += 1; return false; }
+    if (!Number.isFinite(s.st) || (!local && s.st > t + 1000)) { rejectedSnaps += 1; return false; }
     if (rebase) {
       // New host, new timeline: its clock may sit a little behind the old one's. Keep older frames to hold on.
       while (buf.length && (buf[buf.length - 1] as Snapshot<S>).st >= s.st) buf.pop();
@@ -2546,13 +2747,13 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (changed) emit('control', { seat, rs, own: ownB, ack, reset, snap: s });
   }
 
-  function onSnap(m: Record<string, unknown>, bytes: number): void {
-    if (role === 'host') return; // a stale frame from a previous host
+  function onSnap(m: Record<string, unknown>, bytes: number, local = false): void {
+    if (role === 'host' && !local) return; // a stale frame from a previous host
     const s: Snapshot<S> = { k: Number(m['k']) || 0, st: Number(m['st']), d: m['d'] as S, from: typeof m['from'] === 'number' ? m['from'] : null };
     if (Array.isArray(m['c'])) s.c = m['c'] as ControlWire[];
     if (m['hb'] === 1) s.hb = 1;
     if (typeof m['e'] === 'number') s.e = m['e'];
-    if (acceptSnap(s, bytes, true)) { emit('snapshot', s); if (!snapSeen) { snapSeen = true; autoPlayable(); } }
+    if (acceptSnap(s, bytes, true, local)) { emit('snapshot', s); if (!snapSeen) { snapSeen = true; autoPlayable(); } }
   }
 
   function onInput(m: Record<string, unknown>): void {
@@ -2600,6 +2801,8 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   // ---------------------------------------------------------------- wire out
   let pingTimer: ReturnType<typeof setInterval> | null = null;
+  let paceTimer: ReturnType<typeof setInterval> | null = null;
+  let readySpeed = 0;
   let ckptTimer: ReturnType<typeof setInterval> | null = null;
   let statsTimer: ReturnType<typeof setInterval> | null = null;
   let connectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -2647,6 +2850,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const pingHeld = beat - lastPingTick > 2000 + 1500;
     lastPingTick = beat;
     if (!connected) {
+      if (rulesGame && offline && rulesHost && ws && wall() - socketStartedAt >= 2500) { lost(ws, 'connect-timeout'); return; }
       // A socket that opened and was never welcomed (a room that is not answering) is as dead as a silent one: drop
       // it and knock again, so a page that gave up and plays alone still finds its room when the room is back.
       if (ws && ws.readyState === 1 && lastMsgAt && wall() - lastMsgAt > Math.max(staleMs, connectOpenMaxMs)) lost(ws, 'stale');
@@ -2665,16 +2869,18 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const c = Date.now();
     pingsOut.set(c, c);
     if (pingsOut.size > 16) { const first = pingsOut.keys().next().value; if (first !== undefined) pingsOut.delete(first); }
-    raw({ t: 'ping', c, hid: hidden() });
+    // A hidden host's yield is behind its checkpoint in the sender: the relay hears of the hidden tab after both.
+    raw({ t: 'ping', c, hid: hidden() && !rulesSender?.handing, ...(rulesGame ? { readySpeed } : {}) });
   }
 
   function sendCheckpoint(): void {
-    if (role !== 'host' || !opts.checkpoint || offline || !connected) return;
+    if (role !== 'host' || (!opts.checkpoint && !rulesHost) || offline || !connected) return;
     let d: C;
-    try { d = opts.checkpoint(); } catch (err) { console.warn('[netplay] checkpoint()', err); return; }
-    const c: Checkpoint<C> = { k: tick, st: now(), d, c: ctlWire() };
+    try { d = (rulesHost ? rulesHost.save() : opts.checkpoint!()) as C; } catch (err) { console.warn('[netplay] checkpoint()', err); return; }
+    const c: Checkpoint<C> = { k: rulesHost?.tick ?? tick, st: now(), d, c: ctlWire() };
     lastCkpt = c;
-    raw({ t: 'ckpt', k: c.k, st: c.st, d: c.d, c: c.c });
+    const frame = { t: 'ckpt', k: c.k, st: c.st, d: c.d, c: c.c };
+    if (rulesHost) rulesSender?.push(frame); else raw(frame);
   }
 
   /** How long until one more input frame fits the rolling-second cap (0: now). */
@@ -2746,18 +2952,21 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   // ---------------------------------------------------------------- connect
   function goOfflineHost(why: string): void {
+    const kept = rulesHost?.save() ?? null;
+    if (!offline && kept && peers.size <= 1) onlineRulesSave = kept;
     offline = true;
     connected = false;
-    seat = null;
+    seat = rulesGame && canOffline && want === 'play' ? (seat ?? 0) : null;
     if (full) { full = false; post?.({ what: 'full', full: false }); }
     aloneWhy = why;
     // A page that gives up on a room it WAS in says so as a role event even when it was that room's host: its seat is
     // gone with the room, and the game seats itself again for a round of its own (createRoom keeps the round it had).
-    if (!roleKnown || role !== 'host' || why === 'reconnect-timeout') setRole('host', why);
+    if (!roleKnown || role !== 'host' || (rulesGame && !rulesHost) || why === 'reconnect-timeout') setRole(canOffline ? 'host' : 'replica', why, rulesGame && kept ? { ckpt: { k: tick, st: now(), d: kept as C } } : {});
     // No shell at all is `offline` from the start; a room that never answered is `alone` (and still knocked at). A
     // page the relay refused for good stays `closed` (nothing is knocking): it plays by itself and its line says why.
     if (closed) paintLink();
     else if (why !== 'offline') setLink('alone', why);
+    else paintLink();
   }
 
   function lost(sock: WebSocketLike, why: string): void {
@@ -2786,11 +2995,11 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (closed || !cfg || !WS || ws) return;
     let sock: WebSocketLike;
     try { sock = new WS(cfg.url); } catch { retry(); return; }
-    ws = sock;
+    ws = sock; socketStartedAt = wall();
     sock.onopen = () => {
       lastMsgAt = wall();
       raw({
-        t: 'hello', v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
+        t: 'hello', rules: rulesGame, v: NETPLAY_VERSION, rev: NETPLAY_REVISION, token, name: name || undefined, device, want, canHost: asAgent && asAgent.hands === 'host' ? false : canHost, game: opts.game, max: opts.maxPlayers,
         ...(watching ? { watch: true } : {}), ...(caps.size ? { caps: [...caps] } : {}), ...(asAgent ? { agent: asAgent } : {}),
         // Revision 9 (an older relay ignores both): the game's revision and what this build can do.
         ...(version ? { ver: version } : {}), ...(features.length ? { feat: features } : {}),
@@ -2801,6 +3010,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     // Browsers follow an error with close; Node's WebSocket, on a refused connection, never does.
     sock.onerror = () => lost(sock, 'error');
   }
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
   function retry(): void {
     if (closed) return;
     // A hidden tab does not play and its timers crawl: reconnect when it is looked at again.
@@ -2808,7 +3018,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const wait = Math.max(rulesGame ? (attempt < 3 ? Math.random() * Math.min(2000, 500 * 2 ** attempt) : (0.5 + Math.random() * 0.5) * Math.min(60_000, 2000 * 2 ** Math.min(attempt - 2, 5))) : LADDER[Math.min(attempt, LADDER.length - 1)] as number, aloneUntil - wall());
     attempt += 1;
     reconnects += 1;
-    setTimeout(open, wait);
+    retryTimer = setTimeout(open, rulesGame && offline && rulesHost ? Math.min(wait, 2500) : wait);
   }
 
   if (offline) {
@@ -2842,21 +3052,32 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (heartbeatMs) hbTimer = setInterval(heartbeat, 250);
     lastPingTick = wall();
     pingTimer = setInterval(ping, 2000);
+    if (rulesGame) {
+      let at = wall(); const samples: number[] = [];
+      paceTimer = setInterval(() => {
+        const next = wall(); samples.push(Math.min(1, 100 / Math.max(100, next - at))); at = next;
+        if (samples.length > 20) samples.shift();
+        readySpeed = samples.reduce((a, b) => a + b, 0) / samples.length;
+      }, 100);
+    }
     ckptTimer = setInterval(sendCheckpoint, checkpointMs);
     statsTimer = setInterval(() => notifyStats(true), 500);
-    try {
-      g.document?.addEventListener('visibilitychange', () => {
-        if (!hidden() && waitingVisible) { waitingVisible = false; attempt = 0; open(); return; }
-        if (!connected) return;
-        if (hidden()) {
-          // A hidden phone tab loses its timers and rAF: hand the round on before it stalls.
-          if (role === 'host' && peers.size > 1) { sendCheckpoint(); raw({ t: 'yield' }); }
-          ping();
-        } else ping();
-      });
-      g.addEventListener?.('pagehide', () => { if (role === 'host') sendCheckpoint(); raw({ t: 'bye' }); });
-    } catch { /* not a browser */ }
   }
+  try {
+    g.document?.addEventListener('visibilitychange', () => {
+      if (disposed) return;
+      if (hidden()) rulesHost?.pause(); else rulesHost?.resume();
+      if (!hidden() && waitingVisible) { waitingVisible = false; attempt = 0; open(); return; }
+      if (!connected) return;
+      if (hidden()) {
+        // A hidden phone tab loses its timers and rAF: hand the round on before it stalls.
+        if (role === 'host' && peers.size > 1) yieldHost();
+        ping();
+      } else ping();
+    });
+    g.addEventListener?.('online', () => { if (!closed && !connected && rulesGame) { if (ws) lost(ws, 'online'); if (retryTimer !== null) clearTimeout(retryTimer); retryTimer = null; attempt = 0; open(); } });
+    g.addEventListener?.('pagehide', () => { if (role === 'host') { sendCheckpoint(); rulesSender?.leave(); } raw({ t: 'bye' }); });
+  } catch { /* not a browser */ }
 
   // ---------------------------------------------------------------- watching
   let watchTimer: ReturnType<typeof setInterval> | null = null;
@@ -2924,7 +3145,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   /** Tell the relay what this game does with servers (only a host's word counts), once per change. */
   function sendCaps(): void {
-    if (role !== 'host' || offline || !connected || !caps.size) return;
+    if (rulesGame || role !== 'host' || offline || !connected || !caps.size) return;
     const list = [...caps].sort();
     const sig = list.join(',');
     if (sig === capsSent) return;
@@ -2982,6 +3203,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     get seat() { return seat; },
     get spectator() { return seat === null && !offline; },
     get offline() { return offline; },
+    get rulesHosting() { return Boolean(rulesHost); },
     get connected() { return connected; },
     get closedWhy() { return closedWhy; },
     get downMs() { return connected || !downSince ? 0 : wall() - downSince; },
@@ -2993,6 +3215,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       const next = typeof text === 'string' && text.trim() ? text.trim().slice(0, 120) : null;
       if (next === gameLine) return;
       gameLine = next;
+      post?.({ what: 'line', text: next });
       paintLink();
     },
     start(): void { clockRunning = true; },
@@ -3110,6 +3333,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       return wall() - lastSnapSentAt >= (peers.size > 1 ? snapshotMs : 1000) - 2;
     },
     snapshot(d, k, force = false) {
+      if (rulesGame) return false;
       if (role !== 'host' || offline || !connected) return false;
       if (!force && wall() - lastSnapSentAt < (peers.size > 1 ? snapshotMs : 1000) - 2) return false;
       tick = k ?? tick + 1;
@@ -3137,21 +3361,23 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     checkpointNow: sendCheckpoint,
     handOff() {
       if (role !== 'host' || offline || !connected || peers.size < 2) return false;
-      sendCheckpoint();
-      return raw({ t: 'yield' });
+      return yieldHost();
     },
     round(r) {
+      if (rulesGame) return;
       roundInfo = r;
       post?.({ what: 'round', round: r });
       if (role === 'host') raw({ t: 'round', round: r });
       emit('round', r);
     },
     roster(s) {
+      if (rulesGame) return;
       slots = s.map((x) => ({ slot: x.slot, seat: x.seat, name: x.name, bot: x.bot, ...(x.agent ? { agent: { seat: x.agent.seat, role: x.agent.role, hands: x.agent.hands } } : {}) }));
       post?.({ what: 'roster', slots });
       if (role === 'host') raw({ t: 'roster', slots });
     },
     state(key, d) {
+      if (rulesGame) return false;
       if (role !== 'host' && !offline) return false;
       const text = JSON.stringify(d ?? null);
       if (stateSent.get(key) === text) return false;
@@ -3164,6 +3390,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     stateOf<T = unknown>(key: string) { return stateMap.get(key) as T | undefined; },
     stateKeys() { return [...stateMap.keys()]; },
     input(a, held) {
+      if (rulesGame) return;
       pendingA = a;
       const list = heldList(held);
       let edge = false;
@@ -3174,20 +3401,24 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       scheduleInput(edge);
     },
     steps(e, k, entries, r) {
-      if (role === 'host' || seat === null || offline || !connected || !entries.length) return false;
+      if (seat === null || !entries.length) return false;
+      if (rulesHost && offline) { rulesHost.frame({ t: 'in', from: seat, e, k, s: entries, r }); return true; }
+      if ((!rulesGame && role === 'host') || offline || !connected) return false;
       if (!raw({ t: 'in', e, k, s: entries, r })) return false;
       inputOut.hit(wall());
       return true;
     },
     press(idp) {
+      if (rulesGame) return;
       if (role === 'host' || seat === null || offline || !connected) return;
       pendingPresses[idp] = (pendingPresses[idp] ?? 0) + 1;
       scheduleInput(true);
     },
     send(kind, data, to) {
+      if (rulesHost && offline) { rulesHost.frame({ t: 'ev', from: seat, id, k: kind, d: data ?? null }); return; }
       if (offline) return;
-      const m: Record<string, unknown> = { t: 'ev', k: kind, d: data ?? null };
-      if (role === 'host' && (typeof to === 'number' || typeof to === 'string')) m['to'] = to;
+      const m: Record<string, unknown> = { t: 'ev', k: kind, d: data ?? null, ...(rulesGame ? { view: true } : {}) };
+      if (!rulesGame && role === 'host' && (typeof to === 'number' || typeof to === 'string')) m['to'] = to;
       raw(m);
     },
     inputOf(s) { return inputs.get(s) ?? null; },
@@ -3215,7 +3446,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     },
     sample(delayMs) {
       if (!buf.length) return null;
-      const renderT = now() - (delayMs ?? interpDelay());
+      const renderT = (rulesHost ? rulesWireStamp + performance.now() - rulesFrameAt : now()) - (delayMs ?? interpDelay());
       const newest = buf[buf.length - 1] as Snapshot<S>;
       const oldest = buf[0] as Snapshot<S>;
       const t = wall();
@@ -3253,7 +3484,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       };
       decideStats.asked += 1;
       const now0 = wall();
-      const why = role !== 'host' ? 'not-host' : offline || !connected ? 'offline' : now0 < decideOffUntil ? 'off' : now0 < decideNextAt ? 'pace' : null;
+      const why = rulesGame || role !== 'host' ? 'not-host' : offline || !connected ? 'offline' : now0 < decideOffUntil ? 'off' : now0 < decideNextAt ? 'pace' : null;
       if (why) { decideStats.floor += 1; return Promise.resolve({ ...floor(), why }); }
       decideNextAt = now0 + 3000;
       const n = `d${(decideSeq += 1).toString(36)}`;
@@ -3267,13 +3498,17 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     stats: statsNow,
     expose(p) { probes = { ...probes, ...p }; },
     close() {
+      sendCheckpoint(); rulesSender?.leave();
+      disposed = true; stopRules();
       closed = true;
       if (pingTimer) clearInterval(pingTimer);
+      if (paceTimer) clearInterval(paceTimer);
       if (ckptTimer) clearInterval(ckptTimer);
       if (statsTimer) clearInterval(statsTimer);
       if (watchTimer) clearInterval(watchTimer);
       if (hbTimer) clearInterval(hbTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (retryTimer) clearTimeout(retryTimer);
       if (spotTimer) clearTimeout(spotTimer);
       if (overlayTimer) clearTimeout(overlayTimer);
       if (overlayHide) clearTimeout(overlayHide);
@@ -3290,6 +3525,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
       get role() { return role; },
       get seat() { return seat; },
       get offline() { return offline; },
+      get rulesHosting() { return Boolean(rulesHost); },
       get connected() { return connected; },
       get owned() { return api.owned; },
       get host() { return host; },

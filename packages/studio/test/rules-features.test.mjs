@@ -399,10 +399,9 @@ test('saved goals, asks and policy are validated before a rules callback reads t
   saved.core.asks[0].state = { danger: { bad: true } };
   const validPolicy = saved.core.policy;
   saved.core.policy = { reserved: 999999999, level: 999, levelMax: 999, bots: 'invalid' };
-  assert.throws(() => hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }), /saved rules state is invalid/);
+  assert.throws(() => hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }), /saved (rules state|host inputs) are invalid|saved rules state is invalid/);
   saved.core.policy = validPolicy;
-  const back = hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }); back.host.frame({ t: 'vocabulary', vocab }); back.host.frame({ t: 'policy', policy: policy() }); back.join(0); back.ticks(22);
-  assert.equal(back.host.core.goal(3).goal, 'guard'); assert.equal(back.host.core.stats.errors, 0); assert.equal(back.host.facts().faults, 0);
+  assert.throws(() => hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }), /saved (rules state|host inputs) are invalid|saved rules state is invalid/);
 });
 
 test('malformed goal and line identifiers never fault the host', async () => {
@@ -444,8 +443,7 @@ test('client frames cannot change server policy, peer identity or decision answe
 for (const asks of ['nope', [null], [{ name: 'director', n: 'broken', at: 'later', state: {} }]]) test(`damaged saved asks ${JSON.stringify(asks)} cannot stop a room`, async () => {
   const { L, c } = await game(); const h = hostRig(L, c); h.join(0); h.ticks(2);
   const saved = L.P.fromBytes(h.host.save()); saved.core.asks = asks;
-  const back = hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }); back.join(0); back.ticks(110);
-  assert.equal(back.host.core.save().asks.length, 0); assert.equal(back.host.facts().faults, 0);
+  assert.throws(() => hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }), /saved rules state is invalid/);
 });
 
 test('a rejected restored carried goal cannot suppress a valid floor for sixty seconds', async () => {
@@ -467,8 +465,7 @@ for (const value of ['nope', [null]]) test(`damaged saved guide tables ${JSON.st
   const { L, c } = await game(); const h = hostRig(L, c); h.host.frame({ t: 'vocabulary', vocab }); h.host.frame({ t: 'policy', policy: policy() }); h.join(0); h.ticks(2);
   const saved = L.P.fromBytes(h.host.save()); saved.core.guideViews = value; saved.guideViews = value;
   for (const k of Object.keys(saved.agents)) saved.agents[k] = value;
-  const back = hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }); back.host.frame({ t: 'vocabulary', vocab }); back.host.frame({ t: 'policy', policy: policy() }); back.join(0); back.ticks(22);
-  assert.equal(back.host.facts().faults, 0); assert.equal(back.host.core.goal(3)?.goal, 'guard');
+  assert.throws(() => hostRig(L, c, { host: { restore: L.P.toBytes(saved) } }), /saved host inputs are invalid/);
 });
 
 test('server capacity comes from the build even after an older room save', async () => {
@@ -494,6 +491,153 @@ test('whole host saves preserve pending decisions, companion pacing and reserved
   assert.deepEqual(back.host.core.save().ents.filter(e => e[13] === 'reserved'), h.host.core.save().ents.filter(e => e[13] === 'reserved'));
   assert.deepEqual(back.sent.filter(m => m.t === 'roster').at(-1).slots, h.sent.filter(m => m.t === 'roster').at(-1).slots);
   h.host.stop(); back.host.stop();
+});
+
+test('saved answers must satisfy the same questions as live decisions', async () => {
+  const { L, c } = await game(); const h = hostRig(L, c); h.join(0); h.ticks(2);
+  const saved = h.host.core.save();
+  saved.queue.push([saved.tick + 1, 0, '', 1, '', 'room', 'answer', { ask: 'director', by: 'ai', picks: { advance: 'forged' } }, saved.tick, 1]);
+  assert.throws(() => L.C.createCore(c, { restore: saved }), /saved answer/);
+});
+
+test('handover keeps the same holder input and a different holder clears it', async () => {
+  const { L, c } = await game(); const h = hostRig(L, c); h.join(0); h.ticks(2);
+  h.host.frame({ t: 'in', from: 0, e: h.host.epoch, k: h.host.tick + 1, r: 0, s: [[0, 70]] }); h.ticks();
+  const save = h.host.save();
+  const same = hostRig(L, c, { host: { restore: save, restoreEpoch: 99 } }); same.join(0); same.ticks();
+  assert.ok(same.ents()[0].pos.x > h.ents()[0].pos.x);
+  assert.equal(L.P.fromBytes(same.host.save()).queues[0][1].ax, 70);
+  const other = hostRig(L, c, { host: { restore: save, restoreEpoch: 100 } }); other.join(0, 'New', { occ: 999 }); other.ticks();
+  assert.equal(L.P.fromBytes(other.host.save()).queues.length, 0);
+});
+
+
+test('a queued AI answer keeps the absence of a refusal reason on restore', async () => {
+  const { L, c } = await game(); const h = hostRig(L, c); h.join(0); h.ticks(2);
+  const saved = h.host.core.save();
+  const answer = { ask: 'director', by: 'ai', picks: { advance: true } };
+  saved.queue.push([saved.tick + 1, 0, '', 1, '', 'room', 'answer', answer, saved.tick, 1]);
+  const restored = L.C.createCore(c, { restore: saved });
+  assert.deepEqual(restored.save().queue.find(q => q[6] === 'answer')[7], answer);
+  h.host.stop();
+});
+
+for (const rules of [false, true]) test(`relay speech stamps are authoritative with rules=${rules}`, async () => {
+  const { L, c } = await game(); const r = roomRig(L, c, { maxPlayers: 4, roomOpts: { rules } });
+  r.host.stop(); r.room.setServerHost(null);
+  const a = r.conn(); a.hello('First', { rules, rev: 11 });
+  const b = r.conn(); b.hello('Second', { rules, rev: 11 });
+  const other = r.conn(); other.hello('Third', { rules, rev: 11 });
+  b.say({ t: 'ev', k: 'say', from: 99, d: { text: 'Second spoke' } });
+  const incoming = a.of('ev').at(-1); assert.equal(incoming.from, 1);
+  a.say({ ...incoming, rules });
+  assert.equal(other.of('ev').at(-1).from, rules ? 1 : 0);
+  a.say({ t: 'ev', rules, k: 'say', from: 99, d: { text: 'No live holder' } });
+  assert.equal(other.of('ev').at(-1).from, rules ? null : 0);
+  a.drop(); b.drop(); other.drop();
+});
+
+test('slow-host handover needs a recent and measurably faster candidate', async () => {
+  const { L, c } = await game(); const r = roomRig(L, c, { maxPlayers: 4, roomOpts: { rules: true } });
+  r.host.stop(); r.room.setServerHost(null);
+  const a = r.conn(); const aw = a.hello('First', { rules: true, rev: 11 });
+  const b = r.conn(); const bw = b.hello('Second', { rules: true, rev: 11 });
+  b.say({ t: 'ping', readySpeed: 0.1 }); a.say({ t: 'yield', slow: true, speed: 0.1 });
+  assert.equal(r.room.hostId, aw.id);
+  b.say({ t: 'ping', readySpeed: 1 }); a.say({ t: 'yield', slow: true, speed: 0.1 });
+  assert.equal(r.room.hostId, bw.id);
+  a.say({ t: 'ping', readySpeed: 1 }); b.say({ t: 'yield', slow: true, speed: 0.1 });
+  assert.equal(r.room.hostId, bw.id, 'the former host measured equally slow cannot reclaim the role');
+  a.drop(); b.drop();
+});
+
+test('a rules host whose yield elects nobody is told it keeps the role, and a page before revision 11 never hosts', async () => {
+  const { L, c } = await game(); const r = roomRig(L, c, { maxPlayers: 4, roomOpts: { rules: true } });
+  r.host.stop(); r.room.setServerHost(null);
+  const old = r.conn(); const ow = old.hello('Old', { rules: true, rev: 10 });
+  assert.equal(ow.role, 'replica', 'its unmarked output would be taken for a player\'s'); assert.equal(r.room.hostId, null);
+  const a = r.conn(); const aw = a.hello('First', { rules: true, rev: 11 });
+  assert.equal(aw.role, 'host');
+  a.say({ t: 'yield' });
+  assert.equal(r.room.hostId, aw.id, 'the old page is no candidate');
+  const kept = (page) => page.of('host').filter(m => m.why === 'host-kept').map(m => m.host?.id);
+  assert.deepEqual(kept(a), [aw.id]); assert.equal(a.of('role').length, 0);
+  assert.deepEqual(kept(old), [aw.id], 'the others, told a moment ago that nobody hosts, are told who does');
+  a.say({ t: 'yield', slow: true, speed: 0.1 });
+  assert.deepEqual(kept(a), [aw.id, aw.id]);
+  const b = r.conn(); const bw = b.hello('Second', { rules: true, rev: 11 });
+  a.say({ t: 'yield' });
+  assert.equal(r.room.hostId, bw.id); assert.equal(a.of('role').at(-1).role, 'replica');
+  assert.equal(kept(a).length, 2, 'a yield that moved the role is answered by the role alone');
+  old.drop(); a.drop(); b.drop();
+});
+
+test('rules relay caps count encoded bytes, including multibyte state', async () => {
+  const { L, c } = await game(); const r = roomRig(L, c, { maxPlayers: 4, roomOpts: { rules: true } });
+  r.host.stop(); r.room.setServerHost(null);
+  const a = r.conn(); a.hello('First', { rules: true, rev: 11 });
+  const b = r.conn(); b.hello('Second', { rules: true, rev: 11 });
+  const frame = { t: 'state', rules: true, k: 'shared', d: '界'.repeat(3000) };
+  const bytes = Buffer.byteLength(JSON.stringify(frame));
+  assert.ok(bytes > 8192 && JSON.stringify(frame).length < 8192);
+  a.say(frame);
+  assert.ok(a.of('error').some(e => e.code === 'too-large' && e.message.includes(`${bytes} B`)));
+  assert.ok(b.of('error').some(e => e.code === 'room-over'));
+  a.drop(); b.drop();
+});
+
+test('rules roster identities and guide roles come from held seats and policy', async () => {
+  const { L, c } = await game(); const r = roomRig(L, c, { maxPlayers: 4, roomOpts: { rules: true } });
+  r.host.stop(); r.room.setServerHost(null);
+  r.room.setPolicy(policy({ kind: 'beginner', aiSeats: 1, guides: 1 }));
+  const a = r.conn(); a.hello('First', { rules: true, rev: 11 });
+  a.say({ t: 'roster', rules: true, slots: [
+    { slot: 0, seat: null, bot: true, name: 'First', agent: { role: 'guide' } },
+    { slot: 1, seat: null, bot: true, name: 'Bot', agent: { role: 'guide' } },
+    { slot: 2, seat: null, bot: true, name: 'Companion' },
+    { slot: 3, seat: 3, bot: true, name: 'Guide', agent: { role: 'party' } },
+  ] });
+  const rows = r.room.lastRoster;
+  assert.equal(rows[0].bot, false); assert.equal(rows[0].seat, 0); assert.equal(rows[0].agent, undefined);
+  assert.equal(rows[1].agent, undefined);
+  assert.equal(rows[2].agent?.role, 'party'); assert.match(rows[2].name, /AI/);
+  assert.equal(rows[3].agent?.role, 'guide');
+  a.drop();
+});
+
+test('the rules catalogue fixes browser room capacity before hello and after restore', async () => {
+  const { L, c } = await game(); const r = roomRig(L, c, { maxPlayers: 4, roomOpts: { rules: true } });
+  r.host.stop(); r.room.setServerHost(null);
+  const a = r.conn(); a.hello('First', { rules: true, rev: 11, max: 2 });
+  assert.equal(r.room.maxPlayers, 4);
+  const saved = r.room.saved(); saved.maxPlayers = 2;
+  r.room.restore(saved); assert.equal(r.room.maxPlayers, 4);
+  r.room.askedMax = 2; r.room.setSeats(4); assert.equal(r.room.maxPlayers, 4);
+  a.drop();
+});
+
+
+test('fractional round and break durations restore at every tick', async () => {
+  const { L, c } = await game();
+  const compiled = { ...c, rounds: { seconds: 0.08, breakSeconds: 0.17 } };
+  let core = L.C.createCore(compiled);
+  const uninterrupted = L.C.createCore(compiled);
+  for (let tick = 0; tick < 40; tick++) {
+    core = L.C.createCore(compiled, { restore: core.save() });
+    core.step(); uninterrupted.step();
+    assert.deepEqual(core.snapshot(), uninterrupted.snapshot());
+  }
+});
+
+test('a restored goal targeting a temporarily away person cannot fault server recovery', async () => {
+  const { L, c } = await game(); const h = hostRig(L, c);
+  h.host.frame({ t: 'vocabulary', vocab }); h.host.frame({ t: 'policy', policy: policy() }); h.join(0); h.ticks(2);
+  h.host.frame({ t: 'ev', from: 0, k: 'ask:follow', d: { slot: 3, args: { seat: 0 } } }); h.ticks(2);
+  assert.equal(h.host.core.goal(3)?.goal, 'follow');
+  const restored = hostRig(L, c, { host: { restore: h.host.save(), restoreEpoch: 99 } });
+  restored.host.frame({ t: 'vocabulary', vocab }); restored.host.frame({ t: 'policy', policy: policy() }); restored.join(0); restored.ticks(2);
+  assert.equal(restored.host.facts().faults, 0); assert.equal(restored.host.core.goal(3)?.goal, 'follow');
+  h.host.stop(); restored.host.stop();
 });
 
 test('an invalid line rejects the whole floor decision before a valid goal reaches rules', async () => {

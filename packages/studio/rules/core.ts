@@ -132,8 +132,8 @@ export interface SavedCore {
   v: number; tick: number; epoch: number; rng: number; nextId: number; seq: number;
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
   shared: unknown[]; policy: CorePolicy; intent?: [number, number];
-  asks?: PendingAsk[];
-  guideViews?: [number, Record<string, unknown>][];
+  asks: PendingAsk[];
+  guideViews: [number, Record<string, unknown>][];
   ents: unknown[][]; spawns: unknown[][]; seats: [number, string, string, string | null, number][]; queue: unknown[][]; areas: unknown[][]; ops: unknown[];
 }
 
@@ -153,6 +153,8 @@ export interface Core {
   /** The room's public state, packed: `[[n, phase, endsAt], entities]`. */
   snapshot(): unknown[];
   shared(): unknown[];
+  /** The current round, for a host rebasing wall-clock deadlines after a pause or restore. */
+  round(): Extract<CoreOut, { t: 'round' }>;
   bodies(): Body[];
   /** The body in a seat, as the host runtime needs it for the input protocol. */
   bodyOf(seat: number): { id: string; kind: KindTable; r: number; away: boolean; driver: Driver } | null;
@@ -1093,22 +1095,43 @@ export function createCore(c: Compiled, opts: { observe?: (kind: string, handler
   // A persisted value is untrusted too. Reject structural damage instead of silently making a different match.
   function validateSave(r: SavedCore): void {
     const check = (ok: unknown): void => { if (!ok) throw new Error('saved rules state is invalid'); };
-    const uint = (v: unknown): boolean => Number.isSafeInteger(v) && (v as number) >= 0;
+    const uint = (v: unknown): boolean => Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) < 2 ** 40;
     const bit = (v: unknown): boolean => v === 0 || v === 1;
     const fields = (list: FieldList, value: unknown): void => {
       check(Array.isArray(value) && JSON.stringify(value) === JSON.stringify(packFields(list, unpackFields(list, value, dims), dims)));
     };
+    check(r.v === SAVE_REVISION);
+    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops'].includes(k)));
+    const askNames = new Set();
+    check(Array.isArray(r.asks));
+    for (const a of r.asks) {
+      check(a && typeof a.name === 'string' && Object.hasOwn(c.asks, a.name) && !askNames.has(a.name)); askNames.add(a.name);
+      check(Object.keys(a).every(k => ['n', 'name', 'who', 'at', 'state', 'result'].includes(k)));
+      check(typeof a.n === 'string' && a.n.length <= 128 && typeof a.who === 'string' && a.who.length <= 128 && uint(a.at) && a.at <= r.tick);
+      check(JSON.stringify(a.state) === JSON.stringify(coerceFields(c.asks[a.name].stateFields, a.state, dims)));
+      if (a.result !== undefined) check(JSON.stringify(a.result) === JSON.stringify(decisionResult(a.result)));
+    }
+    check(Array.isArray(r.guideViews) && r.guideViews.length <= c.seats);
+    const views = new Set();
+    for (const row of r.guideViews) {
+      check(Array.isArray(row) && row.length === 2 && uint(row[0]) && row[0] < c.seats && !views.has(row[0])); views.add(row[0]);
+      check(JSON.stringify(row[1]) === JSON.stringify(coerceFields(c.view, row[1], dims)));
+    }
     check(r.intent === undefined || Array.isArray(r.intent) && r.intent.length === 2 && r.intent.every(bit));
     for (const v of [r.tick, r.epoch, r.rng, r.nextId, r.seq, r.overAt, r.trips]) check(uint(v));
+    check(r.tick < 0xffffffff);
     check(r.rng <= 4294967295 && r.epoch > 0 && r.nextId > 0 && r.seq > 0);
     check(Array.isArray(r.round) && r.round.length === 4 && r.round.every(uint) && bit(r.round[1]));
-    check(Array.isArray(r.match) && r.match.length === 2 && r.match.every(uint));
+    check(Array.isArray(r.match) && r.match.length === 2 && r.match.every(uint) && bit(r.match[0]));
+    const duration = r.round[1] === 1 ? ticks(c.rounds?.seconds ?? 0) : Math.max(3, ticks(c.rounds?.breakSeconds ?? 0));
+    check(r.round[3] <= r.tick && r.round[2] <= r.tick + duration && !(r.round[1] === 1 && !duration && r.round[2] !== 0));
     check(r.policy && ['fill', 'off'].includes(r.policy.bots) && Number.isInteger(r.policy.level) && Number.isInteger(r.policy.levelMax) && r.policy.level >= 1 && r.policy.level <= r.policy.levelMax && r.policy.levelMax <= 5);
     check(Object.keys(r.policy).every((key) => ['bots', 'level', 'levelMax', 'reserved'].includes(key)));
     check(r.policy.reserved === undefined || uint(r.policy.reserved) && r.policy.reserved < c.seats);
     fields(c.shared, r.shared);
     check(Array.isArray(r.ents) && Array.isArray(r.spawns) && r.ents.length + r.spawns.length <= ENTITY_MAX);
     const ids = new Set();
+    const bodySeats = new Set();
     for (const w of [...r.ents, ...r.spawns]) {
       check(Array.isArray(w) && w.length === 21);
       const k = c.kinds[w[2] as number];
@@ -1118,21 +1141,26 @@ export function createCore(c: Compiled, opts: { observe?: (kind: string, handler
       check(typeof w[16] === 'number' && Number.isFinite(w[16]) && w[16] >= 0);
       for (const i of [5, 10, 14]) check(bit(w[i]));
       for (const i of [7, 8, 9]) check(Array.isArray(w[i]) && (w[i] as unknown[]).length === 3 && (w[i] as unknown[]).every((n) => typeof n === 'number' && Number.isFinite(n)));
+      for (const i of [7, 8, 9]) check(JSON.stringify(w[i]) === JSON.stringify(packVec(unpackVec(w[i], 3), 3)));
+      const goal = w[15] as any;
+      if (goal !== null) check(goal && typeof goal === 'object' && !Array.isArray(goal) && Object.keys(goal).every(k => ['goal', 'args', 'from', 'at', 'asked', 'state'].includes(k)) && typeof goal.goal === 'string' && goal.args && typeof goal.args === 'object' && !Array.isArray(goal.args) && ['brain', 'floor'].includes(goal.from) && uint(goal.at) && goal.at <= r.tick && typeof goal.asked === 'boolean' && goal.state === 'active');
       const pos = unpackVec(w[7] as number[], 3), bounds = c.map.bounds;
       check(pos.x >= bounds.min.x && pos.x <= bounds.max.x && pos.y >= bounds.min.y && pos.y <= bounds.max.y && pos.z === 0);
       check(Number.isInteger(w[11]) && (w[11] as number) >= -1 && (w[11] as number) < c.seats && ['person', 'bot', 'ai'].includes(w[12] as string) && typeof w[13] === 'string' && w[13].length <= 128);
+      if (k.player) { check(!bodySeats.has(w[11])); bodySeats.add(w[11]); }
       fields(k.fields, w[17]); fields(k.motion, w[18]); fields(k.input, w[19]);
       check(w[6] === 'join' || w[6] === 'spawn');
       check(JSON.stringify(w[15]) === JSON.stringify(plainData(w[15], { n: ANSWER_MAX })));
-      check(Array.isArray(w[20]));
+      check(Array.isArray(w[20]) && w[20].length <= 16);
       for (const cmd of w[20] as { name: string; data: unknown }[]) {
-        check(cmd && typeof cmd.name === 'string' && Object.hasOwn(c.commands, cmd.name)); const shape = c.commands[cmd.name];
+        check(cmd && typeof cmd.name === 'string' && Object.hasOwn(c.commands, cmd.name) && Object.hasOwn(k.commands, cmd.name)); const shape = c.commands[cmd.name];
         check(JSON.stringify(cmd.data) === JSON.stringify(coerceFields(shape, cmd.data, dims)));
       }
     }
     check(Array.isArray(r.seats) && r.seats.length <= c.seats);
     const seatIds = new Set();
     const heldIds = new Set();
+    check(r.seats.every((row) => Array.isArray(row) && row.length === 5));
     for (const [seat, driver, owner, id, away] of r.seats) {
       check(uint(seat) && seat < c.seats && !seatIds.has(seat)); seatIds.add(seat);
       check(['person', 'bot', 'ai'].includes(driver) && typeof owner === 'string' && owner.length <= 128 && (id === null || ids.has(id)) && bit(away));
@@ -1143,9 +1171,9 @@ export function createCore(c: Compiled, opts: { observe?: (kind: string, handler
       }
     }
     for (const body of r.ents) if (c.kinds[body[2] as number].player) check(heldIds.has(body[0]));
-    check(Array.isArray(r.queue) && r.queue.length <= QUEUE_MAX && Array.isArray(r.areas) && r.areas.length <= QUEUE_MAX && Array.isArray(r.ops));
+    check(Array.isArray(r.queue) && r.queue.length <= QUEUE_MAX && Array.isArray(r.areas) && r.areas.length <= AREAS_MAX && Array.isArray(r.ops));
     for (const q of r.queue) {
-      check(q.length === 10 && uint(q[0]) && uint(q[1]) && typeof q[2] === 'string' && uint(q[3]) && typeof q[4] === 'string' && ['ev', 'room', 'all'].includes(q[5] as string) && typeof q[6] === 'string' && uint(q[8]) && bit(q[9]));
+      check(q.length === 10 && uint(q[0]) && uint(q[1]) && typeof q[2] === 'string' && q[2].length <= 128 && uint(q[3]) && typeof q[4] === 'string' && q[4].length <= 128 && ['ev', 'room', 'all'].includes(q[5] as string) && typeof q[6] === 'string' && uint(q[8]) && bit(q[9]));
       check((q[3] as number) < r.seq);
       if (!q[9]) { check(Object.hasOwn(c.events, q[6] as string)); const shape = c.events[q[6] as string]; check(JSON.stringify(q[7]) === JSON.stringify(coerceFields(shape, q[7], dims))); }
       else {
@@ -1153,7 +1181,8 @@ export function createCore(c: Compiled, opts: { observe?: (kind: string, handler
         const d = q[7] as Record<string, unknown>; check(d && typeof d === 'object');
         if (q[6] === 'answer') {
           check(typeof d.ask === 'string' && Object.hasOwn(c.asks, d.ask) && ['ai', 'local', 'floor'].includes(d.by as string) && (d.why === undefined || typeof d.why === 'string' && d.why.length <= 256));
-          check(JSON.stringify(d.picks) === JSON.stringify(plainData(d.picks, { n: ANSWER_MAX })) && validPicks(c.asks[d.ask as string].questions, d.picks));
+          check(JSON.stringify(d.picks) === JSON.stringify(plainData(d.picks, { n: ANSWER_MAX })));
+          if (!validPicks(c.asks[d.ask as string].questions, d.picks)) throw new Error('saved rules state is invalid: invalid saved answer');
         } else {
           check(uint(d.n));
           if (q[6] === 'roundOver') {
@@ -1194,19 +1223,15 @@ export function createCore(c: Compiled, opts: { observe?: (kind: string, handler
   if (r) {
     if (r.v !== SAVE_REVISION) throw new Error('this save was written by another version of the runtime');
     validateSave(r);
-    const askNames = new Set<string>();
-    pendingAsks = (Array.isArray(r.asks) ? r.asks : []).filter((a) => {
-      if (!a || typeof a.name !== 'string' || !Object.hasOwn(c.asks, a.name) || askNames.has(a.name) || typeof a.n !== 'string' || a.n.length > 128 || typeof a.who !== 'string' || a.who.length > 128 || !Number.isSafeInteger(a.at) || a.at < 0 || a.at > r.tick) return false;
-      askNames.add(a.name); return true;
-    }).slice(0, Object.keys(c.asks).length).map((a) => ({ n: a.n, name: a.name, who: a.who, at: a.at, state: deepFreeze(coerceFields(c.asks[a.name].stateFields, a.state, dims)), ...(a.result ? { result: decisionResult(a.result) } : {}) }));
-    if (opts.restoreEpoch !== undefined && (!Number.isSafeInteger(opts.restoreEpoch) || opts.restoreEpoch <= 0)) throw new Error('restored epoch is invalid');
+    pendingAsks = r.asks.map(a => ({ ...a, state: deepFreeze(a.state) }));
+    if ([opts.restoreEpoch].some((e) => e !== undefined && (!Number.isSafeInteger(e) || e <= 0))) throw new Error('restored epoch is invalid');
     tick = r.tick; epoch = opts.restoreEpoch ?? r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;
     endAsked = r.intent?.[0] === 1; finishing = r.intent?.[1] === 1;
     round = { n: r.round[0], phase: r.round[1] === 1 ? 'live' : 'over', endsAt: r.round[2], startedAt: r.round[3] };
     refreshRound();
     shared = unpackFields(c.shared, r.shared, dims); sharedChanged();
     policy = normalizeCorePolicy(r.policy ?? {});
-    for (const [seat, value] of (Array.isArray(r.guideViews) ? r.guideViews : []).filter((v) => Array.isArray(v) && v.length === 2).slice(0, c.seats)) if (Number.isInteger(seat) && seat >= 0 && seat < c.seats) guideViews.set(seat, coerceFields(c.view, value, dims));
+    for (const [seat, value] of r.guideViews) guideViews.set(seat, deepFreeze(value));
     for (const w of r.ents) { const e = loadEnt(w as any[]); ents.set(e.id, e); }
     spawns = r.spawns.map((w) => loadEnt(w as any[]));
     for (const [seat, driver, owner, id, away] of r.seats) seats.set(seat, { seat, driver: driver as Driver, owner, id, away: away === 1 });
@@ -1232,11 +1257,12 @@ export function createCore(c: Compiled, opts: { observe?: (kind: string, handler
       ? deepFreeze({ goal: v.goal, args: v.args ?? {}, from: v.from === 'brain' ? 'brain' : 'floor', at: Math.max(0, Math.min(tick, Math.floor(num(v.at)) || 0)), asked: v.asked === true, state: 'active' }) : null;
   }
   return {
+    round: () => ({ t: 'round', ...round, ...(round.phase === 'over' && !overAt ? { results: results() } : {}) }),
     get tick() { return tick; },
     get epoch() { return epoch; },
     step,
     answer: (n, result) => { const a = pendingAsks.find((x) => x.n === n); if (a && !a.result) a.result = decisionResult(result); },
-    vocabulary: (value) => { vocabulary = value; for (const e of playerBodies()) e.goal = e.driver === 'ai' ? validGoal(e.seat, restoredGoals.get(e.seat) ?? e.goal) : null; restoredGoals.clear(); },
+    vocabulary: (value) => { vocabulary = value; for (const e of playerBodies()) { const savedGoal = restoredGoals.get(e.seat); const goal = e.driver === 'ai' ? validGoal(e.seat, savedGoal ?? e.goal) : null; if (savedGoal != null && vocabulary && !Object.hasOwn(vocabulary.goals, String(own(savedGoal, 'goal')))) throw new Error('saved goal is invalid'); e.goal = goal; } restoredGoals.clear(); },
     goal: (seat, value) => {
       const e = playerBodies().find((x) => x.seat === seat);
       if (!e) return null;
@@ -1311,4 +1337,15 @@ export function createCore(c: Compiled, opts: { observe?: (kind: string, handler
     world,
     stats,
   };
+}
+
+/** Decisions from the wire, saved events and rule floors meet the same questions. */
+function validPicks(questions: Record<string, unknown>, picks: unknown): boolean {
+  if (!picks || typeof picks !== 'object' || Array.isArray(picks)) return false;
+  return Object.entries(questions).every(([id, raw]) => {
+    const q = raw as any; const v = (picks as Record<string, unknown>)[id];
+    if (q.type === 'noul' || q.type === 'yes-no') return typeof v === 'boolean';
+    if (q.type === 'score') return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < q.criteria.length;
+    return typeof v === 'string' && (Array.isArray(q.criteria) ? q.criteria.includes(v) : Object.hasOwn(q.criteria, v));
+  });
 }

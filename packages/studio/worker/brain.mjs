@@ -1,3 +1,4 @@
+import { LIMITS } from './limits.mjs';
 /**
  * BRAINS (@homie-rocks/studio 0.17.0, NETPLAY.md section 18): what an AI guide decides, a few seconds at a time, and
  * only ever in the game's own words. Pure: no Worker import and no Node built-in, so the relay (room.mjs), the Table's
@@ -649,7 +650,7 @@ export async function clefDecide(env, { vocab, ctx = {}, model, ms = 8000, local
  *                                   8 questions; Choice 2 to 26 options, Score 2 to 10 levels, a yes/no; short words
  *   picksOf(answers, questions)     the answers as the game uses them: { tactic: 'surround', wave: false, pressure: 2.6 }
  */
-export const DECIDE = Object.freeze({ questions: 8, options: 26, levels: 10, words: 160, option: 40, stateBytes: 2048, bytes: 6144, gapMs: 3000, perMinute: 20, inFlight: 2, ms: 2500 });
+export const DECIDE = Object.freeze({ questions: 8, options: 26, levels: 10, words: 160, option: 40, stateBytes: 2048, bytes: LIMITS.decide, gapMs: 3000, perMinute: 20, inFlight: 2, ms: 2500 });
 const QID = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;
 const OPT = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/;
 
