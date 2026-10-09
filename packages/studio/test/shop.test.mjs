@@ -2460,12 +2460,28 @@ test('failed Stripe refunds can be retried without repeating a pending refund', 
   s.stripe.close();
 });
 
-test('rolling schema upgrade: released checkout, payment and refund; new code before and after the additive step', async () => {
-  // Build the real latest release, not a copied reconstruction of its SQL or grant path.
-  const repo = join(PKG, '..', '..');
-  const tag = spawnSync('git', ['tag', '--sort=-version:refname'], { cwd: repo, encoding: 'utf8' }).stdout.trim().split('\n').find((t) => t.startsWith('release-'));
-  assert.ok(tag);
-  const released = join(scratch, 'released');
+// The released code a studio upgrades from: the newest release tag, and 0.32.1 and 0.33.0 by name (the two releases
+// before the additive step 0012), each when this checkout has its tag. A checkout without tags (a shallow clone,
+// a source archive) has no released code to build, so the test is skipped and says why; CI's Packages job checks
+// out with tags (fetch-depth: 0), so it runs there.
+const ROLLING_REPO = join(PKG, '..', '..');
+const RELEASE_TAG = /^release-\d{4}-\d\d-\d\d-studio-(\d+)\.(\d+)\.(\d+)$/;
+const releaseTags = (() => {
+  const r = spawnSync('git', ['tag', '--list', 'release-*-studio-*'], { cwd: ROLLING_REPO, encoding: 'utf8' });
+  const inRepo = spawnSync('git', ['rev-parse', '--show-cdup'], { cwd: ROLLING_REPO, encoding: 'utf8' });
+  if (r.status !== 0 || inRepo.status !== 0 || inRepo.stdout.trim()) return [];
+  const version = (t) => RELEASE_TAG.exec(t).slice(1).map(Number);
+  // Newest version first; of two tags for one version, the later date.
+  return r.stdout.split('\n').map((t) => t.trim()).filter((t) => RELEASE_TAG.test(t))
+    .sort((x, y) => { const a = version(x), b = version(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2] || (x < y ? 1 : -1); });
+})();
+const rollingFrom = [...new Set([releaseTags[0], ...['0.33.0', '0.32.1'].map((v) => releaseTags.find((t) => t.endsWith(`-studio-${v}`)))].filter(Boolean))];
+const ROLLING = 'rolling schema upgrade: released checkout, payment and refund; new code before and after the additive step';
+if (!rollingFrom.length) test(ROLLING, { skip: 'this checkout has no release-*-studio-* tag, so there is no released code to upgrade from (fetch the tags: git fetch --tags; in CI, actions/checkout with fetch-depth: 0)' }, () => {});
+for (const tag of rollingFrom) test(`${ROLLING} (from ${tag})`, async () => {
+  // Build the real release, not a copied reconstruction of its SQL or grant path.
+  const repo = ROLLING_REPO;
+  const released = join(scratch, `released-${tag}`);
   mkdirSync(released);
   const archive = spawnSync('git', ['archive', tag], { cwd: repo, maxBuffer: 128 * 1024 * 1024 });
   assert.equal(archive.status, 0);

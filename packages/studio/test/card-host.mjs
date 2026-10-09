@@ -78,9 +78,26 @@ export async function cardHost({ puppeteer, chrome, args = [], server, uri, resu
   const frame = async () => { for (let i = 0; i < 50; i++) { const f = page.frames().find((x) => x !== page.mainFrame()); if (f) return f; await new Promise((r) => setTimeout(r, 100)); } throw new Error('no card frame'); };
   const card = await frame();
   const settle = (ms = 700) => new Promise((r) => setTimeout(r, ms));
-  await settle(900);
+  /** Wait until check() answers something truthy (it may be async and may throw while the page is not there yet); else say what was waited for. */
+  const until = async (check, what, ms = Number(process.env.HOMIE_CARD_TEST_WAIT_MS ?? 30_000)) => {
+    const end = Date.now() + ms; let last;
+    for (;;) {
+      try { const v = await check(); if (v) return v; last = undefined; } catch (e) { last = e; }
+      if (Date.now() > end) throw new Error(`the card did not get to: ${what} (waited ${ms} ms)${last ? `; ${last.message ?? last}` : ''}`);
+      await settle(50);
+    }
+  };
+  const text = () => card.evaluate(() => document.body.innerText);
+  // The card has drawn the tool's answer: its first paint is the "Loading" skeleton (mcp/ui/bridge.js), which stays
+  // until the host's tool-result arrives, and how long that takes depends on the machine. A fixed pause is not it.
+  try { await until(() => card.evaluate(() => Boolean(document.getElementById('root')?.childElementCount) && !document.querySelector('#root .skel')), 'the tool\'s answer drawn (no "Loading" skeleton)'); }
+  catch (error) {
+    const shown = await text().catch(() => '(the card could not be read)');
+    await browser.close().catch(() => {}); await new Promise((r) => http.close(r));
+    throw new Error(`${error.message}; it shows: ${JSON.stringify(shown.slice(0, 300))}; page errors: ${JSON.stringify(errors)}`);
+  }
   return {
-    page, card, errors, settle,
+    page, card, errors, settle, until,
     /** Press the first button whose text matches. */
     /** Press the first (or the nth, from 0) button whose text matches. */
     press: async (re, nth = 0) => {
@@ -94,7 +111,7 @@ export async function cardHost({ puppeteer, chrome, args = [], server, uri, resu
       await card.type('input[type=text]', text);
       await card.evaluate(() => document.querySelector('input[type=text]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
     },
-    text: () => card.evaluate(() => document.body.innerText),
+    text,
     calls: () => page.evaluate(() => window.calls),
     told: () => page.evaluate(() => window.told),
     shot: async (file) => { const el = await page.$('#card'); await el.screenshot({ path: file }); },
