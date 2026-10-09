@@ -60,6 +60,7 @@ export function validateMesh(s: MeshState): void {
     requireState(typeof node.allocated === 'boolean' && node.index === i);
     requireState(node.allocated !== n.nodeIndexPool.free.includes(i));
     numbers(node.links);
+    requireState(new Set(node.links).size === node.links.length);
     if (!node.allocated) continue;
     requireState(
       valid(node.ref) &&
@@ -91,7 +92,14 @@ export function validateMesh(s: MeshState): void {
         n.nodes[link.toNodeIndex]?.ref === link.toNodeRef &&
         n.nodes[link.fromNodeIndex]!.links.includes(i),
     );
-    for (const v of [link.edge, link.side, link.bmin, link.bmax]) requireState(Number.isFinite(v));
+    for (const v of [link.edge, link.side, link.bmin, link.bmax]) integer(v);
+    const from = n.nodes[link.fromNodeIndex]!, to = n.nodes[link.toNodeIndex]!;
+    if (from.type === nav.NodeType.POLY && to.type === nav.NodeType.POLY) {
+      const poly = n.tiles[from.tileId]!.polys[from.polyIndex]!;
+      requireState(link.edge < poly.vertices.length);
+      if (from.tileId === to.tileId) requireState(poly.neis[link.edge] === to.polyIndex + 1);
+      else requireState((poly.neis[link.edge]! & 0x8000) !== 0 && link.side <= 7);
+    } else requireState(link.edge <= 1);
   }
   for (const [key, tile] of Object.entries(n.tiles)) {
     requireState(String(tile.id) === key);
@@ -107,6 +115,7 @@ export function validateMesh(s: MeshState): void {
   for (const id of Object.values(n.tilePositionToTileId)) requireState(n.tiles[id]);
   for (const ids of Object.values(n.tileColumnToTileIds)) {
     numbers(ids);
+    requireState(new Set(ids).size === ids.length);
     for (const id of ids) requireState(n.tiles[id]);
   }
   for (const value of Object.values(n.tilePositionToSequenceCounter)) integer(value);

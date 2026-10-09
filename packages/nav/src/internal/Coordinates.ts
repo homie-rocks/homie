@@ -1,7 +1,7 @@
 import type { Point, Vector, Up } from '../Query.ts';
 export function point(p: Point): void {
-  if (!p || p.length !== 3 || ![p[0], p[1], p[2]].every(Number.isFinite))
-    throw new Error('nav: a point needs three finite coordinates');
+  if (!p || p.length !== 3 || ![p[0], p[1], p[2]].every(v => Number.isFinite(v) && Math.abs(v!) <= 1e7))
+    throw new Error('nav: a point needs three finite coordinates within 10000000 units');
 }
 export function vector(p: Point): Vector {
   point(p);

@@ -1,6 +1,11 @@
 import { requireState, numbers, record } from './internal/Validate.ts';
-/** Fixed-step navigation. Only persistent fields are saved; avoidance candidates,
- * neighbour lists and steering scratch are rebuilt at the next tick. */
+/** Fixed-step navigation with pull-based mesh synchronization and explicit detach.
+ * Tile sequence + polygon identity guard saved searches and corridors; edits only
+ * restart requests touching replaced or rejected nodes, from retained progress.
+ * Pending targets coalesce until the current search finishes. The pinned backend
+ * resets requests unconditionally and uses a dense neighbour array: this wrapper
+ * preserves requests, and scripts/runtime.mjs patches that array to a sparse hash.
+ * All persistent bookkeeping is saved; steering scratch is rebuilt next tick. */
 import { crowd, pathCorridor, localBoundary, obstacleAvoidance } from './internal/Backend.ts';
 import type { crowd as CrowdTypes } from 'navcat/blocks';
 import {
@@ -11,7 +16,7 @@ import {
 } from 'navcat';
 import { reachable } from './internal/Reachability.ts';
 import { Mesh } from './Mesh.ts';
-import { meshData, meshDependents, locate } from './internal/MeshData.ts';
+import { meshData, locate } from './internal/MeshData.ts';
 import { pack, unpack } from './internal/Binary.ts';
 import { type Point, type Vector } from './Query.ts';
 import { axes, fromAxes, positive, distance } from './internal/Coordinates.ts';
@@ -43,6 +48,7 @@ interface CrowdState {
   revision: number;
   targets: Record<string, Vector>;
   traversals: Record<string, number>;
+  generations: Record<string, string>;
 }
 /** Audited against pinned blocks.js update order:
  * - neighbours are cleared for ALL states by updateNeighbours before any read;
@@ -56,13 +62,23 @@ interface CrowdState {
 const scratch = new Set(['obstacleAvoidanceQuery', 'obstacleAvoidanceDebugData', 'neis']);
 export class Crowd {
   #state: CrowdState;
-  #dependent: { invalidate(): void };
+  #mesh: Mesh | undefined;
+  get mesh(): Mesh {
+    if (!this.#mesh) throw new Error('nav: crowd is detached');
+    return this.#mesh;
+  }
+  /** Constructor attaches; detach releases ownership and ends all access. */
+  detach(): void { this.#mesh = undefined; }
+  private sync(): void {
+    if (this.#state.revision !== this.mesh.revision) this.invalidate();
+  }
   constructor(
-    readonly mesh: Mesh,
+    mesh: Mesh,
     dt: number,
     maxRadius: number,
     options: CrowdOptions = {},
   ) {
+    this.#mesh = mesh;
     positive(dt, 'fixed dt');
     positive(maxRadius, 'maximum radius');
     if (dt > 0.1) throw new Error(`nav: fixed dt ${dt} must be at most 0.1 seconds`);
@@ -90,20 +106,20 @@ export class Crowd {
       revision: mesh.revision,
       targets: {},
       traversals: {},
+      generations: {},
     };
-    let dependents = meshDependents.get(mesh);
-    if (!dependents) meshDependents.set(mesh, (dependents = new Set()));
-    // Keep the callback private without retaining the crowd from the mesh.
-    this.#dependent = { invalidate: () => this.invalidate() };
-    dependents.add(new WeakRef(this.#dependent));
+
   }
   get tick(): number {
+    void this.mesh;
     return this.#state.tick;
   }
   ids(): number[] {
+    void this.mesh;
     return Object.keys(this.#state.data.agents).map(Number);
   }
   add(at: Point, tune: AgentTune): number {
+    this.sync();
     for (const key of ['radius', 'height', 'speed', 'acceleration', 'neighbours'] as const)
       positive(tune[key], key);
     const m = meshData(this.mesh),
@@ -135,13 +151,16 @@ export class Crowd {
     );
   }
   remove(id: number): boolean {
+    this.sync();
     delete this.#state.targets[id];
     delete this.#state.traversals[id];
     return crowd.removeAgent(this.#state.data, String(id));
   }
   target(id: number, to: Point): boolean {
-    const target = axes(to, this.mesh.up),
-      result = locate(this.mesh, target);
+    this.sync();
+    const target = axes(to, this.mesh.up);
+    const previous = this.#state.targets[id];
+    const result = locate(this.mesh, target);
     const agent = this.#state.data.agents[id];
     if (!agent) return false;
     if (agent.state !== crowd.AgentState.WALKING) {
@@ -156,14 +175,33 @@ export class Crowd {
       !reachable(this.mesh, locate(this.mesh, agent.position).nodeRef).has(result.nodeRef)
     )
       return false;
+    if (previous && previous.every((v, i) => v === target[i])) return true;
     this.#state.targets[id] = target;
+    // Coalesce a moving endpoint while a route is being found. Finish that search,
+    // then extend its corridor to the latest requested endpoint at the next step.
+    if (agent.targetRef === result.nodeRef && agent.targetState !== crowd.AgentTargetState.NONE) {
+      agent.targetPosition = [...result.position];
+      if (agent.slicedQuery.status !== 0) agent.slicedQuery.endPosition = [...result.position];
+      if (agent.corridor.path.at(-1) === result.nodeRef) agent.corridor.target = [...result.position];
+      return true;
+    }
+    if (agent.targetState === crowd.AgentTargetState.WAITING_FOR_PATH ||
+        agent.targetState === crowd.AgentTargetState.WAITING_FOR_QUEUE) return true;
+    if (agent.corridor.path.length && agent.targetState === crowd.AgentTargetState.VALID) {
+      agent.targetRef = result.nodeRef;
+      agent.targetPosition = [...result.position];
+      agent.targetState = crowd.AgentTargetState.WAITING_FOR_QUEUE;
+      return true;
+    }
     return crowd.requestMoveTarget(this.#state.data, String(id), result.nodeRef, result.position);
   }
   stop(id: number): boolean {
+    this.sync();
     delete this.#state.targets[id];
     return crowd.resetMoveTarget(this.#state.data, String(id));
   }
   setSpeed(id: number, speed: number): boolean {
+    this.sync();
     positive(speed, 'speed');
     const agent = this.#state.data.agents[id];
     if (!agent) return false;
@@ -172,6 +210,7 @@ export class Crowd {
   }
   /** Explicit placement keeps identity, tune and requested destination. */
   place(id: number, at: Point): boolean {
+    this.sync();
     const a = this.#state.data.agents[id];
     if (!a) return false;
     const p = locate(this.mesh, axes(at, this.mesh.up));
@@ -195,6 +234,7 @@ export class Crowd {
     return true;
   }
   completeLink(id: number): boolean {
+    this.sync();
     const completed = crowd.completeOffMeshConnection(this.#state.data, String(id));
     if (completed) this.finishLink(id, this.#state.data.agents[id]!.position);
     return completed;
@@ -213,6 +253,7 @@ export class Crowd {
     crowd.resetMoveTarget(this.#state.data, String(id));
   }
   agent(id: number): Agent | null {
+    void this.mesh;
     const a = this.#state.data.agents[id];
     if (!a) return null;
     const m = meshData(this.mesh),
@@ -230,7 +271,8 @@ export class Crowd {
       position: fromAxes(a.position, this.mesh.up),
       velocity: fromAxes(a.velocity, this.mesh.up),
       status:
-        a.state === crowd.AgentState.INVALID
+        a.state === crowd.AgentState.INVALID ||
+        (this.#state.revision !== this.mesh.revision && !locate(this.mesh, a.position).success)
           ? 'stranded'
           : a.state === crowd.AgentState.OFFMESH
             ? 'link'
@@ -241,17 +283,40 @@ export class Crowd {
     };
   }
   arrived(id: number, tolerance: number): boolean {
+    void this.mesh;
     positive(tolerance, 'arrival tolerance');
     const a = this.#state.data.agents[id],
       target = this.#state.targets[id];
     return (
       !!a &&
       !!target &&
+      (this.#state.revision === this.mesh.revision ||
+        a.corridor.path.every(ref => this.#state.generations[ref] === this.generation(ref))) &&
       !a.targetPathIsPartial &&
       a.targetState === crowd.AgentTargetState.VALID &&
       a.state === crowd.AgentState.WALKING &&
       distance(a.position, a.targetPosition) <= tolerance
     );
+  }
+  private generation(ref: number): string {
+    const nav = meshData(this.mesh).nav;
+    if (!isValidNodeRef(nav, ref)) return '';
+    const node = getNodeByRef(nav, ref);
+    const tile = nav.tiles[node.tileId];
+    return tile ? `${tile.tileX},${tile.tileY},${tile.tileLayer}:${tile.sequence}:${node.polyIndex}:${node.flags}`
+      : `link:${node.offMeshConnectionId}:${ref}:${node.flags}`;
+  }
+  private captureGenerations(): void {
+    const refs = new Set<number>();
+    for (const a of Object.values(this.#state.data.agents)) {
+      for (const ref of [...a.corridor.path, ...a.boundary.polys]) refs.add(ref);
+      if (a.targetRef !== null) refs.add(a.targetRef);
+      if (a.slicedQuery.status !== 0) {
+        refs.add(a.slicedQuery.startNodeRef); refs.add(a.slicedQuery.endNodeRef);
+        for (const nodes of Object.values(a.slicedQuery.nodes)) for (const node of nodes) refs.add(node.nodeRef);
+      }
+    }
+    this.#state.generations = Object.fromEntries([...refs].sort((a, b) => a - b).map(ref => [ref, this.generation(ref)]));
   }
   /** All mesh mutations funnel here before stale references can be observed.
    * Completed, valid corridors keep moving. Every search pool and boundary is
@@ -262,14 +327,15 @@ export class Crowd {
     const s = this.#state,
       m = meshData(this.mesh);
     const valid = (ref: number): boolean =>
-      isValidNodeRef(m.nav, ref) && DEFAULT_QUERY_FILTER.passFilter(ref, m.nav);
-    for (const id of this.ids()) {
+      isValidNodeRef(m.nav, ref) && DEFAULT_QUERY_FILTER.passFilter(ref, m.nav) &&
+      (s.generations[ref] === undefined || s.generations[ref] === this.generation(ref));
+    for (const id of Object.keys(s.data.agents).map(Number)) {
       const a = s.data.agents[id]!;
-      let restart =
-        a.targetState === crowd.AgentTargetState.WAITING_FOR_PATH ||
-        a.targetState === crowd.AgentTargetState.WAITING_FOR_QUEUE ||
-        a.slicedQuery.status === 1;
-      a.slicedQuery = createSlicedNodePathQuery();
+      const q = a.slicedQuery;
+      let restart = q.status !== 0 && (
+        !valid(q.startNodeRef) || !valid(q.endNodeRef) ||
+        Object.values(q.nodes).some(nodes => nodes.some(node => !valid(node.nodeRef))));
+      if (restart) a.slicedQuery = createSlicedNodePathQuery();
       if (!a.boundary.polys.every(valid)) localBoundary.resetLocalBoundary(a.boundary);
       a.neis = [];
       const animation = a.offMeshAnimation;
@@ -306,17 +372,22 @@ export class Crowd {
       if (a.targetRef !== null && !valid(a.targetRef)) restart = true;
       const target = s.targets[id];
       if (restart || (target && a.targetState === crowd.AgentTargetState.NONE)) {
+        a.slicedQuery = createSlicedNodePathQuery();
         crowd.resetMoveTarget(s.data, String(id));
         if (target) {
           const goal = locate(this.mesh, target);
-          if (goal.success && a.corridor.path.length)
+          if (goal.success && a.corridor.path.length) {
             crowd.requestMoveTarget(s.data, String(id), goal.nodeRef, goal.position);
+            a.targetState = crowd.AgentTargetState.WAITING_FOR_QUEUE;
+          }
         }
       }
     }
     s.revision = this.mesh.revision;
+    this.captureGenerations();
   }
   step(): void {
+    this.sync();
     const s = this.#state,
       m = meshData(this.mesh);
     if (s.revision !== this.mesh.revision) this.invalidate();
@@ -341,10 +412,22 @@ export class Crowd {
         if (link !== undefined) s.traversals[id] = Number(link);
       }
     }
+    for (const [id, target] of Object.entries(s.targets)) {
+      const a = s.data.agents[id];
+      if (a?.state !== crowd.AgentState.WALKING || a.targetState !== crowd.AgentTargetState.VALID) continue;
+      const goal = locate(this.mesh, target);
+      if (goal.success && goal.nodeRef !== a.targetRef) {
+        a.targetRef = goal.nodeRef;
+        a.targetPosition = [...goal.position];
+        a.targetState = crowd.AgentTargetState.WAITING_FOR_QUEUE;
+      }
+    }
     s.tick++;
+    this.captureGenerations();
   }
   /** No tiles or mesh payload. Restore deliberately requires the shared mesh. */
   save(): Uint8Array {
+    this.sync();
     const agents: Record<string, unknown> = {};
     for (const [id, agent] of Object.entries(this.#state.data.agents)) {
       const fields = Object.fromEntries(Object.entries(agent).filter(([key]) => !scratch.has(key)));
@@ -375,6 +458,8 @@ export class Crowd {
     const s = saved.state,
       result = new Crowd(mesh, s.dt, s.data.maxAgentRadius);
     requireState(Number.isSafeInteger(s.tick) && s.tick >= 0 && Number.isSafeInteger(s.revision));
+    record(s.generations);
+    for (const value of Object.values(s.generations)) requireState(typeof value === 'string');
     record(s.targets);
     record(s.traversals);
     record(s.data.agents);
@@ -392,6 +477,7 @@ export class Crowd {
     for (const [id, target] of Object.entries(s.targets)) {
       requireState(s.data.agents[id]);
       numbers(target, 3);
+      axes(target);
     }
     for (const [id, link] of Object.entries(s.traversals))
       requireState(s.data.agents[id] && Number.isSafeInteger(link) && link > 0);
@@ -401,6 +487,9 @@ export class Crowd {
       );
     for (const a of Object.values(s.data.agents)) {
       record(a);
+      axes(a.position);
+      if (a.state === crowd.AgentState.WALKING) requireState(locate(mesh, a.position).success);
+      axes(a.targetPosition);
       for (const p of [
         a.position,
         a.velocity,

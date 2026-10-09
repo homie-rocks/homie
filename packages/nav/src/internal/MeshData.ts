@@ -34,5 +34,3 @@ export function locate(mesh: object, point: Vector): nav.FindNearestPolyResult {
 
 registerQueryFilter(nav.DEFAULT_QUERY_FILTER);
 
-/** Weak subscribers keep a mesh from retaining discarded restored crowds. */
-export const meshDependents = new WeakMap<object, Set<WeakRef<{ invalidate(): void }>>>();

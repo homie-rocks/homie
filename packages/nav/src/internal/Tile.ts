@@ -51,6 +51,7 @@ export function decodeTile(bytes: Uint8Array): TileData {
   const c = data.compact;
   if (c === null && data.config.retainSpans) throw new Error('nav: missing retained spans');
   if (c) {
+    numbers(c.bounds, 6);
     const cells = c.cells as unknown as Uint32Array,
       spans = c.spans as unknown as Uint32Array;
     if (
@@ -61,14 +62,31 @@ export function decodeTile(bytes: Uint8Array): TileData {
       c.areas.length !== c.spanCount
     )
       throw new Error('nav: invalid compact spans');
-    for (let i = 0; i < cells.length; i += 2)
-      if (cells[i]! + cells[i + 1]! > c.spanCount) throw new Error('nav: invalid span range');
+    requireState(Number.isSafeInteger(c.width) && c.width > 0 && Number.isSafeInteger(c.height) && c.height > 0);
+    let consumed = 0;
+    for (let i = 0; i < cells.length; i += 2) {
+      const start = cells[i]!, count = cells[i + 1]!;
+      requireState((count === 0 || start === consumed) && start + count <= c.spanCount);
+      consumed += count;
+      const x = (i / 2) % c.width, z = Math.floor(i / 2 / c.width);
+      for (let j = start; j < start + count; j++) for (let d = 0; d < 4; d++) {
+        const con = (spans[j * 4 + 2]! >>> (d * 6)) & 63;
+        if (con === nav.NOT_CONNECTED) continue;
+        const nx = x + nav.getDirOffsetX(d), nz = z + nav.getDirOffsetY(d);
+        requireState(nx >= 0 && nz >= 0 && nx < c.width && nz < c.height);
+        const neighbour = (nz * c.width + nx) * 2;
+        requireState(con < cells[neighbour + 1]!);
+      }
+    }
+    requireState(consumed === c.spanCount);
   }
   if (data.baked && (!Array.isArray(data.baked.polys) || !Array.isArray(data.baked.vertices)))
     throw new Error('nav: invalid tile polygons');
   if (data.baked) {
     const t = data.baked;
     numbers(t.vertices);
+    numbers(t.polyNodes);
+    requireState(t.polyNodes.every(n => Number.isSafeInteger(n) && n >= 0));
     numbers(t.bounds, 6);
     numbers(t.detailVertices);
     numbers(t.detailTriangles);

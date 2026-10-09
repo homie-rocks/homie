@@ -74,8 +74,8 @@ export function checkConfig(c: BakeConfig): void {
     throw new Error(
       `nav: slope ${c.slopeDegrees} degrees cannot be honoured with cellSize ${c.cellSize}, ` +
         `cellHeight ${c.cellHeight} and stepHeight ${c.stepHeight}; maximum slope is ` +
-        `${(low * 180) / Math.PI} degrees; ` +
-        `requested slope needs stepHeight at least ${Math.ceil(rise / c.cellHeight - 1e-9) * c.cellHeight}`,
+        `${Number(((low * 180) / Math.PI).toFixed(3))} degrees; ` +
+        `requested slope needs stepHeight at least ${Number((Math.ceil(rise / c.cellHeight - 1e-9) * c.cellHeight).toFixed(6))}`,
     );
   }
   if ((c.maxY - c.minY) / c.cellHeight > 65535)

@@ -23,7 +23,7 @@ import {
   positive,
 } from './internal/Coordinates.ts';
 import { hash, pack, unpack } from './internal/Binary.ts';
-import { meshStates, meshDependents, locate, type MeshState } from './internal/MeshData.ts';
+import { meshStates, locate, type MeshState } from './internal/MeshData.ts';
 import { decodeTile, finishTile, type TileData } from './internal/Tile.ts';
 function copyConfig(config: BakeConfig): BakeConfig {
   return {
@@ -69,7 +69,10 @@ export class Mesh implements NavigationQuery {
         );
     checkConfig(config);
     point(queryHalfExtents);
-    vector(queryHalfExtents).forEach((v) => positive(v, 'query half extent'));
+    vector(queryHalfExtents).forEach((v) => {
+      positive(v, 'query half extent');
+      if (v > config.cellSize * config.tileCells * 8) throw new Error('nav: query half extent exceeds eight tiles');
+    });
     const n = nav.createNavMesh();
     n.origin = axes(config.origin, config.up);
     n.tileWidth = n.tileHeight = config.cellSize * config.tileCells;
@@ -92,6 +95,13 @@ export class Mesh implements NavigationQuery {
   }
   /** Loaded areas only are reachable. Matching global origin/config prevents bad seams. */
   loadTile(bytes: Uint8Array): { warnings: string[] } {
+    try { return this.loadTileData(bytes); }
+    catch (error) {
+      if (error instanceof Error && error.message.startsWith('nav:')) throw error;
+      throw new Error('nav: malformed tile');
+    }
+  }
+  private loadTileData(bytes: Uint8Array): { warnings: string[] } {
     const t = decodeTile(bytes);
     checkConfig(t.config);
     const expected = this.#state.config;
@@ -342,13 +352,7 @@ export class Mesh implements NavigationQuery {
     this.#state.revision++;
     this.#identity = undefined;
     invalidateReachability(this);
-    const dependents = meshDependents.get(this);
-    if (dependents)
-      for (const ref of dependents) {
-        const dependent = ref.deref();
-        if (dependent) dependent.invalidate();
-        else dependents.delete(ref);
-      }
+
   }
   private overlaps(tile: TileData, box: Obstacle): boolean {
     const c = this.#state.config,

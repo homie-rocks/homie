@@ -21,7 +21,13 @@ if (
   throw Error('nav: query and tile backend changed; review graph schema and conformance fixtures');
 const patched = source
   .replaceAll('Math.sin(', 'deterministicSin(')
-  .replaceAll('Math.cos(', 'deterministicCos(');
+  .replaceAll('Math.cos(', 'deterministicCos(')
+  .replace('const grid = new Array(gridSize);', 'const grid = new Map();')
+  .replace('const key = iz * gridWidth + ix;', 'const key = `${iz},${ix}`;')
+  .replace('let cell = grid[key];', 'let cell = grid.get(key);')
+  .replace('grid[key] = cell;', 'grid.set(key, cell);')
+  .replace('const cellKey = checkZ * gridWidth + checkX;', 'const cellKey = `${checkZ},${checkX}`;')
+  .replace('const cell = grid[cellKey];', 'const cell = grid.get(cellKey);');
 const destination = new URL('../src/internal/Generated.ts', import.meta.url);
 const output =
   '// @ts-nocheck\n// Generated from the pinned MIT dependency; see distributed third-party license.\nimport { deterministicSin, deterministicCos } from "./Math.ts";\n' +

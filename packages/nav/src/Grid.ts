@@ -43,6 +43,8 @@ export class Grid implements NavigationQuery {
   ) {
     positive(cell, 'grid cell');
     point(origin);
+    const internalOrigin = axes(origin, options.up);
+    point([internalOrigin[0] + width * cell, internalOrigin[1], internalOrigin[2] + depth * cell]);
     if (
       !Number.isInteger(width) ||
       !Number.isInteger(depth) ||
