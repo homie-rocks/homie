@@ -430,3 +430,13 @@ motion data. Slice 7 retains its stricter correction fade cap and zero-speed
 floor. As in the revised Slice 6 matrix, the 3D speed assertion measures elapsed
 time on the pose's actual sampling clock; rAF timestamps still measure frame
 pacing. View checks and final rendered trials repeat before the clean gate.
+
+The combined reviewed-base view suite passed all 131 tests (88.50 seconds),
+including 36 upstream uneven-frame cases and the Slice 7 knock and 3D pose
+regressions. The packed toolkit was rebuilt and its installed view compared
+byte-for-byte with the checkout. All six repeated visible windows held 59.88 fps,
+frame p95 18.1–18.2 ms, zero browser errors and correction snaps. No clock rebases
+occurred during play except one intentional Ember respawn placement. Saved hero
+reload passed again. I inspected the new recordings' contact and consecutive
+motion frames; no animation or sliding issue was visible. Final evidence now
+uses the three `*-reviewed-final` folders; earlier captures are retained.
