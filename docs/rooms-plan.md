@@ -307,10 +307,12 @@ slice 4 it can also change the rules of a rules game. From slice 8 every new gam
 
 **4. The build check (M, after 1)**
 
-- Ships: type checking of rules, always. Test runs the build generates itself: two runs
-  compared step by step, a run rebuilt from its save before every step, a stop and restore
-  at random steps. Messages for the chat: what broke, the line, the usual fix. A reference
-  page, so the `game` skill can change a rules game.
+- Ships: type checking of rules, always. A play the build generates itself, on the real
+  runtime: a build fails for a handler that threw, a tick out of budget, a character the
+  server held back, a value the room had to change and lose, or a room that did not come back
+  the same from its save. Messages for
+  the chat: what broke, the line, the usual fix. A reference page, so the `game` skill can
+  change a rules game.
 - Exit test:
   - A rules file with fifteen planted faults fails with each line named.
   - Three one-sentence change requests to `coin-dash`, fixed in advance, run unattended. Each

@@ -56,14 +56,12 @@ The game is `games/<id>/`: `game.json` (name, blurb, players, round length),
 `index.html`, `src/main.ts`. The starter (Gem Rush) is a complete netplay game in one
 readable file: rules, bots, snapshots, rendering on a canvas, keys and touch.
 
-**A game with `"room"` in its game.json and a `src/rules.ts` is written another way, and this skill does not yet change one.** Its rules
-(`src/rules.ts`, `src/move.ts`) run on the studio's Cloudflare, not in a player's browser, and its view
-(`src/view.ts`) only draws and sends input (`node_modules/@homie-rocks/studio/netplay/NETPLAY.md`, section 29; the
-example is the `coin-dash` starter). The build checks those rules and refuses anything outside a short list of safe
-operations, naming the line: when it does, fix that line as its message says and build again, and change nothing
-else in those files. Do not make a new game this way and do not rewrite an existing game as rules plus view yet: a
-room of such a game has no save in this version, so every deploy would restart its match. New games and changes to
-a `src/main.ts` game are made exactly as this skill says below.
+**Editing a game with a `"room"` object in game.json and `src/rules.ts`.** Read [RULES.md](RULES.md) before changing it. Its rules and movement
+run through the rules build check on every build; its view draws and sends input. Make the requested change in
+those existing files, repair every named build failure, then run the two-browser check and inspect the changed
+behaviour. Preserve its declared state, event shapes and movement ownership. Do not convert an existing
+`src/main.ts` game or start a new rules game yet; new games keep the starter flow above until the authoring release.
+The following netplay guidance applies to games with their own `src/main.ts` host.
 
 Make it the game the person asked for, one milestone at a time. Within a milestone, work in few, large
 edits: read a file once, decide every change it needs, and make them together (one edit that carries several
