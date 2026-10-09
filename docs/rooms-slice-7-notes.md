@@ -281,8 +281,8 @@ server hosting. The check now derives the expected pair from the generated game
 manifest and reports the measured replica honestly. The packed-studio check will
 exercise this path before completion.
 
-The build report now identifies the completed capacity reference trial (32 Hero
-Rush players, 20 Hz, 30 minutes in Node on macOS arm64), and explicitly says that
+The build report now identifies the highest completed capacity reference trial (32
+Hero Rush players, 30 Hz, 20 minutes in Node on macOS arm64), and explicitly says that
 Cloudflare capacity and billing are unmeasured. It distinguishes this reference
 workload from a game's generated correctness check and flags rates above that
 completed trial. The structured rules check and each rules game's JSON build result
@@ -314,3 +314,13 @@ The post-spawn budget repeat completed all 216,000 ticks with zero errors, skipp
 handlers, cut ticks or budget stops. The table now contains that final receipt;
 `budget-before-spawn.json` retains the previous run. Local timing improved with
 less contention, while the deterministic quotas remain the portability check.
+
+The 30 Hz repeat completed twenty minutes: 36,006 ticks in 1,200.764 seconds,
+99.95% of the ticks due. All 32 clients received complete tick sequences. The
+worst client p99 gap was 38.4 ms and at least 99.95% of each client's gaps were
+under 50 ms. No client errors or closed sockets, host faults, timer slips, core
+errors, skipped handlers, cut ticks or budget stops occurred. The local reference
+reported by builds is therefore 32 players at 30 Hz. Both this and the separate
+30-minute 20 Hz result are Node/WebSocket trials, not Cloudflare Table or billing
+measurements. Raw receipts and final recordings remain in
+`~/.homie/rooms-slice-7-evidence/`, indexed by its `README.md`.

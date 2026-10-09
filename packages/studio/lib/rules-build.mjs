@@ -35,7 +35,7 @@ export { stateHash } from './rules-check.mjs';
 
 // A reference workload, not a promise about every game's rules or a Cloudflare measurement.
 // Receipt and method: docs/rooms-slice-7-notes.md, "Budget measurements".
-export const RULES_CAPACITY_TRIAL = Object.freeze({ game: 'hero-rush-3d', seats: 32, tickHz: 20, minutes: 30, host: 'Node', platform: 'macOS arm64', cloudflare: false });
+export const RULES_CAPACITY_TRIAL = Object.freeze({ game: 'hero-rush-3d', seats: 32, tickHz: 30, minutes: 20, host: 'Node', platform: 'macOS arm64', cloudflare: false });
 
 const readJson = (path) => { try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; } };
 const RULES_FILES = { [RULES_MODULE]: 'rules.ts', [GUARD_MODULE]: 'guard.ts', [`${RULES_MODULE}/view`]: 'view.ts', [`${RULES_MODULE}/host`]: 'host.ts' };
