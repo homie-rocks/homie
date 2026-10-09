@@ -1,8 +1,9 @@
 # Paid parts release check — 2026-10-09
 
 Studio 0.37.2 / plugin 0.38.2, [PR #70](https://github.com/homie-rocks/homie/pull/70).
-Merge AFTER [#74](https://github.com/homie-rocks/homie/pull/74). Rebased onto its verified
-`5c4bfda` commit, which includes main `51227fc` (studio 0.37.0 / plugin 0.38.0).
+Rebased directly onto main `1dadfa6`, the squash merge of
+[#74](https://github.com/homie-rocks/homie/pull/74) (studio 0.37.1 / plugin 0.38.1).
+The diff contains paid parts only; the original first-run commits were dropped.
 
 The release keeps app extraction/imports/credits, app and media provenance, intended uses,
 keyless checkout and the visible Shop control. Purchase migrations are now 0015 and 0016,
@@ -51,7 +52,24 @@ Removed restrictions include the kind whitelist, fixed licence-scope list, seat-
 
 The selling entry adds resource adapters to main's shop. Webhook verification, event handling, Stripe transport, refund creation, the paginated refund-list reader, keyless money snapshots and the owner office are shared. Immutable resource offers and purchase claims still have their own purchase tables; player cart orders retain main's tables and grant logic. There is no copied selling version of the shop or office. Purchase migrations are 0015 and 0016, after main’s 0014 app migration.
 
-## Current release-train verification
+## Verification after #74 was squash-merged
+
+Based directly on main `1dadfa6`, studio 0.37.1. Studio 0.37.2 / plugin 0.38.2
+contains only the paid-parts change and its supporting checks. Generated lockfile,
+template, template history and changelog copy were refreshed with repository scripts;
+released changelog sections are byte-identical to main.
+
+`npm ci`, `npm run build` and the unmodified `npm test` command passed with
+`CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`:
+2,095 tests, 2,087 passed, eight environment-dependent skips, zero failures (783.3 s).
+The skips require local Wrangler, Stripe's mock server or an explicit Miniflare path.
+`npm run test:plugin`: 118 passed, one optional skip, zero failures.
+Validation, desktop packaging, changelog and publish checks passed. Publish reports
+one new studio version and 22 packages already on npm. No new npm package is introduced.
+The rolling-upgrade test inherits main's filter for strictly older release versions,
+so a tag for this checkout's own version is never mistaken for an upgrade source.
+
+## Historical release-train verification (before #74 was squash-merged)
 
 Studio **0.37.2** / plugin **0.38.2**, after #74 (studio 0.37.1 / plugin 0.38.1), rebased onto its verified commit `5c4bfda`. Main is `51227fc`. Apps and the keyless, visible Shop control remain available. Purchase migrations follow the released app migration as 0015 and 0016. Released changelog sections and previous template fingerprints are unchanged.
 
