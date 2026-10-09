@@ -48,7 +48,7 @@ const write = (dir, rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursi
 const edit = (file, fn) => writeFileSync(file, fn(readFileSync(file, 'utf8')));
 const editJson = (file, fn) => { const v = json(file); fn(v); writeFileSync(file, `${JSON.stringify(v, null, 2)}\n`); };
 
-/** A studio whose node_modules point at this package and the repo's esbuild, with the games named (Gem Rush each). */
+/** A studio whose node_modules point at this package and the repo's esbuild, with the games named (the legacy Ember Vale starter each). */
 function studio(name, games = ['alpha', 'beta'], { typescript = false } = {}) {
   const dir = join(scratch, name);
   const r = run(['new', dir, '--name', 'Night Owls', '--homie', 'https://homie.test', '--no-install'], scratch);
@@ -57,7 +57,7 @@ function studio(name, games = ['alpha', 'beta'], { typescript = false } = {}) {
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
   if (typescript) symlinkSync(join(REPO_NM, 'typescript'), join(dir, 'node_modules', 'typescript'));
-  for (const id of games) assert.equal(run(['game', 'new', id, '--name', `Game ${id}`], dir).status, 0);
+  for (const id of games) assert.equal(run(['game', 'new', id, '--from', 'ember-vale', '--name', `Game ${id}`], dir).status, 0);
   return dir;
 }
 

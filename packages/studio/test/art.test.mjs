@@ -290,7 +290,7 @@ test('library: search ranks names and tags, filters by kind and family', () => {
 test('build: no game is handed over whole (no source.json, no assets.json), and a game that was made from another keeps saying whose files it carries', async () => {
   const dir = studio('original');
   // A real game around the codex, so it builds.
-  assert.equal(run(dir, 'game', 'new', 'fox-grove', '--from', 'gem-rush', '--name', 'Fox Grove').code, 0);
+  assert.equal(run(dir, 'game', 'new', 'fox-grove', '--from', 'ember-vale', '--name', 'Fox Grove').code, 0);
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   const gdir = join(dir, 'games', 'fox-grove');
@@ -312,7 +312,7 @@ test('build: no game is handed over whole (no source.json, no assets.json), and 
 
   // A site an older toolkit built still has both files. A one-game build starts from the site as it is: it takes
   // out exactly what that toolkit wrote (told by each file's own "kind"), and never a file of the game's own.
-  assert.equal(run(dir, 'game', 'new', 'second', '--from', 'gem-rush', '--name', 'Second').code, 0);
+  assert.equal(run(dir, 'game', 'new', 'second', '--from', 'ember-vale', '--name', 'Second').code, 0);
   assert.equal(run(dir, 'build').code, 0);
   writeFileSync(join(dist, 'source.json'), JSON.stringify({ v: 1, kind: 'homie-game-source', id: 'fox-grove', files: { 'game.json': '{}' } }));
   writeFileSync(join(dist, 'assets.json'), JSON.stringify({ v: 1, kind: 'homie-game-assets', game: 'fox-grove', assets: [] }));
@@ -325,7 +325,7 @@ test('build: no game is handed over whole (no source.json, no assets.json), and 
 
 test('publish refuses a public game that ships a model with no licence record', async () => {
   const dir = studio('publish');
-  assert.equal(run(dir, 'game', 'new', 'fox-grove', '--from', 'gem-rush').code, 0);
+  assert.equal(run(dir, 'game', 'new', 'fox-grove', '--from', 'ember-vale').code, 0);
   mkdirSync(join(dir, 'games', 'fox-grove', 'public', 'models'), { recursive: true });
   writeFileSync(join(dir, 'games', 'fox-grove', 'public', 'models', 'found-online.glb'), Buffer.from(await placeholderGlb()));
   const r = run(dir, 'publish');

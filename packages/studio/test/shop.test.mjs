@@ -333,7 +333,7 @@ let built = null;
 async function site({ key = true, managed = false, catalog = null, settings = null } = {}) {
   if (!built) {
     const dir = studio('worker');
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
+    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
     writeFileSync(join(dir, 'shop.json'), JSON.stringify({
       till: 'stripe', currency: 'usd', policy: { preset: 'protective' }, automaticTax: true, referralNewPlayersOnly: true, refundDays: 14, capPerPlayerMonth: 2000,
       items: [

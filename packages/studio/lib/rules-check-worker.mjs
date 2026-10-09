@@ -183,12 +183,14 @@ function play(c, companions, allow) {
   const free = (seat) => { if (!seated.has(seat)) return; seated.delete(seat); did.push(`seat ${seat} left`); frames.push({ t: 'free', seat }); };
   const bots = (mode) => { policy = { ...(policy ?? {}), bots: mode }; frames.push({ t: 'policy', policy }); };
 
-  let A = open({ observe, noted, send });
+  const movesToCheck = [];
+  const moved = (...args) => movesToCheck.push(args);
+  let A = open({ observe, noted, moved, send });
   for (const m of told()) A.frame(m);
   /** The room stops and starts again as a deploy restarts it: a new epoch, everybody away until they are back. */
   const restart = () => {
     const bytes = A.save(); const epoch = A.epoch + 1; A.stop();
-    A = open({ observe, noted, send, restore: bytes, restoreEpoch: epoch });
+    A = open({ observe, noted, moved, send, restore: bytes, restoreEpoch: epoch });
     for (const m of told()) A.frame(m);
     // Everybody is back at once, but for the highest seat, which is a second late.
     const top = Math.max(...seated.keys());
@@ -342,6 +344,17 @@ function play(c, companions, allow) {
     const stats = A.core.stats; const cut = stats.ticksCut; const held = stats.held;
     A.tickNow();
     units += A.core.stats.tickUnits;
+    for (const [name, tick, input, before, after] of movesToCheck.splice(0)) {
+      const kind = c.kinds.find(k => k.name === name);
+      moveTick = tick;
+      const result = L.P.stepMove(kind.move, before, input, moveCtx.get(name), Math.max(1, Math.floor(budget / 4)), kind.motion, c.dims,
+        error => { fault ??= `${siteOf(name, 'move')} ${name}.move: prediction failed: ${error.message}.${when()}`; });
+      units += result.used;
+      const r = kind.body.radius, bounds = c.map.bounds;
+      result.pos = L.P.vec3({ x: Math.max(bounds.min.x + r, Math.min(bounds.max.x - r, result.pos.x)), y: Math.max(bounds.min.y + r, Math.min(bounds.max.y - r, result.pos.y)), z: result.pos.z }, c.dims);
+      delete result.used;
+      if (JSON.stringify(result) !== JSON.stringify(after)) fault ??= `${siteOf(name, 'move')} ${name}.move: prediction and the server produced different bodies from the same input.${when()}`;
+    }
     if (A.core.stats.tickUnits > peak) peak = A.core.stats.tickUnits;
     if (A.core.stats.maxUnits > most) { most = A.core.stats.maxUnits; worst = A.core.stats.worst; }
     const facts = A.facts();

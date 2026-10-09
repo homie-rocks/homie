@@ -30,20 +30,25 @@ const json = (rel) => JSON.parse(readFileSync(join(COIN_DASH, rel), 'utf8'));
 /** coin-dash's view library as its build bundles it (the declarations and the guarded move handed over first), and its rules for the server. */
 let kit = null; let viewBuild = 0;
 async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false) {
-  if (kit && mode === 'server' && !offline) return kit;
+  if (kit && mode === 'server' && !offline && tickHz === 20 && !runaway) return kit;
   const esbuild = await esbuildOf();
   let dir = COIN_DASH;
   if (runaway) {
-    dir = join(scratch, 'runaway'); cpSync(COIN_DASH, dir, { recursive: true });
+    dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
+    if (runaway === 'press') {
+      writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{player:true,motion:{jumps:f.u8()},input:{ax:f.i8(),jump:f.press()},body:{shape:'circle',radius:.5,maxSpeed:6}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){if(i.jump)b.motion.jumps+=1;b.pos={x:b.pos.x+i.ax/127*6*c.dt,y:b.motion.jumps,z:0};}});`);
+    } else writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
   }
   const g = { ...json('game.json'), room: { host: mode, offline, tickHz }, dir };
   // This suite measures protocol outcomes on virtual time. The 60 Hz case uses the same checked fixture without
   // asking a busy parallel test runner to meet a 17 ms wall-clock build deadline (rules-build tests own that check).
   const rules = await prepareRuntimeFixture(esbuild, scratch, { ...g, room: { ...g.room, tickHz: 20 } });
   const L = await loadGame(scratch, dir, 'coin-dash');
-  const compiled = L.R.compileRules(L.def, { tune: json('tunables.json'), map: L.R.compileMap(json('map/main.json')), settings: L.R.roomSettings(g.room).settings, seats: 8 });
+  const compiled = L.R.compileRules(L.def, { tune: json('tunables.json'), map: L.R.compileMap(JSON.parse(readFileSync(join(dir, 'map/main.json'), 'utf8'))), settings: L.R.roomSettings(g.room).settings, seats: 8 });
   rules.settings = compiled.settings;
   rules.schema = L.R.schemaOf(compiled);
   const entry = join(scratch, 'entry.ts');
@@ -52,12 +57,12 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   await esbuild.build({ entryPoints: ['homie:view'], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent', plugins: [viewPlugin(g, rules, entry)] });
   await import(pathToFileURL(file).href);
   const result = { L, compiled, openRoom: globalThis.__openRoom, makeHost: globalThis.__makeHost, bundle: readFileSync(file, 'utf8') };
-  if (mode === 'server' && !offline) kit = result;
+  if (mode === 'server' && !offline && tickHz === 20 && !runaway) kit = result;
   return result;
 }
 
 /** A relay with the server as host, on the test's clock, and sockets to it. */
-function rig(L, compiled, mode = false, lag = 0) {
+function rig(L, compiled, mode = false, lag = 0, uplink = 0) {
   const browser = mode === true;
   const extra = typeof mode === "object" ? mode : {};
   const lines = [];
@@ -72,10 +77,10 @@ function rig(L, compiled, mode = false, lag = 0) {
     constructor() {
       this.readyState = 0; this.bufferedAmount = 0; this.sent = [];
       sockets.push(this);
-      this.h = room.attach({ send: (x) => setTimeout(() => { if (this.readyState === 1) this.onmessage?.({ data: x }); }, lag), close: () => { setTimeout(() => this.cut(), 0); }, buffered: () => 0 });
+      this.h = room.attach({ send: (x) => { const delay = typeof lag === 'function' ? lag(JSON.parse(x)) : lag; if (delay !== null) setTimeout(() => { if (this.readyState === 1) this.onmessage?.({ data: x }); }, delay); }, close: () => { setTimeout(() => this.cut(), 0); }, buffered: () => 0 });
       setTimeout(() => { if (network.up) { this.readyState = 1; this.onopen?.({}); } }, 0);
     }
-    send(x) { this.sent.push(JSON.parse(x)); this.h?.onMessage(x); }
+    send(x) { this.sent.push(JSON.parse(x)); const delay = typeof uplink === 'function' ? uplink(JSON.parse(x)) : uplink; if (delay === null) return; if (delay) setTimeout(() => this.h?.onMessage(x), delay); else this.h?.onMessage(x); }
     close() { if (this.readyState === 3) return; this.readyState = 3; this.h?.onClose(); }
     cut() { if (this.readyState === 3) return; this.readyState = 3; this.h?.onClose('error'); this.onclose?.({}); }
   };
@@ -142,11 +147,11 @@ test('two views in one server-hosted room: own bodies, the roster and the round,
   const run = a.me.pos.x - x0;
   assert.ok(run > 5.2 && run <= 6.4, `she ran ${run} m in a second at 6 m/s`);
   const frames = r.sockets[0].sent.filter((m) => m.t === 'in').slice(sent0);
-  assert.ok(frames.length >= 17 && frames.length <= 21, `${frames.length} input frames in a second: at most one a tick`);
+  assert.ok(frames.length >= 3 && frames.length <= 6, `${frames.length} input frames in a second: at most one a tick`);
   for (const f of frames) {
     assert.equal(f.e, r.host.epoch);
     assert.equal(f.s.length, 1);
-    assert.equal(f.s[0].length, 1 + 2 + 9, 'an offset, the two input fields, and the claim of an owner-moved body');
+    assert.equal(f.s[0].length, 1 + 2, 'an offset and two input fields: the server owns the body');
     assert.deepEqual(f.s[0].slice(0, 3), [0, 127, 0]);
   }
   assert.ok(frames.every((f, i) => i === 0 || f.k > frames[i - 1].k), 'stamps rise');
@@ -1018,4 +1023,100 @@ test('legacy speech keeps its published envelope even with arbitrary extra data'
   assert.equal(heard[0].line, undefined);
   assert.equal(heard[0].seat, 0);
   assert.equal(heard[0].slot, -1);
+});
+
+for (const hz of [20, 30, 60]) for (const delay of [50, 150, 300]) test(`prediction: ${hz} ticks, ${delay} ms round trip, fresh input answers within a frame`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, hz);
+  const clock = virtualTime(t), r = rig(L, compiled, false, delay / 2, delay / 2);
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => a.close());
+  await clock.wait(5000);
+  const start = a.me.pos;
+  a.input({ ax: 127, ay: 0 });
+  await clock.wait(16);
+  assert.ok(a.me.pos.x > start.x, 'movement on the first drawn frame');
+  const samples = [];
+  for (let n = 0; n < 90; n++) { await clock.wait(16); samples.push(a.me.pos.x); }
+  const backwards = samples.slice(1).filter((x, n) => x < samples[n] - 0.001);
+  assert.equal(backwards.length, 0, `ordinary movement never rubber-bands: ${backwards.length} frames`);
+  a.input({ ax: 0, ay: 0 }); await clock.wait(1500);
+  const authoritative = r.host.core.snapshot()[1].find(e => e[9] === a.seat)[3][0];
+  assert.ok(Math.abs(a.me.pos.x - authoritative) < 0.001, 'server result wins after input settles');
+  assert.equal(r.host.core.stats.errors, 0);
+});
+
+test('prediction: a late press stays predicted once until the authoritative press catches up', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'press');
+  const clock=virtualTime(t);let extra=0;
+  const r=rig(L,compiled,false,45,m=>m.t==='in'?45+extra:45);t.after(()=>r.stop());
+  const a=openRoom({net:{config:cfg('Ada'),WebSocketImpl:r.socket(),post:null}});t.after(()=>a.close());
+  await clock.wait(5000); extra=180;
+  a.input({ax:0,jump:true});await clock.wait(60);
+  assert.equal(a.me.motion.jumps,1);
+  for(let i=0;i<20;i++){await clock.wait(16);assert.equal(a.me.motion.jumps,1,'a snapshot neither removes nor doubles the late press');}
+  extra=0;await clock.wait(1000);
+  assert.equal(a.me.motion.jumps,1);assert.equal(r.host.core.snapshot()[1].find(e=>e[9]===a.seat)[8][0],1);
+});
+
+for (const hz of [20, 60]) for (const delay of [150, 300]) test(`prediction clock: steering is not jitter at ${hz} Hz and ${delay} ms`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, hz);
+  const clock = virtualTime(t), r = rig(L, compiled, false, delay / 2, delay / 2);
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => a.close());
+  const probe = globalThis.__homieNet.probe.prediction;
+  await clock.wait(5000);
+  const initial = probe();
+  for (let n = 0; n < 80; n++) {
+    await clock.wait(250);
+    const p = probe();
+    assert.equal(p.rebases, initial.rebases, 'a steady connection does not keep rebasing');
+    assert.ok(p.lead < 2, `the clock's steering did not invent ${p.lead} ticks of network jitter`);
+  }
+});
+
+
+for (const hz of [20, 60]) test(`prediction: overlapping corrections under dropped input at ${hz} Hz slow forward movement without reversing it`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, hz, 'press');
+  const clock = virtualTime(t); let drops = 0, snapshots = 0;
+  const r = rig(L, compiled, false, m => 300 + (m.t === 'snap' ? [0, 20, -20, 15, -15][snapshots++ % 5] : 0), m => m.t === 'in' && drops-- > 0 ? null : 300);
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => a.close());
+  await clock.wait(12000);
+  drops = 2; a.input({ ax: 127 });
+  let previous = a.me.pos.x, backwards = 0;
+  for (let n = 0; n < 190; n++) {
+    await clock.wait(16);
+    const x = a.me.pos.x;
+    if (x - previous < -0.01) backwards++;
+    previous = x;
+  }
+  const p = globalThis.__homieNet.probe.prediction();
+  assert.ok(p.count > 1, 'the dropped steps caused overlapping corrections');
+  assert.equal(backwards, 0, JSON.stringify(p));
+  a.input({ ax: 0 }); await clock.wait(2000);
+  const server = r.host.core.snapshot()[1].find(e => e[9] === a.seat)[3][0];
+  assert.ok(Math.abs(a.me.pos.x - server) < 0.001, 'the complete correction still reaches server truth');
+});
+
+for (const hz of [20, 60]) for (const seed of [417, 1, 42, 43, 60, 2026]) test(`prediction: ${hz} Hz jitter and loss remain steady, seed ${seed}`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, hz, 'press');
+  const clock = virtualTime(t); let rng = seed;
+  const leg = hz === 20 ? 300 : 150;
+  const random = () => { rng = (Math.imul(rng,1664525)+1013904223)>>>0; return rng/4294967296; };
+  const shape = m => ['in','snap'].includes(m.t) ? random() < .1 ? null : leg*(.75+random()*.5) : leg;
+  const r = rig(L, compiled, false, shape, shape); t.after(()=>r.stop());
+  const a = openRoom({net:{config:cfg('Ada'),WebSocketImpl:r.socket(),post:null}});t.after(()=>a.close());
+  await clock.wait(12000); const start = globalThis.__homieNet.probe.prediction();
+  a.input({ax:127}); let x=a.me.pos.x;
+  for(let n=0;n<750;n++) {
+    await clock.wait(16); const next=a.me.pos.x, p=globalThis.__homieNet.probe.prediction();
+    assert.equal(p.rebases,start.rebases,JSON.stringify(p));
+    assert.ok(next>=x-.01,`backward ${next-x}: ${JSON.stringify(p)}`); x=next;
+  }
+  a.input({ax:0}); await clock.wait(3000);
+  const server = r.host.core.snapshot()[1].find(e=>e[9]===a.seat)[3][0];
+  assert.ok(Math.abs(a.me.pos.x-server)<.001,'the eased path converges to server truth after stopping');
 });

@@ -249,7 +249,7 @@ function studio(name) {
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-  assert.equal(run(['game', 'new', 'gem', '--from', 'gem-rush', '--name', 'Gem Rush'], dir).status, 0);
+  assert.equal(run(['game', 'new', 'gem', '--from', 'ember-vale', '--name', 'Gem Rush'], dir).status, 0);
   return dir;
 }
 let made = null;

@@ -377,7 +377,7 @@ async function site() {
   if (!built) {
     const dir = studio('worker');
     for (const [id, name, extra] of [['owl-run', 'Owl Run', {}], ['card-night', 'Card Night', { watch: 'overview' }], ['blind-duel', 'Blind Duel', { watch: false }], ['night-vault', 'Night Vault', { launch: 'private' }]]) {
-      assert.equal(run(['game', 'new', id, '--from', 'gem-rush', '--name', name], dir).status, 0);
+      assert.equal(run(['game', 'new', id, '--from', 'ember-vale', '--name', name], dir).status, 0);
       const gj = join(dir, 'games', id, 'game.json');
       writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), ...extra }, null, 2));
     }

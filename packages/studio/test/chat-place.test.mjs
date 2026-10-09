@@ -248,7 +248,7 @@ test('the play page carries the places; the build passes screen.chat through and
     mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
     symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
     symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-    assert.equal(spawnSync(process.execPath, [CLI, 'game', 'new', 'owl-run', '--from', 'gem-rush', '--json'], { cwd: dir, encoding: 'utf8' }).status, 0);
+    assert.equal(spawnSync(process.execPath, [CLI, 'game', 'new', 'owl-run', '--from', 'ember-vale', '--json'], { cwd: dir, encoding: 'utf8' }).status, 0);
     const gj = join(dir, 'games', 'owl-run', 'game.json');
     const chat = { phone: { lines: 'sheet-only' }, desk: { at: 'top-left', y: 130 }, corner: 'top-right' };
     writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), screen: { chat } }, null, 2));

@@ -300,9 +300,10 @@ test('more frames buy no extra step, a command runs once, and an owner\'s claim 
   rig.host.frame({ t: 'ev', from: 0, k: 'say:hi', d: { text: 'hi' }, id: 'c0' });
   assert.deepEqual(rig.sent.at(-1), { t: 'ev', from: 0, k: 'say:hi', d: { text: 'hi' } }, 'a seat\'s speech is passed on unchanged');
 
-  // coin-dash: a person's runner is owner-moved. A claim of 40 m in one tick moves it by a tick of maxSpeed.
+  // Explicit legacy owner variant of coin-dash. A claim of 40 m in one tick moves it by a tick of maxSpeed.
   const { L, compile } = await coinDash();
   const c = compile({});
+  c.kinds[0].body.owner = true;
   const r = hostRig(L, c);
   r.join(0, 'Ada');
   r.ticks(4);

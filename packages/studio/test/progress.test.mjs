@@ -42,7 +42,7 @@ function studio(name) {
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-  assert.equal(out(run(['game', 'new', 'crown-thief', '--name', 'Crown Thief'], dir)).ok, true);
+  assert.equal(out(run(['game', 'new', 'crown-thief', '--from', 'ember-vale', '--name', 'Crown Thief'], dir)).ok, true);
   return dir;
 }
 

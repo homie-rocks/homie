@@ -55,7 +55,7 @@ test('a new studio\'s Worker imports the table of its server-hosted games, and i
 test('game hashes are reproducible, isolate unrelated builds, and distinguish code from state shape', () => {
   const dir = studio('hashes');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
-  assert.equal(run(['game', 'new', 'gems', '--from', 'gem-rush'], dir).status, 0);
+  assert.equal(run(['game', 'new', 'gems', '--from', 'ember-vale'], dir).status, 0);
   const build = () => {
     const r = run(['build'], dir); assert.equal(r.status, 0, r.stdout + r.stderr);
     return JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash');
@@ -87,10 +87,10 @@ test('game hashes are reproducible, isolate unrelated builds, and distinguish co
   const mapped = build(); assert.notEqual(mapped.room.stateHash, shaped.room.stateHash); assert.notEqual(mapped.room.build, shaped.room.build);
 });
 
-test('coin-dash builds as a view bundle and a rules module; gem-rush builds as it always did, and says so', async () => {
+test('coin-dash builds as a view bundle and a rules module; ember-vale builds as it always did, and says so', async () => {
   const dir = studio('both');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
-  assert.equal(run(['game', 'new', 'gems', '--from', 'gem-rush'], dir).status, 0);
+  assert.equal(run(['game', 'new', 'gems', '--from', 'ember-vale'], dir).status, 0);
   const built = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;
@@ -135,11 +135,11 @@ test('coin-dash builds as a view bundle and a rules module; gem-rush builds as i
   assert.match(allView, /this handler ran too long/, 'with the guard that counts it');
   assert.doesNotMatch(view, /agent:offer|carryMs|floorMs/, 'a game without a vocabulary excludes the optional agents helper');
   assert.match(view, /"effectNames":\["ding"\]|effectNames:\["ding"\]/, 'and the declarations, as data');
-  // gem-rush: the same catalogue row it always had, its own code the host, nothing about rules.
+  // ember-vale: the same catalogue row it always had, its own code the host, nothing about rules.
   const gems = cat.games.find((g) => g.id === 'gems');
   assert.equal(gems.room, undefined);
   assert.equal(gems.movement, 'owner');
-  assert.equal(gems.roundSeconds, 60);
+  assert.equal(gems.roundSeconds, 90);
   assert.equal(gems.netplayRev, 11);
   assert.ok(existsSync(join(dir, 'site/dist/games/gems', gems.built.bundle)));
   assert.match(read(dir, `site/dist/games/gems/${gems.built.bundle}`), /homie-netplay-rev:11/);

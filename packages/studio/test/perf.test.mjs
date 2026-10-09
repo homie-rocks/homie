@@ -262,10 +262,11 @@ test('build --maps: the map and module sizes go to .studio/maps/<id>/, never int
   const sizes = perfSizes(dir, 'gem-rush');
   assert.equal(sizes.ok, true);
   assert.ok(sizes.js.bytes > 20_000 && sizes.js.gzip < sizes.js.bytes);
-  assert.equal(sizes.biggest[0].path, bundle);
+  assert.ok(sizes.biggest.some((file) => file.path === bundle), 'the entry is listed beside the shared rules/runtime chunks');
   assert.equal(sizes.biggest[0].code.minified, true, 'a studio build is minified, and perf sizes reads it so');
-  assert.ok(sizes.modules.top.some((m) => /netplay\/netplay\.ts$/.test(m.module)), 'the netplay helper is in the bundle');
-  assert.ok(sizes.modules.top.some((m) => /games\/gem-rush\/src\/main\.ts$/.test(m.module)));
+  const meta = JSON.parse(readFileSync(join(maps, 'meta.json'), 'utf8'));
+  assert.ok(Object.values(meta.outputs).some((out) => Object.keys(out.inputs).some((name) => /netplay\/netplay\.ts$/.test(name))), 'the netplay helper is in a built chunk');
+  assert.ok(sizes.modules.top.some((m) => /games\/gem-rush\/src\/view\.ts$/.test(m.module)));
   assert.match(sizes.apart.note, /never loaded by the game/, 'what the game never loads is listed apart');
   // The CLI says the same, as paths and numbers.
   const cli = JSON.parse(run(['perf', 'sizes', 'gem-rush'], dir).stdout);

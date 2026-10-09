@@ -81,7 +81,7 @@ test('seats: the netplay manifest sets a game\'s room size, up to 32; build says
     ['duel', { players: { min: 2, max: 2 } }, null],
     ['plain', {}, null],
   ]) {
-    assert.equal(out(run(['game', 'new', id], dir)).ok, true);
+    assert.equal(out(run(['game', 'new', id, '--from', 'ember-vale'], dir)).ok, true);
     const path = join(dir, 'games', id, 'game.json');
     const g = { ...JSON.parse(readFileSync(path, 'utf8')), ...meta };
     if (!meta.players) delete g.players;
@@ -312,7 +312,7 @@ test('stats: what counts as a visit, where it came from, and what a referrer is'
 
 test('stats: the site counts, only the owner reads, and a one-time link signs the owner\'s browser in', async () => {
   const dir = studio('counts');
-  assert.equal(out(run(['game', 'new', 'owl-run', '--name', 'Owl Run'], dir)).ok, true);
+  assert.equal(out(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir)).ok, true);
   mkdirSync(join(dir, 'music', 'theme'), { recursive: true });
   writeFileSync(join(dir, 'music', 'theme', 'theme.mp3'), Buffer.from('ID3-audio'));
   writeFileSync(join(dir, 'music', 'manifest.json'), JSON.stringify({ v: 1, items: [{ slug: 'theme', kind: 'song', title: 'Theme', published: true, files: [{ role: 'audio', path: 'music/theme/theme.mp3' }] }] }));

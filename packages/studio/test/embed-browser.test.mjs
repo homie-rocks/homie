@@ -145,6 +145,8 @@ test('Chrome: every starter plays at the player address, as its own page and fra
     const who = game => game.evaluate(() => ({ seat: window.__homieNet.seat, name: window.HOMIE_NET.name, room: window.HOMIE_NET.room }));
     /** Does the player's own body move? Two directions each way: a new guest may take over a body standing at a wall. */
     const moves = async (page, game, touch) => {
+      // A server-hosted game's seat arrives before its first authoritative body snapshot.
+      await game.waitForFunction(() => window.__homieNet?.probe?.self?.());
       const at = () => game.evaluate(() => window.__homieNet.probe.self());
       const far = (a, b) => a && b && Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)) > .1;
       const box = await (await game.$('canvas')).boundingBox();

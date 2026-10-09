@@ -2151,12 +2151,26 @@ and holds that lead from `lead`. A step whose sample (or claim) changed, or that
 makes an entry. A period with no entry sends nothing; after 250 ms without a frame the held values
 are sent again as an ordinary entry. A hidden tab sends one neutral entry and stops stepping.
 
-**In this release a person's body is owner-moved** (`body: { move: 'owner' }` in the rules): its
-browser runs the game's `move` code and claims a position, as `netplay.movement: 'owner'` does
-today, and the server holds each claim to the body's `maxSpeed` (a tick of it every tick, a quarter
-of a second banked at most). It does not stop a changed browser walking through a wall. Bots, and a
-body whose player is away, are moved by the server with the same `move` code. Scores, pickups,
-rounds and placements are the server's in either case.
+**Server movement with immediate local prediction.** The host runs `move` for every body.
+The view library runs the same guarded module for its own player, one step per tick and one
+throwaway preview between ticks. A snapshot replaces that body's position, velocity, heading,
+grounded flag and motion; the view replays pending inputs from there. Late presses are mirrored
+onto the next replay tick while they remain inside the quarter-second window. Scores, pickups,
+collisions between entities and effects are always the host's decisions. Bot and AI bodies
+are interpolated, never predicted by a player's view.
+
+Small errors fade as a visual offset with a nominal 100 ms blend. Overlapping small corrections
+queue their individual fades, so their accumulated offset is not erased all at once. A disagreement
+beyond three ticks of travel plays the corrected path from the snapshot at 1.25 times speed,
+showing the hold and slide of a knock. Offset fades are limited by progress along the drawn
+path, so a late-input correction cannot erase more travel than the player makes; when movement
+stops after catch-up, the remaining fade finishes over the configured blend time. An effect on the body waits for its drawn tick. Placements, epoch changes and clock rebases
+jump deliberately. Other bodies keep the helper's adaptive interpolation, with one send period
+as the default minimum delay. The `room.predict` settings customize these defaults.
+
+`body: { move: 'owner' }` remains available for existing rules games: the browser supplies its
+position and the host limits each claim to `maxSpeed`. It cannot prevent a modified owner walking
+through a wall. New Coin Dash and Gem Rush use authoritative server movement instead.
 
 ### 29.3 The life of a server-hosted room
 

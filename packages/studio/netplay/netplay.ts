@@ -631,6 +631,8 @@ export interface NetplayOptions<C = unknown> {
   checkpointMs?: number;
   /** Fixed interpolation delay in ms. Default: adaptive (arrival age p90 + 1.2 intervals). */
   interpDelayMs?: number;
+  /** Floor under the adaptive interpolation buffer (rules views). */
+  interpFloorMs?: number;
   /** Host: return the full rules state. Called every `checkpointMs`, before yielding, and on pagehide. */
   checkpoint?: () => C;
   /** ms to wait for a welcome before falling back to offline host, when the socket could not even open. Default 4000. */
@@ -2947,7 +2949,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
 
   function interpDelay(): number {
     if (opts.interpDelayMs !== undefined) return opts.interpDelayMs;
-    return delaySmooth || Math.max(50, iv * 1.6 + 8);
+    return Math.max(opts.interpFloorMs ?? 0, delaySmooth || Math.max(50, iv * 1.6 + 8));
   }
 
   // ---------------------------------------------------------------- connect

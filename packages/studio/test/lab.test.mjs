@@ -103,11 +103,11 @@ test('the server: New and Today built, the checkout holds only the game, writes 
     assert.equal(st.today.commit.subject, 'two games');
     assert.equal(st.new.dirty, 0, 'New is Today: nothing changed since the commit');
     assert.equal(st.takes.default, 'knock');
-    assert.ok(st.tunables.spec.knockRange, 'the starter has tunables');
-    assert.equal(st.tunables.today.knockRange, st.tunables.spec.knockRange.value);
+    assert.ok(st.tunables.spec['public.knockRange'], 'the starter has tunables');
+    assert.equal(st.tunables.today['public.knockRange'], st.tunables.spec['public.knockRange'].value);
     // git's own checkout of the commit, with the game and nothing else of the studio.
     const co = join(dir, '.studio', 'lab', 'gem-rush', 'checkout');
-    assert.ok(existsSync(join(co, 'games', 'gem-rush', 'src', 'main.ts')));
+    assert.ok(existsSync(join(co, 'games', 'gem-rush', 'src', 'view.ts')));
     assert.ok(!existsSync(join(co, 'games', 'ember-vale')), 'only the game Today is built from');
     assert.match(spawnSync('git', ['worktree', 'list'], { cwd: dir, encoding: 'utf8' }).stdout, /checkout/);
 
@@ -122,13 +122,13 @@ test('the server: New and Today built, the checkout holds only the game, writes 
 
     // Writes: only the lab page (its own origin, JSON).
     const post = (path, body, headers) => fetch(`${s.url}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
-    assert.equal((await post('/_lab/api/gem-rush/tunables', { values: { knockRange: 120 } }, {})).status, 403, 'no Origin: refused');
-    assert.equal((await post('/_lab/api/gem-rush/tunables', { values: { knockRange: 120 } }, { origin: 'https://evil.example' })).status, 403);
-    const kept = await (await post('/_lab/api/gem-rush/tunables', { values: { knockRange: 120 } }, { origin: s.url })).json();
+    assert.equal((await post('/_lab/api/gem-rush/tunables', { values: { 'public.knockRange': 2.4 } }, {})).status, 403, 'no Origin: refused');
+    assert.equal((await post('/_lab/api/gem-rush/tunables', { values: { 'public.knockRange': 2.4 } }, { origin: 'https://evil.example' })).status, 403);
+    const kept = await (await post('/_lab/api/gem-rush/tunables', { values: { 'public.knockRange': 2.4 } }, { origin: s.url })).json();
     assert.equal(kept.ok, true, kept.why);
     const file = readFileSync(join(dir, 'games', 'gem-rush', 'tunables.json'), 'utf8');
-    assert.equal(JSON.parse(file).knockRange.value, 120);
-    assert.match(file, /^ {2}"knockRange": \{ "value": 120, /m, 'one tunable a line');
+    assert.equal(JSON.parse(file).public.knockRange.value, 2.4);
+    assert.match(file, /"knockRange":\s*\{\s*"value":\s*2\.4,/, 'public movement tunable kept');
     assert.equal((await (await fetch(`${s.url}/_lab/api/gem-rush/state`)).json()).new.dirty, 1, 'New differs from Today now');
     const take = await (await post('/_lab/api/gem-rush/take', { name: 'mine', take: { seconds: 1.5, inputs: [{ at: 0.2, key: 'Space', hold: 0.1 }] } }, { origin: s.url })).json();
     assert.equal(take.ok, true, take.why);
@@ -148,7 +148,7 @@ test('the server: New and Today built, the checkout holds only the game, writes 
     git(dir, 'commit', '-qm', 'kept a wider reach');
     const after = await (await fetch(`${s.url}/_lab/api/gem-rush/state`)).json();
     assert.equal(after.today.commit.subject, 'kept a wider reach');
-    assert.equal(after.tunables.today.knockRange, 120, 'Today\'s tunables are the new commit\'s');
+    assert.equal(after.tunables.today['public.knockRange'], 2.4, 'Today\'s tunables are the new commit\'s');
     assert.equal(after.new.dirty, 0);
   } finally { await s.close(); }
   const stop = await labStop(dir);
@@ -157,9 +157,9 @@ test('the server: New and Today built, the checkout holds only the game, writes 
   assert.doesNotMatch(spawnSync('git', ['worktree', 'list'], { cwd: dir, encoding: 'utf8' }).stdout, /checkout/, 'git forgot it');
   assert.equal(git(dir, 'status', '--porcelain', '--', '.studio'), '', '.studio is the studio\'s own, git-ignored');
 
-  const set = labSet(dir, 'gem-rush', ['knockRange=99', 'ringMs=800']);
+  const set = labSet(dir, 'gem-rush', ['public.knockRange=1.98', 'public.ringMs=800']);
   assert.equal(set.ok, true, set.why);
-  assert.equal(JSON.parse(readFileSync(join(dir, 'games', 'gem-rush', 'tunables.json'), 'utf8')).ringMs.value, 800);
+  assert.equal(JSON.parse(readFileSync(join(dir, 'games', 'gem-rush', 'tunables.json'), 'utf8')).public.ringMs.value, 800);
   assert.equal(labSet(dir, 'gem-rush', ['nope=1']).ok, false);
   assert.equal(labSet(dir, 'gem-rush', ['knockRange']).ok, false);
 });

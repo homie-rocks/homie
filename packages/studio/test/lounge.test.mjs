@@ -323,7 +323,7 @@ const builtFor = new Map();
 async function site({ lounge = { featured: 'studio' }, name = 'worker' } = {}) {
   if (!builtFor.has(name)) {
     const dir = studio(name);
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
+    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
     const sj = join(dir, 'studio.json');
     const s = JSON.parse(readFileSync(sj, 'utf8'));
     if (lounge !== null) s.lounge = lounge;
