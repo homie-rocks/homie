@@ -37,6 +37,8 @@ export const RULES_CONTRACT = 2;
 export const SAVE_REVISION = 2;
 /** How far a query, a ray or an area event reaches, in metres. */
 export const REACH_M = 64;
+/** Rays visit indexed geometry, rather than a radius-sized entity neighbourhood. */
+export const RAY_REACH_M = 10000;
 /** The most entities one room holds. A spawn past it throws in the handler that asked. */
 export const ENTITY_MAX = 2048;
 /** The current bot-fill ceiling; public admission lives in worker/seats.mjs. */
