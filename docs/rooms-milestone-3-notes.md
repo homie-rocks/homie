@@ -112,7 +112,11 @@ the account page with the original passkey and found the same character and 2
 pearls. “Tomorrow” here means a new profile, plus the release-gate test advancing
 the saved absence by a day; it is not a claim of a 24-hour browser soak.
 
-Trial receipts and screenshots are at `/tmp/rooms-m3-trial-receipts.json`,
+A repeat after the seat-token retention fix observed Moss with 1 pearl before
+the kill and 2 after restart: the pickup in progress committed once. Both the
+changed-build reload and fresh-profile sign-in again showed 2. The first run's
+receipts are `/tmp/rooms-m3-trial-receipts-first.json`; the repeat's receipts
+and screenshots are at `/tmp/rooms-m3-trial-receipts.json`,
 `/tmp/rooms-m3-before.png`, and `/tmp/rooms-m3-tomorrow.png` on the trial machine.
 The account ticket bug was found because the first attempt silently played
 offline; that attempt is excluded from these results. A build watcher attempt
