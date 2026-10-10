@@ -1,5 +1,6 @@
 /** Isolated local studio. The trial driver is copied byte-for-byte; no production bindings. */
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {cpSync,mkdtempSync,symlinkSync,mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
@@ -48,5 +49,6 @@ for(const [index,name] of names.entries()) {
   instances.push(mf);await mf.ready;
 }
 const mf={ready:instances[0].ready,dispose:()=>Promise.all(instances.map(m=>m.dispose()))};
-console.log(JSON.stringify({root,url:String(await mf.ready),delay,cost,driver:join(root,'scripts/crowd-load.mjs')}));
+const digest = value => createHash('sha256').update(value).digest('hex');
+console.log(JSON.stringify({root,url:String(await mf.ready),delay,cost,gateProcesses,processes:instances.length,baseline:Boolean(process.env.CROWD_BASELINE),head:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),workerSha256:digest(source),driverSha256:digest(readFileSync(join(root,'scripts/crowd-load.mjs'))),node:process.version,driver:join(root,'scripts/crowd-load.mjs')}));
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,async()=>{await mf.dispose();process.exit(0);});

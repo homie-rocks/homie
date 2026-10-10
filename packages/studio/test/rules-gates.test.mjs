@@ -239,3 +239,14 @@ test('a thousand-slot roster indexes live holders once, preserving names and hum
   assert.equal(scans,1);assert.equal(roster.length,1000);
   for(const row of roster){assert.equal(row.name,'Person '+row.slot);assert.equal(row.bot,false);}
 });
+
+test('churn on a blocked link releases departed players’ unsent views',()=>{
+  const clock=fakeClock(), peer=socket();
+  const link=batchLink(peer,{receipts:true,setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+  link.send(['data','first','hello']);clock.advance(5);
+  for(let id=0;id<2000;id++){
+    link.send(['view',String(id),{k:id,d:[[],[]]},id,{},20]);
+    link.send(['close',String(id)]);
+  }
+  assert.equal(link.facts().pendingViews,0);assert.equal(link.facts().queueRows,2000);link.close();
+});

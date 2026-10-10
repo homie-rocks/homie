@@ -85,6 +85,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
   return {
     send(row) {
       if (closed) return;
+      if (row[0] === 'close') views.delete(row[1]);
       // Snapshots are absolute here; Gate encoders run only when they deliver.
       // Replace unsent state, never an input, command, admission or departure.
       if (row[0] === 'view') {
@@ -98,7 +99,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
       queue.push(row); bytes += size; stats.peakQueueBytes = Math.max(bytes, stats.peakQueueBytes);
       schedule();
     },
-    flush, close, buffered: () => bytes,
+    flush, close, forget: id => views.delete(id), buffered: () => bytes,
     facts: () => ({ ...stats, timing: timing.facts(), queueRows: queue.length, pendingViews: views.size, queueBytes: bytes, inFlight: pending ? 1 : 0 }),
     disconnect() { close(); socket.close(1012, 'room link restarted'); }
   };
@@ -174,7 +175,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {} } = {})
               client.queued--;
               if (closed || !clients.has(id)) return;
               if (op === 'data') client.emit('message', { data: value });
-              else { client.emit('close', {}); clients.delete(id); }
+              else { out.forget(id); client.emit('close', {}); clients.delete(id); }
             });
             pending.add(task); task.then(() => pending.delete(task), () => { pending.delete(task); client.close(1011, 'client message failed'); });
           }
@@ -230,8 +231,14 @@ export class Gate {
               // fresh connection/epoch gets a keyframe; subsequent deltas cannot
               // lose a predecessor, so do not repeat a full interest set each second.
               client.snapEncoder ??= snapshotEncoder(Infinity, true);
-              client.send(snapshotText({ t: 'snap', from: null, ...client.snapEncoder.encode(client.viewSchedule(value, reason), reason) }));
-              this.timing.record('viewEncodeSend', viewAt);
+              const selected = client.viewSchedule(value, reason);
+              this.timing.record('view', viewAt);
+              const encodeAt = this.timing.now();
+              const text = snapshotText({ t: 'snap', from: null, ...client.snapEncoder.encode(selected, reason) });
+              this.timing.record('encode', encodeAt);
+              const sendAt = this.timing.now();
+              client.send(text);
+              this.timing.record('send', sendAt);
             }
             } catch { this.clients.delete(id); link.send(['close', id]); try { client.close(1011, 'client connection ended'); } catch {} }
           } else if (op === 'data') {

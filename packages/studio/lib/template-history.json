@@ -2622,11 +2622,17 @@
    },
    "sections": {
     "AGENTS.md": {
-     "(intro)": "214aa46eb3a895d5",
+     "(intro)": [
+      "214aa46eb3a895d5",
+      "394cbbe934e80722"
+     ],
      "## Version-matched authoring guides": "f6261a0e5801b96b",
      "## Layout": "f3a280b8c96cd068",
      "## Apps: one screen, roles and parts": "8596f2b25edda3e2",
-     "## Commands (all through the pinned CLI in node_modules)": "159151b8861fc051",
+     "## Commands (all through the pinned CLI in node_modules)": [
+      "159151b8861fc051",
+      "5222e08ca55e326e"
+     ],
      "## The site": "0cb8dd9a6f8a0096",
      "## Making games": "bb715272fd1a615b",
      "## The Game Codex and progress": "0738ef719cef3a4c",
@@ -2644,7 +2650,10 @@
     "Homie Arcade": {
      "sections": {
       "AGENTS.md": {
-       "## Commands (all through the pinned CLI in node_modules)": "2cdd530e48170bfd"
+       "## Commands (all through the pinned CLI in node_modules)": [
+        "2cdd530e48170bfd",
+        "611b437f5b3303f0"
+       ]
       }
      }
     }

@@ -105,7 +105,7 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     previews: { vars: { STUDIO_NAME: name, HOMIE_PREVIEW: '1' }, durable_objects: { bindings: rooms } },
   };
   return `// This studio's site on its own Cloudflare account (written by homie-studio). Everything here runs on
-// Cloudflare's Workers Free plan. \`npm run deploy\` (on this computer, or in Workers Builds) puts it live;
+// the studio's Cloudflare Workers account. \`npm run deploy\` (on this computer, or in Workers Builds) puts it live;
 // \`npx wrangler preview\` puts a branch on its own Preview URL with its own rooms. There is no R2 binding
 // until \`homie-studio storage add\` gives the studio storage for large media.
 ${JSON.stringify(config, null, 2)}
@@ -118,7 +118,7 @@ export function agentsMd({ name, slug }) {
 This folder is a studio: **${name}** (\`${slug}\`). It is one repository.
 Its games, music, videos and posts live here; its website and public game rooms
 run on the studio's **own Cloudflare account** (one Worker, one D1 database and
-the Table/Lobby Durable Objects, all on Cloudflare's free Workers plan), built
+the Table/Lobby Durable Objects, on the studio's Cloudflare account), built
 from \`@homie-rocks/studio\`, pinned in \`package.json\`. The homie.rocks
 directory lists its games; homie.rocks does not host them.
 
@@ -217,7 +217,7 @@ studio's pinned copy, never a registry lookup of the bare name.
 - \`npx --no-install homie-studio deploy --plan\` — says what deploy will create on Cloudflare and what it
   costs, and changes nothing. Tell the person before the first deploy.
 - \`npm run deploy\` — the site on this studio's Cloudflare: one Worker, one D1 database, two
-  SQLite-backed Durable Objects, all on the free Workers plan (no payment method needed).
+  SQLite-backed Durable Objects on the studio’s Cloudflare account; its subscription is not inferred.
   If Wrangler is not signed in, run \`npx wrangler login\`: the person approves once in
   their browser. It never overwrites a Worker or database this studio did not create.
 - **Workers Builds** (Cloudflare's own CI, set up by the "Deploy to Cloudflare" button or in the dashboard): on

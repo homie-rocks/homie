@@ -3,7 +3,7 @@
 This folder is a studio: **My Studio** (`my-studio`). It is one repository.
 Its games, music, videos and posts live here; its website and public game rooms
 run on the studio's **own Cloudflare account** (one Worker, one D1 database and
-the Table/Lobby Durable Objects, all on Cloudflare's free Workers plan), built
+the Table/Lobby Durable Objects, on the studio's Cloudflare account), built
 from `@homie-rocks/studio`, pinned in `package.json`. The homie.rocks
 directory lists its games; homie.rocks does not host them.
 
@@ -102,7 +102,7 @@ studio's pinned copy, never a registry lookup of the bare name.
 - `npx --no-install homie-studio deploy --plan` — says what deploy will create on Cloudflare and what it
   costs, and changes nothing. Tell the person before the first deploy.
 - `npm run deploy` — the site on this studio's Cloudflare: one Worker, one D1 database, two
-  SQLite-backed Durable Objects, all on the free Workers plan (no payment method needed).
+  SQLite-backed Durable Objects on the studio’s Cloudflare account; its subscription is not inferred.
   If Wrangler is not signed in, run `npx wrangler login`: the person approves once in
   their browser. It never overwrites a Worker or database this studio did not create.
 - **Workers Builds** (Cloudflare's own CI, set up by the "Deploy to Cloudflare" button or in the dashboard): on

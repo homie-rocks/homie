@@ -312,7 +312,7 @@ export async function deployFacts(io, root, known = {}) {
   const local = known.local ?? (await readJson(io, `${root}/.studio/local.json`)) ?? {};
   const live = known.live !== undefined ? known.live : liveSite(studio, local);
   const created = Array.isArray(studio.cloudflare?.created) ? studio.cloudflare.created : [];
-  const first = created.length ? null : `on the Cloudflare account Wrangler is signed in to: Worker ${studio.cloudflare?.worker ?? '?'}, D1 ${studio.cloudflare?.d1 ?? '?'}, Durable Objects Table and Lobby (free plan, no payment method)`;
+  const first = created.length ? null : `on the Cloudflare account Wrangler is signed in to: Worker ${studio.cloudflare?.worker ?? '?'}, D1 ${studio.cloudflare?.d1 ?? '?'}, Durable Objects Table and Lobby (account subscription not queried)`;
   const where = live ? live.replace(/^https:\/\//, '') : 'a new workers.dev address (the first deploy makes it)';
   const git = async (args) => { try { const r = await io.run(['git', '-C', root, ...args], { timeoutMs: 10_000 }); return r.exitCode === 0 ? r.stdout : null; } catch { return null; } };
   const stored = known.stored ?? null;
@@ -356,7 +356,7 @@ export async function deployDecision(io, root, what, known = {}) {
   const name = known.name ?? studioName(known.studio ?? (await readJson(io, `${root}/studio.json`)), root);
   const short = [
     { k: 'Where', v: d.live ? d.where : 'a new workers.dev address', style: { bold: true } },
-    ...(d.first ? [{ k: 'Creates', v: 'Worker, D1, rooms (free)', style: { color: 'yellow' } }] : []),
+    ...(d.first ? [{ k: 'Creates', v: 'Worker, D1, rooms', style: { color: 'yellow' } }] : []),
     { k: 'Last', v: d.lastDeployShort },
     ...(d.commitCount ? [{ k: 'Commits', v: `${d.commitCount} since` }] : []),
     ...(d.files ? [{ k: 'Files', v: d.files }] : []),

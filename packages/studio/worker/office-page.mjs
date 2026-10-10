@@ -727,8 +727,9 @@ export const OFFICE_SCRIPT = String.raw`(function () {
       var stages = timing && timing.ms || {};
       box.appendChild(el('div', 'faint', 'Server telemetry · ' + Object.keys(stages).map(function(k) { return k + ' p95 ' + (stages[k] ? stages[k].p95.toFixed(2) + ' ms' : 'unavailable'); }).join(' · ') + ' · queued relay rows ' + (r.telemetry.transport || []).reduce(function(n, t) { return n + t.queueRows; }, 0)));
       (r.telemetry.gates || []).forEach(function(g) {
-        var view = g.view && g.view.ms && g.view.ms.viewEncodeSend;
-        box.appendChild(el('div', 'faint', g.id + ' · ' + g.clients + ' clients · encode/send p95 ' + (view ? view.p95.toFixed(2) + ' ms' : 'unavailable') + ' · queue ' + g.queueRows + ' reliable / ' + g.pendingViews + ' views · receipt ' + g.ackMs + ' ms'));
+        var stages = g.view && g.view.ms || {};
+        var timing = ['view','encode','send'].map(function(k) { return k + ' p95 ' + (stages[k] ? stages[k].p95.toFixed(2) + ' ms' : 'unavailable'); }).join(' · ');
+        box.appendChild(el('div', 'faint', g.id + ' · ' + g.clients + ' clients · ' + timing + ' · queue ' + g.queueRows + ' reliable / ' + g.pendingViews + ' views · receipt ' + g.ackMs + ' ms'));
       });
     }
     var head = el('div', 'rhead');
