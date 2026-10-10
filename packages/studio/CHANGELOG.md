@@ -19,7 +19,7 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 ## [0.39.0] - 2026-10-09
 
-**Plugin 0.40.0** · [#78](https://github.com/homie-rocks/homie/pull/78)
+**Plugin 0.39.0** · [#78](https://github.com/homie-rocks/homie/pull/78)
 
 Your studio has its own MCP server. Connect your AI with one browser approval and add tools for the work your studio does.
 
