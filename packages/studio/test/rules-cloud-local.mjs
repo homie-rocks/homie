@@ -67,7 +67,7 @@ for(const [index,name] of names.entries()) {
 if(process.env.CROWD_PROFILE_DIR)writeFileSync(join(process.env.CROWD_PROFILE_DIR,'profiled-worker.mjs'),source);
 const mf={ready:instances[0].ready,dispose:async()=>{await Promise.allSettled(profiles.map(stop=>stop()));await Promise.all(instances.map(m=>m.dispose()));}};
 const digest = value => createHash('sha256').update(value).digest('hex');
-console.log(JSON.stringify({root,url:String(await mf.ready),delay,cost,gateProcesses,processes:instances.length,baseline:Boolean(process.env.CROWD_BASELINE),head:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),workerSha256:digest(source),driverSha256:digest(readFileSync(join(root,'scripts/crowd-load.mjs'))),node:process.version,driver:join(root,'scripts/crowd-load.mjs')}));
+console.log(JSON.stringify({root,url:String(await mf.ready),delay,cost,gateProcesses,processes:instances.length,baseline:Boolean(process.env.CROWD_BASELINE),head:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),workerSha256:digest(source),driverSha256:digest(readFileSync(join(root,'scripts/crowd-load.mjs'))),workingTreeDiffSha256:digest(execFileSync('git',['diff','HEAD','--','packages/studio/worker','packages/studio/rules'],{cwd:repo})),node:process.version,driver:join(root,'scripts/crowd-load.mjs')}));
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,async()=>{await mf.dispose();process.exit(0);});
 // Stop the profiler before Miniflare's process signal handlers dispose workerd.
 process.on('message',async message=>{if(message?.stop){await mf.dispose();process.exit(0);}});

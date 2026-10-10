@@ -160,6 +160,32 @@ case. Outstanding frames share a 4 MiB byte budget, reliable order is preserved,
 duplicate receipts do not free capacity twice, and a minute-long stalled link
 retains only four in-flight frames plus the latest unsent view per player.
 
+## Pipelined local run
+
+With the allocation fixes and four-frame pipeline, a local Node 22 run passed
+300 simulated players plus two Chrome replicas: 300/300 live, delivered median
+19.95 Hz, ack p95 163 ms against 174 ms including injected link delay. The
+300 case began just before commit `07516563` was recorded (its metadata therefore
+names `35243353` with the pipeline still in the working tree); its worker bundle
+hash is retained. The following full-room case at `07516563` admitted 897 before
+host overrun, so this is not a completed handoff.
+
+An unchanged-driver Node 24 diagnostic hit its default 512 MiB RSS limit at 522
+clients. A separate diagnostic using its supported `--rss-mb 1024` option admitted
+all 998 simulated clients plus the two Chrome players and retained all of them,
+with no errors or disconnects. Delivery still failed: 11.07 Hz median and
+1,817 ms ack p95. The client peaked at 764 MiB RSS and 652 ms loop p99. This driver
+resource experiment did not change game settings, offered traffic or acceptance
+thresholds. `CROWD_DRIVER_RSS_MB` exposes that diagnostic option; the reproduction
+default remains 512 MiB.
+
+A subsequent allocation change reuses private interest/encoder records across
+frames, avoids a WeakMap per entity comparison, avoids a Map for the common
+single-precision case, and removes decoder update-pair allocations. The wire
+bytes remain identical in the 64-view/1,000-entity/120-tick six-repeat benchmark:
+62,668,998 bytes for both implementations. Median encoding time fell from
+466 ms to 325 ms. Capacity remains unproven until the next run.
+
 ## Diagnostics and approval
 
 Room and office telemetry expose bounded per-stage samples, per-Gate view/encode/

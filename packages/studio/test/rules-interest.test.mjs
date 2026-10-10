@@ -19,6 +19,17 @@ test('crowd deltas compare immutable tuples without serializing every field', ()
   assert.deepEqual(decoder.decode(JSON.parse(JSON.stringify(delta))),after);
 });
 
+test('reused visual caches preserve source arrays, prior views and different precision policies', () => {
+  const source=snapshot(1,[entity('own',0,0),entity('other',1.23456,1)]), saved=structuredClone(source);
+  Object.freeze(source.d[1]);
+  const coarse=scheduledView({radiusM:null,precisionM:0.1}), fine=scheduledView({radiusM:null,precisionM:0.01});
+  const a=coarse(source,0), b=fine(source,0), c=coarse(source,0);
+  assert.equal(a.d[1][1][3][0],1.2);assert.equal(b.d[1][1][3][0],1.23);assert.deepEqual(c,a);
+  coarse(snapshot(2,[entity('own',4,0)]),0);
+  assert.equal(a.d[1].length,2);assert.equal(a.d[1][1][3][0],1.2);
+  assert.deepEqual(source,saved);
+});
+
 test('a thousand 5 Hz far views spread over four ticks without delaying own state, arrivals or exits', () => {
   const views = Array.from({length:1000},()=>scheduledView({radiusM:12,nearM:4,farHz:5},20));
   const held = [], updates = Array(1000).fill(0), refreshed = [];

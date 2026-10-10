@@ -19,8 +19,8 @@ for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] 
       server.on('exit',code=>{clearTimeout(timer);reject(Error('workerd exited '+code+': '+err.slice(-2000)));});
       server.stdout.on('data',b=>{log+=b;for(const line of log.split('\n')){try {const v=JSON.parse(line);if(v.driver){clearTimeout(timer);resolve(v);return;}}catch{}}});
     });
-    if(process.env.CROWD_PROFILE)sampler=setInterval(async()=>{try{const value=await (await fetch(new URL('/test-facts?room=proof-'+total,info.url),{signal:AbortSignal.timeout(4000)})).json();if(facts.length<120)facts.push({at:Date.now(),value});}catch{}},5000);
-    driver=spawn(process.execPath,[...(process.env.CROWD_PROFILE ? ['--cpu-prof','--cpu-prof-dir='+out] : []),info.driver,'--url',info.url,'--n',String(total-2),'--seconds','60','--room','proof-'+total,'--out',out,'--ramp-ms',process.env.CROWD_RAMP_MS??'50'],{env:process.env,stdio:['ignore','pipe','pipe']});
+    if(process.env.CROWD_PROFILE||process.env.CROWD_FACTS)sampler=setInterval(async()=>{try{const value=await (await fetch(new URL('/test-facts?room=proof-'+total,info.url),{signal:AbortSignal.timeout(4000)})).json();if(facts.length<120)facts.push({at:Date.now(),value});}catch{}},5000);
+    driver=spawn(process.execPath,[...(process.env.CROWD_PROFILE ? ['--cpu-prof','--cpu-prof-dir='+out] : []),info.driver,'--url',info.url,'--n',String(total-2),'--seconds','60','--room','proof-'+total,'--out',out,'--ramp-ms',process.env.CROWD_RAMP_MS??'50','--rss-mb',process.env.CROWD_DRIVER_RSS_MB??'512'],{env:process.env,stdio:['ignore','pipe','pipe']});
     let driverLog='';driver.stdout.on('data',b=>{driverLog+=b;void appendFile(join(out,'driver-live.log'),b);});driver.stderr.on('data',b=>{driverLog+=b;void appendFile(join(out,'driver-live.log'),b);});
     const [code]=await once(driver,'exit');await writeFile(join(out,'driver.log'),driverLog);
     const report=JSON.parse(await readFile(join(out,'report.json'),'utf8'));

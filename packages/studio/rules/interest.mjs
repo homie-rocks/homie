@@ -67,13 +67,16 @@ function sameValue(a, b) {
 // wire fragments across players whose visual baselines contain the same row.
 const changesByBase = new WeakMap(), wireRows = new WeakMap();
 function changedRow(entity, before) {
-  let changes = changesByBase.get(before);
-  if (!changes) { changes = new WeakMap(); changesByBase.set(before, changes); }
-  if (changes.has(entity)) return changes.get(entity);
+  let cached = changesByBase.get(before);
+  if (cached?.entity === entity) return cached.row;
   let mask = 0; const values = [];
   for (let i = 1; i < entity.length; i++) if (!sameValue(entity[i], before[i])) { mask |= 1 << i; values.push(entity[i]); }
   const row = mask ? [entity[0], mask, values] : null;
-  changes.set(entity, row); return row;
+  // A delivery frame visits all players before the next immutable frame.
+  // Keep the most recent pair without allocating a WeakMap for every row.
+  if (cached) { cached.entity = entity; cached.row = row; }
+  else changesByBase.set(before, { entity, row });
+  return row;
 }
 function wireRow(row) {
   let text = wireRows.get(row);
@@ -94,28 +97,29 @@ export function snapshotText(snap) {
 
 export function snapshotEncoder(keyframeTicks, chained = false) {
   let base = null;
-  let rows = new Map(), keyTick = -Infinity;
+  let rows = new Map(), keyTick = -Infinity, generation = 0;
   return {
-    reset() { base = null; rows.clear(); keyTick = -Infinity; },
+    reset() { base = null; rows.clear(); keyTick = -Infinity; generation = 0; },
     encode(snap, seat = null) {
       if (!base || snap.e !== base.e || snap.k <= base.k || snap.k - keyTick >= keyframeTicks) {
         base = snap; keyTick = snap.k;
-        rows = new Map(snap.d[1].map(e => [e[0], e]));
+        rows = new Map(snap.d[1].map(e => [e[0], { entity: e, generation }]));
         return snap;
       }
-      const present = new Set(), changed = [];
+      const changed = [], removed = []; generation++;
       const own = chained && seat !== null ? snap.d[1].filter(e => e[9] === seat && e[10] !== 1) : null;
       for (const entity of snap.d[1]) {
-        const id = entity[0]; present.add(id);
-        const before = rows.get(id);
-        if (chained) rows.set(id, entity);
+        const id = entity[0], held = rows.get(id), before = held?.entity;
+        if (held) { held.generation = generation; if (chained) held.entity = entity; }
+        else if (chained) rows.set(id, { entity, generation });
         if (own?.includes(entity)) continue;
         if (!before) { changed.push(entity); continue; }
         const change = changedRow(entity, before);
         if (change) changed.push(change);
       }
-      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
-      if (chained) { base = snap; for (const id of out.d.removed) rows.delete(id); }
+      rows.forEach((held, id) => { if (held.generation !== generation) { removed.push(id); if (chained) rows.delete(id); } });
+      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed, ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
+      if (chained) base = snap;
       return out;
     },
   };
@@ -157,7 +161,7 @@ export function snapshotDecoder() {
         if (!Array.isArray(change) || typeof change[0] !== 'string') return null;
         if (change.length !== 3) {
           if (change.length < 9) return null;
-          updates.push([change[0], change]); continue;
+          updates.push(change); continue;
         }
         if (!Number.isInteger(change[1]) || change[1] < 0 || !Array.isArray(change[2])) return null;
         const old = rows.get(change[0]);
@@ -165,11 +169,11 @@ export function snapshotDecoder() {
         const entity = old.slice(); let j = 0;
         for (let i = 1; i < entity.length; i++) if (change[1] & (1 << i)) entity[i] = change[2][j++];
         if (j !== change[2].length) return null;
-        updates.push([entity[0], entity]);
+        updates.push(entity);
       }
       const next = d.chain ? rows : new Map(rows);
       for (const id of d.removed) next.delete(id);
-      for (const [id, entity] of updates) next.set(id, entity);
+      for (const entity of updates) next.set(entity[0], entity);
       for (const e of d.own ?? []) next.set(e[0], e);
       const decoded = { ...snap, d: [d.round, [...next.values()], ...(d.collision === undefined ? [] : [d.collision])] };
       if (d.chain) { base = decoded; rows = next; }
@@ -183,18 +187,22 @@ export function snapshotDecoder() {
  */
 const quantizedRows = new WeakMap();
 export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, farHz = null } = {}, tickHz = 20) {
-  let previous = new Map(), epoch = null;
+  const previous = new Map(); let epoch = null, generation = 0;
   return (snap, seat) => {
     if (snap.e !== epoch) { previous.clear(); epoch = snap.e; }
     const selected = interestSnapshot(snap, seat, radiusM);
     const own = selected.d[1].find(e => e[9] === seat && e[10] !== 1);
-    const next = new Map();
-    const entities = selected.d[1].map(entity => {
+    generation++;
+    // Radius selection already owns its array. Overview selection shares the
+    // source, so copy only that case before replacing rows with visual values.
+    const entities = selected.d[1] === snap.d[1] ? selected.d[1].slice() : selected.d[1];
+    for (let index = 0; index < entities.length; index++) {
+      const entity = entities[index], held = previous.get(entity[0]);
       let row = entity;
       if (entity !== own) {
         const p = entity[3], q = own?.[3];
         const distanceSquared = q ? (p[0]-q[0])**2 + (p[1]-q[1])**2 + ((p[2]??0)-(q[2]??0))**2 : 0;
-        const old = previous.get(entity[0]);
+        const old = held?.row;
         const interval = farHz && nearM !== null && distanceSquared > nearM**2 ? Math.max(1, Math.round(tickHz / farHz)) : 1;
         // Spread far-view refreshes across players instead of sending the
         // whole room's largest deltas on the same tick. Each player retains
@@ -202,18 +210,21 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
         if (old && snap.k % interval !== (seat ?? 0) % interval) row = old;
         else if (precisionM > 0) {
           let versions = quantizedRows.get(entity);
-          if (!versions) { versions = new Map(); quantizedRows.set(entity, versions); }
-          row = versions.get(precisionM);
+          row = versions?.precision === precisionM ? versions.row : versions?.others?.get(precisionM);
           if (!row) {
             row = entity.slice();
             for (const i of [3, 4]) row[i] = entity[i].map(n => Number((Math.round(n / precisionM) * precisionM).toPrecision(12)));
-            versions.set(precisionM, row);
+            if (!versions) quantizedRows.set(entity, { precision: precisionM, row });
+            else { versions.others ??= new Map(); versions.others.set(precisionM, row); }
           }
         }
       }
-      next.set(entity[0], row); return row;
-    });
-    previous = next;
-    return { ...selected, d: [selected.d[0], entities, ...selected.d.slice(2)] };
+      if (held) { held.row = row; held.generation = generation; }
+      else previous.set(entity[0], { row, generation });
+      entities[index] = row;
+    }
+    previous.forEach((held, id) => { if (held.generation !== generation) previous.delete(id); });
+    selected.d[1] = entities;
+    return selected;
   };
 }
