@@ -28,7 +28,9 @@ export const LONG_ALLOWANCE = Object.freeze({ ...ALLOWANCE, ticks: 8 * ALLOWANCE
 
 /** The ordered declarations a save depends on. Functions contribute their presence, never their implementation. */
 export function stateHash(c) {
-  const { kinds, events, commands, effects, shared, rounds, bots, roomOn, asks, map, dims, contract, seats, save } = c;
+  const { kinds, events, commands, effects, shared, rounds, bots, roomOn, asks, map: geometry, dims, contract, seats, save } = c;
+  // Keep existing 2D save compatibility hashes when the 3D map vocabulary grows.
+  const map = dims === 2 ? { name: geometry.name, bounds: geometry.bounds, boxes: geometry.boxes, circles: geometry.circles, spots: geometry.spots } : geometry;
   return createHash('sha256').update(JSON.stringify({ kinds, events, commands, effects, shared, rounds, bots, roomOn, asks, map, dims, contract, seats, tickHz: c.settings.tickHz, save }, (k, v) => typeof v === 'function' ? true : v)).digest('hex').slice(0, 32);
 }
 

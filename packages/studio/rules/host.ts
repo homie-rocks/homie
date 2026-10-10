@@ -290,6 +290,10 @@ export function createHost(o: HostOptions): Host {
     agents.on('ask', (d) => o.send({ t: 'ev', k: 'agent:ask', d }));
   }
   function guideBeat(): void {
+    // Roles come from admitted peers and reserved server seats, never player input.
+    const guideSeats = agentSlots().filter(slot => slot.agent?.role === 'guide').map(slot => slot.slot).sort((a, b) => a - b);
+    const previous = (core.world as { guideSeats: readonly number[] }).guideSeats;
+    if (guideSeats.length !== previous.length || guideSeats.some((seat, i) => seat !== previous[i])) core.setPolicy({ guideSeats });
     if (!agents) return;
     const bodies = core.bodies();
     for (const b of bodies) {
@@ -498,7 +502,7 @@ export function createHost(o: HostOptions): Host {
             speech: raw.speech === 'off' || raw.speech === 'lines' ? raw.speech : 'game' };
           if (previous.kind !== policy.kind || previous.aiSeats !== policy.aiSeats || previous.guides !== policy.guides) rosterText = '';
         }
-        if (p) core.setPolicy({ bots: p.bots === 'off' ? 'off' : 'fill', level: num(own(own(p, 'skill'), 'level') ?? own(p, 'level')), levelMax: num(own(p, 'levelMax')), reserved: policy.kind === 'hybrid' || policy.kind === 'beginner' ? policy.aiSeats + policy.guides : 0 });
+        if (p) core.setPolicy({ kids: own(p, 'kids') === true, ...(own(p, 'level') !== undefined ? { guideLevel: num(own(p, 'level')) } : {}), levelSet: Boolean(own(p, 'by')), bots: p.bots === 'off' ? 'off' : 'fill', level: num(own(own(p, 'skill'), 'level') ?? own(p, 'level')), levelMax: num(own(p, 'levelMax')), reserved: policy.kind === 'hybrid' || policy.kind === 'beginner' ? policy.aiSeats + policy.guides : 0 });
         return;
       }
       default: return;

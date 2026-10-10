@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.6.0: 32-seat rooms, and the studio's own stats.
  *
@@ -81,7 +82,7 @@ test('seats: the netplay manifest sets a game\'s room size, up to 32; build says
     ['duel', { players: { min: 2, max: 2 } }, null],
     ['plain', {}, null],
   ]) {
-    assert.equal(out(run(['game', 'new', id, '--from', 'ember-vale'], dir)).ok, true);
+    legacyGame(dir, id);
     const path = join(dir, 'games', id, 'game.json');
     const g = { ...JSON.parse(readFileSync(path, 'utf8')), ...meta };
     if (!meta.players) delete g.players;
@@ -286,7 +287,7 @@ test('the state the playtest and perf read is on the game side: createRoom gives
 
   // The starters set what they can. The 3D ones have a renderer: its counters, on the port probe (they were only on
   // the netplay probe, where neither perf nor the playtest looks). The one with a way to go down says `alive`.
-  const port = (starter) => { const text = readFileSync(join(PKG, 'starters', starter, 'src', 'main.ts'), 'utf8'); const at = text.indexOf('exposePort(net, {'); return text.slice(at, text.indexOf('\n});', at)); };
+  const port = (starter) => { const text = readFileSync(join(PKG, 'starters', starter, 'src', 'view.ts'), 'utf8'); const at = text.indexOf('exposePort(net, {'); return text.slice(at, text.indexOf('\n});', at)); };
   for (const starter of ['gem-rush-3d', 'hero-rush-3d']) assert.match(port(starter), /extra: \{ drawCalls: \(\) => renderer\.info\.render\.calls, triangles: \(\) => renderer\.info\.render\.triangles \}/, starter);
   assert.match(port('ember-vale'), /extra: \{ alive: \(\) => /);
 });
@@ -312,7 +313,7 @@ test('stats: what counts as a visit, where it came from, and what a referrer is'
 
 test('stats: the site counts, only the owner reads, and a one-time link signs the owner\'s browser in', async () => {
   const dir = studio('counts');
-  assert.equal(out(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir)).ok, true);
+  legacyGame(dir, 'owl-run', 'Owl Run');
   mkdirSync(join(dir, 'music', 'theme'), { recursive: true });
   writeFileSync(join(dir, 'music', 'theme', 'theme.mp3'), Buffer.from('ID3-audio'));
   writeFileSync(join(dir, 'music', 'manifest.json'), JSON.stringify({ v: 1, items: [{ slug: 'theme', kind: 'song', title: 'Theme', published: true, files: [{ role: 'audio', path: 'music/theme/theme.mp3' }] }] }));

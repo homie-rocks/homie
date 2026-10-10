@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.13.0: the studio's back office.
  *
@@ -325,8 +326,8 @@ let built = null;
 async function site() {
   if (!built) {
     const dir = studio('worker');
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
-    assert.equal(run(['game', 'new', 'night-vault', '--from', 'ember-vale', '--name', 'Night Vault'], dir).status, 0);
+    legacyGame(dir, 'owl-run', 'Owl Run');
+    legacyGame(dir, 'night-vault', 'Night Vault');
     const gj = join(dir, 'games', 'night-vault', 'game.json');
     writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), launch: 'private' }, null, 2));
     const b = run(['build'], dir);

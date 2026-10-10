@@ -22,7 +22,7 @@ export interface MapView { readonly name: string; spot(name: string): Vec3 | und
 export interface Clock { readonly tick: number; readonly dt: number; ticks(seconds: number): number; readonly math: typeof math }
 export interface Round { readonly n: number; readonly phase: 'live' | 'over'; readonly endsAt: number }
 export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
-  readonly tune: ReadonlyState<T>; readonly map: MapView; readonly stage: string; readonly level: number; readonly levelMax: number;
+  readonly tune: ReadonlyState<T>; readonly map: MapView; readonly stage: string; readonly level: number; readonly levelMax: number; readonly guideLevel: number; readonly guideSeats: readonly number[]; readonly kids: boolean; readonly levelSet: boolean;
   readonly shared: Room extends true ? S : ReadonlyState<S>;
   readonly round: Round & (Room extends true ? { end(): void } : {});
   random(): number;
@@ -49,7 +49,7 @@ export type Undeliverable<E> = { [K in keyof E]: { to: string; event: K; data: E
 export type BuiltIns<E = Record<string, never>> = { arrive: { why: 'join' | 'spawn' }; leave: {}; takeover: {}; undeliverable: Undeliverable<E>; answer: { ask: string; by: string; picks: Readonly<Record<string, unknown>>; why?: string } };
 export type RoomEvents<E = Record<string, never>> = RoundEvents & { seatJoined: { seat: number; id: string; driver: 'person' | 'bot' | 'ai'; owner: string; took: boolean }; seatAway: { seat: number; id: string; away: boolean }; seatLeft: { seat: number; id: string }; answer: BuiltIns['answer']; undeliverable: BuiltIns<E>['undeliverable'] };
 export type RoundEvents = { roundStart: { n: number }; roundOver: { n: number; results: readonly { seat: number; id: string; driver: 'person' | 'bot' | 'ai'; score: number; place: number }[] } };
-type GuideWorld<W> = Pick<W, Extract<keyof W, 'tick' | 'dt' | 'ticks' | 'math' | 'map' | 'tune' | 'stage' | 'level' | 'levelMax' | 'round' | 'shared' | 'near' | 'inBox' | 'ray'>>;
+type GuideWorld<W> = Pick<W, Extract<keyof W, 'tick' | 'dt' | 'ticks' | 'math' | 'map' | 'tune' | 'stage' | 'level' | 'levelMax' | 'guideLevel' | 'guideSeats' | 'kids' | 'levelSet' | 'round' | 'shared' | 'near' | 'inBox' | 'ray'>>;
 export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = GuideRequest, D = GuideDecision> = {
   player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot' }; fields?: Fields; motion?: Fields; input?: Fields; body?: BodyDef;
   tick?: (world: W, self: S) => void;

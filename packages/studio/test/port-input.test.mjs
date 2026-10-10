@@ -21,7 +21,7 @@ test('real input receipts exclude slow touch delivery and collect enough frames 
     addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
     addEventListener('touchmove',e=>{const t=e.touches[0];dx=Math.sign(t.clientX-tx)*6;dy=Math.sign(t.clientY-ty)*6;touchReceipts.push(window.__homieCheckInput.touch);},{passive:true});
     addEventListener('touchend',()=>{dx=0;dy=0;});
-    setInterval(()=>{const now=performance.now();x+=dx*(now-last)/1000;y+=dy*(now-last)/1000;last=now;rows.push([now,x,y,1,0,0,-1,0,0]);},125);
+    setInterval(()=>{const now=performance.now();x+=dx*(now-last)/1000;if(window.bounded)x=Math.max(-3,Math.min(3,x));y+=dy*(now-last)/1000;last=now;rows.push([now,x,y,1,0,0,-1,0,0]);},125);
     window.__homiePort={now:()=>performance.now(),rows:(a=0)=>rows.filter(r=>r[0]>=a)};
   </script>`;
   const server = createServer((req,res)=>{res.setHeader('content-type','text/html');res.end(req.url.includes('/__game/')?game:'<iframe src="/__game/g" style="position:fixed;left:16px;top:24px;width:600px;height:440px;border:0"></iframe>');});
@@ -33,8 +33,9 @@ test('real input receipts exclude slow touch delivery and collect enough frames 
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     const frame=page.frames().find(f=>f.url().includes('/__game/'));await frame.waitForFunction('window.__homiePort');await frame.evaluate(()=>window.focus());
     const cdp=await page.createCDPSession();
+    let moveDelay=100;
     const h={page,touchAll:true,touch:async(type,points)=>{
-      await sleep(type==='touchStart'?800:100);
+      await sleep(type==='touchStart'?800:moveDelay);
       const send=()=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:points});
       // CDP can acknowledge a move before Chrome delivers it to the frame.
       // Make the final ramp event arrive late on every machine, not just CI.
@@ -56,6 +57,17 @@ test('real input receipts exclude slow touch delivery and collect enough frames 
     assert.equal(judgePresses(rows,[{...touch,a:started}],.5,'top').ok,false,'timing from before delivery reproduces the false latency failure');
     const delayed=rows.filter(r=>r[0]>=touch.a).map(r=>[r[0]+800,...r.slice(1)]);
     assert.equal(judgePresses(delayed,[{...touch,b:touch.b+800}],.5,'top').ok,false,'a real response over 600 ms still fails');
+    // On software Chrome each ramp event can take hundreds of milliseconds.
+    // A multi-event ramp crosses the arena before the final-point receipt starts
+    // measurement, falsely reporting working controls as blocked in both directions.
+    await frame.evaluate(()=>{window.bounded=true;x=0;});
+    moveDelay=350;
+    for(const dir of ['left','right']) {
+      const press=await measuredPress(h,'touch',dir==='left'?'ArrowLeft':'ArrowRight',[200,200],dir);
+      const judged=judgePresses(await frame.evaluate(()=>__homiePort.rows()),[press],.5,'top');
+      assert.equal(judged.ok,true,`slow delivery must measure ${dir} before reaching the arena wall: ${JSON.stringify(judged)}`);
+    }
+
   } finally {
     try { await pendingTouch; }
     finally {

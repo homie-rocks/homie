@@ -71,7 +71,7 @@ const plain = (t: FieldKind) => (o?: FieldOptions): Field => made(t, o);
 /**
  * The types of declared state. Whole numbers (`u8` to `u32`, `i8` to `i32`) are held to their range; `bit` is true or
  * false; `fix` is a fixed-point number in steps of 1/4096; `vec3` is a position or a velocity in metres; `dir` is a
- * unit vector on the ground plane; `tick` is a moment and `ticks` a length on the room's clock; `ref` is the id of an
+ * unit vector in the declared dimensions; `tick` is a moment and `ticks` a length on the room's clock; `ref` is the id of an
  * entity or a player; `text`, `list` and `map` name their largest size. `press` (in `input` only) is a button that
  * fires once.
  */
@@ -236,7 +236,8 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
 
 export interface MapBox { readonly min: Vec3; readonly max: Vec3 }
 export interface MapCircle { readonly at: Vec3; readonly r: number }
-export interface GameMap { readonly name: string; readonly bounds: MapBox; readonly boxes: readonly MapBox[]; readonly circles: readonly MapCircle[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> }
+export interface MapHeightTile { readonly at: Vec3; readonly size: Readonly<{ x: number; y: number }>; readonly heights: readonly [number, number, number, number] }
+export interface GameMap { readonly name: string; readonly heightTiles: readonly MapHeightTile[]; readonly bounds: MapBox; readonly boxes: readonly MapBox[]; readonly circles: readonly MapCircle[]; readonly spheres: readonly MapCircle[]; readonly capsules: readonly (MapCircle & { height: number })[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> }
 
 const vecOf = (a: unknown, what: string): Vec3 => {
   const p = Array.isArray(a) ? { x: a[0], y: a[1], z: a[2] ?? 0 } : a as { x?: unknown; y?: unknown; z?: unknown } | null;
@@ -247,8 +248,7 @@ const vecOf = (a: unknown, what: string): Vec3 => {
 
 /**
  * One map file (`games/<id>/map/<name>.json`), checked: `bounds` (the world's edges), `boxes` and `circles` (solid
- * shapes on the ground plane) and named `spots`. Positions are metres, `z` up. Height tiles, spheres and capsules
- * arrive with 3D bodies.
+ * shapes on the ground plane), spheres, upright capsules, height tiles and named `spots`. Positions are metres, `z` up.
  */
 export function compileMap(raw: unknown, name = 'main'): GameMap {
   const m = raw && typeof raw === 'object' ? raw as Record<string, any> : {};
@@ -256,7 +256,7 @@ export function compileMap(raw: unknown, name = 'main'): GameMap {
   if (!m.bounds) throw new Error(`${where} needs "bounds": { "min": [x, y], "max": [x, y] }, the edges of the world in metres`);
   const box = (b: any, what: string): MapBox => {
     const min = vecOf(b?.min, `${what}.min`); const max = vecOf(b?.max, `${what}.max`);
-    if (!(max.x > min.x) || !(max.y > min.y)) throw new Error(`${what}: "max" is above and to the right of "min"`);
+    if (!(max.x > min.x) || !(max.y > min.y) || max.z < min.z) throw new Error(`${what}: "max" is above and to the right of "min"`);
     return Object.freeze({ min, max });
   };
   const spots: Record<string, readonly Vec3[]> = {};
@@ -264,13 +264,33 @@ export function compileMap(raw: unknown, name = 'main'): GameMap {
     if (!/^[a-z][A-Za-z0-9_-]{0,31}$/.test(key) || !Array.isArray(list)) throw new Error(`${where} spots.${key}: a spot name is a short word and holds a list of points`);
     spots[key] = Object.freeze(list.map((p, i) => vecOf(p, `${where} spots.${key}[${i}]`)));
   }
+  const roundShape = (c: any, what: string): MapCircle => {
+    const r = Number(c?.r);
+    if (!Number.isFinite(r) || !(r > 0)) throw new Error(`${what} needs a finite positive radius`);
+    return Object.freeze({ at: vecOf(c?.at, `${what}.at`), r });
+  };
+  if ([m.boxes, m.circles, m.spheres, m.capsules, m.heightTiles].some(list => list !== undefined && !Array.isArray(list))) throw new Error(`${where}: shapes are lists`);
+  if ([m.boxes, m.circles, m.spheres, m.capsules, m.heightTiles].reduce((n, list) => n + (list?.length ?? 0), 0) > 4096) throw new Error(`${where}: at most 4096 static shapes`);
   return Object.freeze({
     name,
+    heightTiles: Object.freeze((m.heightTiles ?? []).map((t: any, i: number) => {
+      const what = `${where} heightTiles[${i}]`;
+      const at = vecOf(t?.at, `${what}.at`);
+      if (!Array.isArray(t.size) || t.size.length !== 2 || t.size.some((v: unknown) => typeof v !== 'number' || !Number.isFinite(v) || v <= 0)) throw new Error(`${what}: size is two positive finite lengths`);
+      if (!Array.isArray(t.heights) || t.heights.length !== 4 || t.heights.some((v: unknown) => typeof v !== 'number' || !Number.isFinite(v))) throw new Error(`${what}: heights are four finite offsets, in row order`);
+      return Object.freeze({ at, size: Object.freeze({ x: t.size[0], y: t.size[1] }), heights: Object.freeze([...t.heights]) as unknown as MapHeightTile['heights'] });
+    })),
+    spheres: Object.freeze((m.spheres ?? []).map((c: any, i: number) => roundShape(c, `${where} spheres[${i}]`))),
+    capsules: Object.freeze((m.capsules ?? []).map((c: any, i: number) => {
+      const shape = roundShape(c, `${where} capsules[${i}]`);
+      if (!Number.isFinite(c.height) || c.height < 2 * shape.r) throw new Error(`${where} capsules[${i}]: height is at least twice the radius`);
+      return Object.freeze({ ...shape, height: c.height });
+    })),
     bounds: box(m.bounds, `${where} bounds`),
     boxes: Object.freeze((Array.isArray(m.boxes) ? m.boxes : []).map((b: unknown, i: number) => box(b, `${where} boxes[${i}]`))),
     circles: Object.freeze((Array.isArray(m.circles) ? m.circles : []).map((c: any, i: number) => {
       const r = Number(c?.r);
-      if (!(r > 0)) throw new Error(`${where} circles[${i}] needs "r", its radius in metres`);
+      if (!Number.isFinite(r) || !(r > 0)) throw new Error(`${where} circles[${i}] needs "r", its radius in metres`);
       return Object.freeze({ at: vecOf(c?.at, `${where} circles[${i}].at`), r });
     })),
     spots: Object.freeze(spots),
@@ -430,6 +450,8 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   if (dims !== 2 && dims !== 3) throw new Error('rules name their space: space: { dims: 2 } or { dims: 3 }');
   const settings = env.settings ?? ROOM_DEFAULTS;
   const map = env.map ?? compileMap({ bounds: { min: [-32, -32], max: [32, 32] } });
+  if (dims === 2 && (map.spheres.length || map.capsules.length || map.heightTiles.length)) throw new Error('spheres, capsules and height tiles need space.dims: 3');
+  if (dims === 3 && map.bounds.max.z <= map.bounds.min.z) throw new Error('a 3D map needs bounds with positive height');
   const { tune, publicTune } = tunablesOf(env.tune);
 
   const events: Record<string, FieldList> = {};
@@ -475,9 +497,10 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
       const b = e.body;
       const shapes = dims === 2 ? ['circle'] : ['sphere', 'capsule', 'box'];
       if (!b || !shapes.includes(b.shape)) throw new Error(`${at}.body.shape is ${shapes.map((s) => `'${s}'`).join(' or ')} when space.dims is ${dims}`);
-      if (typeof b.radius !== 'number' || typeof b.maxSpeed !== 'number' || !(b.radius > 0) || !(b.maxSpeed >= 0)) throw new Error(`${at}.body needs radius (metres) and maxSpeed (metres a second)`);
+      if (typeof b.radius !== 'number' || typeof b.maxSpeed !== 'number' || !Number.isFinite(b.radius) || !Number.isFinite(b.maxSpeed) || !(b.radius > 0) || !(b.maxSpeed >= 0)) throw new Error(`${at}.body needs radius (metres) and maxSpeed (metres a second)`);
       if (b.move !== undefined && b.move !== 'owner') throw new Error(`${at}.body.move is 'owner', or left out`);
-      body = { shape: b.shape, radius: b.radius, height: typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner' };
+      if (dims === 3 && b.height !== undefined && (!Number.isFinite(b.height) || b.height <= 0 || b.shape === 'capsule' && b.height < b.radius * 2)) throw new Error(`${at}.body.height must be finite, positive and at least twice the radius for a capsule`);
+      body = { shape: b.shape, radius: b.radius, height: dims === 3 && b.shape === 'sphere' ? 2 * b.radius : typeof b.height === 'number' && b.height > 0 ? b.height : 0, maxSpeed: b.maxSpeed, sweep: b.sweep === true, owner: b.move === 'owner' };
     }
     if (player && !body) throw new Error(`${at}: a player's kind needs a body`);
     const moveFn = move && typeof move[name] === 'function' ? move[name] as MoveFn : null;
@@ -535,7 +558,7 @@ export interface Schema {
   contract: 2;
   dims: 2 | 3;
   seats: number;
-  kinds: { name: string; player: boolean; owner: boolean; radius: number; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
+  kinds: { name: string; player: boolean; owner: boolean; radius: number; shape?: string; height?: number; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
   effects: Record<string, FieldList>;
   effectNames: string[];
   commands: Record<string, FieldList>;
@@ -546,7 +569,7 @@ export interface Schema {
 export function schemaOf(c: Compiled): Schema {
   return {
     contract: RULES_CONTRACT, dims: c.dims, seats: c.seats,
-    kinds: c.kinds.map((k) => ({ name: k.name, player: Boolean(k.player), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields, motion: k.motion, input: k.input })),
+    kinds: c.kinds.map((k) => ({ name: k.name, player: Boolean(k.player), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields, motion: k.motion, input: k.input })),
     effects: c.effects, effectNames: c.effectNames, commands: c.commands, shared: c.shared, rounds: c.rounds, settings: c.settings,
   };
 }

@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.29.0: the Lounge and kept chat (chat/LOUNGE.md; worker/lounge.mjs, lounge-store.mjs,
  * lounge-page.mjs; NETPLAY.md section 19's `history`, `card`, `mine` and `unsay`).
@@ -323,7 +324,7 @@ const builtFor = new Map();
 async function site({ lounge = { featured: 'studio' }, name = 'worker' } = {}) {
   if (!builtFor.has(name)) {
     const dir = studio(name);
-    assert.equal(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir).status, 0);
+    legacyGame(dir, 'owl-run', 'Owl Run');
     const sj = join(dir, 'studio.json');
     const s = JSON.parse(readFileSync(sj, 'utf8'));
     if (lounge !== null) s.lounge = lounge;

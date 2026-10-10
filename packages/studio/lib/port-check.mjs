@@ -314,10 +314,10 @@ async function focusGame(h) {
 async function holdKey(h, code, ms, ready) { await h.page.keyboard.down(code); if (ready) await ready(); await sleep(ms); await h.page.keyboard.up(code); }
 
 function thumbAt(h, i) { const t = i?.thumb ?? [0.24, 0.74]; return [Math.round(h.vp.width * t[0]), Math.round(h.vp.height * t[1])]; }
-async function touchDrag(h, from, dir, reach, holdMs, ready) {
+async function touchDrag(h, from, dir, reach, holdMs, ready, steps = 8) {
   const [x0, y0] = from; const u = DIRV[dir];
   await h.touch('touchStart', [{ id: 1, x: x0, y: y0 }]);
-  for (let k = 1; k <= 8; k++) { await h.touch('touchMove', [{ id: 1, x: Math.round(x0 + (u[0] * reach * k) / 8), y: Math.round(y0 + (u[1] * reach * k) / 8) }]); await sleep(12); }
+  for (let k = 1; k <= steps; k++) { await h.touch('touchMove', [{ id: 1, x: Math.round(x0 + (u[0] * reach * k) / steps), y: Math.round(y0 + (u[1] * reach * k) / steps) }]); await sleep(12); }
   if (ready) await ready();
   const end = Date.now() + holdMs;
   let w = 0;
@@ -369,7 +369,10 @@ export async function measuredPress(h, how, code, from, dir) {
     b = await frameNow(h);
   };
   if (how === 'keys') await holdKey(h, code, 0, ready);
-  else await touchDrag(h, from, dir, 70, 0, ready);
+  // One real move establishes the measured direction. An eight-event ramp can
+  // take seconds on software Chrome and drive all the way into a wall before
+  // its final-point receipt starts the measurement. Holds still exercise ramps.
+  else await touchDrag(h, from, dir, 70, 0, ready, 1);
   return { dir, a, b };
 }
 

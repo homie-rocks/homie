@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.11.0: a new creator's first hour, from the first outside users' feedback.
  *
@@ -45,7 +46,7 @@ function studio(name, { game = 'ember-run', gameName = 'Ember Run' } = {}) {
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-  if (game) assert.equal(out(run(['game', 'new', game, '--from', 'ember-vale', '--name', gameName], dir)).ok, true);
+  if (game) legacyGame(dir, game, gameName);
   return dir;
 }
 

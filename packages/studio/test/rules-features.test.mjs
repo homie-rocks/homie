@@ -70,6 +70,22 @@ test('server guides floor on ticks, carry asks, save goals and finish them on th
   assert.ok(h.ents().find((e) => e.seat === bot.seat).fields[0] > floorCount);
 });
 
+test('guide roles follow reserved and admitted seats and survive host saves', async () => {
+  const { L, c } = await game();
+  const h = hostRig(L, c);
+  const p = policy({ kind: 'beginner', aiSeats: 1, guides: 1, level: 5, skill: { level: 2 } });
+  h.host.frame({ t: 'policy', policy: p }); h.join(0); h.ticks(2);
+  assert.deepEqual(h.host.core.world.guideSeats, [3]);
+  assert.equal(h.host.core.world.level, 2); assert.equal(h.host.core.world.guideLevel, 5);
+  const restored = hostRig(L, c, { host: { restore: h.host.save() } });
+  assert.deepEqual(restored.host.core.world.guideSeats, [3]);
+  restored.host.frame({ t: 'policy', policy: p }); restored.join(0); restored.ticks();
+  assert.deepEqual(restored.host.core.world.guideSeats, [3]);
+  const r = await room();
+  const a = r.conn({ agent: aiFacts() }); const w = a.hello('Guide', { agent: { hands: 'host', role: 'guide' } }); r.run(100);
+  assert.deepEqual(r.host.core.world.guideSeats, [w.seat]);
+});
+
 test('held AI gets paced views, validated goals and lines, no snapshots, and humans-only removes it after the round', async () => {
   const r = await room();
   const a = r.conn({ agent: aiFacts() }); const w = a.hello('Guide', { agent: { hands: 'host', role: 'guide' } });

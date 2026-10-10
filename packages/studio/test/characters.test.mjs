@@ -47,7 +47,7 @@ function studio(name, game = 'heroes') {
   assert.equal(spawnSync(process.execPath, [CLI, 'new', dir, '--name', 'Hero Den', '--homie', 'https://homie.test', '--no-install', '--json'], { encoding: 'utf8' }).status, 0);
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
-  for (const m of ['esbuild', 'three']) symlinkSync(join(REPO_NM, m), join(dir, 'node_modules', m));
+  for (const m of ['esbuild', 'three', '@types']) symlinkSync(join(REPO_NM, m), join(dir, 'node_modules', m));
   if (game) { mkdirSync(join(dir, 'games', game), { recursive: true }); writeFileSync(join(dir, 'games', game, 'game.json'), JSON.stringify({ id: game, name: 'Heroes', players: { min: 1, max: 8 }, entry: 'src/main.ts' })); }
   return dir;
 }
@@ -319,14 +319,14 @@ test('the hero-rush-3d starter: text only, characters with a rig recipe, every m
     for (const v of ['idle', 'run', 'jump', 'attack', 'hit']) assert.ok(a.rig.verbs.includes(v), `${a.id} bakes ${v}`);
   }
   assert.ok(manifest.assets.every((a) => /^kaykit-/.test(a.from.pack)), 'the props are KayKit too: one look');
-  const src = readFileSync(join(S, 'src', 'main.ts'), 'utf8');
+  const src = readFileSync(join(S, 'src', 'view.ts'), 'utf8');
   assert.match(src, /from '@homie-rocks\/studio\/animate'/);
   assert.match(src, /loadCharacter\(models, heroUrl\(want\), \{ tune: T \}\)/);
   assert.match(src, /crowd\(/);
   assert.doesNotMatch(src, /GLTFLoader|AnimationMixer/, 'no loader or mixer of its own');
   for (const a of manifest.assets) assert.ok(src.includes(`./models/${a.id}.glb`) || (a.rig && src.includes(`'${a.id}'`)), `main.ts draws ${a.id}`);
   const tun = JSON.parse(readFileSync(join(S, 'tunables.json'), 'utf8'));
-  for (const k of ['jumpHeight', 'jumpRise', 'fallFaster', 'windupMs', 'fade', 'walkSpeed', 'runSpeed', 'jumpStretch', 'landSquash', 'lean']) assert.ok(tun[k]?.group, k);
+  for (const k of ['jumpHeight', 'jumpRise', 'fallFaster', 'windupMs', 'fade', 'walkSpeed', 'runSpeed', 'jumpStretch', 'landSquash', 'lean']) assert.ok(tun.public[k]?.group, k);
   const lab = JSON.parse(readFileSync(join(S, 'lab.json'), 'utf8'));
   assert.deepEqual(Object.keys(lab.takes).sort(), ['jump', 'swing']);
 });

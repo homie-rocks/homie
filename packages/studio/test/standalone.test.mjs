@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.32.0: a game as an app of its own (standalone/STANDALONE.md).
  *
@@ -249,7 +250,7 @@ function studio(name) {
   mkdirSync(join(dir, 'node_modules', '@homie-rocks'), { recursive: true });
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
-  assert.equal(run(['game', 'new', 'gem', '--from', 'ember-vale', '--name', 'Gem Rush'], dir).status, 0);
+  legacyGame(dir, 'gem', 'Gem Rush');
   return dir;
 }
 let made = null;

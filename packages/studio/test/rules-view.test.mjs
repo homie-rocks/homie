@@ -37,7 +37,22 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'press') {
+    if (runaway === 'pose') {
+      writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100, 0], max: [100, 100, 3] } }));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
+export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{launch:{}}},entities:{runner:{player:true,motion:{launch:f.tick(),phase:f.u8()},input:{az:f.i8()},body:{shape:'capsule',radius:.4,height:1.7,maxSpeed:6},commands:{launch(w,s){s.motion.launch=w.tick;}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+      writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){
+        if(b.motion.launch){const age=c.tick-b.motion.launch;b.motion.phase=Math.min(20,age);if(age===1)b.pos={x:b.pos.x+4,y:0,z:0};b.grounded=age>=10;b.vel={x:0,y:0,z:age<10?1:0};b.pos={x:b.pos.x,y:0,z:age<10?age*.1:0};}
+        else b.pos={x:0,y:0,z:b.pos.z+i.az/127};
+      }});`);
+    } else if (runaway === 'knock') {
+      writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-100, -100, 0], max: [100, 100, 3] } }));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
+export default defineRules({contract:2,space:{dims:3},move,shapes:{commands:{launch:{}}},entities:{runner:{player:true,motion:{launch:f.tick()},body:{shape:'capsule',radius:.4,height:1.7,maxSpeed:6},commands:{launch(w,s){s.motion.launch=w.tick;}}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
+      writeFileSync(join(dir, 'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules'; export const move=defineMove({runner(b,i,c){
+const age=c.tick-b.motion.launch; b.vel={x:b.motion.launch&&age>0&&age<=8?24:0,y:0,z:0}; b.pos=c.math.add(b.pos,c.math.scale(b.vel,c.dt));
+}});`);
+    } else if (runaway === 'press') {
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify({ bounds: { min: [-1000, -1000], max: [1000, 1000] } }));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules'; import {move} from './move';
 export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{player:true,motion:{jumps:f.u8()},input:{ax:f.i8(),jump:f.press()},body:{shape:'circle',radius:.5,maxSpeed:6}}},room:{bots:{keep:0},join(){return {kind:'runner',at:{x:0,y:0,z:0}}}},map:'./map'});`);
@@ -58,7 +73,7 @@ export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bum
   rules.settings = compiled.settings;
   rules.schema = L.R.schemaOf(compiled);
   const entry = join(scratch, 'entry.ts');
-  writeFileSync(entry, `import { openRoom } from ${JSON.stringify(join(PKG, 'rules', 'view.ts'))};\n(globalThis as any).__openRoom = openRoom;\n${mode === 'browser' ? "import { makeHost } from 'homie:host'; (globalThis as any).__makeHost = makeHost;" : ''}\n`);
+  writeFileSync(entry, `import { openRoom, blendHeading } from ${JSON.stringify(join(PKG, 'rules', 'view.ts'))};\n(globalThis as any).__openRoom = openRoom; (globalThis as any).__blendHeading = blendHeading;\n${mode === 'browser' ? "import { makeHost } from 'homie:host'; (globalThis as any).__makeHost = makeHost;" : ''}\n`);
   const file = join(scratch, `view-${mode}-${offline}-${tickHz}-${runaway}-${++viewBuild}.mjs`);
   await esbuild.build({ entryPoints: ['homie:view'], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent', plugins: [viewPlugin(g, rules, entry)] });
   await import(pathToFileURL(file).href);
@@ -1361,4 +1376,89 @@ test('prediction recalibration offset survives lossy reconciliation on server ho
   assert.ok(shifted);
   assert.ok(probe().snaps > 0, 'a new ten-metre correction still exceeds the snap limit');
 
+});
+
+test('3D facing takes a continuous unit arc through horizontal and vertical half turns', async () => {
+  await coinDashKit();
+  const blend = globalThis.__blendHeading;
+  for (const [a,b] of [[{x:1,y:0,z:0},{x:-1,y:0,z:0}],[{x:0,y:0,z:1},{x:0,y:0,z:-1}],[{x:1,y:0,z:0},{x:0,y:0,z:1}]]) {
+    let last=a;
+    for(let i=1;i<=60;i++){const v=blend(a,b,i/60,3);assert.ok(Math.abs(Math.hypot(v.x,v.y,v.z)-1)<1e-6);assert.ok(Math.hypot(v.x-last.x,v.y-last.y,v.z-last.z)<.053);last=v;}
+    assert.deepEqual(last,b);
+  }
+});
+
+test('seat-or-solo uses a private rules round while full, then joins the server without uploading private state', async t => {
+  const {L,compiled,openRoom}=await coinDashKit('server',true);
+  const clock=virtualTime(t),r=rig(L,compiled);t.after(()=>r.stop());
+  const guests=Array.from({length:8},(_,i)=>openRoom({net:{config:cfg('P'+i),WebSocketImpl:r.socket(),post:null}}));
+  t.after(()=>guests.forEach(g=>g.close()));await clock.wait(800);
+  const waiting=openRoom({fallback:'solo',net:{config:cfg('Waiting'),WebSocketImpl:r.socket(),post:null}});t.after(()=>waiting.close());
+  await clock.wait(5200);
+  assert.equal(waiting.net.full,true);assert.equal(waiting.net.seat,null);assert.equal(waiting.status,'offline');assert.ok(waiting.me,'private room has its own body');
+  const before=waiting.me.pos.x,wire=r.sockets.at(-1),sent=wire.sent.length;
+  waiting.input({ax:127,ay:0});await clock.wait(500);assert.ok(waiting.me.pos.x>before);
+  assert.equal(wire.sent.slice(sent).filter(m=>['in','snap','ckpt','state','round'].includes(m.t)).length,0,'private progress stays local');
+  guests[0].close();await clock.wait(1500);
+  assert.equal(waiting.status,'playing');assert.notEqual(waiting.net.seat,null);assert.equal(waiting.seat,waiting.net.seat);assert.ok(waiting.me);
+  assert.equal(waiting.net.rulesHosting,false,'the waiting browser never takes over the online room');
+});
+
+
+test('3D prediction clamps vertical bounds and draws animation from the catch-up pose', async t => {
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'pose');
+  const clock=virtualTime(t),r=rig(L,compiled,false,150,150);t.after(()=>r.stop());
+  const a=openRoom({net:{config:cfg('Ada'),WebSocketImpl:r.socket(),post:null}});t.after(()=>a.close());
+  await clock.wait(12000);
+  a.input({az:127});await clock.wait(500);
+  assert.ok(Math.abs(a.me.pos.z-1.3)<.001,'predicted feet stop below the ceiling by the body height');
+  a.input({az:-127});await clock.wait(500);
+  assert.ok(Math.abs(a.me.pos.z)<.001,'predicted feet stop on the lower bound');
+  a.input({az:0});await clock.wait(1500);a.command('launch');
+  let catches=0, airborne=0;
+  for(let i=0;i<100;i++){
+    await clock.wait(16);const me=a.me,p=globalThis.__homieNet.probe.prediction();
+    if(p.catchTick===null)continue;
+    catches++;
+    const age=Math.floor(p.catchTick)-me.motion.launch;
+    assert.equal(me.motion.phase,Math.min(20,age),'motion belongs to the drawn historical tick');
+    assert.equal(me.grounded,age>=10,'landing state belongs to the drawn path');
+    if(age>=1 && age<9){airborne++;assert.equal(me.vel.z,1,'airborne velocity is not replaced by the present landing');}
+  }
+  assert.ok(catches>3 && airborne>0,'the unseen launch exercised airborne catch-up');
+  assert.equal(r.host.core.stats.errors,0);
+});
+
+test('a late fast knock does not double its drawn speed while a large correction fades', async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'knock');
+  let muteUntil = 0;
+  const clock = virtualTime(t), r = rig(L, compiled, false, m => m.t === 'snap' && Date.now() < muteUntil ? null : 150, 150); t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } }); t.after(() => a.close());
+  await clock.wait(12000); muteUntil = Date.now() + 240; a.command('launch');
+  let previous = a.me.pos.x, largest = 0, caught = false;
+  for (let i = 0; i < 240; i++) {
+    await clock.wait(16); const next = a.me.pos.x, p = globalThis.__homieNet.probe.prediction();
+    largest = Math.max(largest, Math.abs(next - previous)); previous = next;
+    caught ||= p.catchTick !== null;
+  }
+  t.diagnostic(`largest frame movement: ${largest} m`);
+  assert.ok(caught, 'the delayed impulse requires catch-up');
+  assert.ok(largest < .60, `one 16 ms frame moved ${largest} m`);
+  const authoritative = r.host.core.snapshot()[1].find(e => e[9] === a.seat)[3][0];
+  assert.ok(Math.abs(a.me.pos.x - authoritative) < .001, 'the correction converges after the knock ends');
+  assert.equal(globalThis.__homieNet.probe.prediction().snaps, 0);
+});
+
+for (const phase of [5, 17, 33, 45]) test(`fresh 3D input preserves the pose at a ${phase} ms tick phase`, async t => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, 'pose');
+  const clock = virtualTime(t), r = rig(L, compiled);
+  const a = openRoom({ net: { config: cfg('Player'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(12000 + phase);
+  const before = a.me.pos;
+  a.input({ az: 127 });
+  assert.deepEqual(a.me.pos, before, 'changing the preview cannot apply new input to time already elapsed');
+  await clock.wait(5);
+  assert.ok(a.me.pos.z > before.z, 'the new input still moves on the first drawing frame');
+  assert.ok(a.me.pos.z - before.z <= .15, 'five milliseconds cannot draw most of a fifty-millisecond step');
 });

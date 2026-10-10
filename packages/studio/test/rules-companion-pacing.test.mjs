@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -84,7 +85,7 @@ async function site() {
   if (!built) {
     const dir = studio('worker');
     assert.equal(run(['game', 'new', 'owl-run', '--from', 'gem-rush', '--name', 'Owl Run'], dir).status, 0);
-    assert.equal(run(['game', 'new', 'vale', '--from', 'ember-vale', '--name', 'Vale'], dir).status, 0);
+    legacyGame(dir, 'vale', 'Vale');
     assert.equal(run(['game', 'new', 'rules-run', '--from', 'coin-dash', '--name', 'Rules Run'], dir).status, 0);
     writeFileSync(join(dir, 'games/rules-run/src/rules.ts'), source);
     writeFileSync(join(dir, 'games/rules-run/src/view.ts'), "import { openRoom } from '@homie-rocks/studio/rules/view'; openRoom();\n");

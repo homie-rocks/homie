@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * `homie-studio build` for a game written as rules plus view, beside one written the old way
  * (rooms-milestone-1-design.md sections 7 and 8).
@@ -55,9 +56,12 @@ test('a new studio\'s Worker imports the table of its server-hosted games, and i
 test('game hashes are reproducible, isolate unrelated builds, and distinguish code from state shape', () => {
   const dir = studio('hashes');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
-  assert.equal(run(['game', 'new', 'gems', '--from', 'ember-vale'], dir).status, 0);
+  legacyGame(dir, 'gems');
   const build = () => {
     const r = run(['build'], dir); assert.equal(r.status, 0, r.stdout + r.stderr);
+    const trial = out(r).games.find(g => g.id === 'coin-dash').capacityTrial;
+    assert.equal(trial.seats, 32); assert.equal(trial.host, 'Node'); assert.equal(trial.cloudflare, false);
+    assert.equal(out(r).games.find(g => g.id === 'gems').capacityTrial, undefined, 'legacy games make no rules capacity claim');
     return JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash');
   };
   const first = build();
@@ -87,10 +91,10 @@ test('game hashes are reproducible, isolate unrelated builds, and distinguish co
   const mapped = build(); assert.notEqual(mapped.room.stateHash, shaped.room.stateHash); assert.notEqual(mapped.room.build, shaped.room.build);
 });
 
-test('coin-dash builds as a view bundle and a rules module; ember-vale builds as it always did, and says so', async () => {
+test('coin-dash builds as a view bundle and a rules module; the legacy Ember Vale fixture builds as it always did, and says so', async () => {
   const dir = studio('both');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
-  assert.equal(run(['game', 'new', 'gems', '--from', 'ember-vale'], dir).status, 0);
+  legacyGame(dir, 'gems');
   const built = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(built.status, 0, built.stdout + built.stderr);
   const said = built.stdout + built.stderr;

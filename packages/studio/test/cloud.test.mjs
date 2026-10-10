@@ -1,3 +1,4 @@
+import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.10.0: a studio works from the Claude app, with Cloudflare's own CI doing the deploys.
  *   - the template: `new --template` (and the repository's template/ folder) is what Cloudflare's "Deploy to
@@ -142,7 +143,7 @@ esac
 
 test('Workers Builds: `npm run deploy` only migrates and deploys (by binding name); the first one makes the database as it deploys', () => {
   const dir = studio('builds');
-  assert.equal(out(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir)).ok, true);
+  legacyGame(dir, 'owl-run', 'Owl Run');
   // Room chat's review (0.23.0) binds Workers AI for any game whose players may type; this game keeps chat to emoji
   // and quick lines, so only a server's AI guides decide the binding here (test/chat.test.mjs covers the review's).
   const gj = join(dir, 'games', 'owl-run', 'game.json');
@@ -252,7 +253,7 @@ test('the live site claims itself in the directory the first time it is read, ke
 
 test('a build the chat opened is attached once; its change and pull request go on the card, never its key', async () => {
   const dir = studio('attach');
-  assert.equal(out(run(['game', 'new', 'owl-run', '--from', 'ember-vale', '--name', 'Owl Run'], dir)).ok, true);
+  legacyGame(dir, 'owl-run', 'Owl Run');
   const hb = `hb_${'a'.repeat(32)}`;
   let attached = 0;
   const dirx = await directory({

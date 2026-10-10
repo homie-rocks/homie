@@ -17,6 +17,33 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.40.0] - 2026-10-09
+
+**Plugin 0.40.0**
+
+New 3D games keep their matches on the server and answer your controls immediately.
+
+### Added
+
+- Rules games can move and face in three dimensions, jump and land, and collide with boxes, spheres, upright capsules and sloped height tiles. Declared level data reaches the server and the browser together and is checked with the game's save and restore.
+- Prediction follows vertical movement and facing, eases corrections, and draws other players' poses and animation state smoothly. The build reports the completed local room-capacity trial separately from its generated game check.
+
+### Changed
+
+- Gem Rush 3D, Hero Rush 3D and Ember Vale now use rules plus view with the server keeping the match, including bots, companions, pickups and combat. Ember Vale keeps its saved hero. All five game starters now use the rules runtime; Ember Vale keeps its two-dimensional play.
+
+### Fixed
+
+- Predicted movement respects the server's floor and ceiling, and catch-up animation follows the pose being drawn.
+- Knockback no longer stores blocked travel and bursts around obstacles. A jump or direction change partway through a tick preserves the current drawn position before advancing.
+- Phone control checks start measuring with the first directional touch movement, so slow browser automation cannot cross the arena before measurement begins.
+- Gem Rush keeps sliding along arena walls under thumb input, and a delayed animation frame cannot give a newly arrived effect a negative radius.
+
+### Upgrade notes
+
+- Existing games keep their source and their hosting choice. The game skill is unchanged; its authoring update is the next slice.
+- Capacity measurements in this release are local. Cloudflare capacity and billing have not been measured.
+
 ## [0.39.0] - 2026-10-09
 
 **Plugin 0.39.0** · [#78](https://github.com/homie-rocks/homie/pull/78)
@@ -48,7 +75,7 @@ Your studio has its own MCP server. Connect your AI with one browser approval an
 
 ## [0.38.0] - 2026-10-09
 
-**Plugin 0.39.0**
+**Plugin 0.39.0** · [#77](https://github.com/homie-rocks/homie/pull/77)
 
 Your own character answers as soon as you press, even when the room runs on the server.
 

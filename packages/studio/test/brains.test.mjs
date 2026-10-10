@@ -643,7 +643,7 @@ test('the helper and the relay check arguments the same way (agents.ts argOk and
 test('Ember Vale\'s guide view fits the relay (under 2 KB) and its ids are the vocabulary\'s', () => {
   const big = { me: { x: 1600, y: 1000, hp: 120, maxHp: 120, down: false }, zone: 'east-woods', danger: 'the King Slime', party: Array.from({ length: 6 }, (_, i) => ({ seat: i, x: 1234, y: 987, hp: 999, down: false, dist: 599 })), quests: ['slime-hunt', 'king-slime', 'big-slime'], slimes: { near: 12, big: 3, king: true }, round: { phase: 'live', left: 88 }, goal: { goal: 'quest', args: { quest: 'king-slime' }, state: 'active' }, asks: [{ k: 'ask_help', args: { quest: 'king-slime' }, from: 3, at: 1_000_000_000_000 }] };
   assert.ok(JSON.stringify({ t: 'ev', k: 'agent:view', to: 7, d: big }).length < 2048, 'the largest Ember Vale view is under the relay\'s cap');
-  const src = readFileSync(join(PKG, 'starters', 'ember-vale', 'src', 'main.ts'), 'utf8');
-  for (const id of Object.keys(VOCAB.goals)) assert.ok(src.includes(`case '${id}'`), `the hands carry out ${id}`);
+  const src = readFileSync(join(PKG, 'starters', 'ember-vale', 'src', 'rules.ts'), 'utf8');
+  for (const id of Object.keys(VOCAB.goals)) assert.ok(src.includes(`goal.goal === '${id}'`), `the hands carry out ${id}`);
   for (const id of Object.keys(VOCAB.asks)) assert.ok(src.includes(`'${id}'`), `the floor answers ${id}`);
 });
