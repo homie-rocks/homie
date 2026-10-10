@@ -197,9 +197,7 @@ export function devConfig(root, remoteAi) {
   if (Boolean(json.ai) === remoteAi && !routed) return { args: [], note: aiNote, stripped: [] };
   const abs = (p) => (p && !p.startsWith('/') ? join(base, p) : p);
   delete json.$schema;
-  // This copy is intentionally not the production config watcher. Follow the
-  // atomic local entry so an external build can select a new immutable graph.
-  json.main = abs(json.main?.replace(/\/[a-f0-9]{24}\/worker\.js$/, '/worker.js'));
+  json.main = abs(json.main);
   if (json.assets?.directory) json.assets.directory = abs(json.assets.directory);
   json.d1_databases = (json.d1_databases ?? []).map((d) => ({ ...d, ...(d.migrations_dir ? { migrations_dir: abs(d.migrations_dir) } : {}) }));
   for (const k of ROUTE_KEYS) delete json[k];

@@ -21,7 +21,7 @@ test('a reload holding an old entry retains its complete module graph across a b
   const old=readFileSync(entry,'utf8'),oldMain=readConfig(root).main;
   assert.match(oldMain,/runtime\/[a-f0-9]{24}\/worker\.js$/);
   const local=devConfig(root,true);
-  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,entry,'a copied local config follows the atomic entry');
+  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,join(root,oldMain));
   const options=(text=readFileSync(entry,'utf8'))=> {
     const runtime=join(src,'runtime'),modules={};
     for(const path of readdirSync(runtime,{recursive:true}).filter(p=>p.endsWith('.js'))) modules[path]={type:'esm',contents:path==='worker.js'?text:readFileSync(join(runtime,path),'utf8')};
@@ -32,6 +32,7 @@ test('a reload holding an old entry retains its complete module graph across a b
   writeFileSync(join(src,'lazy.mjs'),`export const value='after'`);
   await buildWorker(root,esbuild);
   assert.notEqual(readConfig(root).main,oldMain,'new config selects a complete immutable graph');
+  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,join(root,readConfig(root).main),'copied dev config also selects the new complete graph');
   assert.ok(readFileSync(join(root,oldMain),'utf8'),'old config still resolves');
   // Simulate the watcher's interleaving: it read the old entry before publication,
   // but resolves that entry's imports after the complete new build is in place.

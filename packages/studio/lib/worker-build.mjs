@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {refreshWorkerConfig} from './worker-config.mjs';
 import {pathToFileURL} from 'node:url';
 import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync,mkdtempSync,rmSync} from 'node:fs';
-import {join,relative,basename} from 'node:path';
+import {join,relative,basename,sep} from 'node:path';
 import {readConfig} from './routes.mjs';
 import {workerDir} from './studio.mjs';
 import {paidReleases} from './parts-upload.mjs';
@@ -39,6 +39,17 @@ export async function buildWorker(root,esbuild) {
   // Wrangler's module root is the immutable generation, so old generations are
   // retained locally for in-flight reloads but are never added to a deployment.
   refreshWorkerConfig(root,{main:relative(workerDir(root),join(dir,'worker.js'))});
+  // Dev sometimes watches a copy with routes/remote AI removed. Publish its
+  // entry too, keeping its local bindings and its module root at one generation.
+  const local=join(workerDir(root),'.wrangler','homie-dev.wrangler.json');
+  if(existsSync(local)) {
+    const config=JSON.parse(readFileSync(local,'utf8'));
+    if(typeof config.main==='string' && config.main.startsWith(out+sep)) {
+      config.main=join(dir,'worker.js');
+      const text=JSON.stringify(config,null,2)+'\n';
+      if(readFileSync(local,'utf8')!==text) {const temp=`${local}.${process.pid}.tmp`;writeFileSync(temp,text);renameSync(temp,local);}
+    }
+  }
   const sizes=Object.entries(result.metafile.outputs).map(([path,value])=>({path:relative(root,join(dir,basename(path))),bytes:value.bytes,imports:value.imports}));
   writeFileSync(join(out,'modules.json'),JSON.stringify(sizes,null,2)+'\n');
   return sizes;

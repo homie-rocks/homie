@@ -90,6 +90,7 @@ test('upgrade shows what the new template adds, and changes nothing until --appl
     'add-section AGENTS.md ## Servers and AI seats',
     'add-section AGENTS.md ## Telling Homie',
     'add-section AGENTS.md ## The Game Codex and progress',
+    'add-section AGENTS.md ## Version-matched authoring guides',
     'pin package.json',
     'scripts package.json',
     'update-section AGENTS.md ## Commands (all through the pinned CLI in node_modules)',
