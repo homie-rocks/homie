@@ -850,3 +850,7 @@ from health, position or whatever makes a body suitable. Reserved companions
 never yield. The selected entity keeps its ID, inventory and all state; only its
 seat and driver change. A displaced bot retains its own state at the donor's old
 seat. Without this declaration, existing seat-based selection is unchanged.
+
+Movement queries reject distant live colliders by swept bounds before detailed
+intersection, just as static map queries do. Bounds include capsule radius and
+height, vertical columns and the full sweep, preserving fast travel and support.
