@@ -357,3 +357,9 @@ Every requested gate passed sequentially on both Node 22.23.3 / npm 10.9.9 and N
 | Node 24.21.0 | 2,224 passed, zero failed, five optional skips; two later desktop cleanup regressions also passed | 120 passed, zero failed, one optional skip | Passed |
 
 The Node 24 full suite preceded extraction of the desktop checker helper; its two process-exit regressions and the desktop gate were rerun afterward. Node 22's full suite includes those regressions. Both full suites passed all 37 real-Chrome prediction matrix cases and the new MCP room-tool cases for rules prediction, legacy games and apps. The publish checks identify only studio 0.39.0 as new, with 22 package versions already on npm. CI on the pushed revision is the remaining gate.
+
+### Follow-up CI: delayed touch delivery
+
+Run `38006610895`, Node 24 job `114076739481`, confirmed the dependency and MCP fixes, then found one unrelated browser checker race. At `2026-10-10T00:22:43.5013119Z`, `port-input.test.mjs:44` compared receipt `2288.5` with `2404.9000000000233`. CDP had acknowledged the final touch movement before Chrome delivered it, so the checker read the preceding ramp event's time. No job hung; Node 24 completed normally with 2,216 passed, one failed, 14 environment-dependent skips.
+
+A deterministic real-Chrome regression delays the final CDP move by 200 ms; before the fix it reproduced the same mismatch on Node 24 (`2376.6` versus `2709.9`). The checker now waits for and latches the final ramp point's DOM receipt, translating page coordinates into iframe coordinates. The regression uses an offset iframe. The equality and 600 ms response-limit assertions are unchanged. Browser-call timeout timers are also cleared when their race settles, eliminating the extra ten seconds after this focused test. The focused input and checker suites pass on both Node versions (13 tests each). The full CI matrix will run again on this revision.

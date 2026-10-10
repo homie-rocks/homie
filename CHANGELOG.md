@@ -36,6 +36,8 @@ Your studio has its own MCP server. Connect your AI with one browser approval an
 
 ### Fixed
 
+- Browser input checks wait for the final touch movement to reach the game before measuring its response, including when Chrome delays delivery. Successful browser calls clear their timeout timers.
+
 - Clean installs on Node 24 include the MCP SDK required by the payment library, so purchase tools and selling builds work alongside the studio MCP server.
 - MCP integration tests close clients after failures as well as successes. The desktop check clears request timers instead of waiting an extra minute after success. Package and plugin test files have a hard timeout.
 

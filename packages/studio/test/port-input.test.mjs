@@ -24,16 +24,23 @@ test('real input receipts exclude slow touch delivery and collect enough frames 
     setInterval(()=>{const now=performance.now();x+=dx*(now-last)/1000;y+=dy*(now-last)/1000;last=now;rows.push([now,x,y,1,0,0,-1,0,0]);},125);
     window.__homiePort={now:()=>performance.now(),rows:(a=0)=>rows.filter(r=>r[0]>=a)};
   </script>`;
-  const server = createServer((req,res)=>{res.setHeader('content-type','text/html');res.end(req.url.includes('/__game/')?game:'<iframe src="/__game/g" style="position:fixed;inset:0;width:100%;height:100%;border:0"></iframe>');});
+  const server = createServer((req,res)=>{res.setHeader('content-type','text/html');res.end(req.url.includes('/__game/')?game:'<iframe src="/__game/g" style="position:fixed;left:16px;top:24px;width:600px;height:440px;border:0"></iframe>');});
   server.listen(0,'127.0.0.1'); await once(server,'listening');
-  let browser;
+  let browser, pendingTouch;
   try {
     browser=await puppeteer.launch({executablePath:findChrome(),headless:true,args:chromeArgs()});
     const page=await browser.newPage();await page.setViewport({width:640,height:480,isMobile:true,hasTouch:true});
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     const frame=page.frames().find(f=>f.url().includes('/__game/'));await frame.waitForFunction('window.__homiePort');await frame.evaluate(()=>window.focus());
     const cdp=await page.createCDPSession();
-    const h={page,touchAll:true,touch:async(type,points)=>{await sleep(type==='touchStart'?800:100);await cdp.send('Input.dispatchTouchEvent',{type,touchPoints:points});}};
+    const h={page,touchAll:true,touch:async(type,points)=>{
+      await sleep(type==='touchStart'?800:100);
+      const send=()=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:points});
+      // CDP can acknowledge a move before Chrome delivers it to the frame.
+      // Make the final ramp event arrive late on every machine, not just CI.
+      if(type==='touchMove'&&points[0]?.y===130){pendingTouch=sleep(200).then(send);return;}
+      await send();
+    }};
     const key=await measuredPress(h,'keys','ArrowRight',[200,200],'right');
     assert.equal(key.a,await frame.evaluate(()=>__homieCheckInput.key));
     assert.ok((await frame.evaluate(a=>__homiePort.rows(a),key.a)).length>=4);
@@ -49,7 +56,13 @@ test('real input receipts exclude slow touch delivery and collect enough frames 
     assert.equal(judgePresses(rows,[{...touch,a:started}],.5,'top').ok,false,'timing from before delivery reproduces the false latency failure');
     const delayed=rows.filter(r=>r[0]>=touch.a).map(r=>[r[0]+800,...r.slice(1)]);
     assert.equal(judgePresses(delayed,[{...touch,b:touch.b+800}],.5,'top').ok,false,'a real response over 600 ms still fails');
-  } finally { await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r)); }
+  } finally {
+    try { await pendingTouch; }
+    finally {
+      try { await browser?.close(); }
+      finally { server.closeAllConnections();await new Promise(r=>server.close(r)); }
+    }
+  }
 });
 
 
