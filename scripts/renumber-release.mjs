@@ -13,10 +13,14 @@ const studio = process.argv[2] ?? next(JSON.parse(main('packages/studio/package.
 const plugin = process.argv[3] ?? next(JSON.parse(main('plugins/homie/plugin.json')).version);
 for (const v of [studio, plugin]) if (!/^\d+\.\d+\.\d+$/.test(v)) throw new Error('Versions must be x.y.z');
 const files = ['packages/studio/package.json', 'packages/studio/worker/version.mjs', '.claude-plugin/marketplace.json', 'plugins/homie/plugin.json', 'plugins/homie/.claude-plugin/plugin.json', 'plugins/homie/.codex-plugin/plugin.json', 'plugins/homie/.grok-plugin/plugin.json'];
-for (const f of files) writeFileSync(f, read(f).replaceAll(old, studio).replaceAll(oldPlugin, plugin));
+for (const f of files) {
+  const isStudio = f.startsWith('packages/studio/');
+  writeFileSync(f, read(f).replaceAll(isStudio ? old : oldPlugin, isStudio ? studio : plugin));
+}
 const log = read('CHANGELOG.md');
 const start = log.indexOf('## ['); const end = log.indexOf('\n## [', start + 1);
-const section = log.slice(start, end < 0 ? undefined : end).replaceAll(old, studio).replaceAll(oldPlugin, plugin);
+const section = log.slice(start, end < 0 ? undefined : end).replaceAll(old, studio)
+  .replace(/(\*\*Plugin )\d+\.\d+\.\d+(\*\*)/, (_, before, after) => before + plugin + after);
 writeFileSync('CHANGELOG.md', log.slice(0, start) + section + (end < 0 ? '' : log.slice(end)));
 const history = json('packages/studio/lib/template-history.json');
 const released = JSON.parse(main('packages/studio/lib/template-history.json'));
