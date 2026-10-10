@@ -17,6 +17,33 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.42.0] - 2026-10-09
+
+**Plugin 0.42.0**
+
+Customers and other businesses can use a studio's tools, buy its goods and services, and trigger its own functions.
+
+### Added
+
+- Customer catalogue, cart, checkout and agent purchases through the studio MCP server, using the existing payment standards and purchase lifecycle.
+- Priced studio tools and configurable built-in audiences, with current permissions checked when listing and calling.
+- Studio functions: plain-file event handlers, local firing, durable retries and office delivery status.
+
+### Changed
+
+- MCP call rates and shop purchase/guest-buyer rates are opt-in.
+
+### Fixed
+
+- Claim refunds use the same tip, used-item and window policy as the web shop. Guest carts create usable accounts before payment.
+- Builds fully regenerate Worker configuration, remove stale generated bindings and the old default purchase limiter, and keep explicit additions in `wrangler.custom.json`.
+- New functions skip history unless explicitly replayed; indexed subscriptions and cursors avoid unused events and prune completed delivery pages.
+- Paid tools renew execution leases, return saved results on retries and automatically refund failed handlers. Unpaid quotes expire and are pruned.
+
+### Upgrade notes
+
+- Run the toolkit upgrade and build, then commit the generated Worker configuration before deploying. Move hand-added Wrangler settings to root `wrangler.custom.json`; apply migrations 0018 and 0019 with the other studio migrations. Functions add a Cloudflare cron for retries only when declared.
+
 ## [0.40.0] - 2026-10-09
 
 **Plugin 0.40.0**

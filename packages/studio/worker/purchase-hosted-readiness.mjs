@@ -8,7 +8,6 @@ import { recurringReady } from './purchase-store.mjs';
 export async function hostedReadiness(env, catalogue, recurring = false) {
   const missing = [];
   if (!env.DB || env.HOMIE_PREVIEW === '1') missing.push('Studio purchases need the deployed database');
-  if (!env.PURCHASE_RATE_LIMITER) missing.push('Deploy the purchase rate limiting binding');
   try { await signingKey(env); } catch { missing.push('Create a valid purchase signing key'); }
   if ((!hasStripeKey(env) && !purchaseLinks(env)) || !WEBHOOK_SECRET_SHAPE.test(env.STRIPE_WEBHOOK_SECRET ?? '') || !['stripe', 'stripe-managed'].includes(catalogue.shop?.purchasesTill ?? catalogue.shop?.till)) missing.push('Connect this studio shop to Stripe first');
   if (recurring && hasStripeKey(env) && !(await recurringReady(env))) missing.push('Reconnect the shop to verify subscription permissions and webhook events before selling recurring resources');

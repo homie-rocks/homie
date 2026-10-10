@@ -128,14 +128,15 @@ export function checkShop(raw, { games = null, audience = 'general', studioName 
   const requestBytes = optionalNumber(raw.requestBytes, 'requestBytes');
   const refundDays = optionalNumber(raw.refundDays, 'refundDays');
   const cap = optionalNumber(raw.capPerPlayerMonth, 'capPerPlayerMonth');
-  // 600 new buyers per hour allows a school or venue to arrive together without disabling flood protection.
-  const guestBuyersPerAddressPerHour = numeric(raw.guestBuyersPerAddressPerHour ?? 600);
-  if (!Number.isSafeInteger(guestBuyersPerAddressPerHour) || guestBuyersPerAddressPerHour < 1) err('guestBuyersPerAddressPerHour', 'use a positive whole number for new guest flood protection');
-  const purchaseAttemptsPerMinute = numeric(raw.purchaseAttemptsPerMinute ?? 6);
-  // A school or venue can share an address; its aggregate bucket must allow many independent accounts.
-  const purchaseAttemptsPerAddressPerMinute = numeric(raw.purchaseAttemptsPerAddressPerMinute ?? 600);
-  if (!Number.isSafeInteger(purchaseAttemptsPerAddressPerMinute) || purchaseAttemptsPerAddressPerMinute < 1) err('purchaseAttemptsPerAddressPerMinute', 'use a positive whole number for address flood protection');
-  if (!Number.isSafeInteger(purchaseAttemptsPerMinute) || purchaseAttemptsPerMinute < 1) err('purchaseAttemptsPerMinute', 'use a positive whole number for the studio account rate limit');
+  const ratePolicy = key => {
+    if(raw[key] === undefined || raw[key] === null)return null;
+    const value=numeric(raw[key]);
+    if(!Number.isSafeInteger(value)||value<1)err(key,'use a positive whole number, or omit the rate policy');
+    return value;
+  };
+  const guestBuyersPerAddressPerHour = ratePolicy('guestBuyersPerAddressPerHour');
+  const purchaseAttemptsPerMinute = ratePolicy('purchaseAttemptsPerMinute');
+  const purchaseAttemptsPerAddressPerMinute = ratePolicy('purchaseAttemptsPerAddressPerMinute');
 
   for (const key of ['automaticTax', 'referralNewPlayersOnly']) if (raw[key] !== undefined && typeof raw[key] !== 'boolean') err(key, 'use a boolean');
   const items = [];

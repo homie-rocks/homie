@@ -1,3 +1,4 @@
+import { selling } from './extensions.mjs';
 import { withToolIdentity } from './tool-identity.mjs';
 import { officeRoutes } from './office.mjs';
 import { appRecordsRoute } from './app-records.mjs';
@@ -43,10 +44,11 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
     const result = await response.json(); if(!response.ok) throw new Error(result.error);return result;
   };
   const office = async (path, body, query={}) => {
-    if (!caller.owner || !/^\/_studio\/api\//.test(path) || path.includes('..') || path.includes('?')) throw new Error('owner only');
+    const delegated=definition.delegateOffice && await allowed(definition.audience,caller,env);
+    if ((!caller.owner && !delegated) || !/^\/_studio\/api\//.test(path) || path.includes('..') || path.includes('?')) throw new Error('owner only');
     const url = new URL(path,origin);
     for(const [key,value] of Object.entries(query))url.searchParams.set(key,String(value));
-    const request = withToolIdentity(new Request(url,{method:body?'POST':'GET',headers:{origin,'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),caller);
+    const request = withToolIdentity(new Request(url,{method:body?'POST':'GET',headers:{origin,'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),delegated?{...caller,owner:true}:caller);
     const response = await officeRoutes(request,env,url,{catalogueOf:async()=>cat});
     const result = response.headers.get('content-type')?.includes('application/json')?await response.json():{text:await response.text()}; if(!response.ok && response.status!==202) throw new Error(result.error);return result;
   };
@@ -57,7 +59,7 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
     shop:()=>office('/_studio/api/shop'),
     database:Object.freeze({
       async get(k){const r=await env.DB.prepare('SELECT value FROM tool_data WHERE namespace=?1 AND key=?2').bind(namespace,key(k)).first();return r?JSON.parse(r.value):null;},
-      async put(k,value){const text=JSON.stringify(value);if(text.length>16384)throw new Error('value too large');await env.DB.prepare('INSERT INTO tool_data(namespace,key,value) VALUES(?1,?2,?3) ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value').bind(namespace,key(k),text).run();},
+      async put(k,value){const text=JSON.stringify(value);await env.DB.prepare('INSERT INTO tool_data(namespace,key,value) VALUES(?1,?2,?3) ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value').bind(namespace,key(k),text).run();},
     }),
     fetch:globalThis.fetch.bind(globalThis),
     // A named secret may authenticate an HTTPS request; its value is never returned.
@@ -77,6 +79,15 @@ export function services(env, cat, origin, caller, namespace, definition = {}) {
 export function builtins(env,cat,origin) {
   const tool=(name,description,audience,inputSchema,handler)=>({name,description,audience,inputSchema,handler});
   const tools=[
+    tool('studio_function_replay','Replay retained events for a declaration with replay: true.','owner',object({name:str},['name']),async({name})=>{
+      const {replayFunction,runFunctions}=await import('./functions.mjs');
+      await replayFunction(env,name);await runFunctions(env,cat,origin);return {ok:true};
+    }),
+    tool('studio_function_fire','Fire an event locally through the durable function dispatcher.','owner',object({event:str,id:str,data:{type:'object'}},['event']),async(args)=>{
+      if(!['localhost','127.0.0.1','[::1]'].includes(new URL(origin).hostname))throw new Error('Local testing only');
+      const {emitEvent,runFunctions}=await import('./functions.mjs');
+      const id=await emitEvent(env,args.event,args.data??{},{id:args.id});await runFunctions(env,cat,origin);return {id};
+    }),
     tool('studio_info','The public studio, apps, games and posts.','public',object(),async()=>{const pub=publicCatalogue(cat,await settingsOf(env),env);return {studio:pub.studio?.name,games:pub.games.map(g=>({id:g.id,name:g.name,kind:g.kind??'game'})),posts:pub.posts};}),
     tool('studio_office','Live rooms and the players as shown in the office.','owner',object(),(_,ctx)=>ctx.office('/_studio/api/office')),
     tool('studio_shop','Orders, refunds and the shop state.','owner',object(),(_,ctx)=>ctx.shop()),
@@ -101,5 +112,6 @@ export function builtins(env,cat,origin) {
   const actions=['announce','kick','mute','close','game','servers','servers/set','servers/close','servers/member','room-level','agents/brain','chat/rules','chat/remove','chat/report','chat/budget','lounge/rules','lounge/night','lounge/mod','lounge/remove','lounge/hold','shop/release','shop/refund','shop/settle','invites','invites/revoke'];
   tools.push(tool('studio_office_action','Use an existing office control. Destructive changes return a browser confirmation for the owner.','owner',object({operation:{enum:actions},action:{type:'object'}},['operation','action']),({operation,action},ctx)=>ctx.office('/_studio/api/'+operation,action)));
   for (const op of ['sit','look','act','speak','stand']) tools.push(tool('agent_'+op, 'A marked AI guide: '+op+'. Room policy and declared vocabulary apply.', 'signed-in', object({game:str,role:str,server:str,room:str,goal:str,line:str,args:{type:'object'}},['game']), async (args,ctx)=>(await import('./mcp-room.mjs')).remoteSeat(env,cat,ctx.caller,op,args)));
-  return tools;
+  tools.push(...selling.customerTools(env,cat,origin));
+  return tools.map(tool => ({...tool, delegateOffice:Object.hasOwn(cat.studio?.mcp?.audiences??{},tool.name), audience: cat.studio?.mcp?.audiences?.[tool.name] ?? tool.audience}));
 }

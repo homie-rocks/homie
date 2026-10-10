@@ -287,7 +287,7 @@ export async function shopConnectManual(root, { fromClipboard = false, clipboard
   const shopNow = readShop(root);
   const till = managed === true ? 'stripe-managed' : managed === false ? 'stripe' : shopNow.shop?.till ?? 'stripe';
   const nonce = randomBytes(16).toString('hex');
-  const paidParts = paidReleases(root).length > 0;
+  const paidParts = paidReleases(root).length > 0 || (shopNow.shop?.items?.length??0)>0 || (await import('./tools-build.mjs')).toolFiles(root).length>0;
   const page = connectPage({ paidParts, nonce, site, studio: studio.name ?? 'Your studio', till, test: !live });
   return await new Promise((done) => {
     let finished = false;

@@ -459,8 +459,9 @@ export async function dev(root, { lan = false, port: askedPort = 8787, remoteAi 
       return;
     }
   };
+  const { functionFiles } = await import('./functions-build.mjs');
   const { toolFiles } = await import('./tools-build.mjs');
-  const toolsStamp = () => toolFiles(root).map(file => `${file}:${statSync(file).mtimeMs}:${statSync(file).size}`).join('|');
+  const toolsStamp = () => [...toolFiles(root),...functionFiles(root)].map(file => `${file}:${statSync(file).mtimeMs}:${statSync(file).size}`).join('|');
   let lastTools = toolsStamp();
   const toolsLook = async () => {
     if (rebuilding || ending) return;

@@ -24,7 +24,8 @@ export function oauthStorage(DB) {
     },
   };
 }
-export async function rateLimit(env, caller, limit = 60) {
+export async function rateLimit(env, caller, limit = null) {
+  if (limit == null) return true;
   const minute = Math.floor(Date.now()/60000);
   const row = await env.DB.prepare('INSERT INTO mcp_limits(caller,minute,n) VALUES(?1,?2,1) ON CONFLICT(caller,minute) DO UPDATE SET n=n+1 RETURNING n').bind(caller,minute).first();
   return row.n <= limit;
@@ -41,5 +42,5 @@ export async function audit(env, caller, tool, outcome) {
 
 export function callsPerMinute(cat) {
   const value=cat.studio?.mcp?.callsPerMinute;
-  return Number.isSafeInteger(value)&&value>0?value:60;
+  return Number.isSafeInteger(value)&&value>0?value:null;
 }

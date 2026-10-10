@@ -44,6 +44,17 @@ asks (`game new <id> --from gem-rush`, or `--from ember-vale` for a hero who las
 npx -y @homie-rocks/studio mcp --studios "<the folder the studios live in>"   # the toolkit as a local MCP server (stdio)
 ```
 
+Every studio also has its own customer-facing `/mcp`. Customers can browse, quote a cart,
+and pay through the same MPP/x402 purchase engine used for paid parts, or open the studio's
+Stripe checkout for human approval. Studio tools choose `public`, `signed-in`, an app staff
+role, or `owner`; a tool can sell its service with `price`. See [Studio tools](tools/TOOLS.md).
+
+[Studio functions](functions/FUNCTIONS.md) run your code when an order is paid or refunded,
+a player joins, a room closes, an app record changes, a tool is called, or a schedule fires.
+Add one with `homie-studio function new paid-order --event order.paid`; fire an event locally
+with `homie-studio function fire order.paid --input '{"order":"example"}'`. Deliveries persist,
+retry with the same event ID, and show failures in the office. Policies and rate limits are opt-in.
+
 The toolkit as MCP tools, so the chat that shows Homie's cards also does the work: the setup status, a new studio,
 the live demo, make / port / plan a game and its Game Codex, build, run it here, the two-browser check, a
 playtest, deploy, publish, the progress feed, the studio's files, and the music, sound, art and video scripts where

@@ -39,7 +39,7 @@ export async function paymentProtocol(
   });
   capabilities ??= await machineCapabilities(env);
   let methods = capabilities.machine.card ? [payments.spt.charge()] : [];
-  if (config.base && capabilities.machine.base && !mcp) {
+  if (order.resource_kind !== 'service' && config.base && capabilities.machine.base && !mcp) {
     facilitator ??= new HTTPFacilitatorClient(
       mode === "live"
         ? createFacilitatorConfig(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET)

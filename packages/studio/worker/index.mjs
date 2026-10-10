@@ -1,3 +1,4 @@
+export { useFunctions } from './functions.mjs';
 import { appAccess, appRecordsRoute } from './app-records.mjs';
 import { appRole, openPath } from './app-format.mjs';
 /**
@@ -600,13 +601,17 @@ function finish(res, path) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil((async () => {
+    const maintenance=(async () => {
       const cat = await catalogue(env, 'https://studio.invalid');
       await reconcileOrders(env, shopOf(cat));
-    })());
+      await (await import('./functions.mjs')).scheduleFunctions(event,env,cat,cat.studio?.url??'https://studio.invalid');
+    })();
+    ctx.waitUntil(maintenance);
+    await maintenance;
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    await (await import('./functions.mjs')).syncFunctions(env);
     // A standalone copy's Lobby call (worker/standalone.mjs): every answer to it can be read by the app's page, an
     // unknown game's 404 and a failure included, so the app can say why it plays offline. No other address is opened.
     const appRecords = isAppOrigin(request) && /^\/[^/]+\/api\/app\/records\//.test(url.pathname);
@@ -618,6 +623,7 @@ export default {
       try { console.error(JSON.stringify({ at: new Date().toISOString(), ev: 'lobby-route-failed', path: url.pathname, error: errorLine(error) })); } catch { /* no console */ }
       res = json({ ok: false, error: 'failed' }, 500);
     }
+    if(ctx?.waitUntil && ['POST','PUT','DELETE'].includes(request.method)) ctx.waitUntil((async()=>{const {runFunctions}=await import('./functions.mjs');await runFunctions(env,()=>catalogue(env,url.origin),url.origin);})());
     if (appLobby || appRecords) return appCors(request, res);
     // A referral's arrival (worker/referrals.mjs): only a person's page load with ?via= of another site, on a studio
     // that pays referrals. The page is answered first; a cookie is added to it only then.
@@ -635,6 +641,7 @@ export default {
 let studioTools = async () => [];
 /** Studio-authored Worker code, loaded only on the MCP surface. */
 export function useTools(load) { studioTools = load; }
+export function getStudioTools() { return studioTools(); }
 
 async function route(request, env, ctx) {
   const url = new URL(request.url);
@@ -646,6 +653,8 @@ async function route(request, env, ctx) {
   // Every game (for a game's own pages and the owner's), and the public ones (every list, the rooms, the manifest).
   const getAll = () => (catP ??= catalogue(env, url.origin).then((cat) => named(cat, env)));
   const getCat = () => (pubP ??= Promise.all([getAll(), settingsOf(env)]).then(([cat, settings]) => publicCatalogue(cat, settings, env)));
+
+  if (path === '/_studio/office/functions') return (await import('./functions.mjs')).functionsRoute(request,env,await getAll());
 
   if (path === '/mcp' || path.startsWith('/hooks/tools/') || path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-') || path === '/_studio/office/connections') {
     const { remoteMcp } = await import('./mcp.mjs');
@@ -1672,9 +1681,33 @@ export class Table {
    * a failure goes to the error stream, everything else to the log (and not at all with HOMIE_ROOM_LOG=0).
    */
   say(line) {
+    if(line?.ev==='hello'&&!line.resumed&&line.seat!==null) this.queueFunctionEvent('player.joined',{game:this.game,room:line.room,player:this.room?.clients.get(line.id)?.conn?.player??null,seat:line.seat});
     const bad = line?.ev === 'failed' || line?.ev === 'socket-error' || line?.ev === 'tick-failed' || line?.ev === 'persist-failed';
     if (!bad && this.env.HOMIE_ROOM_LOG === '0') return;
     try { console[bad ? 'error' : 'log'](JSON.stringify({ at: new Date().toISOString(), ...line, game: this.game ?? null, room: line?.room ?? this.code ?? null })); } catch { /* no console */ }
+  }
+
+  queueFunctionEvent(type,data) {
+    if(!this.env.DB || this.env.HOMIE_PREVIEW==='1' || !this.ctx.storage.sql) return;
+    this.ctx.waitUntil((async()=>{
+      if(!await (await import('./functions.mjs')).hasFunctionType(type))return;
+      const sql=this.ctx.storage.sql;
+      sql.exec('CREATE TABLE IF NOT EXISTS function_outbox(id TEXT PRIMARY KEY,type TEXT,data TEXT,at INTEGER)');
+      sql.exec('INSERT INTO function_outbox VALUES(?,?,?,?)',crypto.randomUUID(),type,JSON.stringify(data),Date.now());
+      this.armRoom(Date.now()+60000);
+      await this.flushFunctionEvents();
+    })());
+  }
+
+  async flushFunctionEvents() {
+    const sql=this.ctx.storage.sql;
+    if(!sql || !this.env.DB)return;
+    if(!sql.exec("SELECT name FROM sqlite_master WHERE name='function_outbox'").toArray().length)return;
+    const {emitEvent}=await import('./functions.mjs');
+    for(const row of sql.exec('SELECT * FROM function_outbox LIMIT 100').toArray()) {
+      try {await emitEvent(this.env,row.type,JSON.parse(row.data),{id:row.id,at:row.at});sql.exec('DELETE FROM function_outbox WHERE id=?',row.id);}
+      catch {this.armRoom(Date.now()+60000);await this.alarmWrite;return;}
+    }
   }
 
   /**
@@ -1893,6 +1926,7 @@ export class Table {
 
   /** The alarm: the house guides' brains decide (worker/agents.mjs), then the day's usage is written. */
   async alarm() {
+    await this.flushFunctionEvents();
     // A brain that throws never takes the room with it: the alarm is not retried, the guides answer from the floor.
     try { if (this.house) await this.house.onAlarm(); } catch (error) { try { console.log(JSON.stringify({ ev: 'brain-alarm-failed', room: this.code, error: String(error?.stack ?? error).slice(0, 400) })); } catch { /* no console */ } }
     try { await this.flushBrain(); } catch { /* counted next time */ }
@@ -2099,6 +2133,7 @@ export class Table {
 
   /** Tell the Lobby this room closed (until when; 0 when it opened again), so it sends nobody here meanwhile. */
   tellLobby(extra) {
+    if(extra.closed || extra.ended) this.queueFunctionEvent('room.closed',{game:this.game,room:this.code,...extra});
     if (!this.game || !this.code) return;
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     this.lastReport = -1;

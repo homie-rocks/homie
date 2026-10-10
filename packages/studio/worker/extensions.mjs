@@ -1,6 +1,7 @@
 /** Optional selling integration. Only the selling entry installs provider adapters. */
 export const selling = {
   enabled: false,
+  customerTools: () => [],
   machineCapabilities: () => ({ machine: {} }),
   priceWords: () => 'Free',
   purchaseRoutes: () => null,

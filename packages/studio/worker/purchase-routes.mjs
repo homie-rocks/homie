@@ -136,19 +136,7 @@ export async function purchaseRoutes(
   if (env.HOMIE_PREVIEW === "1" || !env.DB)
     return fail(503, "Studio purchases need the deployed database");
   try {
-    if (!env.PURCHASE_RATE_LIMITER)
-      return fail(
-        503,
-        "Deploy the Cloudflare purchase rate limiting binding before selling",
-      );
-    if (
-      !(
-        await env.PURCHASE_RATE_LIMITER.limit({
-          key: `${request.headers.get("cf-connecting-ip") ?? "unknown"}:${request.method}`,
-        })
-      ).success
-    )
-      return fail(429, "Too many purchase requests. Try again shortly");
+    if (env.PURCHASE_RATE_LIMITER && !(await env.PURCHASE_RATE_LIMITER.limit({key: `${request.headers.get('cf-connecting-ip') ?? 'unknown'}:${request.method}`})).success) return fail(429, 'Studio purchase rate limit reached');
     if (path === "/api/purchases/mcp") {
       const { purchaseMcp } = await import("./purchase-mcp.mjs");
       return purchaseMcp(request, env, url, cat);
@@ -193,7 +181,7 @@ export async function purchaseRoutes(
       ].includes(path) &&
       request.method === "POST"
     ) {
-      return await claimedPurchase(request, env, url, path);
+      return await claimedPurchase(request, env, url, path, cat);
     }
     return fail(404, "No such studio purchase route");
   } catch (error) {
@@ -484,7 +472,7 @@ async function verifyPurchaseEvidence(request, env, url) {
   });
 }
 
-async function claimedPurchase(request, env, url, path) {
+async function claimedPurchase(request, env, url, path, cat) {
   const claim = bearer(request);
   if (!/^[a-f0-9]{64}$/.test(claim ?? ""))
     return fail(401, "Purchase claim required");
@@ -514,6 +502,12 @@ async function claimedPurchase(request, env, url, path) {
       await reconcileSubscription(env, o);
       o = await byId(env, o.id);
     }
+    if (o.resource_kind === 'cart') {
+      const { refundableShopOrder, shopOf } = await import('./shop.mjs');
+      const { orderById } = await import('./shop-store.mjs');
+      if (!await refundableShopOrder(env, await orderById(env, o.id), shopOf(cat)))
+        return fail(403, 'Ask the studio for this refund. Tips and used items follow the studio refund settings.');
+    }
     const days = termsOf(o).refundWindowDays;
     let paidAt = Number(o.paid_at);
     if (o.subscription && o.payment) {
@@ -536,12 +530,12 @@ async function claimedPurchase(request, env, url, path) {
     }
     if (o.paid_at && !o.payment) return fail(409, 'Stripe has not recorded this chain payment. Contact the seller for a direct refund to the original payer.');
     if (!o.paid_at) return fail(409, "This order is not paid; there is no payment to refund");
-    if (
+    if (o.resource_kind !== 'cart' && (
       !Number.isFinite(days) ||
       days <= 0 ||
       !paidAt ||
       Date.now() > paidAt + days * 86400000
-    )
+    ))
       return fail(
         403,
         "This purchase is outside the seller self-service refund window; contact the seller with your receipt",

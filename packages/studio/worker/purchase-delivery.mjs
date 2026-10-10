@@ -55,6 +55,7 @@ export async function grantPurchase(env, origin, o, b = {}) {
     : null;
   if (!rights || !rights.active)
     return fail(402, `Purchase is ${coreOrder.state}; delivery is unavailable`);
+  await resourceKind(o.resource_kind).fulfill?.(env,origin,o);
   const key = await signingKey(env);
   const now = Math.floor(Date.now() / 1000);
   const claims = {

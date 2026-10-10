@@ -1,3 +1,5 @@
+import {pruneOffers} from '../customer-resources.mjs';
+import { customerTools, paidTool } from '../customer-mcp.mjs';
 import { productDescription, entryDescription, discoveryRoutes } from '../parts-purchase-catalogue.mjs';
 import { officeScript } from '../purchase-office-script.mjs';
 import { officeRoutes } from '../purchase-office-routes.mjs';
@@ -27,10 +29,11 @@ import { paidFile } from '../parts-protected.mjs';
 import { priceWords } from '../purchase-pricing.mjs';
 import { purchaseDiscovery } from '../purchase-discovery.mjs';
 import { testPaymentExchange } from '../payment-test-exchange.mjs';
-useSelling({ enabled: true, productDescription, entryDescription, discoveryRoutes, officeScript, officeRoutes, refundOrder, extendOffice, testPaymentExchange, jobsSQL, manualRefundDetails, confirmManualRefund, listOffers, orderFact, resourceOrder, currentPurchaseOrder, purchasePaymentEvent, refundPurchasePayment, purchaseReadiness, purchaseRoutes, recordOrderState, authorizePurchaseTest, expirePurchaseCheckouts, reissuePurchaseClaim, retireResource, reconcileRecordings, machineCapabilities, paidFile, priceWords, purchaseDiscovery });
+useSelling({ enabled: true, customerTools, paidTool, productDescription, entryDescription, discoveryRoutes, officeScript, officeRoutes, refundOrder, extendOffice, testPaymentExchange, jobsSQL, manualRefundDetails, confirmManualRefund, listOffers, orderFact, resourceOrder, currentPurchaseOrder, purchasePaymentEvent, refundPurchasePayment, purchaseReadiness, purchaseRoutes, recordOrderState, authorizePurchaseTest, expirePurchaseCheckouts, reissuePurchaseClaim, retireResource, reconcileRecordings, machineCapabilities, paidFile, priceWords, purchaseDiscovery });
 export default { ...worker,
   async scheduled(controller, env, ctx) {
     await worker.scheduled(controller, env, ctx);
+    if(env.DB)await pruneOffers(env);
     if (!env.PURCHASE_MACHINE_PAYMENTS || !env.DB) return;
     const { refreshMachineCapabilities } = await import('../payment-capabilities.mjs');
     const errors = [];

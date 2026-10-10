@@ -1,3 +1,4 @@
+import {refreshWorkerConfig} from './worker-config.mjs';
 /**
  * `homie-studio upgrade [--apply] [--diff]` — an existing studio takes what this version's template adds, and
  * nothing it made its own is ever overwritten.
@@ -346,6 +347,7 @@ export function upgradeApply(root, plan) {
     }
     if (text !== null && (!existsSync(path) || readFileSync(path, 'utf8') !== text)) writeAtomic(path, text);
   }
+  refreshWorkerConfig(root);
   const pinned = done.some((c) => c.kind === 'pin');
   return {
     ...plan, applied: true, done, skipped,

@@ -298,6 +298,7 @@ export async function reconcileOneTime(env, o) {
 export async function reconcileOrder(env, o) {
   if (o.subscription && hasStripeKey(env) && !await linkOf(env,o.id)) await reconcileSubscription(env, o);
   else await reconcileOneTime(env, o);
+  if(o.resource_kind==='cart' && o.payment) await (await import('./shop.mjs')).syncRefunds(env,o.payment);
 }
 
 /** Called only AFTER the existing shop webhook signature/mode check. Return null for player orders. */

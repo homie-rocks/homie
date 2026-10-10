@@ -230,14 +230,14 @@ test('tax choices, customer creation and business tax identifiers reach Checkout
   }
 });
 
-test('Turnstile failure creates no rows and missing rate limiting closes part purchases', async () => {
+test('Turnstile failure creates no rows and purchase rate limiting is opt-in', async () => {
   const f = await fixture('human-check'); try {
     const q = await f.add(); const intent = await f.add({ approve: q.purchase.quote });
     f.env.PURCHASE_VERIFY_TURNSTILE = async () => Response.json({ success: false });
     assert.equal((await f.fetcher(intent.purchase.checkout, { method: 'POST', headers: { origin: 'https://seller.example' } })).status, 403);
     assert.equal(f.env.DB.sql.prepare('SELECT COUNT(*) n FROM purchase_orders').get().n, 0);
     delete f.env.PURCHASE_RATE_LIMITER;
-    assert.equal((await f.fetcher('https://seller.example/api/purchases/intent', { method: 'POST' })).status, 503);
+    assert.equal((await f.fetcher('https://seller.example/api/purchases/intent', { method: 'POST' })).status, 400, 'without an opted-in limiter the request reaches input validation');
   } finally { await f.close(); }
 });
 

@@ -1,3 +1,4 @@
+import { toolIdentity } from './tool-identity.mjs';
 /**
  * PLAYERS — accounts on ONE studio, passkey first, and the cloud saves a persistent game keeps (saves/SAVES.md).
  *
@@ -236,8 +237,8 @@ async function sessionOf(request, env, url = new URL(request.url)) {
 /** A guest for a request with no player yet (the first save). Refused past the address's or the day's limit. */
 async function newGuest(request, env, url, addressLimit = PLAYER_LIMITS.newPlayersPerHour, counter = 'new') {
   const ip = addressOf(request);
-  if (limited(`${counter}:${ip}`, addressLimit, HOUR)) return { error: fail(429, 'rate', 'too many new players from this address; try again later') };
-  const capped = await dailyCapReached(env);
+  if (addressLimit !== null && limited(`${counter}:${ip}`, addressLimit, HOUR)) return { error: fail(429, 'rate', 'too many new players from this address; try again later') };
+  const capped = (counter !== 'shop-new' || env.PLAYER_LIMIT_DAILY !== undefined) && await dailyCapReached(env);
   if (capped) return { error: fail(503, 'busy', 'this studio has taken all the new players it takes in one day; try again tomorrow') };
   const id = newPlayerId();
   const now = Date.now();
@@ -383,6 +384,8 @@ export const players = Object.freeze({
   },
   /** The request's signed-in player ({ id, name, guest, owner }), or null. */
   async of(request, env) {
+    const identity=toolIdentity(request);
+    if(identity?.id && !identity.id.startsWith('office-')) { const p=await env.DB.prepare('SELECT id,name,guest,owner FROM players WHERE id=?1').bind(identity.id).first();return p?{...p,guest:Boolean(p.guest),owner:Boolean(p.owner)}:null; }
     try { const s = await sessionOf(request, env); return s ? { id: s.player.id, name: s.player.name, guest: s.player.guest, owner: s.player.owner } : null; } catch { return null; }
   },
   /** Shop guest creation uses the studio's new-guest address rate and the daily player limit. */

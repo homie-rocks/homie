@@ -177,3 +177,21 @@ for (const mode of ['prediction', 'legacy', 'app']) test(`MCP room tools: ${mode
   rig?.host.stop();DB.sql.close();rmSync(scratch,{recursive:true,force:true});
  }
 });
+
+test('a studio explicitly delegates built-ins; other built-ins retain their defaults',async()=>{
+ const {builtins}=await import('../worker/mcp-tools.mjs');const DB=database();
+ try{
+  const tools=builtins({DB},{games:[],studio:{mcp:{audiences:{studio_players:{app:'pub',role:'staff'},studio_stats:'public'}}}},'https://studio.test');
+  const staff={id:'staff',owner:false};DB.sql.exec("INSERT INTO app_roles VALUES('pub','staff','staff')");
+  assert.equal(await allowed(tools.find(t=>t.name==='studio_players').audience,staff,{DB}),true);
+  assert.equal(await allowed(tools.find(t=>t.name==='studio_stats').audience,{}, {DB}),true);
+  assert.equal(await allowed(tools.find(t=>t.name==='studio_shop').audience,staff,{DB}),false);
+  DB.sql.exec('DELETE FROM app_roles');assert.equal(await allowed(tools.find(t=>t.name==='studio_players').audience,staff,{DB}),false);
+ }finally{DB.sql.close();}
+});
+
+test('a signed webhook cannot execute a priced tool without purchase approval',async()=>{
+ const {toolWebhook}=await import('../worker/tool-webhook.mjs');let ran=false;
+ const response=await toolWebhook(new Request('https://studio.test/hooks/tools/paid',{method:'POST',body:'{}'}),{}, {cat:{games:[]},definitions:[{name:'paid',price:{amount:100,currency:'usd'},webhook:{secret:'SECRET',person:'owner'},handler:()=>{ran=true;}}]});
+ assert.equal(response.status,402);assert.equal(ran,false);
+});

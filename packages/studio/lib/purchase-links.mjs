@@ -1,3 +1,5 @@
+import {pathToFileURL} from 'node:url';
+import {serviceTerms} from '../worker/service-terms.mjs';
 /** Uses the shop's authorized Stripe API transport; no API credential goes to the Worker. */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -13,6 +15,12 @@ export async function syncPurchaseLinks({ root, api, slug, site, mode, list, til
     const p = readPart(packedDir(root,id,version)), config = settings[id], selected = config?.releases?.[version];
     return p.sale && config?.active !== false && selected?.active !== false && (version === versions.at(-1) || selected?.keepOnSale === true) ? [{kind:'part',resource:id,version,name:part.name,sale:{...p.sale,...config?.price}}] : [];
   }));
+  const {toolFiles,buildTools}=await import('./tools-build.mjs');
+  if(toolFiles(root).length){
+    await buildTools(root,await import('esbuild'));
+    const definitions=(await import(pathToFileURL(join(root,'site/src/tools/index.mjs')).href+'?links='+Date.now())).default;
+    offers.push(...definitions.filter(t=>t.price).map(t=>({kind:'service',resource:t.name,version:'1.0.0',name:t.description,sale:serviceTerms(t.price)})));
+  }
   const configured = offers.flatMap(o => {
     const quantities = settings[o.resource]?.quantities ?? [1];
     if (!Array.isArray(quantities) || !quantities.length || quantities.some(q=>!Number.isSafeInteger(q) || q<1 || !Number.isSafeInteger(q*o.sale.amount))) throw new Error(`Invalid Payment Link quantities for ${o.resource}`);

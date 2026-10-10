@@ -155,6 +155,9 @@
  *   homie-studio servers new <game> "<Name>" --policy open|humans-only|hybrid|beginner [--ai <n>] [--guides <n>]
  *                                        [--kids] [--door open|accounts|invite] [--level 1-5] [--level-max 1-5]
  *                                        [--speech game|lines|off] [--bots fill|off] [--rooms <n>] [--listed on|off]
+ *   homie-studio function new <name> [--event order.paid]
+ *   homie-studio function replay <name> --replay [--url <studio-site>]
+ *   homie-studio function fire <event> [--input <JSON>] [--id <event-id>] [--url <local-site>]
  *   homie-studio tool new <name> [--app <id>]
  *   homie-studio tool call <name> --input <JSON> [--url <site>] [--public]
  *   homie-studio servers set <game> <server> [the same flags]
@@ -489,9 +492,12 @@ function print(result) {
       lines.push(`R2 holds about ${sizeOf(result.inR2)} of this studio's media. ${result.cost}`, ...(result.warning ? [`Warning: ${result.warning}`] : []));
       break;
     }
+    case 'function new':
     case 'tool new':
       lines.push(result.file, result.next);
       break;
+    case 'function replay':
+    case 'function fire':
     case 'tool call':
     case 'tool list':
       lines.push(JSON.stringify(result.result, null, 2));
@@ -833,6 +839,7 @@ const OUTWARD_FLAGS = {
   'shop connect': ['url', 'managed', 'live', 'manual', 'renew', 'from-clipboard'], 'shop disconnect': ['url'], 'shop refund': ['url', 'reason', 'note', 'manual-transaction'], 'shop statements': ['url', 'period', 'send', 'cursor'],
   'agents pass': ['url', 'label', 'server', 'hands', 'role', 'days'], 'agents revoke': ['url'], 'agents brain': ['url', 'budget', 'remove'],
   'agents sit': ['url', 'server', 'pass', 'label', 'brain'],
+  'function replay': ['url','replay'], 'function new': ['event'], 'function fire': ['url','input','id'],
   'tool new': ['app'], 'tool call': ['url', 'input', 'public'], 'tool list': ['url', 'public'],
   // With --device it adds a phone to the person's Apple team and installs on it: a flag it does not know stops it.
   'standalone run': ['for', 'device', 'site'],
@@ -894,6 +901,7 @@ async function main() {
   // The starter library and the optimiser work anywhere; the rest of style and assets inside a studio (lib/art-cli.mjs).
   if (cmd === 'assets' && ['find', 'optimise', 'optimize'].includes(sub)) return assetsCommand(null, sub, positional, flags, { log });
   const root = requireStudio();
+  if (cmd === 'function') return (await import('../lib/functions-cli.mjs')).functionCommand(root, sub, positional, flags, { log });
   if (cmd === 'tool') return (await import('../lib/tools-cli.mjs')).toolCommand(root, sub, positional, flags, { log });
   // A trailer is the plugin's video skill; this hands the words after the id over to it (lib/trailer.mjs).
   if (cmd === 'trailer') return trailerCommand(root, sub, argv.slice(argv.indexOf(sub) + 1), { skills: flags.get('skills') ?? null, slug: flags.get('slug') ?? null });

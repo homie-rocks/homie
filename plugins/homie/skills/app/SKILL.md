@@ -41,4 +41,6 @@ The complete helper and limits are in `node_modules/@homie-rocks/studio/apps/APP
 
 ## Connect an AI to this studio
 
+Use Studio functions (`functions/FUNCTIONS.md` in the toolkit) for durable reactions to `record.changed`, `order.paid`, refunds, schedules and tool calls. `homie-studio function new <name> --event <type>` creates a plain TypeScript file; local `function fire` and the office delivery table make it testable. Deduplicate external effects by event ID. Public or priced tools can expose app services to customer AIs using the same purchase engine.
+
 Every studio serves its own MCP at `<site>/mcp`. Use the `tools` skill for studio-defined business actions, signed integrations and staff AI access. Reuse office and app-record built-ins first. After an authorized deploy, hand over the MCP address and `<site>/_studio/office/connections`: the person approves with the studio account they already have, with no key to copy. Staff connect their own account and retain only their app grants. Client connector setup is separate from the studio approval. Never deploy merely to set up a local tool test.
