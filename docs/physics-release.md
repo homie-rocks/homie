@@ -1,13 +1,13 @@
 # Physics release verification
 
 Studio 0.45.2 / plugin 0.45.2, physics 0.1.0. Rebased directly onto main
-`b04e6a71` (studio 0.45.0), dropping the navigation stack and inheriting paid parts
-from main. The diff contains physics
+`5a175afb` (studio 0.45.1), inheriting the externally merged paid-parts
+and navigation releases from main. The diff contains physics
 and its release support only. Released changelog sections and released template
 history are preserved from main.
 
-This version reserves the slot after #75; #70 has already merged externally. After #75 merges, rebase on main
-and run `node scripts/renumber-release.mjs` to choose the next studio/plugin patch.
+Both #70 and #75 have merged externally. This version is the next patch after #75.
+If main advances again, rebase on main and run `node scripts/renumber-release.mjs` to choose the next studio/plugin patch.
 Explicit slots are supported: `node scripts/renumber-release.mjs 0.45.2 0.45.2`.
 The command updates packages/studio/package.json, packages/studio/worker/version.mjs,
 .claude-plugin/marketplace.json, plugins/homie/plugin.json and its .claude-plugin,
@@ -45,3 +45,10 @@ package README remain historical measurements, not newly rerun claims.
 Nothing is deployed or merged.
 
 Current gate and CI results are recorded in [PR #76](https://github.com/homie-rocks/homie/pull/76).
+
+All eight requested local gates passed on main 0.45.1. The full Chrome-enabled suite
+passed 4,152 tests with 10 environment/opt-in skips and zero failures (4,252.0 seconds).
+Plugin tests passed 123 with one optional skip. The publish plan contains only
+studio 0.45.2, with 22 existing packages and both private workspaces excluded.
+The rolling-upgrade fixture prepares archived workspace sources before building;
+its 0.45.1, 0.33.0 and 0.32.1 baselines pass.
