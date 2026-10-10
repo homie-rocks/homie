@@ -44,11 +44,11 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
       writeFileSync(join(dir, 'map/main.json'), JSON.stringify(runaway==='terrain'?terrainMap:{bounds:{min:[-20,-20,0],max:[20,20,20]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,
-shapes:{commands:{shoot:{},edit:{mode:f.u8()},place:{at:f.vec3()}},events:{edit:{mode:f.u8()}}},
+shapes:{commands:{shoot:{direction:f.i8()},edit:{mode:f.u8()},place:{at:f.vec3()}},events:{edit:{mode:f.u8()}}},
 entities:{runner:{player:true,fields:{ray:f.fix({init:-1})},input:{ax:f.i8(),ay:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit()},motion:{support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26},
-commands:{shoot(w,s){const hit=w.ray({x:s.pos.x,y:s.pos.y,z:s.pos.z+1},{x:1,y:0,z:0},8);s.ray=hit?hit.dist:-1;},place(w,s,e){w.place(s,e.at);},edit(w,s,e){for(const c of w.near(s.pos,64,'cover'))w.send(c.id,'edit',e);if(e.mode===4)w.spawn('cover',{x:0,y:0,z:0});}}},
+commands:{shoot(w,s,e){const hit=w.ray({x:s.pos.x,y:s.pos.y,z:s.pos.z+1},{x:e.direction,y:0,z:0},8);s.ray=hit?hit.dist:-1;},place(w,s,e){w.place(s,e.at);},edit(w,s,e){for(const c of w.near(s.pos,64,'cover'))w.send(c.id,'edit',e);if(e.mode===4)w.spawn('cover',{x:0,y:0,z:0});}}},
 cover:{fields:{solid:f.bit({init:true}),size:f.vec3({init:{x:1,y:4,z:2.6}})},body:{shape:'${dims===3?'box':'circle'}',radius:.5,height:2.6,maxSpeed:0},collider:{size:'size',enabled:'solid'},
-on:{edit(w,s,e){if(e.mode===0)s.solid=false;if(e.mode===1)s.solid=true;if(e.mode===2)s.size={x:2,y:4,z:2.6};if(e.mode===3)w.despawn(s);if(e.mode===5)w.place(s,{x:0,y:0,z:1});}}}},
+on:{edit(w,s,e){if(e.mode===0)s.solid=false;if(e.mode===1)s.solid=true;if(e.mode===2)s.size={x:2,y:4,z:2.6};if(e.mode===3)w.despawn(s);if(e.mode===5)w.place(s,{x:0,y:0,z:1});if(e.mode===6)w.place(s,{x:32,y:0,z:0});}}}},
 room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat,z:0}};},start(w){w.spawn('cover',{x:0,y:0,z:0});}},map:'./map'});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){
 const support=c.world.support(b,20);b.motion.support=support?support.dist:20;b.motion.blocked=c.world.overlaps(b);
@@ -1612,14 +1612,16 @@ for (const dims of [2,3]) for (const delayed of [false,true]) test(`live cover $
 for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, traversal, combat rays, live cover, rejoin and restore${delayed?' at 300 ms + 12% loss':''}`,async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'terrain',{},.5);
  const clock=virtualTime(t),shaper=predictionShaper({delay:delayed?300:0,loss:delayed?.12:0,seed:743});
+ let inputSeed=743;const inputRandom=()=>{inputSeed=(Math.imul(inputSeed,1664525)+1013904223)>>>0;return inputSeed/4294967296;};
  const r=rig(L,compiled,false,shaper,shaper);
  const open=name=>openRoom({net:{config:cfg(name),WebSocketImpl:r.socket(),post:null}});
  let a=open('Runner');const others=Array.from({length:5},(_,i)=>open('Neighbour'+i));
  t.after(()=>{a.close();for(const b of others)b.close();r.stop();});await clock.wait(2500);
  const place=async(at)=>{a.input({ax:0,ay:0});await clock.wait(700);a.command('place',{at});await clock.wait(1100);};
- await place({x:-4,y:7,z:0});a.command('shoot',{});await clock.wait(1100);assert.ok(Math.abs(a.me.ray-1.5)<.002,`weapon/camera/blast ray hits solid side: ${a.me.ray}, pose ${JSON.stringify(a.me.pos)}, ${JSON.stringify(r.host.core.stats)}`);
- for(const sign of [-1,1]){await place({x:sign*4,y:7,z:0});a.input({ax:-sign,dash:true});
- for(let i=0;i<80;i++){await clock.wait(16);assert.ok(sign*a.me.pos.x>=2.899,`predicted side: ${a.me.pos.x}`);}a.input({ax:0});}
+ await place({x:-4,y:7,z:0});a.command('shoot',{direction:1});await clock.wait(1100);assert.ok(Math.abs(a.me.ray-1.5)<.002,`weapon/camera/blast ray hits solid side: ${a.me.ray}, pose ${JSON.stringify(a.me.pos)}, ${JSON.stringify(r.host.core.stats)}`);
+ for(const sign of [-1,1]){await place({x:sign*4,y:7,z:0});a.command('shoot',{direction:-sign});await clock.wait(1100);assert.ok(Math.abs(a.me.ray-1.5)<.002,'ray from either side');a.input({ax:-sign,dash:true});
+ for(let i=0;i<80;i++){if(i%3===0)a.input({ax:inputRandom()<.1?0:-sign,dash:true});await clock.wait(16);assert.ok(sign*a.me.pos.x>=2.899,`predicted side: ${a.me.pos.x}`);}a.input({ax:0});}
+ await place({x:30,y:0,z:0});a.command('edit',{mode:6});await clock.wait(1100);a.input({ax:4});await clock.wait(1000);assert.ok(Math.abs(a.me.pos.x-31.099)<.003,'live cover in the full terrain');a.input({ax:0});a.command('edit',{mode:0});await clock.wait(1100);a.input({ax:4});await clock.wait(800);assert.ok(a.me.pos.x>32.5,'disabled cover permits traversal');a.input({ax:0});a.command('edit',{mode:1});await clock.wait(1100);
  await place({x:0,y:18,z:0});a.input({ay:-4});await clock.wait(1500);assert.ok(a.me.pos.z>1,'walk up ramp');
  a.input({ay:4});await clock.wait(1500);assert.ok(a.me.pos.z<.2,'walk down ramp');
  await place({x:-3.2,y:14,z:0});a.input({ax:3,jump:true});await clock.wait(550);a.input({ax:0});await clock.wait(1200);assert.ok(a.me.pos.z>.4,'jump onto ramp');
@@ -1632,6 +1634,8 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  t.after(()=>{fresh.close();revived.stop();});await clock.wait(2200);
  fresh.command('place',{at:{x:-4,y:7,z:0}});await clock.wait(1100);fresh.input({ax:1,dash:true});
  for(let i=0;i<90;i++){await clock.wait(16);assert.ok(fresh.me.pos.x<=-2.899,`restored solid terrain: ${fresh.me.pos.x}`);}
+ fresh.input({ax:0});await clock.wait(1000);fresh.command('place',{at:{x:-4,y:8,z:0}});await clock.wait(1100);fresh.command('shoot',{direction:1});await clock.wait(1100);assert.ok(Math.abs(fresh.me.ray-1.5)<.002,`restored combat ray: ${fresh.me.ray}, ${JSON.stringify(fresh.me.pos)}, ${JSON.stringify(revived.host.core.stats)}`);
+ fresh.command('place',{at:{x:0,y:18,z:0}});await clock.wait(1100);fresh.input({ay:-4});await clock.wait(1500);assert.ok(fresh.me.pos.z>1,'restored ascent');fresh.input({ay:4});await clock.wait(1500);assert.ok(fresh.me.pos.z<.2,'restored descent');
  assert.equal(revived.host.core.stats.errors,0,revived.host.core.stats.lastError);
  console.log('Stormbreak 4058 shapes, six clients, max tick units:',r.host.core.stats.maxTickUnits);
 });
