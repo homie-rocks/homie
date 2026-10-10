@@ -61,7 +61,7 @@ import { toolIdentity } from './tool-identity.mjs';
  * links to the studio's own Stripe, a CSV, the referral books and signed statements). A refund is the owner's one tap;
  * from an office key it is ALWAYS an ask (the AI may only propose one), and so is marking a referrer paid.
  */
-import { SEAT_MAX, seatsOf } from './seats.mjs';
+import { seatsOf } from './seats.mjs';
 import { PUBLIC_SERVER, SERVER_LIMITS, checkServer, levelName, narrows, policyOf, roomServer, rowFor, serverView, serversOf, serverPassCookie, writeServer } from './servers.mjs';
 import { BRAIN_BUDGET, aiName, brainFor, fillSpot, passById, passCreate, passList, passRevoke, think } from './agents.mjs';
 import { DEFAULT_MODEL, NEURONS_PER_M, OWNER_MODEL, vocabularyOf } from './brain.mjs';
@@ -670,7 +670,7 @@ function checkAction(cat, op, body) {
       if (!meta) return bad('game is one of this studio\'s game ids');
       if (!room) return bad('room is the room\'s code (pub-3, or a named room)');
       const id = typeof body.id === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(body.id) ? body.id : null;
-      const seat = Number.isInteger(body.seat) && body.seat >= 0 && body.seat < SEAT_MAX ? body.seat : null;
+      const seat = Number.isInteger(body.seat) && body.seat >= 0 && Number.isSafeInteger(body.seat) ? body.seat : null;
       // From a chat line (0.23.0): its sender, whoever they are now (a watcher too); `purge` takes their lines down.
       const line = typeof body.line === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(body.line) ? body.line : null;
       if (id === null && seat === null && line === null) return bad('name the player: id (from the office), seat, or line (a chat message of theirs)');

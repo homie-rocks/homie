@@ -62,7 +62,7 @@ import { PACKAGE_ROOT, isRulesGame, listExperiences as listGames, readStudio } f
 // module is: Homie for Claude Desktop starts the toolkit with no node_modules beside it (scripts/desktop.mjs).
 let rulesBuildModule = null;
 const rulesBuild = () => (rulesBuildModule ??= import('./rules-build.mjs'));
-import { SEAT_MAX, netplayRow } from '../worker/seats.mjs';
+import { seatCount, netplayRow } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { basedOnRow, licenseOf, retiredKeys } from '../worker/license.mjs';
 import { openStage, swapIn } from './stage.mjs';
@@ -267,14 +267,11 @@ export function netplayOf(g, out = null) {
 
 /**
  * How many seats a room of this game has: the netplay manifest's `maxPlayers` (or `players.max`), else game.json's
- * `players.max`, else 8; at most SEAT_MAX (32). `asked` is what the game named, so a build can say it was capped.
+ * `players.max`, else 8. The studio chooses the room size; there is no admission ceiling.
  */
-export function seatsFor(g, net = netplayOf(g)) {
-  const named = [net.maxPlayers, net.players?.max, g.players?.max].map((n) => Math.floor(Number(n))).find((n) => Number.isFinite(n) && n >= 1);
-  const asked = named ?? (g.kind === 'app' ? 32 : 8);
-  const max = Math.min(SEAT_MAX, asked);
-  const minNamed = [net.minPlayers, net.players?.min, g.players?.min].map((n) => Math.floor(Number(n))).find((n) => Number.isFinite(n) && n >= 1);
-  return { min: Math.min(max, minNamed ?? 1), max, asked };
+export function seatsFor(g) {
+  const max = seatCount(g.players?.max, g.kind === 'app' ? 32 : 8);
+  return { min: Math.min(max, seatCount(g.players?.min, 1)), max, asked: max };
 }
 
 /**
@@ -561,7 +558,6 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     const bytes = bundle ? statSync(join(out, bundle)).size : dirBytes(out);
     const later = chunks.reduce((n, c) => n + statSync(join(out, c)).size, 0);
     const seats = seatsFor(g, netplayOf(g, out));
-    if (seats.asked > SEAT_MAX) log(`warning: games/${g.id} asks for ${seats.asked} players; a room holds at most ${SEAT_MAX}, so its rooms have ${SEAT_MAX} seats`);
     built.push({
       id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max,
       ...(rules ? { capacityTrial: rules.check.capacityTrial } : {}),

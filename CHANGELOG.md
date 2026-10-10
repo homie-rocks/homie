@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.45.0] - 2026-10-10
+
+**Plugin 0.45.0**
+
+Choose room sizes in the hundreds and reduce the state each phone downloads.
+
+### Added
+
+- Gate connections and batched concentrator links, with seat resumption after a link restart.
+- Studio-selected `room.view.precisionM`, `nearM` and `farHz` for distant bodies. The controlled body keeps its exact movement state.
+
+### Changed
+
+- Public room admission, rules compilation and deploy planning use the studio's requested `players.max` without the 32-player clamp.
+- Ordered snapshot deltas and a shared spatial index reduce repeated state work. Shared carrier addresses have no automatic guest ceiling.
+
+### Upgrade notes
+
+- Rebuild the studio Worker to include the Gate and Concentrator bindings and SQLite migrations. The build generates these settings.
+
 ## [0.44.3] - 2026-10-10
 
 **Plugin 0.44.3**

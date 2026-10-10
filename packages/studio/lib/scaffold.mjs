@@ -71,7 +71,7 @@ export function slugify(name) {
 export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/runtime/worker.js', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/runtime/worker.js', dist: './site/dist', migrations: 'site/migrations' };
-  const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
+  const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }, { name: 'GATE', class_name: 'Gate' }, { name: 'CONCENTRATOR', class_name: 'Concentrator' }];
   const config = {
     $schema: `${at.schema}/wrangler/config-schema.json`,
     name: worker,
@@ -94,7 +94,7 @@ export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layou
     ...(triggers ? { triggers: paidParts ? { ...triggers, crons: [...new Set([...(triggers.crons ?? []), '*/5 * * * *'])] } : triggers } : {}),
     assets: { directory: at.dist, binding: 'ASSETS', run_worker_first: true },
     durable_objects: { bindings: rooms },
-    migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }],
+    migrations: [{ tag: 'v1', new_sqlite_classes: ['Table', 'Lobby'] }, { tag: 'v2-gates', new_sqlite_classes: ['Gate', 'Concentrator'] }],
     d1_databases: [{ binding: 'DB', database_name: d1, ...(d1Id ? { database_id: d1Id } : {}), migrations_dir: at.migrations }],
     ...(r2 ? { r2_buckets: [{ binding: 'MEDIA', bucket_name: r2 }, ...(paidParts ? [{ binding: 'PURCHASE_MEDIA', bucket_name: `${r2.slice(0, 52)}-purchases` }] : [])] } : {}),
     // Workers AI, only when a server's AI guides think with it (agents_brain workers-ai; deploy adds it, 0.17.0).
@@ -783,7 +783,7 @@ import rules from './rules/index.mjs';
 
 hostRules(rules);
 useTools(async () => (await import('./tools/index.mjs')).default);
-export { default, Table, Lobby } from '@homie-rocks/studio/worker';
+export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/worker';
 `,
     'site/src/rules/index.mjs': rulesIndex([]),
     'site/migrations/0001_studio.sql': MIGRATION,

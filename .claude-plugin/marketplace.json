@@ -11,7 +11,7 @@
       "name": "homie",
       "source": "./plugins/homie",
       "description": "Build games and apps with Homie’s engine packages, animated characters, sound, music and video skills. Play from a post on X. Publish on your own Cloudflare and connect your own Stripe with one approval. Open source.",
-      "version": "0.44.3",
+      "version": "0.45.0",
       "author": {
         "name": "Homie",
         "url": "https://homie.rocks"

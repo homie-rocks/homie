@@ -173,3 +173,104 @@ Only slice 1 is implemented and proposed for release in this worktree.
    300-bot, 30-minute Cloudflare exit test, Gate recovery latency, physical phone
    rendering and actual billing need a separately authorized deployment/device
    session. No local receipt here is represented as those results.
+
+## Slice 2 implementation work (0.45.0, local worktree)
+
+This section is an implementation record, **not a completed release receipt**.
+The old authoring/build/port path has not yet been retired. That remains a
+release blocker for the requested coherent slice; it must not be deferred to
+slice 3 while calling slice 2 finished.
+
+Implemented so far:
+
+- `players.max` is the single build size, read by public admission, compilation
+  and deploy planning without the 32-seat clamp. Shared carrier addresses have
+  no automatic player ceiling.
+- Gate and Concentrator classes carry ordered, batched logical connections over
+  binding-only links. Public authentication remains in the Worker. Small rooms
+  embed the delivery role in the Table; larger layouts use one logical Gate per
+  64 seats and concentrators above eight Gates. These are routing partitions,
+  not admission limits. The template generates both bindings and migrations.
+- Link loss closes downstream sockets for normal token-based seat resumption.
+  Gates do not persist simulation or become a second authority. Gate passes are
+  internal binding requests, not independently client-supplied authorizations.
+- Ordered snapshot deltas, shared spatial indexing and cached wire rows reduce
+  repeated work. Optional `precisionM`, `nearM`, and `farHz` schedule remote
+  visual state; controlled bodies remain exact. Snapshot exits remain immediate.
+- Revision 12 carries roster patches after a full welcome roster. A reconnect
+  storm previously repeated full rosters to every player. The patch baseline is
+  the last transmitted roster, separately from policy relabelling.
+
+A candidate 300-player manifest (the game still needs appropriate arena,
+spawning, rule cost and rendering):
+
+```json
+{
+  "players": { "min": 1, "max": 300 },
+  "room": {
+    "host": "server",
+    "view": { "radiusM": 12, "precisionM": 0.01, "nearM": 4, "farHz": 5 }
+  }
+}
+```
+
+The visual settings are examples, not imposed defaults or information privacy.
+The workload explicitly chooses a 5,000,000-unit tick budget as in slice 1.
+
+### Local measurements during implementation
+
+All results below are **local**, not Cloudflare, billing, Internet latency or
+physical-phone results. Bytes exclude WebSocket/TLS framing. Heap/RSS include
+clients and the test harness in the same Node process. Other work on this
+machine affects CPU timing; bytes are deterministic for the virtual workload.
+
+| Workload | Players | Mean bytes/player/s | Tick p50 / p95 ms | Peak heap / RSS bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Unmodified 0.44.0, 1,200 virtual ticks | 300 | 23,171 | 12.23 / 16.72 | 134,431,008 / 238,534,656 |
+| Scheduled/delta delivery, 1,200 virtual ticks | 300 | 9,184 | 15.98 / 26.84 | 118,783,424 / 225,673,216 |
+| Scheduled/delta delivery, 120 virtual ticks | 1,000 | 9,495 | 29.42 / 45.07 | 179,875,320 / 316,293,120 |
+| Gate links, 4 Chrome pages, reconnect churn and host restore, before roster patches | 300 | 88,444 | 15.79 / 73.47 | 142,211,400 / 375,734,272 |
+| Same mixed transport workload, with roster patches | 300 | 13,623 | 13.52 / 25.33 | 154,397,384 / 274,808,832 |
+
+Steady-state downstream falls about **60%** at 300. The mixed transport result
+includes recovery traffic and is not directly comparable to the steady-state
+number. These two preliminary mixed runs did not declare game rounds; the
+harness now declares a ten-minute round and checks that both failures preserve
+it. Final mid-round receipts are still required.
+
+The first 1,000-client mixed run failed seat continuity while joining under
+heavy concurrent local load. No passing 1,000-client mixed receipt is claimed.
+The harness now starts input/heartbeat processing before admitting the swarm
+and yields between arrival batches; this correction needs a successful rerun.
+
+The mixed harness uses the real Gate/Concentrator classes, the rules loader,
+host and NetRoom, external local WebSockets and Chrome, with in-memory links
+standing in for Durable Object binding links. It does **not** yet prove the
+actual Worker public join route or workerd eviction. Those are release blockers,
+not equivalent measurements. It also needs a 20-Gate recovery case.
+
+Commands:
+
+```sh
+node packages/studio/test/rules-crowd-local.mjs 300 15
+node packages/studio/test/rules-crowd-local.mjs 1000 15
+node --test packages/studio/test/rules-gates.test.mjs packages/studio/test/rules-interest.test.mjs
+```
+
+The sustained, real-time 300/1,000 mixed runs live in `test:rules:extended`.
+Virtual-time tests cover batching/order, 1,000 logical admissions, link cleanup,
+spatial boundaries, quantisation, far scheduling and keyframe recovery.
+
+Initial root `npm test`: 2,340 passed, 19 failed, 13 skipped. Failures identified
+so far were generated template drift, new Worker exports, a round-stat regression,
+and test environments missing the new Gate binding for small rooms. Template,
+exports and statistics are corrected; the small-room path now embeds the Gate
+role as intended. Follow-up roster tests caught policy relabelling changing the
+patch baseline; the separate transmitted baseline fixes that and both affected
+real-view tests pass. A final clean root run and six green CI checks remain.
+
+Remaining requested slice-2 work: retire the old netplay authoring/build/port
+path and migrate its fixtures/docs, finish real public-route/workerd recovery
+proofs, obtain both declared-round mixed receipts, and complete release gates.
+Slices 3–6 above remain after those requirements, with the visual scheduling
+and roster bandwidth work now brought forward into this slice.

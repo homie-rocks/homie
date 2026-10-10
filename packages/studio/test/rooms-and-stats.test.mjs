@@ -24,7 +24,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { NetRoom } from '../worker/room.mjs';
-import { SEAT_MAX, perAddress, seatsOf } from '../worker/seats.mjs';
+import { seatCount, perAddress, seatsOf } from '../worker/seats.mjs';
 import { STATS_MIGRATION, STATS_MIGRATION_FILE, isVisit, kindOf, sourceOf } from '../worker/stats.mjs';
 import { ensureStatsMigration, studioFiles } from '../lib/scaffold.mjs';
 import { virtualTime } from './virtual-time.mjs';
@@ -74,11 +74,11 @@ function assetsOf(dir) {
   };
 }
 
-test('seats: the netplay manifest sets a game\'s room size, up to 32; build says when a game asks for more', () => {
+test('seats: players.max is the single room-size setting, without a public cap', () => {
   const dir = studio('seats');
   for (const [id, meta, file] of [
-    ['courier', { players: { min: 2, max: 8 } }, { v: 1, players: { max: 32 } }],
-    ['crowd', { netplay: { v: 1, public: true, maxPlayers: 40, movement: 'host' } }, null],
+    ['courier', { players: { min: 2, max: 32 } }, { v: 1, players: { max: 32 } }],
+    ['crowd', { players: { min: 1, max: 300 }, netplay: { v: 1, public: true, maxPlayers: 40, movement: 'host' } }, null],
     ['duel', { players: { min: 2, max: 2 } }, null],
     ['plain', {}, null],
   ]) {
@@ -92,14 +92,14 @@ test('seats: the netplay manifest sets a game\'s room size, up to 32; build says
   }
   const b = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
   assert.equal(b.status, 0, b.stderr);
-  assert.match(b.stderr, /games\/crowd asks for 40 players; a room holds at most 32/);
+  assert.doesNotMatch(b.stderr, /a room holds at most/);
   const cat = JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games.json'), 'utf8'));
   const seats = Object.fromEntries(cat.games.map((g) => [g.id, g.players]));
-  assert.deepEqual(seats, { courier: { min: 2, max: 32 }, crowd: { min: 1, max: 32 }, duel: { min: 2, max: 2 }, plain: { min: 1, max: 8 } });
+  assert.deepEqual(seats, { courier: { min: 2, max: 32 }, crowd: { min: 1, max: 300 }, duel: { min: 2, max: 2 }, plain: { min: 1, max: 8 } });
   assert.equal(cat.games.find((g) => g.id === 'crowd').movement, 'host');
-  assert.equal(SEAT_MAX, 32);
-  assert.deepEqual([seatsOf({ players: { max: 32 } }), seatsOf({ players: { max: 99 } }), seatsOf({}), seatsOf({ players: { max: 0 } })], [32, 32, 8, 8]);
-  assert.deepEqual([perAddress(8), perAddress(16), perAddress(32)], [12, 20, 36]);
+  assert.equal(seatCount(1000), 1000);
+  assert.deepEqual([seatsOf({ players: { max: 32 } }), seatsOf({ players: { max: 99 } }), seatsOf({}), seatsOf({ players: { max: 0 } })], [32, 99, 8, 8]);
+  assert.deepEqual([perAddress(8), perAddress(16), perAddress(32)], [0, 0, 0]);
 });
 
 test('the relay at 32: one address fills every seat (a party on one Wi-Fi), the 33rd waits, and a leaver\'s seat goes to it', () => {

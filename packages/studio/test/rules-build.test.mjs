@@ -44,7 +44,7 @@ function studio(name) {
 
 test('a new studio\'s Worker imports the table of its server-hosted games, and its config turns off evaluation at startup', () => {
   const dir = studio('fresh');
-  assert.ok(read(dir, 'site/src/worker.mjs').includes("hostRules(rules);\nuseTools(async () => (await import('./tools/index.mjs')).default);\nexport { default, Table, Lobby } from '@homie-rocks/studio/worker';"));
+  assert.ok(read(dir, 'site/src/worker.mjs').includes("hostRules(rules);\nuseTools(async () => (await import('./tools/index.mjs')).default);\nexport { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/worker';"));
   assert.match(read(dir, 'site/src/rules/index.mjs'), /export default \{\};\n$/);
   assert.match(read(dir, 'wrangler.jsonc'), /"compatibility_flags": \[\s*"nodejs_compat",\s*"global_fetch_strictly_public",\s*"disallow_eval_during_startup"\s*\]/);
   // coin-dash is an example, shown as one, and can be copied by its name.
@@ -121,7 +121,7 @@ test('coin-dash builds as a view bundle and a rules module; the legacy Ember Val
   const row = cat.games.find((g) => g.id === 'coin-dash');
   assert.deepEqual(row.room, { host: 'server', offline: true, tickHz: 20, inputHz: 20, contract: 2, build: data.build, stateHash: data.stateHash, rounds: { seconds: 60, breakSeconds: 8 } });
   assert.equal(row.roundSeconds, 60, 'the round is the rules\' own');
-  assert.equal(row.netplayRev, 11);
+  assert.equal(row.netplayRev, 12);
   const view = read(dir, `site/dist/games/coin-dash/${row.built.bundle}`);
   assert.doesNotMatch(view, /"take"|roundStart\(|world\.spawn|\.despawn\(/, 'no handler of the rules is in the view');
   const manifest = JSON.parse(read(dir, 'site/dist/games/coin-dash/rules.json'));
@@ -144,9 +144,9 @@ test('coin-dash builds as a view bundle and a rules module; the legacy Ember Val
   assert.equal(gems.room, undefined);
   assert.equal(gems.movement, 'owner');
   assert.equal(gems.roundSeconds, 90);
-  assert.equal(gems.netplayRev, 11);
+  assert.equal(gems.netplayRev, 12);
   assert.ok(existsSync(join(dir, 'site/dist/games/gems', gems.built.bundle)));
-  assert.match(read(dir, `site/dist/games/gems/${gems.built.bundle}`), /homie-netplay-rev:11/);
+  assert.match(read(dir, `site/dist/games/gems/${gems.built.bundle}`), /homie-netplay-rev:12/);
 
   // A one-game build of the other game keeps coin-dash's rules and its row.
   assert.equal(spawnSync(process.execPath, [CLI, 'build', 'gems'], { cwd: dir, encoding: 'utf8' }).status, 0);

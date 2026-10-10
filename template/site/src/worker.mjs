@@ -6,4 +6,4 @@ import rules from './rules/index.mjs';
 
 hostRules(rules);
 useTools(async () => (await import('./tools/index.mjs')).default);
-export { default, Table, Lobby } from '@homie-rocks/studio/worker';
+export { default, Table, Lobby, Gate, Concentrator } from '@homie-rocks/studio/worker';

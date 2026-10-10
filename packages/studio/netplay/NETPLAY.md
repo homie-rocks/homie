@@ -255,7 +255,7 @@ code.
 - **Room size.** `maxPlayers` comes from the game's netplay manifest: game.json's
   `netplay.maxPlayers`, or a `netplay.json` beside game.json or in the game's build
   (`maxPlayers` or `players.max`), else game.json's `players.max`, else 8. **A room holds
-  at most 32** (`SEAT_MAX`). `homie-studio build` writes the number into the catalogue and
+  chosen by the studio** (`players.max`). `homie-studio build` writes the number into the catalogue and
   the site's Table takes it from there; the first visitor of an empty room may lower it
   (`hello.max`), never raise it.
 - **A dropped seat is held 60 s** for its token, which covers a reload or a network blip.

@@ -88,9 +88,9 @@
 
 export const NETPLAY_VERSION = 1;
 /** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
-export const NETPLAY_REVISION = 11;
+export const NETPLAY_REVISION = 12;
 /** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
-export const NETPLAY_MARK = 'homie-netplay-rev:11';
+export const NETPLAY_MARK = 'homie-netplay-rev:12';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -2437,7 +2437,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'roster': {
-        slots = (m['slots'] as Slot[]) ?? null;
+        if (m['patch'] === true) {
+          const next = new Map((slots ?? []).map(row => [row.slot, row]));
+          for (const slot of (m['removed'] as number[] ?? [])) next.delete(slot);
+          for (const row of (m['slots'] as Slot[] ?? [])) next.set(row.slot, row);
+          slots = [...next.values()].sort((a, b) => a.slot - b.slot);
+        } else slots = (m['slots'] as Slot[]) ?? null;
         post?.({ what: 'roster', slots });
         if (slots) emit('roster', slots);
         return;

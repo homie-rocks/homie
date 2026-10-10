@@ -104,7 +104,9 @@ import { forgetLines, historyOf, keepLines, keptLine } from './lounge-store.mjs'
 import { isLoungePath, loungeRoutes } from './lounge.mjs';
 import { doorPage, serverPage, serversPage } from './site.mjs';
 import { isLocalOrigin, qrSvg } from './qr.mjs';
-import { SEAT_MAX, paramsFrom, perAddress, seatsOf } from './seats.mjs';
+import { acceptMultiplex, gateFor } from './gate.mjs';
+export { Gate, Concentrator } from './gate.mjs';
+import { seatCount, paramsFrom, perAddress, seatsOf } from './seats.mjs';
 import {
   SITE_JS, atomFeed, creditsPage, customPage, gameCover, gameLanding, gamesPage, homeLd, homePage, jsonFeed, landingLd, mediaArt, mediaIndexPage,
   notFoundPage, postPage, postsPage, roomView, roomsPage, sectionsOf, songPage, videoPage, watchOf,
@@ -129,7 +131,7 @@ import { licenseOf } from './license.mjs';
 // GAME PARTS (parts/PARTS.md section 4): three call-outs below, everything else is worker/parts.mjs.
 import { PART_FILES, isPartsPath, partsRoutes, withPartsBand } from './parts.mjs';
 
-export { SEAT_MAX } from './seats.mjs';
+export { seatCount } from './seats.mjs';
 // Server-hosted games (NETPLAY.md section 29): the studio's site/src/worker.mjs hands the build's rules over with this.
 export { hostRules } from './hosted.mjs';
 /** For a studio whose Worker has player accounts: hand their server API to the back office once (worker/office.mjs). */
@@ -480,7 +482,7 @@ async function gameDocument(request, env, url, game, meta, cat, { agent = null }
   const policy = watchOf(meta);
   const watching = !agent && url.searchParams.get('watch') === '1';
   if (watching && policy === 'off') return new Response(`${meta?.name ?? game} cannot be watched; play it instead.\n`, { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
-  const follow = /^(?:auto|overview|\d{1,2})$/.test(url.searchParams.get('follow') ?? '') ? url.searchParams.get('follow') : 'auto';
+  const follow = /^(?:auto|overview|\d+)$/.test(url.searchParams.get('follow') ?? '') ? url.searchParams.get('follow') : 'auto';
   const want = !agent && (watching || url.searchParams.get('want') === 'screen') ? 'screen' : 'play';
   const device = ['phone', 'desk', 'tv'].includes(url.searchParams.get('device')) ? url.searchParams.get('device') : undefined;
   const wsBase = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
@@ -1184,7 +1186,7 @@ async function route(request, env, ctx) {
       // one; none on a kids server, none for an AI or a watcher.
       const pid = !ag && !w && sub === '__net' ? parts.find((x) => x.startsWith('p-'))?.slice(2) : null;
       const badge = pid ? await roomBadge(env, cat, pid, { kids: pol.kids }) : null;
-      const stub = env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
+      const stub = sub === '__net' ? gateFor(env, game, room, max, b) : env.TABLE.get(env.TABLE.idFromName(`${game}/${room}`));
       // Revision 9 (NETPLAY.md sections 22 and 23): the build that is live now (`cur`, always said, empty when the game
       // names none), the build this socket's page was served with (`gv`, from the socket's own address), and the game's
       // own stall time.
@@ -1934,10 +1936,17 @@ export class Table {
   }
 
   async fetch(request) {
+    if (new URL(request.url).pathname === '/__multiplex') {
+      return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
+    }
+    return this.connect(request);
+  }
+
+  async connect(request, transport = null) {
     const url = new URL(request.url);
     const game = url.searchParams.get('game');
     const code = url.searchParams.get('room');
-    const max = Math.max(1, Math.min(SEAT_MAX, Math.floor(Number(url.searchParams.get('max'))) || 8));
+    const max = seatCount(url.searchParams.get('max'));
     if (url.pathname === '/__restart') {
       if (this.env.HOMIE_PREVIEW !== '1' || request.method !== 'POST') return new Response('not found', { status: 404 });
       // No last-chance save: this measures exactly what a real abrupt restart can lose.
@@ -2006,7 +2015,7 @@ export class Table {
     const agent = decodeFacts(url.searchParams.get('ag'));
     // Kept chat (0.29.0): the room's history is back in its window before this page hears it.
     await this.hydrateHistory(room);
-    const [client, server] = Object.values(new WebSocketPair());
+    const [client, server] = transport ? [null, transport] : Object.values(new WebSocketPair());
     server.accept();
     const via = url.searchParams.get('via');
     const conn = {
@@ -2043,7 +2052,7 @@ export class Table {
       // Watching shells are cheap (outgoing is free) but not free: a room holds at most 256, and 24 from one address
       // (room chat, 0.23.0: another site's page can open one too).
       const same = conn.ip ? [...room.watchers].filter((x) => x.ip === conn.ip).length : 0;
-      if (room.watchers.size >= 256 || same >= 24) { try { server.close(1013, 'too many watching'); } catch { /* gone */ } return new Response(null, { status: 101, webSocket: client }); }
+      if (room.watchers.size >= 256 || same >= 24) { try { server.close(1013, 'too many watching'); } catch { /* gone */ } return transport ? null : new Response(null, { status: 101, webSocket: client }); }
       const w = room.watch(conn);
       // The play page's vote card speaks on this socket (section 17); nothing else it says is read.
       server.addEventListener('message', (e) => {
@@ -2088,7 +2097,7 @@ export class Table {
       });
     }
     this.start();
-    return new Response(null, { status: 101, webSocket: client });
+    return transport ? null : new Response(null, { status: 101, webSocket: client });
   }
 
   start() {
@@ -2173,7 +2182,7 @@ export class Table {
     if (!r || r.phase !== 'over' || !Number.isFinite(r.n) || r.n <= this.recorded || !this.env.DB) return;
     this.recorded = r.n;
     this.ctx.storage.put('recorded', r.n).catch(() => {});
-    const results = Array.isArray(r.results) ? r.results.slice(0, SEAT_MAX * 2) : [];
+    const results = Array.isArray(r.results) ? r.results : [];
     // An AI's row is never a person's (the relay labelled it `agent`): rounds count agents as AI.
     const humans = results.filter((row) => row && !row.bot && !row.agent).length;
     // A round played only by house QA (every seated socket is marked) is kept in `rounds`, not in the stats.
@@ -2273,7 +2282,7 @@ export class Lobby {
     // the build of a game that names none ('').
     const ver = versionOf(url.searchParams.get('ver')) ?? '';
     if (url.pathname === '/join') {
-      const max = Math.max(1, Math.min(SEAT_MAX, Math.floor(Number(url.searchParams.get('max'))) || 8));
+      const max = seatCount(url.searchParams.get('max'));
       const sid = url.searchParams.get('server') ?? 'public';
       const server = sid === 'public' || SERVER_ID.test(sid) ? sid : 'public';
       const roomsMax = Math.max(1, Math.min(16, Math.floor(Number(url.searchParams.get('rooms'))) || 16));

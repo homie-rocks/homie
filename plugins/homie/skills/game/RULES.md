@@ -69,7 +69,7 @@ Rules use `world.map.spot(name)` / `spots(name)`; the view uses `room.map.spots[
 With `space: { dims: 3 }`, z is up and pos is the body's feet. Three.js renders
 `(x,z,y)`. Gravity, jumping and facing belong in move, animation in the view.
 Use continuous sweeps, then slide the remainder along the contact tangent.
-`world.sweep` includes entity bodies. Movement sees the map plus declared live colliders through `ctx.world` (also exposed on `ctx.map`).
+`world.sweep` includes entity bodies; prediction's `ctx.map.sweep` only sees static map.
 
 | Map list (at most 100,000 shapes in all) | JSON shape |
 | --- | --- |
@@ -345,7 +345,7 @@ export const move = defineMove({
 ```
 
 Movement's `ctx` has tick, dt, ticks, math, public tune, map.name, map.spot,
-map.spots, and `world.sweep/support/overlaps` (also on map). Sweeps test static shapes plus declared live colliders, cost
+map.spots and map.sweep. `ctx.map.sweep` tests static shapes, costs
 `20 + 4S` plus copying, writes body.pos, and returns an optional hit.
 Movement may write pos, vel, heading, grounded and declared motion; never return
 an updated body. Normalize diagonals and respect maxSpeed. Collision movement needs a sweep; setting velocity alone does not move a body.
@@ -680,8 +680,7 @@ check green. Never rename rules.ts away or fall back to old-style hosting.
 `room.probe` adds truthful frame/mechanic/render counters to the built-in rules probe.
 Use the normal build, local dev and two-browser check, then play the requested mechanic
 for a minute with delay. Movement should respond before the authoritative response;
-score and other shared outcomes still arrive with the network. Milestone 1 supports
-up to 32 seats; neither frame rate nor feel is guaranteed by a passing build.
+score and other shared outcomes still arrive with the network. The studio chooses `players.max`; neither frame rate nor feel is guaranteed by a passing build.
 
 Room state is saved automatically (default movementSeconds: 1, plus round end,
 pause and finish). After 60 seconds with no person the room ends even if screens or
@@ -701,19 +700,37 @@ no entities. Watchers still receive the whole room.
 
 `room.each` visits visible entities; `enter`/`leave` mean coming into or out of
 view, not spawning or despawning. Remove departed meshes and recreate returning
-ones. Prediction and compact snapshot recovery are handled by the runtime. Live
-collision geometry bypasses visual interest filtering, so a sweep or dash can
-reach a collider beyond the view radius without predicting through it. Its entity
-may be absent from room.each while its geometry still blocks movement.
+ones. Prediction and compact snapshot recovery are handled by the runtime.
 Shared state, effects, rosters and watcher state are still public: this is not a
 hidden-information feature. Browser hosting sends the whole room.
 
-A request for hundreds of players also needs the next Gates release: 0.44.0's
-public build/join path still has the milestone 1 restriction of 32 seats. Do not
-silently clamp a requested bigger game or claim this setting raises admission.
-When Gates ship, `players.max` will choose the room's layout automatically; the
-studio will not create or find infrastructure by hand. The slice plan and local
-300-client measurements are in docs/rooms-milestone-2-notes.md in Homie's repo.
+Set the room size in `players.max`. The same setting feeds rules compilation,
+public admission and the automatic Gate layout; there is no 32-seat clamp.
+For example, in game.json:
+
+```json
+{
+  "players": { "min": 1, "max": 300 },
+  "room": {
+    "host": "server",
+    "view": { "radiusM": 12, "precisionM": 0.01, "nearM": 4, "farHz": 5 }
+  }
+}
+```
+
+These are example visual settings, not defaults. `precisionM` rounds remote
+positions and velocities in the delivered view; controlled bodies stay exact.
+Remote bodies outside `nearM` update at `farHz`; visibility exits are immediate.
+Rules, collision, saves and shared state stay authoritative and unchanged.
+Views must interpolate distant motion and dispose/recreate entities on view exit
+and entry. Omit the settings for full precision and the room's normal tick rate.
+
+A small room embeds delivery in its Table. Larger rooms open Gate connections;
+more than eight Gates use concentrators. Build generates their bindings and
+migrations. No infrastructure naming or studio admission ceiling is required.
+Read the local measurements and their limitations in
+`docs/rooms-milestone-2-notes.md` before making a capacity claim.
+
 ## Live collision geometry (0.44.1)
 
 ```ts

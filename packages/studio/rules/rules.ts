@@ -181,7 +181,7 @@ export interface RoomSettings {
   tickHz: number;
   inputHz: number;
   /** Omit the radius to send the whole room. No implicit visibility or bandwidth cap. */
-  view: { radiusM: number | null };
+  view: { radiusM: number | null; precisionM?: number; nearM?: number | null; farHz?: number | null };
   durability: { movementSeconds: number };
   budget: { tick: number };
   predict: { catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
@@ -229,13 +229,13 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
   if (host === 'browser' && r.view?.radiusM != null) problems.push('"room.view.radiusM" needs room.host "server"; browser hosting sends the whole room');
   if (r.view !== undefined) {
     if (!r.view || typeof r.view !== 'object' || Array.isArray(r.view)) problems.push('"room.view" is an object with an optional radiusM');
-    else for (const key of Object.keys(r.view)) if (key !== 'radiusM') problems.push(`"room.view.${key}" is not a setting; use radiusM`);
+    else for (const key of Object.keys(r.view)) if (!['radiusM', 'precisionM', 'nearM', 'farHz'].includes(key)) problems.push(`"room.view.${key}" is not a setting; use radiusM, precisionM, nearM or farHz`);
   }
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
   return {
     settings: {
       host, offline, tickHz, inputHz,
-      view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null) },
+      view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
       predict: { catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },

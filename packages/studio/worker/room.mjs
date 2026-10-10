@@ -1,4 +1,4 @@
-import { interestSnapshot, snapshotEncoder } from '../rules/interest.mjs';
+import { interestSnapshot, snapshotEncoder, scheduledView } from '../rules/interest.mjs';
 /*
  * room.mjs — the netplay v1 relay semantics, with no transport in it.
  * =============================================================================
@@ -58,7 +58,7 @@ import { CHAT_LIMITS, CHAT_RATES, HELD_WORDS, allows, cleanText, floor, normaliz
 
 export const NET_VERSION = 1;
 /** The contract revision this relay speaks (NETPLAY.md): optional fields, frames and refusals; the wire stays `v: 1`. */
-export const NET_REVISION = 11;
+export const NET_REVISION = 12;
 /**
  * Revision 9 (NETPLAY.md sections 22 and 23). STALL: how long a host may send no snapshot, while others are present,
  * before the room is handed on: 1.5 s unless the game names its own (game.json `netplay.stallMs`), never under
@@ -485,8 +485,9 @@ export class NetRoom {
   /** The same per-player delivery role will run in Gates. Keyframes belong to sockets, not saved seats. */
   playerSnapshot(client, snap, welcome = false) {
     if (!snap || this.server?.viewRadiusM == null) return snap;
-    const selected = interestSnapshot(snap, client.seat, this.server.viewRadiusM);
-    client.snapEncoder ??= snapshotEncoder(this.tickHz);
+    client.viewSchedule ??= scheduledView(this.server.viewSettings ?? { radiusM: this.server.viewRadiusM }, this.tickHz);
+    const selected = client.viewSchedule(snap, client.seat);
+    client.snapEncoder ??= snapshotEncoder(this.tickHz, true);
     if (welcome) client.snapEncoder.reset();
     return client.snapEncoder.encode(selected);
   }
@@ -540,9 +541,15 @@ export class NetRoom {
   hostRoster(c, m) {
     if (!Array.isArray(m.slots)) return;
     // A host cannot hide an AI: a seat an agent holds is named and marked so, a slot with no seat is a bot.
+    const previous = this.rosterSent ?? new Map();
     this.lastRoster = this.labelRoster(m.slots.slice(0, this.server ? this.seatCap : 64));
     this.persistDirty = true;
-    for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.send(o, { t: 'roster', slots: this.lastRoster });
+    const present = new Set(this.lastRoster.map(row => row.slot));
+    const changed = this.lastRoster.filter(row => previous.get(row.slot) !== JSON.stringify(row));
+    this.rosterSent = new Map(this.lastRoster.map(row => [row.slot, JSON.stringify(row)]));
+    const removed = [...previous.keys()].filter(slot => !present.has(slot));
+    const frame = this.server && previous.size ? { t: 'roster', patch: true, slots: changed, removed } : { t: 'roster', slots: this.lastRoster };
+    for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.send(o, frame);
     this.tellWatchers();
   }
 
@@ -2311,7 +2318,7 @@ export class NetRoom {
   setSeats(n, perIp = null) {
     this.seatCap = Math.max(1, Math.floor(n));
     this.maxPlayers = Math.max(1, Math.min(this.seatCap, (this.server || this.rules) ? this.seatCap : this.askedMax ?? this.seatCap));
-    if (Number.isFinite(perIp) && perIp > 0) this.perIp = perIp;
+    if (Number.isFinite(perIp) && perIp >= 0) this.perIp = perIp;
   }
 
   /** The owner's holds, the banner and a closed door: kept apart from the room's play (they outlive an empty room). */

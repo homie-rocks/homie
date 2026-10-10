@@ -147,7 +147,7 @@ test('refusals: an AI hello with no pass, any AI on a humans-only server, and a 
   r2.join({}, { caps: ['agents'] });
   const l2 = r2.agent({ hands: 'host' });
   assert.equal(l2.last('welcome').seat, 7);
-  assert.equal(room.facts().rev, 11, 'revision 11: the server as a host (section 29); a room hosted by a browser is as it was');
+  assert.equal(room.facts().rev, 12, 'revision 11: the server as a host (section 29); a room hosted by a browser is as it was');
 });
 
 test('names: a person cannot type an AI mark, a kids server uses handles, and an agent\'s name is its label', () => {
