@@ -42,7 +42,7 @@ test('map geometry rejects nonfinite radii, invalid capsule height and unbounded
   const L = await kit();
   assert.throws(() => L.R.compileMap({ ...data, spheres: [{ at: [1, 1, 1], r: Infinity }] }), /finite/);
   assert.throws(() => L.R.compileMap({ ...data, capsules: [{ at: [1, 1, 1], r: 1, height: 1 }] }), /height/);
-  assert.throws(() => L.R.compileMap({ ...data, spheres: Array(4097).fill({ at: [1, 1, 1], r: 1 }) }), /4096/);
+  assert.throws(() => L.R.compileMap({ ...data, spheres: Array(100001).fill({ at: [1, 1, 1], r: 1 }) }), /100000/);
 });
 
 test('height tiles land on both triangles, slide up slopes, and leave an open edge', async () => {
@@ -110,6 +110,6 @@ export default defineRules({contract:2,space:{dims:3},move,entities:{runner:{pla
   core.seatJoin({ seat: 0, driver: 'person', owner: 'one' }); core.step();
   const body = core.bodyOf(0);
   core.step(new Map([[0, { values: {}, claim: { r: body.r, pos: { x: 10, y: 10, z: 0 }, vel: { x: 0, y: 0, z: 0 }, heading: { x: 1, y: 0, z: 0 } } }]]));
-  assert.ok(core.stats.tickUnits >= 5400, `support cast used only ${core.stats.tickUnits} units`);
+  assert.ok(core.stats.tickUnits >= 36 && core.stats.tickUnits < 200, `indexed support costs ${core.stats.tickUnits} units; distant boxes must not be charged`);
   assert.equal(core.stats.errors, 0);
 });

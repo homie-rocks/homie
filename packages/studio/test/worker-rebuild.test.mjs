@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {devConfig} from '../lib/dev.mjs';
 import {readConfig} from '../lib/routes.mjs';
-import {buildWorker} from '../lib/worker-build.mjs';
+import {buildWorker,workerEntry} from '../lib/worker-build.mjs';
 import * as esbuild from 'esbuild';
 import {Miniflare} from 'miniflare';
 
@@ -18,10 +18,10 @@ test('a reload holding an old entry retains its complete module graph across a b
   writeFileSync(join(src,'worker.mjs'),`export default {async fetch(){return new Response((await import('./lazy.mjs')).value)}}`);
   writeFileSync(join(src,'lazy.mjs'),`export const value='before'`);
   await buildWorker(root,esbuild);
-  const old=readFileSync(entry,'utf8'),oldMain=readConfig(root).main;
+  const old=readFileSync(entry,'utf8'),oldMain=workerEntry(root),committed=readConfig(root).main;
   assert.match(oldMain,/runtime\/[a-f0-9]{24}\/worker\.js$/);
   const local=devConfig(root,true);
-  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,join(root,oldMain));
+  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,oldMain);
   const options=(text=readFileSync(entry,'utf8'))=> {
     const runtime=join(src,'runtime'),modules={};
     for(const path of readdirSync(runtime,{recursive:true}).filter(p=>p.endsWith('.js'))) modules[path]={type:'esm',contents:path==='worker.js'?text:readFileSync(join(runtime,path),'utf8')};
@@ -31,9 +31,10 @@ test('a reload holding an old entry retains its complete module graph across a b
   assert.equal(await (await mf.dispatchFetch('http://localhost/')).text(),'before');
   writeFileSync(join(src,'lazy.mjs'),`export const value='after'`);
   await buildWorker(root,esbuild);
-  assert.notEqual(readConfig(root).main,oldMain,'new config selects a complete immutable graph');
-  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,join(root,readConfig(root).main),'copied dev config also selects the new complete graph');
-  assert.ok(readFileSync(join(root,oldMain),'utf8'),'old config still resolves');
+  assert.equal(readConfig(root).main,committed);
+  assert.notEqual(workerEntry(root),oldMain,'new config selects a complete immutable graph');
+  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,workerEntry(root),'copied dev config also selects the new complete graph');
+  assert.ok(readFileSync(oldMain,'utf8'),'old config still resolves');
   // Simulate the watcher's interleaving: it read the old entry before publication,
   // but resolves that entry's imports after the complete new build is in place.
   await mf.setOptions(options(old));

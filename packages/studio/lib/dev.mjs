@@ -1,3 +1,4 @@
+import {workerEntry} from './worker-build.mjs';
 import { networkInterfaces } from 'node:os';
 /**
  * `homie-studio dev` and `dev --stop`: the whole site on this computer (pages, rooms in a local Durable Object, D1),
@@ -194,10 +195,11 @@ export function devConfig(root, remoteAi) {
   const stripped = routesOf(json).map((r) => r.pattern);
   const routed = ROUTE_KEYS.some((k) => k in json);
   const aiNote = remoteAi ? 'AI guides think with Workers AI (remote, billed to the signed-in account).' : null;
-  if (Boolean(json.ai) === remoteAi && !routed) return { args: [], note: aiNote, stripped: [] };
+  const entry=workerEntry(root);
+  if (!entry && Boolean(json.ai) === remoteAi && !routed) return { args: [], note: aiNote, stripped: [] };
   const abs = (p) => (p && !p.startsWith('/') ? join(base, p) : p);
   delete json.$schema;
-  json.main = abs(json.main);
+  json.main = entry ?? abs(json.main);
   if (json.assets?.directory) json.assets.directory = abs(json.assets.directory);
   json.d1_databases = (json.d1_databases ?? []).map((d) => ({ ...d, ...(d.migrations_dir ? { migrations_dir: abs(d.migrations_dir) } : {}) }));
   for (const k of ROUTE_KEYS) delete json[k];

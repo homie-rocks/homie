@@ -71,7 +71,7 @@ With `space: { dims: 3 }`, z is up and pos is the body's feet. Three.js renders
 Use continuous sweeps, then slide the remainder along the contact tangent.
 `world.sweep` includes entity bodies. Movement sees the map plus declared live colliders through `ctx.world` (also exposed on `ctx.map`).
 
-| Map list (at most 4,096 solids in all) | JSON shape |
+| Map list (at most 100,000 shapes in all) | JSON shape |
 | --- | --- |
 | boxes | `{ "min": [0,0,0], "max": [2,2,1] }` |
 | circles (vertical columns in 3D) | `{ "at": [4,0,0], "r": 1 }` |
@@ -79,8 +79,25 @@ Use continuous sweeps, then slide the remainder along the contact tangent.
 | capsules | `{ "at": [0,0,0], "r": 0.5, "height": 2 }` |
 | heightTiles | `{ "at": [0,0,0], "size": [2,2], "heights": [0,1,0,1] }` |
 
-Height tiles support the foot point, have open edges and no underside; use boxes
-for platforms and ceilings. A rendered mesh is not a collider. Draw solid geometry
+Height tiles without `base` retain their open, foot-point top surface. Add `base`
+(a height offset from `at.z`, at or below all four samples) for a closed solid:
+vertical sides, the sampled top and a flat underside. For example the relay ramp
+is `{ "at": [-2.5,5,0], "size": [5,12], "heights": [4,4,0,0], "base": 0 }`.
+Raise `at.z` or `base` for roofs and underpasses. `diagonal` defaults to `"00-11"`;
+`"10-01"` preserves meshes split the other way. Row order is 00,10,01,11.
+Noncoplanar cells are two triangular prisms, never a convex hull or bilinear patch.
+Solid tiles use the whole declared body for sweeps, support and overlap; rays hit
+sides and undersides as well as tops. Capsules sit above slopes by their rounded
+foot's clearance, rather than embedding their lower sphere in a foot-point surface.
+
+`compileMap` builds an immutable spatial index, shared in meaning by authority and
+prediction. Queries charge visited bounds and actual geometry tests, not every
+shape in the map; live colliders remain a separate overlay. A 100,000-shape map is
+supported without decimation or a larger tick budget. Dense local geometry still
+costs work. Walk slopes by projecting the remaining sweep onto a walkable contact
+normal. For a step, sweep upward for head clearance, sweep across, then support
+and sweep down; never teleport upward through a ceiling. Keep jump and snap-down
+limits in the shared move function. A rendered mesh is not a collider. Draw solid geometry
 from room.map, including spheres/capsules/heightTiles. Changing the map changes
 state compatibility; it is static build data, not a per-room saved copy.
 

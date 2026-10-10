@@ -1,0 +1,93 @@
+{
+  "toolkit": "0.44.3",
+  "status": "solid height tiles with base:0",
+  "counts": [
+    {
+      "name": "landscape",
+      "exteriorCells": 91,
+      "activeCells": 791,
+      "nonplanarCells": 679,
+      "tilesAfterCoplanarMerge": 739,
+      "maxMergeErrorM": 8.881784197001252e-16
+    },
+    {
+      "name": "courier",
+      "exteriorCells": 0,
+      "activeCells": 3458,
+      "nonplanarCells": 2840,
+      "tilesAfterCoplanarMerge": 3134,
+      "maxMergeErrorM": 1.7763568394002505e-15
+    }
+  ],
+  "boxes": 179,
+  "ramps": 6,
+  "shapes": 4058,
+  "compile": "passed",
+  "movement": [
+    {
+      "seats": 1,
+      "stats": {
+        "handlers": 2,
+        "errors": 0,
+        "budgetStops": 0,
+        "skipped": 0,
+        "ticksCut": 0,
+        "maxUnits": 716,
+        "worst": "runner.move",
+        "lastError": "",
+        "failing": "",
+        "lost": 0,
+        "held": 0,
+        "tickUnits": 1064,
+        "maxTickUnits": 1064
+      },
+      "tick": 1
+    },
+    {
+      "seats": 6,
+      "stats": {
+        "handlers": 12,
+        "errors": 0,
+        "budgetStops": 0,
+        "skipped": 0,
+        "ticksCut": 0,
+        "maxUnits": 956,
+        "worst": "runner.move",
+        "lastError": "",
+        "failing": "",
+        "lost": 0,
+        "held": 0,
+        "tickUnits": 7104,
+        "maxTickUnits": 7104
+      },
+      "tick": 1
+    },
+    {
+      "seats": 8,
+      "stats": {
+        "handlers": 16,
+        "errors": 0,
+        "budgetStops": 0,
+        "skipped": 0,
+        "ticksCut": 0,
+        "maxUnits": 956,
+        "worst": "runner.move",
+        "lastError": "",
+        "failing": "",
+        "lost": 0,
+        "held": 0,
+        "tickUnits": 9304,
+        "maxTickUnits": 9304
+      },
+      "tick": 1
+    }
+  ],
+  "guardedBuild": {
+    "passed": true,
+    "messages": [
+      "types: games/stormbreak-terrain-probe: rules, move and view checked with the toolkit's strict compiler",
+      "info: .checks/stormbreak-rules-map/src/rules.ts:2: the generated play covered 18000 ticks (900 seconds of the room's clock), 8 rounds finished, the room rebuilt from its save and compared 813 times, stopped at its allowance of 18000 ticks; it ended holding 1 entities and 0 waiting events in a save of 678 bytes. `homie-studio build --long-check` plays eight times as much. Play it did not reach is not checked.",
+      "info: rules runtime reference trial: hero-rush-3d, 32 players at 30 Hz for 20 minutes on Node (macOS arm64). Cloudflare capacity and billing are unmeasured."
+    ]
+  }
+}

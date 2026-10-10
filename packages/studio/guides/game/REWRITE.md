@@ -76,3 +76,19 @@ for existing movement code. Keep build/damage/door logic in entity handlers.
 Never copy collision lists into player motion or implement a second replay loop.
 Test visible prediction at 300 ms with loss, rejoin and saved-room restore.
 The installed toolkit's `guides/game/` is the version-matched source for this guide.
+
+
+### Solid terrain and query cost
+
+Preserve each source height triangle and its diagonal. Declare height tiles with
+`base` for solid ramps, terraces, roofs and underpasses; omitting it deliberately
+means an open top surface. Do not replace slopes with boxes, invisible walls or
+coarser sampling. Test both sides, tall end, ascent/descent, jump, dash, underside,
+step head clearance, overlap and weapon/camera/blast rays. A discrete reference
+mover may stop one input increment before the continuous capsule contact; report
+both numbers instead of changing its body radius to make them match.
+
+Map compilation indexes up to 100,000 shapes. Measure the default-budget guarded
+spawn, six initial bodies/eight seats and traversal/combat with live cover. Repeat
+on seeded virtual time with 300 ms/loss, rejoin and saved-room restore, then smoke
+test real browser sockets. Geometry passing alone does not complete a game rewrite.

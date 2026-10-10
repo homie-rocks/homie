@@ -245,7 +245,6 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   let stateHeavy = false;
   const viewCost = new Map<KindTable, number>();
   for (const k of c.kinds) viewCost.set(k, VIEW + k.fields.length + k.motion.length);
-  const mapShapes = 4 + c.map.boxes.length + c.map.circles.length;
 
   const ticks = (seconds: unknown): number => { const s = num(seconds); const n = Math.round(s * tickHz); return s > 0 && Number.isFinite(n) ? Math.max(1, n) : 0; };
   const V = (v: unknown): Vec3 => vec3(v, dims);
@@ -611,7 +610,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     },
     ray: (from: unknown, direction: unknown, max: unknown): unknown => {
       // Charged before the cast, for every shape it may test: the map's, and every entity in the room.
-      charge(20 + 4 * (mapShapes + ents.size));
+      charge(20 + 4 * ents.size);
       const p = V(from); const d = dir(direction, dims); const far = reach(max, 'world.ray');
       if (dims === 3) {
         const delta = { x: d.x * far, y: d.y * far, z: d.z * far };
@@ -633,7 +632,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     },
     sweep: (self: unknown, delta: unknown, o?: unknown): unknown => {
       const e = mine(self, 'world.sweep');
-      charge(20 + 4 * (mapShapes + ents.size));
+      charge(20 + 4 * ents.size);
       const d = V(delta);
       const radius = e.kind.body?.radius ?? 0;
       // The ids to pass through: the first few of a list, read as plain texts. A longer list is not searched once for every entity.
@@ -1007,7 +1006,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       }
       guides?.();
       // All movers see the same world, independent of entity iteration order.
-      if (hasColliders) { left -= 64 * ents.size + 4 * mapShapes; moveGeometry = collisionMap(c.map, collisionState()[2]); }
+      if (hasColliders) { left -= 64 * ents.size; moveGeometry = collisionMap(c.map, collisionState()[2]); }
       // Phase 1: one input step and `move` for every body.
       for (const e of [...ents.values()]) {
         if (e.dead || !e.kind.body) continue;

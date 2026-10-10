@@ -1043,3 +1043,25 @@ test('a name Node.js cannot look up is a network preflight failure with local te
   assert.match(said.why, /network preflight failed, before any page or game was opened/i);
   assert.match(said.instead, /homie-studio dev/);
 });
+
+
+test('committed studio stays clean after npm build and dry deploy, with and without a dev config', async()=>{
+ const dir=studio('clean-build-deploy'),cf=account(dir);
+ // All Cloudflare commands execute against account()'s local stand-in. No network mutations.
+ const fetchFn=async()=>new Response(JSON.stringify({v:1,claim:'cd'.repeat(12),games:[]}),{headers:{'content-type':'application/json'}});
+ const first=await deploy(dir,{homie:'https://homie.test',fetchFn});assert.equal(first.ok,true,JSON.stringify(first));
+ symlinkSync(CLI,join(dir,'node_modules/.bin/homie-studio'));
+ const git=(...args)=>{const r=spawnSync('git',args,{cwd:dir,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
+ writeFileSync(join(dir,'.gitignore'),readFileSync(join(dir,'.gitignore'),'utf8')+'\n.fake-cf/\n');
+ git('init');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','Committed studio');
+ const config=readFileSync(join(dir,'wrangler.jsonc'),'utf8');
+ for(const local of [false,true]){
+   if(local)devConfig(dir,true);
+   const built=spawnSync('npm',['run','build'],{cwd:dir,encoding:'utf8',env:{...process.env,HOMIE_STUDIO_WARM:'0'}});assert.equal(built.status,0,built.stdout+built.stderr);
+   assert.equal(git('status','--porcelain'),'','build leaves committed studio clean');
+   const deployed=await deploy(dir,{homie:'https://homie.test',fetchFn});assert.equal(deployed.ok,true,JSON.stringify(deployed));
+   assert.equal(readFileSync(join(dir,'wrangler.jsonc'),'utf8'),config);
+   assert.equal(git('status','--porcelain'),'','dry deploy leaves committed studio clean');
+   assert.match(cf.calls().filter(c=>c.startsWith('deploy ')).at(-1),/runtime\/[a-f0-9]{24}\/worker\.js/,'deployment selects one immutable generation');
+ }
+});

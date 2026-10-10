@@ -1,3 +1,4 @@
+import {workerEntry} from './worker-build.mjs';
 import { refreshWorkerConfig } from './worker-config.mjs';
 import { paidReleases, uploadPaidParts } from './parts-upload.mjs';
 /**
@@ -381,14 +382,14 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   if(subscriptions.code!==0)return refuse('Could not register studio functions',subscriptions.out);
 
   const started = Date.now();
-  let dep = w(['deploy', ...repoVar(root)]);
+  let dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   if (dep.code !== 0 && explainCloudflare(dep.out, accountId)?.needs === 'workers-dev-subdomain') {
     const headers = await cloudflareAuth({ env: { ...process.env, ...projectsCloudflareEnv(root) }, bin: wranglerBin(root), cwd: root,
       exec: async (_bin, args) => { const r = w(args, { cwd: root }); return { code: r.code, stdout: r.stdout }; } });
     const address = await registerWorkersAddress({ accountId, slug: studio.slug, headers, ...(fetchFn ? { fetchFn } : {}) });
     if (!address.ok) return { ok: false, command: 'deploy', needs: 'workers-dev-subdomain', why: address.next };
     step(address.created ? 'registered the account’s workers.dev address automatically' : 'kept the account’s existing workers.dev address');
-    dep = w(['deploy', ...repoVar(root)]);
+    dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   }
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   if (paidReleases(root).length) {
@@ -607,7 +608,7 @@ export async function ciDeploy(root, { log = () => {} } = {}) {
     } catch { step('could not add the Workers AI binding to wrangler.jsonc: the guides answer from the game\'s script'); }
   }
   const started = Date.now();
-  const dep = w(['deploy', ...repoVar(root)]);
+  const dep = w(['deploy', ...(workerEntry(root) ? [workerEntry(root)] : []), ...repoVar(root)]);
   if (dep.code !== 0) return refuse(`wrangler deploy failed: ${dep.out.trim().split('\n').slice(-6).join(' ')}`, dep.out);
   step(`deployed ${names.worker ?? 'the Worker'} in ${Math.round((Date.now() - started) / 1000)} s`);
   const repo = repoOf(root);

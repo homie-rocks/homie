@@ -1,0 +1,56 @@
+{
+  "toolkit": "0.44.3",
+  "scope": "Direct real core and unchanged Stormbreak helper; not a latency or full-game test.",
+  "ramp": {
+    "x": 0,
+    "z": 11,
+    "w": 5,
+    "d": 12,
+    "h": 4,
+    "ramp": "north"
+  },
+  "tile": {
+    "base": 0,
+    "at": [
+      -2.5,
+      5,
+      0
+    ],
+    "size": [
+      5,
+      12
+    ],
+    "heights": [
+      4,
+      4,
+      0,
+      0
+    ]
+  },
+  "movement": {
+    "reference": {
+      "x": -2.999999999999999,
+      "height": 0
+    },
+    "toolkit": {
+      "x": -2.9210000038146973,
+      "height": 0
+    },
+    "errors": 0
+  },
+  "horizontalRay": {
+    "origin": {
+      "x": -4,
+      "y": 7,
+      "z": 1
+    },
+    "direction": {
+      "x": 1,
+      "y": 0,
+      "z": 0
+    },
+    "referenceDistance": 1.5,
+    "toolkitDistance": 1.5
+  },
+  "conclusion": "Solid height tile blocks movement and rays. The reference uses discrete rejection; toolkit continuous collision stops at the capsule boundary plus skin."
+}

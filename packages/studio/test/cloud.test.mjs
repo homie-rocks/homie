@@ -1,3 +1,4 @@
+import {workerEntry} from '../lib/worker-build.mjs';
 import { legacyGame } from './legacy-game.mjs';
 /**
  * @homie-rocks/studio 0.10.0: a studio works from the Claude app, with Cloudflare's own CI doing the deploys.
@@ -162,12 +163,12 @@ test('Workers Builds: `npm run deploy` only migrates and deploys (by binding nam
   assert.equal(done.ok, true, JSON.stringify(done));
   assert.equal(done.ci, true);
   assert.equal(done.url, 'https://test-studio.acct.workers.dev');
-  assert.deepEqual(cf.calls(), ['d1 migrations apply DB --remote', 'deploy', 'd1 migrations apply DB --remote'], 'no whoami, no create, no refusals: the Deploy flow made the resources');
+  assert.deepEqual(cf.calls(), ['d1 migrations apply DB --remote', `deploy ${workerEntry(dir)}`, 'd1 migrations apply DB --remote'], 'no whoami, no create, no refusals: the Deploy flow made the resources');
   assert.equal(readFileSync(join(dir, 'studio.json'), 'utf8'), before, 'a CI checkout is thrown away: nothing is written back');
   const again = out(run(['deploy'], dir, env));
   assert.equal(again.ok, true);
   const brains = "d1 execute DB --remote --json --command SELECT COUNT(*) AS n FROM servers WHERE brain = 'workers-ai' AND state = 'open'";
-  assert.deepEqual(cf.calls().slice(3), ['d1 migrations apply DB --remote', brains, 'deploy'], 'later deploys: migrations first, whether a server thinks with Workers AI, then the Worker');
+  assert.deepEqual(cf.calls().slice(3), ['d1 migrations apply DB --remote', brains, `deploy ${workerEntry(dir)}`], 'later deploys: migrations first, whether a server thinks with Workers AI, then the Worker');
   assert.ok(!/"ai"/.test(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8')), 'no server thinks with Workers AI: no AI binding');
   // A server whose AI guides think with Workers AI (agents_brain workers-ai): the deploy binds AI (0.17.0).
   writeFileSync(join(dir, '.fake-cf', 'ai'), '1');

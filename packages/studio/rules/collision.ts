@@ -1,3 +1,5 @@
+import { castTerrain } from './terrain.ts';
+import { nearbyMap } from './map-index.ts';
 /** Upright 3D collision. Positions are feet; a rounded box is a box plus a sphere.
  * Capsules are a vertical segment plus a sphere. No engine-specific maths or time.
  */
@@ -8,6 +10,7 @@ export interface BodyShape { shape: string; radius: number; height: number }
 export interface Solid { min: Vec3; max: Vec3; r: number }
 export interface Hit3 { t: number; nx: number; ny: number; nz: number; id?: string }
 export interface Map3 {
+  staticMap?: Map3;
   bounds: MapBox; boxes: readonly MapBox[]; circles: readonly MapCircle[];
   heightTiles?: readonly MapHeightTile[];
   spheres?: readonly MapCircle[];
@@ -74,15 +77,17 @@ function castHeightTile(tile: MapHeightTile, p: Vec3, d: Vec3): Hit3 | null {
   const x = p.x - tile.at.x, y = p.y - tile.at.y;
   let best: Hit3 | null = null;
   for (const half of [0, 1]) {
+    const alternate = tile.diagonal === '10-01';
     const gx = half === 0 ? (h10 - h00) / sx : (h11 - h01) / sx;
-    const gy = half === 0 ? (h11 - h10) / sy : (h01 - h00) / sy;
-    const gap = p.z - tile.at.z - h00 - gx * x - gy * y;
+    const gy = alternate ? (half === 0 ? h01 - h00 : h11 - h10) / sy : (half === 0 ? h11 - h10 : h01 - h00) / sy;
+    const base = alternate && half === 1 ? h10 + h01 - h11 : h00;
+    const gap = p.z - tile.at.z - base - gx * x - gy * y;
     const closing = gx * d.x + gy * d.y - d.z;
     if (gap < -EPS || closing <= EPS) continue;
     const t = Math.max(0, gap / closing);
     if (t > 1 || best && t >= best.t) continue;
     const u = (x + d.x * t) / sx, v = (y + d.y * t) / sy;
-    if (u < -EPS || u > 1 + EPS || v < -EPS || v > 1 + EPS || (half === 0 ? v > u + EPS : u > v + EPS)) continue;
+    if (u < -EPS || u > 1 + EPS || v < -EPS || v > 1 + EPS || (alternate ? (half === 0 ? u + v > 1 + EPS : u + v < 1 - EPS) : (half === 0 ? v > u + EPS : u > v + EPS))) continue;
     const length = Math.sqrt(gx * gx + gy * gy + 1);
     best = { t, nx: -gx / length, ny: -gy / length, nz: 1 / length };
   }
@@ -90,6 +95,7 @@ function castHeightTile(tile: MapHeightTile, p: Vec3, d: Vec3): Hit3 | null {
 }
 
 export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape): Hit3 | null {
+  map = nearbyMap(map, p, d, body.radius, body.height || body.radius * 2);
   charge(24);
   const a = solidAt(p, body), r = body.radius, height = body.height || r * 2;
   let best: Hit3 | null = null;
@@ -101,7 +107,7 @@ export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape): Hit3 | n
     const n = point(0, 0, 0); n[axis] = d[axis] > 0 ? -1 : 1;
     take({ t: ((d[axis] > 0 ? high : low) - p[axis]) / d[axis], nx: n.x, ny: n.y, nz: n.z });
   }
-  for (const tile of map.heightTiles ?? []) take(castHeightTile(tile, p, d));
+  for (const tile of map.heightTiles ?? []) take(tile.base === undefined ? castHeightTile(tile, p, d) : castTerrain(tile, a, d));
   for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }), (b as any).id);
   // Legacy map circles are vertical columns in a 3D map.
   for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }), (c as any).id);
