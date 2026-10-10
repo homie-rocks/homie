@@ -937,7 +937,7 @@ export async function officePage(cat, headers = {}) {
   const name = cat.studio?.name ?? 'Studio';
   const options = (cat.games ?? []).map((g) => `<option value="${esc(g.id)}">every room of ${esc(g.name)}</option>`).join('');
   const body = `<header class="top"><h1>${esc(name)} <small>Office</small></h1>
-<div class="links"><span class="live"><i class="dot" id="livedot"></i><span id="live">…</span></span><a href="/_studio/stats">Stats</a><a href="/_studio/office/connections">AI connections</a>${cat.shop ? '<a href="/_studio/office/shop">Shop</a>' : ''}
+<div class="links"><span class="live"><i class="dot" id="livedot"></i><span id="live">…</span></span><a href="/_studio/stats">Stats</a><a href="/_studio/office/connections">AI connections</a><a href="/_studio/office/functions">Functions</a>${cat.shop ? '<a href="/_studio/office/shop">Shop</a>' : ''}
 <form method="post" action="/_studio/signout" style="display:inline"><button class="ghost small" type="submit">Sign out</button></form></div></header>
 <form class="bar" id="announce-all"><label for="announce-text">Announce</label><input type="text" id="announce-text" maxlength="280" placeholder="A line every player sees, in the game" autocomplete="off">
 <select id="announce-scope" aria-label="Who sees it"><option value="">every room of every game</option>${options}</select><button type="submit">Send</button>

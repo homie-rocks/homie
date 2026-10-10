@@ -6,6 +6,14 @@ metadata:
   providers: stripe
 ---
 
+Customer AIs can buy through the studio's own `/mcp`. Read the toolkit's `tools/TOOLS.md`
+and use the `tools` skill for `studio_catalogue`, cart quotes, standard agent payments,
+private purchase claims, and human Stripe checkout approval. Priced studio tools sell
+services through that same purchase engine; `shop connect` synchronizes their Payment Links.
+Keep orders, grants and refunds in the existing shop. For order/refund follow-up code, use
+Studio functions (`functions/FUNCTIONS.md`), with the event ID as the idempotency key.
+
+
 # The shop
 
 Check that the toolkit exposes `stripe_login`, or that `homie-studio --help` lists `shop connect` with `--renew` and `--manual`. An older toolkit's default is the paste page: upgrade before using this flow; do not send the owner to that old default.

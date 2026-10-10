@@ -1,6 +1,7 @@
+import { selling } from './extensions.mjs';
 import OAuthProvider from '@cloudflare/workers-oauth-provider';
 import { createMcpHandler } from 'agents/mcp/server';
-import { McpServer, fromJsonSchema } from '@modelcontextprotocol/server';
+import { McpServer, fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server';
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker';
 import { players } from './players.mjs';
 import { isOwner, sameOrigin } from './office.mjs';
@@ -24,12 +25,6 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   const url=new URL(request.url), origin=url.origin, path=url.pathname;
   if(!env.DB)return json({error:'studio database required'},503);
   if(request.headers.has('origin') && request.headers.get('origin')!==origin)return json({error:'origin refused'},403);
-  // Cap all protocol bodies before handing them to a library or a handler.
-  if(request.body){
-    const reader=request.body.getReader(),chunks=[];let size=0;
-    for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>65536){await reader.cancel();return json({error:'request too large'},413);}chunks.push(value);}
-    const bytes=new Uint8Array(size);let at=0;for(const chunk of chunks){bytes.set(chunk,at);at+=chunk.length;}request=new Request(request,{body:bytes});
-  }
   if(path.startsWith('/hooks/tools/')) return (await import('./tool-webhook.mjs')).toolWebhook(request,env,{cat:await catalogueOf(),definitions});
   const scoped={...env,OAUTH_KV:oauthStorage(env.DB)};
   const api=async(request,env,ctx)=>{
@@ -40,7 +35,8 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
       const body=await request.clone().json().catch(()=>null);
       if(body?.method==='tools/call') {
         const tool=tools.find(t=>t.name===body.params?.name);
-        if(tool&&!validator.getValidator(tool.inputSchema)(body.params?.arguments??{}).valid)await audit(env,caller,tool.name,'invalid');
+        const schema=tool?.price?{...tool.inputSchema,properties:{...tool.inputSchema.properties,_payment:{type:'object'}}}:tool?.inputSchema;
+        if(tool&&!validator.getValidator(schema)(body.params?.arguments??{}).valid)await audit(env,caller,tool.name,'invalid');
         if(!tool)await audit(env,caller,'unknown-tool','denied');
       }
     }
@@ -50,11 +46,13 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
     };
     const read=async(name,handler)=>{
       let outcome='error';
-      try{const fresh=await currentCaller(env,ctx.props);await rate(fresh);const result=await handler(fresh);if(JSON.stringify(result).length>65536)throw new Error('Result too large');outcome='ok';return result;}
+      try{const fresh=await currentCaller(env,ctx.props);await rate(fresh);const result=await handler(fresh);outcome='ok';return result;}
       finally{await audit(env,caller,name,outcome);}
     };
     const server=async()=>{
-      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator});
+      const capabilities=await selling.machineCapabilities(env);
+      const s=new McpServer({name:cat.studio?.name??'Homie studio',version:'1.0.0'},{jsonSchemaValidator:validator,capabilities:{experimental:{payment:{methods:capabilities.machine?.card?{stripe:{intents:['charge']}}:{}}}}});
+      const dispatch=new Map();
       for (const meta of cat.games.filter(g=>g.kind==='app' && g.records?.persist)) {
         for (const [role,declared] of Object.entries(meta.roles??{})) {
           if (declared.signIn && !await allowed({app:meta.id,role},caller,env)) continue;
@@ -69,6 +67,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
         }
       }
       for(const tool of tools){
+        if (!await allowed(tool.audience,caller,env)) continue;
         if (tool.kind==='prompt') {
           if (!await allowed(tool.audience,caller,env)) continue;
           s.registerPrompt(tool.name,{description:tool.description,argsSchema:fromJsonSchema(tool.inputSchema,validator)},async(args)=>read('prompt:'+tool.name,async fresh=>{
@@ -77,21 +76,37 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             return {messages:[{role:'user',content:{type:'text',text:JSON.stringify({kind:'studio-prompt-data',prompt:tool.name,data:text})}}]};
           }));continue;
         }
-        s.registerTool(tool.name,{description:tool.description,inputSchema:fromJsonSchema(tool.inputSchema,validator)},async(args)=>{
+        const schema=tool.price?{...tool.inputSchema,properties:{...tool.inputSchema.properties,_payment:{type:'object'}}}:tool.inputSchema;
+        const handler=async(args,extra)=>{
           let outcome='error';
           try{
             // Recheck inside dispatch, even when a connection listed tools earlier.
             const fresh=await currentCaller(env,ctx.props);
             if(!await allowed(tool.audience,fresh,env)){outcome='denied';throw new Error('Permission denied');}
             try{await rate(fresh);}catch(error){outcome='limited';throw error;}
-            const value=await tool.handler(args,services(env,cat,origin,fresh,tool.namespace??tool.name,tool));
+            const context=services(env,cat,origin,fresh,tool.namespace??tool.name,tool);
+            if(tool.price) {const result=await selling.paidTool(env,cat,origin,tool,args,context,extra);outcome=result.isError?'error':'ok';return result;}
+            if(tool.protocol) {const result=await tool.handler(args,{...context,paymentExtra:extra});outcome=result.isError?'error':'ok';return result;}
+            const value=await tool.handler(args,context);
             const text=JSON.stringify({kind:'untrusted-tool-data',tool:tool.name,data:value});
-            if(text.length>65536)throw new Error('Result too large; narrow your request');
             outcome='ok';return {content:[{type:'text',text}]};
-          }catch(error){return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'?error.message:'Tool failed. Check the office audit and the tool definition.'}]};}
+          }catch(error){if(error?.code===-32042)throw error;return {isError:true,content:[{type:'text',text:outcome==='denied'||outcome==='limited'?error.message:'Tool failed. Check the office audit and the tool definition.'}]};}
           finally{await audit(env,caller,tool.name,outcome);}
-        });
+        };
+        s.registerTool(tool.name,{description:tool.description,inputSchema:fromJsonSchema(schema,validator)},handler);
+        dispatch.set(tool.name,{schema,handler});
       }
+      // Payment binding errors are JSON-RPC errors, not tool failures. The SDK's
+      // convenience dispatcher turns arbitrary errors into isError results; use its
+      // public protocol handler to preserve mppx's standard -32042 challenge.
+      s.server.setRequestHandler('tools/call',async(input,extra)=>{
+        const entry=dispatch.get(input.params.name);
+        if(!entry)return {isError:true,content:[{type:'text',text:'Permission denied or unknown tool'}]};
+        const args=input.params.arguments??{};
+        if(!validator.getValidator(entry.schema)(args).valid)return {isError:true,content:[{type:'text',text:'Invalid arguments'}]};
+        try{return await entry.handler(args,{...extra,_meta:input.params._meta});}
+        catch(error){if(error?.code===-32042)throw new ProtocolError(error.code,error.message,error.data);throw error;}
+      });
       return s;
     };
     return createMcpHandler(server)(request,env,ctx);

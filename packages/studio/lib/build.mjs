@@ -492,6 +492,7 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   const esbuild = await studioEsbuild(root);
   const studio = readStudio(root);
   await (await import('./tools-build.mjs')).buildTools(root, esbuild);
+  await (await import('./functions-build.mjs')).buildFunctions(root, esbuild);
   // The shop first (shop/SHOP.md): invalid shop settings stop the build before anything is built.
   const shop = shopForBuild(root, { log });
   const live = join(root, 'site', 'dist');

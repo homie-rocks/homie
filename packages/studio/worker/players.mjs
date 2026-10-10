@@ -1,3 +1,4 @@
+import { toolIdentity } from './tool-identity.mjs';
 /**
  * PLAYERS — accounts on ONE studio, passkey first, and the cloud saves a persistent game keeps (saves/SAVES.md).
  *
@@ -383,6 +384,8 @@ export const players = Object.freeze({
   },
   /** The request's signed-in player ({ id, name, guest, owner }), or null. */
   async of(request, env) {
+    const identity=toolIdentity(request);
+    if(identity?.id && !identity.id.startsWith('office-')) { const p=await env.DB.prepare('SELECT id,name,guest,owner FROM players WHERE id=?1').bind(identity.id).first();return p?{...p,guest:Boolean(p.guest),owner:Boolean(p.owner)}:null; }
     try { const s = await sessionOf(request, env); return s ? { id: s.player.id, name: s.player.name, guest: s.player.guest, owner: s.player.owner } : null; } catch { return null; }
   },
   /** Shop guest creation uses the studio's new-guest address rate and the daily player limit. */

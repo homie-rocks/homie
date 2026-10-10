@@ -75,6 +75,7 @@ export async function privateRelease(env, kind, id, version) {
 export async function listedRelease(env, origin, kind, id, version) {
   if (await env.DB.prepare("SELECT 1 FROM resource_retirements WHERE resource = ?1").bind(`${shopMode(env)}:${kind}:${id}`).first()) return null;
   const adapter = resourceKind(kind);
+  if (adapter.listed) return adapter.listed(env,id,version,origin);
   const listed = (await adapter.list(env,origin)).find((r)=>r.id===id && r.version===version);
   if (!listed) return null;
   const resource = await privateRelease(env,kind,id,version);

@@ -17,6 +17,30 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.42.0] - 2026-10-09
+
+**Plugin 0.42.0**
+
+Customers and other businesses can use a studio's tools, buy its goods and services, and trigger its own functions.
+
+### Added
+
+- Customer catalogue, cart, checkout and agent purchases through the studio MCP server, using the existing payment standards and purchase lifecycle.
+- Priced studio tools and configurable built-in audiences, with current permissions checked when listing and calling.
+- Studio functions: plain-file event handlers, local firing, durable retries and office delivery status.
+
+### Changed
+
+- MCP call rate limits are opt-in.
+
+### Fixed
+
+- Repeat deployment preserves committed Worker configuration and studio custom bindings.
+
+### Upgrade notes
+
+- Run the toolkit upgrade and build, then commit the generated Worker configuration before deploying. Apply migration 0018 with the other studio migrations. Functions add a Cloudflare cron for retries only when declared.
+
 ## [0.40.0] - 2026-10-09
 
 **Plugin 0.40.0**

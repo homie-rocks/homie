@@ -1,3 +1,4 @@
+import { updateWorkerConfig } from './worker-config.mjs';
 import { paidReleases, uploadPaidParts } from './parts-upload.mjs';
 /**
  * `homie-studio deploy` — the studio's site on the studio's OWN Cloudflare
@@ -368,7 +369,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   const r2 = storage;
   if (!r2) step('no storage (R2): the studio needs none to run; `homie-studio storage add` adds it for large media');
 
-  writeFileSync(configPath(root), wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes, triggers }));
+  updateWorkerConfig(root, wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), routes, triggers }));
   if (routes) step(`kept the studio's own route${routes.length === 1 ? '' : 's'} in wrangler.jsonc: ${routes.map((r) => r.pattern).join(', ')}`);
   for (const added of ensureMigrations(root)) step(`added ${added} (${migrationWord(added)})`);
   const migrate = w(['d1', 'migrations', 'apply', cf.d1, '--remote']);
@@ -376,7 +377,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
   step('D1 migrations applied');
   // Workers AI (0.17.0): bound only when a server's AI guides think with it.
   if (needsWorkersAi(root, w, cf.d1)) {
-    writeFileSync(configPath(root), wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes, triggers }));
+    updateWorkerConfig(root, wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: db.uuid, r2, layout: layoutOf(root), ai: true, routes, triggers }));
     step('Workers AI bound (AI): a server\'s AI guides think with it and typed room chat is reviewed with it, each within its day\'s budget (free allocation: 10,000 neurons a day)');
   }
 
@@ -680,7 +681,7 @@ export async function storageAdd(root, { log = () => {} } = {}) {
   writeStudio(root, next);
   if (next.cloudflare.d1Id) {
     // The studio's own routes stay through this rewrite too (lib/routes.mjs).
-    writeFileSync(configPath(root), wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root), routes: keptRoutes(root, studio) }));
+    updateWorkerConfig(root, wranglerConfig({ partsRateLimit: readConfig(root)?.ratelimits?.find((binding) => binding.name === 'PURCHASE_RATE_LIMITER'), paidParts: paidReleases(root).length > 0 || readConfig(root)?.alias?.['@homie-rocks/studio/worker'] === '@homie-rocks/studio/worker/selling', worker: cf.worker, name: studio.name, d1: cf.d1, d1Id: next.cloudflare.d1Id, r2: bucket, layout: layoutOf(root), routes: keptRoutes(root, studio) }));
   }
   log(`created R2 ${bucket}`);
   return { ok: true, command: 'storage add', bucket, account: accountId, cost: R2_COST, next: ['npx --no-install homie-studio media move --dry-run   (which songs and videos go to R2: over 1 MiB, or left out of git)', 'npm run deploy   (binds the bucket as MEDIA, moves them, checks each by SHA-256, and serves them from R2 at the same addresses; the files stay in this folder)'] };

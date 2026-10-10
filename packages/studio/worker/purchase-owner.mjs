@@ -109,8 +109,6 @@ export async function purchaseReadiness(env, origin, catalogue = {}) {
     missing.push(
       "Reconnect the shop to verify subscription permissions and webhook events",
     );
-  if (!env.PURCHASE_RATE_LIMITER)
-    missing.push("Deploy the Cloudflare purchase rate limiting binding");
   if (!env.PURCHASE_SIGNING_KEYS)
     missing.push("Create the separate purchase signing key");
   const machine = await machineCapabilities(env);

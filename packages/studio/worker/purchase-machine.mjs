@@ -154,6 +154,7 @@ export async function machineResource(
     .first();
   o = await byId(env, o.id);
   if (["paid", "fulfilled", "disputed"].includes(o.status)) {
+    if(mcp && core?.transport==='checkout') {const result=await response();return result instanceof Response?result:machineMcpDelivery(result,dependencies);}
     const recorded = stored ? null : await env.DB.prepare("SELECT payload FROM purchase_jobs WHERE order_id = ?1 ORDER BY updated_at DESC LIMIT 1").bind(o.id).first();
     const recording = recorded && JSON.parse(recorded.payload);
     const challengeId = recording?.params?.metadata?.mpp_challenge_id;

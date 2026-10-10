@@ -38,6 +38,7 @@ export async function buildTools(root,esbuild) {
     if(!['owner','signed-in','public'].includes(t.audience)&&!(t.audience&&typeof t.audience.app==='string'&&typeof t.audience.role==='string'))throw new Error(`tool ${t.name} needs an audience`);
     if(t.inputSchema?.type!=='object')throw new Error(`tool ${t.name} input schema must be an object`);
     validator.getValidator(t.inputSchema);
+    if(t.price && (t.kind==='prompt'||!Number.isSafeInteger(t.price.amount)||t.price.amount<=0||! /^[a-z]{3}$/.test(t.price.currency)))throw new Error(`tool ${t.name}: price needs a positive minor-unit amount and currency`);
     if(t.kind!==undefined&&!['tool','prompt'].includes(t.kind))throw new Error(`tool ${t.name}: invalid kind`);
     if(t.webhook&&(!/^[A-Z][A-Z0-9_]{0,63}$/.test(t.webhook.secret)||typeof t.webhook.person!=='string'||!t.webhook.person))throw new Error(`tool ${t.name}: webhook needs a named secret and account`);
     for(const [name,event] of Object.entries(t.events??{})){

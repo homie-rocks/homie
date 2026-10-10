@@ -136,19 +136,7 @@ export async function purchaseRoutes(
   if (env.HOMIE_PREVIEW === "1" || !env.DB)
     return fail(503, "Studio purchases need the deployed database");
   try {
-    if (!env.PURCHASE_RATE_LIMITER)
-      return fail(
-        503,
-        "Deploy the Cloudflare purchase rate limiting binding before selling",
-      );
-    if (
-      !(
-        await env.PURCHASE_RATE_LIMITER.limit({
-          key: `${request.headers.get("cf-connecting-ip") ?? "unknown"}:${request.method}`,
-        })
-      ).success
-    )
-      return fail(429, "Too many purchase requests. Try again shortly");
+    if (env.PURCHASE_RATE_LIMITER && !(await env.PURCHASE_RATE_LIMITER.limit({key: `${request.headers.get('cf-connecting-ip') ?? 'unknown'}:${request.method}`})).success) return fail(429, 'Studio purchase rate limit reached');
     if (path === "/api/purchases/mcp") {
       const { purchaseMcp } = await import("./purchase-mcp.mjs");
       return purchaseMcp(request, env, url, cat);

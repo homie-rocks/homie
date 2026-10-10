@@ -6,6 +6,7 @@ export async function toolWebhook(request,env,{cat,definitions}) {
   const name=new URL(request.url).pathname.split('/').pop(),tool=definitions.find(t=>t.name===name&&t.webhook);
   const fail=(status)=>Response.json({ok:false},{status});
   if(!tool||request.method!=='POST')return fail(404);
+  if(tool.price)return Response.json({ok:false,error:'Use /mcp to approve and pay for this tool'},{status:402});
   const timestamp=request.headers.get('x-studio-timestamp')??'',delivery=request.headers.get('x-studio-delivery')??'',signature=request.headers.get('x-studio-signature')??'';
   if(!/^\d{10}$/.test(timestamp)||Math.abs(Date.now()/1000-Number(timestamp))>300||!/^[a-zA-Z0-9_-]{8,100}$/.test(delivery)||!/^[a-f0-9]{64}$/.test(signature))return fail(401);
   const secret=env[tool.webhook.secret];if(typeof secret!=='string'||secret.length<32)return fail(503);

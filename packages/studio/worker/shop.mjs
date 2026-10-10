@@ -743,7 +743,11 @@ async function hook(request, env, cat, shop, ready) {
   if (selling.enabled) {
     if (typeof ev.livemode === 'boolean' && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
     const purchase = await selling.purchasePaymentEvent(env, ev);
-    if (purchase !== null) { await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run(); return json({ ok: true, did: purchase }); }
+    if (purchase !== null) {
+      // Resource carts share the web shop's grants and refund bookkeeping.
+      const payment = typeof obj.payment_intent === 'string' ? obj.payment_intent : obj.payment_intent?.id;
+      if (payment) await syncRefunds(env, payment);
+      await env.DB.prepare('INSERT INTO shop_events (id, type, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO NOTHING').bind(ev.id, ev.type, Date.now()).run(); return json({ ok: true, did: purchase }); }
   }
   if (!needed.includes(ev.type)) return json({ ok: true, did: 'ignored' });
   if (typeof ev.livemode === 'boolean' && (hasStripeKey(env) || linkConfig(env)) && ev.livemode !== (shopMode(env) === 'live')) return json({ ok: true, ignored: 'mode' });
@@ -864,7 +868,7 @@ async function bindLinkSession(env, session, mode) {
 }
 
 /** A paid checkout: the order is paid, its entitlements granted, a referral line written. Idempotent. */
-async function paid(env, shop, session, paidAt = Date.now()) {
+export async function paid(env, shop, session, paidAt = Date.now()) {
   const o = await orderBySession(env, session.id);
   if (!o) return 'unknown-order';
   // The session must be the one this order opened, for this player and this price.
@@ -950,7 +954,7 @@ async function paid(env, shop, session, paidAt = Date.now()) {
  * https://docs.stripe.com/api/refunds/object#refund_object-status
  * https://docs.stripe.com/api/refunds/list
  */
-async function syncRefunds(env, payment, freeOrder = null, freeLines = []) {
+export async function syncRefunds(env, payment, freeOrder = null, freeLines = []) {
   const o = freeOrder ?? await orderByPayment(env, payment);
   if (!o) return 'unknown-order';
   const all = await orderLines(env, o.id);
