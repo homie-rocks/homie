@@ -1,14 +1,14 @@
 # Navigation release verification
 
-Studio 0.39.1 / plugin 0.39.1, navigation 0.1.0. Rebased directly onto main
-`9e3ac4d` after #78 released studio 0.39.0. Navigation is the only new feature; release checks inherit main’s fixes;
+Studio 0.40.1 / plugin 0.40.1, navigation 0.1.0. Rebased directly onto main
+`eb907d3` after #79 released studio 0.40.0. Navigation is the only new feature; release checks inherit main’s fixes;
 paid parts is inherited from main rather than stacked branch commits.
 Released changelog sections are byte-identical to main.
 
-This is now the next free version after main 0.39.0. If main advances, rebase and run
+This is now the next free version after main 0.40.0. If main advances, rebase and run
 `node scripts/renumber-release.mjs`. It chooses the next studio and plugin patch
 versions from fetched origin/main. Explicit slots are also supported:
-`node scripts/renumber-release.mjs 0.39.1 0.39.1`.
+`node scripts/renumber-release.mjs 0.40.1 0.40.1`.
 It updates packages/studio/package.json, packages/studio/worker/version.mjs,
 .claude-plugin/marketplace.json, plugins/homie/plugin.json and its .claude-plugin,
 .codex-plugin and .grok-plugin copies, CHANGELOG.md, packages/studio/CHANGELOG.md,
@@ -80,3 +80,8 @@ Rebased again onto main 39f2cd9 after the prediction release-gate fix (#81), ret
 Latest refresh: main 9e3ac4d (studio 0.39.0). Main now contains the touch-delivery, MCP and changelog fixes, so this branch inherits them without additional changes. The 39f2cd9 run had no assertion failures before being stopped when main advanced. Fresh full gates are recorded in /tmp/homie-refresh-75-main39/ and the PR description.
 
 Latest full validation on 9e3ac4d: npm ci, clean build, npm test (2,424 tests: 2,415 passed, nine environment skips, zero failures), plugin tests (120 passed, one optional skip), validate, desktop, changelog and publish checks all passed. Publish plans studio 0.39.1 only, with 22 packages already on npm and navigation excluded. CI results are recorded in the PR description.
+
+
+Current base is main eb907d3 (studio/plugin 0.40.0), with navigation reserving studio/plugin 0.40.1. Released changelog sections are preserved exactly. The renumber helper now handles equal old studio/plugin versions and distinct new versions independently; regression tests fail against its old implementation. Fresh gate evidence is in /tmp/homie-refresh-75-main40/ and the PR description.
+
+All eight requested gates passed on main eb907d3: full suite 2,529 total, 2,517 passed, 12 environment skips, zero failures; plugin 120 passed/one optional skip. Publish planned only studio 0.40.1 with navigation private. Main advanced to 0.42.0 before this refresh was pushed, requiring another rebase.
