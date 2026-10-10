@@ -133,6 +133,12 @@ function castMap3Uncached(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: H
   const exactTerrain = body.terrain === 'exact';
   const terrain = [...(map.heightTiles ?? [])];
   if(exactTerrain && d.z<0){charge(terrain.length*Math.ceil(Math.log2(terrain.length+1)));terrain.sort((a,b)=>(b.at.z+Math.max(...b.heights))-(a.at.z+Math.max(...a.heights)));}
+  // Visit the nearest possible tile contacts first so later casts are shortened.
+  // All-hit queries retain authored ordering; legacy casts retain cost and behavior.
+  if(exactTerrain && (d.x||d.y) && !hits){
+    const first=(t:MapHeightTile)=>{let near=0;for(const k of ['x','y'] as const){if(d[k])near=Math.max(near,((d[k]>0?t.at[k]-r:t.at[k]+t.size[k]+r)-p[k])/d[k]);}return near;};
+    charge(terrain.length*(16+Math.ceil(Math.log2(terrain.length+1))));const order=new Map(terrain.map(t=>[t,first(t)]));terrain.sort((a,b)=>order.get(a)!-order.get(b)!);
+  }
   for (const tile of terrain) {
     if(exactTerrain && !hits && best?.t===0)break;
     // Once a nearer surface is known, later solids only need to beat that time.
