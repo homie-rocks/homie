@@ -38,7 +38,8 @@
     "test:rules:extended": "RULES_EXTENDED=1 node --test packages/studio/test/rules-corpus.test.mjs packages/studio/test/rules-protocol-corpus.test.mjs packages/studio/test/rules-author-requests.test.mjs packages/studio/test/rules-boundaries.test.mjs packages/studio/test/rules-repeatability.test.mjs packages/studio/test/rules-prediction-chrome.test.mjs packages/studio/test/rules-3d-prediction-chrome.test.mjs",
     "test:mod": "claude plugin test plugins/homie",
     "validate": "claude plugin validate . && claude plugin validate plugins/homie",
-    "release:check": "node scripts/publish.mjs --check"
+    "release:check": "node scripts/publish.mjs --check",
+    "test:rooms:updates": "HOMIE_ROOMS_PAGE_SOAK=1 node --test packages/studio/test/rooms-pages.test.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

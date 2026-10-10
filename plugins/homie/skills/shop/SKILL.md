@@ -23,6 +23,11 @@ The guide is `node_modules/@homie-rocks/studio/shop/SHOP.md`; the owner's plain 
 seller: its prices, its refunds, its disputes, its tax. Money goes straight from players to the studio's Stripe;
 **homie.rocks never sees it, holds it or moves it, and Homie takes no cut.** The studio is responsible for the law where it sells and for Stripe's terms.
 
+In a rules game, keep shop UI in the view. Do not turn a client character save, an
+entity field or a command into proof of a purchase: grants still come from the shop's
+verified server records. Room state is replicated to players; keep payment and private
+customer data out of it. Read the game skill's RULES.md before changing game outcomes.
+
 ## Connect with Stripe's own browser approval
 
 Use `stripe_login` (MCP) or `npx --no-install homie-studio shop connect`. Test mode and a

@@ -672,6 +672,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   net.expose({
     self: () => { const m = meNow(); return m ? { x: m.pos.x, y: m.pos.y, z: m.pos.z } : null; },
     peer: (seat: number) => { if (!latest) return null; for (const u of latest.ents.values()) if (u.seat === seat) return { x: u.pos.x, y: u.pos.y, z: u.pos.z }; return null; },
+    movement: () => { const kinds = schema.kinds.filter(k => k.player); return kinds.length && kinds.every(k => k.maxSpeed === 0) ? 'stationary' : 'spatial'; },
     prediction: () => ({ ...correction, observedLeadAt, lastSendAt, now: clock(), serverTick: latest?.k, tick: stepped, catchTick, lead: targetLead(), medianLead: medianLead(), rate: speed, rtt: authorityRtt(), hostAge: quantile(hostAges, 0.5), pending: pending.length }),
     scores: () => roster().map((r) => ({ seat: r.seat, score: r.score })),
     score: myScore, tick: () => latest?.k ?? 0, epoch: () => epoch, hosted: () => net.rulesHosting ? 'browser' : schema.settings.host, status: () => solo ? 'offline' : status,

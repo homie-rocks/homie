@@ -8,7 +8,7 @@ compatibility: Node 22 and Chrome; the studio's pinned toolkit and Wrangler.
 
 An app is **one screen, its roles, and its parts**. The screen transforms with the person and the work: a camera moves, a ticket unfolds, controls appear in context. Do not build page-to-page navigation, a sidebar of links, or a conventional admin website inside it. A studio's public website can still have pages around the app.
 
-Read the person's brief and existing `apps/<id>/` first. Ask only for missing decisions that change what you build. A business or cause needs no game demo, mandatory entertainment, invented customers, scores or rounds. Never impose a shop, directory listing, sign-in for public visitors, or paid media. Make the fewest human steps possible; run commands yourself.
+Read the person's brief and existing `apps/<id>/` first. Choose sensible engineering defaults from the brief; never ask the person how to implement shared state. A business or cause needs no game demo, mandatory entertainment, invented customers, scores or rounds. Never impose a shop, directory listing, sign-in for public visitors, or paid media. Make the fewest human steps possible; run commands yourself.
 
 ## Start and compose
 
@@ -21,7 +21,25 @@ Read the person's brief and existing `apps/<id>/` first. Ask only for missing de
 
 ## Roles and records
 
-Use `@homie-rocks/studio/netplay` for the shared scene. Its host/replica/screen roles are transport responsibilities; they are not staff permission. Never trust `net.params.role`, a hidden button, or browser-hosted input to authorize an operational change.
+For transient shared live state, use the same server rules rooms as games. Read
+[the rules reference](../game/RULES.md). Declare `src/rules.ts`, `src/move.ts`, `src/view.ts`, and app.json `room: { host: 'server' }`
+with `entry: 'src/view.ts'`. Each interactive visitor has a player entity containing
+its cursor/selection; commands validate actions in that entity, then sendRoom to
+update shared bounded board/poll/scene state. Walls watch without a seat. Omit bots,
+scores and automatic rounds; use `rounds: { seconds: 0, breakSeconds: 0 }`. The current contract requires a body for each participant: use a circle with radius 0.1,
+maxSpeed 0 and a no-op defineMove handler for a stationary board or poll. This is a
+logical seat anchor, not a visible avatar; never add fake movement to pass a test. Include a small map/main.json with bounds even for stationary seats. Draw through openRoom, and acknowledge a button
+locally while waiting for shared outcomes. Keep animations and camera in the view.
+
+Do not add rules to an app that only needs the records service and local UI.
+The welcome starter demonstrates authorized records plus a server-rules scene with
+stationary participants, change effects and a shared revision. Existing apps keep working. Use the manual extraction steps in [REWRITE.md](../game/REWRITE.md)
+for existing live state, adapting game-only tests to the app's workflow.
+
+Transport host/replica/screen roles are not staff permission. Never trust a role
+parameter or hidden button to authorize an operational change. Rules snapshots
+are public, rooms have at most 32 seats, and end after the last person leaves;
+they are neither private business storage nor an authorization service.
 
 Use `createAppRecords` from `@homie-rocks/studio/apps` for lasting records. Declare each collection's fields and every role's read/create/update/delete capabilities. The Worker validates writes and checks the signed-in account on every privileged request. Updates use a version; reload and resolve a conflict instead of overwriting somebody else's edit. A room may empty without deleting these records. Transient effects and camera state remain in netplay.
 

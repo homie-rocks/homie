@@ -93,12 +93,12 @@ export function typecheck(root, games, { log = () => {} } = {}) {
       }
       // An error with no file is the project itself (a tsconfig.json that does not read): the game's to fix.
       const bare = /^error (TS\d+): (.*)$/.exec(line);
-      if (bare) mine.push(`games/${g.id}${own ? '/tsconfig.json' : ''} ${bare[1]} ${bare[2]}`);
+      if (bare) mine.push(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}${own ? '/tsconfig.json' : ''} ${bare[1]} ${bare[2]}`);
     }
     rows.push({ id: g.id, checked: true, with: own ? 'its tsconfig.json' : 'the build\'s own settings', errors: mine.length, elsewhere });
-    if (elsewhere) log(`types: games/${g.id}: ${elsewhere} ${elsewhere === 1 ? 'error' : 'errors'} outside the game's own files (a package it imports as source); not the game's, so not counted`);
+    if (elsewhere) log(`types: ${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: ${elsewhere} ${elsewhere === 1 ? 'error' : 'errors'} outside the game's own files (a package it imports as source); not the game's, so not counted`);
     if (mine.length) found.push(...mine);
-    else log(`types: games/${g.id} has no type errors (TypeScript ${ts.version ?? '?'}, ${own ? 'its tsconfig.json' : 'the build\'s own settings'})`);
+    else log(`types: ${g.kind === 'app' ? 'apps' : 'games'}/${g.id} has no type errors (TypeScript ${ts.version ?? '?'}, ${own ? 'its tsconfig.json' : 'the build\'s own settings'})`);
   }
   if (found.length) {
     const shown = found.slice(0, 20);
@@ -125,7 +125,7 @@ export async function typecheckRules(root, g, checked, tune, { log = () => {} } 
     '@homie-rocks/studio/*': [join(PACKAGE_ROOT, '*')],
   } }, files: [join(g.dir, 'src/rules.ts'), join(g.dir, g.entry ?? 'src/view.ts'), join(dir, 'files.d.ts')] }, null, 2)}\n`);
   const res = await runRulesCompiler(compiler, ['-p', project, '--pretty', 'false']);
-  if (res.error) throw new Error(`games/${g.id}: the rules type check could not finish: ${res.error.message}`);
+  if (res.error) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: the rules type check could not finish: ${res.error.message}`);
   const messages = [];
   for (const line of `${res.stdout ?? ''}\n${res.stderr ?? ''}`.split(/\r?\n/)) {
     const at = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/.exec(line);
@@ -134,7 +134,9 @@ export async function typecheckRules(root, g, checked, tune, { log = () => {} } 
       // Imported game helpers count too. Only the toolkit's own implementation is outside the author's remit.
       if (!file.startsWith(`${PACKAGE_ROOT}${sep}`) && !file.includes(`${sep}node_modules${sep}`) || file.startsWith(`${g.dir}${sep}`)) {
         const sourceLine = readFileSync(file,'utf8').split(/\r?\n/)[Number(at[2])-1] ?? '';
-        const advice = /Property 'ask'.*type 'never'/.test(at[5]) ? 'This handler scope never calls world.ask, so no answer can arrive here. Handle the answer in the scope that asks.'
+        const advice = /Property 'bot'.*RosterRow/.test(at[5]) ? "Rules roster rows use driver === 'bot' or 'ai' (not row.bot); preserve the visible AI label."
+          : /'[^']*\.at' is possibly 'undefined'/.test(at[5]) ? 'Effects carry either at (position) or id (entity). Check e.at before reading coordinates, or resolve e.id with room.get.'
+          : /Property 'ask'.*type 'never'/.test(at[5]) ? 'This handler scope never calls world.ask, so no answer can arrive here. Handle the answer in the scope that asks.'
           : /world\.round\.end/.test(sourceLine) && at[4] === 'TS2339' ? 'Only room handlers end a round. Send a declared event to a room handler that calls world.round.end().'
           : /'check'.*does not exist/.test(at[5]) ? 'Remove the obsolete check key. Generated observations require no exemption.'
           : /=> (?:GameDecision|GuideDecision)'/.test(at[5]) ? 'A floor returns goal and say names from agents.json with exactly the args and sayArgs each declares, or {} to decline. Forward a request as { goal: ask.k, args: ask.args }.'
@@ -150,7 +152,7 @@ export async function typecheckRules(root, g, checked, tune, { log = () => {} } 
     } else if (/^error TS/.test(line)) messages.push(line);
     else if (/^\s+\S/.test(line) && messages.length) messages[messages.length - 1] += `\n${line.length > 360 ? line.slice(0, 220) + ' … ' + line.slice(-100) : line}`;
   }
-  if (messages.length) throw new Error(`games/${g.id}: its rules have type errors:\n${messages.slice(0, 30).map((m) => `  ${m}`).join('\n')}`);
-  if (res.status !== 0 && !res.stdout) throw new Error(`games/${g.id}: TypeScript stopped without diagnostics (${res.signal ?? res.status})`);
-  log(`types: games/${g.id}: rules, move and view checked with the toolkit's strict compiler`);
+  if (messages.length) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: its rules have type errors:\n${messages.slice(0, 30).map((m) => `  ${m}`).join('\n')}`);
+  if (res.status !== 0 && !res.stdout) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: TypeScript stopped without diagnostics (${res.signal ?? res.status})`);
+  log(`types: ${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: rules, move and view checked with the toolkit's strict compiler`);
 }

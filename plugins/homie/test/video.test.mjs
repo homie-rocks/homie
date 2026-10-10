@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { trailerLines } from '../../../packages/studio/lib/trailer.mjs';
+import { isServerRules } from '../skills/music/scripts/lib/studio.mjs';
 import { frameSegments } from '../skills/video/scripts/lib/frames.mjs';
 import { startFakeFal } from './fixtures/fake-fal.mjs';
 
@@ -196,4 +198,41 @@ test('video: a cut from a full-range capture is limited-range BT.709 yuv420p, ta
   // The game's own sound is as long as the picture, to the frame.
   const a = JSON.parse(spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=duration', '-of', 'json', join(job, 'beat.mp4')], { encoding: 'utf8' }).stdout).streams[0];
   assert.ok(Math.abs(Number(a.duration) - 506 / 30) < 0.05, `sound ${a.duration} s for ${(506 / 30).toFixed(3)} s of picture`);
+});
+
+test('video: server-rules trailers refuse virtual-clock flags with an actionable real-time path', () => {
+  const dir = studio('server-rules');
+  const game = join(dir, 'games', 'rules-game');
+  mkdirSync(join(game, 'src'), { recursive: true });
+  writeFileSync(join(game, 'game.json'), JSON.stringify({ id: 'rules-game', room: { host: 'server' } }));
+  writeFileSync(join(game, 'src', 'rules.ts'), 'export default {};');
+  for (const flag of ['--no-pace', '--steps=steps.json', '--page=/rules-game/play']) {
+    const r = spawnSync(process.execPath, [VIDEO, 'trailer', 'rules-clip', '--game', 'rules-game', '--url', 'http://127.0.0.1:1', flag, '--json'], { cwd: dir, encoding: 'utf8' });
+    const result = JSON.parse(r.stdout);
+    assert.equal(result.ok, false);
+    assert.match(result.why, /Server rules keep real time.*video record.*edl and cut/);
+  }
+});
+
+test('media capture respects legacy rules helpers, browser rooms and implicit server defaults', () => {
+  const dir = join(scratch, 'capture-contract'); mkdirSync(join(dir, 'src'), { recursive: true });
+  writeFileSync(join(dir, 'src/rules.ts'), 'export const score = () => 1;');
+  for (const [manifest, expected] of [[{}, false], [{ room: { host: 'browser' } }, false], [{ room: {} }, true], [{ room: { host: 'server' } }, true]]) {
+    writeFileSync(join(dir, 'game.json'), JSON.stringify(manifest));
+    assert.equal(isServerRules(dir), expected, JSON.stringify(manifest));
+  }
+  unlinkSync(join(dir, 'src/rules.ts'));
+  assert.equal(isServerRules(dir), false, 'a room setting alone does not turn old browser code into rules');
+});
+
+
+test('trailer summary distinguishes live capture, silence and rebuilt browser-game sound', () => {
+  const capture = { mode: 'live', seconds: 3, frames: 90, heldFrames: 2, audio: { rebuilt: false, peakDb: -8 } };
+  const lines = () => trailerLines({ capture }).join('\n');
+  assert.match(lines(), /3 s live \(90 frames, 2 held\); game audio captured live/);
+  assert.doesNotMatch(lines(), /frame by frame|sounds rebuilt/);
+  capture.audio = null;
+  assert.match(lines(), /no audio captured/);
+  capture.mode = 'virtual'; capture.audio = { rebuilt: true, placed: 4 };
+  assert.match(lines(), /frame by frame.*4 sounds rebuilt/);
 });

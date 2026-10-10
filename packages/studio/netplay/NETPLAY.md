@@ -1,5 +1,13 @@
 # Homie netplay contract, v1 (revision 11)
 
+**Authoring now:** New games use rules plus view and the server as host. Read the
+Homie game skill's RULES.md and section 29 below. Sections 1–28 preserve the
+browser-hosted helper contract for existing games and describe shared shell
+features; their createNetplay/host-loop examples are not a recipe for new games.
+Use the skill's REWRITE.md for an owner-requested rewrite. All five starters use
+server rules. Room seats are capped at 32; larger rooms are future work.
+
+
 Status: **v1, revision 11** (2026-10-08, `@homie-rocks/studio` 0.33.1). The wire
 version is `v: 1`. Everything revisions 2 to 11 added is either an optional field, a new message type,
 a new refusal, or a change of pace inside the old caps, and both sides ignore types they do

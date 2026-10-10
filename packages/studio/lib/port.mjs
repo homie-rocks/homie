@@ -269,8 +269,8 @@ export function importPort(root, folder, id, { name, mode } = {}) {
   return {
     ok: true, command: 'port import', id, dir: dest, from: src, mode: buildMode, files: copied.length, edits, plan: { grade: plan.grade, movement: plan.recommend.movement, view: plan.recommend.view },
     next: [
-      `Write games/${id}/PORT.md: the grade and why, the movement mode, what the host owns, what each browser owns, bots, touch, camera.`,
-      buildMode === 'static' ? 'Add the netplay layer as a script after the game\'s own (HomiePort.createRoom …), or an "entry" in game.json bundled to assets/main.js.' : 'Import \'@homie-rocks/studio/port/early\' first, then build the netplay layer with createRoom.',
+      `Write games/${id}/PORT.md: the grade and why, server truth, shared movement, the browser view, bots, touch and camera.`,
+      'Read the port skill and game RULES.md. Preserve the imported game as the baseline, then write server rules, shared movement and a view with openRoom. Use room.host server and the bundled view entry. The imported browser-hosted format remains available for local/offline/private use or maintaining an existing port.',
       `npm run dev (in the background), then: npx --no-install homie-studio port check ${id} --url http://127.0.0.1:8787`,
     ],
   };

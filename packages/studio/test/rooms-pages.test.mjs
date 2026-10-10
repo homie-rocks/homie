@@ -1,4 +1,4 @@
-/** The real page/update proof belongs to the ordinary suite as well as the standalone runner. */
+/** Real update/recovery behavior belongs to the release suite; the paced update matrix is an explicit soak. */
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
@@ -11,7 +11,8 @@ import puppeteer from 'puppeteer-core';
 import { findChrome, chromeArgs } from '../lib/chrome.mjs';
 import { PKG, REPO_NM } from './rules-kit.mjs';
 
-test('real Chrome play and watch pages retain their room through ten runs of ten updates and thirty updates', { timeout: 1_800_000 }, async t => {
+const soak = process.env.HOMIE_ROOMS_PAGE_SOAK === '1';
+test(soak ? 'real Chrome play and watch pages: paced update soak' : 'real Chrome play and watch pages retain their room through three acknowledged updates', { timeout: soak ? 1_800_000 : 900_000 }, async t => {
   const wrangler = join(REPO_NM, '.bin', process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler');
   if (!existsSync(wrangler)) { t.skip('Local Wrangler executable is absent; install Wrangler to run the real update proof.'); return; }
   if (!findChrome()) { t.skip('Chrome is absent; set CHROME_PATH to run the real update proof.'); return; }
@@ -46,7 +47,7 @@ test('real Chrome play and watch pages retain their room through ten runs of ten
       if (ready) break; await new Promise(r => setTimeout(r, 250));
     }
     assert.ok(ready, log);
-    proof = spawn(process.execPath, ['--max-old-space-size=1536', join(PKG, 'test/rooms-pages.mjs'), origin, studio], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    proof = spawn(process.execPath, ['--max-old-space-size=1536', join(PKG, 'test/rooms-pages.mjs'), origin, studio, ...(soak ? [] : ['--release'])], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let result = ''; for (const stream of [proof.stdout, proof.stderr]) stream.on('data', chunk => { result += chunk; });
     const [code] = await Promise.race([
       once(proof, 'exit'),

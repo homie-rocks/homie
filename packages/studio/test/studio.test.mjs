@@ -66,7 +66,7 @@ test('new: a studio monorepo in a new folder, every file listed; a non-empty fol
 
 test('game new + build: the starter becomes this studio\'s game, bundled with netplay, with its source shared', () => {
   const dir = studio('builds');
-  const g = out(run(['game', 'new', 'crown-thief', '--from', 'gem-rush', '--name', 'Crown Thief'], dir));
+  const g = out(run(['game', 'new', 'crown-thief', '--name', 'Crown Thief'], dir));
   assert.equal(g.ok, true);
   const meta = JSON.parse(readFileSync(join(dir, 'games/crown-thief/game.json'), 'utf8'));
   assert.equal(meta.id, 'crown-thief');

@@ -723,7 +723,7 @@ ${game.planned ? `- [ ] The plan (this codex)
 -
 `;
   writeFileSync(file, text);
-  return { ok: true, command: 'codex new', id, file: relative(root, file), planned: Boolean(game.planned), next: [`fill it from the plan interview, then: npx --no-install homie-studio codex ${id}`, ...(game.planned ? [`once the plan is agreed: npx --no-install homie-studio game new ${id} --from gem-rush --name "<Name>" makes the game around it (the codex stays)`] : [])] };
+  return { ok: true, command: 'codex new', id, file: relative(root, file), planned: Boolean(game.planned), next: [`fill it from the request and sensible defaults (interview only when asked), then: npx --no-install homie-studio codex ${id}`, ...(game.planned ? [`after recording those defaults: npx --no-install homie-studio game new ${id} --from gem-rush --name "<Name>" makes the game around it (the codex stays)`] : [])] };
 }
 
 /** A sign-in link that opens one game's codex on the live site (the stats page's one-time sign-in, then the codex). */

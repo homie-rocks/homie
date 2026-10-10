@@ -53,9 +53,9 @@ function readMap(g) {
   const dir = join(g.dir, 'map');
   const names = existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.json')).sort() : [];
   const name = names.includes('main.json') ? 'main.json' : names[0];
-  if (!name) throw new Error(`games/${g.id}/map/ needs a map: map/main.json with "bounds", and the "boxes", "circles" and named "spots" the rules use`);
+  if (!name) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}/map/ needs a map: map/main.json with "bounds", and the "boxes", "circles" and named "spots" the rules use`);
   const raw = readJson(join(dir, name));
-  if (!raw || typeof raw !== 'object') throw new Error(`games/${g.id}/map/${name} is not JSON`);
+  if (!raw || typeof raw !== 'object') throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}/map/${name} is not JSON`);
   return { ...raw, name: name.replace(/\.json$/, '') };
 }
 
@@ -142,7 +142,7 @@ export function smokeRun(H, compiled, id, { timer = () => { const t = process.cp
  */
 export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck = false } = {}) {
   const guarded = await guardRules(esbuild, root, g.dir);
-  if (!guarded.ok) throw new Error(`games/${g.id}: its rules were refused.\n${guarded.problems.slice(0, 20).map((p) => `  ${problemLine(p)}`).join('\n')}${guarded.problems.length > 20 ? `\n  … and ${guarded.problems.length - 20} more` : ''}`);
+  if (!guarded.ok) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: its rules were refused.\n${guarded.problems.slice(0, 20).map((p) => `  ${problemLine(p)}`).join('\n')}${guarded.problems.length > 20 ? `\n  … and ${guarded.problems.length - 20} more` : ''}`);
   const tune = readJson(join(g.dir, 'tunables.json')) ?? {};
   const map = readMap(g);
   const seats = Math.max(1, Math.min(32, Math.floor(Number(g.players?.max)) || 8));
@@ -151,12 +151,12 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
   // The declarations first, for the type check: a wrong program is named by the compiler before anything is played.
   await typecheckRules(root, g, await runRulesWorker(bundle, data, { declarationsOnly: true }), tune, { log });
   const checked = await runRulesWorker(bundle, data, { allowance: longCheck ? LONG_ALLOWANCE : ALLOWANCE });
-  for (const p of checked.problems) log(`warning: games/${g.id}/game.json: ${p}`);
+  for (const p of checked.problems) log(`warning: ${g.kind === 'app' ? 'apps' : 'games'}/${g.id}/${g.kind === 'app' ? 'app' : 'game'}.json: ${p}`);
   for (const line of checked.information) log(`info: ${line}`);
   const { settings, schema, publicTune, rounds, stateHash } = checked;
   const trial = RULES_CAPACITY_TRIAL;
   log(`info: rules runtime reference trial: ${trial.game}, ${trial.seats} players at ${trial.tickHz} Hz for ${trial.minutes} minutes on ${trial.host} (${trial.platform}). Cloudflare capacity and billing are unmeasured.`);
-  if (settings.tickHz > trial.tickHz) log(`info: games/${g.id} asks for ${settings.tickHz} Hz, above the completed local reference trial's ${trial.tickHz} Hz. This game's generated check does not establish live room capacity.`);
+  if (settings.tickHz > trial.tickHz) log(`info: ${g.kind === 'app' ? 'apps' : 'games'}/${g.id} asks for ${settings.tickHz} Hz, above the completed local reference trial's ${trial.tickHz} Hz. This game's generated check does not establish live room capacity.`);
   const { def, R, H } = await loadRules(esbuild, root, g.id, guarded.code);
   const compiled = R.compileRules(def, { tune, map: R.compileMap(map, map.name), settings, seats });
   const stats = smokeRun(H, compiled, g.id, { timer: () => 0, vocab: data.vocab });
@@ -168,7 +168,7 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
       ...(t !== 'snap' && rate > rateCap ? [`${t} ${rate}/s (cap ${rateCap}/s; over by ${rate - rateCap}/s)`] : [])];
   });
   if (exceeded.length) {
-    const message = `games/${g.id}: browser rules smoke run measured snapshot ${stats.snapshotBytes} B (cap ${snapshotCap} B), checkpoint ${stats.checkpointBytes} B (cap ${checkpointCap} B). Exceeded: ${exceeded.join(', ')}. Reduce these frames or use room.host: server; offline play has no relay caps.`;
+    const message = `${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: browser rules smoke run measured snapshot ${stats.snapshotBytes} B (cap ${snapshotCap} B), checkpoint ${stats.checkpointBytes} B (cap ${checkpointCap} B). Exceeded: ${exceeded.join(', ')}. Reduce these frames or use room.host: server; offline play has no relay caps.`;
     if (settings.host === 'browser') throw new Error(message);
     log(`warning: ${message}`);
   }

@@ -38,6 +38,14 @@ A new studio has no game: its home page says "First game coming soon" until the 
 `homie-studio demo` names a live game on Homie Arcade to try meanwhile. A starter is copied in only when the person
 asks (`game new <id> --from gem-rush`, or `--from ember-vale` for a hero who lasts, with cloud saves).
 
+New games are rules plus view: `src/rules.ts` declares state and server decisions,
+`src/move.ts` supplies shared movement and local prediction, and `src/view.ts` draws
+and sends input through `openRoom`. All five starters declare `room.host: server`.
+Follow the game skill and `RULES.md`; `build` checks rules, movement and view types
+and refuses a game with neither rules nor a browser-hosted netplay contract.
+The same rules support browser hosting for offline, local and private play.
+Existing browser-hosted games remain supported; rewriting one is an explicit task.
+
 ## In one chat: `homie-studio mcp`
 
 ```sh
@@ -143,7 +151,7 @@ Anyone can **watch** a live room from any player's view at `/<game>/watch?room=<
 Join on every room): the game itself, drawn by the watcher's own browser as a watcher that never takes a seat,
 with a strip of the players to switch between (a tap, keys 1-9, Auto, the whole room). A game draws the followed
 player's camera and HUD from `net.viewSeat` (Gem Rush and Ember Vale do; a game that does not is watched as its
-overview), and game.json `"watch": "overview"` or `false` keeps hidden hands hidden. Private and invite-only games
+overview), and game.json `"watch": "overview"` or `false` changes the watch UI. Rules state is public to replicas; these settings do not secure hidden hands. Private and invite-only games
 are watched only by those they let in (NETPLAY.md section 16, site/SITE.md).
 
 ## Upgrading a studio
@@ -198,11 +206,15 @@ game its studio chooses to share, each with its own licence ("Game parts", below
 Every room of a game has the seats its netplay manifest names: game.json's `netplay`
 block (`maxPlayers`), or a `netplay.json` beside game.json or in the game's build
 (`maxPlayers` or `players.max`), else game.json's `players.max`, else 8; at most 32.
-Bots, a late joiner taking a bot's body and a new host after the old one leaves work
-the same at 32 as at 4. One address may hold every seat plus four sockets, so a party
+Bots and a late joiner taking a bot's body work the same at 32 as at 4.
+Server rules keep running when a browser leaves; older browser-hosted games elect a new host. One address may hold every seat plus four sockets, so a party
 on one Wi-Fi (or strangers behind one carrier's address) fills a room with a TV beside it.
 
 ## A game's netplay manifest
+
+For rules games the build derives the revision from the rules and view; do not bump
+`netplay.version` or tune browser host election. `room` sets hosting and tick rate.
+The version and stall settings below describe existing browser-hosted games.
 
 game.json `"netplay"` says more than the room's size. All of it is optional, and `homie-studio build`
 writes it to the catalogue for the site's rooms (`netplay/NETPLAY.md` sections 22 to 24):
@@ -364,7 +376,8 @@ npx homie-studio agents pass night-rush --label Claude                          
   account) or invite (`office invite <id> --server <server>`).
 - **AI is always marked AI**, by the room's relay, not the game: every agent is named "<label> · AI", and the
   relay rewrites a host's roster and results so a game cannot hide one.
-- **The skill dial:** 1 Rookie to 5 Maxed (`{ reactionMs, aimNoise, aggression, positioning }`). The party votes it
+- **Rules authoring:** use `world.level`, `world.guideLevel`, `world.guideSeats` and `world.kids`; declare `guide.view`, `guide.floor`, `think` and `world.goalDone` for companions, and `asks` with `world.ask` / `on.answer` for decisions. The following `net.skillOf`, `BotBrain`, `useAgents` and `net.decide` recipes apply to existing browser-hosted games.
+- **The skill dial (browser-hosted games):** 1 Rookie to 5 Maxed (`{ reactionMs, aimNoise, aggression, positioning }`). The party votes it
   on a card in the play page (the middle vote wins); `net.skillOf(slot)` is what a bot reads (`NETPLAY.md` section
   17), and `BotBrain` reads it with a rebuild. In the starters, Gem Rush's Rookie bots collect far fewer gems than
   its Maxed ones.
@@ -372,7 +385,7 @@ npx homie-studio agents pass night-rush --label Claude                          
   (humans-only, a stricter door), closing it, removing a member, and the first time AI guides may talk are asked
   for, and the owner confirms with one tap.
 - **AI guides that talk** (0.17.0): a game's `agents.json` is its guides' vocabulary (goals, lines, the asks a
-  player taps), and `useAgents` from `@homie-rocks/studio/agents` its host side (Ember Vale is the reference). The
+  player taps), and `useAgents` from `@homie-rocks/studio/agents` its browser-host side (the pre-rules Ember Vale is the reference). The
   brain is the server's: `agents brain night-rush first-light workers-ai` (the studio's own Workers AI; deploy binds
   it; 8,000 neurons a day by default) or `owner-key` (the owner's own key, `agents brain key`, capped in dollars a
   day); with none, the game's scripted floor. The local MCP's `agent_sit` puts the owner's own Claude in a guide's
@@ -390,7 +403,7 @@ npx homie-studio agents pass night-rush --label Claude                          
 - **A game's own decisions** (0.24.4, NETPLAY.md section 20): `net.decide(state, questions, { floor })` on the host,
   for a game whose game.json says `"decide": true`: tactics for its opponents, an NPC's reaction, a director's call,
   a turn's move, answered by Clef in the room in about a quarter of a second, per beat (never per frame), within the
-  AI brains' day; the floor answers whenever it cannot. Ember Vale's slimes pick their tactics this way (opt-in).
+  AI brains' day; the floor answers whenever it cannot. Rules-based Ember Vale declares asks instead (opt-in).
 - Everything is in the studio's own Worker and D1 (migration `0006_studio_servers.sql`). The site's side is in
   [site/SITE.md](site/SITE.md); the room's in [netplay/NETPLAY.md](netplay/NETPLAY.md) sections 17, 18 and 20.
 
@@ -745,11 +758,10 @@ Web Workers, a live server) and what a game must do for its sound to be in the f
 ```sh
 npx homie-studio perf crown-thief --url http://127.0.0.1:8787 [--device computer,phone] [--runs 3] [--profile]
 npx homie-studio perf sizes crown-thief                     # every built file, raw and gzipped; with build --maps, the bundle's modules
-npx homie-studio perf compare .perf/crown-thief/<before> .perf/crown-thief/<after> --goal phone.host.frame.p95
+npx homie-studio perf compare .perf/crown-thief/<before> .perf/crown-thief/<after> --goal phone.replica.frame.p95
 ```
 
-One run is two headless Chromes on this computer's GPU in a fresh room of their own (`?room=perf-…`): the host (the
-rules, the bots, the snapshots) and a replica, both a computer (1280x800 at 2x) or both an emulated phone (390x844 at
+One run is two headless Chromes on this computer's GPU in a fresh room of their own (`?room=perf-…`): two replicas for server rules, or a host and replica for older browser-hosted games, both a computer (1280x800 at 2x) or both an emulated phone (390x844 at
 3x, touch, Chrome's CPU throttle at 4x with `--cpu`, 4G; each run records the slow-down the throttle really gave, which
 on a fast computer is less than its rate). They play the same seeded presses through a warm-up and a measured
 window, and each run's JSON says, per browser: the time between animation frames (median, p95, p99, the share over 33

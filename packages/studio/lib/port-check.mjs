@@ -95,7 +95,7 @@ const steerable = (r) => finite(r) && !r[8];
 export function judgeHold(rows, dir, a, b, size, view) {
   const seg = rows.filter((r) => r[0] >= a && r[0] <= b + 40 && steerable(r));
   const busyFrames = rows.filter((r) => r[0] >= a && r[0] <= b + 40 && finite(r) && r[8]).length;
-  if (seg.length < 8) return { ok: false, dir, busyFrames, why: busyFrames ? `the body was busy (knocked back, stunned, respawning) for ${busyFrames} frames of the hold` : `too few samples (${seg.length}): no body on the probe?` };
+  if (seg.length < 8) return { ok: false, dir, busyFrames, why: busyFrames ? `the body was busy (knocked back, stunned, respawning, or an intentional phase freeze) for ${busyFrames} frames of the hold; retry the actual controls during an active, steerable phase. Keep the mechanic and report this sample as blocked, not a controls pass` : `too few samples (${seg.length}): no body on the probe?` };
   const u = DIRV[dir]; const r0 = seg[0];
   const side = view === 'side';
   const tiIdx = Math.max(0, seg.findIndex((r) => r[0] >= a + 400));
@@ -284,7 +284,7 @@ async function webkit(pw) {
 const frameOf = (h) => h.page.frames().find((f) => f.url().includes('/__game/')) ?? null;
 async function inFrame(h, src, v = null) { const f = frameOf(h); return f ? T(f.evaluate(src), 10_000, v) : v; }
 const shell = (h) => T(h.page.evaluate(() => { const s = window.__shell; return s ? { room: s.room, seat: s.seat, role: s.stats?.role ?? null, results: s.results ?? [], facts: s.facts ? { counts: s.facts.counts } : null } : null; }), 8000, null);
-const info = (h) => inFrame(h, '(() => { const p = window.__homiePort; if (!p) return null; const i = p.info(); i.observedAt = performance.now(); const n = window.__homieNet; i.net = n ? { snapHzIn: n.stats().snapHzIn, snapHzOut: n.stats().snapHzOut, rtt: n.stats().rtt, promotions: n.stats().promotions } : null; i.hosted = n?.probe?.hosted?.() ?? null; i.tick = n?.probe?.tick?.() ?? null; i.v = p.view; i.size = p.size; i.keys = p.keys; i.thumb = p.thumb; return i; })()');
+const info = (h) => inFrame(h, '(() => { const p = window.__homiePort; if (!p) return null; const i = p.info(); i.observedAt = performance.now(); const n = window.__homieNet; i.net = n ? { snapHzIn: n.stats().snapHzIn, snapHzOut: n.stats().snapHzOut, rtt: n.stats().rtt, promotions: n.stats().promotions } : null; i.movement = n?.probe?.movement?.() ?? null; i.hosted = n?.probe?.hosted?.() ?? null; i.tick = n?.probe?.tick?.() ?? null; i.v = p.view; i.size = p.size; i.keys = p.keys; i.thumb = p.thumb; return i; })()');
 const rowsSince = (h, t) => inFrame(h, `(window.__homiePort ? window.__homiePort.rows(${Number(t) || 0}) : [])`, []);
 const frameNow = (h) => inFrame(h, '(window.__homiePort ? window.__homiePort.now() : performance.now())', 0);
 
@@ -411,6 +411,7 @@ const UI_COVER = `(() => {
 
 async function ownerTests(h, how, log) {
   const i = await info(h);
+  if (i?.movement === 'stationary') return { ok: null, applicable: false, why: 'Rules declare all player anchors with maxSpeed 0: directional movement is not applicable. Exercise the actual buttons, taps or word/turn actions in two browsers; this is not a controls pass.' };
   const view = i?.v ?? 'top';
   const size = Number(i?.size) || 1;
   const keys = i?.keys ?? { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
@@ -565,7 +566,8 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
           await shot(h, 'desk-playing');
           const audio = after?.audio ?? null;
           row('owner-desk', res.ok, { ...res, seatedMs: o.ms, fps: after?.fps ?? null });
-          if (audio) {
+          if (res.applicable === false) row('audio', null, { why: 'No directional input was sent to this stationary game. Test sound with its actual controls.' });
+          else if (audio) {
             const ctxs = audio.contexts ?? [];
             row('audio', ctxs.length ? ctxs.every((s) => s === 'running') : null, { contexts: ctxs, refusedMedia: audio.refusedMedia, why: ctxs.length ? (ctxs.every((s) => s === 'running') ? undefined : 'an AudioContext is still suspended after the first keys') : 'no Web Audio in this game (media elements only, or silent)' });
           }
@@ -591,7 +593,8 @@ export async function portCheck({ url, game, root, only = null, shots = null, lo
           const after = await info(h);
           await shot(h, 'phone-playing');
           row('owner-phone', res.ok, { ...res, seatedMs: o.ms, fps: after?.fps ?? null });
-          row('ui-cover', cover ? cover.cover <= 0.12 && !cover.opaqueCentre.length : null, { ...(cover ?? {}), why: cover && (cover.cover > 0.12 || cover.opaqueCentre.length) ? `UI covers ${Math.round(cover.cover * 100)}% of a phone${cover.opaqueCentre.length ? ' and something opaque sits in the middle' : ''}` : undefined });
+          const stationaryDom = res.applicable === false && await inFrame(h, "!document.querySelector('canvas')", false);
+          row('ui-cover', stationaryDom ? null : cover ? cover.cover <= 0.12 && !cover.opaqueCentre.length : null, { ...(cover ?? {}), why: stationaryDom ? 'The stationary DOM interface is its play surface. Inspect its actual buttons and layout; a movement-world overlay limit is not applicable.' : cover && (cover.cover > 0.12 || cover.opaqueCentre.length) ? `UI covers ${Math.round(cover.cover * 100)}% of a phone${cover.opaqueCentre.length ? ' and something opaque sits in the middle' : ''}` : undefined });
         }
         collect(h); await close(h);
       } catch (e) {

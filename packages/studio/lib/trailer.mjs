@@ -1,8 +1,8 @@
 /**
  * `homie-studio trailer <id>`: a trailer of a game, in one command.
  *
- * The work is not here. It is the Homie plugin's video skill (`video.mjs trailer`): the game rendered frame by frame
- * on a virtual clock, its sound rebuilt from its own files, the highlights picked from what it played, an end card,
+ * The work is not here. It is the Homie plugin's video skill (`video.mjs trailer`): live footage for server rules,
+ * or a virtual clock and rebuilt sound for older browser games, selected highlights, an end card,
  * and 16:9, 1:1 and 9:16 deliveries. This finds that script and hands the command over, so a person at a terminal
  * and an agent with the plugin run the same thing. The video goes to videos/<id>-trailer/ (or --slug <slug>).
  *
@@ -36,10 +36,14 @@ export function trailerCommand(root, id, rest, { skills = null, slug = null } = 
 }
 
 export function trailerLines(r) {
+  const live = r.capture?.mode === 'live';
+  const audio = r.capture?.audio;
+  const sound = audio?.rebuilt ? `${audio.placed} sounds rebuilt from the game's own files`
+    : audio ? 'game audio captured live' : live ? 'no audio captured' : 'the game logged no sound';
   return [
     ...(r.problems ?? []).map((x) => `PROBLEM: ${x}`),
     `${r.seconds} s trailer of ${r.game}: ${Object.values(r.outputs ?? {}).map((o) => o.file).join(', ')}`,
-    `  filmed ${r.capture?.seconds} s frame by frame (${r.capture?.frames} frames, ${r.capture?.heldFrames} held); ${r.capture?.audio ? `${r.capture.audio.placed} sounds rebuilt from the game's own files` : 'the game logged no sound'}`,
+    `  filmed ${r.capture?.seconds} s ${live ? 'live' : 'frame by frame'} (${r.capture?.frames} frames, ${r.capture?.heldFrames} held); ${sound}`,
     `  ${r.edit?.shots} shots of ${r.edit?.shotSeconds} s, picked ${r.edit?.picked}`,
     ...(r.warnings ?? []).map((w) => `  warning: ${w}`),
     ...(r.next ? [`  next (the video skill's script): ${r.next}`] : []),

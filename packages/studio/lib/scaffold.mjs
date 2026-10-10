@@ -126,7 +126,7 @@ directory lists its games; homie.rocks does not host them.
 
 | Path | What it is |
 | --- | --- |
-| \`games/<id>/\` | One game: \`game.json\` (id, name, blurb, players, round length), \`index.html\`, \`src/main.ts\`; and, when it has them, \`tunables.json\` (the numbers that shape how it feels: the Game Lab's sliders, kept values written back) and \`lab.json\` (the Game Lab's takes). |
+| \`games/<id>/\` | One game: \`game.json\` (id, name, blurb, players, round length), \`index.html\`, \`src/rules.ts\`, \`src/move.ts\`, \`src/view.ts\` and shared \`map/\` data; and, when it has them, \`tunables.json\` (the numbers that shape how it feels: the Game Lab's sliders, kept values written back) and \`lab.json\` (the Game Lab's takes). |
 | \`music/\`, \`videos/\` | Songs, scores, loops; trailers, music videos, cutscenes. \`manifest.json\` lists each one (\`node_modules/@homie-rocks/studio/media/MEDIA.md\`); a published entry gets a page at \`/music/<slug>/\` or \`/videos/<slug>/\`. Without storage the site serves each file itself (up to 25 MiB). Once the studio has storage (see below), its big media (over 1 MiB, or left out of git) lives in its own R2: every deploy uploads it, checks it by SHA-256 and serves it from R2 at the same address. Large files never go into git. The Homie plugin's \`music\` and \`video\` skills make them. |
 | \`games/<id>/assets/\` | Every model and texture a game ships, with where it came from and its licence (\`manifest.json\`), and \`RIGHTS.md\` in plain words; \`games/<id>/codex/decisions.json\` (private, like the codex) is its look as decisions, and \`style.json\` the palette, fonts, light and camera the game draws with. \`art/<slug>/\` holds art jobs (concepts, receipts; \`raw/\` is git-ignored). |
 | \`posts/\` | The studio's news and drops: one markdown file each (\`posts/2026-09-30-we-are-live.md\`: \`title:\`, \`date:\`, \`summary:\`, and \`game:\` / \`song:\` / \`video:\` to link one). They are the site's Posts, with Atom and JSON feeds. |
@@ -171,7 +171,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   game: copy a starter only when the person asks for one, or once their game is planned.
 - \`npx --no-install homie-studio port plan <folder>\` — read an existing single-player web game and grade
   how hard making it multiplayer will be; \`port import\` brings it into \`games/\`, \`port check\` runs the
-  owner tests (real touch, a late joiner, a killed host, two browsers finishing a round). The Homie
+  owner tests (real touch, a late joiner, one browser leaving, two browsers finishing a round). The Homie
   plugin's \`port\` skill does the whole job.
 - \`npm run build\` — bundle every game into \`site/dist\`. It builds in a folder of its own and puts the result
   in place only when all of it is there: a game that does not build fails the command (a non-zero exit) and
@@ -197,7 +197,7 @@ studio's pinned copy, never a registry lookup of the bare name.
 - \`npx --no-install homie-studio check <id> --url <site>\` — two headless browsers press Play and must
   land in the same room and finish a round. Run it before you say a game works.
 - \`npx --no-install homie-studio perf <id> --url <site>\` — how fast a game runs, on a computer and an emulated
-  phone, with two browsers in a room (the host and a replica): frame times, the game's JavaScript and the main thread
+  phone, with two browsers in a room (two replicas when the server hosts): frame times, the game's JavaScript and the main thread
   per frame, time to playable, what it downloads, the heap, netplay messages a second (files under \`.perf/\`). The
   Homie plugin's \`perf\` skill runs the whole loop: one change at a time, kept only when it is better beyond the noise
   and \`check\` still passes, and a report in \`perf/<id>/\`.
@@ -279,11 +279,37 @@ studio's pinned copy, never a registry lookup of the bare name.
 
 ## Making games
 
-- Every game is multiplayer on the web through the netplay contract
-  (\`node_modules/@homie-rocks/studio/netplay/NETPLAY.md\`): every browser renders the game
-  itself, one browser hosts the rules, strangers meet in public rooms, bots fill empty
-  seats, anyone arriving takes a bot's place, rounds end and restart on their own.
-- Import it as \`import { createNetplay } from '@homie-rocks/studio/netplay'\`.
+- **New games are rules plus view, hosted by the server.** Read the Homie game skill and its
+  RULES.md before writing code (MCP: studio_guide game, then studio_guide game file RULES.md).
+  Start with coin-dash, gem-rush, ember-vale, gem-rush-3d or hero-rush-3d; all five follow this contract.
+  In games/<id>/src/rules.ts, defineRules declares entities, fields, handlers, events, rounds and companions.
+  The view calls openRoom and sends input/commands; it draws, plays sound and handles controls. It never
+  decides a hit, score, spawn, turn or result. Keep game.json room.host set to server, up to 32 seats.
+- **Movement feels immediate through prediction.** Put the shared defineMove callback in src/move.ts;
+  it runs authoritatively on the server and immediately for your own view, then reconciles. Other bodies
+  interpolate. Use the starter's sweep/slide and room.me/room.each poses; no second browser physics loop,
+  and no owner-movement workaround. Discrete actions wait for the server's decision.
+- **Truth is declared and deterministic.** Entity handlers write their own fields and send next-tick events;
+  room handlers write shared fields. Use world.tick/dt/ticks/after/random and world.math (ctx.math in move),
+  never clocks, Math.random, hidden module state, async/network calls or browser APIs in rules.
+  Read RULES.md for the bounded query and execution budget, declared commands/effects/asks, and message fixes.
+- **Level data is shared.** map/main.json describes collision and bounds in metres. A 3D rules body's z is
+  height at its feet; Three.js draws x,z,y. Floors, walls and platforms must agree in rules and view.
+  Public tunables describe movement. Bots and companions use the same inputs and declared goals, with a
+  scripted floor that plays without AI. Asks declare bounded state, questions and a deterministic floor.
+- **Choose sensible defaults yourself.** Do not ask the person for a hosting mode, movement mode, tick rate
+  or serialization scheme. Preserve the requested mechanic. Turn-based games and live apps may use manual
+  rounds. Shared live app state uses these same rooms; durable records and authentication use the app APIs.
+  A build-only request ends with a working local result; publish only within the owner's requested scope.
+- **Check changes honestly.** Build first, repair each source-located guard/type/play-check error using RULES.md,
+  then check with two browsers and play the requested mechanic with network delay. Info is not a failure.
+  Never remove rules, weaken checks, forge a probe or switch hosting to get past a message.
+  Rules hashes and room saves are automatic; character saves are player-owned, untrusted input. Room state
+  is replicated, not secret. Bigger rooms and private state are not delivered by milestone 1.
+- **Existing games:** change rules truth in rules and presentation in view. Browser hosting is for offline,
+  local development and private friends games. Untouched older createNetplay/createRoom games still work;
+  when asked to rewrite one, read the game skill's REWRITE.md and preserve its art, view and feel. There is
+  no automatic converter. NETPLAY.md section 29 is the rules contract; earlier sections describe older APIs.
 - Phones and computers: touch controls on phones only, keys on computers; keep the
   centre of the screen clear during play.
 - The play page's small room button (Invite, Big screen, the room code) sits top right, with the Chat pill
@@ -433,7 +459,10 @@ studio's pinned copy, never a registry lookup of the bare name.
   \`--policy beginner --guides 2 [--kids]\`, \`--policy humans-only\`) makes one at once; \`servers set <id> <server>
   --level-max 3 …\` changes one; \`servers close <id> <server>\`. A change that narrows who may come in (humans-only,
   a stricter door) and closing one only ASK, with the owner's one-tap link, like \`office kick\`.
-- **The skill dial:** every room has a level, 1 Rookie, 2 Steady, 3 Fair, 4 Strong, 5 Maxed, each \`{ reactionMs,
+- **Rules companions:** use world.level, world.guideLevel, world.guideSeats and world.kids; guide.view,
+  guide.floor, think and goalDone follow the rules contract. The old BotBrain/useAgents/decide recipes below
+  apply only to unchanged browser-hosted games. Read RULES.md for a new game.
+- **The skill dial (older browser-hosted games):** every room has a level, 1 Rookie, 2 Steady, 3 Fair, 4 Strong, 5 Maxed, each \`{ reactionMs,
   aimNoise, aggression, positioning }\`. The party sets it by voting on a card in the play page (the middle vote
   wins, capped by the server's ceiling). Make a game's bots honour it: \`net.skillOf(slot)\` in their step (the
   snippet is in \`NETPLAY.md\` section 17; \`BotBrain\` from the port kit reads it with a rebuild), and declare
@@ -1018,10 +1047,11 @@ export function newStudio(folder, { name, homie, slug: askedSlug, install = true
   const q = JSON.stringify(realpathSync(dir));
   return { ok: true, command: 'new', dir: realpathSync(dir), name, slug, wrote, git, installed, studio: STUDIO_VERSION, next: [
     `cd ${q}${install ? '' : ' && npm install'}`,
-    'see a working game first, with nothing copied here: npx --no-install homie-studio demo (a live game on Homie Arcade)',
-    'a copy of a starter only when the person asks for one: npx --no-install homie-studio game new <id> --from gem-rush --name "<Game Name>"',
+    'read the game skill and RULES.md; choose sensible defaults and make the requested game as server rules plus view',
+    'optional live example, without copying a game here: npx --no-install homie-studio demo',
+    'only when the person asks for a game: start from a rules starter and implement the requested mechanic: npx --no-install homie-studio game new <id> --from gem-rush --name "<Game Name>"',
     'npm run dev   (the home page, "first game coming soon", at http://127.0.0.1:8787/; with a game: npx --no-install homie-studio check <id> --url http://127.0.0.1:8787)',
-    'npm run deploy   (then the Homie MCP tool studio_publish, or: npx --no-install homie-studio publish)',
+    'when the owner asks to publish: npm run deploy   (then studio_publish, or: npx --no-install homie-studio publish)',
   ], online: 'Going online creates one Worker, one D1 database and two Durable Objects on your own Cloudflare account: free plan, no payment method, no R2. `npx --no-install homie-studio deploy --plan` says exactly what, and changes nothing.' };
 }
 

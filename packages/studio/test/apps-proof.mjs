@@ -12,7 +12,6 @@ import puppeteer from 'puppeteer-core';
 import { build as bundle } from 'esbuild';
 import { newStudio } from '../lib/scaffold.mjs';
 import { newApp } from '../lib/studio.mjs';
-import { build } from '../lib/build.mjs';
 import { check } from '../lib/check.mjs';
 import { lanAddresses } from '../lib/dev.mjs';
 import { chromeArgs, findChrome } from '../lib/chrome.mjs';
@@ -40,15 +39,19 @@ export async function appProof({ wrangler, shots = null, log = () => {} }) {
     const script = await bundle({ stdin: { contents: `import * as links from '${join(ROOT, 'packages/studio/links/links.mjs')}'; window.proofLinks = links;`, resolveDir: ROOT }, bundle: true, write: false, format: 'iife' });
     writeFileSync(join(publicDir, 'links.js'), script.outputFiles[0].text);
     writeFileSync(join(publicDir, 'links.html'), '<!doctype html><script src="/links.js"></script>');
-    await build(studio, { types: true });
+    // dev builds this rules app with the strict compiler before starting Wrangler.
+    // Do not build it twice: this proof is of app behavior, not cold-start speed.
     const socket = createServer(); socket.listen(0, '127.0.0.1'); await once(socket, 'listening'); const port = socket.address().port; await new Promise((r) => socket.close(r));
     const ip = lanAddresses()[0]; assert.ok(ip, 'a LAN IPv4 address is available');
     const origin = `http://${ip}:${port}`, local = `http://localhost:${port}`;
     const start = async () => {
       dev = spawn(process.execPath, [CLI, 'dev', '--lan', '--no-local-ai', '--port', String(port)], { cwd: studio, detached: true, env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=1536' }, stdio: ['ignore', 'pipe', 'pipe'] });
       for (const stream of [dev.stdout, dev.stderr]) stream.on('data', (b) => { serverLog = (serverLog + b).slice(-18000); });
-      const end = Date.now() + 90000;
-      while (Date.now() < end && dev.exitCode === null) { if (await fetch(`${origin}/api/games`).then((r) => r.ok).catch(() => false)) return; await pause(200); }
+      const end = Date.now() + 300000;
+      while (Date.now() < end && dev.exitCode === null && dev.signalCode === null) {
+        if (await fetch(`${origin}/api/games`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok).catch(() => false)) return;
+        await pause(200);
+      }
       throw new Error('LAN dev failed: ' + serverLog);
     };
     await start(); log('dev --lan reached from its network address');

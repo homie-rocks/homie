@@ -57,8 +57,8 @@
  *                                          emulated (a --cpu times slower CPU, 4G) on this computer's GPU. The plugin's perf
  *                                          skill runs the whole measure, change, compare, keep-or-revert loop)
  *   homie-studio trailer <id> [--url <site>] [--seconds 40] [--length 20] [--title "…"] [--end "…"] [--skills <folder>]
- *                                         (a trailer in one command, by the plugin's video skill: the game rendered frame by
- *                                          frame on a virtual clock, its sound rebuilt from its own files and what it played,
+ *                                         (a trailer in one command, by the plugin's video skill: live footage for server rules,
+ *                                          or a virtual clock and rebuilt sound for older browser games,
  *                                          the highlights picked, an end card, 16:9, 1:1 and 9:16 in videos/<id>-trailer/)
  *   homie-studio perf sizes <id>          (what a player downloads: every built file, raw and gzipped, the biggest first; with
  *                                          build --maps, which modules make up the bundle; each big script read for whether it
@@ -412,7 +412,7 @@ function print(result) {
       lines.push(`${result.name} is a studio now: ${result.dir}`, '', 'Wrote:', ...result.wrote.map((f) => `  ${f}`), '', `Dependencies: ${result.installed}`, '', 'Next:', ...result.next.map((n) => `  ${n}`), '', result.online);
       break;
     case 'game new':
-      lines.push(`games/${result.id} is a new game from the ${result.from} starter. Change it in games/${result.id}/src/, then: npx homie-studio dev`);
+      lines.push(`games/${result.id} is a new game from the ${result.from} starter. Its server rules are src/rules.ts, shared movement src/move.ts, and browser view src/view.ts. Read the game skill and RULES.md, change the mechanic, then build and run: npx --no-install homie-studio dev`);
       if (result.installNeeded) lines.push(`It needs ${result.needsAdded.map((n) => `${n.name} ${n.version}`).join(', ')}, now in the studio's package.json: run npm install first.`);
       for (const h of result.needsHeld ?? []) lines.push(`It was written against ${h.name} ${h.want}; this studio pins ${h.have}, which stays.`);
       if (result.models) {

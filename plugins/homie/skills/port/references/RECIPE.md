@@ -1,4 +1,9 @@
-# The port recipe
+# Existing browser-hosted ports: maintenance reference
+
+This archived recipe applies only when maintaining an existing `createRoom` game.
+For a new port or a requested server rewrite, follow [RULES.md](../../game/RULES.md)
+and [REWRITE.md](../../game/REWRITE.md): server rules, shared move and the preserved view.
+Do not introduce owner-authoritative movement, snapshots or host election into that rewrite.
 
 How a single-player web game becomes a netplay game in a studio. The contract
 behind all of it is `node_modules/@homie-rocks/studio/netplay/NETPLAY.md`; the toolkit
