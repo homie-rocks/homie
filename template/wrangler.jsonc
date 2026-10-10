@@ -39,6 +39,14 @@
       {
         "name": "LOBBY",
         "class_name": "Lobby"
+      },
+      {
+        "name": "GATE",
+        "class_name": "Gate"
+      },
+      {
+        "name": "CONCENTRATOR",
+        "class_name": "Concentrator"
       }
     ]
   },
@@ -48,6 +56,13 @@
       "new_sqlite_classes": [
         "Table",
         "Lobby"
+      ]
+    },
+    {
+      "tag": "v2-gates",
+      "new_sqlite_classes": [
+        "Gate",
+        "Concentrator"
       ]
     }
   ],
@@ -78,6 +93,14 @@
         {
           "name": "LOBBY",
           "class_name": "Lobby"
+        },
+        {
+          "name": "GATE",
+          "class_name": "Gate"
+        },
+        {
+          "name": "CONCENTRATOR",
+          "class_name": "Concentrator"
         }
       ]
     }

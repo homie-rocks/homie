@@ -1,3 +1,4 @@
+import { seatsOf } from '../worker/seats.mjs';
 /**
  * What `homie-studio build` does for a game written as rules plus view (rooms-milestone-1-design.md, section 8).
  *
@@ -145,7 +146,7 @@ export async function prepareRules(esbuild, root, g, { log = () => {}, longCheck
   if (!guarded.ok) throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}: its rules were refused.\n${guarded.problems.slice(0, 20).map((p) => `  ${problemLine(p)}`).join('\n')}${guarded.problems.length > 20 ? `\n  … and ${guarded.problems.length - 20} more` : ''}`);
   const tune = readJson(join(g.dir, 'tunables.json')) ?? {};
   const map = readMap(g);
-  const seats = Math.max(1, Math.min(32, Math.floor(Number(g.players?.max)) || 8));
+  const seats = seatsOf(g);
   const bundle = await loadRules(esbuild, root, g.id, guarded.code, { bundleOnly: true });
   const data = { id: g.id, tune, map, room: g.room, seats, vocab: readJson(join(g.dir, 'agents.json')), sites: guarded.sites };
   // The declarations first, for the type check: a wrong program is named by the compiler before anything is played.

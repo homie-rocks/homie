@@ -1,3 +1,4 @@
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.27.0: search engines and AI agents read a studio site correctly.
  *
@@ -42,9 +43,10 @@ function fullStudio(name) {
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
   const game = (id, extra = {}) => {
-    write(dir, `games/${id}/game.json`, JSON.stringify({ id, name: id.replace(/-/g, ' ').replace(/\b./g, (c) => c.toUpperCase()), blurb: `${id} for everyone.`, players: { min: 1, max: 6 }, roundSeconds: 120, build: { mode: 'static' }, netplay: { v: 1 }, cover: 'cover.jpg', ...extra }));
-    write(dir, `games/${id}/index.html`, '<!doctype html><html><head><script src="./homie-port.js"></script></head><body></body></html>');
-    write(dir, `games/${id}/cover.jpg`, 'cover');
+    browserRulesGame(dir, id);
+    write(dir, `games/${id}/game.json`, JSON.stringify({ id, name: id.replace(/-/g, ' ').replace(/\b./g, (c) => c.toUpperCase()), blurb: `${id} for everyone.`, players: { min: 1, max: 6 }, roundSeconds: 120, entry: 'src/main.ts', room: { host: 'browser' }, cover: 'cover.jpg', ...extra }));
+    write(dir, `games/${id}/index.html`, '<!doctype html><html><head><script type="module" src="./assets/main.js"></script></head><body></body></html>');
+    write(dir, `games/${id}/public/cover.jpg`, 'cover');
     write(dir, `games/${id}/hero/wide.jpg`, 'the landing still');
   };
   game('rock-race', {
@@ -179,9 +181,9 @@ test('a landing\'s VideoGame: everything the game\'s files say, the owner\'s ext
   assert.deepEqual(g.numberOfPlayers, { '@type': 'QuantitativeValue', minValue: 1, maxValue: 6 });
   assert.deepEqual(g.playMode, ['https://schema.org/SinglePlayer', 'https://schema.org/MultiPlayer']);
   assert.deepEqual(g.gamePlatform, ['Web browser', 'Phone', 'Computer', 'TV']);
-  assert.deepEqual(g.image, [`${ORIGIN}/games/rock-race/hero/wide.jpg`, `${ORIGIN}/games/rock-race/cover.jpg`]);
-  assert.deepEqual(g.screenshot, [`${ORIGIN}/games/rock-race/screenshots/1.jpg`, `${ORIGIN}/games/rock-race/screenshots/2.png`]);
-  assert.match(html, /<div class="shots reveal"><a href="\/games\/rock-race\/screenshots\/1\.jpg"><img src="\/games\/rock-race\/screenshots\/1\.jpg" alt="Rock &lt;Race&gt;: screenshot 1"/, 'the screenshots are on the page too');
+  assert.deepEqual(g.image, [`${ORIGIN}/games/rock-race/_landing/wide.jpg`, `${ORIGIN}/games/rock-race/cover.jpg`]);
+  assert.deepEqual(g.screenshot, [`${ORIGIN}/games/rock-race/_landing/1.jpg`, `${ORIGIN}/games/rock-race/_landing/2.png`]);
+  assert.match(html, /<div class="shots reveal"><a href="\/games\/rock-race\/_landing\/1\.jpg"><img src="\/games\/rock-race\/_landing\/1\.jpg" alt="Rock &lt;Race&gt;: screenshot 1"/, 'the screenshots are on the page too');
   assert.match(html, /<li>Arcade<\/li><li>Shooter<\/li>/, 'and its genre');
   assert.deepEqual(g.author, { '@type': 'Organization', '@id': `${ORIGIN}/#studio`, name: 'Night Owls', url: `${ORIGIN}/` }, 'the studio, by name: a page is read on its own');
   assert.deepEqual(g.publisher, g.author);
@@ -322,8 +324,8 @@ test('robots.txt, sitemap.xml, llms.txt and llms-full.txt: every public page, re
   assert.equal(lines[0], '# Night Owls', 'an H1 first');
   assert.match(lines[2], /^> Night Owls is a studio made with Homie \(Games for night owls\)\. It makes free multiplayer games/, 'then the > summary');
   assert.deepEqual(lines.filter((l) => l.startsWith('## ')), ['## Games', '## Music', '## Videos', '## Posts', '## Pages', '## Optional']);
-  assert.match(llms, /^- \[Rock <Race>\]\(https:\/\/owls\.example\/rock-race\/\): Blast rocks, not friends\. 1–6 players, 2-minute rounds, Arcade, Shooter\. Play: https:\/\/owls\.example\/rock-race\/play\. Watch a live room: https:\/\/owls\.example\/rock-race\/watch\. On a TV: https:\/\/owls\.example\/rock-race\/tv\. Licence: MIT\.$/m);
-  assert.match(llms, /^- \[Gem Thief\]\(https:\/\/owls\.example\/gem-thief\/\): gem-thief for everyone\. 2 players, 2-minute rounds\. Based on Gem Rush by Other Studio\. Play: https:\/\/owls\.example\/gem-thief\/play\./m, 'the credit it owes, as a fact');
+  assert.match(llms, /^- \[Rock <Race>\]\(https:\/\/owls\.example\/rock-race\/\): Blast rocks, not friends\. 1–6 players, 1-minute rounds, Arcade, Shooter\. Play: https:\/\/owls\.example\/rock-race\/play\. Watch a live room: https:\/\/owls\.example\/rock-race\/watch\. On a TV: https:\/\/owls\.example\/rock-race\/tv\. Licence: MIT\.$/m);
+  assert.match(llms, /^- \[Gem Thief\]\(https:\/\/owls\.example\/gem-thief\/\): gem-thief for everyone\. 2 players, 1-minute rounds\. Based on Gem Rush by Other Studio\. Play: https:\/\/owls\.example\/gem-thief\/play\./m, 'the credit it owes, as a fact');
   assert.match(llms, /^- \[Closed Door\]\(https:\/\/owls\.example\/closed-door\/\): .* Play: https:\/\/owls\.example\/closed-door\/play\. On a TV: https:\/\/owls\.example\/closed-door\/tv\.$/m, 'no watch door, and no word about its licence: it names none');
   assert.doesNotMatch(llms, /remix|source\.json/i, 'no Remix section, no source address, no offer');
   assert.doesNotMatch(llms, /secret-plan|Secret Plan/, 'a private game is never named');

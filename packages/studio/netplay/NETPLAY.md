@@ -1,3 +1,10 @@
+> 0.45.0: this document describes the internal transport used by rules rooms.
+> Games have one authoring path: rules plus view with `openRoom`. Browser/offline
+> hosting uses that same contract. Existing netplay builds and port host helpers
+> remain supported with their original 32-seat limit. Historical protocol revisions below explain wire fields, not an
+> alternative way to author new games. `players.max` chooses the room size without
+> a 32-seat ceiling for rules games. Revision 12 adds roster patches and ordered chained deltas.
+
 # Homie netplay contract, v1 (revision 11)
 
 **Authoring now:** New games use rules plus view and the server as host. Read the
@@ -55,11 +62,9 @@ revision-8 relay ignore every new field and frame):
   because the frame has no storage), `net.params` (the address's switches), `net.shell` (where the
   page's own controls sit over the game), `guardGestures()` for a touch game.
 - **Whose body** (section 25): `peer.occ` (which stay in a seat), `Roster.claim(…, occ)`,
-  the `admit` callback, and createRoom's takeover and adopt callbacks for a room revived from its
-  checkpoint and for a host that reconnects as host.
+  and restoring a room's holders from its checkpoint.
 - **Places** (section 26): a tie policy for results. **The relay's log** (section 27).
-- **Seat or solo** (section 28, added after 0.31.0 with no change to the wire): `createRoom({ fallback })`,
-  `room.standing`, `net.full`, `net.line()`, a bound on `reconnecting` (`reconnectMaxMs`), and typed
+- **Seat or solo** (section 28, added after 0.31.0 with no change to the wire):  `net.full`, `net.line()`, a bound on `reconnecting` (`reconnectMaxMs`), and typed
   readers for `net.prefs` (section 24).
 - New optional fields `hello.ver`, `hello.feat`, `welcome.ver`, `welcome.stale`, `welcome.stall`,
   `peer.occ`, `peer.ver`, `peer.feat`, `snap.hb`; a relay → client `stale` frame; the final refusal
@@ -255,7 +260,7 @@ code.
 - **Room size.** `maxPlayers` comes from the game's netplay manifest: game.json's
   `netplay.maxPlayers`, or a `netplay.json` beside game.json or in the game's build
   (`maxPlayers` or `players.max`), else game.json's `players.max`, else 8. **A room holds
-  at most 32** (`SEAT_MAX`). `homie-studio build` writes the number into the catalogue and
+  chosen by the studio** (`players.max`). `homie-studio build` writes the number into the catalogue and
   the site's Table takes it from there; the first visitor of an empty room may lower it
   (`hello.max`), never raise it.
 - **A dropped seat is held 60 s** for its token, which covers a reload or a network blip.
@@ -1099,12 +1104,8 @@ function stepBots(dt: number): void {
 | `aiName(label)`, `stripAi(name)`, `AI_MARK`, `SKILLS`, `skillPreset(n, kids?)` | Names and the dial. |
 | `Roster({ …, policy })` | Keeps `aiSeats + guides` slots marked `agent` (a person never takes one); `claim(seat, name, agent?)` (hands `host`: the slot stays a bot, `agent.seat` set; hands `self`: claimed like a person's); `release(seat)` gives an agent's slot back as a seat kept for AI; `bots: 'off'` adds no filler. |
 
-`createRoom` (the port kit) does all of it: its roster keeps the AI seats, its join passes
-`p.agent`, it declares `caps: ['agents']`, and `room.skillOf(body)` is the dial. `BotBrain`
-takes `skill: () => room.skillOf(body)` and maps it: `reactionMs`, an aim error of
-`aimNoise × 0.8` rad, and a commitment of `2500 × (1.3 − 0.6 × aggression)` ms; `port/skill.ts`
-adds `jitter(s, maxPx)`, `engages(s, dt)` and `standoff(s, near, far)`. A ported game built on
-`BotBrain` gets the dial with a rebuild.
+Rules rooms provide the agent roster and skill dial. Declare deterministic bot inputs
+in `think`; presentation and controls remain in the view.
 
 **Old games and old relays.**
 - A game built with a helper before revision 6 plays on every server: doors, the human seat
@@ -1572,7 +1573,7 @@ and its page, so the wire did not change for it.
   that was, null when it was not late); on the play page `window.__shell.arrival` has `mode`,
   `by`, `explicitMs` (the page's clock) and `lateMs`, and `window.__shell.ready` the message
   itself. The fix is one option: `createNetplay({ arrival: 'game' })`, or in a port
-  `createRoom({ netplay: { arrival: 'game' } })`.
+  the rules view's transport options.
 
 ## 22. The link, said out loud (revision 9)
 
@@ -1608,7 +1609,7 @@ A page stands in one of six places with its room, and the helper says which:
   | `alone`, a room still on the old build (`room-stale`) | `alone` | Playing on your own · this room opens when its players have the new version |
   | `alone`, the room did not come back | `alone` | Playing on your own · the room dropped, still trying… |
   | `online`, every seat taken (`net.full`) | `full` | This room is full · watching until a seat is free |
-  | `online`, the game's own sentence (`net.line(text)`; `createRoom`'s `fallback` uses it) | `seat` | for example: Playing on your own until the next round |
+  | `online`, the game's own sentence (`net.line(text)`) | `seat` | for example: Playing on your own until the next round |
   | `closed`: `room-full`, `too-many` | `closed` | This room is full. (with "· playing on your own" once it does) |
   | `closed`: `replaced`, `kicked`, `room-closed`, `version` | `closed` | This game is open in another tab. / This room is closed. / This game needs a reload to play online. |
   | `closed`: `stale`, or a newer build is live | `stale` | This game was updated. Tap to reload. |
@@ -1625,9 +1626,7 @@ A page stands in one of six places with its room, and the helper says which:
   `reconnectMaxMs`, in `alone` (before this bound a replica whose room never came back showed a
   frozen round and "Reconnecting…" for good). Going `alone` from a room is a `role` event (`role:
   'host'`, `why: 'reconnect-timeout'`), also for a page that was the room's host: its seat went
-  with the room. `createRoom` keeps the round such a host was running (its own body and score,
-  everybody else's body a bot's); a game on raw `createNetplay` starts a round of its own, as it
-  does for `relay-timeout`. `closed` is said in words and the play page offers the way out.
+  with the room. Rules views start their offline rules runtime when going alone. `closed` is said in words and the play page offers the way out.
 - **`net.full`** is true when this browser asked to play and every seat is taken: it is in the
   room with no seat (`seat === null`, role `screen`) and the relay seats it when one frees up (a
   `role` event with `why: 'seated'`). Section 28 says what a game does meanwhile.
@@ -1875,114 +1874,11 @@ const off = guardGestures({ touch: 'canvas, [data-action]' });   // once, early;
   listeners and the stylesheet are tested, and emulated touch does not raise the callout, so try
   a real long press on a real iPhone and Android phone before calling it done.
 
-## 25. Whose body: seats that change hands (revision 9)
+## 25–26. Player bodies and places
 
-A seat number is not a person. The relay reuses a number when its player has been gone a minute
-(or sooner, in a full room), a host can be cut off while people come and go, and a round can
-outlive everyone in it. Three cases went wrong in real games; all three now run the same code as
-an ordinary join.
-
-**`peer.occ`: which stay in the seat.** The relay numbers every stay: a new number whenever a seat
-is given to a new token, the same number across that browser's reloads and reconnects, kept
-through a deploy. `Roster.claim(seat, name, agent, occ)` and `Roster.reconcile(peers)` (pass
-`occ`) use it: the same stay keeps its body; a seat that changed hands gives the old body back to
-a bot and admits the newcomer like any arrival. `roster.occupants()` belongs in the checkpoint
-beside `roster.toJSON()`, and `Roster.from(slots, opts, occupants)` reads it back. With a relay
-that says no `occ`, a seat is taken to be the same player's, as before, and the helper still knows
-its own: `net.resumed` is true when its welcome gave back the seat its token named.
-
-**The takeover callbacks cover every way a body changes hands** (`createRoom`):
-
-| How | `onTakeover(body, info)` | `adopt(body)` |
-|---|---|---|
-| A person joins a running round | `{ why: 'join', own: false }` | on the joiner, when the host resets its body |
-| A visitor revives a room from its checkpoint | `{ why: 'restore', own: true }` for its own body, and for anyone claimed with it | on the new host, with the body it took |
-| A replica is promoted and someone arrived since the last checkpoint | `{ why: 'migrate' }` | on that player, by reset |
-| A host reconnects as host and someone arrived while it was away | `{ why: 'join' }` (the missed `join` is replayed) | on that player, by reset |
-| The same player comes back to the body they held | not called when the slot never left them; called with `back: true` when they left and returned (a reload) | as before |
-
-`info.back` is true when the player held that body before. The default (no `onTakeover`) is still
-"score 0, where it stands".
-
-**The restored room.** Everyone leaves; the relay keeps the round for 60 s; a new visitor arrives
-before that. It is welcomed as host with the checkpoint (`why: 'resumed'`), and the round goes on
-with the clock where it was. Before revision 9 the newcomer inherited a departed player's body
-without `onTakeover` (their score, with eleven seconds left) and without `adopt` (its local pose
-stayed at a default, so it could not move until the next round). Now `createRoom` hands the
-departed players' bodies back to bots, claims one for the newcomer through `admit`, calls
-`onTakeover` and then `adopt`. A player who comes back to their own room (their token) keeps
-their body and score, and is adopted onto it. A game on raw `createNetplay` does the same with
-`roster.reconcile(peers)` in its `role` handler: treat every slot in `claimed` as a takeover.
-
-**The host that reconnects as host.** A host whose socket drops and comes back while nobody else
-could host gets a welcome, not a `role` (its role did not change), so its `role` handler never
-ran, and the relay never told it who came or went meanwhile. A player who arrived in that window
-had no body for the rest of the visit, and one who left kept a frozen one. The helper now says
-the difference as the events it would have been: `leave` (with `why: 'gone'`) and `join`, by seat,
-with a seat whose `occ` changed as both. Nothing to write: the handlers a game already has do it.
-The same change stopped `createRoom` calling `onTakeover` (and zeroing the score) for a player
-whose body never left them.
-
-**`admit`: which body an arrival takes.** By default a newcomer takes the lowest bot's body. In an
-elimination round that can be a dead one while living bots stand by.
-
-```ts
-createRoom({
-  admit: (candidates, who) => candidates.find((b) => b.alive) ?? null,   // null: none will do
-});
-new Roster({ min, max, admit: (slots, who) => pickSlotId(slots) });      // raw: slots in, a slot id out
-```
-
-- Asked for every NEW arrival: a fresh join, a restored room's claims, a promoted host's
-  reconcile, a missed join replayed. Return the body (the slot id, on `Roster`), `undefined` for the
-  default, or `null` for "none of these": a new body is spawned while the room has space, and when
-  it has none the default applies (a seated person always gets a body).
-- Never asked for a player returning to the body they held: an eliminated player who reloads gets
-  their own dead body back, not a way into the round. `occ` is how the roster knows.
-- Never offered a seat kept for AI when a person arrives; an agent is offered the kept seats first
-  (the reservation of section 17 holds).
-- Decide from the bodies' own state so the next host makes the same choice. The host still resets
-  the body (`net.reset`), announces the roster and checkpoints, as for any claim.
-
-**The late-join checklist.** A game is not done with joining until each of these is true in two
-real browsers:
-
-1. A joiner mid-round takes a bot's body, the right one (`admit`), is reset onto it and can move.
-2. The host leaves; the other browser continues the same round; a joiner after that still works.
-3. A joiner who reloads comes back to the same body (and the same score, if the game keeps it:
-   `info.back`).
-4. **Everyone leaves, and a new visitor enters before the room is forgotten (60 s).** The round is
-   the same one; the visitor has a body it did not inherit silently (`onTakeover` ran, `adopt` ran),
-   can move at once, and is ranked as a newcomer.
-5. The same, but the visitor is one of the players who left (same tab, reloaded): their own body
-   and score.
-6. The host's network drops for a second while a third browser joins: after it reconnects, three
-   people, three bodies, and nobody's score was reset.
-7. A deploy with tabs open: section 23.
-8. **A slow browser joins mid-round** (throttle one to "4x slowdown" and open the room's link
-   while a round runs, then again during the results). Within a few seconds it is in one of the
-   places section 28 names, and the screen says which: playing in the room on its own body,
-   playing on its own with bots, or watching with a line that says until when. Never a body-less
-   camera with nothing said, never "Reconnecting…" on a page that was never connected, and never
-   a line left up after the link came back. `room.standing` (or `net.link`, `net.full` and your
-   own roster on raw `createNetplay`) is what a test asserts.
-
-## 26. Places and ties (revision 9)
-
-`createRoom` ranks a round's results by score. The order of the rows was always: higher score
-first, then **people before bots**, then **the lower slot**. Two bodies on 61 points were shown
-first and second with nothing saying why. The order is the tiebreaker and is unchanged; what
-place a tie gets is now the game's to say:
-
-| `createRoom({ ties })` | 61, 61, 40, 12 | |
-|---|---|---|
-| `'order'` (default) | 1, 2, 3, 4 | What results always were: the order above is the place. Say so to players if you keep it ("ties go to the player, then the earlier seat"). |
-| `'shared'` | 1, 1, 3, 4 | Standard competition places: equal scores share one and the next is skipped. |
-| `'dense'` | 1, 1, 2, 3 | Equal scores share one and none is skipped. |
-
-`placesOf(scores, ties)` is the same rule for a game that ranks its own rows (pass the scores in
-the order you show them). A game with a real tiebreaker (time, kills, who got there first) sorts
-by it before ranking and keeps `'order'`.
+Rules own player bodies, arrival, departure and round results. Use the rules
+contract and `openRoom` view. The port-owned `createRoom` host scaffold and its
+callbacks remain available for existing games in 0.45.0. New games use rules plus view.
 
 ## 27. The relay's log (revision 9)
 
@@ -2009,61 +1905,10 @@ and `failed`.
   host is closed, it comes from somewhere these boundaries do not cover; the `leave` and
   `socket-gone` lines beside it say what the room was doing at that second.
 
-## 28. Seat or solo: a page with no body (after 0.31.0)
+## 28. A page waiting for its body
 
-A page can be in its room and have nothing to play: `net.link === 'online'`, and no body. It
-happened three ways, and none of them said anything:
-
-| How | What the page had | What happens now |
-|---|---|---|
-| The relay seated the player and the host had no body free (every body was somebody's: a server stopped keeping seats for AI mid-round, or the game has fewer bodies than the room has seats). The claim was tried once, at the join. | a seat, role `replica`, no body, for the rest of the visit | The host seats everybody who is waiting **whenever a body frees up and at every round start** (`createRoom`; the starters on raw `createNetplay` do the same in `seatWaiting()`). |
-| Every seat is taken. The relay lets the page in with no seat. | `seat === null`, role `screen`, nothing said | `net.full` is true and the line says so; the relay seats it when a seat frees up, as before. |
-| The page was reset by its host before a snapshot showed its body. | a body it never adopted (it could not move until the next round) | `createRoom` owes the adoption until a snapshot shows the body. |
-
-**The recipe is an option, not prose.** `createRoom` decides what a body-less page does, after
-`seatWaitMs` (default 4000, 1000 to 30000) of time it could actually listen:
-
-```ts
-const room = createRoom({
-  // …
-  fallback: 'solo',        // 'wait' (default) | 'solo' | 'spectate'
-  seatWaitMs: 4000,
-  onStanding: (s) => hud.say(s.line),   // optional: the line over the game says it already
-});
-room.standing;   // { state: 'joining' | 'playing' | 'solo' | 'watching' | 'waiting' | 'closed', why, line }
-```
-
-| `fallback` | What the page does while the room has no body for it | The line |
-|---|---|---|
-| `'wait'` (default) | What a game did before: it waits. Now it says so, and the host seats it as above. | Waiting for a place in this round… |
-| `'solo'` | A private round with bots, here: `room.hosting` is true, `room.mine()` is its body, `room.solo` is true. Nothing of it is sent (no round, roster, snapshot or `room.send`). The moment the room has a body for it, the private round ends and `adopt` is called with the room's body. | Playing on your own until the next round (in a full room: This room is full · playing on your own until a seat is free) |
-| `'spectate'` | No body; `room.viewBody()` follows a person in the room until it has one. | Watching until the next round |
-
-`room.standing` ties it to the link states of section 22, so a game (and a test) asks one thing:
-
-| `standing.state` | `why` | `net.link` | Can the player play? |
-|---|---|---|---|
-| `joining` | `connecting`, `no-body`, `full`, `reconnecting` | `connecting`, or `online` inside `seatWaitMs` | not yet; a line after 0.7 s ("Joining the round…") |
-| `playing` | `seated`, `reconnecting` | `online` (or `reconnecting`, bounded) | yes, in the room |
-| `solo` | `alone`, `offline` (the link); `no-body`, `full` (the fallback) | `alone`, `offline`, or `online` | yes, on their own, with bots |
-| `watching` | `screen` (a watcher or a big screen, by choice); `no-body`, `full` (`spectate`) | `online` | no; the line says until when |
-| `waiting` | `no-body`, `full` (`wait`) | `online` | no; the line says so |
-| `closed` | `net.closedWhy` | `closed` | no; the line says why and the play page offers another room |
-
-- **Solo is the game's own host code, run privately.** `onRoundStart` runs for the private round
-  (with the room's round number, a clock of its own) and the game's rules move its bots, exactly
-  as offline. A score made there stays there: the room's body starts as the host made it. Events
-  from the real room still arrive on `room.on('event')` while solo; a game that plays sounds for
-  them checks `room.solo`.
-- **The wait counts only time the page could listen**, like the wait for the welcome: a page
-  blocked for six seconds by its own boot runs its timers before the snapshots queued behind
-  them, and a body that is already on its way is not "missing".
-- **The default changes nothing a working game did.** A page that gets its body with its first
-  snapshots never sees any of this; `'wait'` only adds the line and the host's second try.
-- **On raw `createNetplay`** there is no option: do what the starters do. Host: try the claim
-  again on `leave` and at a round's rollover (`seatWaiting()`). Everyone: test
-  `net.link === 'reconnecting'` for your own "Reconnecting…", read `net.full`, and say where the
-  player stands with `net.line('…')`.
+The rules view owns connecting, playing, offline and closed states. The same
+rules run for offline/browser play; a separate port host is not supported.
 
 ## 29. The server as host (revision 10)
 

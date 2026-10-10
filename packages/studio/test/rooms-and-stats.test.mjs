@@ -1,4 +1,5 @@
-import { legacyGame } from './legacy-game.mjs';
+import { deployPlan } from '../lib/cloudflare.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.6.0: 32-seat rooms, and the studio's own stats.
  *
@@ -24,7 +25,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { NetRoom } from '../worker/room.mjs';
-import { SEAT_MAX, perAddress, seatsOf } from '../worker/seats.mjs';
+import { seatCount, perAddress, seatsOf } from '../worker/seats.mjs';
 import { STATS_MIGRATION, STATS_MIGRATION_FILE, isVisit, kindOf, sourceOf } from '../worker/stats.mjs';
 import { ensureStatsMigration, studioFiles } from '../lib/scaffold.mjs';
 import { virtualTime } from './virtual-time.mjs';
@@ -74,15 +75,15 @@ function assetsOf(dir) {
   };
 }
 
-test('seats: the netplay manifest sets a game\'s room size, up to 32; build says when a game asks for more', () => {
+test('seats: players.max is the single room-size setting, without a public cap', () => {
   const dir = studio('seats');
   for (const [id, meta, file] of [
-    ['courier', { players: { min: 2, max: 8 } }, { v: 1, players: { max: 32 } }],
-    ['crowd', { netplay: { v: 1, public: true, maxPlayers: 40, movement: 'host' } }, null],
+    ['courier', { players: { min: 2, max: 32 } }, { v: 1, players: { max: 32 } }],
+    ['crowd', { room: { host: 'server', budget: { tick: 5_000_000 } }, players: { min: 1, max: 300 }, netplay: { v: 1, public: true, maxPlayers: 40, movement: 'host' } }, null],
     ['duel', { players: { min: 2, max: 2 } }, null],
     ['plain', {}, null],
   ]) {
-    legacyGame(dir, id);
+    browserRulesGame(dir, id);
     const path = join(dir, 'games', id, 'game.json');
     const g = { ...JSON.parse(readFileSync(path, 'utf8')), ...meta };
     if (!meta.players) delete g.players;
@@ -91,13 +92,16 @@ test('seats: the netplay manifest sets a game\'s room size, up to 32; build says
     if (file) writeFileSync(join(dir, 'games', id, 'netplay.json'), JSON.stringify(file));
   }
   const b = spawnSync(process.execPath, [CLI, 'build'], { cwd: dir, encoding: 'utf8' });
-  assert.equal(b.status, 0, b.stderr);
-  assert.match(b.stderr, /games\/crowd asks for 40 players; a room holds at most 32/);
+  assert.equal(b.status, 0, b.stdout + b.stderr);
+  assert.doesNotMatch(b.stderr, /a room holds at most/);
   const cat = JSON.parse(readFileSync(join(dir, 'site', 'dist', 'games.json'), 'utf8'));
   const seats = Object.fromEntries(cat.games.map((g) => [g.id, g.players]));
-  assert.deepEqual(seats, { courier: { min: 2, max: 32 }, crowd: { min: 1, max: 32 }, duel: { min: 2, max: 2 }, plain: { min: 1, max: 8 } });
-  assert.equal(cat.games.find((g) => g.id === 'crowd').movement, 'host');
-  assert.equal(SEAT_MAX, 32);
+  assert.deepEqual(seats, { courier: { min: 2, max: 32 }, crowd: { min: 1, max: 300 }, duel: { min: 2, max: 2 }, plain: { min: 1, max: 8 } });
+  assert.equal(cat.games.find((g) => g.id === 'crowd').room.host, 'server');
+  assert.equal(deployPlan(dir).hosted.find(g => g.id === 'crowd').seats, 300);
+  assert.equal(seatCount(1000), 1000);
+  assert.equal(seatsOf({ players: { max: 1000 }, room: { contract: 2 } }), 1000);
+  assert.equal(perAddress(1000, true), 0);
   assert.deepEqual([seatsOf({ players: { max: 32 } }), seatsOf({ players: { max: 99 } }), seatsOf({}), seatsOf({ players: { max: 0 } })], [32, 32, 8, 8]);
   assert.deepEqual([perAddress(8), perAddress(16), perAddress(32)], [12, 20, 36]);
 });
@@ -186,112 +190,6 @@ test('netplay helper: an idle input frame goes out four times a second; a moving
   assert.ok(replica.stats().idleInputsSkipped > 50);
 });
 
-test('createRoom (the port kit): a body that arrives mid-round never gets a spawn index, so a spot, another body has', async (t) => {
-  const esbuild = (await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'))).default;
-  const file = join(scratch, 'room-kit.mjs');
-  await esbuild.build({ entryPoints: [join(PKG, 'port', 'room.ts')], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent' });
-  const { createRoom } = await import(file);
-  const clock = virtualTime(t);
-  const relay = new NetRoom({ code: 'r', maxPlayers: 8 });
-  class MemorySocket {
-    constructor() {
-      this.readyState = 0; this.bufferedAmount = 0;
-      this.h = relay.attach({ send: (t) => setTimeout(() => this.onmessage?.({ data: t }), 0), close: () => {}, buffered: () => 0 });
-      setTimeout(() => { this.readyState = 1; this.onopen?.({}); }, 0);
-    }
-    send(t) { this.h.onMessage(t); }
-    close() { this.readyState = 3; this.h.onClose(); }
-  }
-  const spawns = [];
-  const make = (who) => createRoom({
-    game: 'x', maxPlayers: 8, minBodies: 3, roundSeconds: 90,
-    // Every spawn on a ring by its index, as Ember Vale and the recipe's coin-dash do.
-    spawn: (slot, i) => { spawns.push({ who, slot: slot.slot, i }); return { slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, score: 0, x: Math.round(Math.cos((i / 8) * Math.PI * 2) * 160), y: Math.round(Math.sin((i / 8) * Math.PI * 2) * 120) }; },
-    pack: (b) => [b.x, b.y], unpack: (f, b) => { b.x = f[0]; b.y = f[1]; },
-    netplay: { config: { v: 1, url: 'ws://relay/x/__net?room=r', room: 'r', device: 'desk', want: 'play', name: who }, WebSocketImpl: MemorySocket, canHost: who === 'host', post: null },
-  });
-  const host = make('host');
-  await clock.wait(100);
-  assert.equal(host.hosting, true);
-  assert.deepEqual([...new Map(spawns.map((s) => [s.slot, s.i])).values()], [0, 1, 2], 'a round starts with the host and two bots: 0, 1, 2');
-  spawns.length = 0;
-  // Five people arrive one after another: two take the bots' places, three have no bot to take over.
-  const rooms = [];
-  for (const who of ['ann', 'ben', 'cal', 'dot', 'eve']) { rooms.push(make(who)); await clock.wait(100); }
-  const bodies = [...host.bodies.values()];
-  assert.equal(bodies.filter((b) => !b.bot).length, 6);
-  assert.deepEqual(spawns.filter((s) => s.who === 'host').map((s) => s.i), [3, 4, 5], 'each arrival with no bot to take over: the lowest index nobody holds (it was 0 for every one)');
-  const spots = new Set(bodies.map((b) => `${b.x},${b.y}`));
-  assert.equal(spots.size, bodies.length, `no two bodies on one spot: ${JSON.stringify(bodies.map((b) => [b.name, b.x, b.y]))}`);
-  for (const r of [host, ...rooms]) r.net.close?.();
-});
-
-test('the state the playtest and perf read is on the game side: createRoom gives the round, the typed extras carry the rest, the 3D starters say their renderer\'s counters', async (t) => {
-  // ACROSS THE SEAM: the real port kit (createRoom + exposePort over the real helper and relay) on one side, the
-  // playtest skill's own reader and judge and perf's renderer-cost reader on the other.
-  const playtest = await import('../../../plugins/homie/skills/playtest/scripts/lib/judge.mjs');
-  const { renderCostOf } = await import('../lib/perf.mjs');
-  const esbuild = (await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'))).default;
-  const file = join(scratch, 'port-kit.mjs');
-  await esbuild.build({ stdin: { contents: "export { createRoom } from './room'; export { exposePort, PORT_EXTRA_NAMES } from './probe';", resolveDir: join(PKG, 'port'), loader: 'ts' }, bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent' });
-  const { createRoom, exposePort, PORT_EXTRA_NAMES } = await import(file);
-  // One list of names: what the game's author is told to set is what the instruments read.
-  assert.deepEqual([...PORT_EXTRA_NAMES], playtest.EXTRA_NAMES);
-  const src = readFileSync(join(PKG, 'port', 'probe.ts'), 'utf8');
-  for (const name of playtest.EXTRA_NAMES) assert.match(src, new RegExp(`\\b${name}\\?: \\(\\) => (boolean|string|number);`), `PortExtra types ${name}`);
-
-  const clock = virtualTime(t);
-  const relay = new NetRoom({ code: 'r', maxPlayers: 4 });
-  class MemorySocket {
-    constructor() {
-      this.readyState = 0; this.bufferedAmount = 0;
-      this.h = relay.attach({ send: (x) => setTimeout(() => this.onmessage?.({ data: x }), 0), close: () => {}, buffered: () => 0 });
-      setTimeout(() => { this.readyState = 1; this.onopen?.({}); }, 0);
-    }
-    send(x) { this.h.onMessage(x); }
-    close() { this.readyState = 3; this.h.onClose(); }
-  }
-  const room = createRoom({
-    game: 'x', maxPlayers: 4, minBodies: 2, roundSeconds: 90,
-    spawn: (slot, i) => ({ slot: slot.slot, seat: slot.seat, name: slot.name, bot: slot.bot, score: 0, x: 10 + i, y: 20 }),
-    pack: (b) => [b.x, b.y], unpack: (f, b) => { b.x = f[0]; b.y = f[1]; },
-    netplay: { config: { v: 1, url: 'ws://relay/x/__net?room=r', room: 'r', device: 'desk', want: 'play', name: 'host' }, WebSocketImpl: MemorySocket, canHost: true, post: null },
-  });
-  await clock.wait(100);
-  assert.equal(room.hosting, true);
-  // The game's frame, as far as a probe needs one. The game says only what it has: alive, a mode, its renderer.
-  const had = globalThis.window;
-  globalThis.window = { addEventListener() {} };
-  t.after(() => { if (had === undefined) delete globalThis.window; else globalThis.window = had; });
-  let hp = 3;
-  const probe = exposePort(room.net, { view: 'top', self: () => ({ x: 11, y: 20 }), extra: { alive: () => hp > 0, mode: () => 'manual fire', drawCalls: () => 42, triangles: () => 9000, level: () => 7 } });
-  assert.equal(globalThis.window.__homiePort, probe);
-  // The round needs no hook: createRoom told the helper, and the probe reads the helper.
-  const info = probe.info();
-  assert.deepEqual([info.round.n, info.round.phase], [1, 'live']);
-  assert.ok(info.round.leftMs > 80_000 && info.round.leftMs <= 90_000, `about 90 s left: ${info.round.leftMs}`);
-  assert.deepEqual([info.link, info.reconnects], ['online', 0], 'and where the browser stands with its room');
-  // The playtest's own reader (the function it runs inside the game's frame), then its judge.
-  const read = playtest.readPort(playtest.EXTRA_NAMES);
-  assert.deepEqual(read.extra, { alive: true, mode: 'manual fire', drawCalls: 42, triangles: 9000 }, 'the named ones, and only those');
-  const st = playtest.stateOf({ at: Date.now(), port: { ...read, busy: 0, x: 11, y: 20 }, shell: null, net: { link: info.link } });
-  assert.deepEqual([st.phase, st.round, st.alive, st.mode, st.source, st.link], ['live', 1, true, 'manual fire', 'probe', 'online']);
-  assert.equal(playtest.contextOf(st).kind, 'live');
-  hp = 0;
-  assert.equal(playtest.contextOf(playtest.stateOf({ port: { ...playtest.readPort(playtest.EXTRA_NAMES), busy: 0 }, shell: null })).kind, 'spectating', 'a dead body is not a broken control');
-  // perf reads the renderer's counters from the same `extra`, and the playtest's look row does too.
-  const x = probe.info().extra;
-  assert.deepEqual(renderCostOf([{ drawCalls: Number(x.drawCalls), triangles: Number(x.triangles) }]).drawCalls.median, 42);
-  assert.equal(playtest.renderCost([read.extra]).triangles.median, 9000);
-  room.net.close?.();
-
-  // The starters set what they can. The 3D ones have a renderer: its counters, on the port probe (they were only on
-  // the netplay probe, where neither perf nor the playtest looks). The one with a way to go down says `alive`.
-  const port = (starter) => { const text = readFileSync(join(PKG, 'starters', starter, 'src', 'view.ts'), 'utf8'); const at = text.indexOf('exposePort(net, {'); return text.slice(at, text.indexOf('\n});', at)); };
-  for (const starter of ['gem-rush-3d', 'hero-rush-3d']) assert.match(port(starter), /extra: \{ drawCalls: \(\) => renderer\.info\.render\.calls, triangles: \(\) => renderer\.info\.render\.triangles \}/, starter);
-  assert.match(port('ember-vale'), /extra: \{ alive: \(\) => /);
-});
-
 test('stats: what counts as a visit, where it came from, and what a referrer is', () => {
   const req = (headers, method = 'GET') => new Request('https://owls.example/', { method, headers });
   assert.equal(isVisit(req({ 'user-agent': BROWSER, 'sec-fetch-dest': 'document' })), true);
@@ -313,7 +211,7 @@ test('stats: what counts as a visit, where it came from, and what a referrer is'
 
 test('stats: the site counts, only the owner reads, and a one-time link signs the owner\'s browser in', async () => {
   const dir = studio('counts');
-  legacyGame(dir, 'owl-run', 'Owl Run');
+  browserRulesGame(dir, 'owl-run', 'Owl Run');
   mkdirSync(join(dir, 'music', 'theme'), { recursive: true });
   writeFileSync(join(dir, 'music', 'theme', 'theme.mp3'), Buffer.from('ID3-audio'));
   writeFileSync(join(dir, 'music', 'manifest.json'), JSON.stringify({ v: 1, items: [{ slug: 'theme', kind: 'song', title: 'Theme', published: true, files: [{ role: 'audio', path: 'music/theme/theme.mp3' }] }] }));

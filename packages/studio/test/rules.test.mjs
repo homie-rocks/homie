@@ -130,7 +130,7 @@ test('a declaration that does not fit the contract is named', async () => {
   assert.equal(L.R.roomSettings({ tickHz: 60, budget: { tick: 900_000 } }).settings.budget.tick, 900_000, 'and a game may name its own');
   assert.equal(L.R.roomSettings({ view: { radiusM: 0 } }).settings.view.radiusM, 0);
   assert.equal(L.R.roomSettings({ view: { radiusM: 1000000 } }).settings.view.radiusM, 1000000);
-  for (const room of [{view:4}, {view:{nearM:4}}, {view:{radiusM:-1}}, {host:'browser',view:{radiusM:4}}])
+  for (const room of [{view:4}, {view:{unknownSetting:4}}, {view:{radiusM:-1}}, {host:'browser',view:{radiusM:4}}])
     assert.ok(L.R.roomSettings(room).problems.length, 'unsupported spatial settings are diagnosed');
   assert.throws(() => L.R.compileMap({}), /needs "bounds"/);
 });
@@ -498,7 +498,7 @@ test('the room with the server as host: no browser hosts, and a forged score, st
   const rig = roomRig(L, compile({}));
   const a = rig.conn();
   const w = a.hello('Ada');
-  assert.deepEqual([w.t, w.role, w.seat, w.rev], ['welcome', 'replica', 0, 11]);
+  assert.deepEqual([w.t, w.role, w.seat, w.rev], ['welcome', 'replica', 0, 12]);
   assert.deepEqual(w.host, { id: 'server', seat: null }, 'the host is the server, and it is not a client');
   assert.equal(w.ckpt, undefined);
   assert.equal(rig.room.hostId, null);

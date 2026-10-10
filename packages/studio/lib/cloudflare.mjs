@@ -1,4 +1,5 @@
 import {workerEntry} from './worker-build.mjs';
+import { seatCount } from '../worker/seats.mjs';
 import { refreshWorkerConfig } from './worker-config.mjs';
 import { paidReleases, uploadPaidParts } from './parts-upload.mjs';
 /**
@@ -184,7 +185,7 @@ export function deployPlan(root) {
   const studio = readStudio(root);
   // Games whose rules run on the server (a src/rules.ts, and not "room": { "host": "browser" }): one line each.
   const hosted = listGames(root).filter((g) => isRulesGame(g) && g.room?.host !== 'browser').map((g) => {
-    const seats = Math.max(1, Math.min(32, Math.floor(Number(g.players?.max)) || 8));
+    const seats = seatCount(g.players?.max);
     const tickHz = Math.max(1, Math.min(60, Math.floor(Number(g.room?.tickHz)) || 20));
     const use = hostedUse({ seats, inputHz: Math.max(1, Math.min(tickHz, Math.floor(Number(g.room?.inputHz)) || tickHz)) });
     return { id: g.id, name: g.name ?? g.id, ...use };

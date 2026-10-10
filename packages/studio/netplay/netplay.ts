@@ -88,9 +88,9 @@
 
 export const NETPLAY_VERSION = 1;
 /** The contract revision this helper speaks (NETPLAY.md): its hello says so (`rev`), and so does every build of it. */
-export const NETPLAY_REVISION = 11;
+export const NETPLAY_REVISION = 12;
 /** In every bundle that includes the helper: `homie-studio build` reads it to tell the office which revision a build speaks. */
-export const NETPLAY_MARK = 'homie-netplay-rev:11';
+export const NETPLAY_MARK = 'homie-netplay-rev:12';
 
 export type Role = 'host' | 'replica' | 'screen';
 export type Device = 'phone' | 'desk' | 'tv';
@@ -802,13 +802,13 @@ export interface Netplay<S = unknown, A = unknown, C = unknown> {
   /**
    * This browser asked to play and every seat is taken: it is in the room with no seat (`seat === null`, role
    * `screen`) and the relay seats it when one frees up (a `role` event with `why: 'seated'`). The line over the game
-   * says so; `createRoom({ fallback })` decides what the page does meanwhile.
+   * says so; the rules view decides what the page shows meanwhile.
    */
   readonly full: boolean;
   /**
    * The line over the game is the game's to use too: one short sentence about where this player stands ("Playing
    * on your own until the next round"), or null to take it away. Shown while the link is `online`; a link that is
-   * down says its own line first. `createRoom` uses it for its `fallback`.
+   * down says its own line first.
    */
   line(text: string | null): void;
   /** `connectClock: 'game'`: the game has finished booting; the wait for the room's welcome starts now. Once. */
@@ -1046,7 +1046,7 @@ export interface RosterOptions {
   max: number;
   botName?: (slot: number) => string;
   /**
-   * Revision 6: the room's policy (createRoom passes `() => net.policy`). A hybrid or beginner server keeps
+   * Revision 6: the room's policy (read from `net.policy`). A hybrid or beginner server keeps
    * `aiSeats + guides` slots for AI (marked `agent`, never given to a person); `bots: 'off'` adds no other filler.
    */
   policy?: () => Policy | null;
@@ -1371,7 +1371,7 @@ export function cleanFeatures(list: unknown): string[] {
 
 /**
  * PLACES (NETPLAY.md section 26): rows ranked by score, with a tie policy said out loud. `rows` must already be in the
- * order to show them (the tiebreak is the caller's: createRoom puts people before bots, then the lower slot).
+ * order to show them (the tiebreak is the caller's).
  * `'order'` (the default, what results always were): places 1, 2, 3… in that order, so two equal scores get different
  * places. `'shared'`: standard competition places, equal scores share one and the next is skipped (1, 1, 3).
  * `'dense'`: equal scores share one and none is skipped (1, 1, 2).
@@ -1799,7 +1799,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     const late = playableSent && arrived.by === 'auto' && arrived.playableMs !== null ? arrived.explicitMs - arrived.playableMs : null;
     if (late !== null && late >= 250) {
       arrived.lateMs = late;
-      console.warn(`[netplay] net.playable() came ${late} ms after the arrival card had already lifted: this game uses the automatic arrival (seated, with the room's state), so its own word changed nothing and the card left before the game was ready. Pass createNetplay({ arrival: 'game' }) (createRoom: netplay: { arrival: 'game' }) so the card waits for net.playable().`);
+      console.warn(`[netplay] net.playable() came ${late} ms after the arrival card had already lifted: this game uses the automatic arrival (seated, with the room's state), so its own word changed nothing and the card left before the game was ready. Pass createNetplay({ arrival: 'game' }) so the card waits for net.playable().`);
     }
     post?.({ what: 'ready', by: 'game', mode: arrival, ms: arrived.explicitMs, ...(arrived.lateMs !== null ? { lateMs: arrived.lateMs } : {}) });
     sayPlayable('game');
@@ -2437,7 +2437,12 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
         return;
       }
       case 'roster': {
-        slots = (m['slots'] as Slot[]) ?? null;
+        if (m['patch'] === true) {
+          const next = new Map((slots ?? []).map(row => [row.slot, row]));
+          for (const slot of (m['removed'] as number[] ?? [])) next.delete(slot);
+          for (const row of (m['slots'] as Slot[] ?? [])) next.set(row.slot, row);
+          slots = [...next.values()].sort((a, b) => a.slot - b.slot);
+        } else slots = (m['slots'] as Slot[]) ?? null;
         post?.({ what: 'roster', slots });
         if (slots) emit('roster', slots);
         return;
@@ -2965,7 +2970,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
     if (full) { full = false; post?.({ what: 'full', full: false }); }
     aloneWhy = why;
     // A page that gives up on a room it WAS in says so as a role event even when it was that room's host: its seat is
-    // gone with the room, and the game seats itself again for a round of its own (createRoom keeps the round it had).
+    // gone with the room, and the game seats itself again for a round of its own.
     if (!roleKnown || role !== 'host' || (rulesGame && !rulesHost) || why === 'reconnect-timeout') setRole(canOffline ? 'host' : 'replica', why, rulesGame && kept ? { ckpt: { k: tick, st: now(), d: kept as C } } : {});
     // No shell at all is `offline` from the start; a room that never answered is `alone` (and still knocked at). A
     // page the relay refused for good stays `closed` (nothing is knocking): it plays by itself and its line says why.

@@ -141,8 +141,8 @@ export function serverOf(raw, { from = 'd1' } = {}) {
     name: oneLine(raw.name, SERVER_LIMITS.name) || (id === 'public' ? 'Quick play' : id),
     blurb: oneLine(raw.blurb, SERVER_LIMITS.blurb),
     policy,
-    aiSeats: human || policy === 'open' ? 0 : int(pick('ai_seats', 'aiSeats'), 0, 31, policy === 'hybrid' ? 2 : 0),
-    guides: policy === 'beginner' ? int(pick('guides', 'guides'), 0, 31, 2) : 0,
+    aiSeats: human || policy === 'open' ? 0 : int(pick('ai_seats', 'aiSeats'), 0, Number.MAX_SAFE_INTEGER, policy === 'hybrid' ? 2 : 0),
+    guides: policy === 'beginner' ? int(pick('guides', 'guides'), 0, Number.MAX_SAFE_INTEGER, 2) : 0,
     bots: (pick('bots', 'bots') ?? (human ? 'off' : 'fill')) === 'off' ? 'off' : 'fill',
     level: Math.min(levelMax, int(pick('level', 'level'), 1, 5, policy === 'beginner' ? 2 : 3)),
     levelMax,
@@ -152,7 +152,7 @@ export function serverOf(raw, { from = 'd1' } = {}) {
     beginnerDays: policy === 'beginner' ? int(pick('beginner_days', 'beginnerDays'), 1, 3650, SERVER_LIMITS.beginnerDays) : null,
     beginnerLevel: policy === 'beginner' && pick('beginner_level', 'beginnerLevel') !== undefined && pick('beginner_level', 'beginnerLevel') !== null ? int(pick('beginner_level', 'beginnerLevel'), 1, 1_000_000, null) : null,
     roomsMax: int(pick('rooms_max', 'roomsMax'), 1, SERVER_LIMITS.roomsMax, id === 'public' ? SERVER_LIMITS.roomsMax : 4),
-    seats: pick('seats', 'seats') === undefined || pick('seats', 'seats') === null ? null : int(pick('seats', 'seats'), 1, 32, null),
+    seats: pick('seats', 'seats') === undefined || pick('seats', 'seats') === null ? null : int(pick('seats', 'seats'), 1, Number.MAX_SAFE_INTEGER, null),
     brain: human ? 'off' : BRAINS.includes(pick('brain', 'brain')) ? pick('brain', 'brain') : 'script',
     listed: pick('listed', 'listed') === undefined || pick('listed', 'listed') === null ? true : pick('listed', 'listed') === true || Number(pick('listed', 'listed')) === 1,
     state: ['open', 'closed', 'archived'].includes(raw.state) ? raw.state : 'open',
@@ -376,14 +376,14 @@ export function checkServer(body, { create = false } = {}) {
   }
   if (body.blurb !== undefined) f.blurb = oneLine(body.blurb, SERVER_LIMITS.blurb);
   const num = (k, lo, hi) => { if (body[k] === undefined) return true; const n = Math.floor(Number(body[k])); if (!Number.isFinite(n) || n < lo || n > hi) return false; f[k] = n; return true; };
-  if (!num('aiSeats', 0, 31)) return bad('aiSeats is 0 to 31 (and at most the room\'s seats less one)');
-  if (!num('guides', 0, 31)) return bad('guides is 0 to 31');
+  if (!num('aiSeats', 0, Number.MAX_SAFE_INTEGER)) return bad('aiSeats is a non-negative safe integer (and at most the room\'s seats less one)');
+  if (!num('guides', 0, Number.MAX_SAFE_INTEGER)) return bad('guides is a non-negative safe integer');
   if (!num('level', 1, 5)) return bad('level is 1 to 5 (Rookie, Steady, Fair, Strong, Maxed)');
   if (!num('levelMax', 1, 5)) return bad('levelMax is 1 to 5');
   if (!num('rooms', 1, SERVER_LIMITS.roomsMax)) return bad(`rooms is 1 to ${SERVER_LIMITS.roomsMax}`);
   if (!num('beginnerDays', 1, 3650)) return bad('beginnerDays is 1 to 3650');
   if (body.beginnerLevel === null) f.beginnerLevel = null; else if (!num('beginnerLevel', 1, 1_000_000)) return bad('beginnerLevel is a number, or null for none');
-  if (body.seats === null) f.seats = null; else if (!num('seats', 1, 32)) return bad('seats is 1 to 32, or null for the game\'s own');
+  if (body.seats === null) f.seats = null; else if (!num('seats', 1, Number.MAX_SAFE_INTEGER)) return bad('seats is a positive safe integer, or null for the game\'s own');
   if (body.kids !== undefined) f.kids = body.kids === true || body.kids === 'on';
   if (body.listed !== undefined) f.listed = !(body.listed === false || body.listed === 'off');
   if (body.bots !== undefined) { if (!['fill', 'off'].includes(body.bots)) return bad('bots is fill or off'); f.bots = body.bots; }

@@ -21,17 +21,6 @@
   .panel li { margin: 4px 0; color: #e7d9b4; }
   .panel li small { color: #a39a80; }
   .panel .close { float: right; background: none; border: 0; color: #c9c0a6; font-size: 20px; cursor: pointer; }
-  /* A panel never runs off a short screen (a phone on its side, a small frame in somebody's post): there the new
-     hero's card becomes two rows at the bottom, clear of the page's own buttons along the top. While a panel is
-     open the touch controls (drawn over everything, .hp-touch) are not drawn over it. */
-  .panel { max-height: calc(100vh - 16px); overflow: auto; }
-  body:has(.panel:not([hidden])) .hp-touch { visibility: hidden; }
-  @media (max-height: 340px) {
-    #make { top: auto; bottom: calc(8px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(520px, calc(100vw - 24px)); padding: 10px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; align-items: center; }
-    #make h2 { margin: 0; font-size: 16px; }
-    #make p { display: none; }
-    #make label.hc { margin: 0; font-size: 11.5px; line-height: 1.25; }
-  }
   /* Asking a guide: buttons (agents.json "asks"), never a text box. On a computer: bottom centre. */
   .asks { left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); max-width: min(560px, calc(100vw - 200px)); box-sizing: border-box; padding: 8px 10px; border-radius: 14px; background: rgba(10,20,18,.84); border: 1px solid rgba(127,216,200,.45); text-align: center; }
   .asks .who { font: 700 12.5px/1.2 inherit; font-family: inherit; color: #7fd8c8; margin: 0 0 6px; }

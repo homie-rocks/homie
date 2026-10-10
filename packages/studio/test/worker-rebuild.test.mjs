@@ -19,6 +19,10 @@ test('a reload holding an old entry retains its complete module graph across a b
   writeFileSync(join(src,'lazy.mjs'),`export const value='before'`);
   await buildWorker(root,esbuild);
   const old=readFileSync(entry,'utf8'),oldMain=workerEntry(root),committed=readConfig(root).main;
+  assert.equal(readFileSync(join(src,'worker.mjs'),'utf8'), `export default {async fetch(){return new Response((await import('./lazy.mjs')).value)}}`, 'the studio source is untouched');
+  const generated=readFileSync(oldMain,'utf8');
+  assert.match(generated, /as Gate/);
+  assert.match(generated, /as Concentrator/);
   assert.match(oldMain,/runtime\/[a-f0-9]{24}\/worker\.js$/);
   const local=devConfig(root,true);
   assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,oldMain);

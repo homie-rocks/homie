@@ -1,4 +1,4 @@
-import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.15.0: watch any player (NETPLAY.md section 16, contract revision 5).
  *
@@ -378,7 +378,7 @@ async function site() {
   if (!built) {
     const dir = studio('worker');
     for (const [id, name, extra] of [['owl-run', 'Owl Run', {}], ['card-night', 'Card Night', { watch: 'overview' }], ['blind-duel', 'Blind Duel', { watch: false }], ['night-vault', 'Night Vault', { launch: 'private' }]]) {
-      legacyGame(dir, id, name);
+      browserRulesGame(dir, id, name);
       const gj = join(dir, 'games', id, 'game.json');
       writeFileSync(gj, JSON.stringify({ ...JSON.parse(readFileSync(gj, 'utf8')), ...extra }, null, 2));
     }
@@ -409,7 +409,7 @@ async function site() {
     const stub = env.TABLE.get(`${game}/${room}`);
     await stub.fetch(`https://table/__facts?game=${game}&room=${room}&max=8`);
     const table = env.TABLE.objs.get(`${game}/${room}`);
-    const conn = { sent: [], ip: '203.0.113.5', send(t) { this.sent.push(JSON.parse(t)); }, close() {} };
+    const conn = { ver: JSON.parse(readFileSync(join(dir, 'site/dist/games.json'), 'utf8')).games.find(g => g.id === game).room.build, sent: [], ip: '203.0.113.5', send(t) { this.sent.push(JSON.parse(t)); }, close() {} };
     table.room.attach(conn).onMessage(JSON.stringify({ t: 'hello', v: 1, device: 'desk', want: 'play', canHost: true }));
     table.report();
     await Promise.all(waits.splice(0));
@@ -448,7 +448,7 @@ test('the watch door: the game as a watcher, its frame and socket say so, and a 
   assert.equal(net.watch, true);
   assert.equal(net.follow, 1);
   assert.equal(net.watchPolicy, 'follow');
-  assert.match(net.url, new RegExp(`/owl-run/__net\\?room=pub-3&b=${KEY_A}&w=1$`));
+  assert.match(net.url, new RegExp(`/owl-run/__net\\?room=pub-3&b=${KEY_A}&w=1&gv=[a-f0-9]{32}$`));
   // A bad follow is Auto; a play frame is untouched.
   assert.equal(netOf(await (await fetchSite('/owl-run/__game/?room=pub-3&watch=1&follow=<x>')).text()).follow, 'auto');
   const play = netOf(await (await fetchSite('/owl-run/__game/?room=pub-3')).text());
@@ -483,7 +483,7 @@ test('a private game is watched only by whoever may play it', async () => {
   assert.match(boot.t, /^[a-z0-9]+\.o\.[A-Za-z0-9_-]{32}$/, 'the owner\'s ticket rides into the frame and the sockets');
   const frame = await fetchSite(`/night-vault/__game/?room=pub-1&watch=1&t=${encodeURIComponent(boot.t)}`);
   assert.equal(frame.status, 200);
-  assert.match(netOf(await frame.text()).url, /&t=.+&w=1$/);
+  assert.match(netOf(await frame.text()).url, /&t=.+&w=1&gv=[a-f0-9]{32}$/);
 });
 
 test('/api/watch names the busiest public room and reserves nothing; every room row carries its Watch link', async () => {

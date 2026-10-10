@@ -77,7 +77,7 @@ export function botClient({ url, name = 'Bot', steer = null, lead = 2, tickHz = 
       if (m.t === 'seat') { bot.seat = m.seat; return; }
       if (m.t === 'error') { bot.errors.push(m); return; }
       if (m.t === 'round') { bot.round = m.round; bot.rounds.push(m.round); return; }
-      if (m.t === 'roster') { bot.roster = m.slots; return; }
+      if (m.t === 'roster') { if (m.patch) { const rows = new Map((bot.roster ?? []).map(r => [r.slot,r])); for (const slot of m.removed ?? []) rows.delete(slot); for (const row of m.slots ?? []) rows.set(row.slot,row); bot.roster = [...rows.values()].sort((a,b)=>a.slot-b.slot); } else bot.roster = m.slots; return; }
       if (m.t === 'ev') { if (bot.events.length < 2000) bot.events.push(m); return; }
       if (m.t !== 'snap') return;
       const now = performance.now();

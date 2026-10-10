@@ -135,11 +135,11 @@ const blocked = (t, ms) => t.mock.timers.setTime(Date.now() + ms);
 const hasBody = (room) => (room.hosting ? Boolean(room.mine()) : room.net.seat !== null && Boolean(room.net.latest()?.d?.b?.some((r) => r[1] === room.net.seat)));
 const stands = (room) => ({ link: room.net.link, standing: room.standing.state, why: room.standing.why, body: hasBody(room) });
 
-test('revision 11, and the numbers both sides share', async () => {
+test('revision 12, and the numbers both sides share', async () => {
   const { NETPLAY_REVISION, NETPLAY_MARK, PREFS_LIMITS: helperPrefs, cleanVersion, cleanFeatures } = await netplayKit();
-  assert.equal(NETPLAY_REVISION, 11);
-  assert.equal(NET_REVISION, 11);
-  assert.equal(NETPLAY_MARK, 'homie-netplay-rev:11');
+  assert.equal(NETPLAY_REVISION, 12);
+  assert.equal(NET_REVISION, 12);
+  assert.equal(NETPLAY_MARK, 'homie-netplay-rev:12');
   assert.deepEqual({ ...helperPrefs }, { ...PREFS_LIMITS }, 'the helper and the play page keep the same prefs limits');
   for (const v of ['7', 'v2.1', '2026-10-06_b', 12, '', ' x ', 'a b', 'x'.repeat(33), null, undefined, {}]) assert.equal(cleanVersion(v), versionOf(v), `the same word for ${JSON.stringify(v)}`);
   assert.equal(versionOf(12), '12');

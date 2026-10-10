@@ -1,8 +1,10 @@
 # Rewrite a browser-hosted game as rules plus view
 
 Use this path when the owner asks to move an old game's rules onto the server.
-There is no automatic converter. An ordinary edit is not permission to rewrite;
-old games continue to work as they are. Read RULES.md before starting.
+There is no automatic converter yet. Version 0.45.0 keeps existing netplay games
+and their port host helpers working, with their original 32-seat limit. Larger
+rooms require this rewrite. Keep a baseline copy and preserve the game throughout.
+Read RULES.md before starting.
 
 1. Read this game's codex, manifest, entry, host loop, input, packing/checkpoint
    code, bots, saves and tests. Record what players must keep: controls, timings,

@@ -8,10 +8,6 @@
   },
   "roundSeconds": 60,
   "entry": "src/view.ts",
-  "netplay": {
-    "v": 1,
-    "public": true
-  },
   "landing": {
     "pitch": "Grab the gems. Bump your rivals away.",
     "controls": {

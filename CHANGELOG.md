@@ -17,6 +17,27 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.45.0] - 2026-10-10
+
+**Plugin 0.45.0** · [#85](https://github.com/homie-rocks/homie/pull/85)
+
+Choose room sizes in the hundreds and reduce the state each phone downloads.
+
+### Added
+
+- Gate connections and batched concentrator links, with seat resumption after a link restart.
+- Studio-selected `room.view.precisionM`, `nearM` and `farHz` for distant bodies. The controlled body keeps its exact movement state.
+
+### Changed
+
+- For rules games, public room admission, rules compilation and deploy planning use the studio's requested `players.max` without the 32-player clamp.
+- Ordered snapshot deltas and a shared spatial index reduce repeated state work. Rules rooms have no automatic guest ceiling for shared carrier addresses.
+
+### Upgrade notes
+
+- Rebuilding generates the Gate and Concentrator exports, bindings and SQLite migration, including for studios whose Worker entry predates Gates. Custom Worker source and routes are preserved.
+- Existing browser-hosted netplay games keep building, checking and running with the restored port host/HUD helpers and importer. Their 32-seat limit remains; a larger request prints the rewrite guide. New games and starters use rules plus view. A release gate packs this version and checks two browsers finishing a round in the unchanged released 0.32.1 starter. Retirement is a later step, after studio migrations and a shipped one-command assisted rewrite.
+
 ## [0.44.3] - 2026-10-10
 
 **Plugin 0.44.3**

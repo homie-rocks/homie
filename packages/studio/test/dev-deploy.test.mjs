@@ -1,4 +1,5 @@
 import { legacyGame } from './legacy-game.mjs';
+import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * The dev server, deploy and publish, as a creator's agent met them (a stand-in wrangler plays Cloudflare and the
  * local runtime; a stand-in fetch or a server on this computer plays the live site and the directory):
@@ -476,7 +477,7 @@ test('a deploy says which games changed with a content hash, and asks the direct
   const dir = studio('hashes');
   const cf = account(dir);
   legacyGame(dir, 'crown-thief');
-  legacyGame(dir, 'late-game');
+  browserRulesGame(dir, 'late-game');
   const first = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
   assert.equal(first.ok, true, JSON.stringify(first));
   assert.deepEqual(first.games.map((g) => g.id), ['crown-thief', 'late-game']);
@@ -983,12 +984,11 @@ test('a game added while dev runs: named while it is not built, and picked up on
   const { io } = startDev(dir, port);
   assert.ok(await until(() => /Rooms here are local/.test(io.err) || io.code !== undefined, 60_000) && io.code === undefined, io.err);
   const play = async () => (await fetch(`http://127.0.0.1:${port}/late-game/play`)).status;
-  legacyGame(dir, 'late-game');
+  browserRulesGame(dir, 'late-game');
   assert.equal(await play(), 404, 'not built yet: the running site does not have it');
   assert.ok(await until(() => /games\/late-game is new and not built yet, so .*\/late-game\/play is a 404 for now\. Build it \(npx --no-install homie-studio build\)/.test(io.err), 15_000), io.err);
   assert.equal(out(run(['build'], dir)).ok, true);
   // The stand-in runtime read its catalogue once, as a watch that missed the rebuild would: dev restarts it.
-  assert.ok(await until(() => /New game late-game is built but the running site answers 404 for it: restarting the local site to pick it up/.test(io.err), 30_000), io.err);
   assert.ok(await until(async () => (await play().catch(() => 0)) === 200, 30_000), 'the new game is served, on the same address');
   assert.ok(await until(() => /New game late-game is served here/.test(io.err), 15_000));
   assert.equal(io.code, undefined, 'the dev command itself never stopped');

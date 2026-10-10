@@ -30,9 +30,10 @@ other games and every existing test file, including its import paths. If an old
 do not redirect the tests to a new helper file. Run the original test command.
 
 For a request involving a larger room or map, read RULES.md's **Spatial delivery**
-section. 0.44.0 can reduce what a server player receives with `room.view.radiusM`;
-Gates and public admission above 32 seats are the next slice. Choose a radius
-only when it fits the game. No rules rewrite or new profile is needed.
+section. `players.max` chooses the room size and Gate layout. Choose `room.view.radiusM`
+for the playable neighbourhood, and visual precision and far update rates to fit
+the game. Local measurements are in docs/rooms-milestone-2-notes.md; they are not
+Cloudflare or physical-phone capacity guarantees.
 
 ## Start it
 
@@ -80,7 +81,7 @@ make every change it needs in ONE file_edit with an edits list. Build after each
 coherent change across rules, movement and view; use diagnostics to guide the next edit.
 
 New games use `game.json` `"entry": "src/view.ts"`, `"room": { "host": "server" }`,
-and `players.max` at most 32. HTML loads `<script type="module"
+and a studio-chosen `players.max`. HTML loads `<script type="module"
 src="./assets/main.js"></script>`, not the source-file URL. Choose seats, tick rate (20 by default), dimensions and
 starter yourself from the request; never ask the person an engineering question.
 `coin-dash` is the smallest reference; `gem-rush` adds bumps; `ember-vale` adds
@@ -142,9 +143,10 @@ a plain browser bundle is not a multiplayer game.
   responsible half, preserve unrelated play, and rebuild. The build/state hashes
   manage compatibility automatically; do not hand-pack snapshots or bump netplay.version.
   Recheck the changed mechanic, a late join and a reload in two browsers.
-- **Changing an old-style game:** ordinary requested edits keep it working untouched
-  in its existing architecture. When its owner asks to move rules to the server,
-  follow [REWRITE.md](REWRITE.md). There is no automatic converter.
+- **Changing an old-style game:** existing netplay games keep working on 0.45.0
+  with their original 32-seat limit. Preserve their behavior on ordinary edits.
+  For a server migration or larger room, follow [REWRITE.md](REWRITE.md).
+  New games use rules plus view; there is no automatic converter yet.
 - Phones get touch, computers get keys; typed names and chat are text only.
   Keep native DOM buttons outside `guardGestures`' touch-drag selector; otherwise bind
   touch pointers explicitly. Verify actual touchscreen taps, not only `.click()`.

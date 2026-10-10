@@ -107,10 +107,8 @@ not a performance or feel guarantee.
 - **A late joiner takes a bot's place**, not a new body: pick a bot that is doing
   well but not winning (the one nearest the pack), give a short shield, and never
   hand over a bot that is dead, carrying the win, or a lap down.
-  `createRoom({ admit })` is where that choice is made: it is asked for every new
-  arrival (a join, a room revived from its checkpoint, a new host's reconcile) and
-  never for a player coming back to their own body, so a reload is not a way back
-  into an elimination round.
+  Express admission in declared rules and preserve the existing player body on
+  reconnect, so a reload is not a way back into an elimination round.
 - **A room can outlive everyone in it.** The relay keeps an empty room's round for
   60 s; the next visitor hosts that same round. Its body is a takeover like any
   other (`onTakeover`, then `adopt`): do the newcomer's reset there, not only in a

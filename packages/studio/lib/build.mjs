@@ -62,7 +62,7 @@ import { PACKAGE_ROOT, isRulesGame, listExperiences as listGames, readStudio } f
 // module is: Homie for Claude Desktop starts the toolkit with no node_modules beside it (scripts/desktop.mjs).
 let rulesBuildModule = null;
 const rulesBuild = () => (rulesBuildModule ??= import('./rules-build.mjs'));
-import { SEAT_MAX, netplayRow } from '../worker/seats.mjs';
+import { seatCount, SEAT_MAX, netplayRow } from '../worker/seats.mjs';
 import { STUDIO_VERSION } from './version.mjs';
 import { basedOnRow, licenseOf, retiredKeys } from '../worker/license.mjs';
 import { openStage, swapIn } from './stage.mjs';
@@ -266,10 +266,14 @@ export function netplayOf(g, out = null) {
 }
 
 /**
- * How many seats a room of this game has: the netplay manifest's `maxPlayers` (or `players.max`), else game.json's
- * `players.max`, else 8; at most SEAT_MAX (32). `asked` is what the game named, so a build can say it was capped.
+ * Room size comes from game.json's players.max, else 8 (32 for apps).
+ * Rules games have no admission ceiling; existing netplay games retain their manifest precedence and 32-seat limit.
  */
 export function seatsFor(g, net = netplayOf(g)) {
+  if (isRulesGame(g)) {
+    const max = seatCount(g.players?.max);
+    return { min: Math.min(max, seatCount(g.players?.min, 1)), max, asked: max };
+  }
   const named = [net.maxPlayers, net.players?.max, g.players?.max].map((n) => Math.floor(Number(n))).find((n) => Number.isFinite(n) && n >= 1);
   const asked = named ?? (g.kind === 'app' ? 32 : 8);
   const max = Math.min(SEAT_MAX, asked);
@@ -390,8 +394,7 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   let chunks = [];
   const budgets = modelBudgetsOf(g, log);
   // RULES PLUS VIEW (rooms on the server). A game with "room" in game.json and a src/rules.ts has its rules checked, guarded and loaded first:
-  // a rule the wall refuses stops the build here, with the line named. A game without one is hosted by a player's
-  // browser exactly as before, and cannot ask for the server.
+  // a rule the wall refuses stops the build here, with the line named. Existing netplay games retain their browser host.
   const ruled = isRulesGame(g);
   if (!ruled && g.room?.host === 'server') {
     throw new Error(`${label}/${manifest} asks for "room": { "host": "server" }, but ${mode === 'bundle' ? 'this game has no src/rules.ts: its rules are inside its own code and run in a player\'s browser. Ask for it to be rewritten as rules plus view' : 'a ported game is someone else\'s browser code, which the server cannot run. It stays hosted by a player\'s browser'}.`);
@@ -517,8 +520,8 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   for (const g of games) if (g.kind === 'app') { const bad = appProblems(g); if (bad.length) throw new Error(`apps/${g.id}/app.json: ${bad.join('; ')}`); }
   // `--types`: the games' TypeScript is checked first (esbuild only strips types, it never reads them), and a type
   // error stops the build before anything is built.
-  // Rules always use their generated capability types, including the view. The legacy
-  // compiler sees broad source types and can falsely reject valid rules callbacks.
+  // Rules always use generated capability types, including the view. Existing netplay games and local apps
+  // use the source type checker.
   const legacy = games.filter((g) => !isRulesGame(g));
   const typed = types && legacy.length ? typecheck(root, legacy, { log }) : null;
   // What the build before this one made, to say which games changed.
@@ -561,7 +564,7 @@ async function buildInto(dist, { esbuild, studio, shop, live, games, before, typ
     const bytes = bundle ? statSync(join(out, bundle)).size : dirBytes(out);
     const later = chunks.reduce((n, c) => n + statSync(join(out, c)).size, 0);
     const seats = seatsFor(g, netplayOf(g, out));
-    if (seats.asked > SEAT_MAX) log(`warning: games/${g.id} asks for ${seats.asked} players; a room holds at most ${SEAT_MAX}, so its rooms have ${SEAT_MAX} seats`);
+    if (seats.asked > SEAT_MAX && !rules) log(`games/${g.id} asks for ${seats.asked} players; browser-hosted netplay rooms retain their ${SEAT_MAX}-player limit, so this build uses ${SEAT_MAX} seats. For larger rooms, rewrite as rules plus view: node_modules/@homie-rocks/studio/guides/game/REWRITE.md`);
     built.push({
       id: g.id, name: g.name, mode, bytes, ms: Date.now() - started, warnings, seats: seats.max,
       ...(rules ? { capacityTrial: rules.check.capacityTrial } : {}),

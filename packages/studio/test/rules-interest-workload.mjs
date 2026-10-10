@@ -10,7 +10,7 @@ import { fakeClock, loadGame, writeGame } from './rules-kit.mjs';
 import { NetRoom } from '../worker/room.mjs';
 import { snapshotDecoder } from '../rules/interest.mjs';
 
-export async function interestWorkload({ seats = 300, ticks = 120, radiusM = 12, measure = false } = {}) {
+export async function interestWorkload({ seats = 300, ticks = 120, radiusM = 12, measure = false, view = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'homie-interest-'));
   let host;
   try {
@@ -20,7 +20,7 @@ export default defineRules({contract:2,space:{dims:2},move,entities:{runner:{pla
       move: `import {defineMove} from '@homie-rocks/studio/rules'; export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*2,y:0,z:0};b.pos=c.math.add(b.pos,c.math.scale(b.vel,c.dt));}});`,
     });
     const L = await loadGame(dir, game);
-    const compiled = L.R.compileRules(L.def, { seats, map: L.R.compileMap({ bounds: { min: [-100,-100], max: [200,200] } }), settings: L.R.roomSettings({ view: { radiusM }, budget: { tick: 5_000_000 } }).settings });
+    const compiled = L.R.compileRules(L.def, { seats, map: L.R.compileMap({ bounds: { min: [-100,-100], max: [200,200] } }), settings: L.R.roomSettings({ view: { radiusM, ...view }, budget: { tick: 5_000_000 } }).settings });
     assert.equal(compiled.seats, seats);
     const clock = fakeClock();
     const room = new NetRoom({ code: 'crowd', rules: true, maxPlayers: seats, tickHz: 20, perIp: seats, now: clock.now });

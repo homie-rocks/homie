@@ -39,7 +39,6 @@ export async function roomSeat(table,room,ctl) {
   if(a.operation==='stand'){seat?.handle.onClose();seats.delete(a.connection);return {ok:true};}
   if(a.operation==='sit'&&(!seat||seat.closed)){
     for(const [id,old] of seats)if(old.closed)seats.delete(id);
-    if(seats.size>=32)throw new Error('remote seat capacity reached');
     await table.readVocab(table.game);
     seat={closed:false,frames:[]};
     const conn={ip:null,player:a.person,via:'p-'+a.person,agent:{pass:a.connection.replaceAll('-','').slice(0,16),role:'guide',hands:'host',by:'studio',name:a.name},send:text=>{seat.frames.push(JSON.parse(text));if(seat.frames.length>20)seat.frames.shift();},close:()=>{seat.closed=true;},buffered:()=>0};
