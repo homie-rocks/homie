@@ -1,12 +1,13 @@
 import { castTerrain } from './terrain.ts';
+import { castTerrain as legacyTerrain } from './terrain-legacy.ts';
 import { nearbyMap } from './map-index.ts';
 /** Upright 3D collision. Positions are feet; a rounded box is a box plus a sphere.
  * Capsules are a vertical segment plus a sphere. No engine-specific maths or time.
  */
-import { charge } from './guard.ts';
+import { charge, G } from './guard.ts';
 import type { Vec3, MapBox, MapCircle, MapHeightTile } from './rules.ts';
 
-export interface BodyShape { shape: string; radius: number; height: number }
+export interface BodyShape { shape: string; radius: number; height: number; terrain?: 'exact' }
 export interface Solid { min: Vec3; max: Vec3; r: number }
 export interface Hit3 { t: number; nx: number; ny: number; nz: number; id?: string }
 export interface Map3 {
@@ -14,7 +15,7 @@ export interface Map3 {
   bounds: MapBox; boxes: readonly MapBox[]; circles: readonly MapCircle[];
   heightTiles?: readonly MapHeightTile[];
   spheres?: readonly MapCircle[];
-  capsules?: readonly (MapCircle & { height: number })[];
+  capsules?: readonly (MapCircle & { height: number; terrain?: 'exact' })[];
 }
 const EPS = 1e-7;
 const point = (x: number, y: number, z: number): {x: number; y: number; z: number} => ({ x, y, z });
@@ -101,7 +102,22 @@ function castHeightTile(tile: MapHeightTile, p: Vec3, d: Vec3): Hit3 | null {
   return best;
 }
 
+let memoEpoch = -1;
+let castMemo = new WeakMap<object, Map<string, Hit3 | null>>();
 export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hit3[], includeInside = false): Hit3 | null {
+  // Exact casts can reuse identical immutable-scene queries within one handler.
+  // The epoch resets at every authority handler, including after restore.
+  if(body.terrain !== 'exact' || hits || !Number.isFinite(G.left)) return castMap3Uncached(map,p,d,body,hits,includeInside);
+  if(memoEpoch!==G.queryEpoch){memoEpoch=G.queryEpoch;castMemo=new WeakMap();}
+  charge(16);
+  let rows=castMemo.get(map);if(!rows){rows=new Map();castMemo.set(map,rows);}
+  const key=[p.x,p.y,p.z,d.x,d.y,d.z,body.shape,body.radius,body.height,includeInside].join(',');
+  if(rows.has(key))return rows.get(key)!;
+  const hit=castMap3Uncached(map,p,d,body,hits,includeInside);
+  if(rows.size<512)rows.set(key,hit);
+  return hit;
+}
+function castMap3Uncached(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hit3[], includeInside = false): Hit3 | null {
   map = nearbyMap(map, p, d, body.radius, body.height || body.radius * 2);
   charge(24);
   const a = solidAt(p, body), r = body.radius, height = body.height || r * 2;
@@ -114,14 +130,16 @@ export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hi
     const n = point(0, 0, 0); n[axis] = d[axis] > 0 ? -1 : 1;
     take({ t: ((d[axis] > 0 ? high : low) - p[axis]) / d[axis], nx: n.x, ny: n.y, nz: n.z });
   }
+  const exactTerrain = body.terrain === 'exact';
   const terrain = [...(map.heightTiles ?? [])];
-  if(d.z<0){charge(terrain.length*Math.ceil(Math.log2(terrain.length+1)));terrain.sort((a,b)=>(b.at.z+Math.max(...b.heights))-(a.at.z+Math.max(...a.heights)));}
+  if(exactTerrain && d.z<0){charge(terrain.length*Math.ceil(Math.log2(terrain.length+1)));terrain.sort((a,b)=>(b.at.z+Math.max(...b.heights))-(a.at.z+Math.max(...a.heights)));}
   for (const tile of terrain) {
+    if(exactTerrain && !hits && best?.t===0)break;
     // Once a nearer surface is known, later solids only need to beat that time.
     // This also bounds work on densely tessellated terrain behind the first hit.
-    const limit = !hits && best ? best.t : 1;
+    const limit = exactTerrain && !hits && best ? best.t : 1;
     const delta = limit < 1 ? point(d.x * limit, d.y * limit, d.z * limit) : d;
-    const hit = tile.base === undefined ? castHeightTile(tile, p, delta) : castTerrain(tile, a, delta);
+    const hit = tile.base === undefined ? castHeightTile(tile, p, delta) : (exactTerrain ? castTerrain : legacyTerrain)(tile, a, delta);
     if (hit) take({...hit, t: hit.t * limit});
   }
   for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }, includeInside), (b as any).id);

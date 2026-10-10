@@ -17,9 +17,10 @@ export type Self<F, M, I, K extends string, P extends boolean, G = Goal> = F & {
   readonly motion: M; readonly input: ReadonlyState<I>;
 } & (P extends true ? Player<G> : {});
 export interface Hit { readonly entity?: string; readonly part?: string; readonly at: Point; readonly normal: Vec3; readonly dist?: number }
-export interface RayOptions { atTick?: number; profile?: string; radius?: number; shape?: 'sphere' | 'box' | 'capsule'; height?:number; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
+export interface RayOptions {
+  terrain?: 'exact'; atTick?: number; profile?: string; radius?: number; shape?: 'sphere' | 'box' | 'capsule'; height?:number; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
 export type RayHit = Hit & { readonly dist: number };
-export interface RaySnapshot {sweep(body:{pos:Point;grounded?:boolean},delta:Point):Hit|undefined;support(body:{pos:Point},distance?:number):(Hit&{dist:number})|undefined;ray(from:Point,direction:Point,max:number):RayHit|undefined;rayAll(from:Point,direction:Point,max:number):readonly RayHit[]}
+export interface RaySnapshot {sweep(body:{pos:Point;grounded?:boolean},delta:Point,options?:{ground?:boolean}):Hit|undefined;support(body:{pos:Point},distance?:number):(Hit&{dist:number})|undefined;ray(from:Point,direction:Point,max:number):RayHit|undefined;rayAll(from:Point,direction:Point,max:number):readonly RayHit[]}
 export interface RayQueries { rays(options?:RayOptions):RaySnapshot; ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
 export type Area = { sphere: { at: Point; r: number } } | { box: { min: Point; max: Point } } | { cone: { at: Point; dir: Point; r: number; angle: number } };
 export interface MapView { readonly name: string; spot(name: string): Vec3 | undefined; spots(name: string): readonly Vec3[] }
@@ -42,6 +43,7 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   near(at: Point, radius: number): readonly Query<V[keyof V]>[];
   inBox<K extends keyof V>(box: { min: Point; max: Point }, kind: K): readonly Query<V[K]>[];
   inBox(box: { min: Point; max: Point }): readonly Query<V[keyof V]>[];
+  route(graph: ReadonlyArray<readonly [number,number,number,readonly number[]]>, from: number, to: number, options?: {radius?:number;height?:number}): readonly number[];
   ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined;
   rays(options?:RayOptions):RaySnapshot;
   rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[];
@@ -68,5 +70,5 @@ export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = 
   guide?: { view: (world: GuideWorld<W>, self: ReadonlyState<Omit<S, 'input'>>) => V; floor?: (world: W, self: S, view: GuideView<V, G, A>) => D };
 };
 export interface MoveBody<M> { get pos(): Vec3; set pos(value: Point); get vel(): Vec3; set vel(value: Point); get heading(): Vec3; set heading(value: Point); grounded: boolean; readonly motion: M }
-export interface MoveCollision<M> extends RayQueries { sweep(body: MoveBody<M>, delta: Point): Hit | undefined; support(body: MoveBody<M>, distance?: number): (Hit & {dist: number}) | undefined; overlaps(body: MoveBody<M>): boolean }
+export interface MoveCollision<M> extends RayQueries { sweep(body: MoveBody<M>, delta: Point, options?: {ground?: boolean}): Hit | undefined; support(body: MoveBody<M>, distance?: number): (Hit & {dist: number}) | undefined; overlaps(body: MoveBody<M>): boolean }
 export type MoveContext<T, M> = Clock & { readonly tune: ReadonlyState<T>; readonly map: MapView & MoveCollision<M>; readonly world: MoveCollision<M> };

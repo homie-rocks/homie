@@ -685,8 +685,7 @@ score and other shared outcomes still arrive with the network. The studio choose
 Room state is saved automatically (default movementSeconds: 1, plus round end,
 pause and finish). After 60 seconds with no person the room ends even if screens or
 AI remain. Use browser createSaves for player-owned character progress; it is not
-server-verified money. All replicated fields are public, including disguised roles.
-Use a separate authorized records service for private or lasting app records.
+server-verified money. Entity fields default to public. Declare visibility explicitly for private information (below); shared state and motion remain public. Use declared server round records for verified match history.
 
 
 ## Spatial delivery (0.45.0; milestone 2 slice 2)
@@ -880,7 +879,7 @@ Declare `room.historySeconds: 1` (maximum two seconds). The server retains and
 saves non-collider body positions and placement revisions on its virtual clock.
 The view's `room.viewTick` is the tick used to interpolate remote bodies. Send it
 with an action, then use `world.ray(..., {atTick, ...filters})`. Fractional ticks
-interpolate saved poses; old/future requests clamp to the configured window.
+interpolate saved poses. Player requests clamp to the smaller of the configured window and the server-measured round-trip latency plus 150 ms presentation delay and one simulation tick. Without a measurement only that small margin is allowed. The relay measures a nonce challenge; client-supplied latency figures are ignored.
 A placement or new round prevents rewinding through a teleport or reset.
 
 Rewind changes actor poses only. Eligibility filters use current fields, so a
@@ -923,3 +922,67 @@ next round on the next tick, keeping seats and entities and running the normal
 `roundStart` handlers. It publishes no completed results or `roundOver` event and
 skips the intermission. Use it for an authorized retry; validate eligibility in
 your room handler. Pending restart intent survives save/restore.
+
+
+### Discrete actions with a value
+
+Use `select: f.pulse()` for a weapon slot or other byte-valued action. Call
+`room.input({select: 2})` on the press and return to zero on release. A nonzero
+value is queued once, including a pulse shorter than a simulation tick; held
+samples do not create repeated actions. Zero is neutral. The reliable event
+channel carries these actions, with at most 16 pending per seat and one consumed
+per tick. Epoch changes discard old-round actions. `f.press()` remains the
+boolean equivalent; `f.u8()` is sampled state and can miss a one-frame pulse.
+
+### Private entity fields and verified round history
+
+Declare an entity field with `{visibility: 'server'}` for bot brains or secrets,
+`{visibility: 'owner'}` for private inventory, or `{visibility: 'results'}` for
+statistics revealed during intermission. Nested contents follow their top-level
+field. Hidden values become neutral on the client; never depend on them in shared
+movement. Server rules still read full state. Watchers receive public fields and
+results only. Entity positions, driver information, shared state and motion are
+public. This is field visibility, not fog-of-war entity hiding.
+
+A collider transmits only geometry plus explicitly named public scalar fields:
+`collider: {size: 'size', enabled: 'solid', fields: ['material']}`. Do not put
+private fields in that list. Unchanged collision rows are inherited from the
+snapshot baseline; keyframes and reconnects remain complete.
+
+For verified history declare
+`room.records: {key: 'server:career-v1', identity: 'matchKey', eligible: 'ready',
+fields: {kills: 'earnedKills', damage: 'earnedDamage'}}`. The identity names a
+shared text field that rules make unique for each round. The optional eligibility
+names a player boolean field; result fields name numeric player fields. The
+Worker associates the participant with its authenticated player ID and stores
+`id`, `endedAt`, `place`, `won` and the declared totals when the round completes.
+A durable outbox retries failed writes; duplicate round IDs are ignored. Read
+with `createSaves().get(key)`. Browser writes, deletes and save resets cannot
+change `server:` records. Keep guest/authentication setup active before playing.
+
+### Opt-in exact terrain and baked navigation
+
+Legacy three-argument rays keep their historical result and cost. Supplying ray
+options enables the richer query policy, including hits at distance zero when
+starting inside solids. Terrain changes are separate: set `terrain: 'exact'` in
+ray options or the entity body declaration to use exact face/edge/vertex terrain
+casts. Existing terrain behavior is retained when omitted. Test your map's
+slopes, ledges and movement when opting in.
+
+`world.route(graph, from, to, {radius, height})` searches an immutable authored
+walking graph. Nodes are `[x, y, z, neighbourIndices]`; endpoints are node indices.
+The graph has at most 8192 nodes and 16 neighbours per node. Edges must already
+encode static terrain walkability. The runtime checks live colliders, returns
+all node indices of a route or an empty list, and charges the search to the
+handler budget. It never substitutes a partial route at an expansion cap.
+Replan when the goal changes and when live geometry changes. Bake invalid or
+occupied terrain nodes out of the graph, and choose reachable endpoints.
+`@homie-rocks/nav` is the richer mesh/crowd API for applications that own that
+runtime; rules graphs avoid importing mutable navigation state into handlers.
+
+`room.predict.idleHold: true` holds small visual reconciliation offsets while
+input and body are stationary. Movement resumes smoothing. Large invalid poses
+still snap to authority. Opt in only after measuring stop/reversal and delayed
+collision behavior for the game's mover.
+
+For multi-cast movement or scratch trajectory checks, `ctx.world.sweep(body, delta, {ground:false})` (also captured-scene `sweep`) moves and returns the same collision but leaves `body.grounded` unchanged. Use it only when your mover computes support explicitly. Omitting the option retains the existing support query and grounding behavior. This avoids paying for identical support checks after horizontal and upward probes.

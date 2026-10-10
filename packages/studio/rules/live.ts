@@ -18,7 +18,7 @@ export function colliderRow(id: string, at: Vec3, body: BodyShape, def: Collider
   const x = size ? size.x : body.radius * 2, y = size ? size.y : body.radius * 2, z = size ? size.z : body.height || body.radius * 2;
   if (![x, y, z].every(Number.isFinite) || x <= 0 || y <= 0 || z < 0) return null;
   const row: ColliderRow = [id, size ? 'box' : body.shape, at.x, at.y, at.z, x, y, z];
-  if(kind) row.push({kind, ...(query?{query}:{}), fields:Object.fromEntries(Object.entries(fields).filter(([,v])=>['number','string','boolean'].includes(typeof v))) as Record<string,number|string|boolean>});
+  if(kind) row.push({kind, ...(query?{query}:{}), fields:Object.fromEntries((opts.fields ?? []).filter(name=>['number','string','boolean'].includes(typeof fields[name])).map(name=>[name,fields[name]])) as Record<string,number|string|boolean>});
   return row;
 }
 export function colliderSolid(row: ColliderRow): ReturnType<typeof solidAt> {
@@ -64,7 +64,7 @@ export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, d
     ray: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self())[0];},
     rays: (options?: unknown) => {const m=map();return raySnapshot(m.staticMap??m,collisionTargets(m),dims,options,self());},
     rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self(),true);},
-    sweep: (body: unknown, delta: unknown) => sweepMap(map(), body, delta, shape().radius, dims, shape()),
+    sweep: (body: unknown, delta: unknown, options?: unknown) => sweepMap(map(), body, delta, shape().radius, dims, shape(), options),
     support: (body: unknown, distance: unknown = 0.002) => {
       charge(20);
       const p = position(body), m = map();

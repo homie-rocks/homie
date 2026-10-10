@@ -37,7 +37,11 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'history') {
+    if (runaway === 'pulses') {
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',entities:{runner:{player:true,input:{select:f.pulse()},fields:{actions:f.list(f.u8(),64),secret:f.text(20,{init:'brain-secret',visibility:'server'}),ammo:f.u8({init:24,visibility:'owner'}),damage:f.u16({init:52,visibility:'results'})},body:{shape:'circle',radius:.4,maxSpeed:0},tick(w,s){if(s.input.select)s.actions=[...s.actions,s.input.select];}}},room:{rounds:{seconds:60,breakSeconds:1},bots:{keep:0},join(c,p){return{kind:'runner',at:{x:p.seat*2,y:0,z:0}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){}});`);
+    } else if (runaway === 'history') {
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot',{at:room.viewTick,y:0});`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100,0],max:[100,100,20]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:3},move,map:'./map',shapes:{commands:{shoot:{at:f.fix(),y:f.fix()},block:{}},events:{block:{}}},entities:{runner:{player:true,fields:{hit:f.ref(),current:f.ref()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:0},commands:{shoot(w,s,e){const from={x:0,y:e.y,z:1},d={x:1,y:0,z:0};s.hit=w.ray(from,d,18,{atTick:e.at,where:{hp:{gt:0}}})?.entity??'';s.current=w.ray(from,d,18,{where:{hp:{gt:0}}})?.entity??'';},block(w,s){for(const c of w.near(s.pos,64,'cover'))w.dispatch(c.id,'block');}}},target:{fields:{hp:f.u8({init:100})},body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{fields:{solid:f.bit(),hp:f.u8({init:100}),size:f.vec3({init:{x:1,y:100,z:3}})},collider:{enabled:'solid',size:'size'},body:{shape:'box',radius:.5,height:3,maxSpeed:0},on:{block(w,s){s.solid=true;}}}},room:{historySeconds:1,bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat*4,z:0}};},start(w){w.spawn('target',{x:8,y:0,z:0});w.spawn('cover',{x:4,y:0,z:0});}}});`);
@@ -74,13 +78,13 @@ room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:1,y:p.seat*5,z:0}};},st
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,
 shapes:{commands:{shoot:{direction:f.i8()},edit:{mode:f.u8()},place:{at:f.vec3()}},events:{edit:{mode:f.u8()}}},
-entities:{runner:{player:true,fields:{ray:f.fix({init:-1})},input:{ax:f.i8(),ay:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit(),camera:f.bit()},motion:{difference:f.fix(),camera:f.fix(),support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26},
+entities:{runner:{player:true,fields:{ray:f.fix({init:-1})},input:{ax:f.i8(),ay:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit(),camera:f.bit()},motion:{difference:f.fix(),camera:f.fix(),support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26,terrain:'exact'},
 commands:{shoot(w,s,e){const hit=w.ray({x:s.pos.x,y:s.pos.y,z:s.pos.z+1},{x:e.direction,y:0,z:0},8);s.ray=hit?hit.dist:-1;},place(w,s,e){w.place(s,e.at);},edit(w,s,e){for(const c of w.near(s.pos,64,'cover'))w.send(c.id,'edit',e);if(e.mode===4)w.spawn('cover',{x:0,y:0,z:0});}}},
 cover:{fields:{solid:f.bit({init:true}),size:f.vec3({init:{x:1,y:4,z:2.6}})},body:{shape:'${dims===3?'box':'circle'}',radius:.5,height:2.6,maxSpeed:0},collider:{size:'size',enabled:'solid'},
 on:{edit(w,s,e){if(e.mode===0)s.solid=false;if(e.mode===1)s.solid=true;if(e.mode===2)s.size={x:2,y:4,z:2.6};if(e.mode===3)w.despawn(s);if(e.mode===5)w.place(s,{x:0,y:0,z:1});if(e.mode===6)w.place(s,{x:32,y:0,z:0});}}}},
 room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat,z:0}};},start(w){w.spawn('cover',{x:0,y:0,z:0});${runaway==='terrain'?"for(let i=0;i<16;i++)w.spawn('cover',{x:40,y:20+i,z:0});":''}}},map:'./map'});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){
-if(i.camera){const shape=c.world.rays({geometryOnly:true,radius:.4,height:1.8,shape:'capsule'}),scratch={pos:{...b.pos},grounded:b.grounded},reference={pos:{...b.pos},grounded:b.grounded};shape.sweep(scratch,{x:.1,y:.1,z:-.2});c.world.sweep(reference,{x:.1,y:.1,z:-.2});b.motion.difference=c.math.len(c.math.sub(scratch.pos,reference.pos));const scene=c.world.rays({geometryOnly:true,radius:.3,shape:'box'});b.motion.camera=6;for(const hit of scene.rayAll({x:b.pos.x,y:b.pos.y,z:b.pos.z+1.45},{x:-1,y:-1,z:-.2},6))b.motion.camera=Math.min(b.motion.camera,hit.dist);return;}
+if(i.camera){const shape=c.world.rays({geometryOnly:true,radius:.4,height:1.8,shape:'capsule',terrain:'exact'}),scratch={pos:{...b.pos},grounded:b.grounded},reference={pos:{...b.pos},grounded:b.grounded};shape.sweep(scratch,{x:.1,y:.1,z:-.2});c.world.sweep(reference,{x:.1,y:.1,z:-.2});b.motion.difference=c.math.len(c.math.sub(scratch.pos,reference.pos));const scene=c.world.rays({geometryOnly:true,radius:.3,shape:'box'});b.motion.camera=6;for(const hit of scene.rayAll({x:b.pos.x,y:b.pos.y,z:b.pos.z+1.45},{x:-1,y:-1,z:-.2},6))b.motion.camera=Math.min(b.motion.camera,hit.dist);return;}
 const support=c.world.support(b,20);b.motion.support=support?support.dist:20;b.motion.blocked=c.world.overlaps(b);
 b.grounded=Boolean(c.world.support(b));if(i.hover)return;let vz=b.vel.z;
 if(i.jump&&b.grounded)vz=12;
@@ -1754,3 +1758,22 @@ for(const delayed of [false,true]) test(`query snapshots preserve captured geome
  const a=openRoom({net:{config:cfg('Retry'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(2500);const id=a.me.id,n=a.round.n;const phases=[];a.net.on('round',round=>phases.push(round));a.command('retry');await clock.wait(1500);assert.equal(a.round.n,n+1);assert.equal(a.round.phase,'live');assert.equal(a.me.id,id);assert.ok(phases.every(p=>p.phase!=='over'&&!p.results));
  const saved=r.host.core.save();saved.intent=[0,0,1];const x=L.C.createCore(compiled,{restore:saved}),y=L.C.createCore(compiled,{restore:saved});x.step();y.step();assert.equal(x.save().round[0],n+2);assert.deepEqual(x.save(),y.save());assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
  });
+
+for(const delayed of [false,true])test(`valued one-frame input survives sampling and private fields stay off every recipient wire${delayed?' under seeded latency/loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'pulses'),clock=virtualTime(t),shape=predictionShaper({delay:delayed?600:0,loss:delayed?.2:0,seed:4527}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('One'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Two'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(2500);
+ for(let i=0;i<20;i++){a.input({select:i%3+1});await clock.wait(1);a.input({select:0});await clock.wait(120);}
+ await clock.wait(1200);assert.deepEqual([...a.me.actions],Array.from({length:20},(_,i)=>i%3+1));
+ assert.equal(a.me.ammo,24);assert.equal(b.get(a.me.id).ammo,0);assert.equal(a.me.secret,'');assert.equal(a.get(b.me.id).secret,'');
+ assert(!JSON.stringify(L.R.schemaOf(compiled)).includes('brain-secret'));
+ const raw=r.host.core.snapshot(),round=raw[0],snap={e:r.host.epoch,k:r.host.tick,d:raw,c:[]};
+ for(const seat of [null,0,1,7]){const filtered=r.host.projectSnapshot(snap,seat);assert(!JSON.stringify(filtered).includes('brain-secret'));for(const row of filtered.d[1]){assert.equal(row[7][1],null);if(row[9]!==seat)assert.equal(row[7][2],null);assert.equal(row[7][3],null);}}
+ const over=r.host.projectSnapshot({...snap,d:[[round[0],0,round[2]],...raw.slice(1)]},null);assert(over.d[1].every(row=>row[7][3]===52));
+ const saved=r.host.save(),restored=L.H.createHost({game:'test',compiled,restore:saved,clock:r.host.clock??{now:()=>Date.now(),setTimer:()=>0,clearTimer(){}},send(){}});assert.deepEqual(restored.core.save(),r.host.core.save());restored.stop();
+});
+test('low-latency player cannot request a one-second-old target pose, seed 4520',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'history'),clock=virtualTime(t),shape=predictionShaper({delay:0,loss:0,seed:4520}),r=rig(L,compiled,false,shape,shape),a=openRoom({net:{config:cfg('Shooter'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();r.stop();});await clock.wait(2500);const tick=r.host.core.tick;
+ a.command('shoot',{at:tick-18,y:(tick-18)*.1});await clock.wait(300);assert.equal(a.me.hit,'','forged 900 ms rewind must be clamped to measured latency and presentation margin');assert.equal(r.host.core.stats.errors,0);
+});
