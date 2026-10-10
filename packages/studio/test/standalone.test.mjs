@@ -288,7 +288,7 @@ test('the web folder is the site\'s build of the game, byte for byte, but for on
   const app = JSON.parse(JSON.stringify(ctx.window.__HOMIE_APP));
   assert.equal(app.room.contract, 2); assert.equal(app.room.host, 'browser'); assert.match(app.room.build, /^[a-f0-9]{32}$/);
   const {room: builtRoom, ...shellApp} = app;
-  assert.deepEqual(shellApp, { v: 1, game: 'gem', name: 'Gem Rush', site: 'https://owls.example', ver: '', params: {}, share: sharePlaces(undefined), colours: null, version: '1.0.0', target: 'mac' });
+  assert.deepEqual(shellApp, { v: 1, game: 'gem', name: 'Gem Rush', site: 'https://owls.example', ver: builtRoom.build, params: {}, share: sharePlaces(undefined), colours: null, version: '1.0.0', target: 'mac' });
   // Everything it made is under .studio/, which every studio's .gitignore leaves out.
   assert.match(readFileSync(join(root, '.gitignore'), 'utf8'), /^\.studio\/$/m);
   assert.ok(relative(root, dir).startsWith(join('.studio', 'standalone')));

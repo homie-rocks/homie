@@ -122,3 +122,20 @@ test('chained and far-scheduled visual delivery preserves each live collision re
     assert.deepEqual(selected.d[1][0][3],[.123,0,0]);
   }
 });
+
+
+test('a lost chained visual frame does not stall the controlled body or collision revisions', () => {
+  const encode=snapshotEncoder(5,true), decode=snapshotDecoder();
+  const frame=k=>({e:1,k,d:[[],[['own',0,0,[k+.123,0,0],[0,0,0],[],0,[],[],0,0],['far',0,0,[k,9,0],[0,0,0],[],0,[],[],1,0]],[k,[]]],c:[[0,0,k,0]]});
+  decode.decode(encode.encode(frame(1),0));
+  encode.encode(frame(2),0); // seeded loss of one predecessor
+  const received=decode.decode(encode.encode(frame(3),0));
+  assert.deepEqual(received.d[1].find(e=>e[0]==='own')[3],[3.123,0,0]);
+  assert.deepEqual(received.d[2],[3,[]]);
+  assert.deepEqual(received.c,[[0,0,3,0]]);
+  assert.equal(received.d[1].find(e=>e[0]==='far')[3][0],1);
+  const leave=frame(4);leave.d[1].pop();
+  assert.deepEqual(decode.decode(encode.encode(leave,0)).d[1].map(e=>e[0]),['own'],'exits remain immediate while repairing the remote baseline');
+  for(let k=5;k<=6;k++)decode.decode(encode.encode(frame(k),0));
+  assert.deepEqual(decode.decode(encode.encode(frame(7),0)),frame(7));
+});

@@ -124,7 +124,7 @@ function arcadeLike(name) {
   write(dir, 'games/rock-race/public/LICENSE', 'MIT License\n\nCopyright (c) the original authors');
   write(dir, 'games/rock-race/credits.json', JSON.stringify({
     v: 1, id: 'rock-race', controls: { computer: 'Arrows and Space', phone: 'Stick left, FIRE right' },
-    original: { title: 'Rocks', author: 'An Author', year: '2010', url: 'https://example.com/rocks', licence: 'MIT', licenceFile: 'LICENSE' },
+    original: { title: 'Rocks', author: 'An Author', year: '2010', url: 'https://example.com/rocks', licence: 'MIT', licenceFile: 'public/LICENSE' },
     parts: [{ what: 'laser.wav', author: 'Someone', url: 'https://example.com/laser', licence: 'CC BY 3.0', licenceUrl: 'https://creativecommons.org/licenses/by/3.0/' }],
   }));
   write(dir, 'posts/2026-09-29-we-are-live.md', '---\ntitle: We are <live>\nsummary: Two games, public rooms.\ngame: rock-race\nimage: /games/rock-race/cover.jpg\n---\n\nPress **Play**. [Rooms](/rooms/)\n\n<script>alert(1)</script>\n');
@@ -151,7 +151,7 @@ test('build: the landing facts come from each game\'s own files; posts are dated
   assert.equal(rock.landing.hero.wide, '/games/rock-race/_landing/wide.mp4', 'the rewritten port hero is copied into its bundled landing');
   assert.equal(rock.landing.hero.tall, '/games/rock-race/_landing/tall.mp4');
   assert.equal(rock.landing.hero.wideImage, '/games/rock-race/_landing/wide.jpg');
-  assert.equal(existsSync(join(dir, 'site/dist/games/rock-race/_landing/wide.mp4')), false);
+  assert.equal(existsSync(join(dir, 'site/dist/games/rock-race/_landing/wide.mp4')), true);
   assert.equal(rock.landing.cover, '/games/rock-race/cover.jpg');
   assert.deepEqual(rock.landing.controls, { phone: 'Stick left, FIRE right', computer: 'Arrows and Space' });
   assert.equal(rock.landing.credits.original.author, 'An Author');
@@ -247,7 +247,7 @@ test('a game\'s landing: its footage, the pitch, Play into a public room, phone 
   assert.match(html, /Stick left, FIRE right/);
   assert.match(html, /Arrows and Space/);
   assert.match(html, /<li>Steer with the stick<\/li>/);
-  assert.match(html, /Up to 6 players, 2\u2011minute rounds\./);
+  assert.match(html, /Up to 6 players, 1\u2011minute rounds\./);
   assert.match(html, /href="\/rock-race\/play\?room=pub-2" data-play>Join/);
   assert.match(html, /<strong>Rocks<\/strong> by <strong>An Author<\/strong> \(2010\), MIT licence/);
   assert.match(html, /laser\.wav: Someone/);

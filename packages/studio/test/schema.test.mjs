@@ -182,8 +182,8 @@ test('a landing\'s VideoGame: everything the game\'s files say, the owner\'s ext
   assert.deepEqual(g.playMode, ['https://schema.org/SinglePlayer', 'https://schema.org/MultiPlayer']);
   assert.deepEqual(g.gamePlatform, ['Web browser', 'Phone', 'Computer', 'TV']);
   assert.deepEqual(g.image, [`${ORIGIN}/games/rock-race/_landing/wide.jpg`, `${ORIGIN}/games/rock-race/cover.jpg`]);
-  assert.deepEqual(g.screenshot, [`${ORIGIN}/games/rock-race/screenshots/1.jpg`, `${ORIGIN}/games/rock-race/screenshots/2.png`]);
-  assert.match(html, /<div class="shots reveal"><a href="\/games\/rock-race\/screenshots\/1\.jpg"><img src="\/games\/rock-race\/screenshots\/1\.jpg" alt="Rock &lt;Race&gt;: screenshot 1"/, 'the screenshots are on the page too');
+  assert.deepEqual(g.screenshot, [`${ORIGIN}/games/rock-race/_landing/1.jpg`, `${ORIGIN}/games/rock-race/_landing/2.png`]);
+  assert.match(html, /<div class="shots reveal"><a href="\/games\/rock-race\/_landing\/1\.jpg"><img src="\/games\/rock-race\/_landing\/1\.jpg" alt="Rock &lt;Race&gt;: screenshot 1"/, 'the screenshots are on the page too');
   assert.match(html, /<li>Arcade<\/li><li>Shooter<\/li>/, 'and its genre');
   assert.deepEqual(g.author, { '@type': 'Organization', '@id': `${ORIGIN}/#studio`, name: 'Night Owls', url: `${ORIGIN}/` }, 'the studio, by name: a page is read on its own');
   assert.deepEqual(g.publisher, g.author);

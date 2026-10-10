@@ -494,7 +494,7 @@ export class NetRoom {
     const selected = client.viewSchedule(snap, client.seat);
     client.snapEncoder ??= snapshotEncoder(this.tickHz, true);
     if (welcome) client.snapEncoder.reset();
-    return client.snapEncoder.encode(selected);
+    return client.snapEncoder.encode(selected, client.seat);
   }
 
   /** One key of the slow state channel from the host. `bytes`: the frame's size, counted against the room's cap for a browser host. */

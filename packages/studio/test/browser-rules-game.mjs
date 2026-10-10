@@ -1,5 +1,4 @@
-/** Shared browser-rules fixture. Historical imports retain their path while
- * their builds exercise the single rules-plus-view authoring contract. */
+/** Shared browser-rules fixture exercising the single rules-plus-view contract. */
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

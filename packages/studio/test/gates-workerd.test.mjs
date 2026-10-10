@@ -50,7 +50,7 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
     const cat={studio:{name:'Local test'},games:[{id:'crowd',name:'Crowd',players:{min:1,max:${capacity}},netplay:{version:'test-build'},room:{host:'server',contract:2,tickHz:1}}]};
     const assets={fetch:async request=>new URL(request.url).pathname==='/games.json'?Response.json(cat):new Response('',{status:404})};
     const configured=env=>({...env,ASSETS:assets,HOMIE_ROOM_LOG:'0'});
-    export class Table extends BaseTable {constructor(ctx,env){super(ctx,configured(env));}fetch(req){if(new URL(req.url).pathname==='/test-abort'){this.saveRoom(this.hostRt.save());setTimeout(()=>this.ctx.abort('test rules restart'),1);return new Response(null,{status:204});}return super.fetch(req);}}
+    export class Table extends BaseTable {constructor(ctx,env){super(ctx,configured(env));}say(line){if(line.ev==='host-ended')console.log(JSON.stringify(line));}fetch(req){if(new URL(req.url).pathname==='/test-abort'){this.saveRoom(this.hostRt.save());setTimeout(()=>this.ctx.abort('test rules restart'),1);return new Response(null,{status:204});}return super.fetch(req);}}
     export class Gate extends BaseGate {fetch(req){if(new URL(req.url).pathname==='/test-abort'){setTimeout(()=>this.ctx.abort('test Gate death'),1);return new Response(null,{status:204});}return super.fetch(req);}}
     export default {fetch(request,env,ctx){const u=new URL(request.url);if(u.pathname==='/test-abort'){const binding=u.searchParams.get('table')?env.TABLE:env.GATE;const key=u.searchParams.get('table')?'crowd/pub-1':u.searchParams.get('key');return binding.get(binding.idFromName(key)).fetch(request);}return worker.fetch(request,configured(env),ctx);}};
   `},bundle:true,write:false,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*']});
@@ -58,21 +58,33 @@ test('public Worker, real Table storage and Gates admit above 32 and preserve se
   const mf=new Miniflare({telemetry:{enabled:false},workers:[{config:{name:'rooms',compatibilityDate:'2026-10-07',compatibilityFlags:['nodejs_compat'],manifest:{mainModule:'entry.mjs',modules:{'entry.mjs':{type:'esm',contents:bundle.outputFiles[0].text}}},exports:Object.fromEntries(classes.map(name=>[name,{type:'durable-object',storage:'sqlite'}])),env:Object.fromEntries(classes.map(name=>[name.toUpperCase(),{type:'durable-object',worker:'rooms',exportName:name}]))}}]});
   const peers=[];
   const heartbeat=setInterval(()=>{for(const p of peers)try{p.send(JSON.stringify({t:'ping',c:Date.now()}));}catch{}},1000);
-  const key='seeded_browser_0001';let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;
-  const open=async(token=null)=>{
+  const shard=key=>{let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;return hash%Math.ceil(capacity/64);};
+  const closedPeers=[];
+  const open=async(key,token=null)=>{
     const response=await mf.dispatchFetch(`https://studio.test/crowd/__net?room=pub-1&b=${key}&gv=test-build`,{headers:{Upgrade:'websocket','cf-connecting-ip':'203.0.113.1'}});
     assert.equal(response.status,101);const ws=response.webSocket;ws.accept();
     const result=await new Promise((resolve,reject)=>{ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.t==='welcome')resolve({ws,welcome:m});else if(m.t==='error')reject(new Error(JSON.stringify(m)));});ws.addEventListener('close',()=>reject(new Error('closed before welcome')));ws.send(JSON.stringify({t:'hello',v:1,rev:12,rules:true,want:'play',token}));});
-    peers.push(result.ws);return result;
+    result.ws.addEventListener('close',e=>closedPeers.push({key,code:e.code,reason:e.reason}));
+    peers.push(result.ws);return {...result,key,gate:shard(key)};
   };
   try {
-    let holders=[];for(let i=0;i<count;i++)holders.push(await open());
-    assert.equal(new Set(holders.map(p=>p.welcome.seat)).size,count);
+    let holders=[];
+    for(let i=0;i<count;i+=20){
+      holders.push(...await Promise.all(Array.from({length:Math.min(20,count-i)},(_,j)=>open(`seeded_browser_${String(i+j).padStart(4,'0')}`))));
+      if(count===1000&&holders.length%100===0)console.log(JSON.stringify({phase:'workerd-admission',players:holders.length,closed:closedPeers.length}));
+    }
+    assert.equal(new Set(holders.map(p=>p.welcome.seat)).size,count,JSON.stringify(closedPeers));
+    assert.equal(closedPeers.length,0,JSON.stringify(closedPeers));
     assert.ok(holders.every(p=>p.welcome.max===capacity&&p.welcome.role==='replica'));
-    for(const failure of [`key=crowd/pub-1/${hash%Math.ceil(capacity/64)}`,'table=1']){
-      const closed=Promise.all(holders.map(p=>new Promise(resolve=>p.ws.addEventListener('close',resolve))));
-      assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${failure}`)).status,204);await closed;
-      const back=[];for(const p of holders){const next=await open(p.welcome.token);assert.equal(next.welcome.seat,p.welcome.seat);back.push(next);}holders=back;
+    for(const failure of ['gate','table']){
+      const gate=holders[0].gate, affected=failure==='table'?holders:holders.filter(p=>p.gate===gate);
+      const closed=Promise.all(affected.map(p=>new Promise(resolve=>p.ws.addEventListener('close',resolve))));
+      const query=failure==='table'?'table=1':`key=crowd/pub-1/${gate}`;
+      assert.equal((await mf.dispatchFetch(`https://studio.test/test-abort?${query}`)).status,204);await closed;
+      const back=new Map();
+      for(let i=0;i<affected.length;i+=20)await Promise.all(affected.slice(i,i+20).map(async p=>{const next=await open(p.key,p.welcome.token);assert.equal(next.welcome.seat,p.welcome.seat);back.set(p.key,next);}));
+      holders=holders.map(p=>back.get(p.key)??p);
+      if(count===1000)console.log(JSON.stringify({phase:'workerd-recovered',failure,players:affected.length}));
     }
       console.log(JSON.stringify({local:true,workerd:true,capacity,clients:count,gateRecovery:true,rulesRecovery:true}));
   } finally {clearInterval(heartbeat);for(const p of peers)try{p.close();}catch{}await mf.dispose();}

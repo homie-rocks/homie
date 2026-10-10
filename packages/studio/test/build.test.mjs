@@ -21,7 +21,8 @@ import { browserRulesGame } from './browser-rules-game.mjs';
  * Run: node --test packages/studio/test/build.test.mjs
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -49,7 +50,7 @@ const write = (dir, rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursi
 const edit = (file, fn) => writeFileSync(file, fn(readFileSync(file, 'utf8')));
 const editJson = (file, fn) => { const v = json(file); fn(v); writeFileSync(file, `${JSON.stringify(v, null, 2)}\n`); };
 
-/** A studio whose node_modules point at this package and the repo's esbuild, with the games named (the legacy Ember Vale starter each). */
+/** A studio whose node_modules point at this package and the repo's esbuild, with the games named (the rules-based Coin Dash starter each). */
 function studio(name, games = ['alpha', 'beta'], { typescript = false } = {}) {
   const dir = join(scratch, name);
   const r = run(['new', dir, '--name', 'Night Owls', '--homie', 'https://homie.test', '--no-install'], scratch);
@@ -517,7 +518,8 @@ test('preview <id>: one built game\'s files and nothing else, across a rebuild',
     assert.equal((await fetch(p.url, { method: 'POST' })).status, 405);
     // A build while it runs: the same server, the new game, no restart.
     edit(join(dir, 'games/alpha/src/main.ts'), (t) => `${t}\nconsole.log('rebuilt under a running preview');\n`);
-    assert.equal(run(['build'], dir).status, 0);
+    // Keep the preview event loop live while the separate build process works.
+    await promisify(execFile)(process.execPath, [CLI, 'build', '--json'], { cwd: dir });
     const next = bundleOf(built);
     assert.notEqual(next, first);
     assert.ok((await (await fetch(p.url)).text()).includes(`src="./${next}"`));

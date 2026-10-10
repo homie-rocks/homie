@@ -52,22 +52,24 @@ export function snapshotEncoder(keyframeTicks, chained = false) {
   let rows = new Map(), keyTick = -Infinity;
   return {
     reset() { base = null; rows.clear(); keyTick = -Infinity; },
-    encode(snap) {
+    encode(snap, seat = null) {
       if (!base || snap.e !== base.e || snap.k <= base.k || snap.k - keyTick >= keyframeTicks) {
         base = snap; keyTick = snap.k;
         rows = new Map(snap.d[1].map(e => [e[0], rowText(e)]));
         return snap;
       }
       const present = new Set(), changed = [];
+      const own = chained && seat !== null ? snap.d[1].filter(e => e[9] === seat && e[10] !== 1) : null;
       for (const entity of snap.d[1]) {
         const id = entity[0]; present.add(id);
+        if (own?.includes(entity)) continue;
         const before = rows.get(id);
         if (!before) { changed.push(entity); continue; }
         let mask = 0; const values = [];
         for (let i = 1; i < entity.length; i++) if (rowText(entity)[i] !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
         if (mask) changed.push([id, mask, values]);
       }
-      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}) } };
+      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
       if (chained) { base = snap; rows = new Map(snap.d[1].map(e => [e[0], rowText(e)])); }
       return out;
     },
@@ -91,8 +93,18 @@ export function snapshotDecoder() {
         return snap;
       }
       const d = snap.d;
-      if (!base || !d || d.base !== base.k || snap.e !== base.e || snap.k <= base.k) return null;
+      if (!base || !d || snap.e !== base.e || snap.k <= base.k) return null;
+      if (d.own !== undefined && (!Array.isArray(d.own) || !d.own.every(e => Array.isArray(e) && e.length >= 9 && typeof e[0] === 'string'))) return null;
       if (!Array.isArray(d.round) || !Array.isArray(d.removed) || !Array.isArray(d.changed)) return null;
+      if (d.base !== base.k) {
+        // A skipped remote delta must not stall local prediction or collider edits.
+        // Keep the remote baseline unchanged until a keyframe repairs the chain.
+        if (!d.chain || !d.own?.length || !Array.isArray(d.round)) return null;
+        const visible = new Map(rows);
+        for (const id of d.removed) visible.delete(id);
+        for (const e of d.own) visible.set(e[0], e);
+        return { ...snap, d: [d.round, [...visible.values()], ...(d.collision === undefined ? [] : [d.collision])] };
+      }
       const next = new Map(rows);
       for (const id of d.removed) next.delete(id);
       for (const change of d.changed) {
@@ -109,6 +121,7 @@ export function snapshotDecoder() {
         if (j !== change[2].length) return null;
         next.set(entity[0], entity);
       }
+      for (const e of d.own ?? []) next.set(e[0], e);
       const decoded = { ...snap, d: [d.round, [...next.values()], ...(d.collision === undefined ? [] : [d.collision])] };
       if (d.chain) { base = decoded; rows = next; }
       return decoded;

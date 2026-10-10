@@ -266,8 +266,8 @@ export function netplayOf(g, out = null) {
 }
 
 /**
- * How many seats a room of this game has: the netplay manifest's `maxPlayers` (or `players.max`), else game.json's
- * `players.max`, else 8. The studio chooses the room size; there is no admission ceiling.
+ * Room size comes from game.json's players.max, else 8 (32 for apps).
+ * The studio chooses the room size; there is no admission ceiling.
  */
 export function seatsFor(g) {
   const max = seatCount(g.players?.max, g.kind === 'app' ? 32 : 8);

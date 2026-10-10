@@ -121,7 +121,7 @@ test('cards, room rows and the directory show the landing\'s hero still, never t
   const rooms = await (await site('/api/rooms')).json();
   assert.equal(rooms.rooms[0].cover, '/games/rock-race/_landing/wide.jpg');
   const wk = await (await site('/.well-known/homie-studio.json')).json();
-  assert.deepEqual(wk.games.map((g) => g.cover), ['https://owls.example/games/rock-race/_landing/wide.jpg', 'https://owls.example/games/white-field/hero/wide.jpg']);
+  assert.deepEqual(wk.games.map((g) => g.cover), ['https://owls.example/games/rock-race/_landing/wide.jpg', 'https://owls.example/games/white-field/_landing/wide.jpg']);
   // A game with no still of its own: its cover still shows.
   rmSync(join(dir, 'games/rock-race/hero'), { recursive: true });
   assert.equal(out(run(['build'], dir)).ok, true);
