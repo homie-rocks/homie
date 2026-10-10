@@ -471,6 +471,7 @@ async function roomRow(env, meta, room, max) {
     round: f.round && typeof f.round === 'object' ? { n: f.round.n ?? null, phase: f.round.phase ?? null, startedAt: f.round.startedAt ?? null, endsAt: f.round.endsAt ?? null } : null,
     openedAt: office.openedAt ?? f.openedAt ?? null, closedUntil: office.closedUntil ?? null, snapHz: f.snapHz ?? 0,
     regate: office.regate ?? null,
+    telemetry: { source: 'server', ticks: f.ticks ?? null, transport: f.transport ?? [], gates: f.gates ?? [] },
     host: f.host ?? null, announce: f.announce ?? null,
     slots: slots.map((s) => ({ slot: s.slot, seat: s.seat ?? null, name: oneLine(s.name, 40), bot: Boolean(s.bot), ...(s.agent ? { agent: { role: s.agent.role ?? 'party', seat: s.agent.seat ?? null } } : {}) })),
     clients, bans: office.bans ?? [], mutes: office.mutes ?? [],

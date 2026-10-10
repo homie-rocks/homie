@@ -1,3 +1,4 @@
+import { stageTimings } from './timing.mjs';
 /*
  * host.ts — the host runtime: a rules module playing the host's part on the wire.
  * =============================================================================
@@ -146,7 +147,7 @@ const SPEECH = /^(?:say|chat|emote)/i;
 /**
  * The overrun check's memory: the last few ticks that started in this isolate, whichever rooms' they were, each with
  * when it started. Time inside a Worker stands still while code runs, so a tick cannot time itself; but the start of
- * the next tick, in any room, shows how long it took. A tick that starts more than a period late blames the newest
+ * the next tick, in any room, gives a scheduling interval (including other work). A late callback suspects the newest
  * tick here that took more than a period: the one just before it, or, when that one was quick and was itself held up,
  * the one before that.
  */
@@ -352,6 +353,7 @@ export function createHost(o: HostOptions): Host {
   /** Where in a tick the runtime is, for the log line of a fault. */
   let phase = '';
   let faultLoggedAt = -Infinity;
+  const timing = stageTimings();
   const stats = { ticks: 0, late: 0, slips: 0, since: 0, ins: 0, dropped: 0, lateEntries: 0, loggedAt: 0, faults: 0, lastFault: '' };
   /** Something was thrown in the runtime itself: it is counted, and said in the log at most once a second. */
   function fault(where: string, error: unknown): void {
@@ -571,17 +573,26 @@ export function createHost(o: HostOptions): Host {
     }
     if (roundRebasePending) publishRebase(now);
     phase = 'step';
+    const rulesAt = timing.now();
     core.step(inputs, guideBeat);
+    timing.record('rules', rulesAt);
     phase = 'frames';
+    const framesAt = timing.now();
     const out = core.drain();
     handle(out, now);
+    timing.record('frames', framesAt);
     if (ended) return;
     phase = 'snapshot';
+    const snapshotAt = timing.now();
     const data = core.snapshot();
+    timing.record('snapshot', snapshotAt);
     const nextPhase = (data[0] as number[])[1];
     if (roundPhase === 1 && nextPhase === 0) forceSave = true;
     roundPhase = nextPhase;
+    const checkpointAt = timing.now();
     checkpoint(forceSave);
+    timing.record('checkpoint', checkpointAt);
+    const encodeAt = timing.now();
     // The control table: one row a seat, [seat, r, ack, lead].
     const rows: number[][] = [];
     for (const b of core.bodies()) {
@@ -594,13 +605,17 @@ export function createHost(o: HostOptions): Host {
     // apart to whoever interpolates between them. The stamp always rises: a replica drops one that does not.
     lastSt = Math.max(lastSt + 1, Math.round(Math.min(now, dueOf(core.tick))));
     const snap = { t: 'snap', from: null, e: epoch, k: core.tick, st: lastSt, d: data, c: rows };
-    o.send(snap, JSON.stringify(snap));
+    const encoded = JSON.stringify(snap);
+    timing.record('encode', encodeAt);
+    const sendAt = timing.now();
+    o.send(snap, encoded);
+    timing.record('send', sendAt);
     stats.ticks += 1;
     stats.since += 1;
     if (now - stats.loggedAt >= 10_000) {
       // Tick figures, one line every ten seconds, never a line a tick.
       const s = core.stats;
-      log({ ev: 'ticks', game: o.game, ...(o.build ? { build: o.build } : {}), tick: core.tick, ticks: stats.since, late: stats.late, slips: stats.slips, ins: stats.ins, lateEntries: stats.lateEntries, dropped: stats.dropped, errors: s.errors, budgetStops: s.budgetStops, cut: s.ticksCut, maxUnits: s.maxUnits, worst: s.worst, maxTickUnits: s.maxTickUnits, ...(s.lost ? { lost: s.lost } : {}), ...(stats.faults ? { faults: stats.faults, lastFault: stats.lastFault } : {}), ...(s.lastError ? { lastError: s.lastError } : {}) });
+      log({ ev: 'ticks', timing: timing.facts(), game: o.game, ...(o.build ? { build: o.build } : {}), tick: core.tick, ticks: stats.since, late: stats.late, slips: stats.slips, ins: stats.ins, lateEntries: stats.lateEntries, dropped: stats.dropped, errors: s.errors, budgetStops: s.budgetStops, cut: s.ticksCut, maxUnits: s.maxUnits, worst: s.worst, maxTickUnits: s.maxTickUnits, ...(s.lost ? { lost: s.lost } : {}), ...(stats.faults ? { faults: stats.faults, lastFault: stats.lastFault } : {}), ...(s.lastError ? { lastError: s.lastError } : {}) });
       stats.loggedAt = now; stats.since = 0; stats.late = 0; stats.ins = 0; stats.lateEntries = 0;
     }
   }
@@ -610,9 +625,10 @@ export function createHost(o: HostOptions): Host {
    * of the clock the room ends, and the log names the handler (or the fault).
    */
   function tick(now: number): void {
+    const tickAt = timing.now();
     const cut = core.stats.ticksCut;
     let faulted = false;
-    try { tickOnce(); } catch (error) { faulted = true; fault(`tick ${core.tick} (${phase})`, error); }
+    try { tickOnce(); } catch (error) { faulted = true; fault(`tick ${core.tick} (${phase})`, error); } finally { timing.record('tick', tickAt); }
     if (ended) return;
     if (!faulted && core.stats.ticksCut === cut) { failingSince = null; return; }
     if (failingSince === null) failingSince = now;
@@ -666,8 +682,13 @@ export function createHost(o: HostOptions): Host {
         if (overSince !== null) {
           overTicks += 1;
           if (2 * overBlamed < overTicks) overSince = null;
-          // A room whose ticks have run slow for five seconds of the clock ends, and the log names the handler that used the most units.
-          else if (now - overSince >= OVERRUN_MS) { end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits, seconds: Math.round((now - overSince) / 100) / 10 }); return; }
+          // Late callbacks can catch up at the requested rate. End only a
+          // blamed room that also loses sustained throughput, not a healthy
+          // 20 Hz room whose callbacks arrive in pairs during admission/I/O.
+          else if (now - overSince >= OVERRUN_MS) {
+            if (overTicks * period < (now - overSince) * 0.9) { end('overrun', { worst: core.stats.worst, maxUnits: core.stats.maxUnits, seconds: Math.round((now - overSince) / 100) / 10 }); return; }
+            overSince = null;
+          }
         }
         if (o.enforceOverrun) recent.push({ who: self, at: now });
         if (recent.length > 8) recent.shift();
@@ -750,7 +771,8 @@ export function createHost(o: HostOptions): Host {
   }
 
   function save(): Uint8Array {
-    return toBytes({ v: 1, core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !core.bodies().some(b => b.seat === seat && b.owner === 'reserved')), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
+    const reserved = new Set(core.bodies().filter(b => b.owner === 'reserved').map(b => b.seat));
+    return toBytes({ v: 1, core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !reserved.has(seat)), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
   }
   function checkpoint(force = false): void {
     const seconds = c.settings.durability.movementSeconds;
@@ -783,7 +805,7 @@ export function createHost(o: HostOptions): Host {
       try { now = o.clock.now(); tick(now); } catch (error) { fault('tickNow', error); } finally { keepTime(); }
     },
     save,
-    facts: () => ({ tick: core.tick, epoch, running, paused, ended, armed, people: people(), tickHz, ...stats, core: { ...core.stats } }),
+    facts: () => ({ timing: timing.facts(), tick: core.tick, epoch, running, paused, ended, armed, people: people(), tickHz, ...stats, core: { ...core.stats } }),
     core,
   };
 }

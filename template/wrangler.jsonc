@@ -1,5 +1,5 @@
 // This studio's site on its own Cloudflare account (written by homie-studio). Everything here runs on
-// Cloudflare's Workers Free plan. `npm run deploy` (on this computer, or in Workers Builds) puts it live;
+// the studio's Cloudflare Workers account. `npm run deploy` (on this computer, or in Workers Builds) puts it live;
 // `npx wrangler preview` puts a branch on its own Preview URL with its own rooms. There is no R2 binding
 // until `homie-studio storage add` gives the studio storage for large media.
 {

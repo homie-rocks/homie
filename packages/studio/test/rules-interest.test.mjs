@@ -1,10 +1,80 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { interestSnapshot, snapshotEncoder, snapshotDecoder } from '../rules/interest.mjs';
+import { interestSnapshot, scheduledView, snapshotEncoder, snapshotDecoder } from '../rules/interest.mjs';
 
 const entity = (id, x, seat = undefined, z = 0) => [String(id), 0, 0, [x, 0, z], [0, 0, 0], [1, 0, 0], 1, [17], [], ...(seat === undefined ? [] : [seat, 0, 0, '', null])];
 const snapshot = (k, entities, e = 1) => ({ k, e, st: k * 50, d: [[1, 1, 1200], entities], c: [[0, 0, k, 0], [1, 0, k, 0]] });
 const sorted = snap => ({ ...snap, d: [snap.d[0], snap.d[1].toSorted((a, b) => a[0].localeCompare(b[0]))] });
+
+test('crowd deltas compare immutable tuples without serializing every field', () => {
+  const before = snapshot(1, Array.from({length:1000},(_,i)=>entity(i,i/10,i)));
+  const after = snapshot(2, before.d[1].map((e,i)=>{const row=structuredClone(e);if(i%3===0)row[3][0]+=0.01;return row;}));
+  const encoder=snapshotEncoder(Infinity,true), decoder=snapshotDecoder();
+  decoder.decode(encoder.encode(before));
+  let serializations=0, delta;const stringify=JSON.stringify;
+  try {JSON.stringify=(...args)=>{serializations++;return stringify(...args);};delta=encoder.encode(after);}
+  finally {JSON.stringify=stringify;}
+  assert.equal(serializations,0,'tuple comparison must not create per-field JSON strings');
+  assert.equal(delta.d.changed.length,334);
+  assert.deepEqual(decoder.decode(JSON.parse(JSON.stringify(delta))),after);
+});
+
+test('reused visual caches preserve source arrays, prior views and different precision policies', () => {
+  const source=snapshot(1,[entity('own',0,0),entity('other',1.23456,1)]), saved=structuredClone(source);
+  Object.freeze(source.d[1]);
+  const coarse=scheduledView({radiusM:null,precisionM:0.1}), fine=scheduledView({radiusM:null,precisionM:0.01});
+  const a=coarse(source,0), b=fine(source,0), c=coarse(source,0);
+  assert.equal(a.d[1][1][3][0],1.2);assert.equal(b.d[1][1][3][0],1.23);assert.deepEqual(c,a);
+  coarse(snapshot(2,[entity('own',4,0)]),0);
+  assert.equal(a.d[1].length,2);assert.equal(a.d[1][1][3][0],1.2);
+  assert.deepEqual(source,saved);
+});
+
+test('far refreshes survive coalescing that skips a player’s scheduled tick phase', () => {
+  const view=scheduledView({radiusM:12,nearM:4,farHz:5},20);
+  const delivered=[];
+  for(const k of [0,2,4,6,8]) {
+    const visible=view(snapshot(k,[entity('own',0,1),entity('far',8+k/100)]),1);
+    delivered.push(visible.d[1][1][3][0]);
+  }
+  assert.deepEqual(delivered,[8,8.02,8.02,8.06,8.06]);
+});
+
+test('a thousand 5 Hz far views spread over four ticks without delaying own state, arrivals or exits', () => {
+  const views = Array.from({length:1000},()=>scheduledView({radiusM:12,nearM:4,farHz:5},20));
+  const held = [], updates = Array(1000).fill(0), refreshed = [];
+  for(let k=1;k<=6;k++) {
+    const own = views.map((_,seat)=>entity('own'+seat,seat*30,seat));
+    const far = k===6 ? [] : own.map((_,seat)=>entity('far'+seat,seat*30+8+k/100));
+    const snap = snapshot(k,[...own,...far]);let count=0;
+    for(let seat=0;seat<1000;seat++) {
+      const visible=views[seat](snap,seat).d[1];
+      assert.equal(visible[0],own[seat],'controlled state stays exact every tick');
+      if(k===1)assert.equal(visible[1],far[seat],'arrivals are immediate in every phase');
+      else if(k===6)assert.equal(visible.length,1,'exits are immediate in every phase');
+      else if(visible[1]!==held[seat]) { count++;updates[seat]++; }
+      held[seat]=visible[1];
+    }
+    if(k>1&&k<6)refreshed.push(count);
+  }
+  assert.deepEqual(refreshed,[250,250,250,250]);
+  assert.ok(updates.every(n=>n===1),'each player still refreshes once per four ticks');
+});
+
+test('players sharing an interest cell share its ordering work and retain their exact radius', () => {
+  const entities = Array.from({length:100}, (_, i) => entity(i, i / 100, i));
+  entities.push(entity('boundary', 5.5));
+  const snap = snapshot(1, entities), sort = Array.prototype.sort;
+  let sorts = 0;
+  try {
+    Array.prototype.sort = function (...args) { sorts++; return sort.apply(this, args); };
+    for (let seat = 0; seat < 100; seat++) {
+      const visible = interestSnapshot(snap, seat, 5).d[1];
+      assert.deepEqual(visible, entities.filter(e => Math.abs(e[3][0] - seat / 100) <= 5));
+    }
+  } finally { Array.prototype.sort = sort; }
+  assert.equal(sorts, 1, 'one candidate ordering per occupied cell, not per player');
+});
 
 test('interest includes the own body and the radius boundary in 3D; absent body receives no entities; watchers get overview', () => {
   const s = snapshot(1, [entity('own', 0, 0), entity('near', 4), entity('edge', 5), entity('far', 6), entity('up', 0, undefined, 6)]);
@@ -65,6 +135,28 @@ test('malformed snapshots do not throw in the view or overwrite a valid keyframe
   assert.deepEqual(decoder.decode(encoder.encode(next)), next);
 });
 
+test('a thousand relayed welcomes leave view and encoder ownership in Gates', async () => {
+  const { NetRoom } = await import('../worker/room.mjs');
+  const room = new NetRoom({ code:'r', rules:true, maxPlayers:1000, tickHz:20 });
+  room.setServerHost({ viewRadiusM:5, viewSettings:{radiusM:5,precisionM:0.1}, frame(){}, facts(){return {};} });
+  const snap = snapshot(1, Array.from({length:1000},(_,i)=>entity(i,i*2,i)));
+  const clients = Array.from({length:1000},(_,seat)=>({seat,conn:{snapshot(){}}}));
+  for (const client of clients) {
+    const welcome = room.playerSnapshot(client,snap,true);
+    assert.ok(Array.isArray(welcome.d));
+    assert.ok(welcome.d[1].some(row=>row[9]===client.seat));
+  }
+  assert.equal(clients.filter(c=>c.viewSchedule || c.snapEncoder).length,0,
+    'the Table must not retain unused per-player baselines after relayed welcomes');
+  const direct = {seat:0,conn:{}};
+  const decoder = snapshotDecoder();
+  decoder.decode(room.playerSnapshot(direct,snap,true));
+  assert.equal(typeof direct.viewSchedule,'function');
+  assert.ok(direct.snapEncoder);
+  const next = snapshot(2,snap.d[1].map((row,i)=>i===0?entity(0,0.2,0):row));
+  assert.equal(decoder.decode(room.playerSnapshot(direct,next)).d[1][0][3][0],0.2);
+});
+
 test('relay backpressure does not advance a client baseline; welcome and watcher overview use the delivery role', async () => {
   const { NetRoom } = await import('../worker/room.mjs');
   const room = new NetRoom({ code:'r', rules:true, maxPlayers:2, tickHz:20, now:()=>1000 });
@@ -113,4 +205,15 @@ test('seeded interest-edge collider revisions survive deltas, loss, edits and re
     assert.deepEqual(received.d[2], collision, `current geometry at tick ${k}`);
     assert.deepEqual(sorted(received), sorted(selected));
   }
+});
+
+test('chained decoding preserves earlier snapshots and rejects a partial invalid update atomically',()=>{
+  const encoder=snapshotEncoder(Infinity,true), decoder=snapshotDecoder();
+  const frame=k=>({e:1,k,d:[[],[['body',0,0,[k,0],[0,0],[],0,[],[],0,0]]],c:[]});
+  const first=decoder.decode(encoder.encode(frame(1)));
+  const second=encoder.encode(frame(2));
+  const broken=structuredClone(second);broken.d.changed.push(['missing',8,[[7,0]]]);
+  assert.equal(decoder.decode(broken),null);
+  assert.deepEqual(decoder.decode(second),frame(2));
+  assert.deepEqual(first,frame(1),'a private baseline update cannot mutate a snapshot already handed to the view');
 });

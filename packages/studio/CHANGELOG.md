@@ -17,6 +17,30 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.45.2] - 2026-10-10
+
+**Plugin 0.45.2** · Crowd transport and deploy approval.
+
+Crowd links bound queued work, and an owner’s deploy request covers the task.
+
+### Changed
+
+- Crowd rooms send shared state through their multiplex links and encode each player's view in Gates. Link receipts bound in-flight work; unsent visual state is replaced while inputs and commands retain their order. Independent admissions no longer wait behind another player's attach, and large welcome bursts wait for relay capacity. Gates compare immutable tuple values without per-field JSON allocation; shared snapshots serialize once across downstream links. Gates share entity encoding and send a full keyframe on connection or epoch change.
+- Far-view refreshes are spread across players to avoid synchronized delivery bursts, preserving each player's declared rate and immediate visibility changes.
+- A deploy requested in the owner's prompt is approved for that task, including retries. Unrequested deployments remain held; explicit refusals revoke the task approval.
+
+### Fixed
+
+- Player rate limits use trusted Gate ingress time, so delayed relay batches do not turn a legitimate input stream into a flood. The allowances remain unchanged.
+- Late callbacks that catch up at the requested tick rate no longer end a healthy room as an overrun; sustained slow ticks still stop.
+- Relay failures log their layer, close cause and queue counters. Room and office diagnostics include stage timing availability and transport queues. Frozen Cloudflare clocks are not reported as zero execution time.
+- Deployment summaries no longer assume Workers Free. Crowd duration estimates include Gates and Concentrators and identify excluded request traffic.
+- The npm package includes the crowd measurement document referenced by its guides. Browser telemetry names offline and disconnected sources explicitly.
+
+### Upgrade notes
+
+- Cloudflare capacity awaits the owner's next trial; local results and limitations are recorded in the crowd reproduction report.
+
 ## [0.45.1] - 2026-10-09
 
 **Plugin 0.45.1** · [#75](https://github.com/homie-rocks/homie/pull/75)

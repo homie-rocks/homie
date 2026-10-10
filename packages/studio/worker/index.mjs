@@ -1339,7 +1339,21 @@ export class Table {
       maxPlayers: max,
       perIp: perAddress(max),
       store: {
-        save: (o) => { if (this.hostRt) this.saveRoom(this.hostRt.save()); else if (!hostedGame(game)) storage.put('net', o).catch(() => {}); },
+        save: (o) => {
+          if (this.hostRt && !this.relayFrame) this.saveRoom(this.hostRt.save());
+          else if (this.hostRt) {
+            // All admissions in one relay turn share a checkpoint. The microtask
+            // runs before the relay's timer flush, retaining the storage output gate.
+            if (!this.admissionSaveQueued) {
+              this.admissionSaveQueued = true;
+              const host = this.hostRt;
+              queueMicrotask(() => {
+                this.admissionSaveQueued = false;
+                if (this.hostRt === host) { try { this.saveRoom(host.save()); } catch (error) { this.storageProblem(error); } }
+              });
+            }
+          } else if (!hostedGame(game)) storage.put('net', o).catch(() => {});
+        },
         clear: () => { this.clearRoom(); },
       },
       // The room's lifecycle, one line each with its time and room (worker/room.mjs `log`): a hello, a leave, an
@@ -1937,7 +1951,7 @@ export class Table {
 
   async fetch(request) {
     if (new URL(request.url).pathname === '/__multiplex') {
-      return acceptMultiplex(request, (req, socket) => this.connect(req, socket));
+      return acceptMultiplex(request, (req, socket) => this.connect(req, socket), { onMetrics: (id, facts) => { this.gateMetrics ??= new Map(); this.gateMetrics.set(id, { id, at: Date.now(), ...facts }); } });
     }
     return this.connect(request);
   }
@@ -1956,7 +1970,7 @@ export class Table {
     const room = this.roomFor(game, code, max);
     // The back office (worker/office.mjs), from the studio's Worker only: the room as its owner sees it, and the
     // owner's signed controls, which this room verifies before it applies one (NETPLAY.md section 15).
-    if (url.pathname === '/__facts') return json({ ...room.officeFacts(), durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
+    if (url.pathname === '/__facts') return json({ ...room.officeFacts(), gates: [...(this.gateMetrics?.values() ?? [])], durability: this.storageHealth ?? { ok: true }, ...(this.house ? { brains: this.house.facts() } : {}) });
     // A chat line as the room keeps it (section 19), for a report: the Worker files the room's own copy, never a reporter's.
     if (url.pathname === '/__chat') {
       const id = url.searchParams.get('id');
@@ -2047,7 +2061,8 @@ export class Table {
       ...(url.pathname === '/__watch' && url.searchParams.get('mod') === '1' ? { mod: true } : {}),
       send: (text) => { try { server.send(text); } catch { /* closed */ } },
       close: (c, r) => { try { server.close(c, r); } catch { /* closed */ } },
-      buffered: () => 0,
+      buffered: () => server.buffered?.() ?? 0,
+      ...(server.snapshot ? { snapshot: (...args) => server.snapshot(...args), transportFacts: server.transportFacts } : {}),
     };
     if (url.pathname === '/__watch') {
       // Watching shells are cheap (outgoing is free) but not free: a room holds at most 256, and 24 from one address
@@ -2068,9 +2083,10 @@ export class Table {
       // seats, so it is not counted twice). One counter write per room.
       const fresh = room.seats.size === 0;
       server.addEventListener('message', (e) => {
-        h.onMessage(typeof e.data === 'string' ? e.data : '');
+        this.relayFrame = Boolean(server.snapshot);
+        try { h.onMessage(typeof e.data === 'string' ? e.data : '', this.relayFrame ? e.receivedAt : undefined); } finally { this.relayFrame = false; }
         // A newcomer: the Lobby hears of the room at once, so the owner's office (and a launch change) never misses it.
-        if (typeof e.data === 'string' && e.data.startsWith('{"t":"hello"')) this.report();
+        if (typeof e.data === 'string' && e.data.startsWith('{"t":"hello"')) this.scheduleReport();
         if (fresh && !this.openCounted && room.seats.size > 0) {
           this.openCounted = true;
           if (conn.qa) return;
@@ -2086,7 +2102,7 @@ export class Table {
         }
         // The room says the departure itself (its `leave` line: who, which seat, host or not, how many are left).
         h.onClose(via);
-        try { this.report(); } catch (error) { this.say({ ev: 'failed', op: 'report', error: errorLine(error) }); }
+        try { this.scheduleReport(); } catch (error) { this.say({ ev: 'failed', op: 'report', error: errorLine(error) }); }
       };
       server.addEventListener('close', () => left('close'));
       // A lost network arrives here, not as a close: said as what it is, with the client it was, then handled as the
@@ -2148,6 +2164,12 @@ export class Table {
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName(this.game));
     this.lastReport = -1;
     this.ctx.waitUntil(lobby.fetch(`https://lobby/report?game=${encodeURIComponent(this.game)}`, { method: 'POST', body: JSON.stringify({ room: this.code, players: 0, people: 0, ...extra }) }).catch(() => {}));
+  }
+
+  scheduleReport() {
+    if (this.reportQueued) return;
+    this.reportQueued = true;
+    queueMicrotask(() => { this.reportQueued = false; this.report(); });
   }
 
   /** Tell the Lobby how many players this room has, when it changes. */

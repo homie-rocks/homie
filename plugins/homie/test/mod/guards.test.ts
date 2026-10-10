@@ -90,7 +90,7 @@ describe('deploys', () => {
     expect(w.store.get(`deployed:${ROOT}`)).toEqual({ commit: 'f00dfeed', at: expect.any(String) } as any)
   })
 
-  test('npx homie-studio deploy, wrangler deploy and a media publish are held; deploy --plan is not', async ($, on) => {
+  test('one approval covers the task’s deploy commands and retries; deploy --plan is not held', async ($, on) => {
     const w = world(on, { tool: () => live })
     await start($)
     await $.tool.call({ tool: 'Bash', command: 'npx --no-install homie-studio deploy' })
@@ -98,7 +98,7 @@ describe('deploys', () => {
     await $.tool.call({ tool: 'Bash', command: 'node skills/music/scripts/music.mjs publish night-theme' })
     await $.tool.call({ tool: 'Bash', command: 'npx --no-install homie-studio deploy --plan' })
     await $.tool.call({ tool: 'Bash', command: 'node skills/video/scripts/video.mjs publish trailer --no-deploy' })
-    expect(w.log.asked.length).toBe(3)
+    expect(w.log.asked.length).toBe(1)
   })
 
   test('Cancel stops it here', async ($, on) => {

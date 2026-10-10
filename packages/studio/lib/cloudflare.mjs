@@ -1,3 +1,4 @@
+import { roomLayout } from '../worker/gate.mjs';
 import {workerEntry} from './worker-build.mjs';
 import { seatCount } from '../worker/seats.mjs';
 import { refreshWorkerConfig } from './worker-config.mjs';
@@ -175,9 +176,11 @@ export async function zonePlan(root, opts = {}) {
  */
 export function hostedUse({ seats = 8, inputHz = 20 } = {}) {
   const requests = Math.round((seats * (inputHz * 3600 + 1800)) / 20);
-  const gbSeconds = 0.128 * 3600;
+  const layout = roomLayout(seats);
+  const objects = 1 + (layout.gates > 1 ? layout.gates + layout.concentrators : 0);
+  const gbSeconds = 0.128 * 3600 * objects;
   const pct = (n, of) => (n / of < 0.001 ? 'under 0.1%' : `${Math.round((n / of) * 1000) / 10}%`);
-  return { seats, requests, gbSeconds, rows: 12, share: { requests: pct(requests, 100_000), gbSeconds: pct(gbSeconds, 13_000), rows: pct(12, 100_000) } };
+  return { seats, requests, gbSeconds, objects, layout, requestBasis: 'player input and ping only; relay frames, receipts, HTTP, saves and Lobby are additional', rows: 12, share: { requests: pct(requests, 100_000), gbSeconds: pct(gbSeconds, 13_000), rows: pct(12, 100_000) } };
 }
 
 /** What `deploy` will create and what it costs, from studio.json alone. It calls nothing. */
@@ -197,18 +200,16 @@ export function deployPlan(root) {
   return {
     ok: true, command: 'deploy plan', studio: studio.name, account: cf.accountId ?? null,
     cloudflare: [
-      { kind: 'Worker', name: cf.worker, what: 'the studio\'s pages, each game\'s page and play shell, and /.well-known/homie-studio.json for the directory', state: mark(`worker:${cf.worker}`), plan: 'Workers Free' },
-      { kind: 'D1 database', name: cf.d1, what: 'the directory claim, every finished round, the studio\'s own stats (daily counters of visits, plays, rooms, rounds and songs, for the owner only; nothing about a visitor), and, for games that keep saves, player accounts (a passkey\'s public key, never a password) and their saves', state: mark(`d1:${cf.d1}`), plan: 'Workers Free (500 MB per database, 5 GB per account)' },
-      { kind: 'Durable Object', name: 'Table', what: hosted.length ? `one per public room: the netplay relay (seats, snapshots), and for ${hosted.map((h) => h.id).join(', ')} the game's own rules, which run here and nowhere else` : 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
-      ...hosted.map((h) => ({ kind: 'Game rules', name: h.id, what: `the rules of ${h.name} run on Cloudflare, in each room's Table, not in a player's browser. An hour of play in one full room (${h.seats} players) uses about ${h.share.requests} of the free plan's 100,000 requests a day, ${h.share.gbSeconds} of its 13,000 GB-seconds of running time and ${h.share.rows} of its 100,000 rows written. A room with nobody in it uses nothing. Out of requests, every room of every game stops until 00:00 UTC; the Workers Paid plan removes the three allowances`, state: 'in the Worker', plan: 'Workers Free' })),
-      { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker', plan: 'Workers Free (SQLite-backed)' },
+      { kind: 'Worker', name: cf.worker, what: 'the studio\'s pages, each game\'s page and play shell, and /.well-known/homie-studio.json for the directory', state: mark(`worker:${cf.worker}`) },
+      { kind: 'D1 database', name: cf.d1, what: 'the directory claim, every finished round, the studio\'s own stats (daily counters of visits, plays, rooms, rounds and songs, for the owner only; nothing about a visitor), and, for games that keep saves, player accounts (a passkey\'s public key, never a password) and their saves', state: mark(`d1:${cf.d1}`) },
+      { kind: 'Durable Object', name: 'Table', what: hosted.length ? `one per public room: the netplay relay (seats, snapshots), and for ${hosted.map((h) => h.id).join(', ')} the game's own rules, which run here and nowhere else` : 'one per public room: the netplay relay (seats, host, snapshots); runs no game code', state: 'declared by the Worker' },
+      ...hosted.map((h) => ({ kind: 'Game rules', name: h.id, what: `One full ${h.seats}-player room activates ${h.objects} objects (${h.layout.gates} logical Gates, ${h.layout.concentrators} Concentrators and a Table): approximately ${h.gbSeconds} GB-seconds/hour before Lobby activity. Player input/ping alone contributes ${h.requests} request units/hour; relay frames and receipts, HTTP and storage are additional. Occupancy, batching and account usage determine the bill.`, state: 'in the Worker' })),
+      { kind: 'Durable Object', name: 'Lobby', what: 'one per game: puts strangers who press Play into the same room', state: 'declared by the Worker' },
       storage
         ? { kind: 'R2 bucket', name: storage, what: 'the studio\'s big media: songs and videos over the size studio.json media.r2Over names (1 MiB unless set) or that git leaves out, uploaded and checked by SHA-256 before the site stops carrying them, served at their same addresses', state: 'exists (this studio made it)', plan: 'R2 (payment method on the account; 10 GB-month free)' }
         : { kind: 'R2 bucket', name: null, what: 'none: a new studio needs no storage. `homie-studio storage add` adds it later, for large media only', state: 'not created', plan: null },
     ],
-    cost: storage
-      ? `Free on Cloudflare's Workers Free plan. ${R2_COST} Beyond the free tier Cloudflare bills the account directly.`
-      : 'Free: everything above is on Cloudflare\'s Workers Free plan, which needs no payment method. Its daily limits (100,000 Worker requests; D1 5 million rows read and 100,000 written) reset at 00:00 UTC; past them requests fail until the reset, nothing is charged.',
+    cost: 'Account subscription not queried. Cloudflare bills usage under the account’s current plan; estimates are not a billing quote.',
     login: 'One approval: `npx wrangler login` opens Cloudflare in the person\'s browser (a free account works; a new one verifies its email address first).',
     address: `https://${cf.worker}.<the account's workers.dev subdomain>.workers.dev`,
     directory: {
@@ -299,7 +300,7 @@ async function deployLocked(root, { log = () => {}, homie, fetchFn = null, ownRo
     const account = who.accounts.find((a) => a.id === accountId)?.name ?? 'the signed-in account';
     announced.push(
       `First deploy of ${studio.name} to the Cloudflare account "${account}". It creates: the Worker ${cf.worker} (the site and its rooms), the D1 database ${cf.d1} (rounds, and the studio's own stats: counts for the owner, never a visitor's identity), and the Durable Objects Table and Lobby (SQLite-backed).`,
-      'Cost: free, on the Workers Free plan; no payment method, no R2 (storage for large media is `homie-studio storage add`, later, only if wanted).',
+      'Account subscription not queried; usage is billed under the account’s current Cloudflare plan.',
       `The directory (${homie || studio.homie?.directory || 'https://homie.rocks'}) will store the site's address and claim, the studio's name, and each game's name, blurb and Play link.`,
     );
     for (const line of announced) log(line);

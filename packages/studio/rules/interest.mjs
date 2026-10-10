@@ -1,6 +1,7 @@
 /** Per-connection state delivery. Pure data, shared by the relay and the view.
  * Deltas may name a periodic keyframe or the previous ordered frame. A missing
- * chained predecessor is ignored until the next keyframe (at most one second).
+ * chained predecessor is ignored until the next keyframe. Periodic encoders
+ * repair the chain; ordered transports reset it on connection or epoch change.
  * No history grows with time: one keyframe per connection, no per-frame queue.
  */
 const spatial = new WeakMap(), controls = new WeakMap();
@@ -16,7 +17,7 @@ function indexFor(snap, radius) {
     const p = e[3], key = `${Math.floor(p[0]/size)},${Math.floor(p[1]/size)},${Math.floor((p[2]??0)/size)}`;
     const list = cells.get(key) ?? []; list.push(e); cells.set(key, list);
   }
-  const index = { own, cells, size, order }; byRadius.set(radius,index); return index;
+  const index = { own, cells, size, order, candidates: new Map() }; byRadius.set(radius,index); return index;
 }
 export function interestSnapshot(snap, seat, radiusM) {
   const [round, entities] = snap.d;
@@ -27,50 +28,98 @@ export function interestSnapshot(snap, seat, radiusM) {
     if (own && radiusM === null) visible = entities;
     else if (own) {
       const q=own[3], x=Math.floor(q[0]/index.size), y=Math.floor(q[1]/index.size), z=Math.floor((q[2]??0)/index.size);
-      for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)
-        for(const e of index.cells.get(`${x+dx},${y+dy},${z+dz}`)??[]) {
-          const p=e[3];
-          if(e===own||(p[0]-q[0])**2+(p[1]-q[1])**2+((p[2]??0)-(q[2]??0))**2<=radiusM**2)visible.push(e);
-        }
-      // Snapshot order is part of the view contract, even though cells are not.
-      visible.sort((a,b)=>index.order.get(a)-index.order.get(b));
+      const cell = `${x},${y},${z}`;
+      let candidates = index.candidates.get(cell);
+      if (!candidates) {
+        candidates = [];
+        for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)
+          candidates.push(...(index.cells.get(`${x+dx},${y+dy},${z+dz}`)??[]));
+        // Every player in this cell shares the ordered candidates. The final
+        // radius check remains exact for that player's position.
+        candidates.sort((a,b)=>index.order.get(a)-index.order.get(b));
+        index.candidates.set(cell, candidates);
+      }
+      for (const e of candidates) {
+        const p=e[3];
+        if(e===own||(p[0]-q[0])**2+(p[1]-q[1])**2+((p[2]??0)-(q[2]??0))**2<=radiusM**2)visible.push(e);
+      }
     }
   }
   let control = snap.c && controls.get(snap.c);
   if (!control) { control = new Map((snap.c ?? []).map(row => [row[0], row])); if (snap.c) controls.set(snap.c, control); }
   return { ...snap, d: [round, visible, ...snap.d.slice(2)], c: control.has(seat) ? [control.get(seat)] : [] };
 }
-const encodedRows = new WeakMap();
-const rowText = row => {
-  let text=encodedRows.get(row);
-  if(!text){text=row.map(v=>JSON.stringify(v));encodedRows.set(row,text);}
+// Snapshot tuples contain primitives and small numeric arrays. Compare these
+// values without allocating a JSON string for every field on every tick.
+// Keep JSON equality for uncommon object-valued fields, including key order.
+function sameValue(a, b) {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!sameValue(a[i], b[i])) return false;
+    return true;
+  }
+  if (a === null || b === null || typeof a !== 'object' && typeof b !== 'object') return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+// Entity rows are immutable snapshot values. Gates share their comparisons and
+// wire fragments across players whose visual baselines contain the same row.
+const changesByBase = new WeakMap(), wireRows = new WeakMap();
+function changedRow(entity, before) {
+  let cached = changesByBase.get(before);
+  if (cached?.entity === entity) return cached.row;
+  let mask = 0; const values = [];
+  for (let i = 1; i < entity.length; i++) if (!sameValue(entity[i], before[i])) { mask |= 1 << i; values.push(entity[i]); }
+  const row = mask ? [entity[0], mask, values] : null;
+  // A delivery frame visits all players before the next immutable frame.
+  // Keep the most recent pair without allocating a WeakMap for every row.
+  if (cached) { cached.entity = entity; cached.row = row; }
+  else changesByBase.set(before, { entity, row });
+  return row;
+}
+function wireRow(row) {
+  let text = wireRows.get(row);
+  if (text === undefined) { text = JSON.stringify(row); wireRows.set(row, text); }
   return text;
-};
+}
+/** JSON wire equivalent of a snapshot, sharing immutable entity fragments. */
+export function snapshotText(snap) {
+  const { d, ...header } = snap;
+  let data;
+  if (Array.isArray(d)) data = '[' + JSON.stringify(d[0]) + ',[' + d[1].map(wireRow).join(',') + ']' + d.slice(2).map(v => ',' + JSON.stringify(v)).join('') + ']';
+  else {
+    const { changed, own, ...meta } = d;
+    data = JSON.stringify(meta).slice(0, -1) + ',"changed":[' + changed.map(wireRow).join(',') + ']' + (own ? ',"own":[' + own.map(wireRow).join(',') + ']' : '') + '}';
+  }
+  return JSON.stringify(header).slice(0, -1) + ',"d":' + data + '}';
+}
 
 export function snapshotEncoder(keyframeTicks, chained = false) {
   let base = null;
-  let rows = new Map(), keyTick = -Infinity;
+  let rows = new Map(), keyTick = -Infinity, generation = 0;
   return {
-    reset() { base = null; rows.clear(); keyTick = -Infinity; },
+    reset() { base = null; rows.clear(); keyTick = -Infinity; generation = 0; },
     encode(snap, seat = null) {
       if (!base || snap.e !== base.e || snap.k <= base.k || snap.k - keyTick >= keyframeTicks) {
         base = snap; keyTick = snap.k;
-        rows = new Map(snap.d[1].map(e => [e[0], rowText(e)]));
+        rows = new Map(snap.d[1].map(e => [e[0], { entity: e, generation }]));
         return snap;
       }
-      const present = new Set(), changed = [];
+      const changed = [], removed = []; generation++;
       const own = chained && seat !== null ? snap.d[1].filter(e => e[9] === seat && e[10] !== 1) : null;
       for (const entity of snap.d[1]) {
-        const id = entity[0]; present.add(id);
+        const id = entity[0], held = rows.get(id), before = held?.entity;
+        if (held) { held.generation = generation; if (chained) held.entity = entity; }
+        else if (chained) rows.set(id, { entity, generation });
         if (own?.includes(entity)) continue;
-        const before = rows.get(id);
         if (!before) { changed.push(entity); continue; }
-        let mask = 0; const values = [];
-        for (let i = 1; i < entity.length; i++) if (rowText(entity)[i] !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
-        if (mask) changed.push([id, mask, values]);
+        const change = changedRow(entity, before);
+        if (change) changed.push(change);
       }
-      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
-      if (chained) { base = snap; rows = new Map(snap.d[1].map(e => [e[0], rowText(e)])); }
+      rows.forEach((held, id) => { if (held.generation !== generation) { removed.push(id); if (chained) rows.delete(id); } });
+      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed, ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
+      if (chained) base = snap;
       return out;
     },
   };
@@ -105,13 +154,14 @@ export function snapshotDecoder() {
         for (const e of d.own) visible.set(e[0], e);
         return { ...snap, d: [d.round, [...visible.values()], ...(d.collision === undefined ? [] : [d.collision])] };
       }
-      const next = new Map(rows);
-      for (const id of d.removed) next.delete(id);
+      // Validate first, then mutate only the private chained baseline. Returned
+      // snapshots keep their own entity array and immutable row values.
+      const updates = [];
       for (const change of d.changed) {
         if (!Array.isArray(change) || typeof change[0] !== 'string') return null;
         if (change.length !== 3) {
           if (change.length < 9) return null;
-          next.set(change[0], change); continue;
+          updates.push(change); continue;
         }
         if (!Number.isInteger(change[1]) || change[1] < 0 || !Array.isArray(change[2])) return null;
         const old = rows.get(change[0]);
@@ -119,8 +169,11 @@ export function snapshotDecoder() {
         const entity = old.slice(); let j = 0;
         for (let i = 1; i < entity.length; i++) if (change[1] & (1 << i)) entity[i] = change[2][j++];
         if (j !== change[2].length) return null;
-        next.set(entity[0], entity);
+        updates.push(entity);
       }
+      const next = d.chain ? rows : new Map(rows);
+      for (const id of d.removed) next.delete(id);
+      for (const entity of updates) next.set(entity[0], entity);
       for (const e of d.own ?? []) next.set(e[0], e);
       const decoded = { ...snap, d: [d.round, [...next.values()], ...(d.collision === undefined ? [] : [d.collision])] };
       if (d.chain) { base = decoded; rows = next; }
@@ -134,33 +187,49 @@ export function snapshotDecoder() {
  */
 const quantizedRows = new WeakMap();
 export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, farHz = null } = {}, tickHz = 20) {
-  let previous = new Map(), epoch = null;
+  const previous = new Map(); let epoch = null, generation = 0;
   return (snap, seat) => {
     if (snap.e !== epoch) { previous.clear(); epoch = snap.e; }
     const selected = interestSnapshot(snap, seat, radiusM);
     const own = selected.d[1].find(e => e[9] === seat && e[10] !== 1);
-    const next = new Map();
-    const entities = selected.d[1].map(entity => {
-      let row = entity;
+    generation++;
+    // Radius selection already owns its array. Overview selection shares the
+    // source, so copy only that case before replacing rows with visual values.
+    const entities = selected.d[1] === snap.d[1] ? selected.d[1].slice() : selected.d[1];
+    for (let index = 0; index < entities.length; index++) {
+      const entity = entities[index], held = previous.get(entity[0]);
+      let row = entity, sampledTick = snap.k;
       if (entity !== own) {
-        const distance = own ? Math.hypot(...entity[3].map((n, i) => n - (own[3][i] ?? 0))) : 0;
-        const old = previous.get(entity[0]);
-        const interval = farHz && nearM !== null && distance > nearM ? Math.max(1, Math.round(tickHz / farHz)) : 1;
-        if (old && snap.k % interval !== 0) row = old;
-        else if (precisionM > 0) {
+        const p = entity[3], q = own?.[3];
+        const distanceSquared = q ? (p[0]-q[0])**2 + (p[1]-q[1])**2 + ((p[2]??0)-(q[2]??0))**2 : 0;
+        const old = held?.row;
+        const interval = farHz && nearM !== null && distanceSquared > nearM**2 ? Math.max(1, Math.round(tickHz / farHz)) : 1;
+        // Spread far-view refreshes across players instead of sending the
+        // whole room's largest deltas on the same tick. Each player retains
+        // the declared rate; newly visible bodies still arrive immediately.
+        const phase = (seat ?? 0) % interval;
+        sampledTick = snap.k - ((snap.k - phase) % interval + interval) % interval;
+        // Coalescing may skip the exact phase. Refresh at the first delivered
+        // tick after it, instead of waiting indefinitely for that residue.
+        if (old && interval > 1 && snap.k - held.sampledTick < interval) {
+          row = old; sampledTick = held.sampledTick;
+        } else if (precisionM > 0) {
           let versions = quantizedRows.get(entity);
-          if (!versions) { versions = new Map(); quantizedRows.set(entity, versions); }
-          row = versions.get(precisionM);
+          row = versions?.precision === precisionM ? versions.row : versions?.others?.get(precisionM);
           if (!row) {
             row = entity.slice();
             for (const i of [3, 4]) row[i] = entity[i].map(n => Number((Math.round(n / precisionM) * precisionM).toPrecision(12)));
-            versions.set(precisionM, row);
+            if (!versions) quantizedRows.set(entity, { precision: precisionM, row });
+            else { versions.others ??= new Map(); versions.others.set(precisionM, row); }
           }
         }
       }
-      next.set(entity[0], row); return row;
-    });
-    previous = next;
-    return { ...selected, d: [selected.d[0], entities, ...selected.d.slice(2)] };
+      if (held) { held.row = row; held.generation = generation; held.sampledTick = sampledTick; }
+      else previous.set(entity[0], { row, generation, sampledTick });
+      entities[index] = row;
+    }
+    previous.forEach((held, id) => { if (held.generation !== generation) previous.delete(id); });
+    selected.d[1] = entities;
+    return selected;
   };
 }
