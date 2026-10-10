@@ -4,7 +4,7 @@ import { charge } from './guard.ts';
 import type { Vec3, MapHeightTile } from './rules.ts';
 import type { Solid, Hit3 } from './collision.ts';
 type Plane = { n: Vec3; c: number };
-type Prism = { vertices: Vec3[]; faces: Vec3[][]; planes: Plane[]; edges: Vec3[] };
+type Prism = { vertices: Vec3[]; faces: Vec3[][]; bounds: {min:Vec3;max:Vec3}[]; planes: Plane[]; edges: Vec3[] };
 const cache = new WeakMap<MapHeightTile, Prism[]>();
 const sub=(a:Vec3,b:Vec3):Vec3=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
 const add=(a:Vec3,b:Vec3,t=1):Vec3=>({x:a.x+b.x*t,y:a.y+b.y*t,z:a.z+b.z*t});
@@ -23,7 +23,7 @@ export function prepareTile(t:MapHeightTile):void {
     for(let i=0;i<3;i++){const j=(i+1)%3;faces.push([upper[i],lower[i],lower[j]],[upper[i],lower[j],upper[j]]);}
     const center=vertices.reduce((s,v)=>add(s,v,1/6),{x:0,y:0,z:0}),planes:Plane[]=[],valid:Vec3[][]=[],edges:Vec3[]=[];
     for(const face of faces){let n=cross(sub(face[1],face[0]),sub(face[2],face[0]));const len=Math.sqrt(dot(n,n));if(len<1e-12)continue;n={x:n.x/len,y:n.y/len,z:n.z/len};let c=dot(n,face[0]);if(dot(n,center)>c){n={x:-n.x,y:-n.y,z:-n.z};c=-c;}planes.push({n,c});valid.push(face);for(let i=0;i<3;i++)edges.push(sub(face[(i+1)%3],face[i]));}
-    prisms.push({vertices,faces:valid,planes,edges});
+    prisms.push({vertices,faces:valid,bounds:valid.map(face=>({min:{x:Math.min(...face.map(v=>v.x)),y:Math.min(...face.map(v=>v.y)),z:Math.min(...face.map(v=>v.z))},max:{x:Math.max(...face.map(v=>v.x)),y:Math.max(...face.map(v=>v.y)),z:Math.max(...face.map(v=>v.z))}})),planes,edges});
   }
   cache.set(t,prisms);
 }
@@ -54,7 +54,7 @@ function distance(prism:Prism,a:Vec3,b:Vec3):Vec3 {
   if(clip(prism,a,sub(b,a)))return {x:0,y:0,z:0};
   let best={x:Infinity,y:Infinity,z:Infinity},sq=Infinity;
   const take=(v:Vec3)=>{const n=dot(v,v);if(n<sq){sq=n;best=v;}};
-  for(const [x,y,z] of prism.faces){charge(36);take(sub(a,triangle(a,x,y,z)));take(sub(b,triangle(b,x,y,z)));take(segmentPair(a,b,x,y));take(segmentPair(a,b,y,z));take(segmentPair(a,b,z,x));}
+  for(let i=0;i<prism.faces.length;i++){charge(12);const bounds=prism.bounds[i];let lower=0;for(const k of ['x','y','z'] as const){const gap=Math.max(0,bounds.min[k]-Math.max(a[k],b[k]),Math.min(a[k],b[k])-bounds.max[k]);lower+=gap*gap;}if(lower>sq)continue;const [x,y,z]=prism.faces[i];charge(36);take(sub(a,triangle(a,x,y,z)));take(sub(b,triangle(b,x,y,z)));take(segmentPair(a,b,x,y));take(segmentPair(a,b,y,z));take(segmentPair(a,b,z,x));}
   return best;
 }
 function boxCast(prism:Prism,a:Solid,d:Vec3):Hit3|null {

@@ -66,7 +66,7 @@ export const REFUSED_NAMES = ['constructor', 'prototype', '__proto__', 'stack', 
 /** The names JavaScript calls by itself to turn an object into a number or a text: no function may sit under one. */
 export const HOOK_NAMES = ['valueOf', 'toString', 'toJSON'];
 /** What the host runtime's own objects offer: `world`, `ctx`, the round, the map (rules/core.ts) and `world.math` (rules/math.ts). */
-export const WORLD_METHODS = ['ticks', 'random', 'send', 'sendRoom', 'announce', 'sendArea', 'after', 'emit', 'spawn', 'despawn', 'place', 'near', 'inBox', 'ray', 'rayAll', 'sweep', 'ask', 'goalDone', 'finish', 'end', 'spot', 'spots'];
+export const WORLD_METHODS = ['ticks', 'random', 'send', 'dispatch', 'sendRoom', 'announce', 'sendArea', 'after', 'emit', 'spawn', 'despawn', 'place', 'near', 'inBox', 'ray', 'rayAll', 'sweep', 'ask', 'goalDone', 'finish', 'end', 'spot', 'spots'];
 export const MATH_METHODS = ['sin', 'cos', 'tan', 'atan', 'atan2', 'asin', 'acos', 'exp', 'log', 'pow', 'hypot', 'rad', 'deg', 'clamp', 'lerp', 'vec', 'add', 'sub', 'scale', 'dot', 'cross', 'len', 'dist', 'norm', 'clampLen', 'lerpVec', 'dir', 'angle'];
 const VALUE_METHODS = new Set([...ARRAY_METHODS, ...STRING_METHODS, ...MAPSET_METHODS]);
 export const MOVE_METHODS = ['support', 'overlaps'];

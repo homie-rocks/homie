@@ -854,3 +854,22 @@ seat. Without this declaration, existing seat-based selection is unchanged.
 Movement queries reject distant live colliders by swept bounds before detailed
 intersection, just as static map queries do. Bounds include capsule radius and
 height, vertical columns and the full sweep, preserving fast travel and support.
+
+### Ordered same-tick interactions
+
+`world.dispatch(id, event, payload)` delivers a declared event immediately and
+returns whether a live receiver had a handler. The receiver changes only its own
+state; after it returns, later queries see those changes. Use it for ordered
+pellets, where destroying a wall or killing a fighter changes the next ray.
+Ordinary `send` retains next-tick delivery. For a blast, collect every visibility
+decision before dispatching damage so one broken wall still shields that blast.
+
+Dispatch consumes the caller's remaining handler budget, including receiver work,
+and permits at most eight nested deliveries. It does not grant writes to another
+entity or shared state. It is not a transaction: mutations before an error remain
+subject to ordinary field coercion. Missing targets return false; there is no
+queued undeliverable event for immediate delivery. Movement cannot dispatch.
+
+Solid-terrain capsule distance queries reject triangle faces whose bounds cannot
+beat the closest feature already found. This preserves exact sampled geometry,
+including both source triangles and the solid sides and underside.
