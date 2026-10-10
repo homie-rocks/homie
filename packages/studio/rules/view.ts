@@ -44,7 +44,7 @@ import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RulesHostFactory, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { lab } from '../lab/lab.ts';
 import { exposePort, type PortProbeOptions } from '../port/probe.ts';
-import { BudgetError, charge } from './guard.ts';
+import { BudgetError } from './guard.ts';
 import { moveContext } from './math.ts';
 import { coerce, dir, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
@@ -255,7 +255,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   let geometry = map as import('./math.ts').MapShapes;
   const geometryAt = () => {
     const revision = revisionAt(collisionHistory, moveTick);
-    if (revision !== cachedCollision) { charge(64 * (revision?.[2].length ?? 0) + 4 * (map.boxes.length + map.circles.length + map.spheres.length + map.capsules.length)); geometry = collisionMap(map, revision?.[2] ?? []); cachedCollision = revision; }
+    if (revision !== cachedCollision) { geometry = collisionMap(map, revision?.[2] ?? []); cachedCollision = revision; }
     return geometry;
   };
   const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
@@ -308,6 +308,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const fn = moves[kindName];
     if (!fn) return body;
     moveTick = t;
+    // Like snapshot unpacking, prepare the bounded geometry outside the handler
+    // quota. Authority debits projection once per tick, not once per mover.
+    geometryAt();
     const out = stepMove(fn, body, input, moveCtx, Math.max(1, Math.floor(schema.settings.budget.tick / 4)), kindOf.get(kindName)?.motion ?? [], dims, (err) => { if (!(err instanceof BudgetError)) console.warn('[room] move', err); });
     const kind = kindOf.get(kindName), r = kind?.radius ?? 0;
     const height = kind?.height || 2 * r;

@@ -23,7 +23,10 @@ test('the studio Stormbreak probe: declared live cover matches static cover and 
 });
 
 test('collision revisions choose the tick world, support and overlap retain opaque refs; queries pay budget',async()=>{
-  const L=await bundle(`export * from ${JSON.stringify(join(PKG,'rules/live.ts'))};export {compileMap} from ${JSON.stringify(join(PKG,'rules/rules.ts'))};export {G,BudgetError} from ${JSON.stringify(join(PKG,'rules/guard.ts'))};`,'geometry');
+  const L=await bundle(`export * from ${JSON.stringify(join(PKG,'rules/live.ts'))};export {compileMap,compileRules,defineRules,defineMove,f} from ${JSON.stringify(join(PKG,'rules/rules.ts'))};export {G,BudgetError} from ${JSON.stringify(join(PKG,'rules/guard.ts'))};`,'geometry');
+  const definition=(owner=false,collider=true)=>L.defineRules({contract:2,space:{dims:2},move:L.defineMove({runner(){}}),entities:{runner:{player:true,body:{shape:'circle',radius:.4,maxSpeed:4,...(owner?{move:'owner'}:{})}},wall:{body:{shape:'circle',radius:1,maxSpeed:0},collider}},room:{join(){return{kind:'runner',at:{x:0,y:0}};}}});
+  assert.throws(()=>L.compileRules(definition(true)),/live colliders need server movement/);
+  assert.throws(()=>L.compileRules(definition(false,{size:'missing'})),/must name a vec3 field/);
   const first=[1,2,[['opaque-ref','box',0,0,0,3,.3,2.6]]],destroyed=[7,8,[]];
   assert.equal(L.revisionAt([first,destroyed],7),first);assert.equal(L.revisionAt([first,destroyed],8),destroyed);assert.equal(L.revisionAt([first],1),undefined);
   const map=L.compileMap({bounds:{min:[-10,-10,0],max:[10,10,10]}}),geometry=L.collisionMap(map,first[2]);

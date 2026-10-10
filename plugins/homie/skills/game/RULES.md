@@ -709,7 +709,7 @@ cover: {
 supplies full axis-aligned box dimensions in metres, including rectangular 2D
 walls (use a circle body with a size field). Nonpositive width/depth disables it.
 `enabled` names a bit field; false removes it from movement collision. Collider
-entities are non-player bodies. Their declared state and position save and restore
+entities are non-player bodies; players use server movement (omit `body.move: 'owner'`). Their declared state and position save and restore
 with the room; their refs stay opaque. Collision geometry is sent to all players
 in the room, independently of visual interpolation, including on reload/rejoin.
 

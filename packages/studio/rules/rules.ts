@@ -539,6 +539,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     kindOf[name] = k;
   }
 
+  if (kinds.some(k => k.collider) && kinds.some(k => k.player && k.body?.owner)) throw new Error("live colliders need server movement: omit body.move: 'owner' on players");
   const room = d.room ?? {};
   const roomOn = handlers<RoomHandler>(room.on, 'room.on');
   for (const key of Object.keys(roomOn)) if (!events[key] && !ROOM_EVENTS.includes(key) && !SEAT_EVENTS.includes(key) && key !== 'answer' && key !== 'undeliverable') throw new Error(`room.on.${key}: no event "${key}" is declared in shapes.events`);
