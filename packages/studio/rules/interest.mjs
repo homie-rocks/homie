@@ -67,7 +67,7 @@ export function snapshotEncoder(keyframeTicks, chained = false) {
         for (let i = 1; i < entity.length; i++) if (rowText(entity)[i] !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
         if (mask) changed.push([id, mask, values]);
       }
-      const out = { ...snap, d: { base: base.k, round: snap.d[0], changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}) } };
+      const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}) } };
       if (chained) { base = snap; rows = new Map(snap.d[1].map(e => [e[0], rowText(e)])); }
       return out;
     },
