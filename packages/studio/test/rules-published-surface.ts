@@ -3,7 +3,7 @@ import { defineRules, type GameWorld, type GameSelf, type GameGoal, type GameReq
 import { openRoom } from '@homie-rocks/studio/rules/view';
 export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: GameRequest) {
   const members: Record<keyof GameWorld, true> = {
-    tick:true,dt:true,ticks:true,math:true,tune:true,map:true,world:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
+    tick:true,dt:true,ticks:true,math:true,tune:true,map:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
     random:true,send:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,ask:true,
     goalDone:true,despawn:true,place:true,sweep:true,
   };
