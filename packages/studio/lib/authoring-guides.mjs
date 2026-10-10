@@ -16,7 +16,7 @@ export function authoringGuidance({home=homedir(),version=STUDIO_VERSION}={}) {
   const cache=join(home,'.codex/plugins/cache/homie/homie');
   if(existsSync(cache))for(const entry of readdirSync(cache)) {
     const v=json(join(cache,entry,'.codex-plugin/plugin.json'))?.version;
-    if(v)installed.push({client:'Codex',version:v,update:'Update Homie in Codex Settings → Plugins, then start a new session'});
+    if(v)installed.push({client:'Codex',version:v,update:'Run codex plugin marketplace upgrade homie && codex plugin add homie@homie, then start a new session'});
   }
   const guides='node_modules/@homie-rocks/studio/guides/game/';
   return {version,guides,warning:installed.filter(p=>/^\d+\.\d+\.\d+$/.test(p.version)&&older(p.version,version)).map(p=>`Homie ${p.client} plugin ${p.version} is older than toolkit ${version}. Its guidance may be stale. Read ${guides}{SKILL,RULES,REWRITE}.md. ${p.update}.`)};
