@@ -1,14 +1,14 @@
 # Navigation release verification
 
-Studio 0.44.2 / plugin 0.44.2, navigation 0.1.0. Rebased directly onto main
-`ed77f97d` after #84 released studio 0.44.1. Navigation is the only new feature; release checks inherit main’s fixes;
+Studio 0.44.4 / plugin 0.44.4, navigation 0.1.0. Rebased directly onto main
+`4975cd48` after #86 released studio 0.44.3. Navigation is the only new feature; release checks inherit main’s fixes;
 paid parts is inherited from main rather than stacked branch commits.
 Released changelog sections are byte-identical to main.
 
-This is now the next free version after main 0.44.1. If main advances, rebase and run
+This is now the next free version after main 0.44.3. If main advances, rebase and run
 `node scripts/renumber-release.mjs`. It chooses the next studio and plugin patch
 versions from fetched origin/main. Explicit slots are also supported:
-`node scripts/renumber-release.mjs 0.44.2 0.44.2`.
+`node scripts/renumber-release.mjs 0.44.4 0.44.4`.
 It updates packages/studio/package.json, packages/studio/worker/version.mjs,
 .claude-plugin/marketplace.json, plugins/homie/plugin.json and its .claude-plugin,
 .codex-plugin and .grok-plugin copies, CHANGELOG.md, packages/studio/CHANGELOG.md,
@@ -40,16 +40,9 @@ No npm publication, deployment or merge is performed by this PR refresh.
 
 ## Validation
 
-All eight requested gates passed on main ed77f97d: npm ci, clean npm run build,
-CHROME_PATH-enabled npm test (2,559 total, 2,546 passed, 13 environment/opt-in
-skips, zero failures), npm run test:plugin (123 passed, one optional skip),
-npm run validate, node scripts/desktop.mjs --check,
-node scripts/changelog.mjs --check, and node scripts/publish.mjs --check.
-Publish plans studio 0.44.2 only, with 22 existing packages and navigation
-excluded. Logs are in /tmp/homie-refresh-75-main441/. Final tagged-head and CI
-results are maintained in [PR #75](https://github.com/homie-rocks/homie/pull/75).
-
-The renumber helper preserves base-version references in upgrade notes while
-updating the release heading and plugin version. Its regressions fail against
-the previous implementation and pass with the fix. It also handles different
-studio/plugin versions independently. Browser suites run one file at a time.
+All eight requested gates passed on main 4975cd48: npm ci, clean build,
+CHROME_PATH-enabled npm test (2,568 total, 2,555 passed, 13 skips, zero failures),
+plugin tests (123 passed, one skip), validate, desktop, changelog and publish.
+Publish planned studio 0.44.4 only and excluded private navigation. Logs are in
+/tmp/homie-refresh-75-main443/. Main advanced to 0.45.0 during the run, requiring
+another refresh. Final results are in [PR #75](https://github.com/homie-rocks/homie/pull/75).
