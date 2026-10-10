@@ -77,9 +77,10 @@ request, so none of those results is claimed.
 - Recording: a virtual view clock does not step server rules. Rules trailers now
   use real-time capture; scripted server footage uses record then edl/cut. A wall
   alone does not keep an empty room alive. No hosting switch for online footage.
-- The traffic and 2D/3D prediction Chrome matrices are explicit real-time soaks:
-  `npm run test:rules:realtime`. They are retained, outside `npm test`; deterministic
-  runtime, prediction, wire and save tests remain release gates.
+- The draft moved Chrome matrices to a separate real-time command. The post-#79
+  rebase supersedes that split: main's seeded virtual-time matrices and bounded
+  real-Chrome cases remain in `npm test`, and its exhaustive cases remain in
+  `npm run test:rules:extended`.
 
 ## Fresh authoring trials
 
