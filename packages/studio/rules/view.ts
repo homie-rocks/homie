@@ -245,6 +245,9 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     while (phases.length > 2 && phases[1].at < now - Math.max(1000, 2 * authorityRtt() + period)) phases.shift();
   }
   function rebase(k: number, reason = 'placement'): void {
+    // Recalibrating an input clock is not a placement. Keep the drawn pose while
+    // the new prediction catches up, just as for a snapshot reconciliation.
+    const shown = reason === 'lead' ? meNow()?.pos : null;
     correction.rebaseReason = reason; correction.rebaseError = medianLead() - targetLead();
     const rtt = authorityRtt();
     // Lead samples refer to the clock which stamped them. Do not mix its offset with this clock's jitter.
@@ -256,7 +259,10 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     entries = []; pending = []; history.clear(); replayHeld = {}; held = {}; lastSent = ''; leads.length = 0; pressed = new Set();
     speed = 1; phases.length = 0; phases.push({ ...base, rate: 1 }); catchTick = null; offsets = []; correction.rebases += 1;
     const u = mine && latest?.ents.get(mine.id); if (u) adopt(u);
-    if (mine) history.set(stepped, copyMine(mine));
+    if (mine) {
+      history.set(stepped, copyMine(mine));
+      if (shown) offsets = [{ delta: { x: shown.x - mine.pos.x, y: shown.y - mine.pos.y, z: shown.z - mine.pos.z }, at: clock(), path: mine.pos, fade: 1, last: clock() }];
+    }
   }
   /** `motion` as this browser's own `move` may change it in place: what a snapshot carries is frozen, so every list, map and struct in it is copied. */
   const motionOf = (kindName: string, motion: Record<string, unknown>): Record<string, unknown> => thawFields(kindOf.get(kindName)?.motion ?? [], motion);
@@ -405,14 +411,24 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
           if (catchTick === null && error > (predict.catchM ?? myKind()!.maxSpeed * 3 / tickHz) + 0.00001) {
             catchTick = f.k; catchAt = clock(); correction.catches++;
           }
+          // Older history belongs to the previous reconciliation. Crossing from it into
+          // the newly adopted snapshot can draw a backwards segment even though both
+          // paths move forward. Start on the new path and preserve the shown pose below.
+          if (catchTick !== null && catchTick < f.k) {
+            catchTick = f.k; catchAt = clock();
+          }
           offsets = [];
           const corrected = meNow()?.pos ?? mine!.pos;
-          const gap = distance(shown, corrected);
+          // Limit the new reconciliation, not an offset already being blended (which
+          // can include a clock recalibration). Clipping that carried offset would
+          // turn a small new error into a visible snap.
+          const change = { x: shown.x - corrected.x - oldOffset.x, y: shown.y - corrected.y - oldOffset.y, z: shown.z - corrected.z - oldOffset.z };
+          const gap = Math.hypot(change.x, change.y, change.z);
           const ahead = Math.max(0, tickAt(clock()) - f.k) / tickHz;
           const cap = predict.snapM ?? myKind()!.maxSpeed * (2 * ahead + 0.1);
           const scale = gap > cap && gap > 0 ? cap / gap : 1;
           if (scale < 1) correction.snaps++;
-          const delta = { x: (shown.x - corrected.x) * scale, y: (shown.y - corrected.y) * scale, z: (shown.z - corrected.z) * scale };
+          const delta = { x: oldOffset.x + change.x * scale, y: oldOffset.y + change.y * scale, z: oldOffset.z + change.z * scale };
           if (catchTick !== null || scale < 1) offsets = [{ delta, at: clock(), path: corrected, fade: 1, last: clock() }];
           else {
             // Each small correction gets its own blend. Restarting one fade for their accumulated

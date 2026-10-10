@@ -34,6 +34,7 @@ Your own character answers as soon as you press, even when the room runs on the 
 
 ### Fixed
 
+- Rules prediction keeps movement continuous when snapshots replace its catch-up path or its input clock recalibrates, fixing backward steps on delayed, lossy connections.
 - A rules correction that catches up to the current fractional tick uses the next movement preview instead of holding still and jumping when the next whole tick arrives. Snapshots also preserve the drawn catch-up pose when they replace its history. Offset fading is bounded by normal movement speed, so it does not compound a fast knock's catch-up speed.
 - Gem Rush reports its downward Y axis to the rules probe, so control checks judge its actual on-screen direction. Rules views can supply their camera axes through `screenBasis`.
 - Playtest no longer attributes its default timeout duration to a rules game that declares no round duration in `game.json`.

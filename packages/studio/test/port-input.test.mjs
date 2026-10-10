@@ -16,10 +16,10 @@ test('round clock uses both observation times, including a slow pre-disconnect s
 
 test('real input receipts exclude slow touch delivery and collect enough frames without changing the response limit', { skip: !findChrome(), timeout: 60000 }, async () => {
   const game = `<style>html,body{margin:0;touch-action:none}</style><script>
-    let x=0,y=0,dx=0,dy=0,tx=0,ty=0,last=performance.now();const rows=[];
+    let x=0,y=0,dx=0,dy=0,tx=0,ty=0,last=performance.now();const rows=[];window.touchReceipts=[];
     addEventListener('keydown',e=>{dx=e.code==='ArrowRight'?6:0;});addEventListener('keyup',()=>{dx=0;dy=0;});
     addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
-    addEventListener('touchmove',e=>{const t=e.touches[0];dx=Math.sign(t.clientX-tx)*6;dy=Math.sign(t.clientY-ty)*6;},{passive:true});
+    addEventListener('touchmove',e=>{const t=e.touches[0];dx=Math.sign(t.clientX-tx)*6;dy=Math.sign(t.clientY-ty)*6;touchReceipts.push(window.__homieCheckInput.touch);},{passive:true});
     addEventListener('touchend',()=>{dx=0;dy=0;});
     setInterval(()=>{const now=performance.now();x+=dx*(now-last)/1000;y+=dy*(now-last)/1000;last=now;rows.push([now,x,y,1,0,0,-1,0,0]);},125);
     window.__homiePort={now:()=>performance.now(),rows:(a=0)=>rows.filter(r=>r[0]>=a)};
@@ -41,7 +41,9 @@ test('real input receipts exclude slow touch delivery and collect enough frames 
     const started=await frame.evaluate(()=>performance.now());
     const touch=await measuredPress(h,'touch','ArrowUp',[200,200],'up');
     assert.ok(touch.a-started>800,'the automation takes over 800 ms to deliver the full gesture');
-    assert.equal(touch.a,await frame.evaluate(()=>__homieCheckInput.touch));
+    // CDP can deliver a queued touchmove after measuredPress captures its receipt.
+    // Judge the captured event, not the mutable latest-event timestamp.
+    assert.ok((await frame.evaluate(()=>touchReceipts)).includes(touch.a), 'the receipt is an actual delivered touch event');
     const rows=await frame.evaluate(()=>__homiePort.rows());
     assert.equal(judgePresses(rows,[touch],.5,'top').ok,true);
     assert.equal(judgePresses(rows,[{...touch,a:started}],.5,'top').ok,false,'timing from before delivery reproduces the false latency failure');
