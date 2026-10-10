@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {refreshWorkerConfig} from './worker-config.mjs';
 import {pathToFileURL} from 'node:url';
 import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync,mkdtempSync,rmSync} from 'node:fs';
-import {join,relative,basename,sep} from 'node:path';
+import {join,relative,basename,sep,resolve} from 'node:path';
 import {readConfig} from './routes.mjs';
 import {workerDir} from './studio.mjs';
 import {paidReleases} from './parts-upload.mjs';
@@ -59,6 +59,9 @@ export async function buildWorker(root,esbuild) {
 
 /** Local immutable entry; the committed config always names the stable shim. */
 export function workerEntry(root) {
+  const main=readConfig(root)?.main;
+  // Explicit custom entry points remain the owner's choice.
+  if(typeof main!=='string' || resolve(workerDir(root),main)!==resolve(root,'site/src/runtime/worker.js'))return null;
   const file=join(root,'site/src/runtime/current.json');
   return existsSync(file)?JSON.parse(readFileSync(file,'utf8')).main:null;
 }

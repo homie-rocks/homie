@@ -41,4 +41,8 @@ test('a reload holding an old entry retains its complete module graph across a b
   assert.equal(await (await mf.dispatchFetch('http://localhost/')).text(),'before');
   await mf.setOptions(options());
   assert.equal(await (await mf.dispatchFetch('http://localhost/')).text(),'after');
+  const config=readConfig(root);config.main='site/src/custom-worker.mjs';
+  writeFileSync(join(root,'wrangler.jsonc'),JSON.stringify(config));
+  assert.equal(workerEntry(root),null,'an explicit custom entry is never overridden by a generated generation');
+  assert.equal(JSON.parse(readFileSync(devConfig(root,true).copy,'utf8')).main,join(root,config.main));
 });
