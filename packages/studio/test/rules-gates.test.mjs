@@ -59,6 +59,20 @@ test('only trusted transport metadata supplies ingress time, never a player JSON
   assert.equal(row[3],10_000);
   gate.link.disconnect();
 });
+
+test('one oversized public frame cannot exhaust or restart the shared room link', async () => {
+  const upstream=socket(), bad=socket(), good=socket(), closures=[];
+  bad.close=(code,reason)=>closures.push([code,reason]);
+  const gate=new Gate({}, {TABLE:{idFromName:n=>n,get:()=>({fetch:async()=>({webSocket:upstream})})}});
+  const request=new Request('https://table/__net?game=g&room=r&gates=5&gate=0');
+  await gate.connect(request,bad);await gate.connect(request,good);
+  bad.emit('message',{data:'x'.repeat(4*1024*1024+1)});
+  good.emit('message',{data:'hello'});gate.link.flush();
+  assert.deepEqual(closures,[[1009,'message too large']]);
+  assert.equal(gate.clients.size,1);assert.ok(gate.link);
+  assert.ok(upstream.sent.flat().some(row=>row[0]==='data'&&row[2]==='hello'));
+  gate.link.disconnect();
+});
 test('multiplex admission awaits attach, preserves commands, and closes every logical connection on Gate death', async () => {
   const peer = socket(), attached = [], messages = [], left = [];
   const session = multiplexSession(peer, async (req, conn) => {

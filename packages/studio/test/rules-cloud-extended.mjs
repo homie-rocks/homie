@@ -9,7 +9,7 @@ import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] : [302,1000])) test(`Cloudflare transport reproduction: ${total} total seats`,{skip:process.env.RULES_EXTENDED!=='1',timeout:600000},async()=>{
   const out=await mkdtemp(join(tmpdir(),'homie-crowd-proof-'));
-  const server=spawn(process.execPath,[fileURLToPath(new URL('./rules-cloud-local.mjs',import.meta.url))],{env:{...process.env,CROWD_PORT:'8810'},stdio:['ignore','pipe','pipe']});
+  const server=spawn(process.execPath,[...(process.env.CROWD_PROFILE ? ['--cpu-prof','--cpu-prof-dir='+out,'--cpu-prof-name=workerd-controller.cpuprofile'] : []),fileURLToPath(new URL('./rules-cloud-local.mjs',import.meta.url))],{env:{...process.env,CROWD_PORT:'8810'},stdio:['ignore','pipe','pipe']});
   let log='',err='',driver;
   server.stderr.on('data',b=>{err+=b;});
   try {

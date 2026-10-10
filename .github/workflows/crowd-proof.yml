@@ -9,6 +9,9 @@ on:
       - .github/workflows/crowd-proof.yml
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 concurrency:
   group: crowd-proof-${{ github.ref }}
   cancel-in-progress: true
@@ -34,7 +37,7 @@ jobs:
           chrome=$(command -v google-chrome)
           "$chrome" --version
           echo "CHROME_PATH=$chrome" >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/crowd-before" "$RUNNER_TEMP/crowd-after"
+          mkdir -p "$RUNNER_TEMP/crowd-before" "$RUNNER_TEMP/crowd-after" "$RUNNER_TEMP/crowd-profile"
           lscpu
           free -m
       - name: Original server comparison (failure is retained as evidence)
@@ -51,6 +54,16 @@ jobs:
         run: |
           export TMPDIR="$RUNNER_TEMP/crowd-after"
           xvfb-run -a --server-args='-screen 0 1920x1080x24' node --test packages/studio/test/rules-cloud-extended.mjs | tee "$RUNNER_TEMP/crowd-after.log"
+      - name: Profile the unchanged 300-player driver when capacity fails
+        if: failure()
+        continue-on-error: true
+        env:
+          RULES_EXTENDED: '1'
+          CROWD_TOTAL: '302'
+          CROWD_PROFILE: '1'
+        run: |
+          export TMPDIR="$RUNNER_TEMP/crowd-profile"
+          xvfb-run -a --server-args='-screen 0 1920x1080x24' node --test packages/studio/test/rules-cloud-extended.mjs | tee "$RUNNER_TEMP/crowd-profile.log"
       - name: Preserve reports, screenshots and raw logs even on failure
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -59,6 +72,8 @@ jobs:
           path: |
             ${{ runner.temp }}/crowd-before.log
             ${{ runner.temp }}/crowd-after.log
+            ${{ runner.temp }}/crowd-profile.log
             ${{ runner.temp }}/crowd-before/homie-crowd-proof-*/
             ${{ runner.temp }}/crowd-after/homie-crowd-proof-*/
+            ${{ runner.temp }}/crowd-profile/homie-crowd-proof-*/
           retention-days: 14

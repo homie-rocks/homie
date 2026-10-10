@@ -268,6 +268,15 @@ export class Gate {
     deadline?.unref?.(); this.admissions.set(id, deadline);
     server.addEventListener('message', event => {
       if (!this.clients.has(id) || typeof event.data !== 'string') return;
+      // No legal public frame exceeds the largest checkpoint allowance
+      // (128 KiB). Reject it before it exhausts a shared relay's budget.
+      // The Table still enforces each message kind's smaller byte/rate caps.
+      if (event.data.length > 128 * 1024) {
+        clearTimeout(deadline); this.admissions.delete(id); this.clients.delete(id);
+        if (opened) link.send(['close', id]);
+        try { server.close(1009, 'message too large'); } catch {}
+        return;
+      }
       if (!opened) {
         opened = true; clearTimeout(deadline); this.admissions.delete(id);
         // Logical creation and the first frame share a batch: admission time at
