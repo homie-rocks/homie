@@ -212,6 +212,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
   let restartAt = 0;
   let finishing = false;
   let endAsked = false;
+  let restartAsked = false;
   let vocabulary: Vocabulary | null = null;
   const restoredGoals = new Map<number, unknown>();
   const guideViews = new Map<number, Record<string, unknown>>();
@@ -466,7 +467,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
   }));
   let roundApi: Readonly<Record<string, unknown>> = Object.freeze({});
   const refreshRound = (): void => {
-    roundApi = brand(Object.freeze({ n: round.n, phase: round.phase, endsAt: round.endsAt, end: (): void => { need('room', 'world.round.end()'); endAsked = true; } }));
+    roundApi = brand(Object.freeze({ n: round.n, phase: round.phase, endsAt: round.endsAt, end: (): void => { need('room', 'world.round.end()'); endAsked = true; }, restart: (): void => { need('room', 'world.round.restart()'); restartAsked = true; } }));
   };
   refreshRound();
   /** `world.shared`: in room scope the writable face of the stored record, held to its types as it is written; everywhere else a frozen record of the same stored values. */
@@ -941,6 +942,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
       for (const s of [...seats.values()]) { seats.delete(s.seat); if (s.driver !== 'bot') ops.push({ op: 'join', info: { seat: s.seat, driver: s.driver, owner: s.owner } }, ...(s.away ? [{ op: 'away' as const, seat: s.seat, away: true }] : [])); }
       return;
     }
+    if (restartAsked) { restartAsked = false; endAsked = false; startRound(); return; }
     if (round.phase === 'live' && (endAsked || (round.endsAt > 0 && tick >= round.endsAt))) endRound();
     endAsked = false;
     if (overAt && tick >= overAt + 2) {
@@ -952,7 +954,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
     } else if (round.phase === 'over' && !overAt && tick >= round.endsAt) startRound();
   }
   function finishMatch(): void {
-    finishing = false;
+    finishing = false; restartAsked = false;
     out.push({ t: 'round', n: round.n, phase: 'over', endsAt: tick + Math.max(3, ticks(c.rounds ? c.rounds.breakSeconds : 0)), startedAt: round.startedAt, results: results() });
     for (const e of ents.values()) e.dead = true;
     ents.clear(); spawns = []; queue = []; pendingAsks = []; areas = []; fx = [];
@@ -1179,7 +1181,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
     return {
       v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
       ...(historyTicks?{history:poseHistory.map(([at,rows])=>[at,rows.map(row=>[...row])] as SavedCore['history'])}:{}),
-      shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
+      shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: [endAsked ? 1 : 0, finishing ? 1 : 0, ...(restartAsked ? [1] : [])], asks: pendingAsks, guideViews: [...guideViews],
       ents: [...ents.values()].map(saveEnt), spawns: spawns.map(saveEnt),
       seats: [...seats.values()].map((s) => [s.seat, s.driver, s.owner, s.id, s.away ? 1 : 0]),
       queue: queue.map((q) => [q.due, q.from, q.fromId, q.seq, q.to, q.kind, q.ev, q.data, q.at, q.builtIn ? 1 : 0]),
@@ -1212,7 +1214,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
       check(Array.isArray(row) && row.length === 2 && uint(row[0]) && row[0] < c.seats && !views.has(row[0])); views.add(row[0]);
       check(JSON.stringify(row[1]) === JSON.stringify(coerceFields(c.view, row[1], dims)));
     }
-    check(r.intent === undefined || Array.isArray(r.intent) && r.intent.length === 2 && r.intent.every(bit));
+    check(r.intent === undefined || Array.isArray(r.intent) && (r.intent.length === 2 || r.intent.length === 3) && r.intent.every(bit));
     for (const v of [r.tick, r.epoch, r.rng, r.nextId, r.seq, r.overAt, r.trips]) check(uint(v));
     check(r.tick < 0xffffffff);
     check(r.rng <= 4294967295 && r.epoch > 0 && r.nextId > 0 && r.seq > 0);
@@ -1330,7 +1332,7 @@ export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driv
     pendingAsks = r.asks.map(a => ({ ...a, state: deepFreeze(a.state) }));
     if ([opts.restoreEpoch].some((e) => e !== undefined && (!Number.isSafeInteger(e) || e <= 0))) throw new Error('restored epoch is invalid');
     tick = r.tick; epoch = opts.restoreEpoch ?? r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;
-    endAsked = r.intent?.[0] === 1; finishing = r.intent?.[1] === 1;
+    endAsked = r.intent?.[0] === 1; finishing = r.intent?.[1] === 1; restartAsked = r.intent?.[2] === 1;
     round = { n: r.round[0], phase: r.round[1] === 1 ? 'live' : 'over', endsAt: r.round[2], startedAt: r.round[3] };
     refreshRound();
     shared = unpackFields(c.shared, r.shared, dims); sharedChanged();

@@ -28,6 +28,7 @@ Run richer server-authoritative combat, admission and bots with shared collision
 - Budgeted `ray` options and ordered `rayAll` results: entity kind, tag, layer, scalar field comparisons, bounded ignore lists, ignore-self control and geometry-only occlusion.
 - Named query hit regions and projectile profiles, plus sphere, box and capsule casts for camera clearance and movement planning.
 - Bounded pose history for lag-compensated hits, synchronous ordered interaction dispatch for sequential pellets, and immutable query snapshots with scratch sweep/support for bot route rehearsal.
+- Result-free round restart for authorized retries, preserving seats and skipping the intermission.
 - Ranked bot takeover with explicit player control consent, and server-owned player labels for historical game events.
 - Matching view aiming and movement geometry rays. Collision revisions carry collider filter metadata outside visual interest and across rejoin.
 
