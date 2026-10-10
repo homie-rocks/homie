@@ -6,10 +6,12 @@ the game skill belongs to slice 8 and is not changed here.
 
 ## 0.40.0 release-gate repair
 
-Rebased onto main's #81 (`39f2cd9`), retaining its prediction history-boundary,
+Initially rebased onto main's #81 (`39f2cd9`), retaining its prediction history-boundary,
 clock-recalibration and carried-offset fixes and virtual-time test matrix.
-Studio and all plugin manifests now name 0.40.0. PR #78 owns 0.39.0; its
-changelog section is not on this base, so 0.40.0 sits directly above 0.38.0.
+Studio and all plugin manifests name 0.40.0. PR #78 merged while the local gate
+was running, so the branch was then rebased onto `9e3ac4d` as well. Its 0.39.0
+changelog and template history are preserved below the new 0.40.0 entries.
+The MCP completion assertion and predecessor-tag selection retain main's fixes.
 The earlier measurements below describe earlier commits, not this final gate.
 The root test command is restored to main's normal parallel runner; the old
 serial/heap-cap workaround for real-time matrices is no longer needed. The
@@ -65,7 +67,7 @@ The final three Chrome canvas smokes passed in 80.0 seconds. The existing
 182-case view suite and all four new tick-phase regressions passed; the nine
 focused crossing/score/obstacle/input checks and TypeScript build passed too.
 
-Final root `npm test` with main's parallel command: **2,318 passed, 12 skipped,
+Pre-#78 root `npm test` with main's parallel command: **2,318 passed, 12 skipped,
 0 failed**, 2,330 tests, in **975.7 seconds (16.3 minutes)**. The skips require
 optional local Wrangler, stripe-mock or the Miniflare environment setting; CI
 starts stripe-mock. In that loaded full run the three starter Chrome smokes took
