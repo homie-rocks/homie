@@ -16,7 +16,7 @@ function indexFor(snap, radius) {
     const p = e[3], key = `${Math.floor(p[0]/size)},${Math.floor(p[1]/size)},${Math.floor((p[2]??0)/size)}`;
     const list = cells.get(key) ?? []; list.push(e); cells.set(key, list);
   }
-  const index = { own, cells, size, order }; byRadius.set(radius,index); return index;
+  const index = { own, cells, size, order, candidates: new Map() }; byRadius.set(radius,index); return index;
 }
 export function interestSnapshot(snap, seat, radiusM) {
   const [round, entities] = snap.d;
@@ -27,13 +27,21 @@ export function interestSnapshot(snap, seat, radiusM) {
     if (own && radiusM === null) visible = entities;
     else if (own) {
       const q=own[3], x=Math.floor(q[0]/index.size), y=Math.floor(q[1]/index.size), z=Math.floor((q[2]??0)/index.size);
-      for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)
-        for(const e of index.cells.get(`${x+dx},${y+dy},${z+dz}`)??[]) {
-          const p=e[3];
-          if(e===own||(p[0]-q[0])**2+(p[1]-q[1])**2+((p[2]??0)-(q[2]??0))**2<=radiusM**2)visible.push(e);
-        }
-      // Snapshot order is part of the view contract, even though cells are not.
-      visible.sort((a,b)=>index.order.get(a)-index.order.get(b));
+      const cell = `${x},${y},${z}`;
+      let candidates = index.candidates.get(cell);
+      if (!candidates) {
+        candidates = [];
+        for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++)
+          candidates.push(...(index.cells.get(`${x+dx},${y+dy},${z+dz}`)??[]));
+        // Every player in this cell shares the ordered candidates. The final
+        // radius check remains exact for that player's position.
+        candidates.sort((a,b)=>index.order.get(a)-index.order.get(b));
+        index.candidates.set(cell, candidates);
+      }
+      for (const e of candidates) {
+        const p=e[3];
+        if(e===own||(p[0]-q[0])**2+(p[1]-q[1])**2+((p[2]??0)-(q[2]??0))**2<=radiusM**2)visible.push(e);
+      }
     }
   }
   let control = snap.c && controls.get(snap.c);
@@ -175,9 +183,10 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
     const entities = selected.d[1].map(entity => {
       let row = entity;
       if (entity !== own) {
-        const distance = own ? Math.hypot(...entity[3].map((n, i) => n - (own[3][i] ?? 0))) : 0;
+        const p = entity[3], q = own?.[3];
+        const distanceSquared = q ? (p[0]-q[0])**2 + (p[1]-q[1])**2 + ((p[2]??0)-(q[2]??0))**2 : 0;
         const old = previous.get(entity[0]);
-        const interval = farHz && nearM !== null && distance > nearM ? Math.max(1, Math.round(tickHz / farHz)) : 1;
+        const interval = farHz && nearM !== null && distanceSquared > nearM**2 ? Math.max(1, Math.round(tickHz / farHz)) : 1;
         if (old && snap.k % interval !== 0) row = old;
         else if (precisionM > 0) {
           let versions = quantizedRows.get(entity);

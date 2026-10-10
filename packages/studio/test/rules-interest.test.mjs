@@ -6,6 +6,21 @@ const entity = (id, x, seat = undefined, z = 0) => [String(id), 0, 0, [x, 0, z],
 const snapshot = (k, entities, e = 1) => ({ k, e, st: k * 50, d: [[1, 1, 1200], entities], c: [[0, 0, k, 0], [1, 0, k, 0]] });
 const sorted = snap => ({ ...snap, d: [snap.d[0], snap.d[1].toSorted((a, b) => a[0].localeCompare(b[0]))] });
 
+test('players sharing an interest cell share its ordering work and retain their exact radius', () => {
+  const entities = Array.from({length:100}, (_, i) => entity(i, i / 100, i));
+  entities.push(entity('boundary', 5.5));
+  const snap = snapshot(1, entities), sort = Array.prototype.sort;
+  let sorts = 0;
+  try {
+    Array.prototype.sort = function (...args) { sorts++; return sort.apply(this, args); };
+    for (let seat = 0; seat < 100; seat++) {
+      const visible = interestSnapshot(snap, seat, 5).d[1];
+      assert.deepEqual(visible, entities.filter(e => Math.abs(e[3][0] - seat / 100) <= 5));
+    }
+  } finally { Array.prototype.sort = sort; }
+  assert.equal(sorts, 1, 'one candidate ordering per occupied cell, not per player');
+});
+
 test('interest includes the own body and the radius boundary in 3D; absent body receives no entities; watchers get overview', () => {
   const s = snapshot(1, [entity('own', 0, 0), entity('near', 4), entity('edge', 5), entity('far', 6), entity('up', 0, undefined, 6)]);
   assert.deepEqual(interestSnapshot(s, 0, 5).d[1].map(e => e[0]), ['own', 'near', 'edge']);
