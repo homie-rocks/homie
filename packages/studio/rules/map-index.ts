@@ -46,6 +46,12 @@ export function nearbyMap(map: MapShapes, p:Vec3, d:Vec3, radius:number, height:
   function visit(n:Node){if(!touches(n))return;if(n.entries){for(const e of n.entries)if(touches(e))found.push(e);}else{visit(n.left!);visit(n.right!);}}
   visit(root);charge(found.length*Math.ceil(Math.log2(found.length+1)));
   found.sort((a,b)=>a.order-b.order);for(const e of found)out[e.key].push(e.value);
-  if(parent)for(const key of ['boxes','circles','spheres','capsules','heightTiles'] as const)for(const v of map[key]??[]){charge(12);out[key].push(v);}
+  if(parent)for(const key of ['boxes','circles','spheres','capsules','heightTiles'] as const)for(const raw of map[key]??[]){
+    const v:any=raw;let min:Vec3,max:Vec3;
+    if(key==='boxes'){min=v.min;max=v.max;}
+    else if(key==='heightTiles'){min={...v.at,z:v.at.z+Math.min(v.base??Infinity,...v.heights)};max={x:v.at.x+v.size.x,y:v.at.y+v.size.y,z:v.at.z+Math.max(...v.heights)};}
+    else{min={x:v.at.x-v.r,y:v.at.y-v.r,z:key==='circles'?-Infinity:key==='capsules'?v.at.z:v.at.z-v.r};max={x:v.at.x+v.r,y:v.at.y+v.r,z:key==='circles'?Infinity:key==='capsules'?v.at.z+v.height:v.at.z+v.r};}
+    if(touches({min,max}))out[key].push(raw);
+  }
   return out;
 }

@@ -184,7 +184,7 @@ function play(c, companions, allow) {
   const bots = (mode) => { policy = { ...(policy ?? {}), bots: mode }; frames.push({ t: 'policy', policy }); };
 
   const movesToCheck = [];
-  const moved = (...args) => movesToCheck.push(args);
+  const moved = (...args) => { movesToCheck.push(args); if (fault && fault.includes(`${args[0]}.move:`) && !fault.includes('Movement input:')) fault += ` Movement input: ${JSON.stringify(args[2])}; before: ${JSON.stringify(args[3])}.`; };
   let A = open({ observe, noted, moved, send });
   for (const m of told()) A.frame(m);
   /** The room stops and starts again as a deploy restarts it: a new epoch, everybody away until they are back. */
