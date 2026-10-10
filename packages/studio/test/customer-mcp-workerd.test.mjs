@@ -47,6 +47,9 @@ test('outside customer uses /mcp for catalogue, cart, standard payment, priced t
   const browse=await client.callTool({name:'studio_catalogue',arguments:{}});assert.equal(browse.isError,undefined,JSON.stringify(browse));assert.match(JSON.stringify(browse),/Coffee/);
   const raw=await client.callTool({name:'translate',arguments:{word:'hello'}});assert.equal(raw.isError,undefined,JSON.stringify(raw));const {quote}=JSON.parse(raw.content[0].text);
   const args={word:'hello',_payment:{buyer:'a'.repeat(64),claim:'b'.repeat(64),offerVersion:quote.offerVersion}};
+  const substitution=await client.callTool({name:'translate',arguments:{...args,_payment:{...args._payment,kind:'part',resource:'cheap',quote:'different-approved-quote'}}});
+  assert.equal(substitution.isError,true,'buyer cannot replace the server-selected service with another purchase');
+  assert.equal(w.st.pis.size,0);
   await assert.rejects(client.callTool({name:'translate',arguments:args}),e=>e.code===-32042);
   let charges=0;McpClient.wrap(client,{methods:[stripe.charge({paymentMethod:'pm_card',createToken:async()=>{const token='spt_customer_'+ ++charges;w.st.spts.set(token,{max:10000,currency:'usd'});return token;}})]});
   const paid=await client.callTool({name:'translate',arguments:args});assert.equal(paid.isError,undefined,JSON.stringify(paid));const result=JSON.parse(paid.content[0].text);assert.deepEqual(result.data,{word:'HELLO'});assert.ok(paid.receipt);

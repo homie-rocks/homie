@@ -54,7 +54,7 @@ export async function paidTool(env,cat,origin,tool,input,context,extra) {
   } else quote=await customerOffer(env,'service',{name:tool.description,tool:tool.name,args,sale:serviceTerms(tool.price)});
   if(!payment?.offerVersion) return {content:[{type:'text',text:JSON.stringify({quote, next:'Approve offerVersion, then repeat this call with _payment: {buyer, claim, offerVersion}. Set checkout:true for human approval.',http:origin+'/api/purchases/resource'})}]};
   if(payment.offerVersion!==quote.offerVersion)throw new Error('Service or arguments changed; approve a fresh quote');
-  const result=await buy(env,cat,origin,{...quote,...payment},extra);
+  const result=await buy(env,cat,origin,{...quote,buyer:payment.buyer,claim:payment.claim,offerVersion:payment.offerVersion,checkout:payment.checkout},extra);
   if(result.isError||payment.checkout)return result;
   const grant=JSON.parse(result.content[0].text),id=grant.order;
   if(!id)throw new Error('Payment has no order');

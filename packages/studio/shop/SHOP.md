@@ -39,9 +39,10 @@ A kind is a label, not a recurring-billing, wallet, random-reward or fulfillment
   omitted limits do not apply. `referralNewPlayersOnly: true` limits attribution to new players.
 - `catalog`: modes (`test`, `live`) populated by `homie-studio shop catalog` for named Stripe Products.
   Prices always come from your file, even when a Stripe Product exists.
-- Flood protection: `purchaseAttemptsPerMinute` (6 per buyer),
-  `purchaseAttemptsPerAddressPerMinute` (600), `guestBuyersPerAddressPerHour` (600).
-  These are configurable positive integers, per Worker instance. `PLAYER_LIMIT_DAILY` also applies.
+- Optional flood protection: `purchaseAttemptsPerMinute`,
+  `purchaseAttemptsPerAddressPerMinute`, `guestBuyersPerAddressPerHour`.
+  Omitted or null means no limit. Explicit positive integers apply per Worker instance.
+  An explicitly set `PLAYER_LIMIT_DAILY` also applies to new shop buyers.
   Referral delivery uses `REFERRAL_STATEMENTS_PER_MINUTE`, `REFERRAL_STATEMENTS_GLOBAL_PER_MINUTE`
   (both 30), and `REFERRAL_STATEMENT_BYTES` (65536). `requestBytes` overrides the catalog-sized shop request
   allowance; `SHOP_WEBHOOK_BYTES` (524288) controls the webhook byte allowance.

@@ -1108,7 +1108,9 @@ test('shop connect: the owner pastes the key on this computer; it goes to the Wo
   const calls = readFileSync(join(state, 'calls'), 'utf8');
   assert.match(calls, /^secret put STRIPE_KEY$/m);
   assert.match(calls, /^secret put STRIPE_WEBHOOK_SECRET$/m);
-  assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number), [TEST_KEY.length + 1, HOOK_SECRET.length + 1], 'both on Wrangler\'s standard input');
+  assert.match(calls, /^secret put PURCHASE_PAYMENT_CAPABILITIES$/m);
+  assert.match(calls, /^secret put PURCHASE_MACHINE_PAYMENTS$/m);
+  assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,2), [TEST_KEY.length + 1, HOOK_SECRET.length + 1], 'both on Wrangler\'s standard input');
   assert.doesNotMatch(JSON.stringify(r) + said.join(' ') + calls, /rk_test_A1b2|whsec_test/, 'never printed, returned or put in an argument');
   assert.equal(JSON.parse(readFileSync(join(dir, 'shop.json'), 'utf8')).till, 'stripe-managed', 'the seller the owner picked');
   assert.equal(r.webhook.made, false, 'the owner made the webhook and pasted its secret');
@@ -1140,7 +1142,7 @@ test('shop connect: with the key alone the page makes the webhook; its secret go
     assert.equal(r.managedPayments.ok, true);
     const made = stripe.behave.made[0];
     assert.equal(made.url, 'https://owls.example/api/shop/hook');
-    assert.deepEqual(made.enabled_events, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed']);
+    assert.deepEqual(made.enabled_events, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'payment_intent.succeeded', 'invoice.paid', 'invoice_payment.paid', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded', 'refund.created', 'refund.updated', 'refund.failed', 'charge.dispute.created', 'charge.dispute.closed']);
     assert.equal(made.api_version, '2025-03-31.basil', 'events rendered in the version the kit reads');
     assert.equal(made.metadata.homie, 'shop-v1');
     assert.deepEqual(stripe.behave.updated, [{ id: 'we_test_older', disabled: 'true' }], 'only the kit\'s own older endpoint, turned off, never deleted');
@@ -1152,7 +1154,7 @@ test('shop connect: with the key alone the page makes the webhook; its secret go
     const calls = readFileSync(join(state, 'calls'), 'utf8');
     assert.match(calls, /^secret put STRIPE_KEY$/m);
     assert.match(calls, /^secret put STRIPE_WEBHOOK_SECRET$/m);
-    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number), [TEST_KEY.length + 1, made.secret.length + 1], 'Stripe\'s secret went to Wrangler\'s standard input');
+    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,2), [TEST_KEY.length + 1, made.secret.length + 1], 'Stripe\'s secret went to Wrangler\'s standard input');
     assert.doesNotMatch(JSON.stringify(r) + c.said.join(' ') + calls + words, /Q7Q7|rk_test_A1b2/, 'the webhook\'s secret and the key are never printed or returned');
   } finally {
     if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
@@ -1181,7 +1183,7 @@ test('shop connect: a key without Webhook Endpoints says how to fix it; the page
     const r = await c.done;
     assert.equal(r.webhook.made, false);
     assert.equal(r.managedPayments.ok, false);
-    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number), [TEST_KEY.length + 1, HOOK_SECRET.length + 1]);
+    assert.deepEqual(readFileSync(join(state, 'stdin-bytes'), 'utf8').trim().split('\n').map(Number).slice(0,2), [TEST_KEY.length + 1, HOOK_SECRET.length + 1]);
   } finally {
     if (before === undefined) delete process.env.STRIPE_API_BASE; else process.env.STRIPE_API_BASE = before;
     stripe.close();
@@ -1378,7 +1380,7 @@ test('invalid unauthenticated requests create no guest rows; valid purchases obe
 });
 
 test('account flood protection survives address rotation and lets shared addresses buy', async () => {
-  const s = await site();
+  const s = await site({settings:{purchaseAttemptsPerMinute:6}});
   const p = s.player(400, { band: 'adult' });
   for (let i = 0; i < 9; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.as(p), 'cf-connecting-ip': `198.51.100.${i}` })).status, i < 6 ? 200 : 429);
   for (let i = 0; i < 20; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.as(s.player(400, { band: 'adult' })), 'cf-connecting-ip': '198.51.100.220' })).status, 200);
@@ -1647,7 +1649,7 @@ test('2000 referrers are listed once and their displayed totals equal SQL exactl
 
 test('address churn cannot reset an account, and new guest rates are configurable and positive', async () => {
   for (const value of [0, -1, false, '', '0x10', 1.5]) assert.equal(checkShop({ guestBuyersPerAddressPerHour: value }).ok, false);
-  const s = await site({ settings: { capPerPlayerMonth: null } });
+  const s = await site({ settings: { capPerPlayerMonth: null, purchaseAttemptsPerMinute: 6 } });
   const p = s.player(400, { band: 'adult' });
   for (let i = 0; i < 6; i++) assert.equal((await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, s.as(p))).status, 200);
   for (let i = 0; i < 10005; i++) await s.post('/api/shop/buy', { item: 'tip', amount: 200 }, { ...s.same, 'cf-connecting-ip': `2001:db8::${i.toString(16)}` });
@@ -3526,4 +3528,10 @@ test('agent clipboard transfer installs the provider key privately with no paste
  stripe.behave.refusePath='/v1/webhook_endpoints';stripe.behave.refuseMessage='Stripe refuses webhook access sk_test_PRIVATE';
  const refused=await shopConnect(dir,{fromClipboard:true,clipboard:async()=>`rk_test_${'A9'.repeat(20)}`,log:s=>logs.push(s),wait:5000,fetcher:(url,options)=>fetch(String(url).replace('https://api.stripe.com',stripe.base),options)});assert.equal(refused.ok,false);assert.match(refused.why,/Stripe refuses webhook access/);assert.doesNotMatch(JSON.stringify([refused,logs]),/sk_test_PRIVATE|A9A9|whsec_/); }
  finally {stripe.close();}
+});
+
+test('customer purchase rates are opt-in with no implicit shop limits',()=>{
+ const {shop}=checkShop({items:[]});
+ assert.equal(shop.purchaseAttemptsPerMinute,null);assert.equal(shop.purchaseAttemptsPerAddressPerMinute,null);assert.equal(shop.guestBuyersPerAddressPerHour,null);
+ assert.equal(checkShop({purchaseAttemptsPerMinute:123456789}).shop.purchaseAttemptsPerMinute,123456789);
 });

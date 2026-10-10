@@ -32,13 +32,13 @@ the HTTP endpoint anonymously. Only the payment provider is a stateful local
 Stripe stand-in; the test uses the existing test-order approval gate and standard
 MPP shared-payment-token exchange. There is no live charge or deployment.
 
-Observed in `/tmp/homie-customers-trial-Teuudz/trial.json`:
+Observed in `/tmp/homie-customers-trial-DaGHxe/trial.json`:
 
 - Toolkit 0.42.0; anonymous listing included catalogue, cart, purchase and the
   priced `translate` service, and excluded owner office tools.
-- Bought two Coffee units for USD 8.00. Order `ord_scYCldS1nnUCBgmiQ400` was paid
+- Bought two Coffee units for USD 8.00. Order `ord_6t00kMYDgxisDid5kXBf` was paid
   in the native shop, with a quantity-two `coffee` grant.
-- Paid USD 2.50 for `translate`; order `ord_eLbu4Wm8bZ8gOe1eJQGo` returned `HELLO`.
+- Paid USD 2.50 for `translate`; order `ord_1cwtLzcOKwcQUj0ypfG0` returned `HELLO`.
   Repeating that call returned the same completed result. Total provider charges: two.
 - The declared `order-ready` function received the cart order's stable event and
   stored its payload in the studio database.

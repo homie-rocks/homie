@@ -237,8 +237,8 @@ async function sessionOf(request, env, url = new URL(request.url)) {
 /** A guest for a request with no player yet (the first save). Refused past the address's or the day's limit. */
 async function newGuest(request, env, url, addressLimit = PLAYER_LIMITS.newPlayersPerHour, counter = 'new') {
   const ip = addressOf(request);
-  if (limited(`${counter}:${ip}`, addressLimit, HOUR)) return { error: fail(429, 'rate', 'too many new players from this address; try again later') };
-  const capped = await dailyCapReached(env);
+  if (addressLimit !== null && limited(`${counter}:${ip}`, addressLimit, HOUR)) return { error: fail(429, 'rate', 'too many new players from this address; try again later') };
+  const capped = (counter !== 'shop-new' || env.PLAYER_LIMIT_DAILY !== undefined) && await dailyCapReached(env);
   if (capped) return { error: fail(503, 'busy', 'this studio has taken all the new players it takes in one day; try again tomorrow') };
   const id = newPlayerId();
   const now = Date.now();

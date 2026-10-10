@@ -21,6 +21,7 @@ async function browserPerson(request,env) {
   }
   return null;
 }
+const paymentInputSchema={type:'object',properties:{buyer:{type:'string',pattern:'^[a-f0-9]{64}$'},claim:{type:'string',pattern:'^[a-f0-9]{64}$'},offerVersion:{type:'string'},checkout:{type:'boolean'}},additionalProperties:false};
 export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
   const url=new URL(request.url), origin=url.origin, path=url.pathname;
   if(!env.DB)return json({error:'studio database required'},503);
@@ -35,7 +36,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
       const body=await request.clone().json().catch(()=>null);
       if(body?.method==='tools/call') {
         const tool=tools.find(t=>t.name===body.params?.name);
-        const schema=tool?.price?{...tool.inputSchema,properties:{...tool.inputSchema.properties,_payment:{type:'object'}}}:tool?.inputSchema;
+        const schema=tool?.price?{...tool.inputSchema,properties:{...tool.inputSchema.properties,_payment:paymentInputSchema}}:tool?.inputSchema;
         if(tool&&!validator.getValidator(schema)(body.params?.arguments??{}).valid)await audit(env,caller,tool.name,'invalid');
         if(!tool)await audit(env,caller,'unknown-tool','denied');
       }
@@ -76,7 +77,7 @@ export async function remoteMcp(request,env,ctx,{catalogueOf,definitions=[]}) {
             return {messages:[{role:'user',content:{type:'text',text:JSON.stringify({kind:'studio-prompt-data',prompt:tool.name,data:text})}}]};
           }));continue;
         }
-        const schema=tool.price?{...tool.inputSchema,properties:{...tool.inputSchema.properties,_payment:{type:'object'}}}:tool.inputSchema;
+        const schema=tool.price?{...tool.inputSchema,properties:{...tool.inputSchema.properties,_payment:paymentInputSchema}}:tool.inputSchema;
         const handler=async(args,extra)=>{
           let outcome='error';
           try{

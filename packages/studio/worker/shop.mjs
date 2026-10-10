@@ -556,8 +556,8 @@ const WAY_WORDS = Object.freeze({
 });
 
 function purchaseLimited(request, shop, player, kind) {
-  const account = player && limited(`${kind}:account:${player}`, shop.purchaseAttemptsPerMinute, 60_000);
-  const address = limited(`${kind}:address:${addressOf(request)}`, shop.purchaseAttemptsPerAddressPerMinute, 60_000);
+  const account = player && shop.purchaseAttemptsPerMinute !== null && limited(`${kind}:account:${player}`, shop.purchaseAttemptsPerMinute, 60_000);
+  const address = shop.purchaseAttemptsPerAddressPerMinute !== null && limited(`${kind}:address:${addressOf(request)}`, shop.purchaseAttemptsPerAddressPerMinute, 60_000);
   return account || address;
 }
 

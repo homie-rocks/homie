@@ -31,7 +31,7 @@ Customers and other businesses can use a studio's tools, buy its goods and servi
 
 ### Changed
 
-- MCP call rate limits are opt-in.
+- MCP call rates and shop purchase/guest-buyer rates are opt-in.
 
 ### Fixed
 

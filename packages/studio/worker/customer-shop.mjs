@@ -1,3 +1,4 @@
+import {amountError} from './shop-rules.mjs';
 import {shopOf,shopRoutes,paid} from './shop.mjs';
 import {players} from './players.mjs';
 import {withToolIdentity} from './tool-identity.mjs';
@@ -15,7 +16,7 @@ export async function quoteCart(env,cat,origin,caller,input) {
     const view=await response.json(),item=shop.items.find(i=>i.id===line.item),shown=view.items?.find(i=>i.id===line.item);
     if(!item||!shown||shown.way!=='checkout')throw new Error('Item unavailable under the studio shop policy');
     const quantity=line.quantity??1,unit=item.price==='choose'?line.amount:item.price;
-    if(!Number.isSafeInteger(quantity)||quantity<1||!Number.isSafeInteger(unit)||unit<0||item.price==='choose'&&(unit<item.min||item.max!==null&&unit>item.max))throw new Error('Invalid cart amount or quantity');
+    if(!Number.isSafeInteger(quantity)||quantity<1||amountError(unit,shop.currency)||item.price==='choose'&&(unit<item.min||item.max!==null&&unit>item.max))throw new Error('Invalid cart amount or quantity');
     if(!shop.policy.repeatPurchases&&(quantity>1||lines.some(l=>l.item.id===item.id)))throw new Error('Studio disabled repeat purchases');
     amount+=unit*quantity;if(!Number.isSafeInteger(amount))throw new Error('Cart total exceeds safe integer arithmetic');
     lines.push({item,quantity,amount:unit});
