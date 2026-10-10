@@ -894,3 +894,11 @@ window in game rules and validate actions normally; the client's tick is a claim
 Vertical capsule sweeps against solid terrain use an exact swept sphere against
 the prism extended by the capsule centreline. Face, edge and vertex contacts
 replace iterative grazing convergence; geometry and handler budgets stay intact.
+
+For many related visibility or navigation queries in one handler, use
+`const scene = world.rays(options)`, then `scene.ray(from, direction, metres)`
+or `scene.rayAll(...)`. It captures actor poses, live geometry and filter fields
+once; later damage or placement does not change that scene. Each ray is still
+budgeted. Keep it local to the handler. Use ordinary `world.ray` when subsequent
+hits must see mutations, such as sequential pellets. Predicted movement exposes
+`ctx.world.rays` for its current geometry, too.

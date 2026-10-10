@@ -1,5 +1,5 @@
 /** Bounded, data-only ray policy. Shared by rules and predicted geometry queries. */
-import { charge } from './guard.ts';
+import { charge, brand, plainData } from './guard.ts';
 import { own, dir, vec3 } from './pack.ts';
 import { castMap } from './math.ts';
 import type { MapShapes } from './math.ts';
@@ -76,4 +76,12 @@ export function queryParts(at: Vec3, query?: QueryDef, profile?: string): QueryT
   if(!parts)return undefined;
   charge(24*Object.keys(parts).length);
   return Object.entries(parts).map(([name,p])=>({name,solid:solidAt({x:at.x+(p.offset?.x??0),y:at.y+(p.offset?.y??0),z:at.z+(p.offset?.z??0)},{shape:p.shape,radius:p.radius,height:p.height??2*p.radius})}));
+}
+
+/** A handler-local immutable query scene. Target construction is paid once;
+ * every individual ray still pays for its candidates and geometry traversal. */
+export function raySnapshot(map:MapShapes,targets:readonly QueryTarget[],dims:number,options:unknown,self?:string){
+ const policy=plainData(options??{}, {n:1024}, 6);
+ const scene=targets.map(t=>{charge(24+4*Object.keys(t.fields).length);return {...t,at:t.at?{...t.at}:undefined,fields:Object.fromEntries(Object.entries(t.fields).filter(([,v])=>typeof v==='number'||typeof v==='string'||typeof v==='boolean'))};});
+ return brand(Object.freeze({ray:(from:unknown,direction:unknown,max:unknown)=>rayQuery(map,scene,dims,from,direction,max,policy,self)[0],rayAll:(from:unknown,direction:unknown,max:unknown)=>rayQuery(map,scene,dims,from,direction,max,policy,self,true)}));
 }
