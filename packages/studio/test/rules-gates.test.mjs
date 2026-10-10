@@ -15,7 +15,7 @@ test('room layouts scale without imposing an admission ceiling; carrier addresse
   assert.deepEqual(roomLayout(1000), { gates: 16, concentrators: 2 });
   assert.deepEqual(roomLayout(1280), { gates: 20, concentrators: 3 });
   assert.equal(seatCount(1000), 1000);
-  assert.equal(perAddress(300), 0);
+  assert.equal(perAddress(300, true), 0);
 });
 test('virtual-time batches retain every input and command in order, and stop on link death', () => {
   const clock = fakeClock(), peer = socket();

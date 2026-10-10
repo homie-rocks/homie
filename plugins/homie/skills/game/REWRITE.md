@@ -1,8 +1,9 @@
 # Rewrite a browser-hosted game as rules plus view
 
 Use this path when the owner asks to move an old game's rules onto the server.
-There is no automatic converter. Version 0.45.0 retires netplay-only builds and the
-port host scaffold. Keep a baseline copy and preserve the game through this rewrite.
+There is no automatic converter yet. Version 0.45.0 keeps existing netplay games
+and their port host helpers working, with their original 32-seat limit. Larger
+rooms require this rewrite. Keep a baseline copy and preserve the game throughout.
 Read RULES.md before starting.
 
 1. Read this game's codex, manifest, entry, host loop, input, packing/checkpoint

@@ -2541,7 +2541,10 @@
      "## Apps: one screen, roles and parts": "8596f2b25edda3e2",
      "## Commands (all through the pinned CLI in node_modules)": "159151b8861fc051",
      "## The site": "0cb8dd9a6f8a0096",
-     "## Making games": "78950c6b4eb98ea6",
+     "## Making games": [
+      "78950c6b4eb98ea6",
+      "bb715272fd1a615b"
+     ],
      "## The Game Codex and progress": "0738ef719cef3a4c",
      "## Art direction and models": "a48fff7bf0a5f2fc",
      "## Running live games (the back office)": "51ebf2ab756f6e4d",

@@ -148,10 +148,10 @@ slice 2 as 0.45.0 on the released 0.44.1 base.
    resume/revocation, and automatic layout from `players.max`. Remove public seat
    caps, make guest policy studio-selected, report tested size in build/deploy
    plans. Prove 300 clients through the actual join path, Gate restart/resend,
-   20 Gates through concentrators, and small rooms without extra objects. Retire
-   the legacy netplay authoring/build path and port host helpers here, updating
-   port tooling, fixtures and starters in the same release; rules plus view is
-   the sole game design, including the existing browser/offline mode.
+   20 Gates through concentrators, and small rooms without extra objects. Preserve
+   existing netplay builds, checks, deploys and host/port helpers at their original
+   32-seat limit. New games, starters and authoring guides use rules plus view,
+   including browser/offline mode.
 3. **Private and scheduled delivery.** Field `see`, reliable one-player `tell`,
    optional studio-chosen downstream budget and priorities (near/far visual
    scheduling shipped in slice 2),
@@ -258,12 +258,16 @@ which runs files sequentially so load experiments do not compete with each other
 Virtual-time tests cover batching/order, 1,000 logical admissions, link cleanup,
 spatial boundaries, quantisation, far scheduling and keyframe recovery.
 
-### Admission, retirement and recovery proofs
+### Admission, compatibility and recovery proofs
 
-The authoring/build retirement is now implemented: netplay-only games are refused,
-port imports are references for a rules/view rewrite, the old port host/HUD and
-legacy starter fixture are removed, and starters/docs use the current contract.
-Migrating the fixtures exposed missing TypeScript resolution for shared parts;
+Existing browser-hosted netplay games retain the build and runtime path from
+0.44.1, including host helpers, HUD and port import. Their manifest precedence
+and 32-seat limit remain; larger requests print the limit and rewrite guide.
+The generated Worker supplies Gate/Concentrator exports for pre-Gate studio
+entries without rewriting custom Worker source. The release gate uses unchanged Ember Vale files from released 0.32.1, packs and
+installs the current package, builds it and runs the real two-browser check
+through a completed round. Starters/docs teach rules plus view only.
+Migrating the rules fixtures exposed missing TypeScript resolution for shared parts;
 the guarded checker now resolves those same declared parts as the bundler.
 
 The public Worker test verifies its actual authorization and capacity selection
@@ -319,3 +323,23 @@ were back when checked at 20.08 s (Gate) / 20.74 s (rules) at 300, and
 20.10 s / 60.00 s at 1,000. These are upper bounds, not minimum recovery latency.
 The 1,000-client full restart is visibly expensive; faster crowd reconnection
 and deployed latency measurements remain work for the milestone proof slice.
+
+## Later step: retire browser-hosted netplay
+
+Retirement is not part of 0.45.0. Its preconditions are that every game in
+Homie's own three live studios has moved to server rules, and a release has
+already shipped a one-command assisted rewrite for other studios. Until both
+are met, existing games must continue to build, pass check, run and deploy,
+with the legacy release gate protecting that promise. New games remain rules
+games only.
+
+### Upgrade proof on the real studio copy
+
+Copied `/Users/ryan/Studios/homie-arcade` to
+`/tmp/homie-arcade-045-0Vaqlp/studio`, packed and installed 0.45.0 there.
+`npm run build` passed for all five existing netplay games.
+`npm run check -- --url http://127.0.0.1:8898` passed for its default game,
+2048 Race: desktop and phone finished round 1 in 123 seconds, with both
+connections uninterrupted. The original studio was not changed; nothing was
+deployed. The released 0.32.1 Ember Vale gate also passed with an older Worker
+entry: one host and one replica finished round 1 in 92 seconds.

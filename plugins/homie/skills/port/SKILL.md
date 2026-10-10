@@ -87,7 +87,7 @@ Read the game skill's [RULES.md](../game/RULES.md) and
 [REWRITE.md](../game/REWRITE.md), then extract truth from the existing loop step by step.
 This is a manual rewrite to rules plus view with `room.host: "server"`. Keep the art,
 renderer, controls, sound and feel. `port import` only copies files; it does not convert
-rules. The `createRoom` host scaffold is retired. Follow `references/RECIPE.md` for the
+rules. Existing ports retain the compatible host scaffold for upgrades. Follow `references/RECIPE.md` for the
 same rules/view contract used by the starters. Never add a browser host to get past a rules error.
 
 Use declared entities and events for hits, scores, spawns and turns, shared `defineMove`

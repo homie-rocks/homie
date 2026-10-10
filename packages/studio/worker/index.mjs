@@ -131,7 +131,7 @@ import { licenseOf } from './license.mjs';
 // GAME PARTS (parts/PARTS.md section 4): three call-outs below, everything else is worker/parts.mjs.
 import { PART_FILES, isPartsPath, partsRoutes, withPartsBand } from './parts.mjs';
 
-export { seatCount } from './seats.mjs';
+export { seatCount, SEAT_MAX } from './seats.mjs';
 // Server-hosted games (NETPLAY.md section 29): the studio's site/src/worker.mjs hands the build's rules over with this.
 export { hostRules } from './hosted.mjs';
 /** For a studio whose Worker has player accounts: hand their server API to the back office once (worker/office.mjs). */
@@ -1995,11 +1995,12 @@ export class Table {
       return json(res);
     }
     room.rules = url.searchParams.get('rules') === '1';
+    room.perIp = perAddress(max, room.rules);
     // Any tick rate a game may declare (1 to 60): the relay's allowances are the page's, from the same table.
     const hz = Number(url.searchParams.get('hz'));
     room.tickHz = Number.isInteger(hz) && hz >= 1 && hz <= 60 ? hz : 20;
     // The owner's room size: a room already open takes it from the next visitor on.
-    if (room.seatCap !== max || room.rules && room.maxPlayers !== max) room.setSeats(max, perAddress(max));
+    if (room.seatCap !== max || room.rules && room.maxPlayers !== max) room.setSeats(max, perAddress(max, room.rules));
     // Revision 9: the game's own stall time and the build that is live now, the Worker's word with every socket.
     const said = url.searchParams.has('cur');
     if (said) { room.setStall(url.searchParams.get('stall')); room.setCurrent(url.searchParams.get('cur') || null); }

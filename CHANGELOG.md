@@ -30,13 +30,13 @@ Choose room sizes in the hundreds and reduce the state each phone downloads.
 
 ### Changed
 
-- Public room admission, rules compilation and deploy planning use the studio's requested `players.max` without the 32-player clamp.
-- Ordered snapshot deltas and a shared spatial index reduce repeated state work. Shared carrier addresses have no automatic guest ceiling.
+- For rules games, public room admission, rules compilation and deploy planning use the studio's requested `players.max` without the 32-player clamp.
+- Ordered snapshot deltas and a shared spatial index reduce repeated state work. Rules rooms have no automatic guest ceiling for shared carrier addresses.
 
 ### Upgrade notes
 
-- Upgrade the studio template to include the Gate and Concentrator exports, bindings and SQLite migration, then rebuild the Worker. Preserve custom Worker routes when applying the template changes.
-- Netplay-only builds and the port `createRoom`/HUD host scaffold are retired. Existing rules starters already use the one supported contract. Rewrite an older game as rules plus view before building; browser/offline play uses that same contract.
+- Rebuilding generates the Gate and Concentrator exports, bindings and SQLite migration, including for studios whose Worker entry predates Gates. Custom Worker source and routes are preserved.
+- Existing browser-hosted netplay games keep building, checking and running with the restored port host/HUD helpers and importer. Their 32-seat limit remains; a larger request prints the rewrite guide. New games and starters use rules plus view. A release gate packs this version and checks two browsers finishing a round in the unchanged released 0.32.1 starter. Retirement is a later step, after studio migrations and a shipped one-command assisted rewrite.
 
 ## [0.44.3] - 2026-10-10
 

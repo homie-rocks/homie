@@ -63,7 +63,7 @@ export interface PortProbeOptions {
  *              drawCalls: () => renderer.info.render.calls, triangles: () => renderer.info.render.triangles } });
  *
  * The round (`info().round`: { n, phase: 'live' | 'over', endsAt, leftMs }) needs no hook: it is the room's own, from
- * `net.round(...)`, supplied by the rules runtime. So are `info().link` and `info().reconnects`
+ * `net.round(...)`, which `createRoom` calls for every round it runs. So are `info().link` and `info().reconnects`
  * (where this browser stands with its room, and how often that was interrupted).
  */
 export interface PortExtra {

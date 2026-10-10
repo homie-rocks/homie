@@ -6,7 +6,7 @@ import { browserRulesGame } from './browser-rules-game.mjs';
  *   - coin-dash builds: its view bundle holds the guarded move code and the rules' declarations as data, and none of
  *     the rules' own code; its rules go to site/src/rules/ as one module that imports only Homie's rules module and
  *     the guard, with a table the studio's Worker imports; the catalogue says its rules run on the server;
- *   - browser/offline games use guarded rules too; old netplay-only builds are refused;
+ *   - browser/offline games use guarded rules too; existing netplay builds remain supported;
  *   - rules the wall refuses stop the build with the line named, and leave the site and site/src/rules as they were;
  *   - rules that fail when they run stop the build with the handler named;
  *   - a new studio's Worker imports an empty table, and its config turns off evaluation at startup.
@@ -90,7 +90,7 @@ test('game hashes are reproducible, isolate unrelated builds, and distinguish co
   const mapped = build(); assert.notEqual(mapped.room.stateHash, shaped.room.stateHash); assert.notEqual(mapped.room.build, shaped.room.build);
 });
 
-test('server and browser games build the same rules-plus-view contract, and old netplay-only games are refused', async () => {
+test('server and browser rules games build the same rules-plus-view contract', async () => {
   const dir = studio('both');
   assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
   browserRulesGame(dir, 'gems');
@@ -150,15 +150,6 @@ test('server and browser games build the same rules-plus-view contract, and old 
   assert.equal(spawnSync(process.execPath, [CLI, 'build', 'gems'], { cwd: dir, encoding: 'utf8' }).status, 0);
   assert.ok(existsSync(join(dir, 'site/src/rules/coin-dash.mjs')));
   assert.deepEqual(JSON.parse(read(dir, 'site/dist/games.json')).games.find((g) => g.id === 'coin-dash').room.host, 'server');
-
-  // Removing the rules contract has no browser-hosted fallback.
-  const meta = JSON.parse(read(dir, 'games/gems/game.json'));
-  const unruled = { ...meta }; delete unruled.room;
-  writeFileSync(join(dir, 'games/gems/game.json'), JSON.stringify(unruled));
-  const no = run(['build'], dir);
-  assert.notEqual(no.status, 0);
-  assert.match(no.stdout + no.stderr, /games use rules plus view/);
-  writeFileSync(join(dir, 'games/gems/game.json'), JSON.stringify(meta));
 
   // Rules the wall refuses stop the build with the line named, and nothing that was built is touched.
   const before = { rules, index: read(dir, 'site/src/rules/index.mjs'), games: read(dir, 'site/dist/games.json') };
@@ -317,7 +308,7 @@ test('build refuses an unconnected game and preserves the prior site', () => {
   writeFileSync(join(dir, 'games/plain/src/main.ts'), 'document.body.textContent = "No room";');
   const r = run(['build'], dir);
   assert.notEqual(r.status, 0);
-  assert.match(r.stdout + r.stderr, /games use rules plus view/);
+  assert.match(r.stdout + r.stderr, /neither rules plus view nor a browser-hosted netplay game/);
   assert.equal(read(dir, 'site/dist/games.json'), previous);
 });
 
@@ -328,6 +319,6 @@ test('an injected port toolkit alone does not turn a static page into a netplay 
   writeFileSync(join(game, 'index.html'), '<h1>No room</h1><script src="./homie-port.js"></script>');
   const g = { id: 'plain', dir: game, build: { mode: 'static' } };
   const esbuild = await esbuildOf(dir);
-  await assert.rejects(buildGameFiles(esbuild, dir, g, join(dir, 'out')), /games use rules plus view/);
-  await assert.rejects(buildGameFiles(esbuild, dir, { ...g, netplay: { v: 1 } }, join(dir, 'out')), /games use rules plus view/);
+  await assert.rejects(buildGameFiles(esbuild, dir, g, join(dir, 'out')), /neither rules plus view nor a browser-hosted netplay game/);
+  await buildGameFiles(esbuild, dir, { ...g, netplay: { v: 1 } }, join(dir, 'out'));
 });

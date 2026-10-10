@@ -314,7 +314,7 @@ studio's pinned copy, never a registry lookup of the bare name.
   Rules hashes and room saves are automatic; character saves are player-owned, untrusted input. Room state
   is replicated, not secret. Rooms may have hundreds of seats; choose players.max and spatial delivery explicitly and measure. Private state is not delivered.
 - **Existing games:** change rules truth in rules and presentation in view. Browser hosting is for offline,
-  local development and private friends games. Old netplay-only builds and the port host scaffold are retired;
+  local development and private friends games. Existing netplay games and port host helpers remain supported at their original 32-seat limit;
   to rewrite one, read the game skill's REWRITE.md and preserve its art, view and feel. There is
   no automatic converter. NETPLAY.md section 29 is the rules contract; earlier sections describe older APIs.
 - Phones and computers: touch controls on phones only, keys on computers; keep the

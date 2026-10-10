@@ -143,9 +143,10 @@ a plain browser bundle is not a multiplayer game.
   responsible half, preserve unrelated play, and rebuild. The build/state hashes
   manage compatibility automatically; do not hand-pack snapshots or bump netplay.version.
   Recheck the changed mechanic, a late join and a reload in two browsers.
-- **Changing an old-style game:** 0.45.0 retires netplay-only builds and the port host
-  scaffold. Follow [REWRITE.md](REWRITE.md), preserve its behavior and assets, and
-  use rules plus view. There is no automatic converter.
+- **Changing an old-style game:** existing netplay games keep working on 0.45.0
+  with their original 32-seat limit. Preserve their behavior on ordinary edits.
+  For a server migration or larger room, follow [REWRITE.md](REWRITE.md).
+  New games use rules plus view; there is no automatic converter yet.
 - Phones get touch, computers get keys; typed names and chat are text only.
   Keep native DOM buttons outside `guardGestures`' touch-drag selector; otherwise bind
   touch pointers explicitly. Verify actual touchscreen taps, not only `.click()`.

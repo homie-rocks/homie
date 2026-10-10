@@ -240,8 +240,8 @@ export function importPort(root, folder, id, { name, mode } = {}) {
     blurb: '',
     players: { min: 1, max: 8 },
     roundSeconds: 120,
-    entry: 'src/view.ts',
-    room: { host: 'server' },
+    build: buildMode === 'command' ? { mode: 'command', command: 'npm run build', out: 'dist' } : { mode: buildMode },
+    netplay: { v: 1, public: true, movement: plan.recommend.movement },
     port: { from: basename(src), licence: plan.licence.kind, licenceFile: plan.licence.file, grade: plan.grade, view: plan.recommend.view, at: new Date().toISOString() },
   };
   writeFileSync(join(dest, 'game.json'), `${JSON.stringify(meta, null, 2)}\n`);
@@ -270,7 +270,7 @@ export function importPort(root, folder, id, { name, mode } = {}) {
     ok: true, command: 'port import', id, dir: dest, from: src, mode: buildMode, files: copied.length, edits, plan: { grade: plan.grade, movement: plan.recommend.movement, view: plan.recommend.view },
     next: [
       `Write games/${id}/PORT.md: the grade and why, server truth, shared movement, the browser view, bots, touch and camera.`,
-      'Read the port skill and game RULES.md. Preserve the imported game as the baseline, then write server rules, shared movement and a view with openRoom. Use room.host server and the bundled view entry. The imported source is a reference for the rewrite; it cannot build as an old netplay game. Browser/offline play uses the same rules and view with room.host browser.',
+      'Read the port skill and game RULES.md. Preserve the imported game as the baseline, then write server rules, shared movement and a view with openRoom. Use room.host server and the bundled view entry. The imported browser-hosted format remains available for local/offline/private use or maintaining an existing port.',
       `npm run dev (in the background), then: npx --no-install homie-studio port check ${id} --url http://127.0.0.1:8787`,
     ],
   };

@@ -47,7 +47,7 @@ async function netplayKit() {
   if (kit) return kit;
   const esbuild = (await import(join(REPO_NM, 'esbuild', 'lib', 'main.js'))).default;
   const entry = join(scratch, 'entry.ts');
-  writeFileSync(entry, `export * from ${JSON.stringify(join(PKG, 'netplay', 'netplay.ts'))};\n`);
+  writeFileSync(entry, `export * from ${JSON.stringify(join(PKG, 'netplay', 'netplay.ts'))};\nexport { createRoom } from ${JSON.stringify(join(PKG, 'port', 'room.ts'))};\n`);
   const file = join(scratch, 'kit.mjs');
   await esbuild.build({ entryPoints: [entry], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent' });
   kit = await import(file);
@@ -97,6 +97,16 @@ test('a rules client asks its page to reload an old build and rematch an ended r
   const count = r.sockets.length; await clock.wait(5000); assert.equal(r.sockets.length, count, 'the page owns rematching; the old socket cannot reopen the ended room');
   fresh.close(); old.close(); r.stop();
 });
+/** A createRoom game small enough to read: a body is a place, a score and whether it is alive. */
+const bodyGame = (extra = {}) => ({
+  game: 'x', maxPlayers: 4, minBodies: 3, roundSeconds: 600,
+  spawn: (_slot, i) => ({ slot: 0, seat: null, name: '', bot: true, score: 0, x: 100 + i * 10, y: 0, alive: 1 }),
+  pack: (b) => [b.x, b.y, b.alive], unpack: (f, b) => { b.x = f[0]; b.y = f[1]; b.alive = f[2]; },
+  ...extra,
+});
+/** Run every room's host loop on the virtual clock (a frame every 50 ms). */
+const loop = (...rooms) => { const id = setInterval(() => { for (const r of rooms) r.update(); }, 50); return () => clearInterval(id); };
+
 /** A document small enough for the line over the game: `lines()` is what a player reads on it right now. */
 function pageDocument(t) {
   const made = [];
@@ -121,6 +131,10 @@ const filtered = (Base, keep) => class extends Base {
 };
 /** The page is blocked for `ms` (a heavy boot, shaders compiling): its clock moves and none of its timers run; then they all run late, the oldest first, before anything that arrives now. */
 const blocked = (t, ms) => t.mock.timers.setTime(Date.now() + ms);
+/** Where a createRoom page stands, as a player meets it: its link, where the room says it stands, and whether it has a body to play. */
+const hasBody = (room) => (room.hosting ? Boolean(room.mine()) : room.net.seat !== null && Boolean(room.net.latest()?.d?.b?.some((r) => r[1] === room.net.seat)));
+const stands = (room) => ({ link: room.net.link, standing: room.standing.state, why: room.standing.why, body: hasBody(room) });
+
 test('revision 12, and the numbers both sides share', async () => {
   const { NETPLAY_REVISION, NETPLAY_MARK, PREFS_LIMITS: helperPrefs, cleanVersion, cleanFeatures } = await netplayKit();
   assert.equal(NETPLAY_REVISION, 12);
@@ -797,6 +811,209 @@ test('Roster: a returning player keeps their body, a new holder of the seat is a
   assert.deepEqual(offered.at(-1), [true, [true]], 'the kept seat for an agent');
 });
 
+/* ------------------------------------------------------------------ createRoom (sections 25 and 26) */
+
+test('a room revived from its checkpoint: the newcomer takes a body over (onTakeover, adopt), a returning player keeps theirs', async (t) => {
+  const { createRoom } = await netplayKit();
+  const clock = virtualTime(t);
+  for (const older of [false, true]) {
+    // `older`: a relay from before revision 9 (no `occ`): the newcomer still knows its own seat was not resumed.
+    const strip = (text) => { const m = JSON.parse(text); for (const p of m.peers ?? []) delete p.occ; if (m.peer) delete m.peer.occ; return JSON.stringify(m); };
+    // Seats are let go after 2 s here, so the newcomer is handed the SAME seat number the player who left had.
+    const r = rig({ holdMs: 2000, forgetMs: 60_000 });
+    const S = r.socket(older ? { edit: strip } : {});
+    let token = null;
+    const first = createRoom(bodyGame({ netplay: { config: cfg('first'), WebSocketImpl: S, post: (m) => { if (m.what === 'token') token = m.token; } } }));
+    const stopA = loop(first);
+    await clock.wait(200);
+    assert.equal(first.hosting, true);
+    const mine = first.mine();
+    mine.score = 7; mine.x = 555;
+    await clock.wait(1300); // a checkpoint
+    stopA();
+    first.net.close();
+    await clock.wait(3000); // the room is empty, its checkpoint kept; the seat is free again
+    assert.ok(r.room.lastCkpt, 'the relay kept the round');
+    // A new visitor, before the room is forgotten.
+    const took = [];
+    const adopted = [];
+    const fresh = createRoom(bodyGame({
+      netplay: { config: cfg('fresh'), WebSocketImpl: S, post: null },
+      onTakeover: (b, info) => { took.push([b.slot, b.seat, b.score, info]); b.score = 0; },
+      adopt: (b) => adopted.push([b.slot, b.x]),
+      local: () => ({ slot: -1, seat: null, name: '', bot: false, score: 0, x: -1, y: -1, alive: 1 }),
+    }));
+    const stopB = loop(fresh);
+    await clock.wait(300);
+    assert.equal(fresh.hosting, true);
+    assert.equal(fresh.net.seat, 0, 'the same seat number as the player who left');
+    assert.equal(fresh.net.resumed, false);
+    assert.equal(fresh.round.n, 1, 'the same round goes on');
+    assert.equal(took.length, 1, `the restored claim is a takeover (${older ? 'older relay' : 'revision 9'})`);
+    assert.deepEqual(took[0].slice(0, 3), [mine.slot, 0, 7], 'the old body, with the score its last player left');
+    assert.deepEqual(took[0][3], { why: 'restore', own: true, back: false });
+    assert.equal(fresh.mine().score, 0, 'the newcomer does not inherit a stranger\'s score');
+    assert.deepEqual(adopted.at(-1), [mine.slot, 555], 'and stands where its body stands');
+    assert.equal(fresh.mine().x, 555, 'not at a place it has never been');
+    assert.equal(fresh.bodies.size, 3);
+    assert.equal([...fresh.bodies.values()].filter((b) => !b.bot).length, 1);
+    stopB();
+    fresh.net.close();
+    r.stop();
+    // The same room, and this time the player who left comes back (a reload keeps the seat's token): nothing is
+    // taken over, the score is theirs, and their game is told where their body is.
+    const r2 = rig({ forgetMs: 60_000 });
+    const S2 = r2.socket(older ? { edit: strip } : {});
+    let token2 = null;
+    const was = createRoom(bodyGame({ netplay: { config: cfg('was'), WebSocketImpl: S2, post: (m) => { if (m.what === 'token') token2 = m.token; } } }));
+    const stopC = loop(was);
+    await clock.wait(200);
+    was.mine().score = 9; was.mine().x = 321;
+    await clock.wait(1300);
+    stopC();
+    was.net.close();
+    await clock.wait(3000);
+    const took2 = [];
+    const adopted2 = [];
+    const again = createRoom(bodyGame({ netplay: { config: cfg('was', { token: token2 }), WebSocketImpl: S2, post: null }, onTakeover: (b, i) => took2.push(i), adopt: (b) => adopted2.push(b.x), local: () => ({ slot: -1, seat: null, name: '', bot: false, score: 0, x: -1, y: -1, alive: 1 }) }));
+    const stopD = loop(again);
+    await clock.wait(300);
+    assert.equal(again.hosting, true);
+    assert.equal(again.net.resumed, true);
+    assert.deepEqual(took2, [], 'a returning player takes nothing over');
+    assert.equal(again.mine().score, 9);
+    assert.equal(again.mine().x, 321);
+    assert.deepEqual(adopted2.at(-1), 321);
+    stopD();
+    again.net.close();
+    r2.stop();
+    assert.ok(token && token2);
+  }
+});
+
+test('admit: the game chooses the body an arrival takes, for a fresh join and for a restored room alike; a returner is not re-admitted', async (t) => {
+  const { createRoom } = await netplayKit();
+  const clock = virtualTime(t);
+  const r = rig({ forgetMs: 60_000 });
+  t.after(r.stop);
+  const S = r.socket();
+  const asked = [];
+  // An elimination round: a newcomer takes the lowest LIVING bot, never a dead one.
+  const admit = (cands, who) => { asked.push([cands.map((b) => [b.slot, b.alive]), who.name]); return cands.find((b) => b.alive) ?? undefined; };
+  const host = createRoom(bodyGame({ minBodies: 4, admit, saveWorld: () => ({}), netplay: { config: cfg('host'), WebSocketImpl: S, post: null } }));
+  const stop = loop(host);
+  await clock.wait(200);
+  host.bodies.get(1).alive = 0; // the lowest bot is out of the round
+  const resets = [];
+  let token = null;
+  const ann = createRoom(bodyGame({ minBodies: 4, admit, adopt: (b) => resets.push(b.slot), netplay: { config: cfg('ann'), WebSocketImpl: S, canHost: false, post: (m) => { if (m.what === 'token') token = m.token; } } }));
+  await clock.wait(300);
+  const annBody = [...host.bodies.values()].find((b) => b.seat === ann.net.seat);
+  assert.equal(annBody.slot, 2, 'the living bot, not the dead one in the lower slot');
+  assert.deepEqual(asked.at(-1), [[[1, 0], [2, 1], [3, 1]], 'ann']);
+  assert.deepEqual(resets, [2], 'the joiner is reset onto its body, as always');
+  assert.deepEqual(host.net.slots.find((s) => s.seat === ann.net.seat).slot, 2, 'and the roster says the same');
+  // Ann is eliminated, and reloads: the same stay in her seat, so her own (dead) body, and the game is not asked.
+  annBody.alive = 0;
+  const before = asked.length;
+  ann.net.close();
+  await clock.wait(200);
+  const ann2 = createRoom(bodyGame({ minBodies: 4, admit, netplay: { config: cfg('ann', { token }), WebSocketImpl: S, canHost: false, post: null } }));
+  await clock.wait(300);
+  assert.equal([...host.bodies.values()].find((b) => b.seat === ann2.net.seat).slot, 2);
+  assert.equal(asked.length, before, 'reloading is not a way back into the round');
+  // The checkpoint and the roster agree with the claim.
+  await clock.wait(1200);
+  const ck = r.room.lastCkpt.d;
+  assert.equal(ck.roster.find((s) => s.seat === ann2.net.seat).slot, 2);
+  assert.ok(ck.occ.some(([seat]) => seat === ann2.net.seat), 'whose stay each body is rides in the checkpoint');
+  // Everyone leaves; a visitor revives the room: the same choice is made for the restored claim.
+  stop();
+  host.net.close(); ann2.net.close();
+  await clock.wait(500);
+  const took = [];
+  const late = createRoom(bodyGame({ minBodies: 4, admit, onTakeover: (b, i) => took.push([b.slot, i.why]), netplay: { config: cfg('late'), WebSocketImpl: S, post: null } }));
+  const stop2 = loop(late);
+  await clock.wait(300);
+  assert.equal(late.hosting, true);
+  assert.equal(late.round.n, 1);
+  assert.deepEqual(took, [[late.mine().slot, 'restore']]);
+  assert.equal(late.mine().alive, 1, 'a living body for the newcomer of a restored round too');
+  assert.equal(asked.at(-1)[1], 'late');
+  stop2();
+  late.net.close();
+});
+
+test('a host that reconnects as host learns who came and went meanwhile: no player without a body, no frozen body, no score lost', async (t) => {
+  const { createRoom } = await netplayKit();
+  const clock = virtualTime(t);
+  const r = rig();
+  t.after(r.stop);
+  const S = r.socket();
+  const took = [];
+  const host = createRoom(bodyGame({ minBodies: 4, onTakeover: (b, i) => { took.push([b.seat, i.why]); b.score = 0; }, netplay: { config: cfg('host'), WebSocketImpl: S, post: null } }));
+  const stop = loop(host);
+  t.after(stop);
+  await clock.wait(200);
+  // Phones that never host (a game says so with canHost: false), so the room has no other host to hand to.
+  const phone = (name) => createRoom(bodyGame({ minBodies: 4, netplay: { config: cfg(name, { device: 'phone' }), WebSocketImpl: S, canHost: false, post: null } }));
+  const stays = phone('stays');
+  const leaves = phone('leaves');
+  await clock.wait(300);
+  const bodyOf = (seat) => [...host.bodies.values()].find((b) => !b.bot && b.seat === seat) ?? null;
+  bodyOf(stays.net.seat).score = 5;
+  const goneSeat = leaves.net.seat;
+  assert.ok(bodyOf(goneSeat));
+  const events = [];
+  host.net.on('join', (p) => events.push(['join', p.name]));
+  host.net.on('leave', (p) => events.push(['leave', p.seat, p.why]));
+  const roles = [];
+  host.net.on('role', (e) => roles.push(e.why));
+  // The host's socket goes. While it is away: one player leaves for good, and a new one arrives.
+  r.sockets.find((s) => s.sent.some((x) => x.includes('"name":"host"'))).cut();
+  assert.equal(host.net.link, 'reconnecting');
+  leaves.net.close();
+  const arrives = phone('arrives');
+  await clock.wait(900);
+  // It is the host again, and nothing told it so (its role did not change): the continuing-host case.
+  assert.equal(host.net.connected, true);
+  assert.equal(host.hosting, true);
+  assert.deepEqual(roles, [], 'no role event: for this host nothing changed');
+  assert.deepEqual(events, [['leave', goneSeat, 'gone'], ['join', 'arrives']], 'what it missed is said as the events it would have been');
+  assert.ok(arrives.net.seat !== null);
+  const body = bodyOf(arrives.net.seat);
+  assert.ok(body, 'the player who arrived while the host was away has a body');
+  assert.deepEqual(took, [[stays.net.seat, 'join'], [goneSeat, 'join'], [arrives.net.seat, 'join']]);
+  assert.equal(bodyOf(goneSeat) === null || goneSeat === arrives.net.seat, true, 'the body of the player who left is a bot\'s again (or the newcomer\'s)');
+  assert.equal([...host.bodies.values()].filter((b) => !b.bot).length, 3, 'three people, three bodies');
+  assert.equal(bodyOf(stays.net.seat).score, 5, 'the player who was here all along keeps their score');
+  // The round's results have everybody in them.
+  const names = host.results().filter((x) => !x.bot).map((x) => x.name).sort();
+  assert.deepEqual(names, ['arrives', 'host', 'stays']);
+  host.net.close(); stays.net.close(); arrives.net.close();
+});
+
+test('equal scores: the documented order by default, shared places when the game asks', async (t) => {
+  const { createRoom, placesOf } = await netplayKit();
+  assert.deepEqual(placesOf([9, 7, 7, 3]), [1, 2, 3, 4]);
+  assert.deepEqual(placesOf([9, 7, 7, 3], 'shared'), [1, 2, 2, 4]);
+  assert.deepEqual(placesOf([9, 7, 7, 3], 'dense'), [1, 2, 2, 3]);
+  assert.deepEqual(placesOf([5, 5, 5], 'shared'), [1, 1, 1]);
+  assert.deepEqual(placesOf([]), []);
+  const clock = virtualTime(t);
+  for (const [ties, places] of [[undefined, [1, 2, 3, 4]], ['shared', [1, 1, 3, 4]], ['dense', [1, 1, 2, 3]]]) {
+    const room = createRoom(bodyGame({ minBodies: 4, ...(ties ? { ties } : {}), netplay: { config: null } }));
+    await clock.wait(10);
+    const scores = { 0: 61, 1: 61, 2: 40, 3: 12 };
+    for (const b of room.bodies.values()) b.score = scores[b.slot];
+    const res = room.results();
+    assert.deepEqual(res.map((x) => x.place), places, `ties: ${ties ?? 'order'}`);
+    assert.deepEqual(res.map((x) => x.slot), [0, 1, 2, 3], 'the order never changes: score, people before bots, the lower slot');
+    assert.equal(res[0].bot, false, 'the person comes before the bot on the same score');
+    room.net.close();
+  }
+});
+
 /* ------------------------------------------------------------------ the arrival (section 21) */
 
 test('a late net.playable() after an automatic arrival warns once, and the arrival\'s facts are readable', async (t) => {
@@ -839,6 +1056,320 @@ test('a late net.playable() after an automatic arrival warns once, and the arriv
   assert.deepEqual([early.arrivalInfo.by, early.arrivalInfo.lateMs], ['game', null]);
   assert.equal(warned.filter((w) => /net\.playable/.test(w)).length, 1);
   auto.close(); own.close(); early.close();
+});
+
+/* ------------------------------------------------------------------ seat or solo (section 28) */
+
+test('a seat with no body is not for ever: the host seats whoever is waiting when a body frees up and at every round start, and the page says where it stands', async (t) => {
+  const { createRoom } = await netplayKit();
+  const clock = virtualTime(t);
+  const page = pageDocument(t);
+  warnings(t);
+  // The room seats four and the game has two bodies: the third person is seated by the relay and finds no body.
+  const r = rig();
+  t.after(r.stop);
+  const S = r.socket();
+  const two = (who, extra = {}) => createRoom(bodyGame({ maxPlayers: 2, minBodies: 2, seatWaitMs: 1000, ...extra, netplay: { config: cfg(who), WebSocketImpl: S, post: null, maxPlayers: 4, canHost: who === 'host', linkOverlay: who === 'late' } }));
+  const host = two('host');
+  const stop = loop(host);
+  t.after(stop);
+  await clock.wait(200);
+  const kay = two('kay');
+  await clock.wait(200);
+  const adopted = [];
+  const said = [];
+  const late = two('late', { adopt: (b) => adopted.push(b.slot), onStanding: (st) => said.push([st.state, st.why, st.line]) });
+  await clock.wait(300);
+  assert.deepEqual(stands(late), { link: 'online', standing: 'joining', why: 'no-body', body: false }, 'online, seated by the relay, and no body: what used to be said nowhere');
+  assert.equal(late.net.seat, 2);
+  assert.deepEqual(page.lines(), [], 'a join that is merely on its way is never drawn');
+  await clock.wait(600);
+  assert.deepEqual(page.lines(), [['seat', 'Joining the round…']]);
+  await clock.wait(500);
+  // BOUNDED: after seatWaitMs the page is told where it stands (the default keeps what a game did: it waits).
+  assert.deepEqual(stands(late), { link: 'online', standing: 'waiting', why: 'no-body', body: false });
+  assert.deepEqual(page.lines(), [['seat', 'Waiting for a place in this round…']]);
+  assert.equal(late.hosting, false);
+  // A body frees up: the page that was waiting has it at once, not never.
+  kay.net.close();
+  await clock.wait(400);
+  assert.deepEqual(stands(late), { link: 'online', standing: 'playing', why: 'seated', body: true });
+  assert.equal([...host.bodies.values()].find((b) => b.seat === 2)?.bot, false);
+  assert.equal(adopted.length, 1, 'and is reset onto it, like any joiner');
+  assert.deepEqual(page.lines(), []);
+  assert.deepEqual(said, [['joining', 'no-body', null], ['joining', 'no-body', 'Joining the round…'], ['waiting', 'no-body', 'Waiting for a place in this round…'], ['playing', 'seated', null]], 'onStanding: the same, for a game that draws its own words');
+  late.net.close(); host.net.close(); stop();
+  page.made.length = 0;
+  // A server that kept two seats for AI stops keeping them mid-round. The relay seats people in them at once; the
+  // game's roster lets those seats go at the round start, so a person who arrives in between has no body until then.
+  const r2 = rig();
+  t.after(r2.stop);
+  r2.room.setPolicy({ ...r2.room.policy, kind: 'hybrid', aiSeats: 2, at: 1 }, { force: true });
+  const short = { minBodies: 2, roundSeconds: 10, breakSeconds: 3, seatWaitMs: 1000 };
+  const host2 = createRoom(bodyGame({ ...short, netplay: { config: cfg('host'), WebSocketImpl: r2.socket(), post: null, linkOverlay: false } }));
+  const stop2 = loop(host2);
+  t.after(stop2);
+  await clock.wait(300);
+  const kay2 = createRoom(bodyGame({ ...short, netplay: { config: cfg('kay'), WebSocketImpl: r2.socket(), post: null, canHost: false, linkOverlay: false } }));
+  await clock.wait(300);
+  assert.deepEqual([[...host2.bodies.values()].filter((b) => !b.bot).length, [...host2.bodies.values()].filter((b) => b.agent).length, host2.bodies.size], [2, 2, 4], 'two people, two seats kept for AI: every body is somebody\'s');
+  r2.room.setPolicy({ ...r2.room.policy, kind: 'open', aiSeats: 0, at: 2 }, { force: true });
+  await clock.wait(400);
+  const adopted2 = [];
+  const late2 = createRoom(bodyGame({ ...short, adopt: (b) => adopted2.push(b.slot), netplay: { config: cfg('late'), WebSocketImpl: r2.socket(), post: null, canHost: false } }));
+  await clock.wait(5000);
+  assert.equal(late2.net.seat, 2, 'the relay seated it');
+  assert.deepEqual(stands(late2), { link: 'online', standing: 'waiting', why: 'no-body', body: false });
+  await clock.wait(8500);
+  assert.equal(host2.round.n, 2);
+  assert.deepEqual(stands(late2), { link: 'online', standing: 'playing', why: 'seated', body: true }, 'the next round has a body for everybody who is seated');
+  assert.equal(adopted2.length, 1);
+  assert.deepEqual(page.lines(), []);
+  late2.net.close(); kay2.net.close(); host2.net.close();
+});
+
+test('fallback: solo plays a private round with bots and moves into the room when it has a body; spectate watches; a full room says so', async (t) => {
+  const { createRoom } = await netplayKit();
+  const clock = virtualTime(t);
+  const page = pageDocument(t);
+  warnings(t);
+  const r = rig();
+  t.after(r.stop);
+  // The room of the test above: a server stopped keeping two seats for AI, and until the round start the game has no
+  // body for the two people the relay seated in them.
+  r.room.setPolicy({ ...r.room.policy, kind: 'hybrid', aiSeats: 2, at: 1 }, { force: true });
+  const short = { minBodies: 2, roundSeconds: 10, breakSeconds: 3, seatWaitMs: 1000 };
+  const heard = [];
+  const host = createRoom(bodyGame({ ...short, netplay: { config: cfg('host'), WebSocketImpl: r.socket(), post: null, linkOverlay: false } }));
+  host.on('event', (e) => heard.push(e.k));
+  const stop = loop(host);
+  t.after(stop);
+  await clock.wait(300);
+  const kay0 = createRoom(bodyGame({ ...short, netplay: { config: cfg('kay'), WebSocketImpl: r.socket(), post: null, canHost: false, linkOverlay: false } }));
+  await clock.wait(300);
+  r.room.setPolicy({ ...r.room.policy, kind: 'open', aiSeats: 0, at: 2 }, { force: true });
+  await clock.wait(400);
+  host.mine().x = 777;
+  const adopted = [];
+  const starts = [];
+  const late = createRoom(bodyGame({ ...short, fallback: 'solo', adopt: (b) => adopted.push(b.x), onRoundStart: (n) => starts.push(n), netplay: { config: cfg('late'), WebSocketImpl: r.socket(), post: null, canHost: false } }));
+  const eyes = createRoom(bodyGame({ ...short, fallback: 'spectate', netplay: { config: cfg('eyes'), WebSocketImpl: r.socket(), post: null, canHost: false, linkOverlay: false } }));
+  const stopLate = loop(late);
+  t.after(stopLate);
+  await clock.wait(900);
+  assert.equal(late.solo, false, 'not before seatWaitMs');
+  await clock.wait(600);
+  // SOLO: a round of its own, here, with bots; in the room it is still a seated replica.
+  assert.deepEqual(stands(late), { link: 'online', standing: 'solo', why: 'no-body', body: true });
+  assert.deepEqual([late.solo, late.hosting, late.net.role, late.net.isHost], [true, true, 'replica', false]);
+  assert.deepEqual(page.lines(), [['seat', 'Playing on your own until the next round']]);
+  assert.deepEqual([late.mine().seat, late.mine().bot, late.mySeat(), late.viewSeat()], [late.net.seat, false, late.net.seat, late.net.seat]);
+  assert.equal(late.viewBody(), late.mine());
+  assert.ok(late.view().filter((b) => b.bot).length >= 1, 'its own bots');
+  assert.deepEqual(starts, [1], 'the room\'s round number, a clock of its own');
+  assert.deepEqual([late.round.n, late.round.phase], [1, 'live']);
+  assert.ok(late.round.startedAt > host.round.startedAt);
+  const roundWas = JSON.stringify(r.room.lastRound);
+  late.mine().score = 3;
+  late.send('boom');
+  await clock.wait(500);
+  assert.equal(JSON.stringify(r.room.lastRound), roundWas, 'nothing of a private round is told to the room');
+  assert.deepEqual(heard, []);
+  assert.equal(late.net.roundInfo.startedAt, host.round.startedAt, 'and the room\'s own round is still what the helper knows');
+  // SPECTATE: no body, the camera follows the room, and the line says until when.
+  assert.deepEqual(stands(eyes), { link: 'online', standing: 'watching', why: 'no-body', body: false });
+  assert.equal(eyes.standing.line, 'Watching until the next round');
+  assert.equal(eyes.hosting, false);
+  assert.equal(eyes.viewBody()?.x, 777, 'a person in the room, as everyone draws them');
+  // The room's next round start seats both: the private round ends and the page stands where the room put it.
+  await clock.wait(11_500);
+  assert.equal(host.round.n, 2);
+  assert.deepEqual(stands(late), { link: 'online', standing: 'playing', why: 'seated', body: true });
+  assert.deepEqual([late.solo, late.hosting, late.round.n], [false, false, 2]);
+  const mine = [...host.bodies.values()].find((b) => b.seat === late.net.seat);
+  assert.equal(adopted.at(-1), mine.x, 'adopted onto the room\'s body, not left where the private round had it');
+  assert.equal(mine.score, 0, 'a private round\'s score stays private');
+  assert.deepEqual(page.lines(), []);
+  assert.deepEqual(stands(eyes), { link: 'online', standing: 'playing', why: 'seated', body: true });
+  assert.equal(eyes.viewBody().seat, eyes.net.seat);
+  late.net.close(); eyes.net.close(); kay0.net.close(); host.net.close(); stop(); stopLate();
+  page.made.length = 0;
+  // A FULL room (every seat a person's): the relay lets the page in with no seat. Solo until a seat is free.
+  const r2 = rig();
+  t.after(r2.stop);
+  const S2 = r2.socket();
+  const pair = (who, extra = {}) => createRoom(bodyGame({ maxPlayers: 2, minBodies: 2, seatWaitMs: 1000, ...extra, netplay: { config: cfg(who), WebSocketImpl: S2, post: null, canHost: who === 'host', linkOverlay: who === 'third' || who === 'fourth' } }));
+  const host2 = pair('host');
+  const stop2 = loop(host2);
+  t.after(stop2);
+  await clock.wait(200);
+  const kay = pair('kay');
+  await clock.wait(200);
+  const third = pair('third', { fallback: 'solo' });
+  const stop3 = loop(third);
+  t.after(stop3);
+  await clock.wait(600);
+  assert.deepEqual([third.net.full, third.net.seat, third.standing.state], [true, null, 'joining']);
+  assert.deepEqual(page.lines(), [['full', 'This room is full · watching until a seat is free']]);
+  await clock.wait(900);
+  assert.deepEqual(stands(third), { link: 'online', standing: 'solo', why: 'full', body: true });
+  assert.deepEqual(page.lines(), [['seat', 'This room is full · playing on your own until a seat is free']]);
+  assert.equal(third.mySeat(), 0, 'seat 0 of a round of its own, as offline');
+  kay.net.close();
+  await clock.wait(900);
+  assert.deepEqual(stands(third), { link: 'online', standing: 'playing', why: 'seated', body: true });
+  assert.deepEqual([third.solo, third.net.seat, third.net.full], [false, 1, false]);
+  assert.deepEqual(page.lines(), []);
+  // The default in a full room: it waits, and the helper's own line says why.
+  const fourth = pair('fourth');
+  await clock.wait(1800);
+  assert.deepEqual(stands(fourth), { link: 'online', standing: 'waiting', why: 'full', body: false });
+  assert.deepEqual(page.lines(), [['full', 'This room is full · watching until a seat is free']]);
+  third.net.close(); fourth.net.close(); host2.net.close();
+});
+
+test('a slow page that joins mid-round always ends somewhere a player can act: each way it can arrive, on the virtual clock', async (t) => {
+  const { createRoom } = await netplayKit();
+  const clock = virtualTime(t);
+  const page = pageDocument(t);
+  warnings(t);
+  const open = async (hostExtra = {}, relay = {}) => {
+    const r = rig(relay);
+    t.after(r.stop);
+    const host = createRoom(bodyGame({ ...hostExtra, netplay: { config: cfg('host'), WebSocketImpl: r.socket(), post: null, linkOverlay: false, ...(hostExtra.netplay ?? {}) } }));
+    const stop = loop(host);
+    t.after(stop);
+    await clock.wait(600);
+    return { r, host, stop };
+  };
+  const joiner = (r, extra = {}, np = {}) => {
+    const adopted = [];
+    const room = createRoom(bodyGame({ adopt: (b) => adopted.push(b.slot), ...extra, netplay: { config: cfg('slow'), WebSocketImpl: r.socket(), post: null, canHost: false, ...np } }));
+    const stop = loop(room);
+    t.after(stop);
+    return { room, adopted, stop };
+  };
+  // 1. The welcome arrives after the page gave up waiting (connectOpenMaxMs): it was playing alone, and moves in.
+  {
+    const { r, host } = await open();
+    let dead = true;
+    const Live = r.socket(); const Dead = r.socket({ mute: true });
+    const j = joiner(r, {}, { WebSocketImpl: function (u) { return dead ? new Dead(u) : new Live(u); }, connectOpenMaxMs: 2000, staleMs: 2500 });
+    await clock.wait(2600);
+    assert.deepEqual(stands(j.room), { link: 'alone', standing: 'solo', why: 'alone', body: true });
+    assert.deepEqual(page.lines(), [['alone', 'Playing on your own · still looking for the room…']]);
+    dead = false;
+    await clock.wait(6000);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    assert.equal(j.adopted.length, 2, 'its own round\'s body, then the room\'s');
+    assert.deepEqual(page.lines(), [], 'no line is left up once the link is');
+    j.room.net.close(); host.net.close();
+  }
+  // 2. connectClock: 'game' and a late net.start(): a welcome that came first is used at once; the wait only starts at start().
+  {
+    const { r, host } = await open();
+    const j = joiner(r, {}, { connectClock: 'game', connectOpenMaxMs: 2000 });
+    await clock.wait(300);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true }, 'in the room before the game said it had booted');
+    await clock.wait(9000);
+    j.room.net.start();
+    await clock.wait(3000);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    j.room.net.close();
+    const k = joiner(r, {}, { WebSocketImpl: r.socket({ mute: true }), connectClock: 'game', connectOpenMaxMs: 2000 });
+    await clock.wait(9000);
+    assert.deepEqual(stands(k.room), { link: 'connecting', standing: 'joining', why: 'connecting', body: false }, 'still booting: not given up on');
+    k.room.net.start();
+    await clock.wait(2600);
+    assert.deepEqual(stands(k.room), { link: 'alone', standing: 'solo', why: 'alone', body: true }, 'bounded from start()');
+    k.room.net.close(); host.net.close();
+    page.made.length = 0;
+  }
+  // 3. A join during the round break: a body at once, and the next round with everybody else.
+  {
+    const { r, host } = await open({ roundSeconds: 10, breakSeconds: 3 });
+    await clock.wait(10_000);
+    assert.equal(host.round.phase, 'over');
+    const j = joiner(r, { roundSeconds: 10, breakSeconds: 3 });
+    await clock.wait(500);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    await clock.wait(3500);
+    assert.deepEqual([host.round.n, host.round.phase], [2, 'live']);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    assert.equal(j.adopted.length, 2);
+    j.room.net.close(); host.net.close();
+  }
+  // 4. The host's frames have stopped (it heartbeats): the join is still answered, with a body.
+  {
+    const { r, host, stop } = await open();
+    const other = createRoom(bodyGame({ netplay: { config: cfg('kay'), WebSocketImpl: r.socket(), post: null, canHost: false, linkOverlay: false } }));
+    await clock.wait(500);
+    stop();
+    await clock.wait(700);
+    const j = joiner(r);
+    await clock.wait(1000);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    assert.ok(host.net.stats().heartbeats > 0);
+    await clock.wait(6000);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    j.room.net.close(); other.net.close(); host.net.close();
+  }
+  // 5. The page is blocked for six seconds the moment it is welcomed (its heavy boot): its body's snapshot is queued
+  //    behind its own timers. Time it could not listen is not time without a body: no private round, no reconnect.
+  {
+    const { r, host } = await open({}, { idleMs: 60_000 });
+    const queued = [];
+    let hold = true;
+    const Slow = filtered(r.socket(), (m) => { if (hold && m.t === 'snap') { queued.push(m); return false; } return true; });
+    const j = joiner(r, { fallback: 'solo', seatWaitMs: 1000 }, { WebSocketImpl: Slow });
+    const links = [];
+    j.room.net.on('link', (e) => links.push(e.state));
+    await clock.wait(100);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'joining', why: 'no-body', body: false }, 'welcomed; the snapshot with its body is on its way');
+    blocked(t, 6000);
+    await clock.wait(1);
+    // Its timers have all just run, six seconds late. The snapshots come after them.
+    assert.equal(j.room.solo, false, 'six seconds it could not listen are not six seconds without a body');
+    hold = false;
+    const sock = r.sockets.at(-1);
+    for (const m of queued) sock.heard({ data: JSON.stringify(m) });
+    await clock.wait(400);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    assert.deepEqual([j.room.solo, links.join(), j.room.net.stats().drops], [false, 'online', 0]);
+    assert.deepEqual(page.lines(), []);
+    j.room.net.close(); host.net.close();
+  }
+  // 6. The room does not come back (reconnectMaxMs): a replica is not left with a frozen round; the host of a room
+  //    keeps the round it was running. Both play, alone, and say so.
+  {
+    const { r, host } = await open({ netplay: { reconnectMaxMs: 5000 } });
+    let up = true;
+    const Live = r.socket();
+    const Gone = class { constructor() { this.readyState = 0; setTimeout(() => { this.readyState = 3; this.onerror?.({}); }, 0); } send() {} close() {} };
+    const j = joiner(r, {}, { WebSocketImpl: function (u) { return up ? new Live(u) : new Gone(u); }, reconnectMaxMs: 5000 });
+    await clock.wait(500);
+    assert.deepEqual(stands(j.room), { link: 'online', standing: 'playing', why: 'seated', body: true });
+    up = false;
+    r.sockets.at(-1).cut();
+    await clock.wait(3000);
+    assert.deepEqual(stands(j.room), { link: 'reconnecting', standing: 'playing', why: 'reconnecting', body: true });
+    assert.equal(j.room.hosting, false, 'for these seconds the round on screen is frozen');
+    await clock.wait(2500);
+    assert.deepEqual(stands(j.room), { link: 'alone', standing: 'solo', why: 'alone', body: true });
+    assert.deepEqual([j.room.hosting, j.room.mine().seat, j.room.view().length], [true, 0, 3], 'a round of its own, with bots');
+    assert.deepEqual(page.lines(), [['alone', 'Playing on your own · the room dropped, still trying…']]);
+    // The host, cut off: the same round, its own body and score, everybody else's body a bot's.
+    const n = host.round.n;
+    host.mine().score = 5;
+    const mineSlot = host.mine().slot;
+    for (const sock of r.sockets) sock.cut?.();
+    r.room.attach = () => { throw new Error('gone'); };
+    await clock.wait(6500);
+    assert.deepEqual(stands(host), { link: 'alone', standing: 'solo', why: 'alone', body: true });
+    assert.deepEqual([host.round.n, host.mine().slot, host.mine().score, host.mine().seat], [n, mineSlot, 5, 0], 'not a new round: the one it was playing');
+    assert.equal([...host.bodies.values()].filter((b) => !b.bot).length, 1);
+    j.room.net.close(); host.net.close();
+  }
 });
 
 /* ------------------------------------------------------------------ the page around the frame (section 24) */

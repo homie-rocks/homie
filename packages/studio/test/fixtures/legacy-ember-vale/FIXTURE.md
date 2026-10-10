@@ -1,0 +1,1 @@
+Ember Vale copied byte for byte from packages/studio/starters/ember-vale at release-2026-10-07-studio-0.32.1 (before rules existed). Test fixture only; never shipped as a starter. The legacy release gate builds these unchanged files and runs the real two-browser check.

@@ -473,17 +473,16 @@ test('the site: the codex is the owner\'s private page, and CODEX.md never ships
   assert.equal(away.headers.get('location'), '/_studio/stats');
 });
 
-test('a netplay-only static game is refused with rewrite guidance', () => {
+test('a static game\'s folder ships as it is, except its CODEX.md', () => {
   const dir = studio('codex-static', { game: null });
   const game = join(dir, 'games', 'tiles');
   mkdirSync(game, { recursive: true });
   writeFileSync(join(game, 'game.json'), JSON.stringify({ id: 'tiles', name: 'Tiles', build: { mode: 'static' }, netplay: { v: 1, public: true } }));
   writeFileSync(join(game, 'index.html'), '<!doctype html><script src="./homie-port.js"></script><p>tiles</p>');
   writeFileSync(join(game, 'CODEX.md'), '# Tiles\n');
-  const result = out(run(['build'], dir));
-  assert.equal(result.ok, false);
-  assert.match(result.why, /games use rules plus view/);
-  assert.equal(existsSync(join(dir, 'site', 'dist', 'games', 'tiles', 'index.html')), false);
+  assert.equal(out(run(['build'], dir)).ok, true);
+  assert.ok(existsSync(join(dir, 'site', 'dist', 'games', 'tiles', 'index.html')));
+  assert.equal(existsSync(join(dir, 'site', 'dist', 'games', 'tiles', 'CODEX.md')), false);
 });
 
 /* ------------------------------------------------------------------ the status line */

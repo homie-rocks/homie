@@ -9,7 +9,7 @@ import { runRulesCompiler } from './rules-compiler.mjs';
  * of its own to run `npx tsc` with.
  *
  *   - The compiler is the STUDIO'S OWN (`typescript` in its node_modules, which a new studio's package.json asks
- *     for). This optional check for local apps keeps using that compiler. Rules games use the toolkit's own
+ *     for). This optional check for legacy games and local apps keeps using that compiler. Rules games use the toolkit's own
  *     pinned compiler through typecheckRules below, on every build.
  *   - A game with a tsconfig.json of its own is checked with it. Any other game is checked the way esbuild reads
  *     it: its entry and whatever that imports, as ES2022 for a browser, strictly, with the pictures, sounds and
@@ -17,7 +17,7 @@ import { runRulesCompiler } from './rules-compiler.mjs';
  *   - Only errors in the game's own files stop the build. A game imports the toolkit's helpers as TypeScript
  *     source, and a creator can do nothing about a line in node_modules; those are counted and said, never fatal.
  *
- * The local-app check runs only when asked with --types. The rules check is mandatory.
+ * The legacy/app check runs only when asked with --types. The rules check is mandatory.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';

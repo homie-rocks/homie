@@ -1,3 +1,4 @@
+import { deployPlan } from '../lib/cloudflare.mjs';
 import { browserRulesGame } from './browser-rules-game.mjs';
 /**
  * @homie-rocks/studio 0.6.0: 32-seat rooms, and the studio's own stats.
@@ -97,9 +98,12 @@ test('seats: players.max is the single room-size setting, without a public cap',
   const seats = Object.fromEntries(cat.games.map((g) => [g.id, g.players]));
   assert.deepEqual(seats, { courier: { min: 2, max: 32 }, crowd: { min: 1, max: 300 }, duel: { min: 2, max: 2 }, plain: { min: 1, max: 8 } });
   assert.equal(cat.games.find((g) => g.id === 'crowd').room.host, 'server');
+  assert.equal(deployPlan(dir).hosted.find(g => g.id === 'crowd').seats, 300);
   assert.equal(seatCount(1000), 1000);
-  assert.deepEqual([seatsOf({ players: { max: 32 } }), seatsOf({ players: { max: 99 } }), seatsOf({}), seatsOf({ players: { max: 0 } })], [32, 99, 8, 8]);
-  assert.deepEqual([perAddress(8), perAddress(16), perAddress(32)], [0, 0, 0]);
+  assert.equal(seatsOf({ players: { max: 1000 }, room: { contract: 2 } }), 1000);
+  assert.equal(perAddress(1000, true), 0);
+  assert.deepEqual([seatsOf({ players: { max: 32 } }), seatsOf({ players: { max: 99 } }), seatsOf({}), seatsOf({ players: { max: 0 } })], [32, 32, 8, 8]);
+  assert.deepEqual([perAddress(8), perAddress(16), perAddress(32)], [12, 20, 36]);
 });
 
 test('the relay at 32: one address fills every seat (a party on one Wi-Fi), the 33rd waits, and a leaver\'s seat goes to it', () => {

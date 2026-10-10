@@ -208,8 +208,9 @@ game its studio chooses to share, each with its own licence ("Game parts", below
 There is no 32-player ceiling or default per-address admission limit. Public games use
 rules plus view with `room.host: "server"`. Gates carry the browser connections and
 concentrators combine Gate links for larger rooms. Server rules survive browser departures.
-Browser/offline hosting uses the same rules contract; the old netplay-only build and port
-host scaffold have been retired.
+New browser/offline games use the same rules contract. Existing netplay games and their
+port host helpers remain supported for upgrades, with their original 32-seat limit.
+For larger rooms, follow `guides/game/REWRITE.md`.
 
 For example, a 300-player room can choose spatial delivery explicitly:
 

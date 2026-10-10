@@ -9,9 +9,13 @@ import { stallOf, versionOf } from './room.mjs';
 
 /** Room size is chosen by the studio, not capped by admission. */
 export const seatCount = (n, fallback = 8) => Number.isSafeInteger(Number(n)) && Number(n) > 0 ? Number(n) : fallback;
-export const seatsOf = (meta) => seatCount(meta?.players?.max);
-/** Shared carrier addresses do not impose a guest ceiling. */
-export const perAddress = () => 0;
+/** Compatibility limit for existing browser-hosted netplay games only. */
+export const SEAT_MAX = 32;
+export const seatsOf = (meta) => meta?.room?.contract || meta?.kind === 'app'
+  ? seatCount(meta?.players?.max)
+  : Math.max(1, Math.min(SEAT_MAX, Math.floor(Number(meta?.players?.max)) || 8));
+/** Rules rooms have no carrier-address ceiling; legacy rooms retain their old allowance. */
+export const perAddress = (seats, rules = false) => rules ? 0 : Math.max(12, seats + 4);
 
 /**
  * `net.prefs` (NETPLAY.md section 24): what the play page keeps for one game on one browser, because the game's frame

@@ -111,3 +111,5 @@ jobs:
         run: |
           node scripts/studio-check.mjs --chrome-for-testing --record --perf --lab --controls
           node scripts/studio-check.mjs --chrome-for-testing --record --perf --lab --controls --game coin-dash
+      - name: Legacy release gate (released 0.32.1 starter builds and two clients finish a round)
+        run: node scripts/studio-check.mjs --chrome-for-testing --legacy

@@ -390,7 +390,7 @@ esac
   assert.equal(r.needs, 'cloudflare-verify-email');
 });
 
-test('port: plan grades a single-player game and reads its risks; import retains the source and licence for a rules rewrite; build refuses the old host', () => {
+test('port: plan grades a single-player game and reads its risks; import brings it in as a static game with the toolkit first; build ships homie-port.js', () => {
   const fixture = join(PKG, 'test', 'fixtures', 'coin-dash');
   const plan = out(run(['port', 'plan', fixture], scratch));
   assert.equal(plan.ok, true, JSON.stringify(plan));
@@ -403,17 +403,18 @@ test('port: plan grades a single-player game and reads its risks; import retains
   const imp = out(run(['port', 'import', fixture, '--id', 'coin-dash'], dir));
   assert.equal(imp.ok, true, JSON.stringify(imp));
   const meta = JSON.parse(readFileSync(join(dir, 'games/coin-dash/game.json'), 'utf8'));
-  assert.deepEqual([meta.entry, meta.room.host, meta.port.licence], ['src/view.ts', 'server', 'Apache-2.0']);
-  assert.equal(meta.build, undefined); assert.equal(meta.netplay, undefined);
+  assert.deepEqual([meta.build.mode, meta.netplay.movement, meta.port.licence], ['static', 'owner', 'Apache-2.0']);
   const html = readFileSync(join(dir, 'games/coin-dash/index.html'), 'utf8');
   assert.ok(html.indexOf('homie-port.js') > 0 && html.indexOf('homie-port.js') < html.indexOf('game.js'), 'the toolkit loads before the game');
   assert.match(html, /user-scalable=no/, 'a phone-safe viewport');
   assert.ok(existsSync(join(dir, 'games/coin-dash/LICENSE')), 'the licence travels with the game');
   assert.equal(out(run(['port', 'import', fixture, '--id', 'coin-dash'], dir)).ok, false, 'an existing id is refused');
   const b = out(run(['build'], dir));
-  assert.equal(b.ok, false);
-  assert.match(b.why, /games use rules plus view/);
-
+  assert.equal(b.ok, true, JSON.stringify(b));
+  const port = readFileSync(join(dir, 'site/dist/games/coin-dash/homie-port.js'), 'utf8');
+  assert.match(port, /HomiePort/, 'the toolkit as one classic script');
+  assert.ok(existsSync(join(dir, 'site/dist/games/coin-dash/game.js')), 'the game\'s own files are served as they are');
+  assert.ok(!existsSync(join(dir, 'site/dist/games/coin-dash/game.json')), 'game.json is not served');
 });
 
 test('port check judges motion on screen axes: a straight hold passes, a camera that turns or a curve fails, a wall is contact', async () => {

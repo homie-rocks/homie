@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {join,relative,basename,sep,resolve} from 'node:path';
 import {readConfig} from './routes.mjs';
-import {workerDir} from './studio.mjs';
+import {PACKAGE_ROOT,workerDir} from './studio.mjs';
 import {paidReleases} from './parts-upload.mjs';
 /** Preserve dynamic imports as real Worker modules: page startup never evaluates MCP libraries. */
 export async function buildWorker(root,esbuild) {
@@ -15,7 +15,10 @@ export async function buildWorker(root,esbuild) {
   const toolModule=join(root,'site/src/tools/index.mjs');
   const pricedTools=existsSync(toolModule) && (await import(pathToFileURL(toolModule).href+'?worker='+Date.now())).default.some(tool=>tool.price);
   if(paidReleases(root).length || existsSync(join(root,'shop.json')) || pricedTools)alias['@homie-rocks/studio/worker']='@homie-rocks/studio/worker/selling';
-  const result=await esbuild.build({entryPoints:[source],absWorkingDir:root,alias,outdir:out,bundle:true,splitting:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],target:'es2022',write:false,minify:true,metafile:true,logLevel:'silent'});
+  // Older studio entries export only Table and Lobby. Supply the new toolkit-owned
+  // classes in the generated bundle without rewriting the studio's source/customizations.
+  const contents=`export * from ${JSON.stringify(source)};\nexport { default } from ${JSON.stringify(source)};\nexport { Gate, Concentrator } from ${JSON.stringify(join(PACKAGE_ROOT,'worker/gate.mjs'))};\n`;
+  const result=await esbuild.build({stdin:{contents,resolveDir:root,sourcefile:'worker.mjs'},entryNames:'worker',absWorkingDir:root,alias,outdir:out,bundle:true,splitting:true,format:'esm',platform:'browser',mainFields:['module','main'],conditions:['workerd','worker','browser'],external:['node:*','cloudflare:*'],target:'es2022',write:false,minify:true,metafile:true,logLevel:'silent'});
   // A watcher may already have read the previous entry while this build is
   // publishing. Keep its entire graph available. Publish immutable modules first,
   // then switch the single entry atomically; never remove a running graph.

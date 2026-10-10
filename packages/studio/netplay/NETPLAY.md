@@ -1,9 +1,9 @@
 > 0.45.0: this document describes the internal transport used by rules rooms.
 > Games have one authoring path: rules plus view with `openRoom`. Browser/offline
-> hosting uses that same contract. Netplay-only builds and the port host scaffold
-> are retired. Historical protocol revisions below explain wire fields, not an
+> hosting uses that same contract. Existing netplay builds and port host helpers
+> remain supported with their original 32-seat limit. Historical protocol revisions below explain wire fields, not an
 > alternative way to author new games. `players.max` chooses the room size without
-> a 32-seat ceiling. Revision 12 adds roster patches and ordered chained deltas.
+> a 32-seat ceiling for rules games. Revision 12 adds roster patches and ordered chained deltas.
 
 # Homie netplay contract, v1 (revision 11)
 
@@ -1878,7 +1878,7 @@ const off = guardGestures({ touch: 'canvas, [data-action]' });   // once, early;
 
 Rules own player bodies, arrival, departure and round results. Use the rules
 contract and `openRoom` view. The port-owned `createRoom` host scaffold and its
-callbacks are retired in 0.45.0; there is no alternative game authoring path.
+callbacks remain available for existing games in 0.45.0. New games use rules plus view.
 
 ## 27. The relay's log (revision 9)
 

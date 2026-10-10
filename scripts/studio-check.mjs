@@ -9,6 +9,7 @@
  *   node scripts/studio-check.mjs [--keep] [--port 8799] [--chrome-for-testing] [--record] [--perf] [--lab] [--game gem-rush|coin-dash] [--controls] [--drive]
  *     --chrome-for-testing: Chrome for Testing even when the machine has a Chrome, as a machine without one gets
  *     --game: Gem Rush by default; coin-dash exercises the other server-rules starter
+ *     --legacy: unchanged Ember Vale from released 0.32.1; build and real two-browser check
  *     --controls: held keys, alternating keys, touch, browser disconnect and late joining
  *     --drive: also run the playtest instruments and shoot live and preview frames; keep the playtest report
  *               for visual/sound findings (these are separate from tool failures and round completion)
@@ -29,14 +30,15 @@
  */
 import { perfProblems } from './studio-check-perf.mjs';
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const game = process.argv.includes('--game') ? process.argv[process.argv.indexOf('--game') + 1] : 'gem-rush';
-if (!['gem-rush', 'coin-dash'].includes(game)) throw new Error('--game: gem-rush or coin-dash');
+const legacy = process.argv.includes('--legacy');
+const game = legacy ? 'ember-vale' : process.argv.includes('--game') ? process.argv[process.argv.indexOf('--game') + 1] : 'gem-rush';
+if (!['gem-rush', 'coin-dash', 'ember-vale'].includes(game)) throw new Error('--game: gem-rush or coin-dash');
 const keep = process.argv.includes('--keep');
 const port = String(process.argv[process.argv.indexOf('--port') + 1] > 0 ? process.argv[process.argv.indexOf('--port') + 1] : 8799);
 const work = mkdtempSync(join(tmpdir(), 'homie-studio-check-'));
@@ -87,12 +89,18 @@ try {
   say('home page: "First game coming soon" (no game yet)');
   await stopDev();
   // The creator asks for a copy of the starter.
-  sh(cli, ['game', 'new', game, '--from', game, '--json'], studio);
+  if (legacy) {
+    cpSync(join(ROOT, 'packages/studio/test/fixtures/legacy-ember-vale'), join(studio, 'games', game), { recursive: true });
+    // Existing studios have pre-Gate Worker exports too; upgrading the package must suffice.
+    writeFileSync(join(studio, 'site/src/worker.mjs'), "export { default, Table, Lobby } from '@homie-rocks/studio/worker';\n");
+  }
+  else sh(cli, ['game', 'new', game, '--from', game, '--json'], studio);
   const built = JSON.parse(sh(cli, ['build', '--json'], studio, env));
   say(`asked for the starter; built: ${built.games.map((g) => `${g.id} ${Math.round(g.bytes / 1024)} KB`).join(', ')}`);
   await startDev();
   const r = spawnSync(cli, ['check', game, '--url', `http://127.0.0.1:${port}`, '--json'], { cwd: studio, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
   const result = JSON.parse(r.stdout || '{}');
+  if (legacy && (r.status !== 0 || !result.ok || result.round?.humans !== 2 || result.seats?.length !== 2 || !result.seats.some(s => s.role === 'host') || !result.seats.some(s => s.role === 'replica'))) throw new Error(`Legacy release gate failed: ${r.stdout} ${r.stderr}`);
   const lines = [
     `### A studio on ${process.platform} ${process.arch}, ${result.ok ? 'PASSED' : 'NOT YET'}`,
     '',
