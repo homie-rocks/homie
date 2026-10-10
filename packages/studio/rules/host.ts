@@ -99,6 +99,7 @@ export interface Host {
   readonly running: boolean;
   readonly paused: boolean;
   readonly people: number;
+  readonly viewRadiusM: number | null;
   frame(m: Record<string, unknown>): void;
   /** Start the tick loop (the first person has joined). */
   start(): void;
@@ -767,6 +768,7 @@ export function createHost(o: HostOptions): Host {
   }
 
   return {
+    get viewRadiusM() { return c.settings.view?.radiusM ?? null; },
     get tick() { return core.tick; },
     get epoch() { return epoch; },
     get running() { return running; },

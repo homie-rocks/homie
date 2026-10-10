@@ -37,7 +37,7 @@ export const SAVE_REVISION = 2;
 export const REACH_M = 64;
 /** The most entities one room holds. A spawn past it throws in the handler that asked. */
 export const ENTITY_MAX = 2048;
-/** The most seats one room holds (worker/seats.mjs `SEAT_MAX`). */
+/** The current bot-fill ceiling; public admission lives in worker/seats.mjs. */
 export const SEATS_MAX = 32;
 /** The most values one declared field may hold when it is full (`cellsOf`), and the most all the fields of one kind of entity may. */
 export const FIELD_CELLS_MAX = 16_384;
@@ -176,6 +176,8 @@ export interface RoomSettings {
   offline: boolean;
   tickHz: number;
   inputHz: number;
+  /** Omit the radius to send the whole room. No implicit visibility or bandwidth cap. */
+  view: { radiusM: number | null };
   durability: { movementSeconds: number };
   budget: { tick: number };
   predict: { catchM: number | null; catchUp: number; snapM: number | null; blendMs: number; interpMs: number | null };
@@ -191,7 +193,7 @@ export const BUDGET_TICK = 500_000;
 export const BUDGET_SECOND = 10_000_000;
 export const budgetFor = (tickHz: number): number => Math.min(BUDGET_TICK, Math.floor(BUDGET_SECOND / tickHz));
 export const ROOM_DEFAULTS: RoomSettings = deepFreeze({
-  host: 'server', offline: true, tickHz: 20, inputHz: 20, durability: { movementSeconds: 1 }, budget: { tick: BUDGET_TICK },
+  host: 'server', offline: true, tickHz: 20, inputHz: 20, view: { radiusM: null }, durability: { movementSeconds: 1 }, budget: { tick: BUDGET_TICK },
   predict: { catchM: null, catchUp: 1.25, snapM: null, blendMs: 100, interpMs: null },
 });
 
@@ -212,18 +214,24 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     if (!Number.isFinite(n) || n < 0) { problems.push(`"room.${name}" is a number, zero or more; using its default`); return d; }
     return n;
   };
-  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict']);
-  for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict)`);
+  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view']);
+  for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict, view)`);
   let host: 'server' | 'browser' = 'server';
   if (r.host !== undefined) { if (r.host === 'server' || r.host === 'browser') host = r.host; else problems.push('"room.host" is "server" or "browser"; using "server"'); }
   let offline = true;
   if (r.offline !== undefined) { if (typeof r.offline === 'boolean') offline = r.offline; else problems.push('"room.offline" is true or false; using true'); }
   const tickHz = whole('tickHz', r.tickHz, 1, 60, 20);
   const inputHz = whole('inputHz', r.inputHz, 1, tickHz, tickHz);
+  if (host === 'browser' && r.view?.radiusM != null) problems.push('"room.view.radiusM" needs room.host "server"; browser hosting sends the whole room');
+  if (r.view !== undefined) {
+    if (!r.view || typeof r.view !== 'object' || Array.isArray(r.view)) problems.push('"room.view" is an object with an optional radiusM');
+    else for (const key of Object.keys(r.view)) if (key !== 'radiusM') problems.push(`"room.view.${key}" is not a setting; use radiusM`);
+  }
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
   return {
     settings: {
       host, offline, tickHz, inputHz,
+      view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
       predict: { catchM: num('predict.catchM', p.catchM, null), catchUp: num('predict.catchUp', p.catchUp, 1.25) as number, snapM: num('predict.snapM', p.snapM, null), blendMs: num('predict.blendMs', p.blendMs, 100) as number, interpMs: num('predict.interpMs', p.interpMs, null) },
@@ -540,7 +548,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     if (!a.questions || typeof a.questions !== 'object') throw new Error(`asks.${key}.questions is required; for example { advance: { type: 'noul', instructions: 'Should the party advance?' } }`);
     asks[key] = { ...a, stateFields: fieldList(a.state, `asks.${key}.state`) };
   }
-  const seats = Math.max(1, Math.min(SEATS_MAX, Math.floor(Number(env.seats)) || 8));
+  const seats = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(env.seats)) || 8));
   return {
     contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
     shared: fieldList(d.shared, 'shared'), view, rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
