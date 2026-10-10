@@ -205,7 +205,7 @@ requestAnimationFrame(frame);
 function fixture(dir, id, dice) {
   const g = join(dir, 'games', id);
   mkdirSync(join(g, 'src'), { recursive: true });
-  writeFileSync(join(g, 'game.json'), JSON.stringify({ id, name: id, entry: 'src/main.ts' }));
+  writeFileSync(join(g, 'game.json'), JSON.stringify({ id, name: id, entry: 'src/main.ts', netplay: { v: 1 } }));
   writeFileSync(join(g, 'index.html'), '<!doctype html><html><head><meta charset="utf-8"></head><body><canvas id="c" width="80" height="80"></canvas><script type="module" src="./assets/main.js"></script></body></html>');
   writeFileSync(join(g, 'tunables.json'), formatTunables({ speed: { value: 120, min: 0, max: 400 } }));
   writeFileSync(join(g, 'src', 'main.ts'), FIXTURE(dice));

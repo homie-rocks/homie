@@ -82,7 +82,7 @@ studio's pinned copy, never a registry lookup of the bare name.
 - `npx --no-install homie-studio check <id> --url <site>` — two headless browsers press Play and must
   land in the same room and finish a round. Run it before you say a game works.
 - `npx --no-install homie-studio perf <id> --url <site>` — how fast a game runs, on a computer and an emulated
-  phone, with two browsers in a room (the host and a replica): frame times, the game's JavaScript and the main thread
+  phone, with two browsers in a room (two replicas when the server hosts): frame times, the game's JavaScript and the main thread
   per frame, time to playable, what it downloads, the heap, netplay messages a second (files under `.perf/`). The
   Homie plugin's `perf` skill runs the whole loop: one change at a time, kept only when it is better beyond the noise
   and `check` still passes, and a report in `perf/<id>/`.

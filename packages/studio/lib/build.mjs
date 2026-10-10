@@ -210,11 +210,12 @@ export function genreOf(g, log = () => {}) {
  * bundle (netplay/netplay.ts NETPLAY_MARK). A build without it is revision 5 or older: it plays on every server, but
  * reserved AI seats stay empty and its bots do not read the dial, and the office says so. Null when nothing says.
  */
-export function netplayRevOf(out) {
+export function netplayRevOf(out, { skipPort = false } = {}) {
   const files = [];
   const walk = (dir, depth) => {
     if (depth > 3 || !existsSync(dir)) return;
     for (const name of readdirSync(dir)) {
+      if (skipPort && name === 'homie-port.js') continue;
       const f = join(dir, name);
       let st;
       try { st = statSync(f); } catch { continue; }
@@ -471,6 +472,11 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   }
   if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
   if (!existsSync(join(out, 'index.html'))) throw new Error(`${label}/index.html is missing`);
+  // Older games declare netplay v1 or carry the helper's revision marker. A plain
+  // browser bundle is not automatically a multiplayer game. Apps may be local-only.
+  if (!rules && g.kind !== 'app' && netplayOf(g, out).v !== 1 && netplayRevOf(out, { skipPort: true }) === null) {
+    throw new Error(`${label}/${manifest}: this game is neither rules plus view nor a browser-hosted netplay game. Start with game new, src/rules.ts, src/view.ts and "room": { "host": "server" }. Existing browser-hosted games must retain their netplay v1 manifest or netplay helper.`);
+  }
   if (rules) {
     // Only this game's executable view and rules data: buildInfo, the site and other games cannot reload its players.
     const digest = createHash('sha256').update(rules.build);

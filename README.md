@@ -317,7 +317,7 @@ npx homie-studio dev --stop   # this studio's dev server only
 
 (`../homie` is this checkout.) Open `http://127.0.0.1:8787/crown-thief/` in two browser
 windows, or a computer and a phone on the same network, to play against yourself.
-`packages/studio/netplay/NETPLAY.md` is the contract a game keeps.
+New games use server rules in `src/rules.ts`, shared movement in `src/move.ts`, and browser presentation in `src/view.ts`. The [game skill](plugins/homie/skills/game/SKILL.md) and its [rules reference](plugins/homie/skills/game/RULES.md) teach the authoring contract. Browser hosting remains available for offline, local and private play; existing netplay games keep working.
 
 **Releasing.** A published version never changes. Give each package you changed a new
 `version` (and bump the exact pins of the packages that depend on it). A new

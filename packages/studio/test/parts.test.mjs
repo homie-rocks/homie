@@ -47,7 +47,7 @@ function studio(folder, name) {
 }
 /** A small bundled game: main.ts puts what it computed on globalThis, so a built bundle can be run and read here. */
 function game(dir, id, main, extra = {}, files = {}) {
-  write(dir, `games/${id}/game.json`, `${JSON.stringify({ id, name: id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase()), blurb: `${id}.`, players: { min: 1, max: 4 }, entry: 'src/main.ts', ...extra }, null, 2)}\n`);
+  write(dir, `games/${id}/game.json`, `${JSON.stringify({ id, name: id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase()), blurb: `${id}.`, players: { min: 1, max: 4 }, entry: 'src/main.ts', netplay: { v: 1 }, ...extra }, null, 2)}\n`);
   write(dir, `games/${id}/index.html`, '<!doctype html><html><head></head><body><script type="module" src="./assets/main.js"></script></body></html>');
   write(dir, `games/${id}/src/main.ts`, main);
   for (const [rel, text] of Object.entries(files)) write(dir, `games/${id}/${rel}`, text);

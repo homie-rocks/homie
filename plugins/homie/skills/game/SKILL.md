@@ -72,6 +72,8 @@ starter yourself from the request; never ask the person an engineering question.
 `coin-dash` is the smallest reference; `gem-rush` adds bumps; `ember-vale` adds
 companions, decisions and character saves; the two 3D starters add models and jumps.
 A starter is a starting point: implement the requested mechanic, not a renamed gem collector.
+The build refuses a game with neither rules plus view nor a browser-hosted netplay contract;
+a plain browser bundle is not a multiplayer game.
 
 - **Truth: `src/rules.ts`.** Default-export `defineRules({ contract: 2, ... })`.
   Declare every lasting value in entity `fields`, movement `motion`, or room `shared`,

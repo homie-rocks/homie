@@ -314,3 +314,30 @@ test('rules HTML names the built view; a source URL fails before a browser opens
   writeFileSync(join(game.dir, 'index.html'), '<canvas></canvas><script type="module" src="/src/view.ts"></script>');
   await assert.rejects(buildGameFiles(await esbuildOf(), dir, game, join(dir, 'bad-html')), /index\.html: load the built view.*\.\/assets\/main\.js.*not \/src\/view\.ts/);
 });
+
+// A successful bundle alone must not be reported as a multiplayer game.
+test('build refuses an unconnected game and preserves the prior site', () => {
+  const dir = studio('neither');
+  legacyGame(dir, 'plain');
+  assert.equal(run(['build'], dir).status, 0);
+  const previous = read(dir, 'site/dist/games.json');
+  const manifest = JSON.parse(read(dir, 'games/plain/game.json'));
+  delete manifest.netplay;
+  writeFileSync(join(dir, 'games/plain/game.json'), JSON.stringify(manifest));
+  writeFileSync(join(dir, 'games/plain/src/main.ts'), 'document.body.textContent = "No room";');
+  const r = run(['build'], dir);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stdout + r.stderr, /neither rules plus view nor a browser-hosted netplay game/);
+  assert.equal(read(dir, 'site/dist/games.json'), previous);
+});
+
+test('an injected port toolkit alone does not turn a static page into a netplay game', async () => {
+  const dir = studio('static-neither');
+  const game = join(dir, 'games', 'plain');
+  mkdirSync(game, { recursive: true });
+  writeFileSync(join(game, 'index.html'), '<h1>No room</h1><script src="./homie-port.js"></script>');
+  const g = { id: 'plain', dir: game, build: { mode: 'static' } };
+  const esbuild = await esbuildOf(dir);
+  await assert.rejects(buildGameFiles(esbuild, dir, g, join(dir, 'out')), /neither rules plus view/);
+  await buildGameFiles(esbuild, dir, { ...g, netplay: { v: 1 } }, join(dir, 'out'));
+});

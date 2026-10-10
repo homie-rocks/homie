@@ -151,6 +151,10 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     const game = await s.call('game_make', { id: 'comet-crews', name: 'Comet Crews' });
     assert.ok(!game.isError, game.content[0].text);
     assert.ok(existsSync(join(root, 'games', 'comet-crews', 'game.json')));
+    const made = JSON.parse(readFileSync(join(root, 'games', 'comet-crews', 'game.json'), 'utf8'));
+    assert.equal(made.room.host, 'server');
+    assert.equal(made.entry, 'src/view.ts');
+    assert.ok(existsSync(join(root, 'games', 'comet-crews', 'src', 'rules.ts')));
     assert.match(readFileSync(join(root, 'games', 'comet-crews', 'CODEX.md'), 'utf8'), /# Comet Crews/, 'the codex stays');
     const open = await s.call('build_open', { id: 'comet-crews', title: 'Comet Crews: first playable' });
     assert.ok(!open.isError, open.content[0].text);

@@ -36,7 +36,7 @@ Ask for a game and its rules run on your server.
 ### Fixed
 
 - Builds explain the exact script tag a game page needs, check rules types once, and keep guarded builds working through a temporary-directory alias.
-- Input checks measure when the final touch reaches the game, so a slow test machine is not mistaken for slow controls. Real-time soak measurements are a separate command from the release test suite.
+- Builds refuse a game with neither rules plus view nor a browser-hosted netplay contract, instead of silently calling an unconnected page multiplayer. Existing netplay games keep their compatibility path.
 
 ### Upgrade notes
 

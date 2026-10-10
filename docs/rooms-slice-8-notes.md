@@ -1,9 +1,60 @@
 # Rooms, slice 8
 
-Implementation, fresh authoring proof and local release gates are complete. No deployment.
-The required post-#79 rebase remains pending because #79 is still open. The candidate
-versions are studio 0.40.0 / plugin 0.41.0, to be confirmed against main after that merge.
-This file records observed results, not planned passes; the milestone design is the authority.
+The post-#79 rebase is complete on main `eb907d3` (0.40.0). Only slice 8's
+own commit was replayed; the release is now studio and plugin 0.41.0 throughout.
+Main's seeded input, virtual-time correctness matrix, bounded real-Chrome smoke
+cases and `test:rules:extended` arrangement are preserved. No deployment or merge.
+This file records observed results; the earlier draft receipts below are historical.
+
+## Post-merge studio trial, 0.41.0
+
+The author in this session followed this checkout's game skill and RULES.md, using
+one sentence: “Make a cooperative lantern hunt where two players light all six
+beacons before night ends.” This was a local authoring trial, not a new blind agent
+study. The eleven earlier independent trials remain recorded below.
+
+- Packed this checkout with `npm pack`, scaffolded `/tmp/homie-slice8-041-trial/studio`
+  with `homie-studio new --template --no-install`, and installed the packed 0.41.0
+  toolkit plus the template's pinned dependencies. No linked toolkit or deployed site.
+- Queried the parts catalogue (14 entries, no match), wrote the game's CODEX, and
+  used `game new lantern-hunt --from coin-dash`. Shared beacon lighting, the six-light
+  cooperative goal, server end condition, two seats, 45-second rounds and five-second
+  breaks were authored in rules. The view draws lit/unlit beacons, the shared count,
+  results and a local oscillator chime; movement uses the starter's shared move.
+- Strict build passed: 18,000 ticks, 44 rounds, 813 save/restore comparisons;
+  busiest tick 968/500,000 budget units and largest save 1,746 bytes. These are
+  generated local checks, not Cloudflare capacity measurements.
+- Local Wrangler at port 8818 served the packed game. The standard `check` passed
+  in 49.073 seconds: a computer and emulated phone, two people and zero bots in the
+  completed result, distinct seats, both replicas. Both measured 60 fps on this
+  machine's Apple M4 Metal renderer.
+- In two additional visible Chrome processes, keyboard play reached six shared
+  lights and matching 3–3 results, then both saw round 2 and the shared count reset.
+  Both probes named host `server`, `hosted: server`, `rulesHosting: false`, connected
+  and online. Pausing one browser in the debugger for 2.2 seconds advanced the
+  other from server tick 230 to 274. Reload rejoined round 2. No page errors or
+  reconnects were recorded. The initial arrival had inherited two lights from a
+  fill bot; this first run is not claimed as six exclusively human pickups.
+- A second run waited for a fresh round with both Chrome windows focus-emulated as
+  separate active devices. It started at zero; actual keyboard controls lit three
+  beacons per person, reached six, and both saw matching 3–3 results and round 3.
+  The pause repeated successfully (ticks 1208 → 1252); reload retained round 3,
+  again with no page errors or reconnects. No state or clock was injected.
+- Receipts, source and screenshots are in `/tmp/homie-slice8-041-trial/` locally.
+  The shown “All alight!” result was inspected. This is a small functional trial,
+  not a production art or physical-phone review.
+
+The build now refuses a game with neither rules plus view nor a browser-hosted
+netplay declaration/helper, preserves the previously built site on failure, and
+does not count an automatically copied `homie-port.js` as an implementation.
+Old netplay v1 games and local-only apps remain supported. Lab and parts fixtures
+now explicitly declare their legacy netplay contract. The CLI default and MCP
+`game_make` are checked for server hosting and a rules/view entry.
+
+Remaining milestone-wide gaps are unchanged: actual Cloudflare capacity, save
+output-gate/duration/row billing and quota measurements; actual AI provider/billing
+proof; and a physical phone on mobile data. No deployment is authorized in this
+request, so none of those results is claimed.
 
 ## Teaching changes before the trials
 
