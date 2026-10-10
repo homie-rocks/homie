@@ -370,6 +370,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
    * budget; and the counter and the scope are put back whatever happens. Nothing of the rules' is touched after this
    * returns.
    */
+  let dispatchDepth = 0;
   function run(kind: string, handler: string, ent: Ent | null, scope: Ctx['scope'], fn: () => void, always: boolean | 'body' = false): boolean {
     if (left <= 0) {
       cut = true;
@@ -525,6 +526,23 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       charge(SEND);
       if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.send is for handlers');
       push({ due: tick + 1, to: typeof target === 'string' ? target.slice(0, 24) : '', kind: 'ev', ev: ev as string, data: shapeData(c.events, ev, 'the event', data), at: tick });
+    },
+    dispatch: (target: unknown, ev: unknown, data?: unknown): boolean => {
+      charge(SEND);
+      if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.dispatch is for handlers');
+      if (dispatchDepth >= 8) throw new Error('world.dispatch permits at most eight nested deliveries');
+      const payload = shapeData(c.events, ev, 'the event', data);
+      const e = typeof target === 'string' ? ents.get(target) : undefined;
+      const fn = e && typeof ev === 'string' ? e.kind.on[ev] : undefined;
+      if (!e || e.dead || !fn) return false;
+      // Synchronous delivery shares the caller's remaining quota. Each handler
+      // still writes only its own entity, and collection settlement stays scoped.
+      const parent = cx, parentTouched = touched, note = G.note;
+      cx = {scope:'ent',ent:e}; touched = []; dispatchDepth++;
+      if (noted) G.note = (what, at, written) => noted(e.kind.name, `on.${String(ev)}`, what, at, written);
+      try { fn(world,e.self,payload); }
+      finally { try { settle(); } finally { cx=parent; touched=parentTouched; G.note=note; dispatchDepth--; } }
+      return true;
     },
     sendRoom: (ev: unknown, data?: unknown): void => {
       charge(SEND);

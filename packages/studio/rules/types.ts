@@ -30,6 +30,7 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   readonly round: Round & (Room extends true ? { end(): void } : {});
   random(): number;
   send<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): void;
+  dispatch<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): boolean;
   sendRoom<K extends keyof E>(event: K, ...data: Payload<E[K]>): void;
   sendArea<K extends keyof E>(area: Area, event: K, ...data: Payload<E[K]>): void;
   after<K extends keyof E>(ticks: number, event: K, ...data: Payload<E[K]>): void;
