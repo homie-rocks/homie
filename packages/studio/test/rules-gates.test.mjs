@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Gate, batchLink, multiplexSession, roomLayout } from '../worker/gate.mjs';
+import { Gate, batchLink, expandBatch, multiplexSession, roomLayout } from '../worker/gate.mjs';
 import { fakeClock } from './rules-kit.mjs';
 import { seatCount, perAddress } from '../worker/seats.mjs';
 import { scheduledView, snapshotEncoder, snapshotDecoder } from '../rules/interest.mjs';
@@ -25,6 +25,39 @@ test('virtual-time batches retain every input and command in order, and stop on 
   assert.deepEqual(peer.sent.flat().map(row => JSON.parse(row[2]).k), Array.from({ length: 300 }, (_, i) => i));
   link.send(['data', '0', 'pending']); link.close(); clock.advance(1000);
   assert.equal(peer.sent.flat().length, 300);
+});
+
+test('relay batching preserves trusted ingress times; a delayed 10 Hz sender still has the same 60/s cap', async () => {
+  const {NetRoom}=await import('../worker/room.mjs');
+  const room=Object.create(NetRoom.prototype);
+  Object.assign(room,{seatCap:1000,rules:true,stats:{drops:0},now:()=>100_000,roleOf:()=> 'replica',send:()=>{}});
+  const client=()=>({id:'p',seat:0,rates:new Map(),drops:[],errAt:0});
+  const clock=fakeClock(), peer=socket(), link=batchLink(peer,{setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+  for(let i=0;i<100;i++)link.send(['data','p','input',i*100]);
+  link.flush();
+  const rows=[...expandBatch(peer.sent.flat())], delayed=client();
+  assert.equal(rows.length,100);
+  for(let i=0;i<100;i++){
+    assert.equal(rows[i][3],i*100);
+    assert.equal(room.allow(delayed,'in',20,false,rows[i][3]),true);
+  }
+  const abusive=client();
+  for(let i=0;i<60;i++)assert.equal(room.allow(abusive,'in',20,false,10_000),true);
+  assert.equal(room.allow(abusive,'in',20,false,10_000),false);
+  assert.equal(room.allow(abusive,'in',20,false,1),false,'backward time cannot reset the window');
+  assert.equal(room.stats.drops,2);
+  link.close();
+});
+
+test('only trusted transport metadata supplies ingress time, never a player JSON field', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:10_000});
+  const upstream=socket(), peer=socket();
+  const gate=new Gate({}, {TABLE:{idFromName:n=>n,get:()=>({fetch:async()=>({webSocket:upstream})})}});
+  await gate.connect(new Request('https://table/__net?game=g&room=r&gates=5&gate=0'),peer);
+  peer.emit('message',{data:'{"t":"in","receivedAt":999999}'});gate.link.flush();
+  const row=upstream.sent.flat().find(row=>row[0]==='data');
+  assert.equal(row[3],10_000);
+  gate.link.disconnect();
 });
 test('multiplex admission awaits attach, preserves commands, and closes every logical connection on Gate death', async () => {
   const peer = socket(), attached = [], messages = [], left = [];

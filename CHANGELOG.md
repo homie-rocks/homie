@@ -30,6 +30,7 @@ Crowd links bound queued work, and an owner’s deploy request covers the task.
 
 ### Fixed
 
+- Player rate limits use trusted Gate ingress time, so delayed relay batches do not turn a legitimate input stream into a flood. The allowances remain unchanged.
 - Late callbacks that catch up at the requested tick rate no longer end a healthy room as an overrun; sustained slow ticks still stop.
 - Relay failures log their layer, close cause and queue counters. Room and office diagnostics include stage timing availability and transport queues. Frozen Cloudflare clocks are not reported as zero execution time.
 - Deployment summaries no longer assume Workers Free. Crowd duration estimates include Gates and Concentrators and identify excluded request traffic.

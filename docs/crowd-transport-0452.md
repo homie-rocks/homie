@@ -37,6 +37,12 @@ which upstream operation failed. No trial deployment has been performed here.
 - A downstream send exception was already isolated to that client in 0.45.0.
   That candidate is ruled out as a newly repaired cause. Regression coverage
   preserves it. New upstream-loss logs include layer, reason, code and queues.
+- The Table applied player rate windows to batch delivery time. A held 10 Hz
+  stream could therefore exceed its unchanged 60/s cap when delivered together.
+  Trusted Gate ingress timestamps now survive fan-out and Concentrators; the
+  Table uses those monotonic timestamps for the same rate window. Tests deliver
+  100 delayed inputs without drops, still reject the 61st simultaneous input,
+  reject backward-clock window resets and ignore a player's JSON timestamp.
 - A 1,000-seat manifest selects 16 Gates, two Concentrators and a Table regardless
   of current occupancy. Duration estimates now count all 19 objects; request
   estimates explicitly exclude unmeasured internal traffic. No account plan is

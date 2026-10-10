@@ -601,7 +601,7 @@ export class NetRoom {
     this.clients.set(c.id, c);
     return {
       id: c.id,
-      onMessage: (text) => this.guard(c, 'message', () => this.onMessage(c, text), text),
+      onMessage: (text, receivedAt) => this.guard(c, 'message', () => this.onMessage(c, text, receivedAt), text),
       /** `via`: how the transport learned it (`close`, or `error`: the socket failed, which is how a lost network arrives). */
       onClose: (via = 'close') => this.guard(c, 'close', () => this.onClose(c, 'closed', via)),
     };
@@ -754,7 +754,7 @@ export class NetRoom {
     return true;
   }
 
-  allow(c, t, bytes, view = false) {
+  allow(c, t, bytes, view = false, receivedAt) {
     // A spectator screen has little to say: its events are capped at 512 B (16 screens x 2/s x 512 B at most reach the host).
     const cap = t === 'ev' && c.seat === null && (view || c.id !== this.hostId) ? 512 : capOf(t, this.seatCap);
     const rulesOutput = !view && this.rules && c.rules && c.id === this.hostId;
@@ -765,7 +765,10 @@ export class NetRoom {
       if (rulesOutput) this.stopBrowserRules(c, 'size', `This game's rules exceeded the browser room size cap: ${detail}. Join again for a fresh room.`);
       return false;
     }
-    const now = this.now();
+    // Trusted Gate ingress time measures the sender, not a delayed batch's
+    // arrival at the Table. Direct sockets keep the Table clock. Monotonicity
+    // prevents a relay clock adjustment from resetting an existing rate window.
+    const now = Number.isFinite(receivedAt) ? (c.ingressRateAt = Math.max(c.ingressRateAt ?? receivedAt, receivedAt)) : this.now();
     if (rulesOutput) {
       c.rulesBuckets ??= new Map();
       const rate = rulesRates(this.tickHz, this.seatCap)[t];
@@ -797,7 +800,7 @@ export class NetRoom {
     return true;
   }
 
-  onMessage(c, text) {
+  onMessage(c, text, receivedAt) {
     if (this.clients.get(c.id) !== c) return;
     text = String(text);
     const now = this.now();
@@ -809,7 +812,7 @@ export class NetRoom {
     if (!m || typeof m.t !== 'string') return;
     if (!c.helloed) { if (m.t === 'hello' && bytes <= LIMITS.hello) this.hello(c, m); return; }
     const view = this.rules && !(c.rules && c.id === this.hostId && m.rules === true && RULES_FRAMES.includes(m.t));
-    if (!this.allow(c, m.t, bytes, view)) return;
+    if (!this.allow(c, m.t, bytes, view, receivedAt)) return;
     const isHost = c.id === this.hostId && !view;
     switch (m.t) {
       case 'rules-end': {

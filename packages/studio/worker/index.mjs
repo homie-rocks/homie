@@ -2084,7 +2084,7 @@ export class Table {
       const fresh = room.seats.size === 0;
       server.addEventListener('message', (e) => {
         this.relayFrame = Boolean(server.snapshot);
-        try { h.onMessage(typeof e.data === 'string' ? e.data : ''); } finally { this.relayFrame = false; }
+        try { h.onMessage(typeof e.data === 'string' ? e.data : '', this.relayFrame ? e.receivedAt : undefined); } finally { this.relayFrame = false; }
         // A newcomer: the Lobby hears of the room at once, so the owner's office (and a launch change) never misses it.
         if (typeof e.data === 'string' && e.data.startsWith('{"t":"hello"')) this.scheduleReport();
         if (fresh && !this.openCounted && room.seats.size > 0) {

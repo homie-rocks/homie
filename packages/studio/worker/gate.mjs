@@ -35,7 +35,7 @@ export function gateFor(env, game, room, seats, key) {
 export function* expandBatch(rows) {
   for (const row of rows) {
     if (row[0] === 'views') { for (const [id, seat] of row[1]) yield ['view', id, row[2], seat, row[3], row[4]]; }
-    else if (row[0] === 'fan') { for (const id of row[1]) yield ['data', id, row[2]]; }
+    else if (row[0] === 'fan') { for (const id of row[1]) yield row.length > 3 ? ['data', id, row[2], row[3]] : ['data', id, row[2]]; }
     else yield row;
   }
 }
@@ -51,7 +51,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     if (closed || pending || !queue.length && !views.size) return;
     const rows = []; let last = null;
     for (const row of queue) {
-      if (row[0] === 'data' && last && (last[0] === 'data' || last[0] === 'fan') && last[2] === row[2]) {
+      if (row[0] === 'data' && last && (last[0] === 'data' || last[0] === 'fan') && last[2] === row[2] && last[3] === row[3]) {
         if (last[0] === 'data') { last[0] = 'fan'; last[1] = [last[1]]; }
         last[1].push(row[1]);
       } else { last = row.slice(); rows.push(last); }
@@ -174,7 +174,7 @@ export function multiplexSession(socket, connect, { onMetrics = () => {} } = {})
             const task = client.ready = client.ready.then(() => {
               client.queued--;
               if (closed || !clients.has(id)) return;
-              if (op === 'data') client.emit('message', { data: value });
+              if (op === 'data') client.emit('message', { data: value, receivedAt: ip });
               else { out.forget(id); client.emit('close', {}); clients.delete(id); }
             });
             pending.add(task); task.then(() => pending.delete(task), () => { pending.delete(task); client.close(1011, 'client message failed'); });
@@ -274,7 +274,9 @@ export class Gate {
         // the Table excludes the public handshake and relay transit.
         link.send(['open', id, request.url, request.headers.get('cf-connecting-ip'), request.headers.get('user-agent')]);
       }
-      link.send(['data', id, event.data]);
+      // Only the public Gate stamps ingress. A Concentrator preserves the
+      // trusted event property; a player cannot supply it inside their JSON.
+      link.send(['data', id, event.data, Number.isFinite(event.receivedAt) ? event.receivedAt : Date.now()]);
       if (Date.now() - this.metricsAt >= 1000) {
         this.metricsAt = Date.now(); const url = new URL(request.url);
         link.send(['metrics', `${this instanceof Concentrator ? 'concentrator' : 'gate'}/${this instanceof Concentrator ? Math.floor(Number(url.searchParams.get('gate')) / 8) : url.searchParams.get('gate')}`, { ...link.facts(), view: this.timing.facts(), clients: this.clients.size }]);
