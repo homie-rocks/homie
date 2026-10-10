@@ -1,7 +1,7 @@
 # Navigation release verification
 
 Studio 0.38.1 / plugin 0.39.1, navigation 0.1.0. Rebased directly onto main
-`91be345` after #77 released studio 0.38.0. The diff adds navigation only;
+`91be345` after #77 released studio 0.38.0. Navigation is the only new feature; release checks include supporting fixes;
 paid parts is inherited from main rather than stacked branch commits.
 Released changelog sections are byte-identical to main.
 
@@ -63,3 +63,12 @@ and CI results are maintained in [PR #75](https://github.com/homie-rocks/homie/p
 Earlier complete runs before main 0.38.0 passed on the independent branch and on
 main 0.37.2. Historical extended navigation stress measurements remain in the
 package README; they are not claimed as newly rerun here.
+
+Both Node 22 and Node 24 CI reproduced the input-receipt race. The playability
+checker now waits for the final drag position to be delivered, then freezes its
+receipt before measuring the game response. A regression delays that final event
+by 250 ms after acknowledging the command: it fails with the original checker and
+passes with the fix. The 600 ms response limit and negative controls are unchanged.
+A subsequent local matrix passed the earlier failed scenarios but found one
+1.24 cm backward step in the 300 ms / 10% loss / 60 Hz browser case (limit 1 cm).
+This intermittent prediction result is retained in the PR's gate evidence.
