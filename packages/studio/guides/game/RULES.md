@@ -673,27 +673,6 @@ server-verified money. All replicated fields are public, including disguised rol
 Use a separate authorized records service for private or lasting app records.
 
 
-## Spatial delivery (0.44.0; milestone 2 slice 1)
-
-For a server game with a larger map, the studio's AI can set
-`"room": { "view": { "radiusM": 32 } }` in game.json to send each player only
-entities within that many metres of its body (3D includes height). This is the
-studio's choice: omit it or use null for the whole room. Rules and move do not
-change. The player's own body is always sent. Before a body exists, its view has
-no entities. Watchers still receive the whole room.
-
-`room.each` visits visible entities; `enter`/`leave` mean coming into or out of
-view, not spawning or despawning. Remove departed meshes and recreate returning
-ones. Prediction and compact snapshot recovery are handled by the runtime.
-Shared state, effects, rosters and watcher state are still public: this is not a
-hidden-information feature. Browser hosting sends the whole room.
-
-A request for hundreds of players also needs the next Gates release: 0.44.0's
-public build/join path still has the milestone 1 restriction of 32 seats. Do not
-silently clamp a requested bigger game or claim this setting raises admission.
-When Gates ship, `players.max` will choose the room's layout automatically; the
-studio will not create or find infrastructure by hand. The slice plan and local
-300-client measurements are in docs/rooms-milestone-2-notes.md in Homie's repo.
 ## Live collision geometry (0.43.1)
 
 ```ts

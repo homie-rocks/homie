@@ -5,15 +5,17 @@ import { defineMove, type Vec3 } from '@homie-rocks/studio/rules';
 import type { MoveBody, MoveContext } from '@homie-rocks/studio/rules/types';
 
 function slide<M>(body: MoveBody<M>, delta: Vec3, ctx: MoveContext<unknown, M>) {
-  const before = body.pos, hit = ctx.map.sweep(body, delta);
+  const before = body.pos, hit = ctx.world.sweep(body, delta);
   if (!hit) return;
   const M = ctx.math, remaining = M.sub(delta, M.sub(body.pos, before));
   const into = M.dot(remaining, hit.normal);
-  if (into < 0) ctx.map.sweep(body, M.sub(remaining, M.scale(hit.normal, into)));
+  if (into < 0) ctx.world.sweep(body, M.sub(remaining, M.scale(hit.normal, into)));
 }
 
 export const move = defineMove({
   runner(body, input, ctx) {
+    // Recheck support before jumping: a platform/cover may have moved or broken.
+    body.grounded = Boolean(ctx.world.support(body));
     const M = ctx.math, m = body.motion, T = ctx.tune;
     const dt = ctx.dt, knocked = m.knockAt > 0;
     const g0 = 2 * T.jumpHeight / (T.jumpRise * T.jumpRise);

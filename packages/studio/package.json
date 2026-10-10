@@ -121,7 +121,8 @@
     "apps/",
     "app-starters/",
     "tools/",
-    "functions/"
+    "functions/",
+    "guides/"
   ],
   "engines": {
     "node": ">=22"
@@ -160,6 +161,7 @@
     "zod": "4.3.6"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=2 --test-timeout=1800000 test/*.test.mjs"
+    "test": "node --test --test-concurrency=2 --test-timeout=1800000 test/*.test.mjs",
+    "prepack": "node ../../scripts/authoring-guides.mjs --check"
   }
 }

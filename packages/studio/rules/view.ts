@@ -1,4 +1,5 @@
 import { snapshotDecoder } from './interest.mjs';
+import { collisionMap, revisionAt, type CollisionRevision } from './live.ts';
 import { rulesOutput } from '../netplay/rules-output.mjs';
 import { rulesCaps, rulesRates } from '../worker/limits.mjs';
 /*
@@ -43,7 +44,7 @@ import { createNetplay } from '../netplay/netplay.ts';
 import type { Netplay, NetplayOptions, RulesHostFactory, RoundInfo, Snapshot, StepEntry } from '../netplay/netplay.ts';
 import { lab } from '../lab/lab.ts';
 import { exposePort, type PortProbeOptions } from '../port/probe.ts';
-import { BudgetError } from './guard.ts';
+import { BudgetError, charge } from './guard.ts';
 import { moveContext } from './math.ts';
 import { coerce, dir, stepMove, thawFields, unpackEntity, unpackFields, unpackVec, vec3 } from './pack.ts';
 import type { Unpacked } from './pack.ts';
@@ -249,7 +250,15 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const tickAt = (now: number): number => (base ? base.tick + (now - base.at) / period * speed : 0);
   /** The tick `move` is being run for: the step just taken, or the one after it while the own body is drawn between ticks. */
   let moveTick = 0;
-  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
+  let collisionHistory: CollisionRevision[] = [];
+  let cachedCollision: CollisionRevision | undefined;
+  let geometry = map as import('./math.ts').MapShapes;
+  const geometryAt = () => {
+    const revision = revisionAt(collisionHistory, moveTick);
+    if (revision !== cachedCollision) { charge(64 * (revision?.[2].length ?? 0) + 4 * (map.boxes.length + map.circles.length + map.spheres.length + map.capsules.length)); geometry = collisionMap(map, revision?.[2] ?? []); cachedCollision = revision; }
+    return geometry;
+  };
+  const moveCtx = moveContext({ tick: () => moveTick, tickHz, tune, map, geometry: geometryAt, name: game.map.name ?? 'main', spots, radius: () => myKind()?.radius ?? 0, shape: () => ({ shape: myKind()?.shape ?? 'sphere', radius: myKind()?.radius ?? 0, height: myKind()?.height ?? 0 }), dims });
   function authorityRtt(): number {
     // The helper's ping ends at the relay. A browser host adds another network leg in both directions.
     // Snapshot stamps use the relay clock, so their observed age measures the complete downstream path.
@@ -387,6 +396,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const before = latest;
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
+    if (!before || before.e !== f.e) collisionHistory = [];
+    const collision = (s.d as unknown[])[2] as CollisionRevision | undefined;
+    if (collision) {
+      collisionHistory.push(collision);
+      if (collisionHistory.length > 128) collisionHistory.shift();
+    }
     if (before && before.e !== f.e) hostAges.length = 0;
     hostAges.push(Math.max(0, net.now() - s.st)); if (hostAges.length > 40) hostAges.shift();
     if (before && before.e !== f.e) fxQueue.length = 0;

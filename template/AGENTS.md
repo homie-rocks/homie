@@ -7,6 +7,13 @@ the Table/Lobby Durable Objects, all on Cloudflare's free Workers plan), built
 from `@homie-rocks/studio`, pinned in `package.json`. The homie.rocks
 directory lists its games; homie.rocks does not host them.
 
+## Version-matched authoring guides
+
+Before authoring or rewriting a game, read `node_modules/@homie-rocks/studio/guides/game/SKILL.md`,
+`RULES.md` and `REWRITE.md` in that same folder. These ship with the installed toolkit;
+use them when an installed plugin describes an older API. `homie-studio check` reports older
+plugin copies and the update step. After upgrading the plugin, start a new session.
+
 ## Layout
 
 | Path | What it is |

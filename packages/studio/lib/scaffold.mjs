@@ -68,14 +68,14 @@ export function slugify(name) {
  * No `database_id` until one is known: Wrangler (4.45.0+) and the Deploy to Cloudflare flow create the database
  * the binding names and keep it linked.
  */
-export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null }) {
+export function wranglerConfig({ worker, name, d1, d1Id = null, r2 = null, layout = 'root', main = null, ai = false, routes = null, paidParts = false, partsRateLimit = null, triggers = null }) {
   const at = layout === 'site' ? { schema: '../node_modules', main: 'src/runtime/worker.js', dist: './dist', migrations: 'migrations' }
     : { schema: 'node_modules', main: 'site/src/runtime/worker.js', dist: './site/dist', migrations: 'site/migrations' };
   const rooms = [{ name: 'TABLE', class_name: 'Table' }, { name: 'LOBBY', class_name: 'Lobby' }];
   const config = {
     $schema: `${at.schema}/wrangler/config-schema.json`,
     name: worker,
-    main: at.main,
+    main: main ?? at.main,
     compatibility_date: COMPAT_DATE,
     // The site's own fetches (its directory claim, "played this week") go out as any browser's would, so a studio
     // whose directory is on the same zone (a house studio on *.homie.rocks, or two Workers on one workers.dev
@@ -121,6 +121,13 @@ run on the studio's **own Cloudflare account** (one Worker, one D1 database and
 the Table/Lobby Durable Objects, all on Cloudflare's free Workers plan), built
 from \`@homie-rocks/studio\`, pinned in \`package.json\`. The homie.rocks
 directory lists its games; homie.rocks does not host them.
+
+## Version-matched authoring guides
+
+Before authoring or rewriting a game, read \`node_modules/@homie-rocks/studio/guides/game/SKILL.md\`,
+\`RULES.md\` and \`REWRITE.md\` in that same folder. These ship with the installed toolkit;
+use them when an installed plugin describes an older API. \`homie-studio check\` reports older
+plugin copies and the update step. After upgrading the plugin, start a new session.
 
 ## Layout
 

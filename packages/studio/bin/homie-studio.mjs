@@ -968,7 +968,9 @@ async function main() {
   // lib/dev.mjs: the dev server, its registration file, and what `--stop` will and will not signal.
   if (cmd === 'dev' && flags.has('stop')) return stopDev(root);
   if (cmd === 'dev') return dev(root, { lan: flags.has('lan'), port: flags.get('port') ?? 8787, remoteAi: flags.has('remote-ai'), localAi: !flags.has('no-local-ai'), timestamps: flags.has('timestamps'), log });
+  if (['build', 'upgrade'].includes(cmd)) for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords()) log(line);
   if (cmd === 'check') {
+    for (const line of (await import('../lib/authoring-guides.mjs')).authoringWords()) log(line);
     const game = positional[1] ?? listGames(root)[0]?.id;
     const url = flags.get('url') ?? siteUrl(root);
     if (!url) return { ok: false, command: 'check', why: 'give --url (the local dev address or the live site)' };

@@ -14,7 +14,7 @@ export interface Map3 {
   capsules?: readonly (MapCircle & { height: number })[];
 }
 const EPS = 1e-7;
-const point = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
+const point = (x: number, y: number, z: number): {x: number; y: number; z: number} => ({ x, y, z });
 export function solidAt(at: Vec3, body: BodyShape): Solid {
   const r = body.radius, height = body.height || 2 * r;
   if (body.shape === 'box') return { min: point(at.x - r, at.y - r, at.z), max: point(at.x + r, at.y + r, at.z + height), r: 0 };
@@ -93,7 +93,7 @@ export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape): Hit3 | n
   charge(24);
   const a = solidAt(p, body), r = body.radius, height = body.height || r * 2;
   let best: Hit3 | null = null;
-  const take = (h: Hit3 | null): void => { if (h && h.t >= 0 && h.t <= 1 && (!best || h.t < best.t)) best = h; };
+  const take = (h: Hit3 | null, id?: string): void => { if (h && h.t >= 0 && h.t <= 1 && (!best || h.t < best.t)) best = id ? {...h, id} : h; };
   for (const axis of ['x', 'y', 'z'] as const) {
     const low = map.bounds.min[axis] + (axis === 'z' ? 0 : r);
     const high = map.bounds.max[axis] - (axis === 'z' ? height : r);
@@ -102,11 +102,11 @@ export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape): Hit3 | n
     take({ t: ((d[axis] > 0 ? high : low) - p[axis]) / d[axis], nx: n.x, ny: n.y, nz: n.z });
   }
   for (const tile of map.heightTiles ?? []) take(castHeightTile(tile, p, d));
-  for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }));
+  for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }), (b as any).id);
   // Legacy map circles are vertical columns in a 3D map.
-  for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }));
-  for (const s of map.spheres ?? []) take(castSolid(a, d, { min: s.at, max: s.at, r: s.r }));
-  for (const c of map.capsules ?? []) take(castSolid(a, d, solidAt(c.at, { shape: 'capsule', radius: c.r, height: c.height })));
+  for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }), (c as any).id);
+  for (const s of map.spheres ?? []) take(castSolid(a, d, { min: s.at, max: s.at, r: s.r }), (s as any).id);
+  for (const c of map.capsules ?? []) take(castSolid(a, d, solidAt(c.at, { shape: 'capsule', radius: c.r, height: c.height })), (c as any).id);
   return best;
 }
 export function restsOnMap(map: Map3, p: Vec3, body: BodyShape): boolean {

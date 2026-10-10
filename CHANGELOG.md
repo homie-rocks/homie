@@ -17,6 +17,27 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.43.1] - 2026-10-10
+
+**Plugin 0.43.1**
+
+Predicted movement meets the live world, and local builds keep dev running.
+
+### Added
+
+- Rules movement sweeps, support and overlap queries include declared live colliders: rectangular cover, doors and platforms, with tick-stamped geometry in prediction and room restores.
+- The npm package ships generated, version-matched game authoring and rewrite guides. Studio guidance and check/build output point to them and report older plugin copies with an update step.
+
+### Fixed
+
+- Rebuilding while dev is running preserves immutable Worker module graphs and atomically switches the entry, so a reload cannot lose its imported chunks.
+- Customer offers omit the studio refund window when no window is set.
+
+### Upgrade notes
+
+- Declare non-player entity colliders with `collider: true` or `{size, enabled}` field names. Movement uses `ctx.world.sweep/support/overlaps`; existing `ctx.map.sweep` includes declared colliders too. Games without colliders keep their existing snapshot shape.
+- Read `node_modules/@homie-rocks/studio/guides/game/` after upgrading. Older plugin sessions need an update and a new session; the installed guides are usable immediately.
+
 ## [0.44.0] - 2026-10-10
 
 **Plugin 0.44.0** · [#83](https://github.com/homie-rocks/homie/pull/83)
