@@ -26,6 +26,7 @@ export function auditDeclarations(sources) {
         if(declaration==='GuideDecision')reason='Untrusted floor result; the admission boundary validates goal, line and argument names and values together.';
         if(runtime && file==='rules/rules.ts' && ['RuntimeWorld','RuntimeSelf','Handler','RoomHandler','MoveFn','GuideDef','EntityDef','AskDef','RulesDef'].includes(declaration)) reason='Raw runtime declaration; replaced by the generated Definition, Entity and Moves callback signatures before game code is checked.';
         if(runtime && file==='rules/rules.ts' && ['Field','FieldOptions'].includes(declaration)) reason='Initializer input crosses the declared field boundary before rules read it.';
+        if(runtime && file==='rules/rules.ts' && declaration==='Character')reason='Raw persisted character snapshot; generated room.join replaces fields and motion with the declared player-kind union, and core creation admits them through field coercion.';
         if(runtime && file==='rules/rules.ts' && declaration==='Compiled')reason='Raw compiled tuning record; generated public tuning fields supply their concrete types to game code.';
         if(runtime && file==='rules/rules.ts' && declaration==='CompileEnv')reason='Compiler configuration input is validated before becoming declared runtime values.';
         if(runtime && file==='rules/view.ts' && ['Entity','GameData'].includes(declaration)) reason='Raw schema transport; generated Entities and shared fields replace dynamic reads in a checked view.';

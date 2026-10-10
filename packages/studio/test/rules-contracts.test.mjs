@@ -94,3 +94,9 @@ test('a difference inside a map is named down to its key',async()=>{
  const rules=`import {defineRules,f} from '@homie-rocks/studio/rules';const counts=new WeakMap();export default defineRules({contract:2,space:{dims:2},entities:{dot:{fields:{entries:f.map(f.u16(),8)},tick(w,s){const n=(counts.get(s)??0)+1;counts.set(s,n);s.entries.value=n;}},noise:{tick(w){w.random();}}},room:{start(w){w.spawn('dot',{x:3,y:3});w.spawn('noise',{x:4,y:4});}}});`;
  await assert.rejects(checkRules(await esbuildOf(),root,'nested-writer',rules,{map:COIN_MAP,tune:{},seats:2}),/does not play the same as the room that kept running; first difference at ents\.e1\.fields\.entries\.value/);
 });
+
+test('account character fields in room.join use the game declarations, without casts',async()=>{
+ const joined=source.replace("join() { return { kind: 'pawn', at: { x: 0, y: 0, z: 0 } }; }", "join(c,p) { const level: number | undefined = p.character?.fields?.level; const guided: boolean | undefined = p.character?.fields?.guided; return p.character ?? { kind: 'pawn', at: { x: 0, y: 0, z: 0 } }; }");
+ await build('character-types',joined,vocab);
+ await assert.rejects(build('character-wrong-type',joined.replace('const level: number','const level: string'),vocab),/number.*string|not assignable/s);
+});
