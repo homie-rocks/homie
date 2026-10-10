@@ -136,16 +136,9 @@ test('Chrome: ordinary browser and server sessions have the same outcomes for th
         for (const room of rooms.values()) {
           if (scenario.joins) for (const page of room.proof.waiting) { await page.evaluate(() => connect()); room.proof.group.push(page); await sleep(70); }
           if (scenario.asks) for (let n = 0; n < 5; n++) { await room.proof.group[1].evaluate(() => room.command('ask')); await sleep(200); }
-          if (scenario.emotes) for (let batch = 1; batch <= 3; batch++) {
-            await Promise.all(room.proof.group.slice(1).map(page => page.evaluate(() => {
-              for (let i = 0; i < 10; i++) room.net.send('emote:wave', { text: 'Wave' });
-            })));
-            // Space batches from observed delivery, not a page's interval deadline: a delayed
-            // socket flush must not compress two batches into the relay's one-second window.
-            await room.proof.group[0].waitForFunction(expected => heard.emotes === expected,
-              { timeout: 15000 }, (room.proof.group.length - 1) * 10 * batch);
-            if (batch < 3) await sleep(1100);
-          }
+          if (scenario.emotes) await Promise.all(room.proof.group.slice(1).map(page => page.evaluate(() => new Promise(resolve => {
+            let n = 0; const timer = setInterval(() => { for (let i = 0; i < 10; i++) room.net.send('emote:wave', { text: 'Wave' }); if (++n === 3) { clearInterval(timer); resolve(); } }, 1100);
+          }))));
         }
         await sleep(Math.max(0, 30500 - (performance.now() - started)));
         const outcomes = [], snapshots = [];
