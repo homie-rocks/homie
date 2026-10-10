@@ -50,16 +50,17 @@ export function* expandBatch(rows) {
     else yield row;
   }
 }
-export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 1, receipts = false, maxBytes = 4 * 1024 * 1024, onWritable = () => {} } = {}) {
-  let queue = [], views = new Map(), strings = new Set(), timer = null, closed = false, bytes = 0, sequence = 0, pending = 0, sentAt = 0;
+export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTimeout, delay = 1, receipts = false, maxFrames = 4, maxBytes = 4 * 1024 * 1024, onWritable = () => {} } = {}) {
+  let queue = [], views = new Map(), strings = new Set(), timer = null, closed = false, bytes = 0, sequence = 0, inFlightBytes = 0, blockedByBytes = false;
+  const pending = new Map();
   const timing = stageTimings();
   const stats = { frames: 0, rows: 0, bytes: 0, peakQueueBytes: 0, coalesced: 0, ackMs: 0, maxAckMs: 0 };
-  const close = () => { closed = true; queue = []; views.clear(); strings.clear(); bytes = 0; if (timer !== null) clearTimer(timer); timer = null; };
+  const close = () => { closed = true; queue = []; views.clear(); strings.clear(); pending.clear(); inFlightBytes = 0; bytes = 0; if (timer !== null) clearTimer(timer); timer = null; };
   const fail = (reason) => { close(); try { socket.close(1011, reason); } catch {} };
-  const schedule = () => { if (!closed && !pending && (queue.length || views.size) && timer === null) timer = setTimer(flush, delay); };
+  const schedule = () => { if (!closed && pending.size < maxFrames && !blockedByBytes && (queue.length || views.size) && timer === null) timer = setTimer(flush, delay); };
   const flush = () => {
     if (timer !== null) clearTimer(timer); timer = null;
-    if (closed || pending || !queue.length && !views.size) return;
+    if (closed || pending.size >= maxFrames || blockedByBytes || !queue.length && !views.size) return;
     const rows = []; let last = null;
     for (const row of queue) {
       if (row[0] === 'data' && last && (last[0] === 'data' || last[0] === 'fan') && last[2] === row[2] && last[3] === row[3]) {
@@ -73,12 +74,14 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
       if (!group) { group = ['views', [], row[2], row[4], row[5]]; groups.set(row[2], group); rows.push(group); }
       group[1].push([row[1], row[3]]);
     }
-    queue = []; views.clear(); strings.clear(); bytes = 0;
-    if (receipts) { pending = ++sequence; sentAt = Date.now(); rows.push(['receipt', pending]); }
+    if (receipts) rows.push(['receipt', sequence + 1]);
     const encodeAt = timing.now();
     const text = batchText(rows);
     timing.record('encode', encodeAt);
     if (text.length > maxBytes) { fail('room link frame limit'); return; }
+    if (receipts && inFlightBytes + text.length > maxBytes) { blockedByBytes = true; return; }
+    queue = []; views.clear(); strings.clear(); bytes = 0;
+    if (receipts) { pending.set(++sequence, { at: Date.now(), bytes: text.length }); inFlightBytes += text.length; }
     stats.frames++; stats.rows += rows.length; stats.bytes += text.length;
     const sendAt = timing.now();
     try { socket.send(text); timing.record('send', sendAt); onWritable(); } catch { fail('room link send failed'); }
@@ -88,7 +91,11 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
       const rows = parseFrame(event);
       if (!Array.isArray(rows)) return;
       for (const row of rows) {
-        if (row[0] === 'ack' && row[1] === pending) { stats.ackMs = Date.now() - sentAt; stats.maxAckMs = Math.max(stats.maxAckMs, stats.ackMs); pending = 0; schedule(); onWritable(); }
+        if (row[0] === 'ack' && pending.has(row[1])) {
+          const frame = pending.get(row[1]);
+          stats.ackMs = Date.now() - frame.at; stats.maxAckMs = Math.max(stats.maxAckMs, stats.ackMs);
+          pending.delete(row[1]); inFlightBytes -= frame.bytes; blockedByBytes = false; schedule(); onWritable();
+        }
         if (row[0] === 'receipt') socket.send(JSON.stringify([['ack', row[1]]]));
       }
     } catch { /* the session reports malformed frames */ }
@@ -111,7 +118,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
       schedule();
     },
     flush, close, forget: id => views.delete(id), buffered: () => bytes,
-    facts: () => ({ ...stats, timing: timing.facts(), queueRows: queue.length, pendingViews: views.size, queueBytes: bytes, inFlight: pending ? 1 : 0 }),
+    facts: () => ({ ...stats, timing: timing.facts(), queueRows: queue.length, pendingViews: views.size, queueBytes: bytes, inFlight: pending.size, inFlightBytes }),
     disconnect() { close(); socket.close(1012, 'room link restarted'); }
   };
 }

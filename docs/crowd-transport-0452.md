@@ -153,6 +153,13 @@ microbenchmark fell from median 0.576 seconds to 0.315 seconds on this
 machine; it is not a capacity result. Both capacity cases still require a fresh
 run after this change.
 
+The initial receipt implementation also imposed stop-and-wait: at 80 ms receipt
+RTT it delivered only 50 of 80 offered snapshots in four seconds (12.5 Hz).
+The bounded four-frame pipeline delivers all 80 (20 Hz) in the same virtual-time
+case. Outstanding frames share a 4 MiB byte budget, reliable order is preserved,
+duplicate receipts do not free capacity twice, and a minute-long stalled link
+retains only four in-flight frames plus the latest unsent view per player.
+
 ## Diagnostics and approval
 
 Room and office telemetry expose bounded per-stage samples, per-Gate view/encode/

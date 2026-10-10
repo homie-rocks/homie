@@ -225,10 +225,37 @@ test('receipt flow control bounds snapshots through a long busy link without a w
     if(k===1)link.send(['data','0','command']);
     clock.advance(50);
   }
-  assert.equal(peer.sent.length,1);assert.equal(link.facts().pendingViews,1000);assert.equal(closes,0);
+  assert.equal(peer.sent.length,4);assert.equal(link.facts().inFlight,4);assert.equal(link.facts().pendingViews,1000);assert.equal(closes,0);
   peer.emit('message',{data:JSON.stringify([['ack',1]])});clock.advance(5);
-  const rows=peer.sent[1];assert.equal(rows[0][2],'command');
+  assert.equal(peer.sent[1][0][2],'command');
+  const rows=peer.sent[4];
   const views=rows.filter(row=>row[0]==='views');assert.equal(views.length,1);assert.equal(views[0][1].length,1000);assert.equal(views[0][2].k,1200);
+  link.close();
+});
+
+test('bounded receipt pipelining retains 20 Hz across an 80 ms round trip', () => {
+  const run=maxFrames=>{
+    const clock=fakeClock(),peer=socket(),send=peer.send;
+    peer.send=text=>{send.call(peer,text);const receipt=JSON.parse(text).find(row=>row[0]==='receipt');if(receipt)clock.setTimer(()=>peer.emit('message',{data:JSON.stringify([['ack',receipt[1]]])}),80);};
+    const link=batchLink(peer,{receipts:true,maxFrames,setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+    for(let k=0;k<80;k++){link.send(['view','p',{e:1,k,d:[[],[]]},0,{},20]);clock.advance(50);}
+    const ticks=peer.sent.flat().filter(row=>row[0]==='views').map(row=>row[2].k);
+    assert.ok(link.facts().inFlight<=maxFrames);link.close();return ticks;
+  };
+  assert.equal(run(1).length,50,'stop-and-wait caps this healthy link at 12.5 Hz');
+  assert.deepEqual(run(4),Array.from({length:80},(_,i)=>i));
+});
+
+test('pipelined frames share a byte budget and ignore duplicate receipts', () => {
+  const clock=fakeClock(),peer=socket();
+  const link=batchLink(peer,{receipts:true,maxBytes:512,setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+  link.send(['data','p','a'.repeat(300)]);clock.advance(5);
+  link.send(['data','p','b'.repeat(300)]);clock.advance(5);
+  assert.equal(peer.sent.length,1);assert.equal(link.facts().queueRows,1);
+  assert.ok(link.facts().inFlightBytes<=512);
+  peer.emit('message',{data:JSON.stringify([['ack',1],['ack',1]])});clock.advance(5);
+  assert.equal(peer.sent.length,2);assert.equal(peer.sent[1][0][2],'b'.repeat(300));
+  assert.equal(link.facts().inFlight,1);assert.ok(link.facts().inFlightBytes>300&&link.facts().inFlightBytes<=512);
   link.close();
 });
 
