@@ -323,12 +323,15 @@ test('deploy keeps the studio\'s custom-domain and exact-host routes: the rewrit
   const dir = studio('keeps-routes');
   const cf = account(dir);
   const routes = [{ pattern: 'play.example.com', custom_domain: true }, { pattern: 'play.example.com/*', zone_name: 'example.com' }];
-  editConfig(dir, (c) => { c.routes = routes; });
+  editConfig(dir, (c) => { c.routes = routes; c.compatibility_flags.reverse(); c.vars.CUSTOM = 'kept'; });
+  let committedConfig;
   writeStudio(dir, { ...readStudio(dir), cloudflare: { ...readStudio(dir).cloudflare, domain: 'play.example.com' } });
   for (const n of [1, 2]) {
+    if(n===2)committedConfig=readFileSync(join(dir,'wrangler.jsonc'),'utf8');
     const done = out(run(['deploy', '--homie', 'http://127.0.0.1:9'], dir));
     assert.equal(done.ok, true, JSON.stringify(done));
     assert.equal(done.url, 'https://play.example.com');
+    if(n===2)assert.equal(readFileSync(join(dir,'wrangler.jsonc'),'utf8'),committedConfig,'a repeat deploy leaves the committed config byte-for-byte unchanged');
     assert.deepEqual(done.routes, ['play.example.com', 'play.example.com/*']);
     assert.deepEqual(readConfig(dir).routes, routes, `deploy ${n}: the routes are in wrangler.jsonc exactly as written`);
     assert.deepEqual(JSON.parse(readFileSync(join(cf.state, 'deployed-config'), 'utf8').replace(/^\s*\/\/.*$/gm, '')).routes, routes, 'and in the config Wrangler deployed');
