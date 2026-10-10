@@ -56,9 +56,13 @@ export interface HostClock {
   setTimer(fn: () => void, ms: number): unknown;
   clearTimer(handle: unknown): void;
 }
+export interface CharacterLease {
+  account: string; lease: number; seat: number; character: import('./rules.ts').Character | null; returning?: boolean;
+}
 export interface HostOptions {
   game: string;
   record?(owner:string,key:string,value:Record<string,unknown>):void;
+  characterFor?(peer: Record<string, unknown>): CharacterLease | null;
   /** The build check compares a movement step before any tick handler can change it. */
   moved?: NonNullable<Parameters<typeof createCore>[1]>['moved'];
   /** Told of every handler as it ends, and what it threw if it threw (core.ts `observe`): the build check listens. */
@@ -95,6 +99,10 @@ export interface HostOptions {
   onEnd?(why: string, facts: Record<string, unknown>): void;
 }
 export interface Host {
+  readonly characters: ReadonlyMap<string, CharacterLease>;
+  characterReturned(account: string, lease: number): void;
+  releaseCharacter(account: string): void;
+  reserveCharacter(lease: CharacterLease): void;
   readonly tick: number;
   readonly epoch: number;
   readonly running: boolean;
@@ -164,19 +172,33 @@ function blameLate(now: number, period: number): void {
 
 export function createHost(o: HostOptions): Host {
   const c = o.compiled;
+  const persistent = c.settings.lifetime === 'persistent';
+  // Keep even effects and agent requests behind the same commit as their tick.
+  // Match rooms retain their existing save frequency and output behaviour.
+  const publish = o.send;
+  let pendingOutput: [Record<string, unknown>, string | undefined][] | null = null;
+  if (persistent) o = { ...o, send: (frame, text) => {
+    if (pendingOutput) pendingOutput.push([frame, text]); else publish(frame, text);
+  } };
+
   const period = 1000 / c.settings.tickHz;
   const tickHz = c.settings.tickHz;
   const lateTicks = Math.ceil(tickHz / 4);
   // A log that throws takes nothing down with it.
   const log = (line: Record<string, unknown>): void => { try { o.log?.(line); } catch { /* nothing to say it with */ } };
   const random = o.random ?? Math.random;
-  const saved = o.restore ? fromBytes(o.restore) as { v: number; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][]; inputs?: [number, SeatIn][] } : null;
+  const saved = o.restore ? fromBytes(o.restore) as { v: number; characters?: CharacterLease[]; core: SavedCore; names: [number, string][]; agents?: AgentsSaved; guideViews?: [number, { id: string; at: number; value: Record<string, unknown> }][]; queues: [number, Record<string, unknown>, StepInput['claim'], number, number][]; inputs?: [number, SeatIn][] } : null;
   if (o.restore && (!saved || typeof saved !== 'object' || Array.isArray(saved))) throw new Error('saved host is not an object');
   if (saved) {
     const check = (ok: unknown): void => { if (!ok) throw new Error('saved host inputs are invalid'); };
     const uint = (n: unknown): boolean => Number.isSafeInteger(n) && (n as number) >= 0;
-    check(Object.keys(saved).every(k => ['v', 'core', 'names', 'agents', 'guideViews', 'queues', 'inputs'].includes(k)));
+    check(Object.keys(saved).every(k => ['v', 'core', 'names', 'agents', 'guideViews', 'queues', 'inputs', 'characters'].includes(k)));
     check(saved.core && Array.isArray(saved.names) && Array.isArray(saved.queues));
+    if (saved.characters !== undefined) {
+      check(c.settings.characters && Array.isArray(saved.characters));
+      check(new Set(saved.characters.map(c => c.account)).size === saved.characters.length);
+      for (const held of saved.characters) check(typeof held.account === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(held.account) && uint(held.lease) && held.lease > 0 && Number.isInteger(held.seat) && held.seat >= -1 && held.seat < c.seats && (held.returning === undefined || typeof held.returning === 'boolean'));
+    }
     if (saved.agents !== undefined) {
       const tables = ['goals', 'asks', 'avoid', 'sayAt', 'viewAt', 'floorAt', 'askAt'];
       check(saved.agents && Object.keys(saved.agents).every(k => tables.includes(k)));
@@ -236,7 +258,8 @@ export function createHost(o: HostOptions): Host {
   }
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
   const measuredRtt = new Map<number, number>();
-  const core = createCore(c, { rewindTicks: seat => Math.ceil(((measuredRtt.get(seat) ?? 0) + 150 + period) / period), label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const characters = new Map<string, CharacterLease>((saved?.characters ?? []).map(c => [c.account, c]));
+  const core = createCore(c, { ...(c.settings.characters ? { characterLeft: (seat: number, character: import('./rules.ts').Character) => { const held = [...characters.values()].find(c => c.seat === seat && c.returning); if (held) held.character = character; } } : {}), rewindTicks: seat => Math.ceil(((measuredRtt.get(seat) ?? 0) + 150 + period) / period), label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
@@ -459,7 +482,14 @@ export function createHost(o: HostOptions): Host {
         // The relay numbers every stay in a seat (`occ`): the same number is the same holder, back.
         const owner = `p${Number.isInteger(p.occ) ? p.occ : typeof p.id === 'string' ? p.id.slice(0, 40) : seat}`;
         const previous = core.bodies().find((s) => s.seat === seat);
-        core.seatJoin({ seat, driver, owner });
+        const grant = driver === 'person' ? o.characterFor?.(p as Record<string, unknown>) : null;
+        if (c.settings.characters && driver === 'person' && !grant && o.characterFor) throw new Error('Character lease required');
+        if (grant) {
+          const held = characters.get(grant.account);
+          if (held && (held.lease !== grant.lease || held.returning || held.seat >= 0 && held.seat !== seat)) throw new Error('Character return is still pending');
+          characters.set(grant.account, { ...grant, seat });
+        }
+        core.seatJoin({ seat, driver, owner, ...(grant ? { character: grant.character } : {}) });
         core.seatAway(seat, false);
         if (!previous || previous.driver !== driver || previous.owner !== owner) queues.delete(seat);
         rosterText = '';
@@ -471,7 +501,13 @@ export function createHost(o: HostOptions): Host {
         for (const [id, p] of peers) if (p.seat === m.seat) peers.delete(id);
         present.delete(m.seat as number);
         queues.delete(m.seat as number);
-        core.seatAway(m.seat as number, true);
+        const held = [...characters.values()].find(c => c.seat === m.seat && !c.returning);
+        if (held) {
+          held.character = core.character(held.seat) ?? held.character;
+          held.returning = true;
+          core.seatLeave(held.seat);
+          tick(o.clock.now());
+        } else core.seatAway(m.seat as number, true);
         if (running && people() === 0) pause();
         return;
       }
@@ -481,7 +517,10 @@ export function createHost(o: HostOptions): Host {
         for (const [id, p] of peers) if (p.seat === m.seat) peers.delete(id);
         present.delete(m.seat as number);
         queues.delete(m.seat as number);
+        const held = [...characters.values()].find(c => c.seat === m.seat && !c.returning);
+        if (held) { held.character = core.character(held.seat) ?? held.character; held.returning = true; }
         core.seatLeave(m.seat as number);
+        if (held) tick(o.clock.now());
         rosterText = '';
         return;
       }
@@ -634,7 +673,17 @@ export function createHost(o: HostOptions): Host {
   function tick(now: number): void {
     const cut = core.stats.ticksCut;
     let faulted = false;
-    try { tickOnce(); } catch (error) { faulted = true; fault(`tick ${core.tick} (${phase})`, error); }
+    if (persistent) pendingOutput = [];
+    try {
+      tickOnce();
+      const committed = pendingOutput; pendingOutput = null;
+      if (committed && !ended) for (const [frame, text] of committed) publish(frame, text);
+    } catch (error) {
+      pendingOutput = null;
+      faulted = true; fault(`tick ${core.tick} (${phase})`, error);
+      // Never continue from uncommitted memory or retire the last good save.
+      if (persistent) { stop(); o.onEnd?.('storage-or-tick-failed', { tick: core.tick }); return; }
+    }
     if (ended) return;
     if (!faulted && core.stats.ticksCut === cut) { failingSince = null; return; }
     if (failingSince === null) failingSince = now;
@@ -730,7 +779,7 @@ export function createHost(o: HostOptions): Host {
     // A pending timer would keep the object in memory and billed: the pause clears it.
     disarm();
     log({ ev: 'host-pause', game: o.game, tick: core.tick });
-    try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); }
+    try { checkpoint(true); o.onPause?.(); } catch (error) { fault('onPause', error); if (persistent) { stop(); o.onEnd?.('storage-or-tick-failed', { tick: core.tick }); } }
   }
   function resume(): void {
     if (running || ended || !paused) return;
@@ -772,9 +821,15 @@ export function createHost(o: HostOptions): Host {
   }
 
   function save(): Uint8Array {
-    return toBytes({ v: 1, core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !core.bodies().some(b => b.seat === seat && b.owner === 'reserved')), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
+    return toBytes({ v: 1, ...(characters.size ? { characters: [...characters.values()] } : {}), core: core.save(), guideViews: [...guideViews], ...(agents ? { agents: agents.save() } : savedAgents ? { agents: savedAgents } : {}), names: [...names].filter(([seat]) => !core.bodies().some(b => b.seat === seat && b.owner === 'reserved')), queues: [...queues].map(([seat, q]) => [seat, q.held, q.claim, q.newest, q.ack]), inputs: [...queues] });
   }
   function checkpoint(force = false): void {
+    if (persistent) {
+      if (!o.store) return; // Local checks/offline simulation have no durable account.
+      o.store.save(save());
+      saveTick = core.tick; lastSaveAt = o.clock.now(); forceSave = false;
+      return;
+    }
     const seconds = c.settings.durability.movementSeconds;
     // Catch-up ticks can cover a second of play in less than a second of wall time. Bound both clocks.
     if (!o.store || !force && (core.tick === saveTick || o.clock.now() - lastSaveAt < seconds * 1000 && core.tick - saveTick < seconds * tickHz)) return;
@@ -800,6 +855,17 @@ export function createHost(o: HostOptions): Host {
         return [...row.slice(0,7),fields,...row.slice(8)];
       }),...snap.d.slice(2)]};
     },
+    get characters() { return characters; },
+    reserveCharacter(lease) { if (!characters.has(lease.account)) characters.set(lease.account, { ...lease }); },
+    releaseCharacter(account) {
+      const held = characters.get(account);
+      if (!held || held.returning || ended) return;
+      held.character = core.character(held.seat) ?? held.character; held.returning = true;
+      present.delete(held.seat); queues.delete(held.seat); names.delete(held.seat);
+      if (held.seat >= 0) core.seatLeave(held.seat); tick(o.clock.now());
+      if (running && people() === 0) pause();
+    },
+    characterReturned(account, lease) { if (characters.get(account)?.returning && characters.get(account)?.lease === lease) characters.delete(account); },
     get viewSettings() { return c.settings.view; },
     get viewRadiusM() { return c.settings.view?.radiusM ?? null; },
     get tick() { return core.tick; },

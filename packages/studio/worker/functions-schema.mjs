@@ -53,3 +53,19 @@ ALTER TABLE customer_offers ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX customer_offers_expiry ON customer_offers(expires_at);
 ${FUNCTIONS_MIGRATION.slice(FUNCTIONS_MIGRATION.indexOf('CREATE TRIGGER')).replace(/CREATE TRIGGER (\w+)/g, 'DROP TRIGGER IF EXISTS $1; CREATE TRIGGER $1').replace(/ON (shop_orders|purchase_orders|meta|mcp_audit)\n?WHEN /g, 'ON $1 WHEN ').replace(/WHEN OLD.paid_at/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='order.paid') AND OLD.paid_at").replace(/WHEN OLD.status/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='order.refunded') AND OLD.status").replace(/ON app_records BEGIN/g, "ON app_records WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='record.changed') BEGIN").replace(/WHEN NEW.key/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='payment.refunded') AND NEW.key").replace(/WHEN NEW.outcome/g, "WHEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='tool.called') AND NEW.outcome").replace(/INTO studio_events(?= VALUES|\n SELECT)/g,'INTO studio_events(id,type,data,at)')}
 `;
+
+// SQLite may evaluate AND operands in either order. Guard parsing itself: meta also
+// holds plain strings, including the key used to sign player room tickets.
+export const FUNCTIONS_META_MIGRATION_FILE = '0020_function_meta.sql';
+export const FUNCTIONS_META_MIGRATION = ['INSERT', 'UPDATE'].map(op => `
+DROP TRIGGER IF EXISTS money_function_refund_${op.toLowerCase()};
+CREATE TRIGGER money_function_refund_${op.toLowerCase()} AFTER ${op} ON meta
+WHEN CASE WHEN NEW.key LIKE 'shop-money:%:refund:%' AND json_valid(NEW.value)
+THEN EXISTS (SELECT 1 FROM function_subscriptions WHERE type='payment.refunded')
+ AND json_extract(NEW.value,'$.status')='succeeded'
+ AND NOT EXISTS (SELECT 1 FROM studio_events WHERE id='refund:' || json_extract(NEW.value,'$.id'))
+ELSE 0 END BEGIN
+ INSERT OR IGNORE INTO studio_events(id,type,data,at)
+ SELECT 'refund:' || json_extract(NEW.value,'$.id'),'payment.refunded',
+ json_object('refund',json_extract(NEW.value,'$.id'),'payment',json_extract(NEW.value,'$.payment_intent'),'amount',json_extract(NEW.value,'$.amount'),'currency',json_extract(NEW.value,'$.currency')),json_extract(NEW.value,'$.at')*1000;
+END;`).join('\n');

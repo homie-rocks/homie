@@ -137,6 +137,46 @@ for an app. A wall/TV watches without taking a seat. Each interactive phone
 takes one of the room's declared seats; shared state is replicated, public and transient. An app's
 lasting, authorized business data belongs in `createAppRecords`, not in room fields.
 
+## Lasting worlds and account characters
+
+For a world that should still exist tomorrow, set game.json:
+
+```json
+{"room":{"host":"server","lifetime":"persistent","characters":true}}
+```
+
+`characters` is optional: `lifetime` alone keeps the world. Account characters
+require the existing studio sign-in/passkey. Play redirects to the account page
+when needed. In `room.join(ctx, player)`, return
+`player.character ?? { kind: 'runner', at: spawn }`. Keep inventory in that player
+kind's declared fields and change it only in rules. The runtime returns its kind,
+position, heading, fields and motion to the account when it leaves. Use
+`player: true` or `leave: 'despawn'`; a returned character cannot also become a bot.
+Do not reset inventory in `arrive`, round-start handlers or `world.finish`.
+
+The public world has a stable room name; `?room=<name>` chooses another world.
+Every tick commits before publishing its results. An empty world sleeps and
+retains state. A failed write stops play with the last good save intact. Another
+room waits for the current holder to return the character; no timeout grants a
+stale copy. No database or IDs are set up by hand. Ordinary games keep their
+existing save frequency and behavior.
+
+Write idempotent pickups using a saved collectible ID/set; duplicate commands
+must not mint again. Events arrive later and can become `undeliverable` when a
+recipient leaves; do not treat sending one as an atomic inventory transfer.
+Trading and shop-grant consumption need the later economy slice. Browser saves
+remain player-owned and are not an authoritative inventory.
+
+This first slice saves the whole world every tick, so opted-in games pay for
+more writes. Compatible deploys still restart/reload and then restore the world.
+A state-schema change is refused on restore with data retained; keep the previous
+compatible build until migrations ship. Offline play has no account authority.
+
+For proof, build normally, then sign two players in and test movement, pickup,
+restart mid-pickup, a compatible rebuild, and a fresh profile signing in as the
+same player. Verify actual inventory and world state. A lasting world need not
+finish a round: its browser proof replaces the match check's round requirement.
+
 ## State and field types
 
 `f` declares state, event/command/effect payloads, ask state and guide views.

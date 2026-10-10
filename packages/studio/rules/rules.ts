@@ -167,7 +167,7 @@ export interface RulesDef {
     records?: RoundRecords;
     historySeconds?: number;
     start?: RoomHandler;
-    join?: (ctx: any, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string }) => { kind: string; at: Vec3; heading?: Vec3; fields?: Record<string, unknown>; motion?: Record<string, unknown> };
+    join?: (ctx: any, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string; character?: Character | null }) => { kind: string; at: Vec3; heading?: Vec3; fields?: Record<string, unknown>; motion?: Record<string, unknown> };
     on?: Record<string, RoomHandler>;
   };
   asks?: Record<string, AskDef>;
@@ -189,9 +189,14 @@ export function defineMove<M extends Record<string, MoveFn>>(def: M): M {
 
 /* ------------------------------------------------------------------ settings (game.json "room") */
 
+export interface Character { kind: string; at: Vec3; heading: Vec3; fields: Record<string, unknown>; motion: Record<string, unknown> }
+
 export interface RoomSettings {
   host: 'server' | 'browser';
   offline: boolean;
+  /** Persistent rooms retain their committed world until explicitly replaced. */
+  lifetime?: 'match' | 'persistent';
+  characters?: boolean;
   tickHz: number;
   inputHz: number;
   /** Omit the radius to send the whole room. No implicit visibility or bandwidth cap. */
@@ -232,10 +237,14 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
     if (!Number.isFinite(n) || n < 0) { problems.push(`"room.${name}" is a number, zero or more; using its default`); return d; }
     return n;
   };
-  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view']);
+  const known = new Set(['host', 'offline', 'tickHz', 'inputHz', 'durability', 'budget', 'predict', 'view', 'lifetime', 'characters']);
   for (const key of Object.keys(r)) if (!known.has(key)) problems.push(`"room.${key}" is not a setting (host, offline, tickHz, inputHz, durability, budget, predict, view)`);
   let host: 'server' | 'browser' = 'server';
   if (r.host !== undefined) { if (r.host === 'server' || r.host === 'browser') host = r.host; else problems.push('"room.host" is "server" or "browser"; using "server"'); }
+  if (r.lifetime !== undefined && !['match', 'persistent'].includes(r.lifetime)) problems.push('"room.lifetime" is "match" or "persistent"');
+  if (r.lifetime === 'persistent' && host !== 'server') problems.push('"room.lifetime: persistent" needs room.host "server"');
+  if (r.characters !== undefined && typeof r.characters !== 'boolean') problems.push('"room.characters" is true or false');
+  if (r.characters === true && r.lifetime !== 'persistent') problems.push('"room.characters" needs room.lifetime "persistent"');
   let offline = true;
   if (r.offline !== undefined) { if (typeof r.offline === 'boolean') offline = r.offline; else problems.push('"room.offline" is true or false; using true'); }
   const tickHz = whole('tickHz', r.tickHz, 1, 60, 20);
@@ -248,7 +257,7 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
   const p = r.predict && typeof r.predict === 'object' ? r.predict : {};
   return {
     settings: {
-      host, offline, tickHz, inputHz,
+      host, offline, tickHz, inputHz, ...(r.lifetime === 'persistent' ? { lifetime: 'persistent' as const } : {}), ...(r.characters === true ? { characters: true } : {}),
       view: { radiusM: r.view?.radiusM === null ? null : num('view.radiusM', r.view?.radiusM, null), ...(r.view?.precisionM !== undefined ? { precisionM: num('view.precisionM', r.view.precisionM, 0) as number } : {}), ...(r.view?.nearM !== undefined ? { nearM: num('view.nearM', r.view.nearM, null) } : {}), ...(r.view?.farHz !== undefined ? { farHz: whole('view.farHz', r.view.farHz, 1, tickHz, tickHz) } : {}) },
       durability: { movementSeconds: whole('durability.movementSeconds', r.durability?.movementSeconds, 1, 60, 1) },
       budget: { tick: Math.max(1, Math.floor(num('budget.tick', r.budget?.tick, budgetFor(tickHz)) as number)) },
@@ -489,6 +498,7 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   const dims = d.space?.dims;
   if (dims !== 2 && dims !== 3) throw new Error('rules name their space: space: { dims: 2 } or { dims: 3 }');
   const settings = env.settings ?? ROOM_DEFAULTS;
+  if (settings.characters && Object.values(d.entities ?? {}).some(e => typeof e.player === 'object' && e.player.leave === 'bot')) throw new Error('Account characters return on leaving; player.leave must be despawn');
   const map = env.map ?? compileMap({ bounds: { min: [-32, -32], max: [32, 32] } });
   if (dims === 2 && (map.spheres.length || map.capsules.length || map.heightTiles.length)) throw new Error('spheres, capsules and height tiles need space.dims: 3');
   if (dims === 3 && map.bounds.max.z <= map.bounds.min.z) throw new Error('a 3D map needs bounds with positive height');

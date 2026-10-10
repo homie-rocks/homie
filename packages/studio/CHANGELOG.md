@@ -17,6 +17,50 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.46.0] - 2026-10-10
+
+**Plugin 0.46.0**
+
+Keep a world and its account characters across restarts.
+
+### Added
+
+- Opt-in lasting single-area worlds: `room.lifetime: "persistent"` retains a room
+  across empty periods, restarts and compatible builds. Each tick commits its
+  result before publishing. Storage failures stop play and retain committed state.
+- Optional `room.characters: true` keeps one character per game on the existing
+  signed-in player account. Rules read `player.character` on join and write its
+  inventory through declared entity fields. A durable lease and return outbox
+  prevent two rooms holding the character at once. No manual provisioning.
+
+### Changed
+
+- Only opted-in worlds use a stable public room instead of allocating fresh match
+  copies. Full worlds wait for seats; named room links select other worlds.
+- Only character games require studio account sign-in before playing and return
+  the character on disconnect/recall instead of leaving it as a bot.
+- Only lasting worlds save every tick (more storage writes), retain incompatible
+  saves instead of resetting, and stop on write failure. Their save envelopes do
+  not use the match path's 16 MB cap. Existing simulation and Cloudflare constraints
+  still apply. Ordinary rules games and browser-hosted games keep their APIs,
+  save costs and lifecycle.
+
+### Fixed
+
+- Refund-event SQL triggers no longer try to parse plain-text settings as JSON,
+  which could prevent account room tickets being signed. The automatic
+  `0020_function_meta.sql` migration preserves refund IDs and delivery behavior.
+
+### Upgrade notes
+
+- First milestone-3 slice. Compatible deployments still restart the Worker and
+  reload old views; uninterrupted rule swaps, migrations, durable command retries,
+  atomic trades and restore points remain later slices. Commands should be
+  idempotent; a command lost before commitment has not happened. Queued events are
+  not atomic transfers when a recipient leaves. Existing cloud saves, shop orders
+  and grants, and app records retain their existing behavior.
+- Version 0.46.0 is provisional. No deploy or merge is part of this PR.
+
 ## [0.45.3] - 2026-10-10
 
 **Plugin 0.45.3**

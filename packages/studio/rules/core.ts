@@ -79,7 +79,7 @@ export const IGNORE_MAX = 16;
 export const ANSWER_MAX = 256;
 
 export type Driver = 'person' | 'bot' | 'ai';
-export interface SeatInfo { seat: number; driver: Driver; owner: string }
+export interface SeatInfo { seat: number; driver: Driver; owner: string; character?: import('./rules.ts').Character | null }
 /** One seat's step for a tick: its input values (already held to their types) and, for an owner-moved body, its claim. */
 export interface StepInput { values: Record<string, unknown>; claim?: { pos: Vec3; vel: Vec3; heading: Vec3; r: number } | null }
 export interface ResultRow { seat: number; id: string; driver: Driver; score: number; place: number }
@@ -163,6 +163,7 @@ export interface Core {
   round(): Extract<CoreOut, { t: 'round' }>;
   bodies(): Body[];
   /** The body in a seat, as the host runtime needs it for the input protocol. */
+  character(seat: number): import('./rules.ts').Character | null;
   bodyOf(seat: number): { id: string; kind: KindTable; r: number; away: boolean; driver: Driver } | null;
   /** What happened since the last call: rounds, effects, a changed roster, changed shared state, a new epoch, a failure. */
   drain(): CoreOut[];
@@ -838,7 +839,7 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
     return rows;
   }
   function joinBody(info: SeatInfo): Ent | null {
-    const player = Object.freeze({ seat: info.seat, driver: info.driver, owner: info.owner });
+    const player = Object.freeze({ seat: info.seat, driver: info.driver, owner: info.owner, ...(info.character !== undefined ? { character: deepFreeze(info.character) } : {}) });
     let made: Ent | null = null;
     run('room', 'join', null, 'join', () => {
       // What room.join returns is read by its own data properties, and its fields are charged before they are held to their shapes.
@@ -864,6 +865,7 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
     } else {
       if (e) {
         if (e.kind.on.leave) run(e.kind.name, 'on.leave', e, 'ent', () => e.kind.on.leave(world, e.self, Object.freeze({})));
+        opts.characterLeft?.(e.seat, JSON.parse(JSON.stringify({ kind: e.kind.name, at: e.pos, heading: e.heading, fields: e.f, motion: e.m })));
         e.dead = true; ents.delete(e.id);
       }
       seats.delete(s.seat);
@@ -1456,7 +1458,7 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
       if (!floorCall && value) guideViews.set(seat, value);
       return value;
     },
-    seatJoin: (info) => { ops.push({ op: 'join', info: { seat: info.seat, driver: info.driver, owner: String(info.owner ?? '').slice(0, 128) } }); },
+    seatJoin: (info) => { ops.push({ op: 'join', info: { seat: info.seat, driver: info.driver, owner: String(info.owner ?? '').slice(0, 128), ...(info.character !== undefined ? { character: info.character } : {}) } }); },
     seatAway: (seat, away) => { ops.push({ op: 'away', seat, away }); },
     seatLeave: (seat) => { ops.push({ op: 'leave', seat }); },
     setPolicy: (p) => { policy = normalizeCorePolicy(p); },
@@ -1477,6 +1479,7 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
       return [[round.n, round.phase === 'live' ? 1 : 0, round.endsAt], list, ...(collision ? [collision] : [])];
     },
     shared: () => packFields(c.shared, shared, dims),
+    character: (seat) => { const e = playerBodies().find(e => e.seat === seat); return e ? JSON.parse(JSON.stringify({ kind: e.kind.name, at: e.pos, heading: e.heading, fields: e.f, motion: e.m })) : null; },
     bodies: () => playerBodies().map((e) => ({ seat: e.seat, id: e.id, kind: e.kind.name, driver: e.driver, owner: e.owner, away: e.away, score: e.kind.score ? Number(e.f[e.kind.score]) || 0 : 0, r: e.r })),
     bodyOf: (seat) => { const s = seats.get(seat); const e = s?.id ? ents.get(s.id) : null; return e ? { id: e.id, kind: e.kind, r: e.r, away: e.away, driver: e.driver } : null; },
     drain: () => { const o = out; out = []; return o; },
