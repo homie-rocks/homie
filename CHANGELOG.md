@@ -17,6 +17,27 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.45.2] - 2026-10-10
+
+**Plugin 0.45.2**
+
+Filter combat rays and declare head/body regions independently of movement bodies.
+
+### Added
+
+- Budgeted `ray` options and ordered `rayAll` results: entity kind, tag, layer, scalar field comparisons, bounded ignore lists, ignore-self control and geometry-only occlusion.
+- Named query hit regions, plus radius-based sphere or box casts for camera clearance.
+- Matching view aiming and movement geometry rays. Collision revisions carry collider filter metadata outside visual interest and across rejoin.
+
+### Fixed
+
+- Point queries starting inside solid boxes, spheres, capsules or solid terrain report an immediate hit; movement still permits escape from existing overlap.
+
+### Upgrade notes
+
+- Existing three-argument rays remain supported. Query parts change shot geometry only. Filters and local feedback do not grant client damage authority or implement lag compensation.
+- This capability work does not constitute a completed Stormbreak server-rules migration or a gameplay parity claim.
+
 ## [0.45.1] - 2026-10-09
 
 **Plugin 0.45.1** · [#75](https://github.com/homie-rocks/homie/pull/75)

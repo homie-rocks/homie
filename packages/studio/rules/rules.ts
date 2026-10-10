@@ -126,6 +126,7 @@ export type RoomHandler = (world: RuntimeWorld, e?: any) => void;
 export type MoveFn = (body: any, input: any, ctx: any) => void;
 
 export type ColliderDef = true | { size?: string; enabled?: string };
+export interface QueryDef { layer?: string; tags?: readonly string[]; parts?: Record<string, { shape: 'sphere' | 'capsule' | 'box'; radius: number; height?: number; offset?: Vec3 }> }
 export interface BodyDef { shape: 'circle' | 'sphere' | 'capsule' | 'box'; radius: number; height?: number; maxSpeed: number; sweep?: boolean; move?: 'owner' }
 export interface GuideDef { view: (world: RuntimeWorld, self: RuntimeSelf) => unknown; floor?: (world: RuntimeWorld, self: RuntimeSelf, view: any) => unknown }
 export interface EntityDef {
@@ -135,6 +136,7 @@ export interface EntityDef {
   input?: Fields;
   body?: BodyDef;
   collider?: ColliderDef;
+  query?: QueryDef;
   guide?: GuideDef;
   tick?: Handler;
   think?: (world: RuntimeWorld, self: RuntimeSelf) => Record<string, unknown>;
@@ -326,6 +328,7 @@ export interface KindTable {
   motion: FieldList;
   input: FieldList;
   collider?: ColliderDef;
+  query?: QueryDef;
   body: null | { shape: string; radius: number; height: number; maxSpeed: number; sweep: boolean; owner: boolean };
   score: string | null;
   tick: Handler | null;
@@ -542,7 +545,20 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
         }
       }
     }
-    const k: KindTable = { ...(e.collider ? { collider: e.collider } : {}), name, index: kinds.length, player, fields, motion, input, body, score: scores[0]?.[0] ?? null, tick: e.tick ?? null, think: e.think ?? null, on, commands: cmds, onRoom, guide: e.guide ?? null, move: moveFn };
+    if (e.query !== undefined) {
+      const q = e.query;
+      const word = (v: unknown): boolean => typeof v === 'string' && /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(v);
+      if (!body || !q || typeof q !== 'object' || Object.keys(q).some(k => !['layer','tags','parts'].includes(k))) throw new Error(`${at}.query needs a body and {layer, tags, parts}`);
+      if (q.layer !== undefined && !word(q.layer)) throw new Error(`${at}.query.layer is a short name`);
+      if (q.tags !== undefined && (!Array.isArray(q.tags) || q.tags.length > 16 || !q.tags.every(word))) throw new Error(`${at}.query.tags holds at most 16 short names`);
+      if (q.parts !== undefined) {
+        if (!q.parts || typeof q.parts !== 'object' || Array.isArray(q.parts) || Object.keys(q.parts).length > 16) throw new Error(`${at}.query.parts holds at most 16 shapes`);
+        for (const [name, part] of Object.entries(q.parts)) {
+          if (!word(name) || !part || !['sphere','capsule','box'].includes(part.shape) || !Number.isFinite(part.radius) || part.radius <= 0 || part.radius > 10000 || part.height !== undefined && (!Number.isFinite(part.height) || part.height <= 0 || part.height > 10000 || part.shape === 'capsule' && part.height < 2*part.radius) || part.offset !== undefined && !['x','y','z'].every(k => Number.isFinite((part.offset as any)[k]) && Math.abs((part.offset as any)[k]) <= 10000)) throw new Error(`${at}.query.parts.${name} needs a finite shape, radius, height and offset`);
+        }
+      }
+    }
+    const k: KindTable = { ...(e.query ? {query: Object.freeze(e.query)} : {}), ...(e.collider ? { collider: e.collider } : {}), name, index: kinds.length, player, fields, motion, input, body, score: scores[0]?.[0] ?? null, tick: e.tick ?? null, think: e.think ?? null, on, commands: cmds, onRoom, guide: e.guide ?? null, move: moveFn };
     kinds.push(k);
     kindOf[name] = k;
   }
@@ -588,7 +604,7 @@ export interface Schema {
   contract: 2;
   dims: 2 | 3;
   seats: number;
-  kinds: { name: string; player: boolean; owner: boolean; radius: number; shape?: string; height?: number; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
+  kinds: { query?: QueryDef; collider?: ColliderDef; name: string; player: boolean; owner: boolean; radius: number; shape?: string; height?: number; maxSpeed: number; score: string | null; fields: FieldList; motion: FieldList; input: FieldList }[];
   effects: Record<string, FieldList>;
   effectNames: string[];
   commands: Record<string, FieldList>;
@@ -599,7 +615,7 @@ export interface Schema {
 export function schemaOf(c: Compiled): Schema {
   return {
     contract: RULES_CONTRACT, dims: c.dims, seats: c.seats,
-    kinds: c.kinds.map((k) => ({ name: k.name, player: Boolean(k.player), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields, motion: k.motion, input: k.input })),
+    kinds: c.kinds.map((k) => ({ ...(k.query?{query:k.query}:{}), ...(k.collider?{collider:k.collider}:{}), name: k.name, player: Boolean(k.player), owner: Boolean(k.body?.owner), radius: k.body?.radius ?? 0, ...(c.dims === 3 && k.body ? { shape: k.body.shape, height: k.body.height || 2 * k.body.radius } : {}), maxSpeed: k.body?.maxSpeed ?? 0, score: k.score, fields: k.fields, motion: k.motion, input: k.input })),
     effects: c.effects, effectNames: c.effectNames, commands: c.commands, shared: c.shared, rounds: c.rounds, settings: c.settings,
   };
 }
