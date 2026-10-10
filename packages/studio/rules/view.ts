@@ -1,3 +1,4 @@
+import { snapshotDecoder } from './interest.mjs';
 import { rulesOutput } from '../netplay/rules-output.mjs';
 import { rulesCaps, rulesRates } from '../worker/limits.mjs';
 /*
@@ -162,11 +163,12 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
 
   /* ---------------------------------------------------------------- frames in */
 
+  const delivery = snapshotDecoder();
   function frameOf(s: Snapshot<unknown> | null): Frame | null {
     if (!s || typeof s !== 'object') return null;
     if (frames.has(s)) return frames.get(s) ?? null;
     let f: Frame | null = null;
-    const d = s.d as [unknown, unknown] | null;
+    const d = delivery.decode(s)?.d as [unknown, unknown] | null;
     if (Array.isArray(d) && Array.isArray(d[0]) && Array.isArray(d[1])) {
       const ents = new Map<string, Unpacked>();
       for (const w of d[1] as unknown[]) { const e = unpackEntity(schema.kinds, w, dims); if (e) ents.set(e.id, e); }

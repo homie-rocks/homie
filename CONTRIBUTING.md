@@ -40,7 +40,10 @@ add 54 virtual delay/loss/seed cases and three real-Chrome canvas smokes (about
 extended suite. Chrome/Node tick-for-tick replay comparisons remain in the gate
 with virtual clocks, since they check cross-runtime agreement. Run
 `CHROME_PATH=/path/to/chrome npm run test:rules:extended` for the full real-time
-Chrome soak as well as the extended rules corpus. A focused repeated measurement is:
+Chrome soak as well as the extended rules corpus. It also includes the full
+real-time traffic matrix, repeated browser handovers and the long 300-client
+spatial-delivery workload. The normal gate keeps two traffic handover cases for
+actual tab visibility and socket closure; rate/seed correctness uses virtual time. A focused repeated measurement is:
 
 ```sh
 CHROME_PATH=/path/to/chrome ROOMS_FEEL_FILTER=60-browser ROOMS_FEEL_DELAY=300 \

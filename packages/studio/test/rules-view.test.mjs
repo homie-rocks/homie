@@ -30,8 +30,8 @@ const json = (rel) => JSON.parse(readFileSync(join(COIN_DASH, rel), 'utf8'));
 
 /** coin-dash's view library as its build bundles it (the declarations and the guarded move handed over first), and its rules for the server. */
 let kit = null; let viewBuild = 0;
-async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false, predict = {}) {
-  if (kit && mode === 'server' && !offline && tickHz === 20 && !runaway) return kit;
+async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false, predict = {}, radiusM = null) {
+  if (kit && mode === 'server' && !offline && tickHz === 20 && !runaway && radiusM === null) return kit;
   const esbuild = await esbuildOf();
   let dir = COIN_DASH;
   if (runaway) {
@@ -64,7 +64,7 @@ export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bum
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:0,z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:12,z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
   }
-  const g = { ...json('game.json'), room: { host: mode, offline, tickHz, predict }, dir };
+  const g = { ...json('game.json'), room: { host: mode, offline, tickHz, predict, view: { radiusM } }, dir };
   // This suite measures protocol outcomes on virtual time. The 60 Hz case uses the same checked fixture without
   // asking a busy parallel test runner to meet a 17 ms wall-clock build deadline (rules-build tests own that check).
   const rules = await prepareRuntimeFixture(esbuild, scratch, { ...g, room: { ...g.room, tickHz: 20 } });
@@ -78,7 +78,7 @@ export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bum
   await esbuild.build({ entryPoints: ['homie:view'], bundle: true, format: 'esm', platform: 'neutral', outfile: file, logLevel: 'silent', plugins: [viewPlugin(g, rules, entry)] });
   await import(pathToFileURL(file).href);
   const result = { L, compiled, openRoom: globalThis.__openRoom, makeHost: globalThis.__makeHost, bundle: readFileSync(file, 'utf8') };
-  if (mode === 'server' && !offline && tickHz === 20 && !runaway) kit = result;
+  if (mode === 'server' && !offline && tickHz === 20 && !runaway && radiusM === null) kit = result;
   return result;
 }
 
@@ -1479,4 +1479,49 @@ for (const phase of [5, 17, 33, 45]) test(`fresh 3D input preserves the pose at 
   await clock.wait(5);
   assert.ok(a.me.pos.z > before.z, 'the new input still moves on the first drawing frame');
   assert.ok(a.me.pos.z - before.z <= .15, 'five milliseconds cannot draw most of a fifty-millisecond step');
+});
+
+
+test('spatial snapshots reach real views, preserve prediction, recover a lost keyframe and reconnect', async (t) => {
+  const { L, compiled, openRoom } = await coinDashKit('server', false, 20, false, {}, 0);
+  const clock = virtualTime(t);
+  let lost = false;
+  const r = rig(L, compiled, false, (m, link) => {
+    if (link === 0 && m.t === 'snap' && Array.isArray(m.d) && m.k > 30 && !lost) { lost = true; return null; }
+    return 0;
+  });
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Ada'), WebSocketImpl: r.socket(), post: null } });
+  const prediction = globalThis.__homieNet.probe.prediction;
+  const b = openRoom({ net: { config: cfg('Bo'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); });
+  await clock.wait(600);
+  assert.equal(a.status, 'playing'); assert.equal(b.status, 'playing');
+  const visible = () => { const ids = []; a.each('runner', e => ids.push(e.id)); return ids; };
+  assert.deepEqual(visible(), [a.me.id]);
+  const start = a.me.pos.x;
+  a.input({ ax: 127, ay: 0 });
+  await clock.wait(2800);
+  assert.equal(lost, true);
+  assert.ok(a.me.pos.x > start + 1, 'own prediction keeps moving through deltas and a lost keyframe');
+  assert.deepEqual(visible(), [a.me.id]);
+  const seat = a.seat;
+  r.sockets[0].cut();
+  for (let i = 0; i < 60 && !a.net.connected; i++) await clock.wait(50);
+  assert.equal(a.net.connected, true);
+  // Drop the next periodic keyframe: the welcome alone must seed the new socket.
+  const nextSocket = r.sockets.at(-1);
+  const incoming = nextSocket.onmessage;
+  nextSocket.onmessage = event => {
+    const m = JSON.parse(event.data);
+    if (m.t === 'snap' && Array.isArray(m.d)) return;
+    incoming?.(event);
+  };
+  await clock.wait(150);
+  assert.ok(r.host.tick - prediction().serverTick <= 1, 'new socket deltas advance the view immediately');
+  const own = r.host.core.snapshot()[1].find(e => e[9] === seat);
+  assert.ok(Math.abs(a.me.pos.x - own[3][0]) < 1, 'welcome baseline reconciles immediately, before another keyframe');
+  assert.equal(a.seat, seat); assert.equal(a.status, 'playing');
+  assert.deepEqual(visible(), [a.me.id]);
+  assert.equal(r.host.core.stats.errors, 0);
 });

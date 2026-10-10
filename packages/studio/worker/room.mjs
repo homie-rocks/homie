@@ -1,3 +1,4 @@
+import { interestSnapshot, snapshotEncoder } from '../rules/interest.mjs';
 /*
  * room.mjs — the netplay v1 relay semantics, with no transport in it.
  * =============================================================================
@@ -460,7 +461,7 @@ export class NetRoom {
   hostSnap(c, m, now, text = null) {
     // The server's stamp is this relay's own clock; a browser's is its estimate of it, and is checked.
     const snap = { k: Number(m.k) || 0, st: c ? this.stamp(m.st) : Number(m.st) || now, d: m.d ?? null };
-    if (Array.isArray(m.c)) snap.c = m.c.slice(0, 64);
+    if (Array.isArray(m.c)) snap.c = m.c.slice(0, this.server ? this.seatCap : 64);
     // Revision 10: a rules game's snapshot names the room's epoch.
     if ((!c || this.rules && c.rules) && Number.isFinite(m.e)) snap.e = m.e;
     this.lastSnap = snap;
@@ -477,8 +478,17 @@ export class NetRoom {
       if (this.lite(o)) continue; // an agent with no game client draws nothing
       // A congested socket skips a snapshot rather than queueing a stale one.
       if (o.conn.buffered && o.conn.buffered() > 256 * 1024) { this.stats.drops += 1; continue; }
-      this.sendText(o.conn, out);
+      this.sendText(o.conn, this.server?.viewRadiusM != null ? JSON.stringify({ t: 'snap', from: null, ...this.playerSnapshot(o, snap) }) : out);
     }
+  }
+
+  /** The same per-player delivery role will run in Gates. Keyframes belong to sockets, not saved seats. */
+  playerSnapshot(client, snap, welcome = false) {
+    if (!snap || this.server?.viewRadiusM == null) return snap;
+    const selected = interestSnapshot(snap, client.seat, this.server.viewRadiusM);
+    client.snapEncoder ??= snapshotEncoder(this.tickHz);
+    if (welcome) client.snapEncoder.reset();
+    return client.snapEncoder.encode(selected);
   }
 
   /** One key of the slow state channel from the host. `bytes`: the frame's size, counted against the room's cap for a browser host. */
@@ -530,7 +540,7 @@ export class NetRoom {
   hostRoster(c, m) {
     if (!Array.isArray(m.slots)) return;
     // A host cannot hide an AI: a seat an agent holds is named and marked so, a slot with no seat is a bot.
-    this.lastRoster = this.labelRoster(m.slots.slice(0, 64));
+    this.lastRoster = this.labelRoster(m.slots.slice(0, this.server ? this.seatCap : 64));
     this.persistDirty = true;
     for (const o of (c && this.rules && c.rules ? this.live() : this.others(c))) this.send(o, { t: 'roster', slots: this.lastRoster });
     this.tellWatchers();
@@ -1102,7 +1112,7 @@ export class NetRoom {
       t: 'welcome', v: NET_VERSION, rev: NET_REVISION, id: c.id, room: this.code, seat: c.seat, token: c.token, name: c.name, colour: c.colour,
       ...(this.gameVer ? { ver: this.gameVer } : {}), ...(behind ? { stale: { ver: this.currentVer } } : {}), stall: this.stallMs,
       role, why, host: this.hostRef(), peers: this.peers(), ...(this.rules ? { held: this.heldPeers() } : {}), st: now, max: this.maxPlayers,
-      round: this.lastRound, roster: this.lastRoster, snap: lite ? null : this.lastSnap, state: lite ? {} : this.stateObject(),
+      round: this.lastRound, roster: this.lastRoster, snap: lite ? null : this.playerSnapshot(c, this.lastSnap, true), state: lite ? {} : this.stateObject(),
       ...(role === 'host' ? { ckpt: this.lastCkpt } : {}),
       ...(full ? { full: true } : {}),
       ...(this.liveAnnouncement() ? { announce: this.liveAnnouncement() } : {}),
@@ -1803,7 +1813,7 @@ export class NetRoom {
 
   /** A round's results, labelled the same way (`agent: true` on every AI's row). */
   labelResults(rows) {
-    return rows.slice(0, 64).map((raw) => this.labelOne(raw, true)).filter(Boolean);
+    return rows.slice(0, this.server ? this.seatCap : 64).map((raw) => this.labelOne(raw, true)).filter(Boolean);
   }
 
   labelOne(raw, result) {

@@ -22,6 +22,7 @@ import { source } from './rules-feature-kit.mjs';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const within = (promise, ms) => Promise.race([promise, sleep(ms)]);
 
+const extended = process.env.RULES_EXTENDED === '1';
 const cases = [
   ...[20, 30, 60].map(hz => ({ name: `effects-${hz}`, hz })),
   ...[20, 60, 120].flatMap(late => [1, 2].map(players => ({ name: `late-${late}-${players}`, late, players }))),
@@ -114,7 +115,7 @@ async function stage(browser, esbuild, scratch, scenario, modes) {
   return { rooms, close };
 }
 
-test('Chrome: ordinary browser and server sessions have the same outcomes for thirty real seconds', async t => {
+test('Chrome: ordinary browser and server sessions have the same outcomes for thirty real seconds', { skip: !extended && 'long real-time traffic matrix: npm run test:rules:extended' }, async t => {
   const browser = await chrome(t);
   if (!browser) return;
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-traffic-')));
@@ -185,15 +186,17 @@ test('Chrome: a host that hides, closes or yields hands on its last tick: no pag
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-handover-')));
   try {
     const esbuild = await esbuildOf();
-    for (const hz of [20, 30, 60]) for (const how of ['hides', 'closes', 'yields']) await t.test(`${hz} ticks, the host ${how}`, { timeout: 180_000 }, async () => {
+    // Virtual-time rules-view tests own rate/seed/handover correctness. Only native
+    // visibility and an actual socket close need these release-gate browser cases.
+    for (const hz of extended ? [20, 30, 60] : [20]) for (const how of extended ? ['hides', 'closes', 'yields'] : ['hides', 'closes']) await t.test(`${hz} ticks, the host ${how}`, { timeout: 180_000 }, async () => {
       const results = [];
       // Each trial is a room of its own, so the moment within a tick and within the allowances differs.
-      for (let trial = 0; trial < 3; trial++) {
+      for (let trial = 0; trial < (extended ? 3 : 1); trial++) {
         const { rooms, close } = await stage(browser, esbuild, scratch, { name: `handover-${hz}-${how}-${trial}`, hz }, ['browser']);
         try {
           const relay = rooms.get('browser');
           const [a, b, c] = [await relay.open(0), await relay.open(1), await relay.open(2)];
-          await sleep(2500 + Math.random() * 400);
+          await sleep(2500 + (trial * 137) % 400);
           assert.equal(await a.evaluate(() => room.net.rulesHosting), true);
           const host = relay.wire[0], watcher = relay.wire[2], from = { in: host.in.length, out: watcher.out.length };
           if (how === 'hides') { const cover = await a.browserContext().newPage(); await cover.goto('about:blank'); await cover.bringToFront(); }
