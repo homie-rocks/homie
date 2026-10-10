@@ -102,6 +102,7 @@ export interface OpenRoomOptions {
   timers?: boolean;
 }
 export interface Room<R = unknown> extends RayQueries {
+  readonly viewTick: number;
   readonly status: RoomStatus;
   readonly seat: number | null;
   readonly me: Entity | null;
@@ -724,6 +725,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     return rayQuery(map,targets,dims,from,direction,max,options,mine?.id,all);
   };
   return {
+    get viewTick() { if(solo)return solo.viewTick;const s=net.sample();const a=s?frameOf(s.a):latest,b=s?frameOf(s.b):latest;return a&&b?a.k+(b.k-a.k)*(s?.alpha??0):latest?.k??0; },
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },
     get me() { pump(); return meNow(); },

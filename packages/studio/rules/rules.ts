@@ -158,6 +158,7 @@ export interface RulesDef {
   room?: {
     rounds?: { seconds: number; breakSeconds: number };
     bots?: { keep: number };
+    historySeconds?: number;
     start?: RoomHandler;
     join?: (ctx: any, player: { seat: number; driver: 'person' | 'bot' | 'ai'; owner: string }) => { kind: string; at: Vec3; heading?: Vec3; fields?: Record<string, unknown>; motion?: Record<string, unknown> };
     on?: Record<string, RoomHandler>;
@@ -355,6 +356,7 @@ export interface Compiled {
   effectNames: string[];
   shared: FieldList;
   view: FieldList;
+  historySeconds?: number;
   rounds: { seconds: number; breakSeconds: number } | null;
   bots: number;
   start: RoomHandler | null;
@@ -598,10 +600,11 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
     if (!a.questions || typeof a.questions !== 'object') throw new Error(`asks.${key}.questions is required; for example { advance: { type: 'noul', instructions: 'Should the party advance?' } }`);
     asks[key] = { ...a, stateFields: fieldList(a.state, `asks.${key}.state`) };
   }
+  if (room.historySeconds !== undefined && (typeof room.historySeconds !== 'number' || !Number.isFinite(room.historySeconds) || room.historySeconds < 0 || room.historySeconds > 2)) throw new Error('room.historySeconds is from 0 to 2');
   const seats = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(env.seats)) || 8));
   return {
     contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
-    shared: fieldList(d.shared, 'shared'), view, rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
+    shared: fieldList(d.shared, 'shared'), view, ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
     tune, publicTune, map, settings, seats,
   };
 }
@@ -621,6 +624,7 @@ export interface Schema {
   effectNames: string[];
   commands: Record<string, FieldList>;
   shared: FieldList;
+  historySeconds?: number;
   rounds: { seconds: number; breakSeconds: number } | null;
   settings: RoomSettings;
 }

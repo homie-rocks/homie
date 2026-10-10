@@ -17,7 +17,7 @@ export type Self<F, M, I, K extends string, P extends boolean, G = Goal> = F & {
   readonly motion: M; readonly input: ReadonlyState<I>;
 } & (P extends true ? Player<G> : {});
 export interface Hit { readonly entity?: string; readonly part?: string; readonly at: Point; readonly normal: Vec3; readonly dist?: number }
-export interface RayOptions { profile?: string; radius?: number; shape?: 'sphere' | 'box'; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
+export interface RayOptions { atTick?: number; profile?: string; radius?: number; shape?: 'sphere' | 'box'; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
 export type RayHit = Hit & { readonly dist: number };
 export interface RayQueries { ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
 export type Area = { sphere: { at: Point; r: number } } | { box: { min: Point; max: Point } } | { cone: { at: Point; dir: Point; r: number; angle: number } };

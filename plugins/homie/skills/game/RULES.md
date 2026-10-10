@@ -873,3 +873,24 @@ queued undeliverable event for immediate delivery. Movement cannot dispatch.
 Solid-terrain capsule distance queries reject triangle faces whose bounds cannot
 beat the closest feature already found. This preserves exact sampled geometry,
 including both source triangles and the solid sides and underside.
+
+### Bounded actor-pose rewind
+
+Declare `room.historySeconds: 1` (maximum two seconds). The server retains and
+saves non-collider body positions and placement revisions on its virtual clock.
+The view's `room.viewTick` is the tick used to interpolate remote bodies. Send it
+with an action, then use `world.ray(..., {atTick, ...filters})`. Fractional ticks
+interpolate saved poses; old/future requests clamp to the configured window.
+A placement or new round prevents rewinding through a teleport or reset.
+
+Rewind changes actor poses only. Eligibility filters use current fields, so a
+corpse or a fighter killed by an earlier pellet cannot absorb later pellets.
+Static terrain and live cover stay current: new cover blocks an old shot, and
+destroyed cover no longer blocks. This conservative cover policy is explicit;
+it is not a historical replay of world destruction. Rewind does not move actors,
+change movement prediction, roll back damage or rewind projectiles. Choose the
+window in game rules and validate actions normally; the client's tick is a claim.
+
+Vertical capsule sweeps against solid terrain use an exact swept sphere against
+the prism extended by the capsule centreline. Face, edge and vertex contacts
+replace iterative grazing convergence; geometry and handler budgets stay intact.

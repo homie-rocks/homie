@@ -37,7 +37,12 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'sequence') {
+    if (runaway === 'history') {
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot',{at:room.viewTick,y:0});`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100,0],max:[100,100,20]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';export default defineRules({contract:2,space:{dims:3},move,map:'./map',shapes:{commands:{shoot:{at:f.fix(),y:f.fix()},block:{}},events:{block:{}}},entities:{runner:{player:true,fields:{hit:f.ref(),current:f.ref()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:0},commands:{shoot(w,s,e){const from={x:0,y:e.y,z:1},d={x:1,y:0,z:0};s.hit=w.ray(from,d,18,{atTick:e.at,where:{hp:{gt:0}}})?.entity??'';s.current=w.ray(from,d,18,{where:{hp:{gt:0}}})?.entity??'';},block(w,s){for(const c of w.near(s.pos,64,'cover'))w.dispatch(c.id,'block');}}},target:{fields:{hp:f.u8({init:100})},body:{shape:'box',radius:.15,height:2,maxSpeed:2}},cover:{fields:{solid:f.bit(),hp:f.u8({init:100}),size:f.vec3({init:{x:1,y:100,z:3}})},collider:{enabled:'solid',size:'size'},body:{shape:'box',radius:.5,height:3,maxSpeed:0},on:{block(w,s){s.solid=true;}}}},room:{historySeconds:1,bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat*4,z:0}};},start(w){w.spawn('target',{x:8,y:0,z:0});w.spawn('cover',{x:4,y:0,z:0});}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){},target(b,i,c){b.pos={x:8,y:c.tick*.1,z:0};}});`);
+    } else if (runaway === 'sequence') {
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot');`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20,0],max:[20,20,20]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -1650,6 +1655,12 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  a.input({ay:4});await clock.wait(1500);assert.ok(a.me.pos.z<.2,'walk down ramp');
  await place({x:-3.2,y:14,z:0});a.input({ax:3,jump:true});await clock.wait(550);a.input({ax:0});await clock.wait(1200);assert.ok(a.me.pos.z>.4,'jump onto ramp');
  a.input({jump:true});await clock.wait(200);assert.ok(a.me.pos.z>1.5,'jump off ramp');a.input({ax:0});
+ // Dense hill rims from real-game movement failures, under the same network clock.
+ for(const at of [{x:-10.89543,y:26.09822,z:.129555},{x:-19.84526,y:20.9344,z:.511}]){
+  await place(at);a.input({ax:1,ay:3});await clock.wait(700);a.input({ax:0,ay:0});
+  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+  assert.ok(Number.isFinite(a.me.pos.z));
+ }
  await place({x:-4,y:7,z:0});
  a.close();a=open('Rejoined');await clock.wait(2200);await place({x:-4,y:7,z:0});a.input({ax:1,dash:true});await clock.wait(1200);assert.ok(a.me.pos.x<=-2.899,'rejoined side');a.input({ax:0});
  assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
@@ -1717,3 +1728,15 @@ for(const delayed of [false,true]) test(`synchronous events preserve ordered pel
  const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
 });
 test('synchronous event declaration passes the strict author build',async()=>{await coinDashKit('server',false,20,'sequence');await prepareRules(await esbuildOf(),scratch,{id:'sequence',dir:join(scratch,'variant-sequence'),players:{max:8},room:{host:'server'}});});
+
+test('historical actor queries hit the rendered pose with 300 ms/loss and restore exactly',async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'history');
+ const clock=virtualTime(t),shape=predictionShaper({delay:300,loss:.05,seed:4513}),r=rig(L,compiled,false,shape,shape);
+ const a=openRoom({net:{config:cfg('Shooter'),WebSocketImpl:r.socket(),post:null}}),b=openRoom({net:{config:cfg('Viewer'),WebSocketImpl:r.socket(),post:null}});
+ t.after(()=>{a.close();b.close();r.stop();});await clock.wait(2200);let target;a.each('target',e=>target=e);assert.ok(target);assert.ok(a.viewTick<r.host.core.tick);
+ a.command('shoot',{at:a.viewTick,y:target.pos.y});await clock.wait(1500);assert.equal(a.me.hit,target.id);assert.equal(a.me.current,'','uncompensated query misses the moving actor');
+ a.command('block');await clock.wait(1000);a.each('target',e=>target=e);a.command('shoot',{at:a.viewTick,y:target.pos.y});await clock.wait(1200);let cover;a.each('cover',e=>cover=e);assert.equal(a.me.hit,cover.id,'new cover stays authoritative during actor rewind');assert.equal(a.me.current,cover.id);
+ const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});assert.deepEqual(restored.save(),saved);for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+ const invalid=structuredClone(saved);invalid.history[0][1][0][1]=Infinity;assert.throws(()=>L.C.createCore(compiled,{restore:invalid}),/history/);
+});
+test('history query declaration passes the strict author build',async()=>{await coinDashKit('server',false,20,'history');await prepareRules(await esbuildOf(),scratch,{id:'history',dir:join(scratch,'variant-history'),players:{max:8},room:{host:'server'}});});
