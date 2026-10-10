@@ -487,7 +487,8 @@ test('world has no way out: everything reachable from it is plain frozen data an
   walk(world, 'world');
   assert.deepEqual(bad, []);
   assert.ok(seen.size > 40, `walked ${seen.size} values`);
-  for (const name of WORLD_METHODS.filter((n) => !['end', 'spot', 'spots'].includes(n))) assert.equal(typeof world[name], 'function', `world.${name}`);
+  for (const name of WORLD_METHODS.filter((n) => !['end', 'restart', 'spot', 'spots'].includes(n))) assert.equal(typeof world[name], 'function', `world.${name}`);
+  for (const name of ['end', 'restart']) assert.equal(typeof world.round[name], 'function', `world.round.${name}`);
   assert.throws(() => { 'use strict'; world.tick = 5; }, TypeError);
   assert.throws(() => world.shared.x = 1, TypeError);
   assert.throws(() => world.despawn({}), /takes the entity the handler runs for/);
