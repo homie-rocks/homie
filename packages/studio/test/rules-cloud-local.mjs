@@ -17,7 +17,7 @@ symlinkSync(join(repo,'node_modules'),join(root,'node_modules'));
 await build(root,{log:line=>console.error(line)});
 }
 const delay=Number(process.env.CROWD_LINK_MS??5), cost=Number(process.env.CROWD_FRAME_MS??1);
-// Each object has an independent ordered delivery lane. Delay is propagation;
+// Each link has an ordered delivery lane. Delay is propagation;
 // cost is service time per message, not per player or tick. Only test code injects it.
 const injection=`
 const delayed=new WeakMap();

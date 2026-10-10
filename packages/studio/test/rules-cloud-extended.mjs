@@ -22,11 +22,21 @@ for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] 
     let driverLog='';driver.stdout.on('data',b=>{driverLog+=b;void appendFile(join(out,'driver-live.log'),b);});driver.stderr.on('data',b=>{driverLog+=b;void appendFile(join(out,'driver-live.log'),b);});
     const [code]=await once(driver,'exit');await writeFile(join(out,'driver.log'),driverLog);
     const report=JSON.parse(await readFile(join(out,'report.json'),'utf8'));
-    console.log(JSON.stringify({out,code,total,joined:report.joined,live:report.connectedAtEnd,hz:report.tickHz,ack:report.inputAckMs}));
+    // Tick progression alone can look like 20 Hz while snapshots are skipped.
+    // The unchanged driver records first own state, final close and raw counts.
+    const delivered = report.players.map(p => (p.rawSnapshots - (p.ownMissing ?? 0) - (p.decodeMiss ?? 0) - 1) * 1000 / (p.closedAfterMs - p.firstStateMs)).filter(Number.isFinite).sort((a,b)=>a-b);
+    const deliveredHz = { min: delivered[0] ?? null, median: delivered[Math.floor(delivered.length / 2)] ?? null, max: delivered.at(-1) ?? null };
+    const ackBudgetMs = 150 + 4 * (info.delay + info.cost);
+    console.log(JSON.stringify({out,code,total,joined:report.joined,live:report.connectedAtEnd,hz:report.tickHz,deliveredHz,ack:report.inputAckMs,ackBudgetMs}));
     assert.equal(code,0);assert.equal(report.joined,total-2);assert.equal(report.connectedAtEnd,total-2);assert.equal(report.disconnects,0);
     assert.ok(report.tickHz.median>=19.5 && report.tickHz.median<=20.5);
-    // Four inter-object hops at 5 ms, plus one 50 ms scheduling phase.
-    assert.ok(report.inputAckMs.p95<=220,`ack p95 ${report.inputAckMs.p95} ms`);
+    assert.equal(delivered.length,total-2);
+    assert.ok(deliveredHz.median>=19.5,`delivered median ${deliveredHz.median} Hz`);
+    for(const sample of report.samples.filter(s=>typeof s.seconds==='number'))for(const browser of sample.browsers){
+      assert.equal(browser.room,'proof-'+total);assert.equal(browser.stats.connected,true);assert.equal(browser.stats.offline,false);assert.equal(browser.stats.role,'replica');
+    }
+    // Four inter-object hops, each with the configured propagation/service cost.
+    assert.ok(report.inputAckMs.p95<=ackBudgetMs,`ack p95 ${report.inputAckMs.p95} ms exceeds ${ackBudgetMs} ms`);
   } finally {
     driver?.kill('SIGTERM');server.kill('SIGTERM');if(server.exitCode===null)await once(server,'exit').catch(()=>{});
     await writeFile(join(out,'server.log'),log+'\n'+err);
