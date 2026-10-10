@@ -1,4 +1,4 @@
-import { rayQuery, queryParts, type QueryTarget } from './query.ts';
+import { rayQuery, type QueryTarget } from './query.ts';
 import { solidAt } from './collision.ts';
 import type { RayQueries, RayOptions } from './types.ts';
 import { snapshotDecoder } from './interest.mjs';
@@ -718,7 +718,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     const targets: QueryTarget[] = collisionTargets(collisionMap(map, collisionHistory.at(-1)?.[2] ?? []));
     for(const k of schema.kinds) {
       if(k.collider || !k.radius)continue;
-      each(k.name,e=>targets.push({id:e.id,kind:k.name,query:k.query,fields:e as Record<string,unknown>,geometry:false,solid:solidAt(e.pos,{shape:k.shape??'circle',radius:k.radius,height:k.height??0}),parts:queryParts(e.pos,k.query)}));
+      each(k.name,e=>targets.push({id:e.id,kind:k.name,query:k.query,fields:e as Record<string,unknown>,geometry:false,solid:solidAt(e.pos,{shape:k.shape??'circle',radius:k.radius,height:k.height??0}),at:e.pos}));
     }
     return rayQuery(map,targets,dims,from,direction,max,options,mine?.id,all);
   };

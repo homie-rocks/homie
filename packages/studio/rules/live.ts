@@ -1,4 +1,4 @@
-import { rayQuery, queryParts, type QueryTarget } from './query.ts';
+import { rayQuery, type QueryTarget } from './query.ts';
 import { overlapsTerrain } from './terrain.ts';
 import { nearbyMap } from './map-index.ts';
 /** Declared collision geometry, shared by authority and prediction. Entity fields
@@ -32,7 +32,7 @@ export function castCollider2(row: ColliderRow, p: Vec3, d: Vec3, radius: number
 }
 const rowsOf = new WeakMap<object, readonly ColliderRow[]>();
 export function collisionTargets(map: MapShapes): QueryTarget[] {
-  return (rowsOf.get(map) ?? []).map(row=>({id:row[0],kind:row[8]?.kind??'',query:row[8]?.query,fields:row[8]?.fields??{},geometry:true,solid:colliderSolid(row),parts:queryParts({x:row[2],y:row[3],z:row[4]},row[8]?.query)}));
+  return (rowsOf.get(map) ?? []).map(row=>({id:row[0],kind:row[8]?.kind??'',query:row[8]?.query,fields:row[8]?.fields??{},geometry:true,solid:colliderSolid(row),at:{x:row[2],y:row[3],z:row[4]}}));
 }
 export function collisionMap(map: MapShapes, rows: readonly ColliderRow[]): MapShapes {
   if (!rows.length) return map;

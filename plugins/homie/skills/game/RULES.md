@@ -797,7 +797,7 @@ runner: {
 
 Parts are axis-aligned, feet-relative shapes, at most 16 per kind. `hit.part`
 is their declared name. A kind without parts uses its normal body or enabled
-collider. Parts do not resize movement bodies. Query layers and tags are static
+collider. Parts do not resize movement bodies. Optional `query.profiles` holds up to eight named part sets; `profile` in ray options selects one, falling back to the default parts when that kind has no matching profile. For example, projectile travel may use a full-height box while bullets use separate body/head boxes. Geometry-only rays always use collision shapes. Query layers and tags are static
 kind declarations. A live collider's `enabled` and `size` fields still control
 its presence and dimensions.
 

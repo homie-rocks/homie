@@ -1,12 +1,12 @@
 /** Bounded, data-only ray policy. Shared by rules and predicted geometry queries. */
 import { charge } from './guard.ts';
 import { own, dir, vec3 } from './pack.ts';
-import { castMap, rayCircle } from './math.ts';
+import { castMap } from './math.ts';
 import type { MapShapes } from './math.ts';
 import { castMap3, castSolid, solidAt, type Solid } from './collision.ts';
 import { REACH_M, type Vec3, type QueryDef } from './rules.ts';
 import type { RayHit } from './types.ts';
-export interface QueryTarget { id: string; kind: string; query?: QueryDef; fields: Record<string, unknown>; geometry: boolean; solid: Solid; parts?: readonly {name: string; solid: Solid}[] }
+export interface QueryTarget { at?: Vec3; id: string; kind: string; query?: QueryDef; fields: Record<string, unknown>; geometry: boolean; solid: Solid; parts?: readonly {name: string; solid: Solid}[] }
 export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: number, from: unknown, direction: unknown, max: unknown, options?: unknown, self?: string, all = false): readonly RayHit[] {
   charge(32 + 8 * targets.length);
   if (typeof max !== 'number' || !Number.isFinite(max) || max < 0 || max > REACH_M) throw new Error(`ray reaches 0 to ${REACH_M} metres`);
@@ -22,8 +22,9 @@ export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: 
   const excluded = new Set<string>();
   if (Array.isArray(ignore)) for (let i=0;i<ignore.length;i++) { const id=own(ignore,i); if(typeof id!=='string') throw new Error('ray.ignore needs entity refs'); excluded.add(id); }
   if (self && own(options,'ignoreSelf') !== false) excluded.add(self);
+  const profile=own(options,'profile');
   const layer=own(options,'layer'), kind=own(options,'kind'), tag=own(options,'tag');
-  for(const v of [layer,kind,tag]) if(v!==undefined && (typeof v!=='string' || v.length>32)) throw new Error('ray filters are short names');
+  for(const v of [layer,kind,tag,profile]) if(v!==undefined && (typeof v!=='string' || v.length>32)) throw new Error('ray filters are short names');
   const where=own(options,'where');
   if(where!==undefined && (!where || typeof where!=='object' || Array.isArray(where))) throw new Error('ray.where is a field map');
   const keys=where ? Object.keys(where) : [];
@@ -31,11 +32,12 @@ export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: 
   const hits: RayHit[]=[];
   const take=(h: {t:number;nx:number;ny:number;nz?:number}|null,id?:string,part?:string):void=>{
     if(!h)return; charge(32);
+    if(h.t===0 && h.nx===0 && h.ny===0 && !h.nz)h={...h,nx:-d.x,ny:-d.y,nz:-d.z};
     hits.push(Object.freeze({at:vec3({x:p.x+delta.x*h.t,y:p.y+delta.y*h.t,z:p.z+delta.z*h.t},dims),normal:vec3({x:h.nx,y:h.ny,z:h.nz??0},dims),dist:max*h.t,...(id?{entity:id}:{}),...(part?{part}:{})}));
   };
   if(own(options,'entitiesOnly')!==true && (layer===undefined || layer==='geometry')) {
     if(dims===3) {const found: import('./collision.ts').Hit3[]=[];const h=castMap3(map,start,delta,shape,all?found:undefined,true);if(all)for(const h of found)take(h);else take(h);}
-    else {const found: import('./math.ts').Hit[]=[];const h=castMap(map,p.x,p.y,delta.x,delta.y,radius,all?found:undefined).hit;if(all)for(const h of found)take(h);else take(h);}
+    else {const found: import('./math.ts').Hit[]=[];const h=castMap(map,p.x,p.y,delta.x,delta.y,radius,all?found:undefined,true,shape.shape==='box').hit;if(all)for(const h of found)take(h);else take(h);}
   }
   const point=solidAt(start,shape);
   for(const target of targets) {
@@ -54,9 +56,13 @@ export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: 
       } else if(actual!==condition)match=false;
     }
     if(!match)continue;
-    for(const part of own(options,'geometryOnly')!==true && target.parts?.length?target.parts:[{name:'',solid:target.solid}]) {
+    const parts = target.at ? queryParts(target.at,target.query,profile as string | undefined) : target.parts;
+    for(const part of own(options,'geometryOnly')!==true && parts?.length?parts:[{name:'',solid:target.solid}]) {
       const s=part.solid;
-      const h=dims===3?castSolid(point,delta,s,true):s.r>0?rayCircle(p.x,p.y,delta.x,delta.y,s.min.x,s.min.y,s.r+radius):castSolid({...point,min:{...point.min,z:.5},max:{...point.max,z:.5}}, {...delta,z:0},{...s,min:{...s.min,z:0},max:{...s.max,z:1}});
+      const h=dims===3?castSolid(point,delta,s,true):castSolid(
+        {...point,min:{...point.min,z:0},max:{...point.max,z:1}}, {...delta,z:0},
+        {...s,min:{...s.min,z:-1},max:{...s.max,z:2}},true);
+
       take(h,target.id,part.name||undefined);
     }
   }
@@ -65,6 +71,9 @@ export function rayQuery(map: MapShapes, targets: readonly QueryTarget[], dims: 
   hits.sort((a,b)=>a.dist-b.dist);
   return Object.freeze(all?hits:hits.slice(0,1));
 }
-export function queryParts(at: Vec3, query?: QueryDef): QueryTarget['parts'] {
-  return query?.parts ? Object.entries(query.parts).map(([name,p])=>({name,solid:solidAt({x:at.x+(p.offset?.x??0),y:at.y+(p.offset?.y??0),z:at.z+(p.offset?.z??0)},{shape:p.shape,radius:p.radius,height:p.height??2*p.radius})})) : undefined;
+export function queryParts(at: Vec3, query?: QueryDef, profile?: string): QueryTarget['parts'] {
+  const parts=profile && query?.profiles?.[profile] ? query.profiles[profile] : query?.parts;
+  if(!parts)return undefined;
+  charge(24*Object.keys(parts).length);
+  return Object.entries(parts).map(([name,p])=>({name,solid:solidAt({x:at.x+(p.offset?.x??0),y:at.y+(p.offset?.y??0),z:at.z+(p.offset?.z??0)},{shape:p.shape,radius:p.radius,height:p.height??2*p.radius})}));
 }

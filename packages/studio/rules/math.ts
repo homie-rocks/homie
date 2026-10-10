@@ -14,7 +14,7 @@ import { collisionQueries } from './live.ts';
  * Every call is charged 4 units to the running handler's budget (guard.ts), beside what any guarded call costs.
  * =============================================================================
  */
-import { castMap3, restsOnMap, type BodyShape } from './collision.ts';
+import { castMap3, castSolid, restsOnMap, type BodyShape } from './collision.ts';
 import { brand, charge, own, put } from './guard.ts';
 import { num } from './pack.ts';
 
@@ -237,13 +237,24 @@ function rayBounds(px: number, py: number, dx: number, dy: number, b: { min: Vec
   return best;
 }
 /** A circle (or a point, r 0) moved along d against the static map: the first thing in the way, and how many shapes were tested. */
-export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number, hits?: Hit[]): { hit: Hit | null; tested: number } {
+export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number, hits?: Hit[], includeInside = false, square = false): { hit: Hit | null; tested: number } {
   map = nearbyMap(map, {x:px,y:py,z:0}, {x:dx,y:dy,z:0}, r, 0, 2);
   charge(16 + 4 * (map.boxes.length + map.circles.length));
   let best: Hit | null = rayBounds(Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, px)), Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, py)), dx, dy, map.bounds, r);
   if (hits && best) hits.push(best);
-  for (const b of map.boxes) { const h = rayBox(px, py, dx, dy, b.min, b.max, r); if (h && hits) hits.push(h); if (h && (!best || h.t < best.t)) best = { ...h, id: (b as any).id }; }
-  for (const c of map.circles) { const h = rayCircle(px, py, dx, dy, c.at.x, c.at.y, c.r + r); if (h && hits) hits.push(h); if (h && (!best || h.t < best.t)) best = { ...h, id: (c as any).id }; }
+  const take=(h: Hit | null,id?:string): void => {if(!h)return;const hit={...h,...(id?{id}:{})};if(hits)hits.push(hit);if(!best||h.t<best.t)best=hit;};
+  const length=Math.sqrt(dx*dx+dy*dy)||1;
+  const inside: Hit={t:0,nx:-dx/length,ny:-dy/length};
+  for (const b of map.boxes) {
+    const min=square?{x:b.min.x-r,y:b.min.y-r,z:0}:b.min,max=square?{x:b.max.x+r,y:b.max.y+r,z:0}:b.max;
+    const embedded=includeInside&&px>min.x&&px<max.x&&py>min.y&&py<max.y;
+    take(embedded?inside:rayBox(px,py,dx,dy,min,max,square?0:r),(b as {id?:string}).id);
+  }
+  for (const c of map.circles) {
+    const embedded=includeInside&&(px-c.at.x)*(px-c.at.x)+(py-c.at.y)*(py-c.at.y)<(c.r+r)*(c.r+r);
+    const h=square?castSolid({min:{x:px-r,y:py-r,z:0},max:{x:px+r,y:py+r,z:1},r:0},{x:dx,y:dy,z:0},{min:{x:c.at.x,y:c.at.y,z:-1},max:{x:c.at.x,y:c.at.y,z:2},r:c.r},includeInside):embedded?inside:rayCircle(px,py,dx,dy,c.at.x,c.at.y,c.r+r);
+    take(h,(c as {id?:string}).id);
+  }
   return { hit: best, tested: 4 + map.boxes.length + map.circles.length };
 }
 
