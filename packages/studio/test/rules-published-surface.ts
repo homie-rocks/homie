@@ -3,7 +3,7 @@ import { defineRules, type GameWorld, type GameSelf, type GameGoal, type GameReq
 import { openRoom } from '@homie-rocks/studio/rules/view';
 export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: GameRequest) {
   const members: Record<keyof GameWorld, true> = {
-    tick:true,dt:true,ticks:true,math:true,tune:true,map:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
+    tick:true,dt:true,ticks:true,math:true,tune:true,map:true,world:true,stage:true,level:true,levelMax:true,guideLevel:true,guideSeats:true,kids:true,levelSet:true,shared:true,round:true,
     random:true,send:true,sendRoom:true,sendArea:true,after:true,emit:true,spawn:true,near:true,inBox:true,ray:true,ask:true,
     goalDone:true,despawn:true,place:true,sweep:true,
   };
@@ -67,9 +67,9 @@ export function inspectView(){
 }
 export const movement:NonNullable<Def['move']>={pawn(body,input,ctx){
  const members:Record<keyof typeof body,true>={pos:true,vel:true,heading:true,grounded:true,motion:true};
- const context:Record<keyof typeof ctx,true>={tick:true,dt:true,ticks:true,math:true,tune:true,map:true};
+ const context:Record<keyof typeof ctx,true>={tick:true,dt:true,ticks:true,math:true,tune:true,map:true,world:true};
  body.pos={x:body.pos.x+input.ax*ctx.dt,y:body.pos.y};body.vel={x:0,y:0};body.heading={x:1,y:0};body.grounded=true;
- ctx.ticks(1);ctx.map.name.toUpperCase();ctx.map.spot('camp')?.x;ctx.map.spots('camp').map(p=>p.y);ctx.map.sweep(body,body.vel)?.normal.x;
+ ctx.ticks(1);ctx.map.name.toUpperCase();ctx.map.spot('camp')?.x;ctx.map.spots('camp').map(p=>p.y);ctx.map.sweep(body,body.vel)?.normal.x;ctx.world.support(body,2)?.dist;const blocked:boolean=ctx.world.overlaps(body);ctx.world.sweep(body,body.vel)?.entity?.toUpperCase();
 }};
 export const guide:NonNullable<Def['entities']['pawn']['guide']>={
  view(w,s){

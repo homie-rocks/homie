@@ -3,6 +3,7 @@ import {test} from 'node:test';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {devConfig} from '../lib/dev.mjs';
 import {readConfig} from '../lib/routes.mjs';
 import {buildWorker} from '../lib/worker-build.mjs';
 import * as esbuild from 'esbuild';
@@ -19,6 +20,8 @@ test('a reload holding an old entry retains its complete module graph across a b
   await buildWorker(root,esbuild);
   const old=readFileSync(entry,'utf8'),oldMain=readConfig(root).main;
   assert.match(oldMain,/runtime\/[a-f0-9]{24}\/worker\.js$/);
+  const local=devConfig(root,true);
+  assert.equal(JSON.parse(readFileSync(local.copy,'utf8')).main,entry,'a copied local config follows the atomic entry');
   const options=(text=readFileSync(entry,'utf8'))=> {
     const runtime=join(src,'runtime'),modules={};
     for(const path of readdirSync(runtime,{recursive:true}).filter(p=>p.endsWith('.js'))) modules[path]={type:'esm',contents:path==='worker.js'?text:readFileSync(join(runtime,path),'utf8')};
