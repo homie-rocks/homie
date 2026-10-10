@@ -1493,10 +1493,15 @@ export class Table {
       this.durable ??= roomStore(this.ctx.storage, { persistent: this.isPersistent() });
       const build = hostedBuild(this.game);
       const host = new TextDecoder().decode(bytes);
+      const net = this.room.saved();
       if (build.settings.characters) for (const client of this.room.clients.values()) {
         if (client.player && client.seat !== null && client.token) this.accountTokens[client.player] = client.token;
       }
-      const saved = { ...(build.settings.characters ? { accountTokens: this.accountTokens } : {}), v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, stateHash: build.stateHash, buildHash: build.build, host, net: this.room.saved() };
+      if (build.settings.characters) {
+        const tokens = new Set((net.seats ?? []).map(seat => seat[1]));
+        for (const [account, token] of Object.entries(this.accountTokens)) if (!tokens.has(token)) delete this.accountTokens[account];
+      }
+      const saved = { ...(build.settings.characters ? { accountTokens: { ...this.accountTokens } } : {}), v: 1, game: this.game, room: this.code, at: now, pauseFromRestore: this.hostRt?.paused === true && this.pauseFromRestore === true, pausedAt: this.hostRt?.paused ? this.pausedAt ?? now : null, stateHash: build.stateHash, buildHash: build.build, host, net };
       const clearing = this.cleanupPending;
       if (clearing) this.durable.clear();
       this.durable.write(saved);

@@ -813,3 +813,15 @@ test('lasting worlds survive tomorrow, repeated restores and incompatible builds
   const disabled=await tableRig(r,entry());assert.equal(disabled.t.hostRt,null);assert.ok(store.read(),'removing the setting does not erase the world');
   const restored=await tableRig(r,build);assert.ok(restored.t.hostRt);assert.equal(restored.t.hostRt.tick,core.tick);restored.t.hostRt.stop();
 });
+
+test('character token recovery retains current seats, not every account that ever visited', async t => {
+  const r=storageRig();t.after(()=>r.close());
+  const build={...entry(),settings:roomSettings({lifetime:'persistent',characters:true}).settings};
+  const rig=await tableRig(r,build);t.after(()=>rig.t.hostRt?.stop());
+  rig.t.accountTokens={departed:'gone',current:'kept'};
+  rig.room.saved=()=>({seats:[[0,'kept']],state:[]});
+  rig.t.saveRoom(rig.t.hostRt.save());
+  assert.deepEqual(roomStore(r.storage).read().accountTokens,{current:'kept'});
+  rig.t.accountTokens.next='future';
+  assert.deepEqual(rig.t.roomSave.accountTokens,{current:'kept'},'committed envelope does not alias the mutable lookup');
+});
