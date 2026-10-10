@@ -17,9 +17,25 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.44.0] - 2026-10-10
+
+**Plugin 0.44.0**
+
+Send each player the part of the room near their character.
+
+### Added
+
+- Server-hosted rules games can choose `room.view.radiusM` in game.json. Views receive nearby entities and their own body, with compact state updates and fresh state on reconnect. Omit it to keep the whole-room view.
+- Seeded tests cover spatial visibility, delta recovery and 300 simulated clients through the host and relay. The longer capacity workload runs in the extended suite.
+
+### Upgrade notes
+
+- `room.each`, `enter` and `leave` describe visible entities when a radius is set. Dispose of departed meshes and recreate them when they return. Rules and movement need no changes; existing starters keep their whole-room views.
+- This is the first bigger-rooms slice. The public build/join path still has 32 seats until Gates ship in the next slice. The 300-client proof is local, not a Cloudflare capacity measurement. Interest filtering does not hide secrets; private fields and tells follow later.
+
 ## [0.43.0] - 2026-10-09
 
-**Plugin 0.43.0**
+**Plugin 0.43.0** · [release-2026-10-10-studio-0.43.0](https://github.com/homie-rocks/homie/releases/tag/release-2026-10-10-studio-0.43.0)
 
 Ask for a game and its rules run on your server.
 

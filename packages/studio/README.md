@@ -1259,3 +1259,17 @@ Homie as a short note you see and send yourself (`homie_feedback`, above).
 ## License
 
 Apache-2.0. See `LICENSE` and `NOTICE`.
+
+
+### Spatial state delivery
+
+Server-hosted rules games may set `room.view.radiusM` in game.json to send each
+player nearby entities and its own body. Omitted or null sends the whole room.
+Rules and movement stay the same; the view's `each`, `enter` and `leave` describe
+the visible set. Dispose of meshes on leave and recreate them on enter.
+Watchers, shared state, effects and rosters remain public. This is bandwidth
+filtering, not private state. Browser-hosted rooms send the whole room.
+
+0.44.0 delivers this first part of bigger rooms. Public admission above 32 seats
+arrives with Gates in the next slice. See [the milestone 2 notes](../../docs/rooms-milestone-2-notes.md)
+for the remaining slices and the local 300-client proof.
