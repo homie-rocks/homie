@@ -186,6 +186,48 @@ bytes remain identical in the 64-view/1,000-entity/120-tick six-repeat benchmark
 62,668,998 bytes for both implementations. Median encoding time fell from
 466 ms to 325 ms. Capacity remains unproven until the next run.
 
+## Subsequent validation (still failing)
+
+The cache change at `42f02279` did not meet the capacity gate:
+
+| Environment / case | Joined / live at cleanup | Delivered median | Ack p95 |
+| --- | ---: | ---: | ---: |
+| Mac, Node 24, 300 + 2 Chrome | 300 / 300 | 19.94 Hz | 177 ms (174 ms budget) |
+| Mac, Node 24, 998 + 2 Chrome | 924 / 864 | admission ended on overrun | unavailable |
+| Isolated Linux, 300 + 2 Chrome | 300 / 300 | 17.03 Hz | 1,453 ms |
+| Isolated Linux, 998 + 2 Chrome | 575 / 9 | admission ended on overrun | unavailable |
+
+The Mac diagnostic used the unchanged driver's supported 1,024 MiB RSS option.
+A separate Mac experiment with one workerd process for each of the 16 Gates
+(20 total processes) admitted 639 before overrun. Grouping four Gates per process
+therefore is not established as the cause. A four-process unchanged-driver
+experiment (4 × 248 simulated clients plus eight Chrome players, 200 ms ramp per
+process) ended during admission at 303 historical joins. Its driver event-loop
+p99 values were 57–68 ms. It does not establish that a single driver is the sole
+bottleneck. These diagnostic variants do not replace the required single-driver
+capacity test. Other builds and system work competed for this Mac's CPU.
+
+At 846 players in the Mac cache run, Table output receipts took 753–754 ms,
+with 1,745/1,635 reliable rows queued and approximately 1.01 MB in flight on each
+Concentrator link. A separate test-only storage probe awaited `storage.sync()`
+after admission saves: 898 confirmations had median 4 ms, p95 24 ms and maximum
+139 ms. Storage output gates can delay outgoing frames without an explicit
+await in the rules tick; these local samples do not explain the full receipt
+latency or prove Cloudflare storage caused the trial failure. Production storage
+confirmation semantics were not weakened.
+
+The phased-view regression test also exposed an error introduced by this patch:
+when coalescing delivered only even ticks, an odd-phase client's far bodies never
+refreshed. Scheduling now tracks the last serviced phase and refreshes on the
+first delivered tick after a missed phase. The failing test's frozen positions
+`[8,8,8,8,8]` become `[8,8.02,8.02,8.06,8.06]`; the 250-per-tick phase distribution
+still passes. This fixes coalescing correctness, not the unproven capacity claim.
+
+Local reports are preserved under
+`/Users/ryan/.homie/artifacts/big-rooms-real/local-pipeline/`, with storage probe
+artifacts under `storage-probe/` and Linux run 38074964451 under `isolated-caches/`.
+No tarball has been produced: both required capacity cases have not passed.
+
 ## Diagnostics and approval
 
 Room and office telemetry expose bounded per-stage samples, per-Gate view/encode/

@@ -30,6 +30,16 @@ test('reused visual caches preserve source arrays, prior views and different pre
   assert.deepEqual(source,saved);
 });
 
+test('far refreshes survive coalescing that skips a player’s scheduled tick phase', () => {
+  const view=scheduledView({radiusM:12,nearM:4,farHz:5},20);
+  const delivered=[];
+  for(const k of [0,2,4,6,8]) {
+    const visible=view(snapshot(k,[entity('own',0,1),entity('far',8+k/100)]),1);
+    delivered.push(visible.d[1][1][3][0]);
+  }
+  assert.deepEqual(delivered,[8,8.02,8.02,8.06,8.06]);
+});
+
 test('a thousand 5 Hz far views spread over four ticks without delaying own state, arrivals or exits', () => {
   const views = Array.from({length:1000},()=>scheduledView({radiusM:12,nearM:4,farHz:5},20));
   const held = [], updates = Array(1000).fill(0), refreshed = [];

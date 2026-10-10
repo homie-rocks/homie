@@ -198,7 +198,7 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
     const entities = selected.d[1] === snap.d[1] ? selected.d[1].slice() : selected.d[1];
     for (let index = 0; index < entities.length; index++) {
       const entity = entities[index], held = previous.get(entity[0]);
-      let row = entity;
+      let row = entity, sampledTick = snap.k;
       if (entity !== own) {
         const p = entity[3], q = own?.[3];
         const distanceSquared = q ? (p[0]-q[0])**2 + (p[1]-q[1])**2 + ((p[2]??0)-(q[2]??0))**2 : 0;
@@ -207,8 +207,13 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
         // Spread far-view refreshes across players instead of sending the
         // whole room's largest deltas on the same tick. Each player retains
         // the declared rate; newly visible bodies still arrive immediately.
-        if (old && snap.k % interval !== (seat ?? 0) % interval) row = old;
-        else if (precisionM > 0) {
+        const phase = (seat ?? 0) % interval;
+        sampledTick = snap.k - ((snap.k - phase) % interval + interval) % interval;
+        // Coalescing may skip the exact phase. Refresh at the first delivered
+        // tick after it, instead of waiting indefinitely for that residue.
+        if (old && interval > 1 && snap.k - held.sampledTick < interval) {
+          row = old; sampledTick = held.sampledTick;
+        } else if (precisionM > 0) {
           let versions = quantizedRows.get(entity);
           row = versions?.precision === precisionM ? versions.row : versions?.others?.get(precisionM);
           if (!row) {
@@ -219,8 +224,8 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
           }
         }
       }
-      if (held) { held.row = row; held.generation = generation; }
-      else previous.set(entity[0], { row, generation });
+      if (held) { held.row = row; held.generation = generation; held.sampledTick = sampledTick; }
+      else previous.set(entity[0], { row, generation, sampledTick });
       entities[index] = row;
     }
     previous.forEach((held, id) => { if (held.generation !== generation) previous.delete(id); });
