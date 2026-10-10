@@ -2,6 +2,17 @@ import { stageTimings } from '../rules/timing.mjs';
 import { scheduledView, snapshotEncoder, snapshotText } from '../rules/interest.mjs';
 
 const parsedFrames = new WeakMap();
+const sharedSnapshotText = new WeakMap();
+function batchText(rows) {
+  return '[' + rows.map(row => {
+    if (row[0] !== 'views') return JSON.stringify(row);
+    // All downstream links share this immutable state. Serialize it once in
+    // this isolate, rather than once for every Gate fed by a Concentrator.
+    let state = sharedSnapshotText.get(row[2]);
+    if (state === undefined) { state = JSON.stringify(row[2]); sharedSnapshotText.set(row[2], state); }
+    return '["views",' + JSON.stringify(row[1]) + ',' + state + ',' + JSON.stringify([row[3], row[4]]).slice(1, -1) + ']';
+  }).join(',') + ']';
+}
 function parseFrame(event) {
   let rows = parsedFrames.get(event);
   if (!rows) { rows = JSON.parse(event.data); parsedFrames.set(event, rows); }
@@ -65,7 +76,7 @@ export function batchLink(socket, { setTimer = setTimeout, clearTimer = clearTim
     queue = []; views.clear(); strings.clear(); bytes = 0;
     if (receipts) { pending = ++sequence; sentAt = Date.now(); rows.push(['receipt', pending]); }
     const encodeAt = timing.now();
-    const text = JSON.stringify(rows);
+    const text = batchText(rows);
     timing.record('encode', encodeAt);
     if (text.length > maxBytes) { fail('room link frame limit'); return; }
     stats.frames++; stats.rows += rows.length; stats.bytes += text.length;

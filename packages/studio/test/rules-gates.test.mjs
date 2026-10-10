@@ -27,6 +27,20 @@ test('virtual-time batches retain every input and command in order, and stop on 
   assert.equal(peer.sent.flat().length, 300);
 });
 
+test('a Concentrator serializes shared immutable state once across its Gate links', () => {
+  const clock=fakeClock();let reads=0;
+  const data=[[],[['body',0,0,[1,2,3],[0,0,0],[1,0,0],1,[],[]]]];
+  const snap=Object.freeze({e:1,k:1,get d(){reads++;return data;}});
+  const links=Array.from({length:8},()=>{const peer=socket();return {peer,link:batchLink(peer,{setTimer:clock.setTimer,clearTimer:clock.clearTimer})};});
+  for(const {link} of links)link.send(['view','player',snap,1]);
+  clock.advance(5);
+  assert.equal(reads,1);
+  for(const {peer,link} of links){
+    assert.deepEqual([...expandBatch(peer.sent.flat())],[['view','player',{e:1,k:1,d:data},1,null,null]]);
+    link.close();
+  }
+});
+
 test('relay batching preserves trusted ingress times; a delayed 10 Hz sender still has the same 60/s cap', async () => {
   const {NetRoom}=await import('../worker/room.mjs');
   const room=Object.create(NetRoom.prototype);

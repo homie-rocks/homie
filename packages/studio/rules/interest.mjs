@@ -49,12 +49,19 @@ export function interestSnapshot(snap, seat, radiusM) {
   if (!control) { control = new Map((snap.c ?? []).map(row => [row[0], row])); if (snap.c) controls.set(snap.c, control); }
   return { ...snap, d: [round, visible, ...snap.d.slice(2)], c: control.has(seat) ? [control.get(seat)] : [] };
 }
-const encodedRows = new WeakMap();
-const rowText = row => {
-  let text=encodedRows.get(row);
-  if(!text){text=row.map(v=>JSON.stringify(v));encodedRows.set(row,text);}
-  return text;
-};
+// Snapshot tuples contain primitives and small numeric arrays. Compare these
+// values without allocating a JSON string for every field on every tick.
+// Keep JSON equality for uncommon object-valued fields, including key order.
+function sameValue(a, b) {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!sameValue(a[i], b[i])) return false;
+    return true;
+  }
+  if (a === null || b === null || typeof a !== 'object' && typeof b !== 'object') return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 // Entity rows are immutable snapshot values. Gates share their comparisons and
 // wire fragments across players whose visual baselines contain the same row.
@@ -63,8 +70,8 @@ function changedRow(entity, before) {
   let changes = changesByBase.get(before);
   if (!changes) { changes = new WeakMap(); changesByBase.set(before, changes); }
   if (changes.has(entity)) return changes.get(entity);
-  let mask = 0; const values = [], after = rowText(entity);
-  for (let i = 1; i < entity.length; i++) if (after[i] !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
+  let mask = 0; const values = [];
+  for (let i = 1; i < entity.length; i++) if (!sameValue(entity[i], before[i])) { mask |= 1 << i; values.push(entity[i]); }
   const row = mask ? [entity[0], mask, values] : null;
   changes.set(entity, row); return row;
 }
@@ -93,21 +100,22 @@ export function snapshotEncoder(keyframeTicks, chained = false) {
     encode(snap, seat = null) {
       if (!base || snap.e !== base.e || snap.k <= base.k || snap.k - keyTick >= keyframeTicks) {
         base = snap; keyTick = snap.k;
-        rows = new Map(snap.d[1].map(e => [e[0], rowText(e)]));
+        rows = new Map(snap.d[1].map(e => [e[0], e]));
         return snap;
       }
       const present = new Set(), changed = [];
       const own = chained && seat !== null ? snap.d[1].filter(e => e[9] === seat && e[10] !== 1) : null;
       for (const entity of snap.d[1]) {
         const id = entity[0]; present.add(id);
-        if (own?.includes(entity)) continue;
         const before = rows.get(id);
+        if (chained) rows.set(id, entity);
+        if (own?.includes(entity)) continue;
         if (!before) { changed.push(entity); continue; }
         const change = changedRow(entity, before);
         if (change) changed.push(change);
       }
       const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
-      if (chained) { base = snap; rows = new Map(snap.d[1].map(e => [e[0], rowText(e)])); }
+      if (chained) { base = snap; for (const id of out.d.removed) rows.delete(id); }
       return out;
     },
   };

@@ -134,6 +134,25 @@ server-side delivery gap. Workerd profiles and transport samples are available
 with `CROWD_PROFILE=1` for the next diagnostic pass. Profiling is separate from the
 strict capacity measurement and does not change the driver.
 
+## Allocation follow-up
+
+A separate local workerd profile (`rDv1k6`, pre-change) located Gate samples in
+field comparison, map construction and garbage collection. Of 24,422 Gate-0
+samples, 6,367 were GC, 2,364 encoder work and 1,931 delta field comparison. The
+Concentrator recorded 1,109 of 4,178 samples in batch serialization and 664 in
+parsing. Workerd sample intervals vary while isolates are inactive, so these
+counts are not reported as synchronous execution milliseconds.
+
+Tuple fields now compare directly instead of allocating JSON for each field,
+and chained encoders reuse their private row map. Full shared snapshots are
+serialized once per isolate rather than separately for every downstream Gate
+link. The wire format is unchanged. Deterministic tests verify zero field
+serializations for a 1,000-row numeric delta, exact reconstruction and one state
+serialization across eight links. A six-repeat 64-view/200-entity/120-tick
+microbenchmark fell from median 0.576 seconds to 0.315 seconds on this
+machine; it is not a capacity result. Both capacity cases still require a fresh
+run after this change.
+
 ## Diagnostics and approval
 
 Room and office telemetry expose bounded per-stage samples, per-Gate view/encode/

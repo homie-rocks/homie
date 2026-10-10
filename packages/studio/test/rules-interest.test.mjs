@@ -6,6 +6,19 @@ const entity = (id, x, seat = undefined, z = 0) => [String(id), 0, 0, [x, 0, z],
 const snapshot = (k, entities, e = 1) => ({ k, e, st: k * 50, d: [[1, 1, 1200], entities], c: [[0, 0, k, 0], [1, 0, k, 0]] });
 const sorted = snap => ({ ...snap, d: [snap.d[0], snap.d[1].toSorted((a, b) => a[0].localeCompare(b[0]))] });
 
+test('crowd deltas compare immutable tuples without serializing every field', () => {
+  const before = snapshot(1, Array.from({length:1000},(_,i)=>entity(i,i/10,i)));
+  const after = snapshot(2, before.d[1].map((e,i)=>{const row=structuredClone(e);if(i%3===0)row[3][0]+=0.01;return row;}));
+  const encoder=snapshotEncoder(Infinity,true), decoder=snapshotDecoder();
+  decoder.decode(encoder.encode(before));
+  let serializations=0, delta;const stringify=JSON.stringify;
+  try {JSON.stringify=(...args)=>{serializations++;return stringify(...args);};delta=encoder.encode(after);}
+  finally {JSON.stringify=stringify;}
+  assert.equal(serializations,0,'tuple comparison must not create per-field JSON strings');
+  assert.equal(delta.d.changed.length,334);
+  assert.deepEqual(decoder.decode(JSON.parse(JSON.stringify(delta))),after);
+});
+
 test('a thousand 5 Hz far views spread over four ticks without delaying own state, arrivals or exits', () => {
   const views = Array.from({length:1000},()=>scheduledView({radiusM:12,nearM:4,farHz:5},20));
   const held = [], updates = Array(1000).fill(0), refreshed = [];
