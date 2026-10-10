@@ -84,6 +84,21 @@ move; holds retain their ramp. The bounded-arena browser regression injects
 passes both horizontal directions with the fix. The 600 ms limit is unchanged.
 CI must pass twice consecutively after this fix; the earlier pass does not count.
 
+Further validation reproduced two Gem Rush issues inherited from the 2D rules
+migration. A held phone stick with a small sideways wobble could stop tangential
+travel at the arena wall, unlike the original per-axis clamping. Three virtual
+wall-contact cases (0/20/100 ms, seed 417, uneven frames) fail before restoring
+sliding and pass afterward; the real packed-studio phone holds and alternating
+presses then pass too. Existing crossing/knock timing and twenty-round scoring
+checks still pass. The three new cases were repeated three times independently.
+
+The next Linux CI attempt also caught a negative Canvas arc radius during perf:
+an effect delivered by `updateView` could be newer than the rAF timestamp passed
+to paint. The shipped view now paints with the current monotonic time. Its
+virtual paint regression delivers an effect 500 ms after the supplied rAF time;
+it fails with radius -278 on the old code, then checks the initial and expanding
+ring with the fix. These faults are fixed in code, without relaxing gate limits.
+
 ## Earlier verification (before the release-gate repair)
 
 Rebased onto merged Slice 6, `origin/main` at `91be345`; final fetch confirmed

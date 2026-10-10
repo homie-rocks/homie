@@ -420,7 +420,8 @@ function frame(t: number): void {
   const dt = lab.time.dt(t, 0.05);
   updateView();
   if (lab.on) labReport(dt);
-  draw(t); frames++; requestAnimationFrame(frame);
+  // updateView can deliver an effect newer than a delayed rAF timestamp.
+  draw(performance.now()); frames++; requestAnimationFrame(frame);
 }
 room.probe({ frames: () => frames, waves: () => wavesSeen, knocks: () => knocksSeen, zone: () => zone,
   camera: () => ({ ...cam, view: viewSeat() }),

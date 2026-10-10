@@ -97,3 +97,25 @@ test(`${id}: virtual prediction ${delay} ms, ${loss} loss, seed ${seed}`, async 
   assert.equal(r.host.core.stats.errors, 0);
   t.diagnostic(JSON.stringify({ id, delay, loss, seed, digest: digest.digest('hex'), responses, landings, peak, remotePeak, prediction: probe() }));
 });
+
+for (const delay of [0, 20, 100]) test(`Gem Rush slides along a wall under held analogue input at ${delay} ms`, async t => {
+  const { L, compiled, openRoom } = await kit('gem-rush');
+  const clock = virtualTime(t), r = rig('gem-rush', L, compiled, predictionShaper({ delay, loss: 0, seed: 417 }));
+  const v = openRoom({ net: { config: { v: 1, url: 'ws://relay/socket', room: 'r', device: 'phone', want: 'play', name: 'P' }, WebSocketImpl: r.Socket, post: null } });
+  t.after(() => { v.close(); r.stop(); });
+  await clock.wait(12000);
+  v.input({ax: 0, ay: 127}); await clock.wait(5000);
+  v.input({ax: 0, ay: 0}); await clock.wait(400);
+  let previous = v.me.pos; const start = previous, trace = [];
+  for (let n = 0; n < 240; n++) {
+    await clock.wait([16, 16, 33, 5][n % 4]);
+    const now = globalThis.__homieNet.probe.self();
+    v.input({ ax: -127, ay: n % 2 ? 4 : -4 });
+    const drawn = v.me;
+    trace.push({ n, now, drawn, probe: globalThis.__homieNet.probe.prediction() });
+    if (trace.length > 5) trace.shift();
+    assert.ok(now.x <= previous.x + .001, `frame ${n}: ${previous.x} -> ${now.x}: ${JSON.stringify(trace)}`);
+    previous = now;
+  }
+  assert.ok(start.x - previous.x > 12, 'the hold travels along the wall instead of sticking');
+});

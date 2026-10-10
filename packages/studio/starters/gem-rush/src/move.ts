@@ -18,6 +18,14 @@ export const move = defineMove({
     const keep = M.pow(1 - m.accel / 60, ctx.dt * 60);
     body.vel = M.add(want, M.scale(M.sub(body.vel, want), keep));
     if (M.len(body.vel) > 0.6) body.heading = M.norm(body.vel);
-    ctx.map.sweep(body, M.scale(body.vel, ctx.dt));
+    // Keep the tangential travel when a thumb points slightly into an arena wall.
+    // The original canvas starter clamped each axis independently.
+    const delta = M.scale(body.vel, ctx.dt), before = body.pos;
+    const hit = ctx.map.sweep(body, delta);
+    if (hit) {
+      const remaining = M.sub(delta, M.sub(body.pos, before));
+      const into = M.dot(remaining, hit.normal);
+      if (into < 0) ctx.map.sweep(body, M.sub(remaining, M.scale(hit.normal, into)));
+    }
   },
 });

@@ -37,6 +37,7 @@ New 3D games keep their matches on the server and answer your controls immediate
 - Predicted movement respects the server's floor and ceiling, and catch-up animation follows the pose being drawn.
 - Knockback no longer stores blocked travel and bursts around obstacles. A jump or direction change partway through a tick preserves the current drawn position before advancing.
 - Phone control checks start measuring with the first directional touch movement, so slow browser automation cannot cross the arena before measurement begins.
+- Gem Rush keeps sliding along arena walls under thumb input, and a delayed animation frame cannot give a newly arrived effect a negative radius.
 
 ### Upgrade notes
 
