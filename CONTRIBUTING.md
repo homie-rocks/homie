@@ -33,6 +33,22 @@ Before you open one:
   `v: 2` (see `packages/studio/netplay/NETPLAY.md`);
 - never put a key, token or password in an issue, a pull request or a test.
 
+The rules prediction release gate includes the full delay/loss/host matrix on virtual
+time and four real-Chrome smoke cases (about two minutes). Run
+`CHROME_PATH=/path/to/chrome npm run test:rules:extended` for the full real-time
+Chrome soak as well as the extended rules corpus. A focused repeated measurement is:
+
+```sh
+CHROME_PATH=/path/to/chrome ROOMS_FEEL_FILTER=60-browser ROOMS_FEEL_DELAY=300 \
+ROOMS_FEEL_LOSS=.1 ROOMS_FEEL_REPEATS=30 ROOMS_FEEL_CPU=6 \
+ROOMS_FEEL_RECEIPT=/tmp/prediction.json \
+node --test packages/studio/test/rules-prediction-chrome.test.mjs
+```
+
+`ROOMS_FEEL_CPU` sets Chrome's CPU slowdown for both pages; omit it for normal speed.
+Corrections and catch counts are measurements, not pass/fail thresholds. The checks
+judge drawn movement, first-frame response and convergence to authoritative movement.
+
 Report a security problem privately, as [SECURITY.md](SECURITY.md) says, never in an
 issue.
 

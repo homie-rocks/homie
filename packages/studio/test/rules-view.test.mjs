@@ -22,6 +22,7 @@ import { viewPlugin } from '../lib/rules-build.mjs';
 import { NetRoom } from '../worker/room.mjs';
 import { COIN_DASH, PKG, esbuildOf, loadGame } from './rules-kit.mjs';
 import { virtualTime } from './virtual-time.mjs';
+import { predictionShaper } from './prediction-shaper.mjs';
 
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'homie-studio-rules-view-')));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -29,7 +30,7 @@ const json = (rel) => JSON.parse(readFileSync(join(COIN_DASH, rel), 'utf8'));
 
 /** coin-dash's view library as its build bundles it (the declarations and the guarded move handed over first), and its rules for the server. */
 let kit = null; let viewBuild = 0;
-async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false) {
+async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runaway = false, predict = {}) {
   if (kit && mode === 'server' && !offline && tickHz === 20 && !runaway) return kit;
   const esbuild = await esbuildOf();
   let dir = COIN_DASH;
@@ -48,7 +49,7 @@ export default defineRules({contract:2,space:{dims:2},move,shapes:{commands:{bum
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.vel={x:i.ax/127*6,y:0,z:0};if(b.motion.push>0){b.motion.push-=1;b.vel={x:0,y:12,z:0};}c.map.sweep(b,c.math.scale(b.vel,c.dt));}});`);
     } else writeFileSync(file, readFileSync(file, 'utf8').replace('commands: {},', 'commands: { boom: {} },').replace('fields: { score:', 'commands: { boom(world, self) { self.bomb = true; } }, fields: { bomb: f.bit(), score:').replace('tick(world, self) {', 'tick(world, self) { if (self.bomb) { while (true) {} }'));
   }
-  const g = { ...json('game.json'), room: { host: mode, offline, tickHz }, dir };
+  const g = { ...json('game.json'), room: { host: mode, offline, tickHz, predict }, dir };
   // This suite measures protocol outcomes on virtual time. The 60 Hz case uses the same checked fixture without
   // asking a busy parallel test runner to meet a 17 ms wall-clock build deadline (rules-build tests own that check).
   const rules = await prepareRuntimeFixture(esbuild, scratch, { ...g, room: { ...g.room, tickHz: 20 } });
@@ -81,11 +82,11 @@ function rig(L, compiled, mode = false, lag = 0, uplink = 0) {
   const socket = () => class MemorySocket {
     constructor() {
       this.readyState = 0; this.bufferedAmount = 0; this.sent = [];
-      sockets.push(this);
-      this.h = room.attach({ send: (x) => { const delay = typeof lag === 'function' ? lag(JSON.parse(x)) : lag; if (delay !== null) setTimeout(() => { if (this.readyState === 1) this.onmessage?.({ data: x }); }, delay); }, close: () => { setTimeout(() => this.cut(), 0); }, buffered: () => 0 });
+      this.link = sockets.length; sockets.push(this);
+      this.h = room.attach({ send: (x) => { const delay = typeof lag === 'function' ? lag(JSON.parse(x), this.link) : lag; if (delay !== null) setTimeout(() => { if (this.readyState === 1) this.onmessage?.({ data: x }); }, delay); }, close: () => { setTimeout(() => this.cut(), 0); }, buffered: () => 0 });
       setTimeout(() => { if (network.up) { this.readyState = 1; this.onopen?.({}); } }, 0);
     }
-    send(x) { this.sent.push(JSON.parse(x)); const delay = typeof uplink === 'function' ? uplink(JSON.parse(x)) : uplink; if (delay === null) return; if (delay) setTimeout(() => this.h?.onMessage(x), delay); else this.h?.onMessage(x); }
+    send(x) { this.sent.push(JSON.parse(x)); const delay = typeof uplink === 'function' ? uplink(JSON.parse(x), this.link) : uplink; if (delay === null) return; if (delay) setTimeout(() => this.h?.onMessage(x), delay); else this.h?.onMessage(x); }
     close() { if (this.readyState === 3) return; this.readyState = 3; this.h?.onClose(); }
     cut() { if (this.readyState === 3) return; this.readyState = 3; this.h?.onClose('error'); this.onclose?.({}); }
   };
@@ -1148,4 +1149,216 @@ for (const hz of [20, 30, 60]) for (const delay of [50, 150, 300]) for (const ax
   }
   assert.ok(a.me.pos.y > 2, 'the authoritative push wins');
   assert.deepEqual(bad, [], 'catch-up and its blend form one continuous path');
+});
+
+// Compile each fixture once; every case still opens fresh hosts, views and clocks.
+const predictionKits = new Map();
+async function predictionKit(mode, hz) {
+  const key = `${mode}-${hz}`;
+  if (!predictionKits.has(key)) predictionKits.set(key, coinDashKit(mode, false, hz, 'push'));
+  return predictionKits.get(key);
+}
+
+// Same delay/loss/host matrix as the Chrome soak, on a clock independent of runner load.
+for (const hz of [20, 30, 60]) for (const mode of ['server', 'browser'])
+for (const delay of hz === 20 && mode === 'server' ? [50, 90, 150, 300] : [50, 150, 300])
+for (const loss of delay === 90 ? [0] : [.02, .10])
+for (const seed of hz === 60 && mode === 'browser' && delay === 300 && loss === .1 ? [417, 1, 42, 43, 60, 2026] : [417])
+test(`prediction release matrix: ${hz} Hz ${mode}, ${delay} ms, ${loss} loss, seed ${seed}`, async t => {
+  const { L, compiled, openRoom } = await predictionKit(mode, hz);
+  const clock = virtualTime(t);
+  const shape = predictionShaper({ delay, loss, seed, jitter: delay !== 90 });
+  const r = rig(L, compiled, mode === 'browser', (m, link) => shape(m, `${link}:down`), (m, link) => shape(m, `${link}:up`));
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('First'), WebSocketImpl: r.socket(), post: null } });
+  await clock.wait(1000);
+  const b = openRoom({ net: { config: cfg('Second'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); });
+  await clock.wait(12000);
+  assert.equal(b.status, 'playing');
+  assert.equal(a.net.rulesHosting, mode === 'browser');
+  const probe = globalThis.__homieNet.probe.prediction;
+  const start = probe();
+  a.input({ ax: 127 }); b.input({ ax: 127 });
+  let previous = b.me.pos;
+  await clock.wait(16);
+  assert.ok(b.me.pos.x > previous.x, 'fresh input moves on the first drawing frame');
+  previous = b.me.pos;
+  const failures = [];
+  for (let n = 0; n < 750; n++) {
+    const ms = [16, 16, 33, 5][n % 4];
+    await clock.wait(ms);
+    const pos = b.me.pos;
+    if (pos.x < previous.x - .001 || Math.hypot(pos.x - previous.x, pos.y - previous.y) > 21 * ms / 1000 + .05)
+      failures.push({ n, ms, previous, pos, probe: probe() });
+    previous = pos;
+  }
+  t.diagnostic(JSON.stringify({ hz, mode, delay, loss, seed, corrections: probe().count, catches: probe().catches, backwards: failures.length }));
+  assert.deepEqual(failures, [], 'steady drawn motion is forward and continuous');
+  assert.equal(probe().rebases, start.rebases);
+  b.command('bump');
+  for (let n = 0; n < 120; n++) {
+    const ms = [28, 5, 17, 33][n % 4]; await clock.wait(ms);
+    const pos = b.me.pos;
+    assert.ok(Math.hypot(pos.x - previous.x, pos.y - previous.y) <= 21 * ms / 1000 + .05, 'push remains continuous');
+    previous = pos;
+  }
+  assert.ok(b.me.pos.y > 2, 'authoritative push wins');
+  assert.equal(probe().snaps, 0);
+  a.input({ ax: 0 }); b.input({ ax: 0 }); await clock.wait(4000);
+  const stopped = b.me.pos;
+  const authoritative = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3];
+  assert.ok(Math.hypot(stopped.x - authoritative[0], stopped.y - authoritative[1]) < .001, 'drawn correction converges to host truth');
+  await clock.wait(1000);
+  assert.ok(Math.hypot(b.me.pos.x - stopped.x, b.me.pos.y - stopped.y) < .001, 'correction settles');
+});
+
+test('prediction catch-up boundary: replaced history stays forward, seed 1', async t => {
+  const seed = 1;
+  const hz = 60, delay = 300;
+  const { L, compiled, openRoom } = await predictionKit('browser', hz);
+  const clock = virtualTime(t);
+  // Preserve the failing release shaper's shared seeded stream here: virtual time fixes
+  // its packet order. Seed 1 crosses replaced history by -0.105 m before the fix.
+  let rng = seed;
+  const random = () => { rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0; return rng / 4294967296; };
+  const shape = m => ['in', 'snap'].includes(m.t) ? random() < .1 ? null : delay / 2 * (.75 + random() * .5) : delay / 2;
+  let drop = 0;
+  const r = rig(L, compiled, true, (m, link) => shape(m, `${link}:down`), (m, link) => {
+    if (link === 1 && m.t === 'in' && drop > 0) { drop--; return null; }
+    return shape(m, `${link}:up`);
+  });
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Host'), WebSocketImpl: r.socket(), post: null } });
+  await clock.wait(1000);
+  const b = openRoom({ net: { config: cfg('Replica'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); });
+  await clock.wait(12000);
+  const probe = globalThis.__homieNet.probe.prediction;
+  const start = probe(); drop = 1;
+  b.input({ ax: 127 });
+  let previous = b.me.pos.x;
+  const backwards = [];
+  for (let n = 0; n < 250; n++) {
+    const ms = [16, 33, 5, 17][n % 4]; await clock.wait(ms);
+    b.input({ ax: 127 });
+    const x = b.me.pos.x;
+    assert.ok(x - previous <= 21 * ms / 1000 + .05, 'catch-up remains continuous');
+    if (x < previous - .001) backwards.push({ n, step: x - previous, probe: probe() });
+    previous = x;
+  }
+  assert.equal(probe().rebases, start.rebases);
+  assert.equal(probe().snaps, 0);
+  assert.ok(probe().catches > start.catches, 'lost input must exercise catch-up');
+  assert.deepEqual(backwards, [], 'catch-up must not cross a discontinuity between old and replaced history');
+  b.input({ ax: 0 }); await clock.wait(4000);
+  const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
+  assert.ok(Math.abs(b.me.pos.x - server) < .001, 'the correction still converges to the host');
+});
+
+test('prediction clock recalibration preserves the drawn pose on a delayed browser-host input path', async t => {
+  const { L, compiled, openRoom } = await predictionKit('browser', 60);
+  const clock = virtualTime(t);
+  let extra = 0;
+  const r = rig(L, compiled, true, 150, m => 150 + (m.t === 'in' ? extra : 0));
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Host'), WebSocketImpl: r.socket(), post: null } });
+  await clock.wait(1000);
+  const b = openRoom({ net: { config: cfg('Replica'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); });
+  await clock.wait(12000);
+  b.input({ ax: 127 }); await clock.wait(2000);
+  const probe = globalThis.__homieNet.probe.prediction;
+  const start = probe();
+  extra = 200;
+  let previous = b.me.pos.x;
+  const backwards = [];
+  for (let n = 0; n < 750; n++) {
+    await clock.wait(16); b.input({ ax: 127 });
+    const x = b.me.pos.x;
+    if (x < previous - .001) backwards.push({ n, step: x - previous, probe: probe() });
+    assert.ok(x - previous <= 21 * .016 + .05, 'recalibration remains continuous');
+    previous = x;
+  }
+  assert.ok(probe().rebases > start.rebases, 'changed input delay must exercise recalibration');
+  assert.deepEqual(backwards, [], 'a clock change must not place the drawn body back at the old snapshot');
+  extra = 0; b.input({ ax: 0 }); await clock.wait(5000);
+  const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
+  assert.ok(Math.abs(b.me.pos.x - server) < .001, 'the corrected body converges to the host');
+});
+
+for (const mode of ['server', 'browser']) for (const hz of [20, 30, 60])
+test(`prediction transport: ${mode} delivers a snapshot every ${hz} Hz tick on virtual time`, async t => {
+  const { L, compiled, openRoom } = await predictionKit(mode, hz);
+  const clock = virtualTime(t), r = rig(L, compiled, mode === 'browser');
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Host'), WebSocketImpl: r.socket(), post: null } });
+  const b = openRoom({ net: { config: cfg('Replica'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); });
+  await clock.wait(2000);
+  const firstTick = r.room.lastSnap.k, ticks = [];
+  const socket = r.sockets[1], receive = socket.onmessage;
+  socket.onmessage = event => {
+    const frame = JSON.parse(event.data);
+    if (frame.t === 'snap') ticks.push(frame.k);
+    receive.call(socket, event);
+  };
+  await clock.wait(1000);
+  assert.equal(r.room.lastSnap.k - firstTick, hz, 'the host keeps its configured rate on a punctual clock');
+  assert.deepEqual(ticks, Array.from({ length: hz }, (_, n) => firstTick + n + 1), 'every completed tick reaches the replica exactly once');
+});
+
+test('prediction recalibration offset survives lossy reconciliation on server host', async t => {
+  const mode = 'server';
+  // A small explicit snap limit isolates the new correction from the carried clock
+  // offset. The loaded Chrome regression clipped that offset with the default limit.
+  const { L, compiled, openRoom } = await coinDashKit(mode, false, 60, 'push', { snapM: .5, catchM: 10 });
+  const clock = virtualTime(t);
+  let extra = 0;
+  const shape = predictionShaper({ delay: 300, loss: .1, seed: 417 });
+  const r = rig(L, compiled, mode === 'browser', (m, link) => shape(m, `${link}:down`), (m, link) => {
+    const ms = shape(m, `${link}:up`);
+    return ms === null ? null : ms + (m.t === 'in' ? extra : 0);
+  });
+  t.after(() => r.stop());
+  const a = openRoom({ net: { config: cfg('Host'), WebSocketImpl: r.socket(), post: null } });
+  await clock.wait(1000);
+  const b = openRoom({ net: { config: cfg('Replica'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); b.close(); });
+  await clock.wait(12000);
+  b.input({ ax: 127 }); await clock.wait(2000);
+  const probe = globalThis.__homieNet.probe.prediction;
+  const start = probe();
+  extra = 200;
+  let previous = b.me.pos.x;
+  const backwards = [];
+  for (let n = 0; n < 750; n++) {
+    await clock.wait(16); b.input({ ax: 127 });
+    const x = b.me.pos.x;
+    if (x < previous - .001) backwards.push({ n, step: x - previous, probe: probe() });
+    assert.ok(x - previous <= 21 * .016 + .05, 'recalibration remains continuous');
+    previous = x;
+  }
+  assert.ok(probe().rebases > start.rebases, 'changed input delay must exercise recalibration');
+  assert.ok(probe().max <= .5, 'new errors stay inside the explicit snap limit');
+  assert.equal(probe().snaps, 0, 'small reconciliation must not clip an existing clock correction');
+  assert.deepEqual(backwards, [], 'a clock change must not place the drawn body back at the old snapshot');
+  extra = 0; b.input({ ax: 0 }); await clock.wait(5000);
+  const server = r.room.lastSnap.d[1].find(e => e[9] === b.seat)[3][0];
+  assert.ok(Math.abs(b.me.pos.x - server) < .001, 'the corrected body converges to the host');
+  // The cap still applies to a genuinely new large authoritative displacement.
+  const socket = r.sockets[1], receive = socket.onmessage;
+  let shifted = false;
+  socket.onmessage = event => {
+    const frame = JSON.parse(event.data);
+    if (frame.t === 'snap') {
+      const own = frame.d[1].find(e => e[9] === b.seat);
+      own[3][0] += 10; shifted = true;
+    }
+    receive.call(socket, { data: JSON.stringify(frame) });
+  };
+  await clock.wait(500);
+  assert.ok(shifted);
+  assert.ok(probe().snaps > 0, 'a new ten-metre correction still exceeds the snap limit');
+
 });

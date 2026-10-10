@@ -95,7 +95,7 @@ test('handshake, tools with the remote\'s names, prompts, and the cards as MCP A
   } finally { await s.close(); }
 });
 
-test('a studio made, planned, made into a game, built and tracked, all through tools; files stay inside it', async () => {
+test('a studio made, planned, made into a game, built and tracked, all through tools; files stay inside it', { timeout: 180000 }, async () => {
   const studios = join(scratch, 'studios');
   const s = server(['--studios', studios, '--no-install', '--homie', 'https://homie.test']);
   try {
@@ -155,7 +155,14 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     const open = await s.call('build_open', { id: 'comet-crews', title: 'Comet Crews: first playable' });
     assert.ok(!open.isError, open.content[0].text);
     assert.equal(open.structuredContent.kind, 'build');
-    const built = await s.call('build', {});
+    let built = await s.call('build', {});
+    // A slow runner gets the same background-job receipt as any MCP client.
+    // Follow it to completion instead of treating the synchronous window as a deadline.
+    const deadline = Date.now() + 120000;
+    while (built.structuredContent?.kind === 'job' && built.structuredContent.state === 'running' && Date.now() < deadline) {
+      built = await s.call('studio_job', { job: built.structuredContent.job });
+    }
+    if (built.structuredContent?.kind === 'job') assert.equal(built.structuredContent.state, 'done', built.content[0].text);
     assert.ok(!built.isError, built.content[0].text);
     assert.match(built.content[0].text, /comet-crews/);
     const progress = await s.call('build_progress', {});
