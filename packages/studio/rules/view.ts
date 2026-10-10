@@ -1,4 +1,4 @@
-import { rayQuery, type QueryTarget } from './query.ts';
+import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { solidAt } from './collision.ts';
 import type { RayQueries, RayOptions } from './types.ts';
 import { snapshotDecoder } from './interest.mjs';
@@ -715,15 +715,16 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const onShow = (): void => { if (typeof document !== 'undefined' && !document.hidden) { base = null; if (latest) rebase(latest.k); } };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onShow);
 
-  const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => {
+  const viewTargets = () => {
     pump();
     const targets: QueryTarget[] = collisionTargets(collisionMap(map, collisionHistory.at(-1)?.[2] ?? []));
     for(const k of schema.kinds) {
       if(k.collider || !k.radius)continue;
       each(k.name,e=>targets.push({id:e.id,kind:k.name,query:k.query,fields:e as Record<string,unknown>,geometry:false,solid:solidAt(e.pos,{shape:k.shape??'circle',radius:k.radius,height:k.height??0}),at:e.pos}));
     }
-    return rayQuery(map,targets,dims,from,direction,max,options,mine?.id,all);
+    return targets;
   };
+  const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => rayQuery(map,viewTargets(),dims,from,direction,max,options,mine?.id,all);
   return {
     get viewTick() { if(solo)return solo.viewTick;const s=net.sample();const a=s?frameOf(s.a):latest,b=s?frameOf(s.b):latest;return a&&b?a.k+(b.k-a.k)*(s?.alpha??0):latest?.k??0; },
     get status() { return solo ? 'offline' : status; },
@@ -731,6 +732,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     get me() { pump(); return meNow(); },
     each, get,
     ray: (from,direction,max,options) => solo ? solo.ray(from,direction,max,options) : viewRay(from,direction,max,options)[0],
+    rays: options => solo ? solo.rays(options) : raySnapshot(map,viewTargets(),dims,options,mine?.id),
     rayAll: (from,direction,max,options) => solo ? solo.rayAll(from,direction,max,options) : viewRay(from,direction,max,options,true),
     on(name, fn) { let set = listeners.get(name); if (!set) { set = new Set(); listeners.set(name, set); } set.add(fn); forwardSolo(name); return () => { set?.delete(fn); }; },
     get shared() { if (solo) return solo.shared; return Object.freeze(unpackFields(schema.shared, net.stateOf('shared'), dims)); },

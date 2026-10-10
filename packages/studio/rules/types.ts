@@ -17,9 +17,9 @@ export type Self<F, M, I, K extends string, P extends boolean, G = Goal> = F & {
   readonly motion: M; readonly input: ReadonlyState<I>;
 } & (P extends true ? Player<G> : {});
 export interface Hit { readonly entity?: string; readonly part?: string; readonly at: Point; readonly normal: Vec3; readonly dist?: number }
-export interface RayOptions { atTick?: number; profile?: string; radius?: number; shape?: 'sphere' | 'box'; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
+export interface RayOptions { atTick?: number; profile?: string; radius?: number; shape?: 'sphere' | 'box' | 'capsule'; height?:number; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
 export type RayHit = Hit & { readonly dist: number };
-export interface RaySnapshot {ray(from:Point,direction:Point,max:number):RayHit|undefined;rayAll(from:Point,direction:Point,max:number):readonly RayHit[]}
+export interface RaySnapshot {sweep(body:{pos:Point;grounded?:boolean},delta:Point):Hit|undefined;support(body:{pos:Point},distance?:number):(Hit&{dist:number})|undefined;ray(from:Point,direction:Point,max:number):RayHit|undefined;rayAll(from:Point,direction:Point,max:number):readonly RayHit[]}
 export interface RayQueries { rays(options?:RayOptions):RaySnapshot; ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
 export type Area = { sphere: { at: Point; r: number } } | { box: { min: Point; max: Point } } | { cone: { at: Point; dir: Point; r: number; angle: number } };
 export interface MapView { readonly name: string; spot(name: string): Vec3 | undefined; spots(name: string): readonly Vec3[] }
@@ -30,6 +30,7 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   readonly shared: Room extends true ? S : ReadonlyState<S>;
   readonly round: Round & (Room extends true ? { end(): void } : {});
   random(): number;
+  label(player:string):string;
   send<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): void;
   dispatch<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): boolean;
   sendRoom<K extends keyof E>(event: K, ...data: Payload<E[K]>): void;

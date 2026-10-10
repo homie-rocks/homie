@@ -181,7 +181,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -654,6 +654,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       return Object.freeze(found.map(viewOf));
     },
     ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0],
+    label: (id: unknown): string => {charge(20);const e=typeof id==='string'?ents.get(id):undefined;if(!e?.kind.player)return '';return String(opts.label?.(e.seat,e.driver)??`Player ${e.seat+1}`).slice(0,40);},
     rays: (options?: unknown): unknown => raySnapshot(c.map,rayTargets(options),dims,options,cx.ent?.id),
     rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id, true),
     sweep: (self: unknown, delta: unknown, o?: unknown): unknown => {
