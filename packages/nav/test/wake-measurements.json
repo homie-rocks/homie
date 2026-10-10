@@ -1,0 +1,104 @@
+{
+  "cpu": "Apple M4",
+  "timing": "process user + system CPU milliseconds",
+  "load": [
+    46.8681640625,
+    54.3369140625,
+    56.994140625
+  ],
+  "node": "v22.22.2",
+  "samples": 7,
+  "agents": 300,
+  "rows": [
+    {
+      "size": 80,
+      "tiles": 16,
+      "editable": false,
+      "obstacles": 0,
+      "assets": 174075,
+      "meshBytes": 103048,
+      "crowdBytes": 295207,
+      "meshSaveMs": 5.923,
+      "meshRestoreMs": 9.354,
+      "crowdRestoreMs": 18.006,
+      "roomWakeMs": 26.393
+    },
+    {
+      "size": 80,
+      "tiles": 16,
+      "editable": true,
+      "obstacles": 0,
+      "assets": 3180879,
+      "meshBytes": 103048,
+      "crowdBytes": 295207,
+      "meshSaveMs": 9.045,
+      "meshRestoreMs": 46.544,
+      "crowdRestoreMs": 15.389,
+      "roomWakeMs": 65.476
+    },
+    {
+      "size": 80,
+      "tiles": 16,
+      "editable": true,
+      "obstacles": 20,
+      "assets": 3180879,
+      "meshBytes": 139922,
+      "crowdBytes": 335044,
+      "meshSaveMs": 7.922,
+      "meshRestoreMs": 156.172,
+      "crowdRestoreMs": 14.996,
+      "roomWakeMs": 172.626
+    },
+    {
+      "size": 160,
+      "tiles": 64,
+      "editable": false,
+      "obstacles": 0,
+      "assets": 726059,
+      "meshBytes": 428827,
+      "crowdBytes": 488183,
+      "meshSaveMs": 25.188,
+      "meshRestoreMs": 35.363,
+      "crowdRestoreMs": 22.243,
+      "roomWakeMs": 58.706
+    },
+    {
+      "size": 160,
+      "tiles": 64,
+      "editable": true,
+      "obstacles": 0,
+      "assets": 12977471,
+      "meshBytes": 428828,
+      "crowdBytes": 488184,
+      "meshSaveMs": 21.984,
+      "meshRestoreMs": 185.78,
+      "crowdRestoreMs": 23.479,
+      "roomWakeMs": 209.92
+    },
+    {
+      "size": 160,
+      "tiles": 64,
+      "editable": true,
+      "obstacles": 20,
+      "assets": 12977471,
+      "meshBytes": 488114,
+      "crowdBytes": 598758,
+      "meshSaveMs": 25.45,
+      "meshRestoreMs": 371.273,
+      "crowdRestoreMs": 30.488,
+      "roomWakeMs": 400.55
+    }
+  ],
+  "workerd": [
+    {
+      "size": 80,
+      "meshRestoreMs": 114,
+      "roomWakeMs": 126
+    },
+    {
+      "size": 160,
+      "meshRestoreMs": 244,
+      "roomWakeMs": 272
+    }
+  ]
+}

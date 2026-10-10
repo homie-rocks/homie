@@ -17,6 +17,25 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.45.1] - 2026-10-09
+
+**Plugin 0.45.1** · [#75](https://github.com/homie-rocks/homie/pull/75)
+
+Crowds keep finding their way while a world changes.
+
+### Added
+
+- **Navigation for walking agents in games and apps.** `@homie-rocks/nav` bakes tiled walking surfaces, finds routes across slopes and links, carves obstacles, streams tiles and moves crowds at a fixed tick. It supports either up axis, seeded queries and grid paths, with matching saved-state continuation in browsers and Workers.
+- **Edits and chase targets preserve useful progress.** An unrelated edit leaves active searches alone. Replaced tiles and polygons invalidate only requests that touch them. Repeating a goal is a no-op; a nearby moving goal keeps the route already being found. Neighbour storage depends on agents rather than the distance between loaded tiles.
+- **Portable room saves.** Save the mesh and crowd together and restore them with the original tile assets in any order. Malformed topology and span connections are refused with navigation errors. Crowds have an explicit `detach()` and meshes never retain discarded crowds.
+
+### Upgrade notes
+
+- Based directly on main after [#85](https://github.com/homie-rocks/homie/pull/85) released studio 0.45.0. If main advances again, rebase and run `node scripts/renumber-release.mjs`.
+- Navigation is optional for games and apps; existing studios gain no dependency. After its first npm publication, install `@homie-rocks/nav@0.1.0` in a studio that needs it. Its README has the imports, storage contract, larger test commands and CPU measurements for Node and workerd, including edits and full room wakes.
+
+- **First npm publication needs a maintainer.** Navigation remains private and studio does not depend on it, so releases skip it safely. After merge, run `node scripts/first-publish-private.mjs nav`, then remove the private flag and update the lockfile and package contract test in a follow-up after trusted publishing is registered.
+
 ## [0.45.0] - 2026-10-10
 
 **Plugin 0.45.0** · [#85](https://github.com/homie-rocks/homie/pull/85)

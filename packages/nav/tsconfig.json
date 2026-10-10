@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "lib": ["ES2022"],
+    "types": [],
+    "outDir": "dist",
+    // The .tsbuildinfo lands HERE, beside tsconfig.json, NOT in dist/. That is
+    // load-bearing: dist/ is served over HTTP on every package origin and the
+    // build info names absolute paths on this machine.
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../heightfield" }]
+}

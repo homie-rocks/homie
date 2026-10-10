@@ -1,0 +1,85 @@
+{
+  "name": "@homie-rocks/nav",
+  "version": "0.1.0",
+  "description": "Portable tiled navigation meshes, seeded queries, fixed-step crowds and grid paths with exact state restore.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/homie-rocks/homie.git",
+    "directory": "packages/nav"
+  },
+  "homepage": "https://github.com/homie-rocks/homie/tree/main/packages/nav#readme",
+  "bugs": {
+    "url": "https://github.com/homie-rocks/homie/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./Bake.js": {
+      "types": "./dist/Bake.d.ts",
+      "default": "./dist/Bake.js"
+    },
+    "./Crowd.js": {
+      "types": "./dist/Crowd.d.ts",
+      "default": "./dist/Crowd.js"
+    },
+    "./Grid.js": {
+      "types": "./dist/Grid.d.ts",
+      "default": "./dist/Grid.js"
+    },
+    "./Mesh.js": {
+      "types": "./dist/Mesh.d.ts",
+      "default": "./dist/Mesh.js"
+    },
+    "./Query.js": {
+      "types": "./dist/Query.d.ts",
+      "default": "./dist/Query.js"
+    },
+    "./Random.js": {
+      "types": "./dist/Random.d.ts",
+      "default": "./dist/Random.js"
+    },
+    "./State.js": {
+      "types": "./dist/State.d.ts",
+      "default": "./dist/State.js"
+    },
+    "./Three.js": {
+      "types": "./dist/Three.d.ts",
+      "default": "./dist/Three.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "node scripts/runtime.mjs && tsc --build",
+    "prepack": "npm run build",
+    "prepare": "node scripts/runtime.mjs",
+    "test:sweep": "NAV_FULL=1 node --test test/continuation*.test.mjs test/topology.test.mjs",
+    "test:arrival": "node test/full-arrival.mjs",
+    "test:memory": "node --expose-gc test/full-memory.mjs"
+  },
+  "dependencies": {
+    "@homie-rocks/heightfield": "0.2.0",
+    "navcat": "0.4.1",
+    "pathfinding": "0.4.18",
+    "mathcat": "0.0.12"
+  },
+  "peerDependencies": {
+    "three": "0.185.1"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "recast-navigation": "0.43.1",
+    "workerd": "1.20261007.1"
+  },
+  "private": true
+}

@@ -1,0 +1,351 @@
+{
+  "cpu": "Apple M4",
+  "timing": "process user + system CPU milliseconds",
+  "load": [
+    50.15380859375,
+    51.34716796875,
+    58.1611328125
+  ],
+  "node": "v22.22.2",
+  "scenes": [
+    {
+      "size": 20,
+      "pillars": false,
+      "tiles": 1,
+      "bakeAndLoadMs": 123.471,
+      "staticBytes": 1126,
+      "largestStaticBytes": 1126,
+      "retainedBytes": 169582,
+      "largestRetainedBytes": 169582,
+      "meshBytes": 1068,
+      "meshSave": {
+        "median": 0.195,
+        "p95": 5.138,
+        "max": 5.138
+      },
+      "meshRestore": {
+        "median": 0.45,
+        "p95": 12.384,
+        "max": 12.384
+      },
+      "path": {
+        "median": 0.034,
+        "p95": 0.809,
+        "max": 2.756
+      },
+      "crowdAgents": 300,
+      "crowdBytes": 131033,
+      "crowdSave": {
+        "median": 11.547,
+        "p95": 26.751,
+        "max": 26.751
+      },
+      "crowdRestore": {
+        "median": 11.099,
+        "p95": 22.527,
+        "max": 22.527
+      }
+    },
+    {
+      "size": 20,
+      "pillars": true,
+      "tiles": 1,
+      "bakeAndLoadMs": 116.986,
+      "staticBytes": 8755,
+      "largestStaticBytes": 8755,
+      "retainedBytes": 176599,
+      "largestRetainedBytes": 176599,
+      "meshBytes": 5322,
+      "meshSave": {
+        "median": 0.167,
+        "p95": 0.351,
+        "max": 0.351
+      },
+      "meshRestore": {
+        "median": 0.425,
+        "p95": 1.324,
+        "max": 1.324
+      },
+      "path": {
+        "median": 0.112,
+        "p95": 3.424,
+        "max": 8.048
+      },
+      "crowdAgents": 300,
+      "crowdBytes": 217989,
+      "crowdSave": {
+        "median": 12.73,
+        "p95": 37.536,
+        "max": 37.536
+      },
+      "crowdRestore": {
+        "median": 9.666,
+        "p95": 35.891,
+        "max": 35.891
+      }
+    },
+    {
+      "size": 80,
+      "pillars": true,
+      "tiles": 16,
+      "bakeAndLoadMs": 391.108,
+      "staticBytes": 174075,
+      "largestStaticBytes": 11782,
+      "retainedBytes": 3180879,
+      "largestRetainedBytes": 206758,
+      "meshBytes": 103048,
+      "meshSave": {
+        "median": 4.911,
+        "p95": 6.935,
+        "max": 6.935
+      },
+      "meshRestore": {
+        "median": 12.062,
+        "p95": 74.674,
+        "max": 74.674
+      },
+      "path": {
+        "median": 0.367,
+        "p95": 4.66,
+        "max": 9.389
+      },
+      "crowdAgents": 300,
+      "crowdBytes": 295207,
+      "crowdSave": {
+        "median": 13.13,
+        "p95": 48.34,
+        "max": 48.34
+      },
+      "crowdRestore": {
+        "median": 21.351,
+        "p95": 28.175,
+        "max": 28.175
+      }
+    },
+    {
+      "size": 160,
+      "pillars": true,
+      "tiles": 64,
+      "bakeAndLoadMs": 602.18,
+      "staticBytes": 726059,
+      "largestStaticBytes": 11868,
+      "retainedBytes": 12977471,
+      "largestRetainedBytes": 206844,
+      "meshBytes": 428827,
+      "meshSave": {
+        "median": 23.966,
+        "p95": 35.236,
+        "max": 35.236
+      },
+      "meshRestore": {
+        "median": 47.696,
+        "p95": 56.729,
+        "max": 56.729
+      },
+      "path": {
+        "median": 2.43,
+        "p95": 3.517,
+        "max": 4.772
+      },
+      "crowdAgents": 300,
+      "crowdBytes": 488183,
+      "crowdSave": {
+        "median": 24.721,
+        "p95": 45.424,
+        "max": 45.424
+      },
+      "crowdRestore": {
+        "median": 25.649,
+        "p95": 77.548,
+        "max": 77.548
+      }
+    }
+  ],
+  "ticks": [
+    {
+      "count": 100,
+      "targets": {
+        "median": 0.903,
+        "p95": 1.567,
+        "max": 1.953
+      },
+      "step": {
+        "median": 4.319,
+        "p95": 6.176,
+        "max": 7.31
+      },
+      "wholeTick": {
+        "median": 5.277,
+        "p95": 7.329000000000001,
+        "max": 8.833
+      }
+    },
+    {
+      "count": 400,
+      "targets": {
+        "median": 3.508,
+        "p95": 4.877,
+        "max": 6.674
+      },
+      "step": {
+        "median": 15.506,
+        "p95": 20.555,
+        "max": 74.443
+      },
+      "wholeTick": {
+        "median": 19,
+        "p95": 24.191,
+        "max": 76.348
+      }
+    },
+    {
+      "count": 1000,
+      "targets": {
+        "median": 8.356,
+        "p95": 11.562,
+        "max": 13.555
+      },
+      "step": {
+        "median": 34.44,
+        "p95": 45.889,
+        "max": 54.707
+      },
+      "wholeTick": {
+        "median": 41.823,
+        "p95": 55.739,
+        "max": 64.621
+      }
+    }
+  ],
+  "grids": [
+    {
+      "kind": "single",
+      "astar": {
+        "median": 47.164,
+        "p95": 149.357,
+        "max": 149.357
+      },
+      "jps": {
+        "median": 23.097,
+        "p95": 23.311,
+        "max": 23.311
+      },
+      "firstNearest": 177.316,
+      "repeatedNearest": {
+        "median": 0.005,
+        "p95": 0.203,
+        "max": 0.203
+      },
+      "bytes": 4000113,
+      "restoreMs": 23.581
+    },
+    {
+      "kind": "random",
+      "astar": {
+        "median": 561.778,
+        "p95": 562.091,
+        "max": 562.091
+      },
+      "jps": {
+        "median": 597.315,
+        "p95": 603.077,
+        "max": 603.077
+      },
+      "firstNearest": 215.177,
+      "repeatedNearest": {
+        "median": 0.003,
+        "p95": 11.657,
+        "max": 11.657
+      },
+      "bytes": 4000113,
+      "restoreMs": 26.464
+    },
+    {
+      "kind": "walls",
+      "astar": {
+        "median": 2263.114,
+        "p95": 2273.732,
+        "max": 2273.732
+      },
+      "jps": {
+        "median": 370.339,
+        "p95": 411.356,
+        "max": 411.356
+      },
+      "firstNearest": 113.146,
+      "repeatedNearest": {
+        "median": 0.007,
+        "p95": 0.113,
+        "max": 0.113
+      },
+      "bytes": 4000113,
+      "restoreMs": 33.569
+    },
+    {
+      "kind": "unreachable",
+      "astar": {
+        "median": 2202.878,
+        "p95": 2324.279,
+        "max": 2324.279
+      },
+      "jps": {
+        "median": 2361.069,
+        "p95": 2439.021,
+        "max": 2439.021
+      },
+      "firstNearest": 120.148,
+      "repeatedNearest": {
+        "median": 0.004,
+        "p95": 0.019,
+        "max": 0.019
+      },
+      "bytes": 4000113,
+      "restoreMs": 28.51
+    }
+  ],
+  "workerd": [
+    {
+      "count": 100,
+      "targetCpu": {
+        "median": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "tickCpu": {
+        "median": 6.5,
+        "p95": 9,
+        "max": 9
+      }
+    },
+    {
+      "count": 400,
+      "targetCpu": {
+        "median": 3,
+        "p95": 4,
+        "max": 4
+      },
+      "tickCpu": {
+        "median": 17,
+        "p95": 20.5,
+        "max": 20.5
+      }
+    },
+    {
+      "count": 1000,
+      "targetCpu": {
+        "median": 7,
+        "p95": 8.5,
+        "max": 8.5
+      },
+      "tickCpu": {
+        "median": 36,
+        "p95": 43.5,
+        "max": 43.5
+      }
+    }
+  ],
+  "gridBundle": {
+    "minified": 20749,
+    "gzip": 8229
+  }
+}
