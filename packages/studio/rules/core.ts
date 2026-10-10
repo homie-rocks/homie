@@ -1,3 +1,4 @@
+import { rayQuery, queryParts, type QueryTarget } from './query.ts';
 import { colliderSolid, castCollider2, colliderRow, collisionMap, collisionQueries, type CollisionRevision } from './live.ts';
 /*
  * core.ts — one room's world, stepped a tick at a time from a compiled rules module.
@@ -478,6 +479,17 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     return sharedRO;
   };
 
+  function rayTargets(): QueryTarget[] {
+    charge(64 * ents.size);
+    const targets: QueryTarget[] = [];
+    for(const e of ents.values()) {
+      if(e.dead || !e.kind.body)continue;
+      const row=e.kind.collider?colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f):null;
+      if(e.kind.collider&&!row)continue;
+      targets.push({id:e.id,kind:e.kind.name,query:e.kind.query,fields:e.f,geometry:Boolean(row),solid:row?colliderSolid(row):solidAt(e.pos,e.kind.body),parts:queryParts(e.pos,e.kind.query)});
+    }
+    return targets;
+  }
   function cast3(p: Vec3, d: Vec3, shape: BodyShape, ignored: Set<string>): Hit3 | null {
     let best = castMap3(c.map, p, d, shape);
     const solid = solidAt(p, shape);
@@ -608,28 +620,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       charge(cost);
       return Object.freeze(found.map(viewOf));
     },
-    ray: (from: unknown, direction: unknown, max: unknown): unknown => {
-      // Charged before the cast, for every shape it may test: the map's, and every entity in the room.
-      charge(20 + 4 * ents.size);
-      const p = V(from); const d = dir(direction, dims); const far = reach(max, 'world.ray');
-      if (dims === 3) {
-        const delta = { x: d.x * far, y: d.y * far, z: d.z * far };
-        const hit = cast3(p, delta, { shape: 'sphere', radius: 0, height: 0 }, new Set(cx.ent ? [cx.ent.id] : []));
-        return hit ? Object.freeze({ ...(hit.id ? { entity: hit.id } : {}), at: V({ x: p.x + delta.x * hit.t, y: p.y + delta.y * hit.t, z: p.z + delta.z * hit.t }), normal: V({ x: hit.nx, y: hit.ny, z: hit.nz }), dist: far * hit.t }) : undefined;
-      }
-      const cast = castMap(c.map, p.x, p.y, d.x * far, d.y * far, 0);
-      let best: Hit | null = cast.hit;
-      for (const e of ents.values()) {
-        if (!e.kind.body || e === cx.ent) continue;
-        if (e.kind.collider) charge(48);
-        const row = e.kind.collider ? colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f) : null;
-        if (e.dead || e.kind.collider && !row) continue;
-        const h = row ? castCollider2(row, p, {x:d.x*far,y:d.y*far,z:0}, 0) : rayCircle(p.x, p.y, d.x * far, d.y * far, e.pos.x, e.pos.y, e.kind.body.radius);
-        if (h && (!best || h.t < best.t)) best = { ...h, id: e.id };
-      }
-      if (!best) return undefined;
-      return Object.freeze({ ...(best.id ? { entity: best.id } : {}), at: V({ x: p.x + d.x * far * best.t, y: p.y + d.y * far * best.t, z: 0 }), normal: V({ x: best.nx, y: best.ny, z: 0 }), dist: far * best.t });
-    },
+    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(), dims, from, direction, max, options, cx.ent?.id)[0],
+    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(), dims, from, direction, max, options, cx.ent?.id, true),
     sweep: (self: unknown, delta: unknown, o?: unknown): unknown => {
       const e = mine(self, 'world.sweep');
       charge(20 + 4 * ents.size);
@@ -690,7 +682,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   const hasColliders = c.kinds.some(k => k.collider);
   const collisionState = (): CollisionRevision => [tick, tick + 1, [...ents.values()].flatMap(e => {
     if (e.dead || !e.kind.collider || !e.kind.body) return [];
-    const row = colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f);
+    const row = colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f, e.kind.name, e.kind.query);
     return row ? [row] : [];
   })];
   let moveGeometry = c.map as import('./math.ts').MapShapes;

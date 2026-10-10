@@ -772,3 +772,65 @@ known geometry beyond received ticks: a client cannot predict an unseen remote
 build/destruction. Once that update arrives, replay uses its geometry immediately.
 Moving platforms use world.place in their handlers; sweep/support see each tick's
 position. Passenger carrying is explicit movement logic, not automatic physics.
+
+## Filtered combat and camera queries (0.45.1)
+
+`world.ray(from, direction, metres, options?)` returns the nearest hit or undefined.
+`world.rayAll` returns all entry hits in distance order (one per shape or named
+part, not exit faces). Static geometry wins equal-distance ties; entity and part
+insertion order break remaining ties. Both queries charge their scans, geometry,
+filtering and output to the normal handler budget. The maximum distance is the
+normal query reach; no query raises the game's budget.
+
+```ts
+runner: {
+  // Movement remains a capsule; these boxes apply only to ray queries.
+  body: {shape: 'capsule', radius: .42, height: 1.8, maxSpeed: 22},
+  query: {layer: 'fighters', tags: ['damageable'], parts: {
+    body: {shape: 'box', radius: .42, height: 1.5},
+    head: {shape: 'box', radius: .24, height: .4, offset: {x: 0, y: 0, z: 1.5}},
+  }},
+  fields: {hp: f.fix({init: 100})},
+  // ...player, inputs, movement and handlers...
+}
+```
+
+Parts are axis-aligned, feet-relative shapes, at most 16 per kind. `hit.part`
+is their declared name. A kind without parts uses its normal body or enabled
+collider. Parts do not resize movement bodies. Query layers and tags are static
+kind declarations. A live collider's `enabled` and `size` fields still control
+its presence and dimensions.
+
+Options are plain data, never callbacks:
+
+- `kind`, `tag`, `layer`: exact entity-kind, declared-tag and layer matches.
+  Undeclared layers default to `geometry` for live colliders and `body` otherwise.
+  Static map shapes use `geometry` and are not subject to kind/tag/field filters.
+- `where: {hp: {gt: 0}}`: filter declared entity fields. Values may be exact
+  numbers, strings or booleans; numeric tests are `gt`, `gte`, `lt`, `lte`, plus
+  `eq`. All tests must match. Missing fields do not match. At most 16 fields.
+- `ignore: [ref]`: at most 16 opaque entity refs. Entity-handler rays ignore self
+  by default; `ignoreSelf: false` includes it. Room and geometry queries have no
+  implicit caller. Rocket travel can ignore its owner explicitly; blast damage
+  may include the owner.
+- `geometryOnly: true`: map plus enabled live colliders, using their collision
+  shape rather than hit parts. Fighters do not shield other fighters. Use an
+  exclusion when testing the visibility of the cover being damaged. Evaluate
+  every visibility ray before sending damage events to preserve pre-blast cover.
+- `entitiesOnly: true`: omit the static map. Combine with the filters above.
+- `radius` and `shape`: cast a sphere (default) or axis-aligned box with this
+  half-size around the ray centre, useful for camera clearance. Radius defaults
+  to zero and is at most 100 metres. A point ray beginning inside a solid reports
+  an immediate hit; movement sweeps continue to allow escape from overlap.
+
+`room.ray` and `room.rayAll` use the same implementation for local aiming and
+cosmetic feedback. They use the drawn entity poses and latest known live geometry;
+only server results award damage. Spatially absent non-collider entities cannot
+be targeted by the view. Unknown remote edits are not predicted.
+
+Movement's `ctx.world.ray/rayAll` (also on `ctx.map`) query its tick's frozen static
+and live collision geometry with these same options. Collider kind, layer, tags
+and scalar fields accompany collision revisions, including outside visual
+interest, so a predicted geometry filter has the same data as authority.
+Movement cannot query fighters or award damage. These APIs do not implement lag
+compensation: they query the current authoritative or presented world.

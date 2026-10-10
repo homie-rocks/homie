@@ -237,12 +237,13 @@ function rayBounds(px: number, py: number, dx: number, dy: number, b: { min: Vec
   return best;
 }
 /** A circle (or a point, r 0) moved along d against the static map: the first thing in the way, and how many shapes were tested. */
-export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number): { hit: Hit | null; tested: number } {
+export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number, hits?: Hit[]): { hit: Hit | null; tested: number } {
   map = nearbyMap(map, {x:px,y:py,z:0}, {x:dx,y:dy,z:0}, r, 0, 2);
   charge(16 + 4 * (map.boxes.length + map.circles.length));
   let best: Hit | null = rayBounds(Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, px)), Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, py)), dx, dy, map.bounds, r);
-  for (const b of map.boxes) { const h = rayBox(px, py, dx, dy, b.min, b.max, r); if (h && (!best || h.t < best.t)) best = { ...h, id: (b as any).id }; }
-  for (const c of map.circles) { const h = rayCircle(px, py, dx, dy, c.at.x, c.at.y, c.r + r); if (h && (!best || h.t < best.t)) best = { ...h, id: (c as any).id }; }
+  if (hits && best) hits.push(best);
+  for (const b of map.boxes) { const h = rayBox(px, py, dx, dy, b.min, b.max, r); if (h && hits) hits.push(h); if (h && (!best || h.t < best.t)) best = { ...h, id: (b as any).id }; }
+  for (const c of map.circles) { const h = rayCircle(px, py, dx, dy, c.at.x, c.at.y, c.r + r); if (h && hits) hits.push(h); if (h && (!best || h.t < best.t)) best = { ...h, id: (c as any).id }; }
   return { hit: best, tested: 4 + map.boxes.length + map.circles.length };
 }
 

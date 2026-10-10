@@ -1,4 +1,4 @@
-import { castTerrain } from './terrain.ts';
+import { castTerrain, overlapsTerrain } from './terrain.ts';
 import { nearbyMap } from './map-index.ts';
 /** Upright 3D collision. Positions are feet; a rounded box is a box plus a sphere.
  * Capsules are a vertical segment plus a sphere. No engine-specific maths or time.
@@ -33,8 +33,14 @@ function separation(a: Solid, b: Solid, d: Vec3, t: number): Vec3 {
 /** Continuous convex cast: each separating plane gives a lower bound on impact.
  * Every iteration is charged, and a fixed cap bounds grazing contacts as well.
  */
-export function castSolid(a: Solid, d: Vec3, b: Solid): Hit3 | null {
+export function castSolid(a: Solid, d: Vec3, b: Solid, includeInside = false): Hit3 | null {
   charge(30);
+  if (includeInside) {
+    const gap = separation(a, b, d, 0);
+    const sq = gap.x*gap.x + gap.y*gap.y + gap.z*gap.z;
+    const inside = b.r > 0 ? sq < b.r*b.r : a.min.x > b.min.x && a.min.x < b.max.x && a.min.y > b.min.y && a.min.y < b.max.y && a.min.z > b.min.z && a.min.z < b.max.z;
+    if (inside) {const length = Math.sqrt(d.x*d.x+d.y*d.y+d.z*d.z)||1; return {t:0,nx:-d.x/length,ny:-d.y/length,nz:-d.z/length};}
+  }
   let t = 0;
   const r = a.r + b.r;
   let normal = point(0, 0, 0);
@@ -94,12 +100,12 @@ function castHeightTile(tile: MapHeightTile, p: Vec3, d: Vec3): Hit3 | null {
   return best;
 }
 
-export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape): Hit3 | null {
+export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hit3[], includeInside = false): Hit3 | null {
   map = nearbyMap(map, p, d, body.radius, body.height || body.radius * 2);
   charge(24);
   const a = solidAt(p, body), r = body.radius, height = body.height || r * 2;
   let best: Hit3 | null = null;
-  const take = (h: Hit3 | null, id?: string): void => { if (h && h.t >= 0 && h.t <= 1 && (!best || h.t < best.t)) best = id ? {...h, id} : h; };
+  const take = (h: Hit3 | null, id?: string): void => { if (h && h.t >= 0 && h.t <= 1) { const hit = id ? {...h, id} : h; if (hits) {charge(8); hits.push(hit);} if (!best || h.t < best.t) best = hit; } };
   for (const axis of ['x', 'y', 'z'] as const) {
     const low = map.bounds.min[axis] + (axis === 'z' ? 0 : r);
     const high = map.bounds.max[axis] - (axis === 'z' ? height : r);
@@ -107,12 +113,12 @@ export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape): Hit3 | n
     const n = point(0, 0, 0); n[axis] = d[axis] > 0 ? -1 : 1;
     take({ t: ((d[axis] > 0 ? high : low) - p[axis]) / d[axis], nx: n.x, ny: n.y, nz: n.z });
   }
-  for (const tile of map.heightTiles ?? []) take(tile.base === undefined ? castHeightTile(tile, p, d) : castTerrain(tile, a, d));
-  for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }), (b as any).id);
+  for (const tile of map.heightTiles ?? []) take(tile.base === undefined ? castHeightTile(tile, p, d) : includeInside && overlapsTerrain(tile,a) ? {t:0,nx:-d.x/(Math.hypot(d.x,d.y,d.z)||1),ny:-d.y/(Math.hypot(d.x,d.y,d.z)||1),nz:-d.z/(Math.hypot(d.x,d.y,d.z)||1)} : castTerrain(tile, a, d));
+  for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }, includeInside), (b as any).id);
   // Legacy map circles are vertical columns in a 3D map.
-  for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }), (c as any).id);
-  for (const s of map.spheres ?? []) take(castSolid(a, d, { min: s.at, max: s.at, r: s.r }), (s as any).id);
-  for (const c of map.capsules ?? []) take(castSolid(a, d, solidAt(c.at, { shape: 'capsule', radius: c.r, height: c.height })), (c as any).id);
+  for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }, includeInside), (c as any).id);
+  for (const s of map.spheres ?? []) take(castSolid(a, d, { min: s.at, max: s.at, r: s.r }, includeInside), (s as any).id);
+  for (const c of map.capsules ?? []) take(castSolid(a, d, solidAt(c.at, { shape: 'capsule', radius: c.r, height: c.height }), includeInside), (c as any).id);
   return best;
 }
 export function restsOnMap(map: Map3, p: Vec3, body: BodyShape): boolean {

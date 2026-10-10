@@ -1,5 +1,8 @@
+import { rayQuery, queryParts, type QueryTarget } from './query.ts';
+import { solidAt } from './collision.ts';
+import type { RayQueries, RayOptions } from './types.ts';
 import { snapshotDecoder } from './interest.mjs';
-import { collisionMap, revisionAt, type CollisionRevision } from './live.ts';
+import { collisionMap, collisionTargets, revisionAt, type CollisionRevision } from './live.ts';
 import { rulesOutput } from '../netplay/rules-output.mjs';
 import { rulesCaps, rulesRates } from '../worker/limits.mjs';
 /*
@@ -98,7 +101,7 @@ export interface OpenRoomOptions {
   now?: () => number;
   timers?: boolean;
 }
-export interface Room<R = unknown> {
+export interface Room<R = unknown> extends RayQueries {
   readonly status: RoomStatus;
   readonly seat: number | null;
   readonly me: Entity | null;
@@ -710,11 +713,22 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
   const onShow = (): void => { if (typeof document !== 'undefined' && !document.hidden) { base = null; if (latest) rebase(latest.k); } };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onShow);
 
+  const viewRay = (from: unknown, direction: unknown, max: number, options?: RayOptions, all=false) => {
+    pump();
+    const targets: QueryTarget[] = collisionTargets(collisionMap(map, collisionHistory.at(-1)?.[2] ?? []));
+    for(const k of schema.kinds) {
+      if(k.collider || !k.radius)continue;
+      each(k.name,e=>targets.push({id:e.id,kind:k.name,query:k.query,fields:e as Record<string,unknown>,geometry:false,solid:solidAt(e.pos,{shape:k.shape??'circle',radius:k.radius,height:k.height??0}),parts:queryParts(e.pos,k.query)}));
+    }
+    return rayQuery(map,targets,dims,from,direction,max,options,mine?.id,all);
+  };
   return {
     get status() { return solo ? 'offline' : status; },
     get seat() { return solo ? solo.seat : net.seat; },
     get me() { pump(); return meNow(); },
     each, get,
+    ray: (from,direction,max,options) => solo ? solo.ray(from,direction,max,options) : viewRay(from,direction,max,options)[0],
+    rayAll: (from,direction,max,options) => solo ? solo.rayAll(from,direction,max,options) : viewRay(from,direction,max,options,true),
     on(name, fn) { let set = listeners.get(name); if (!set) { set = new Set(); listeners.set(name, set); } set.add(fn); forwardSolo(name); return () => { set?.delete(fn); }; },
     get shared() { if (solo) return solo.shared; return Object.freeze(unpackFields(schema.shared, net.stateOf('shared'), dims)); },
     input(s) {

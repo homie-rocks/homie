@@ -1,5 +1,5 @@
 /** The build specialises these faces from a game's declarations; the runtime still checks every write. */
-import type { Vec3, BodyDef, Fields, ColliderDef } from './rules.ts';
+import type { Vec3, BodyDef, Fields, ColliderDef, QueryDef } from './rules.ts';
 import type { math } from './math.ts';
 
 export type Point = { readonly x: number; readonly y: number; readonly z?: number };
@@ -16,7 +16,10 @@ export type Self<F, M, I, K extends string, P extends boolean, G = Goal> = F & {
   readonly id: string; readonly kind: K; readonly pos: Vec3; get vel(): Vec3; set vel(value: Point); get heading(): Vec3; set heading(value: Point); readonly grounded: boolean;
   readonly motion: M; readonly input: ReadonlyState<I>;
 } & (P extends true ? Player<G> : {});
-export interface Hit { readonly entity?: string; readonly at: Point; readonly normal: Vec3; readonly dist?: number }
+export interface Hit { readonly entity?: string; readonly part?: string; readonly at: Point; readonly normal: Vec3; readonly dist?: number }
+export interface RayOptions { radius?: number; shape?: 'sphere' | 'box'; geometryOnly?: boolean; entitiesOnly?: boolean; ignoreSelf?: boolean; ignore?: readonly string[]; kind?: string; tag?: string; layer?: string; where?: Readonly<Record<string, number | boolean | string | {gt?: number; gte?: number; lt?: number; lte?: number; eq?: number | boolean | string}>> }
+export type RayHit = Hit & { readonly dist: number };
+export interface RayQueries { ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined; rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[] }
 export type Area = { sphere: { at: Point; r: number } } | { box: { min: Point; max: Point } } | { cone: { at: Point; dir: Point; r: number; angle: number } };
 export interface MapView { readonly name: string; spot(name: string): Vec3 | undefined; spots(name: string): readonly Vec3[] }
 export interface Clock { readonly tick: number; readonly dt: number; ticks(seconds: number): number; readonly math: typeof math }
@@ -36,7 +39,8 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   near(at: Point, radius: number): readonly Query<V[keyof V]>[];
   inBox<K extends keyof V>(box: { min: Point; max: Point }, kind: K): readonly Query<V[K]>[];
   inBox(box: { min: Point; max: Point }): readonly Query<V[keyof V]>[];
-  ray(from: Point, direction: Point, max: number): (Hit & { readonly dist: number }) | undefined;
+  ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined;
+  rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[];
   ask<K extends keyof A>(name: K, state: WriteState<A[K]>): boolean;
 } & (Room extends true ? { announce<K extends keyof E>(event: K, ...data: Payload<E[K]>): void; finish(): void } : {
   goalDone(ok?: boolean): void;
@@ -51,7 +55,7 @@ export type RoomEvents<E = Record<string, never>> = RoundEvents & { seatJoined: 
 export type RoundEvents = { roundStart: { n: number }; roundOver: { n: number; results: readonly { seat: number; id: string; driver: 'person' | 'bot' | 'ai'; score: number; place: number }[] } };
 type GuideWorld<W> = Pick<W, Extract<keyof W, 'tick' | 'dt' | 'ticks' | 'math' | 'map' | 'tune' | 'stage' | 'level' | 'levelMax' | 'guideLevel' | 'guideSeats' | 'kids' | 'levelSet' | 'round' | 'shared' | 'near' | 'inBox' | 'ray'>>;
 export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = GuideRequest, D = GuideDecision> = {
-  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot' }; fields?: Fields; motion?: Fields; input?: Fields; body?: BodyDef; collider?: ColliderDef;
+  player?: true | { away?: 'neutral' | 'think'; leave?: 'despawn' | 'bot' }; fields?: Fields; motion?: Fields; input?: Fields; body?: BodyDef; collider?: ColliderDef; query?: QueryDef;
   tick?: (world: W, self: S) => void;
   think?: (world: W, self: S) => Partial<I>;
   on?: { [K in keyof (Omit<E, keyof BuiltIns> & Omit<BuiltIns<E>, 'answer'> & { answer: Answer })]?: (world: W, self: S, event: EventData<(Omit<E, keyof BuiltIns> & Omit<BuiltIns<E>, 'answer'> & { answer: Answer })[K]>) => void };
@@ -60,5 +64,5 @@ export type Entity<W, S, I, E, C, V, Answer = BuiltIns['answer'], G = Goal, A = 
   guide?: { view: (world: GuideWorld<W>, self: ReadonlyState<Omit<S, 'input'>>) => V; floor?: (world: W, self: S, view: GuideView<V, G, A>) => D };
 };
 export interface MoveBody<M> { get pos(): Vec3; set pos(value: Point); get vel(): Vec3; set vel(value: Point); get heading(): Vec3; set heading(value: Point); grounded: boolean; readonly motion: M }
-export interface MoveCollision<M> { sweep(body: MoveBody<M>, delta: Point): Hit | undefined; support(body: MoveBody<M>, distance?: number): (Hit & {dist: number}) | undefined; overlaps(body: MoveBody<M>): boolean }
+export interface MoveCollision<M> extends RayQueries { sweep(body: MoveBody<M>, delta: Point): Hit | undefined; support(body: MoveBody<M>, distance?: number): (Hit & {dist: number}) | undefined; overlaps(body: MoveBody<M>): boolean }
 export type MoveContext<T, M> = Clock & { readonly tune: ReadonlyState<T>; readonly map: MapView & MoveCollision<M>; readonly world: MoveCollision<M> };
