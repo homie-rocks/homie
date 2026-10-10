@@ -128,7 +128,7 @@ export interface Room<R = unknown> {
   readonly __rules?: R;
 }
 
-interface Frame { k: number; e: number; at: number; round: [number, number, number]; ents: Map<string, Unpacked>; rows: number[][] }
+interface Frame { k: number; e: number; at: number; round: [number, number, number]; ents: Map<string, Unpacked>; rows: number[][]; collision?: CollisionRevision }
 const frames = new WeakMap<object, Frame | null>();
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
@@ -169,11 +169,11 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (!s || typeof s !== 'object') return null;
     if (frames.has(s)) return frames.get(s) ?? null;
     let f: Frame | null = null;
-    const d = delivery.decode(s)?.d as [unknown, unknown] | null;
+    const d = delivery.decode(s)?.d as [unknown, unknown, CollisionRevision?] | null;
     if (Array.isArray(d) && Array.isArray(d[0]) && Array.isArray(d[1])) {
       const ents = new Map<string, Unpacked>();
       for (const w of d[1] as unknown[]) { const e = unpackEntity(schema.kinds, w, dims); if (e) ents.set(e.id, e); }
-      f = { k: s.k, e: Number(s.e) || 0, at: clock(), round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
+      f = { collision: d[2], k: s.k, e: Number(s.e) || 0, at: clock(), round: [Number(d[0][0]) || 0, Number(d[0][1]) || 0, Number(d[0][2]) || 0], ents, rows: (Array.isArray(s.c) ? s.c : []) as unknown as number[][] };
     }
     frames.set(s, f);
     return f;
@@ -400,7 +400,7 @@ export function openRoom<R = unknown>(opts: OpenRoomOptions = {}): Room<R> {
     if (before && before.e === f.e && f.k <= before.k) return;
     latest = f;
     if (!before || before.e !== f.e) collisionHistory = [];
-    const collision = (s.d as unknown[])[2] as CollisionRevision | undefined;
+    const collision = f.collision;
     if (collision) {
       collisionHistory.push(collision);
       if (collisionHistory.length > 128) collisionHistory.shift();

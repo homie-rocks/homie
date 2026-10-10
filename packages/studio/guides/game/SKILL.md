@@ -27,6 +27,11 @@ other games and every existing test file, including its import paths. If an old
 `rules.ts` exports tested helpers, keep those exports when adding defineRules;
 do not redirect the tests to a new helper file. Run the original test command.
 
+For a request involving a larger room or map, read RULES.md's **Spatial delivery**
+section. 0.44.0 can reduce what a server player receives with `room.view.radiusM`;
+Gates and public admission above 32 seats are the next slice. Choose a radius
+only when it fits the game. No rules rewrite or new profile is needed.
+
 ## Start it
 
 - **Look for pieces before writing them.** Games build on each other by sharing parts: a creature from one game,

@@ -10,7 +10,9 @@ export function interestSnapshot(snap, seat, radiusM) {
     const p = e[3], q = own[3];
     return e === own || (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + ((p[2] ?? 0) - (q[2] ?? 0)) ** 2 <= radiusM ** 2;
   }) : seat === null ? entities : own ? entities : [];
-  return { ...snap, d: [round, visible], c: (snap.c ?? []).filter(row => row[0] === seat) };
+  // Collision revisions are prediction inputs, independent of visual interest.
+  // Deliver all geometry: authored sweeps/dashes need not fit inside the view radius.
+  return { ...snap, d: [round, visible, ...snap.d.slice(2)], c: (snap.c ?? []).filter(row => row[0] === seat) };
 }
 
 export function snapshotEncoder(keyframeTicks) {
@@ -33,7 +35,7 @@ export function snapshotEncoder(keyframeTicks) {
         for (let i = 1; i < entity.length; i++) if (JSON.stringify(entity[i]) !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
         if (mask) changed.push([id, mask, values]);
       }
-      return { ...snap, d: { base: base.k, round: snap.d[0], changed, removed: [...rows.keys()].filter(id => !present.has(id)) } };
+      return { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)) } };
     },
   };
 }
@@ -73,7 +75,7 @@ export function snapshotDecoder() {
         if (j !== change[2].length) return null;
         next.set(entity[0], entity);
       }
-      return { ...snap, d: [d.round, [...next.values()]] };
+      return { ...snap, d: [d.round, [...next.values()], ...(d.collision === undefined ? [] : [d.collision])] };
     },
   };
 }

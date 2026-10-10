@@ -92,3 +92,25 @@ test('relay backpressure does not advance a client baseline; welcome and watcher
   assert.equal(watcher.seat,null);
   assert.deepEqual(watcher.snap.d[1].map(e=>e[0]),['own','far']);
 });
+
+
+test('seeded interest-edge collider revisions survive deltas, loss, edits and reconnect', () => {
+  let seed = 8441;
+  const rng = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+  const encoder = snapshotEncoder(20), decoder = snapshotDecoder();
+  for (let k = 1; k <= 120; k++) {
+    // The centre crosses interest; its near face remains reachable by a sweep.
+    const x = 5 + (rng() - .5) * .2;
+    const s = snapshot(k, [entity('own', 0, 0), entity('wall', x)]);
+    const collision = [k, k + 1, k % 11 ? [['wall', 'box', x, 0, 0, 2, 4, 3]] : []];
+    s.d.push(collision);
+    if (k === 61) { encoder.reset(); decoder.reset(); }
+    const selected = interestSnapshot(s, 0, 5);
+    assert.equal(selected.d[1].some(e => e[0] === 'wall'), x <= 5);
+    const wire = JSON.parse(JSON.stringify(encoder.encode(selected)));
+    if (k % 7 === 0 && !Array.isArray(wire.d)) continue;
+    const received = decoder.decode(wire);
+    assert.deepEqual(received.d[2], collision, `current geometry at tick ${k}`);
+    assert.deepEqual(sorted(received), sorted(selected));
+  }
+});

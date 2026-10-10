@@ -17,9 +17,9 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
-## [0.43.1] - 2026-10-10
+## [0.44.1] - 2026-10-10
 
-**Plugin 0.43.1**
+**Plugin 0.44.1**
 
 Predicted movement meets the live world, and local builds keep dev running.
 
@@ -30,6 +30,7 @@ Predicted movement meets the live world, and local builds keep dev running.
 
 ### Fixed
 
+- Spatial delivery retains live collision revisions in keyframes and compact updates, even when a collider lies outside the player’s visual interest radius.
 - Rebuilding while dev is running preserves immutable Worker module graphs and atomically switches the entry, so a reload cannot lose its imported chunks.
 - Customer offers omit the studio refund window when no window is set.
 

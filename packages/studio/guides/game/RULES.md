@@ -673,7 +673,31 @@ server-verified money. All replicated fields are public, including disguised rol
 Use a separate authorized records service for private or lasting app records.
 
 
-## Live collision geometry (0.43.1)
+## Spatial delivery (0.44.0; milestone 2 slice 1)
+
+For a server game with a larger map, the studio's AI can set
+`"room": { "view": { "radiusM": 32 } }` in game.json to send each player only
+entities within that many metres of its body (3D includes height). This is the
+studio's choice: omit it or use null for the whole room. Rules and move do not
+change. The player's own body is always sent. Before a body exists, its view has
+no entities. Watchers still receive the whole room.
+
+`room.each` visits visible entities; `enter`/`leave` mean coming into or out of
+view, not spawning or despawning. Remove departed meshes and recreate returning
+ones. Prediction and compact snapshot recovery are handled by the runtime. Live
+collision geometry bypasses visual interest filtering, so a sweep or dash can
+reach a collider beyond the view radius without predicting through it. Its entity
+may be absent from room.each while its geometry still blocks movement.
+Shared state, effects, rosters and watcher state are still public: this is not a
+hidden-information feature. Browser hosting sends the whole room.
+
+A request for hundreds of players also needs the next Gates release: 0.44.0's
+public build/join path still has the milestone 1 restriction of 32 seats. Do not
+silently clamp a requested bigger game or claim this setting raises admission.
+When Gates ship, `players.max` will choose the room's layout automatically; the
+studio will not create or find infrastructure by hand. The slice plan and local
+300-client measurements are in docs/rooms-milestone-2-notes.md in Homie's repo.
+## Live collision geometry (0.44.1)
 
 ```ts
 cover: {
@@ -690,7 +714,9 @@ walls (use a circle body with a size field). Nonpositive width/depth disables it
 `enabled` names a bit field; false removes it from movement collision. Collider
 entities are non-player bodies; players use server movement (omit `body.move: 'owner'`). Their declared state and position save and restore
 with the room; their refs stay opaque. Collision geometry is sent to all players
-in the room, independently of visual interpolation, including on reload/rejoin.
+in the room, independently of visual interpolation and spatial interest, including in compact
+updates and on reload/rejoin. This includes all live geometry, rather than a
+speed-based margin that could miss an authored dash or sweep.
 
 `ctx.world.sweep(body, delta)` moves and updates grounded, returning an optional
 hit with at/normal and the collider's entity ref. `support(body, distance=.002)`

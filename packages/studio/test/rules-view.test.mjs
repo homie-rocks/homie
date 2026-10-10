@@ -1546,14 +1546,16 @@ test('spatial snapshots reach real views, preserve prediction, recover a lost ke
   assert.equal(r.host.core.stats.errors, 0);
 });
 
-for (const dims of [2,3]) for (const delayed of [false,true]) test(`live cover ${dims}D: visible prediction, edits, rejoin and restore${delayed?' at 300 ms + 12% loss':''}`, async t=>{
-  const {L,compiled,openRoom}=await coinDashKit('server',false,20,dims===3?'cover':'cover2');
+for (const dims of [2,3]) for (const delayed of [false,true]) test(`live cover ${dims}D outside spatial interest: visible prediction, edits, rejoin and restore${delayed?' at 300 ms + 12% loss':''}`, async t=>{
+  const {L,compiled,openRoom}=await coinDashKit('server',false,20,dims===3?'cover':'cover2',{},.5);
   const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.12:0,seed:743});
   let inputSeed=743;const inputRandom=()=>{inputSeed=(Math.imul(inputSeed,1664525)+1013904223)>>>0;return inputSeed/4294967296;};
   const r=rig(L,compiled,false,shape,shape);
   const open=who=>openRoom({net:{config:cfg(who),WebSocketImpl:r.socket(),post:null}});
   let a=open('Builder');const b=open('Neighbour');t.after(()=>{a.close();b.close();r.stop();});
   await clock.wait(2000);
+  const visibleCover=[];a.each('cover',e=>visibleCover.push(e.id));
+  assert.deepEqual(visibleCover,[],'collider entity is outside visual interest');
   const place=async(at,hover=false)=>{a.input({ax:0,hover});await clock.wait(700);a.command('place',{at});await clock.wait(1000);};
   for(const [name,speed,dash] of [['walk',4,false],['sprint',9,false],['dash',1,true]]) {
     await place({x:-2,y:0,z:0});a.input({ax:speed,dash});
