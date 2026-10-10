@@ -57,8 +57,8 @@
  *                                          emulated (a --cpu times slower CPU, 4G) on this computer's GPU. The plugin's perf
  *                                          skill runs the whole measure, change, compare, keep-or-revert loop)
  *   homie-studio trailer <id> [--url <site>] [--seconds 40] [--length 20] [--title "…"] [--end "…"] [--skills <folder>]
- *                                         (a trailer in one command, by the plugin's video skill: the game rendered frame by
- *                                          frame on a virtual clock, its sound rebuilt from its own files and what it played,
+ *                                         (a trailer in one command, by the plugin's video skill: live footage for server rules,
+ *                                          or a virtual clock and rebuilt sound for older browser games,
  *                                          the highlights picked, an end card, 16:9, 1:1 and 9:16 in videos/<id>-trailer/)
  *   homie-studio perf sizes <id>          (what a player downloads: every built file, raw and gzipped, the biggest first; with
  *                                          build --maps, which modules make up the bundle; each big script read for whether it

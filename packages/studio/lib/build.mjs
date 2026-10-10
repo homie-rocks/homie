@@ -381,6 +381,8 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   rmSync(out, { recursive: true, force: true });
   mkdirSync(join(out, 'assets'), { recursive: true });
   const mode = g.build?.mode ?? 'bundle';
+  const label = `${g.kind === 'app' ? 'apps' : 'games'}/${g.id}`;
+  const manifest = g.kind === 'app' ? 'app.json' : 'game.json';
   let warnings = 0;
   let metafile = null;
   let bundled = null;
@@ -391,14 +393,22 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
   // browser exactly as before, and cannot ask for the server.
   const ruled = isRulesGame(g);
   if (!ruled && g.room?.host === 'server') {
-    throw new Error(`games/${g.id}/game.json asks for "room": { "host": "server" }, but ${mode === 'bundle' ? 'this game has no src/rules.ts: its rules are inside its own code and run in a player\'s browser. Ask for it to be rewritten as rules plus view' : 'a ported game is someone else\'s browser code, which the server cannot run. It stays hosted by a player\'s browser'}.`);
+    throw new Error(`${label}/${manifest} asks for "room": { "host": "server" }, but ${mode === 'bundle' ? 'this game has no src/rules.ts: its rules are inside its own code and run in a player\'s browser. Ask for it to be rewritten as rules plus view' : 'a ported game is someone else\'s browser code, which the server cannot run. It stays hosted by a player\'s browser'}.`);
   }
-  if (ruled && mode !== 'bundle') throw new Error(`games/${g.id} has a src/rules.ts and game.json "build": { "mode": "${mode}" }. A game written as rules plus view is built by Homie itself: take the "build" setting out.`);
+  if (ruled && mode !== 'bundle') throw new Error(`${label} has a src/rules.ts and ${manifest} "build": { "mode": "${mode}" }. A game written as rules plus view is built by Homie itself: take the "build" setting out.`);
+  if (ruled) {
+    const file = join(g.dir, 'index.html');
+    const html = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const scripts = html.match(/<script\b[^>]*>/gi) ?? [];
+    if (!scripts.some((tag) => /\btype\s*=\s*["']module["']/i.test(tag) && /\bsrc\s*=\s*(["'])(?:\.\/)?assets\/main\.js(?:[?#][^"']*)?\1/i.test(tag))) {
+      throw new Error(`${g.kind === 'app' ? 'apps' : 'games'}/${g.id}/index.html: load the built view with <script type="module" src="./assets/main.js"></script>. The manifest entry names src/view.ts; HTML loads the bundle, not /src/view.ts. Keep the path relative so it works inside the game frame.`);
+    }
+  }
   const { prepareRules, viewPlugin } = ruled ? await rulesBuild() : {};
   const rules = ruled ? await prepareRules(esbuild, root, g, { log, longCheck }) : null;
   const bundle = async (entryRel) => {
     const entry = join(g.dir, entryRel);
-    if (!existsSync(entry)) throw new Error(`games/${g.id}: entry ${entryRel} not found`);
+    if (!existsSync(entry)) throw new Error(`${label}: entry ${entryRel} not found`);
     const options = {
       entryPoints: [rules ? 'homie:view' : entry], bundle: true, format: 'esm', target: 'es2022', minify: true, sourcemap: sourcemap ?? false,
       outdir: join(out, 'assets'), splitting: true, entryNames: hashed ? 'main-[hash]' : 'main', chunkNames: 'chunk-[hash]',
@@ -411,14 +421,14 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     };
     const failed = (error) => {
       const first = error.errors?.[0];
-      throw new Error(`games/${g.id} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
+      throw new Error(`${label} did not build: ${first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ''}` : error.message}`);
     };
     const result = await esbuild.build(options).catch(failed);
     warnings += result.warnings.length;
     metafile = result.metafile;
     const outputs = Object.entries(result.metafile.outputs).filter(([k]) => k.endsWith('.js'));
     const main = outputs.find(([, v]) => rules ? v.entryPoint === 'homie-view:homie:view' : Boolean(v.entryPoint))?.[0];
-    if (!main) throw new Error(`games/${g.id} did not build: esbuild wrote no bundle for ${entryRel}`);
+    if (!main) throw new Error(`${label} did not build: esbuild wrote no bundle for ${entryRel}`);
     bundled = `assets/${basename(main)}`;
     chunks = outputs.filter(([k]) => k !== main).map(([k]) => `assets/${basename(k)}`).sort();
     if (maps) {
@@ -442,25 +452,25 @@ export async function buildGameFiles(esbuild, root, g, out, { maps = false, sour
     writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
     if (g.entry) await bundle(g.entry);
     const html = readFileSync(join(out, 'index.html'), 'utf8');
-    if (!/homie-port\.js/.test(html)) log(`warning: games/${g.id}/index.html does not load ./homie-port.js (the port toolkit); add <script src="./homie-port.js"></script> first in <head>`);
+    if (!/homie-port\.js/.test(html)) log(`warning: ${label}/index.html does not load ./homie-port.js (the port toolkit); add <script src="./homie-port.js"></script> first in <head>`);
     if (hashed && bundled) writeFileSync(join(out, 'index.html'), pointAtBundle(html, bundled));
   } else if (mode === 'command') {
     const command = String(g.build.command ?? 'npm run build');
     const res = spawnSync(command, { cwd: g.dir, shell: true, encoding: 'utf8', timeout: 10 * 60_000, maxBuffer: 64 * 1024 * 1024 });
-    if (res.status !== 0) throw new Error(`games/${g.id}: \`${command}\` failed: ${`${res.stdout ?? ''}${res.stderr ?? ''}`.trim().split('\n').slice(-6).join(' ')}`);
+    if (res.status !== 0) throw new Error(`${label}: \`${command}\` failed: ${`${res.stdout ?? ''}${res.stderr ?? ''}`.trim().split('\n').slice(-6).join(' ')}`);
     const built = join(g.dir, String(g.build.out ?? 'dist'));
-    if (!existsSync(join(built, 'index.html'))) throw new Error(`games/${g.id}: \`${command}\` left no index.html in ${relative(g.dir, built) || '.'}`);
+    if (!existsSync(join(built, 'index.html'))) throw new Error(`${label}: \`${command}\` left no index.html in ${relative(g.dir, built) || '.'}`);
     cpSync(built, out, { recursive: true });
     writeFileSync(join(out, 'homie-port.js'), await portScript(esbuild, root, cache));
   } else {
     await bundle(g.entry ?? (rules ? 'src/view.ts' : 'src/main.ts'));
     const html = join(g.dir, 'index.html');
-    if (!existsSync(html)) throw new Error(`games/${g.id}/index.html is missing`);
+    if (!existsSync(html)) throw new Error(`${label}/index.html is missing`);
     const text = readFileSync(html, 'utf8');
     writeFileSync(join(out, 'index.html'), hashed ? pointAtBundle(text, bundled) : text);
   }
   if (mode !== 'static' && existsSync(join(g.dir, 'public'))) cpSync(join(g.dir, 'public'), out, { recursive: true });
-  if (!existsSync(join(out, 'index.html'))) throw new Error(`games/${g.id}/index.html is missing`);
+  if (!existsSync(join(out, 'index.html'))) throw new Error(`${label}/index.html is missing`);
   if (rules) {
     // Only this game's executable view and rules data: buildInfo, the site and other games cannot reload its players.
     const digest = createHash('sha256').update(rules.build);
@@ -501,7 +511,10 @@ export async function build(root, { only = null, log = () => {}, deploy = proces
   for (const g of games) if (g.kind === 'app') { const bad = appProblems(g); if (bad.length) throw new Error(`apps/${g.id}/app.json: ${bad.join('; ')}`); }
   // `--types`: the games' TypeScript is checked first (esbuild only strips types, it never reads them), and a type
   // error stops the build before anything is built.
-  const typed = types ? typecheck(root, games, { log }) : null;
+  // Rules always use their generated capability types, including the view. The legacy
+  // compiler sees broad source types and can falsely reject valid rules callbacks.
+  const legacy = games.filter((g) => !isRulesGame(g));
+  const typed = types && legacy.length ? typecheck(root, legacy, { log }) : null;
   // What the build before this one made, to say which games changed.
   const before = readJson(join(live, '_site', 'build.json'))?.games ?? {};
   // Everything is built in a folder of its own and put in place only when all of it is there (lib/stage.mjs): a

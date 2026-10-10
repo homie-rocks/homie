@@ -309,7 +309,7 @@ export async function newApp(root, id, { name } = {}) {
   const meta = JSON.parse(readFileSync(file, 'utf8'));
   meta.id = id; meta.name = String(name ?? 'Welcome together').slice(0, 60);
   writeFileSync(file, `${JSON.stringify(meta, null, 2)}\n`);
-  const main = join(dest, 'src/main.ts');
+  const main = join(dest, meta.entry ?? 'src/main.ts');
   writeFileSync(main, readFileSync(main, 'utf8').replaceAll("game: 'welcome'", `game: '${id}'`));
   return { ok: true, command: 'app new', id, dir: dest, files: readdirSync(dest, { recursive: true }).map(String), ...addNeeds(root, meta.needs) };
 }

@@ -306,3 +306,11 @@ test('a rules build publishes code and assets only after the development barrier
   await assert.rejects(buildSite(dir, { beforePublish: async () => { calls++; } }));
   assert.equal(calls, 1, 'a rejected build leaves the running Worker alone');
 });
+
+test('rules HTML names the built view; a source URL fails before a browser opens', async () => {
+  const dir = studio('html-entry');
+  assert.equal(run(['game', 'new', 'coin-dash', '--from', 'coin-dash'], dir).status, 0);
+  const game = listGames(dir).find((g) => g.id === 'coin-dash');
+  writeFileSync(join(game.dir, 'index.html'), '<canvas></canvas><script type="module" src="/src/view.ts"></script>');
+  await assert.rejects(buildGameFiles(await esbuildOf(), dir, game, join(dir, 'bad-html')), /index\.html: load the built view.*\.\/assets\/main\.js.*not \/src\/view\.ts/);
+});

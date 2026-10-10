@@ -1,3 +1,5 @@
+// Presentation only: openRoom gives predicted own movement and interpolated other bodies.
+// Send intent; rules decide outcomes. Keep rendered obstacles aligned with room.map.
 /*
  * COIN DASH — the view: what a player sees, and what they press.
  *

@@ -1,3 +1,5 @@
+// Presentation only: openRoom gives predicted own movement and interpolated other bodies.
+// Send intent; rules decide outcomes. Keep rendered obstacles aligned with room.map.
 /** Gem Rush 3D: the room runs the rules; this view draws the meadow and its animals. */
 import {
   AmbientLight, AnimationClip, AnimationMixer, Box3, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, ConeGeometry, CylinderGeometry,

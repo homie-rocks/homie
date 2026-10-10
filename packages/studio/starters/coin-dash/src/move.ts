@@ -1,3 +1,5 @@
+// This same guarded step runs on the server and immediately for the local player.
+// Only pose/motion, input, ctx map/public tune/math/clocks: no scores, queries or random.
 /*
  * COIN DASH — how a runner moves. Its own file, because two places run it: the server, for every body it moves, and
  * each player's browser, for that player's own body. So it reads only what both have: the body's own position,

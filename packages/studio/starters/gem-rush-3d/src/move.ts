@@ -1,3 +1,5 @@
+// This same guarded step runs on the server and immediately for the local player.
+// Only pose/motion, input, ctx map/public tune/math/clocks: no scores, queries or random.
 import { defineMove, type Vec3 } from '@homie-rocks/studio/rules';
 
 import type { MoveBody, MoveContext } from '@homie-rocks/studio/rules/types';

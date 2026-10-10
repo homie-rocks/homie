@@ -2,7 +2,7 @@
   "id": "welcome",
   "name": "Welcome together",
   "blurb": "A little place to gather. Join the queue, keep your ticket, and see when it is your turn.",
-  "entry": "src/main.ts",
+  "entry": "src/view.ts",
   "roles": {
     "customer": {
       "signIn": false,
@@ -102,5 +102,12 @@
       "phone": "Join once and keep your ticket.",
       "computer": "Staff call the next person from their signed-in tablet."
     }
+  },
+  "room": {
+    "host": "server"
+  },
+  "players": {
+    "min": 1,
+    "max": 32
   }
 }

@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { damp1 } from '@homie-rocks/camera/spring.js';
 import { chamferBox } from '@homie-rocks/geom/chamfer.js';
-import { createNetplay } from '@homie-rocks/studio/netplay';
+import { openRoom } from '@homie-rocks/studio/rules/view';
+import type rules from './rules';
 import { createAppRecords, type AppRecord } from '@homie-rocks/studio/apps';
 import { appLink, qrSvg, randomId } from '@homie-rocks/studio/links';
 
 type Ticket = { label: string; status: string };
-const net = createNetplay<{ light: number }>({ game: 'welcome', maxPlayers: 32, snapshotHz: 2 });
+const room = openRoom<typeof rules>();
+const net = room.net;
 const role = net.params.role ?? 'customer';
 document.body.className = role;
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
@@ -42,7 +44,7 @@ async function refresh() {
 }
 async function action(fn: () => Promise<unknown>) {
   pending = true; paint();
-  try { await fn(); net.send('records-changed'); await refresh(); }
+  try { await fn(); room.command('refresh', {}); await refresh(); }
   catch (e) { $('#status').textContent = (e as Error).message; }
   finally { pending = false; paint(); }
 }
@@ -61,10 +63,9 @@ next.onclick = () => action(async () => {
   if (first) await records.update(first, { ...first.data, status: 'called' });
 });
 // The room carries scene state and change notices; records always come from the authorized database.
-net.on('event', (e) => { if (e.k === 'records-changed') { if (net.role === 'host') net.send('records-changed'); void refresh(); } });
-net.on('snapshot', (s) => { light = s.d.light; });
+room.on('refresh', () => { void refresh(); });
 net.on('link', () => { void refresh(); });
-setInterval(() => { if (net.role === 'host') { light = net.now() / 1000; net.snapshot({ light }); } $('#connection').textContent = net.link === 'online' ? 'Here together · live' : 'Reconnecting…'; }, 500);
+setInterval(() => { $('#connection').textContent = net.link === 'online' ? 'Here together · live' : 'Reconnecting…'; }, 500);
 setInterval(() => void refresh(), 2000); // recover a missed notice; no dependency on a trusted browser host
 void refresh(); paint();
 
@@ -100,6 +101,7 @@ function draw(now: number) {
   const phone = innerWidth < 600;
   camera.position.set(phone ? 7 : 6, phone ? 6 : 5, distance); camera.lookAt(phone ? 1 : -.4, .6, 0);
   stage.position.x = phone ? 1.8 : 2.4;
+  light = net.now() / 1000;
   stage.rotation.y = reduced.matches ? 0 : Math.sin(light * .12) * .09;
   lanterns.forEach((g, i) => { const target = i < waiting ? 1 : .28; g.scale.y += (target - g.scale.y) * (1 - Math.exp(-dt * 5)); g.position.y = .18 + (reduced.matches ? 0 : Math.sin(now / 1000 + i) * .05); });
   renderer.render(scene, camera);

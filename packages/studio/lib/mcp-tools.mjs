@@ -925,7 +925,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'game_make', title: 'Make a multiplayer game',
-      description: 'Make a game in the studio from a multiplayer starter, under the id you choose, to change into the person\'s game: gem-rush (an arena: every browser renders, one hosts the rules, bots fill empty seats, rounds restart), gem-rush-3d (the same arena in three.js, dressed with free CC0 models through @homie-rocks/studio/assets: the start for a 3D game), hero-rush-3d (the arena with animated CC0 heroes that run, jump and swing through @homie-rocks/studio/animate, a shared clip library per skeleton, a jump and a swing tuned in the Game Lab: the start for a 3D game with characters) or ember-vale (a hero who lasts for days, with cloud saves: for persistent games). In a new studio only once their game is planned (game_plan), or when they ask for a copy of a working starter; never as a first step. A planned game\'s codex stays. Before writing one of its systems from scratch, look for a piece of an existing game that does it (parts_find; part_add brings it in), and for the general mechanism in the @homie-rocks/* packages.',
+      description: 'Make a game in the studio from a multiplayer starter, under the id you choose, to change into the person\'s game: coin-dash (the smallest rules-plus-view example), gem-rush (an arena: the server runs rules, browsers predict movement and render, bots fill empty seats, rounds restart), gem-rush-3d (the same arena in three.js, dressed with free CC0 models through @homie-rocks/studio/assets: the start for a 3D game), hero-rush-3d (the arena with animated CC0 heroes that run, jump and swing through @homie-rocks/studio/animate, a shared clip library per skeleton, a jump and a swing tuned in the Game Lab: the start for a 3D game with characters) or ember-vale (a hero who lasts for days, with cloud saves: for persistent games). In a new studio only once their game is planned (game_plan), or when they ask for a copy of a working starter; never as a first step. A planned game\'s codex stays. Before writing one of its systems from scratch, look for a piece of an existing game that does it (parts_find; part_add brings it in), and for the general mechanism in the @homie-rocks/* packages.',
       inputSchema: { type: 'object', properties: { id: str('The game\'s id (lowercase, digits, hyphens): its address'), name: str('The game\'s display name'), from: str('Starter id (default gem-rush)'), ...STUDIO_ARG }, required: ['id', 'name'] },
       annotations: { title: 'Make a game', ...RW },
       run: async (a) => {
@@ -948,7 +948,7 @@ export function toolDefs(ctx, avail = {}) {
         }
         const m = r.result?.models;
         const got = m ? ` Its models: ${m.fetched} from the starter library${m.missing.length ? `; ${m.missing.length} could not be fetched (${m.why ?? m.missing[0].why}), and it draws stand-ins for those` : ''}.` : '';
-        return ok(`games/${a.id} is ${a.name}, from the ${a.from ?? 'gem-rush'} starter (${(r.result?.files ?? []).length} files).${got}${install} Change it in games/${a.id}/src/main.ts: file_read it once (a long file in two or three reads), decide every change, and make them in ONE file_edit with an edits list (never a call per change: twenty single edits use up a turn before the game is checked); then build and preview_run; check proves two browsers finish a round.`, { kind: 'game', ...r.result });
+        return ok(`games/${a.id} is ${a.name}, from the ${a.from ?? 'gem-rush'} starter (${(r.result?.files ?? []).length} files).${got}${install} Read studio_guide topic game, then file RULES.md. Change games/${a.id}/src/rules.ts (declared state and decisions), src/move.ts (server movement and local prediction), src/view.ts (pictures and input), and map/main.json (shared geometry). Read each file once and make its changes in ONE file_edit with an edits list (never a call per change). Keep room.host server. Choose defaults yourself. Build, repair every named diagnostic, preview_run and check; then play the requested mechanic in two browsers. A green check is not a playtest.`, { kind: 'game', ...r.result });
       },
     },
     {
@@ -992,7 +992,7 @@ export function toolDefs(ctx, avail = {}) {
         const guide = a.interview === true && ctx.skillsDir && existsSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md')) ? readFileSync(join(ctx.skillsDir, 'plan', 'references', 'INTERVIEW.md'), 'utf8') : null;
         return ok([
           made ? `Wrote games/${a.id}/CODEX.md (every section${made.planned ? '; the game is planned here before it is made' : ''}).` : `games/${a.id}/CODEX.md is there already: change it, never replace it.`,
-          'From the request and sensible defaults, fill CODEX.md in one call, then show it with game_codex and continue building. Choose phone and computer controls, a small first version, local sound and CC0 art. Infer persistent progress from the premise. No interview unless the person explicitly asks to plan together; no engineering or design questions.',
+          'From the request and sensible defaults, fill CODEX.md in one call, then show it with game_codex and continue building. New games are rules plus view with room.host server; read the game guide and RULES.md. Choose phone and computer controls, a small first version, local sound and CC0 art. Infer persistent progress from the premise. No interview unless the person explicitly asks to plan together; no engineering or design questions.',
           '', PARTS_FIRST,
           ...(guide ? ['', 'Optional reference for a person who explicitly requests an interview:', guide] : []),
         ].join('\n'), { kind: 'plan', id: a.id, file: `games/${a.id}/CODEX.md`, created: Boolean(made) });
@@ -1018,7 +1018,7 @@ export function toolDefs(ctx, avail = {}) {
     },
     {
       name: 'build', title: 'Build the site',
-      description: 'Bundle every game (or one) and the studio\'s site into site/dist. A few seconds. A running preview shows the new build on reload.',
+      description: 'Bundle every game or app and the site into site/dist. Rules builds always run strict types, the guard and deterministic generated play, including save/restore and prediction checks. Read full diagnostics and repair the named handler; info lines do not fail. Never bypass checks or switch to browser hosting to escape a failure. A running preview shows the new build on reload.',
       inputSchema: { type: 'object', properties: { game: str('Optional: only this game'), ...STUDIO_ARG } },
       annotations: { title: 'Build', ...RW },
       run: async (a) => {
@@ -1097,8 +1097,9 @@ export function toolDefs(ctx, avail = {}) {
         const url = a.url ? String(a.url) : await devUrl(ctx, root);
         const shots = join('.checks', `${game}-look`);
         return startRun(ctx, root, { kind: 'playtest', game, title: `${games.find((g) => g.id === game)?.name ?? game}: playtest`, steps: [
+          ...(games.some((g) => g.id === game && isRulesGame(g)) ? [{ label: 'rules build check', args: ['build', game] }] : []),
           { label: 'two-browser check', args: ['check', game, '--url', url, '--shots', join('.checks', game)] },
-          { label: 'pictures on a computer and a phone', soft: true, args: ['look', `/${game}/`, `/${game}/play`, '--url', url, '--only', 'computer,phone', '--shots', shots],
+          { label: 'pictures on a computer and a phone', soft: true, args: ['look', `/${game}/`, `/${game}/${games.find((g) => g.id === game)?.kind === 'app' ? 'open' : 'play'}`, '--url', url, '--only', 'computer,phone', '--shots', shots],
             // The first screen of each page first (a whole page is a tall picture): what a person sees on arrival.
             after: (j, run) => { run.look = (j.result?.rows ?? []).flatMap((r) => [r.fold, r.shot]).filter(Boolean).map((f) => relative(root, resolve(root, f))).slice(0, 8); } },
         ] });
@@ -1456,11 +1457,13 @@ export function toolDefs(ctx, avail = {}) {
         if (!topics.includes(a.topic)) return fail(`guides: ${topics.join(', ')}`);
         const dir = join(ctx.skillsDir, a.topic);
         if (a.file) {
-          const f = join(dir, 'references', basename(String(a.file)));
+          const name = basename(String(a.file));
+          const direct = join(dir, name);
+          const f = name.endsWith('.md') && existsSync(direct) ? direct : join(dir, 'references', name);
           if (!existsSync(f)) return fail(`no reference ${a.file} in ${a.topic}`);
           return ok(readFileSync(f, 'utf8'));
         }
-        const refs = (() => { try { return readdirSync(join(dir, 'references')); } catch { return []; } })();
+        const refs = [...readdirSync(dir).filter(f => f.endsWith('.md') && f !== 'SKILL.md'), ...(() => { try { return readdirSync(join(dir, 'references')); } catch { return []; } })()];
         return ok(`${DESKTOP_NOTE}${ctx.desktop ? `\n\n${DESKTOP_APPROVALS}` : ''}\n\n${readFileSync(join(dir, 'SKILL.md'), 'utf8')}${refs.length ? `\n\nReferences (file): ${refs.join(', ')}` : ''}`);
       },
     });

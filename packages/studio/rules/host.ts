@@ -2,8 +2,8 @@
  * host.ts — the host runtime: a rules module playing the host's part on the wire.
  * =============================================================================
  *
- * Today one player's browser is a room's host: it runs the rules and the clock and sends everybody the state. The host
- * runtime is that host with no browser in it. It takes a compiled rules module (rules.ts) and three things from its
+ * The server normally hosts the room: rules, clock and state. Browser hosting uses the same runtime
+ * for offline play, local development or private friends games. It takes a compiled rules module (rules.ts) and three things from its
  * caller: a way to send a frame, a clock and a store. It has no transport in it and no Cloudflare in it, in the style of
  * worker/room.mjs. Inside the `Table` (worker/index.mjs) the relay hands it parsed frames and fans out what it sends;
  * in Node the tests and the build check drive it with a clock of their own.

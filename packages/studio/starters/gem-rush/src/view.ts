@@ -1,3 +1,5 @@
+// Presentation only: openRoom gives predicted own movement and interpolated other bodies.
+// Send intent; rules decide outcomes. Keep rendered obstacles aligned with room.map.
 /** Gem Rush: the canvas draws the room; rules.ts decides the game. Coordinates here are pixels (50 per metre). */
 import { openRoom, type Entity } from '@homie-rocks/studio/rules/view';
 import type rules from './rules';

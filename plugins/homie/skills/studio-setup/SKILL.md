@@ -26,7 +26,8 @@ Show brief progress, not a form. Choose the name from the request, otherwise "My
 The demo and small-change lesson below are optional, only for someone who asks for a tutorial.
 Plan from the premise with sensible engineering and design defaults; the person changes them later
 by asking. A business or non-profit may need an app or site: do not force a game or game interview.
-Use phone and computer controls, a small first version, local sound and CC0 art. Build with one agent
+Use phone and computer controls, a small first version, local sound and CC0 art. New games
+use rules plus view with the server as host; read the game skill and RULES.md before coding. Build with one agent
 unless parallel work was requested. Keep provider approvals, paid budgets and required host holds.
 An existing request to go live or list is authorization; do not ask again outside those holds.
 

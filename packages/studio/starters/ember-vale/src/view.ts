@@ -1,3 +1,5 @@
+// Presentation only: openRoom gives predicted own movement and interpolated other bodies.
+// Send intent; rules decide outcomes. Keep rendered obstacles aligned with room.map.
 /** Ember Vale: server-run hunts, with the hero save and memorials owned by its player. */
 import { AI_MARK, BUBBLE_FONT, createBubbles, createControls, createLabels, paintBubbles, type BubbleIn, type BubbleOut, createSaves, easeView, exposePort, fitView, stripAi, type BodyBase, type Fit, type LabelIn, type LabelOut, type NetEvent } from '@homie-rocks/studio/port';
 // The Game Lab: tunables, phases, tracks and overlays (no-ops outside the lab).

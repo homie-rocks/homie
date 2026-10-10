@@ -1,6 +1,7 @@
 /** Real Chrome pages through local updates. Start one Preview dev server, then:
  * node packages/studio/test/rooms-pages.mjs http://127.0.0.1:8792 .wrangler/slice-2-studio
- * Runs ten updates ten seconds apart, then thirty five seconds apart, with one browser.
+ * The standalone soak runs ten sequences of ten updates ten seconds apart, then thirty five seconds apart.
+ * --release checks three acknowledged updates without real-time pacing or duration assertions.
  */
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -15,9 +16,11 @@ const original = readFileSync(source, 'utf8'); assert.ok(original.includes('self
 const meta = () => JSON.parse(readFileSync(resolve(studio, 'site/dist/games.json'), 'utf8')).games.find(g => g.id === 'coin-dash').room;
 const sleep = ms => new Promise(r => setTimeout(r, Math.max(0, ms)));
 const browser = await puppeteer.launch({ executablePath: findChrome(), headless: true, args: chromeArgs(), timeout: 0 });
+const release = process.argv.includes('--release');
+const sequences = release ? [[3, 0]] : [...Array.from({ length: 10 }, () => [10, 10000]), [30, 5000]];
 let edit = 1;
 try {
-  for (const [count, gap] of [...Array.from({ length: 10 }, () => [10, 10000]), [30, 5000]]) {
+  for (const [count, gap] of sequences) {
     const room = `updates-${Date.now().toString(36)}`; const clients = []; const errors = []; let sent = 0;
     try {
       for (const mode of ['play', 'play', 'watch']) {
@@ -76,12 +79,13 @@ try {
 
       do { for (const c of clients) await inspect(c, meta().build); if (clients.every(c => c.current)) break; await sleep(100); } while (true);
       assert.ok(clients.every(c => c.current), 'all pages initially online');
-      let nextAt = performance.now() + 1000, awaitingBuild = null;
+      let nextAt = performance.now() + (release ? 0 : 1000), awaitingBuild = null;
       while (true) {
         const now = performance.now();
         const version = meta().build;
         if (awaitingBuild !== null && version !== awaitingBuild) awaitingBuild = null;
-        if (sent < count && now >= nextAt && awaitingBuild === null) { writeFileSync(source, original.replace('self.score += 1;', `self.score += ${++edit};`)); sent++; awaitingBuild = version; nextAt = now + gap; }
+        if (release) for (const c of clients) await inspect(c, version);
+        if (sent < count && now >= nextAt && awaitingBuild === null && (!release || clients.every(c => c.current))) { writeFileSync(source, original.replace('self.score += 1;', `self.score += ${++edit};`)); sent++; awaitingBuild = version; nextAt = now + gap; }
         for (const c of clients) await inspect(c, version);
         assert.deepEqual(errors, []);
         if (sent === count && awaitingBuild === null && now >= nextAt && clients.every(c => c.current)) break;

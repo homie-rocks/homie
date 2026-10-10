@@ -17,6 +17,32 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.43.0] - 2026-10-09
+
+**Plugin 0.43.0**
+
+Ask for a game and its rules run on your server.
+
+### Added
+
+- The game skill teaches the whole rules-and-view workflow: shared truth, immediate movement, levels, companions, saving and the checks that prove the requested game plays. Your AI chooses the engineering defaults.
+- A guided rewrite keeps an older game's look, controls and feel while moving its rules to the server. It preserves the studio's other games and existing tests; there is no automatic converter.
+
+### Changed
+
+- Apps that need a shared live screen now start with the same server rooms. A quiz, queue or turn-based app gets real actions and shared state without pretend movement or compulsory game rounds.
+- Playtests explain stationary controls and intentional freezes. Performance reports measure both players when the server hosts. Covers and trailers use a live rules room and explain when an empty spectator room is paused.
+
+### Fixed
+
+- Builds explain the exact script tag a game page needs, check rules types once, and keep guarded builds working through a temporary-directory alias.
+- Input checks measure when the final touch reaches the game, so a slow test machine is not mistaken for slow controls. Real-time soak measurements are a separate command from the release test suite.
+
+### Upgrade notes
+
+- Existing games keep working as they are. A rewrite happens only when requested. Building a game does not ask for publication or deploy it.
+- Rooms still hold at most 32 seats. Larger rooms are a later milestone; Cloudflare capacity and billing remain unmeasured.
+
 ## [0.42.0] - 2026-10-09
 
 **Plugin 0.42.0**
@@ -46,7 +72,7 @@ Customers and other businesses can use a studio's tools, buy its goods and servi
 
 ## [0.40.0] - 2026-10-09
 
-**Plugin 0.40.0**
+**Plugin 0.40.0** · [#79](https://github.com/homie-rocks/homie/pull/79)
 
 New 3D games keep their matches on the server and answer your controls immediately.
 

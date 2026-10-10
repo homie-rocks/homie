@@ -666,6 +666,24 @@ async function featureKit(id, mode, mutate = s => s, tickHz = 20) {
   return { L, compiled, vocab, ...(await import(pathToFileURL(file).href)) };
 }
 
+for (const maxSpeed of [0, 100]) test(`movement probes derive stationary controls from the declared player speed ${maxSpeed}`, async t => {
+  const { L, compiled, openRoom } = await featureKit(`movement-probe-${maxSpeed}`, 'server', s => {
+    s = s.replace('maxSpeed: 100', `maxSpeed: ${maxSpeed}`);
+    return maxSpeed === 0 ? s.replace('body.pos.x + input.ax / 100', 'body.pos.x') : s;
+  });
+  const clock = virtualTime(t); const r = rig(L, compiled);
+  const a = openRoom({ net: { config: cfg('Player'), WebSocketImpl: r.socket(), post: null } });
+  t.after(() => { a.close(); r.stop(); });
+  await clock.wait(600);
+  assert.equal(globalThis.__homieNet.probe.movement(), maxSpeed === 0 ? 'stationary' : 'spatial');
+  assert.equal(a.status, 'playing');
+  assert.equal(a.net.role, 'replica');
+  const before = a.me.pos.x;
+  a.input({ ax: 100 }); await clock.wait(600);
+  if (maxSpeed === 0) assert.equal(a.me.pos.x, before, 'stationary rules use a no-op move and still receive real inputs');
+  else assert.ok(a.me.pos.x > before, 'moving rules remain subject to movement checks');
+});
+
 for (const path of ['server', 'replica', 'hosting']) test(`public view session has the same results through ${path}`, async t => {
   const browser = path !== 'server';
   const { L, compiled, vocab, openRoom } = await featureKit(`public-${path}`, browser ? 'browser' : 'server', s => s.replace('commands: { done: {}, ask: {} }', 'effects: { pulse: {} }, commands: { done: {}, ask: {} }').replace('self.level = world.level;', "self.level = world.level; world.emit('pulse', self.pos, {});"));

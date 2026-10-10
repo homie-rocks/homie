@@ -1,3 +1,5 @@
+// Presentation only: openRoom gives predicted own movement and interpolated other bodies.
+// Send intent; rules decide outcomes. Keep rendered obstacles aligned with room.map.
 /** Hero Rush 3D: server rules, predicted jumps, and the original meadow and heroes. */
 import {
   AmbientLight, Box3, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, ConeGeometry, CylinderGeometry,

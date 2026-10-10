@@ -42,7 +42,7 @@ import babelTraverse from '@babel/traverse';
 import * as babelGenerator from '@babel/generator';
 import * as t from '@babel/types';
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
 const traverse = babelTraverse.default ?? babelTraverse;
@@ -757,12 +757,18 @@ export async function guardFiles(esbuild, root, gameDir, entry) {
 
 /** An esbuild plugin that serves a game's guarded files in place of its sources (`stub`: files a bundle must not hold at all). */
 export function guardedPlugin(files, { stub = [] } = {}) {
+  // esbuild resolves filesystem aliases (including macOS /tmp -> /private/tmp).
+  // Match those paths to the exact sources already checked and rewritten.
+  const canonical = (file) => existsSync(file) ? realpathSync(file) : file;
+  const guarded = new Map([...files].map(([file, code]) => [canonical(file), code]));
+  const omitted = new Set(stub.map(canonical));
   return {
     name: 'homie-rules-guard',
     setup(b) {
       b.onLoad({ filter: /\.(?:ts|js|mjs)$/ }, (a) => {
-        if (stub.includes(a.path)) return { contents: 'export default {};\n', loader: 'js' };
-        const code = files.get(a.path);
+        const file = canonical(a.path);
+        if (omitted.has(file)) return { contents: 'export default {};\n', loader: 'js' };
+        const code = guarded.get(file);
         return typeof code === 'string' ? { contents: code, loader: 'js' } : null;
       });
     },

@@ -1,3 +1,5 @@
+// Game truth lives here: declared fields, legal inputs, next-tick events and the server clock.
+// Read the game skill RULES.md before changing the mechanic; keep presentation in view.ts.
 /*
  * COIN DASH — the rules: the example of a game whose rules run on the server.
  *

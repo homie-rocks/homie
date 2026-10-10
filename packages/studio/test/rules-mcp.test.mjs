@@ -19,6 +19,7 @@ test('MCP check refuses a planted rules fault before opening either browser, eve
     const dir = writeGame(join(root, 'games'), 'fault', { rules: "import { defineRules } from '@homie-rocks/studio/rules';\nexport default defineRules({ contract: 2, space: { dims: 2 }, entities: { dot: { tick() { Date.now(); } } } });" });
     writeFileSync(join(dir, 'game.json'), JSON.stringify({ id: 'fault', name: 'Fault', entry: 'src/view.ts', room: { host: 'server' } }));
     writeFileSync(join(dir, 'src/view.ts'), 'export {};');
+    writeFileSync(join(dir, 'index.html'), '<script type="module" src="./assets/main.js"></script>');
     const ctx = { root: () => root, install: false, runs: new Map(), note: () => ({}) };
     await toolDefs(ctx).find((t) => t.name === 'check').run({ game: 'fault', url: 'http://127.0.0.1:1' });
     const run = [...ctx.runs.values()][0];

@@ -17,7 +17,7 @@
  * Run: node --test packages/studio/test/rules-guard.test.mjs
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -216,6 +216,17 @@ export const move = defineMove({
   const broken = writeGame(scratch, 'broken', { rules: 'export default defineRules({ entities: { a: { tick(world, self) { self.n = ; } } } });\n' });
   const b = await guardRules(esbuild, scratch, broken);
   assert.match(problemLine(b.problems[0]), /^broken\/src\/rules\.ts:1 this file does not parse/);
+});
+
+test('a studio reached through a filesystem alias still links its guarded sources', async () => {
+  const esbuild = await esbuildOf();
+  const dir = writeGame(scratch, 'alias-game', { rules: file('self.score += 1;') });
+  const alias = join(scratch, 'alias');
+  symlinkSync(dir, alias, 'dir');
+  const result = await guardRules(esbuild, scratch, alias);
+  assert.deepEqual(result.problems, []);
+  assert.equal(result.ok, true);
+  assert.match(result.code, /__homie\d*\.l\(/, 'the linked handler remains counted');
 });
 
 test('coin-dash passes, and its linked module is the checked one: no unguarded key, no uncounted loop or function', async () => {

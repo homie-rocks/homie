@@ -178,6 +178,12 @@ test('a studio made, planned, made into a game, built and tracked, all through t
     const guide = await s.call('studio_guide', { topic: 'studio-setup' });
     assert.match(guide.content[0].text, /See a working game/);
     assert.match(guide.content[0].text, /call the tool of the same job/);
+    const rules = await s.call('studio_guide', { topic: 'game', file: 'RULES.md' });
+    assert.ok(!rules.isError, rules.content[0].text);
+    assert.match(rules.content[0].text, /Rules reference/);
+    const rewrite = await s.call('studio_guide', { topic: 'game', file: 'REWRITE.md' });
+    assert.ok(!rewrite.isError, rewrite.content[0].text);
+    assert.match(rewrite.content[0].text, /rewrite/i);
   } finally { await s.close(); }
 });
 

@@ -1,3 +1,5 @@
+// This same guarded step runs on the server and immediately for the local player.
+// Only pose/motion, input, ctx map/public tune/math/clocks: no scores, queries or random.
 import { defineMove } from '@homie-rocks/studio/rules';
 
 export const move = defineMove({
