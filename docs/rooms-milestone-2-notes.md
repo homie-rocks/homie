@@ -34,7 +34,11 @@ proof. No deployment or merge was made.
 - Saving and host recovery still use complete authoritative state. Filtering
   never changes simulation, collision, queries, scoreboards or shared state.
 - Seeded, virtual-time correctness in `npm test`; the long 300-client run is in
-  `test:rules:extended`. No wall-clock throughput threshold is a release gate.
+  `test:rules:extended`. The pre-existing 12-scenario real-time traffic matrix and
+  27 handover repetitions move there too, with all assertions retained. The gate
+  keeps two actual-browser cases (tab hiding and socket closing); virtual time
+  covers the rate/seed/handover matrix. No wall-clock throughput threshold is a
+  release gate.
 
 Interest is a bandwidth feature, **not hidden information**. Shared state,
 effects, roster and watcher overview are still public. Private fields and tells
