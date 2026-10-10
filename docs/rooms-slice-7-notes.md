@@ -74,6 +74,16 @@ starts stripe-mock. In that loaded full run the three starter Chrome smokes took
 92.1 seconds and main's four shared prediction smokes took 121.8 seconds.
 Changelog validation against `origin/main` and `git diff --check` also passed.
 
+Post-#78 root `npm test`: **2,337 passed, 12 skipped, 0 failed**, 2,349 total,
+in **816.6 seconds (13.6 minutes)**. The first CI attempt passed all six checks.
+Its confirmation rerun exposed a phone-check measurement fault: an eight-event
+touch ramp can reach the arena wall before its final-point receipt starts timing
+on software Chrome. Measured presses now establish direction with one real touch
+move; holds retain their ramp. The bounded-arena browser regression injects
+350 ms per touch event and fails on the old ramp (zero measured movement), then
+passes both horizontal directions with the fix. The 600 ms limit is unchanged.
+CI must pass twice consecutively after this fix; the earlier pass does not count.
+
 ## Earlier verification (before the release-gate repair)
 
 Rebased onto merged Slice 6, `origin/main` at `91be345`; final fetch confirmed
