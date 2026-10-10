@@ -17,6 +17,35 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.45.2] - 2026-10-10
+
+**Plugin 0.45.2**
+
+Run richer server-authoritative combat, admission and bots with shared collision queries.
+
+### Added
+
+- Opt-in ray options, ordered `rayAll` hits, named hit regions, projectile profiles, immutable query scenes and scratch movement queries.
+- `f.pulse()` carries a nonzero byte action once over the reliable input-event channel. Use it for weapon selection; ordinary sampled fields must not carry one-frame actions.
+- Entity field visibility: `owner`, `server` and `results`. Per-recipient projections also apply to welcome, watching and reconnect snapshots. Private-delivery deltas refer to a keyframe so packet loss cannot leave moving actors at stale poses.
+- Authenticated room round records, with a durable retry outbox and idempotent player-history append. Browser saves cannot overwrite server records.
+- Budgeted routes over baked walking graphs, ordered same-tick dispatch, player labels, ranked takeover and result-free retries. Named `navigation` graphs validate once at compilation, avoiding repeated graph-validation charges in bot handlers while retaining live obstacle checks and full searches.
+
+### Fixed
+
+- **Ray compatibility:** the earlier PR revision changed all rays to hit inside solids and charged more. Three-argument calls now retain their existing results and cost. Supplying the new options explicitly opts into inside-solid hits and the new query cost.
+- **Collider delivery:** the earlier PR revision copied every primitive field. Collider rows now carry only explicitly declared public `collider.fields`, and geometry revisions are sent only when changed relative to the snapshot baseline.
+- **Build compatibility:** `label`, `dispatch`, `rayAll`, `rays` and `restart` remain legal ordinary property and destructuring names. Guarding capability calls does not reserve these data names.
+- **Terrain compatibility:** the earlier PR revision changed terrain casting globally. Existing casts retain the 0.45.0 implementation; `body.terrain: 'exact'` and ray option `terrain: 'exact'` opt into the new algorithm and cost. Seeded compatibility tests pin old results and costs.
+- Client-requested actor rewind is bounded by server-measured round-trip latency plus presentation and scheduling margins, within the declared history limit. A client cannot simply choose any point in the history window.
+- Optional `sweep(body, delta, {ground:false})` skips redundant support work when the mover explicitly computes grounding. Default sweep behavior is unchanged. Exact terrain casts reject irrelevant support features early, reuse face-entry calculations and cache identical immutable queries within a handler. Ten thousand seeded exact casts pin zero result drift through the face optimization. These savings do not enlarge handler budgets.
+
+### Upgrade notes
+
+- New ray and terrain policies are opt-in. Query filters and locally predicted feedback do not grant damage authority.
+- `server:` save keys are reserved for declared room records; player-owned saves use other keys. Records retain at most 100 completed rounds.
+- This capability work does not itself constitute a Stormbreak gameplay parity claim.
+
 ## [0.45.1] - 2026-10-09
 
 **Plugin 0.45.1** · [#75](https://github.com/homie-rocks/homie/pull/75)

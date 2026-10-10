@@ -14,7 +14,7 @@ import { collisionQueries } from './live.ts';
  * Every call is charged 4 units to the running handler's budget (guard.ts), beside what any guarded call costs.
  * =============================================================================
  */
-import { castMap3, restsOnMap, type BodyShape } from './collision.ts';
+import { castMap3, castSolid, restsOnMap, type BodyShape } from './collision.ts';
 import { brand, charge, own, put } from './guard.ts';
 import { num } from './pack.ts';
 
@@ -237,12 +237,24 @@ function rayBounds(px: number, py: number, dx: number, dy: number, b: { min: Vec
   return best;
 }
 /** A circle (or a point, r 0) moved along d against the static map: the first thing in the way, and how many shapes were tested. */
-export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number): { hit: Hit | null; tested: number } {
+export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number, hits?: Hit[], includeInside = false, square = false): { hit: Hit | null; tested: number } {
   map = nearbyMap(map, {x:px,y:py,z:0}, {x:dx,y:dy,z:0}, r, 0, 2);
   charge(16 + 4 * (map.boxes.length + map.circles.length));
   let best: Hit | null = rayBounds(Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, px)), Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, py)), dx, dy, map.bounds, r);
-  for (const b of map.boxes) { const h = rayBox(px, py, dx, dy, b.min, b.max, r); if (h && (!best || h.t < best.t)) best = { ...h, id: (b as any).id }; }
-  for (const c of map.circles) { const h = rayCircle(px, py, dx, dy, c.at.x, c.at.y, c.r + r); if (h && (!best || h.t < best.t)) best = { ...h, id: (c as any).id }; }
+  if (hits && best) hits.push(best);
+  const take=(h: Hit | null,id?:string): void => {if(!h)return;const hit={...h,...(id?{id}:{})};if(hits)hits.push(hit);if(!best||h.t<best.t)best=hit;};
+  const length=Math.sqrt(dx*dx+dy*dy)||1;
+  const inside: Hit={t:0,nx:-dx/length,ny:-dy/length};
+  for (const b of map.boxes) {
+    const min=square?{x:b.min.x-r,y:b.min.y-r,z:0}:b.min,max=square?{x:b.max.x+r,y:b.max.y+r,z:0}:b.max;
+    const embedded=includeInside&&px>min.x&&px<max.x&&py>min.y&&py<max.y;
+    take(embedded?inside:rayBox(px,py,dx,dy,min,max,square?0:r),(b as {id?:string}).id);
+  }
+  for (const c of map.circles) {
+    const embedded=includeInside&&(px-c.at.x)*(px-c.at.x)+(py-c.at.y)*(py-c.at.y)<(c.r+r)*(c.r+r);
+    const h=square?castSolid({min:{x:px-r,y:py-r,z:0},max:{x:px+r,y:py+r,z:1},r:0},{x:dx,y:dy,z:0},{min:{x:c.at.x,y:c.at.y,z:-1},max:{x:c.at.x,y:c.at.y,z:2},r:c.r},includeInside):embedded?inside:rayCircle(px,py,dx,dy,c.at.x,c.at.y,c.r+r);
+    take(h,(c as {id?:string}).id);
+  }
   return { hit: best, tested: 4 + map.boxes.length + map.circles.length };
 }
 
@@ -251,7 +263,7 @@ export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: 
  * and a browser both move a body with this, so they agree to the last bit. Returns nothing, or `{ at, normal }`.
  * The 2D path charges 20 units and 4 per shape; 3D also charges each convex cast and terrain tile. With `dims` 2 a body always rests on the ground.
  */
-export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, dims: number, shape: BodyShape = { shape: 'sphere', radius, height: 2 * radius }): unknown {
+export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, dims: number, shape: BodyShape = { shape: 'sphere', radius, height: 2 * radius }, options?: unknown): unknown {
   // Charged before the cast, for every shape of the map it may test.
   charge(20);
   const fr = Math.fround;
@@ -267,7 +279,7 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
     const length = Math.sqrt(dx * dx + dy * dy + d.z * d.z);
     const t = h ? Math.max(0, h.t - (length > 0 ? SKIN / length : 0)) : 1;
     const at = v(fr(px + dx * t), fr(py + dy * t), fr(p.z + d.z * t));
-    put(body, 'pos', at); put(body, 'grounded', restsOnMap(map, at, shape));
+    put(body, 'pos', at); if (own(options, 'ground') !== false) put(body, 'grounded', restsOnMap(map, at, shape));
     return h ? Object.freeze({ at, normal: v(h.nx, h.ny, h.nz), ...(h.id ? { entity: h.id } : {}) }) : undefined;
   }
   const { hit: h } = castMap(map, px, py, dx, dy, radius);
@@ -285,9 +297,9 @@ export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: 
  * map. One function, so that the browser (view.ts) and the person the build check plays hold the same one. The
  * server's own (core.ts `moveCtx`) is made beside the rest of its world, and charges as that does.
  */
-export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number; geometry?: () => MapShapes }): unknown {
+export function moveContext(o: { tick: () => number; tickHz: number; tune: unknown; map: MapShapes; name: string; spots: Readonly<Record<string, readonly unknown[]>>; radius: () => number; shape?: () => BodyShape; dims: number; geometry?: () => MapShapes; self?: () => string | undefined }): unknown {
   const none = Object.freeze([]);
-  const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims);
+  const queries = collisionQueries(() => o.geometry?.() ?? o.map, () => o.shape?.() ?? {shape: 'sphere', radius: o.radius(), height: 2 * o.radius()}, o.dims, o.self);
   return brand(Object.freeze({
     get tick() { return o.tick(); }, dt: 1 / o.tickHz, tune: o.tune, math,
     // As the server's `ctx.ticks` reads it: a plain number, or nothing.

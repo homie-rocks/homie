@@ -388,6 +388,7 @@ export const players = Object.freeze({
     if(identity?.id && !identity.id.startsWith('office-')) { const p=await env.DB.prepare('SELECT id,name,guest,owner FROM players WHERE id=?1').bind(identity.id).first();return p?{...p,guest:Boolean(p.guest),owner:Boolean(p.owner)}:null; }
     try { const s = await sessionOf(request, env); return s ? { id: s.player.id, name: s.player.name, guest: s.player.guest, owner: s.player.owner } : null; } catch { return null; }
   },
+  async recordsGuest(request,env,url){return newGuest(request,env,url);},
   /** Shop guest creation uses the studio's new-guest address rate and the daily player limit. */
   async shopGuest(request, env, url, addressLimit) { return newGuest(request, env, url, addressLimit, 'shop-new'); },
   /** True when the request carries the session of an account its owner marked (`homie-studio players owner`). */
@@ -548,7 +549,8 @@ async function apiRoute(request, env, ctx, url, parts, { catalogueOf, read, f })
       if (head === 'stats') return withCookies(json({ ok: true, game: game.id, stats: s ? await readPlayerStats(env, s.player.id, game.id) : {} }), s?.cookies);
       if (third && parts.length === 3) {
         if (!s) return json({ ok: true, key: third, value: null, version: 0, updatedAt: null });
-        const r = await getSave(env, s.player.id, game.id, third);
+        let key;try{key=decodeURIComponent(third);}catch{return fail(400,'key','invalid save key');}
+        const r = await getSave(env, s.player.id, game.id, key);
         return withCookies(json(r, r.ok ? 200 : 400), s.cookies);
       }
       if (!s) return json({ ok: true, game: game.id, player: null, keys: [], used: { keys: 0, bytes: 0, blobBytes: 0 }, limits: SAVE_LIMITS });

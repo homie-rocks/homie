@@ -1,13 +1,12 @@
 import { castTerrain } from './terrain.ts';
-import { castTerrain as legacyTerrain } from './terrain-legacy.ts';
-import { nearbyMap } from './map-index.ts';
+import { nearbyMap } from '../../../rules/map-index.ts';
 /** Upright 3D collision. Positions are feet; a rounded box is a box plus a sphere.
  * Capsules are a vertical segment plus a sphere. No engine-specific maths or time.
  */
-import { charge, G } from './guard.ts';
-import type { Vec3, MapBox, MapCircle, MapHeightTile } from './rules.ts';
+import { charge } from '../../../rules/guard.ts';
+import type { Vec3, MapBox, MapCircle, MapHeightTile } from '../../../rules/rules.ts';
 
-export interface BodyShape { shape: string; radius: number; height: number; terrain?: 'exact' }
+export interface BodyShape { shape: string; radius: number; height: number }
 export interface Solid { min: Vec3; max: Vec3; r: number }
 export interface Hit3 { t: number; nx: number; ny: number; nz: number; id?: string }
 export interface Map3 {
@@ -15,7 +14,7 @@ export interface Map3 {
   bounds: MapBox; boxes: readonly MapBox[]; circles: readonly MapCircle[];
   heightTiles?: readonly MapHeightTile[];
   spheres?: readonly MapCircle[];
-  capsules?: readonly (MapCircle & { height: number; terrain?: 'exact' })[];
+  capsules?: readonly (MapCircle & { height: number })[];
 }
 const EPS = 1e-7;
 const point = (x: number, y: number, z: number): {x: number; y: number; z: number} => ({ x, y, z });
@@ -34,15 +33,8 @@ function separation(a: Solid, b: Solid, d: Vec3, t: number): Vec3 {
 /** Continuous convex cast: each separating plane gives a lower bound on impact.
  * Every iteration is charged, and a fixed cap bounds grazing contacts as well.
  */
-export function castSolid(a: Solid, d: Vec3, b: Solid, includeInside = false): Hit3 | null {
+export function castSolid(a: Solid, d: Vec3, b: Solid): Hit3 | null {
   charge(30);
-  if (includeInside) {
-    const gap = separation(a, b, d, 0);
-    const sq = gap.x*gap.x + gap.y*gap.y + gap.z*gap.z;
-    const radius=a.r+b.r;
-    const inside = radius > 0 ? sq < radius*radius : a.max.x > b.min.x && a.min.x < b.max.x && a.max.y > b.min.y && a.min.y < b.max.y && a.max.z > b.min.z && a.min.z < b.max.z;
-    if (inside) {const length = Math.sqrt(d.x*d.x+d.y*d.y+d.z*d.z)||1; return {t:0,nx:-d.x/length,ny:-d.y/length,nz:-d.z/length};}
-  }
   let t = 0;
   const r = a.r + b.r;
   let normal = point(0, 0, 0);
@@ -102,27 +94,12 @@ function castHeightTile(tile: MapHeightTile, p: Vec3, d: Vec3): Hit3 | null {
   return best;
 }
 
-let memoEpoch = -1;
-let castMemo = new WeakMap<object, Map<string, Hit3 | null>>();
-export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hit3[], includeInside = false): Hit3 | null {
-  // Exact casts can reuse identical immutable-scene queries within one handler.
-  // The epoch resets at every authority handler, including after restore.
-  if(body.terrain !== 'exact' || hits || !Number.isFinite(G.left)) return castMap3Uncached(map,p,d,body,hits,includeInside);
-  if(memoEpoch!==G.queryEpoch){memoEpoch=G.queryEpoch;castMemo=new WeakMap();}
-  charge(16);
-  let rows=castMemo.get(map);if(!rows){rows=new Map();castMemo.set(map,rows);}
-  const key=[p.x,p.y,p.z,d.x,d.y,d.z,body.shape,body.radius,body.height,includeInside].join(',');
-  if(rows.has(key))return rows.get(key)!;
-  const hit=castMap3Uncached(map,p,d,body,hits,includeInside);
-  if(rows.size<512)rows.set(key,hit);
-  return hit;
-}
-function castMap3Uncached(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: Hit3[], includeInside = false): Hit3 | null {
+export function castMap3(map: Map3, p: Vec3, d: Vec3, body: BodyShape): Hit3 | null {
   map = nearbyMap(map, p, d, body.radius, body.height || body.radius * 2);
   charge(24);
   const a = solidAt(p, body), r = body.radius, height = body.height || r * 2;
   let best: Hit3 | null = null;
-  const take = (h: Hit3 | null, id?: string): void => { if (h && h.t >= 0 && h.t <= 1) { const hit = id ? {...h, id} : h; if (hits) {charge(8); hits.push(hit);} if (!best || h.t < best.t) best = hit; } };
+  const take = (h: Hit3 | null, id?: string): void => { if (h && h.t >= 0 && h.t <= 1 && (!best || h.t < best.t)) best = id ? {...h, id} : h; };
   for (const axis of ['x', 'y', 'z'] as const) {
     const low = map.bounds.min[axis] + (axis === 'z' ? 0 : r);
     const high = map.bounds.max[axis] - (axis === 'z' ? height : r);
@@ -130,23 +107,12 @@ function castMap3Uncached(map: Map3, p: Vec3, d: Vec3, body: BodyShape, hits?: H
     const n = point(0, 0, 0); n[axis] = d[axis] > 0 ? -1 : 1;
     take({ t: ((d[axis] > 0 ? high : low) - p[axis]) / d[axis], nx: n.x, ny: n.y, nz: n.z });
   }
-  const exactTerrain = body.terrain === 'exact';
-  const terrain = [...(map.heightTiles ?? [])];
-  if(exactTerrain && d.z<0){charge(terrain.length*Math.ceil(Math.log2(terrain.length+1)));terrain.sort((a,b)=>(b.at.z+Math.max(...b.heights))-(a.at.z+Math.max(...a.heights)));}
-  for (const tile of terrain) {
-    if(exactTerrain && !hits && best?.t===0)break;
-    // Once a nearer surface is known, later solids only need to beat that time.
-    // This also bounds work on densely tessellated terrain behind the first hit.
-    const limit = exactTerrain && !hits && best ? best.t : 1;
-    const delta = limit < 1 ? point(d.x * limit, d.y * limit, d.z * limit) : d;
-    const hit = tile.base === undefined ? castHeightTile(tile, p, delta) : (exactTerrain ? castTerrain : legacyTerrain)(tile, a, delta);
-    if (hit) take({...hit, t: hit.t * limit});
-  }
-  for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }, includeInside), (b as any).id);
+  for (const tile of map.heightTiles ?? []) take(tile.base === undefined ? castHeightTile(tile, p, d) : castTerrain(tile, a, d));
+  for (const b of map.boxes) take(castSolid(a, d, { ...b, r: 0 }), (b as any).id);
   // Legacy map circles are vertical columns in a 3D map.
-  for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }, includeInside), (c as any).id);
-  for (const s of map.spheres ?? []) take(castSolid(a, d, { min: s.at, max: s.at, r: s.r }, includeInside), (s as any).id);
-  for (const c of map.capsules ?? []) take(castSolid(a, d, solidAt(c.at, { shape: 'capsule', radius: c.r, height: c.height }), includeInside), (c as any).id);
+  for (const c of map.circles) take(castSolid(a, d, { min: point(c.at.x, c.at.y, map.bounds.min.z - r), max: point(c.at.x, c.at.y, map.bounds.max.z + r), r: c.r }), (c as any).id);
+  for (const s of map.spheres ?? []) take(castSolid(a, d, { min: s.at, max: s.at, r: s.r }), (s as any).id);
+  for (const c of map.capsules ?? []) take(castSolid(a, d, solidAt(c.at, { shape: 'capsule', radius: c.r, height: c.height })), (c as any).id);
   return best;
 }
 export function restsOnMap(map: Map3, p: Vec3, body: BodyShape): boolean {

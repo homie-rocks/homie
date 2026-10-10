@@ -685,8 +685,7 @@ score and other shared outcomes still arrive with the network. The studio choose
 Room state is saved automatically (default movementSeconds: 1, plus round end,
 pause and finish). After 60 seconds with no person the room ends even if screens or
 AI remain. Use browser createSaves for player-owned character progress; it is not
-server-verified money. All replicated fields are public, including disguised roles.
-Use a separate authorized records service for private or lasting app records.
+server-verified money. Entity fields default to public. Declare visibility explicitly for private information (below); shared state and motion remain public. Use declared server round records for verified match history.
 
 
 ## Spatial delivery (0.45.0; milestone 2 slice 2)
@@ -772,3 +771,224 @@ known geometry beyond received ticks: a client cannot predict an unseen remote
 build/destruction. Once that update arrives, replay uses its geometry immediately.
 Moving platforms use world.place in their handlers; sweep/support see each tick's
 position. Passenger carrying is explicit movement logic, not automatic physics.
+
+## Filtered combat and camera queries (0.45.1)
+
+`world.ray(from, direction, metres, options?)` returns the nearest hit or undefined.
+`world.rayAll` returns all entry hits in distance order (one per shape or named
+part, not exit faces). Static geometry wins equal-distance ties; entity and part
+insertion order break remaining ties. Both queries charge their scans, geometry,
+filtering and output to the normal handler budget. The maximum ray distance is 10,000 metres; radius queries keep their 64 m bound; no query raises the game's budget.
+
+```ts
+runner: {
+  // Movement remains a capsule; these boxes apply only to ray queries.
+  body: {shape: 'capsule', radius: .42, height: 1.8, maxSpeed: 22},
+  query: {layer: 'fighters', tags: ['damageable'], parts: {
+    body: {shape: 'box', radius: .42, height: 1.5},
+    head: {shape: 'box', radius: .24, height: .4, offset: {x: 0, y: 0, z: 1.5}},
+  }},
+  fields: {hp: f.fix({init: 100})},
+  // ...player, inputs, movement and handlers...
+}
+```
+
+Parts are axis-aligned, feet-relative shapes, at most 16 per kind. `hit.part`
+is their declared name. A kind without parts uses its normal body or enabled
+collider. Parts do not resize movement bodies. Optional `query.profiles` holds up to eight named part sets; `profile` in ray options selects one, falling back to the default parts when that kind has no matching profile. For example, projectile travel may use a full-height box while bullets use separate body/head boxes. Geometry-only rays always use collision shapes. Query layers and tags are static
+kind declarations. A live collider's `enabled` and `size` fields still control
+its presence and dimensions.
+
+Options are plain data, never callbacks:
+
+- `kind`, `tag`, `layer`: exact entity-kind, declared-tag and layer matches.
+  Undeclared layers default to `geometry` for live colliders and `body` otherwise.
+  Static map shapes use `geometry` and are not subject to kind/tag/field filters.
+- `where: {hp: {gt: 0}}`: filter declared entity fields. Values may be exact
+  numbers, strings or booleans; numeric tests are `gt`, `gte`, `lt`, `lte`, plus
+  `eq`. All tests must match. Missing fields do not match. At most 16 fields.
+- `ignore: [ref]`: at most 16 opaque entity refs. Entity-handler and movement rays ignore their own entity
+  by default; `ignoreSelf: false` includes it. This also applies when a moving
+  non-player entity is itself a live collider. Local view rays use the own player
+  as caller; room-handler rays have no implicit caller. Rocket travel can ignore its owner explicitly; blast damage
+  may include the owner.
+- `geometryOnly: true`: map plus enabled live colliders, using their collision
+  shape rather than hit parts. Fighters do not shield other fighters. Use an
+  exclusion when testing the visibility of the cover being damaged. Evaluate
+  every visibility ray before sending damage events to preserve pre-blast cover.
+- `entitiesOnly: true`: omit the static map. Combine with the filters above.
+- `radius` and `shape`: cast a sphere (default) or axis-aligned box with this
+  half-size around the ray centre, useful for camera clearance. Radius defaults
+  to zero and is at most 100 metres. A point ray beginning inside a solid reports
+  an immediate hit; movement sweeps continue to allow escape from overlap.
+
+`room.ray` and `room.rayAll` use the same implementation for local aiming and
+cosmetic feedback. They use the drawn entity poses and latest known live geometry;
+only server results award damage. Spatially absent non-collider entities cannot
+be targeted by the view. Unknown remote edits are not predicted.
+
+Movement's `ctx.world.ray/rayAll` (also on `ctx.map`) query its tick's frozen static
+and live collision geometry with these same options. Collider kind, layer, tags
+and scalar fields accompany collision revisions, including outside visual
+interest, so a predicted geometry filter has the same data as authority.
+Movement cannot query fighters or award damage. These APIs do not implement lag
+compensation: they query the current authoritative or presented world.
+
+### Consent before driving an inherited bot
+
+A player's declaration may set `control: 'accepted'`, naming a declared bit in
+`motion`. When false, authority calls `think` even for a present person, and the
+view draws the authoritative body without predicting that person's movement.
+Commands remain available: validate an explicit consent command and set the bit
+true. Initialize it on arrival and reset it in `on.takeover` when appropriate.
+The server still owns driver/seat identity; this flag only controls input.
+
+Set `takeover: 'fitness'` to name a numeric field used when selecting a fill bot.
+The highest value wins (equal values use the highest seat). Update it in rules
+from health, position or whatever makes a body suitable. Reserved companions
+never yield. The selected entity keeps its ID, inventory and all state; only its
+seat and driver change. A displaced bot retains its own state at the donor's old
+seat. Without this declaration, existing seat-based selection is unchanged.
+
+Movement queries reject distant live colliders by swept bounds before detailed
+intersection, just as static map queries do. Bounds include capsule radius and
+height, vertical columns and the full sweep, preserving fast travel and support.
+
+### Ordered same-tick interactions
+
+`world.dispatch(id, event, payload)` delivers a declared event immediately and
+returns whether a live receiver had a handler. The receiver changes only its own
+state; after it returns, later queries see those changes. Use it for ordered
+pellets, where destroying a wall or killing a fighter changes the next ray.
+Ordinary `send` retains next-tick delivery. For a blast, collect every visibility
+decision before dispatching damage so one broken wall still shields that blast.
+
+Dispatch consumes the caller's remaining handler budget, including receiver work,
+and permits at most eight nested deliveries. It does not grant writes to another
+entity or shared state. It is not a transaction: mutations before an error remain
+subject to ordinary field coercion. Missing targets return false; there is no
+queued undeliverable event for immediate delivery. Movement cannot dispatch.
+
+Solid-terrain capsule distance queries reject triangle faces whose bounds cannot
+beat the closest feature already found. This preserves exact sampled geometry,
+including both source triangles and the solid sides and underside.
+
+### Bounded actor-pose rewind
+
+Declare `room.historySeconds: 1` (maximum two seconds). The server retains and
+saves non-collider body positions and placement revisions on its virtual clock.
+The view's `room.viewTick` is the tick used to interpolate remote bodies. Send it
+with an action, then use `world.ray(..., {atTick, ...filters})`. Fractional ticks
+interpolate saved poses. Player requests clamp to the smaller of the configured window and the server-measured round-trip latency plus 150 ms presentation delay and one simulation tick. Without a measurement only that small margin is allowed. The relay measures a nonce challenge; client-supplied latency figures are ignored.
+A placement or new round prevents rewinding through a teleport or reset.
+
+Rewind changes actor poses only. Eligibility filters use current fields, so a
+corpse or a fighter killed by an earlier pellet cannot absorb later pellets.
+Static terrain and live cover stay current: new cover blocks an old shot, and
+destroyed cover no longer blocks. This conservative cover policy is explicit;
+it is not a historical replay of world destruction. Rewind does not move actors,
+change movement prediction, roll back damage or rewind projectiles. Choose the
+window in game rules and validate actions normally; the client's tick is a claim.
+
+Vertical capsule sweeps against solid terrain use an exact swept sphere against
+the prism extended by the capsule centreline. Face, edge and vertex contacts
+replace iterative grazing convergence; geometry and handler budgets stay intact.
+
+For many related visibility or navigation queries in one handler, use
+`const scene = world.rays(options)`, then `scene.ray(from, direction, metres)`
+or `scene.rayAll(...)`. It captures actor poses, live geometry and filter fields
+once; later damage or placement does not change that scene. Each ray is still
+budgeted. Keep it local to the handler. Use ordinary `world.ray` when subsequent
+hits must see mutations, such as sequential pellets. Predicted movement exposes
+`ctx.world.rays` for its current geometry, too.
+
+`world.label(playerRef)` reads the relay's current display name (including bot
+names), at most 40 characters, or an empty string for a missing/non-player ref.
+Copy it into a declared field when a historical message must survive departures
+or seat exchanges. Names are presentation text, never proof of player identity;
+use the existing owner/ref for identity. The host restores labels with its save.
+
+For a body's planned route, capture `world.rays({geometryOnly:true,
+shape:'capsule', radius:.4, height:1.8})`. A capsule ray starts at its centre;
+`scene.sweep(scratchBody, delta)` and `scene.support(scratchBody, distance)` use
+its foot position instead, like shared movement. A scratch body has plain `pos`
+and `grounded` fields. These bounded queries change only that local copy, never
+a player or the captured scene. Use the same movement helper to evaluate a
+jump or dive without granting an action to the real body. Height is at least
+twice the radius, at most 200 metres; spherical casts retain their diameter.
+
+`world.round.restart()` is room-only. It abandons the current attempt and starts the
+next round on the next tick, keeping seats and entities and running the normal
+`roundStart` handlers. It publishes no completed results or `roundOver` event and
+skips the intermission. Use it for an authorized retry; validate eligibility in
+your room handler. Pending restart intent survives save/restore.
+
+
+### Discrete actions with a value
+
+Use `select: f.pulse()` for a weapon slot or other byte-valued action. Call
+`room.input({select: 2})` on the press and return to zero on release. A nonzero
+value is queued once, including a pulse shorter than a simulation tick; held
+samples do not create repeated actions. Zero is neutral. The reliable event
+channel carries these actions, with at most 16 pending per seat and one consumed
+per tick. Epoch changes discard old-round actions. `f.press()` remains the
+boolean equivalent; `f.u8()` is sampled state and can miss a one-frame pulse.
+
+### Private entity fields and verified round history
+
+Declare an entity field with `{visibility: 'server'}` for bot brains or secrets,
+`{visibility: 'owner'}` for private inventory, or `{visibility: 'results'}` for
+statistics revealed during intermission. Nested contents follow their top-level
+field. Hidden values become neutral on the client; never depend on them in shared
+movement. Server rules still read full state. Watchers receive public fields and
+results only. Entity positions, driver information, shared state and motion are
+public. This is field visibility, not fog-of-war entity hiding.
+
+A collider transmits only geometry plus explicitly named public scalar fields:
+`collider: {size: 'size', enabled: 'solid', fields: ['material']}`. Do not put
+private fields in that list. Unchanged collision rows are inherited from the
+snapshot baseline; keyframes and reconnects remain complete.
+
+For verified history declare
+`room.records: {key: 'server:career-v1', identity: 'matchKey', eligible: 'ready',
+fields: {kills: 'earnedKills', damage: 'earnedDamage'}}`. The identity names a
+shared text field that rules make unique for each round. The optional eligibility
+names a player boolean field; result fields name numeric player fields. The
+Worker associates the participant with its authenticated player ID and stores
+`id`, `endedAt`, `place`, `won` and the declared totals when the round completes.
+A durable outbox retries failed writes; duplicate round IDs are ignored. Read
+with `createSaves().get(key)`. Browser writes, deletes and save resets cannot
+change `server:` records. Keep guest/authentication setup active before playing.
+
+### Opt-in exact terrain and baked navigation
+
+Legacy three-argument rays keep their historical result and cost. Supplying ray
+options enables the richer query policy, including hits at distance zero when
+starting inside solids. Terrain changes are separate: set `terrain: 'exact'` in
+ray options or the entity body declaration to use exact face/edge/vertex terrain
+casts. Existing terrain behavior is retained when omitted. Test your map's
+slopes, ledges and movement when opting in.
+
+Declare static graphs once with `navigation: {walk: graph}` in `defineRules`, then
+call `world.route('walk', from, to, {radius, height})`. Compilation validates and
+copies the graph once; handlers pay for the live search, not graph validation.
+At most eight named graphs with 8192 nodes total are accepted. Unknown names fail.
+The array form remains available for occasional dynamic graphs.
+
+`world.route(graph, from, to, {radius, height})` searches an immutable authored
+walking graph. Nodes are `[x, y, z, neighbourIndices]`; endpoints are node indices.
+The graph has at most 8192 nodes and 16 neighbours per node. Edges must already
+encode static terrain walkability. The runtime checks live colliders, returns
+all node indices of a route or an empty list, and charges the search to the
+handler budget. It never substitutes a partial route at an expansion cap.
+Replan when the goal changes and when live geometry changes. Bake invalid or
+occupied terrain nodes out of the graph, and choose reachable endpoints.
+`@homie-rocks/nav` is the richer mesh/crowd API for applications that own that
+runtime; rules graphs avoid importing mutable navigation state into handlers.
+
+`room.predict.idleHold: true` holds small visual reconciliation offsets while
+input and body are stationary. Movement resumes smoothing. Large invalid poses
+still snap to authority. Opt in only after measuring stop/reversal and delayed
+collision behavior for the game's mover.
+
+For multi-cast movement or scratch trajectory checks, `ctx.world.sweep(body, delta, {ground:false})` (also captured-scene `sweep`) moves and returns the same collision but leaves `body.grounded` unchanged. Use it only when your mover computes support explicitly. Omitting the option retains the existing support query and grounding behavior. This avoids paying for identical support checks after horizontal and upward probes.

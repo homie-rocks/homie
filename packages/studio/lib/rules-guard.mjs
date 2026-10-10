@@ -66,10 +66,11 @@ export const REFUSED_NAMES = ['constructor', 'prototype', '__proto__', 'stack', 
 /** The names JavaScript calls by itself to turn an object into a number or a text: no function may sit under one. */
 export const HOOK_NAMES = ['valueOf', 'toString', 'toJSON'];
 /** What the host runtime's own objects offer: `world`, `ctx`, the round, the map (rules/core.ts) and `world.math` (rules/math.ts). */
-export const WORLD_METHODS = ['ticks', 'random', 'send', 'sendRoom', 'announce', 'sendArea', 'after', 'emit', 'spawn', 'despawn', 'place', 'near', 'inBox', 'ray', 'sweep', 'ask', 'goalDone', 'finish', 'end', 'spot', 'spots'];
+export const WORLD_METHODS = ['ticks', 'random', 'route', 'label', 'send', 'dispatch', 'sendRoom', 'announce', 'sendArea', 'after', 'emit', 'spawn', 'despawn', 'place', 'near', 'inBox', 'ray', 'rayAll', 'rays', 'sweep', 'ask', 'goalDone', 'finish', 'end', 'restart', 'spot', 'spots'];
 export const MATH_METHODS = ['sin', 'cos', 'tan', 'atan', 'atan2', 'asin', 'acos', 'exp', 'log', 'pow', 'hypot', 'rad', 'deg', 'clamp', 'lerp', 'vec', 'add', 'sub', 'scale', 'dot', 'cross', 'len', 'dist', 'norm', 'clampLen', 'lerpVec', 'dir', 'angle'];
 const VALUE_METHODS = new Set([...ARRAY_METHODS, ...STRING_METHODS, ...MAPSET_METHODS]);
 export const MOVE_METHODS = ['support', 'overlaps'];
+const NEW_METHODS = new Set(['route','label','dispatch','rayAll','rays','restart']);
 const CALLABLE = new Set([...VALUE_METHODS, ...WORLD_METHODS, ...MOVE_METHODS, ...MATH_METHODS]);
 const refusedName = (k) => REFUSED_NAMES.includes(k) || k.startsWith('toLocale');
 /** Operators that turn each operand into a number or a text. (`+` is handled beside them; `==` and `!=` are refused.) */
@@ -398,7 +399,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
       const decl = path.parentPath.isVariableDeclarator() && path.parentPath.parentPath.isVariableDeclaration() && statementsOf(path.parentPath.parentPath);
       for (const p of path.node.properties) {
         if (t.isRestElement(p)) continue;
-        const risky = p.computed || CALLABLE.has(p.key.name ?? p.key.value);
+        const risky = p.computed || (CALLABLE.has(p.key.name ?? p.key.value) && !NEW_METHODS.has(p.key.name ?? p.key.value));
         if (risky && !(decl && t.isIdentifier(p.value))) bad(p, `take "${p.computed ? 'a computed key' : p.key.name ?? p.key.value}" out with a plain \`const { … } = value\` declaration, or read it with a dot: a pattern here could take a method out of a value`);
       }
     },
@@ -457,7 +458,7 @@ export function guardSource(code, { file = 'rules.js', map = null, linked = fals
         const checks = [];
         for (const d of path.node.declarations) {
           if (!t.isObjectPattern(d.id)) continue;
-          for (const p of d.id.properties) if (!t.isRestElement(p) && t.isIdentifier(p.value) && (p.computed || CALLABLE.has(p.key.name ?? p.key.value))) checks.push(t.expressionStatement(call('nf', [t.identifier(p.value.name), line(p)])));
+          for (const p of d.id.properties) if (!t.isRestElement(p) && t.isIdentifier(p.value) && (p.computed || (CALLABLE.has(p.key.name ?? p.key.value) && !NEW_METHODS.has(p.key.name ?? p.key.value)))) checks.push(t.expressionStatement(call('nf', [t.identifier(p.value.name), line(p)])));
         }
         if (checks.length) path.insertAfter(checks);
       },

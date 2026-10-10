@@ -1,3 +1,5 @@
+import {routeGraph} from './navigation.ts';
+import { rayQuery, raySnapshot, type QueryTarget } from './query.ts';
 import { colliderSolid, castCollider2, colliderRow, collisionMap, collisionQueries, type CollisionRevision } from './live.ts';
 /*
  * core.ts — one room's world, stepped a tick at a time from a compiled rules module.
@@ -133,7 +135,9 @@ function errorText(error: unknown): string {
 export interface SavedCore {
   v: number; tick: number; epoch: number; rng: number; nextId: number; seq: number;
   round: [number, number, number, number]; overAt: number; match: [number, number]; trips: number;
-  shared: unknown[]; policy: CorePolicy; intent?: [number, number];
+  shared: unknown[]; policy: CorePolicy; intent?: [number, number, number?];
+  collision?: [number,number];
+  history?: [number, [string, number, number, number, number][]][];
   asks: PendingAsk[];
   guideViews: [number, Record<string, unknown>][];
   ents: unknown[][]; spawns: unknown[][]; seats: [number, string, string, string | null, number][]; queue: unknown[][]; areas: unknown[][]; ops: unknown[];
@@ -179,7 +183,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -210,6 +214,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   let restartAt = 0;
   let finishing = false;
   let endAsked = false;
+  let restartAsked = false;
   let vocabulary: Vocabulary | null = null;
   const restoredGoals = new Map<number, unknown>();
   const guideViews = new Map<number, Record<string, unknown>>();
@@ -369,6 +374,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
    * budget; and the counter and the scope are put back whatever happens. Nothing of the rules' is touched after this
    * returns.
    */
+  let dispatchDepth = 0;
   function run(kind: string, handler: string, ent: Ent | null, scope: Ctx['scope'], fn: () => void, always: boolean | 'body' = false): boolean {
     if (left <= 0) {
       cut = true;
@@ -387,7 +393,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     const E = Error as unknown as { stackTraceLimit?: number };
     const limit = E.stackTraceLimit;
     E.stackTraceLimit = 0;
-    G.left = quota;
+    G.queryEpoch++; G.left = quota;
     // The build check is told of every written value that had to be changed to fit (pack.ts), with the handler it was in.
     if (noted) G.note = (what, at, written) => noted(kind, handler, what, at, written);
     let bad = false; let thrown: unknown;
@@ -463,7 +469,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   }));
   let roundApi: Readonly<Record<string, unknown>> = Object.freeze({});
   const refreshRound = (): void => {
-    roundApi = brand(Object.freeze({ n: round.n, phase: round.phase, endsAt: round.endsAt, end: (): void => { need('room', 'world.round.end()'); endAsked = true; } }));
+    roundApi = brand(Object.freeze({ n: round.n, phase: round.phase, endsAt: round.endsAt, end: (): void => { need('room', 'world.round.end()'); endAsked = true; }, restart: (): void => { need('room', 'world.round.restart()'); restartAsked = true; } }));
   };
   refreshRound();
   /** `world.shared`: in room scope the writable face of the stored record, held to its types as it is written; everywhere else a frozen record of the same stored values. */
@@ -478,6 +484,32 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     return sharedRO;
   };
 
+  const historyTicks = Math.ceil((c.historySeconds ?? 0) * tickHz);
+  let poseHistory: [number, [string, number, number, number, number][]][] = [];
+  function rayTargets(options?: unknown): QueryTarget[] {
+    charge(8 * ents.size);
+    const targets: QueryTarget[] = [];
+    const filterKind=own(options,'kind'),filterLayer=own(options,'layer'),filterTag=own(options,'tag'),geometryOnly=own(options,'geometryOnly')===true;
+
+    const requested = own(options,'atTick');
+    if (requested !== undefined && (typeof requested !== 'number' || !Number.isFinite(requested))) throw new Error('ray.atTick is a finite simulation tick');
+    if (requested !== undefined && !historyTicks) throw new Error('ray.atTick needs room.historySeconds');
+    const allowance = cx.ent?.driver === 'person' ? Math.min(historyTicks,Math.max(0,opts.rewindTicks?.(cx.ent.seat) ?? 0)) : historyTicks;
+    const wanted = typeof requested === 'number' ? Math.max(tick-allowance,Math.min(tick,requested)) : tick;
+    let before: typeof poseHistory[number] | undefined, after: typeof poseHistory[number] | undefined;
+    if(wanted<tick)for(const frame of poseHistory){charge(2);if(frame[0]<=wanted)before=frame;if(frame[0]>=wanted){after=frame;break;}}
+    before ??= poseHistory[0];after ??= poseHistory[poseHistory.length-1];
+    for(const e of ents.values()) {
+      if(e.dead || !e.kind.body || typeof filterKind==='string'&&e.kind.name!==filterKind || geometryOnly&&!e.kind.collider || typeof filterLayer==='string'&&filterLayer!==(e.kind.query?.layer??(e.kind.collider?'geometry':'body')) || typeof filterTag==='string'&&!e.kind.query?.tags?.includes(filterTag))continue;
+      charge(64);
+      const row=e.kind.collider?colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f):null;
+      if(e.kind.collider&&!row)continue;
+      let at=e.pos;
+      if(!e.kind.collider && wanted<tick && before && after){charge(4*(before[1].length+after[1].length));const a=before[1].find(p=>p[0]===e.id&&p[4]===e.r),b=after[1].find(p=>p[0]===e.id&&p[4]===e.r);if(a&&b){const mix=after[0]===before[0]?0:Math.max(0,Math.min(1,(wanted-before[0])/(after[0]-before[0])));at={x:a[1]+(b[1]-a[1])*mix,y:a[2]+(b[2]-a[2])*mix,z:a[3]+(b[3]-a[3])*mix};}}
+      targets.push({id:e.id,kind:e.kind.name,query:e.kind.query,fields:e.f,geometry:Boolean(row),solid:row?colliderSolid(row):solidAt(at,e.kind.body),at});
+    }
+    return targets;
+  }
   function cast3(p: Vec3, d: Vec3, shape: BodyShape, ignored: Set<string>): Hit3 | null {
     let best = castMap3(c.map, p, d, shape);
     const solid = solidAt(p, shape);
@@ -513,6 +545,23 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       charge(SEND);
       if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.send is for handlers');
       push({ due: tick + 1, to: typeof target === 'string' ? target.slice(0, 24) : '', kind: 'ev', ev: ev as string, data: shapeData(c.events, ev, 'the event', data), at: tick });
+    },
+    dispatch: (target: unknown, ev: unknown, data?: unknown): boolean => {
+      charge(SEND);
+      if (cx.scope !== 'ent' && cx.scope !== 'room') throw new Error('world.dispatch is for handlers');
+      if (dispatchDepth >= 8) throw new Error('world.dispatch permits at most eight nested deliveries');
+      const payload = shapeData(c.events, ev, 'the event', data);
+      const e = typeof target === 'string' ? ents.get(target) : undefined;
+      const fn = e && typeof ev === 'string' ? e.kind.on[ev] : undefined;
+      if (!e || e.dead || !fn) return false;
+      // Synchronous delivery shares the caller's remaining quota. Each handler
+      // still writes only its own entity, and collection settlement stays scoped.
+      const parent = cx, parentTouched = touched, note = G.note;
+      cx = {scope:'ent',ent:e}; touched = []; dispatchDepth++;
+      if (noted) G.note = (what, at, written) => noted(e.kind.name, `on.${String(ev)}`, what, at, written);
+      try { fn(world,e.self,payload); }
+      finally { try { settle(); } finally { cx=parent; touched=parentTouched; G.note=note; dispatchDepth--; } }
+      return true;
     },
     sendRoom: (ev: unknown, data?: unknown): void => {
       charge(SEND);
@@ -608,7 +657,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       charge(cost);
       return Object.freeze(found.map(viewOf));
     },
-    ray: (from: unknown, direction: unknown, max: unknown): unknown => {
+    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => {
+      if (options !== undefined) return rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id)[0];
       // Charged before the cast, for every shape it may test: the map's, and every entity in the room.
       charge(20 + 4 * ents.size);
       const p = V(from); const d = dir(direction, dims); const far = reach(max, 'world.ray');
@@ -630,6 +680,14 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       if (!best) return undefined;
       return Object.freeze({ ...(best.id ? { entity: best.id } : {}), at: V({ x: p.x + d.x * far * best.t, y: p.y + d.y * far * best.t, z: 0 }), normal: V({ x: best.nx, y: best.ny, z: 0 }), dist: far * best.t });
     },
+    route: (graph: unknown, from: unknown, to: unknown, options?: unknown) => {
+      const radius=own(options,'radius')??.5,height=own(options,'height')??1.8;
+      if(typeof radius!=='number'||!Number.isFinite(radius)||radius<0||radius>100||typeof height!=='number'||!Number.isFinite(height)||height<0||height>200)throw new Error('route radius/height are finite body dimensions');
+      const named=typeof graph==='string';if(named&&!Object.hasOwn(c.navigation,graph))throw new Error('unknown navigation graph');return routeGraph(named?c.navigation[graph]:graph,from,to,rayTargets({geometryOnly:true}).map(t=>t.solid),radius,height,named);
+    },
+    label: (id: unknown): string => {charge(20);const e=typeof id==='string'?ents.get(id):undefined;if(!e?.kind.player)return '';return String(opts.label?.(e.seat,e.driver)??`Player ${e.seat+1}`).slice(0,40);},
+    rays: (options?: unknown): unknown => raySnapshot(c.map,rayTargets(options),dims,options,cx.ent?.id),
+    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown): unknown => rayQuery(c.map, rayTargets(options), dims, from, direction, max, options, cx.ent?.id, true),
     sweep: (self: unknown, delta: unknown, o?: unknown): unknown => {
       const e = mine(self, 'world.sweep');
       charge(20 + 4 * ents.size);
@@ -688,13 +746,19 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   Object.freeze(world);
 
   const hasColliders = c.kinds.some(k => k.collider);
-  const collisionState = (): CollisionRevision => [tick, tick + 1, [...ents.values()].flatMap(e => {
-    if (e.dead || !e.kind.collider || !e.kind.body) return [];
-    const row = colliderRow(e.id, e.pos, e.kind.body, e.kind.collider, e.f);
-    return row ? [row] : [];
-  })];
+  let collisionPrevious: CollisionRevision | null = null, collisionText = '';
+  const collisionState = (): CollisionRevision => {
+    const rows = [...ents.values()].flatMap(e => {
+      if (e.dead || !e.kind.collider || !e.kind.body) return [];
+      const row = colliderRow(e.id,e.pos,e.kind.body,e.kind.collider,e.f,e.kind.name,e.kind.query);
+      return row ? [row] : [];
+    });
+    const text = JSON.stringify(rows);
+    if (!collisionPrevious || text !== collisionText) {collisionText=text;collisionPrevious=[...(collisionPrevious ? [tick,tick+1] : opts.restore?.collision ?? [tick,tick+1]) as [number,number],rows];}
+    return collisionPrevious;
+  };
   let moveGeometry = c.map as import('./math.ts').MapShapes;
-  const queries = collisionQueries(() => moveGeometry, () => moveShape, dims);
+  const queries = collisionQueries(() => moveGeometry, () => moveShape, dims, () => cx.ent?.id);
   const moveWorld = brand(Object.freeze(queries));
   const moveMap = brand(Object.freeze({ name: c.map.name, spot: mapApi.spot, spots: mapApi.spots, ...queries }));
   let moveShape = { shape: 'sphere', radius: 0, height: 0 };
@@ -833,13 +897,19 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         // The seat changed hands without a goodbye: its old holder has left.
         if (s && s.driver !== 'bot') { leaveBody(s); s = seats.get(info.seat); }
         let bot: Ent | null = s && s.id ? ents.get(s.id) ?? null : null;
-        if (!bot && playerBodies().length >= c.bots) {
+        const previousBot = bot;
+        if (!bot && playerBodies().length >= c.bots || bot?.kind.player?.takeover) {
           // A person who joins a full room takes over a bot's body: the bot in the highest seat.
-          for (const e of playerBodies()) if (e.driver === 'bot' && (!bot || e.seat > bot.seat)) bot = e;
+          const priority = (e: Ent): number => e.kind.player?.takeover ? Number(e.f[e.kind.player.takeover]) : 0;
+          for (const e of playerBodies()) if (e.driver === 'bot' && (!bot || priority(e) > priority(bot) || (priority(e) === priority(bot) && e.seat > bot.seat))) bot = e;
         }
         if (bot) {
           const e = bot;
           seats.delete(e.seat);
+          if (previousBot && previousBot !== e) {
+            previousBot.seat = e.seat;
+            seats.set(previousBot.seat, {seat:previousBot.seat, driver:'bot', owner:'', id:previousBot.id, away:false});
+          }
           e.goal = null; e.seat = info.seat; e.driver = info.driver; e.owner = info.owner; e.away = false; e.r = (e.r + 1) & 0xffff; e.allow = 0;
           seats.set(info.seat, { seat: info.seat, driver: info.driver, owner: info.owner, id: e.id, away: false });
           out.push({ t: 'seats' });
@@ -882,6 +952,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       const seat = seats.get(e.seat);
       if (seat) leaveBody(seat);
     }
+    poseHistory = [];
     round = { n: round.n + 1, phase: 'live', endsAt: c.rounds && c.rounds.seconds > 0 ? tick + ticks(c.rounds.seconds) : 0, startedAt: tick };
     overAt = 0;
     refreshRound();
@@ -907,6 +978,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       for (const s of [...seats.values()]) { seats.delete(s.seat); if (s.driver !== 'bot') ops.push({ op: 'join', info: { seat: s.seat, driver: s.driver, owner: s.owner } }, ...(s.away ? [{ op: 'away' as const, seat: s.seat, away: true }] : [])); }
       return;
     }
+    if (restartAsked) { restartAsked = false; endAsked = false; startRound(); return; }
     if (round.phase === 'live' && (endAsked || (round.endsAt > 0 && tick >= round.endsAt))) endRound();
     endAsked = false;
     if (overAt && tick >= overAt + 2) {
@@ -918,7 +990,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     } else if (round.phase === 'over' && !overAt && tick >= round.endsAt) startRound();
   }
   function finishMatch(): void {
-    finishing = false;
+    finishing = false; restartAsked = false;
     out.push({ t: 'round', n: round.n, phase: 'over', endsAt: tick + Math.max(3, ticks(c.rounds ? c.rounds.breakSeconds : 0)), startedAt: round.startedAt, results: results() });
     for (const e of ents.values()) e.dead = true;
     ents.clear(); spawns = []; queue = []; pendingAsks = []; areas = []; fx = [];
@@ -1014,12 +1086,13 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         const body = k.body as NonNullable<KindTable['body']>;
         let claim: StepInput['claim'] = null;
         if (k.player) {
-          const driven = (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && !e.away;
+          const permitted = !k.player.control || Boolean(e.m[k.player.control]);
+          const driven = permitted && (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && !e.away;
           if (driven) {
             const s = inputs.get(e.seat);
             e.input = Object.freeze(s ? coerceFields(k.input, s.values, dims) : initFields(k.input, dims));
             claim = s?.claim ?? null;
-          } else if (k.think && (e.driver !== 'person' || k.player.away === 'think')) {
+          } else if (k.think && (!permitted || e.driver !== 'person' || k.player.away === 'think')) {
             // `think` returns the step. It is held to the declared input inside the handler's own try and budget; a `think` that throws leaves the input neutral.
             let stepIn: Record<string, unknown> | null = null;
             run(k.name, 'think', e, 'ent', () => {
@@ -1068,7 +1141,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         naming('body', 'pos'); e.pos = clampIn(V(own(b, 'pos')), body.radius, body.height || 2 * body.radius); naming('body', 'vel'); e.vel = V(own(b, 'vel')); naming('body', 'heading'); e.heading = dir(own(b, 'heading'), dims); naming();
         G.note = null;
         e.grounded = own(b, 'grounded') === true;
-        if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry);
+        if (beforeMove) opts.moved!(k.name, tick, e.input, beforeMove, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: { ...e.m } }, moveGeometry, e.id);
       }
       // Phase 2: for every entity, its commands and then its tick, starting from a different entity each tick.
       const list = [...ents.values()];
@@ -1109,6 +1182,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       areas = [];
       if (finishing) finishMatch();
     }
+    if(historyTicks){const rows:[string,number,number,number,number][]=[];for(const e of ents.values())if(e.kind.body&&!e.kind.collider&&!e.dead)rows.push([e.id,e.pos.x,e.pos.y,e.pos.z,e.r]);left-=16*rows.length;poseHistory.push([tick,rows]);while(poseHistory.length>historyTicks+1)poseHistory.shift();}
     if (fx.length) { out.push({ t: 'fx', tick, list: fx }); fx = []; }
     if (sharedDirty) { sharedDirty = false; out.push({ t: 'shared' }); }
     stats.tickUnits = c.settings.budget.tick - left;
@@ -1142,7 +1216,9 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   function save(): SavedCore {
     return {
       v: SAVE_REVISION, tick, epoch, rng, nextId, seq, round: [round.n, round.phase === 'live' ? 1 : 0, round.endsAt, round.startedAt], overAt, match: [playing, restartAt], trips,
-      shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
+      ...(hasColliders?{collision:collisionState().slice(0,2) as [number,number]}:{}),
+      ...(historyTicks?{history:poseHistory.map(([at,rows])=>[at,rows.map(row=>[...row])] as SavedCore['history'])}:{}),
+      shared: packFields(c.shared, shared, dims), policy: { ...policy }, intent: restartAsked ? [endAsked ? 1 : 0, finishing ? 1 : 0, 1] : [endAsked ? 1 : 0, finishing ? 1 : 0], asks: pendingAsks, guideViews: [...guideViews],
       ents: [...ents.values()].map(saveEnt), spawns: spawns.map(saveEnt),
       seats: [...seats.values()].map((s) => [s.seat, s.driver, s.owner, s.id, s.away ? 1 : 0]),
       queue: queue.map((q) => [q.due, q.from, q.fromId, q.seq, q.to, q.kind, q.ev, q.data, q.at, q.builtIn ? 1 : 0]),
@@ -1159,7 +1235,8 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       check(Array.isArray(value) && JSON.stringify(value) === JSON.stringify(packFields(list, unpackFields(list, value, dims), dims)));
     };
     check(r.v === SAVE_REVISION);
-    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops'].includes(k)));
+    if(r.collision!==undefined)check(Array.isArray(r.collision)&&r.collision.length===2&&uint(r.collision[0])&&uint(r.collision[1])&&r.collision[0]<=r.tick&&r.collision[1]===r.collision[0]+1);
+    check(Object.keys(r).every(k => ['v', 'tick', 'epoch', 'rng', 'nextId', 'seq', 'round', 'overAt', 'match', 'trips', 'shared', 'policy', 'intent', 'asks', 'guideViews', 'ents', 'spawns', 'seats', 'queue', 'areas', 'ops', 'history', 'collision'].includes(k)));
     const askNames = new Set();
     check(Array.isArray(r.asks));
     for (const a of r.asks) {
@@ -1175,7 +1252,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
       check(Array.isArray(row) && row.length === 2 && uint(row[0]) && row[0] < c.seats && !views.has(row[0])); views.add(row[0]);
       check(JSON.stringify(row[1]) === JSON.stringify(coerceFields(c.view, row[1], dims)));
     }
-    check(r.intent === undefined || Array.isArray(r.intent) && r.intent.length === 2 && r.intent.every(bit));
+    check(r.intent === undefined || Array.isArray(r.intent) && (r.intent.length === 2 || r.intent.length === 3) && r.intent.every(bit));
     for (const v of [r.tick, r.epoch, r.rng, r.nextId, r.seq, r.overAt, r.trips]) check(uint(v));
     check(r.tick < 0xffffffff);
     check(r.rng <= 4294967295 && r.epoch > 0 && r.nextId > 0 && r.seq > 0);
@@ -1284,10 +1361,16 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
   if (r) {
     if (r.v !== SAVE_REVISION) throw new Error('this save was written by another version of the runtime');
     validateSave(r);
+    if(historyTicks){
+      if(!Array.isArray(r.history)||r.history.length>historyTicks+1)throw new Error('saved query history is invalid');
+      let previous=-1;
+      for(const frame of r.history){if(!Array.isArray(frame)||frame.length!==2||!Number.isInteger(frame[0])||frame[0]<=previous||frame[0]>r.tick||frame[0]<r.tick-historyTicks||!Array.isArray(frame[1])||frame[1].length>ENTITY_MAX)throw new Error('saved query history is invalid');previous=frame[0];const ids=new Set<string>();for(const p of frame[1]){if(!Array.isArray(p)||p.length!==5||typeof p[0]!=='string'||p[0].length>24||ids.has(p[0])||!p.slice(1,4).every(v=>typeof v==='number'&&Number.isFinite(v))||!Number.isInteger(p[4])||p[4]<0||p[4]>65535)throw new Error('saved query history is invalid');ids.add(p[0]);}}
+      poseHistory=r.history.map(([at,rows])=>[at,rows.map(row=>[...row])]);
+    }
     pendingAsks = r.asks.map(a => ({ ...a, state: deepFreeze(a.state) }));
     if ([opts.restoreEpoch].some((e) => e !== undefined && (!Number.isSafeInteger(e) || e <= 0))) throw new Error('restored epoch is invalid');
     tick = r.tick; epoch = opts.restoreEpoch ?? r.epoch; rng = r.rng; nextId = r.nextId; seq = r.seq; overAt = r.overAt; playing = r.match[0]; restartAt = r.match[1]; trips = r.trips;
-    endAsked = r.intent?.[0] === 1; finishing = r.intent?.[1] === 1;
+    endAsked = r.intent?.[0] === 1; finishing = r.intent?.[1] === 1; restartAsked = r.intent?.[2] === 1;
     round = { n: r.round[0], phase: r.round[1] === 1 ? 'live' : 'over', endsAt: r.round[2], startedAt: r.round[3] };
     refreshRound();
     shared = unpackFields(c.shared, r.shared, dims); sharedChanged();
@@ -1304,6 +1387,7 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
     });
     areas = r.areas.map((a: any[]) => ({ from: a[0], fromId: a[1], seq: a[2], shape: a[3], ev: a[4], data: deepFreeze(coerceFields(c.events[a[4]] ?? [], a[5], dims)) }));
     ops = r.ops as typeof ops;
+    if(hasColliders)collisionState();
   } else startMatch();
 
   function decisionResult(value: unknown): Record<string, unknown> {

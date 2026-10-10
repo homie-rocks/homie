@@ -184,7 +184,7 @@ function play(c, companions, allow) {
   const bots = (mode) => { policy = { ...(policy ?? {}), bots: mode }; frames.push({ t: 'policy', policy }); };
 
   const movesToCheck = [];
-  const moved = (...args) => movesToCheck.push(args);
+  const moved = (...args) => { movesToCheck.push(args); if (fault && fault.includes(`${args[0]}.move:`) && !fault.includes('Movement input:')) fault += ` Movement input: ${JSON.stringify(args[2])}; before: ${JSON.stringify(args[3])}.`; };
   let A = open({ observe, noted, moved, send });
   for (const m of told()) A.frame(m);
   /** The room stops and starts again as a deploy restarts it: a new epoch, everybody away until they are back. */
@@ -236,8 +236,9 @@ function play(c, companions, allow) {
   const ends = (fd) => (fd.t === 'bit' || fd.t === 'press' ? [false, true] : fd.t === 'fix' ? [-1, 1] : [L.P.coerce(fd, -Infinity, c.dims), L.P.coerce(fd, Infinity, c.dims)]);
   const steering = new Map();
   let moveTick = 0;
+  let moveSelf;
   let moveGeometry = c.map;
-  const moveCtx = new Map(c.kinds.filter((k) => k.move && k.body).map((k) => [k.name, L.M.moveContext({ tick: () => moveTick, tickHz, tune: c.publicTune, map: c.map, geometry: () => moveGeometry, name: c.map.name, spots: c.map.spots, radius: () => k.body.radius, shape: () => k.body, dims: c.dims })]));
+  const moveCtx = new Map(c.kinds.filter((k) => k.move && k.body).map((k) => [k.name, L.M.moveContext({ tick: () => moveTick, tickHz, tune: c.publicTune, map: c.map, geometry: () => moveGeometry, self: () => moveSelf, name: c.map.name, spots: c.map.spots, radius: () => k.body.radius, shape: () => k.body, dims: c.dims })]));
   /**
    * An owner-moved body's own browser, for one tick: the game's `move` from where the last snapshot has the body, by
    * the step a browser takes (pack.ts `stepMove`), and the claim of where that leaves it. Its units are the play's.
@@ -249,7 +250,7 @@ function play(c, companions, allow) {
     const e = w && L.P.unpackEntity(c.kinds, w, c.dims);
     if (!e) return null;
     G.note = (what, at, written) => noted(k.name, 'move', what, at, written);
-    moveTick = t;
+    moveTick = t; moveSelf = b.id;
     const body = L.P.stepMove(k.move, { pos: e.pos, vel: e.vel, heading: e.heading, grounded: e.grounded, motion: L.P.thawFields(k.motion, e.motion) }, Object.freeze(values), moveCtx.get(k.name), Math.max(1, Math.floor(budget / 4)), k.motion, c.dims,
       (error) => { fault ??= `${G.file}:${G.line} ${k.name}.move: ${fix(diagnostic(String(error?.message ?? error)))} A player's own browser runs this move for its body.${when()}`; });
     G.note = null;
@@ -345,9 +346,9 @@ function play(c, companions, allow) {
     const stats = A.core.stats; const cut = stats.ticksCut; const held = stats.held;
     A.tickNow();
     units += A.core.stats.tickUnits;
-    for (const [name, tick, input, before, after, geometry] of movesToCheck.splice(0)) {
+    for (const [name, tick, input, before, after, geometry, id] of movesToCheck.splice(0)) {
       const kind = c.kinds.find(k => k.name === name);
-      moveTick = tick; moveGeometry = geometry ?? c.map;
+      moveTick = tick; moveGeometry = geometry ?? c.map; moveSelf = id;
       const result = L.P.stepMove(kind.move, before, input, moveCtx.get(name), Math.max(1, Math.floor(budget / 4)), kind.motion, c.dims,
         error => { fault ??= `${siteOf(name, 'move')} ${name}.move: prediction failed: ${error.message}.${when()}`; });
       units += result.used;

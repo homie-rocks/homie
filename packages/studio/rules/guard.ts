@@ -37,7 +37,7 @@ export const refusedName = (k: string): boolean => REFUSED_NAMES.has(k) || k.sta
  * of the rules that ran last: the guarded module sets them as it goes, and the runtime reads them when a handler throws.
  * `note` is the build check's listener for a written value that had to be changed to fit (pack.ts); a room has none.
  */
-export const G = { left: Infinity, file: '', line: 0, note: null as null | ((what: string, at: string, written: string) => void) };
+export const G = { queryEpoch: 0, left: Infinity, file: '', line: 0, note: null as null | ((what: string, at: string, written: string) => void) };
 /** The line a guarded call is on, set again after its arguments ran (they may have called into another file). */
 export function l(file: string, line: number): number { G.file = file; G.line = line; return line; }
 
