@@ -131,3 +131,16 @@ test('a world finish and a crash in its break cannot resurrect the inventory fro
     assert.equal(fromBytes(b.durable).characters[0].character.fields.coins,2,'latest balance survives both the empty break and the re-created body');b.host.stop();
   }
 });
+
+test('an unacknowledged return cannot be overwritten by a later player in the same seat', () => {
+  const character=coins=>({kind:'runner',at:{x:0,y:0,z:0},fields:{coins},motion:{}});
+  let grant={account:'a',lease:1,seat:-1,character:character(5)};
+  const a=rig({characterFor:()=>grant});a.join();a.step();a.host.frame({t:'leave',seat:0});
+  assert.equal(a.host.characters.get('a').character.fields.coins,5);
+  // Leave the first return unacknowledged, just as a delayed account object does.
+  grant={account:'b',lease:1,seat:-1,character:character(9)};
+  a.host.frame({t:'join',peer:{id:'two',seat:0,occ:2}});a.step();a.host.frame({t:'leave',seat:0});
+  const records=new Map(fromBytes(a.durable).characters.map(c=>[c.account,c]));
+  assert.equal(records.get('a').character.fields.coins,5);assert.equal(records.get('b').character.fields.coins,9);
+  assert.equal(records.get('a').seat,-1);assert.equal(records.get('b').seat,-1);a.host.stop();
+});

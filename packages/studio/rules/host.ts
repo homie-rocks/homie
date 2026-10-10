@@ -258,8 +258,19 @@ export function createHost(o: HostOptions): Host {
   }
   if (saved && saved.v !== 1) throw new Error('this save was written by another version of the runtime');
   const measuredRtt = new Map<number, number>();
-  const characters = new Map<string, CharacterLease>((saved?.characters ?? []).map(c => [c.account, c]));
-  const core = createCore(c, { ...(c.settings.characters ? { characterForSeat: (seat: number) => [...characters.values()].find(c => c.seat === seat && !c.returning)?.character, characterSaved: (seat: number, character: import('./rules.ts').Character) => { const held = [...characters.values()].find(c => c.seat === seat); if (held) held.character = character; } } : {}), rewindTicks: seat => Math.ceil(((measuredRtt.get(seat) ?? 0) + 150 + period) / period), label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
+  const characters = new Map<string, CharacterLease>((saved?.characters ?? []).map(c => [c.account, c.returning ? { ...c, seat: -1 } : c]));
+  const characterOptions = c.settings.characters ? {
+    characterForSeat: (seat: number) => [...characters.values()].find(c => c.seat === seat && !c.returning)?.character,
+    characterSaved: (seat: number, character: import('./rules.ts').Character) => {
+      const held = [...characters.values()].find(c => c.seat === seat);
+      if (held) {
+        held.character = character;
+        // Once removed, a delayed return must never follow a new occupant of this seat.
+        if (held.returning) held.seat = -1;
+      }
+    },
+  } : {};
+  const core = createCore(c, { ...characterOptions, rewindTicks: seat => Math.ceil(((measuredRtt.get(seat) ?? 0) + 150 + period) / period), label: (seat,driver)=>nameOf(seat,driver), moved: o.moved, observe: o.observe, noted: o.noted, seed: Math.floor(random() * 4294967296) >>> 0, epoch: saved ? undefined : (Math.floor(random() * 4294967295) >>> 0) + 1, restore: saved?.core ?? null, restoreEpoch: o.restoreEpoch, stage: o.stage, decisions: !o.check });
   let epoch = core.epoch;
   if (saved && (o.startPaused ?? o.restoreEpoch !== undefined)) for (const body of core.bodies()) if (body.driver !== 'bot' && body.owner !== 'reserved') core.seatAway(body.seat, true);
   let lastSaveAt = o.clock.now();
@@ -827,6 +838,8 @@ export function createHost(o: HostOptions): Host {
   }
   function checkpoint(force = false): void {
     if (persistent) {
+      // An empty match break or an unjoined reservation has no body-removal callback.
+      for (const held of characters.values()) if (held.returning) held.seat = -1;
       if (!o.store) return; // Local checks/offline simulation have no durable account.
       o.store.save(save());
       saveTick = core.tick; lastSaveAt = o.clock.now(); forceSave = false;

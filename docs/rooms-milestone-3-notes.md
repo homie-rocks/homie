@@ -55,7 +55,9 @@ reservation. Repeating acquisition by that holder returns the same lease.
 The room's save is authoritative while the lease is out. Account copies are
 never used to overwrite a live room. On departure/recall the room removes the
 body and stores the final character plus a return outbox in the same transaction.
-Only then does it send the return. The account commits before acknowledging;
+The return detaches from the seat before that seat can be reused, so a later
+occupant cannot overwrite an unacknowledged inventory. Only then does it send
+the return. The account commits before acknowledging;
 a repeated or older return cannot overwrite a newer lease. A second room recalls
 the first and acquires only after the return. There is no expiry-based takeover.
 A reservation interrupted before join can also be recalled. An unavailable or
