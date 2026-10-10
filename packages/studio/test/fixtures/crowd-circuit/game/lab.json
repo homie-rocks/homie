@@ -1,0 +1,17 @@
+{
+  "v": 1,
+  "default": "run",
+  "takes": {
+    "run": {
+      "note": "Run right, then turn upward on the same rules clock",
+      "seconds": 2,
+      "seed": 7,
+      "device": "desk",
+      "fps": 60,
+      "inputs": [
+        { "at": 0.2, "key": "ArrowRight", "hold": 0.6 },
+        { "at": 1, "key": "ArrowUp", "hold": 0.6 }
+      ]
+    }
+  }
+}

@@ -161,7 +161,8 @@ test('Grok\'s documented shapes: a pass, a hold, the person\'s proceed, a refusa
     assert.equal(run('prompt', event('UserPromptSubmit', { prompt: 'hello there' })), null);
     assert.equal(run('prompt', event('UserPromptSubmit', { prompt: `proceed ${code}` })), null, 'the answer is recorded, nothing is printed');
     assert.deepEqual(run('pre', deploy), { decision: 'allow' });
-    assert.equal(run('pre', deploy).decision, 'deny', 'once: the next deploy is held again');
+    assert.equal(run('pre', deploy).decision, 'allow', 'approval covers retries in this task');
+    run('prompt', event('UserPromptSubmit', { prompt: 'Do not deploy this again.' }));
     // The model cannot answer for the person: a proceed inside a tool call is not a prompt.
     assert.equal(run('pre', tool('PreToolUse', 'run_terminal_command', { command: `echo proceed ${code} && npm run deploy` })).decision, 'deny');
 

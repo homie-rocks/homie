@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { deployIntent } from './lib/deploy-intent.mjs';
 /**
  * HOMIE'S HOLDS IN CODEX. Codex runs this as the plugin's lifecycle hooks (hooks/codex.json), with the hook's JSON on
  * stdin and its answer on stdout:
@@ -114,14 +115,14 @@ export function dataDir() {
 async function readState(dir) {
   try {
     const s = JSON.parse(await readFile(join(dir, 'holds.json'), 'utf8'));
-    return { holds: Array.isArray(s.holds) ? s.holds.filter((h) => Date.now() - h.at < HOUR) : [], deployed: s.deployed && typeof s.deployed === 'object' ? s.deployed : {} };
-  } catch { return { holds: [], deployed: {} }; }
+    return { holds: Array.isArray(s.holds) ? s.holds.filter((h) => Date.now() - h.at < HOUR) : [], deployTasks: s.deployTasks ?? {}, deployed: s.deployed && typeof s.deployed === 'object' ? s.deployed : {} };
+  } catch { return { holds: [], deployed: {}, deployTasks: {} }; }
 }
 
 async function writeState(dir, state) {
   await mkdir(dir, { recursive: true });
   const tmp = join(dir, `holds.${process.pid}.tmp`);
-  await writeFile(tmp, JSON.stringify({ holds: state.holds.slice(-50), deployed: state.deployed }, null, 1));
+  await writeFile(tmp, JSON.stringify({ holds: state.holds.slice(-50), deployed: state.deployed, deployTasks: state.deployTasks ?? {} }, null, 1));
   await rename(tmp, join(dir, 'holds.json'));
 }
 
@@ -181,7 +182,7 @@ export async function decide(p, { io = nodeIo(), state = { holds: [], deployed: 
     if (!call.changes?.length) return null;
     return editDecision(io, ctx, { tool: call.tool ?? 'apply_patch', changes: call.changes, by });
   }
-  const known = (root) => deployKnown(io, root, state, by);
+  const known = async (root) => ({ ...await deployKnown(io, root, state, by), requested: Boolean(p.session_id && state.deployTasks?.[String(p.session_id)]?.[root]) });
   if (call.kind === 'shell') return (await shellDecision(io, ctx, call.command, known)).decision;
   return (await mcpDecision(io, ctx, call.tool, call.input, known)).decision;
 }
@@ -204,6 +205,7 @@ export async function pre(p, { io, guards, dir = dataDir(), app = 'codex', by = 
   const mine = state.holds.filter((h) => h.fp === fp && h.session === session && h.state !== 'used');
   const yes = mine.find((h) => h.state === 'yes');
   if (yes) {
+    if (yes.kind === 'deploy' && p.session_id) { const ctx = await contextOf(io ?? nodeIo(), p.cwd); if (ctx.root) { state.deployTasks ??= {}; state.deployTasks[session] ??= {}; state.deployTasks[session][ctx.root] = true; } }
     yes.state = 'used';
     yes.usedAt = Date.now();
     await writeState(dir, state);
@@ -241,10 +243,20 @@ export function answersIn(prompt) {
   return out;
 }
 
-export async function prompt(p, { dir = dataDir() } = {}) {
+export async function prompt(p, { dir = dataDir(), io = nodeIo() } = {}) {
   const answers = answersIn(p.prompt);
-  if (!answers.length) return null;
+  const intent = deployIntent(p.prompt);
+  if (!answers.length && intent === null) return null;
   const state = await readState(dir);
+  if (intent !== null && p.session_id && p.cwd) {
+    const ctx = await contextOf(io, p.cwd);
+    if (ctx.root) {
+      state.deployTasks ??= {};
+      state.deployTasks[String(p.session_id)] ??= {};
+      state.deployTasks[String(p.session_id)][ctx.root] = intent;
+      await writeState(dir, state);
+    }
+  }
   const session = String(p.session_id ?? '');
   const waiting = state.holds.filter((h) => h.session === session && h.state === 'waiting');
   const said = [];

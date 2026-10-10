@@ -618,3 +618,15 @@ test('rules that cannot start refuse joins and say why, and a room never falls b
   // Unsupported dimensions still fail at declaration time; 3D is covered by rules-3d.
   assert.throws(() => L.R.compileRules(L.R.defineRules({ contract: 2, space: { dims: 4 }, entities: {} })), /space/);
 });
+
+test('late paired callbacks sustaining 20 Hz do not end a healthy room as an overrun', async () => {
+  const {L,compile}=await coinDash(), clock=fakeClock();
+  const rig=hostRig(L,compile({}),{clock});rig.join(0);const start=clock.t;
+  for(let n=1;n<=200;n++){
+    clock.t=start+n*100+1;
+    for(const timer of clock.timers.filter(x=>x.at<=clock.t)){
+      clock.timers=clock.timers.filter(x=>x!==timer);timer.fn();
+    }
+  }
+  assert.equal(rig.host.tick,400);assert.deepEqual(rig.ended,[]);rig.host.stop();
+});

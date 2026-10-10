@@ -47,6 +47,35 @@ const rowText = row => {
   return text;
 };
 
+// Entity rows are immutable snapshot values. Gates share their comparisons and
+// wire fragments across players whose visual baselines contain the same row.
+const changesByBase = new WeakMap(), wireRows = new WeakMap();
+function changedRow(entity, before) {
+  let changes = changesByBase.get(before);
+  if (!changes) { changes = new WeakMap(); changesByBase.set(before, changes); }
+  if (changes.has(entity)) return changes.get(entity);
+  let mask = 0; const values = [], after = rowText(entity);
+  for (let i = 1; i < entity.length; i++) if (after[i] !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
+  const row = mask ? [entity[0], mask, values] : null;
+  changes.set(entity, row); return row;
+}
+function wireRow(row) {
+  let text = wireRows.get(row);
+  if (text === undefined) { text = JSON.stringify(row); wireRows.set(row, text); }
+  return text;
+}
+/** JSON wire equivalent of a snapshot, sharing immutable entity fragments. */
+export function snapshotText(snap) {
+  const { d, ...header } = snap;
+  let data;
+  if (Array.isArray(d)) data = '[' + JSON.stringify(d[0]) + ',[' + d[1].map(wireRow).join(',') + ']' + d.slice(2).map(v => ',' + JSON.stringify(v)).join('') + ']';
+  else {
+    const { changed, own, ...meta } = d;
+    data = JSON.stringify(meta).slice(0, -1) + ',"changed":[' + changed.map(wireRow).join(',') + ']' + (own ? ',"own":[' + own.map(wireRow).join(',') + ']' : '') + '}';
+  }
+  return JSON.stringify(header).slice(0, -1) + ',"d":' + data + '}';
+}
+
 export function snapshotEncoder(keyframeTicks, chained = false) {
   let base = null;
   let rows = new Map(), keyTick = -Infinity;
@@ -65,9 +94,8 @@ export function snapshotEncoder(keyframeTicks, chained = false) {
         if (own?.includes(entity)) continue;
         const before = rows.get(id);
         if (!before) { changed.push(entity); continue; }
-        let mask = 0; const values = [];
-        for (let i = 1; i < entity.length; i++) if (rowText(entity)[i] !== before[i]) { mask |= 1 << i; values.push(entity[i]); }
-        if (mask) changed.push([id, mask, values]);
+        const change = changedRow(entity, before);
+        if (change) changed.push(change);
       }
       const out = { ...snap, d: { base: base.k, round: snap.d[0], ...(snap.d.length > 2 ? { collision: snap.d[2] } : {}), changed, removed: [...rows.keys()].filter(id => !present.has(id)), ...(chained ? { chain: true } : {}), ...(own ? { own } : {}) } };
       if (chained) { base = snap; rows = new Map(snap.d[1].map(e => [e[0], rowText(e)])); }
@@ -105,13 +133,14 @@ export function snapshotDecoder() {
         for (const e of d.own) visible.set(e[0], e);
         return { ...snap, d: [d.round, [...visible.values()], ...(d.collision === undefined ? [] : [d.collision])] };
       }
-      const next = new Map(rows);
-      for (const id of d.removed) next.delete(id);
+      // Validate first, then mutate only the private chained baseline. Returned
+      // snapshots keep their own entity array and immutable row values.
+      const updates = [];
       for (const change of d.changed) {
         if (!Array.isArray(change) || typeof change[0] !== 'string') return null;
         if (change.length !== 3) {
           if (change.length < 9) return null;
-          next.set(change[0], change); continue;
+          updates.push([change[0], change]); continue;
         }
         if (!Number.isInteger(change[1]) || change[1] < 0 || !Array.isArray(change[2])) return null;
         const old = rows.get(change[0]);
@@ -119,8 +148,11 @@ export function snapshotDecoder() {
         const entity = old.slice(); let j = 0;
         for (let i = 1; i < entity.length; i++) if (change[1] & (1 << i)) entity[i] = change[2][j++];
         if (j !== change[2].length) return null;
-        next.set(entity[0], entity);
+        updates.push([entity[0], entity]);
       }
+      const next = d.chain ? rows : new Map(rows);
+      for (const id of d.removed) next.delete(id);
+      for (const [id, entity] of updates) next.set(id, entity);
       for (const e of d.own ?? []) next.set(e[0], e);
       const decoded = { ...snap, d: [d.round, [...next.values()], ...(d.collision === undefined ? [] : [d.collision])] };
       if (d.chain) { base = decoded; rows = next; }

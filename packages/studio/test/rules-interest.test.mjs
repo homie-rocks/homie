@@ -114,3 +114,14 @@ test('seeded interest-edge collider revisions survive deltas, loss, edits and re
     assert.deepEqual(sorted(received), sorted(selected));
   }
 });
+
+test('chained decoding preserves earlier snapshots and rejects a partial invalid update atomically',()=>{
+  const encoder=snapshotEncoder(Infinity,true), decoder=snapshotDecoder();
+  const frame=k=>({e:1,k,d:[[],[['body',0,0,[k,0],[0,0],[],0,[],[],0,0]]],c:[]});
+  const first=decoder.decode(encoder.encode(frame(1)));
+  const second=encoder.encode(frame(2));
+  const broken=structuredClone(second);broken.d.changed.push(['missing',8,[[7,0]]]);
+  assert.equal(decoder.decode(broken),null);
+  assert.deepEqual(decoder.decode(second),frame(2));
+  assert.deepEqual(first,frame(1),'a private baseline update cannot mutate a snapshot already handed to the view');
+});

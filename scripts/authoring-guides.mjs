@@ -12,3 +12,10 @@ for(const name of readdirSync(source).filter(n=>n.endsWith('.md'))) {
     if(readFileSync(target,'utf8')!==text)throw new Error(`stale npm guide ${name}: node scripts/authoring-guides.mjs`);
   } else writeFileSync(target,text);
 }
+
+const docs=join(root,'packages/studio/docs');mkdirSync(docs,{recursive:true});
+for(const name of ['rooms-milestone-2-notes.md']) {
+  const text=readFileSync(join(root,'docs',name),'utf8'),target=join(docs,name);
+  if(process.argv.includes('--check')) {if(readFileSync(target,'utf8')!==text)throw new Error(`stale npm document ${name}`);}
+  else writeFileSync(target,text);
+}

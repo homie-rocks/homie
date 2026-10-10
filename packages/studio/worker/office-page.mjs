@@ -722,6 +722,15 @@ export const OFFICE_SCRIPT = String.raw`(function () {
   function room(g, r, now) {
     var box = el('div', 'room');
     var key = g.id + '/' + r.room;
+    if (r.telemetry) {
+      var timing = r.telemetry.ticks && r.telemetry.ticks.timing;
+      var stages = timing && timing.ms || {};
+      box.appendChild(el('div', 'faint', 'Server telemetry · ' + Object.keys(stages).map(function(k) { return k + ' p95 ' + (stages[k] ? stages[k].p95.toFixed(2) + ' ms' : 'unavailable'); }).join(' · ') + ' · queued relay rows ' + (r.telemetry.transport || []).reduce(function(n, t) { return n + t.queueRows; }, 0)));
+      (r.telemetry.gates || []).forEach(function(g) {
+        var view = g.view && g.view.ms && g.view.ms.viewEncodeSend;
+        box.appendChild(el('div', 'faint', g.id + ' · ' + g.clients + ' clients · encode/send p95 ' + (view ? view.p95.toFixed(2) + ' ms' : 'unavailable') + ' · queue ' + g.queueRows + ' reliable / ' + g.pendingViews + ' views · receipt ' + g.ackMs + ' ms'));
+      });
+    }
     var head = el('div', 'rhead');
     head.onclick = function (e) { if (e.target.closest('button,select')) return; S.open[key] = !S.open[key]; render(); };
     var round = r.round ? 'Round ' + (r.round.n || '?') + (r.round.phase === 'live' && r.round.endsAt ? ' · ' + clock(r.round.endsAt - now) + ' left' : r.round.phase === 'over' ? ' · results' : '') : 'no round yet';

@@ -350,6 +350,7 @@ export async function deployDecision(io, root, what, known = {}) {
     const games = [...new Set(lic.problems.map((p) => p.game))];
     return { deny: `Not deployed: ${lic.problems.length} asset${lic.problems.length === 1 ? '' : 's'} in a public game ${lic.problems.length === 1 ? 'has' : 'have'} no allowed licence: ${lic.problems.slice(0, 12).map((p) => `${p.game}/${p.asset}: ${p.problem}`).join('; ')}${lic.problems.length > 12 ? '; …' : ''}. Fix each with the studio's toolkit (${games.map((g) => `homie-studio assets check ${g}`).join(', ')} says what is wrong and how to fix it), then deploy again.` };
   }
+  if (known.requested === true) return null;
   const licences = lic.count ? `${lic.count} asset${lic.count === 1 ? '' : 's'}, all licensed` : null;
   const d = await deployFacts(io, root, known);
   const name = known.name ?? studioName(known.studio ?? (await readJson(io, `${root}/studio.json`)), root);

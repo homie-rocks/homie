@@ -123,7 +123,7 @@ export async function grokPre(p, opts = {}) {
 
 /** The person's own "proceed <code>" or "cancel <code>": recorded, and nothing is printed. `said` is what it answered (tests). */
 export async function grokPrompt(p, opts = {}) {
-  const call = { prompt: p.prompt ?? p.userPrompt ?? p.user_prompt ?? p.message ?? '', session_id: sessionOf(p) };
+  const call = { cwd: p.cwd ?? p.working_directory, prompt: p.prompt ?? p.userPrompt ?? p.user_prompt ?? p.message ?? '', session_id: sessionOf(p) };
   const out = await prompt(call, opts);
   return out ? { said: out.hookSpecificOutput?.additionalContext ?? '' } : null;
 }

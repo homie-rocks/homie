@@ -438,9 +438,9 @@ chat's card follows the work from then on) and, for a studio still being set up,
   `"games/*/game.json"`) and `"budget"` (`{ "usd": <n>, "credits": <n> }`: the most the studio's media jobs spend
   in all). In Claude Code, the Homie plugin's mod holds an edit to a protected file, a deploy, and a paid call past
   the budget until the person says Proceed, and takes keys out of command output. In Codex the plugin's hooks hold
-  the same calls until the person's own `proceed <code>`, once the person has trusted them, and in Grok Build once
+  unrequested deploys and the other held calls until the person's own `proceed <code>`, once the person has trusted them, and in Grok Build once
   the plugin is trusted. `npx --no-install homie-studio setup status --client codex` (or `grok`) says whether Homie's
-  holds are on, and while they are off, ask before each of those yourself. When a call is refused, say what you
+  holds are on. A deploy the person requested in their own words is already approved for that task; do not ask again or demand a typed code. Stop an unrequested deploy and ask once. When a call is refused, say what you
   meant to do and why; do not retry it unless the person asks.
 
 ## Telling Homie

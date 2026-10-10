@@ -40,7 +40,7 @@ test('multiplex admission awaits attach, preserves commands, and closes every lo
   peer.emit('message', { data: JSON.stringify(batch) });
   await session.settled();
   assert.equal(attached.length, 1000); assert.equal(messages.length, 2000);
-  assert.deepEqual(messages.slice(0, 2), [['0', 'hello'], ['0', 'command']]);
+  for (let i = 0; i < 1000; i++) assert.deepEqual(messages.filter(([id]) => id === String(i)).map(([, value]) => value), ['hello', 'command']);
   peer.close(); peer.close(); assert.equal(left.length, 1000);
 });
 test('scheduled delivery keeps controlled state exact, updates far bodies on virtual ticks, removes exits immediately', () => {
@@ -138,4 +138,104 @@ test('a lost chained visual frame does not stall the controlled body or collisio
   assert.deepEqual(decode.decode(encode.encode(leave,0)).d[1].map(e=>e[0]),['own'],'exits remain immediate while repairing the remote baseline');
   for(let k=5;k<=6;k++)decode.decode(encode.encode(frame(k),0));
   assert.deepEqual(decode.decode(encode.encode(frame(7),0)),frame(7));
+});
+
+test('a slow admission does not hold another player or their ordered inputs', async () => {
+  const peer = socket(), received = []; let release;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const session = multiplexSession(peer, async (req, client) => {
+    const id = new URL(req.url).pathname;
+    if (id === '/slow') await blocked;
+    client.addEventListener('message', e => received.push([id,e.data]));
+  });
+  peer.emit('message',{data:JSON.stringify([['open','1','https://room/slow'],['data','1','hello'],['open','2','https://room/fast'],['data','2','hello'],['data','2','command']])});
+  for(let i=0;i<10;i++)await Promise.resolve();
+  assert.deepEqual(received,[['/fast','hello'],['/fast','command']]);
+  release();await session.settled();assert.deepEqual(received.at(-1),['/slow','hello']);peer.close();
+});
+
+test('receipt flow control bounds snapshots through a long busy link without a watchdog restart', () => {
+  const clock=fakeClock(), peer=socket(); let closes=0;peer.close=()=>closes++;
+  const link=batchLink(peer,{receipts:true,setTimer:clock.setTimer,clearTimer:clock.clearTimer});
+  link.send(['data','0','hello']);clock.advance(5);
+  for(let k=1;k<=1200;k++) {
+    const snap={k,d:[[],[]]};
+    for(let id=0;id<1000;id++)link.send(['view',String(id),snap,id,{},20]);
+    if(k===1)link.send(['data','0','command']);
+    clock.advance(50);
+  }
+  assert.equal(peer.sent.length,1);assert.equal(link.facts().pendingViews,1000);assert.equal(closes,0);
+  peer.emit('message',{data:JSON.stringify([['ack',1]])});clock.advance(5);
+  const rows=peer.sent[1];assert.equal(rows[0][2],'command');
+  const views=rows.filter(row=>row[0]==='views');assert.equal(views.length,1);assert.equal(views[0][1].length,1000);assert.equal(views[0][2].k,1200);
+  link.close();
+});
+
+test('join storm starts logical admission with the first frame, not during handshake transit', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const upstream=socket();
+  const gate=new Gate({}, {TABLE:{idFromName:n=>n,get:()=>({fetch:async()=>({webSocket:upstream})})}});
+  const clients=Array.from({length:1000},socket);
+  await Promise.all(clients.map(client=>gate.connect(new Request('https://table/__net?game=g&room=r&gates=5&gate=0'),client)));
+  t.mock.timers.tick(4999);
+  assert.equal(upstream.sent.length,0,'Table has no premature logical connections');
+  for(const client of clients)client.emit('message',{data:'hello'});
+  t.mock.timers.tick(1);
+  const rows=upstream.sent.flat();
+  assert.equal(rows.filter(row=>row[0]==='open').length,1000);
+  assert.equal(rows.filter(row=>row[0]==='data').length,1000);
+  assert.equal(gate.clients.size,1000);assert.equal(gate.admissions.size,0);
+  gate.link.disconnect();
+});
+
+test('a reliable Gate encodes after coalescing, with a full keyframe only on connection or epoch change', async () => {
+  const upstream=socket(), client=socket(), decoder=snapshotDecoder();
+  const gate=new Gate({}, {TABLE:{idFromName:n=>n,get:()=>({fetch:async()=>({webSocket:upstream})})}});
+  await gate.connect(new Request('https://table/__net?game=g&room=r&gates=5&gate=0'),client);
+  for (const k of [1,2,4,20,21,100,101]) {
+    const snap={e:k===101?2:1,k,d:[[],[['own',0,0,[k,0],[0,0],[],0,[],[],0,0]]],c:[[0,0,k,0]]};
+    upstream.emit('message',{data:JSON.stringify([['views',[['1',0]],snap,{radiusM:12},20]])});
+    const wire=client.sent.at(-1);
+    assert.equal(Array.isArray(wire.d),k===1||k===101,'skipped unsent ticks do not break the ordered delta chain');
+    const received=decoder.decode(wire);
+    assert.deepEqual(received.d,snap.d);assert.deepEqual(received.c,snap.c);
+  }
+  gate.link.disconnect();
+});
+
+test('a thousand large welcomes wait for relay capacity while established inputs continue', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const peer=socket(), received=[], transports=new Set(); let closed=0, welcomed=0;
+  peer.close=()=>closed++;
+  const session=multiplexSession(peer,async(req,client)=>{
+    transports.add(client.transportFacts);
+    client.addEventListener('message',e=>{
+      if(e.data==='hello'){welcomed++;client.send(JSON.stringify({t:'welcome',id:req.url,payload:'x'.repeat(20000)}));}
+      else received.push(e.data);
+    });
+  });
+  peer.emit('message',{data:JSON.stringify(Array.from({length:1000},(_,i)=>[['open',String(i),'https://room/'+i],['data',String(i),'hello']]).flat())});
+  for(let step=0;step<2000 && welcomed<1000;step++){
+    t.mock.timers.tick(5);for(let i=0;i<12;i++)await Promise.resolve();
+    if(step===20){
+      assert.ok(welcomed<1000,'admission stops filling the reliable queue');
+      peer.emit('message',{data:JSON.stringify([['data','0','existing input']])});
+    }
+    if(step>30 && step%10===0)for(const frame of peer.sent.splice(0)){
+      const receipt=frame.find(row=>row[0]==='receipt');
+      if(receipt)peer.emit('message',{data:JSON.stringify([['ack',receipt[1]]])});
+    }
+  }
+  await session.settled();assert.equal(welcomed,1000);assert.deepEqual(received,['existing input']);assert.equal(closed,0);assert.equal(transports.size,1,'one diagnostics sampler per link, not per player');
+  session.shutdown();
+});
+
+test('a thousand-slot roster indexes live holders once, preserving names and human labels', async () => {
+  const {NetRoom}=await import('../worker/room.mjs');
+  const room=Object.create(NetRoom.prototype), slots=Array.from({length:1000},(_,slot)=>({slot,seat:slot,name:'untrusted',bot:true}));
+  Object.assign(room,{rules:true,seatCap:1000,maxPlayers:1000,seats:new Map(),stats:{labelled:0}});
+  let scans=0;room.live=()=>{scans++;return slots.map(s=>({seat:s.slot,name:'Person '+s.slot}));};
+  const roster=room.labelRoster(slots);
+  assert.equal(scans,1);assert.equal(roster.length,1000);
+  for(const row of roster){assert.equal(row.name,'Person '+row.slot);assert.equal(row.bot,false);}
 });

@@ -529,6 +529,7 @@ export interface NetStats {
   offline: boolean;
   rtt: number | null;
   offset: number;
+  telemetrySource: 'server' | 'browser' | 'offline' | 'disconnected';
   snapHzIn: number;
   snapHzOut: number;
   inputHzIn: number;
@@ -2938,6 +2939,7 @@ export function createNetplay<S = unknown, A = unknown, C = unknown>(opts: Netpl
   function statsNow(): NetStats {
     const t = wall();
     return {
+      telemetrySource: offline ? 'offline' : !connected ? 'disconnected' : opts.rulesHost?.mode === 'server' ? 'server' : 'browser',
       role, seat, host, connected, offline, rtt, offset: Math.round(offset),
       snapHzIn: snapIn.hz(t), snapHzOut: snapOut.hz(t), inputHzIn: inputIn.hz(t), inputHzOut: inputOut.hz(t), idleInputsSkipped: idleSkipped,
       lastSnapBytes, maxSnapBytes, bytesInPerS: perSecond(bytesIn), bytesOutPerS: perSecond(bytesOut),

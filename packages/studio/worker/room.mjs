@@ -476,6 +476,7 @@ export class NetRoom {
     this.lastSnapText = out;
     for (const o of this.others(c)) {
       if (this.lite(o)) continue; // an agent with no game client draws nothing
+      if (o.conn.snapshot && this.hasViewSchedule()) { o.conn.snapshot(snap, o.seat, this.server.viewSettings, this.tickHz); continue; }
       // A congested socket skips a snapshot rather than queueing a stale one.
       if (o.conn.buffered && o.conn.buffered() > 256 * 1024) { this.stats.drops += 1; continue; }
       this.sendText(o.conn, this.hasViewSchedule() ? JSON.stringify({ t: 'snap', from: null, ...this.playerSnapshot(o, snap) }) : out);
@@ -1807,9 +1808,9 @@ export class NetRoom {
   }
 
   /** The seat a slot names (its own, or the one its agent sits in), and what holds it. */
-  holderOf(seat) {
+  holderOf(seat, holders) {
     if (!Number.isInteger(seat)) return { kind: 'none' };
-    const c = this.live().find((o) => o.seat === seat);
+    const c = holders ? holders.get(seat) : this.live().find((o) => o.seat === seat);
     const s = this.seats.get(seat);
     if (c && c.agent) return { kind: 'agent', agent: c.agent, name: c.name };
     if (c) return { kind: 'human', name: c.name };
@@ -1823,21 +1824,29 @@ export class NetRoom {
    * slot with no seat is a bot; a slot naming a seat nobody holds is a bot; a person is never marked AI and never
    * named with an AI mark. A host's game cannot present an AI as a person.
    */
+  holderIndex() {
+    const holders = new Map();
+    for (const client of this.live()) if (!holders.has(client.seat)) holders.set(client.seat, client);
+    return holders;
+  }
+
   labelRoster(slots) {
-    return slots.map((raw) => this.labelOne(raw, false)).filter(Boolean);
+    const holders = this.holderIndex();
+    return slots.map((raw) => this.labelOne(raw, false, holders)).filter(Boolean);
   }
 
   /** A round's results, labelled the same way (`agent: true` on every AI's row). */
   labelResults(rows) {
-    return rows.slice(0, this.server || this.rules ? this.seatCap : 64).map((raw) => this.labelOne(raw, true)).filter(Boolean);
+    const holders = this.holderIndex();
+    return rows.slice(0, this.server || this.rules ? this.seatCap : 64).map((raw) => this.labelOne(raw, true, holders)).filter(Boolean);
   }
 
-  labelOne(raw, result) {
+  labelOne(raw, result, holders) {
     if (!raw || typeof raw !== 'object') return null;
     if (this.rules) {
       if (!Number.isInteger(raw.slot) || raw.slot < 0 || raw.slot >= this.seatCap) return null;
       raw = { ...raw, seat: raw.slot };
-      const holder = this.holderOf(raw.slot);
+      const holder = this.holderOf(raw.slot, holders);
       if (holder.kind !== 'human' && holder.kind !== 'agent') {
         if (raw.slot >= this.maxPlayers - this.reserve())
           raw.agent = { seat: null, role: raw.slot >= this.maxPlayers - this.policy.guides ? 'guide' : 'party', hands: 'host' };
@@ -1847,7 +1856,7 @@ export class NetRoom {
     const out = { ...raw };
     const seat = Number.isInteger(raw.seat) ? raw.seat : null;
     const agentSeat = !result && raw.agent && Number.isInteger(raw.agent.seat) ? raw.agent.seat : null;
-    const who = this.holderOf(seat ?? agentSeat);
+    const who = this.holderOf(seat ?? agentSeat, holders);
     const role = (a) => (['party', 'guide', 'player'].includes(a?.role) ? a.role : 'party');
     if (who.kind === 'agent') {
       out.name = who.name || aiName(raw.name);
@@ -2394,6 +2403,7 @@ export class NetRoom {
     const live = this.live();
     const agents = live.filter((c) => c.agent && c.seat !== null).length;
     return {
+      transport: [...new Set(this.live().map(c => c.conn.transportFacts).filter(Boolean))].map(f => f()),
       t: 'net', v: NET_VERSION, rev: NET_REVISION, room: this.code, st: now,
       host: this.hostRef(),
       openedAt: this.openedAt || null,
