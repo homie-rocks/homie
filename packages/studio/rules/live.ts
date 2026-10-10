@@ -54,15 +54,15 @@ export function revisionAt(history: readonly CollisionRevision[], tick: number):
   for (let i = history.length - 1; i >= 0; i--) if (history[i][1] <= tick) return history[i];
   return undefined;
 }
-export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, dims: number): object {
+export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, dims: number, self: () => string | undefined = () => undefined): object {
   const position = (body: unknown): Vec3 => {
     const p = own(body, 'pos');
     const n = (k: string): number => { const v = own(p, k); return typeof v === 'number' && Number.isFinite(v) ? Math.fround(v) : 0; };
     return { x: n('x'), y: n('y'), z: n('z') };
   };
   return {
-    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options)[0];},
-    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,undefined,true);},
+    ray: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self())[0];},
+    rayAll: (from: unknown, direction: unknown, max: unknown, options?: unknown) => {const m=map();return rayQuery(m.staticMap??m,collisionTargets(m),dims,from,direction,max,options,self(),true);},
     sweep: (body: unknown, delta: unknown) => sweepMap(map(), body, delta, shape().radius, dims, shape()),
     support: (body: unknown, distance: unknown = 0.002) => {
       charge(20);

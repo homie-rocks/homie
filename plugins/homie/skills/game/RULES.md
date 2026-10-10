@@ -808,9 +808,10 @@ Options are plain data, never callbacks:
 - `where: {hp: {gt: 0}}`: filter declared entity fields. Values may be exact
   numbers, strings or booleans; numeric tests are `gt`, `gte`, `lt`, `lte`, plus
   `eq`. All tests must match. Missing fields do not match. At most 16 fields.
-- `ignore: [ref]`: at most 16 opaque entity refs. Entity-handler rays ignore self
-  by default; `ignoreSelf: false` includes it. Room and geometry queries have no
-  implicit caller. Rocket travel can ignore its owner explicitly; blast damage
+- `ignore: [ref]`: at most 16 opaque entity refs. Entity-handler and movement rays ignore their own entity
+  by default; `ignoreSelf: false` includes it. This also applies when a moving
+  non-player entity is itself a live collider. Local view rays use the own player
+  as caller; room-handler rays have no implicit caller. Rocket travel can ignore its owner explicitly; blast damage
   may include the owner.
 - `geometryOnly: true`: map plus enabled live colliders, using their collision
   shape rather than hit parts. Fighters do not shield other fighters. Use an
