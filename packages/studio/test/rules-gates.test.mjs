@@ -109,3 +109,16 @@ test('named server settings preserve a studio-selected crowd capacity', async ()
   const server=serverOf({id:'crowd',name:'Crowd',policy:'hybrid',seats:1000,aiSeats:200});
   assert.equal(server.seats,1000);assert.equal(policyOf(server,{seats:1000}).aiSeats,200);
 });
+
+test('chained and far-scheduled visual delivery preserves each live collision revision immediately', () => {
+  const select=scheduledView({radiusM:0,nearM:0,farHz:1,precisionM:1},20);
+  const encode=snapshotEncoder(20,true), decode=snapshotDecoder();
+  const own=['person',0,0,[.123,0,0],[0,0,0],[],0,[],[],0,0];
+  for(let k=1;k<=3;k++) {
+    const geometry=[k,[['wall',k,0,0]]];
+    const snap={e:1,k,d:[[],[own],geometry],c:[[0,0,k,0]]};
+    const selected=select(snap,0), wire=encode.encode(selected);
+    assert.deepEqual(decode.decode(wire).d[2],geometry);
+    assert.deepEqual(selected.d[1][0][3],[.123,0,0]);
+  }
+});

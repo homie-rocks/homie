@@ -69,7 +69,7 @@ Rules use `world.map.spot(name)` / `spots(name)`; the view uses `room.map.spots[
 With `space: { dims: 3 }`, z is up and pos is the body's feet. Three.js renders
 `(x,z,y)`. Gravity, jumping and facing belong in move, animation in the view.
 Use continuous sweeps, then slide the remainder along the contact tangent.
-`world.sweep` includes entity bodies; prediction's `ctx.map.sweep` only sees static map.
+`world.sweep` includes entity bodies. Movement sees the map plus declared live colliders through `ctx.world` (also exposed on `ctx.map`).
 
 | Map list (at most 100,000 shapes in all) | JSON shape |
 | --- | --- |
@@ -345,7 +345,7 @@ export const move = defineMove({
 ```
 
 Movement's `ctx` has tick, dt, ticks, math, public tune, map.name, map.spot,
-map.spots and map.sweep. `ctx.map.sweep` tests static shapes, costs
+map.spots, and `world.sweep/support/overlaps` (also on map). Sweeps test static shapes plus declared live colliders, cost
 `20 + 4S` plus copying, writes body.pos, and returns an optional hit.
 Movement may write pos, vel, heading, grounded and declared motion; never return
 an updated body. Normalize diagonals and respect maxSpeed. Collision movement needs a sweep; setting velocity alone does not move a body.
@@ -700,7 +700,10 @@ no entities. Watchers still receive the whole room.
 
 `room.each` visits visible entities; `enter`/`leave` mean coming into or out of
 view, not spawning or despawning. Remove departed meshes and recreate returning
-ones. Prediction and compact snapshot recovery are handled by the runtime.
+ones. Prediction and compact snapshot recovery are handled by the runtime. Live
+collision geometry bypasses visual interest filtering, so a sweep or dash can
+reach a collider beyond the view radius without predicting through it. Its entity
+may be absent from room.each while its geometry still blocks movement.
 Shared state, effects, rosters and watcher state are still public: this is not a
 hidden-information feature. Browser hosting sends the whole room.
 
@@ -726,8 +729,8 @@ Views must interpolate distant motion and dispose/recreate entities on view exit
 and entry. Omit the settings for full precision and the room's normal tick rate.
 
 A small room embeds delivery in its Table. Larger rooms open Gate connections;
-more than eight Gates use concentrators. Build generates their bindings and
-migrations. No infrastructure naming or studio admission ceiling is required.
+more than eight Gates use concentrators. The studio template supplies their exports, bindings and
+migration; upgrade the template before deploying an existing studio. No infrastructure naming or studio admission ceiling is required.
 Read the local measurements and their limitations in
 `docs/rooms-milestone-2-notes.md` before making a capacity claim.
 
