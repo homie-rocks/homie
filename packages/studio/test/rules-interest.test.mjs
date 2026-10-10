@@ -1,10 +1,31 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { interestSnapshot, snapshotEncoder, snapshotDecoder } from '../rules/interest.mjs';
+import { interestSnapshot, scheduledView, snapshotEncoder, snapshotDecoder } from '../rules/interest.mjs';
 
 const entity = (id, x, seat = undefined, z = 0) => [String(id), 0, 0, [x, 0, z], [0, 0, 0], [1, 0, 0], 1, [17], [], ...(seat === undefined ? [] : [seat, 0, 0, '', null])];
 const snapshot = (k, entities, e = 1) => ({ k, e, st: k * 50, d: [[1, 1, 1200], entities], c: [[0, 0, k, 0], [1, 0, k, 0]] });
 const sorted = snap => ({ ...snap, d: [snap.d[0], snap.d[1].toSorted((a, b) => a[0].localeCompare(b[0]))] });
+
+test('a thousand 5 Hz far views spread over four ticks without delaying own state, arrivals or exits', () => {
+  const views = Array.from({length:1000},()=>scheduledView({radiusM:12,nearM:4,farHz:5},20));
+  const held = [], updates = Array(1000).fill(0), refreshed = [];
+  for(let k=1;k<=6;k++) {
+    const own = views.map((_,seat)=>entity('own'+seat,seat*30,seat));
+    const far = k===6 ? [] : own.map((_,seat)=>entity('far'+seat,seat*30+8+k/100));
+    const snap = snapshot(k,[...own,...far]);let count=0;
+    for(let seat=0;seat<1000;seat++) {
+      const visible=views[seat](snap,seat).d[1];
+      assert.equal(visible[0],own[seat],'controlled state stays exact every tick');
+      if(k===1)assert.equal(visible[1],far[seat],'arrivals are immediate in every phase');
+      else if(k===6)assert.equal(visible.length,1,'exits are immediate in every phase');
+      else if(visible[1]!==held[seat]) { count++;updates[seat]++; }
+      held[seat]=visible[1];
+    }
+    if(k>1&&k<6)refreshed.push(count);
+  }
+  assert.deepEqual(refreshed,[250,250,250,250]);
+  assert.ok(updates.every(n=>n===1),'each player still refreshes once per four ticks');
+});
 
 test('players sharing an interest cell share its ordering work and retain their exact radius', () => {
   const entities = Array.from({length:100}, (_, i) => entity(i, i / 100, i));

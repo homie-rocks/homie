@@ -13,6 +13,10 @@ which upstream operation failed. No trial deployment has been performed here.
   Table. Absolute snapshots now cross each link once per shared snapshot group;
   Gates encode the individual views after coalescing. Immutable entity fragments
   and ordered candidates for each interest cell are shared within a Gate.
+- Far-view refreshes previously aligned every player on the same tick. They are
+  now phased by seat: the deterministic 1,000-player / 5 Hz case refreshes 250
+  players on each of four ticks instead of 1,000 on one tick. The per-player
+  rate, exact controlled state, immediate arrivals and immediate exits remain.
 - A multiplex session's single attach chain blocked other players behind a slow
   admission. Logical clients now have independent ordered chains. Large welcomes
   wait for reliable-queue capacity. The virtual-time thousand-welcome test keeps

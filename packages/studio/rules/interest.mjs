@@ -188,7 +188,10 @@ export function scheduledView({ radiusM = null, precisionM = 0, nearM = null, fa
         const distanceSquared = q ? (p[0]-q[0])**2 + (p[1]-q[1])**2 + ((p[2]??0)-(q[2]??0))**2 : 0;
         const old = previous.get(entity[0]);
         const interval = farHz && nearM !== null && distanceSquared > nearM**2 ? Math.max(1, Math.round(tickHz / farHz)) : 1;
-        if (old && snap.k % interval !== 0) row = old;
+        // Spread far-view refreshes across players instead of sending the
+        // whole room's largest deltas on the same tick. Each player retains
+        // the declared rate; newly visible bodies still arrive immediately.
+        if (old && snap.k % interval !== (seat ?? 0) % interval) row = old;
         else if (precisionM > 0) {
           let versions = quantizedRows.get(entity);
           if (!versions) { versions = new Map(); quantizedRows.set(entity, versions); }

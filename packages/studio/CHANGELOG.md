@@ -26,6 +26,7 @@ Crowd links bound queued work, and an owner’s deploy request covers the task.
 ### Changed
 
 - Crowd rooms send shared state through their multiplex links and encode each player's view in Gates. Link receipts bound in-flight work; unsent visual state is replaced while inputs and commands retain their order. Independent admissions no longer wait behind another player's attach, and large welcome bursts wait for relay capacity. Gates share immutable entity encoding and send a full keyframe on connection or epoch change.
+- Far-view refreshes are spread across players to avoid synchronized delivery bursts, preserving each player's declared rate and immediate visibility changes.
 - A deploy requested in the owner's prompt is approved for that task, including retries. Unrequested deployments remain held; explicit refusals revoke the task approval.
 
 ### Fixed
