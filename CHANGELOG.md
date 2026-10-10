@@ -37,6 +37,8 @@ Keep a world and its account characters across restarts.
 
 - Only opted-in worlds use a stable public room instead of allocating fresh match
   copies. Full worlds wait for seats; named room links select other worlds.
+- Lasting worlds default to `offline: false` so practice cannot look like a
+  durable session. An explicit `offline: true` still allows unsaved local practice.
 - Only character games require studio account sign-in before playing and return
   the character on disconnect/recall instead of leaving it as a bot.
 - Only lasting worlds save every tick (more storage writes), retain incompatible

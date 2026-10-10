@@ -8,6 +8,8 @@ Gate, concentrator and transport implementations are unchanged.
 
 Set game.json `room: { host: "server", lifetime: "persistent", characters: true }`.
 The world alone needs only `lifetime`; accounts are separately optional.
+Lasting worlds default to `offline: false`. A studio can explicitly enable local
+practice with `offline: true`; its progress is not authoritative or saved.
 Keep inventory in the player kind's declared fields, and return
 `player.character ?? { kind: "runner", at: spawn }` from `room.join`.
 A character record contains kind, position, heading, fields and motion. Only rules

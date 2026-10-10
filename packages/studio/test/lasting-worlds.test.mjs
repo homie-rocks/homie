@@ -45,6 +45,9 @@ function rig(opts={}) {
 
 test('persistent settings are opt-in and existing defaults do not change',()=>{
   assert.equal(roomSettings({}).settings.lifetime,undefined);
+  assert.equal(roomSettings({}).settings.offline,true);
+  assert.equal(roomSettings({lifetime:'persistent'}).settings.offline,false);
+  assert.equal(roomSettings({lifetime:'persistent',offline:true}).settings.offline,true);
   assert.equal(roomSettings({}).settings.durability.movementSeconds,1);
   assert.ok(roomSettings({host:'browser',lifetime:'persistent'}).problems.length);
   assert.ok(roomSettings({characters:true}).problems.length);

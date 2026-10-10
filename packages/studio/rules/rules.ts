@@ -245,8 +245,8 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
   if (r.lifetime === 'persistent' && host !== 'server') problems.push('"room.lifetime: persistent" needs room.host "server"');
   if (r.characters !== undefined && typeof r.characters !== 'boolean') problems.push('"room.characters" is true or false');
   if (r.characters === true && r.lifetime !== 'persistent') problems.push('"room.characters" needs room.lifetime "persistent"');
-  let offline = true;
-  if (r.offline !== undefined) { if (typeof r.offline === 'boolean') offline = r.offline; else problems.push('"room.offline" is true or false; using true'); }
+  let offline = r.lifetime !== 'persistent';
+  if (r.offline !== undefined) { if (typeof r.offline === 'boolean') offline = r.offline; else problems.push(`"room.offline" is true or false; using ${offline}`); }
   const tickHz = whole('tickHz', r.tickHz, 1, 60, 20);
   const inputHz = whole('inputHz', r.inputHz, 1, tickHz, tickHz);
   if (host === 'browser' && r.view?.radiusM != null) problems.push('"room.view.radiusM" needs room.host "server"; browser hosting sends the whole room');

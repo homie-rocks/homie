@@ -145,6 +145,10 @@ For a world that should still exist tomorrow, set game.json:
 {"room":{"host":"server","lifetime":"persistent","characters":true}}
 ```
 
+Lasting worlds default to `offline: false`: wait for the durable server. A studio
+may explicitly set `offline: true` for separate local practice, whose progress
+is not saved to the world or account. Never count that as proof of persistence.
+
 `characters` is optional: `lifetime` alone keeps the world. Account characters
 require the existing studio sign-in/passkey. Play redirects to the account page
 when needed. In `room.join(ctx, player)`, return
