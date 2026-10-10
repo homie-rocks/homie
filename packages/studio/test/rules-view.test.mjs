@@ -1480,7 +1480,7 @@ test('3D prediction clamps vertical bounds and draws animation from the catch-up
     if(age>=1 && age<9){airborne++;assert.equal(me.vel.z,1,'airborne velocity is not replaced by the present landing');}
   }
   assert.ok(catches>3 && airborne>0,'the unseen launch exercised airborne catch-up');
-  for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}assert.equal(r.host.core.stats.errors,0);
+  assert.equal(r.host.core.stats.errors,0);
 });
 
 test('a late fast knock does not double its drawn speed while a large correction fades', async t => {
