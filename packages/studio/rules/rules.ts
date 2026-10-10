@@ -1,3 +1,4 @@
+import {prepareGraph,type RouteNode} from './navigation.ts';
 import { prepareTile as prepareExactTile } from './terrain.ts';
 import { prepareTile as prepareLegacyTile } from './terrain-legacy.ts';
 const prepareTile = (tile: MapHeightTile) => { prepareExactTile(tile); prepareLegacyTile(tile); };
@@ -170,6 +171,7 @@ export interface RulesDef {
     on?: Record<string, RoomHandler>;
   };
   asks?: Record<string, AskDef>;
+  navigation?: Record<string,readonly RouteNode[]>;
   map?: string;
 }
 
@@ -350,6 +352,7 @@ export interface KindTable {
   move: MoveFn | null;
 }
 export interface Compiled {
+  navigation: Readonly<Record<string,readonly RouteNode[]>>;
   contract: 2;
   /** `SAVE_REVISION`, so that what hashes these declarations hashes it too. */
   save: number;
@@ -621,8 +624,11 @@ export function compileRules(def: RulesDef, env: CompileEnv = {}): Compiled {
   }
   if (room.historySeconds !== undefined && (typeof room.historySeconds !== 'number' || !Number.isFinite(room.historySeconds) || room.historySeconds < 0 || room.historySeconds > 2)) throw new Error('room.historySeconds is from 0 to 2');
   const seats = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(env.seats)) || 8));
+  const navigation:Record<string,readonly RouteNode[]> = Object.create(null);let graphNodes=0;
+  if(d.navigation){const entries=Object.entries(d.navigation);if(entries.length>8)throw new Error('navigation declares at most 8 graphs');for(const [name,graph] of entries){if(!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(name))throw new Error('navigation graph names are identifiers up to 48 characters');navigation[name]=prepareGraph(graph);graphNodes+=navigation[name].length;if(graphNodes>8192)throw new Error('navigation declares at most 8192 nodes in total');}}
+  Object.freeze(navigation);
   return {
-    contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
+    navigation, contract: RULES_CONTRACT, save: SAVE_REVISION, dims, kinds, kindOf, events, commands, effects, effectNames: Object.keys(effects),
     shared: fieldList(d.shared, 'shared'), view, ...(room.records?{records:room.records}:{}), ...(room.historySeconds ? {historySeconds:room.historySeconds}:{}), rounds, bots: Math.min(keep, seats), start: room.start ?? null, join: room.join ?? null, roomOn, asks,
     tune, publicTune, map, settings, seats,
   };

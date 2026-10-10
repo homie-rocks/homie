@@ -683,7 +683,7 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
     route: (graph: unknown, from: unknown, to: unknown, options?: unknown) => {
       const radius=own(options,'radius')??.5,height=own(options,'height')??1.8;
       if(typeof radius!=='number'||!Number.isFinite(radius)||radius<0||radius>100||typeof height!=='number'||!Number.isFinite(height)||height<0||height>200)throw new Error('route radius/height are finite body dimensions');
-      return routeGraph(graph,from,to,rayTargets({geometryOnly:true}).map(t=>t.solid),radius,height);
+      const named=typeof graph==='string';if(named&&!Object.hasOwn(c.navigation,graph))throw new Error('unknown navigation graph');return routeGraph(named?c.navigation[graph]:graph,from,to,rayTargets({geometryOnly:true}).map(t=>t.solid),radius,height,named);
     },
     label: (id: unknown): string => {charge(20);const e=typeof id==='string'?ents.get(id):undefined;if(!e?.kind.player)return '';return String(opts.label?.(e.seat,e.driver)??`Player ${e.seat+1}`).slice(0,40);},
     rays: (options?: unknown): unknown => raySnapshot(c.map,rayTargets(options),dims,options,cx.ent?.id),

@@ -29,7 +29,7 @@ Run richer server-authoritative combat, admission and bots with shared collision
 - `f.pulse()` carries a nonzero byte action once over the reliable input-event channel. Use it for weapon selection; ordinary sampled fields must not carry one-frame actions.
 - Entity field visibility: `owner`, `server` and `results`. Per-recipient projections also apply to welcome, watching and reconnect snapshots. Private-delivery deltas refer to a keyframe so packet loss cannot leave moving actors at stale poses.
 - Authenticated room round records, with a durable retry outbox and idempotent player-history append. Browser saves cannot overwrite server records.
-- Budgeted routes over baked walking graphs, ordered same-tick dispatch, player labels, ranked takeover and result-free retries.
+- Budgeted routes over baked walking graphs, ordered same-tick dispatch, player labels, ranked takeover and result-free retries. Named `navigation` graphs validate once at compilation, avoiding repeated graph-validation charges in bot handlers while retaining live obstacle checks and full searches.
 
 ### Fixed
 
