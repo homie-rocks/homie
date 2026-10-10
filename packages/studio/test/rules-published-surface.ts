@@ -38,7 +38,7 @@ export function inspectWorld(w: GameWorld, s: GameSelf<'pawn'>, g: GameGoal, a: 
 }
 type Def=Parameters<typeof defineRules>[0];
 export const roomHandlers:NonNullable<NonNullable<Def['room']>['on']>={
-  give(w,e){const n:number=e.n;w.shared.answers=n;w.round.end();w.announce('give',{n});w.finish();},
+  give(w,e){const n:number=e.n;w.shared.answers=n;w.round.end();w.round.restart();w.announce('give',{n});w.finish();},
   undeliverable(w,e){const to:string=e.to;if(e.event==='give'){const n:number=e.data.n;}},
   roundStart(w,e){const n:number=e.n;},
   roundOver(w,e){const n:number=e.n;e.results.forEach(r=>{const n:number=r.seat+r.score+r.place;const s:string=r.id+r.driver;});},

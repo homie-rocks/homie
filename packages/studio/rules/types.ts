@@ -28,7 +28,7 @@ export interface Round { readonly n: number; readonly phase: 'live' | 'over'; re
 export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   readonly tune: ReadonlyState<T>; readonly map: MapView; readonly stage: string; readonly level: number; readonly levelMax: number; readonly guideLevel: number; readonly guideSeats: readonly number[]; readonly kids: boolean; readonly levelSet: boolean;
   readonly shared: Room extends true ? S : ReadonlyState<S>;
-  readonly round: Round & (Room extends true ? { end(): void } : {});
+  readonly round: Round & (Room extends true ? { end(): void; restart(): void } : {});
   random(): number;
   label(player:string):string;
   send<K extends keyof E>(target: string, event: K, ...data: Payload<E[K]>): void;

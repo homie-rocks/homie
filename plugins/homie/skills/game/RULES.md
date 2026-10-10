@@ -917,3 +917,9 @@ and `grounded` fields. These bounded queries change only that local copy, never
 a player or the captured scene. Use the same movement helper to evaluate a
 jump or dive without granting an action to the real body. Height is at least
 twice the radius, at most 200 metres; spherical casts retain their diameter.
+
+`world.round.restart()` is room-only. It abandons the current attempt and starts the
+next round on the next tick, keeping seats and entities and running the normal
+`roundStart` handlers. It publishes no completed results or `roundOver` event and
+skips the intermission. Use it for an authorized retry; validate eligibility in
+your room handler. Pending restart intent survives save/restore.
