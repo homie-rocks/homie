@@ -1,3 +1,5 @@
+import { prepareTile } from './terrain.ts';
+import { indexMap } from './map-index.ts';
 /*
  * rules.ts — the rules contract, version 2: what a rules module declares, and how the runtime reads it.
  * =============================================================================
@@ -246,7 +248,7 @@ export function roomSettings(raw: unknown): { settings: RoomSettings; problems: 
 
 export interface MapBox { readonly min: Vec3; readonly max: Vec3 }
 export interface MapCircle { readonly at: Vec3; readonly r: number }
-export interface MapHeightTile { readonly at: Vec3; readonly size: Readonly<{ x: number; y: number }>; readonly heights: readonly [number, number, number, number] }
+export interface MapHeightTile { readonly base?: number; readonly diagonal?: '00-11' | '10-01'; readonly at: Vec3; readonly size: Readonly<{ x: number; y: number }>; readonly heights: readonly [number, number, number, number] }
 export interface GameMap { readonly name: string; readonly heightTiles: readonly MapHeightTile[]; readonly bounds: MapBox; readonly boxes: readonly MapBox[]; readonly circles: readonly MapCircle[]; readonly spheres: readonly MapCircle[]; readonly capsules: readonly (MapCircle & { height: number })[]; readonly spots: Readonly<Record<string, readonly Vec3[]>> }
 
 const vecOf = (a: unknown, what: string): Vec3 => {
@@ -280,15 +282,19 @@ export function compileMap(raw: unknown, name = 'main'): GameMap {
     return Object.freeze({ at: vecOf(c?.at, `${what}.at`), r });
   };
   if ([m.boxes, m.circles, m.spheres, m.capsules, m.heightTiles].some(list => list !== undefined && !Array.isArray(list))) throw new Error(`${where}: shapes are lists`);
-  if ([m.boxes, m.circles, m.spheres, m.capsules, m.heightTiles].reduce((n, list) => n + (list?.length ?? 0), 0) > 4096) throw new Error(`${where}: at most 4096 static shapes`);
-  return Object.freeze({
+  if ([m.boxes, m.circles, m.spheres, m.capsules, m.heightTiles].reduce((n, list) => n + (list?.length ?? 0), 0) > 100000) throw new Error(`${where}: at most 100000 static shapes`);
+  const result = Object.freeze({
     name,
     heightTiles: Object.freeze((m.heightTiles ?? []).map((t: any, i: number) => {
       const what = `${where} heightTiles[${i}]`;
       const at = vecOf(t?.at, `${what}.at`);
       if (!Array.isArray(t.size) || t.size.length !== 2 || t.size.some((v: unknown) => typeof v !== 'number' || !Number.isFinite(v) || v <= 0)) throw new Error(`${what}: size is two positive finite lengths`);
       if (!Array.isArray(t.heights) || t.heights.length !== 4 || t.heights.some((v: unknown) => typeof v !== 'number' || !Number.isFinite(v))) throw new Error(`${what}: heights are four finite offsets, in row order`);
-      return Object.freeze({ at, size: Object.freeze({ x: t.size[0], y: t.size[1] }), heights: Object.freeze([...t.heights]) as unknown as MapHeightTile['heights'] });
+      if (t.base !== undefined && (typeof t.base !== 'number' || !Number.isFinite(t.base) || t.heights.some((h:number) => h < t.base))) throw new Error(`${what}: base must be finite and at or below every top sample`);
+      if (t.diagonal !== undefined && !['00-11','10-01'].includes(t.diagonal)) throw new Error(`${what}: diagonal is 00-11 or 10-01`);
+      const tile = Object.freeze({ ...(t.base !== undefined ? {base:t.base} : {}), ...(t.diagonal ? {diagonal:t.diagonal} : {}), at, size: Object.freeze({ x: t.size[0], y: t.size[1] }), heights: Object.freeze([...t.heights]) as unknown as MapHeightTile['heights'] });
+      prepareTile(tile);
+      return tile;
     })),
     spheres: Object.freeze((m.spheres ?? []).map((c: any, i: number) => roundShape(c, `${where} spheres[${i}]`))),
     capsules: Object.freeze((m.capsules ?? []).map((c: any, i: number) => {
@@ -305,6 +311,8 @@ export function compileMap(raw: unknown, name = 'main'): GameMap {
     })),
     spots: Object.freeze(spots),
   });
+  indexMap(result);
+  return result;
 }
 
 /* ------------------------------------------------------------------ compiled tables */

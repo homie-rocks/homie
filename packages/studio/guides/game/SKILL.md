@@ -8,7 +8,9 @@ metadata:
 
 Read the installed toolkit's `node_modules/@homie-rocks/studio/guides/game/{RULES,REWRITE}.md`
 before authoring: these match its runtime even when this plugin is older. Toolkit
-check/build report stale installed plugin copies and the update step. For live
+check/build report stale installed plugin copies and the update step. For solid slopes and terrain, use heightTiles with `base` and the source
+`diagonal`; test sides, underside, step clearance and rays. Maps are indexed at
+compile time up to 100,000 shapes; measure default-budget spawn and traversal. For live
 cover, doors and platforms, use declared entity `collider` state and movement's
 `ctx.world.sweep/support/overlaps`; test prediction, loss, rejoin and restore.
 

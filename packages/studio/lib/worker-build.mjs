@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {refreshWorkerConfig} from './worker-config.mjs';
 import {pathToFileURL} from 'node:url';
 import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync,mkdtempSync,rmSync} from 'node:fs';
-import {join,relative,basename,sep} from 'node:path';
+import {join,relative,basename,sep,resolve} from 'node:path';
 import {readConfig} from './routes.mjs';
 import {workerDir} from './studio.mjs';
 import {paidReleases} from './parts-upload.mjs';
@@ -38,7 +38,9 @@ export async function buildWorker(root,esbuild) {
   }
   // Wrangler's module root is the immutable generation, so old generations are
   // retained locally for in-flight reloads but are never added to a deployment.
-  refreshWorkerConfig(root,{main:relative(workerDir(root),join(dir,'worker.js'))});
+  refreshWorkerConfig(root);
+  const current=join(out,'current.json'), pending=`${current}.${process.pid}.tmp`;
+  writeFileSync(pending,JSON.stringify({main:join(dir,'worker.js')})+'\n');renameSync(pending,current);
   // Dev sometimes watches a copy with routes/remote AI removed. Publish its
   // entry too, keeping its local bindings and its module root at one generation.
   const local=join(workerDir(root),'.wrangler','homie-dev.wrangler.json');
@@ -53,4 +55,13 @@ export async function buildWorker(root,esbuild) {
   const sizes=Object.entries(result.metafile.outputs).map(([path,value])=>({path:relative(root,join(dir,basename(path))),bytes:value.bytes,imports:value.imports}));
   writeFileSync(join(out,'modules.json'),JSON.stringify(sizes,null,2)+'\n');
   return sizes;
+}
+
+/** Local immutable entry; the committed config always names the stable shim. */
+export function workerEntry(root) {
+  const main=readConfig(root)?.main;
+  // Explicit custom entry points remain the owner's choice.
+  if(typeof main!=='string' || resolve(workerDir(root),main)!==resolve(root,'site/src/runtime/worker.js'))return null;
+  const file=join(root,'site/src/runtime/current.json');
+  return existsSync(file)?JSON.parse(readFileSync(file,'utf8')).main:null;
 }

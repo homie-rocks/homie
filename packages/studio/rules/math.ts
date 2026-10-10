@@ -1,3 +1,4 @@
+import { nearbyMap } from './map-index.ts';
 import { collisionQueries } from './live.ts';
 /*
  * math.ts — `world.math` and `ctx.math`: the maths rules may not take from `Math`, in plain arithmetic.
@@ -183,7 +184,7 @@ export const exact = Object.freeze({ sin, cos, atan, atan2, exp, log, pow });
 /* ------------------------------------------------------------------ the ground plane: a point or a circle against the map */
 
 /** The shapes of a map the sweep reads (rules.ts `GameMap` has them). */
-export interface MapShapes { bounds: { min: Vec3; max: Vec3 }; boxes: readonly { min: Vec3; max: Vec3 }[]; circles: readonly { at: Vec3; r: number }[]; spheres?: readonly { at: Vec3; r: number }[]; capsules?: readonly { at: Vec3; r: number; height: number }[]; heightTiles?: readonly import('./rules.ts').MapHeightTile[] }
+export interface MapShapes { staticMap?: MapShapes; bounds: { min: Vec3; max: Vec3 }; boxes: readonly { min: Vec3; max: Vec3 }[]; circles: readonly { at: Vec3; r: number }[]; spheres?: readonly { at: Vec3; r: number }[]; capsules?: readonly { at: Vec3; r: number; height: number }[]; heightTiles?: readonly import('./rules.ts').MapHeightTile[] }
 /** How close a swept body stops to what it hit, in metres. */
 export const SKIN = 0.001;
 
@@ -237,6 +238,8 @@ function rayBounds(px: number, py: number, dx: number, dy: number, b: { min: Vec
 }
 /** A circle (or a point, r 0) moved along d against the static map: the first thing in the way, and how many shapes were tested. */
 export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: number, r: number): { hit: Hit | null; tested: number } {
+  map = nearbyMap(map, {x:px,y:py,z:0}, {x:dx,y:dy,z:0}, r, 0, 2);
+  charge(16 + 4 * (map.boxes.length + map.circles.length));
   let best: Hit | null = rayBounds(Math.max(map.bounds.min.x + r, Math.min(map.bounds.max.x - r, px)), Math.max(map.bounds.min.y + r, Math.min(map.bounds.max.y - r, py)), dx, dy, map.bounds, r);
   for (const b of map.boxes) { const h = rayBox(px, py, dx, dy, b.min, b.max, r); if (h && (!best || h.t < best.t)) best = { ...h, id: (b as any).id }; }
   for (const c of map.circles) { const h = rayCircle(px, py, dx, dy, c.at.x, c.at.y, c.r + r); if (h && (!best || h.t < best.t)) best = { ...h, id: (c as any).id }; }
@@ -250,7 +253,7 @@ export function castMap(map: MapShapes, px: number, py: number, dx: number, dy: 
  */
 export function sweepMap(map: MapShapes, body: unknown, delta: unknown, radius: number, dims: number, shape: BodyShape = { shape: 'sphere', radius, height: 2 * radius }): unknown {
   // Charged before the cast, for every shape of the map it may test.
-  charge(20 + 4 * (4 + map.boxes.length + map.circles.length));
+  charge(20);
   const fr = Math.fround;
   // Both are whatever `move` handed over: each is read as a plain number or as nothing, and nothing is called to convert it.
   const num = (a: unknown): number => { const x = typeof a === 'number' ? fr(a) : 0; return Number.isFinite(x) ? x : 0; };

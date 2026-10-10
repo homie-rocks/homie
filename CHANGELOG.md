@@ -17,6 +17,26 @@ To bring a studio up to date, tell Claude: "Upgrade my studio to the newest Homi
 `npx -y @homie-rocks/studio@latest upgrade`, which shows what's new since the version your studio pins (from this
 file) and what the upgrade would change, and changes nothing until you agree.
 
+## [0.44.3] - 2026-10-10
+
+**Plugin 0.44.3**
+
+Solid terrain and indexed map queries keep large arenas within the rules budget.
+
+### Added
+
+- Solid triangulated height tiles: explicit bases and source diagonals preserve ramp sides, roofs and underpasses across movement, support, overlap and rays.
+- Build-time spatial indexing for up to 100,000 static shapes, with query work charged by visited geometry on authority and prediction.
+
+### Fixed
+
+- Terrain-heavy rules maps spawn and move within the default tick budget, including Stormbreak's losslessly prepared 4,058 shapes.
+- Build and deployment retain the same committed Wrangler config while local rebuilds and deployment select complete immutable Worker generations.
+
+### Upgrade notes
+
+- Height tiles remain open surfaces unless `base` is declared. Solid tiles collide against the whole body, so capsule clearance on a slope differs from the old foot-point surface.
+
 ## [0.44.1] - 2026-10-10
 
 **Plugin 0.44.1**

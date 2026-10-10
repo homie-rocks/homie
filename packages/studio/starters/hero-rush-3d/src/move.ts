@@ -4,6 +4,8 @@ import { defineMove, type Vec3 } from '@homie-rocks/studio/rules';
 
 import type { MoveBody, MoveContext } from '@homie-rocks/studio/rules/types';
 
+// Solid slopes use the same contact tangent as walls; the capsule keeps its full
+// clearance. Never replace this sweep with an unchecked height assignment.
 function slide<M>(body: MoveBody<M>, delta: Vec3, ctx: MoveContext<unknown, M>) {
   const before = body.pos, hit = ctx.world.sweep(body, delta);
   if (!hit) return;

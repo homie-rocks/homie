@@ -1,3 +1,5 @@
+import { overlapsTerrain } from './terrain.ts';
+import { nearbyMap } from './map-index.ts';
 /** Declared collision geometry, shared by authority and prediction. Entity fields
  * own its lifetime and dimensions; this projection contains no gameplay state. */
 import type { Vec3, ColliderDef } from './rules.ts';
@@ -27,7 +29,7 @@ export function castCollider2(row: ColliderRow, p: Vec3, d: Vec3, radius: number
 }
 export function collisionMap(map: MapShapes, rows: readonly ColliderRow[]): MapShapes {
   if (!rows.length) return map;
-  const boxes = [...map.boxes], circles = [...map.circles], spheres = [...(map.spheres ?? [])], capsules = [...(map.capsules ?? [])];
+  const boxes: any[] = [], circles: any[] = [], spheres: any[] = [], capsules: any[] = [];
   for (const [id, shape, x, y, z, w, d, h] of rows) {
     const at = { x, y, z };
     if (shape === 'box') boxes.push({ min: { x: x - w / 2, y: y - d / 2, z }, max: { x: x + w / 2, y: y + d / 2, z: z + h }, id } as any);
@@ -35,7 +37,7 @@ export function collisionMap(map: MapShapes, rows: readonly ColliderRow[]): MapS
     else if (shape === 'sphere') spheres.push({ at: { x, y, z: z + w / 2 }, r: w / 2, id } as any);
     else capsules.push({ at, r: w / 2, height: h, id } as any);
   }
-  return { ...map, boxes, circles, spheres, capsules };
+  return { bounds: map.bounds, staticMap: map, boxes, circles, spheres, capsules };
 }
 /** Latest known revision at the requested tick. Unknown future edits are never
  * guessed: a later snapshot rebases the body and replays its pending inputs. */
@@ -60,14 +62,14 @@ export function collisionQueries(map: () => MapShapes, shape: () => BodyShape, d
       return h && h.nz > 0.5 ? Object.freeze({ at: Object.freeze({ ...p, z: p.z - d * h.t }), normal: Object.freeze({ x: h.nx, y: h.ny, z: h.nz }), dist: d * h.t, ...(h.id ? { entity: h.id } : {}) }) : undefined;
     },
     overlaps: (body: unknown) => {
-      const m = map(), p = position(body), s = shape(), a = solidAt(p, s);
+      const p = position(body), s = shape(), a = solidAt(p, s), m = nearbyMap(map(), p, {x:0,y:0,z:0}, s.radius, s.height || 2*s.radius, dims);
       charge(20 + 8 * (m.boxes.length + m.circles.length + (m.spheres?.length ?? 0) + (m.capsules?.length ?? 0)));
       const overlap = (b: ReturnType<typeof solidAt>): boolean => {
         let sq = 0;
         for (const k of dims === 2 ? ['x', 'y'] as const : ['x', 'y', 'z'] as const) { const gap = Math.max(0, a.min[k] - b.max[k], b.min[k] - a.max[k]); sq += gap * gap; }
         return sq < (a.r + b.r) ** 2 || a.r + b.r === 0 && a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b.max.y && a.max.y > b.min.y && (dims === 2 || a.min.z < b.max.z && a.max.z > b.min.z);
       };
-      return m.boxes.some(b => overlap({ ...b, r: 0 })) || m.circles.some(b => overlap({ min: {...b.at,z:m.bounds.min.z}, max: {...b.at,z:m.bounds.max.z}, r: b.r })) || (m.spheres ?? []).some(b => overlap({ min: b.at, max: b.at, r: b.r })) || (m.capsules ?? []).some(b => overlap(solidAt(b.at, { shape: 'capsule', radius: b.r, height: b.height })));
+      return (m.heightTiles ?? []).some(t => t.base !== undefined && overlapsTerrain(t, a)) || m.boxes.some(b => overlap({ ...b, r: 0 })) || m.circles.some(b => overlap({ min: {...b.at,z:m.bounds.min.z}, max: {...b.at,z:m.bounds.max.z}, r: b.r })) || (m.spheres ?? []).some(b => overlap({ min: b.at, max: b.at, r: b.r })) || (m.capsules ?? []).some(b => overlap(solidAt(b.at, { shape: 'capsule', radius: b.r, height: b.height })));
     },
   };
 }
