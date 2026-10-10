@@ -3,13 +3,13 @@
 import {own,charge} from './guard.ts';
 import type {Solid} from './collision.ts';
 import {castSolid} from './collision.ts';
-type Node = readonly [number,number,number,readonly number[]];
-const graphs = new WeakMap<object,readonly Node[]>();
+export type RouteNode = readonly [number,number,number,readonly number[]];
+const graphs = new WeakMap<object,readonly RouteNode[]>();
 const incoming = new WeakMap<object,readonly (readonly number[])[]>();
-function graphOf(value: unknown): readonly Node[] {
+function graphOf(value: unknown, billing=true): readonly RouteNode[] {
  if(!Array.isArray(value)||value.length>8192)throw new Error('route graph has at most 8192 nodes');
- charge(value.length*12);const cached=graphs.get(value);if(cached)return cached;
- const nodes:Node[]=[];
+ if(billing)charge(value.length*12);const cached=graphs.get(value);if(cached)return cached;
+ const nodes:RouteNode[]=[];
  for(let i=0;i<value.length;i++){
   const n=own(value,i),links=own(n,3),x=own(n,0),y=own(n,1),z=own(n,2);
   if(![x,y,z].every(v=>typeof v==='number'&&Number.isFinite(v))||!Array.isArray(links)||links.length>16)throw new Error('route nodes are [x,y,z,links], at most 16 neighbours');
@@ -18,8 +18,9 @@ function graphOf(value: unknown): readonly Node[] {
  }
  const result=Object.freeze(nodes);const reverse:number[][]=nodes.map(()=>[]);nodes.forEach((n,i)=>{for(const next of n[3])reverse[next].push(i);});incoming.set(result,reverse);if(Object.isFrozen(value)&&value.every(n=>Object.isFrozen(n)&&Object.isFrozen(own(n,3))))graphs.set(value,result);return result;
 }
-export function routeGraph(value: unknown, origin: unknown, destination: unknown, solids: readonly Solid[], radius: number, height: number): readonly number[] {
- const nodes=graphOf(value);
+export const prepareGraph=(value:unknown):readonly RouteNode[]=>graphOf(value,false);
+export function routeGraph(value: unknown, origin: unknown, destination: unknown, solids: readonly Solid[], radius: number, height: number, prepared=false): readonly number[] {
+ const nodes=prepared?value as readonly RouteNode[]:graphOf(value);if(prepared)charge(16);
  if(!Number.isInteger(origin)||!Number.isInteger(destination)||Number(origin)<0||Number(destination)<0||Number(origin)>=nodes.length||Number(destination)>=nodes.length)throw new Error('route endpoints name graph nodes');
  let start=Number(origin),goal=Number(destination),end=nodes[goal];
  const buckets=new Map<string,Solid[]>();
@@ -27,7 +28,7 @@ export function routeGraph(value: unknown, origin: unknown, destination: unknown
   if((maxX-minX+1)*(maxY-minY+1)>65536)throw new Error('route obstacle spans too many graph cells');
   for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){charge(2);const key=x+','+y;const rows=buckets.get(key)??[];rows.push(solid);buckets.set(key,rows);}
  }
- const blocked=(a:Node,b:Node)=>{
+ const blocked=(a:RouteNode,b:RouteNode)=>{
   const from={min:{x:a[0]-radius,y:a[1]-radius,z:a[2]+.05},max:{x:a[0]+radius,y:a[1]+radius,z:a[2]+height},r:0},delta={x:b[0]-a[0],y:b[1]-a[1],z:b[2]-a[2]};
   const candidates=new Set<Solid>();
   for(let x=Math.floor(Math.min(a[0],b[0])/4);x<=Math.floor(Math.max(a[0],b[0])/4);x++)for(let y=Math.floor(Math.min(a[1],b[1])/4);y<=Math.floor(Math.max(a[1],b[1])/4);y++){charge(1);for(const solid of buckets.get(x+','+y)??[])candidates.add(solid);}

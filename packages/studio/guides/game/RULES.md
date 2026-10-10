@@ -969,6 +969,12 @@ ray options or the entity body declaration to use exact face/edge/vertex terrain
 casts. Existing terrain behavior is retained when omitted. Test your map's
 slopes, ledges and movement when opting in.
 
+Declare static graphs once with `navigation: {walk: graph}` in `defineRules`, then
+call `world.route('walk', from, to, {radius, height})`. Compilation validates and
+copies the graph once; handlers pay for the live search, not graph validation.
+At most eight named graphs with 8192 nodes total are accepted. Unknown names fail.
+The array form remains available for occasional dynamic graphs.
+
 `world.route(graph, from, to, {radius, height})` searches an immutable authored
 walking graph. Nodes are `[x, y, z, neighbourIndices]`; endpoints are node indices.
 The graph has at most 8192 nodes and 16 neighbours per node. Edges must already

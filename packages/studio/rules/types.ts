@@ -43,7 +43,7 @@ export type World<E, F, S, V, C, A, T, Room extends boolean = false> = Clock & {
   near(at: Point, radius: number): readonly Query<V[keyof V]>[];
   inBox<K extends keyof V>(box: { min: Point; max: Point }, kind: K): readonly Query<V[K]>[];
   inBox(box: { min: Point; max: Point }): readonly Query<V[keyof V]>[];
-  route(graph: ReadonlyArray<readonly [number,number,number,readonly number[]]>, from: number, to: number, options?: {radius?:number;height?:number}): readonly number[];
+  route(graph: string | ReadonlyArray<readonly [number,number,number,readonly number[]]>, from: number, to: number, options?: {radius?:number;height?:number}): readonly number[];
   ray(from: Point, direction: Point, max: number, options?: RayOptions): RayHit | undefined;
   rays(options?:RayOptions):RaySnapshot;
   rayAll(from: Point, direction: Point, max: number, options?: RayOptions): readonly RayHit[];
