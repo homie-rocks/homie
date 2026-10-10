@@ -46,7 +46,7 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('shoot');`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20,0],max:[20,20,20]}}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
-export default defineRules({contract:2,space:{dims:3},move,map:'./map',shapes:{commands:{shoot:{},snapshot:{}},events:{damage:{amount:f.u8(),owner:f.ref()},credit:{}}},entities:{runner:{player:true,fields:{hits:f.list(f.ref(),8),credit:f.u8()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:0},on:{credit(w,s){s.credit++;}},commands:{snapshot(w,s){const scene=w.rays({where:{hp:{gt:0}}}),from={x:0,y:0,z:1},d={x:1,y:0,z:0},first=scene.ray(from,d,18);if(first?.entity)w.dispatch(first.entity,'damage',{amount:20,owner:s.id});s.hits=[scene.ray(from,d,18)?.entity??'',w.ray(from,d,18,{where:{hp:{gt:0}}})?.entity??''];},shoot(w,s){s.hits=[];for(let i=0;i<8;i++){const hit=w.ray({x:0,y:0,z:1},{x:1,y:0,z:0},18,{where:{hp:{gt:0}}});if(hit?.entity){s.hits=[...s.hits,hit.entity];w.dispatch(hit.entity,'damage',{amount:10,owner:s.id});}}}}},target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0},collider:{enabled:'solid'},fields:{hp:f.u8({init:20}),solid:f.bit({init:true})},on:{damage(w,s,e){s.hp=Math.max(0,s.hp-e.amount);s.solid=s.hp>0;w.dispatch(e.owner,'credit');}}}},room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat*4,z:0}};},start(w){w.spawn('target',{x:4,y:0,z:0});w.spawn('target',{x:8,y:0,z:0});w.spawn('target',{x:12,y:0,z:0});}}});`);
+export default defineRules({contract:2,space:{dims:3},move,map:'./map',shapes:{commands:{shoot:{},snapshot:{}},events:{damage:{amount:f.u8(),owner:f.ref()},credit:{}}},entities:{runner:{player:true,fields:{label:f.text(40),hits:f.list(f.ref(),8),credit:f.u8()},body:{shape:'capsule',radius:.4,height:1.8,maxSpeed:0},on:{credit(w,s){s.credit++;}},commands:{snapshot(w,s){s.label=w.label(s.id);const scene=w.rays({where:{hp:{gt:0}}}),from={x:0,y:0,z:1},d={x:1,y:0,z:0},first=scene.ray(from,d,18);if(first?.entity)w.dispatch(first.entity,'damage',{amount:20,owner:s.id});s.hits=[scene.ray(from,d,18)?.entity??'',w.ray(from,d,18,{where:{hp:{gt:0}}})?.entity??''];},shoot(w,s){s.hits=[];for(let i=0;i<8;i++){const hit=w.ray({x:0,y:0,z:1},{x:1,y:0,z:0},18,{where:{hp:{gt:0}}});if(hit?.entity){s.hits=[...s.hits,hit.entity];w.dispatch(hit.entity,'damage',{amount:10,owner:s.id});}}}}},target:{body:{shape:'box',radius:.5,height:2,maxSpeed:0},collider:{enabled:'solid'},fields:{hp:f.u8({init:20}),solid:f.bit({init:true})},on:{damage(w,s,e){s.hp=Math.max(0,s.hp-e.amount);s.solid=s.hp>0;w.dispatch(e.owner,'credit');}}}},room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat*4,z:0}};},start(w){w.spawn('target',{x:4,y:0,z:0});w.spawn('target',{x:8,y:0,z:0});w.spawn('target',{x:12,y:0,z:0});}}});`);
       writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(){}});`);
     } else if (runaway === 'admission') {
       writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('accept');`);
@@ -74,12 +74,13 @@ room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:1,y:p.seat*5,z:0}};},st
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
 export default defineRules({contract:2,space:{dims:${dims}},move,
 shapes:{commands:{shoot:{direction:f.i8()},edit:{mode:f.u8()},place:{at:f.vec3()}},events:{edit:{mode:f.u8()}}},
-entities:{runner:{player:true,fields:{ray:f.fix({init:-1})},input:{ax:f.i8(),ay:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit()},motion:{support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26},
+entities:{runner:{player:true,fields:{ray:f.fix({init:-1})},input:{ax:f.i8(),ay:f.i8(),jump:f.press(),dash:f.bit(),dive:f.press(),launch:f.press(),hover:f.bit(),camera:f.bit()},motion:{difference:f.fix(),camera:f.fix(),support:f.fix(),blocked:f.bit()},body:{shape:'${dims===3?'capsule':'circle'}',radius:.4,height:1.8,maxSpeed:26},
 commands:{shoot(w,s,e){const hit=w.ray({x:s.pos.x,y:s.pos.y,z:s.pos.z+1},{x:e.direction,y:0,z:0},8);s.ray=hit?hit.dist:-1;},place(w,s,e){w.place(s,e.at);},edit(w,s,e){for(const c of w.near(s.pos,64,'cover'))w.send(c.id,'edit',e);if(e.mode===4)w.spawn('cover',{x:0,y:0,z:0});}}},
 cover:{fields:{solid:f.bit({init:true}),size:f.vec3({init:{x:1,y:4,z:2.6}})},body:{shape:'${dims===3?'box':'circle'}',radius:.5,height:2.6,maxSpeed:0},collider:{size:'size',enabled:'solid'},
 on:{edit(w,s,e){if(e.mode===0)s.solid=false;if(e.mode===1)s.solid=true;if(e.mode===2)s.size={x:2,y:4,z:2.6};if(e.mode===3)w.despawn(s);if(e.mode===5)w.place(s,{x:0,y:0,z:1});if(e.mode===6)w.place(s,{x:32,y:0,z:0});}}}},
 room:{bots:{keep:0},join(c,p){return{kind:'runner',at:{x:-2,y:p.seat,z:0}};},start(w){w.spawn('cover',{x:0,y:0,z:0});${runaway==='terrain'?"for(let i=0;i<16;i++)w.spawn('cover',{x:40,y:20+i,z:0});":''}}},map:'./map'});`);
       writeFileSync(join(dir,'src/move.ts'), `import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){
+if(i.camera){const shape=c.world.rays({geometryOnly:true,radius:.4,height:1.8,shape:'capsule'}),scratch={pos:{...b.pos},grounded:b.grounded},reference={pos:{...b.pos},grounded:b.grounded};shape.sweep(scratch,{x:.1,y:.1,z:-.2});c.world.sweep(reference,{x:.1,y:.1,z:-.2});b.motion.difference=c.math.len(c.math.sub(scratch.pos,reference.pos));const scene=c.world.rays({geometryOnly:true,radius:.3,shape:'box'});b.motion.camera=6;for(const hit of scene.rayAll({x:b.pos.x,y:b.pos.y,z:b.pos.z+1.45},{x:-1,y:-1,z:-.2},6))b.motion.camera=Math.min(b.motion.camera,hit.dist);return;}
 const support=c.world.support(b,20);b.motion.support=support?support.dist:20;b.motion.blocked=c.world.overlaps(b);
 b.grounded=Boolean(c.world.support(b));if(i.hover)return;let vz=b.vel.z;
 if(i.jump&&b.grounded)vz=12;
@@ -1657,9 +1658,9 @@ for(const delayed of [false,true]) test(`solid Stormbreak terrain: six bodies, t
  a.input({jump:true});await clock.wait(200);assert.ok(a.me.pos.z>1.5,'jump off ramp');a.input({ax:0});
  // Dense hill rims from real-game movement failures, under the same network clock.
  for(const at of [{x:-10.89543,y:26.09822,z:.129555},{x:-19.84526,y:20.9344,z:.511}]){
-  await place(at);a.input({ax:1,ay:3});await clock.wait(700);a.input({ax:0,ay:0});
+  await place(at);a.input({ax:1,ay:3,camera:true});await clock.wait(700);a.input({ax:0,ay:0,camera:false});
   assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
-  assert.ok(Number.isFinite(a.me.pos.z));
+  assert.ok(Number.isFinite(a.me.pos.z));assert.ok(a.me.motion.difference<.002,'scratch capsule sweep matches movement');
  }
  await place({x:-4,y:7,z:0});
  a.close();a=open('Rejoined');await clock.wait(2200);await place({x:-4,y:7,z:0});a.input({ax:1,dash:true});await clock.wait(1200);assert.ok(a.me.pos.x<=-2.899,'rejoined side');a.input({ax:0});
@@ -1744,6 +1745,6 @@ test('history query declaration passes the strict author build',async()=>{await 
 for(const delayed of [false,true]) test(`query snapshots preserve captured geometry and fields across dispatch${delayed?' with delay/loss':''}`,async t=>{
  const {L,compiled,openRoom}=await coinDashKit('server',false,20,'sequence');const clock=virtualTime(t),shaper=predictionShaper({delay:delayed?300:0,loss:delayed?.05:0,seed:4517}),r=rig(L,compiled,false,shaper,shaper);
  const a=openRoom({net:{config:cfg('Snapshot'),WebSocketImpl:r.socket(),post:null}});t.after(()=>{a.close();r.stop();});await clock.wait(2500);a.command('snapshot');await clock.wait(1800);
- assert.equal(a.me.hits.length,2);assert.notEqual(a.me.hits[0],a.me.hits[1]);assert.ok(a.me.hits.every(Boolean));assert.equal(a.me.credit,1);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+ assert.equal(a.me.label,'Snapshot');assert.equal(a.me.hits.length,2);assert.notEqual(a.me.hits[0],a.me.hits[1]);assert.ok(a.me.hits.every(Boolean));assert.equal(a.me.credit,1);assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
  const saved=r.host.save();assert.ok(saved);r.host.core.step();assert.equal(r.host.core.stats.errors,0);
 });

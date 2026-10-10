@@ -4,7 +4,7 @@ import { charge } from './guard.ts';
 import type { Vec3, MapHeightTile } from './rules.ts';
 import type { Solid, Hit3 } from './collision.ts';
 type Plane = { n: Vec3; c: number };
-type Prism = { vertices: Vec3[]; faces: Vec3[][]; bounds: {min:Vec3;max:Vec3}[]; planes: Plane[]; edges: Vec3[]; segments: [Vec3,Vec3][]; segmentIds: [number,number][] };
+type Prism = { vertices: Vec3[]; faces: Vec3[][]; bounds: {min:Vec3;max:Vec3}[]; planes: Plane[]; edges: Vec3[]; segments: [Vec3,Vec3][]; segmentIds: [number,number][]; boxAxes:Vec3[] };
 const cache = new WeakMap<MapHeightTile, Prism[]>();
 const sub=(a:Vec3,b:Vec3):Vec3=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
 const add=(a:Vec3,b:Vec3,t=1):Vec3=>({x:a.x+b.x*t,y:a.y+b.y*t,z:a.z+b.z*t});
@@ -34,7 +34,10 @@ function makePrism(upper:Vec3[],lower:Vec3[]):Prism {
       if(common.some((p,k)=>common.slice(k+1).some(q=>Math.abs(dot(p.n,q.n))<1-1e-9))){segments.push([vertices[i],vertices[j]]);segmentIds.push([i,j]);}
     }
     const unique=planes.filter((p,i)=>!planes.slice(0,i).some(q=>dot(p.n,q.n)>1-1e-10&&Math.abs(p.c-q.c)<1e-9));
-    return {vertices,segments,segmentIds,faces:valid,bounds:valid.map(face=>({min:{x:Math.min(...face.map(v=>v.x)),y:Math.min(...face.map(v=>v.y)),z:Math.min(...face.map(v=>v.z))},max:{x:Math.max(...face.map(v=>v.x)),y:Math.max(...face.map(v=>v.y)),z:Math.max(...face.map(v=>v.z))}})),planes:unique,edges};
+    const boxAxes:Vec3[]=[];
+    const axis=(v:Vec3)=>{const len=Math.sqrt(dot(v,v));if(len<1e-10)return;const n={x:v.x/len,y:v.y/len,z:v.z/len};if(!boxAxes.some(a=>Math.abs(dot(a,n))>1-1e-10))boxAxes.push(n);};
+    const bases=[{x:1,y:0,z:0},{x:0,y:1,z:0},{x:0,y:0,z:1}];for(const b of bases)axis(b);for(const p of unique)axis(p.n);for(const e of edges)for(const b of bases)axis(cross(e,b));
+    return {vertices,segments,segmentIds,boxAxes,faces:valid,bounds:valid.map(face=>({min:{x:Math.min(...face.map(v=>v.x)),y:Math.min(...face.map(v=>v.y)),z:Math.min(...face.map(v=>v.z))},max:{x:Math.max(...face.map(v=>v.x)),y:Math.max(...face.map(v=>v.y)),z:Math.max(...face.map(v=>v.z))}})),planes:unique,edges};
 }
 // Closest point on a triangle, including vertex and edge Voronoi regions.
 function triangle(p:Vec3,a:Vec3,b:Vec3,c:Vec3):Vec3 {
@@ -72,10 +75,9 @@ function distance(prism:Prism,a:Vec3,b:Vec3):Vec3 {
   return best;
 }
 function boxCast(prism:Prism,a:Solid,d:Vec3):Hit3|null {
-  const axes:Vec3[]=[{x:1,y:0,z:0},{x:0,y:1,z:0},{x:0,y:0,z:1},...prism.planes.map(p=>p.n)];
-  for(const e of prism.edges)for(const k of axes.slice(0,3))axes.push(cross(e,k));
+  const axes=prism.boxAxes;
   let near=0,far=1,normal={x:0,y:0,z:0};
-  for(const axis of axes){charge(16);const len=Math.sqrt(dot(axis,axis));if(len<1e-10)continue;const n={x:axis.x/len,y:axis.y/len,z:axis.z/len};let lo=Infinity,hi=-Infinity;
+  for(const n of axes){charge(16);let lo=Infinity,hi=-Infinity;
     for(const v of prism.vertices){const p=dot(n,v);lo=Math.min(lo,p);hi=Math.max(hi,p);}
     let amin=0,amax=0;for(const k of ['x','y','z'] as const){amin+=n[k]*(n[k]>=0?a.min[k]:a.max[k]);amax+=n[k]*(n[k]>=0?a.max[k]:a.min[k]);}
     const speed=dot(n,d);if(Math.abs(speed)<1e-12){if(amax<=lo+1e-9||amin>=hi-1e-9)return null;continue;}
@@ -90,7 +92,7 @@ function capsulePrism(prism:Prism,length:number):Prism {
   let variants=extended.get(prism);if(!variants){variants=new Map();extended.set(prism,variants);}
   let result=variants.get(length);if(!result){const vertices=prism.vertices.map((p,i)=>i<3?p:{...p,z:p.z-length});
     const translate=(p:Vec3)=>vertices[prism.vertices.indexOf(p)];
-    result={vertices,faces:prism.faces.map(face=>face.map(translate)),bounds:prism.bounds.map(b=>({min:{...b.min,z:b.min.z-length},max:b.max})),planes:prism.planes.map(p=>({n:p.n,c:p.c+Math.max(0,-p.n.z*length)})),edges:prism.edges,segments:prism.segmentIds.map(([i,j])=>[vertices[i],vertices[j]]),segmentIds:prism.segmentIds};if(variants.size>=32)variants.clear();variants.set(length,result);}
+    result={vertices,faces:prism.faces.map(face=>face.map(translate)),bounds:prism.bounds.map(b=>({min:{...b.min,z:b.min.z-length},max:b.max})),planes:prism.planes.map(p=>({n:p.n,c:p.c+Math.max(0,-p.n.z*length)})),edges:prism.edges,segments:prism.segmentIds.map(([i,j])=>[vertices[i],vertices[j]]),segmentIds:prism.segmentIds,boxAxes:prism.boxAxes};if(variants.size>=32)variants.clear();variants.set(length,result);}
   return result;
 }
 /** Downward vertical support only meets the upper triangle or its rounded rim.
@@ -158,8 +160,7 @@ export function overlapsTerrain(tile:MapHeightTile,a:Solid):boolean {
     if(a.r>0){const v=distance(prism,a.min,a.max);if(dot(v,v)<a.r*a.r-1e-9)return true;}
     else {
       // SAT overlap uses the same face, edge and box axes as continuous casts.
-      const axes=[{x:1,y:0,z:0},{x:0,y:1,z:0},{x:0,y:0,z:1},...prism.planes.map(p=>p.n)];
-      for(const e of prism.edges)for(const k of axes.slice(0,3))axes.push(cross(e,k));
+      const axes=prism.boxAxes;
       let separated=false;for(const n of axes){charge(16);if(dot(n,n)<1e-18)continue;const ps=prism.vertices.map(v=>dot(n,v));let lo=0,hi=0;for(const k of ['x','y','z'] as const){lo+=n[k]*(n[k]>=0?a.min[k]:a.max[k]);hi+=n[k]*(n[k]>=0?a.max[k]:a.min[k]);}if(hi<=Math.min(...ps)+1e-9||lo>=Math.max(...ps)-1e-9){separated=true;break;}}if(!separated)return true;
     }
   }return false;

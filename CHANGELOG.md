@@ -21,16 +21,19 @@ file) and what the upgrade would change, and changes nothing until you agree.
 
 **Plugin 0.45.2**
 
-Filter combat rays and declare head/body regions independently of movement bodies.
+Run richer server-authoritative combat, admission and bots with shared collision queries.
 
 ### Added
 
 - Budgeted `ray` options and ordered `rayAll` results: entity kind, tag, layer, scalar field comparisons, bounded ignore lists, ignore-self control and geometry-only occlusion.
-- Named query hit regions, plus radius-based sphere or box casts for camera clearance.
+- Named query hit regions and projectile profiles, plus sphere, box and capsule casts for camera clearance and movement planning.
+- Bounded pose history for lag-compensated hits, synchronous ordered interaction dispatch for sequential pellets, and immutable query snapshots with scratch sweep/support for bot route rehearsal.
+- Ranked bot takeover with explicit player control consent, and server-owned player labels for historical game events.
 - Matching view aiming and movement geometry rays. Collision revisions carry collider filter metadata outside visual interest and across rejoin.
 
 ### Fixed
 
+- Terrain and live-geometry broad phases keep detailed arenas and repeated camera queries within rules budgets.
 - Point queries starting inside solid boxes, spheres, capsules or solid terrain report an immediate hit; movement still permits escape from existing overlap.
 
 ### Upgrade notes

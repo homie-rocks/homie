@@ -902,3 +902,18 @@ once; later damage or placement does not change that scene. Each ray is still
 budgeted. Keep it local to the handler. Use ordinary `world.ray` when subsequent
 hits must see mutations, such as sequential pellets. Predicted movement exposes
 `ctx.world.rays` for its current geometry, too.
+
+`world.label(playerRef)` reads the relay's current display name (including bot
+names), at most 40 characters, or an empty string for a missing/non-player ref.
+Copy it into a declared field when a historical message must survive departures
+or seat exchanges. Names are presentation text, never proof of player identity;
+use the existing owner/ref for identity. The host restores labels with its save.
+
+For a body's planned route, capture `world.rays({geometryOnly:true,
+shape:'capsule', radius:.4, height:1.8})`. A capsule ray starts at its centre;
+`scene.sweep(scratchBody, delta)` and `scene.support(scratchBody, distance)` use
+its foot position instead, like shared movement. A scratch body has plain `pos`
+and `grounded` fields. These bounded queries change only that local copy, never
+a player or the captured scene. Use the same movement helper to evaluate a
+jump or dive without granting an action to the real body. Height is at least
+twice the radius, at most 200 metres; spherical casts retain their diameter.
