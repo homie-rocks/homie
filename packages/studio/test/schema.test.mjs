@@ -42,7 +42,7 @@ function fullStudio(name) {
   symlinkSync(PKG, join(dir, 'node_modules', '@homie-rocks', 'studio'));
   symlinkSync(join(REPO_NM, 'esbuild'), join(dir, 'node_modules', 'esbuild'));
   const game = (id, extra = {}) => {
-    write(dir, `games/${id}/game.json`, JSON.stringify({ id, name: id.replace(/-/g, ' ').replace(/\b./g, (c) => c.toUpperCase()), blurb: `${id} for everyone.`, players: { min: 1, max: 6 }, roundSeconds: 120, build: { mode: 'static' }, cover: 'cover.jpg', ...extra }));
+    write(dir, `games/${id}/game.json`, JSON.stringify({ id, name: id.replace(/-/g, ' ').replace(/\b./g, (c) => c.toUpperCase()), blurb: `${id} for everyone.`, players: { min: 1, max: 6 }, roundSeconds: 120, build: { mode: 'static' }, netplay: { v: 1 }, cover: 'cover.jpg', ...extra }));
     write(dir, `games/${id}/index.html`, '<!doctype html><html><head><script src="./homie-port.js"></script></head><body></body></html>');
     write(dir, `games/${id}/cover.jpg`, 'cover');
     write(dir, `games/${id}/hero/wide.jpg`, 'the landing still');
