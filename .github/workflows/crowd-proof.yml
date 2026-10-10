@@ -54,12 +54,11 @@ jobs:
         run: |
           export TMPDIR="$RUNNER_TEMP/crowd-after"
           xvfb-run -a --server-args='-screen 0 1920x1080x24' node --test packages/studio/test/rules-cloud-extended.mjs | tee "$RUNNER_TEMP/crowd-after.log"
-      - name: Profile the unchanged 300-player driver when capacity fails
+      - name: Profile workerd and the unchanged driver when capacity fails
         if: failure()
         continue-on-error: true
         env:
           RULES_EXTENDED: '1'
-          CROWD_TOTAL: '302'
           CROWD_PROFILE: '1'
         run: |
           export TMPDIR="$RUNNER_TEMP/crowd-profile"

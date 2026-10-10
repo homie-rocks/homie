@@ -9,8 +9,9 @@ import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] : [302,1000])) test(`Cloudflare transport reproduction: ${total} total seats`,{skip:process.env.RULES_EXTENDED!=='1',timeout:600000},async()=>{
   const out=await mkdtemp(join(tmpdir(),'homie-crowd-proof-'));
-  const server=spawn(process.execPath,[...(process.env.CROWD_PROFILE ? ['--cpu-prof','--cpu-prof-dir='+out,'--cpu-prof-name=workerd-controller.cpuprofile'] : []),fileURLToPath(new URL('./rules-cloud-local.mjs',import.meta.url))],{env:{...process.env,CROWD_PORT:'8810'},stdio:['ignore','pipe','pipe']});
-  let log='',err='',driver;
+  const server=spawn(process.execPath,[...(process.env.CROWD_PROFILE ? ['--cpu-prof','--cpu-prof-dir='+out,'--cpu-prof-name=workerd-controller.cpuprofile'] : []),fileURLToPath(new URL('./rules-cloud-local.mjs',import.meta.url))],{env:{...process.env,CROWD_PORT:'8810',...(process.env.CROWD_PROFILE ? {CROWD_PROFILE_DIR:out} : {})},stdio:['ignore','pipe','pipe','ipc']});
+  let log='',err='',driver,sampler;
+  const facts=[];
   server.stderr.on('data',b=>{err+=b;});
   try {
     const info=await new Promise((resolve,reject)=>{
@@ -18,6 +19,7 @@ for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] 
       server.on('exit',code=>{clearTimeout(timer);reject(Error('workerd exited '+code+': '+err.slice(-2000)));});
       server.stdout.on('data',b=>{log+=b;for(const line of log.split('\n')){try {const v=JSON.parse(line);if(v.driver){clearTimeout(timer);resolve(v);return;}}catch{}}});
     });
+    if(process.env.CROWD_PROFILE)sampler=setInterval(async()=>{try{const value=await (await fetch(new URL('/test-facts?room=proof-'+total,info.url),{signal:AbortSignal.timeout(4000)})).json();if(facts.length<120)facts.push({at:Date.now(),value});}catch{}},5000);
     driver=spawn(process.execPath,[...(process.env.CROWD_PROFILE ? ['--cpu-prof','--cpu-prof-dir='+out] : []),info.driver,'--url',info.url,'--n',String(total-2),'--seconds','60','--room','proof-'+total,'--out',out,'--ramp-ms',process.env.CROWD_RAMP_MS??'50'],{env:process.env,stdio:['ignore','pipe','pipe']});
     let driverLog='';driver.stdout.on('data',b=>{driverLog+=b;void appendFile(join(out,'driver-live.log'),b);});driver.stderr.on('data',b=>{driverLog+=b;void appendFile(join(out,'driver-live.log'),b);});
     const [code]=await once(driver,'exit');await writeFile(join(out,'driver.log'),driverLog);
@@ -38,7 +40,9 @@ for(const total of (process.env.CROWD_TOTAL ? [Number(process.env.CROWD_TOTAL)] 
     // Four inter-object hops, each with the configured propagation/service cost.
     assert.ok(report.inputAckMs.p95<=ackBudgetMs,`ack p95 ${report.inputAckMs.p95} ms exceeds ${ackBudgetMs} ms`);
   } finally {
-    driver?.kill('SIGTERM');server.kill('SIGTERM');if(server.exitCode===null)await once(server,'exit').catch(()=>{});
+    clearInterval(sampler);await writeFile(join(out,'transport-facts.json'),JSON.stringify(facts));
+    driver?.kill('SIGTERM');
+    if(server.exitCode===null){const force=setTimeout(()=>server.kill('SIGTERM'),15000);if(server.connected)server.send({stop:true});else server.kill('SIGTERM');await once(server,'exit').catch(()=>{});clearTimeout(force);}
     await writeFile(join(out,'server.log'),log+'\n'+err);
   }
 });

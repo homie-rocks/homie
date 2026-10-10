@@ -107,6 +107,33 @@ failures, not a successful handoff. Artifact suffixes respectively: `WYnKTD`,
 The subsequent cell optimization shares ordering work once per cell; its
 regression test verifies exact per-player radius membership and snapshot order.
 
+## Isolated Linux follow-up
+
+The Actions reproduction runs separate local workerd processes on a four-vCPU
+AMD EPYC runner, with Chrome under Xvfb. It does not deploy to Cloudflare.
+At `ae46962e`, run 38071793253 failed both strict capacity cases:
+
+| Case | Joined / live at end | Delivered median | Ack p95 |
+| --- | ---: | ---: | ---: |
+| 300 simulated + 2 Chrome | 300 / 300 | 15.30 Hz | 397 ms |
+| 998 simulated + 2 Chrome | 932 / 4 | no valid steady interval | unavailable |
+
+The 300 case kept 20.01 Hz tick progression. The 1,000-total case ended on host
+overrun during admission. An earlier isolated attempt at `4e66560b` delivered
+11.04 Hz / 887 ms at 300 and admitted 678 at the larger size. That first workflow
+incorrectly masked the failing test's exit code through `tee`; explicit Bash
+pipefail now makes capacity failure fail the check. No package was made from it.
+
+A separate 300-player diagnostic profile at `ae46962e` found the Node Miniflare
+controller idle for 91.49 of 92.62 seconds. The unchanged driver's 82.02-second
+profile attributed 28.78 seconds to its message callback, 15.38 to garbage
+collection, 6.78 to decoding and 16.66 to idle time. Callback line samples mainly
+hit JSON parsing and the driver's payload-size serialization. This rules out a
+busy Node controller in that run; it does not prove the driver alone caused the
+server-side delivery gap. Workerd profiles and transport samples are available
+with `CROWD_PROFILE=1` for the next diagnostic pass. Profiling is separate from the
+strict capacity measurement and does not change the driver.
+
 ## Diagnostics and approval
 
 Room and office telemetry expose bounded per-stage samples, per-Gate view/encode/
