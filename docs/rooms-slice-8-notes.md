@@ -56,6 +56,27 @@ output-gate/duration/row billing and quota measurements; actual AI provider/bill
 proof; and a physical phone on mobile data. No deployment is authorized in this
 request, so none of those results is claimed.
 
+## Post-merge release gates
+
+- `npm ci` and root `npm test` passed on the rebased 0.41.0 tree. The clean full
+  run reported **2,354 passed, zero failed, five skipped**, in 1,099.71 seconds.
+  Real Chrome, the app/LAN integration, embedded starters and workerd determinism
+  were enabled. Four skipped checks require Stripe-mock (CI supplies it).
+- The fifth skipped check expects Wrangler in the repository's node_modules.
+  With temporary links to the scratch studio's pinned Wrangler, its three
+  acknowledged play/watch updates passed separately (59.74 seconds). The links
+  were removed afterward; no dependency or test-gate configuration was changed.
+- The new build-guard regressions passed 2/2. Repaired Lab/parts fixtures passed
+  21/21, static landing/schema fixtures 11/11, and MCP integration 7/7.
+  Initial full runs exposed the missing legacy declarations in those fixtures
+  and a duplicate local variable in the added MCP assertion; both were repaired
+  before the clean passing run. No assertions or checks were removed.
+- Plugin tests: 123 passed, zero failed, one optional live-URL fixture skipped.
+- Template/history generation, changelog sync/check, plugin validation, the
+  Desktop packed-server check and publish preflight passed. The packed server
+  answered with 69 tools and five cards. Preflight found one new package version,
+  studio 0.41.0, and 22 unchanged published packages. Nothing was published.
+
 ## Teaching changes before the trials
 
 - Before: the game skill recommended a browser host and owner movement, while the
