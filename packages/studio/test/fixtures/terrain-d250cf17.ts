@@ -1,8 +1,9 @@
+/** Frozen d250cf170df9ae4b4fb358eaf32fcd393932970e exact terrain reference. */
 /** Solid triangulated height tiles. Each source triangle is a closed vertical
  * prism; their union preserves noncoplanar samples without a convex-hull fill. */
-import { charge } from './guard.ts';
-import type { Vec3, MapHeightTile } from './rules.ts';
-import type { Solid, Hit3 } from './collision.ts';
+import { charge } from '../../rules/guard.ts';
+import type { Vec3, MapHeightTile } from '../../rules/rules.ts';
+import type { Solid, Hit3 } from '../../rules/collision.ts';
 type Plane = { n: Vec3; c: number };
 type Prism = { vertices: Vec3[]; faces: Vec3[][]; bounds: {min:Vec3;max:Vec3}[]; planes: Plane[]; edges: Vec3[]; segments: [Vec3,Vec3][]; segmentIds: [number,number][]; boxAxes:Vec3[] };
 const cache = new WeakMap<MapHeightTile, Prism[]>();
@@ -129,8 +130,8 @@ function roundedCast(source:Prism,a:Solid,d:Vec3):Hit3|null {
   let near=0,far=1;
   for(const k of ['x','y'] as const){const low=Math.min(source.vertices[0][k],source.vertices[1][k],source.vertices[2][k])-a.r,high=Math.max(source.vertices[0][k],source.vertices[1][k],source.vertices[2][k])+a.r;if(!d[k]){if(a.min[k]<low||a.min[k]>high)return null;}else{let t=(low-a.min[k])/d[k],u=(high-a.min[k])/d[k];if(t>u)[t,u]=[u,t];near=Math.max(near,t);far=Math.min(far,u);if(near>far)return null;}}
   charge(64);const prism=capsulePrism(source,a.max.z-a.min.z),p=a.min,r=a.r;
-  let entry=0,exit=1,enterPlane:Plane|null=null;const approaching:{plane:Plane;t:number}[]=[];
-  for(const plane of prism.planes){charge(8);const gap=plane.c+r-dot(plane.n,p),speed=dot(plane.n,d);if(Math.abs(speed)<1e-12){if(gap< -1e-10)return null;}else if(speed>0)exit=Math.min(exit,gap/speed);else {const t=gap/speed;if(t>=-1e-9&&t<=1)approaching.push({plane,t});if(t>=entry){entry=t;enterPlane=plane;}}if(entry>exit+1e-10)return null;}
+  let entry=0,exit=1,enterPlane:Plane|null=null;
+  for(const plane of prism.planes){charge(8);const gap=plane.c+r-dot(plane.n,p),speed=dot(plane.n,d);if(Math.abs(speed)<1e-12){if(gap< -1e-10)return null;}else if(speed>0)exit=Math.min(exit,gap/speed);else {const t=gap/speed;if(t>=entry){entry=t;enterPlane=plane;}}if(entry>exit+1e-10)return null;}
   if(entry>1||exit<0)return null;
   if(enterPlane){const projected=add(add(p,d,entry),enterPlane.n,-r);let inside=true;for(const plane of prism.planes){charge(8);if(dot(plane.n,projected)>plane.c+1e-10){inside=false;break;}}if(inside)return{t:Math.max(0,entry),nx:enterPlane.n.x,ny:enterPlane.n.y,nz:enterPlane.n.z};}
 
@@ -138,12 +139,9 @@ function roundedCast(source:Prism,a:Solid,d:Vec3):Hit3|null {
   let best:Hit3|null=null;
   const take=(t:number,normal:Vec3)=>{if(t< -1e-9||t>1||best&&t>=best.t)return;const len=Math.sqrt(dot(normal,normal));if(len<1e-12||dot(normal,d)>=-1e-12)return;best={t:Math.max(0,t),nx:normal.x/len,ny:normal.y/len,nz:normal.z/len};};
   const sphere=(v:Vec3)=>{const o=sub(p,v),b=dot(o,d),c=dot(o,o)-r*r,h=b*b-speed2*c;if(h<0)return;const t=(-b-Math.sqrt(h))/speed2;take(t,sub(add(p,d,t),v));};
-  // Reuse the plane times from clipping. Parallel and receding faces cannot
-  // be entry contacts; do not project or retest their already-known times.
-  for(const {plane,t} of approaching){
-    charge(8);if(best&&t>=best.t)continue;charge(16);const hit=add(add(p,d,t),plane.n,-r);let inside=true;
-    for(const q of prism.planes){charge(4);if(dot(q.n,hit)>q.c+1e-10){inside=false;break;}}
-    if(inside)take(t,plane.n);
+  for(const plane of prism.planes){
+    charge(40);const speed=dot(plane.n,d);
+    if(speed< -1e-12){const t=(plane.c+r-dot(plane.n,p))/speed;if(t>=-1e-9&&t<=1&&(!best||t<best.t)){const hit=add(add(p,d,t),plane.n,-r);if(prism.planes.every(q=>dot(q.n,hit)<=q.c+1e-10))take(t,plane.n);}}
   }
   const sweptMin={x:Math.min(p.x,p.x+d.x)-r,y:Math.min(p.y,p.y+d.y)-r,z:Math.min(p.z,p.z+d.z)-r},sweptMax={x:Math.max(p.x,p.x+d.x)+r,y:Math.max(p.y,p.y+d.y)+r,z:Math.max(p.z,p.z+d.z)+r};
   for(const [from,to] of prism.segments){

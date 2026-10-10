@@ -38,7 +38,7 @@ Run richer server-authoritative combat, admission and bots with shared collision
 - **Build compatibility:** `label`, `dispatch`, `rayAll`, `rays` and `restart` remain legal ordinary property and destructuring names. Guarding capability calls does not reserve these data names.
 - **Terrain compatibility:** the earlier PR revision changed terrain casting globally. Existing casts retain the 0.45.0 implementation; `body.terrain: 'exact'` and ray option `terrain: 'exact'` opt into the new algorithm and cost. Seeded compatibility tests pin old results and costs.
 - Client-requested actor rewind is bounded by server-measured round-trip latency plus presentation and scheduling margins, within the declared history limit. A client cannot simply choose any point in the history window.
-- Optional `sweep(body, delta, {ground:false})` skips redundant support work when the mover explicitly computes grounding. Default sweep behavior is unchanged. Exact terrain casts reject irrelevant support features early and reuse identical immutable queries within a handler. These savings do not enlarge handler budgets.
+- Optional `sweep(body, delta, {ground:false})` skips redundant support work when the mover explicitly computes grounding. Default sweep behavior is unchanged. Exact terrain casts reject irrelevant support features early, reuse face-entry calculations and cache identical immutable queries within a handler. Ten thousand seeded exact casts pin zero result drift through the face optimization. These savings do not enlarge handler budgets.
 
 ### Upgrade notes
 
