@@ -153,7 +153,8 @@ await initPhysics();globalThis.physicsResult=run();`;
     '<script type="module" src="/src/main.ts"></script>',
   );
   const output = join(dir, "output");
-  await buildGameFiles(esbuild, dir, { id: "physics", dir: game }, output);
+  // This fixture is a local app: it compares physics runtimes without a multiplayer room.
+  await buildGameFiles(esbuild, dir, { id: "physics", dir: game, kind: "app" }, output);
 
   const server = createServer(async (req, res) => {
     try {
