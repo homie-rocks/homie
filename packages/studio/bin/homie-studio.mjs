@@ -412,7 +412,7 @@ function print(result) {
       lines.push(`${result.name} is a studio now: ${result.dir}`, '', 'Wrote:', ...result.wrote.map((f) => `  ${f}`), '', `Dependencies: ${result.installed}`, '', 'Next:', ...result.next.map((n) => `  ${n}`), '', result.online);
       break;
     case 'game new':
-      lines.push(`games/${result.id} is a new game from the ${result.from} starter. Change it in games/${result.id}/src/, then: npx homie-studio dev`);
+      lines.push(`games/${result.id} is a new game from the ${result.from} starter. Its server rules are src/rules.ts, shared movement src/move.ts, and browser view src/view.ts. Read the game skill and RULES.md, change the mechanic, then build and run: npx --no-install homie-studio dev`);
       if (result.installNeeded) lines.push(`It needs ${result.needsAdded.map((n) => `${n.name} ${n.version}`).join(', ')}, now in the studio's package.json: run npm install first.`);
       for (const h of result.needsHeld ?? []) lines.push(`It was written against ${h.name} ${h.want}; this studio pins ${h.have}, which stays.`);
       if (result.models) {
