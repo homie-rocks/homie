@@ -37,7 +37,13 @@ async function coinDashKit(mode = 'server', offline = false, tickHz = 20, runawa
   if (runaway) {
     dir = join(scratch, `variant-${runaway}`); cpSync(COIN_DASH, dir, { recursive: true });
     const file = join(dir, 'src/rules.ts');
-    if (runaway === 'queries') {
+    if (runaway === 'admission') {
+      writeFileSync(join(dir,'src/view.ts'),`import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.command('accept');`);
+      writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-100,-100],max:[100,100]}}));
+      writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
+export default defineRules({contract:2,space:{dims:2},move,map:'./map',shapes:{commands:{accept:{}}},entities:{runner:{player:{away:'think',leave:'bot',control:'accepted',takeover:'fitness'},fields:{fitness:f.fix(),hp:f.u8({init:73}),ammo:f.u8({init:7})},motion:{accepted:f.bit({init:true})},input:{ax:f.i8()},body:{shape:'circle',radius:.4,maxSpeed:4},think(){return {ax:1};},on:{takeover(w,s){s.motion.accepted=false;}},commands:{accept(w,s){s.motion.accepted=true;}}}},room:{bots:{keep:6},rounds:{seconds:12,breakSeconds:1},join(c,p){return{kind:'runner',at:{x:0,y:p.seat*2,z:0},fields:{fitness:10-p.seat}};}}});`);
+      writeFileSync(join(dir,'src/move.ts'),`import {defineMove} from '@homie-rocks/studio/rules';export const move=defineMove({runner(b,i,c){b.pos={x:b.pos.x+i.ax*c.dt,y:b.pos.y,z:0};}});`);
+    } else if (runaway === 'queries') {
       writeFileSync(join(dir,'src/view.ts'), `import {openRoom} from '@homie-rocks/studio/rules/view';const room=openRoom();room.ray({x:0,y:0,z:1},{x:1,y:0,z:0},18,{geometryOnly:true});room.rayAll({x:0,y:0,z:1},{x:1,y:0,z:0},18,{where:{hp:{gt:0}}});`);
       writeFileSync(join(dir,'map/main.json'),JSON.stringify({bounds:{min:[-20,-20,0],max:[20,20,20]},boxes:[{min:[12,-2,0],max:[13,2,3]}]}));
       writeFileSync(file, `import {defineRules,f} from '@homie-rocks/studio/rules';import {move} from './move';
@@ -1671,4 +1677,25 @@ test('filtered ray declarations and API pass the strict author build',async()=>{
  await coinDashKit('server',false,20,'queries');
  const esbuild=await esbuildOf();
  await prepareRules(esbuild,scratch,{id:'queries',dir:join(scratch,'variant-queries'),players:{max:8},room:{host:'server'}});
+});
+
+for(const delayed of [false,true]) test(`ranked bot admission retains entity resources and gates player control${delayed?' with 300 ms and loss':''}`,async t=>{
+ const {L,compiled,openRoom}=await coinDashKit('server',false,20,'admission');
+ const clock=virtualTime(t),shape=predictionShaper({delay:delayed?300:0,loss:delayed?.05:0,seed:4511});
+ const r=rig(L,compiled,false,shape,shape),a=openRoom({net:{config:cfg('First'),WebSocketImpl:r.socket(),post:null}});
+ let b;t.after(()=>{a.close();b?.close();r.stop();});await clock.wait(2200);
+ const bots=[];a.each('runner',e=>{if(e.driver==='bot')bots.push(e);});bots.sort((a,b)=>b.fitness-a.fitness);const chosen=bots[0];assert.ok(chosen);
+ b=openRoom({net:{config:cfg('Late'),WebSocketImpl:r.socket(),post:null}});await clock.wait(2200);
+ assert.equal(b.me.id,chosen.id);assert.equal(b.me.hp,73);assert.equal(b.me.ammo,7);assert.equal(b.me.motion.accepted,false);
+ const before=b.me.pos.x;b.input({ax:-4});await clock.wait(1000);assert.ok(b.me.pos.x>before,'think keeps driving until consent');
+ b.command('accept');await clock.wait(1300);assert.equal(b.me.motion.accepted,true);
+ const accepted=b.me.pos.x;await clock.wait(500);assert.ok(b.me.pos.x<accepted,'player input drives after consent');
+ const saved=r.host.core.save(),restored=L.C.createCore(compiled,{restore:saved});assert.deepEqual(restored.save(),saved);
+ for(let i=0;i<8;i++){r.host.core.step();restored.step();assert.deepEqual(restored.save(),r.host.core.save());}
+ assert.equal(r.host.core.stats.errors,0,r.host.core.stats.lastError);
+});
+
+test('admission declarations pass the strict author build',async()=>{
+ await coinDashKit('server',false,20,'admission');
+ await prepareRules(await esbuildOf(),scratch,{id:'admission',dir:join(scratch,'variant-admission'),players:{max:8},room:{host:'server'}});
 });

@@ -825,13 +825,19 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         // The seat changed hands without a goodbye: its old holder has left.
         if (s && s.driver !== 'bot') { leaveBody(s); s = seats.get(info.seat); }
         let bot: Ent | null = s && s.id ? ents.get(s.id) ?? null : null;
-        if (!bot && playerBodies().length >= c.bots) {
+        const previousBot = bot;
+        if (!bot && playerBodies().length >= c.bots || bot?.kind.player?.takeover) {
           // A person who joins a full room takes over a bot's body: the bot in the highest seat.
-          for (const e of playerBodies()) if (e.driver === 'bot' && (!bot || e.seat > bot.seat)) bot = e;
+          const priority = (e: Ent): number => e.kind.player?.takeover ? Number(e.f[e.kind.player.takeover]) : 0;
+          for (const e of playerBodies()) if (e.driver === 'bot' && (!bot || priority(e) > priority(bot) || (priority(e) === priority(bot) && e.seat > bot.seat))) bot = e;
         }
         if (bot) {
           const e = bot;
           seats.delete(e.seat);
+          if (previousBot && previousBot !== e) {
+            previousBot.seat = e.seat;
+            seats.set(previousBot.seat, {seat:previousBot.seat, driver:'bot', owner:'', id:previousBot.id, away:false});
+          }
           e.goal = null; e.seat = info.seat; e.driver = info.driver; e.owner = info.owner; e.away = false; e.r = (e.r + 1) & 0xffff; e.allow = 0;
           seats.set(info.seat, { seat: info.seat, driver: info.driver, owner: info.owner, id: e.id, away: false });
           out.push({ t: 'seats' });
@@ -1006,12 +1012,13 @@ export function createCore(c: Compiled, opts: { moved?: (kind: string, tick: num
         const body = k.body as NonNullable<KindTable['body']>;
         let claim: StepInput['claim'] = null;
         if (k.player) {
-          const driven = (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && !e.away;
+          const permitted = !k.player.control || Boolean(e.m[k.player.control]);
+          const driven = permitted && (e.driver === 'person' || (e.driver === 'ai' && inputs.has(e.seat))) && !e.away;
           if (driven) {
             const s = inputs.get(e.seat);
             e.input = Object.freeze(s ? coerceFields(k.input, s.values, dims) : initFields(k.input, dims));
             claim = s?.claim ?? null;
-          } else if (k.think && (e.driver !== 'person' || k.player.away === 'think')) {
+          } else if (k.think && (!permitted || e.driver !== 'person' || k.player.away === 'think')) {
             // `think` returns the step. It is held to the declared input inside the handler's own try and budget; a `think` that throws leaves the input neutral.
             let stepIn: Record<string, unknown> | null = null;
             run(k.name, 'think', e, 'ent', () => {
