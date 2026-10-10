@@ -31,7 +31,9 @@ Keep a world and its account characters across restarts.
 - Optional `room.characters: true` keeps one character per game on the existing
   signed-in player account. Rules read `player.character` on join and write its
   inventory through declared entity fields. A durable lease and return outbox
-  prevent two rooms holding the character at once. No manual provisioning.
+  prevent two rooms holding the character at once. Explicit `world.finish()`
+  resets retain the latest account character instead of replaying its old inventory.
+  No manual provisioning.
 
 ### Changed
 

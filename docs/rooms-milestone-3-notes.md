@@ -13,7 +13,9 @@ practice with `offline: true`; its progress is not authoritative or saved.
 Keep inventory in the player kind's declared fields, and return
 `player.character ?? { kind: "runner", at: spawn }` from `room.join`.
 A character record contains kind, position, heading, fields and motion. Only rules
-change it. Use the existing account page/passkeys to sign in; character games
+change it. `world.finish()` resets the world but carries the latest character
+into the next join, including a crash or disconnect during the empty break; it
+cannot replay the inventory that the account had before a spend. Use the existing account page/passkeys to sign in; character games
 redirect a player without a signed-in account there. Browser-written saves remain
 available with their existing contract, cost and behavior. They are not imported
 into an authoritative inventory. Shop orders/grants and app records are unchanged.

@@ -184,7 +184,7 @@ export interface Core {
  * `noted`: told, as it happens, of a value the rules wrote that the runtime changed to make it fit, or dropped (pack.ts
  * `Adjusted`; also `effect`, `think` and `decision`): the handler, what was done, the field's name and what was written.
  */
-export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
+export function createCore(c: Compiled, opts: { characterForSeat?: (seat: number) => import('./rules.ts').Character | null | undefined; characterSaved?: (seat: number, character: import('./rules.ts').Character) => void; rewindTicks?: (seat: number)=>number; label?: (seat:number,driver:Driver)=>string; moved?: (kind: string, tick: number, input: Readonly<Record<string, unknown>>, before: import('./pack.ts').MoveBody, after: import('./pack.ts').MoveBody, geometry: import('./math.ts').MapShapes, id: string) => void; observe?: (kind: string, handler: string, error?: string) => void; noted?: (kind: string, handler: string, what: string, at: string, written: string) => void; seed?: number; epoch?: number; restore?: SavedCore | null; restoreEpoch?: number; stage?: string; decisions?: boolean } = {}): Core {
   const dims = c.dims;
   const tickHz = c.settings.tickHz;
   const dt = 1 / tickHz;
@@ -865,7 +865,7 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
     } else {
       if (e) {
         if (e.kind.on.leave) run(e.kind.name, 'on.leave', e, 'ent', () => e.kind.on.leave(world, e.self, Object.freeze({})));
-        opts.characterLeft?.(e.seat, JSON.parse(JSON.stringify({ kind: e.kind.name, at: e.pos, heading: e.heading, fields: e.f, motion: e.m })));
+        opts.characterSaved?.(e.seat, JSON.parse(JSON.stringify({ kind: e.kind.name, at: e.pos, heading: e.heading, fields: e.f, motion: e.m })));
         e.dead = true; ents.delete(e.id);
       }
       seats.delete(s.seat);
@@ -977,7 +977,7 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
       if (tick < restartAt) return;
       startMatch();
       // Seats stay through a finished match: every holder's body is made again, as if it had just joined.
-      for (const s of [...seats.values()]) { seats.delete(s.seat); if (s.driver !== 'bot') ops.push({ op: 'join', info: { seat: s.seat, driver: s.driver, owner: s.owner } }, ...(s.away ? [{ op: 'away' as const, seat: s.seat, away: true }] : [])); }
+      for (const s of [...seats.values()]) { seats.delete(s.seat); if (s.driver !== 'bot') ops.push({ op: 'join', info: { seat: s.seat, driver: s.driver, owner: s.owner, ...(opts.characterForSeat ? { character: opts.characterForSeat(s.seat) } : {}) } }, ...(s.away ? [{ op: 'away' as const, seat: s.seat, away: true }] : [])); }
       return;
     }
     if (restartAsked) { restartAsked = false; endAsked = false; startRound(); return; }
@@ -994,7 +994,10 @@ export function createCore(c: Compiled, opts: { rewindTicks?: (seat: number)=>nu
   function finishMatch(): void {
     finishing = false; restartAsked = false;
     out.push({ t: 'round', n: round.n, phase: 'over', endsAt: tick + Math.max(3, ticks(c.rounds ? c.rounds.breakSeconds : 0)), startedAt: round.startedAt, results: results() });
-    for (const e of ents.values()) e.dead = true;
+    for (const e of ents.values()) {
+      if (e.kind.player) opts.characterSaved?.(e.seat, JSON.parse(JSON.stringify({ kind: e.kind.name, at: e.pos, heading: e.heading, fields: e.f, motion: e.m })));
+      e.dead = true;
+    }
     ents.clear(); spawns = []; queue = []; pendingAsks = []; areas = []; fx = [];
     for (const s of seats.values()) s.id = null;
     shared = initFields(c.shared, dims); sharedChanged();

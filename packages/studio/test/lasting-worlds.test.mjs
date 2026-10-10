@@ -117,3 +117,17 @@ test('a recall waits for a delayed acquisition in the same room before retiring 
   await unrelated;assert.deepEqual(order,['acquire-write','other-account']);resume();await Promise.all([acquire,recall]);
   assert.deepEqual(order,['acquire-write','other-account','room-reserve','room-return']);assert.equal(table.characterOperations.size,0);
 });
+
+test('a world finish and a crash in its break cannot resurrect the inventory from before a spend', () => {
+  const rules=defineRules({contract:2,space:{dims:2},move:defineMove({runner(){}}),
+    shapes:{events:{finish:{}},commands:{spendAndFinish:{}}},entities:{runner:{player:true,fields:{coins:f.u32()},body:{shape:'circle',radius:.4,maxSpeed:1},commands:{spendAndFinish(w,s){s.coins=2;}}}},
+    room:{start(w){w.after(3,'finish',{});},on:{finish(w){w.finish();}},join(c,p){return p.character??{kind:'runner',at:{x:0,y:0,z:0}};}}});
+  const c=compileRules(rules,{map,settings:roomSettings({lifetime:'persistent',characters:true}).settings,seats:8});
+  const grant={account:'a',lease:1,seat:-1,character:{kind:'runner',at:{x:0,y:0,z:0},heading:{x:1,y:0,z:0},fields:{coins:10},motion:{}}};
+  const a=rig({compiled:c,characterFor:()=>grant});a.join();a.step();a.host.frame({t:'ev',from:0,k:'cmd',d:['spendAndFinish',{}]});a.step(3);assert.equal(a.host.core.character(0),null,'world is in its empty break');
+  const checkpoint=a.durable;a.host.stop();
+  for(const reconnect of [false,true]) for(const breakTicks of [0,5]) {
+    const b=rig({compiled:c,restore:checkpoint,characterFor:()=>grant});if(reconnect){b.join();b.step();}b.step(breakTicks);b.host.releaseCharacter('a');
+    assert.equal(fromBytes(b.durable).characters[0].character.fields.coins,2,'latest balance survives both the empty break and the re-created body');b.host.stop();
+  }
+});
