@@ -772,7 +772,7 @@ build/destruction. Once that update arrives, replay uses its geometry immediatel
 Moving platforms use world.place in their handlers; sweep/support see each tick's
 position. Passenger carrying is explicit movement logic, not automatic physics.
 
-## Filtered combat and camera queries (0.45.1)
+## Filtered combat and camera queries
 
 `world.ray(from, direction, metres, options?)` returns the nearest hit or undefined.
 `world.rayAll` returns all entry hits in distance order (one per shape or named
